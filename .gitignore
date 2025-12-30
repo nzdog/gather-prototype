@@ -1,0 +1,27 @@
+node_modules
+.next
+.env
+/src/generated/prisma
+
+# Build outputs
+*.tsbuildinfo
+dist/
+build/
+
+# Database
+*.db
+*.db-journal
+
+# Backups
+*.bak
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Claude
+.claude/

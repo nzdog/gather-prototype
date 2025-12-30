@@ -1,0 +1,36 @@
+{
+  "name": "gather-prototype",
+  "version": "1.0.0",
+  "description": "A coordination app for multi-day gatherings (Christmas, reunions, retreats) that ensures everyone knows what they're responsible for without anyone holding the whole plan in their head.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:reset": "prisma migrate reset"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@prisma/client": "^6.19.1",
+    "next": "^14.2.35",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.3",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.4.23",
+    "postcss": "^8.5.6",
+    "prisma": "^6.19.1",
+    "tailwindcss": "^3.4.19",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

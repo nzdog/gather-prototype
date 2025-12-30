@@ -1,0 +1,199 @@
+// schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// ============================================
+// CORE OBJECTS
+// ============================================
+
+model Event {
+  id          String      @id @default(cuid())
+  name        String
+  startDate   DateTime
+  endDate     DateTime
+  status      EventStatus @default(DRAFT)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  hostId      String
+  host        Person      @relation("EventHost", fields: [hostId], references: [id])
+  days        Day[]
+  teams       Team[]
+  people      PersonEvent[]
+  auditLog    AuditEntry[]
+  tokens      AccessToken[]
+}
+
+enum EventStatus {
+  DRAFT
+  CONFIRMING
+  FROZEN
+  COMPLETE
+}
+
+model Day {
+  id      String   @id @default(cuid())
+  name    String
+  date    DateTime
+
+  // Relations
+  eventId String
+  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  items   Item[]
+}
+
+model Team {
+  id            String  @id @default(cuid())
+  name          String
+  scope         String?
+
+  // Relations
+  eventId       String
+  event         Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  coordinatorId String
+  coordinator   Person  @relation("TeamCoordinator", fields: [coordinatorId], references: [id])
+
+  items         Item[]
+  members       PersonEvent[]
+  tokens        AccessToken[]
+}
+
+model Person {
+  id        String  @id @default(cuid())
+  name      String
+  email     String? @unique
+  phone     String?
+
+  // Relations
+  hostedEvents      Event[]       @relation("EventHost")
+  coordinatedTeams  Team[]        @relation("TeamCoordinator")
+  eventMemberships  PersonEvent[]
+  assignments       Assignment[]
+  auditActions      AuditEntry[]
+  tokens            AccessToken[]
+}
+
+// Join table: Person <-> Event (with team assignment)
+model PersonEvent {
+  id       String @id @default(cuid())
+
+  personId String
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  eventId  String
+  event    Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  // teamId is REQUIRED to enforce "one team only" strictly
+  teamId   String
+  team     Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  role     PersonRole @default(PARTICIPANT)
+
+  @@unique([personId, eventId]) // One person, one team per event
+}
+
+enum PersonRole {
+  HOST
+  COORDINATOR
+  PARTICIPANT
+}
+
+model Item {
+  id                   String      @id @default(cuid())
+  name                 String
+  quantity             String?
+  description          String?
+  critical             Boolean     @default(false)
+  status               ItemStatus  @default(UNASSIGNED)
+  previouslyAssignedTo String?
+
+  // Constraint tags
+  glutenFree           Boolean     @default(false)
+  dairyFree            Boolean     @default(false)
+  vegetarian           Boolean     @default(false)
+
+  notes                String?
+
+  // Drop-off logistics
+  dropOffAt            DateTime?   // When to drop off (stored as UTC)
+  dropOffLocation      String?     // e.g., "Kate's Kitchen", "Marquee"
+  dropOffNote          String?     // Human-readable time note, e.g., "12 noon", "after mains"
+
+  // Relations
+  teamId      String
+  team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  dayId       String?
+  day         Day?     @relation(fields: [dayId], references: [id])
+
+  assignment  Assignment?
+}
+
+enum ItemStatus {
+  ASSIGNED
+  UNASSIGNED
+}
+
+model Assignment {
+  id           String   @id @default(cuid())
+  acknowledged Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  // Relations
+  itemId   String @unique // One assignment per item
+  item     Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  personId String
+  person   Person @relation(fields: [personId], references: [id])
+  // NOTE: No onDelete cascade here — removal requires app-layer orchestration
+  // See "Remove Person Procedure" in Section 6
+}
+
+// Dedicated token table for magic link auth
+model AccessToken {
+  id          String      @id @default(cuid())
+  token       String      @unique
+  scope       TokenScope
+  expiresAt   DateTime?
+  createdAt   DateTime    @default(now())
+
+  eventId     String
+  event       Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  personId    String
+  person      Person      @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  // Required for coordinator-scoped tokens
+  teamId      String?
+  team        Team?       @relation(fields: [teamId], references: [id])
+}
+
+enum TokenScope {
+  HOST
+  COORDINATOR
+  PARTICIPANT
+}
+
+model AuditEntry {
+  id         String   @id @default(cuid())
+  timestamp  DateTime @default(now())
+  actionType String
+  targetType String
+  targetId   String
+  details    String?
+
+  eventId  String
+  event    Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  actorId  String
+  actor    Person @relation(fields: [actorId], references: [id])
+}
