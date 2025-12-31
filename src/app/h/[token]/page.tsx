@@ -42,6 +42,10 @@ interface Team {
 }
 
 interface HostData {
+  person: {
+    id: string;
+    name: string;
+  };
   event: {
     id: string;
     name: string;
@@ -284,7 +288,10 @@ export default function HostView() {
           Back to Demo
         </a>
         <div className="flex items-start justify-between mb-2">
-          <h1 className="text-2xl font-bold text-gray-900">{data.event.name}</h1>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">{data.event.name}</h1>
+            <p className="text-sm text-gray-600 mt-1">Host: {data.person.name}</p>
+          </div>
           <a
             href={`/h/${token}/audit`}
             className="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700 transition"

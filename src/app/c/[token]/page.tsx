@@ -55,6 +55,10 @@ interface OtherTeam {
 }
 
 interface CoordinatorData {
+  person: {
+    id: string;
+    name: string;
+  };
   event: {
     id: string;
     name: string;
@@ -332,6 +336,7 @@ export default function CoordinatorView() {
         </a>
         <div className="text-sm font-medium text-gray-500 mb-1">{data.event.name}</div>
         <h1 className="text-2xl font-bold text-gray-900">{data.team.name}</h1>
+        <p className="text-sm text-gray-600 mt-1">Coordinator: {data.person.name}</p>
         {data.team.scope && (
           <p className="text-sm text-gray-500 mt-1">{data.team.scope}</p>
         )}

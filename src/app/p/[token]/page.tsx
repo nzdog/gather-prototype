@@ -29,6 +29,10 @@ interface Assignment {
 }
 
 interface ParticipantData {
+  person: {
+    id: string;
+    name: string;
+  };
   event: {
     id: string;
     name: string;
@@ -166,6 +170,7 @@ export default function ParticipantView() {
           Back to Demo
         </a>
         <h1 className="text-2xl font-bold text-gray-900">{data.event.name}</h1>
+        <p className="text-sm text-gray-600 mt-1">Participant: {data.person.name}</p>
         <div className="text-sm text-gray-500 mt-1">
           {formatDateRange(data.event.startDate, data.event.endDate)}
           {data.event.guestCount && ` · ${data.event.guestCount} guests`}
