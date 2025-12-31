@@ -12,24 +12,19 @@ const execAsync = promisify(exec);
  */
 export async function POST() {
   try {
-    console.log('[Reset] Starting database reset...');
+    console.log('[Reset] Starting database reset (keeping tokens)...');
 
-    // Step 1: Delete all data in the correct order to respect foreign key constraints
-    console.log('[Reset] Deleting existing data...');
+    // Step 1: Delete only items and assignments, keep people/teams/tokens
+    console.log('[Reset] Deleting items and assignments...');
     await prisma.$transaction([
       prisma.auditEntry.deleteMany(),
-      prisma.accessToken.deleteMany(),
       prisma.assignment.deleteMany(),
       prisma.item.deleteMany(),
-      prisma.personEvent.deleteMany(),
-      prisma.team.deleteMany(),
       prisma.day.deleteMany(),
-      prisma.event.deleteMany(),
-      prisma.person.deleteMany(),
     ]);
-    console.log('[Reset] Data deleted successfully');
+    console.log('[Reset] Items deleted successfully');
 
-    // Step 2: Run the seed script
+    // Step 2: Run the seed script (will skip existing people/teams/tokens)
     console.log('[Reset] Running seed script...');
     const { stdout, stderr } = await execAsync('npx prisma db seed');
     console.log('[Reset] Seed stdout:', stdout);
@@ -38,13 +33,15 @@ export async function POST() {
     }
     console.log('[Reset] Seed completed successfully');
 
-    // Step 3: Verify data was created
+    // Step 3: Verify data
+    const itemCount = await prisma.item.count();
     const tokenCount = await prisma.accessToken.count();
-    console.log(`[Reset] Verification: ${tokenCount} tokens created`);
+    console.log(`[Reset] Verification: ${itemCount} items, ${tokenCount} tokens`);
 
     return NextResponse.json({
       success: true,
-      message: 'Database reset and reseeded successfully',
+      message: 'Database reset successfully (tokens preserved)',
+      itemCount,
       tokenCount
     });
   } catch (error) {

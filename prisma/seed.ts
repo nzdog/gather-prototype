@@ -11,10 +11,18 @@ function generateToken(): string {
 async function main() {
   console.log('🌱 Starting seed...');
 
+  // Check if this is a fresh seed or incremental reseed
+  const existingPeople = await prisma.person.count();
+  const isIncremental = existingPeople > 0;
+
+  if (isIncremental) {
+    console.log(`ℹ️  Found ${existingPeople} existing people - doing incremental reseed (keeping people/teams/tokens)`);
+  }
+
   // ============================================
-  // STEP 1: CREATE PEOPLE
+  // STEP 1: CREATE OR FETCH PEOPLE
   // ============================================
-  console.log('Creating people...');
+  const personByName = new Map();
 
   const peopleData = [
     // Host (also Veg & Sides coordinator)
@@ -55,34 +63,56 @@ async function main() {
     { name: "Annie", role: "PARTICIPANT", teamName: "Clean-up" },
   ];
 
-  const personByName = new Map();
-  for (const personData of peopleData) {
-    const person = await prisma.person.create({
-      data: { name: personData.name }
-    });
-    personByName.set(personData.name, { ...person, role: personData.role, teamName: personData.teamName });
+  if (isIncremental) {
+    // Fetch existing people
+    console.log('Fetching existing people...');
+    const existingPeopleList = await prisma.person.findMany();
+    for (const person of existingPeopleList) {
+      const personData = peopleData.find(p => p.name === person.name);
+      if (personData) {
+        personByName.set(person.name, { ...person, role: personData.role, teamName: personData.teamName });
+      }
+    }
+    console.log(`✓ Fetched ${personByName.size} existing people`);
+  } else {
+    // Create new people
+    console.log('Creating people...');
+    for (const personData of peopleData) {
+      const person = await prisma.person.create({
+        data: { name: personData.name }
+      });
+      personByName.set(personData.name, { ...person, role: personData.role, teamName: personData.teamName });
+    }
+    console.log(`✓ Created ${personByName.size} people`);
   }
 
-  console.log(`✓ Created ${personByName.size} people`);
-
   // ============================================
-  // STEP 2: CREATE EVENT
+  // STEP 2: CREATE OR FETCH EVENT
   // ============================================
-  console.log('Creating event...');
-
+  let event;
   const jacqui = personByName.get("Jacqui");
-  const event = await prisma.event.create({
-    data: {
-      name: "Wickham Family Christmas",
-      startDate: makeNzdtChristmas2025Date("2025-12-24", "00:00"),
-      endDate: makeNzdtChristmas2025Date("2025-12-26", "23:59"),
-      status: "CONFIRMING",
-      guestCount: 27,
-      hostId: jacqui.id,
-    }
-  });
 
-  console.log(`✓ Created event: ${event.name}`);
+  if (isIncremental) {
+    console.log('Fetching existing event...');
+    event = await prisma.event.findFirst();
+    if (!event) {
+      throw new Error('Incremental seed failed: no existing event found');
+    }
+    console.log(`✓ Fetched event: ${event.name}`);
+  } else {
+    console.log('Creating event...');
+    event = await prisma.event.create({
+      data: {
+        name: "Wickham Family Christmas",
+        startDate: makeNzdtChristmas2025Date("2025-12-24", "00:00"),
+        endDate: makeNzdtChristmas2025Date("2025-12-26", "23:59"),
+        status: "CONFIRMING",
+        guestCount: 27,
+        hostId: jacqui.id,
+      }
+    });
+    console.log(`✓ Created event: ${event.name}`);
+  }
 
   // ============================================
   // STEP 3: CREATE DAYS
@@ -110,10 +140,8 @@ async function main() {
   console.log(`✓ Created ${dayByName.size} days`);
 
   // ============================================
-  // STEP 4: CREATE TEAMS
+  // STEP 4: CREATE OR FETCH TEAMS
   // ============================================
-  console.log('Creating teams...');
-
   const teamsData = [
     { name: "Entrées & Nibbles", scope: "Pre-meal food, easy grazing", coordinatorName: "Joanna" },
     { name: "Mains – Proteins", scope: "Centre protein dishes for 36-40", coordinatorName: "Kate" },
@@ -126,41 +154,53 @@ async function main() {
   ];
 
   const teamByName = new Map();
-  for (const teamData of teamsData) {
-    const coordinator = personByName.get(teamData.coordinatorName);
-    const team = await prisma.team.create({
-      data: {
-        name: teamData.name,
-        scope: teamData.scope,
-        coordinatorId: coordinator.id,
-        eventId: event.id,
-      }
-    });
-    teamByName.set(teamData.name, team);
+
+  if (isIncremental) {
+    console.log('Fetching existing teams...');
+    const existingTeams = await prisma.team.findMany();
+    for (const team of existingTeams) {
+      teamByName.set(team.name, team);
+    }
+    console.log(`✓ Fetched ${teamByName.size} teams`);
+  } else {
+    console.log('Creating teams...');
+    for (const teamData of teamsData) {
+      const coordinator = personByName.get(teamData.coordinatorName);
+      const team = await prisma.team.create({
+        data: {
+          name: teamData.name,
+          scope: teamData.scope,
+          coordinatorId: coordinator.id,
+          eventId: event.id,
+        }
+      });
+      teamByName.set(teamData.name, team);
+    }
+    console.log(`✓ Created ${teamByName.size} teams`);
   }
 
-  console.log(`✓ Created ${teamByName.size} teams`);
-
   // ============================================
-  // STEP 5: CREATE PERSONEVENT (MEMBERSHIP)
+  // STEP 5: CREATE OR SKIP PERSONEVENT (MEMBERSHIP)
   // ============================================
-  console.log('Creating person-event memberships...');
-
-  let membershipCount = 0;
-  for (const [name, person] of personByName) {
-    const team = teamByName.get(person.teamName);
-    await prisma.personEvent.create({
-      data: {
-        personId: person.id,
-        eventId: event.id,
-        teamId: team.id,
-        role: person.role,
-      }
-    });
-    membershipCount++;
+  if (isIncremental) {
+    console.log('✓ Skipping memberships (already exist)');
+  } else {
+    console.log('Creating person-event memberships...');
+    let membershipCount = 0;
+    for (const [name, person] of personByName) {
+      const team = teamByName.get(person.teamName);
+      await prisma.personEvent.create({
+        data: {
+          personId: person.id,
+          eventId: event.id,
+          teamId: team.id,
+          role: person.role,
+        }
+      });
+      membershipCount++;
+    }
+    console.log(`✓ Created ${membershipCount} memberships`);
   }
-
-  console.log(`✓ Created ${membershipCount} memberships`);
 
   // ============================================
   // DROP-OFF REFERENCE OBJECT
@@ -332,67 +372,72 @@ async function main() {
   }
 
   // ============================================
-  // STEP 8: CREATE ACCESS TOKENS
+  // STEP 8: CREATE OR SKIP ACCESS TOKENS
   // ============================================
-  console.log('Creating access tokens...');
-
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 90); // 90 days from now
-
   let tokenCount = 0;
 
-  // HOST token for Jacqui
-  await prisma.accessToken.create({
-    data: {
-      token: generateToken(),
-      scope: 'HOST',
-      personId: jacqui.id,
-      eventId: event.id,
-      teamId: null,
-      expiresAt,
-    }
-  });
-  tokenCount++;
+  if (isIncremental) {
+    tokenCount = await prisma.accessToken.count();
+    console.log(`✓ Skipping tokens (${tokenCount} already exist)`);
+  } else {
+    console.log('Creating access tokens...');
 
-  // COORDINATOR tokens
-  for (const [name, person] of personByName) {
-    if (person.role === 'COORDINATOR') {
-      const personEvent = await prisma.personEvent.findFirst({
-        where: { personId: person.id, eventId: event.id }
-      });
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 90); // 90 days from now
 
-      await prisma.accessToken.create({
-        data: {
-          token: generateToken(),
-          scope: 'COORDINATOR',
-          personId: person.id,
-          eventId: event.id,
-          teamId: personEvent!.teamId,
-          expiresAt,
-        }
-      });
-      tokenCount++;
+    // HOST token for Jacqui
+    await prisma.accessToken.create({
+      data: {
+        token: generateToken(),
+        scope: 'HOST',
+        personId: jacqui.id,
+        eventId: event.id,
+        teamId: null,
+        expiresAt,
+      }
+    });
+    tokenCount++;
+
+    // COORDINATOR tokens
+    for (const [name, person] of personByName) {
+      if (person.role === 'COORDINATOR') {
+        const personEvent = await prisma.personEvent.findFirst({
+          where: { personId: person.id, eventId: event.id }
+        });
+
+        await prisma.accessToken.create({
+          data: {
+            token: generateToken(),
+            scope: 'COORDINATOR',
+            personId: person.id,
+            eventId: event.id,
+            teamId: personEvent!.teamId,
+            expiresAt,
+          }
+        });
+        tokenCount++;
+      }
     }
+
+    // PARTICIPANT tokens
+    for (const [name, person] of personByName) {
+      if (person.role === 'PARTICIPANT') {
+        await prisma.accessToken.create({
+          data: {
+            token: generateToken(),
+            scope: 'PARTICIPANT',
+            personId: person.id,
+            eventId: event.id,
+            teamId: null,
+            expiresAt,
+          }
+        });
+        tokenCount++;
+      }
+    }
+
+    console.log(`✓ Created ${tokenCount} access tokens`);
   }
-
-  // PARTICIPANT tokens
-  for (const [name, person] of personByName) {
-    if (person.role === 'PARTICIPANT') {
-      await prisma.accessToken.create({
-        data: {
-          token: generateToken(),
-          scope: 'PARTICIPANT',
-          personId: person.id,
-          eventId: event.id,
-          teamId: null,
-          expiresAt,
-        }
-      });
-      tokenCount++;
-    }
-  }
-
-  console.log(`✓ Created ${tokenCount} access tokens`);
 
   // ============================================
   // SUMMARY
