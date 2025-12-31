@@ -105,6 +105,7 @@ export async function GET(
       startDate: context.event.startDate,
       endDate: context.event.endDate,
       status: context.event.status,
+      guestCount: context.event.guestCount,
     },
     teams: teamsWithStatus,
     freezeAllowed,

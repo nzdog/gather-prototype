@@ -85,6 +85,14 @@ export async function POST(
       }
     });
 
+    // Clear notes if it contains "UNASSIGNED" message from seed data
+    if (item.notes && item.notes.includes('UNASSIGNED')) {
+      await tx.item.update({
+        where: { id: params.itemId },
+        data: { notes: null }
+      });
+    }
+
     // Repair item status after assignment mutation
     await repairItemStatusAfterMutation(tx, params.itemId);
 
