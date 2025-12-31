@@ -28,6 +28,11 @@ export default function DemoLandingPage() {
       });
       if (response.ok) {
         const data = await response.json();
+        console.log(`[Demo] Fetched ${data.tokens.length} tokens from API`);
+        if (data.tokens.length > 0) {
+          console.log(`[Demo] First HOST token: /h/${data.tokens.find((t: any) => t.scope === 'HOST')?.token.substring(0, 16)}...`);
+          console.log(`[Demo] First COORD token: /c/${data.tokens.find((t: any) => t.scope === 'COORDINATOR')?.token.substring(0, 16)}...`);
+        }
         setTokens(data.tokens);
       }
     } catch (err) {
