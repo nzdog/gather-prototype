@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { AlertCircle, Calendar, MapPin, Home, Check, Grid3x3, List, ChevronDown, ChevronRight, Maximize2, Minimize2 } from 'lucide-react';
+import { AlertCircle, Calendar, MapPin, Home, Check, Grid3x3, List, ChevronDown, ChevronRight, Maximize2, Minimize2, Plus, Trash2, X } from 'lucide-react';
 
 interface Assignment {
   id: string;
@@ -85,6 +85,19 @@ export default function CoordinatorView() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [collapsedItems, setCollapsedItems] = useState<Set<string>>(new Set());
   const isInitialLoad = useRef(true);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newItem, setNewItem] = useState({
+    name: '',
+    quantity: '',
+    critical: false,
+    glutenFree: false,
+    dairyFree: false,
+    vegetarian: false,
+    notes: '',
+    dropOffLocation: '',
+    dropOffNote: '',
+    dayId: '',
+  });
 
   useEffect(() => {
     fetchData();
@@ -205,6 +218,79 @@ export default function CoordinatorView() {
     }
   };
 
+  const handleCreateItem = async () => {
+    if (!newItem.name.trim()) {
+      alert('Item name is required');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/c/${token}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newItem.name,
+          quantity: newItem.quantity || null,
+          critical: newItem.critical,
+          glutenFree: newItem.glutenFree,
+          dairyFree: newItem.dairyFree,
+          vegetarian: newItem.vegetarian,
+          notes: newItem.notes || null,
+          dropOffLocation: newItem.dropOffLocation || null,
+          dropOffNote: newItem.dropOffNote || null,
+          dayId: newItem.dayId || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to create item');
+      }
+
+      // Reset form and close modal
+      setNewItem({
+        name: '',
+        quantity: '',
+        critical: false,
+        glutenFree: false,
+        dairyFree: false,
+        vegetarian: false,
+        notes: '',
+        dropOffLocation: '',
+        dropOffNote: '',
+        dayId: '',
+      });
+      setShowAddModal(false);
+
+      // Refresh data
+      await fetchData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to create item');
+    }
+  };
+
+  const handleDeleteItem = async (itemId: string, itemName: string) => {
+    if (!confirm(`Delete "${itemName}"?\n\nThis will also remove any assignment for this item.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/c/${token}/items/${itemId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete item');
+      }
+
+      // Refresh data
+      await fetchData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete item');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -303,6 +389,15 @@ export default function CoordinatorView() {
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm uppercase tracking-wide text-gray-500">Team Items</h2>
           <div className="flex items-center gap-2">
+            {data.event.status !== 'FROZEN' && (
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
+              >
+                <Plus className="size-4" />
+                Add Item
+              </button>
+            )}
             {data && data.items.length > 0 && (
               <button
                 onClick={toggleAllItems}
@@ -494,6 +589,19 @@ export default function CoordinatorView() {
                     </div>
                   )}
                 </div>
+
+                {/* Delete button */}
+                {data.event.status !== 'FROZEN' && (
+                  <div className="pt-3 mt-3 border-t border-gray-200">
+                    <button
+                      onClick={() => handleDeleteItem(item.id, item.name)}
+                      className="flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="size-4" />
+                      Delete Item
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -631,6 +739,170 @@ export default function CoordinatorView() {
                 <span className="text-sm text-gray-700">{team.name}</span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Add Item Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">Add New Item</h2>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="size-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Item Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newItem.name}
+                  onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., Potato salad"
+                />
+              </div>
+
+              {/* Quantity */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Quantity
+                </label>
+                <input
+                  type="text"
+                  value={newItem.quantity}
+                  onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., 2 large bowls, Plenty"
+                />
+              </div>
+
+              {/* Day */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Day
+                </label>
+                <select
+                  value={newItem.dayId}
+                  onChange={(e) => setNewItem({ ...newItem, dayId: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select day...</option>
+                  {data.items[0]?.day && (
+                    <option value={data.items[0].day.id}>{data.items[0].day.name}</option>
+                  )}
+                </select>
+              </div>
+
+              {/* Drop-off Location */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Drop-off Location
+                </label>
+                <input
+                  type="text"
+                  value={newItem.dropOffLocation}
+                  onChange={(e) => setNewItem({ ...newItem, dropOffLocation: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., Main kitchen"
+                />
+              </div>
+
+              {/* Drop-off Note */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Drop-off Note
+                </label>
+                <input
+                  type="text"
+                  value={newItem.dropOffNote}
+                  onChange={(e) => setNewItem({ ...newItem, dropOffNote: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., Before 5pm"
+                />
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Notes
+                </label>
+                <textarea
+                  value={newItem.notes}
+                  onChange={(e) => setNewItem({ ...newItem, notes: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                  placeholder="Additional information..."
+                />
+              </div>
+
+              {/* Checkboxes */}
+              <div className="space-y-2">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={newItem.critical}
+                    onChange={(e) => setNewItem({ ...newItem, critical: e.target.checked })}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Critical Item</span>
+                </label>
+
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={newItem.glutenFree}
+                    onChange={(e) => setNewItem({ ...newItem, glutenFree: e.target.checked })}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">Gluten Free</span>
+                </label>
+
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={newItem.dairyFree}
+                    onChange={(e) => setNewItem({ ...newItem, dairyFree: e.target.checked })}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">Dairy Free</span>
+                </label>
+
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={newItem.vegetarian}
+                    onChange={(e) => setNewItem({ ...newItem, vegetarian: e.target.checked })}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">Vegetarian</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateItem}
+                className="px-4 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
+              >
+                Create Item
+              </button>
+            </div>
           </div>
         </div>
       )}
