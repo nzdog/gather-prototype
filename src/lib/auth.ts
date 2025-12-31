@@ -23,6 +23,8 @@ export interface AuthContext {
  * @returns AuthContext if valid, null if invalid/expired
  */
 export async function resolveToken(token: string): Promise<AuthContext | null> {
+  console.log(`[Auth] Resolving token: ${token.substring(0, 16)}...`);
+
   // 1. Find token
   const accessToken = await prisma.accessToken.findUnique({
     where: { token },
@@ -34,11 +36,15 @@ export async function resolveToken(token: string): Promise<AuthContext | null> {
   });
 
   if (!accessToken) {
+    console.log(`[Auth] Token not found in database`);
     return null;
   }
 
+  console.log(`[Auth] Token found - scope: ${accessToken.scope}, person: ${accessToken.person?.name || 'NULL'}, event: ${accessToken.event?.name || 'NULL'}`);
+
   // 2. Check expiration
   if (accessToken.expiresAt && accessToken.expiresAt < new Date()) {
+    console.log(`[Auth] Token expired`);
     return null;
   }
 
@@ -59,10 +65,12 @@ export async function resolveToken(token: string): Promise<AuthContext | null> {
 
     if (!personEvent || personEvent.teamId !== accessToken.teamId) {
       // Team mismatch - invalid token
+      console.log(`[Auth] COORDINATOR token team mismatch`);
       return null;
     }
 
     // Return context with team
+    console.log(`[Auth] Returning COORDINATOR context`);
     return {
       person: accessToken.person,
       event: accessToken.event,
@@ -72,6 +80,7 @@ export async function resolveToken(token: string): Promise<AuthContext | null> {
   }
 
   // 4. For HOST and PARTICIPANT tokens, return without team
+  console.log(`[Auth] Returning ${accessToken.scope} context`);
   return {
     person: accessToken.person,
     event: accessToken.event,
