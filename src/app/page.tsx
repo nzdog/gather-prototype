@@ -39,15 +39,19 @@ export default function DemoLandingPage() {
     }
 
     setResetting(true);
+    setLoading(true);
     try {
       const response = await fetch('/api/demo/reset', { method: 'POST' });
       if (response.ok) {
         const data = await response.json();
         // Small delay to ensure DB changes are fully committed
         await new Promise(resolve => setTimeout(resolve, 500));
-        // Re-fetch fresh tokens instead of reloading page
+        // Re-fetch fresh tokens with cache busting
         await fetchTokens();
-        alert(`Database reset successfully! Created ${data.tokenCount} access tokens.`);
+        // Show non-blocking success message
+        setTimeout(() => {
+          alert(`✅ Reset complete! Created ${data.tokenCount} fresh access tokens. The page has been updated with new links.`);
+        }, 100);
       } else {
         const error = await response.json();
         alert(`Failed to reset: ${error.error}`);
@@ -57,6 +61,7 @@ export default function DemoLandingPage() {
       alert('Failed to reset database');
     } finally {
       setResetting(false);
+      setLoading(false);
     }
   };
 
