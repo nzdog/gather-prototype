@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
  */
 export async function GET() {
   try {
+    console.log('[TokenAPI] Fetching all tokens from database...');
     const tokens = await prisma.accessToken.findMany({
       include: {
         person: true,
@@ -29,9 +30,15 @@ export async function GET() {
       teamName: t.team?.name
     }));
 
+    console.log(`[TokenAPI] Returning ${formattedTokens.length} tokens`);
+    if (formattedTokens.length > 0) {
+      console.log(`[TokenAPI] First HOST token: ${formattedTokens.find(t => t.scope === 'HOST')?.token.substring(0, 16)}...`);
+      console.log(`[TokenAPI] First COORD token: ${formattedTokens.find(t => t.scope === 'COORDINATOR')?.token.substring(0, 16)}...`);
+    }
+
     return NextResponse.json({ tokens: formattedTokens });
   } catch (error) {
-    console.error('Failed to fetch tokens:', error);
+    console.error('[TokenAPI] Failed to fetch tokens:', error);
     return NextResponse.json({ error: 'Failed to fetch tokens' }, { status: 500 });
   }
 }
