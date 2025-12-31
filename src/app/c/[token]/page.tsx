@@ -1,7 +1,28 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
+import { AlertCircle, Calendar, MapPin, Home, Check, Grid3x3, List, ChevronDown, ChevronRight, Maximize2, Minimize2 } from 'lucide-react';
+
+interface Assignment {
+  id: string;
+  acknowledged: boolean;
+  item: {
+    id: string;
+    name: string;
+    quantity: string | null;
+    description: string | null;
+    critical: boolean;
+    glutenFree: boolean;
+    dairyFree: boolean;
+    vegetarian: boolean;
+    notes: string | null;
+    dropOffAt: string | null;
+    dropOffLocation: string | null;
+    dropOffNote: string | null;
+    day: { id: string; name: string; date: string } | null;
+  };
+}
 
 interface Item {
   id: string;
@@ -14,6 +35,7 @@ interface Item {
   vegetarian: boolean;
   notes: string | null;
   day: { id: string; name: string; date: string } | null;
+  dropOffLocation: string | null;
   assignment: {
     id: string;
     acknowledged: boolean;
@@ -37,6 +59,7 @@ interface CoordinatorData {
     id: string;
     name: string;
     status: string;
+    guestCount: number | null;
   };
   team: {
     id: string;
@@ -50,6 +73,7 @@ interface CoordinatorData {
   items: Item[];
   teamMembers: TeamMember[];
   otherTeams: OtherTeam[];
+  myAssignments: Assignment[];
 }
 
 export default function CoordinatorView() {
@@ -58,6 +82,9 @@ export default function CoordinatorView() {
   const [data, setData] = useState<CoordinatorData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [collapsedItems, setCollapsedItems] = useState<Set<string>>(new Set());
+  const isInitialLoad = useRef(true);
 
   useEffect(() => {
     fetchData();
@@ -71,6 +98,17 @@ export default function CoordinatorView() {
       }
       const result = await response.json();
       setData(result);
+
+      // Only initialize collapsed state on first load
+      if (isInitialLoad.current) {
+        const allItemIds = new Set<string>();
+        result.items.forEach((item: any) => allItemIds.add(item.id));
+        if (result.myAssignments) {
+          result.myAssignments.forEach((assignment: any) => allItemIds.add(assignment.id));
+        }
+        setCollapsedItems(allItemIds);
+        isInitialLoad.current = false;
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -120,20 +158,56 @@ export default function CoordinatorView() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'SORTED':
-        return <span className="text-green-600">✓</span>;
-      case 'CRITICAL_GAP':
-        return <span className="text-red-600">⚠</span>;
-      default:
-        return <span className="text-yellow-600">⚠</span>;
+  const handleAcknowledge = async (assignmentId: string) => {
+    try {
+      const response = await fetch(`/api/c/${token}/ack/${assignmentId}`, {
+        method: 'POST',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to acknowledge');
+      }
+      await fetchData();
+    } catch (err) {
+      console.error('Failed to acknowledge:', err);
+    }
+  };
+
+  const formatDropOff = (dropOffAt: string | null, dropOffNote: string | null) => {
+    if (dropOffNote) return dropOffNote;
+    if (!dropOffAt) return null;
+
+    const date = new Date(dropOffAt);
+    return new Intl.DateTimeFormat('en-NZ', {
+      timeZone: 'Pacific/Auckland',
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(date);
+  };
+
+  const toggleItemCollapse = (itemId: string) => {
+    const newCollapsed = new Set(collapsedItems);
+    if (newCollapsed.has(itemId)) {
+      newCollapsed.delete(itemId);
+    } else {
+      newCollapsed.add(itemId);
+    }
+    setCollapsedItems(newCollapsed);
+  };
+
+  const toggleAllItems = () => {
+    if (collapsedItems.size === 0) {
+      // All expanded, collapse all
+      const allIds = new Set(data?.items.map(item => item.id) || []);
+      setCollapsedItems(allIds);
+    } else {
+      // Some or all collapsed, expand all
+      setCollapsedItems(new Set());
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen p-8 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-gray-600">Loading...</div>
       </div>
     );
@@ -141,167 +215,425 @@ export default function CoordinatorView() {
 
   if (error || !data) {
     return (
-      <div className="min-h-screen p-8 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-red-600">Error: {error || 'Failed to load'}</div>
       </div>
     );
   }
 
-  const unassignedCount = data.items.filter(i => i.status === 'UNASSIGNED').length;
+  const unassignedItems = data.items.filter(i => !i.assignment);
+  const unassignedCount = unassignedItems.length;
+  const criticalCount = unassignedItems.filter(i => i.critical).length;
+
+  // Sort items: critical unassigned first, then regular unassigned, then assigned
+  const sortedItems = [...data.items].sort((a, b) => {
+    const aUnassigned = !a.assignment;
+    const bUnassigned = !b.assignment;
+    if (aUnassigned && a.critical && !(bUnassigned && b.critical)) return -1;
+    if (bUnassigned && b.critical && !(aUnassigned && a.critical)) return 1;
+    if (aUnassigned && !bUnassigned) return -1;
+    if (bUnassigned && !aUnassigned) return 1;
+    return 0;
+  });
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
-      <div className="max-w-6xl mx-auto">
-        {/* Frozen State Banner */}
-        {data.event.status === 'FROZEN' && (
-          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6 rounded-r-lg">
-            <div className="flex items-start">
-              <div className="flex-shrink-0">
-                <span className="text-2xl">🔒</span>
-              </div>
-              <div className="ml-3 flex-1">
-                <h3 className="text-lg font-bold text-blue-900">
-                  Event Frozen
-                </h3>
-                <p className="text-sm text-blue-800 mt-1">
-                  This event has been frozen. You cannot make changes to assignments.
-                  {data.host && (
-                    <span className="block mt-1 font-medium">
-                      Contact {data.host.name} (event host) to request changes.
-                    </span>
-                  )}
-                </p>
-              </div>
-            </div>
-          </div>
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 px-6 py-5">
+        <a href="/" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 mb-3">
+          <Home className="size-4" />
+          Back to Demo
+        </a>
+        <div className="text-sm font-medium text-gray-500 mb-1">{data.event.name}</div>
+        <h1 className="text-2xl font-bold text-gray-900">{data.team.name}</h1>
+        {data.team.scope && (
+          <p className="text-sm text-gray-500 mt-1">{data.team.scope}</p>
         )}
-
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h1 className="text-2xl font-bold mb-2">{data.team.name}</h1>
-          {data.team.scope && (
-            <p className="text-gray-600 mb-4">{data.team.scope}</p>
+        <div className="flex items-center gap-2 mt-2">
+          <span className="text-xs uppercase tracking-wide text-gray-500 bg-gray-100 px-2 py-1 rounded">
+            Coordinating
+          </span>
+          {data.event.guestCount && (
+            <span className="text-sm text-gray-500">{data.event.guestCount} guests</span>
           )}
-          <div className="flex gap-4 text-sm">
-            <div>
-              <span className="text-gray-600">Event:</span>{' '}
-              <span className="font-medium">{data.event.status}</span>
-            </div>
-            <div>
-              <span className="text-gray-600">Team:</span>{' '}
-              <span className="font-medium">
-                {unassignedCount > 0 ? `${unassignedCount} gaps` : 'All sorted'}
+        </div>
+      </div>
+
+      {/* Frozen State Banner */}
+      {data.event.status === 'FROZEN' && (
+        <div className="bg-blue-50 px-6 py-4 flex items-start gap-3">
+          <span className="text-2xl">🔒</span>
+          <div className="flex-1">
+            <h3 className="text-sm font-bold text-blue-900">Event Frozen</h3>
+            <p className="text-xs text-blue-800 mt-1">
+              Contact {data.host?.name || 'the host'} to request changes.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Status Bar */}
+      {data.event.status !== 'FROZEN' && (
+        <>
+          {criticalCount > 0 ? (
+            <div className="bg-red-50 px-6 py-4 flex items-center gap-3">
+              <AlertCircle className="size-5 text-red-500" />
+              <span className="font-semibold text-red-900">
+                {criticalCount} critical {criticalCount === 1 ? 'item needs' : 'items need'} assignment
               </span>
             </div>
+          ) : unassignedCount > 0 ? (
+            <div className="bg-amber-50 px-6 py-4 flex items-center gap-3">
+              <AlertCircle className="size-5 text-amber-500" />
+              <span className="font-semibold text-amber-900">
+                {unassignedCount} {unassignedCount === 1 ? 'item needs' : 'items need'} assignment
+              </span>
+            </div>
+          ) : (
+            <div className="bg-green-50 px-6 py-4 flex items-center gap-3">
+              <div className="size-5 rounded-full bg-green-500 flex items-center justify-center text-white text-xs">✓</div>
+              <span className="font-semibold text-green-900">All items assigned</span>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Items List */}
+      <div className="flex-1 overflow-y-auto p-4 md:p-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm uppercase tracking-wide text-gray-500">Team Items</h2>
+          <div className="flex items-center gap-2">
+            {data && data.items.length > 0 && (
+              <button
+                onClick={toggleAllItems}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                {collapsedItems.size === 0 ? (
+                  <>
+                    <Minimize2 className="size-4" />
+                    Collapse All
+                  </>
+                ) : (
+                  <>
+                    <Maximize2 className="size-4" />
+                    Expand All
+                  </>
+                )}
+              </button>
+            )}
+            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-1.5 rounded transition-colors ${
+                viewMode === 'grid'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+              title="Grid view"
+            >
+              <Grid3x3 className="size-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-1.5 rounded transition-colors ${
+                viewMode === 'list'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+              title="List view"
+            >
+              <List className="size-4" />
+            </button>
+          </div>
           </div>
         </div>
-
-        {/* Items */}
-        <div className="space-y-4 mb-6">
-          <h2 className="text-xl font-bold">Items</h2>
-
-          {data.items.map((item) => (
-            <div
-              key={item.id}
-              className={`bg-white rounded-lg shadow-sm p-4 ${
-                item.status === 'UNASSIGNED' ? 'border-l-4 border-yellow-500' : 'border-l-4 border-green-500'
-              }`}
-            >
-              <div className="flex justify-between items-start mb-3">
-                <div className="flex-1">
-                  <h3 className="font-semibold">
-                    {item.status === 'UNASSIGNED' && '⚠ '}
-                    {item.name}
-                    {item.critical && ' [!]'}
-                  </h3>
-                  {item.quantity && (
-                    <p className="text-sm text-gray-600">{item.quantity}</p>
+        <div className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}>
+        {sortedItems.map((item) => (
+          <div
+            key={item.id}
+            className={`bg-white border border-gray-200 rounded-lg shadow-sm p-4 hover:shadow-md transition-shadow ${
+              viewMode === 'list' ? 'w-full max-w-md' : ''
+            }`}
+          >
+            {/* Card Header - Always Visible */}
+            <div className="flex items-start justify-between mb-2">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  {!item.assignment && item.critical && (
+                    <AlertCircle className="size-4 text-red-500 flex-shrink-0" />
                   )}
-                  {item.day && (
-                    <p className="text-sm text-gray-600">{item.day.name}</p>
-                  )}
-                </div>
-                {item.critical && (
-                  <span className="bg-red-100 text-red-800 text-xs font-semibold px-2 py-1 rounded">
-                    CRITICAL
-                  </span>
-                )}
-              </div>
-
-              {/* Dietary tags */}
-              {(item.glutenFree || item.dairyFree || item.vegetarian) && (
-                <div className="flex gap-2 mb-3">
-                  {item.glutenFree && (
-                    <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">GF</span>
-                  )}
-                  {item.dairyFree && (
-                    <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">DF</span>
-                  )}
-                  {item.vegetarian && (
-                    <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">V</span>
-                  )}
-                </div>
-              )}
-
-              {/* Assignment control */}
-              <div className="mt-3">
-                {item.assignment ? (
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm">
-                      ✓ {item.assignment.person.name}
-                      {item.assignment.acknowledged && ' (acknowledged)'}
+                  <span className="font-semibold text-gray-900">{item.name}</span>
+                  {item.quantity && <span className="text-gray-500 flex-shrink-0">×{item.quantity}</span>}
+                  {!item.assignment && item.critical && (
+                    <span className="bg-red-100 text-red-800 text-xs font-semibold px-2 py-1 rounded flex-shrink-0">
+                      CRITICAL
                     </span>
-                    {data.event.status !== 'FROZEN' && (
-                      <button
-                        onClick={() => handleUnassign(item.id)}
-                        className="text-sm text-red-600 hover:text-red-800"
-                      >
-                        Unassign
-                      </button>
+                  )}
+                </div>
+
+                {/* Dietary tags - Always Visible */}
+                {(item.glutenFree || item.dairyFree || item.vegetarian) && (
+                  <div className="flex gap-2 mb-2">
+                    {item.glutenFree && (
+                      <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">GF</span>
                     )}
-                  </div>
-                ) : (
-                  <div>
-                    {data.event.status !== 'FROZEN' ? (
-                      <select
-                        onChange={(e) => {
-                          if (e.target.value) {
-                            handleAssign(item.id, e.target.value);
-                          }
-                        }}
-                        className="text-sm border rounded px-2 py-1"
-                        defaultValue=""
-                      >
-                        <option value="">Assign to...</option>
-                        {data.teamMembers.map((member) => (
-                          <option key={member.id} value={member.id}>
-                            {member.name}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className="text-sm text-gray-600">UNASSIGNED</span>
+                    {item.dairyFree && (
+                      <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">DF</span>
+                    )}
+                    {item.vegetarian && (
+                      <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">V</span>
                     )}
                   </div>
                 )}
-              </div>
-            </div>
-          ))}
-        </div>
 
-        {/* Other Teams */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <h2 className="text-xl font-bold mb-4">Other Teams</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {data.otherTeams.map((team) => (
-              <div key={team.id} className="flex items-center gap-2">
-                {getStatusBadge(team.status)}
-                <span className="text-sm">{team.name}</span>
+                {/* Assignment Status Icon - Always Visible */}
+                <div className="flex items-center gap-1.5 text-xs">
+                  {item.assignment ? (
+                    <>
+                      <Check className="size-3.5 text-green-600" />
+                      <span className="text-green-600 font-medium">Assigned</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertCircle className="size-3.5 text-amber-600" />
+                      <span className="text-amber-600 font-medium">Unassigned</span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Collapse Toggle Button */}
+              <button
+                onClick={() => toggleItemCollapse(item.id)}
+                className="ml-2 p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0 border border-gray-300"
+                title={collapsedItems.has(item.id) ? 'Expand' : 'Collapse'}
+              >
+                {collapsedItems.has(item.id) ? (
+                  <ChevronRight className="size-5 text-gray-700" />
+                ) : (
+                  <ChevronDown className="size-5 text-gray-700" />
+                )}
+              </button>
+            </div>
+
+            {/* Collapsible Content */}
+            {!collapsedItems.has(item.id) && (
+              <div className="space-y-2">
+                {/* Day and location */}
+                <div className="text-sm text-gray-500 flex items-center gap-3">
+                  {item.day && (
+                    <span className="flex items-center gap-1">
+                      <Calendar className="size-4" />
+                      {item.day.name}
+                    </span>
+                  )}
+                  {item.dropOffLocation && (
+                    <span className="flex items-center gap-1">
+                      <MapPin className="size-4" />
+                      {item.dropOffLocation}
+                    </span>
+                  )}
+                </div>
+
+                {/* Notes */}
+                {item.notes && (
+                  <div className="text-sm text-gray-600 mb-2 italic">{item.notes}</div>
+                )}
+
+                {/* Assignment control */}
+                <div className="mt-3">
+                  {item.assignment ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-900">
+                          {item.assignment.person.name}
+                        </span>
+                        {data.event.status !== 'FROZEN' && (
+                          <button
+                            onClick={() => handleUnassign(item.id)}
+                            className="text-sm text-red-600 hover:text-red-800"
+                          >
+                            Unassign
+                          </button>
+                        )}
+                      </div>
+                      {item.assignment.acknowledged ? (
+                        <div className="inline-flex items-center gap-1.5 bg-green-100 text-green-800 px-3 py-1.5 rounded-full text-sm font-semibold">
+                          <Check className="size-4" />
+                          Confirmed
+                        </div>
+                      ) : (
+                        <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full text-sm font-semibold">
+                          <AlertCircle className="size-4" />
+                          Awaiting confirmation
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      {data.event.status !== 'FROZEN' ? (
+                        <select
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              handleAssign(item.id, e.target.value);
+                            }
+                          }}
+                          className="text-sm border border-gray-300 rounded-lg px-3 py-2 hover:border-gray-400 transition-colors"
+                          defaultValue=""
+                        >
+                          <option value="">Assign to...</option>
+                          {data.teamMembers.map((member) => (
+                            <option key={member.id} value={member.id}>
+                              {member.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-sm font-medium text-amber-600">UNASSIGNED</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+        </div>
+      </div>
+
+      {/* Your Assignments */}
+      {data.myAssignments && data.myAssignments.length > 0 && (
+        <div className="px-4 md:px-6 py-4 bg-blue-50 border-t-2 border-blue-200">
+          <h2 className="text-sm uppercase tracking-wide text-blue-900 font-bold mb-3">Your Personal Assignments</h2>
+          <div className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}>
+            {data.myAssignments.map((assignment) => (
+              <div
+                key={assignment.id}
+                className={`bg-white rounded-lg p-4 shadow-sm border ${
+                  viewMode === 'list' ? 'w-full max-w-md' : ''
+                } ${
+                  assignment.acknowledged ? 'border-green-300' : 'border-blue-300'
+                }`}
+              >
+                {/* Card Header - Always Visible */}
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold text-gray-900 text-lg">{assignment.item.name}</h3>
+                      {assignment.item.quantity && (
+                        <span className="text-gray-500 flex-shrink-0">×{assignment.item.quantity}</span>
+                      )}
+                      {assignment.item.critical && (
+                        <span className="bg-red-100 text-red-800 text-xs font-semibold px-2 py-1 rounded flex-shrink-0">
+                          CRITICAL
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Dietary tags - Always Visible */}
+                    {(assignment.item.glutenFree || assignment.item.dairyFree || assignment.item.vegetarian) && (
+                      <div className="flex gap-2">
+                    {assignment.item.glutenFree && (
+                      <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">GF</span>
+                    )}
+                    {assignment.item.dairyFree && (
+                      <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">DF</span>
+                    )}
+                        {assignment.item.vegetarian && (
+                          <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">V</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Collapse Toggle Button */}
+                  <button
+                    onClick={() => toggleItemCollapse(assignment.id)}
+                    className="ml-2 p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0 border border-gray-300"
+                    title={collapsedItems.has(assignment.id) ? 'Expand' : 'Collapse'}
+                  >
+                    {collapsedItems.has(assignment.id) ? (
+                      <ChevronRight className="size-5 text-gray-700" />
+                    ) : (
+                      <ChevronDown className="size-5 text-gray-700" />
+                    )}
+                  </button>
+                </div>
+
+                {/* Collapsible Content */}
+                {!collapsedItems.has(assignment.id) && (
+                  <div>
+                    {/* Drop-off Details */}
+                    <div className="space-y-2 mb-3">
+                  {assignment.item.day && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Calendar className="size-4 text-gray-400" />
+                      <span className="text-gray-900">
+                        {assignment.item.day.name}
+                        {formatDropOff(assignment.item.dropOffAt, assignment.item.dropOffNote) &&
+                          `, ${formatDropOff(assignment.item.dropOffAt, assignment.item.dropOffNote)}`}
+                      </span>
+                    </div>
+                  )}
+                  {assignment.item.dropOffLocation && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <MapPin className="size-4 text-gray-400" />
+                      <span className="text-gray-900">{assignment.item.dropOffLocation}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Notes */}
+                {assignment.item.notes && (
+                  <div className="bg-gray-50 rounded-lg p-3 mb-3">
+                    <p className="text-sm text-gray-600">{assignment.item.notes}</p>
+                  </div>
+                )}
+
+                    {/* Acknowledge Button */}
+                    {!assignment.acknowledged ? (
+                      <button
+                        onClick={() => handleAcknowledge(assignment.id)}
+                        className="mx-auto px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-all flex items-center justify-center"
+                      >
+                        Please Confirm
+                      </button>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2 text-green-600 font-medium py-2.5">
+                        <Check className="size-5" />
+                        Confirmed
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Other Teams */}
+      {data.otherTeams.length > 0 && (
+        <div className="bg-white border-t-2 border-gray-200 px-6 py-4">
+          <h2 className="text-sm uppercase tracking-wide text-gray-500 mb-3">Other Teams</h2>
+          <div className="grid grid-cols-2 gap-2">
+            {data.otherTeams.map((team) => (
+              <div key={team.id} className="flex items-center gap-2">
+                <div
+                  className={`size-2 rounded-full ${
+                    team.status === 'SORTED'
+                      ? 'bg-green-500'
+                      : team.status === 'CRITICAL_GAP'
+                      ? 'bg-red-500'
+                      : 'bg-amber-500'
+                  }`}
+                />
+                <span className="text-sm text-gray-700">{team.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
