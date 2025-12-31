@@ -46,8 +46,8 @@ export default function DemoLandingPage() {
         alert(`Database reset successfully! Created ${data.tokenCount} access tokens.`);
         // Small delay to ensure DB changes are fully committed before reload
         await new Promise(resolve => setTimeout(resolve, 500));
-        // Reload the page to fetch new tokens
-        window.location.reload();
+        // Force hard reload with cache busting to ensure fresh token links
+        window.location.href = '/?t=' + Date.now();
       } else {
         const error = await response.json();
         alert(`Failed to reset: ${error.error}`);
