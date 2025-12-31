@@ -73,10 +73,11 @@ async function main() {
   const jacqui = personByName.get("Jacqui");
   const event = await prisma.event.create({
     data: {
-      name: "Richardson Family Christmas",
+      name: "Wickham Family Christmas",
       startDate: makeNzdtChristmas2025Date("2025-12-24", "00:00"),
       endDate: makeNzdtChristmas2025Date("2025-12-26", "23:59"),
       status: "CONFIRMING",
+      guestCount: 27,
       hostId: jacqui.id,
     }
   });
@@ -178,21 +179,21 @@ async function main() {
 
   const itemsData = [
     // ENTRÉES & NIBBLES
-    { teamName: "Entrées & Nibbles", name: "Ceviche snapper starter — Jack's portion", quantity: "Half platter", assigneeName: "Jack", glutenFree: true, dairyFree: true, dayName: "Christmas Eve", ...dropOff.eve, critical: false },
-    { teamName: "Entrées & Nibbles", name: "Ceviche snapper starter — Tom's portion", quantity: "Half platter", assigneeName: "Tom", glutenFree: true, dairyFree: true, dayName: "Christmas Eve", ...dropOff.eve, critical: false },
-    { teamName: "Entrées & Nibbles", name: "Potato chips, nuts, nibbles — Pete", quantity: "Plenty", assigneeName: "Pete", dayName: "Christmas Eve", ...dropOff.eve, critical: false },
-    { teamName: "Entrées & Nibbles", name: "Potato chips, nuts, nibbles — Joanna", quantity: "Plenty", assigneeName: "Joanna", dayName: "Christmas Eve", ...dropOff.eve, critical: false },
-    { teamName: "Entrées & Nibbles", name: "Platter food — Jane", quantity: "1 platter", assigneeName: "Jane", dayName: "Christmas Day", ...dropOff.day, critical: false },
-    { teamName: "Entrées & Nibbles", name: "Platter food — Gavin", quantity: "1 platter", assigneeName: "Gavin", dayName: "Christmas Day", ...dropOff.day, critical: false },
+    { teamName: "Entrées & Nibbles", name: "Ceviche snapper starter", quantity: "Half platter", assigneeName: "Jack", glutenFree: true, dairyFree: true, dayName: "Christmas Eve", ...dropOff.eve, critical: false },
+    { teamName: "Entrées & Nibbles", name: "Ceviche snapper starter", quantity: "Half platter", assigneeName: "Tom", glutenFree: true, dairyFree: true, dayName: "Christmas Eve", ...dropOff.eve, critical: false },
+    { teamName: "Entrées & Nibbles", name: "Potato chips, nuts, nibbles", quantity: "Plenty", assigneeName: "Pete", dayName: "Christmas Eve", ...dropOff.eve, critical: false },
+    { teamName: "Entrées & Nibbles", name: "Potato chips, nuts, nibbles", quantity: "Plenty", assigneeName: "Joanna", dayName: "Christmas Eve", ...dropOff.eve, critical: false },
+    { teamName: "Entrées & Nibbles", name: "Platter food", quantity: "1 platter", assigneeName: "Jane", dayName: "Christmas Day", ...dropOff.day, critical: false },
+    { teamName: "Entrées & Nibbles", name: "Platter food", quantity: "1 platter", assigneeName: "Gavin", dayName: "Christmas Day", ...dropOff.day, critical: false },
 
     // MAINS – PROTEINS
-    { teamName: "Mains – Proteins", name: "Turkey + stuffing + gravy — Angus", quantity: "1", assigneeName: "Angus", glutenFree: true, dayName: "Christmas Day", ...dropOff.day, critical: true },
-    { teamName: "Mains – Proteins", name: "Turkey + stuffing + gravy — Dougal", quantity: "1", assigneeName: "Dougal", glutenFree: true, dayName: "Christmas Day", ...dropOff.day, critical: true },
-    { teamName: "Mains – Proteins", name: "Turkey + stuffing + gravy — Robyn", quantity: "1", assigneeName: "Robyn", glutenFree: true, dayName: "Christmas Day", ...dropOff.day, critical: true },
-    { teamName: "Mains – Proteins", name: "Ham (basted) — Kate", quantity: "1", assigneeName: "Kate", glutenFree: true, dayName: "Christmas Day", ...dropOff.day, critical: true },
-    { teamName: "Mains – Proteins", name: "Ham (basted) — Angus", quantity: "1", assigneeName: "Angus", glutenFree: true, dayName: "Christmas Day", ...dropOff.day, critical: true },
-    { teamName: "Mains – Proteins", name: "Beef fillets — Kate", quantity: "3", assigneeName: "Kate", glutenFree: true, dairyFree: true, dayName: "Christmas Eve", ...dropOff.eve, critical: true },
-    { teamName: "Mains – Proteins", name: "Beef fillets — Angus", quantity: "2", assigneeName: "Angus", glutenFree: true, dairyFree: true, dayName: "Christmas Eve", ...dropOff.eve, critical: true },
+    { teamName: "Mains – Proteins", name: "Turkey + stuffing + gravy", quantity: "1", assigneeName: "Angus", glutenFree: true, dayName: "Christmas Day", ...dropOff.day, critical: true },
+    { teamName: "Mains – Proteins", name: "Turkey + stuffing + gravy", quantity: "1", assigneeName: "Dougal", glutenFree: true, dayName: "Christmas Day", ...dropOff.day, critical: true },
+    { teamName: "Mains – Proteins", name: "Turkey + stuffing + gravy", quantity: "1", assigneeName: "Robyn", glutenFree: true, dayName: "Christmas Day", ...dropOff.day, critical: true },
+    { teamName: "Mains – Proteins", name: "Ham (basted)", quantity: "1", assigneeName: "Kate", glutenFree: true, dayName: "Christmas Day", ...dropOff.day, critical: true },
+    { teamName: "Mains – Proteins", name: "Ham (basted)", quantity: "1", assigneeName: "Angus", glutenFree: true, dayName: "Christmas Day", ...dropOff.day, critical: true },
+    { teamName: "Mains – Proteins", name: "Beef fillets", quantity: "3", assigneeName: "Kate", glutenFree: true, dairyFree: true, dayName: "Christmas Eve", ...dropOff.eve, critical: true },
+    { teamName: "Mains – Proteins", name: "Beef fillets", quantity: "2", assigneeName: "Angus", glutenFree: true, dairyFree: true, dayName: "Christmas Eve", ...dropOff.eve, critical: true },
     { teamName: "Mains – Proteins", name: "Salmon fillets", quantity: "2", assigneeName: "Kate", glutenFree: true, dairyFree: true, dayName: "Christmas Eve", ...dropOff.eve, critical: true },
     { teamName: "Mains – Proteins", name: "Farm sausages", quantity: "Plenty", assigneeName: "Robyn", glutenFree: true, dairyFree: true, dayName: "Christmas Eve", ...dropOff.eve, critical: false },
 
@@ -216,12 +217,12 @@ async function main() {
     { teamName: "Puddings", name: "Xmas pudding (non-GF)", quantity: "2", assigneeName: "Anika", dayName: "Christmas Day", ...dropOff.day, critical: true },
     { teamName: "Puddings", name: "GF Xmas pudding", quantity: "1", assigneeName: null, glutenFree: true, dayName: "Christmas Day", ...dropOff.day, critical: true, notes: "UNASSIGNED — CRITICAL — needs coordinator to assign within Puddings team" },
     { teamName: "Puddings", name: "GF trifle", quantity: "3", assigneeName: null, glutenFree: true, dayName: "Christmas Day", ...dropOff.day, critical: true, notes: "UNASSIGNED — CRITICAL — needs coordinator to assign within Puddings team" },
-    { teamName: "Puddings", name: "Pavlova — Anika", quantity: "1", assigneeName: "Anika", dairyFree: true, dayName: "Christmas Day", ...dropOff.day, critical: true },
-    { teamName: "Puddings", name: "Pavlova — Lance", quantity: "1", assigneeName: "Lance", dairyFree: true, dayName: "Christmas Day", ...dropOff.day, critical: true },
+    { teamName: "Puddings", name: "Pavlova", quantity: "1", assigneeName: "Anika", dairyFree: true, dayName: "Christmas Day", ...dropOff.day, critical: true },
+    { teamName: "Puddings", name: "Pavlova", quantity: "1", assigneeName: "Lance", dairyFree: true, dayName: "Christmas Day", ...dropOff.day, critical: true },
     { teamName: "Puddings", name: "Pavlova", quantity: "1", assigneeName: null, dairyFree: true, dayName: "Christmas Day", ...dropOff.day, critical: true, notes: "UNASSIGNED — CRITICAL — needs coordinator to assign within Puddings team" },
     { teamName: "Puddings", name: "Berries", quantity: "Plenty", assigneeName: null, glutenFree: true, dairyFree: true, dayName: "Christmas Day", ...dropOff.day, critical: false, notes: "UNASSIGNED — needs coordinator to assign within Puddings team" },
-    { teamName: "Puddings", name: "Vanilla ice cream — Rosie", quantity: "2 tubs", assigneeName: "Rosie", glutenFree: true, dayName: "Christmas Day", ...dropOff.day, critical: false },
-    { teamName: "Puddings", name: "Vanilla ice cream — Lance", quantity: "2 tubs", assigneeName: "Lance", glutenFree: true, dayName: "Christmas Day", ...dropOff.day, critical: false },
+    { teamName: "Puddings", name: "Vanilla ice cream", quantity: "2 tubs", assigneeName: "Rosie", glutenFree: true, dayName: "Christmas Day", ...dropOff.day, critical: false },
+    { teamName: "Puddings", name: "Vanilla ice cream", quantity: "2 tubs", assigneeName: "Lance", glutenFree: true, dayName: "Christmas Day", ...dropOff.day, critical: false },
 
     // LATER FOOD
     { teamName: "Later Food", name: "BBQ sausages", quantity: "Plenty", assigneeName: "Gus", glutenFree: true, dairyFree: true, dayName: "Boxing Day", ...dropOff.box, critical: false },
@@ -237,14 +238,14 @@ async function main() {
     { teamName: "Setup", name: "Buggy + rubbish bags", quantity: "1 set", assigneeName: "Elliot", dayName: "Christmas Day", ...dropOff.setup, critical: true },
 
     // CLEAN-UP
-    { teamName: "Clean-up", name: "Clear plates (mains) — George", quantity: "Rostered", assigneeName: "George", dayName: "Christmas Day", at: null, location: "Kitchen", note: "After mains", critical: false },
-    { teamName: "Clean-up", name: "Clear plates (mains) — Aaron", quantity: "Rostered", assigneeName: "Aaron", dayName: "Christmas Day", at: null, location: "Kitchen", note: "After mains", critical: false },
-    { teamName: "Clean-up", name: "Clear plates (mains) — Florence", quantity: "Rostered", assigneeName: "Florence", dayName: "Christmas Day", at: null, location: "Kitchen", note: "After mains", critical: false },
-    { teamName: "Clean-up", name: "Clear plates (mains) — Emily", quantity: "Rostered", assigneeName: "Emily", dayName: "Christmas Day", at: null, location: "Kitchen", note: "After mains", critical: false },
+    { teamName: "Clean-up", name: "Clear plates (mains)", quantity: "Rostered", assigneeName: "George", dayName: "Christmas Day", at: null, location: "Kitchen", note: "After mains", critical: false },
+    { teamName: "Clean-up", name: "Clear plates (mains)", quantity: "Rostered", assigneeName: "Aaron", dayName: "Christmas Day", at: null, location: "Kitchen", note: "After mains", critical: false },
+    { teamName: "Clean-up", name: "Clear plates (mains)", quantity: "Rostered", assigneeName: "Florence", dayName: "Christmas Day", at: null, location: "Kitchen", note: "After mains", critical: false },
+    { teamName: "Clean-up", name: "Clear plates (mains)", quantity: "Rostered", assigneeName: "Emily", dayName: "Christmas Day", at: null, location: "Kitchen", note: "After mains", critical: false },
     { teamName: "Clean-up", name: "Rinse + dishwasher", quantity: "Rostered", assigneeName: "Charlie", dayName: "Christmas Day", at: null, location: "Kitchen", note: "After mains", critical: false },
-    { teamName: "Clean-up", name: "Dessert clean-up — Lucas", quantity: "Rostered", assigneeName: "Lucas", dayName: "Christmas Day", at: null, location: "Kitchen", note: "After dessert", critical: false },
-    { teamName: "Clean-up", name: "Dessert clean-up — Oliver", quantity: "Rostered", assigneeName: "Oliver", dayName: "Christmas Day", at: null, location: "Kitchen", note: "After dessert", critical: false },
-    { teamName: "Clean-up", name: "Dessert clean-up — Annie", quantity: "Rostered", assigneeName: "Annie", dayName: "Christmas Day", at: null, location: "Kitchen", note: "After dessert", critical: false },
+    { teamName: "Clean-up", name: "Dessert clean-up", quantity: "Rostered", assigneeName: "Lucas", dayName: "Christmas Day", at: null, location: "Kitchen", note: "After dessert", critical: false },
+    { teamName: "Clean-up", name: "Dessert clean-up", quantity: "Rostered", assigneeName: "Oliver", dayName: "Christmas Day", at: null, location: "Kitchen", note: "After dessert", critical: false },
+    { teamName: "Clean-up", name: "Dessert clean-up", quantity: "Rostered", assigneeName: "Annie", dayName: "Christmas Day", at: null, location: "Kitchen", note: "After dessert", critical: false },
     { teamName: "Clean-up", name: "Clean-up coordination", quantity: "All", assigneeName: "Nigel", dayName: "Christmas Day", at: null, location: "Kitchen", note: "Ongoing", critical: true },
   ];
 
