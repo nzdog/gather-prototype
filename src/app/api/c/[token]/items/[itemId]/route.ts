@@ -107,10 +107,10 @@ export async function DELETE(
     return NextResponse.json({ error: 'Item not found' }, { status: 404 });
   }
 
-  // Check if deletion is allowed (passes itemCritical for CONFIRMING check)
-  if (!canMutate(context.event.status, 'deleteItem', item.critical)) {
+  // Check if deletion is allowed (allow both critical and non-critical)
+  if (!canMutate(context.event.status, 'deleteItem', false)) {
     return NextResponse.json({
-      error: `Cannot delete ${item.critical ? 'critical ' : ''}items while event is ${context.event.status}`
+      error: `Cannot delete items while event is ${context.event.status}`
     }, { status: 403 });
   }
 
