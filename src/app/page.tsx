@@ -52,11 +52,12 @@ export default function DemoLandingPage() {
       const response = await fetch('/api/demo/reset', { method: 'POST' });
       if (response.ok) {
         const data = await response.json();
+        console.log('[Reset] About to reload page in 1 second...');
         // Wait for DB to commit
         await new Promise(resolve => setTimeout(resolve, 1000));
+        console.log('[Reset] Reloading now with:', `/?reset=${Date.now()}`);
         // Force complete page reload with aggressive cache busting
-        // Use location.replace to prevent back button issues
-        window.location.replace(`/?reset=${Date.now()}`);
+        window.location.href = `/?reset=${Date.now()}`;
       } else {
         const error = await response.json();
         alert(`Failed to reset: ${error.error}`);
