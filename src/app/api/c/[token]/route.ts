@@ -115,6 +115,10 @@ export async function GET(
   const myAssignments = allMyAssignments.filter(a => a.item.team.eventId === context.event.id);
 
   return NextResponse.json({
+    person: {
+      id: context.person.id,
+      name: context.person.name,
+    },
     event: {
       id: context.event.id,
       name: context.event.name,

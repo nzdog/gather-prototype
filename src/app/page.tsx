@@ -13,6 +13,7 @@ interface Token {
 export default function DemoLandingPage() {
   const [tokens, setTokens] = useState<Token[]>([]);
   const [loading, setLoading] = useState(true);
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     fetchTokens();
@@ -32,6 +33,30 @@ export default function DemoLandingPage() {
     }
   };
 
+  const handleReset = async () => {
+    if (!confirm('Are you sure you want to reset all data? This will delete everything and reseed the database.')) {
+      return;
+    }
+
+    setResetting(true);
+    try {
+      const response = await fetch('/api/demo/reset', { method: 'POST' });
+      if (response.ok) {
+        alert('Database reset successfully!');
+        // Reload the page to fetch new tokens
+        window.location.reload();
+      } else {
+        const error = await response.json();
+        alert(`Failed to reset: ${error.error}`);
+      }
+    } catch (err) {
+      console.error('Reset failed:', err);
+      alert('Failed to reset database');
+    } finally {
+      setResetting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -48,7 +73,14 @@ export default function DemoLandingPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
       <div className="max-w-4xl mx-auto px-4 py-12">
         {/* Header */}
-        <div className="text-center mb-12">
+        <div className="text-center mb-12 relative">
+          <button
+            onClick={handleReset}
+            disabled={resetting}
+            className="absolute top-0 right-0 px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {resetting ? 'Resetting...' : '🔄 Reset Demo Data'}
+          </button>
           <h1 className="text-4xl font-bold text-gray-900 mb-3">Gather Demo</h1>
           <p className="text-lg text-gray-600 mb-2">Event Coordination System</p>
           <p className="text-sm text-gray-500">Choose a role to explore the interface</p>
