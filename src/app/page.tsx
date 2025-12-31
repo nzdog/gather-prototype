@@ -43,29 +43,24 @@ export default function DemoLandingPage() {
     }
 
     setResetting(true);
-    setLoading(true);
     try {
       const response = await fetch('/api/demo/reset', { method: 'POST' });
       if (response.ok) {
         const data = await response.json();
-        // Small delay to ensure DB changes are fully committed
-        await new Promise(resolve => setTimeout(resolve, 500));
-        // Re-fetch fresh tokens with cache busting
-        await fetchTokens();
-        // Show non-blocking success message
-        setTimeout(() => {
-          alert(`✅ Reset complete! Created ${data.tokenCount} fresh access tokens. The page has been updated with new links.`);
-        }, 100);
+        // Wait for DB to commit
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Force complete page reload with aggressive cache busting
+        // Use location.replace to prevent back button issues
+        window.location.replace(`/?reset=${Date.now()}`);
       } else {
         const error = await response.json();
         alert(`Failed to reset: ${error.error}`);
+        setResetting(false);
       }
     } catch (err) {
       console.error('Reset failed:', err);
       alert('Failed to reset database');
-    } finally {
       setResetting(false);
-      setLoading(false);
     }
   };
 
