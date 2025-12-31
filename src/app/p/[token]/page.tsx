@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
+import { Calendar, MapPin, Check, Home, ChevronDown, ChevronRight, Maximize2, Minimize2 } from 'lucide-react';
 
 interface Assignment {
   id: string;
@@ -34,6 +35,7 @@ interface ParticipantData {
     startDate: string;
     endDate: string;
     status: string;
+    guestCount: number | null;
   };
   team: {
     id: string;
@@ -52,6 +54,8 @@ export default function ParticipantView() {
   const [data, setData] = useState<ParticipantData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [collapsedAssignments, setCollapsedAssignments] = useState<Set<string>>(new Set());
+  const isInitialLoad = useRef(true);
 
   useEffect(() => {
     fetchData();
@@ -65,6 +69,13 @@ export default function ParticipantView() {
       }
       const result = await response.json();
       setData(result);
+
+      // Only initialize collapsed state on first load
+      if (isInitialLoad.current) {
+        const allAssignmentIds = new Set<string>(result.assignments.map((assignment: any) => assignment.id));
+        setCollapsedAssignments(allAssignmentIds);
+        isInitialLoad.current = false;
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -80,11 +91,42 @@ export default function ParticipantView() {
       if (!response.ok) {
         throw new Error('Failed to acknowledge');
       }
-      // Refresh data
       await fetchData();
     } catch (err) {
       console.error('Failed to acknowledge:', err);
     }
+  };
+
+  const toggleAssignmentCollapse = (assignmentId: string) => {
+    const newCollapsed = new Set(collapsedAssignments);
+    if (newCollapsed.has(assignmentId)) {
+      newCollapsed.delete(assignmentId);
+    } else {
+      newCollapsed.add(assignmentId);
+    }
+    setCollapsedAssignments(newCollapsed);
+  };
+
+  const toggleAllAssignments = () => {
+    if (collapsedAssignments.size === 0) {
+      // All expanded, collapse all
+      const allIds = new Set(data?.assignments.map(a => a.id) || []);
+      setCollapsedAssignments(allIds);
+    } else {
+      // Some or all collapsed, expand all
+      setCollapsedAssignments(new Set());
+    }
+  };
+
+  const formatDateRange = (startDate: string, endDate: string) => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const formatter = new Intl.DateTimeFormat('en-NZ', {
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'Pacific/Auckland'
+    });
+    return `${formatter.format(start)}-${formatter.format(end).split(' ')[1]}`;
   };
 
   const formatDropOff = (dropOffAt: string | null, dropOffNote: string | null) => {
@@ -101,7 +143,7 @@ export default function ParticipantView() {
 
   if (loading) {
     return (
-      <div className="min-h-screen p-8 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-gray-600">Loading...</div>
       </div>
     );
@@ -109,110 +151,180 @@ export default function ParticipantView() {
 
   if (error || !data) {
     return (
-      <div className="min-h-screen p-8 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-red-600">Error: {error || 'Failed to load'}</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
-      <div className="max-w-3xl mx-auto">
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h1 className="text-2xl font-bold mb-2">{data.event.name}</h1>
-          <p className="text-gray-600">
-            {new Date(data.event.startDate).toLocaleDateString('en-NZ')} – {new Date(data.event.endDate).toLocaleDateString('en-NZ')}
-          </p>
-          {data.team && (
-            <div className="mt-4 pt-4 border-t">
-              <p className="text-sm text-gray-600">You&apos;re part of:</p>
-              <p className="font-semibold">{data.team.name}</p>
-              <p className="text-sm text-gray-600">Coordinator: {data.team.coordinator.name}</p>
-            </div>
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 px-6 py-5">
+        <a href="/" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 mb-3">
+          <Home className="size-4" />
+          Back to Demo
+        </a>
+        <h1 className="text-2xl font-bold text-gray-900">{data.event.name}</h1>
+        <div className="text-sm text-gray-500 mt-1">
+          {formatDateRange(data.event.startDate, data.event.endDate)}
+          {data.event.guestCount && ` · ${data.event.guestCount} guests`}
+        </div>
+        {data.team && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <p className="text-xs text-gray-500">You're part of:</p>
+            <p className="font-semibold text-gray-900 mt-1">{data.team.name}</p>
+            <p className="text-sm text-gray-500">Coordinator: {data.team.coordinator.name}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-4 md:p-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm uppercase tracking-wide text-gray-500">Your Assignments</h2>
+          {data && data.assignments.length > 0 && (
+            <button
+              onClick={toggleAllAssignments}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              {collapsedAssignments.size === 0 ? (
+                <>
+                  <Minimize2 className="size-4" />
+                  Collapse All
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="size-4" />
+                  Expand All
+                </>
+              )}
+            </button>
           )}
         </div>
 
-        {/* Assignments */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-bold">Your Assignments</h2>
-
-          {data.assignments.length === 0 ? (
-            <div className="bg-white rounded-lg shadow-sm p-6 text-center text-gray-600">
-              No assignments yet
-            </div>
-          ) : (
-            data.assignments.map((assignment) => (
-              <div
-                key={assignment.id}
-                className={`bg-white rounded-lg shadow-sm p-6 ${
-                  assignment.acknowledged ? 'border-l-4 border-green-500' : 'border-l-4 border-yellow-500'
-                }`}
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-lg">{assignment.item.name}</h3>
-                    {assignment.item.quantity && (
-                      <p className="text-gray-600">{assignment.item.quantity}</p>
-                    )}
-                  </div>
-                  {assignment.item.critical && (
-                    <span className="bg-red-100 text-red-800 text-xs font-semibold px-2 py-1 rounded">
-                      CRITICAL
-                    </span>
-                  )}
-                </div>
-
-                {/* Dietary tags */}
-                {(assignment.item.glutenFree || assignment.item.dairyFree || assignment.item.vegetarian) && (
-                  <div className="flex gap-2 mb-3">
-                    {assignment.item.glutenFree && (
-                      <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">GF</span>
-                    )}
-                    {assignment.item.dairyFree && (
-                      <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">DF</span>
-                    )}
-                    {assignment.item.vegetarian && (
-                      <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">V</span>
-                    )}
-                  </div>
-                )}
-
-                {/* Day and drop-off */}
-                <div className="space-y-2 mb-4 text-sm">
-                  {assignment.item.day && (
-                    <p className="text-gray-700">
-                      <span className="font-medium">Day:</span> {assignment.item.day.name}
-                    </p>
-                  )}
-                  {assignment.item.dropOffLocation && (
-                    <p className="text-gray-700">
-                      <span className="font-medium">Drop-off:</span> {assignment.item.dropOffLocation}
-                      {formatDropOff(assignment.item.dropOffAt, assignment.item.dropOffNote) && (
-                        <span> • {formatDropOff(assignment.item.dropOffAt, assignment.item.dropOffNote)}</span>
+        {data.assignments.length === 0 ? (
+          <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 text-center">
+            <p className="text-gray-600">No assignments yet</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
+            {data.assignments.map((assignment) => (
+              <div key={assignment.id} className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                {/* Card Header - Always Visible */}
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h2 className="text-2xl font-bold text-gray-900">{assignment.item.name}</h2>
+                      {assignment.item.quantity && (
+                        <span className="text-xl text-gray-500">×{assignment.item.quantity}</span>
                       )}
-                    </p>
-                  )}
-                  {assignment.item.notes && (
-                    <p className="text-gray-600 italic">{assignment.item.notes}</p>
-                  )}
+                    </div>
+
+                    {/* Critical Badge - Always Visible */}
+                    {assignment.item.critical && (
+                      <div className="mb-2">
+                        <span className="bg-red-100 text-red-800 text-xs font-semibold px-2 py-1 rounded">
+                          CRITICAL
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Dietary tags - Always Visible */}
+                    {(assignment.item.glutenFree || assignment.item.dairyFree || assignment.item.vegetarian) && (
+                      <div className="flex gap-2">
+                        {assignment.item.glutenFree && (
+                          <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">GF</span>
+                        )}
+                        {assignment.item.dairyFree && (
+                          <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">DF</span>
+                        )}
+                        {assignment.item.vegetarian && (
+                          <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">V</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Collapse Toggle Button */}
+                  <button
+                    onClick={() => toggleAssignmentCollapse(assignment.id)}
+                    className="ml-2 p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0 border border-gray-300"
+                    title={collapsedAssignments.has(assignment.id) ? 'Expand' : 'Collapse'}
+                  >
+                    {collapsedAssignments.has(assignment.id) ? (
+                      <ChevronRight className="size-5 text-gray-700" />
+                    ) : (
+                      <ChevronDown className="size-5 text-gray-700" />
+                    )}
+                  </button>
                 </div>
 
-                {/* Acknowledge button */}
-                {!assignment.acknowledged ? (
-                  <button
-                    onClick={() => handleAcknowledge(assignment.id)}
-                    className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition"
-                  >
-                    Confirm ✓
-                  </button>
-                ) : (
-                  <div className="text-green-600 font-medium">✓ Acknowledged</div>
+                {/* Collapsible Content */}
+                {!collapsedAssignments.has(assignment.id) && (
+                  <div className="space-y-4 mt-4">
+                    {/* Drop-off Details */}
+                    {(assignment.item.day || assignment.item.dropOffLocation) && (
+                      <div className="space-y-2">
+                        {assignment.item.day && (
+                          <div className="flex items-center gap-3">
+                            <Calendar className="size-5 text-gray-400" />
+                            <span className="text-gray-900">
+                              {assignment.item.day.name}
+                              {formatDropOff(assignment.item.dropOffAt, assignment.item.dropOffNote) &&
+                                `, ${formatDropOff(assignment.item.dropOffAt, assignment.item.dropOffNote)}`}
+                            </span>
+                          </div>
+                        )}
+                        {assignment.item.dropOffLocation && (
+                          <div className="flex items-center gap-3">
+                            <MapPin className="size-5 text-gray-400" />
+                            <span className="text-gray-900">{assignment.item.dropOffLocation}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Notes */}
+                    {assignment.item.notes && (
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <p className="text-sm text-gray-600">{assignment.item.notes}</p>
+                      </div>
+                    )}
+
+                    {/* Acknowledge Button */}
+                    <button
+                      onClick={() => handleAcknowledge(assignment.id)}
+                      disabled={assignment.acknowledged}
+                      className={`w-full py-2.5 rounded-lg font-medium transition-all ${
+                        assignment.acknowledged
+                          ? 'bg-green-500 text-white cursor-default'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      {assignment.acknowledged ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <Check className="size-5" />
+                          Confirmed
+                        </span>
+                      ) : (
+                        "Please Confirm"
+                      )}
+                    </button>
+                  </div>
                 )}
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="bg-white border-t border-gray-200 px-6 py-4">
+        <p className="text-center text-sm text-gray-500">
+          Questions? Contact your coordinator
+          {data.team && <span className="text-blue-600"> {data.team.coordinator.name}</span>}
+        </p>
       </div>
     </div>
   );
