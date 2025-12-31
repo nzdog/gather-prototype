@@ -42,7 +42,8 @@ export default function DemoLandingPage() {
     try {
       const response = await fetch('/api/demo/reset', { method: 'POST' });
       if (response.ok) {
-        alert('Database reset successfully!');
+        const data = await response.json();
+        alert(`Database reset successfully! Created ${data.tokenCount} access tokens.`);
         // Reload the page to fetch new tokens
         window.location.reload();
       } else {
