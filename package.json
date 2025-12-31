@@ -4,7 +4,7 @@
   "description": "A coordination app for multi-day gatherings (Christmas, reunions, retreats) that ensures everyone knows what they're responsible for without anyone holding the whole plan in their head.",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "DATABASE_URL=\"${DATABASE_URL:-postgresql://user:pass@localhost:5432/db}\" prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
     "db:generate": "prisma generate",
