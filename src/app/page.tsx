@@ -21,7 +21,11 @@ export default function DemoLandingPage() {
 
   const fetchTokens = async () => {
     try {
-      const response = await fetch('/api/demo/tokens');
+      // Add cache busting to ensure fresh tokens
+      const response = await fetch(`/api/demo/tokens?t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
+      });
       if (response.ok) {
         const data = await response.json();
         setTokens(data.tokens);
