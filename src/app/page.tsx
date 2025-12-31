@@ -43,11 +43,11 @@ export default function DemoLandingPage() {
       const response = await fetch('/api/demo/reset', { method: 'POST' });
       if (response.ok) {
         const data = await response.json();
-        alert(`Database reset successfully! Created ${data.tokenCount} access tokens.`);
-        // Small delay to ensure DB changes are fully committed before reload
+        // Small delay to ensure DB changes are fully committed
         await new Promise(resolve => setTimeout(resolve, 500));
-        // Force hard reload with cache busting to ensure fresh token links
-        window.location.href = '/?t=' + Date.now();
+        // Re-fetch fresh tokens instead of reloading page
+        await fetchTokens();
+        alert(`Database reset successfully! Created ${data.tokenCount} access tokens.`);
       } else {
         const error = await response.json();
         alert(`Failed to reset: ${error.error}`);
