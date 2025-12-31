@@ -1,10 +1,22 @@
+-- CreateEnum
+CREATE TYPE "EventStatus" AS ENUM ('DRAFT', 'CONFIRMING', 'FROZEN', 'COMPLETE');
+
+-- CreateEnum
+CREATE TYPE "PersonRole" AS ENUM ('HOST', 'COORDINATOR', 'PARTICIPANT');
+
+-- CreateEnum
+CREATE TYPE "ItemStatus" AS ENUM ('ASSIGNED', 'UNASSIGNED');
+
+-- CreateEnum
+CREATE TYPE "TokenScope" AS ENUM ('HOST', 'COORDINATOR', 'PARTICIPANT');
+
 -- CreateTable
 CREATE TABLE "Event" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "startDate" TIMESTAMP(3) NOT NULL,
     "endDate" TIMESTAMP(3) NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'DRAFT',
+    "status" "EventStatus" NOT NULL DEFAULT 'DRAFT',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "hostId" TEXT NOT NULL,
@@ -49,7 +61,7 @@ CREATE TABLE "PersonEvent" (
     "personId" TEXT NOT NULL,
     "eventId" TEXT NOT NULL,
     "teamId" TEXT NOT NULL,
-    "role" TEXT NOT NULL DEFAULT 'PARTICIPANT',
+    "role" "PersonRole" NOT NULL DEFAULT 'PARTICIPANT',
 
     CONSTRAINT "PersonEvent_pkey" PRIMARY KEY ("id")
 );
@@ -61,7 +73,7 @@ CREATE TABLE "Item" (
     "quantity" TEXT,
     "description" TEXT,
     "critical" BOOLEAN NOT NULL DEFAULT false,
-    "status" TEXT NOT NULL DEFAULT 'UNASSIGNED',
+    "status" "ItemStatus" NOT NULL DEFAULT 'UNASSIGNED',
     "previouslyAssignedTo" TEXT,
     "glutenFree" BOOLEAN NOT NULL DEFAULT false,
     "dairyFree" BOOLEAN NOT NULL DEFAULT false,
@@ -91,7 +103,7 @@ CREATE TABLE "Assignment" (
 CREATE TABLE "AccessToken" (
     "id" TEXT NOT NULL,
     "token" TEXT NOT NULL,
-    "scope" TEXT NOT NULL,
+    "scope" "TokenScope" NOT NULL,
     "expiresAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "eventId" TEXT NOT NULL,
