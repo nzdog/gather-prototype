@@ -105,6 +105,7 @@ model Event {
   startDate   DateTime
   endDate     DateTime
   status      EventStatus @default(DRAFT)
+  guestCount  Int?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -1039,6 +1040,7 @@ const event = {
   startDate: makeNzdtChristmas2025Date("2025-12-24", "00:00"),
   endDate: makeNzdtChristmas2025Date("2025-12-26", "23:59"),
   status: "CONFIRMING",
+  guestCount: 27,
   // hostId will reference Jacqui's Person.id after Person creation
 };
 ```
@@ -2051,6 +2053,7 @@ The schema uses `onDelete: Cascade` on PersonEvent.team specifically to allow cl
 
 ### Participant View
 - [ ] `/p/[token]` shows only that person's assignments
+- [ ] Shows guest count
 - [ ] Shows dropOffAt formatted as date/time and location
 - [ ] Shows dropOffNote if present
 - [ ] Can acknowledge assignment
@@ -2061,6 +2064,7 @@ The schema uses `onDelete: Cascade` on PersonEvent.team specifically to allow cl
 ### Coordinator View
 - [ ] `/c/[token]` only works for valid coordinator token
 - [ ] Token validation verifies teamId matches PersonEvent.teamId
+- [ ] Shows guest count
 - [ ] Shows all items in their team with assignment status
 - [ ] Unassigned items clearly visible
 - [ ] Critical items marked
@@ -2075,6 +2079,9 @@ The schema uses `onDelete: Cascade` on PersonEvent.team specifically to allow cl
 
 ### Host Overview
 - [ ] `/h/[token]` shows all teams with computed status
+- [ ] Shows guest count
+- [ ] Can edit guest count
+- [ ] Guest count editable even when frozen
 - [ ] Freeze button disabled when critical gaps exist
 - [ ] Shows count of critical gaps blocking freeze
 - [ ] Can drill down to any team

@@ -19,6 +19,7 @@ model Event {
   startDate   DateTime
   endDate     DateTime
   status      EventStatus @default(DRAFT)
+  guestCount  Int?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 

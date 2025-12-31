@@ -96,11 +96,30 @@ export async function GET(
     }
   });
 
+  // 7. Get coordinator's own assignments (items assigned to them personally)
+  const allMyAssignments = await prisma.assignment.findMany({
+    where: {
+      personId: context.person.id
+    },
+    include: {
+      item: {
+        include: {
+          day: true,
+          team: true
+        }
+      }
+    }
+  });
+
+  // Filter to only assignments for this event (via item's team)
+  const myAssignments = allMyAssignments.filter(a => a.item.team.eventId === context.event.id);
+
   return NextResponse.json({
     event: {
       id: context.event.id,
       name: context.event.name,
       status: context.event.status,
+      guestCount: context.event.guestCount,
     },
     team: {
       id: context.team.id,
@@ -144,5 +163,28 @@ export async function GET(
       name: m.person.name,
     })),
     otherTeams: otherTeamsStatus, // Status only, no items
+    myAssignments: myAssignments.map(assignment => ({
+      id: assignment.id,
+      acknowledged: assignment.acknowledged,
+      item: {
+        id: assignment.item.id,
+        name: assignment.item.name,
+        quantity: assignment.item.quantity,
+        description: assignment.item.description,
+        critical: assignment.item.critical,
+        glutenFree: assignment.item.glutenFree,
+        dairyFree: assignment.item.dairyFree,
+        vegetarian: assignment.item.vegetarian,
+        notes: assignment.item.notes,
+        dropOffAt: assignment.item.dropOffAt,
+        dropOffLocation: assignment.item.dropOffLocation,
+        dropOffNote: assignment.item.dropOffNote,
+        day: assignment.item.day ? {
+          id: assignment.item.day.id,
+          name: assignment.item.day.name,
+          date: assignment.item.day.date,
+        } : null,
+      }
+    }))
   });
 }
