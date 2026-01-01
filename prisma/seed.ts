@@ -26,7 +26,7 @@ async function main() {
 
   const peopleData = [
     // Host (also Veg & Sides coordinator)
-    { name: "Jacqui", role: "HOST", teamName: "Vegetables & Sides" },
+    { name: "Jacqui & Ian", role: "HOST", teamName: "Vegetables & Sides" },
     // Coordinators
     { name: "Joanna", role: "COORDINATOR", teamName: "Entrées & Nibbles" },
     { name: "Kate", role: "COORDINATOR", teamName: "Mains – Proteins" },
@@ -90,7 +90,7 @@ async function main() {
   // STEP 2: CREATE OR FETCH EVENT
   // ============================================
   let event;
-  const jacqui = personByName.get("Jacqui");
+  const jacqui = personByName.get("Jacqui & Ian");
 
   if (isIncremental) {
     console.log('Fetching existing event...');
@@ -145,7 +145,7 @@ async function main() {
   const teamsData = [
     { name: "Entrées & Nibbles", scope: "Pre-meal food, easy grazing", coordinatorName: "Joanna" },
     { name: "Mains – Proteins", scope: "Centre protein dishes for 36-40", coordinatorName: "Kate" },
-    { name: "Vegetables & Sides", scope: "Salads + hot veg, volume + balance", coordinatorName: "Jacqui" },
+    { name: "Vegetables & Sides", scope: "Salads + hot veg, volume + balance", coordinatorName: "Jacqui & Ian" },
     { name: "Puddings", scope: "Desserts including GF options", coordinatorName: "Anika" },
     { name: "Later Food", scope: "Evening / next-day easy food", coordinatorName: "Gus" },
     { name: "Drinks", scope: "All drinks + ice", coordinatorName: "Ian" },
@@ -239,13 +239,13 @@ async function main() {
 
     // VEGETABLES & SIDES
     { teamName: "Vegetables & Sides", name: "Potato gratin", quantity: "3", assigneeName: null, glutenFree: false, dayName: "Christmas Eve", ...dropOff.eve, critical: false, notes: "UNASSIGNED — needs coordinator to assign within Veg team" },
-    { teamName: "Vegetables & Sides", name: "Vege pilaf (raw)", quantity: "Large", assigneeName: "Jacqui", glutenFree: true, dairyFree: true, dayName: "Christmas Day", ...dropOff.day, critical: false },
+    { teamName: "Vegetables & Sides", name: "Vege pilaf (raw)", quantity: "Large", assigneeName: "Jacqui & Ian", glutenFree: true, dairyFree: true, dayName: "Christmas Day", ...dropOff.day, critical: false },
     { teamName: "Vegetables & Sides", name: "Coleslaw", quantity: "Large", assigneeName: "Emma", glutenFree: true, dairyFree: true, dayName: "Christmas Day", ...dropOff.day, critical: false },
     { teamName: "Vegetables & Sides", name: "Green salad", quantity: "Large", assigneeName: "Grace", glutenFree: true, dairyFree: true, dayName: "Christmas Day", ...dropOff.day, critical: false },
-    { teamName: "Vegetables & Sides", name: "Roasted carrots w/ ricotta", quantity: "Large", assigneeName: "Jacqui", glutenFree: true, dayName: "Christmas Day", ...dropOff.day, critical: false },
+    { teamName: "Vegetables & Sides", name: "Roasted carrots w/ ricotta", quantity: "Large", assigneeName: "Jacqui & Ian", glutenFree: true, dayName: "Christmas Day", ...dropOff.day, critical: false },
     { teamName: "Vegetables & Sides", name: "New potatoes", quantity: "Large", assigneeName: "Emma", glutenFree: true, dairyFree: true, dayName: "Christmas Day", ...dropOff.day, critical: false },
     { teamName: "Vegetables & Sides", name: "Roast vegetables", quantity: "2 large dishes", assigneeName: "Grace", glutenFree: true, dairyFree: true, dayName: "Christmas Day", ...dropOff.day, critical: false },
-    { teamName: "Vegetables & Sides", name: "Beetroot salad", quantity: "2", assigneeName: "Jacqui", glutenFree: true, dairyFree: true, dayName: "Christmas Day", ...dropOff.day, critical: false },
+    { teamName: "Vegetables & Sides", name: "Beetroot salad", quantity: "2", assigneeName: "Jacqui & Ian", glutenFree: true, dairyFree: true, dayName: "Christmas Day", ...dropOff.day, critical: false },
 
     // PUDDINGS
     { teamName: "Puddings", name: "Ice cream sticks (minis)", quantity: "36", assigneeName: "Keith", glutenFree: true, dayName: "Christmas Eve", ...dropOff.eve, critical: false },
@@ -385,7 +385,7 @@ async function main() {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 90); // 90 days from now
 
-    // HOST token for Jacqui
+    // HOST token for Jacqui & Ian
     await prisma.accessToken.create({
       data: {
         token: generateToken(),
