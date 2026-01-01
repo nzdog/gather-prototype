@@ -398,20 +398,21 @@ async function main() {
     });
     tokenCount++;
 
-    // COORDINATOR tokens
-    for (const [name, person] of personByName) {
-      if (person.role === 'COORDINATOR') {
+    // COORDINATOR tokens - create for all team coordinators (regardless of their role)
+    for (const [teamName, team] of teamByName) {
+      const coordinator = personByName.get(teamsData.find(t => t.name === teamName)!.coordinatorName);
+      if (coordinator) {
         const personEvent = await prisma.personEvent.findFirst({
-          where: { personId: person.id, eventId: event.id }
+          where: { personId: coordinator.id, eventId: event.id }
         });
 
         await prisma.accessToken.create({
           data: {
             token: generateToken(),
             scope: 'COORDINATOR',
-            personId: person.id,
+            personId: coordinator.id,
             eventId: event.id,
-            teamId: personEvent!.teamId,
+            teamId: team.id,
             expiresAt,
           }
         });
