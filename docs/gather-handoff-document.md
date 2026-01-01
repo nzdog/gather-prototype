@@ -421,7 +421,7 @@ Do NOT show a single "confirm all" button. Batch confirmation loses the felt acc
 
 ### Edge Case: Host is also a coordinator
 
-Jacqui is host AND coordinates Setup & Cleanup. She has two roles.
+Jacqui & Ian are the hosts AND coordinate Setup & Cleanup. They have two roles.
 
 **Decision:** Two separate links. Two separate views. Roles do not merge.
 

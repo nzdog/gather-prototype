@@ -341,7 +341,7 @@ Two distinct concepts exist in the system:
    - This grants operational authority over that team's items
    - Independent of PersonEvent.role
 
-**A HOST can also be a team coordinator.** Example: Jacqui has `PersonEvent.role = HOST` and is also referenced by `Team.coordinatorId` for the "Vegetables & Sides" team. She has both host powers (event-level) and coordinator powers (team-level).
+**A HOST can also be a team coordinator.** Example: Jacqui & Ian has `PersonEvent.role = HOST` and is also referenced by `Team.coordinatorId` for the "Vegetables & Sides" team. They have both host powers (event-level) and coordinator powers (team-level).
 
 This is not multi-role in the schema — it's two separate authority paths that can overlap.
 
@@ -964,7 +964,7 @@ async function removePerson(personId: string, eventId: string): Promise<void> {
 The seed script MUST create records in this order to satisfy foreign key constraints:
 
 1. **People** — Create all Person records first
-2. **Event** — Create Event with `hostId` referencing Jacqui's Person.id
+2. **Event** — Create Event with `hostId` referencing Jacqui & Ian's Person.id
 3. **Days** — Create Day records referencing Event.id
 4. **Teams** — Create Team records with `coordinatorId` referencing Person.id and `eventId`
 5. **PersonEvent** — Create membership records linking Person → Event → Team (one per person)
@@ -1041,7 +1041,7 @@ const event = {
   endDate: makeNzdtChristmas2025Date("2025-12-26", "23:59"),
   status: "CONFIRMING",
   guestCount: 27,
-  // hostId will reference Jacqui's Person.id after Person creation
+  // hostId will reference Jacqui & Ian's Person.id after Person creation
 };
 ```
 
@@ -1074,7 +1074,7 @@ const dropOff = {
 const teams = [
   { name: "Entrées & Nibbles", scope: "Pre-meal food, easy grazing", coordinatorName: "Joanna" },
   { name: "Mains – Proteins", scope: "Centre protein dishes for 36-40", coordinatorName: "Kate" },
-  { name: "Vegetables & Sides", scope: "Salads + hot veg, volume + balance", coordinatorName: "Jacqui" },
+  { name: "Vegetables & Sides", scope: "Salads + hot veg, volume + balance", coordinatorName: "Jacqui & Ian" },
   { name: "Puddings", scope: "Desserts including GF options", coordinatorName: "Anika" },
   { name: "Later Food", scope: "Evening / next-day easy food", coordinatorName: "Gus" },
   { name: "Drinks", scope: "All drinks + ice", coordinatorName: "Ian" },
@@ -1089,7 +1089,7 @@ const teams = [
 ```typescript
 const people = [
   // Host (also Veg & Sides coordinator)
-  { name: "Jacqui", role: "HOST", teamName: "Vegetables & Sides" },
+  { name: "Jacqui & Ian", role: "HOST", teamName: "Vegetables & Sides" },
 
   // Coordinators
   { name: "Joanna", role: "COORDINATOR", teamName: "Entrées & Nibbles" },
@@ -1334,7 +1334,7 @@ const items = [
   },
 
   // ============================================
-  // VEGETABLES & SIDES (Coordinator: Jacqui)
+  // VEGETABLES & SIDES (Coordinator: Jacqui & Ian)
   // ============================================
   {
     teamName: "Vegetables & Sides",
@@ -1353,7 +1353,7 @@ const items = [
     teamName: "Vegetables & Sides",
     name: "Vege pilaf (raw)",
     quantity: "Large",
-    assigneeName: "Jacqui",
+    assigneeName: "Jacqui & Ian",
     glutenFree: true,
     dairyFree: true,
     dayName: "Christmas Day",
@@ -1392,7 +1392,7 @@ const items = [
     teamName: "Vegetables & Sides",
     name: "Roasted carrots w/ ricotta",
     quantity: "Large",
-    assigneeName: "Jacqui",
+    assigneeName: "Jacqui & Ian",
     glutenFree: true,
     dayName: "Christmas Day",
     dropOffAt: dropOff.day.at,
@@ -1430,7 +1430,7 @@ const items = [
     teamName: "Vegetables & Sides",
     name: "Beetroot salad",
     quantity: "2",
-    assigneeName: "Jacqui",
+    assigneeName: "Jacqui & Ian",
     glutenFree: true,
     dairyFree: true,
     dayName: "Christmas Day",
@@ -1904,7 +1904,7 @@ if (item.assigneeName) {
 For each person, create one AccessToken with appropriate scope:
 
 ```typescript
-// HOST token for Jacqui
+// HOST token for Jacqui & Ian
 await prisma.accessToken.create({
   data: {
     token: generateToken(),
