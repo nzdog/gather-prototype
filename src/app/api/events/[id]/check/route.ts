@@ -1,6 +1,7 @@
 // POST /api/events/[id]/check - Check plan for conflicts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { detectConflicts, saveConflicts } from '@/lib/ai/check';
 
 export async function POST(
   request: NextRequest,
@@ -29,41 +30,11 @@ export async function POST(
       },
     });
 
-    // For now, create a demo conflict if there are critical placeholders
-    const criticalPlaceholders = await prisma.item.findMany({
-      where: {
-        team: { eventId },
-        critical: true,
-        quantityState: 'PLACEHOLDER',
-        placeholderAcknowledged: false,
-      },
-    });
+    // Detect all conflicts using AI logic
+    const detectedConflicts = await detectConflicts(eventId);
 
-    if (criticalPlaceholders.length > 0) {
-      // Create or update a conflict about placeholder quantities
-      const fingerprint = `placeholder-quantities-${eventId}`;
-
-      const existingConflict = await prisma.conflict.findFirst({
-        where: { eventId, fingerprint },
-      });
-
-      if (!existingConflict) {
-        await prisma.conflict.create({
-          data: {
-            eventId,
-            fingerprint,
-            type: 'QUANTITY',
-            severity: 'CRITICAL',
-            claimType: 'SPEC_INCOMPLETE',
-            resolutionClass: 'DEFER_OR_SPECIFY',
-            title: 'Critical Items Have Placeholder Quantities',
-            description: `${criticalPlaceholders.length} critical item(s) have placeholder quantities that need to be specified or acknowledged before transitioning.`,
-            affectedItems: criticalPlaceholders.map(i => i.id) as any,
-            status: 'OPEN',
-          },
-        });
-      }
-    }
+    // Save conflicts to database
+    await saveConflicts(eventId, detectedConflicts);
 
     // Get all conflicts
     const conflicts = await prisma.conflict.findMany({
@@ -75,6 +46,7 @@ export async function POST(
       success: true,
       message: 'Plan check complete',
       conflicts: conflicts.length,
+      detected: detectedConflicts.length,
     });
   } catch (error) {
     console.error('Error checking plan:', error);
