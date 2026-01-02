@@ -14,90 +14,167 @@ datasource db {
 // ============================================
 
 model Event {
-  id          String      @id @default(cuid())
-  name        String
-  startDate   DateTime
-  endDate     DateTime
-  status      EventStatus @default(DRAFT)
-  guestCount  Int?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id         String      @id @default(cuid())
+  name       String
+  startDate  DateTime
+  endDate    DateTime
+  status     EventStatus @default(DRAFT)
+  guestCount Int?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  // Plan phase: Occasion details
+  occasionType        OccasionType?
+  occasionDescription String?
+
+  // Plan phase: Ownership
+  hostId   String
+  host     Person  @relation("EventHost", fields: [hostId], references: [id])
+  coHostId String?
+  coHost   Person? @relation("EventCoHost", fields: [coHostId], references: [id])
+
+  // Plan phase: Guest parameters
+  guestCountConfidence GuestCountConfidence @default(MEDIUM)
+  guestCountMin        Int?
+  guestCountMax        Int?
+
+  // Plan phase: Dietary
+  dietaryStatus     DietaryStatus @default(UNSPECIFIED)
+  dietaryVegetarian Int           @default(0)
+  dietaryVegan      Int           @default(0)
+  dietaryGlutenFree Int           @default(0)
+  dietaryDairyFree  Int           @default(0)
+  dietaryAllergies  String?
+
+  // Plan phase: Venue
+  venueName            String?
+  venueType            VenueType?
+  venueKitchenAccess   KitchenAccess?
+  venueOvenCount       Int            @default(0)
+  venueStoretopBurners Int?
+  venueBbqAvailable    Boolean?
+  venueTimingStart     String?
+  venueTimingEnd       String?
+  venueNotes           String?
+
+  // Plan phase: Generation tracking
+  generationPath   GenerationPath?
+  clonedFromId     String?
+  clonedFrom       Event?          @relation("EventClone", fields: [clonedFromId], references: [id])
+  cloneAdaptations Json?
+  clonedEvents     Event[]         @relation("EventClone")
+
+  // Plan phase: Check Plan tracking
+  checkPlanInvocations Int       @default(0)
+  firstCheckPlanAt     DateTime?
+  lastCheckPlanAt      DateTime?
+  checkPlanBeforeGate  Boolean   @default(false)
+
+  // Plan phase: Transition tracking
+  transitionAttempts         Json?
+  transitionedToConfirmingAt DateTime?
+  planSnapshotIdAtConfirming String?
+  planSnapshotAtConfirming   PlanSnapshot? @relation("EventConfirmingSnapshot", fields: [planSnapshotIdAtConfirming], references: [id])
+
+  // Plan phase: Structure mode (post-transition)
+  structureMode StructureMode @default(EDITABLE)
+
+  // Plan phase: Engagement signals
+  blindAccept                Boolean @default(false)
+  madeAnyEditBeforeCheckPlan Boolean @default(false)
+  manualAdditionsCount       Int     @default(0)
+
+  // Plan phase: Readiness
+  hostReadinessConfidence HostReadinessConfidence?
+
+  // Plan phase: Revisions
+  currentRevisionId String?
+  currentRevision   PlanRevision? @relation("EventCurrentRevision", fields: [currentRevisionId], references: [id])
 
   // Relations
-  hostId      String
-  host        Person      @relation("EventHost", fields: [hostId], references: [id])
-  days        Day[]
-  teams       Team[]
-  people      PersonEvent[]
-  auditLog    AuditEntry[]
-  tokens      AccessToken[]
-}
-
-enum EventStatus {
-  DRAFT
-  CONFIRMING
-  FROZEN
-  COMPLETE
+  days             Day[]
+  teams            Team[]
+  people           PersonEvent[]
+  auditLog         AuditEntry[]
+  tokens           AccessToken[]
+  conflicts        Conflict[]
+  acknowledgements Acknowledgement[]
+  revisions        PlanRevision[]
+  snapshots        PlanSnapshot[]
+  structureChanges StructureChangeRequest[]
 }
 
 model Day {
-  id      String   @id @default(cuid())
-  name    String
-  date    DateTime
+  id   String   @id @default(cuid())
+  name String
+  date DateTime
 
   // Relations
   eventId String
-  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
   items   Item[]
 }
 
 model Team {
-  id            String  @id @default(cuid())
-  name          String
-  scope         String?
+  id    String  @id @default(cuid())
+  name  String
+  scope String?
+
+  // Plan phase: Domain mapping
+  domain           Domain?
+  domainConfidence DomainConfidence @default(MEDIUM)
+  displayOrder     Int              @default(0)
+
+  // Plan phase: Source tracking
+  source      ItemSource @default(MANUAL)
+  isProtected Boolean    @default(false)
 
   // Relations
-  eventId       String
-  event         Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   coordinatorId String
-  coordinator   Person  @relation("TeamCoordinator", fields: [coordinatorId], references: [id])
+  coordinator   Person @relation("TeamCoordinator", fields: [coordinatorId], references: [id])
 
-  items         Item[]
-  members       PersonEvent[]
-  tokens        AccessToken[]
+  items   Item[]
+  members PersonEvent[]
+  tokens  AccessToken[]
 }
 
 model Person {
-  id        String  @id @default(cuid())
-  name      String
-  email     String? @unique
-  phone     String?
+  id    String  @id @default(cuid())
+  name  String
+  email String? @unique
+  phone String?
 
   // Relations
-  hostedEvents      Event[]       @relation("EventHost")
-  coordinatedTeams  Team[]        @relation("TeamCoordinator")
-  eventMemberships  PersonEvent[]
-  assignments       Assignment[]
-  auditActions      AuditEntry[]
-  tokens            AccessToken[]
+  hostedEvents     Event[]       @relation("EventHost")
+  cohostedEvents   Event[]       @relation("EventCoHost")
+  coordinatedTeams Team[]        @relation("TeamCoordinator")
+  eventMemberships PersonEvent[]
+  assignments      Assignment[]
+  auditActions     AuditEntry[]
+  tokens           AccessToken[]
+
+  // Plan phase: Host memory
+  hostMemory HostMemory?
 }
 
 // Join table: Person <-> Event (with team assignment)
 model PersonEvent {
-  id       String @id @default(cuid())
+  id String @id @default(cuid())
 
   personId String
   person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
 
-  eventId  String
-  event    Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   // teamId is REQUIRED to enforce "one team only" strictly
-  teamId   String
-  team     Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  teamId String
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
-  role     PersonRole @default(PARTICIPANT)
+  role PersonRole @default(PARTICIPANT)
 
   @@unique([personId, eventId]) // One person, one team per event
 }
@@ -109,34 +186,71 @@ enum PersonRole {
 }
 
 model Item {
-  id                   String      @id @default(cuid())
+  id                   String     @id @default(cuid())
   name                 String
   quantity             String?
   description          String?
-  critical             Boolean     @default(false)
-  status               ItemStatus  @default(UNASSIGNED)
+  critical             Boolean    @default(false)
+  status               ItemStatus @default(UNASSIGNED)
   previouslyAssignedTo String?
 
-  // Constraint tags
-  glutenFree           Boolean     @default(false)
-  dairyFree            Boolean     @default(false)
-  vegetarian           Boolean     @default(false)
+  // Plan phase: Structured quantity
+  quantityAmount              Float?
+  quantityUnit                QuantityUnit?
+  quantityUnitCustom          String?
+  quantityText                String?
+  quantityState               QuantityState       @default(SPECIFIED)
+  quantityLabel               QuantityLabel?
+  quantitySource              QuantitySource?
+  quantityDerivedFromTemplate Boolean             @default(false)
+  placeholderAcknowledged     Boolean             @default(false)
+  quantityDeferredTo          QuantityDeferredTo?
 
-  notes                String?
+  // Plan phase: Critical flags
+  criticalReason   String?
+  criticalSource   CriticalSource?
+  criticalOverride CriticalOverride @default(NONE)
+
+  // Constraint tags (existing)
+  glutenFree Boolean @default(false)
+  dairyFree  Boolean @default(false)
+  vegetarian Boolean @default(false)
+
+  // Plan phase: Dietary tags (JSON array)
+  dietaryTags Json?
+
+  // Plan phase: Equipment
+  equipmentNeeds  Json?
+  equipmentLoad   Float?
+  durationMinutes Int?
+
+  notes String?
+
+  // Plan phase: Timing
+  prepStartTime String?
+  prepEndTime   String?
+  serveTime     String?
 
   // Drop-off logistics
-  dropOffAt            DateTime?   // When to drop off (stored as UTC)
-  dropOffLocation      String?     // e.g., "Kate's Kitchen", "Marquee"
-  dropOffNote          String?     // Human-readable time note, e.g., "12 noon", "after mains"
+  dropOffAt       DateTime? // When to drop off (stored as UTC)
+  dropOffLocation String? // e.g., "Kate's Kitchen", "Marquee"
+  dropOffNote     String? // Human-readable time note, e.g., "12 noon", "after mains"
+
+  // Plan phase: Source tracking
+  source       ItemSource    @default(MANUAL)
+  isProtected  Boolean       @default(false)
+  lastEditedBy LastEditedBy?
 
   // Relations
-  teamId      String
-  team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  teamId String
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
-  dayId       String?
-  day         Day?     @relation(fields: [dayId], references: [id])
+  dayId String?
+  day   Day?    @relation(fields: [dayId], references: [id])
 
-  assignment  Assignment?
+  assignment Assignment?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
 }
 
 enum ItemStatus {
@@ -150,8 +264,8 @@ model Assignment {
   createdAt    DateTime @default(now())
 
   // Relations
-  itemId   String @unique // One assignment per item
-  item     Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId String @unique // One assignment per item
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
   personId String
   person   Person @relation(fields: [personId], references: [id])
@@ -161,21 +275,21 @@ model Assignment {
 
 // Dedicated token table for magic link auth
 model AccessToken {
-  id          String      @id @default(cuid())
-  token       String      @unique
-  scope       TokenScope
-  expiresAt   DateTime?
-  createdAt   DateTime    @default(now())
+  id        String     @id @default(cuid())
+  token     String     @unique
+  scope     TokenScope
+  expiresAt DateTime?
+  createdAt DateTime   @default(now())
 
-  eventId     String
-  event       Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
-  personId    String
-  person      Person      @relation(fields: [personId], references: [id], onDelete: Cascade)
+  personId String
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
 
   // Required for coordinator-scoped tokens
-  teamId      String?
-  team        Team?       @relation(fields: [teamId], references: [id])
+  teamId String?
+  team   Team?   @relation(fields: [teamId], references: [id])
 }
 
 enum TokenScope {
@@ -192,9 +306,548 @@ model AuditEntry {
   targetId   String
   details    String?
 
-  eventId  String
-  event    Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
-  actorId  String
-  actor    Person @relation(fields: [actorId], references: [id])
+  actorId String
+  actor   Person @relation(fields: [actorId], references: [id])
+}
+
+// ============================================
+// PLAN PHASE MODELS
+// ============================================
+
+model Conflict {
+  id          String @id @default(cuid())
+  eventId     String
+  event       Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  fingerprint String
+
+  type            ConflictType
+  severity        ConflictSeverity
+  claimType       ClaimType
+  resolutionClass ResolutionClass
+
+  title       String
+  description String
+
+  // Affected entities (JSON arrays of UUIDs)
+  affectedItems   Json?
+  affectedDays    Json?
+  affectedParties Json?
+
+  // Timing conflicts
+  equipment         String?
+  timeSlot          String?
+  capacityAvailable Float?
+  capacityRequired  Float?
+
+  // Dietary gaps
+  dietaryType     String?
+  guestCount      Int?
+  category        String?
+  currentCoverage Int?
+  minimumNeeded   Int?
+
+  // AI suggestion
+  suggestion Json?
+
+  // Inputs for reset logic
+  inputsReferenced Json?
+
+  // Status
+  status ConflictStatus @default(OPEN)
+
+  // Engagement tracking
+  viewed                  Boolean @default(false)
+  viewDuration            Int     @default(0)
+  whyThisViewed           Boolean @default(false)
+  dismissedWithoutReading Boolean @default(false)
+
+  // Resolution
+  resolvedBy  String?
+  resolvedAt  DateTime?
+  dismissedAt DateTime?
+  delegatedTo DelegatedTo?
+  delegatedAt DateTime?
+
+  // Delegation
+  canDelegate     Boolean @default(false)
+  delegateToRoles Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  acknowledgements Acknowledgement[]
+
+  @@index([eventId, status])
+  @@index([fingerprint])
+}
+
+model Acknowledgement {
+  id         String   @id @default(cuid())
+  conflictId String
+  conflict   Conflict @relation(fields: [conflictId], references: [id], onDelete: Cascade)
+  eventId    String
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  acknowledgedAt DateTime
+  acknowledgedBy String
+
+  impactStatement    String
+  impactUnderstood   Boolean
+  mitigationPlanType MitigationPlanType
+
+  affectedParties        Json?
+  alternativesConsidered AlternativesConsidered @default(NONE)
+
+  // Visibility
+  visibilityCohosts      Boolean @default(true)
+  visibilityCoordinators String  @default("NONE")
+  visibilityParticipants Boolean @default(false)
+
+  // Supersession
+  supersedesAcknowledgementId String?
+  status                      AcknowledgementStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+
+  @@index([eventId])
+  @@index([conflictId])
+}
+
+model PlanRevision {
+  id             String @id @default(cuid())
+  eventId        String
+  event          Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  revisionNumber Int
+
+  // Full snapshot (stored as JSON)
+  teams            Json
+  items            Json
+  days             Json
+  conflicts        Json
+  acknowledgements Json
+
+  createdAt DateTime
+  createdBy String
+  reason    String?
+
+  currentForEvents Event[] @relation("EventCurrentRevision")
+
+  @@index([eventId])
+}
+
+model PlanSnapshot {
+  id      String        @id @default(cuid())
+  eventId String
+  event   Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  phase   SnapshotPhase
+
+  // Snapshot data (stored as JSON)
+  teams            Json
+  items            Json
+  days             Json
+  criticalFlags    Json
+  acknowledgements Json
+
+  createdAt DateTime @default(now())
+
+  confirmingEvents Event[] @relation("EventConfirmingSnapshot")
+
+  @@index([eventId])
+}
+
+model StructureChangeRequest {
+  id      String              @id @default(cuid())
+  eventId String
+  event   Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  type    StructureChangeType
+
+  requestedBy String
+  requestedAt DateTime
+  reason      String
+
+  // Impact
+  impactedCoordinators Json?
+  impactedItems        Json?
+  deltaFromSnapshot    Json?
+
+  status    StructureChangeStatus @default(PENDING)
+  appliedAt DateTime?
+
+  // For critical flag changes
+  previousCriticalState Boolean?
+  newCriticalState      Boolean?
+
+  @@index([eventId, status])
+}
+
+model StructureTemplate {
+  id             String         @id @default(cuid())
+  hostId         String
+  templateSource TemplateSource
+
+  name         String
+  occasionType String
+
+  // Template data (stored as JSON)
+  teams Json
+  items Json
+  days  Json
+
+  // For Gather templates
+  version          String?
+  changelogSummary String?
+  publishedAt      DateTime?
+
+  createdFrom String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([hostId])
+  @@index([templateSource])
+}
+
+model QuantitiesProfile {
+  id           String @id @default(cuid())
+  hostId       String
+  occasionType String
+  derivedFrom  Json
+
+  // Ratios and quantities (stored as JSON)
+  ratios         Json
+  itemQuantities Json
+  overrides      Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([hostId, occasionType])
+}
+
+model HostMemory {
+  id     String @id @default(cuid())
+  hostId String @unique
+  host   Person @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  // Consent
+  learningEnabled              Boolean @default(false)
+  aggregateContributionConsent Boolean @default(false)
+
+  // Preferences
+  useHistoryByDefault Boolean @default(false)
+
+  updatedAt DateTime @updatedAt
+
+  patterns             HostPattern[]
+  defaults             HostDefault[]
+  dismissedSuggestions DismissedSuggestion[]
+}
+
+model HostPattern {
+  id           String      @id @default(cuid())
+  hostMemoryId String
+  hostMemory   HostMemory  @relation(fields: [hostMemoryId], references: [id], onDelete: Cascade)
+  occasionType String
+  patternType  PatternType
+
+  patternData Json
+  derivedFrom Json
+
+  confidence PatternConfidence
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([hostMemoryId])
+}
+
+model HostDefault {
+  id           String     @id @default(cuid())
+  hostMemoryId String
+  hostMemory   HostMemory @relation(fields: [hostMemoryId], references: [id], onDelete: Cascade)
+  field        String
+  value        Json
+  setAt        DateTime
+
+  @@index([hostMemoryId])
+}
+
+model DismissedSuggestion {
+  id             String     @id @default(cuid())
+  hostMemoryId   String
+  hostMemory     HostMemory @relation(fields: [hostMemoryId], references: [id], onDelete: Cascade)
+  suggestionType String
+  dismissedAt    DateTime
+  count          Int
+
+  @@index([hostMemoryId])
+}
+
+model DeletionReceipt {
+  id        String        @id @default(cuid())
+  hostId    String
+  deletedAt DateTime
+  scope     DeletionScope
+
+  targetIds                   Json?
+  derivedArtifactsRemoved     Boolean
+  aggregateContributionPurged Boolean
+}
+
+// ============================================
+// PLAN PHASE ENUMS
+// ============================================
+
+enum EventStatus {
+  DRAFT
+  CONFIRMING
+  FROZEN
+  COMPLETE
+}
+
+enum OccasionType {
+  CHRISTMAS
+  THANKSGIVING
+  EASTER
+  WEDDING
+  BIRTHDAY
+  REUNION
+  RETREAT
+  OTHER
+}
+
+enum GuestCountConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum DietaryStatus {
+  UNSPECIFIED
+  NONE
+  SPECIFIED
+}
+
+enum VenueType {
+  HOME
+  HIRED_VENUE
+  OUTDOOR
+  MIXED
+  OTHER
+}
+
+enum KitchenAccess {
+  FULL
+  LIMITED
+  NONE
+  CATERING_ONLY
+}
+
+enum GenerationPath {
+  AI
+  TEMPLATE
+  MANUAL
+}
+
+enum StructureMode {
+  EDITABLE
+  LOCKED
+  CHANGE_REQUESTED
+}
+
+enum HostReadinessConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum Domain {
+  PROTEINS
+  VEGETARIAN_MAINS
+  SIDES
+  SALADS
+  STARTERS
+  DESSERTS
+  DRINKS
+  LATER_FOOD
+  SETUP
+  CLEANUP
+  CUSTOM
+}
+
+enum DomainConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum ItemSource {
+  GENERATED
+  TEMPLATE
+  MANUAL
+}
+
+enum QuantityUnit {
+  KG
+  G
+  L
+  ML
+  COUNT
+  PACKS
+  TRAYS
+  SERVINGS
+  CUSTOM
+}
+
+enum QuantityState {
+  SPECIFIED
+  PLACEHOLDER
+  NA
+}
+
+enum QuantityLabel {
+  CALCULATED
+  HEURISTIC
+  PLACEHOLDER
+}
+
+enum QuantitySource {
+  HOST_INPUTS
+  HOST_HISTORY
+  HOST_DEFAULTS
+  SYSTEM_HEURISTICS
+  AGGREGATE_PATTERNS
+  TEMPLATE
+}
+
+enum QuantityDeferredTo {
+  COORDINATOR
+}
+
+enum CriticalSource {
+  AI
+  HOST
+  RULE
+}
+
+enum CriticalOverride {
+  NONE
+  ADDED
+  REMOVED
+}
+
+enum LastEditedBy {
+  AI
+  HOST
+}
+
+enum ConflictType {
+  TIMING
+  DIETARY_GAP
+  STRUCTURAL_IMBALANCE
+  CONSTRAINT_VIOLATION
+  COVERAGE_GAP
+  QUANTITY_MISSING
+  EQUIPMENT_MISMATCH
+}
+
+enum ConflictSeverity {
+  CRITICAL
+  SIGNIFICANT
+  ADVISORY
+}
+
+enum ClaimType {
+  CONSTRAINT
+  RISK
+  PATTERN
+  PREFERENCE
+  ASSUMPTION
+}
+
+enum ResolutionClass {
+  FIX_IN_PLAN
+  DECISION_REQUIRED
+  DELEGATE_ALLOWED
+  INFORMATIONAL
+}
+
+enum ConflictStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+  ACKNOWLEDGED
+  DELEGATED
+}
+
+enum DelegatedTo {
+  COORDINATOR
+}
+
+enum MitigationPlanType {
+  SUBSTITUTE
+  REASSIGN
+  COMMUNICATE
+  ACCEPT_GAP
+  EXTERNAL_CATERING
+  BRING_OWN
+  OTHER
+}
+
+enum AlternativesConsidered {
+  NONE
+  REVIEWED
+  ATTEMPTED
+}
+
+enum AcknowledgementStatus {
+  ACTIVE
+  SUPERSEDED
+}
+
+enum SnapshotPhase {
+  CONFIRMING
+}
+
+enum StructureChangeType {
+  ADD_TEAM
+  RENAME_TEAM
+  REMOVE_TEAM
+  MOVE_ITEM_TEAM
+  ADD_ITEM_TO_TEAM
+  REMOVE_ITEM
+  CHANGE_CRITICAL_FLAG
+}
+
+enum StructureChangeStatus {
+  PENDING
+  APPLIED
+  CANCELLED
+}
+
+enum TemplateSource {
+  HOST
+  GATHER_CURATED
+}
+
+enum PatternType {
+  TEAM_STRUCTURE
+  DOMAIN_COVERAGE
+  QUANTITY_RATIO
+  CRITICAL_ITEMS
+}
+
+enum PatternConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum DeletionScope {
+  ALL
+  EVENTS
+  PATTERNS
+  SPECIFIC_EVENT
 }

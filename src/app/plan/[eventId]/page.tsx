@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ChevronDown, ChevronRight, Plus, AlertCircle } from 'lucide-react';
 import ConflictList from '@/components/plan/ConflictList';
+import GateCheck from '@/components/plan/GateCheck';
 import { Conflict } from '@prisma/client';
 
 interface Event {
@@ -29,6 +30,29 @@ interface Team {
   };
 }
 
+interface Item {
+  id: string;
+  name: string;
+  description: string | null;
+  critical: boolean;
+  quantityState: string;
+  quantityAmount: number | null;
+  quantityUnit: string | null;
+  quantityText: string | null;
+  placeholderAcknowledged: boolean;
+  quantityDeferredTo: string | null;
+  team: {
+    id: string;
+    name: string;
+  };
+  assignment: {
+    person: {
+      id: string;
+      name: string;
+    };
+  } | null;
+}
+
 export default function PlanEditorPage() {
   const params = useParams();
   const router = useRouter();
@@ -37,15 +61,27 @@ export default function PlanEditorPage() {
   const [event, setEvent] = useState<Event | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
+  const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editQuantityAmount, setEditQuantityAmount] = useState('');
+  const [editQuantityUnit, setEditQuantityUnit] = useState('SERVINGS');
 
   useEffect(() => {
+    // Handle invalid eventId (like "new")
+    if (eventId === 'new' || !eventId) {
+      setError('Invalid event ID. Please navigate from the demo page or use a valid event link.');
+      setLoading(false);
+      return;
+    }
+
     loadEvent();
     loadTeams();
     loadConflicts();
+    loadItems();
   }, [eventId]);
 
   const loadEvent = async () => {
@@ -83,6 +119,35 @@ export default function PlanEditorPage() {
     }
   };
 
+  const loadItems = async () => {
+    try {
+      const response = await fetch(`/api/events/${eventId}/items`);
+      if (!response.ok) throw new Error('Failed to load items');
+      const data = await response.json();
+      setItems(data.items || []);
+    } catch (err: any) {
+      console.error('Error loading items:', err);
+    }
+  };
+
+  const handleGeneratePlan = async () => {
+    try {
+      const response = await fetch(`/api/events/${eventId}/generate`, {
+        method: 'POST',
+      });
+      if (!response.ok) throw new Error('Failed to generate plan');
+
+      // Reload teams and items after generation
+      await loadTeams();
+      await loadItems();
+
+      alert('Plan generated! Demo team and items created.');
+    } catch (err: any) {
+      console.error('Error generating plan:', err);
+      alert('Failed to generate plan');
+    }
+  };
+
   const handleCheckPlan = async () => {
     try {
       const response = await fetch(`/api/events/${eventId}/check`, {
@@ -98,6 +163,72 @@ export default function PlanEditorPage() {
       console.error('Error checking plan:', err);
       alert('Failed to check plan');
     }
+  };
+
+  const handleDeferToCoordinator = async (itemId: string) => {
+    try {
+      const response = await fetch(`/api/events/${eventId}/items/${itemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          placeholderAcknowledged: true,
+          quantityDeferredTo: 'COORDINATOR',
+        }),
+      });
+      if (!response.ok) throw new Error('Failed to update item');
+
+      // Reload items and conflicts
+      await loadItems();
+      await loadConflicts();
+    } catch (err: any) {
+      console.error('Error deferring item:', err);
+      alert('Failed to defer item');
+    }
+  };
+
+  const handleStartEditQuantity = (item: Item) => {
+    setEditingItemId(item.id);
+    setEditQuantityAmount(item.quantityAmount?.toString() || '');
+    setEditQuantityUnit(item.quantityUnit || 'SERVINGS');
+  };
+
+  const handleSaveQuantity = async (itemId: string) => {
+    try {
+      const amount = parseFloat(editQuantityAmount);
+      if (isNaN(amount) || amount <= 0) {
+        alert('Please enter a valid quantity');
+        return;
+      }
+
+      const response = await fetch(`/api/events/${eventId}/items/${itemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quantityAmount: amount,
+          quantityUnit: editQuantityUnit,
+          quantityState: 'SPECIFIED',
+        }),
+      });
+      if (!response.ok) throw new Error('Failed to update item');
+
+      // Reload items and conflicts
+      await loadItems();
+      await loadConflicts();
+
+      // Clear editing state
+      setEditingItemId(null);
+      setEditQuantityAmount('');
+      setEditQuantityUnit('SERVINGS');
+    } catch (err: any) {
+      console.error('Error saving quantity:', err);
+      alert('Failed to save quantity');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingItemId(null);
+    setEditQuantityAmount('');
+    setEditQuantityUnit('SERVINGS');
   };
 
   const toggleTeam = (teamId: string) => {
@@ -158,6 +289,14 @@ export default function PlanEditorPage() {
               >
                 View as Host
               </button>
+              {event.status === 'DRAFT' && teams.length === 0 && (
+                <button
+                  onClick={handleGeneratePlan}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                >
+                  Generate Plan
+                </button>
+              )}
               <button
                 onClick={handleCheckPlan}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
@@ -184,6 +323,154 @@ export default function PlanEditorPage() {
                 onConflictsChanged={loadConflicts}
               />
             </div>
+
+            {/* Items with Placeholder Quantities */}
+            {items.length > 0 && (
+              <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                  Items & Quantities
+                </h2>
+                <div className="space-y-3">
+                  {items.map((item) => {
+                    const needsAction =
+                      item.critical &&
+                      item.quantityState === 'PLACEHOLDER' &&
+                      !item.placeholderAcknowledged;
+
+                    return (
+                      <div
+                        key={item.id}
+                        className={`border rounded-lg p-4 ${
+                          needsAction
+                            ? 'border-orange-300 bg-orange-50'
+                            : 'border-gray-200'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="font-medium text-gray-900">
+                                {item.name}
+                              </h3>
+                              {item.critical && (
+                                <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded">
+                                  CRITICAL
+                                </span>
+                              )}
+                              <span className="text-sm text-gray-500">
+                                {item.team.name}
+                              </span>
+                            </div>
+
+                            {item.description && (
+                              <p className="text-sm text-gray-600 mb-2">
+                                {item.description}
+                              </p>
+                            )}
+
+                            {/* Quantity Display/Edit */}
+                            {editingItemId === item.id ? (
+                              <div className="flex items-center gap-2 mt-2">
+                                <input
+                                  type="number"
+                                  value={editQuantityAmount}
+                                  onChange={(e) =>
+                                    setEditQuantityAmount(e.target.value)
+                                  }
+                                  placeholder="Amount"
+                                  className="w-24 px-3 py-1 border border-gray-300 rounded-md text-sm"
+                                />
+                                <select
+                                  value={editQuantityUnit}
+                                  onChange={(e) =>
+                                    setEditQuantityUnit(e.target.value)
+                                  }
+                                  className="px-3 py-1 border border-gray-300 rounded-md text-sm"
+                                >
+                                  <option value="SERVINGS">Servings</option>
+                                  <option value="KG">Kilograms</option>
+                                  <option value="G">Grams</option>
+                                  <option value="L">Liters</option>
+                                  <option value="ML">Milliliters</option>
+                                  <option value="COUNT">Count</option>
+                                  <option value="PACKS">Packs</option>
+                                  <option value="TRAYS">Trays</option>
+                                  <option value="CUSTOM">Custom</option>
+                                </select>
+                                <button
+                                  onClick={() => handleSaveQuantity(item.id)}
+                                  className="px-3 py-1 bg-green-600 text-white text-sm rounded-md hover:bg-green-700"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  onClick={handleCancelEdit}
+                                  className="px-3 py-1 bg-gray-200 text-gray-700 text-sm rounded-md hover:bg-gray-300"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-sm mt-2">
+                                {item.quantityState === 'SPECIFIED' ? (
+                                  <span className="text-gray-700">
+                                    Quantity: {item.quantityAmount}{' '}
+                                    {item.quantityUnit?.toLowerCase()}
+                                  </span>
+                                ) : (
+                                  <span className="text-orange-600">
+                                    Quantity: {item.quantityText || 'TBD'}
+                                  </span>
+                                )}
+                                {item.placeholderAcknowledged && (
+                                  <span className="ml-2 text-gray-500">
+                                    (Deferred to{' '}
+                                    {item.quantityDeferredTo?.toLowerCase()})
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Action Buttons */}
+                          {needsAction && editingItemId !== item.id && (
+                            <div className="flex flex-col gap-2 ml-4">
+                              <button
+                                onClick={() => handleStartEditQuantity(item)}
+                                className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 whitespace-nowrap"
+                              >
+                                Enter Quantity
+                              </button>
+                              <button
+                                onClick={() => handleDeferToCoordinator(item.id)}
+                                className="px-3 py-1 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 whitespace-nowrap"
+                              >
+                                Defer to Coordinator
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Gate Check - Only show for DRAFT events */}
+            {event.status === 'DRAFT' && (
+              <div className="mb-6">
+                <GateCheck
+                  eventId={eventId}
+                  onTransitionComplete={() => {
+                    // Reload event data after successful transition
+                    loadEvent();
+                    loadTeams();
+                    loadConflicts();
+                  }}
+                />
+              </div>
+            )}
 
             {/* Teams */}
             <div className="bg-white rounded-lg shadow-md p-6">

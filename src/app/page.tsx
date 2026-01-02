@@ -96,7 +96,15 @@ export default function DemoLandingPage() {
           </button>
           <h1 className="text-4xl font-bold text-gray-900 mb-3">Gather Demo</h1>
           <p className="text-lg text-gray-600 mb-2">Event Coordination System</p>
-          <p className="text-sm text-gray-500">Choose a role to explore the interface</p>
+          <p className="text-sm text-gray-500 mb-6">Choose a role to explore the interface</p>
+
+          {/* Create New Plan Button */}
+          <a
+            href="/plan/new"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-md"
+          >
+            + Create New Plan
+          </a>
         </div>
 
         {/* Host Section */}
