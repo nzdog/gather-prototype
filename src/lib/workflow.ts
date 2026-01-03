@@ -597,3 +597,261 @@ export async function transitionToConfirming(
     };
   }
 }
+
+/**
+ * ============================================
+ * PHASE 6: REVISION SYSTEM
+ * ============================================
+ */
+
+/**
+ * Creates a manual revision snapshot of the current event state
+ * @param eventId - Event to snapshot
+ * @param actorId - Person creating the revision
+ * @param reason - Reason for creating the revision
+ * @returns The created revision ID
+ */
+export async function createRevision(
+  eventId: string,
+  actorId: string,
+  reason?: string
+): Promise<string> {
+  return await prisma.$transaction(async (tx) => {
+    // Get current revision number
+    const latestRevision = await tx.planRevision.findFirst({
+      where: { eventId },
+      orderBy: { revisionNumber: 'desc' },
+      select: { revisionNumber: true }
+    });
+
+    const revisionNumber = (latestRevision?.revisionNumber ?? 0) + 1;
+
+    // Capture current state
+    const teams = await tx.team.findMany({
+      where: { eventId },
+      include: {
+        coordinator: { select: { id: true, name: true } },
+        items: {
+          include: {
+            assignment: {
+              include: {
+                person: { select: { id: true, name: true } }
+              }
+            },
+            day: { select: { id: true, name: true, date: true } }
+          }
+        }
+      }
+    });
+
+    const days = await tx.day.findMany({
+      where: { eventId }
+    });
+
+    const conflicts = await tx.conflict.findMany({
+      where: { eventId }
+    });
+
+    const acknowledgements = await tx.acknowledgement.findMany({
+      where: { eventId }
+    });
+
+    // Create revision
+    const revision = await tx.planRevision.create({
+      data: {
+        eventId,
+        revisionNumber,
+        createdAt: new Date(),
+        createdBy: actorId,
+        reason: reason || 'Manual revision',
+        teams: teams as any,
+        items: teams.flatMap(t => t.items) as any,
+        days: days as any,
+        conflicts: conflicts as any,
+        acknowledgements: acknowledgements as any
+      }
+    });
+
+    // Update event's currentRevisionId
+    await tx.event.update({
+      where: { id: eventId },
+      data: { currentRevisionId: revision.id }
+    });
+
+    // Log audit entry
+    await logAudit(tx, {
+      eventId,
+      actorId,
+      actionType: 'CREATE_REVISION',
+      targetType: 'PlanRevision',
+      targetId: revision.id,
+      details: `Created revision #${revisionNumber}: ${reason || 'Manual revision'}`
+    });
+
+    return revision.id;
+  });
+}
+
+/**
+ * Restores event to a previous revision state
+ * - Replaces current teams/items/days with revision snapshot
+ * - Clears conflicts (will be re-detected on next Check Plan)
+ * - Updates event.currentRevisionId
+ * - Logs audit entry
+ *
+ * @param eventId - Event to restore
+ * @param revisionId - Revision to restore to
+ * @param actorId - Person performing the restore
+ */
+export async function restoreFromRevision(
+  eventId: string,
+  revisionId: string,
+  actorId: string
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    // Get the revision
+    const revision = await tx.planRevision.findUnique({
+      where: { id: revisionId }
+    });
+
+    if (!revision) {
+      throw new Error('Revision not found');
+    }
+
+    if (revision.eventId !== eventId) {
+      throw new Error('Revision does not belong to this event');
+    }
+
+    // Delete current items (assignments cascade)
+    await tx.item.deleteMany({
+      where: { team: { eventId } }
+    });
+
+    // Delete current teams
+    await tx.team.deleteMany({
+      where: { eventId }
+    });
+
+    // Delete current days
+    await tx.day.deleteMany({
+      where: { eventId }
+    });
+
+    // Clear conflicts (will be re-detected on next Check Plan)
+    await tx.conflict.deleteMany({
+      where: { eventId }
+    });
+
+    // Restore days from revision
+    const days = revision.days as any[];
+    const dayIdMap = new Map<string, string>(); // old ID -> new ID
+
+    for (const dayData of days) {
+      const newDay = await tx.day.create({
+        data: {
+          name: dayData.name,
+          date: new Date(dayData.date),
+          eventId
+        }
+      });
+      dayIdMap.set(dayData.id, newDay.id);
+    }
+
+    // Restore teams from revision
+    const teams = revision.teams as any[];
+    const teamIdMap = new Map<string, string>(); // old ID -> new ID
+    const personIdMap = new Map<string, string>(); // We'll use the same person IDs
+
+    for (const teamData of teams) {
+      const newTeam = await tx.team.create({
+        data: {
+          name: teamData.name,
+          scope: teamData.scope,
+          domain: teamData.domain,
+          domainConfidence: teamData.domainConfidence,
+          displayOrder: teamData.displayOrder,
+          source: teamData.source,
+          isProtected: teamData.isProtected,
+          eventId,
+          coordinatorId: teamData.coordinatorId
+        }
+      });
+      teamIdMap.set(teamData.id, newTeam.id);
+
+      // Restore items for this team
+      const teamItems = teamData.items || [];
+      for (const itemData of teamItems) {
+        const newItem = await tx.item.create({
+          data: {
+            name: itemData.name,
+            quantity: itemData.quantity,
+            description: itemData.description,
+            critical: itemData.critical,
+            status: itemData.status,
+            previouslyAssignedTo: itemData.previouslyAssignedTo,
+            quantityAmount: itemData.quantityAmount,
+            quantityUnit: itemData.quantityUnit,
+            quantityUnitCustom: itemData.quantityUnitCustom,
+            quantityText: itemData.quantityText,
+            quantityState: itemData.quantityState,
+            quantityLabel: itemData.quantityLabel,
+            quantitySource: itemData.quantitySource,
+            quantityDerivedFromTemplate: itemData.quantityDerivedFromTemplate,
+            placeholderAcknowledged: itemData.placeholderAcknowledged,
+            quantityDeferredTo: itemData.quantityDeferredTo,
+            criticalReason: itemData.criticalReason,
+            criticalSource: itemData.criticalSource,
+            criticalOverride: itemData.criticalOverride,
+            glutenFree: itemData.glutenFree,
+            dairyFree: itemData.dairyFree,
+            vegetarian: itemData.vegetarian,
+            dietaryTags: itemData.dietaryTags,
+            equipmentNeeds: itemData.equipmentNeeds,
+            equipmentLoad: itemData.equipmentLoad,
+            durationMinutes: itemData.durationMinutes,
+            notes: itemData.notes,
+            prepStartTime: itemData.prepStartTime,
+            prepEndTime: itemData.prepEndTime,
+            serveTime: itemData.serveTime,
+            dropOffAt: itemData.dropOffAt ? new Date(itemData.dropOffAt) : null,
+            dropOffLocation: itemData.dropOffLocation,
+            dropOffNote: itemData.dropOffNote,
+            source: itemData.source,
+            isProtected: itemData.isProtected,
+            lastEditedBy: itemData.lastEditedBy,
+            teamId: newTeam.id,
+            dayId: itemData.dayId ? dayIdMap.get(itemData.dayId) : null
+          }
+        });
+
+        // Restore assignment if it existed
+        if (itemData.assignment) {
+          await tx.assignment.create({
+            data: {
+              itemId: newItem.id,
+              personId: itemData.assignment.personId,
+              acknowledged: itemData.assignment.acknowledged,
+              createdAt: new Date(itemData.assignment.createdAt)
+            }
+          });
+        }
+      }
+    }
+
+    // Update event's currentRevisionId
+    await tx.event.update({
+      where: { id: eventId },
+      data: { currentRevisionId: revisionId }
+    });
+
+    // Log audit entry
+    await logAudit(tx, {
+      eventId,
+      actorId,
+      actionType: 'RESTORE_REVISION',
+      targetType: 'PlanRevision',
+      targetId: revisionId,
+      details: `Restored event to revision #${revision.revisionNumber}`
+    });
+  });
+}
