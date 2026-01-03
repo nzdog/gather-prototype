@@ -2,20 +2,31 @@
 
 import { useState } from 'react';
 
+interface Day {
+  id: string;
+  name: string;
+  date: string;
+}
+
 interface AddItemModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAdd: (itemData: ItemFormData) => Promise<void>;
   teamName: string;
+  days: Day[];
 }
 
 export interface ItemFormData {
   name: string;
   quantityAmount?: number;
   quantityUnit?: string;
+  quantityState?: string;
+  placeholderAcknowledged?: boolean;
   critical?: boolean;
   dietaryTags?: string[];
   description?: string;
+  dayId?: string | null;
+  serveTime?: string | null;
 }
 
 const QUANTITY_UNITS = [
@@ -27,6 +38,13 @@ const QUANTITY_UNITS = [
   { value: 'COUNT', label: 'Count' },
   { value: 'PACKS', label: 'Packs' },
   { value: 'TRAYS', label: 'Trays' },
+  { value: 'CUSTOM', label: 'Custom' },
+];
+
+const QUANTITY_STATES = [
+  { value: 'SPECIFIED', label: 'Specified' },
+  { value: 'PLACEHOLDER', label: 'Placeholder (TBD)' },
+  { value: 'NA', label: 'Not Applicable' },
 ];
 
 const DIETARY_TAGS = [
@@ -34,18 +52,19 @@ const DIETARY_TAGS = [
   { value: 'vegan', label: 'Vegan' },
   { value: 'glutenFree', label: 'Gluten Free' },
   { value: 'dairyFree', label: 'Dairy Free' },
-  { value: 'nutFree', label: 'Nut Free' },
-  { value: 'halal', label: 'Halal' },
-  { value: 'kosher', label: 'Kosher' },
 ];
 
-export default function AddItemModal({ isOpen, onClose, onAdd, teamName }: AddItemModalProps) {
+export default function AddItemModal({ isOpen, onClose, onAdd, teamName, days }: AddItemModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [quantityAmount, setQuantityAmount] = useState('');
   const [quantityUnit, setQuantityUnit] = useState('SERVINGS');
+  const [quantityState, setQuantityState] = useState('SPECIFIED');
+  const [placeholderAcknowledged, setPlaceholderAcknowledged] = useState(false);
   const [critical, setCritical] = useState(false);
   const [dietaryTags, setDietaryTags] = useState<string[]>([]);
+  const [dayId, setDayId] = useState<string>('');
+  const [serveTime, setServeTime] = useState<string>('');
   const [adding, setAdding] = useState(false);
 
   if (!isOpen) return null;
@@ -75,11 +94,21 @@ export default function AddItemModal({ isOpen, onClose, onAdd, teamName }: AddIt
         dietaryTags: dietaryTags.length > 0 ? dietaryTags : undefined
       };
 
-      // Add quantity if specified
-      if (quantityAmount && parseFloat(quantityAmount) > 0) {
+      // Add quantity fields based on state
+      if (quantityState === 'SPECIFIED' && quantityAmount && parseFloat(quantityAmount) > 0) {
         itemData.quantityAmount = parseFloat(quantityAmount);
         itemData.quantityUnit = quantityUnit;
+        itemData.quantityState = 'SPECIFIED';
+      } else if (quantityState === 'PLACEHOLDER') {
+        itemData.quantityState = 'PLACEHOLDER';
+        itemData.placeholderAcknowledged = placeholderAcknowledged;
+      } else if (quantityState === 'NA') {
+        itemData.quantityState = 'NA';
       }
+
+      // Add timing fields
+      if (dayId) itemData.dayId = dayId;
+      if (serveTime) itemData.serveTime = serveTime;
 
       await onAdd(itemData);
 
@@ -88,8 +117,12 @@ export default function AddItemModal({ isOpen, onClose, onAdd, teamName }: AddIt
       setDescription('');
       setQuantityAmount('');
       setQuantityUnit('SERVINGS');
+      setQuantityState('SPECIFIED');
+      setPlaceholderAcknowledged(false);
       setCritical(false);
       setDietaryTags([]);
+      setDayId('');
+      setServeTime('');
       onClose();
     } catch (error) {
       console.error('Error adding item:', error);
@@ -105,8 +138,12 @@ export default function AddItemModal({ isOpen, onClose, onAdd, teamName }: AddIt
       setDescription('');
       setQuantityAmount('');
       setQuantityUnit('SERVINGS');
+      setQuantityState('SPECIFIED');
+      setPlaceholderAcknowledged(false);
       setCritical(false);
       setDietaryTags([]);
+      setDayId('');
+      setServeTime('');
       onClose();
     }
   };
@@ -152,35 +189,82 @@ export default function AddItemModal({ isOpen, onClose, onAdd, teamName }: AddIt
               />
             </div>
 
-            {/* Quantity */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Quantity (Optional)
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  value={quantityAmount}
-                  onChange={(e) => setQuantityAmount(e.target.value)}
-                  placeholder="Amount"
-                  step="0.1"
-                  min="0"
-                  className="w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={adding}
-                />
+            {/* Quantity Section */}
+            <div className="border-t pt-4">
+              <h3 className="text-sm font-medium text-gray-900 mb-3">Quantity</h3>
+
+              {/* Quantity State */}
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Quantity Status
+                </label>
                 <select
-                  value={quantityUnit}
-                  onChange={(e) => setQuantityUnit(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={quantityState}
+                  onChange={(e) => setQuantityState(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   disabled={adding}
                 >
-                  {QUANTITY_UNITS.map((unit) => (
-                    <option key={unit.value} value={unit.value}>
-                      {unit.label}
+                  {QUANTITY_STATES.map(state => (
+                    <option key={state.value} value={state.value}>
+                      {state.label}
                     </option>
                   ))}
                 </select>
               </div>
+
+              {/* Quantity Amount and Unit - Only show if SPECIFIED */}
+              {quantityState === 'SPECIFIED' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Amount
+                    </label>
+                    <input
+                      type="number"
+                      value={quantityAmount}
+                      onChange={(e) => setQuantityAmount(e.target.value)}
+                      placeholder="e.g., 100"
+                      step="0.01"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled={adding}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Unit
+                    </label>
+                    <select
+                      value={quantityUnit}
+                      onChange={(e) => setQuantityUnit(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled={adding}
+                    >
+                      {QUANTITY_UNITS.map(unit => (
+                        <option key={unit.value} value={unit.value}>
+                          {unit.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Placeholder Acknowledgement - Only show if PLACEHOLDER */}
+              {quantityState === 'PLACEHOLDER' && (
+                <div className="flex items-center p-3 bg-orange-50 border border-orange-200 rounded-md">
+                  <input
+                    type="checkbox"
+                    id="add-placeholder-acknowledged"
+                    checked={placeholderAcknowledged}
+                    onChange={(e) => setPlaceholderAcknowledged(e.target.checked)}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    disabled={adding}
+                  />
+                  <label htmlFor="add-placeholder-acknowledged" className="ml-2 text-sm text-gray-700">
+                    Defer to Coordinator (quantity will be determined later)
+                  </label>
+                </div>
+              )}
             </div>
 
             {/* Critical Flag */}
@@ -223,6 +307,44 @@ export default function AddItemModal({ isOpen, onClose, onAdd, teamName }: AddIt
                     {tag.label}
                   </button>
                 ))}
+              </div>
+            </div>
+
+            {/* Timing */}
+            <div className="border-t pt-4">
+              <h3 className="text-sm font-medium text-gray-900 mb-3">Timing (Optional)</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Day
+                  </label>
+                  <select
+                    value={dayId}
+                    onChange={(e) => setDayId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={adding}
+                  >
+                    <option value="">All days</option>
+                    {days.map(day => (
+                      <option key={day.id} value={day.id}>
+                        {day.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Serve Time
+                  </label>
+                  <input
+                    type="time"
+                    value={serveTime}
+                    onChange={(e) => setServeTime(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., 18:00"
+                    disabled={adding}
+                  />
+                </div>
               </div>
             </div>
           </div>

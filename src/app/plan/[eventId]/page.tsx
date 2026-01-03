@@ -948,6 +948,7 @@ export default function PlanEditorPage() {
           }}
           onAdd={handleAddItem}
           teamName={selectedTeamForItem.name}
+          days={days}
         />
       )}
 
