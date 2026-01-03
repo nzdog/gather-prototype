@@ -9,6 +9,7 @@ import SaveTemplateModal from '@/components/templates/SaveTemplateModal';
 import AddTeamModal, { TeamFormData } from '@/components/plan/AddTeamModal';
 import AddItemModal, { ItemFormData } from '@/components/plan/AddItemModal';
 import EditItemModal from '@/components/plan/EditItemModal';
+import RevisionHistory from '@/components/plan/RevisionHistory';
 import { Conflict } from '@prisma/client';
 
 interface Event {
@@ -705,6 +706,14 @@ export default function PlanEditorPage() {
                 />
               </div>
             )}
+
+            {/* Revision History */}
+            <div className="mb-6">
+              <RevisionHistory
+                eventId={eventId}
+                actorId={MOCK_HOST_ID}
+              />
+            </div>
 
             {/* Teams */}
             <div className="bg-white rounded-lg shadow-md p-6">

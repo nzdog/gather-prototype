@@ -1,6 +1,7 @@
 // POST /api/events/[id]/regenerate - Regenerate plan with modifier
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { createRevision } from '@/lib/workflow';
 
 export async function POST(
   request: NextRequest,
@@ -9,7 +10,7 @@ export async function POST(
   try {
     const { id: eventId } = await context.params;
     const body = await request.json();
-    const { modifier = '', preserveProtected = true } = body;
+    const { modifier = '', preserveProtected = true, actorId } = body;
 
     // Verify event exists
     const event = await prisma.event.findUnique({
@@ -25,6 +26,21 @@ export async function POST(
 
     if (!event) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
+
+    // PHASE 6: Create revision before regeneration to preserve pre-regenerate state
+    let revisionId: string | null = null;
+    if (actorId) {
+      try {
+        revisionId = await createRevision(
+          eventId,
+          actorId,
+          `Before regeneration: ${modifier || 'no modifier'}`
+        );
+      } catch (revisionError) {
+        console.error('Warning: Failed to create pre-regeneration revision:', revisionError);
+        // Continue with regeneration even if revision fails
+      }
     }
 
     // Get protected items if preserveProtected is true
@@ -81,7 +97,7 @@ export async function POST(
         data: {
           name: teamData.name,
           scope: teamData.scope,
-          domain: teamData.domain,
+          domain: teamData.domain as any,
           eventId,
           coordinatorId: event.hostId,
           source: 'GENERATED',
@@ -96,12 +112,12 @@ export async function POST(
             name: itemData.name,
             teamId: team.id,
             quantityAmount: itemData.quantityAmount,
-            quantityUnit: itemData.quantityUnit,
-            quantityState: itemData.quantityState || 'SPECIFIED',
+            quantityUnit: itemData.quantityUnit as any,
+            quantityState: (itemData.quantityState || 'SPECIFIED') as any,
             critical: itemData.critical || false,
-            vegetarian: itemData.vegetarian || false,
-            glutenFree: itemData.glutenFree || false,
-            dairyFree: itemData.dairyFree || false,
+            vegetarian: Boolean((itemData as any).vegetarian),
+            glutenFree: Boolean((itemData as any).glutenFree),
+            dairyFree: Boolean((itemData as any).dairyFree),
             source: 'GENERATED',
           },
         });
@@ -117,6 +133,7 @@ export async function POST(
       preservedItems: protectedItems.length,
       teamsCreated,
       itemsCreated,
+      revisionId, // Include revision ID in response
     });
   } catch (error) {
     console.error('Error regenerating plan:', error);
