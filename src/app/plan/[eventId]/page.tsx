@@ -2,9 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ChevronDown, ChevronRight, Plus, AlertCircle } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, AlertCircle, Save } from 'lucide-react';
 import ConflictList from '@/components/plan/ConflictList';
 import GateCheck from '@/components/plan/GateCheck';
+import SaveTemplateModal from '@/components/templates/SaveTemplateModal';
+import AddTeamModal, { TeamFormData } from '@/components/plan/AddTeamModal';
+import AddItemModal, { ItemFormData } from '@/components/plan/AddItemModal';
+import EditItemModal from '@/components/plan/EditItemModal';
 import { Conflict } from '@prisma/client';
 
 interface Event {
@@ -41,6 +45,9 @@ interface Item {
   quantityText: string | null;
   placeholderAcknowledged: boolean;
   quantityDeferredTo: string | null;
+  dietaryTags: string[];
+  dayId: string | null;
+  serveTime: string | null;
   team: {
     id: string;
     name: string;
@@ -51,6 +58,17 @@ interface Item {
       name: string;
     };
   } | null;
+  day?: {
+    id: string;
+    name: string;
+    date: string;
+  } | null;
+}
+
+interface Day {
+  id: string;
+  name: string;
+  date: string;
 }
 
 export default function PlanEditorPage() {
@@ -60,6 +78,7 @@ export default function PlanEditorPage() {
 
   const [event, setEvent] = useState<Event | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [days, setDays] = useState<Day[]>([]);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,6 +88,19 @@ export default function PlanEditorPage() {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editQuantityAmount, setEditQuantityAmount] = useState('');
   const [editQuantityUnit, setEditQuantityUnit] = useState('SERVINGS');
+  const [saveTemplateModalOpen, setSaveTemplateModalOpen] = useState(false);
+  const [addTeamModalOpen, setAddTeamModalOpen] = useState(false);
+  const [addItemModalOpen, setAddItemModalOpen] = useState(false);
+  const [selectedTeamForItem, setSelectedTeamForItem] = useState<Team | null>(null);
+  const [teamItems, setTeamItems] = useState<Record<string, Item[]>>({});
+  const [loadingTeamItems, setLoadingTeamItems] = useState<Set<string>>(new Set());
+  const [editingItem, setEditingItem] = useState<Item | null>(null);
+  const [editItemName, setEditItemName] = useState('');
+  const [editItemDescription, setEditItemDescription] = useState('');
+  const [editItemCritical, setEditItemCritical] = useState(false);
+
+  // Mock hostId - in production, this would come from auth
+  const MOCK_HOST_ID = 'cmjwbjrpw0000n99xs11r44qh';
 
   useEffect(() => {
     // Handle invalid eventId (like "new")
@@ -80,6 +112,7 @@ export default function PlanEditorPage() {
 
     loadEvent();
     loadTeams();
+    loadDays();
     loadConflicts();
     loadItems();
   }, [eventId]);
@@ -105,6 +138,18 @@ export default function PlanEditorPage() {
       setTeams(data.teams);
     } catch (err: any) {
       console.error('Error loading teams:', err);
+    }
+  };
+
+  const loadDays = async () => {
+    try {
+      const response = await fetch(`/api/events/${eventId}/days`);
+      if (!response.ok) throw new Error('Failed to load days');
+      const data = await response.json();
+      setDays(data.days || []);
+    } catch (err: any) {
+      console.error('Error loading days:', err);
+      setDays([]); // Set empty array on error
     }
   };
 
@@ -231,14 +276,194 @@ export default function PlanEditorPage() {
     setEditQuantityUnit('SERVINGS');
   };
 
-  const toggleTeam = (teamId: string) => {
+
+  const handleSaveAsTemplate = async (templateName: string) => {
+    try {
+      const response = await fetch('/api/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hostId: MOCK_HOST_ID,
+          eventId: event?.id,
+          name: templateName
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save template');
+      }
+
+      const data = await response.json();
+      alert(`Template "${templateName}" saved successfully!`);
+
+      // Optionally redirect to templates page
+      // router.push('/plan/templates');
+    } catch (error: any) {
+      console.error('Error saving template:', error);
+      throw error;
+    }
+  };
+
+  const handleAddTeam = async (teamData: TeamFormData) => {
+    try {
+      const response = await fetch(`/api/events/${eventId}/teams`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...teamData,
+          coordinatorId: MOCK_HOST_ID // Host is initial coordinator
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to add team');
+      }
+
+      // Reload teams
+      await loadTeams();
+    } catch (error: any) {
+      console.error('Error adding team:', error);
+      alert('Failed to add team');
+      throw error;
+    }
+  };
+
+  const handleAddItem = async (itemData: ItemFormData) => {
+    if (!selectedTeamForItem) return;
+
+    try {
+      const response = await fetch(`/api/events/${eventId}/teams/${selectedTeamForItem.id}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(itemData)
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to add item');
+      }
+
+      // Reload teams and team items
+      await loadTeams();
+      await loadTeamItems(selectedTeamForItem.id);
+    } catch (error: any) {
+      console.error('Error adding item:', error);
+      alert('Failed to add item');
+      throw error;
+    }
+  };
+
+  const loadTeamItems = async (teamId: string) => {
+    setLoadingTeamItems(prev => new Set(prev).add(teamId));
+    try {
+      const response = await fetch(`/api/events/${eventId}/teams/${teamId}/items`);
+      if (!response.ok) throw new Error('Failed to load team items');
+
+      const data = await response.json();
+      setTeamItems(prev => ({ ...prev, [teamId]: data.items }));
+    } catch (error: any) {
+      console.error('Error loading team items:', error);
+    } finally {
+      setLoadingTeamItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(teamId);
+        return newSet;
+      });
+    }
+  };
+
+  const toggleTeamExpanded = async (teamId: string) => {
     const newExpanded = new Set(expandedTeams);
     if (newExpanded.has(teamId)) {
       newExpanded.delete(teamId);
     } else {
       newExpanded.add(teamId);
+      // Load items when expanding
+      if (!teamItems[teamId]) {
+        await loadTeamItems(teamId);
+      }
     }
     setExpandedTeams(newExpanded);
+  };
+
+  const handleStartEditItem = (item: Item) => {
+    setEditingItem(item);
+    setEditItemName(item.name);
+    setEditItemDescription(item.description || '');
+    setEditItemCritical(item.critical);
+  };
+
+  const handleSaveEditItem = async (itemId: string, data: any) => {
+    const item = editingItem; // Store reference before clearing
+    try {
+      const response = await fetch(`/api/events/${eventId}/items/${itemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+
+      if (!response.ok) throw new Error('Failed to update item');
+
+      // Reload team items to show updated data
+      if (item?.team?.id) {
+        await loadTeamItems(item.team.id);
+      }
+    } catch (error: any) {
+      console.error('Error updating item:', error);
+      alert('Failed to update item');
+      throw error; // Re-throw to prevent modal from closing
+    }
+  };
+
+  const handleDeleteItem = async (item: Item) => {
+    if (!confirm(`Delete "${item.name}"? This cannot be undone.`)) return;
+
+    try {
+      const response = await fetch(`/api/events/${eventId}/items/${item.id}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) throw new Error('Failed to delete item');
+
+      // Reload team items and teams
+      await loadTeamItems(item.team.id);
+      await loadTeams();
+    } catch (error: any) {
+      console.error('Error deleting item:', error);
+      alert('Failed to delete item');
+    }
+  };
+
+  const handleDeleteTeam = async (team: Team) => {
+    const itemCount = team._count.items;
+    const message = itemCount > 0
+      ? `Delete "${team.name}" and its ${itemCount} item(s)? This cannot be undone.`
+      : `Delete "${team.name}"? This cannot be undone.`;
+
+    if (!confirm(message)) return;
+
+    try {
+      const response = await fetch(`/api/events/${eventId}/teams/${team.id}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) throw new Error('Failed to delete team');
+
+      // Remove from expanded teams
+      const newExpanded = new Set(expandedTeams);
+      newExpanded.delete(team.id);
+      setExpandedTeams(newExpanded);
+
+      // Remove from team items
+      const newTeamItems = { ...teamItems };
+      delete newTeamItems[team.id];
+      setTeamItems(newTeamItems);
+
+      // Reload teams
+      await loadTeams();
+    } catch (error: any) {
+      console.error('Error deleting team:', error);
+      alert('Failed to delete team');
+    }
   };
 
   if (loading) {
@@ -303,6 +528,15 @@ export default function PlanEditorPage() {
               >
                 Check Plan
               </button>
+              {(event.status === 'CONFIRMING' || event.status === 'FROZEN' || event.status === 'COMPLETE') && (
+                <button
+                  onClick={() => setSaveTemplateModalOpen(true)}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 flex items-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  Save as Template
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -476,7 +710,10 @@ export default function PlanEditorPage() {
             <div className="bg-white rounded-lg shadow-md p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold text-gray-900">Teams</h2>
-                <button className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2">
+                <button
+                  onClick={() => setAddTeamModalOpen(true)}
+                  className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"
+                >
                   <Plus className="w-4 h-4" />
                   Add Team
                 </button>
@@ -491,7 +728,7 @@ export default function PlanEditorPage() {
                   {teams.map((team) => (
                     <div key={team.id} className="border border-gray-200 rounded-lg">
                       <button
-                        onClick={() => toggleTeam(team.id)}
+                        onClick={() => toggleTeamExpanded(team.id)}
                         className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50"
                       >
                         <div className="flex items-center gap-3">
@@ -514,9 +751,101 @@ export default function PlanEditorPage() {
                       {expandedTeams.has(team.id) && (
                         <div className="px-4 py-3 bg-gray-50 border-t">
                           <p className="text-sm text-gray-600 mb-3">{team.scope}</p>
-                          <button className="text-sm text-blue-600 hover:text-blue-700">
-                            View Items →
-                          </button>
+                          <div className="flex gap-2 mb-4">
+                            <button
+                              onClick={() => {
+                                setSelectedTeamForItem(team);
+                                setAddItemModalOpen(true);
+                              }}
+                              className="px-3 py-1 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 flex items-center gap-1"
+                            >
+                              <Plus className="w-3 h-3" />
+                              Add Item
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTeam(team)}
+                              className="px-3 py-1 bg-red-600 text-white text-sm rounded-md hover:bg-red-700 flex items-center gap-1"
+                            >
+                              Delete Team
+                            </button>
+                          </div>
+
+                          {/* Items List */}
+                          {loadingTeamItems.has(team.id) ? (
+                            <div className="text-center py-4 text-gray-500">
+                              <p className="text-sm">Loading items...</p>
+                            </div>
+                          ) : teamItems[team.id] && teamItems[team.id].length > 0 ? (
+                            <div className="space-y-2">
+                              {teamItems[team.id].map((item: any) => (
+                                <div key={item.id} className="bg-white border border-gray-200 rounded-md p-3">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <h4 className="font-medium text-gray-900">{item.name}</h4>
+                                        {item.critical && (
+                                          <span className="px-2 py-0.5 bg-red-100 text-red-800 text-xs rounded">
+                                            Critical
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {item.description && (
+                                        <p className="text-sm text-gray-600 mt-1">{item.description}</p>
+                                      )}
+
+                                      {/* Quantity Display */}
+                                      <div className="text-sm mt-2">
+                                        {item.quantityState === 'SPECIFIED' ? (
+                                          <span className="text-gray-700">
+                                            Quantity: {item.quantityAmount} {item.quantityUnit?.toLowerCase()}
+                                          </span>
+                                        ) : (
+                                          <span className="text-orange-600">
+                                            Quantity: {item.quantityText || 'TBD'}
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {/* Dietary Tags */}
+                                      {item.dietaryTags && item.dietaryTags.length > 0 && (
+                                        <div className="flex gap-1 mt-2">
+                                          {item.dietaryTags.map((tag: string) => (
+                                            <span
+                                              key={tag}
+                                              className="px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded"
+                                            >
+                                              {tag}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div className="flex gap-2 ml-4">
+                                      <button
+                                        onClick={() => handleStartEditItem(item)}
+                                        className="px-2 py-1 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700"
+                                      >
+                                        Edit
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteItem(item)}
+                                        className="px-2 py-1 bg-red-600 text-white text-xs rounded-md hover:bg-red-700"
+                                      >
+                                        Delete
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center py-4 text-gray-500">
+                              <p className="text-sm">No items yet. Add an item to get started.</p>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -588,6 +917,48 @@ export default function PlanEditorPage() {
           </div>
         </div>
       </div>
+
+      {/* Save Template Modal */}
+      {event && (
+        <SaveTemplateModal
+          isOpen={saveTemplateModalOpen}
+          onClose={() => setSaveTemplateModalOpen(false)}
+          onSave={handleSaveAsTemplate}
+          eventName={event.name}
+          teamCount={teams.length}
+          itemCount={teams.reduce((sum, team) => sum + team._count.items, 0)}
+          occasionType={event.occasionType}
+        />
+      )}
+
+      {/* Add Team Modal */}
+      <AddTeamModal
+        isOpen={addTeamModalOpen}
+        onClose={() => setAddTeamModalOpen(false)}
+        onAdd={handleAddTeam}
+      />
+
+      {/* Add Item Modal */}
+      {selectedTeamForItem && (
+        <AddItemModal
+          isOpen={addItemModalOpen}
+          onClose={() => {
+            setAddItemModalOpen(false);
+            setSelectedTeamForItem(null);
+          }}
+          onAdd={handleAddItem}
+          teamName={selectedTeamForItem.name}
+        />
+      )}
+
+      {/* Edit Item Modal */}
+      <EditItemModal
+        isOpen={!!editingItem}
+        onClose={() => setEditingItem(null)}
+        onSave={handleSaveEditItem}
+        item={editingItem}
+        days={days}
+      />
     </div>
   );
 }

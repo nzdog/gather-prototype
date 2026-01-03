@@ -1,4 +1,5 @@
 // PATCH /api/events/[id]/items/[itemId] - Update item
+// DELETE /api/events/[id]/items/[itemId] - Delete item
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
@@ -34,6 +35,13 @@ export async function PATCH(
     if (body.description !== undefined) updateData.description = body.description;
     if (body.critical !== undefined) updateData.critical = body.critical;
 
+    // Dietary tags
+    if (body.dietaryTags !== undefined) updateData.dietaryTags = body.dietaryTags;
+
+    // Timing fields
+    if (body.dayId !== undefined) updateData.dayId = body.dayId;
+    if (body.serveTime !== undefined) updateData.serveTime = body.serveTime;
+
     // Update item
     const item = await prisma.item.update({
       where: { id: itemId },
@@ -49,6 +57,48 @@ export async function PATCH(
     return NextResponse.json(
       {
         error: 'Failed to update item',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ id: string; itemId: string }> }
+) {
+  try {
+    const { id: eventId, itemId } = await context.params;
+
+    // Verify item exists
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      include: { team: true }
+    });
+
+    if (!item) {
+      return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+    }
+
+    if (item.team.eventId !== eventId) {
+      return NextResponse.json(
+        { error: 'Item does not belong to this event' },
+        { status: 400 }
+      );
+    }
+
+    // Delete item (cascade will handle assignment if any)
+    await prisma.item.delete({
+      where: { id: itemId }
+    });
+
+    return NextResponse.json({ success: true, message: 'Item deleted' });
+  } catch (error) {
+    console.error('Error deleting item:', error);
+    return NextResponse.json(
+      {
+        error: 'Failed to delete item',
         details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
