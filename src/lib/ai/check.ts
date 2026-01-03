@@ -121,12 +121,14 @@ async function detectTimingConflicts(event: any): Promise<ConflictData[]> {
   const conflicts: ConflictData[] = [];
 
   // Get items that need oven and have timing info
-  const ovenItems = await prisma.item.findMany({
+  const allItems = await prisma.item.findMany({
     where: {
       team: { eventId: event.id },
-      equipmentNeeds: { not: null },
     },
   });
+
+  // Filter items that have equipment needs
+  const ovenItems = allItems.filter(item => item.equipmentNeeds !== null);
 
   // Group by time slot and check oven capacity
   const ovenCapacity = event.venueOvenCount || 1;
@@ -277,7 +279,7 @@ async function detectCoverageGaps(event: any): Promise<ConflictData[]> {
       select: { domain: true },
     });
 
-    const presentDomains = new Set(teams.map(t => t.domain).filter(Boolean));
+    const presentDomains = new Set(teams.map(t => t.domain).filter(Boolean) as string[]);
     const missing = expected.filter(d => !presentDomains.has(d));
 
     if (missing.length > 0) {
