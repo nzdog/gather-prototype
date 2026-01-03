@@ -52,6 +52,19 @@ export default function NewPlanPage() {
     setError('');
 
     try {
+      // Debug: Log form data before submit
+      console.log('Form data before submit:', formData);
+
+      // Client-side validation for required fields
+      const missingFields: string[] = [];
+      if (!formData.name) missingFields.push('name');
+      if (!formData.startDate) missingFields.push('startDate');
+      if (!formData.endDate) missingFields.push('endDate');
+
+      if (missingFields.length > 0) {
+        throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+      }
+
       // Convert to proper types
       const payload = {
         ...formData,
@@ -70,6 +83,8 @@ export default function NewPlanPage() {
         venueType: formData.venueType || null,
         venueKitchenAccess: formData.venueKitchenAccess || null,
       };
+
+      console.log('Payload being sent:', payload);
 
       const response = await fetch('/api/events', {
         method: 'POST',
@@ -237,7 +252,24 @@ export default function NewPlanPage() {
 
               <button
                 type="button"
-                onClick={() => setStep(2)}
+                onClick={() => {
+                  // Validate required fields before proceeding
+                  if (!formData.name) {
+                    setError('Event name is required');
+                    return;
+                  }
+                  if (!formData.startDate) {
+                    setError('Start date is required');
+                    return;
+                  }
+                  if (!formData.endDate) {
+                    setError('End date is required');
+                    return;
+                  }
+                  setError('');
+                  console.log('Step 1 complete, formData:', formData);
+                  setStep(2);
+                }}
                 className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700"
               >
                 Next: Guest Details →
@@ -409,7 +441,10 @@ export default function NewPlanPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setStep(3)}
+                  onClick={() => {
+                    console.log('Step 2 complete, formData:', formData);
+                    setStep(3);
+                  }}
                   className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700"
                 >
                   Next: Venue Details →

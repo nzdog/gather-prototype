@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createRevision } from '@/lib/workflow';
+import { regeneratePlan, RegenerationParams } from '@/lib/ai/generate';
 
 export async function POST(
   request: NextRequest,
@@ -12,7 +13,7 @@ export async function POST(
     const body = await request.json();
     const { modifier = '', preserveProtected = true, actorId } = body;
 
-    // Verify event exists
+    // Verify event exists and get all details
     const event = await prisma.event.findUnique({
       where: { id: eventId },
       include: {
@@ -21,6 +22,7 @@ export async function POST(
             items: true,
           },
         },
+        days: true,
       },
     });
 
@@ -85,14 +87,46 @@ export async function POST(
       });
     }
 
-    // Generate new plan based on modifier
-    const generatedData = await generatePlanWithModifier(event, modifier);
+    // Build regeneration parameters for AI
+    const regenerationParams: RegenerationParams = {
+      occasion: event.occasionType || 'gathering',
+      guests: event.guestCount || 10,
+      dietary: {
+        vegetarian: event.dietaryVegetarian || 0,
+        glutenFree: event.dietaryGlutenFree || 0,
+        dairyFree: event.dietaryDairyFree || 0,
+        nutFree: 0, // Not tracked separately in schema
+        other: event.dietaryAllergies || undefined,
+      },
+      venue: {
+        name: event.venueName || 'Unknown venue',
+        ovenCount: event.venueOvenCount || undefined,
+        bbqAvailable: event.venueBbqAvailable || undefined,
+      },
+      days: event.days.length || 1,
+      modifier,
+      protectedItems: protectedItems.map((item: any) => ({
+        name: item.name,
+        team: item.team?.name || 'Unknown',
+        quantity: item.quantityText || `${item.quantityAmount} ${item.quantityUnit}`,
+      })),
+    };
+
+    console.log('[Regenerate] Calling AI with params:', JSON.stringify(regenerationParams, null, 2));
+
+    // Generate new plan using Claude AI
+    const aiResponse = await regeneratePlan(regenerationParams);
+
+    console.log('[Regenerate] AI response received:', {
+      teams: aiResponse.teams.length,
+      items: aiResponse.items.length,
+    });
 
     // Create teams and items
     let teamsCreated = 0;
     let itemsCreated = 0;
 
-    for (const teamData of generatedData.teams) {
+    for (const teamData of aiResponse.teams) {
       const team = await prisma.team.create({
         data: {
           name: teamData.name,
@@ -106,19 +140,40 @@ export async function POST(
 
       teamsCreated++;
 
-      for (const itemData of teamData.items) {
+      // Create items for this team
+      const teamItems = aiResponse.items.filter(
+        (item) => item.teamName === teamData.name
+      );
+
+      for (const itemData of teamItems) {
+        // Determine quantity state and text
+        let quantityState: 'SPECIFIED' | 'PLACEHOLDER';
+        let quantityText: string | null = null;
+
+        if (itemData.quantityLabel === 'PLACEHOLDER') {
+          quantityState = 'PLACEHOLDER';
+          quantityText = itemData.quantityReasoning;
+        } else {
+          quantityState = 'SPECIFIED';
+        }
+
         await prisma.item.create({
           data: {
             name: itemData.name,
             teamId: team.id,
             quantityAmount: itemData.quantityAmount,
             quantityUnit: itemData.quantityUnit as any,
-            quantityState: (itemData.quantityState || 'SPECIFIED') as any,
-            critical: itemData.critical || false,
-            vegetarian: Boolean((itemData as any).vegetarian),
-            glutenFree: Boolean((itemData as any).glutenFree),
-            dairyFree: Boolean((itemData as any).dairyFree),
+            quantityState,
+            quantityText,
+            quantityLabel: itemData.quantityLabel,
+            notes: itemData.quantityReasoning, // Store reasoning in notes
+            critical: itemData.critical,
+            criticalReason: itemData.criticalReason,
+            vegetarian: itemData.dietaryTags.includes('VEGETARIAN'),
+            glutenFree: itemData.dietaryTags.includes('GLUTEN_FREE'),
+            dairyFree: itemData.dietaryTags.includes('DAIRY_FREE'),
             source: 'GENERATED',
+            placeholderAcknowledged: false,
           },
         });
 
@@ -128,15 +183,16 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      message: `Plan regenerated with modifier: "${modifier}"`,
+      message: `Plan regenerated with Claude AI: "${modifier}"`,
       modifier,
       preservedItems: protectedItems.length,
       teamsCreated,
       itemsCreated,
-      revisionId, // Include revision ID in response
+      revisionId,
+      reasoning: aiResponse.reasoning,
     });
   } catch (error) {
-    console.error('Error regenerating plan:', error);
+    console.error('[Regenerate] Error regenerating plan:', error);
     return NextResponse.json(
       {
         error: 'Failed to regenerate plan',
@@ -145,119 +201,4 @@ export async function POST(
       { status: 500 }
     );
   }
-}
-
-/**
- * Generate plan based on modifier
- * In production, this would call AI API
- */
-async function generatePlanWithModifier(event: any, modifier: string) {
-  // Parse modifier to determine what to generate
-  const isVegetarianFocus = modifier.toLowerCase().includes('vegetarian');
-  const isGlutenFreeFocus = modifier.toLowerCase().includes('gluten');
-
-  const teams = [];
-
-  // Main Dishes team
-  teams.push({
-    name: 'Main Dishes',
-    scope: 'Responsible for main course items',
-    domain: 'PROTEINS',
-    items: [
-      {
-        name: isVegetarianFocus ? 'Vegetable Wellington' : 'Roast Turkey',
-        quantityAmount: 1,
-        quantityUnit: 'COUNT',
-        quantityState: 'SPECIFIED',
-        critical: true,
-        vegetarian: isVegetarianFocus,
-      },
-      {
-        name: 'Stuffing',
-        quantityAmount: 5,
-        quantityUnit: 'KG',
-        quantityState: 'SPECIFIED',
-        critical: false,
-      },
-    ],
-  });
-
-  // Add vegetarian team if modifier requests it
-  if (isVegetarianFocus || event.dietaryVegetarian > 0) {
-    teams.push({
-      name: 'Vegetarian Options',
-      scope: 'Vegetarian dishes for dietary requirements',
-      domain: 'VEGETARIAN_MAINS',
-      items: [
-        {
-          name: 'Mushroom Risotto',
-          quantityAmount: 3,
-          quantityUnit: 'SERVINGS',
-          quantityState: 'SPECIFIED',
-          critical: true,
-          vegetarian: true,
-        },
-        {
-          name: 'Grilled Vegetable Platter',
-          quantityAmount: 2,
-          quantityUnit: 'TRAYS',
-          quantityState: 'SPECIFIED',
-          critical: false,
-          vegetarian: true,
-        },
-      ],
-    });
-  }
-
-  // Add gluten-free options if modifier requests it
-  if (isGlutenFreeFocus && event.dietaryGlutenFree > 0) {
-    teams.push({
-      name: 'Gluten-Free Options',
-      scope: 'Gluten-free dishes',
-      domain: 'SIDES',
-      items: [
-        {
-          name: 'GF Bread Rolls',
-          quantityAmount: event.dietaryGlutenFree,
-          quantityUnit: 'COUNT',
-          quantityState: 'SPECIFIED',
-          critical: true,
-          glutenFree: true,
-        },
-        {
-          name: 'Rice Salad',
-          quantityAmount: 1,
-          quantityUnit: 'TRAYS',
-          quantityState: 'SPECIFIED',
-          critical: false,
-          glutenFree: true,
-        },
-      ],
-    });
-  }
-
-  // Desserts team
-  teams.push({
-    name: 'Desserts',
-    scope: 'Sweet treats and desserts',
-    domain: 'DESSERTS',
-    items: [
-      {
-        name: 'Pavlova',
-        quantityAmount: 2,
-        quantityUnit: 'COUNT',
-        quantityState: 'SPECIFIED',
-        critical: true,
-      },
-      {
-        name: 'Ice Cream',
-        quantityAmount: 3,
-        quantityUnit: 'L',
-        quantityState: 'SPECIFIED',
-        critical: false,
-      },
-    ],
-  });
-
-  return { teams };
 }
