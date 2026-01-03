@@ -99,12 +99,26 @@ export default function DemoLandingPage() {
           <p className="text-sm text-gray-500 mb-6">Choose a role to explore the interface</p>
 
           {/* Create New Plan Button */}
-          <a
-            href="/plan/new"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-md"
-          >
-            + Create New Plan
-          </a>
+          <div className="flex justify-center gap-4">
+            <a
+              href="/plan/new"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-md"
+            >
+              + Create New Plan
+            </a>
+            <a
+              href="/plan/templates"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-colors shadow-md"
+            >
+              📋 Templates
+            </a>
+            <a
+              href="/plan/settings"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-700 transition-colors shadow-md"
+            >
+              ⚙️ Settings
+            </a>
+          </div>
         </div>
 
         {/* Host Section */}
