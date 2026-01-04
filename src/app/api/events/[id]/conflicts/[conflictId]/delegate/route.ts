@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 export async function POST(
-  request: NextRequest,
+  _request: NextRequest,
   context: { params: Promise<{ id: string; conflictId: string }> }
 ) {
   try {
@@ -15,10 +15,7 @@ export async function POST(
     });
 
     if (!conflict) {
-      return NextResponse.json(
-        { error: 'Conflict not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Conflict not found' }, { status: 404 });
     }
 
     if (conflict.eventId !== eventId) {
@@ -30,10 +27,7 @@ export async function POST(
 
     // Verify conflict can be delegated
     if (!conflict.canDelegate) {
-      return NextResponse.json(
-        { error: 'This conflict cannot be delegated' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'This conflict cannot be delegated' }, { status: 400 });
     }
 
     // Update conflict status to delegated
@@ -49,9 +43,6 @@ export async function POST(
     return NextResponse.json({ conflict: updatedConflict });
   } catch (error) {
     console.error('Error delegating conflict:', error);
-    return NextResponse.json(
-      { error: 'Failed to delegate conflict' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to delegate conflict' }, { status: 500 });
   }
 }

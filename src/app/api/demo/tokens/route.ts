@@ -13,27 +13,28 @@ export async function GET() {
         person: true,
         team: {
           select: {
-            name: true
-          }
-        }
+            name: true,
+          },
+        },
       },
-      orderBy: [
-        { scope: 'asc' },
-        { person: { name: 'asc' } }
-      ]
+      orderBy: [{ scope: 'asc' }, { person: { name: 'asc' } }],
     });
 
-    const formattedTokens = tokens.map(t => ({
+    const formattedTokens = tokens.map((t) => ({
       scope: t.scope,
       token: t.token,
       personName: t.person.name,
-      teamName: t.team?.name
+      teamName: t.team?.name,
     }));
 
     console.log(`[TokenAPI] Returning ${formattedTokens.length} tokens`);
     if (formattedTokens.length > 0) {
-      console.log(`[TokenAPI] First HOST token: ${formattedTokens.find(t => t.scope === 'HOST')?.token.substring(0, 16)}...`);
-      console.log(`[TokenAPI] First COORD token: ${formattedTokens.find(t => t.scope === 'COORDINATOR')?.token.substring(0, 16)}...`);
+      console.log(
+        `[TokenAPI] First HOST token: ${formattedTokens.find((t) => t.scope === 'HOST')?.token.substring(0, 16)}...`
+      );
+      console.log(
+        `[TokenAPI] First COORD token: ${formattedTokens.find((t) => t.scope === 'COORDINATOR')?.token.substring(0, 16)}...`
+      );
     }
 
     return NextResponse.json({ tokens: formattedTokens });

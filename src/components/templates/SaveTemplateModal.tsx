@@ -19,7 +19,7 @@ export default function SaveTemplateModal({
   eventName,
   teamCount,
   itemCount,
-  occasionType
+  occasionType,
 }: SaveTemplateModalProps) {
   const [templateName, setTemplateName] = useState('');
   const [saving, setSaving] = useState(false);
@@ -76,9 +76,7 @@ export default function SaveTemplateModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Template Name
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Template Name</label>
             <input
               type="text"
               value={templateName}

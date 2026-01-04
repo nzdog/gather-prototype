@@ -19,8 +19,8 @@ export async function POST(request: NextRequest) {
     // In production, this would come from authenticated session
     let host = await prisma.person.findFirst({
       where: {
-        name: 'Demo Host'
-      }
+        name: 'Demo Host',
+      },
     });
 
     if (!host) {
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
         data: {
           name: 'Demo Host',
           email: 'demo@gather.app',
-        }
+        },
       });
     }
 

@@ -18,16 +18,13 @@ export async function POST(
     const { actorId } = body;
 
     if (!actorId) {
-      return NextResponse.json(
-        { error: 'actorId is required in request body' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'actorId is required in request body' }, { status: 400 });
     }
 
     // Verify event exists
     const event = await prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, name: true, status: true }
+      select: { id: true, name: true, status: true },
     });
 
     if (!event) {
@@ -37,7 +34,7 @@ export async function POST(
     // Verify revision exists and belongs to this event
     const revision = await prisma.planRevision.findUnique({
       where: { id: revisionId },
-      select: { id: true, eventId: true, revisionNumber: true, reason: true }
+      select: { id: true, eventId: true, revisionNumber: true, reason: true },
     });
 
     if (!revision) {
@@ -60,15 +57,15 @@ export async function POST(
       revision: {
         id: revision.id,
         revisionNumber: revision.revisionNumber,
-        reason: revision.reason
-      }
+        reason: revision.reason,
+      },
     });
   } catch (error) {
     console.error('Error restoring revision:', error);
     return NextResponse.json(
       {
         error: 'Failed to restore revision',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     );

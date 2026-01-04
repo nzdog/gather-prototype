@@ -7,10 +7,7 @@ import { prisma } from '@/lib/prisma';
  * Clone template to new event.
  * Compares parameters (guest count) and offers quantity scaling if QuantitiesProfile exists.
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const body = await request.json();
   const {
     hostId,
@@ -19,18 +16,21 @@ export async function POST(
     endDate,
     guestCount,
     applyQuantityScaling = false,
-    occasionType
+    occasionType,
   } = body;
 
   if (!hostId || !eventName || !startDate || !endDate) {
-    return NextResponse.json({
-      error: 'hostId, eventName, startDate, and endDate are required'
-    }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: 'hostId, eventName, startDate, and endDate are required',
+      },
+      { status: 400 }
+    );
   }
 
   // Fetch the template
   const template = await prisma.structureTemplate.findUnique({
-    where: { id: params.id }
+    where: { id: params.id },
   });
 
   if (!template) {
@@ -44,7 +44,7 @@ export async function POST(
 
   // Get host person
   const host = await prisma.person.findUnique({
-    where: { id: hostId }
+    where: { id: hostId },
   });
 
   if (!host) {
@@ -59,16 +59,17 @@ export async function POST(
     quantitiesProfile = await prisma.quantitiesProfile.findFirst({
       where: {
         hostId,
-        occasionType: template.occasionType
+        occasionType: template.occasionType,
       },
       orderBy: {
-        createdAt: 'desc'
-      }
+        createdAt: 'desc',
+      },
     });
 
     if (quantitiesProfile) {
       const derivedFrom = quantitiesProfile.derivedFrom as any;
-      const baseGuestCount = derivedFrom?.guestCount || (quantitiesProfile.ratios as any)?.baseGuestCount;
+      const baseGuestCount =
+        derivedFrom?.guestCount || (quantitiesProfile.ratios as any)?.baseGuestCount;
 
       if (baseGuestCount) {
         scalingRatio = guestCount / baseGuestCount;
@@ -88,7 +89,7 @@ export async function POST(
       hostId,
       generationPath: 'TEMPLATE',
       clonedFromId: template.createdFrom || null,
-    }
+    },
   });
 
   // Create days from template
@@ -102,8 +103,8 @@ export async function POST(
       data: {
         name: dayData.name,
         date: new Date(startDate), // Default to start date, host can adjust
-        eventId: event.id
-      }
+        eventId: event.id,
+      },
     });
     dayMap.set(dayData.name, day.id);
   }
@@ -121,8 +122,8 @@ export async function POST(
         displayOrder: teamData.displayOrder || 0,
         source: 'TEMPLATE',
         eventId: event.id,
-        coordinatorId: hostId // Host is initial coordinator
-      }
+        coordinatorId: hostId, // Host is initial coordinator
+      },
     });
 
     // Store first team ID for PersonEvent creation
@@ -139,9 +140,7 @@ export async function POST(
       // Apply quantity scaling if requested
       if (applyQuantityScaling && quantitiesProfile) {
         const itemQuantities = quantitiesProfile.itemQuantities as any[];
-        const matchingQuantity = itemQuantities.find(
-          (q: any) => q.itemName === itemData.name
-        );
+        const matchingQuantity = itemQuantities.find((q: any) => q.itemName === itemData.name);
 
         if (matchingQuantity) {
           quantityAmount = matchingQuantity.quantity * scalingRatio;
@@ -164,8 +163,8 @@ export async function POST(
           quantityDerivedFromTemplate: applyQuantityScaling && quantityAmount !== null,
           source: 'TEMPLATE',
           teamId: team.id,
-          status: 'UNASSIGNED'
-        }
+          status: 'UNASSIGNED',
+        },
       });
     }
   }
@@ -177,8 +176,8 @@ export async function POST(
         personId: hostId,
         eventId: event.id,
         teamId: firstTeamId,
-        role: 'HOST'
-      }
+        role: 'HOST',
+      },
     });
   }
 
@@ -187,6 +186,6 @@ export async function POST(
     event,
     scalingApplied: applyQuantityScaling,
     scalingRatio: applyQuantityScaling ? scalingRatio : null,
-    message: 'Template cloned successfully'
+    message: 'Template cloned successfully',
   });
 }

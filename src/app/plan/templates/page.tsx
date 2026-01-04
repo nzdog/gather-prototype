@@ -18,7 +18,7 @@ export default function TemplatesPage() {
     setCloneModalOpen(true);
   };
 
-  const handleDelete = (templateId: string) => {
+  const handleDelete = (_templateId: string) => {
     // Template already deleted by TemplateList component
     // Could show a success toast here
   };
@@ -53,11 +53,7 @@ export default function TemplatesPage() {
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="bg-white rounded-lg shadow-md p-6">
-          <TemplateList
-            hostId={MOCK_HOST_ID}
-            onClone={handleClone}
-            onDelete={handleDelete}
-          />
+          <TemplateList hostId={MOCK_HOST_ID} onClone={handleClone} onDelete={handleDelete} />
         </div>
       </div>
 

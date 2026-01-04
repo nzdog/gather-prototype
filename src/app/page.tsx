@@ -24,14 +24,18 @@ export default function DemoLandingPage() {
       // Add cache busting to ensure fresh tokens
       const response = await fetch(`/api/demo/tokens?t=${Date.now()}`, {
         cache: 'no-store',
-        headers: { 'Cache-Control': 'no-cache' }
+        headers: { 'Cache-Control': 'no-cache' },
       });
       if (response.ok) {
         const data = await response.json();
         console.log(`[Demo] Fetched ${data.tokens.length} tokens from API`);
         if (data.tokens.length > 0) {
-          console.log(`[Demo] First HOST token: /h/${data.tokens.find((t: any) => t.scope === 'HOST')?.token.substring(0, 16)}...`);
-          console.log(`[Demo] First COORD token: /c/${data.tokens.find((t: any) => t.scope === 'COORDINATOR')?.token.substring(0, 16)}...`);
+          console.log(
+            `[Demo] First HOST token: /h/${data.tokens.find((t: any) => t.scope === 'HOST')?.token.substring(0, 16)}...`
+          );
+          console.log(
+            `[Demo] First COORD token: /c/${data.tokens.find((t: any) => t.scope === 'COORDINATOR')?.token.substring(0, 16)}...`
+          );
         }
         setTokens(data.tokens);
       }
@@ -43,7 +47,11 @@ export default function DemoLandingPage() {
   };
 
   const handleReset = async () => {
-    if (!confirm('Are you sure you want to reset all data? This will delete everything and reseed the database.')) {
+    if (
+      !confirm(
+        'Are you sure you want to reset all data? This will delete everything and reseed the database.'
+      )
+    ) {
       return;
     }
 
@@ -51,10 +59,10 @@ export default function DemoLandingPage() {
     try {
       const response = await fetch('/api/demo/reset', { method: 'POST' });
       if (response.ok) {
-        const data = await response.json();
+        await response.json();
         console.log('[Reset] About to reload page in 1 second...');
         // Wait for DB to commit
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
         console.log('[Reset] Reloading now with:', `/?reset=${Date.now()}`);
         // Force complete page reload with aggressive cache busting
         window.location.href = `/?reset=${Date.now()}`;
@@ -78,9 +86,9 @@ export default function DemoLandingPage() {
     );
   }
 
-  const hostTokens = tokens.filter(t => t.scope === 'HOST');
-  const coordinatorTokens = tokens.filter(t => t.scope === 'COORDINATOR');
-  const participantTokens = tokens.filter(t => t.scope === 'PARTICIPANT');
+  const hostTokens = tokens.filter((t) => t.scope === 'HOST');
+  const coordinatorTokens = tokens.filter((t) => t.scope === 'COORDINATOR');
+  const participantTokens = tokens.filter((t) => t.scope === 'PARTICIPANT');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
@@ -163,7 +171,9 @@ export default function DemoLandingPage() {
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="font-bold text-gray-900">{token.teamName || 'Team Coordinator'}</div>
+                    <div className="font-bold text-gray-900">
+                      {token.teamName || 'Team Coordinator'}
+                    </div>
                     <div className="text-sm text-gray-500 mt-0.5">{token.personName}</div>
                   </div>
                   <div className="text-blue-600">→</div>
@@ -214,13 +224,16 @@ export default function DemoLandingPage() {
           <h3 className="font-semibold text-blue-900 mb-2">About This Demo</h3>
           <div className="text-sm text-blue-800 space-y-2">
             <p>
-              <strong>Host:</strong> Manages the entire event, oversees all teams, and controls event status (Draft → Confirming → Frozen → Complete)
+              <strong>Host:</strong> Manages the entire event, oversees all teams, and controls
+              event status (Draft → Confirming → Frozen → Complete)
             </p>
             <p>
-              <strong>Coordinator:</strong> Leads a specific team, assigns items to team members, and tracks progress
+              <strong>Coordinator:</strong> Leads a specific team, assigns items to team members,
+              and tracks progress
             </p>
             <p>
-              <strong>Participant:</strong> Receives assignments, views item details, and acknowledges commitments
+              <strong>Participant:</strong> Receives assignments, views item details, and
+              acknowledges commitments
             </p>
           </div>
         </div>

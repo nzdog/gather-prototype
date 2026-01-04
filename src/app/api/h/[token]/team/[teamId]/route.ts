@@ -9,7 +9,7 @@ import { prisma } from '@/lib/prisma';
  * Host can see but not alter coordinator's team items.
  */
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: { token: string; teamId: string } }
 ) {
   const context = await resolveToken(params.token);
@@ -22,8 +22,8 @@ export async function GET(
   const team = await prisma.team.findUnique({
     where: { id: params.teamId },
     include: {
-      coordinator: true
-    }
+      coordinator: true,
+    },
   });
 
   if (!team || team.eventId !== context.event.id) {
@@ -36,15 +36,12 @@ export async function GET(
     include: {
       assignment: {
         include: {
-          person: true
-        }
+          person: true,
+        },
       },
-      day: true
+      day: true,
     },
-    orderBy: [
-      { critical: 'desc' },
-      { name: 'asc' }
-    ]
+    orderBy: [{ critical: 'desc' }, { name: 'asc' }],
   });
 
   return NextResponse.json({
@@ -53,17 +50,17 @@ export async function GET(
       name: context.event.name,
       startDate: context.event.startDate.toISOString(),
       endDate: context.event.endDate.toISOString(),
-      status: context.event.status
+      status: context.event.status,
     },
     team: {
       id: team.id,
       name: team.name,
       coordinator: {
         id: team.coordinator.id,
-        name: team.coordinator.name
-      }
+        name: team.coordinator.name,
+      },
     },
-    items: items.map(item => ({
+    items: items.map((item) => ({
       id: item.id,
       name: item.name,
       quantity: item.quantity,
@@ -76,19 +73,23 @@ export async function GET(
       dropOffAt: item.dropOffAt?.toISOString() || null,
       dropOffLocation: item.dropOffLocation,
       dropOffNote: item.dropOffNote,
-      day: item.day ? {
-        id: item.day.id,
-        name: item.day.name,
-        date: item.day.date.toISOString()
-      } : null,
-      assignment: item.assignment ? {
-        id: item.assignment.id,
-        acknowledged: item.assignment.acknowledged,
-        person: {
-          id: item.assignment.person.id,
-          name: item.assignment.person.name
-        }
-      } : null
-    }))
+      day: item.day
+        ? {
+            id: item.day.id,
+            name: item.day.name,
+            date: item.day.date.toISOString(),
+          }
+        : null,
+      assignment: item.assignment
+        ? {
+            id: item.assignment.id,
+            acknowledged: item.assignment.acknowledged,
+            person: {
+              id: item.assignment.person.id,
+              name: item.assignment.person.name,
+            },
+          }
+        : null,
+    })),
   });
 }

@@ -3,7 +3,19 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { AlertCircle, Lock, Users, Home, Grid3x3, List, ChevronDown, ChevronRight, Eye, Maximize2, Minimize2 } from 'lucide-react';
+import {
+  AlertCircle,
+  Lock,
+  Users,
+  Home,
+  Grid3x3,
+  List,
+  ChevronDown,
+  ChevronRight,
+  Eye,
+  Maximize2,
+  Minimize2,
+} from 'lucide-react';
 
 interface Item {
   id: string;
@@ -107,9 +119,9 @@ export default function HostView() {
     if (data.event.status === 'FROZEN' && newStatus === 'COMPLETE') {
       const confirmed = window.confirm(
         'Mark event as COMPLETE?\n\n' +
-        'This is a final action and cannot be undone. ' +
-        'Once complete, no further changes can be made to the event.\n\n' +
-        'Are you sure you want to continue?'
+          'This is a final action and cannot be undone. ' +
+          'Once complete, no further changes can be made to the event.\n\n' +
+          'Are you sure you want to continue?'
       );
       if (!confirmed) {
         return;
@@ -120,8 +132,8 @@ export default function HostView() {
     if (data.event.status === 'FROZEN' && newStatus === 'CONFIRMING') {
       unfreezeReason = window.prompt(
         'Unfreezing Event\n\n' +
-        'Please provide a reason for unfreezing this event.\n' +
-        'This will be logged in the audit trail.'
+          'Please provide a reason for unfreezing this event.\n' +
+          'This will be logged in the audit trail.'
       );
 
       if (unfreezeReason === null) {
@@ -141,7 +153,7 @@ export default function HostView() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: newStatus,
-          unfreezeReason: unfreezeReason || undefined
+          unfreezeReason: unfreezeReason || undefined,
         }),
       });
 
@@ -215,7 +227,7 @@ export default function HostView() {
   const toggleAllTeams = () => {
     if (collapsedTeams.size === 0) {
       // All expanded, collapse all
-      const allIds = new Set(data?.teams.map(team => team.id) || []);
+      const allIds = new Set(data?.teams.map((team) => team.id) || []);
       setCollapsedTeams(allIds);
     } else {
       // Some or all collapsed, expand all
@@ -229,7 +241,7 @@ export default function HostView() {
     const formatter = new Intl.DateTimeFormat('en-NZ', {
       month: 'short',
       day: 'numeric',
-      timeZone: 'Pacific/Auckland'
+      timeZone: 'Pacific/Auckland',
     });
     return `${formatter.format(start)}-${formatter.format(end).split(' ')[1]}`;
   };
@@ -283,7 +295,10 @@ export default function HostView() {
     <div className="min-h-screen flex flex-col bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-5">
-        <a href="/" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 mb-3">
+        <a
+          href="/"
+          className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 mb-3"
+        >
           <Home className="size-4" />
           Back to Demo
         </a>
@@ -362,19 +377,24 @@ export default function HostView() {
             <div className="bg-red-50 px-6 py-4 flex items-center gap-3">
               <AlertCircle className="size-6 text-red-500" />
               <span className="font-semibold text-red-900">
-                {data.criticalGapCount} critical {data.criticalGapCount === 1 ? 'gap remains' : 'gaps remain'}
+                {data.criticalGapCount} critical{' '}
+                {data.criticalGapCount === 1 ? 'gap remains' : 'gaps remain'}
               </span>
             </div>
           ) : totalGaps > 0 ? (
             <div className="bg-amber-50 px-6 py-4 flex items-center gap-3">
-              <div className="size-6 rounded-full bg-amber-500 flex items-center justify-center text-white text-sm">!</div>
+              <div className="size-6 rounded-full bg-amber-500 flex items-center justify-center text-white text-sm">
+                !
+              </div>
               <span className="font-semibold text-amber-900">
                 Ready to freeze ({totalGaps} non-critical {totalGaps === 1 ? 'gap' : 'gaps'})
               </span>
             </div>
           ) : (
             <div className="bg-green-50 px-6 py-4 flex items-center gap-3">
-              <div className="size-6 rounded-full bg-green-500 flex items-center justify-center text-white text-sm">✓</div>
+              <div className="size-6 rounded-full bg-green-500 flex items-center justify-center text-white text-sm">
+                ✓
+              </div>
               <span className="font-semibold text-green-900">Ready to freeze</span>
             </div>
           )}
@@ -405,35 +425,37 @@ export default function HostView() {
               </button>
             )}
             <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-1.5 rounded transition-colors ${
-                viewMode === 'grid'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-              title="Grid view"
-            >
-              <Grid3x3 className="size-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-1.5 rounded transition-colors ${
-                viewMode === 'list'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-              title="List view"
-            >
-              <List className="size-4" />
-            </button>
-          </div>
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded transition-colors ${
+                  viewMode === 'grid'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+                title="Grid view"
+              >
+                <Grid3x3 className="size-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-1.5 rounded transition-colors ${
+                  viewMode === 'list'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+                title="List view"
+              >
+                <List className="size-4" />
+              </button>
+            </div>
           </div>
         </div>
-        <div className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}>
+        <div
+          className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}
+        >
           {sortedTeams.map((team) => {
-            const assignedCount = team.items.filter(i => i.assignment).length;
-            const acknowledgedCount = team.items.filter(i => i.assignment?.acknowledged).length;
+            const assignedCount = team.items.filter((i) => i.assignment).length;
+            const acknowledgedCount = team.items.filter((i) => i.assignment?.acknowledged).length;
 
             return (
               <div
@@ -444,8 +466,8 @@ export default function HostView() {
                   team.status === 'CRITICAL_GAP'
                     ? 'border-red-300'
                     : team.status === 'GAP'
-                    ? 'border-amber-300'
-                    : 'border-green-300'
+                      ? 'border-amber-300'
+                      : 'border-green-300'
                 }`}
               >
                 {/* Card Header - Always Visible */}
@@ -456,8 +478,8 @@ export default function HostView() {
                         team.status === 'CRITICAL_GAP'
                           ? 'bg-red-500'
                           : team.status === 'GAP'
-                          ? 'bg-amber-500'
-                          : 'bg-green-500'
+                            ? 'bg-amber-500'
+                            : 'bg-green-500'
                       }`}
                     />
                     <div className="flex-1 min-w-0">
@@ -485,7 +507,8 @@ export default function HostView() {
                   {team.status === 'CRITICAL_GAP' ? (
                     <div className="inline-flex items-center gap-1.5 bg-red-100 text-red-800 px-3 py-1.5 rounded-full text-sm font-semibold">
                       <AlertCircle className="size-4" />
-                      {team.criticalGapCount} critical {team.criticalGapCount === 1 ? 'gap' : 'gaps'}
+                      {team.criticalGapCount} critical{' '}
+                      {team.criticalGapCount === 1 ? 'gap' : 'gaps'}
                     </div>
                   ) : team.status === 'GAP' ? (
                     <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full text-sm font-semibold">
@@ -505,22 +528,32 @@ export default function HostView() {
                   <>
                     {/* Stats Grid */}
                     <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-200">
-                  <div>
-                    <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Items</div>
-                    <div className="text-xl font-bold text-gray-900">{team.itemCount}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Assigned</div>
-                    <div className="text-xl font-bold text-green-600">{assignedCount}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Unassigned</div>
-                    <div className={`text-xl font-bold ${team.unassignedCount > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
-                      {team.unassignedCount}
-                    </div>
-                  </div>
                       <div>
-                        <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Confirmed</div>
+                        <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                          Total Items
+                        </div>
+                        <div className="text-xl font-bold text-gray-900">{team.itemCount}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                          Assigned
+                        </div>
+                        <div className="text-xl font-bold text-green-600">{assignedCount}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                          Unassigned
+                        </div>
+                        <div
+                          className={`text-xl font-bold ${team.unassignedCount > 0 ? 'text-amber-600' : 'text-gray-400'}`}
+                        >
+                          {team.unassignedCount}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                          Confirmed
+                        </div>
                         <div className="text-xl font-bold text-blue-600">{acknowledgedCount}</div>
                       </div>
                     </div>
@@ -566,7 +599,8 @@ export default function HostView() {
           </button>
           {nextStatus === 'FROZEN' && !data.freezeAllowed && (
             <p className="text-center text-sm text-red-600 mt-2">
-              Cannot freeze: {data.criticalGapCount} critical {data.criticalGapCount === 1 ? 'gap' : 'gaps'}
+              Cannot freeze: {data.criticalGapCount} critical{' '}
+              {data.criticalGapCount === 1 ? 'gap' : 'gaps'}
             </p>
           )}
         </div>

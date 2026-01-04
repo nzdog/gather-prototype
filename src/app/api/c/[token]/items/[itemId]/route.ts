@@ -25,7 +25,7 @@ export async function PATCH(
 
   // Verify item ownership
   const item = await prisma.item.findUnique({
-    where: { id: params.itemId }
+    where: { id: params.itemId },
   });
 
   if (!item || item.teamId !== context.team.id) {
@@ -34,9 +34,12 @@ export async function PATCH(
 
   // Check if mutations are allowed
   if (!canMutate(context.event.status, 'editItem')) {
-    return NextResponse.json({
-      error: `Cannot edit items while event is ${context.event.status}`
-    }, { status: 403 });
+    return NextResponse.json(
+      {
+        error: `Cannot edit items while event is ${context.event.status}`,
+      },
+      { status: 403 }
+    );
   }
 
   const body = await request.json();
@@ -54,11 +57,17 @@ export async function PATCH(
         dairyFree: body.dairyFree !== undefined ? body.dairyFree : item.dairyFree,
         vegetarian: body.vegetarian !== undefined ? body.vegetarian : item.vegetarian,
         notes: body.notes !== undefined ? body.notes : item.notes,
-        dropOffAt: body.dropOffAt !== undefined ? (body.dropOffAt ? new Date(body.dropOffAt) : null) : item.dropOffAt,
-        dropOffLocation: body.dropOffLocation !== undefined ? body.dropOffLocation : item.dropOffLocation,
+        dropOffAt:
+          body.dropOffAt !== undefined
+            ? body.dropOffAt
+              ? new Date(body.dropOffAt)
+              : null
+            : item.dropOffAt,
+        dropOffLocation:
+          body.dropOffLocation !== undefined ? body.dropOffLocation : item.dropOffLocation,
         dropOffNote: body.dropOffNote !== undefined ? body.dropOffNote : item.dropOffNote,
         dayId: body.dayId !== undefined ? body.dayId : item.dayId,
-      }
+      },
     });
 
     await logAudit(tx, {
@@ -67,7 +76,7 @@ export async function PATCH(
       actionType: 'EDIT_ITEM',
       targetType: 'Item',
       targetId: params.itemId,
-      details: `Updated item: ${updated.name}`
+      details: `Updated item: ${updated.name}`,
     });
 
     return updated;
@@ -89,7 +98,7 @@ export async function PATCH(
  * - Cascade will delete assignment (via schema)
  */
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: { token: string; itemId: string } }
 ) {
   const context = await resolveToken(params.token);
@@ -100,7 +109,7 @@ export async function DELETE(
 
   // Verify item ownership
   const item = await prisma.item.findUnique({
-    where: { id: params.itemId }
+    where: { id: params.itemId },
   });
 
   if (!item || item.teamId !== context.team.id) {
@@ -109,15 +118,18 @@ export async function DELETE(
 
   // Check if deletion is allowed (allow both critical and non-critical)
   if (!canMutate(context.event.status, 'deleteItem', false)) {
-    return NextResponse.json({
-      error: `Cannot delete items while event is ${context.event.status}`
-    }, { status: 403 });
+    return NextResponse.json(
+      {
+        error: `Cannot delete items while event is ${context.event.status}`,
+      },
+      { status: 403 }
+    );
   }
 
   // Delete item in transaction (cascade will delete assignment)
   await prisma.$transaction(async (tx) => {
     await tx.item.delete({
-      where: { id: params.itemId }
+      where: { id: params.itemId },
     });
 
     await logAudit(tx, {
@@ -126,7 +138,7 @@ export async function DELETE(
       actionType: 'DELETE_ITEM',
       targetType: 'Item',
       targetId: params.itemId,
-      details: `Deleted item: ${item.name}`
+      details: `Deleted item: ${item.name}`,
     });
   });
 

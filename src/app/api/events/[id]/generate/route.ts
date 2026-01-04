@@ -3,10 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { generatePlan, EventParams } from '@/lib/ai/generate';
 
-export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
 
@@ -71,9 +68,7 @@ export async function POST(
       teamsCreated++;
 
       // Create items for this team
-      const teamItems = aiResponse.items.filter(
-        (item) => item.teamName === teamData.name
-      );
+      const teamItems = aiResponse.items.filter((item) => item.teamName === teamData.name);
 
       for (const itemData of teamItems) {
         // Determine quantity state and text

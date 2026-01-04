@@ -6,15 +6,12 @@ import { prisma } from '@/lib/prisma';
  *
  * Get template details.
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   const searchParams = request.nextUrl.searchParams;
   const hostId = searchParams.get('hostId');
 
   const template = await prisma.structureTemplate.findUnique({
-    where: { id: params.id }
+    where: { id: params.id },
   });
 
   if (!template) {
@@ -34,10 +31,7 @@ export async function GET(
  *
  * Delete template (host templates only).
  */
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   const body = await request.json();
   const { hostId } = body;
 
@@ -46,7 +40,7 @@ export async function DELETE(
   }
 
   const template = await prisma.structureTemplate.findUnique({
-    where: { id: params.id }
+    where: { id: params.id },
   });
 
   if (!template) {
@@ -62,7 +56,7 @@ export async function DELETE(
   }
 
   await prisma.structureTemplate.delete({
-    where: { id: params.id }
+    where: { id: params.id },
   });
 
   return NextResponse.json({ message: 'Template deleted successfully' });

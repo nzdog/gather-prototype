@@ -8,10 +8,7 @@ import { prisma } from '@/lib/prisma';
  * Returns audit log entries for the event.
  * Supports filtering by actionType.
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { token: string } }
-) {
+export async function GET(request: NextRequest, { params }: { params: { token: string } }) {
   const context = await resolveToken(params.token);
 
   if (!context || context.scope !== 'HOST') {
@@ -24,7 +21,7 @@ export async function GET(
 
   // Build where clause
   const where: any = {
-    eventId: context.event.id
+    eventId: context.event.id,
   };
 
   if (actionTypeFilter && actionTypeFilter !== 'ALL') {
@@ -35,27 +32,27 @@ export async function GET(
   const entries = await prisma.auditEntry.findMany({
     where,
     include: {
-      actor: true
+      actor: true,
     },
     orderBy: {
-      timestamp: 'desc'
+      timestamp: 'desc',
     },
-    take: 100 // Limit to last 100 entries
+    take: 100, // Limit to last 100 entries
   });
 
   // Get unique action types for filter dropdown
   const actionTypes = await prisma.auditEntry.findMany({
     where: {
-      eventId: context.event.id
+      eventId: context.event.id,
     },
     select: {
-      actionType: true
+      actionType: true,
     },
-    distinct: ['actionType']
+    distinct: ['actionType'],
   });
 
   return NextResponse.json({
-    entries: entries.map(entry => ({
+    entries: entries.map((entry) => ({
       id: entry.id,
       timestamp: entry.timestamp,
       actionType: entry.actionType,
@@ -64,9 +61,9 @@ export async function GET(
       details: entry.details,
       actor: {
         id: entry.actor.id,
-        name: entry.actor.name
-      }
+        name: entry.actor.name,
+      },
     })),
-    actionTypes: actionTypes.map(at => at.actionType).sort()
+    actionTypes: actionTypes.map((at) => at.actionType).sort(),
   });
 }

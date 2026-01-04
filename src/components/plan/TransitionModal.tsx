@@ -25,11 +25,7 @@ interface WeakSpot {
   icon: string;
 }
 
-export default function TransitionModal({
-  eventId,
-  onClose,
-  onSuccess,
-}: TransitionModalProps) {
+export default function TransitionModal({ eventId, onClose, onSuccess }: TransitionModalProps) {
   const [loading, setLoading] = useState(true);
   const [transitioning, setTransitioning] = useState(false);
   const [summary, setSummary] = useState<PlanSummary | null>(null);
@@ -184,9 +180,7 @@ export default function TransitionModal({
             {/* Transition Confirmation */}
             <div className="mb-6">
               <h2 className="text-2xl font-bold mb-2">Ready to Move to Confirming?</h2>
-              <p className="text-gray-600">
-                Review your plan summary before transitioning.
-              </p>
+              <p className="text-gray-600">Review your plan summary before transitioning.</p>
             </div>
 
             {/* Plan Summary */}
@@ -209,7 +203,8 @@ export default function TransitionModal({
                     <div className="text-sm text-gray-600">Critical Items</div>
                     <div className="text-2xl font-bold">{summary.criticalItemCount}</div>
                     <div className="text-xs text-gray-500 mt-1">
-                      {summary.criticalAssignedCount} assigned, {summary.criticalUnassignedCount} unassigned
+                      {summary.criticalAssignedCount} assigned, {summary.criticalUnassignedCount}{' '}
+                      unassigned
                     </div>
                   </div>
 
@@ -277,9 +272,7 @@ export default function TransitionModal({
             {/* Weak Spots View */}
             <div className="mb-6">
               <h2 className="text-2xl font-bold mb-2">Before You Go...</h2>
-              <p className="text-gray-600">
-                Here are the top areas you might want to strengthen:
-              </p>
+              <p className="text-gray-600">Here are the top areas you might want to strengthen:</p>
             </div>
 
             {/* Weak Spots List */}
@@ -293,9 +286,7 @@ export default function TransitionModal({
                     <div className="flex items-start gap-3">
                       <span className="text-2xl">{spot.icon}</span>
                       <div className="flex-1">
-                        <h3 className="font-semibold text-yellow-900 mb-1">
-                          {spot.title}
-                        </h3>
+                        <h3 className="font-semibold text-yellow-900 mb-1">{spot.title}</h3>
                         <p className="text-sm text-yellow-800">{spot.description}</p>
                       </div>
                     </div>
@@ -306,12 +297,8 @@ export default function TransitionModal({
                   <div className="flex items-center gap-3">
                     <span className="text-2xl">✅</span>
                     <div>
-                      <h3 className="font-semibold text-green-900">
-                        Your plan looks solid!
-                      </h3>
-                      <p className="text-sm text-green-800">
-                        No significant weak spots detected.
-                      </p>
+                      <h3 className="font-semibold text-green-900">Your plan looks solid!</h3>
+                      <p className="text-sm text-green-800">No significant weak spots detected.</p>
                     </div>
                   </div>
                 </div>

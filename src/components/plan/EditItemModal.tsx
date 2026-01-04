@@ -54,13 +54,7 @@ const DIETARY_TAGS = [
   { value: 'dairyFree', label: 'Dairy Free' },
 ];
 
-export default function EditItemModal({
-  isOpen,
-  onClose,
-  onSave,
-  item,
-  days,
-}: EditItemModalProps) {
+export default function EditItemModal({ isOpen, onClose, onSave, item, days }: EditItemModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [critical, setCritical] = useState(false);
@@ -102,11 +96,7 @@ export default function EditItemModal({
   if (!isOpen || !item) return null;
 
   const handleDietaryTagToggle = (tag: string) => {
-    setDietaryTags(prev =>
-      prev.includes(tag)
-        ? prev.filter(t => t !== tag)
-        : [...prev, tag]
-    );
+    setDietaryTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -158,10 +148,7 @@ export default function EditItemModal({
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white">
           <h2 className="text-lg font-semibold text-gray-900">Edit Item</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -169,9 +156,7 @@ export default function EditItemModal({
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
           {/* Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Item Name *
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Item Name *</label>
             <input
               type="text"
               value={name}
@@ -184,9 +169,7 @@ export default function EditItemModal({
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -210,7 +193,7 @@ export default function EditItemModal({
                 onChange={(e) => setQuantityState(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {QUANTITY_STATES.map(state => (
+                {QUANTITY_STATES.map((state) => (
                   <option key={state.value} value={state.value}>
                     {state.label}
                   </option>
@@ -222,9 +205,7 @@ export default function EditItemModal({
             {quantityState === 'SPECIFIED' && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Amount
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
                   <input
                     type="number"
                     step="0.01"
@@ -235,15 +216,13 @@ export default function EditItemModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Unit
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
                   <select
                     value={quantityUnit}
                     onChange={(e) => setQuantityUnit(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    {QUANTITY_UNITS.map(unit => (
+                    {QUANTITY_UNITS.map((unit) => (
                       <option key={unit.value} value={unit.value}>
                         {unit.label}
                       </option>
@@ -263,7 +242,10 @@ export default function EditItemModal({
                   onChange={(e) => setPlaceholderAcknowledged(e.target.checked)}
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                 />
-                <label htmlFor="edit-placeholder-acknowledged" className="ml-2 text-sm text-gray-700">
+                <label
+                  htmlFor="edit-placeholder-acknowledged"
+                  className="ml-2 text-sm text-gray-700"
+                >
                   Defer to Coordinator (quantity will be determined later)
                 </label>
               </div>
@@ -274,7 +256,7 @@ export default function EditItemModal({
           <div className="border-t pt-4">
             <h3 className="text-sm font-medium text-gray-900 mb-3">Dietary Tags</h3>
             <div className="grid grid-cols-2 gap-2">
-              {DIETARY_TAGS.map(tag => (
+              {DIETARY_TAGS.map((tag) => (
                 <div key={tag.value} className="flex items-center">
                   <input
                     type="checkbox"
@@ -283,7 +265,10 @@ export default function EditItemModal({
                     onChange={() => handleDietaryTagToggle(tag.value)}
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
-                  <label htmlFor={`edit-dietary-${tag.value}`} className="ml-2 text-sm text-gray-700">
+                  <label
+                    htmlFor={`edit-dietary-${tag.value}`}
+                    className="ml-2 text-sm text-gray-700"
+                  >
                     {tag.label}
                   </label>
                 </div>
@@ -296,16 +281,14 @@ export default function EditItemModal({
             <h3 className="text-sm font-medium text-gray-900 mb-3">Timing</h3>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Day
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Day</label>
                 <select
                   value={dayId}
                   onChange={(e) => setDayId(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">All days</option>
-                  {days.map(day => (
+                  {days.map((day) => (
                     <option key={day.id} value={day.id}>
                       {day.name}
                     </option>
@@ -313,9 +296,7 @@ export default function EditItemModal({
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Serve Time
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Serve Time</label>
                 <input
                   type="time"
                   value={serveTime}

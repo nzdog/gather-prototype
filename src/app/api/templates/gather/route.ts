@@ -6,14 +6,14 @@ import { prisma } from '@/lib/prisma';
  *
  * Returns Gather curated templates.
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   const templates = await prisma.structureTemplate.findMany({
     where: {
-      templateSource: 'GATHER_CURATED'
+      templateSource: 'GATHER_CURATED',
     },
     orderBy: {
-      publishedAt: 'desc'
-    }
+      publishedAt: 'desc',
+    },
   });
 
   return NextResponse.json({ templates });

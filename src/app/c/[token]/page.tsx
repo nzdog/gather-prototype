@@ -2,7 +2,22 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { AlertCircle, Calendar, MapPin, Home, Check, Grid3x3, List, ChevronDown, ChevronRight, Maximize2, Minimize2, Plus, Trash2, X } from 'lucide-react';
+import {
+  AlertCircle,
+  Calendar,
+  MapPin,
+  Home,
+  Check,
+  Grid3x3,
+  List,
+  ChevronDown,
+  ChevronRight,
+  Maximize2,
+  Minimize2,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-react';
 
 interface Assignment {
   id: string;
@@ -214,7 +229,7 @@ export default function CoordinatorView() {
   const toggleAllItems = () => {
     if (collapsedItems.size === 0) {
       // All expanded, collapse all
-      const allIds = new Set(data?.items.map(item => item.id) || []);
+      const allIds = new Set(data?.items.map((item) => item.id) || []);
       setCollapsedItems(allIds);
     } else {
       // Some or all collapsed, expand all
@@ -311,9 +326,9 @@ export default function CoordinatorView() {
     );
   }
 
-  const unassignedItems = data.items.filter(i => !i.assignment);
+  const unassignedItems = data.items.filter((i) => !i.assignment);
   const unassignedCount = unassignedItems.length;
-  const criticalCount = unassignedItems.filter(i => i.critical).length;
+  const criticalCount = unassignedItems.filter((i) => i.critical).length;
 
   // Sort items: critical unassigned first, then regular unassigned, then assigned
   const sortedItems = [...data.items].sort((a, b) => {
@@ -330,16 +345,17 @@ export default function CoordinatorView() {
     <div className="min-h-screen flex flex-col bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-5">
-        <a href="/" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 mb-3">
+        <a
+          href="/"
+          className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 mb-3"
+        >
           <Home className="size-4" />
           Back to Demo
         </a>
         <div className="text-sm font-medium text-gray-500 mb-1">{data.event.name}</div>
         <h1 className="text-2xl font-bold text-gray-900">{data.team.name}</h1>
         <p className="text-sm text-gray-600 mt-1">Coordinator: {data.person.name}</p>
-        {data.team.scope && (
-          <p className="text-sm text-gray-500 mt-1">{data.team.scope}</p>
-        )}
+        {data.team.scope && <p className="text-sm text-gray-500 mt-1">{data.team.scope}</p>}
         <div className="flex items-center gap-2 mt-2">
           <span className="text-xs uppercase tracking-wide text-gray-500 bg-gray-100 px-2 py-1 rounded">
             Coordinating
@@ -370,7 +386,8 @@ export default function CoordinatorView() {
             <div className="bg-red-50 px-6 py-4 flex items-center gap-3">
               <AlertCircle className="size-5 text-red-500" />
               <span className="font-semibold text-red-900">
-                {criticalCount} critical {criticalCount === 1 ? 'item needs' : 'items need'} assignment
+                {criticalCount} critical {criticalCount === 1 ? 'item needs' : 'items need'}{' '}
+                assignment
               </span>
             </div>
           ) : unassignedCount > 0 ? (
@@ -382,7 +399,9 @@ export default function CoordinatorView() {
             </div>
           ) : (
             <div className="bg-green-50 px-6 py-4 flex items-center gap-3">
-              <div className="size-5 rounded-full bg-green-500 flex items-center justify-center text-white text-xs">✓</div>
+              <div className="size-5 rounded-full bg-green-500 flex items-center justify-center text-white text-xs">
+                ✓
+              </div>
               <span className="font-semibold text-green-900">All items assigned</span>
             </div>
           )}
@@ -422,219 +441,235 @@ export default function CoordinatorView() {
               </button>
             )}
             <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-1.5 rounded transition-colors ${
-                viewMode === 'grid'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-              title="Grid view"
-            >
-              <Grid3x3 className="size-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-1.5 rounded transition-colors ${
-                viewMode === 'list'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-              title="List view"
-            >
-              <List className="size-4" />
-            </button>
-          </div>
-          </div>
-        </div>
-        <div className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}>
-        {sortedItems.map((item) => (
-          <div
-            key={item.id}
-            className={`bg-white border border-gray-200 rounded-lg shadow-sm p-4 hover:shadow-md transition-shadow ${
-              viewMode === 'list' ? 'w-full max-w-md' : ''
-            }`}
-          >
-            {/* Card Header - Always Visible */}
-            <div className="flex items-start justify-between mb-2">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  {!item.assignment && item.critical && (
-                    <AlertCircle className="size-4 text-red-500 flex-shrink-0" />
-                  )}
-                  <span className="font-semibold text-gray-900">{item.name}</span>
-                  {item.quantity && <span className="text-gray-500 flex-shrink-0">×{item.quantity}</span>}
-                  {!item.assignment && item.critical && (
-                    <span className="bg-red-100 text-red-800 text-xs font-semibold px-2 py-1 rounded flex-shrink-0">
-                      CRITICAL
-                    </span>
-                  )}
-                </div>
-
-                {/* Dietary tags - Always Visible */}
-                {(item.glutenFree || item.dairyFree || item.vegetarian) && (
-                  <div className="flex gap-2 mb-2">
-                    {item.glutenFree && (
-                      <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">GF</span>
-                    )}
-                    {item.dairyFree && (
-                      <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">DF</span>
-                    )}
-                    {item.vegetarian && (
-                      <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">V</span>
-                    )}
-                  </div>
-                )}
-
-                {/* Assignment Status Icon - Always Visible */}
-                <div className="flex items-center gap-1.5 text-xs">
-                  {item.assignment ? (
-                    <>
-                      <Check className="size-3.5 text-green-600" />
-                      <span className="text-green-600 font-medium">Assigned</span>
-                    </>
-                  ) : (
-                    <>
-                      <AlertCircle className="size-3.5 text-amber-600" />
-                      <span className="text-amber-600 font-medium">Unassigned</span>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Collapse Toggle Button */}
               <button
-                onClick={() => toggleItemCollapse(item.id)}
-                className="ml-2 p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0 border border-gray-300"
-                title={collapsedItems.has(item.id) ? 'Expand' : 'Collapse'}
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded transition-colors ${
+                  viewMode === 'grid'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+                title="Grid view"
               >
-                {collapsedItems.has(item.id) ? (
-                  <ChevronRight className="size-5 text-gray-700" />
-                ) : (
-                  <ChevronDown className="size-5 text-gray-700" />
-                )}
+                <Grid3x3 className="size-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-1.5 rounded transition-colors ${
+                  viewMode === 'list'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+                title="List view"
+              >
+                <List className="size-4" />
               </button>
             </div>
+          </div>
+        </div>
+        <div
+          className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}
+        >
+          {sortedItems.map((item) => (
+            <div
+              key={item.id}
+              className={`bg-white border border-gray-200 rounded-lg shadow-sm p-4 hover:shadow-md transition-shadow ${
+                viewMode === 'list' ? 'w-full max-w-md' : ''
+              }`}
+            >
+              {/* Card Header - Always Visible */}
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    {!item.assignment && item.critical && (
+                      <AlertCircle className="size-4 text-red-500 flex-shrink-0" />
+                    )}
+                    <span className="font-semibold text-gray-900">{item.name}</span>
+                    {item.quantity && (
+                      <span className="text-gray-500 flex-shrink-0">×{item.quantity}</span>
+                    )}
+                    {!item.assignment && item.critical && (
+                      <span className="bg-red-100 text-red-800 text-xs font-semibold px-2 py-1 rounded flex-shrink-0">
+                        CRITICAL
+                      </span>
+                    )}
+                  </div>
 
-            {/* Collapsible Content */}
-            {!collapsedItems.has(item.id) && (
-              <div className="space-y-2">
-                {/* Day and location */}
-                <div className="text-sm text-gray-500 flex items-center gap-3">
-                  {item.day && (
-                    <span className="flex items-center gap-1">
-                      <Calendar className="size-4" />
-                      {item.day.name}
-                    </span>
+                  {/* Dietary tags - Always Visible */}
+                  {(item.glutenFree || item.dairyFree || item.vegetarian) && (
+                    <div className="flex gap-2 mb-2">
+                      {item.glutenFree && (
+                        <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                          GF
+                        </span>
+                      )}
+                      {item.dairyFree && (
+                        <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                          DF
+                        </span>
+                      )}
+                      {item.vegetarian && (
+                        <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">
+                          V
+                        </span>
+                      )}
+                    </div>
                   )}
-                  {item.dropOffLocation && (
-                    <span className="flex items-center gap-1">
-                      <MapPin className="size-4" />
-                      {item.dropOffLocation}
-                    </span>
-                  )}
+
+                  {/* Assignment Status Icon - Always Visible */}
+                  <div className="flex items-center gap-1.5 text-xs">
+                    {item.assignment ? (
+                      <>
+                        <Check className="size-3.5 text-green-600" />
+                        <span className="text-green-600 font-medium">Assigned</span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle className="size-3.5 text-amber-600" />
+                        <span className="text-amber-600 font-medium">Unassigned</span>
+                      </>
+                    )}
+                  </div>
                 </div>
 
-                {/* Notes */}
-                {item.notes && (
-                  <div className="text-sm text-gray-600 mb-2 italic">{item.notes}</div>
-                )}
+                {/* Collapse Toggle Button */}
+                <button
+                  onClick={() => toggleItemCollapse(item.id)}
+                  className="ml-2 p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0 border border-gray-300"
+                  title={collapsedItems.has(item.id) ? 'Expand' : 'Collapse'}
+                >
+                  {collapsedItems.has(item.id) ? (
+                    <ChevronRight className="size-5 text-gray-700" />
+                  ) : (
+                    <ChevronDown className="size-5 text-gray-700" />
+                  )}
+                </button>
+              </div>
 
-                {/* Assignment control */}
-                <div className="mt-3">
-                  {item.assignment ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-900">
-                          {item.assignment.person.name}
-                        </span>
-                        {data.event.status !== 'FROZEN' && (
-                          <button
-                            onClick={() => handleUnassign(item.id)}
-                            className="text-sm text-red-600 hover:text-red-800"
-                          >
-                            Unassign
-                          </button>
+              {/* Collapsible Content */}
+              {!collapsedItems.has(item.id) && (
+                <div className="space-y-2">
+                  {/* Day and location */}
+                  <div className="text-sm text-gray-500 flex items-center gap-3">
+                    {item.day && (
+                      <span className="flex items-center gap-1">
+                        <Calendar className="size-4" />
+                        {item.day.name}
+                      </span>
+                    )}
+                    {item.dropOffLocation && (
+                      <span className="flex items-center gap-1">
+                        <MapPin className="size-4" />
+                        {item.dropOffLocation}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Notes */}
+                  {item.notes && (
+                    <div className="text-sm text-gray-600 mb-2 italic">{item.notes}</div>
+                  )}
+
+                  {/* Assignment control */}
+                  <div className="mt-3">
+                    {item.assignment ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-900">
+                            {item.assignment.person.name}
+                          </span>
+                          {data.event.status !== 'FROZEN' && (
+                            <button
+                              onClick={() => handleUnassign(item.id)}
+                              className="text-sm text-red-600 hover:text-red-800"
+                            >
+                              Unassign
+                            </button>
+                          )}
+                        </div>
+                        {item.assignment.acknowledged ? (
+                          <div className="inline-flex items-center gap-1.5 bg-green-100 text-green-800 px-3 py-1.5 rounded-full text-sm font-semibold">
+                            <Check className="size-4" />
+                            Confirmed
+                          </div>
+                        ) : (
+                          <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full text-sm font-semibold">
+                            <AlertCircle className="size-4" />
+                            Awaiting confirmation
+                          </div>
                         )}
                       </div>
-                      {item.assignment.acknowledged ? (
-                        <div className="inline-flex items-center gap-1.5 bg-green-100 text-green-800 px-3 py-1.5 rounded-full text-sm font-semibold">
-                          <Check className="size-4" />
-                          Confirmed
-                        </div>
-                      ) : (
-                        <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full text-sm font-semibold">
-                          <AlertCircle className="size-4" />
-                          Awaiting confirmation
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div>
-                      {data.event.status !== 'FROZEN' ? (
-                        <select
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              handleAssign(item.id, e.target.value);
-                            }
-                          }}
-                          className="text-sm border border-gray-300 rounded-lg px-3 py-2 hover:border-gray-400 transition-colors"
-                          defaultValue=""
-                        >
-                          <option value="">Assign to...</option>
-                          {data.teamMembers.map((member) => (
-                            <option key={member.id} value={member.id}>
-                              {member.name}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span className="text-sm font-medium text-amber-600">UNASSIGNED</span>
-                      )}
+                    ) : (
+                      <div>
+                        {data.event.status !== 'FROZEN' ? (
+                          <select
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                handleAssign(item.id, e.target.value);
+                              }
+                            }}
+                            className="text-sm border border-gray-300 rounded-lg px-3 py-2 hover:border-gray-400 transition-colors"
+                            defaultValue=""
+                          >
+                            <option value="">Assign to...</option>
+                            {data.teamMembers.map((member) => (
+                              <option key={member.id} value={member.id}>
+                                {member.name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-sm font-medium text-amber-600">UNASSIGNED</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Delete button */}
+                  {data.event.status !== 'FROZEN' && (
+                    <div className="pt-3 mt-3 border-t border-gray-200">
+                      <button
+                        onClick={() => handleDeleteItem(item.id, item.name)}
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="size-4" />
+                        Delete Item
+                      </button>
                     </div>
                   )}
                 </div>
-
-                {/* Delete button */}
-                {data.event.status !== 'FROZEN' && (
-                  <div className="pt-3 mt-3 border-t border-gray-200">
-                    <button
-                      onClick={() => handleDeleteItem(item.id, item.name)}
-                      className="flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
-                    >
-                      <Trash2 className="size-4" />
-                      Delete Item
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+              )}
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Your Assignments */}
       {data.myAssignments && data.myAssignments.length > 0 && (
         <div className="px-4 md:px-6 py-4 bg-blue-50 border-t-2 border-blue-200">
-          <h2 className="text-sm uppercase tracking-wide text-blue-900 font-bold mb-3">Your Personal Assignments</h2>
-          <div className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}>
+          <h2 className="text-sm uppercase tracking-wide text-blue-900 font-bold mb-3">
+            Your Personal Assignments
+          </h2>
+          <div
+            className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}
+          >
             {data.myAssignments.map((assignment) => (
               <div
                 key={assignment.id}
                 className={`bg-white rounded-lg p-4 shadow-sm border ${
                   viewMode === 'list' ? 'w-full max-w-md' : ''
-                } ${
-                  assignment.acknowledged ? 'border-green-300' : 'border-blue-300'
-                }`}
+                } ${assignment.acknowledged ? 'border-green-300' : 'border-blue-300'}`}
               >
                 {/* Card Header - Always Visible */}
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold text-gray-900 text-lg">{assignment.item.name}</h3>
+                      <h3 className="font-semibold text-gray-900 text-lg">
+                        {assignment.item.name}
+                      </h3>
                       {assignment.item.quantity && (
-                        <span className="text-gray-500 flex-shrink-0">×{assignment.item.quantity}</span>
+                        <span className="text-gray-500 flex-shrink-0">
+                          ×{assignment.item.quantity}
+                        </span>
                       )}
                       {assignment.item.critical && (
                         <span className="bg-red-100 text-red-800 text-xs font-semibold px-2 py-1 rounded flex-shrink-0">
@@ -644,16 +679,24 @@ export default function CoordinatorView() {
                     </div>
 
                     {/* Dietary tags - Always Visible */}
-                    {(assignment.item.glutenFree || assignment.item.dairyFree || assignment.item.vegetarian) && (
+                    {(assignment.item.glutenFree ||
+                      assignment.item.dairyFree ||
+                      assignment.item.vegetarian) && (
                       <div className="flex gap-2">
-                    {assignment.item.glutenFree && (
-                      <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">GF</span>
-                    )}
-                    {assignment.item.dairyFree && (
-                      <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">DF</span>
-                    )}
+                        {assignment.item.glutenFree && (
+                          <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                            GF
+                          </span>
+                        )}
+                        {assignment.item.dairyFree && (
+                          <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                            DF
+                          </span>
+                        )}
                         {assignment.item.vegetarian && (
-                          <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">V</span>
+                          <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">
+                            V
+                          </span>
                         )}
                       </div>
                     )}
@@ -678,30 +721,33 @@ export default function CoordinatorView() {
                   <div>
                     {/* Drop-off Details */}
                     <div className="space-y-2 mb-3">
-                  {assignment.item.day && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Calendar className="size-4 text-gray-400" />
-                      <span className="text-gray-900">
-                        {assignment.item.day.name}
-                        {formatDropOff(assignment.item.dropOffAt, assignment.item.dropOffNote) &&
-                          `, ${formatDropOff(assignment.item.dropOffAt, assignment.item.dropOffNote)}`}
-                      </span>
+                      {assignment.item.day && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Calendar className="size-4 text-gray-400" />
+                          <span className="text-gray-900">
+                            {assignment.item.day.name}
+                            {formatDropOff(
+                              assignment.item.dropOffAt,
+                              assignment.item.dropOffNote
+                            ) &&
+                              `, ${formatDropOff(assignment.item.dropOffAt, assignment.item.dropOffNote)}`}
+                          </span>
+                        </div>
+                      )}
+                      {assignment.item.dropOffLocation && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <MapPin className="size-4 text-gray-400" />
+                          <span className="text-gray-900">{assignment.item.dropOffLocation}</span>
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {assignment.item.dropOffLocation && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <MapPin className="size-4 text-gray-400" />
-                      <span className="text-gray-900">{assignment.item.dropOffLocation}</span>
-                    </div>
-                  )}
-                </div>
 
-                {/* Notes */}
-                {assignment.item.notes && (
-                  <div className="bg-gray-50 rounded-lg p-3 mb-3">
-                    <p className="text-sm text-gray-600">{assignment.item.notes}</p>
-                  </div>
-                )}
+                    {/* Notes */}
+                    {assignment.item.notes && (
+                      <div className="bg-gray-50 rounded-lg p-3 mb-3">
+                        <p className="text-sm text-gray-600">{assignment.item.notes}</p>
+                      </div>
+                    )}
 
                     {/* Acknowledge Button */}
                     {!assignment.acknowledged ? (
@@ -737,8 +783,8 @@ export default function CoordinatorView() {
                     team.status === 'SORTED'
                       ? 'bg-green-500'
                       : team.status === 'CRITICAL_GAP'
-                      ? 'bg-red-500'
-                      : 'bg-amber-500'
+                        ? 'bg-red-500'
+                        : 'bg-amber-500'
                   }`}
                 />
                 <span className="text-sm text-gray-700">{team.name}</span>
@@ -779,9 +825,7 @@ export default function CoordinatorView() {
 
               {/* Quantity */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Quantity
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
                 <input
                   type="text"
                   value={newItem.quantity}
@@ -793,9 +837,7 @@ export default function CoordinatorView() {
 
               {/* Day */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Day
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Day</label>
                 <select
                   value={newItem.dayId}
                   onChange={(e) => setNewItem({ ...newItem, dayId: e.target.value })}
@@ -838,9 +880,7 @@ export default function CoordinatorView() {
 
               {/* Notes */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Notes
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                 <textarea
                   value={newItem.notes}
                   onChange={(e) => setNewItem({ ...newItem, notes: e.target.value })}

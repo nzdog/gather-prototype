@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   context: { params: Promise<{ id: string; conflictId: string }> }
 ) {
   try {
@@ -20,10 +20,7 @@ export async function GET(
     });
 
     if (!conflict) {
-      return NextResponse.json(
-        { error: 'Conflict not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Conflict not found' }, { status: 404 });
     }
 
     // Verify conflict belongs to event
@@ -37,9 +34,6 @@ export async function GET(
     return NextResponse.json({ conflict });
   } catch (error) {
     console.error('Error fetching conflict:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch conflict' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch conflict' }, { status: 500 });
   }
 }
