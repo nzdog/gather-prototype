@@ -31,6 +31,8 @@ jobs:
         run: npx prisma generate
 
       - name: Build
+        env:
+          DATABASE_URL: postgresql://user:pass@localhost:5432/ci_db
         run: npx next build
 
       - name: Audit
