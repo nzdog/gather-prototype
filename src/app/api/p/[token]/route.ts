@@ -10,10 +10,7 @@ import { prisma } from '@/lib/prisma';
  * CRITICAL: No repair loop. This is a GET route - no DB writes.
  * Status is read as-is from database.
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { token: string } }
-) {
+export async function GET(_request: NextRequest, { params }: { params: { token: string } }) {
   const context = await resolveToken(params.token);
 
   if (!context || context.scope !== 'PARTICIPANT') {
@@ -26,9 +23,9 @@ export async function GET(
       personId: context.person.id,
       item: {
         team: {
-          eventId: context.event.id
-        }
-      }
+          eventId: context.event.id,
+        },
+      },
     },
     include: {
       item: {
@@ -36,32 +33,32 @@ export async function GET(
           day: true,
           team: {
             include: {
-              coordinator: true
-            }
-          }
-        }
-      }
+              coordinator: true,
+            },
+          },
+        },
+      },
     },
     orderBy: {
       item: {
-        name: 'asc'
-      }
-    }
+        name: 'asc',
+      },
+    },
   });
 
   // Get team info (participant belongs to one team)
   const personEvent = await prisma.personEvent.findFirst({
     where: {
       personId: context.person.id,
-      eventId: context.event.id
+      eventId: context.event.id,
     },
     include: {
       team: {
         include: {
-          coordinator: true
-        }
-      }
-    }
+          coordinator: true,
+        },
+      },
+    },
   });
 
   return NextResponse.json({
@@ -77,15 +74,17 @@ export async function GET(
       status: context.event.status,
       guestCount: context.event.guestCount,
     },
-    team: personEvent?.team ? {
-      id: personEvent.team.id,
-      name: personEvent.team.name,
-      coordinator: {
-        id: personEvent.team.coordinator.id,
-        name: personEvent.team.coordinator.name,
-      }
-    } : null,
-    assignments: assignments.map(a => ({
+    team: personEvent?.team
+      ? {
+          id: personEvent.team.id,
+          name: personEvent.team.name,
+          coordinator: {
+            id: personEvent.team.coordinator.id,
+            name: personEvent.team.coordinator.name,
+          },
+        }
+      : null,
+    assignments: assignments.map((a) => ({
       id: a.id,
       acknowledged: a.acknowledged,
       item: {
@@ -101,12 +100,14 @@ export async function GET(
         dropOffAt: a.item.dropOffAt,
         dropOffLocation: a.item.dropOffLocation,
         dropOffNote: a.item.dropOffNote,
-        day: a.item.day ? {
-          id: a.item.day.id,
-          name: a.item.day.name,
-          date: a.item.day.date,
-        } : null,
-      }
-    }))
+        day: a.item.day
+          ? {
+              id: a.item.day.id,
+              name: a.item.day.name,
+              date: a.item.day.date,
+            }
+          : null,
+      },
+    })),
   });
 }

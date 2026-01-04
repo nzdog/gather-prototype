@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { generateExplanation } from '@/lib/ai/generate';
 
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   context: { params: Promise<{ id: string; suggestionId: string }> }
 ) {
   try {
@@ -16,10 +16,7 @@ export async function GET(
     });
 
     if (!conflict) {
-      return NextResponse.json(
-        { error: 'Suggestion not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Suggestion not found' }, { status: 404 });
     }
 
     if (conflict.eventId !== eventId) {

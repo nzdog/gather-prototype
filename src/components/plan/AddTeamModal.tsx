@@ -50,7 +50,7 @@ export default function AddTeamModal({ isOpen, onClose, onAdd }: AddTeamModalPro
       await onAdd({
         name: name.trim(),
         scope: scope.trim(),
-        domain: domain || undefined
+        domain: domain || undefined,
       });
 
       // Reset form
@@ -84,9 +84,7 @@ export default function AddTeamModal({ isOpen, onClose, onAdd }: AddTeamModalPro
           <div className="space-y-4 mb-6">
             {/* Team Name */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Team Name *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Team Name *</label>
               <input
                 type="text"
                 value={name}

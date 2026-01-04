@@ -2,10 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
 
@@ -15,10 +12,7 @@ export async function GET(
     });
 
     if (!event) {
-      return NextResponse.json(
-        { error: 'Event not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
     // Get all dismissed conflicts
@@ -33,9 +27,6 @@ export async function GET(
     return NextResponse.json({ conflicts: dismissedConflicts });
   } catch (error) {
     console.error('Error fetching dismissed conflicts:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch dismissed conflicts' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch dismissed conflicts' }, { status: 500 });
   }
 }

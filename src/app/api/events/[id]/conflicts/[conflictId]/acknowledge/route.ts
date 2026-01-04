@@ -35,10 +35,7 @@ export async function POST(
     });
 
     if (!conflict) {
-      return NextResponse.json(
-        { error: 'Conflict not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Conflict not found' }, { status: 404 });
     }
 
     if (conflict.eventId !== eventId) {
@@ -65,18 +62,21 @@ export async function POST(
     }
 
     // Validate impactStatement references affected party or action
-    const impactLower = body.impactStatement.toLowerCase();
     const hasReference =
       // Check for party references (guest, vegetarian, etc.)
-      /guest|vegetarian|vegan|gluten|dairy|participant|coordinator|person|people/i.test(body.impactStatement) ||
+      /guest|vegetarian|vegan|gluten|dairy|participant|coordinator|person|people/i.test(
+        body.impactStatement
+      ) ||
       // Check for action words (communicate, substitute, etc.)
-      /communicate|notify|inform|substitute|replace|reassign|provide|bring|cater|accept|gap|external/i.test(body.impactStatement);
+      /communicate|notify|inform|substitute|replace|reassign|provide|bring|cater|accept|gap|external/i.test(
+        body.impactStatement
+      );
 
     if (!hasReference) {
       return NextResponse.json(
         {
           error: 'Impact statement must reference affected parties or mitigation action',
-          hint: 'Mention who is affected (e.g., "vegetarian guests") or what action you will take (e.g., "communicate with guests", "provide substitute")'
+          hint: 'Mention who is affected (e.g., "vegetarian guests") or what action you will take (e.g., "communicate with guests", "provide substitute")',
         },
         { status: 400 }
       );
@@ -102,10 +102,7 @@ export async function POST(
     ];
 
     if (!validMitigationTypes.includes(body.mitigationPlanType)) {
-      return NextResponse.json(
-        { error: 'Invalid mitigation plan type' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Invalid mitigation plan type' }, { status: 400 });
     }
 
     // Default visibility settings
@@ -162,9 +159,6 @@ export async function POST(
     });
   } catch (error) {
     console.error('Error acknowledging conflict:', error);
-    return NextResponse.json(
-      { error: 'Failed to acknowledge conflict' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to acknowledge conflict' }, { status: 500 });
   }
 }

@@ -8,7 +8,7 @@ export async function PATCH(
   context: { params: Promise<{ id: string; itemId: string }> }
 ) {
   try {
-    const { id: eventId, itemId } = await context.params;
+    const { id: _eventId, itemId } = await context.params;
     const body = await request.json();
 
     // Build update data
@@ -65,7 +65,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   context: { params: Promise<{ id: string; itemId: string }> }
 ) {
   try {
@@ -74,7 +74,7 @@ export async function DELETE(
     // Verify item exists
     const item = await prisma.item.findUnique({
       where: { id: itemId },
-      include: { team: true }
+      include: { team: true },
     });
 
     if (!item) {
@@ -82,15 +82,12 @@ export async function DELETE(
     }
 
     if (item.team.eventId !== eventId) {
-      return NextResponse.json(
-        { error: 'Item does not belong to this event' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Item does not belong to this event' }, { status: 400 });
     }
 
     // Delete item (cascade will handle assignment if any)
     await prisma.item.delete({
-      where: { id: itemId }
+      where: { id: itemId },
     });
 
     return NextResponse.json({ success: true, message: 'Item deleted' });

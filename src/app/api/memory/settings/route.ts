@@ -19,7 +19,7 @@ export async function PATCH(request: NextRequest) {
 
   // Get or create HostMemory
   let hostMemory = await prisma.hostMemory.findUnique({
-    where: { hostId }
+    where: { hostId },
   });
 
   if (!hostMemory) {
@@ -29,8 +29,8 @@ export async function PATCH(request: NextRequest) {
         hostId,
         learningEnabled: learningEnabled ?? false,
         aggregateContributionConsent: aggregateContributionConsent ?? false,
-        useHistoryByDefault: useHistoryByDefault ?? false
-      }
+        useHistoryByDefault: useHistoryByDefault ?? false,
+      },
     });
   } else {
     // Update settings
@@ -50,12 +50,12 @@ export async function PATCH(request: NextRequest) {
 
     hostMemory = await prisma.hostMemory.update({
       where: { hostId },
-      data: updateData
+      data: updateData,
     });
   }
 
   return NextResponse.json({
     hostMemory,
-    message: 'Settings updated successfully'
+    message: 'Settings updated successfully',
   });
 }

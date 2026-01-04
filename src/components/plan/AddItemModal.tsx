@@ -54,7 +54,13 @@ const DIETARY_TAGS = [
   { value: 'dairyFree', label: 'Dairy Free' },
 ];
 
-export default function AddItemModal({ isOpen, onClose, onAdd, teamName, days }: AddItemModalProps) {
+export default function AddItemModal({
+  isOpen,
+  onClose,
+  onAdd,
+  teamName,
+  days,
+}: AddItemModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [quantityAmount, setQuantityAmount] = useState('');
@@ -71,7 +77,7 @@ export default function AddItemModal({ isOpen, onClose, onAdd, teamName, days }:
 
   const handleDietaryTagToggle = (tag: string) => {
     if (dietaryTags.includes(tag)) {
-      setDietaryTags(dietaryTags.filter(t => t !== tag));
+      setDietaryTags(dietaryTags.filter((t) => t !== tag));
     } else {
       setDietaryTags([...dietaryTags, tag]);
     }
@@ -91,7 +97,7 @@ export default function AddItemModal({ isOpen, onClose, onAdd, teamName, days }:
         name: name.trim(),
         description: description.trim() || undefined,
         critical,
-        dietaryTags: dietaryTags.length > 0 ? dietaryTags : undefined
+        dietaryTags: dietaryTags.length > 0 ? dietaryTags : undefined,
       };
 
       // Add quantity fields based on state
@@ -152,17 +158,13 @@ export default function AddItemModal({ isOpen, onClose, onAdd, teamName, days }:
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
       <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 my-8">
         <h2 className="text-xl font-bold mb-2">Add Item to {teamName}</h2>
-        <p className="text-sm text-gray-600 mb-4">
-          Add a new item to this team's responsibility
-        </p>
+        <p className="text-sm text-gray-600 mb-4">Add a new item to this team's responsibility</p>
 
         <form onSubmit={handleSubmit}>
           <div className="space-y-4 mb-6">
             {/* Item Name */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Item Name *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Item Name *</label>
               <input
                 type="text"
                 value={name}
@@ -204,7 +206,7 @@ export default function AddItemModal({ isOpen, onClose, onAdd, teamName, days }:
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   disabled={adding}
                 >
-                  {QUANTITY_STATES.map(state => (
+                  {QUANTITY_STATES.map((state) => (
                     <option key={state.value} value={state.value}>
                       {state.label}
                     </option>
@@ -216,9 +218,7 @@ export default function AddItemModal({ isOpen, onClose, onAdd, teamName, days }:
               {quantityState === 'SPECIFIED' && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Amount
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
                     <input
                       type="number"
                       value={quantityAmount}
@@ -230,16 +230,14 @@ export default function AddItemModal({ isOpen, onClose, onAdd, teamName, days }:
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Unit
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
                     <select
                       value={quantityUnit}
                       onChange={(e) => setQuantityUnit(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       disabled={adding}
                     >
-                      {QUANTITY_UNITS.map(unit => (
+                      {QUANTITY_UNITS.map((unit) => (
                         <option key={unit.value} value={unit.value}>
                           {unit.label}
                         </option>
@@ -260,7 +258,10 @@ export default function AddItemModal({ isOpen, onClose, onAdd, teamName, days }:
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     disabled={adding}
                   />
-                  <label htmlFor="add-placeholder-acknowledged" className="ml-2 text-sm text-gray-700">
+                  <label
+                    htmlFor="add-placeholder-acknowledged"
+                    className="ml-2 text-sm text-gray-700"
+                  >
                     Defer to Coordinator (quantity will be determined later)
                   </label>
                 </div>
@@ -277,9 +278,7 @@ export default function AddItemModal({ isOpen, onClose, onAdd, teamName, days }:
                   className="w-4 h-4 text-blue-600"
                   disabled={adding}
                 />
-                <span className="text-sm font-medium text-gray-700">
-                  Mark as Critical
-                </span>
+                <span className="text-sm font-medium text-gray-700">Mark as Critical</span>
               </label>
               <p className="text-xs text-gray-500 ml-6 mt-1">
                 Critical items must be assigned before event can be frozen
@@ -315,9 +314,7 @@ export default function AddItemModal({ isOpen, onClose, onAdd, teamName, days }:
               <h3 className="text-sm font-medium text-gray-900 mb-3">Timing (Optional)</h3>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Day
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Day</label>
                   <select
                     value={dayId}
                     onChange={(e) => setDayId(e.target.value)}
@@ -325,7 +322,7 @@ export default function AddItemModal({ isOpen, onClose, onAdd, teamName, days }:
                     disabled={adding}
                   >
                     <option value="">All days</option>
-                    {days.map(day => (
+                    {days.map((day) => (
                       <option key={day.id} value={day.id}>
                         {day.name}
                       </option>
@@ -333,9 +330,7 @@ export default function AddItemModal({ isOpen, onClose, onAdd, teamName, days }:
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Serve Time
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Serve Time</label>
                   <input
                     type="time"
                     value={serveTime}

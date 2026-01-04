@@ -42,12 +42,15 @@ export async function POST() {
       success: true,
       message: 'Database reset successfully (tokens preserved)',
       itemCount,
-      tokenCount
+      tokenCount,
     });
   } catch (error) {
     console.error('[Reset] Failed:', error);
     return NextResponse.json(
-      { error: 'Failed to reset database', details: error instanceof Error ? error.message : 'Unknown error' },
+      {
+        error: 'Failed to reset database',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
       { status: 500 }
     );
   }

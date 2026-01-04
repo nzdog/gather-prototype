@@ -58,7 +58,7 @@ export default function AuditLogPage() {
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
-      second: '2-digit'
+      second: '2-digit',
     });
   };
 
@@ -66,7 +66,8 @@ export default function AuditLogPage() {
     if (actionType.includes('ASSIGN')) return 'bg-blue-100 text-blue-800';
     if (actionType.includes('UNASSIGN')) return 'bg-yellow-100 text-yellow-800';
     if (actionType.includes('STATUS')) return 'bg-purple-100 text-purple-800';
-    if (actionType.includes('OVERRIDE') || actionType.includes('UNFREEZE')) return 'bg-red-100 text-red-800';
+    if (actionType.includes('OVERRIDE') || actionType.includes('UNFREEZE'))
+      return 'bg-red-100 text-red-800';
     if (actionType.includes('ACK')) return 'bg-green-100 text-green-800';
     return 'bg-gray-100 text-gray-800';
   };
@@ -95,9 +96,7 @@ export default function AuditLogPage() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-3xl font-bold mb-2">Audit Log</h1>
-              <p className="text-gray-600">
-                Complete history of actions and changes
-              </p>
+              <p className="text-gray-600">Complete history of actions and changes</p>
             </div>
             <button
               onClick={() => router.back()}
@@ -109,9 +108,7 @@ export default function AuditLogPage() {
 
           {/* Filter */}
           <div className="flex items-center gap-3">
-            <label className="text-sm font-medium text-gray-700">
-              Filter by action:
-            </label>
+            <label className="text-sm font-medium text-gray-700">Filter by action:</label>
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
@@ -150,9 +147,7 @@ export default function AuditLogPage() {
 
                   {/* Actor */}
                   <div className="flex-shrink-0 w-32">
-                    <span className="text-sm font-medium text-gray-700">
-                      {entry.actor.name}
-                    </span>
+                    <span className="text-sm font-medium text-gray-700">{entry.actor.name}</span>
                   </div>
 
                   {/* Action Badge */}
@@ -169,13 +164,9 @@ export default function AuditLogPage() {
                   {/* Details */}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-900">
-                      {entry.details || (
-                        <span className="text-gray-400 italic">No details</span>
-                      )}
+                      {entry.details || <span className="text-gray-400 italic">No details</span>}
                     </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Target: {entry.targetType}
-                    </p>
+                    <p className="text-xs text-gray-500 mt-1">Target: {entry.targetType}</p>
                   </div>
                 </div>
               </div>

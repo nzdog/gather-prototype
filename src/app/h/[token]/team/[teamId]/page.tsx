@@ -2,7 +2,19 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Calendar, MapPin, ArrowLeft, Check, AlertCircle, ChevronDown, ChevronRight, Grid3x3, List, Maximize2, Minimize2 } from 'lucide-react';
+import {
+  Calendar,
+  MapPin,
+  ArrowLeft,
+  Check,
+  AlertCircle,
+  ChevronDown,
+  ChevronRight,
+  Grid3x3,
+  List,
+  Maximize2,
+  Minimize2,
+} from 'lucide-react';
 
 interface Item {
   id: string;
@@ -102,7 +114,7 @@ export default function HostTeamView() {
   const toggleAllItems = () => {
     if (collapsedItems.size === 0) {
       // All expanded, collapse all
-      const allIds = new Set(data?.items.map(item => item.id) || []);
+      const allIds = new Set(data?.items.map((item) => item.id) || []);
       setCollapsedItems(allIds);
     } else {
       // Some or all collapsed, expand all
@@ -149,9 +161,7 @@ export default function HostTeamView() {
 
         <div className="text-sm font-medium text-gray-500 mb-1">{data.event.name}</div>
         <h1 className="text-2xl font-bold text-gray-900">{data.team.name}</h1>
-        <div className="text-sm text-gray-500 mt-1">
-          Coordinator: {data.team.coordinator.name}
-        </div>
+        <div className="text-sm text-gray-500 mt-1">Coordinator: {data.team.coordinator.name}</div>
       </div>
 
       {/* Content */}
@@ -178,29 +188,29 @@ export default function HostTeamView() {
               </button>
             )}
             <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-1.5 rounded transition-colors ${
-                viewMode === 'grid'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-              title="Grid view"
-            >
-              <Grid3x3 className="size-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-1.5 rounded transition-colors ${
-                viewMode === 'list'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-              title="List view"
-            >
-              <List className="size-4" />
-            </button>
-          </div>
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded transition-colors ${
+                  viewMode === 'grid'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+                title="Grid view"
+              >
+                <Grid3x3 className="size-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-1.5 rounded transition-colors ${
+                  viewMode === 'list'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+                title="List view"
+              >
+                <List className="size-4" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -209,7 +219,9 @@ export default function HostTeamView() {
             <p className="text-gray-600">No items yet</p>
           </div>
         ) : (
-          <div className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}>
+          <div
+            className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}
+          >
             {sortedItems.map((item) => (
               <div
                 key={item.id}
@@ -225,7 +237,9 @@ export default function HostTeamView() {
                         <AlertCircle className="size-4 text-red-500 flex-shrink-0" />
                       )}
                       <span className="font-semibold text-gray-900">{item.name}</span>
-                      {item.quantity && <span className="text-gray-500 flex-shrink-0">×{item.quantity}</span>}
+                      {item.quantity && (
+                        <span className="text-gray-500 flex-shrink-0">×{item.quantity}</span>
+                      )}
                       {!item.assignment && item.critical && (
                         <span className="bg-red-100 text-red-800 text-xs font-semibold px-2 py-1 rounded flex-shrink-0">
                           CRITICAL
@@ -237,13 +251,19 @@ export default function HostTeamView() {
                     {(item.glutenFree || item.dairyFree || item.vegetarian) && (
                       <div className="flex gap-2">
                         {item.glutenFree && (
-                          <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">GF</span>
+                          <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                            GF
+                          </span>
                         )}
                         {item.dairyFree && (
-                          <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">DF</span>
+                          <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                            DF
+                          </span>
                         )}
                         {item.vegetarian && (
-                          <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">V</span>
+                          <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">
+                            V
+                          </span>
                         )}
                       </div>
                     )}

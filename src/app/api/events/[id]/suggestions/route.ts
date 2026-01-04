@@ -2,10 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
 
@@ -31,7 +28,7 @@ export async function GET(
     });
 
     // Transform conflicts to suggestion format
-    const formattedSuggestions = suggestions.map(conflict => ({
+    const formattedSuggestions = suggestions.map((conflict) => ({
       id: conflict.id,
       type: conflict.type,
       severity: conflict.severity,

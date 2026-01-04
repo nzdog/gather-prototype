@@ -47,11 +47,11 @@ export default function TemplateList({ hostId, onClone, onDelete }: TemplateList
       const response = await fetch(`/api/templates/${templateId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hostId })
+        body: JSON.stringify({ hostId }),
       });
 
       if (response.ok) {
-        setTemplates(templates.filter(t => t.id !== templateId));
+        setTemplates(templates.filter((t) => t.id !== templateId));
         onDelete(templateId);
       } else {
         console.error('Error deleting template');
@@ -64,11 +64,7 @@ export default function TemplateList({ hostId, onClone, onDelete }: TemplateList
   const displayTemplates = activeTab === 'my' ? templates : gatherTemplates;
 
   if (loading) {
-    return (
-      <div className="p-4 text-center text-gray-600">
-        Loading templates...
-      </div>
-    );
+    return <div className="p-4 text-center text-gray-600">Loading templates...</div>;
   }
 
   return (
@@ -106,11 +102,8 @@ export default function TemplateList({ hostId, onClone, onDelete }: TemplateList
         </div>
       ) : (
         <div className="grid gap-4">
-          {displayTemplates.map(template => (
-            <div
-              key={template.id}
-              className="border rounded-lg p-4 hover:shadow-md transition"
-            >
+          {displayTemplates.map((template) => (
+            <div key={template.id} className="border rounded-lg p-4 hover:shadow-md transition">
               <div className="flex justify-between items-start mb-2">
                 <div>
                   <h3 className="font-semibold text-lg">{template.name}</h3>
@@ -118,9 +111,7 @@ export default function TemplateList({ hostId, onClone, onDelete }: TemplateList
                     {template.occasionType} • {(template.teams as any[]).length} teams
                   </p>
                   {template.createdFrom && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Created from event
-                    </p>
+                    <p className="text-xs text-gray-500 mt-1">Created from event</p>
                   )}
                 </div>
                 <div className="flex items-center gap-2">

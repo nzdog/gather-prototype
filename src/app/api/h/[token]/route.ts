@@ -13,10 +13,7 @@ import { computeTeamStatusFromItems, canFreeze, getCriticalGapCount } from '@/li
  * - Use canFreeze() for freeze allowed (queries assignment:null)
  * - No repair (GET route - no DB writes)
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { token: string } }
-) {
+export async function GET(_request: NextRequest, { params }: { params: { token: string } }) {
   const context = await resolveToken(params.token);
 
   if (!context || context.scope !== 'HOST') {
@@ -32,25 +29,22 @@ export async function GET(
         include: {
           assignment: {
             include: {
-              person: true
-            }
+              person: true,
+            },
           },
-          day: true
+          day: true,
         },
-        orderBy: [
-          { critical: 'desc' },
-          { name: 'asc' }
-        ]
-      }
+        orderBy: [{ critical: 'desc' }, { name: 'asc' }],
+      },
     },
-    orderBy: { name: 'asc' }
+    orderBy: { name: 'asc' },
   });
 
   // Compute status for each team (SYNCHRONOUS - no await)
-  const teamsWithStatus = teams.map(team => {
+  const teamsWithStatus = teams.map((team) => {
     const status = computeTeamStatusFromItems(team.items);
-    const unassignedCount = team.items.filter(i => i.assignment === null).length;
-    const criticalGapCount = team.items.filter(i => i.critical && i.assignment === null).length;
+    const unassignedCount = team.items.filter((i) => i.assignment === null).length;
+    const criticalGapCount = team.items.filter((i) => i.critical && i.assignment === null).length;
 
     return {
       id: team.id,
@@ -64,7 +58,7 @@ export async function GET(
       itemCount: team.items.length,
       unassignedCount,
       criticalGapCount,
-      items: team.items.map(item => ({
+      items: team.items.map((item) => ({
         id: item.id,
         name: item.name,
         quantity: item.quantity,
@@ -77,20 +71,24 @@ export async function GET(
         dropOffAt: item.dropOffAt,
         dropOffLocation: item.dropOffLocation,
         dropOffNote: item.dropOffNote,
-        day: item.day ? {
-          id: item.day.id,
-          name: item.day.name,
-          date: item.day.date,
-        } : null,
-        assignment: item.assignment ? {
-          id: item.assignment.id,
-          acknowledged: item.assignment.acknowledged,
-          person: {
-            id: item.assignment.person.id,
-            name: item.assignment.person.name,
-          }
-        } : null,
-      }))
+        day: item.day
+          ? {
+              id: item.day.id,
+              name: item.day.name,
+              date: item.day.date,
+            }
+          : null,
+        assignment: item.assignment
+          ? {
+              id: item.assignment.id,
+              acknowledged: item.assignment.acknowledged,
+              person: {
+                id: item.assignment.person.id,
+                name: item.assignment.person.name,
+              },
+            }
+          : null,
+      })),
     };
   });
 

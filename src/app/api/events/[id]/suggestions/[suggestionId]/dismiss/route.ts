@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 export async function POST(
-  request: NextRequest,
+  _request: NextRequest,
   context: { params: Promise<{ id: string; suggestionId: string }> }
 ) {
   try {
@@ -15,10 +15,7 @@ export async function POST(
     });
 
     if (!conflict) {
-      return NextResponse.json(
-        { error: 'Suggestion not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Suggestion not found' }, { status: 404 });
     }
 
     if (conflict.eventId !== eventId) {

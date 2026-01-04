@@ -100,7 +100,9 @@ export async function callClaude(
 
       // Provide more specific error messages
       if (error.status === 401) {
-        throw new Error('Invalid Anthropic API key. Please check your ANTHROPIC_API_KEY environment variable.');
+        throw new Error(
+          'Invalid Anthropic API key. Please check your ANTHROPIC_API_KEY environment variable.'
+        );
       } else if (error.status === 429) {
         throw new Error('Rate limit exceeded. Please try again later.');
       } else if (error.status === 500) {
@@ -130,7 +132,9 @@ export function parseClaudeJSON<T>(response: ClaudeResponse): T {
     return JSON.parse(jsonText) as T;
   } catch (error) {
     console.error('[Claude API] Failed to parse JSON response:', jsonText);
-    throw new Error(`Failed to parse Claude response as JSON: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(
+      `Failed to parse Claude response as JSON: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 }
 

@@ -19,10 +19,10 @@ export async function GET(request: NextRequest) {
     include: {
       patterns: {
         orderBy: {
-          updatedAt: 'desc'
-        }
-      }
-    }
+          updatedAt: 'desc',
+        },
+      },
+    },
   });
 
   if (!hostMemory) {

@@ -3,10 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
 
@@ -17,17 +14,17 @@ export async function GET(
           select: {
             id: true,
             name: true,
-          }
+          },
         },
         _count: {
           select: {
             items: true,
-          }
-        }
+          },
+        },
       },
       orderBy: {
         name: 'asc',
-      }
+      },
     });
 
     return NextResponse.json({
@@ -45,10 +42,7 @@ export async function GET(
   }
 }
 
-export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
     const body = await request.json();
@@ -64,7 +58,7 @@ export async function POST(
 
     // Verify event exists
     const event = await prisma.event.findUnique({
-      where: { id: eventId }
+      where: { id: eventId },
     });
 
     if (!event) {
@@ -80,16 +74,16 @@ export async function POST(
         domainConfidence: domain ? 'HIGH' : 'MEDIUM',
         source: 'MANUAL',
         eventId,
-        coordinatorId
+        coordinatorId,
       },
       include: {
         coordinator: {
           select: {
             id: true,
-            name: true
-          }
-        }
-      }
+            name: true,
+          },
+        },
+      },
     });
 
     return NextResponse.json({ team }, { status: 201 });

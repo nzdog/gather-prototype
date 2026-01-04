@@ -14,10 +14,7 @@ import { computeTeamStatusFromItems } from '@/lib/workflow';
  * - Compute status synchronously (no await)
  * - Other teams' statuses via item.groupBy aggregate only
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { token: string } }
-) {
+export async function GET(_request: NextRequest, { params }: { params: { token: string } }) {
   const context = await resolveToken(params.token);
 
   if (!context || context.scope !== 'COORDINATOR' || !context.team) {
@@ -30,15 +27,12 @@ export async function GET(
     include: {
       assignment: {
         include: {
-          person: true
-        }
+          person: true,
+        },
       },
-      day: true
+      day: true,
     },
-    orderBy: [
-      { critical: 'desc' },
-      { name: 'asc' }
-    ]
+    orderBy: [{ critical: 'desc' }, { name: 'asc' }],
   });
 
   // Compute status from assignment existence (SYNCHRONOUS - no await)
@@ -48,9 +42,9 @@ export async function GET(
   const otherTeams = await prisma.team.findMany({
     where: {
       eventId: context.event.id,
-      id: { not: context.team.id }
+      id: { not: context.team.id },
     },
-    select: { id: true, name: true }
+    select: { id: true, name: true },
   });
 
   // 3. Count critical gaps per team via groupBy on Item
@@ -58,17 +52,17 @@ export async function GET(
   const gapCounts = await prisma.item.groupBy({
     by: ['teamId'],
     where: {
-      teamId: { in: otherTeams.map(t => t.id) },
+      teamId: { in: otherTeams.map((t) => t.id) },
       critical: true,
       assignment: null,
     },
     _count: { _all: true },
   });
 
-  const gapByTeam = new Map(gapCounts.map(g => [g.teamId, g._count._all]));
+  const gapByTeam = new Map(gapCounts.map((g) => [g.teamId, g._count._all]));
 
   // 4. Map to status enum (simplified: CRITICAL_GAP or SORTED only)
-  const otherTeamsStatus = otherTeams.map(t => ({
+  const otherTeamsStatus = otherTeams.map((t) => ({
     id: t.id,
     name: t.name,
     status: (gapByTeam.get(t.id) ?? 0) > 0 ? 'CRITICAL_GAP' : 'SORTED',
@@ -78,41 +72,41 @@ export async function GET(
   const teamMembers = await prisma.personEvent.findMany({
     where: {
       eventId: context.event.id,
-      teamId: context.team.id
+      teamId: context.team.id,
     },
     include: {
-      person: true
-    }
+      person: true,
+    },
   });
 
   // 6. Get host information
   const hostToken = await prisma.accessToken.findFirst({
     where: {
       eventId: context.event.id,
-      scope: 'HOST'
+      scope: 'HOST',
     },
     include: {
-      person: true
-    }
+      person: true,
+    },
   });
 
   // 7. Get coordinator's own assignments (items assigned to them personally)
   const allMyAssignments = await prisma.assignment.findMany({
     where: {
-      personId: context.person.id
+      personId: context.person.id,
     },
     include: {
       item: {
         include: {
           day: true,
-          team: true
-        }
-      }
-    }
+          team: true,
+        },
+      },
+    },
   });
 
   // Filter to only assignments for this event (via item's team)
-  const myAssignments = allMyAssignments.filter(a => a.item.team.eventId === context.event.id);
+  const myAssignments = allMyAssignments.filter((a) => a.item.team.eventId === context.event.id);
 
   return NextResponse.json({
     person: {
@@ -130,11 +124,13 @@ export async function GET(
       name: context.team.name,
       scope: context.team.scope,
     },
-    host: hostToken ? {
-      name: hostToken.person.name,
-    } : null,
+    host: hostToken
+      ? {
+          name: hostToken.person.name,
+        }
+      : null,
     myStatus,
-    items: myItems.map(item => ({
+    items: myItems.map((item) => ({
       id: item.id,
       name: item.name,
       quantity: item.quantity,
@@ -148,26 +144,30 @@ export async function GET(
       dropOffAt: item.dropOffAt,
       dropOffLocation: item.dropOffLocation,
       dropOffNote: item.dropOffNote,
-      day: item.day ? {
-        id: item.day.id,
-        name: item.day.name,
-        date: item.day.date,
-      } : null,
-      assignment: item.assignment ? {
-        id: item.assignment.id,
-        acknowledged: item.assignment.acknowledged,
-        person: {
-          id: item.assignment.person.id,
-          name: item.assignment.person.name,
-        }
-      } : null,
+      day: item.day
+        ? {
+            id: item.day.id,
+            name: item.day.name,
+            date: item.day.date,
+          }
+        : null,
+      assignment: item.assignment
+        ? {
+            id: item.assignment.id,
+            acknowledged: item.assignment.acknowledged,
+            person: {
+              id: item.assignment.person.id,
+              name: item.assignment.person.name,
+            },
+          }
+        : null,
     })),
-    teamMembers: teamMembers.map(m => ({
+    teamMembers: teamMembers.map((m) => ({
       id: m.person.id,
       name: m.person.name,
     })),
     otherTeams: otherTeamsStatus, // Status only, no items
-    myAssignments: myAssignments.map(assignment => ({
+    myAssignments: myAssignments.map((assignment) => ({
       id: assignment.id,
       acknowledged: assignment.acknowledged,
       item: {
@@ -183,12 +183,14 @@ export async function GET(
         dropOffAt: assignment.item.dropOffAt,
         dropOffLocation: assignment.item.dropOffLocation,
         dropOffNote: assignment.item.dropOffNote,
-        day: assignment.item.day ? {
-          id: assignment.item.day.id,
-          name: assignment.item.day.name,
-          date: assignment.item.day.date,
-        } : null,
-      }
-    }))
+        day: assignment.item.day
+          ? {
+              id: assignment.item.day.id,
+              name: assignment.item.day.name,
+              date: assignment.item.day.date,
+            }
+          : null,
+      },
+    })),
   });
 }

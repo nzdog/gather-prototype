@@ -5,10 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runGateCheck } from '@/lib/workflow';
 
-export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
 
@@ -21,7 +18,7 @@ export async function POST(
     return NextResponse.json(
       {
         error: 'Failed to run gate check',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     );

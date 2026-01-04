@@ -53,8 +53,8 @@ export default function RevisionHistory({ eventId, actorId }: RevisionHistoryPro
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           actorId,
-          reason: 'Manual snapshot'
-        })
+          reason: 'Manual snapshot',
+        }),
       });
 
       if (!response.ok) throw new Error('Failed to create revision');
@@ -77,14 +77,11 @@ export default function RevisionHistory({ eventId, actorId }: RevisionHistoryPro
 
     try {
       setRestoring(revision.id);
-      const response = await fetch(
-        `/api/events/${eventId}/revisions/${revision.id}/restore`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ actorId })
-        }
-      );
+      const response = await fetch(`/api/events/${eventId}/revisions/${revision.id}/restore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actorId }),
+      });
 
       if (!response.ok) throw new Error('Failed to restore revision');
 
@@ -116,7 +113,7 @@ export default function RevisionHistory({ eventId, actorId }: RevisionHistoryPro
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     });
   };
 
@@ -181,13 +178,9 @@ export default function RevisionHistory({ eventId, actorId }: RevisionHistoryPro
                     <span className="font-medium text-gray-900">
                       Revision #{revision.revisionNumber}
                     </span>
-                    <span className="text-xs text-gray-500">
-                      {formatDate(revision.createdAt)}
-                    </span>
+                    <span className="text-xs text-gray-500">{formatDate(revision.createdAt)}</span>
                   </div>
-                  <p className="text-sm text-gray-600">
-                    {revision.reason || 'No reason provided'}
-                  </p>
+                  <p className="text-sm text-gray-600">{revision.reason || 'No reason provided'}</p>
                 </div>
                 <button
                   onClick={() => handleRestore(revision)}

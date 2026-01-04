@@ -20,8 +20,8 @@ export async function GET(request: NextRequest) {
     include: {
       patterns: true,
       defaults: true,
-      dismissedSuggestions: true
-    }
+      dismissedSuggestions: true,
+    },
   });
 
   if (!hostMemory) {
@@ -31,13 +31,13 @@ export async function GET(request: NextRequest) {
         hostId,
         learningEnabled: false,
         aggregateContributionConsent: false,
-        useHistoryByDefault: false
+        useHistoryByDefault: false,
       },
       include: {
         patterns: true,
         defaults: true,
-        dismissedSuggestions: true
-      }
+        dismissedSuggestions: true,
+      },
     });
   }
 
@@ -45,16 +45,16 @@ export async function GET(request: NextRequest) {
   const completedEventsCount = await prisma.event.count({
     where: {
       hostId,
-      status: 'COMPLETE'
-    }
+      status: 'COMPLETE',
+    },
   });
 
   // Count templates saved
   const templatesCount = await prisma.structureTemplate.count({
     where: {
       hostId,
-      templateSource: 'HOST'
-    }
+      templateSource: 'HOST',
+    },
   });
 
   return NextResponse.json({
@@ -63,8 +63,8 @@ export async function GET(request: NextRequest) {
       completedEvents: completedEventsCount,
       templatesSaved: templatesCount,
       patternsLearned: hostMemory.patterns.length,
-      defaultsSet: hostMemory.defaults.length
-    }
+      defaultsSet: hostMemory.defaults.length,
+    },
   });
 }
 
@@ -87,8 +87,8 @@ export async function DELETE(request: NextRequest) {
     include: {
       patterns: true,
       defaults: true,
-      dismissedSuggestions: true
-    }
+      dismissedSuggestions: true,
+    },
   });
 
   if (!hostMemory) {
@@ -96,26 +96,26 @@ export async function DELETE(request: NextRequest) {
   }
 
   // Collect IDs for deletion receipt
-  const patternIds = hostMemory.patterns.map(p => p.id);
-  const defaultIds = hostMemory.defaults.map(d => d.id);
-  const dismissedIds = hostMemory.dismissedSuggestions.map(d => d.id);
+  const patternIds = hostMemory.patterns.map((p) => p.id);
+  const defaultIds = hostMemory.defaults.map((d) => d.id);
+  const dismissedIds = hostMemory.dismissedSuggestions.map((d) => d.id);
 
   // Delete templates
   await prisma.structureTemplate.deleteMany({
     where: {
       hostId,
-      templateSource: 'HOST'
-    }
+      templateSource: 'HOST',
+    },
   });
 
   // Delete quantities profiles
   await prisma.quantitiesProfile.deleteMany({
-    where: { hostId }
+    where: { hostId },
   });
 
   // Delete host memory (cascades to patterns, defaults, dismissedSuggestions)
   await prisma.hostMemory.delete({
-    where: { hostId }
+    where: { hostId },
   });
 
   // Create deletion receipt
@@ -127,15 +127,15 @@ export async function DELETE(request: NextRequest) {
       targetIds: {
         patterns: patternIds,
         defaults: defaultIds,
-        dismissedSuggestions: dismissedIds
+        dismissedSuggestions: dismissedIds,
       },
       derivedArtifactsRemoved: true,
-      aggregateContributionPurged: hostMemory.aggregateContributionConsent
-    }
+      aggregateContributionPurged: hostMemory.aggregateContributionConsent,
+    },
   });
 
   return NextResponse.json({
     message: 'Host memory deleted successfully',
-    receipt
+    receipt,
   });
 }

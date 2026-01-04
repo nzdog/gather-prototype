@@ -9,7 +9,7 @@ import { logAudit } from '@/lib/workflow';
  * Coordinator acknowledges their own assignment
  */
 export async function POST(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: { token: string; assignmentId: string } }
 ) {
   const context = await resolveToken(params.token);
@@ -22,8 +22,8 @@ export async function POST(
   const assignment = await prisma.assignment.findUnique({
     where: { id: params.assignmentId },
     include: {
-      item: true
-    }
+      item: true,
+    },
   });
 
   if (!assignment || assignment.personId !== context.person.id) {
@@ -38,7 +38,7 @@ export async function POST(
   await prisma.$transaction(async (tx) => {
     await tx.assignment.update({
       where: { id: params.assignmentId },
-      data: { acknowledged: true }
+      data: { acknowledged: true },
     });
 
     await logAudit(tx, {
@@ -47,7 +47,7 @@ export async function POST(
       actionType: 'ACKNOWLEDGE_ITEM',
       targetType: 'Assignment',
       targetId: params.assignmentId,
-      details: `Acknowledged ${assignment.item.name}`
+      details: `Acknowledged ${assignment.item.name}`,
     });
   });
 

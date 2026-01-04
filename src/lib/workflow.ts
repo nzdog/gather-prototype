@@ -19,8 +19,8 @@ type Tx = Prisma.TransactionClient;
 export function computeTeamStatusFromItems(
   items: ItemWithAssignmentAndPerson[]
 ): 'SORTED' | 'GAP' | 'CRITICAL_GAP' {
-  const hasCriticalGap = items.some(i => i.critical && i.assignment === null);
-  const hasGap = items.some(i => i.assignment === null);
+  const hasCriticalGap = items.some((i) => i.critical && i.assignment === null);
+  const hasGap = items.some((i) => i.assignment === null);
 
   if (hasCriticalGap) return 'CRITICAL_GAP';
   if (hasGap) return 'GAP';
@@ -34,13 +34,10 @@ export function computeTeamStatusFromItems(
  * CRITICAL: Call this AFTER creating or deleting assignments.
  * Do NOT call this in GET routes (no mutations in GET).
  */
-export async function repairItemStatusAfterMutation(
-  tx: Tx,
-  itemId: string
-): Promise<void> {
+export async function repairItemStatusAfterMutation(tx: Tx, itemId: string): Promise<void> {
   const item = await tx.item.findUnique({
     where: { id: itemId },
-    include: { assignment: true }
+    include: { assignment: true },
   });
 
   if (!item) return;
@@ -108,7 +105,7 @@ export function canTransition(fromStatus: EventStatus, toStatus: EventStatus): b
     DRAFT: ['CONFIRMING'],
     CONFIRMING: ['FROZEN'],
     FROZEN: ['CONFIRMING', 'COMPLETE'],
-    COMPLETE: []
+    COMPLETE: [],
   };
 
   return validTransitions[fromStatus].includes(toStatus);
@@ -165,8 +162,8 @@ export async function logAudit(
       targetType: params.targetType,
       targetId: params.targetId,
       details: params.details || '',
-      timestamp: new Date()
-    }
+      timestamp: new Date(),
+    },
   });
 }
 
@@ -197,7 +194,7 @@ export async function removePerson(
   await prisma.$transaction(async (tx) => {
     const person = await tx.person.findUnique({
       where: { id: personId },
-      select: { name: true }
+      select: { name: true },
     });
 
     if (!person) throw new Error('Person not found');
@@ -209,15 +206,15 @@ export async function removePerson(
       actionType: 'REMOVE_PERSON',
       targetType: 'PersonEvent',
       targetId: personId,
-      details: `Removed person ${person.name} from event`
+      details: `Removed person ${person.name} from event`,
     });
 
     const assignments = await tx.assignment.findMany({
       where: {
         personId,
-        item: { team: { eventId } }
+        item: { team: { eventId } },
       },
-      include: { item: true }
+      include: { item: true },
     });
 
     for (const assignment of assignments) {
@@ -228,12 +225,12 @@ export async function removePerson(
           previouslyAssignedTo: assignment.item.previouslyAssignedTo
             ? `${assignment.item.previouslyAssignedTo}, ${person.name}`
             : person.name,
-        }
+        },
       });
 
       // Delete assignment
       await tx.assignment.delete({
-        where: { id: assignment.id }
+        where: { id: assignment.id },
       });
 
       // Repair Item.status after assignment deletion
@@ -246,16 +243,16 @@ export async function removePerson(
         actionType: 'UNASSIGN_ITEM',
         targetType: 'Item',
         targetId: assignment.itemId,
-        details: `Unassigned item due to removing person ${person.name}`
+        details: `Unassigned item due to removing person ${person.name}`,
       });
     }
 
     await tx.accessToken.deleteMany({
-      where: { personId, eventId }
+      where: { personId, eventId },
     });
 
     await tx.personEvent.deleteMany({
-      where: { personId, eventId }
+      where: { personId, eventId },
     });
   });
 }
@@ -305,12 +302,12 @@ export async function runGateCheck(eventId: string): Promise<GateCheckResult> {
       eventId,
       severity: 'CRITICAL',
       status: {
-        in: ['OPEN', 'DELEGATED'] // Not resolved or dismissed
+        in: ['OPEN', 'DELEGATED'], // Not resolved or dismissed
       },
       acknowledgements: {
-        none: {} // No acknowledgements at all
-      }
-    }
+        none: {}, // No acknowledgements at all
+      },
+    },
   });
 
   if (criticalConflictsWithoutAck > 0) {
@@ -318,7 +315,7 @@ export async function runGateCheck(eventId: string): Promise<GateCheckResult> {
       code: 'CRITICAL_CONFLICT_UNACKNOWLEDGED',
       reason: `${criticalConflictsWithoutAck} critical conflict(s) must be acknowledged before transitioning`,
       count: criticalConflictsWithoutAck,
-      resolution: 'Review and acknowledge all critical conflicts in the Check Plan view'
+      resolution: 'Review and acknowledge all critical conflicts in the Check Plan view',
     });
   }
 
@@ -329,8 +326,8 @@ export async function runGateCheck(eventId: string): Promise<GateCheckResult> {
       team: { eventId },
       critical: true,
       quantityState: 'PLACEHOLDER',
-      placeholderAcknowledged: false
-    }
+      placeholderAcknowledged: false,
+    },
   });
 
   if (criticalPlaceholdersUnacked > 0) {
@@ -338,14 +335,15 @@ export async function runGateCheck(eventId: string): Promise<GateCheckResult> {
       code: 'CRITICAL_PLACEHOLDER_UNACKNOWLEDGED',
       reason: `${criticalPlaceholdersUnacked} critical item(s) have placeholder quantities that must be acknowledged`,
       count: criticalPlaceholdersUnacked,
-      resolution: 'Either specify exact quantities or acknowledge the placeholder status for critical items'
+      resolution:
+        'Either specify exact quantities or acknowledge the placeholder status for critical items',
     });
   }
 
   // Check 3: STRUCTURAL_MINIMUM_TEAMS
   // At least 1 team must exist
   const teamCount = await prisma.team.count({
-    where: { eventId }
+    where: { eventId },
   });
 
   if (teamCount < 1) {
@@ -353,7 +351,7 @@ export async function runGateCheck(eventId: string): Promise<GateCheckResult> {
       code: 'STRUCTURAL_MINIMUM_TEAMS',
       reason: 'At least 1 team must exist before transitioning',
       count: teamCount,
-      resolution: 'Create at least one team with a coordinator'
+      resolution: 'Create at least one team with a coordinator',
     });
   }
 
@@ -361,8 +359,8 @@ export async function runGateCheck(eventId: string): Promise<GateCheckResult> {
   // At least 1 item must exist
   const itemCount = await prisma.item.count({
     where: {
-      team: { eventId }
-    }
+      team: { eventId },
+    },
   });
 
   if (itemCount < 1) {
@@ -370,7 +368,7 @@ export async function runGateCheck(eventId: string): Promise<GateCheckResult> {
       code: 'STRUCTURAL_MINIMUM_ITEMS',
       reason: 'At least 1 item must exist before transitioning',
       count: itemCount,
-      resolution: 'Add items to your teams before confirming the plan'
+      resolution: 'Add items to your teams before confirming the plan',
     });
   }
 
@@ -378,7 +376,7 @@ export async function runGateCheck(eventId: string): Promise<GateCheckResult> {
   // Verify event status is DRAFT (transition should only happen from DRAFT to CONFIRMING)
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { status: true }
+    select: { status: true },
   });
 
   if (!event) {
@@ -389,13 +387,13 @@ export async function runGateCheck(eventId: string): Promise<GateCheckResult> {
     blocks.push({
       code: 'UNSAVED_DRAFT_CHANGES',
       reason: `Event must be in DRAFT status to transition (current status: ${event.status})`,
-      resolution: 'Event can only transition to CONFIRMING from DRAFT status'
+      resolution: 'Event can only transition to CONFIRMING from DRAFT status',
     });
   }
 
   return {
     passed: blocks.length === 0,
-    blocks
+    blocks,
   };
 }
 
@@ -421,35 +419,35 @@ async function createPlanSnapshot(tx: Tx, eventId: string): Promise<string> {
       coordinator: { select: { id: true, name: true } },
       members: {
         include: {
-          person: { select: { id: true, name: true } }
-        }
-      }
-    }
+          person: { select: { id: true, name: true } },
+        },
+      },
+    },
   });
 
   const items = await tx.item.findMany({
     where: {
-      team: { eventId }
+      team: { eventId },
     },
     include: {
       assignment: {
         include: {
-          person: { select: { id: true, name: true } }
-        }
+          person: { select: { id: true, name: true } },
+        },
       },
       team: { select: { id: true, name: true } },
-      day: { select: { id: true, name: true } }
-    }
+      day: { select: { id: true, name: true } },
+    },
   });
 
   const days = await tx.day.findMany({
-    where: { eventId }
+    where: { eventId },
   });
 
   // Extract critical items
   const criticalFlags = items
-    .filter(item => item.critical)
-    .map(item => ({
+    .filter((item) => item.critical)
+    .map((item) => ({
       itemId: item.id,
       itemName: item.name,
       teamId: item.teamId,
@@ -457,7 +455,7 @@ async function createPlanSnapshot(tx: Tx, eventId: string): Promise<string> {
       criticalReason: item.criticalReason,
       criticalSource: item.criticalSource,
       assigned: !!item.assignment,
-      assignedTo: item.assignment?.person.name || null
+      assignedTo: item.assignment?.person.name || null,
     }));
 
   // Get all conflict acknowledgements
@@ -469,10 +467,10 @@ async function createPlanSnapshot(tx: Tx, eventId: string): Promise<string> {
           id: true,
           type: true,
           severity: true,
-          title: true
-        }
-      }
-    }
+          title: true,
+        },
+      },
+    },
   });
 
   // Create the snapshot
@@ -484,8 +482,8 @@ async function createPlanSnapshot(tx: Tx, eventId: string): Promise<string> {
       items: items as any,
       days: days as any,
       criticalFlags: criticalFlags as any,
-      acknowledgements: acknowledgements as any
-    }
+      acknowledgements: acknowledgements as any,
+    },
   });
 
   return snapshot.id;
@@ -512,10 +510,12 @@ export async function transitionToConfirming(
     // Record failed transition attempt
     const event = await prisma.event.findUnique({
       where: { id: eventId },
-      select: { transitionAttempts: true }
+      select: { transitionAttempts: true },
     });
 
-    const attempts = Array.isArray(event?.transitionAttempts) ? event.transitionAttempts as any[] : [];
+    const attempts = Array.isArray(event?.transitionAttempts)
+      ? (event.transitionAttempts as any[])
+      : [];
 
     await prisma.event.update({
       where: { id: eventId },
@@ -526,15 +526,15 @@ export async function transitionToConfirming(
             attemptedAt: new Date().toISOString(),
             attemptedBy: actorId,
             passed: false,
-            blocks: gateCheck.blocks as any
-          }
-        ] as any
-      }
+            blocks: gateCheck.blocks as any,
+          },
+        ] as any,
+      },
     });
 
     return {
       success: false,
-      blocks: gateCheck.blocks
+      blocks: gateCheck.blocks,
     };
   }
 
@@ -547,13 +547,15 @@ export async function transitionToConfirming(
       // Get existing attempts
       const currentEvent = await tx.event.findUnique({
         where: { id: eventId },
-        select: { transitionAttempts: true }
+        select: { transitionAttempts: true },
       });
 
-      const attempts = Array.isArray(currentEvent?.transitionAttempts) ? currentEvent.transitionAttempts as any[] : [];
+      const attempts = Array.isArray(currentEvent?.transitionAttempts)
+        ? (currentEvent.transitionAttempts as any[])
+        : [];
 
       // Update event
-      const event = await tx.event.update({
+      await tx.event.update({
         where: { id: eventId },
         data: {
           status: 'CONFIRMING',
@@ -566,10 +568,10 @@ export async function transitionToConfirming(
               attemptedAt: new Date().toISOString(),
               attemptedBy: actorId,
               passed: true,
-              snapshotId
-            }
-          ] as any
-        }
+              snapshotId,
+            },
+          ] as any,
+        },
       });
 
       // Log transition
@@ -579,7 +581,7 @@ export async function transitionToConfirming(
         actionType: 'TRANSITION_TO_CONFIRMING',
         targetType: 'Event',
         targetId: eventId,
-        details: `Transitioned event to CONFIRMING status with snapshot ${snapshotId}`
+        details: `Transitioned event to CONFIRMING status with snapshot ${snapshotId}`,
       });
 
       return { snapshotId };
@@ -587,13 +589,13 @@ export async function transitionToConfirming(
 
     return {
       success: true,
-      snapshotId: result.snapshotId
+      snapshotId: result.snapshotId,
     };
   } catch (error) {
     console.error('Error during transition:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error during transition'
+      error: error instanceof Error ? error.message : 'Unknown error during transition',
     };
   }
 }
@@ -621,7 +623,7 @@ export async function createRevision(
     const latestRevision = await tx.planRevision.findFirst({
       where: { eventId },
       orderBy: { revisionNumber: 'desc' },
-      select: { revisionNumber: true }
+      select: { revisionNumber: true },
     });
 
     const revisionNumber = (latestRevision?.revisionNumber ?? 0) + 1;
@@ -635,25 +637,25 @@ export async function createRevision(
           include: {
             assignment: {
               include: {
-                person: { select: { id: true, name: true } }
-              }
+                person: { select: { id: true, name: true } },
+              },
             },
-            day: { select: { id: true, name: true, date: true } }
-          }
-        }
-      }
+            day: { select: { id: true, name: true, date: true } },
+          },
+        },
+      },
     });
 
     const days = await tx.day.findMany({
-      where: { eventId }
+      where: { eventId },
     });
 
     const conflicts = await tx.conflict.findMany({
-      where: { eventId }
+      where: { eventId },
     });
 
     const acknowledgements = await tx.acknowledgement.findMany({
-      where: { eventId }
+      where: { eventId },
     });
 
     // Create revision
@@ -665,17 +667,17 @@ export async function createRevision(
         createdBy: actorId,
         reason: reason || 'Manual revision',
         teams: teams as any,
-        items: teams.flatMap(t => t.items) as any,
+        items: teams.flatMap((t) => t.items) as any,
         days: days as any,
         conflicts: conflicts as any,
-        acknowledgements: acknowledgements as any
-      }
+        acknowledgements: acknowledgements as any,
+      },
     });
 
     // Update event's currentRevisionId
     await tx.event.update({
       where: { id: eventId },
-      data: { currentRevisionId: revision.id }
+      data: { currentRevisionId: revision.id },
     });
 
     // Log audit entry
@@ -685,7 +687,7 @@ export async function createRevision(
       actionType: 'CREATE_REVISION',
       targetType: 'PlanRevision',
       targetId: revision.id,
-      details: `Created revision #${revisionNumber}: ${reason || 'Manual revision'}`
+      details: `Created revision #${revisionNumber}: ${reason || 'Manual revision'}`,
     });
 
     return revision.id;
@@ -711,7 +713,7 @@ export async function restoreFromRevision(
   await prisma.$transaction(async (tx) => {
     // Get the revision
     const revision = await tx.planRevision.findUnique({
-      where: { id: revisionId }
+      where: { id: revisionId },
     });
 
     if (!revision) {
@@ -724,22 +726,22 @@ export async function restoreFromRevision(
 
     // Delete current items (assignments cascade)
     await tx.item.deleteMany({
-      where: { team: { eventId } }
+      where: { team: { eventId } },
     });
 
     // Delete current teams
     await tx.team.deleteMany({
-      where: { eventId }
+      where: { eventId },
     });
 
     // Delete current days
     await tx.day.deleteMany({
-      where: { eventId }
+      where: { eventId },
     });
 
     // Clear conflicts (will be re-detected on next Check Plan)
     await tx.conflict.deleteMany({
-      where: { eventId }
+      where: { eventId },
     });
 
     // Restore days from revision
@@ -751,8 +753,8 @@ export async function restoreFromRevision(
         data: {
           name: dayData.name,
           date: new Date(dayData.date),
-          eventId
-        }
+          eventId,
+        },
       });
       dayIdMap.set(dayData.id, newDay.id);
     }
@@ -760,7 +762,8 @@ export async function restoreFromRevision(
     // Restore teams from revision
     const teams = revision.teams as any[];
     const teamIdMap = new Map<string, string>(); // old ID -> new ID
-    const personIdMap = new Map<string, string>(); // We'll use the same person IDs
+    // TODO: Revision system - person ID mapping for restored team memberships (Section 9 of build spec)
+    // Will need: const personIdMap = new Map<string, string>(); when implementing person restoration
 
     for (const teamData of teams) {
       const newTeam = await tx.team.create({
@@ -773,8 +776,8 @@ export async function restoreFromRevision(
           source: teamData.source,
           isProtected: teamData.isProtected,
           eventId,
-          coordinatorId: teamData.coordinatorId
-        }
+          coordinatorId: teamData.coordinatorId,
+        },
       });
       teamIdMap.set(teamData.id, newTeam.id);
 
@@ -820,8 +823,8 @@ export async function restoreFromRevision(
             isProtected: itemData.isProtected,
             lastEditedBy: itemData.lastEditedBy,
             teamId: newTeam.id,
-            dayId: itemData.dayId ? dayIdMap.get(itemData.dayId) : null
-          }
+            dayId: itemData.dayId ? dayIdMap.get(itemData.dayId) : null,
+          },
         });
 
         // Restore assignment if it existed
@@ -831,8 +834,8 @@ export async function restoreFromRevision(
               itemId: newItem.id,
               personId: itemData.assignment.personId,
               acknowledged: itemData.assignment.acknowledged,
-              createdAt: new Date(itemData.assignment.createdAt)
-            }
+              createdAt: new Date(itemData.assignment.createdAt),
+            },
           });
         }
       }
@@ -841,7 +844,7 @@ export async function restoreFromRevision(
     // Update event's currentRevisionId
     await tx.event.update({
       where: { id: eventId },
-      data: { currentRevisionId: revisionId }
+      data: { currentRevisionId: revisionId },
     });
 
     // Log audit entry
@@ -851,7 +854,7 @@ export async function restoreFromRevision(
       actionType: 'RESTORE_REVISION',
       targetType: 'PlanRevision',
       targetId: revisionId,
-      details: `Restored event to revision #${revision.revisionNumber}`
+      details: `Restored event to revision #${revision.revisionNumber}`,
     });
   });
 }

@@ -17,10 +17,7 @@ export async function POST(
     });
 
     if (!conflict) {
-      return NextResponse.json(
-        { error: 'Suggestion not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Suggestion not found' }, { status: 404 });
     }
 
     if (conflict.eventId !== eventId) {
