@@ -15,10 +15,7 @@ import { canFreeze, getCriticalGapCount, canTransition, logAudit } from '@/lib/w
  * - Transaction: update + audit + optional override log
  * - Log override when unfreezing (FROZEN → CONFIRMING)
  */
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: { token: string } }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: { token: string } }) {
   const context = await resolveToken(params.token);
 
   if (!context || context.scope !== 'HOST') {
@@ -43,17 +40,23 @@ export async function PATCH(
     // Validate unfreeze reason if unfreezing
     if (fromStatus === 'FROZEN' && status === 'CONFIRMING') {
       if (!unfreezeReason || unfreezeReason.trim() === '') {
-        return NextResponse.json({
-          error: 'A reason is required to unfreeze the event'
-        }, { status: 400 });
+        return NextResponse.json(
+          {
+            error: 'A reason is required to unfreeze the event',
+          },
+          { status: 400 }
+        );
       }
     }
 
     // Validate state transition
     if (!canTransition(fromStatus, status)) {
-      return NextResponse.json({
-        error: `Invalid transition from ${fromStatus} to ${status}`
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: `Invalid transition from ${fromStatus} to ${status}`,
+        },
+        { status: 400 }
+      );
     }
 
     // Freeze gate check
@@ -61,9 +64,12 @@ export async function PATCH(
       const allowed = await canFreeze(context.event.id);
       if (!allowed) {
         const gaps = await getCriticalGapCount(context.event.id);
-        return NextResponse.json({
-          error: `Cannot freeze: ${gaps} critical gaps`
-        }, { status: 400 });
+        return NextResponse.json(
+          {
+            error: `Cannot freeze: ${gaps} critical gaps`,
+          },
+          { status: 400 }
+        );
       }
     }
 
@@ -83,7 +89,7 @@ export async function PATCH(
   const updated = await prisma.$transaction(async (tx) => {
     const event = await tx.event.update({
       where: { id: context.event.id },
-      data: updateData
+      data: updateData,
     });
 
     // Only log if status changed (not for guest count changes)
@@ -94,7 +100,7 @@ export async function PATCH(
         actionType: 'EVENT_STATUS_CHANGE',
         targetType: 'Event',
         targetId: context.event.id,
-        details: `Changed status from ${fromStatus} to ${status}`
+        details: `Changed status from ${fromStatus} to ${status}`,
       });
 
       // Log override in same transaction with reason
@@ -105,7 +111,7 @@ export async function PATCH(
           actionType: 'OVERRIDE_UNFREEZE',
           targetType: 'Event',
           targetId: context.event.id,
-          details: `Host unfroze event. Reason: ${unfreezeReason}`
+          details: `Host unfroze event. Reason: ${unfreezeReason}`,
         });
       }
     }

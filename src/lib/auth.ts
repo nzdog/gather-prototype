@@ -32,7 +32,7 @@ export async function resolveToken(token: string): Promise<AuthContext | null> {
       person: true,
       event: true,
       team: true,
-    }
+    },
   });
 
   if (!accessToken) {
@@ -40,7 +40,9 @@ export async function resolveToken(token: string): Promise<AuthContext | null> {
     return null;
   }
 
-  console.log(`[Auth] Token found - scope: ${accessToken.scope}, person: ${accessToken.person?.name || 'NULL'}, event: ${accessToken.event?.name || 'NULL'}`);
+  console.log(
+    `[Auth] Token found - scope: ${accessToken.scope}, person: ${accessToken.person?.name || 'NULL'}, event: ${accessToken.event?.name || 'NULL'}`
+  );
 
   // 2. Check expiration
   if (accessToken.expiresAt && accessToken.expiresAt < new Date()) {
@@ -60,7 +62,7 @@ export async function resolveToken(token: string): Promise<AuthContext | null> {
       where: {
         personId: accessToken.personId,
         eventId: accessToken.eventId,
-      }
+      },
     });
 
     if (!personEvent || personEvent.teamId !== accessToken.teamId) {

@@ -17,10 +17,7 @@ export async function POST(
     });
 
     if (!conflict) {
-      return NextResponse.json(
-        { error: 'Conflict not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Conflict not found' }, { status: 404 });
     }
 
     if (conflict.eventId !== eventId) {
@@ -43,9 +40,6 @@ export async function POST(
     return NextResponse.json({ conflict: updatedConflict });
   } catch (error) {
     console.error('Error resolving conflict:', error);
-    return NextResponse.json(
-      { error: 'Failed to resolve conflict' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to resolve conflict' }, { status: 500 });
   }
 }

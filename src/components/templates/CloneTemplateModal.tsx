@@ -24,10 +24,11 @@ export default function CloneTemplateModal({
   onClose,
   onClone,
   templateId,
-  hostId
+  hostId,
 }: CloneTemplateModalProps) {
   const [template, setTemplate] = useState<StructureTemplate | null>(null);
-  const [quantitiesProfile, setQuantitiesProfile] = useState<QuantitiesProfile | null>(null);
+  // TODO: QuantitiesProfile feature (Section 3.11 of build spec) - for quantity scaling across templates
+  const [_quantitiesProfile, _setQuantitiesProfile] = useState<QuantitiesProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [cloning, setCloning] = useState(false);
 
@@ -88,8 +89,8 @@ export default function CloneTemplateModal({
           endDate,
           guestCount: guestCount ? parseInt(guestCount) : null,
           applyQuantityScaling,
-          occasionType: template?.occasionType
-        })
+          occasionType: template?.occasionType,
+        }),
       });
 
       if (response.ok) {
@@ -160,9 +161,7 @@ export default function CloneTemplateModal({
         {/* Event Details Form */}
         <div className="space-y-4 mb-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Event Name *
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Event Name *</label>
             <input
               type="text"
               value={eventName}
@@ -173,9 +172,7 @@ export default function CloneTemplateModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Start Date *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Start Date *</label>
               <input
                 type="date"
                 value={startDate}
@@ -185,9 +182,7 @@ export default function CloneTemplateModal({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                End Date *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">End Date *</label>
               <input
                 type="date"
                 value={endDate}
@@ -223,8 +218,8 @@ export default function CloneTemplateModal({
                 <div className="text-sm">
                   <span className="font-medium">Apply quantity scaling</span>
                   <p className="text-gray-600 mt-1">
-                    Scale item quantities based on your guest count. This uses your saved
-                    quantity profiles if available. Quantities can be adjusted after creation.
+                    Scale item quantities based on your guest count. This uses your saved quantity
+                    profiles if available. Quantities can be adjusted after creation.
                   </p>
                 </div>
               </label>
@@ -239,9 +234,7 @@ export default function CloneTemplateModal({
             <li>{teamsData.length} teams with structure and scopes</li>
             <li>{totalItems} items tagged as source: TEMPLATE</li>
             <li>All items will be UNASSIGNED (ready for coordinator assignment)</li>
-            {applyQuantityScaling && (
-              <li>Quantities scaled for {guestCount} guests</li>
-            )}
+            {applyQuantityScaling && <li>Quantities scaled for {guestCount} guests</li>}
           </ul>
         </div>
 

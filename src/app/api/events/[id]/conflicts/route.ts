@@ -7,10 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ConflictStatus } from '@prisma/client';
 
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
     const { searchParams } = new URL(request.url);
@@ -22,10 +19,7 @@ export async function GET(
     });
 
     if (!event) {
-      return NextResponse.json(
-        { error: 'Event not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
     // Build status filter based on query param
@@ -59,16 +53,16 @@ export async function GET(
     const summary = {
       total: conflicts.length,
       byStatus: {
-        open: conflicts.filter(c => c.status === 'OPEN').length,
-        acknowledged: conflicts.filter(c => c.status === 'ACKNOWLEDGED').length,
-        resolved: conflicts.filter(c => c.status === 'RESOLVED').length,
-        dismissed: conflicts.filter(c => c.status === 'DISMISSED').length,
-        delegated: conflicts.filter(c => c.status === 'DELEGATED').length,
+        open: conflicts.filter((c) => c.status === 'OPEN').length,
+        acknowledged: conflicts.filter((c) => c.status === 'ACKNOWLEDGED').length,
+        resolved: conflicts.filter((c) => c.status === 'RESOLVED').length,
+        dismissed: conflicts.filter((c) => c.status === 'DISMISSED').length,
+        delegated: conflicts.filter((c) => c.status === 'DELEGATED').length,
       },
       bySeverity: {
-        critical: conflicts.filter(c => c.severity === 'CRITICAL').length,
-        significant: conflicts.filter(c => c.severity === 'SIGNIFICANT').length,
-        advisory: conflicts.filter(c => c.severity === 'ADVISORY').length,
+        critical: conflicts.filter((c) => c.severity === 'CRITICAL').length,
+        significant: conflicts.filter((c) => c.severity === 'SIGNIFICANT').length,
+        advisory: conflicts.filter((c) => c.severity === 'ADVISORY').length,
       },
     };
 
@@ -79,9 +73,6 @@ export async function GET(
     });
   } catch (error) {
     console.error('Error fetching conflicts:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch conflicts' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch conflicts' }, { status: 500 });
   }
 }

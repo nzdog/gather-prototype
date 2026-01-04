@@ -187,7 +187,7 @@ async function main() {
   } else {
     console.log('Creating person-event memberships...');
     let membershipCount = 0;
-    for (const [name, person] of personByName) {
+    for (const [_name, person] of personByName) {
       const team = teamByName.get(person.teamName);
       await prisma.personEvent.create({
         data: {
@@ -402,10 +402,6 @@ async function main() {
     for (const [teamName, team] of teamByName) {
       const coordinator = personByName.get(teamsData.find(t => t.name === teamName)!.coordinatorName);
       if (coordinator) {
-        const personEvent = await prisma.personEvent.findFirst({
-          where: { personId: coordinator.id, eventId: event.id }
-        });
-
         await prisma.accessToken.create({
           data: {
             token: generateToken(),
@@ -421,7 +417,7 @@ async function main() {
     }
 
     // PARTICIPANT tokens
-    for (const [name, person] of personByName) {
+    for (const [_name, person] of personByName) {
       if (person.role === 'PARTICIPANT') {
         await prisma.accessToken.create({
           data: {

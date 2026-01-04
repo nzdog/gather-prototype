@@ -4,10 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { createRevision } from '@/lib/workflow';
 import { regeneratePlan, RegenerationParams } from '@/lib/ai/generate';
 
-export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
     const body = await request.json();
@@ -112,7 +109,10 @@ export async function POST(
       })),
     };
 
-    console.log('[Regenerate] Calling AI with params:', JSON.stringify(regenerationParams, null, 2));
+    console.log(
+      '[Regenerate] Calling AI with params:',
+      JSON.stringify(regenerationParams, null, 2)
+    );
 
     // Generate new plan using Claude AI
     const aiResponse = await regeneratePlan(regenerationParams);
@@ -141,9 +141,7 @@ export async function POST(
       teamsCreated++;
 
       // Create items for this team
-      const teamItems = aiResponse.items.filter(
-        (item) => item.teamName === teamData.name
-      );
+      const teamItems = aiResponse.items.filter((item) => item.teamName === teamData.name);
 
       for (const itemData of teamItems) {
         // Determine quantity state and text

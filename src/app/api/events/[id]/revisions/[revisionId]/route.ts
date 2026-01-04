@@ -8,7 +8,7 @@ import { prisma } from '@/lib/prisma';
  * Get a specific revision snapshot with full details
  */
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   context: { params: Promise<{ id: string; revisionId: string }> }
 ) {
   try {
@@ -16,7 +16,7 @@ export async function GET(
 
     // Get the revision
     const revision = await prisma.planRevision.findUnique({
-      where: { id: revisionId }
+      where: { id: revisionId },
     });
 
     if (!revision) {
@@ -41,15 +41,15 @@ export async function GET(
         items: revision.items,
         days: revision.days,
         conflicts: revision.conflicts,
-        acknowledgements: revision.acknowledgements
-      }
+        acknowledgements: revision.acknowledgements,
+      },
     });
   } catch (error) {
     console.error('Error fetching revision:', error);
     return NextResponse.json(
       {
         error: 'Failed to fetch revision',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     );

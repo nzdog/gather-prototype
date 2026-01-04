@@ -2,7 +2,16 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { Calendar, MapPin, Check, Home, ChevronDown, ChevronRight, Maximize2, Minimize2 } from 'lucide-react';
+import {
+  Calendar,
+  MapPin,
+  Check,
+  Home,
+  ChevronDown,
+  ChevronRight,
+  Maximize2,
+  Minimize2,
+} from 'lucide-react';
 
 interface Assignment {
   id: string;
@@ -76,7 +85,9 @@ export default function ParticipantView() {
 
       // Only initialize collapsed state on first load
       if (isInitialLoad.current) {
-        const allAssignmentIds = new Set<string>(result.assignments.map((assignment: any) => assignment.id));
+        const allAssignmentIds = new Set<string>(
+          result.assignments.map((assignment: any) => assignment.id)
+        );
         setCollapsedAssignments(allAssignmentIds);
         isInitialLoad.current = false;
       }
@@ -114,7 +125,7 @@ export default function ParticipantView() {
   const toggleAllAssignments = () => {
     if (collapsedAssignments.size === 0) {
       // All expanded, collapse all
-      const allIds = new Set(data?.assignments.map(a => a.id) || []);
+      const allIds = new Set(data?.assignments.map((a) => a.id) || []);
       setCollapsedAssignments(allIds);
     } else {
       // Some or all collapsed, expand all
@@ -128,7 +139,7 @@ export default function ParticipantView() {
     const formatter = new Intl.DateTimeFormat('en-NZ', {
       month: 'short',
       day: 'numeric',
-      timeZone: 'Pacific/Auckland'
+      timeZone: 'Pacific/Auckland',
     });
     return `${formatter.format(start)}-${formatter.format(end).split(' ')[1]}`;
   };
@@ -165,7 +176,10 @@ export default function ParticipantView() {
     <div className="min-h-screen flex flex-col bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-5">
-        <a href="/" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 mb-3">
+        <a
+          href="/"
+          className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 mb-3"
+        >
           <Home className="size-4" />
           Back to Demo
         </a>
@@ -215,7 +229,10 @@ export default function ParticipantView() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
             {data.assignments.map((assignment) => (
-              <div key={assignment.id} className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+              <div
+                key={assignment.id}
+                className="bg-white rounded-xl p-6 shadow-sm border border-gray-200"
+              >
                 {/* Card Header - Always Visible */}
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1 min-w-0">
@@ -236,16 +253,24 @@ export default function ParticipantView() {
                     )}
 
                     {/* Dietary tags - Always Visible */}
-                    {(assignment.item.glutenFree || assignment.item.dairyFree || assignment.item.vegetarian) && (
+                    {(assignment.item.glutenFree ||
+                      assignment.item.dairyFree ||
+                      assignment.item.vegetarian) && (
                       <div className="flex gap-2">
                         {assignment.item.glutenFree && (
-                          <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">GF</span>
+                          <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                            GF
+                          </span>
                         )}
                         {assignment.item.dairyFree && (
-                          <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">DF</span>
+                          <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                            DF
+                          </span>
                         )}
                         {assignment.item.vegetarian && (
-                          <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">V</span>
+                          <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">
+                            V
+                          </span>
                         )}
                       </div>
                     )}
@@ -276,7 +301,10 @@ export default function ParticipantView() {
                             <Calendar className="size-5 text-gray-400" />
                             <span className="text-gray-900">
                               {assignment.item.day.name}
-                              {formatDropOff(assignment.item.dropOffAt, assignment.item.dropOffNote) &&
+                              {formatDropOff(
+                                assignment.item.dropOffAt,
+                                assignment.item.dropOffNote
+                              ) &&
                                 `, ${formatDropOff(assignment.item.dropOffAt, assignment.item.dropOffNote)}`}
                             </span>
                           </div>
@@ -313,7 +341,7 @@ export default function ParticipantView() {
                           Confirmed
                         </span>
                       ) : (
-                        "Please Confirm"
+                        'Please Confirm'
                       )}
                     </button>
                   </div>

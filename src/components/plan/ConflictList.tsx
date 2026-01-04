@@ -26,14 +26,11 @@ export default function ConflictList({
 
   const handleResolve = async (conflictId: string) => {
     try {
-      const response = await fetch(
-        `/api/events/${eventId}/conflicts/${conflictId}/resolve`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ resolvedBy: 'current-user-id' }), // TODO: Get actual user ID
-        }
-      );
+      const response = await fetch(`/api/events/${eventId}/conflicts/${conflictId}/resolve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resolvedBy: 'current-user-id' }), // TODO: Get actual user ID
+      });
 
       if (!response.ok) {
         throw new Error('Failed to resolve conflict');
@@ -48,12 +45,9 @@ export default function ConflictList({
 
   const handleDismiss = async (conflictId: string) => {
     try {
-      const response = await fetch(
-        `/api/events/${eventId}/conflicts/${conflictId}/dismiss`,
-        {
-          method: 'POST',
-        }
-      );
+      const response = await fetch(`/api/events/${eventId}/conflicts/${conflictId}/dismiss`, {
+        method: 'POST',
+      });
 
       if (!response.ok) {
         throw new Error('Failed to dismiss conflict');
@@ -68,12 +62,9 @@ export default function ConflictList({
 
   const handleDelegate = async (conflictId: string) => {
     try {
-      const response = await fetch(
-        `/api/events/${eventId}/conflicts/${conflictId}/delegate`,
-        {
-          method: 'POST',
-        }
-      );
+      const response = await fetch(`/api/events/${eventId}/conflicts/${conflictId}/delegate`, {
+        method: 'POST',
+      });
 
       if (!response.ok) {
         const data = await response.json();
@@ -144,9 +135,7 @@ export default function ConflictList({
       {/* Critical Conflicts */}
       {criticalConflicts.length > 0 && (
         <div>
-          <h2 className="text-xl font-bold text-red-900 mb-3 uppercase tracking-wide">
-            Critical
-          </h2>
+          <h2 className="text-xl font-bold text-red-900 mb-3 uppercase tracking-wide">Critical</h2>
           {criticalConflicts.map((conflict) => (
             <ConflictCard
               key={conflict.id}
@@ -182,9 +171,7 @@ export default function ConflictList({
       {/* Advisory Conflicts */}
       {advisoryConflicts.length > 0 && (
         <div>
-          <h2 className="text-xl font-bold text-blue-900 mb-3 uppercase tracking-wide">
-            Advisory
-          </h2>
+          <h2 className="text-xl font-bold text-blue-900 mb-3 uppercase tracking-wide">Advisory</h2>
           {advisoryConflicts.map((conflict) => (
             <ConflictCard
               key={conflict.id}

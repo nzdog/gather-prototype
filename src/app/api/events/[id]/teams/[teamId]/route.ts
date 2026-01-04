@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   context: { params: Promise<{ id: string; teamId: string }> }
 ) {
   try {
@@ -14,9 +14,9 @@ export async function DELETE(
       where: { id: teamId },
       include: {
         _count: {
-          select: { items: true }
-        }
-      }
+          select: { items: true },
+        },
+      },
     });
 
     if (!team) {
@@ -24,21 +24,18 @@ export async function DELETE(
     }
 
     if (team.eventId !== eventId) {
-      return NextResponse.json(
-        { error: 'Team does not belong to this event' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Team does not belong to this event' }, { status: 400 });
     }
 
     // Delete team (cascade will delete items)
     await prisma.team.delete({
-      where: { id: teamId }
+      where: { id: teamId },
     });
 
     return NextResponse.json({
       success: true,
       message: 'Team deleted',
-      itemsDeleted: team._count.items
+      itemsDeleted: team._count.items,
     });
   } catch (error) {
     console.error('Error deleting team:', error);

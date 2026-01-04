@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   context: { params: Promise<{ id: string; teamId: string }> }
 ) {
   try {
@@ -12,7 +12,7 @@ export async function GET(
 
     // Verify team exists and belongs to event
     const team = await prisma.team.findUnique({
-      where: { id: teamId }
+      where: { id: teamId },
     });
 
     if (!team) {
@@ -20,10 +20,7 @@ export async function GET(
     }
 
     if (team.eventId !== eventId) {
-      return NextResponse.json(
-        { error: 'Team does not belong to this event' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Team does not belong to this event' }, { status: 400 });
     }
 
     // Fetch items for this team
@@ -33,20 +30,17 @@ export async function GET(
         team: {
           select: {
             id: true,
-            name: true
-          }
+            name: true,
+          },
         },
         assignment: {
           include: {
-            person: true
-          }
+            person: true,
+          },
         },
-        day: true
+        day: true,
       },
-      orderBy: [
-        { critical: 'desc' },
-        { name: 'asc' }
-      ]
+      orderBy: [{ critical: 'desc' }, { name: 'asc' }],
     });
 
     return NextResponse.json({ items });
@@ -70,26 +64,16 @@ export async function POST(
     const { id: eventId, teamId } = await context.params;
     const body = await request.json();
 
-    const {
-      name,
-      description,
-      quantityAmount,
-      quantityUnit,
-      critical,
-      dietaryTags
-    } = body;
+    const { name, description, quantityAmount, quantityUnit, critical, dietaryTags } = body;
 
     if (!name) {
-      return NextResponse.json(
-        { error: 'name is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'name is required' }, { status: 400 });
     }
 
     // Verify team exists and belongs to event
     const team = await prisma.team.findUnique({
       where: { id: teamId },
-      include: { event: true }
+      include: { event: true },
     });
 
     if (!team) {
@@ -97,10 +81,7 @@ export async function POST(
     }
 
     if (team.eventId !== eventId) {
-      return NextResponse.json(
-        { error: 'Team does not belong to this event' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Team does not belong to this event' }, { status: 400 });
     }
 
     // Create item
@@ -111,7 +92,7 @@ export async function POST(
       criticalSource: critical ? 'HOST' : null,
       source: 'MANUAL',
       status: 'UNASSIGNED',
-      teamId
+      teamId,
     };
 
     // Add quantity if provided
@@ -137,10 +118,10 @@ export async function POST(
         team: {
           select: {
             id: true,
-            name: true
-          }
-        }
-      }
+            name: true,
+          },
+        },
+      },
     });
 
     return NextResponse.json({ item }, { status: 201 });

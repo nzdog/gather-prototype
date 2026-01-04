@@ -16,9 +16,7 @@ interface InputReference {
  * @param eventId - The event to check
  * @returns Array of conflicts that were reopened
  */
-export async function checkAndResetDismissedConflicts(
-  eventId: string
-): Promise<Conflict[]> {
+export async function checkAndResetDismissedConflicts(eventId: string): Promise<Conflict[]> {
   // Get all dismissed conflicts for this event
   const dismissedConflicts = await prisma.conflict.findMany({
     where: {
@@ -82,10 +80,7 @@ async function shouldResetDismissal(
 /**
  * Get the current value of an input reference
  */
-async function getCurrentValue(
-  eventId: string,
-  input: InputReference
-): Promise<any> {
+async function getCurrentValue(eventId: string, input: InputReference): Promise<any> {
   switch (input.type) {
     case 'event': {
       const event = await prisma.event.findUnique({
@@ -139,11 +134,7 @@ function getNestedValue(obj: any, path: string): any {
 /**
  * Format a human-readable reason for why a conflict was reopened
  */
-function formatChangeReason(
-  input: InputReference,
-  oldValue: any,
-  newValue: any
-): string {
+function formatChangeReason(input: InputReference, oldValue: any, newValue: any): string {
   const fieldName = input.field.split('.').pop() || input.field;
 
   // Format based on field type

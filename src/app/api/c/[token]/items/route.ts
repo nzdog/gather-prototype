@@ -13,10 +13,7 @@ import { canMutate, logAudit } from '@/lib/workflow';
  * - Check canMutate() before creating
  * - All operations in transaction
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { token: string } }
-) {
+export async function POST(request: NextRequest, { params }: { params: { token: string } }) {
   const context = await resolveToken(params.token);
 
   if (!context || context.scope !== 'COORDINATOR' || !context.team) {
@@ -25,9 +22,12 @@ export async function POST(
 
   // Check if mutations are allowed
   if (!canMutate(context.event.status, 'createItem')) {
-    return NextResponse.json({
-      error: `Cannot create items while event is ${context.event.status}`
-    }, { status: 403 });
+    return NextResponse.json(
+      {
+        error: `Cannot create items while event is ${context.event.status}`,
+      },
+      { status: 403 }
+    );
   }
 
   const body = await request.json();
@@ -55,7 +55,7 @@ export async function POST(
         teamId: context.team!.id, // FORCE from token, NEVER from client
         dayId: body.dayId || null,
         status: 'UNASSIGNED',
-      }
+      },
     });
 
     await logAudit(tx, {
@@ -64,7 +64,7 @@ export async function POST(
       actionType: 'CREATE_ITEM',
       targetType: 'Item',
       targetId: newItem.id,
-      details: `Created item: ${newItem.name}`
+      details: `Created item: ${newItem.name}`,
     });
 
     return newItem;

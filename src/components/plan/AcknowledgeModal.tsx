@@ -37,8 +37,12 @@ export default function AcknowledgeModal({
 
     // Validate impact statement references affected party or action
     const hasReference =
-      /guest|vegetarian|vegan|gluten|dairy|participant|coordinator|person|people/i.test(impactStatement) ||
-      /communicate|notify|inform|substitute|replace|reassign|provide|bring|cater|accept|gap|external/i.test(impactStatement);
+      /guest|vegetarian|vegan|gluten|dairy|participant|coordinator|person|people/i.test(
+        impactStatement
+      ) ||
+      /communicate|notify|inform|substitute|replace|reassign|provide|bring|cater|accept|gap|external/i.test(
+        impactStatement
+      );
 
     if (!hasReference) {
       newErrors.push('Impact statement must reference affected parties or mitigation action');
@@ -74,17 +78,10 @@ export default function AcknowledgeModal({
         <div className="p-6">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">
-                Acknowledge Critical Conflict
-              </h2>
-              <p className="text-sm text-gray-600 mt-1">
-                {conflict.title}
-              </p>
+              <h2 className="text-2xl font-bold text-gray-900">Acknowledge Critical Conflict</h2>
+              <p className="text-sm text-gray-600 mt-1">{conflict.title}</p>
             </div>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 text-2xl"
-            >
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl">
               ×
             </button>
           </div>

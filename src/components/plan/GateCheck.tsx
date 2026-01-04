@@ -7,6 +7,7 @@ import TransitionModal from './TransitionModal';
 interface GateCheckProps {
   eventId: string;
   onTransitionComplete?: () => void;
+  refreshTrigger?: number;
 }
 
 const blockStyles: Record<GateBlockCode, string> = {
@@ -33,7 +34,11 @@ const blockTitles: Record<GateBlockCode, string> = {
   UNSAVED_DRAFT_CHANGES: 'Unsaved Draft Changes',
 };
 
-export default function GateCheck({ eventId, onTransitionComplete }: GateCheckProps) {
+export default function GateCheck({
+  eventId,
+  onTransitionComplete,
+  refreshTrigger,
+}: GateCheckProps) {
   const [checking, setChecking] = useState(false);
   const [passed, setPassed] = useState<boolean | null>(null);
   const [blocks, setBlocks] = useState<GateBlock[]>([]);
@@ -65,7 +70,7 @@ export default function GateCheck({ eventId, onTransitionComplete }: GateCheckPr
 
   useEffect(() => {
     runGateCheck();
-  }, [eventId]);
+  }, [eventId, refreshTrigger]);
 
   const handleMoveToConfirming = () => {
     setShowModal(true);
@@ -135,16 +140,11 @@ export default function GateCheck({ eventId, onTransitionComplete }: GateCheckPr
           <div className="space-y-3 mt-4">
             <h3 className="font-semibold text-lg mb-2">Issues Blocking Transition:</h3>
             {blocks.map((block, index) => (
-              <div
-                key={index}
-                className={`rounded-lg border-2 p-4 ${blockStyles[block.code]}`}
-              >
+              <div key={index} className={`rounded-lg border-2 p-4 ${blockStyles[block.code]}`}>
                 <div className="flex items-start gap-2">
                   <span className="text-xl">{blockIcons[block.code]}</span>
                   <div className="flex-1">
-                    <h4 className="font-semibold mb-1">
-                      {blockTitles[block.code]}
-                    </h4>
+                    <h4 className="font-semibold mb-1">{blockTitles[block.code]}</h4>
                     <p className="text-sm mb-2">{block.reason}</p>
                     {block.resolution && (
                       <div className="bg-white bg-opacity-50 rounded p-2 text-sm">

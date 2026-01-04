@@ -9,17 +9,14 @@ import { createRevision } from '@/lib/workflow';
  * GET /api/events/[id]/revisions
  * List revisions for an event (last 5)
  */
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
 
     // Verify event exists
     const event = await prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, name: true }
+      select: { id: true, name: true },
     });
 
     if (!event) {
@@ -36,19 +33,19 @@ export async function GET(
         revisionNumber: true,
         createdAt: true,
         createdBy: true,
-        reason: true
-      }
+        reason: true,
+      },
     });
 
     return NextResponse.json({
-      revisions
+      revisions,
     });
   } catch (error) {
     console.error('Error fetching revisions:', error);
     return NextResponse.json(
       {
         error: 'Failed to fetch revisions',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     );
@@ -59,26 +56,20 @@ export async function GET(
  * POST /api/events/[id]/revisions
  * Create a manual revision snapshot
  */
-export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
     const body = await request.json();
     const { actorId, reason } = body;
 
     if (!actorId) {
-      return NextResponse.json(
-        { error: 'actorId is required in request body' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'actorId is required in request body' }, { status: 400 });
     }
 
     // Verify event exists
     const event = await prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, name: true }
+      select: { id: true, name: true },
     });
 
     if (!event) {
@@ -96,20 +87,20 @@ export async function POST(
         revisionNumber: true,
         createdAt: true,
         createdBy: true,
-        reason: true
-      }
+        reason: true,
+      },
     });
 
     return NextResponse.json({
       success: true,
-      revision
+      revision,
     });
   } catch (error) {
     console.error('Error creating revision:', error);
     return NextResponse.json(
       {
         error: 'Failed to create revision',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     );

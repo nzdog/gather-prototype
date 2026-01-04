@@ -3,7 +3,14 @@
  * Detects timing conflicts, dietary gaps, and coverage gaps
  */
 
-import { PrismaClient, Item, Event, Team, ConflictType, ConflictSeverity, ClaimType, ResolutionClass } from '@prisma/client';
+import {
+  PrismaClient,
+  Item,
+  ConflictType,
+  ConflictSeverity,
+  ClaimType,
+  ResolutionClass,
+} from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -99,10 +106,10 @@ async function detectPlaceholderConflicts(event: any): Promise<ConflictData[]> {
       resolutionClass: 'DECISION_REQUIRED',
       title: 'Critical Items Have Placeholder Quantities',
       description: `${criticalPlaceholders.length} critical item(s) have placeholder quantities that need to be specified or acknowledged before transitioning.`,
-      affectedItems: criticalPlaceholders.map(i => i.id),
+      affectedItems: criticalPlaceholders.map((i) => i.id),
       suggestion: {
         action: 'specify_quantities',
-        items: criticalPlaceholders.map(i => ({
+        items: criticalPlaceholders.map((i) => ({
           id: i.id,
           name: i.name,
           currentQuantity: i.quantityText,
@@ -128,7 +135,7 @@ async function detectTimingConflicts(event: any): Promise<ConflictData[]> {
   });
 
   // Filter items that have equipment needs
-  const ovenItems = allItems.filter(item => item.equipmentNeeds !== null);
+  const ovenItems = allItems.filter((item) => item.equipmentNeeds !== null);
 
   // Group by time slot and check oven capacity
   const ovenCapacity = event.venueOvenCount || 1;
@@ -156,7 +163,7 @@ async function detectTimingConflicts(event: any): Promise<ConflictData[]> {
         resolutionClass: 'FIX_IN_PLAN',
         title: 'Oven Capacity Exceeded',
         description: `${items.length} items need the oven at ${timeSlot}, but only ${ovenCapacity} oven(s) available.`,
-        affectedItems: items.map(i => i.id),
+        affectedItems: items.map((i) => i.id),
         equipment: 'oven',
         timeSlot,
         capacityAvailable: ovenCapacity,
@@ -279,8 +286,8 @@ async function detectCoverageGaps(event: any): Promise<ConflictData[]> {
       select: { domain: true },
     });
 
-    const presentDomains = new Set(teams.map(t => t.domain).filter(Boolean) as string[]);
-    const missing = expected.filter(d => !presentDomains.has(d));
+    const presentDomains = new Set(teams.map((t) => t.domain).filter(Boolean) as string[]);
+    const missing = expected.filter((d) => !presentDomains.has(d));
 
     if (missing.length > 0) {
       conflicts.push({
@@ -295,7 +302,7 @@ async function detectCoverageGaps(event: any): Promise<ConflictData[]> {
         suggestion: {
           action: 'add_teams',
           missingDomains: missing,
-          recommendations: missing.map(domain => ({
+          recommendations: missing.map((domain) => ({
             domain,
             teamName: `${domain.charAt(0) + domain.slice(1).toLowerCase()}`,
           })),

@@ -59,7 +59,7 @@ RULES (from Plan AI Protocol):
 1. You produce DRAFTS only - the host decides what to accept
 2. Be transparent - explain your reasoning
 3. Respect the modifier - apply the requested changes
-4. Preserve protected items - they will be provided as context, DO NOT remove them
+4. Preserve protected items and teams - they will be provided as context, DO NOT remove or duplicate them
 5. Be proportionate - only say "must" for calculated requirements
 
 QUANTITY LABELS:
@@ -69,10 +69,12 @@ QUANTITY LABELS:
 
 You will receive:
 - Original event parameters (occasion, guests, dietary needs, venue)
-- Current protected items (items the host wants to keep)
+- Current protected teams (teams manually added by the host - DO NOT duplicate these)
+- Current protected items (items the host wants to keep - DO NOT include these in your output)
 - A modifier instruction (e.g., "more vegetarian options", "add breakfast items")
 
-Apply the modifier while respecting the event constraints and protected items.
+Apply the modifier while respecting the event constraints, protected teams, and protected items.
+Generate NEW teams and items only - the protected ones already exist.
 
 OUTPUT FORMAT:
 Return ONLY valid JSON matching this exact structure:
@@ -205,6 +207,10 @@ export function buildRegenerationPrompt(params: {
     team: string;
     quantity: string;
   }>;
+  protectedTeams?: Array<{
+    name: string;
+    scope: string;
+  }>;
 }): string {
   let prompt = `Regenerate the plan for a ${params.occasion} gathering with the following modification:
 
@@ -227,15 +233,23 @@ ${params.venue.ovenCount ? `- Ovens: ${params.venue.ovenCount}` : ''}
 ${params.venue.bbqAvailable ? `- BBQ: Available` : ''}
 `;
 
+  if (params.protectedTeams && params.protectedTeams.length > 0) {
+    prompt += `\nPROTECTED TEAMS (already exist - DO NOT duplicate):
+${params.protectedTeams.map((team) => `- ${team.name}: ${team.scope}`).join('\n')}
+`;
+  }
+
   if (params.protectedItems && params.protectedItems.length > 0) {
-    prompt += `\nPROTECTED ITEMS (DO NOT REMOVE):
-${params.protectedItems.map(item => `- ${item.name} (${item.team}) - ${item.quantity}`).join('\n')}
+    prompt += `\nPROTECTED ITEMS (already exist - DO NOT include in output):
+${params.protectedItems.map((item) => `- ${item.name} (${item.team}) - ${item.quantity}`).join('\n')}
 `;
   }
 
   prompt += `\nApply the modifier while:
 - Respecting the event constraints
-- NOT removing protected items (if any)
+- NOT duplicating protected teams (they already exist)
+- NOT including protected items in your output (they already exist)
+- Generating NEW teams and items based on the modifier
 - Labeling quantities appropriately
 - Explaining your reasoning`;
 

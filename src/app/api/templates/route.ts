@@ -17,11 +17,11 @@ export async function GET(request: NextRequest) {
   const templates = await prisma.structureTemplate.findMany({
     where: {
       hostId,
-      templateSource: 'HOST'
+      templateSource: 'HOST',
     },
     orderBy: {
-      createdAt: 'desc'
-    }
+      createdAt: 'desc',
+    },
   });
 
   return NextResponse.json({ templates });
@@ -47,11 +47,11 @@ export async function POST(request: NextRequest) {
     include: {
       teams: {
         include: {
-          items: true
-        }
+          items: true,
+        },
       },
-      days: true
-    }
+      days: true,
+    },
   });
 
   if (!event) {
@@ -63,12 +63,12 @@ export async function POST(request: NextRequest) {
   }
 
   // Extract structure template data (names, scopes, domains - NO dates, assignments, quantities)
-  const teamsData = event.teams.map(team => ({
+  const teamsData = event.teams.map((team) => ({
     name: team.name,
     scope: team.scope,
     domain: team.domain,
     displayOrder: team.displayOrder,
-    items: team.items.map(item => ({
+    items: team.items.map((item) => ({
       name: item.name,
       description: item.description,
       dietaryTags: item.dietaryTags,
@@ -76,10 +76,10 @@ export async function POST(request: NextRequest) {
       critical: item.critical,
       criticalReason: item.criticalReason,
       // Do NOT include: quantity, assignments, acknowledgements
-    }))
+    })),
   }));
 
-  const daysData = event.days.map(day => ({
+  const daysData = event.days.map((day) => ({
     name: day.name,
     // Do NOT include: date (that's event-specific)
   }));
@@ -94,18 +94,21 @@ export async function POST(request: NextRequest) {
       teams: teamsData,
       items: [], // Items are nested in teams
       days: daysData,
-      createdFrom: eventId
-    }
+      createdFrom: eventId,
+    },
   });
 
   // Optionally create QuantitiesProfile if guestCountConfidence is HIGH or MEDIUM
   let quantitiesProfile = null;
-  if (event.guestCount && (event.guestCountConfidence === 'HIGH' || event.guestCountConfidence === 'MEDIUM')) {
+  if (
+    event.guestCount &&
+    (event.guestCountConfidence === 'HIGH' || event.guestCountConfidence === 'MEDIUM')
+  ) {
     // Extract quantity ratios
-    const allItems = event.teams.flatMap(t => t.items);
+    const allItems = event.teams.flatMap((t) => t.items);
     const itemQuantities = allItems
-      .filter(item => item.quantityAmount !== null)
-      .map(item => ({
+      .filter((item) => item.quantityAmount !== null)
+      .map((item) => ({
         itemName: item.name,
         quantity: item.quantityAmount,
         unit: item.quantityUnit,
@@ -125,14 +128,14 @@ export async function POST(request: NextRequest) {
         derivedFrom: { eventId, guestCount: event.guestCount },
         ratios,
         itemQuantities,
-        overrides: {}
-      }
+        overrides: {},
+      },
     });
   }
 
   return NextResponse.json({
     template,
     quantitiesProfile,
-    message: 'Template created successfully'
+    message: 'Template created successfully',
   });
 }

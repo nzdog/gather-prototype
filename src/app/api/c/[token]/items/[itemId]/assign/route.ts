@@ -28,7 +28,7 @@ export async function POST(
   // Verify item ownership
   const item = await prisma.item.findUnique({
     where: { id: params.itemId },
-    include: { assignment: true }
+    include: { assignment: true },
   });
 
   if (!item || item.teamId !== context.team.id) {
@@ -37,9 +37,12 @@ export async function POST(
 
   // Check if mutations are allowed
   if (!canMutate(context.event.status, 'assignItem')) {
-    return NextResponse.json({
-      error: `Cannot assign items while event is ${context.event.status}`
-    }, { status: 403 });
+    return NextResponse.json(
+      {
+        error: `Cannot assign items while event is ${context.event.status}`,
+      },
+      { status: 403 }
+    );
   }
 
   const body = await request.json();
@@ -52,14 +55,17 @@ export async function POST(
   const personEvent = await prisma.personEvent.findFirst({
     where: {
       personId: body.personId,
-      eventId: context.event.id
-    }
+      eventId: context.event.id,
+    },
   });
 
   if (!personEvent || personEvent.teamId !== context.team.id) {
-    return NextResponse.json({
-      error: 'Person must be in the same team as the item'
-    }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: 'Person must be in the same team as the item',
+      },
+      { status: 400 }
+    );
   }
 
   // Assign/reassign in transaction
@@ -70,7 +76,7 @@ export async function POST(
     // Delete existing assignment if present
     if (item.assignment) {
       await tx.assignment.delete({
-        where: { id: item.assignment.id }
+        where: { id: item.assignment.id },
       });
     }
 
@@ -81,15 +87,15 @@ export async function POST(
         personId: body.personId,
       },
       include: {
-        person: true
-      }
+        person: true,
+      },
     });
 
     // Clear notes if it contains "UNASSIGNED" message from seed data
     if (item.notes && item.notes.includes('UNASSIGNED')) {
       await tx.item.update({
         where: { id: params.itemId },
-        data: { notes: null }
+        data: { notes: null },
       });
     }
 
@@ -102,7 +108,7 @@ export async function POST(
       actionType,
       targetType: 'Item',
       targetId: params.itemId,
-      details: `${isReassignment ? 'Reassigned' : 'Assigned'} ${item.name} to ${assignment.person.name}`
+      details: `${isReassignment ? 'Reassigned' : 'Assigned'} ${item.name} to ${assignment.person.name}`,
     });
 
     return assignment;
@@ -122,7 +128,7 @@ export async function POST(
  * - Log UNASSIGN_ITEM
  */
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: { token: string; itemId: string } }
 ) {
   const context = await resolveToken(params.token);
@@ -137,10 +143,10 @@ export async function DELETE(
     include: {
       assignment: {
         include: {
-          person: true
-        }
-      }
-    }
+          person: true,
+        },
+      },
+    },
   });
 
   if (!item || item.teamId !== context.team.id) {
@@ -153,15 +159,18 @@ export async function DELETE(
 
   // Check if mutations are allowed
   if (!canMutate(context.event.status, 'assignItem')) {
-    return NextResponse.json({
-      error: `Cannot unassign items while event is ${context.event.status}`
-    }, { status: 403 });
+    return NextResponse.json(
+      {
+        error: `Cannot unassign items while event is ${context.event.status}`,
+      },
+      { status: 403 }
+    );
   }
 
   // Delete assignment in transaction
   await prisma.$transaction(async (tx) => {
     await tx.assignment.delete({
-      where: { id: item.assignment!.id }
+      where: { id: item.assignment!.id },
     });
 
     // Repair item status after assignment deletion
@@ -173,7 +182,7 @@ export async function DELETE(
       actionType: 'UNASSIGN_ITEM',
       targetType: 'Item',
       targetId: params.itemId,
-      details: `Unassigned ${item.name} from ${item.assignment!.person.name}`
+      details: `Unassigned ${item.name} from ${item.assignment!.person.name}`,
     });
   });
 

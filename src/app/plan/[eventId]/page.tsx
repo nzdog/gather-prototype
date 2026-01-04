@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ChevronDown, ChevronRight, Plus, AlertCircle, Save } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, Save, Loader2 } from 'lucide-react';
 import ConflictList from '@/components/plan/ConflictList';
 import GateCheck from '@/components/plan/GateCheck';
 import SaveTemplateModal from '@/components/templates/SaveTemplateModal';
@@ -10,6 +10,7 @@ import AddTeamModal, { TeamFormData } from '@/components/plan/AddTeamModal';
 import AddItemModal, { ItemFormData } from '@/components/plan/AddItemModal';
 import EditItemModal from '@/components/plan/EditItemModal';
 import RevisionHistory from '@/components/plan/RevisionHistory';
+import RegenerateModal from '@/components/plan/RegenerateModal';
 import { Conflict } from '@prisma/client';
 
 interface Event {
@@ -96,9 +97,12 @@ export default function PlanEditorPage() {
   const [teamItems, setTeamItems] = useState<Record<string, Item[]>>({});
   const [loadingTeamItems, setLoadingTeamItems] = useState<Set<string>>(new Set());
   const [editingItem, setEditingItem] = useState<Item | null>(null);
-  const [editItemName, setEditItemName] = useState('');
-  const [editItemDescription, setEditItemDescription] = useState('');
-  const [editItemCritical, setEditItemCritical] = useState(false);
+  const [gateCheckRefresh, setGateCheckRefresh] = useState(0);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [regenerateModalOpen, setRegenerateModalOpen] = useState(false);
+  const [manualTeamCount, setManualTeamCount] = useState(0);
+  const [manualItemCount, setManualItemCount] = useState(0);
 
   // Mock hostId - in production, this would come from auth
   const MOCK_HOST_ID = 'cmjwbjrpw0000n99xs11r44qh';
@@ -177,20 +181,26 @@ export default function PlanEditorPage() {
   };
 
   const handleGeneratePlan = async () => {
+    setIsGenerating(true);
     try {
       const response = await fetch(`/api/events/${eventId}/generate`, {
         method: 'POST',
       });
       if (!response.ok) throw new Error('Failed to generate plan');
 
-      // Reload teams and items after generation
+      // After success, refresh all data
+      await loadEvent();
       await loadTeams();
       await loadItems();
+      await loadConflicts();
+      setGateCheckRefresh((prev) => prev + 1);
 
       alert('Plan generated! Demo team and items created.');
     } catch (err: any) {
       console.error('Error generating plan:', err);
       alert('Failed to generate plan');
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -201,13 +211,80 @@ export default function PlanEditorPage() {
       });
       if (!response.ok) throw new Error('Failed to check plan');
 
-      // Reload conflicts after check
+      // After success, refresh all data
+      await loadEvent();
+      await loadTeams();
+      await loadItems();
       await loadConflicts();
+      setGateCheckRefresh((prev) => prev + 1);
 
       alert('Plan check complete! See conflicts below.');
     } catch (err: any) {
       console.error('Error checking plan:', err);
       alert('Failed to check plan');
+    }
+  };
+
+  const handleRegeneratePlan = async () => {
+    // Check for manual/protected teams and items
+    try {
+      // Fetch all teams to check for manual ones
+      const teamsResponse = await fetch(`/api/events/${eventId}/teams`);
+      if (teamsResponse.ok) {
+        const teamsData = await teamsResponse.json();
+        const manualTeams = (teamsData.teams || []).filter((team: any) => team.source === 'MANUAL');
+        setManualTeamCount(manualTeams.length);
+      }
+
+      // Fetch all items to check for manual/protected ones
+      const itemsResponse = await fetch(`/api/events/${eventId}/items`);
+      if (itemsResponse.ok) {
+        const itemsData = await itemsResponse.json();
+        const manualItems = (itemsData.items || []).filter(
+          (item: any) => item.source === 'MANUAL' || item.isProtected === true
+        );
+        setManualItemCount(manualItems.length);
+      }
+
+      // Open the modal
+      setRegenerateModalOpen(true);
+    } catch (err: any) {
+      console.error('Error checking for manual items:', err);
+      // Fallback to simple confirmation
+      if (confirm('Regenerate plan? This will replace existing teams and items.')) {
+        executeRegenerate({ preserveProtected: false, modifier: '' });
+      }
+    }
+  };
+
+  const executeRegenerate = async (options: { preserveProtected: boolean; modifier: string }) => {
+    setRegenerateModalOpen(false);
+    setIsRegenerating(true);
+
+    try {
+      const response = await fetch(`/api/events/${eventId}/regenerate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          preserveProtected: options.preserveProtected,
+          modifier: options.modifier || undefined,
+        }),
+      });
+      if (!response.ok) throw new Error('Failed to regenerate plan');
+
+      // After success, refresh all data
+      await loadEvent();
+      await loadTeams();
+      await loadItems();
+      await loadConflicts();
+      setGateCheckRefresh((prev) => prev + 1);
+
+      alert('Plan regenerated successfully!');
+    } catch (err: any) {
+      console.error('Error regenerating plan:', err);
+      alert('Failed to regenerate plan');
+    } finally {
+      setIsRegenerating(false);
     }
   };
 
@@ -277,7 +354,6 @@ export default function PlanEditorPage() {
     setEditQuantityUnit('SERVINGS');
   };
 
-
   const handleSaveAsTemplate = async (templateName: string) => {
     try {
       const response = await fetch('/api/templates', {
@@ -286,15 +362,15 @@ export default function PlanEditorPage() {
         body: JSON.stringify({
           hostId: MOCK_HOST_ID,
           eventId: event?.id,
-          name: templateName
-        })
+          name: templateName,
+        }),
       });
 
       if (!response.ok) {
         throw new Error('Failed to save template');
       }
 
-      const data = await response.json();
+      await response.json();
       alert(`Template "${templateName}" saved successfully!`);
 
       // Optionally redirect to templates page
@@ -312,16 +388,17 @@ export default function PlanEditorPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...teamData,
-          coordinatorId: MOCK_HOST_ID // Host is initial coordinator
-        })
+          coordinatorId: MOCK_HOST_ID, // Host is initial coordinator
+        }),
       });
 
       if (!response.ok) {
         throw new Error('Failed to add team');
       }
 
-      // Reload teams
+      // Reload teams and refresh gate check
       await loadTeams();
+      setGateCheckRefresh((prev) => prev + 1);
     } catch (error: any) {
       console.error('Error adding team:', error);
       alert('Failed to add team');
@@ -336,16 +413,17 @@ export default function PlanEditorPage() {
       const response = await fetch(`/api/events/${eventId}/teams/${selectedTeamForItem.id}/items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(itemData)
+        body: JSON.stringify(itemData),
       });
 
       if (!response.ok) {
         throw new Error('Failed to add item');
       }
 
-      // Reload teams and team items
+      // Reload teams and team items, refresh gate check
       await loadTeams();
       await loadTeamItems(selectedTeamForItem.id);
+      setGateCheckRefresh((prev) => prev + 1);
     } catch (error: any) {
       console.error('Error adding item:', error);
       alert('Failed to add item');
@@ -354,17 +432,17 @@ export default function PlanEditorPage() {
   };
 
   const loadTeamItems = async (teamId: string) => {
-    setLoadingTeamItems(prev => new Set(prev).add(teamId));
+    setLoadingTeamItems((prev) => new Set(prev).add(teamId));
     try {
       const response = await fetch(`/api/events/${eventId}/teams/${teamId}/items`);
       if (!response.ok) throw new Error('Failed to load team items');
 
       const data = await response.json();
-      setTeamItems(prev => ({ ...prev, [teamId]: data.items }));
+      setTeamItems((prev) => ({ ...prev, [teamId]: data.items }));
     } catch (error: any) {
       console.error('Error loading team items:', error);
     } finally {
-      setLoadingTeamItems(prev => {
+      setLoadingTeamItems((prev) => {
         const newSet = new Set(prev);
         newSet.delete(teamId);
         return newSet;
@@ -388,9 +466,6 @@ export default function PlanEditorPage() {
 
   const handleStartEditItem = (item: Item) => {
     setEditingItem(item);
-    setEditItemName(item.name);
-    setEditItemDescription(item.description || '');
-    setEditItemCritical(item.critical);
   };
 
   const handleSaveEditItem = async (itemId: string, data: any) => {
@@ -399,7 +474,7 @@ export default function PlanEditorPage() {
       const response = await fetch(`/api/events/${eventId}/items/${itemId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
       });
 
       if (!response.ok) throw new Error('Failed to update item');
@@ -420,14 +495,15 @@ export default function PlanEditorPage() {
 
     try {
       const response = await fetch(`/api/events/${eventId}/items/${item.id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
       });
 
       if (!response.ok) throw new Error('Failed to delete item');
 
-      // Reload team items and teams
+      // Reload team items and teams, refresh gate check
       await loadTeamItems(item.team.id);
       await loadTeams();
+      setGateCheckRefresh((prev) => prev + 1);
     } catch (error: any) {
       console.error('Error deleting item:', error);
       alert('Failed to delete item');
@@ -436,15 +512,16 @@ export default function PlanEditorPage() {
 
   const handleDeleteTeam = async (team: Team) => {
     const itemCount = team._count.items;
-    const message = itemCount > 0
-      ? `Delete "${team.name}" and its ${itemCount} item(s)? This cannot be undone.`
-      : `Delete "${team.name}"? This cannot be undone.`;
+    const message =
+      itemCount > 0
+        ? `Delete "${team.name}" and its ${itemCount} item(s)? This cannot be undone.`
+        : `Delete "${team.name}"? This cannot be undone.`;
 
     if (!confirm(message)) return;
 
     try {
       const response = await fetch(`/api/events/${eventId}/teams/${team.id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
       });
 
       if (!response.ok) throw new Error('Failed to delete team');
@@ -459,8 +536,9 @@ export default function PlanEditorPage() {
       delete newTeamItems[team.id];
       setTeamItems(newTeamItems);
 
-      // Reload teams
+      // Reload teams and refresh gate check
       await loadTeams();
+      setGateCheckRefresh((prev) => prev + 1);
     } catch (error: any) {
       console.error('Error deleting team:', error);
       alert('Failed to delete team');
@@ -501,9 +579,7 @@ export default function PlanEditorPage() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">{event.name}</h1>
               <div className="mt-2 flex items-center gap-4 text-sm text-gray-600">
-                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded">
-                  {event.status}
-                </span>
+                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded">{event.status}</span>
                 <span>{event.occasionType}</span>
                 {event.guestCount && <span>{event.guestCount} guests</span>}
               </div>
@@ -518,9 +594,37 @@ export default function PlanEditorPage() {
               {event.status === 'DRAFT' && teams.length === 0 && (
                 <button
                   onClick={handleGeneratePlan}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                  disabled={isGenerating}
+                  className={`px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2 ${
+                    isGenerating ? 'opacity-75 cursor-not-allowed' : ''
+                  }`}
                 >
-                  Generate Plan
+                  {isGenerating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Generating with AI...
+                    </>
+                  ) : (
+                    'Generate Plan'
+                  )}
+                </button>
+              )}
+              {event.status === 'DRAFT' && teams.length > 0 && (
+                <button
+                  onClick={handleRegeneratePlan}
+                  disabled={isRegenerating}
+                  className={`px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2 ${
+                    isRegenerating ? 'opacity-75 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {isRegenerating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Regenerating with AI...
+                    </>
+                  ) : (
+                    'Regenerate Plan'
+                  )}
                 </button>
               )}
               <button
@@ -529,7 +633,9 @@ export default function PlanEditorPage() {
               >
                 Check Plan
               </button>
-              {(event.status === 'CONFIRMING' || event.status === 'FROZEN' || event.status === 'COMPLETE') && (
+              {(event.status === 'CONFIRMING' ||
+                event.status === 'FROZEN' ||
+                event.status === 'COMPLETE') && (
                 <button
                   onClick={() => setSaveTemplateModalOpen(true)}
                   className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 flex items-center gap-2"
@@ -547,11 +653,25 @@ export default function PlanEditorPage() {
         <div className="grid grid-cols-12 gap-8">
           {/* Main Content */}
           <div className="col-span-8">
+            {/* AI Generation Loading Banner */}
+            {(isGenerating || isRegenerating) && (
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="w-5 h-5 text-blue-600 animate-spin flex-shrink-0" />
+                  <div>
+                    <p className="text-blue-900 font-medium">
+                      🤖 Claude is {isGenerating ? 'creating' : 'adjusting'} your plan...
+                    </p>
+                    <p className="text-blue-700 text-sm mt-1">
+                      This usually takes 15-20 seconds. Please wait.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             {/* Conflicts */}
             <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                Plan Assessment
-              </h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Plan Assessment</h2>
               <ConflictList
                 eventId={eventId}
                 conflicts={conflicts}
@@ -562,9 +682,7 @@ export default function PlanEditorPage() {
             {/* Items with Placeholder Quantities */}
             {items.length > 0 && (
               <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                  Items & Quantities
-                </h2>
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Items & Quantities</h2>
                 <div className="space-y-3">
                   {items.map((item) => {
                     const needsAction =
@@ -576,31 +694,23 @@ export default function PlanEditorPage() {
                       <div
                         key={item.id}
                         className={`border rounded-lg p-4 ${
-                          needsAction
-                            ? 'border-orange-300 bg-orange-50'
-                            : 'border-gray-200'
+                          needsAction ? 'border-orange-300 bg-orange-50' : 'border-gray-200'
                         }`}
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
-                              <h3 className="font-medium text-gray-900">
-                                {item.name}
-                              </h3>
+                              <h3 className="font-medium text-gray-900">{item.name}</h3>
                               {item.critical && (
                                 <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded">
                                   CRITICAL
                                 </span>
                               )}
-                              <span className="text-sm text-gray-500">
-                                {item.team.name}
-                              </span>
+                              <span className="text-sm text-gray-500">{item.team.name}</span>
                             </div>
 
                             {item.description && (
-                              <p className="text-sm text-gray-600 mb-2">
-                                {item.description}
-                              </p>
+                              <p className="text-sm text-gray-600 mb-2">{item.description}</p>
                             )}
 
                             {/* Quantity Display/Edit */}
@@ -609,17 +719,13 @@ export default function PlanEditorPage() {
                                 <input
                                   type="number"
                                   value={editQuantityAmount}
-                                  onChange={(e) =>
-                                    setEditQuantityAmount(e.target.value)
-                                  }
+                                  onChange={(e) => setEditQuantityAmount(e.target.value)}
                                   placeholder="Amount"
                                   className="w-24 px-3 py-1 border border-gray-300 rounded-md text-sm"
                                 />
                                 <select
                                   value={editQuantityUnit}
-                                  onChange={(e) =>
-                                    setEditQuantityUnit(e.target.value)
-                                  }
+                                  onChange={(e) => setEditQuantityUnit(e.target.value)}
                                   className="px-3 py-1 border border-gray-300 rounded-md text-sm"
                                 >
                                   <option value="SERVINGS">Servings</option>
@@ -659,8 +765,7 @@ export default function PlanEditorPage() {
                                 )}
                                 {item.placeholderAcknowledged && (
                                   <span className="ml-2 text-gray-500">
-                                    (Deferred to{' '}
-                                    {item.quantityDeferredTo?.toLowerCase()})
+                                    (Deferred to {item.quantityDeferredTo?.toLowerCase()})
                                   </span>
                                 )}
                               </div>
@@ -697,6 +802,7 @@ export default function PlanEditorPage() {
               <div className="mb-6">
                 <GateCheck
                   eventId={eventId}
+                  refreshTrigger={gateCheckRefresh}
                   onTransitionComplete={() => {
                     // Reload event data after successful transition
                     loadEvent();
@@ -709,10 +815,7 @@ export default function PlanEditorPage() {
 
             {/* Revision History */}
             <div className="mb-6">
-              <RevisionHistory
-                eventId={eventId}
-                actorId={MOCK_HOST_ID}
-              />
+              <RevisionHistory eventId={eventId} actorId={MOCK_HOST_ID} />
             </div>
 
             {/* Teams */}
@@ -747,9 +850,7 @@ export default function PlanEditorPage() {
                             <ChevronRight className="w-5 h-5 text-gray-400" />
                           )}
                           <div className="text-left">
-                            <h3 className="font-medium text-gray-900">
-                              {team.name}
-                            </h3>
+                            <h3 className="font-medium text-gray-900">{team.name}</h3>
                             <p className="text-sm text-gray-600">
                               {team.coordinator.name} • {team._count.items} items
                             </p>
@@ -787,7 +888,10 @@ export default function PlanEditorPage() {
                           ) : teamItems[team.id] && teamItems[team.id].length > 0 ? (
                             <div className="space-y-2">
                               {teamItems[team.id].map((item: any) => (
-                                <div key={item.id} className="bg-white border border-gray-200 rounded-md p-3">
+                                <div
+                                  key={item.id}
+                                  className="bg-white border border-gray-200 rounded-md p-3"
+                                >
                                   <div className="flex items-start justify-between">
                                     <div className="flex-1">
                                       <div className="flex items-center gap-2">
@@ -800,14 +904,17 @@ export default function PlanEditorPage() {
                                       </div>
 
                                       {item.description && (
-                                        <p className="text-sm text-gray-600 mt-1">{item.description}</p>
+                                        <p className="text-sm text-gray-600 mt-1">
+                                          {item.description}
+                                        </p>
                                       )}
 
                                       {/* Quantity Display */}
                                       <div className="text-sm mt-2">
                                         {item.quantityState === 'SPECIFIED' ? (
                                           <span className="text-gray-700">
-                                            Quantity: {item.quantityAmount} {item.quantityUnit?.toLowerCase()}
+                                            Quantity: {item.quantityAmount}{' '}
+                                            {item.quantityUnit?.toLowerCase()}
                                           </span>
                                         ) : (
                                           <span className="text-orange-600">
@@ -867,9 +974,7 @@ export default function PlanEditorPage() {
           {/* Sidebar */}
           <div className="col-span-4">
             <div className="bg-white rounded-lg shadow-md p-6 sticky top-8">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                Event Details
-              </h2>
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Event Details</h2>
 
               <dl className="space-y-3 text-sm">
                 <div>
@@ -879,9 +984,7 @@ export default function PlanEditorPage() {
 
                 <div>
                   <dt className="text-gray-600">Occasion</dt>
-                  <dd className="font-medium text-gray-900">
-                    {event.occasionType}
-                  </dd>
+                  <dd className="font-medium text-gray-900">{event.occasionType}</dd>
                 </div>
 
                 <div>
@@ -895,9 +998,7 @@ export default function PlanEditorPage() {
                 {event.guestCount && (
                   <div>
                     <dt className="text-gray-600">Guest Count</dt>
-                    <dd className="font-medium text-gray-900">
-                      {event.guestCount}
-                    </dd>
+                    <dd className="font-medium text-gray-900">{event.guestCount}</dd>
                   </div>
                 )}
 
@@ -968,6 +1069,15 @@ export default function PlanEditorPage() {
         onSave={handleSaveEditItem}
         item={editingItem}
         days={days}
+      />
+
+      {/* Regenerate Modal */}
+      <RegenerateModal
+        isOpen={regenerateModalOpen}
+        onClose={() => setRegenerateModalOpen(false)}
+        onRegenerate={executeRegenerate}
+        manualTeamCount={manualTeamCount}
+        manualItemCount={manualItemCount}
       />
     </div>
   );

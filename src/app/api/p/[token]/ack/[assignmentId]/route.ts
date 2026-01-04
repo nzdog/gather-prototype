@@ -14,7 +14,7 @@ import { logAudit } from '@/lib/workflow';
  * - Second call returns success but logs nothing
  */
 export async function POST(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: { token: string; assignmentId: string } }
 ) {
   const context = await resolveToken(params.token);
@@ -26,7 +26,7 @@ export async function POST(
   // Idempotent ACK: check and update inside transaction to avoid race conditions
   const result = await prisma.$transaction(async (tx) => {
     const assignment = await tx.assignment.findUnique({
-      where: { id: params.assignmentId }
+      where: { id: params.assignmentId },
     });
 
     // Verify assignment exists and belongs to this participant
@@ -42,7 +42,7 @@ export async function POST(
     // Update and log
     await tx.assignment.update({
       where: { id: params.assignmentId },
-      data: { acknowledged: true }
+      data: { acknowledged: true },
     });
 
     await logAudit(tx, {
@@ -51,7 +51,7 @@ export async function POST(
       actionType: 'ACK_ASSIGNMENT',
       targetType: 'Assignment',
       targetId: params.assignmentId,
-      details: `Acknowledged assignment for item ${assignment.itemId}`
+      details: `Acknowledged assignment for item ${assignment.itemId}`,
     });
 
     return { found: true, alreadyAcked: false };

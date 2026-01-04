@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Calendar, Users, MapPin, UtensilsCrossed, ChefHat } from 'lucide-react';
+import { Calendar, Users, MapPin, ChefHat } from 'lucide-react';
 
 export default function NewPlanPage() {
   const router = useRouter();
@@ -76,8 +76,15 @@ export default function NewPlanPage() {
         dietaryGlutenFree: formData.dietaryGlutenFree ? parseInt(formData.dietaryGlutenFree) : 0,
         dietaryDairyFree: formData.dietaryDairyFree ? parseInt(formData.dietaryDairyFree) : 0,
         venueOvenCount: formData.venueOvenCount ? parseInt(formData.venueOvenCount) : 0,
-        venueStoretopBurners: formData.venueStoretopBurners ? parseInt(formData.venueStoretopBurners) : null,
-        venueBbqAvailable: formData.venueBbqAvailable === 'true' ? true : formData.venueBbqAvailable === 'false' ? false : null,
+        venueStoretopBurners: formData.venueStoretopBurners
+          ? parseInt(formData.venueStoretopBurners)
+          : null,
+        venueBbqAvailable:
+          formData.venueBbqAvailable === 'true'
+            ? true
+            : formData.venueBbqAvailable === 'false'
+              ? false
+              : null,
         // Convert empty strings to null for optional enums
         occasionType: formData.occasionType || null,
         venueType: formData.venueType || null,
@@ -108,7 +115,9 @@ export default function NewPlanPage() {
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+  ) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
@@ -177,7 +186,10 @@ export default function NewPlanPage() {
 
               {/* Occasion Type */}
               <div>
-                <label htmlFor="occasionType" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="occasionType"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Occasion Type
                 </label>
                 <select
@@ -201,7 +213,10 @@ export default function NewPlanPage() {
 
               {/* Occasion Description */}
               <div>
-                <label htmlFor="occasionDescription" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="occasionDescription"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Description (optional)
                 </label>
                 <textarea
@@ -218,7 +233,10 @@ export default function NewPlanPage() {
               {/* Date Range */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label
+                    htmlFor="startDate"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
                     <Calendar className="inline w-4 h-4 mr-1" />
                     Start Date *
                   </label>
@@ -287,7 +305,10 @@ export default function NewPlanPage() {
 
               {/* Guest Count */}
               <div>
-                <label htmlFor="guestCount" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="guestCount"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Expected Guest Count
                 </label>
                 <input
@@ -304,7 +325,10 @@ export default function NewPlanPage() {
 
               {/* Confidence */}
               <div>
-                <label htmlFor="guestCountConfidence" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="guestCountConfidence"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   How confident are you in this number?
                 </label>
                 <select
@@ -323,7 +347,10 @@ export default function NewPlanPage() {
               {/* Min/Max Range */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="guestCountMin" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label
+                    htmlFor="guestCountMin"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
                     Minimum Guests
                   </label>
                   <input
@@ -337,7 +364,10 @@ export default function NewPlanPage() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="guestCountMax" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label
+                    htmlFor="guestCountMax"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
                     Maximum Guests
                   </label>
                   <input
@@ -500,7 +530,10 @@ export default function NewPlanPage() {
 
               {/* Kitchen Access */}
               <div>
-                <label htmlFor="venueKitchenAccess" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="venueKitchenAccess"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   <ChefHat className="inline w-4 h-4 mr-1" />
                   Kitchen Access
                 </label>
@@ -536,7 +569,10 @@ export default function NewPlanPage() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="venueStoretopBurners" className="block text-sm text-gray-700 mb-1">
+                  <label
+                    htmlFor="venueStoretopBurners"
+                    className="block text-sm text-gray-700 mb-1"
+                  >
                     Stovetop Burners
                   </label>
                   <input

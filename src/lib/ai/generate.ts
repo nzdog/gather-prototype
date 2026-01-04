@@ -71,6 +71,10 @@ export interface RegenerationParams extends EventParams {
     team: string;
     quantity: string;
   }>;
+  protectedTeams?: Array<{
+    name: string;
+    scope: string;
+  }>;
 }
 
 /**
@@ -94,14 +98,10 @@ export async function generatePlan(params: EventParams): Promise<AIPlanResponse>
     console.log('[AI Generate] Calling Claude API...');
 
     // Call Claude and parse response
-    const response = await callClaudeForJSON<AIPlanResponse>(
-      systemPrompt,
-      userPrompt,
-      {
-        maxTokens: 4096,
-        temperature: 1.0,
-      }
-    );
+    const response = await callClaudeForJSON<AIPlanResponse>(systemPrompt, userPrompt, {
+      maxTokens: 4096,
+      temperature: 1.0,
+    });
 
     console.log('[AI Generate] Successfully generated plan');
     console.log('[AI Generate] Teams:', response.teams.length);
@@ -125,6 +125,7 @@ export async function regeneratePlan(params: RegenerationParams): Promise<AIPlan
   console.log('[AI Regenerate] Starting plan regeneration');
   console.log('[AI Regenerate] Modifier:', params.modifier);
   console.log('[AI Regenerate] Protected items:', params.protectedItems?.length || 0);
+  console.log('[AI Regenerate] Protected teams:', params.protectedTeams?.length || 0);
 
   // Check if Claude is available
   if (!isClaudeAvailable()) {
@@ -140,14 +141,10 @@ export async function regeneratePlan(params: RegenerationParams): Promise<AIPlan
     console.log('[AI Regenerate] Calling Claude API...');
 
     // Call Claude and parse response
-    const response = await callClaudeForJSON<AIPlanResponse>(
-      systemPrompt,
-      userPrompt,
-      {
-        maxTokens: 4096,
-        temperature: 1.0,
-      }
-    );
+    const response = await callClaudeForJSON<AIPlanResponse>(systemPrompt, userPrompt, {
+      maxTokens: 4096,
+      temperature: 1.0,
+    });
 
     console.log('[AI Regenerate] Successfully regenerated plan');
     console.log('[AI Regenerate] Teams:', response.teams.length);
@@ -190,14 +187,10 @@ export async function generateExplanation(conflict: {
     console.log('[AI Explain] Calling Claude API...');
 
     // Call Claude and parse response
-    const response = await callClaudeForJSON<AIExplanationResponse>(
-      systemPrompt,
-      userPrompt,
-      {
-        maxTokens: 1024,
-        temperature: 0.7, // Lower temperature for more consistent explanations
-      }
-    );
+    const response = await callClaudeForJSON<AIExplanationResponse>(systemPrompt, userPrompt, {
+      maxTokens: 1024,
+      temperature: 0.7, // Lower temperature for more consistent explanations
+    });
 
     console.log('[AI Explain] Successfully generated explanation');
 
