@@ -574,6 +574,15 @@ export async function transitionToConfirming(
         },
       });
 
+      // Ensure all access tokens exist (idempotent)
+      const { ensureEventTokens } = await import('./tokens');
+      await ensureEventTokens(eventId, tx);
+
+      // Count tokens created
+      const tokenCount = await tx.accessToken.count({
+        where: { eventId },
+      });
+
       // Log transition
       await logAudit(tx, {
         eventId,
@@ -581,15 +590,16 @@ export async function transitionToConfirming(
         actionType: 'TRANSITION_TO_CONFIRMING',
         targetType: 'Event',
         targetId: eventId,
-        details: `Transitioned event to CONFIRMING status with snapshot ${snapshotId}`,
+        details: `Transitioned event to CONFIRMING status with snapshot ${snapshotId}. Generated/verified ${tokenCount} access tokens.`,
       });
 
-      return { snapshotId };
+      return { snapshotId, tokenCount };
     });
 
     return {
       success: true,
       snapshotId: result.snapshotId,
+      tokenCount: result.tokenCount,
     };
   } catch (error) {
     console.error('Error during transition:', error);

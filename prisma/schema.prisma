@@ -290,6 +290,8 @@ model AccessToken {
   // Required for coordinator-scoped tokens
   teamId String?
   team   Team?   @relation(fields: [teamId], references: [id])
+
+  @@unique([eventId, personId, scope, teamId])
 }
 
 enum TokenScope {

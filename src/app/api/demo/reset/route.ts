@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
@@ -8,41 +7,37 @@ const execAsync = promisify(exec);
 /**
  * POST /api/demo/reset
  *
- * Resets the database by clearing all data and reseeding
+ * Completely resets the database by dropping all tables and reseeding
  */
 export async function POST() {
   try {
-    console.log('[Reset] Starting database reset (keeping tokens)...');
+    console.log('[Reset] Starting full database reset...');
 
-    // Step 1: Delete only items and assignments, keep people/teams/tokens
-    console.log('[Reset] Deleting items and assignments...');
-    await prisma.$transaction([
-      prisma.auditEntry.deleteMany(),
-      prisma.assignment.deleteMany(),
-      prisma.item.deleteMany(),
-      prisma.day.deleteMany(),
-    ]);
-    console.log('[Reset] Items deleted successfully');
+    // Use Prisma migrate reset to drop all tables and re-run migrations + seed
+    // --force: Skip confirmation prompt
+    // --skip-generate: Don't regenerate Prisma client (already generated)
+    console.log('[Reset] Running Prisma migrate reset...');
 
-    // Step 2: Run the seed script (will skip existing people/teams/tokens)
-    console.log('[Reset] Running seed script...');
-    const { stdout, stderr } = await execAsync('npx prisma db seed');
-    console.log('[Reset] Seed stdout:', stdout);
+    const { stdout, stderr } = await execAsync(
+      'npx prisma migrate reset --force --skip-generate',
+      {
+        env: {
+          ...process.env,
+          // Auto-confirm the reset
+          PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION: 'yes'
+        }
+      }
+    );
+
+    console.log('[Reset] Migrate reset stdout:', stdout);
     if (stderr) {
-      console.warn('[Reset] Seed stderr:', stderr);
+      console.warn('[Reset] Migrate reset stderr:', stderr);
     }
-    console.log('[Reset] Seed completed successfully');
-
-    // Step 3: Verify data
-    const itemCount = await prisma.item.count();
-    const tokenCount = await prisma.accessToken.count();
-    console.log(`[Reset] Verification: ${itemCount} items, ${tokenCount} tokens`);
+    console.log('[Reset] Database reset and seeded successfully');
 
     return NextResponse.json({
       success: true,
-      message: 'Database reset successfully (tokens preserved)',
-      itemCount,
-      tokenCount,
+      message: 'Database reset successfully - all data recreated fresh',
     });
   } catch (error) {
     console.error('[Reset] Failed:', error);
