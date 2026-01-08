@@ -260,9 +260,9 @@ enum ItemStatus {
 }
 
 model Assignment {
-  id           String   @id @default(cuid())
-  acknowledged Boolean  @default(false)
-  createdAt    DateTime @default(now())
+  id        String             @id @default(cuid())
+  response  AssignmentResponse @default(PENDING)
+  createdAt DateTime           @default(now())
 
   // Relations
   itemId String @unique // One assignment per item
@@ -854,4 +854,10 @@ enum DeletionScope {
   EVENTS
   PATTERNS
   SPECIFIC_EVENT
+}
+
+enum AssignmentResponse {
+  PENDING
+  ACCEPTED
+  DECLINED
 }

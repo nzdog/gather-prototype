@@ -22,16 +22,21 @@ export const STATUS_LABELS = {
 
 /**
  * Computes team status from assignment data directly.
- * Does NOT use cached Item.status - queries assignment existence.
+ * Does NOT use cached Item.status - queries assignment existence and response.
  * Use this in all GET routes. Pure synchronous function.
  *
  * CRITICAL: This is SYNCHRONOUS (no async/await)
+ *
+ * Note: Declined assignments are treated as gaps because they indicate
+ * items that need attention (participant won't bring them).
  */
 export function computeTeamStatusFromItems(
   items: ItemWithAssignmentAndPerson[]
 ): 'SORTED' | 'GAP' | 'CRITICAL_GAP' {
-  const hasCriticalGap = items.some((i) => i.critical && i.assignment === null);
-  const hasGap = items.some((i) => i.assignment === null);
+  const hasCriticalGap = items.some(
+    (i) => i.critical && (i.assignment === null || i.assignment.response === 'DECLINED')
+  );
+  const hasGap = items.some((i) => i.assignment === null || i.assignment?.response === 'DECLINED');
 
   if (hasCriticalGap) return 'CRITICAL_GAP';
   if (hasGap) return 'GAP';
@@ -858,7 +863,7 @@ export async function restoreFromRevision(
             data: {
               itemId: newItem.id,
               personId: itemData.assignment.personId,
-              acknowledged: itemData.assignment.acknowledged,
+              response: itemData.assignment.response,
               createdAt: new Date(itemData.assignment.createdAt),
             },
           });

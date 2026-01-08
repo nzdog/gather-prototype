@@ -33,7 +33,7 @@ interface Item {
   day: { id: string; name: string; date: string } | null;
   assignment: {
     id: string;
-    acknowledged: boolean;
+    response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
     person: { id: string; name: string };
   } | null;
 }
@@ -86,6 +86,14 @@ export default function HostView() {
 
   useEffect(() => {
     fetchData();
+
+    // Auto-refresh every 5 seconds to pick up participant responses
+    const intervalId = setInterval(() => {
+      fetchData();
+    }, 5000);
+
+    // Cleanup interval on unmount
+    return () => clearInterval(intervalId);
   }, [token]);
 
   const fetchData = async () => {
@@ -282,14 +290,9 @@ export default function HostView() {
   const nextStatus = getNextStatus(data.event.status);
   const totalGaps = data.teams.reduce((sum, t) => sum + t.unassignedCount, 0);
 
-  // Sort teams: critical gaps first, then regular gaps, then sorted
-  const sortedTeams = [...data.teams].sort((a, b) => {
-    if (a.status === 'CRITICAL_GAP' && b.status !== 'CRITICAL_GAP') return -1;
-    if (b.status === 'CRITICAL_GAP' && a.status !== 'CRITICAL_GAP') return 1;
-    if (a.status === 'GAP' && b.status === 'SORTED') return -1;
-    if (b.status === 'GAP' && a.status === 'SORTED') return 1;
-    return 0;
-  });
+  // Sort teams alphabetically by name for stable ordering
+  // Status badges (red/amber/green) provide visual priority without rearranging cards
+  const sortedTeams = [...data.teams].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -455,7 +458,19 @@ export default function HostView() {
         >
           {sortedTeams.map((team) => {
             const assignedCount = team.items.filter((i) => i.assignment).length;
-            const acknowledgedCount = team.items.filter((i) => i.assignment?.acknowledged).length;
+            const pendingCount = team.items.filter((i) => i.assignment?.response === 'PENDING')
+              .length;
+            const acceptedCount = team.items.filter((i) => i.assignment?.response === 'ACCEPTED')
+              .length;
+            const declinedCount = team.items.filter((i) => i.assignment?.response === 'DECLINED')
+              .length;
+            // Gap count includes unassigned items AND declined items
+            const gapCount = team.items.filter(
+              (i) => i.assignment === null || i.assignment?.response === 'DECLINED'
+            ).length;
+            const criticalGapCount = team.items.filter(
+              (i) => i.critical && (i.assignment === null || i.assignment?.response === 'DECLINED')
+            ).length;
 
             return (
               <div
@@ -507,13 +522,12 @@ export default function HostView() {
                   {team.status === 'CRITICAL_GAP' ? (
                     <div className="inline-flex items-center gap-1.5 bg-red-100 text-red-800 px-3 py-1.5 rounded-full text-sm font-semibold">
                       <AlertCircle className="size-4" />
-                      {team.criticalGapCount} critical{' '}
-                      {team.criticalGapCount === 1 ? 'gap' : 'gaps'}
+                      {criticalGapCount} critical {criticalGapCount === 1 ? 'gap' : 'gaps'}
                     </div>
                   ) : team.status === 'GAP' ? (
                     <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full text-sm font-semibold">
                       <AlertCircle className="size-4" />
-                      {team.unassignedCount} {team.unassignedCount === 1 ? 'gap' : 'gaps'}
+                      {gapCount} {gapCount === 1 ? 'gap' : 'gaps'}
                     </div>
                   ) : (
                     <div className="inline-flex items-center gap-1.5 bg-green-100 text-green-800 px-3 py-1.5 rounded-full text-sm font-semibold">
@@ -552,9 +566,21 @@ export default function HostView() {
                       </div>
                       <div>
                         <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-                          Confirmed
+                          Pending
                         </div>
-                        <div className="text-xl font-bold text-blue-600">{acknowledgedCount}</div>
+                        <div className="text-xl font-bold text-gray-600">{pendingCount}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                          Accepted
+                        </div>
+                        <div className="text-xl font-bold text-green-600">{acceptedCount}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                          Declined
+                        </div>
+                        <div className="text-xl font-bold text-red-600">{declinedCount}</div>
                       </div>
                     </div>
 

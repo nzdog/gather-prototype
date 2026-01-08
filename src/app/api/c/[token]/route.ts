@@ -154,7 +154,7 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
       assignment: item.assignment
         ? {
             id: item.assignment.id,
-            acknowledged: item.assignment.acknowledged,
+            response: item.assignment.response,
             person: {
               id: item.assignment.person.id,
               name: item.assignment.person.name,
@@ -169,7 +169,7 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
     otherTeams: otherTeamsStatus, // Status only, no items
     myAssignments: myAssignments.map((assignment) => ({
       id: assignment.id,
-      acknowledged: assignment.acknowledged,
+      response: assignment.response,
       item: {
         id: assignment.item.id,
         name: assignment.item.name,

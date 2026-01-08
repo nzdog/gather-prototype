@@ -36,7 +36,7 @@ interface Item {
   } | null;
   assignment: {
     id: string;
-    acknowledged: boolean;
+    response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
     person: {
       id: string;
       name: string;
@@ -77,6 +77,14 @@ export default function HostTeamView() {
 
   useEffect(() => {
     fetchData();
+
+    // Auto-refresh every 5 seconds to pick up participant responses
+    const intervalId = setInterval(() => {
+      fetchData();
+    }, 5000);
+
+    // Cleanup interval on unmount
+    return () => clearInterval(intervalId);
   }, [token, teamId]);
 
   const fetchData = async () => {
@@ -315,15 +323,20 @@ export default function HostTeamView() {
                             <span className="text-sm font-medium text-gray-900">
                               {item.assignment.person.name}
                             </span>
-                            {item.assignment.acknowledged ? (
+                            {item.assignment.response === 'ACCEPTED' ? (
                               <div className="inline-flex items-center gap-1.5 bg-green-100 text-green-800 px-3 py-1.5 rounded-full text-sm font-semibold">
                                 <Check className="size-4" />
-                                Confirmed
+                                Accepted
+                              </div>
+                            ) : item.assignment.response === 'DECLINED' ? (
+                              <div className="inline-flex items-center gap-1.5 bg-red-100 text-red-800 px-3 py-1.5 rounded-full text-sm font-semibold">
+                                <AlertCircle className="size-4" />
+                                Declined
                               </div>
                             ) : (
                               <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full text-sm font-semibold">
                                 <AlertCircle className="size-4" />
-                                Awaiting confirmation
+                                Pending
                               </div>
                             )}
                           </div>

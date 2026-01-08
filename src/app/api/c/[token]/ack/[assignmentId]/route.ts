@@ -2,20 +2,33 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logAudit } from '@/lib/workflow';
+import { AssignmentResponse } from '@prisma/client';
 
 /**
  * POST /api/c/[token]/ack/[assignmentId]
  *
- * Coordinator acknowledges their own assignment
+ * Coordinator records response (Accept or Decline) for their own assignment
  */
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { token: string; assignmentId: string } }
 ) {
   const context = await resolveToken(params.token);
 
   if (!context || context.scope !== 'COORDINATOR') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
+
+  // Parse request body for response type
+  const body = await request.json();
+  const { response } = body;
+
+  // Validate response type
+  if (!response || !['ACCEPTED', 'DECLINED'].includes(response)) {
+    return NextResponse.json(
+      { error: 'Invalid response. Must be ACCEPTED or DECLINED' },
+      { status: 400 }
+    );
   }
 
   // Verify assignment belongs to this person
@@ -30,24 +43,25 @@ export async function POST(
     return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
   }
 
-  if (assignment.acknowledged) {
-    return NextResponse.json({ error: 'Already acknowledged' }, { status: 400 });
+  // If response unchanged, do nothing (idempotent)
+  if (assignment.response === response) {
+    return NextResponse.json({ success: true });
   }
 
-  // Acknowledge in transaction
+  // Update response in transaction
   await prisma.$transaction(async (tx) => {
     await tx.assignment.update({
       where: { id: params.assignmentId },
-      data: { acknowledged: true },
+      data: { response: response as AssignmentResponse },
     });
 
     await logAudit(tx, {
       eventId: context.event.id,
       actorId: context.person.id,
-      actionType: 'ACKNOWLEDGE_ITEM',
+      actionType: response === 'ACCEPTED' ? 'ACCEPT_ASSIGNMENT' : 'DECLINE_ASSIGNMENT',
       targetType: 'Assignment',
       targetId: params.assignmentId,
-      details: `Acknowledged ${assignment.item.name}`,
+      details: `${response === 'ACCEPTED' ? 'Accepted' : 'Declined'} ${assignment.item.name}`,
     });
   });
 
