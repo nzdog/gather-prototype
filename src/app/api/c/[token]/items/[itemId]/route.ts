@@ -44,6 +44,20 @@ export async function PATCH(
 
   const body = await request.json();
 
+  // Check if substantive fields are being edited
+  const substantiveFieldsBeingEdited =
+    body.name !== undefined ||
+    body.description !== undefined ||
+    body.quantity !== undefined ||
+    body.critical !== undefined ||
+    body.glutenFree !== undefined ||
+    body.dairyFree !== undefined ||
+    body.vegetarian !== undefined ||
+    body.dayId !== undefined ||
+    body.dropOffAt !== undefined ||
+    body.dropOffLocation !== undefined ||
+    body.dropOffNote !== undefined;
+
   // Update item in transaction
   const updatedItem = await prisma.$transaction(async (tx) => {
     const updated = await tx.item.update({
@@ -67,6 +81,9 @@ export async function PATCH(
           body.dropOffLocation !== undefined ? body.dropOffLocation : item.dropOffLocation,
         dropOffNote: body.dropOffNote !== undefined ? body.dropOffNote : item.dropOffNote,
         dayId: body.dayId !== undefined ? body.dayId : item.dayId,
+        // If this is a GENERATED item and substantive fields are being edited, mark as HOST_EDITED
+        source:
+          item.source === 'GENERATED' && substantiveFieldsBeingEdited ? 'HOST_EDITED' : item.source,
       },
     });
 

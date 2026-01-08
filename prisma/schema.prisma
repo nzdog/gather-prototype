@@ -237,9 +237,10 @@ model Item {
   dropOffNote     String? // Human-readable time note, e.g., "12 noon", "after mains"
 
   // Plan phase: Source tracking
-  source       ItemSource    @default(MANUAL)
-  isProtected  Boolean       @default(false)
-  lastEditedBy LastEditedBy?
+  source            ItemSource    @default(MANUAL)
+  generatedBatchId  String? // Batch ID for AI-generated items (for selective regeneration)
+  isProtected       Boolean       @default(false)
+  lastEditedBy      LastEditedBy?
 
   // Relations
   teamId String
@@ -689,6 +690,7 @@ enum ItemSource {
   GENERATED
   TEMPLATE
   MANUAL
+  HOST_EDITED
 }
 
 enum QuantityUnit {

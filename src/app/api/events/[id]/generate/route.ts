@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { generatePlan, EventParams } from '@/lib/ai/generate';
+import { randomBytes } from 'crypto';
 
 export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -48,6 +49,10 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       teams: aiResponse.teams.length,
       items: aiResponse.items.length,
     });
+
+    // Generate a unique batch ID for this generation run
+    const generatedBatchId = `gen_${randomBytes(16).toString('hex')}`;
+    console.log('[Generate] Batch ID:', generatedBatchId);
 
     // Create teams and items in database
     let teamsCreated = 0;
@@ -98,6 +103,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
             glutenFree: itemData.dietaryTags.includes('GLUTEN_FREE'),
             dairyFree: itemData.dietaryTags.includes('DAIRY_FREE'),
             source: 'GENERATED',
+            generatedBatchId,
             placeholderAcknowledged: false,
           },
         });
