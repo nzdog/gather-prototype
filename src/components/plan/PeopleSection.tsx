@@ -24,9 +24,10 @@ interface Person {
 interface PeopleSectionProps {
   eventId: string;
   teams: Team[];
+  onPeopleChanged?: () => void;
 }
 
-export default function PeopleSection({ eventId, teams }: PeopleSectionProps) {
+export default function PeopleSection({ eventId, teams, onPeopleChanged }: PeopleSectionProps) {
   const [people, setPeople] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -64,6 +65,7 @@ export default function PeopleSection({ eventId, teams }: PeopleSectionProps) {
       }
 
       await loadPeople();
+      onPeopleChanged?.();
     } catch (error) {
       throw error; // Re-throw so modal can show error
     }
@@ -86,6 +88,7 @@ export default function PeopleSection({ eventId, teams }: PeopleSectionProps) {
       }
 
       await loadPeople();
+      onPeopleChanged?.();
     } catch (error) {
       throw error; // Re-throw so modal can show error
     }
@@ -103,6 +106,7 @@ export default function PeopleSection({ eventId, teams }: PeopleSectionProps) {
       }
 
       await loadPeople();
+      onPeopleChanged?.();
     } catch (error) {
       throw error; // Re-throw so modal can show error
     }

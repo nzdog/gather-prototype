@@ -54,27 +54,26 @@ export async function repairItemStatusAfterMutation(tx: Tx, itemId: string): Pro
 
 /**
  * Returns true if event can be frozen.
- * Freeze blocked if ANY critical item lacks assignment.
+ * Freeze blocked if ANY item lacks assignment (T6 - all items assigned gate).
  * Queries Assignment directly, NOT Item.status.
  *
  * CRITICAL: This queries assignment: null, NOT Item.status.
  * The freeze gate is safety-critical and must not trust cached state.
  */
 export async function canFreeze(eventId: string): Promise<boolean> {
-  const criticalUnassignedCount = await prisma.item.count({
+  const unassignedCount = await prisma.item.count({
     where: {
       team: { eventId },
-      critical: true,
       assignment: null,
     },
   });
 
-  return criticalUnassignedCount === 0;
+  return unassignedCount === 0;
 }
 
 /**
- * Returns the count of critical items blocking freeze.
- * Used for UI messaging ("Cannot freeze: N critical gaps").
+ * Returns the count of unassigned items blocking freeze (T6).
+ * Used for UI messaging ("Cannot freeze: N items unassigned").
  *
  * CRITICAL: Queries assignment: null, NOT Item.status.
  */
@@ -82,7 +81,6 @@ export async function getCriticalGapCount(eventId: string): Promise<number> {
   return prisma.item.count({
     where: {
       team: { eventId },
-      critical: true,
       assignment: null,
     },
   });
@@ -282,12 +280,15 @@ export interface GateCheckResult {
 
 /**
  * Runs the gate check to determine if event can transition to CONFIRMING.
- * Only 5 blocking codes per Section 5.1:
+ * Blocking codes (DRAFT → CONFIRMING):
  * - CRITICAL_CONFLICT_UNACKNOWLEDGED
  * - CRITICAL_PLACEHOLDER_UNACKNOWLEDGED
  * - STRUCTURAL_MINIMUM_TEAMS
  * - STRUCTURAL_MINIMUM_ITEMS
  * - UNSAVED_DRAFT_CHANGES
+ *
+ * Note: ALL_ITEMS_ASSIGNED is NOT required for DRAFT → CONFIRMING.
+ * Assignment coverage is enforced at CONFIRMING → FROZEN transition.
  *
  * @param eventId - Event to check
  * @returns GateCheckResult with passed boolean and array of blocks
@@ -390,6 +391,9 @@ export async function runGateCheck(eventId: string): Promise<GateCheckResult> {
       resolution: 'Event can only transition to CONFIRMING from DRAFT status',
     });
   }
+
+  // Note: ALL_ITEMS_ASSIGNED check removed from DRAFT → CONFIRMING gate
+  // Assignment coverage is now enforced only at CONFIRMING → FROZEN transition
 
   return {
     passed: blocks.length === 0,
