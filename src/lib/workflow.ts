@@ -10,6 +10,17 @@ type ItemWithAssignmentAndPerson = Item & {
 type Tx = Prisma.TransactionClient;
 
 /**
+ * UI Status Labels - Consistent status naming for UI display
+ * Use these constants throughout the UI to ensure consistent terminology
+ */
+export const STATUS_LABELS = {
+  DRAFT: 'DRAFT',
+  CONFIRMING: 'CONFIRMING',
+  FROZEN: 'FROZEN',
+  COMPLETE: 'COMPLETE',
+} as const;
+
+/**
  * Computes team status from assignment data directly.
  * Does NOT use cached Item.status - queries assignment existence.
  * Use this in all GET routes. Pure synchronous function.

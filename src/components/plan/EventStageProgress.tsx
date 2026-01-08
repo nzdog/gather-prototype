@@ -1,6 +1,7 @@
 'use client';
 
 import { Check } from 'lucide-react';
+import { STATUS_LABELS } from '@/lib/workflow';
 
 type EventStatus = 'DRAFT' | 'CONFIRMING' | 'FROZEN' | 'COMPLETE';
 
@@ -9,10 +10,10 @@ interface EventStageProgressProps {
 }
 
 const stages: { status: EventStatus; label: string; icon: string }[] = [
-  { status: 'DRAFT', label: 'Draft', icon: '📝' },
-  { status: 'CONFIRMING', label: 'Confirming', icon: '👥' },
-  { status: 'FROZEN', label: 'Frozen', icon: '🧊' },
-  { status: 'COMPLETE', label: 'Complete', icon: '✅' },
+  { status: 'DRAFT', label: STATUS_LABELS.DRAFT, icon: '📝' },
+  { status: 'CONFIRMING', label: STATUS_LABELS.CONFIRMING, icon: '👥' },
+  { status: 'FROZEN', label: STATUS_LABELS.FROZEN, icon: '🧊' },
+  { status: 'COMPLETE', label: STATUS_LABELS.COMPLETE, icon: '✅' },
 ];
 
 export default function EventStageProgress({ currentStatus }: EventStageProgressProps) {
@@ -55,7 +56,7 @@ export default function EventStageProgress({ currentStatus }: EventStageProgress
                     {stage.label}
                   </p>
                   {isCurrent && (
-                    <p className="text-xs text-blue-600 font-medium mt-0.5">Current Stage</p>
+                    <p className="text-xs text-blue-600 font-medium mt-0.5">Current Status</p>
                   )}
                 </div>
               </div>
@@ -79,34 +80,34 @@ export default function EventStageProgress({ currentStatus }: EventStageProgress
       <div className="mt-6 pt-4 border-t">
         {currentStatus === 'DRAFT' && (
           <div className="text-sm text-gray-600">
-            <p className="font-medium text-gray-900 mb-1">Draft Stage</p>
+            <p className="font-medium text-gray-900 mb-1">DRAFT</p>
             <p>
               Build your plan: add teams, items, and resolve any conflicts. When ready, move to
-              Confirming to share with your team and assign items.
+              CONFIRMING to share with your team and assign items.
             </p>
           </div>
         )}
         {currentStatus === 'CONFIRMING' && (
           <div className="text-sm text-gray-600">
-            <p className="font-medium text-gray-900 mb-1">Confirming Stage</p>
+            <p className="font-medium text-gray-900 mb-1">CONFIRMING</p>
             <p>
               Share invite links with your team and assign all items to people. Once all items are
-              assigned, freeze the plan to lock it for execution.
+              assigned, you can transition to FROZEN to lock the plan for execution.
             </p>
           </div>
         )}
         {currentStatus === 'FROZEN' && (
           <div className="text-sm text-gray-600">
-            <p className="font-medium text-gray-900 mb-1">Frozen Stage</p>
+            <p className="font-medium text-gray-900 mb-1">FROZEN</p>
             <p>
               Plan is locked and ready for execution. Team members can view their assignments and
-              acknowledge items. Mark complete when the event is finished.
+              acknowledge items. Mark COMPLETE when the event is finished.
             </p>
           </div>
         )}
         {currentStatus === 'COMPLETE' && (
           <div className="text-sm text-gray-600">
-            <p className="font-medium text-gray-900 mb-1">Complete</p>
+            <p className="font-medium text-gray-900 mb-1">COMPLETE</p>
             <p>Event completed! You can save this plan as a template for future events.</p>
           </div>
         )}
