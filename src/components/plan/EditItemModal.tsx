@@ -201,29 +201,40 @@ export default function EditItemModal({ isOpen, onClose, onSave, item, days, eve
     updateData.dropOffNote = dropOffNote || null;
 
     try {
-      await onSave(item.id, updateData);
-
-      // Handle assignment changes
+      // Handle assignment changes FIRST, before saving other data
       const currentAssignmentId = item.assignment?.person?.id;
       if (assignedPersonId !== currentAssignmentId) {
         if (assignedPersonId) {
           // Assign to person
-          await fetch(`/api/events/${eventId}/items/${item.id}/assign`, {
+          const assignResponse = await fetch(`/api/events/${eventId}/items/${item.id}/assign`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ personId: assignedPersonId }),
           });
+          if (!assignResponse.ok) {
+            const error = await assignResponse.json();
+            throw new Error(error.error || 'Failed to assign item');
+          }
         } else if (currentAssignmentId) {
           // Unassign
-          await fetch(`/api/events/${eventId}/items/${item.id}/assign`, {
+          const unassignResponse = await fetch(`/api/events/${eventId}/items/${item.id}/assign`, {
             method: 'DELETE',
           });
+          if (!unassignResponse.ok) {
+            const error = await unassignResponse.json();
+            throw new Error(error.error || 'Failed to unassign item');
+          }
         }
       }
 
+      // Then save other item data
+      await onSave(item.id, updateData);
+
       onClose();
-    } catch (error) {
-      // Error already handled in parent, don't close modal
+    } catch (error: any) {
+      console.error('Error saving item:', error);
+      alert(error.message || 'Failed to save item');
+      // Don't close modal on error
     }
   };
 
