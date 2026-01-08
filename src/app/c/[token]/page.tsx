@@ -371,7 +371,7 @@ export default function CoordinatorView() {
         <div className="bg-blue-50 px-6 py-4 flex items-start gap-3">
           <span className="text-2xl">🔒</span>
           <div className="flex-1">
-            <h3 className="text-sm font-bold text-blue-900">Event Frozen</h3>
+            <h3 className="text-sm font-bold text-blue-900">Plan is FROZEN</h3>
             <p className="text-xs text-blue-800 mt-1">
               Contact {data.host?.name || 'the host'} to request changes.
             </p>
