@@ -225,7 +225,7 @@ export default function DemoLandingPage() {
           <div className="text-sm text-blue-800 space-y-2">
             <p>
               <strong>Host:</strong> Manages the entire event, oversees all teams, and controls
-              event status (Draft → Confirming → Frozen → Complete)
+              event status (DRAFT → CONFIRMING → FROZEN → COMPLETE)
             </p>
             <p>
               <strong>Coordinator:</strong> Leads a specific team, assigns items to team members,
