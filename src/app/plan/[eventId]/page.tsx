@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { ChevronDown, ChevronRight, Plus, Save, Loader2 } from 'lucide-react';
 import ConflictList from '@/components/plan/ConflictList';
 import GateCheck from '@/components/plan/GateCheck';
+import FreezeCheck from '@/components/plan/FreezeCheck';
+import EventStageProgress from '@/components/plan/EventStageProgress';
 import SaveTemplateModal from '@/components/templates/SaveTemplateModal';
 import AddTeamModal, { TeamFormData } from '@/components/plan/AddTeamModal';
 import AddItemModal, { ItemFormData } from '@/components/plan/AddItemModal';
@@ -55,6 +57,7 @@ interface Team {
   _count: {
     items: number;
   };
+  unassignedCount: number;
 }
 
 interface Item {
@@ -127,6 +130,8 @@ export default function PlanEditorPage() {
   const [editEventModalOpen, setEditEventModalOpen] = useState(false);
   const [inviteLinks, setInviteLinks] = useState<any[]>([]);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const [teamPeople, setTeamPeople] = useState<Record<string, any[]>>({});
+  const [loadingTeamPeople, setLoadingTeamPeople] = useState<Set<string>>(new Set());
 
   // Mock hostId - in production, this would come from auth
   const MOCK_HOST_ID = 'cmjwbjrpw0000n99xs11r44qh';
@@ -146,9 +151,9 @@ export default function PlanEditorPage() {
     loadItems();
   }, [eventId]);
 
-  // Load invite links when event status is CONFIRMING
+  // Load invite links when event status is CONFIRMING or later
   useEffect(() => {
-    if (event && event.status === 'CONFIRMING') {
+    if (event && ['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status)) {
       loadInviteLinks();
     }
   }, [event?.status]);
@@ -512,15 +517,73 @@ export default function PlanEditorPage() {
     }
   };
 
+  const loadTeamPeople = async (teamId: string) => {
+    setLoadingTeamPeople((prev) => new Set(prev).add(teamId));
+    try {
+      const response = await fetch(`/api/events/${eventId}/people`);
+      if (!response.ok) throw new Error('Failed to load people');
+
+      const data = await response.json();
+      // Filter people in this team
+      const teamMembers = data.people.filter((p: any) => p.team.id === teamId);
+      setTeamPeople((prev) => ({ ...prev, [teamId]: teamMembers }));
+    } catch (error: any) {
+      console.error('Error loading team people:', error);
+    } finally {
+      setLoadingTeamPeople((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(teamId);
+        return newSet;
+      });
+    }
+  };
+
+  const handleQuickAssign = async (itemId: string, personId: string, teamId: string) => {
+    try {
+      if (personId) {
+        // Assign to person
+        const response = await fetch(`/api/events/${eventId}/items/${itemId}/assign`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ personId }),
+        });
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to assign item');
+        }
+      } else {
+        // Unassign
+        const response = await fetch(`/api/events/${eventId}/items/${itemId}/assign`, {
+          method: 'DELETE',
+        });
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to unassign item');
+        }
+      }
+
+      // Reload team items, teams, and gate check
+      await loadTeamItems(teamId);
+      await loadTeams();
+      setGateCheckRefresh((prev) => prev + 1);
+    } catch (error: any) {
+      console.error('Error assigning item:', error);
+      alert(error.message || 'Failed to assign item');
+    }
+  };
+
   const toggleTeamExpanded = async (teamId: string) => {
     const newExpanded = new Set(expandedTeams);
     if (newExpanded.has(teamId)) {
       newExpanded.delete(teamId);
     } else {
       newExpanded.add(teamId);
-      // Load items when expanding
+      // Load items and people when expanding
       if (!teamItems[teamId]) {
         await loadTeamItems(teamId);
+      }
+      if (!teamPeople[teamId]) {
+        await loadTeamPeople(teamId);
       }
     }
     setExpandedTeams(newExpanded);
@@ -545,6 +608,12 @@ export default function PlanEditorPage() {
       if (item?.team?.id) {
         await loadTeamItems(item.team.id);
       }
+
+      // Reload teams to update unassigned count badges
+      await loadTeams();
+
+      // Refresh gate check to update coverage indicator
+      setGateCheckRefresh((prev) => prev + 1);
     } catch (error: any) {
       console.error('Error updating item:', error);
       alert('Failed to update item');
@@ -715,6 +784,9 @@ export default function PlanEditorPage() {
         <div className="grid grid-cols-12 gap-8">
           {/* Main Content */}
           <div className="col-span-8">
+            {/* Event Stage Progress */}
+            <EventStageProgress currentStatus={event.status as any} />
+
             {/* AI Generation Loading Banner */}
             {(isGenerating || isRegenerating) && (
               <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6 shadow-sm">
@@ -861,7 +933,19 @@ export default function PlanEditorPage() {
 
             {/* People Section */}
             <div className="mb-6">
-              <PeopleSection eventId={eventId} teams={teams} />
+              <PeopleSection
+                eventId={eventId}
+                teams={teams}
+                onPeopleChanged={() => {
+                  // Reload teams and refresh gate check when people change
+                  loadTeams();
+                  setGateCheckRefresh((prev) => prev + 1);
+                  // Reload team people for all expanded teams
+                  expandedTeams.forEach((teamId) => {
+                    loadTeamPeople(teamId);
+                  });
+                }}
+              />
             </div>
 
             {/* Gate Check - Only show for DRAFT events */}
@@ -880,8 +964,18 @@ export default function PlanEditorPage() {
               </div>
             )}
 
-            {/* Invite Links - Show for CONFIRMING events */}
-            {event.status === 'CONFIRMING' && inviteLinks.length > 0 && (
+            {/* Freeze Check - Only show for CONFIRMING events */}
+            {event.status === 'CONFIRMING' && (
+              <div className="mb-6">
+                <FreezeCheck eventId={eventId} refreshTrigger={gateCheckRefresh} onFreezeComplete={() => {
+                  loadEvent();
+                  loadTeams();
+                }} />
+              </div>
+            )}
+
+            {/* Invite Links - Show for CONFIRMING, FROZEN, and COMPLETE events */}
+            {['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status) && inviteLinks.length > 0 && (
               <div className="bg-white rounded-lg shadow-md p-6 mb-6">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Invite Links</h2>
                 <p className="text-sm text-gray-600 mb-4">
@@ -1013,7 +1107,14 @@ export default function PlanEditorPage() {
                             <ChevronRight className="w-5 h-5 text-gray-400" />
                           )}
                           <div className="text-left">
-                            <h3 className="font-medium text-gray-900">{team.name}</h3>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-medium text-gray-900">{team.name}</h3>
+                              {team.unassignedCount > 0 && (
+                                <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-medium rounded">
+                                  {team.unassignedCount} unassigned
+                                </span>
+                              )}
+                            </div>
                             <p className="text-sm text-gray-600">
                               {team.coordinator.name} • {team._count.items} items
                             </p>
@@ -1064,6 +1165,11 @@ export default function PlanEditorPage() {
                                             Critical
                                           </span>
                                         )}
+                                        {!item.assignment && (
+                                          <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded">
+                                            Unassigned
+                                          </span>
+                                        )}
                                       </div>
 
                                       {item.description && (
@@ -1101,20 +1207,49 @@ export default function PlanEditorPage() {
                                       )}
                                     </div>
 
-                                    {/* Action Buttons */}
-                                    <div className="flex gap-2 ml-4">
-                                      <button
-                                        onClick={() => handleStartEditItem(item)}
-                                        className="px-2 py-1 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700"
-                                      >
-                                        Edit
-                                      </button>
-                                      <button
-                                        onClick={() => handleDeleteItem(item)}
-                                        className="px-2 py-1 bg-red-600 text-white text-xs rounded-md hover:bg-red-700"
-                                      >
-                                        Delete
-                                      </button>
+                                    {/* Right Side: Quick Assign + Action Buttons */}
+                                    <div className="flex flex-col gap-3 ml-4 w-48">
+                                      {/* Quick Assign Dropdown */}
+                                      <div>
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                                          Assign to
+                                        </label>
+                                        <select
+                                          value={item.assignment?.person?.id || ''}
+                                          onChange={(e) =>
+                                            handleQuickAssign(item.id, e.target.value, team.id)
+                                          }
+                                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        >
+                                          <option value="">Unassigned</option>
+                                          {teamPeople[team.id]?.map((person: any) => (
+                                            <option key={person.personId} value={person.personId}>
+                                              {person.name}
+                                            </option>
+                                          ))}
+                                        </select>
+                                        {!teamPeople[team.id] || teamPeople[team.id].length === 0 ? (
+                                          <p className="text-xs text-gray-500 mt-1">
+                                            No people in this team yet
+                                          </p>
+                                        ) : null}
+                                      </div>
+
+                                      {/* Action Buttons */}
+                                      <div className="flex gap-2">
+                                        <button
+                                          onClick={() => handleStartEditItem(item)}
+                                          className="flex-1 px-2 py-1 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700"
+                                        >
+                                          Edit
+                                        </button>
+                                        <button
+                                          onClick={() => handleDeleteItem(item)}
+                                          className="flex-1 px-2 py-1 bg-red-600 text-white text-xs rounded-md hover:bg-red-700"
+                                        >
+                                          Delete
+                                        </button>
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
