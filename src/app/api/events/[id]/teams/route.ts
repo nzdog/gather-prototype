@@ -21,14 +21,34 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
             items: true,
           },
         },
+        items: {
+          select: {
+            id: true,
+            assignment: {
+              select: {
+                id: true,
+              },
+            },
+          },
+        },
       },
       orderBy: {
         name: 'asc',
       },
     });
 
+    // Calculate unassigned count for each team
+    const teamsWithUnassignedCount = teams.map((team) => {
+      const unassignedCount = team.items.filter((item) => !item.assignment).length;
+      const { items, ...teamWithoutItems } = team;
+      return {
+        ...teamWithoutItems,
+        unassignedCount,
+      };
+    });
+
     return NextResponse.json({
-      teams,
+      teams: teamsWithUnassignedCount,
     });
   } catch (error) {
     console.error('Error fetching teams:', error);

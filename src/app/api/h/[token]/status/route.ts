@@ -59,14 +59,14 @@ export async function PATCH(request: NextRequest, { params }: { params: { token:
       );
     }
 
-    // Freeze gate check
+    // Freeze gate check (T6 - all items must be assigned)
     if (status === 'FROZEN') {
       const allowed = await canFreeze(context.event.id);
       if (!allowed) {
-        const gaps = await getCriticalGapCount(context.event.id);
+        const unassignedCount = await getCriticalGapCount(context.event.id);
         return NextResponse.json(
           {
-            error: `Cannot freeze: ${gaps} critical gaps`,
+            error: `Cannot freeze: ${unassignedCount} item${unassignedCount !== 1 ? 's' : ''} unassigned`,
           },
           { status: 400 }
         );
