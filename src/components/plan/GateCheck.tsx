@@ -121,7 +121,7 @@ export default function GateCheck({
               </h2>
               <p className="text-gray-600 mt-1">
                 {passed
-                  ? 'All gate checks passed. You can now move to the Confirming phase.'
+                  ? 'All gate checks passed. You can now move to CONFIRMING.'
                   : `${blocks.length} issue(s) must be resolved before transitioning.`}
               </p>
             </div>
@@ -170,7 +170,7 @@ export default function GateCheck({
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
             }`}
           >
-            {passed ? 'Move to Confirming →' : 'Resolve Issues to Continue'}
+            {passed ? 'Move to CONFIRMING →' : 'Resolve Issues to Continue'}
           </button>
         </div>
       </div>

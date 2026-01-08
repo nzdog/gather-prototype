@@ -179,7 +179,7 @@ export default function TransitionModal({ eventId, onClose, onSuccess }: Transit
           <>
             {/* Transition Confirmation */}
             <div className="mb-6">
-              <h2 className="text-2xl font-bold mb-2">Ready to Move to Confirming?</h2>
+              <h2 className="text-2xl font-bold mb-2">Ready to Move to CONFIRMING?</h2>
               <p className="text-gray-600">Review your plan summary before transitioning.</p>
             </div>
 
