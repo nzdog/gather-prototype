@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createRevision } from '@/lib/workflow';
 import { regeneratePlan, RegenerationParams } from '@/lib/ai/generate';
+import { randomBytes } from 'crypto';
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -42,28 +43,43 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       }
     }
 
-    // Get protected items if preserveProtected is true
-    let protectedItems: any[] = [];
+    // RULE A: Selective regeneration - preserve host-added and host-edited items
+    // Get items to preserve (host-added, host-edited, or explicitly protected)
+    let preservedItems: any[] = [];
     if (preserveProtected) {
-      protectedItems = await prisma.item.findMany({
+      preservedItems = await prisma.item.findMany({
         where: {
           team: { eventId },
-          isProtected: true,
+          OR: [
+            { source: 'MANUAL' }, // Host-added items
+            { source: 'HOST_EDITED' }, // Host-edited items (preserve customizations)
+            { isProtected: true }, // Explicitly protected items (backward compatibility)
+          ],
         },
-      });
-    }
-
-    // Delete non-protected items and teams
-    if (preserveProtected) {
-      // Delete only non-protected items
-      await prisma.item.deleteMany({
-        where: {
-          team: { eventId },
-          isProtected: false,
+        include: {
+          team: true,
         },
       });
 
-      // Delete teams that have no items left
+      console.log('[Regenerate] Rule A - Preserving items:', {
+        total: preservedItems.length,
+        manual: preservedItems.filter((i) => i.source === 'MANUAL').length,
+        hostEdited: preservedItems.filter((i) => i.source === 'HOST_EDITED').length,
+        protected: preservedItems.filter((i) => i.isProtected).length,
+      });
+
+      // Delete only GENERATED items (safe to overwrite)
+      const deleteResult = await prisma.item.deleteMany({
+        where: {
+          team: { eventId },
+          source: 'GENERATED', // Only delete AI-generated items that haven't been edited
+          isProtected: false, // Don't delete protected items even if generated
+        },
+      });
+
+      console.log('[Regenerate] Rule A - Deleted GENERATED items:', deleteResult.count);
+
+      // Delete teams that have no items left and are not protected
       const teams = await prisma.team.findMany({
         where: { eventId },
         include: { _count: { select: { items: true } } },
@@ -75,7 +91,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         }
       }
     } else {
-      // Delete all items and teams
+      // Delete all items and teams (preserveProtected=false means full regeneration)
       await prisma.item.deleteMany({
         where: { team: { eventId } },
       });
@@ -102,7 +118,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       },
       days: event.days.length || 1,
       modifier,
-      protectedItems: protectedItems.map((item: any) => ({
+      protectedItems: preservedItems.map((item: any) => ({
         name: item.name,
         team: item.team?.name || 'Unknown',
         quantity: item.quantityText || `${item.quantityAmount} ${item.quantityUnit}`,
@@ -121,6 +137,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       teams: aiResponse.teams.length,
       items: aiResponse.items.length,
     });
+
+    // Generate a unique batch ID for this regeneration run
+    const generatedBatchId = `regen_${randomBytes(16).toString('hex')}`;
+    console.log('[Regenerate] Batch ID:', generatedBatchId);
 
     // Create teams and items
     let teamsCreated = 0;
@@ -171,6 +191,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
             glutenFree: itemData.dietaryTags.includes('GLUTEN_FREE'),
             dairyFree: itemData.dietaryTags.includes('DAIRY_FREE'),
             source: 'GENERATED',
+            generatedBatchId,
             placeholderAcknowledged: false,
           },
         });
@@ -183,7 +204,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       success: true,
       message: `Plan regenerated with Claude AI: "${modifier}"`,
       modifier,
-      preservedItems: protectedItems.length,
+      preservedItems: preservedItems.length,
+      preservedBreakdown: {
+        manual: preservedItems.filter((i) => i.source === 'MANUAL').length,
+        hostEdited: preservedItems.filter((i) => i.source === 'HOST_EDITED').length,
+        protected: preservedItems.filter((i) => i.isProtected).length,
+      },
       teamsCreated,
       itemsCreated,
       revisionId,
