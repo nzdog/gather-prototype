@@ -83,7 +83,7 @@ export async function GET(
       assignment: item.assignment
         ? {
             id: item.assignment.id,
-            acknowledged: item.assignment.acknowledged,
+            response: item.assignment.response,
             person: {
               id: item.assignment.person.id,
               name: item.assignment.person.name,

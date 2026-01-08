@@ -2,19 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logAudit } from '@/lib/workflow';
+import { AssignmentResponse } from '@prisma/client';
 
 /**
  * POST /api/p/[token]/ack/[assignmentId]
  *
- * Acknowledges an assignment.
+ * Records participant response (Accept or Decline) for an assignment.
  *
  * CRITICAL: Idempotent + race-safe implementation.
- * - Ownership check and "already acknowledged" check performed inside transaction
- * - Audit logged only on first ACK
- * - Second call returns success but logs nothing
+ * - Ownership check performed inside transaction
+ * - Allows response changes (PENDING → ACCEPTED, PENDING → DECLINED, etc.)
+ * - Audit logged on response change
  */
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { token: string; assignmentId: string } }
 ) {
   const context = await resolveToken(params.token);
@@ -23,7 +24,19 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
-  // Idempotent ACK: check and update inside transaction to avoid race conditions
+  // Parse request body for response type
+  const body = await request.json();
+  const { response } = body;
+
+  // Validate response type
+  if (!response || !['ACCEPTED', 'DECLINED'].includes(response)) {
+    return NextResponse.json(
+      { error: 'Invalid response. Must be ACCEPTED or DECLINED' },
+      { status: 400 }
+    );
+  }
+
+  // Update response inside transaction
   const result = await prisma.$transaction(async (tx) => {
     const assignment = await tx.assignment.findUnique({
       where: { id: params.assignmentId },
@@ -34,27 +47,27 @@ export async function POST(
       return { found: false };
     }
 
-    // If already acknowledged, do nothing (idempotent)
-    if (assignment.acknowledged) {
-      return { found: true, alreadyAcked: true };
+    // If response unchanged, do nothing (idempotent)
+    if (assignment.response === response) {
+      return { found: true, changed: false };
     }
 
-    // Update and log
+    // Update response and log
     await tx.assignment.update({
       where: { id: params.assignmentId },
-      data: { acknowledged: true },
+      data: { response: response as AssignmentResponse },
     });
 
     await logAudit(tx, {
       eventId: context.event.id,
       actorId: context.person.id,
-      actionType: 'ACK_ASSIGNMENT',
+      actionType: response === 'ACCEPTED' ? 'ACCEPT_ASSIGNMENT' : 'DECLINE_ASSIGNMENT',
       targetType: 'Assignment',
       targetId: params.assignmentId,
-      details: `Acknowledged assignment for item ${assignment.itemId}`,
+      details: `${response === 'ACCEPTED' ? 'Accepted' : 'Declined'} assignment for item ${assignment.itemId}`,
     });
 
-    return { found: true, alreadyAcked: false };
+    return { found: true, changed: true };
   });
 
   if (!result.found) {

@@ -86,7 +86,7 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
       : null,
     assignments: assignments.map((a) => ({
       id: a.id,
-      acknowledged: a.acknowledged,
+      response: a.response,
       item: {
         id: a.item.id,
         name: a.item.name,

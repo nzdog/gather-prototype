@@ -15,7 +15,7 @@ import {
 
 interface Assignment {
   id: string;
-  acknowledged: boolean;
+  response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
   item: {
     id: string;
     name: string;
@@ -98,17 +98,19 @@ export default function ParticipantView() {
     }
   };
 
-  const handleAcknowledge = async (assignmentId: string) => {
+  const handleResponse = async (assignmentId: string, responseType: 'ACCEPTED' | 'DECLINED') => {
     try {
       const response = await fetch(`/api/p/${token}/ack/${assignmentId}`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ response: responseType }),
       });
       if (!response.ok) {
-        throw new Error('Failed to acknowledge');
+        throw new Error('Failed to record response');
       }
       await fetchData();
     } catch (err) {
-      console.error('Failed to acknowledge:', err);
+      console.error('Failed to record response:', err);
     }
   };
 
@@ -325,25 +327,47 @@ export default function ParticipantView() {
                       </div>
                     )}
 
-                    {/* Acknowledge Button */}
-                    <button
-                      onClick={() => handleAcknowledge(assignment.id)}
-                      disabled={assignment.acknowledged}
-                      className={`w-full py-2.5 rounded-lg font-medium transition-all ${
-                        assignment.acknowledged
-                          ? 'bg-green-500 text-white cursor-default'
-                          : 'bg-blue-600 text-white hover:bg-blue-700'
-                      }`}
-                    >
-                      {assignment.acknowledged ? (
-                        <span className="flex items-center justify-center gap-2">
+                    {/* Response Buttons */}
+                    {assignment.response === 'PENDING' ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          onClick={() => handleResponse(assignment.id, 'ACCEPTED')}
+                          className="py-2.5 rounded-lg font-medium bg-green-600 text-white hover:bg-green-700 transition-all"
+                        >
+                          Accept
+                        </button>
+                        <button
+                          onClick={() => handleResponse(assignment.id, 'DECLINED')}
+                          className="py-2.5 rounded-lg font-medium bg-gray-400 text-white hover:bg-gray-500 transition-all"
+                        >
+                          Decline
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        <div
+                          className={`w-full py-2.5 rounded-lg font-medium text-white flex items-center justify-center gap-2 ${
+                            assignment.response === 'ACCEPTED'
+                              ? 'bg-green-500'
+                              : 'bg-gray-500'
+                          }`}
+                        >
                           <Check className="size-5" />
-                          Confirmed
-                        </span>
-                      ) : (
-                        'Please Confirm'
-                      )}
-                    </button>
+                          {assignment.response === 'ACCEPTED' ? 'Accepted' : 'Declined'}
+                        </div>
+                        <button
+                          onClick={() =>
+                            handleResponse(
+                              assignment.id,
+                              assignment.response === 'ACCEPTED' ? 'DECLINED' : 'ACCEPTED'
+                            )
+                          }
+                          className="text-sm text-blue-600 hover:underline"
+                        >
+                          Change to {assignment.response === 'ACCEPTED' ? 'Decline' : 'Accept'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
