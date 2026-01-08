@@ -11,6 +11,16 @@ export async function PATCH(
     const { id: _eventId, itemId } = await context.params;
     const body = await request.json();
 
+    // Fetch current item to check if it's generated
+    const currentItem = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: { source: true },
+    });
+
+    if (!currentItem) {
+      return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+    }
+
     // Build update data
     const updateData: any = {};
 
@@ -45,6 +55,27 @@ export async function PATCH(
     // Drop-off fields
     if (body.dropOffLocation !== undefined) updateData.dropOffLocation = body.dropOffLocation;
     if (body.dropOffNote !== undefined) updateData.dropOffNote = body.dropOffNote;
+
+    // If this is a GENERATED item and substantive fields are being edited, mark as HOST_EDITED
+    // Substantive fields: name, description, quantity*, critical, dietaryTags, timing, drop-off
+    // Non-substantive: placeholderAcknowledged, quantityDeferredTo (these are acknowledgements, not edits)
+    const substantiveFieldsBeingEdited =
+      body.name !== undefined ||
+      body.description !== undefined ||
+      body.quantityAmount !== undefined ||
+      body.quantityUnit !== undefined ||
+      body.quantityState !== undefined ||
+      body.quantityText !== undefined ||
+      body.critical !== undefined ||
+      body.dietaryTags !== undefined ||
+      body.dayId !== undefined ||
+      body.serveTime !== undefined ||
+      body.dropOffLocation !== undefined ||
+      body.dropOffNote !== undefined;
+
+    if (currentItem.source === 'GENERATED' && substantiveFieldsBeingEdited) {
+      updateData.source = 'HOST_EDITED';
+    }
 
     // Update item
     const item = await prisma.item.update({
