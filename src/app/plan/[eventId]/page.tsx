@@ -11,14 +11,35 @@ import AddItemModal, { ItemFormData } from '@/components/plan/AddItemModal';
 import EditItemModal from '@/components/plan/EditItemModal';
 import RevisionHistory from '@/components/plan/RevisionHistory';
 import RegenerateModal from '@/components/plan/RegenerateModal';
+import PeopleSection from '@/components/plan/PeopleSection';
+import EditEventModal from '@/components/plan/EditEventModal';
 import { Conflict } from '@prisma/client';
 
 interface Event {
   id: string;
   name: string;
   status: string;
-  occasionType: string;
+  occasionType: string | null;
+  occasionDescription: string | null;
   guestCount: number | null;
+  guestCountConfidence: string;
+  guestCountMin: number | null;
+  guestCountMax: number | null;
+  dietaryStatus: string;
+  dietaryVegetarian: number;
+  dietaryVegan: number;
+  dietaryGlutenFree: number;
+  dietaryDairyFree: number;
+  dietaryAllergies: string | null;
+  venueName: string | null;
+  venueType: string | null;
+  venueKitchenAccess: string | null;
+  venueOvenCount: number;
+  venueStoretopBurners: number | null;
+  venueBbqAvailable: boolean | null;
+  venueTimingStart: string | null;
+  venueTimingEnd: string | null;
+  venueNotes: string | null;
   startDate: string;
   endDate: string;
 }
@@ -103,6 +124,9 @@ export default function PlanEditorPage() {
   const [regenerateModalOpen, setRegenerateModalOpen] = useState(false);
   const [manualTeamCount, setManualTeamCount] = useState(0);
   const [manualItemCount, setManualItemCount] = useState(0);
+  const [editEventModalOpen, setEditEventModalOpen] = useState(false);
+  const [inviteLinks, setInviteLinks] = useState<any[]>([]);
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
   // Mock hostId - in production, this would come from auth
   const MOCK_HOST_ID = 'cmjwbjrpw0000n99xs11r44qh';
@@ -121,6 +145,13 @@ export default function PlanEditorPage() {
     loadConflicts();
     loadItems();
   }, [eventId]);
+
+  // Load invite links when event status is CONFIRMING
+  useEffect(() => {
+    if (event && event.status === 'CONFIRMING') {
+      loadInviteLinks();
+    }
+  }, [event?.status]);
 
   const loadEvent = async () => {
     try {
@@ -177,6 +208,26 @@ export default function PlanEditorPage() {
       setItems(data.items || []);
     } catch (err: any) {
       console.error('Error loading items:', err);
+    }
+  };
+
+  const loadInviteLinks = async () => {
+    try {
+      if (!event) return;
+
+      // Use hostId query param for authentication
+      // This allows the Plan page to fetch tokens without requiring a stored token
+      const response = await fetch(`/api/events/${eventId}/tokens?hostId=${event.hostId}`);
+
+      if (!response.ok) {
+        console.error('Failed to load invite links:', response.status);
+        return;
+      }
+
+      const data = await response.json();
+      setInviteLinks(data.inviteLinks || []);
+    } catch (err: any) {
+      console.error('Error loading invite links:', err);
     }
   };
 
@@ -378,6 +429,17 @@ export default function PlanEditorPage() {
     } catch (error: any) {
       console.error('Error saving template:', error);
       throw error;
+    }
+  };
+
+  const handleCopyLink = async (url: string, token: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedToken(token);
+      setTimeout(() => setCopiedToken(null), 2000); // Reset after 2 seconds
+    } catch (err) {
+      console.error('Failed to copy:', err);
+      alert('Failed to copy link to clipboard');
     }
   };
 
@@ -797,6 +859,11 @@ export default function PlanEditorPage() {
               </div>
             )}
 
+            {/* People Section */}
+            <div className="mb-6">
+              <PeopleSection eventId={eventId} teams={teams} />
+            </div>
+
             {/* Gate Check - Only show for DRAFT events */}
             {event.status === 'DRAFT' && (
               <div className="mb-6">
@@ -810,6 +877,102 @@ export default function PlanEditorPage() {
                     loadConflicts();
                   }}
                 />
+              </div>
+            )}
+
+            {/* Invite Links - Show for CONFIRMING events */}
+            {event.status === 'CONFIRMING' && inviteLinks.length > 0 && (
+              <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Invite Links</h2>
+                <p className="text-sm text-gray-600 mb-4">
+                  Share these links with your team. Each link is personalized and grants access to the
+                  appropriate view.
+                </p>
+                <div className="space-y-4">
+                  {/* Hosts */}
+                  {inviteLinks
+                    .filter((link) => link.scope === 'HOST')
+                    .map((link) => (
+                      <div key={link.token} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded">
+                                HOST
+                              </span>
+                              <span className="font-medium text-gray-900">{link.personName}</span>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1 font-mono truncate max-w-md">
+                              {link.url}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handleCopyLink(link.url, link.token)}
+                            className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+                          >
+                            {copiedToken === link.token ? 'Copied!' : 'Copy Link'}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                  {/* Coordinators */}
+                  {inviteLinks
+                    .filter((link) => link.scope === 'COORDINATOR')
+                    .map((link) => (
+                      <div key={link.token} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded">
+                                COORDINATOR
+                              </span>
+                              <span className="font-medium text-gray-900">{link.personName}</span>
+                              {link.teamName && (
+                                <span className="text-sm text-gray-600">({link.teamName})</span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1 font-mono truncate max-w-md">
+                              {link.url}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handleCopyLink(link.url, link.token)}
+                            className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+                          >
+                            {copiedToken === link.token ? 'Copied!' : 'Copy Link'}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                  {/* Participants */}
+                  {inviteLinks
+                    .filter((link) => link.scope === 'PARTICIPANT')
+                    .map((link) => (
+                      <div key={link.token} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded">
+                                PARTICIPANT
+                              </span>
+                              <span className="font-medium text-gray-900">{link.personName}</span>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1 font-mono truncate max-w-md">
+                              {link.url}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handleCopyLink(link.url, link.token)}
+                            className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+                          >
+                            {copiedToken === link.token ? 'Copied!' : 'Copy Link'}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
               </div>
             )}
 
@@ -1017,7 +1180,7 @@ export default function PlanEditorPage() {
 
               <div className="mt-6 pt-6 border-t">
                 <button
-                  onClick={() => router.push(`/plan/${eventId}/settings`)}
+                  onClick={() => setEditEventModalOpen(true)}
                   className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
                 >
                   Edit Event Details
@@ -1037,7 +1200,7 @@ export default function PlanEditorPage() {
           eventName={event.name}
           teamCount={teams.length}
           itemCount={teams.reduce((sum, team) => sum + team._count.items, 0)}
-          occasionType={event.occasionType}
+          occasionType={event.occasionType || 'OTHER'}
         />
       )}
 
@@ -1069,6 +1232,7 @@ export default function PlanEditorPage() {
         onSave={handleSaveEditItem}
         item={editingItem}
         days={days}
+        eventId={eventId}
       />
 
       {/* Regenerate Modal */}
@@ -1079,6 +1243,20 @@ export default function PlanEditorPage() {
         manualTeamCount={manualTeamCount}
         manualItemCount={manualItemCount}
       />
+
+      {/* Edit Event Modal */}
+      {event && (
+        <EditEventModal
+          isOpen={editEventModalOpen}
+          onClose={() => setEditEventModalOpen(false)}
+          onSave={() => {
+            loadEvent();
+            setEditEventModalOpen(false);
+          }}
+          event={event}
+          eventId={eventId}
+        />
+      )}
     </div>
   );
 }

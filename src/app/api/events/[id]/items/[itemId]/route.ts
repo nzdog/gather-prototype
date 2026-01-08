@@ -42,6 +42,10 @@ export async function PATCH(
     if (body.dayId !== undefined) updateData.dayId = body.dayId;
     if (body.serveTime !== undefined) updateData.serveTime = body.serveTime;
 
+    // Drop-off fields
+    if (body.dropOffLocation !== undefined) updateData.dropOffLocation = body.dropOffLocation;
+    if (body.dropOffNote !== undefined) updateData.dropOffNote = body.dropOffNote;
+
     // Update item
     const item = await prisma.item.update({
       where: { id: itemId },

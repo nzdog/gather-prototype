@@ -50,10 +50,20 @@ export async function resolveToken(token: string): Promise<AuthContext | null> {
     return null;
   }
 
-  // 3. For COORDINATOR tokens, validate teamId matches PersonEvent.teamId
+  // 3. For COORDINATOR tokens, validate team access
   if (accessToken.scope === 'COORDINATOR') {
     // COORDINATOR tokens MUST have teamId
     if (!accessToken.teamId) {
+      return null;
+    }
+
+    // Get the team to check coordinatorId
+    const team = await prisma.team.findUnique({
+      where: { id: accessToken.teamId },
+    });
+
+    if (!team) {
+      console.log(`[Auth] COORDINATOR token team not found`);
       return null;
     }
 
@@ -65,7 +75,13 @@ export async function resolveToken(token: string): Promise<AuthContext | null> {
       },
     });
 
-    if (!personEvent || personEvent.teamId !== accessToken.teamId) {
+    // Allow access if EITHER:
+    // 1. PersonEvent.teamId matches token.teamId (regular coordinator added via People section)
+    // 2. Person is the team.coordinatorId (Demo Host or team coordinator)
+    const hasPersonEventMatch = personEvent && personEvent.teamId === accessToken.teamId;
+    const isTeamCoordinator = team.coordinatorId === accessToken.personId;
+
+    if (!hasPersonEventMatch && !isTeamCoordinator) {
       // Team mismatch - invalid token
       console.log(`[Auth] COORDINATOR token team mismatch`);
       return null;

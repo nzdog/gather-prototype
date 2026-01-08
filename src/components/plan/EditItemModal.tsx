@@ -9,6 +9,16 @@ interface Day {
   date: string;
 }
 
+interface Person {
+  id: string;
+  personId: string;
+  name: string;
+  team: {
+    id: string;
+    name: string;
+  };
+}
+
 interface EditItemModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -25,8 +35,21 @@ interface EditItemModalProps {
     dietaryTags: string[];
     dayId: string | null;
     serveTime: string | null;
+    dropOffLocation: string | null;
+    dropOffNote: string | null;
+    team: {
+      id: string;
+      name: string;
+    };
+    assignment?: {
+      person: {
+        id: string;
+        name: string;
+      };
+    } | null;
   } | null;
   days: Day[];
+  eventId: string;
 }
 
 const QUANTITY_UNITS = [
@@ -54,7 +77,7 @@ const DIETARY_TAGS = [
   { value: 'dairyFree', label: 'Dairy Free' },
 ];
 
-export default function EditItemModal({ isOpen, onClose, onSave, item, days }: EditItemModalProps) {
+export default function EditItemModal({ isOpen, onClose, onSave, item, days, eventId }: EditItemModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [critical, setCritical] = useState(false);
@@ -71,6 +94,15 @@ export default function EditItemModal({ isOpen, onClose, onSave, item, days }: E
   // Timing fields
   const [dayId, setDayId] = useState<string>('');
   const [serveTime, setServeTime] = useState<string>('');
+
+  // Drop-off fields
+  const [dropOffLocation, setDropOffLocation] = useState<string>('');
+  const [dropOffNote, setDropOffNote] = useState<string>('');
+
+  // Assignment fields
+  const [assignedPersonId, setAssignedPersonId] = useState<string>('');
+  const [people, setPeople] = useState<Person[]>([]);
+  const [loadingPeople, setLoadingPeople] = useState(false);
 
   useEffect(() => {
     if (item) {
@@ -90,8 +122,37 @@ export default function EditItemModal({ isOpen, onClose, onSave, item, days }: E
       // Timing fields
       setDayId(item.dayId || '');
       setServeTime(item.serveTime || '');
+
+      // Drop-off fields
+      setDropOffLocation(item.dropOffLocation || '');
+      setDropOffNote(item.dropOffNote || '');
+
+      // Assignment fields
+      setAssignedPersonId(item.assignment?.person?.id || '');
+
+      // Load people in the same team
+      loadPeople();
     }
   }, [item]);
+
+  const loadPeople = async () => {
+    if (!item) return;
+
+    setLoadingPeople(true);
+    try {
+      const response = await fetch(`/api/events/${eventId}/people`);
+      if (!response.ok) throw new Error('Failed to load people');
+      const data = await response.json();
+
+      // Filter people in the same team as the item
+      const teamPeople = data.people.filter((p: Person) => p.team.id === item.team.id);
+      setPeople(teamPeople);
+    } catch (error: any) {
+      console.error('Error loading people:', error);
+    } finally {
+      setLoadingPeople(false);
+    }
+  };
 
   if (!isOpen || !item) return null;
 
@@ -135,8 +196,31 @@ export default function EditItemModal({ isOpen, onClose, onSave, item, days }: E
     updateData.dayId = dayId || null;
     updateData.serveTime = serveTime || null;
 
+    // Add drop-off fields
+    updateData.dropOffLocation = dropOffLocation || null;
+    updateData.dropOffNote = dropOffNote || null;
+
     try {
       await onSave(item.id, updateData);
+
+      // Handle assignment changes
+      const currentAssignmentId = item.assignment?.person?.id;
+      if (assignedPersonId !== currentAssignmentId) {
+        if (assignedPersonId) {
+          // Assign to person
+          await fetch(`/api/events/${eventId}/items/${item.id}/assign`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ personId: assignedPersonId }),
+          });
+        } else if (currentAssignmentId) {
+          // Unassign
+          await fetch(`/api/events/${eventId}/items/${item.id}/assign`, {
+            method: 'DELETE',
+          });
+        }
+      }
+
       onClose();
     } catch (error) {
       // Error already handled in parent, don't close modal
@@ -305,6 +389,71 @@ export default function EditItemModal({ isOpen, onClose, onSave, item, days }: E
                   placeholder="e.g., 18:00"
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Drop-off Details */}
+          <div className="border-t pt-4">
+            <h3 className="text-sm font-medium text-gray-900 mb-3">Drop-off Details</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Drop-off Location
+                </label>
+                <input
+                  type="text"
+                  value={dropOffLocation}
+                  onChange={(e) => setDropOffLocation(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., Main Kitchen, Marquee"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Drop-off Note
+                </label>
+                <input
+                  type="text"
+                  value={dropOffNote}
+                  onChange={(e) => setDropOffNote(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., 12 noon, Before 5pm"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Human-readable time/instructions (e.g., "12 noon", "after mains")
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Assignment */}
+          <div className="border-t pt-4">
+            <h3 className="text-sm font-medium text-gray-900 mb-3">Assignment</h3>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Assigned to
+              </label>
+              {loadingPeople ? (
+                <p className="text-sm text-gray-500">Loading people...</p>
+              ) : (
+                <select
+                  value={assignedPersonId}
+                  onChange={(e) => setAssignedPersonId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Unassigned</option>
+                  {people.map((person) => (
+                    <option key={person.personId} value={person.personId}>
+                      {person.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {people.length === 0 && !loadingPeople && (
+                <p className="text-xs text-gray-500 mt-1">
+                  No people in this team yet. Add people to the team first.
+                </p>
+              )}
             </div>
           </div>
 
