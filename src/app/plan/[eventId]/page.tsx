@@ -716,6 +716,10 @@ export default function PlanEditorPage() {
       await loadPeople();
       await loadTeams();
       setGateCheckRefresh((prev) => prev + 1);
+      // Reload invite links if event is in CONFIRMING or later status
+      if (event && ['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status)) {
+        loadInviteLinks();
+      }
     } catch (error: any) {
       console.error('Error moving person:', error);
       // Revert optimistic update
@@ -994,6 +998,10 @@ export default function PlanEditorPage() {
                   loadPeople();
                   loadTeams();
                   setGateCheckRefresh((prev) => prev + 1);
+                  // Reload invite links if event is in CONFIRMING or later status
+                  if (event && ['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status)) {
+                    loadInviteLinks();
+                  }
                 }}
                 onMovePerson={handleMovePerson}
               />

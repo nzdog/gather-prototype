@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Edit2, Users } from 'lucide-react';
+import { Plus, Edit2, Users, Loader2 } from 'lucide-react';
 import AddPersonModal, { AddPersonFormData } from './AddPersonModal';
 import EditPersonModal from './EditPersonModal';
 import TeamBoard from './TeamBoard';
@@ -41,6 +41,7 @@ export default function PeopleSection({
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
+  const [isAutoAssigning, setIsAutoAssigning] = useState(false);
 
   const handleAddPerson = async (data: AddPersonFormData) => {
     try {
@@ -105,6 +106,34 @@ export default function PeopleSection({
     setEditModalOpen(true);
   };
 
+  const handleAutoAssign = async () => {
+    setIsAutoAssigning(true);
+    try {
+      const response = await fetch(`/api/events/${eventId}/people/auto-assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to auto-assign people');
+      }
+
+      const result = await response.json();
+
+      // Success feedback
+      alert(`Successfully assigned ${result.assigned} people to teams!`);
+
+      // Refresh data
+      onPeopleChanged?.();
+    } catch (error: any) {
+      console.error('Auto-assign error:', error);
+      alert(error.message || 'Failed to auto-assign people');
+    } finally {
+      setIsAutoAssigning(false);
+    }
+  };
+
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case 'HOST':
@@ -155,13 +184,34 @@ export default function PeopleSection({
               </div>
             </div>
           </div>
-          <button
-            onClick={() => setAddModalOpen(true)}
-            className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Add Person
-          </button>
+          <div className="flex gap-2">
+            {/* Auto-Assign Button */}
+            <button
+              onClick={handleAutoAssign}
+              disabled={isAutoAssigning || people.length === 0}
+              className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isAutoAssigning ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Assigning...
+                </>
+              ) : (
+                <>
+                  <Users className="w-4 h-4" />
+                  Auto-Assign
+                </>
+              )}
+            </button>
+            {/* Add Person Button */}
+            <button
+              onClick={() => setAddModalOpen(true)}
+              className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Add Person
+            </button>
+          </div>
         </div>
 
         {view === 'board' && (
