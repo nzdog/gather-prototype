@@ -83,6 +83,15 @@ export default function HostView() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [collapsedTeams, setCollapsedTeams] = useState<Set<string>>(new Set());
   const isInitialLoad = useRef(true);
+  const expandAll = useRef(false);
+
+  // Check URL params on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search);
+      expandAll.current = searchParams.get('expand') === 'all';
+    }
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -107,8 +116,14 @@ export default function HostView() {
 
       // Only initialize collapsed state on first load
       if (isInitialLoad.current) {
-        const allTeamIds = new Set<string>(result.teams.map((team: any) => team.id));
-        setCollapsedTeams(allTeamIds);
+        if (expandAll.current) {
+          // If expand=all query param is present, start with all teams expanded
+          setCollapsedTeams(new Set());
+        } else {
+          // Default behavior: start with all teams collapsed
+          const allTeamIds = new Set<string>(result.teams.map((team: any) => team.id));
+          setCollapsedTeams(allTeamIds);
+        }
         isInitialLoad.current = false;
       }
     } catch (err) {
@@ -298,13 +313,13 @@ export default function HostView() {
     <div className="min-h-screen flex flex-col bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-5">
-        <a
-          href="/"
+        <button
+          onClick={() => window.close()}
           className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 mb-3"
         >
           <Home className="size-4" />
-          Back to Demo
-        </a>
+          Close Window
+        </button>
         <div className="flex items-start justify-between mb-2">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{data.event.name}</h1>
