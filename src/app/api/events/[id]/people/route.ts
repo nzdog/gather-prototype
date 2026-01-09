@@ -53,7 +53,7 @@ export async function GET(
           email: pe.person.email,
           phone: pe.person.phone,
           role: pe.role,
-          team: pe.team,
+          team: pe.team || { id: '', name: 'Unassigned' },
           itemCount,
         };
       })
@@ -162,7 +162,7 @@ export async function POST(
         email: personEvent.person.email,
         phone: personEvent.person.phone,
         role: personEvent.role,
-        team: personEvent.team,
+        team: personEvent.team || { id: '', name: 'Unassigned' },
         itemCount: 0,
       },
     });
