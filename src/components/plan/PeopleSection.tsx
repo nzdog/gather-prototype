@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Plus, Edit2, Users } from 'lucide-react';
 import AddPersonModal, { AddPersonFormData } from './AddPersonModal';
 import EditPersonModal from './EditPersonModal';
+import TeamBoard from './TeamBoard';
 
 interface Team {
   id: string;
@@ -24,32 +25,22 @@ interface Person {
 interface PeopleSectionProps {
   eventId: string;
   teams: Team[];
+  people: Person[];
   onPeopleChanged?: () => void;
+  onMovePerson: (personId: string, teamId: string | null) => Promise<void>;
 }
 
-export default function PeopleSection({ eventId, teams, onPeopleChanged }: PeopleSectionProps) {
-  const [people, setPeople] = useState<Person[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function PeopleSection({
+  eventId,
+  teams,
+  people,
+  onPeopleChanged,
+  onMovePerson
+}: PeopleSectionProps) {
+  const [view, setView] = useState<'table' | 'board'>('table');
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
-
-  useEffect(() => {
-    loadPeople();
-  }, [eventId]);
-
-  const loadPeople = async () => {
-    try {
-      const response = await fetch(`/api/events/${eventId}/people`);
-      if (!response.ok) throw new Error('Failed to load people');
-      const data = await response.json();
-      setPeople(data.people);
-    } catch (error: any) {
-      console.error('Error loading people:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleAddPerson = async (data: AddPersonFormData) => {
     try {
@@ -64,7 +55,6 @@ export default function PeopleSection({ eventId, teams, onPeopleChanged }: Peopl
         throw new Error(error.error || 'Failed to add person');
       }
 
-      await loadPeople();
       onPeopleChanged?.();
     } catch (error) {
       throw error; // Re-throw so modal can show error
@@ -73,7 +63,7 @@ export default function PeopleSection({ eventId, teams, onPeopleChanged }: Peopl
 
   const handleUpdatePerson = async (
     personId: string,
-    data: { role?: string; teamId?: string }
+    data: { role?: string; teamId?: string | null }
   ) => {
     try {
       const response = await fetch(`/api/events/${eventId}/people/${personId}`, {
@@ -87,7 +77,6 @@ export default function PeopleSection({ eventId, teams, onPeopleChanged }: Peopl
         throw new Error(error.error || 'Failed to update person');
       }
 
-      await loadPeople();
       onPeopleChanged?.();
     } catch (error) {
       throw error; // Re-throw so modal can show error
@@ -105,7 +94,6 @@ export default function PeopleSection({ eventId, teams, onPeopleChanged }: Peopl
         throw new Error(error.error || 'Failed to remove person');
       }
 
-      await loadPeople();
       onPeopleChanged?.();
     } catch (error) {
       throw error; // Re-throw so modal can show error
@@ -130,22 +118,42 @@ export default function PeopleSection({ eventId, teams, onPeopleChanged }: Peopl
     }
   };
 
-  if (loading) {
-    return (
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <p className="text-gray-600">Loading people...</p>
-      </div>
-    );
-  }
-
   return (
     <>
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-gray-600" />
-            <h2 className="text-xl font-semibold text-gray-900">People</h2>
-            <span className="text-sm text-gray-500">({people.length})</span>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-gray-600" />
+              <h2 className="text-xl font-semibold text-gray-900">People</h2>
+              <span className="text-sm text-gray-500">({people.length})</span>
+            </div>
+            {/* View Toggle */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">View</span>
+              <div className="flex gap-1 bg-gray-100 rounded-md p-1">
+                <button
+                  onClick={() => setView('table')}
+                  className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                    view === 'table'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Table
+                </button>
+                <button
+                  onClick={() => setView('board')}
+                  className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                    view === 'board'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Board
+                </button>
+              </div>
+            </div>
           </div>
           <button
             onClick={() => setAddModalOpen(true)}
@@ -156,11 +164,17 @@ export default function PeopleSection({ eventId, teams, onPeopleChanged }: Peopl
           </button>
         </div>
 
+        {view === 'board' && (
+          <p className="text-xs text-gray-500 mb-4">
+            Move people between teams in Board view.
+          </p>
+        )}
+
         {people.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <p>No people added yet. Add people to assign items to them.</p>
           </div>
-        ) : (
+        ) : view === 'table' ? (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -218,6 +232,8 @@ export default function PeopleSection({ eventId, teams, onPeopleChanged }: Peopl
               </tbody>
             </table>
           </div>
+        ) : (
+          <TeamBoard teams={teams} people={people} onMovePerson={onMovePerson} />
         )}
       </div>
 

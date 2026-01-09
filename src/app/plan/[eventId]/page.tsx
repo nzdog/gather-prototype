@@ -97,6 +97,20 @@ interface Day {
   date: string;
 }
 
+interface Person {
+  id: string;
+  personId: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  role: string;
+  team: {
+    id: string;
+    name: string;
+  };
+  itemCount: number;
+}
+
 export default function PlanEditorPage() {
   const params = useParams();
   const router = useRouter();
@@ -107,6 +121,7 @@ export default function PlanEditorPage() {
   const [days, setDays] = useState<Day[]>([]);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
   const [items, setItems] = useState<Item[]>([]);
+  const [people, setPeople] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -130,8 +145,6 @@ export default function PlanEditorPage() {
   const [editEventModalOpen, setEditEventModalOpen] = useState(false);
   const [inviteLinks, setInviteLinks] = useState<any[]>([]);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
-  const [teamPeople, setTeamPeople] = useState<Record<string, any[]>>({});
-  const [loadingTeamPeople, setLoadingTeamPeople] = useState<Set<string>>(new Set());
 
   // Mock hostId - in production, this would come from auth
   const MOCK_HOST_ID = 'cmjwbjrpw0000n99xs11r44qh';
@@ -149,6 +162,7 @@ export default function PlanEditorPage() {
     loadDays();
     loadConflicts();
     loadItems();
+    loadPeople();
   }, [eventId]);
 
   // Load invite links when event status is CONFIRMING or later
@@ -213,6 +227,17 @@ export default function PlanEditorPage() {
       setItems(data.items || []);
     } catch (err: any) {
       console.error('Error loading items:', err);
+    }
+  };
+
+  const loadPeople = async () => {
+    try {
+      const response = await fetch(`/api/events/${eventId}/people`);
+      if (!response.ok) throw new Error('Failed to load people');
+      const data = await response.json();
+      setPeople(data.people || []);
+    } catch (err: any) {
+      console.error('Error loading people:', err);
     }
   };
 
@@ -517,26 +542,6 @@ export default function PlanEditorPage() {
     }
   };
 
-  const loadTeamPeople = async (teamId: string) => {
-    setLoadingTeamPeople((prev) => new Set(prev).add(teamId));
-    try {
-      const response = await fetch(`/api/events/${eventId}/people`);
-      if (!response.ok) throw new Error('Failed to load people');
-
-      const data = await response.json();
-      // Filter people in this team
-      const teamMembers = data.people.filter((p: any) => p.team.id === teamId);
-      setTeamPeople((prev) => ({ ...prev, [teamId]: teamMembers }));
-    } catch (error: any) {
-      console.error('Error loading team people:', error);
-    } finally {
-      setLoadingTeamPeople((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(teamId);
-        return newSet;
-      });
-    }
-  };
 
   const handleQuickAssign = async (itemId: string, personId: string, teamId: string) => {
     try {
@@ -578,12 +583,9 @@ export default function PlanEditorPage() {
       newExpanded.delete(teamId);
     } else {
       newExpanded.add(teamId);
-      // Load items and people when expanding
+      // Load items when expanding
       if (!teamItems[teamId]) {
         await loadTeamItems(teamId);
-      }
-      if (!teamPeople[teamId]) {
-        await loadTeamPeople(teamId);
       }
     }
     setExpandedTeams(newExpanded);
@@ -673,6 +675,51 @@ export default function PlanEditorPage() {
     } catch (error: any) {
       console.error('Error deleting team:', error);
       alert('Failed to delete team');
+    }
+  };
+
+  const handleMovePerson = async (personId: string, newTeamId: string | null) => {
+    // Find the person being moved
+    const person = people.find((p) => p.personId === personId);
+    if (!person) return;
+
+    // Store original state for rollback
+    const originalPeople = [...people];
+
+    // Optimistically update local state
+    const updatedPeople = people.map((p) =>
+      p.personId === personId
+        ? {
+            ...p,
+            team: newTeamId
+              ? teams.find((t) => t.id === newTeamId)!
+              : { id: '', name: 'Unassigned' },
+          }
+        : p
+    );
+    setPeople(updatedPeople);
+
+    try {
+      // PATCH to backend
+      const response = await fetch(`/api/events/${eventId}/people/${personId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId: newTeamId }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update person');
+      }
+
+      // Reload people to get fresh data (including itemCount updates)
+      await loadPeople();
+      await loadTeams();
+      setGateCheckRefresh((prev) => prev + 1);
+    } catch (error: any) {
+      console.error('Error moving person:', error);
+      // Revert optimistic update
+      setPeople(originalPeople);
+      alert("Couldn't save. Try again.");
     }
   };
 
@@ -936,15 +983,14 @@ export default function PlanEditorPage() {
               <PeopleSection
                 eventId={eventId}
                 teams={teams}
+                people={people}
                 onPeopleChanged={() => {
                   // Reload teams and refresh gate check when people change
+                  loadPeople();
                   loadTeams();
                   setGateCheckRefresh((prev) => prev + 1);
-                  // Reload team people for all expanded teams
-                  expandedTeams.forEach((teamId) => {
-                    loadTeamPeople(teamId);
-                  });
                 }}
+                onMovePerson={handleMovePerson}
               />
             </div>
 
@@ -1222,13 +1268,15 @@ export default function PlanEditorPage() {
                                           className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         >
                                           <option value="">Unassigned</option>
-                                          {teamPeople[team.id]?.map((person: any) => (
-                                            <option key={person.personId} value={person.personId}>
-                                              {person.name}
-                                            </option>
-                                          ))}
+                                          {people
+                                            .filter((p) => p.team.id === team.id)
+                                            .map((person) => (
+                                              <option key={person.personId} value={person.personId}>
+                                                {person.name}
+                                              </option>
+                                            ))}
                                         </select>
-                                        {!teamPeople[team.id] || teamPeople[team.id].length === 0 ? (
+                                        {people.filter((p) => p.team.id === team.id).length === 0 ? (
                                           <p className="text-xs text-gray-500 mt-1">
                                             No people in this team yet
                                           </p>
@@ -1368,6 +1416,7 @@ export default function PlanEditorPage() {
         item={editingItem}
         days={days}
         eventId={eventId}
+        people={people}
       />
 
       {/* Regenerate Modal */}

@@ -31,7 +31,7 @@ interface Assignment {
 interface EditPersonModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (personId: string, data: { role?: string; teamId?: string }) => Promise<void>;
+  onSave: (personId: string, data: { role?: string; teamId?: string | null }) => Promise<void>;
   onRemove: (personId: string) => Promise<void>;
   person: Person | null;
   teams: Team[];
@@ -85,7 +85,7 @@ export default function EditPersonModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const updates: { role?: string; teamId?: string } = {};
+    const updates: { role?: string; teamId?: string | null } = {};
     let hasChanges = false;
 
     if (role !== person?.role) {
@@ -94,7 +94,7 @@ export default function EditPersonModal({
     }
 
     if (teamId !== person?.team.id) {
-      updates.teamId = teamId;
+      updates.teamId = teamId || null;
       hasChanges = true;
 
       // Warn about team change
@@ -189,6 +189,7 @@ export default function EditPersonModal({
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               disabled={isSubmitting}
             >
+              <option value="">Unassigned</option>
               {teams.map((team) => (
                 <option key={team.id} value={team.id}>
                   {team.name}
