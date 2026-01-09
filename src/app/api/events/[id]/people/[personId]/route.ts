@@ -30,16 +30,19 @@ export async function PATCH(
     }
 
     // If teamId is being changed, validate it
-    if (teamId && teamId !== personEvent.teamId) {
-      const team = await prisma.team.findFirst({
-        where: { id: teamId, eventId },
-      });
+    if ('teamId' in body && teamId !== personEvent.teamId) {
+      // Only validate if teamId is not null (null means moving to unassigned)
+      if (teamId !== null) {
+        const team = await prisma.team.findFirst({
+          where: { id: teamId, eventId },
+        });
 
-      if (!team) {
-        return NextResponse.json(
-          { error: 'Team not found or does not belong to this event' },
-          { status: 404 }
-        );
+        if (!team) {
+          return NextResponse.json(
+            { error: 'Team not found or does not belong to this event' },
+            { status: 404 }
+          );
+        }
       }
 
       // When changing teams, remove all assignments (items must be in same team as person)
@@ -77,8 +80,8 @@ export async function PATCH(
         },
       },
       data: {
-        role: role || personEvent.role,
-        teamId: teamId || personEvent.teamId,
+        role: role !== undefined ? role : personEvent.role,
+        teamId: 'teamId' in body ? teamId : personEvent.teamId,
       },
       include: {
         person: {
@@ -117,7 +120,7 @@ export async function PATCH(
         email: updated.person.email,
         phone: updated.person.phone,
         role: updated.role,
-        team: updated.team,
+        team: updated.team || { id: '', name: 'Unassigned' },
         itemCount,
       },
     });

@@ -50,6 +50,7 @@ interface EditItemModalProps {
   } | null;
   days: Day[];
   eventId: string;
+  people: Person[];
 }
 
 const QUANTITY_UNITS = [
@@ -77,7 +78,15 @@ const DIETARY_TAGS = [
   { value: 'dairyFree', label: 'Dairy Free' },
 ];
 
-export default function EditItemModal({ isOpen, onClose, onSave, item, days, eventId }: EditItemModalProps) {
+export default function EditItemModal({
+  isOpen,
+  onClose,
+  onSave,
+  item,
+  days,
+  eventId,
+  people
+}: EditItemModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [critical, setCritical] = useState(false);
@@ -101,8 +110,6 @@ export default function EditItemModal({ isOpen, onClose, onSave, item, days, eve
 
   // Assignment fields
   const [assignedPersonId, setAssignedPersonId] = useState<string>('');
-  const [people, setPeople] = useState<Person[]>([]);
-  const [loadingPeople, setLoadingPeople] = useState(false);
 
   useEffect(() => {
     if (item) {
@@ -129,30 +136,8 @@ export default function EditItemModal({ isOpen, onClose, onSave, item, days, eve
 
       // Assignment fields
       setAssignedPersonId(item.assignment?.person?.id || '');
-
-      // Load people in the same team
-      loadPeople();
     }
   }, [item]);
-
-  const loadPeople = async () => {
-    if (!item) return;
-
-    setLoadingPeople(true);
-    try {
-      const response = await fetch(`/api/events/${eventId}/people`);
-      if (!response.ok) throw new Error('Failed to load people');
-      const data = await response.json();
-
-      // Filter people in the same team as the item
-      const teamPeople = data.people.filter((p: Person) => p.team.id === item.team.id);
-      setPeople(teamPeople);
-    } catch (error: any) {
-      console.error('Error loading people:', error);
-    } finally {
-      setLoadingPeople(false);
-    }
-  };
 
   if (!isOpen || !item) return null;
 
@@ -444,23 +429,21 @@ export default function EditItemModal({ isOpen, onClose, onSave, item, days, eve
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Assigned to
               </label>
-              {loadingPeople ? (
-                <p className="text-sm text-gray-500">Loading people...</p>
-              ) : (
-                <select
-                  value={assignedPersonId}
-                  onChange={(e) => setAssignedPersonId(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Unassigned</option>
-                  {people.map((person) => (
+              <select
+                value={assignedPersonId}
+                onChange={(e) => setAssignedPersonId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Unassigned</option>
+                {people
+                  .filter((p) => p.team.id === item.team.id)
+                  .map((person) => (
                     <option key={person.personId} value={person.personId}>
                       {person.name}
                     </option>
                   ))}
-                </select>
-              )}
-              {people.length === 0 && !loadingPeople && (
+              </select>
+              {people.filter((p) => p.team.id === item.team.id).length === 0 && (
                 <p className="text-xs text-gray-500 mt-1">
                   No people in this team yet. Add people to the team first.
                 </p>
