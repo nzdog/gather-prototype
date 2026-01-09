@@ -1,0 +1,5 @@
+Name,Email,Phone
+Valid Person,valid@example.com,021-555-0401
+,missing-name@example.com,021-555-0402
+Invalid Email,not-an-email,021-555-0403
+Another Valid,another@example.com,

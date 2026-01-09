@@ -1,0 +1,6 @@
+Name,Email,Phone
+Test Person,test@example.com,021-555-0301
+Another Person,another@example.com,021-555-0302
+Test Person,test@example.com,021-555-0303
+Duplicate Name,unique1@example.com,021-555-0304
+Duplicate Name,unique2@example.com,021-555-0304
