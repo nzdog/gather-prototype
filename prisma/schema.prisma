@@ -170,9 +170,9 @@ model PersonEvent {
   eventId String
   event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
-  // teamId is REQUIRED to enforce "one team only" strictly
-  teamId String
-  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  // teamId is optional to support unassigned people
+  teamId String?
+  team   Team?   @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   role PersonRole @default(PARTICIPANT)
 
