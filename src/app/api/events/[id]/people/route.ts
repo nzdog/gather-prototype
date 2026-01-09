@@ -76,23 +76,25 @@ export async function POST(
     const body = await request.json();
     const { name, email, phone, role, teamId } = body;
 
-    if (!name || !teamId) {
+    if (!name) {
       return NextResponse.json(
-        { error: 'Name and team are required' },
+        { error: 'Name is required' },
         { status: 400 }
       );
     }
 
-    // Validate team belongs to event
-    const team = await prisma.team.findFirst({
-      where: { id: teamId, eventId },
-    });
+    // Validate team belongs to event (if teamId provided)
+    if (teamId) {
+      const team = await prisma.team.findFirst({
+        where: { id: teamId, eventId },
+      });
 
-    if (!team) {
-      return NextResponse.json(
-        { error: 'Team not found or does not belong to this event' },
-        { status: 404 }
-      );
+      if (!team) {
+        return NextResponse.json(
+          { error: 'Team not found or does not belong to this event' },
+          { status: 404 }
+        );
+      }
     }
 
     // Create or find person
@@ -133,7 +135,7 @@ export async function POST(
       data: {
         personId: person.id,
         eventId,
-        teamId,
+        teamId: teamId || null,
         role: role || 'PARTICIPANT',
       },
       include: {

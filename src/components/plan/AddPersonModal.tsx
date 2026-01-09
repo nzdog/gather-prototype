@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 
 interface Team {
@@ -13,7 +13,7 @@ export interface AddPersonFormData {
   email: string;
   phone: string;
   role: string;
-  teamId: string;
+  teamId: string | null;
 }
 
 interface AddPersonModalProps {
@@ -28,33 +28,52 @@ export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPer
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState('PARTICIPANT');
-  const [teamId, setTeamId] = useState('');
+  const [teamId, setTeamId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [addedPeople, setAddedPeople] = useState<Array<{ name: string; team: string; role: string }>>([]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim() || !teamId) {
-      alert('Name and team are required');
+  // Detect platform for keyboard shortcut display
+  const isMac = typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!name.trim()) {
+      alert('Name is required');
       return;
     }
 
     setIsSubmitting(true);
     try {
+      const addedName = name.trim();
       await onAdd({
-        name: name.trim(),
+        name: addedName,
         email: email.trim(),
         phone: phone.trim(),
         role,
         teamId,
       });
 
-      // Reset form
+      // Add to list of added people
+      const teamName = teamId ? teams.find(t => t.id === teamId)?.name || 'Unassigned' : 'Unassigned';
+      setAddedPeople(prev => [...prev, { name: addedName, team: teamName, role }]);
+
+      // Show success message
+      setSuccessMessage(`${addedName} added successfully!`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+
+      // Reset form but keep modal open
       setName('');
       setEmail('');
       setPhone('');
       setRole('PARTICIPANT');
-      setTeamId('');
-      onClose();
+      setTeamId(null);
+
+      // Refocus name input for next entry
+      setTimeout(() => {
+        const nameInput = document.querySelector('input[type="text"]') as HTMLInputElement;
+        nameInput?.focus();
+      }, 100);
     } catch (error: any) {
       console.error('Error adding person:', error);
       alert(error.message || 'Failed to add person');
@@ -63,19 +82,58 @@ export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPer
     }
   };
 
+  const handleClose = () => {
+    setAddedPeople([]);
+    onClose();
+  };
+
+  // Keyboard shortcut: Cmd+Enter (Mac) or Ctrl+Enter (Windows/Linux)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check for Cmd+Enter (Mac) or Ctrl+Enter (Windows/Linux)
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        if (!isSubmitting && name.trim()) {
+          // Trigger form submission
+          const form = document.querySelector('form');
+          if (form) {
+            form.requestSubmit();
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isSubmitting, name]);
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold text-gray-900">Add Person</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <h2 className="text-lg font-semibold text-gray-900">Add People</h2>
+          <button onClick={handleClose} className="text-gray-400 hover:text-gray-600">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+        <div className="flex-1 flex overflow-hidden">
+          {/* Left Side - Form */}
+          <div className="flex-1 overflow-y-auto">
+            {/* Success Message - Always reserve space to prevent jumping */}
+            <div className="mx-4 mt-4 h-14 flex items-center">
+              <div className={`w-full transition-opacity duration-200 ${successMessage ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                  <p className="text-sm text-green-800">{successMessage || '\u00A0'}</p>
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-4 space-y-4">
           {/* Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -141,21 +199,23 @@ export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPer
           {/* Team */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Team *
+              Team
             </label>
             <select
-              value={teamId}
-              onChange={(e) => setTeamId(e.target.value)}
+              value={teamId || ''}
+              onChange={(e) => setTeamId(e.target.value || null)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
             >
-              <option value="">Select a team...</option>
+              <option value="">Unassigned</option>
               {teams.map((team) => (
                 <option key={team.id} value={team.id}>
                   {team.name}
                 </option>
               ))}
             </select>
+            <p className="text-xs text-gray-500 mt-1">
+              You can assign people to teams later.
+            </p>
           </div>
 
           {/* Actions */}
@@ -166,17 +226,64 @@ export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPer
               className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Adding...' : 'Add Person'}
+              <span className="ml-2 text-xs opacity-75">
+                ({isMac ? '⌘' : 'Ctrl'}+↵)
+              </span>
             </button>
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               disabled={isSubmitting}
               className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50"
             >
-              Cancel
+              Close
             </button>
           </div>
+          <p className="text-xs text-gray-500 text-center -mt-2">
+            Modal will stay open • Press {isMac ? '⌘' : 'Ctrl'}+Enter to add quickly
+          </p>
         </form>
+          </div>
+
+          {/* Right Side - Added People List */}
+          <div className="w-80 border-l bg-gray-50 overflow-y-auto">
+            <div className="p-4 border-b bg-white sticky top-0">
+              <h3 className="text-sm font-semibold text-gray-900">
+                Added This Session ({addedPeople.length})
+              </h3>
+            </div>
+            <div className="p-4">
+              {addedPeople.length === 0 ? (
+                <div className="text-center py-8 text-gray-400 text-sm">
+                  <p>No people added yet.</p>
+                  <p className="mt-1">Start adding people to see them here.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {addedPeople.map((person, index) => (
+                    <div
+                      key={index}
+                      className="bg-white border border-gray-200 rounded-md p-3 shadow-sm"
+                    >
+                      <p className="font-medium text-gray-900 text-sm">{person.name}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs text-gray-600">{person.team}</span>
+                        <span className="text-xs text-gray-400">•</span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${
+                          person.role === 'COORDINATOR'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-green-100 text-green-700'
+                        }`}>
+                          {person.role}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
