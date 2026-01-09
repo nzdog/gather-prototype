@@ -15,6 +15,7 @@ import RevisionHistory from '@/components/plan/RevisionHistory';
 import RegenerateModal from '@/components/plan/RegenerateModal';
 import PeopleSection from '@/components/plan/PeopleSection';
 import EditEventModal from '@/components/plan/EditEventModal';
+import ItemStatusBadges from '@/components/plan/ItemStatusBadges';
 import { Conflict } from '@prisma/client';
 
 interface Event {
@@ -890,6 +891,10 @@ export default function PlanEditorPage() {
                               <span className="text-sm text-gray-500">{item.team.name}</span>
                             </div>
 
+                            <div className="mb-2">
+                              <ItemStatusBadges assignment={item.assignment} />
+                            </div>
+
                             {item.description && (
                               <p className="text-sm text-gray-600 mb-2">{item.description}</p>
                             )}
@@ -1211,11 +1216,10 @@ export default function PlanEditorPage() {
                                             Critical
                                           </span>
                                         )}
-                                        {!item.assignment && (
-                                          <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded">
-                                            Unassigned
-                                          </span>
-                                        )}
+                                      </div>
+
+                                      <div className="mt-2">
+                                        <ItemStatusBadges assignment={item.assignment} />
                                       </div>
 
                                       {item.description && (

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
+import ItemStatusBadges from './ItemStatusBadges';
 
 interface Day {
   id: string;
@@ -234,6 +235,11 @@ export default function EditItemModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          {/* Status Badges */}
+          <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+            <ItemStatusBadges assignment={item.assignment} />
+          </div>
+
           {/* Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Item Name *</label>

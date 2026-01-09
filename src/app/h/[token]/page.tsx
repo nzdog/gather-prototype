@@ -572,7 +572,7 @@ export default function HostView() {
                       </div>
                       <div>
                         <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-                          Accepted
+                          Confirmed
                         </div>
                         <div className="text-xl font-bold text-green-600">{acceptedCount}</div>
                       </div>

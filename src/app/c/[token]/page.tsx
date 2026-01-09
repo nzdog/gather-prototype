@@ -18,6 +18,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import ItemStatusBadges from '@/components/plan/ItemStatusBadges';
 
 interface Assignment {
   id: string;
@@ -54,6 +55,7 @@ interface Item {
   assignment: {
     id: string;
     acknowledged: boolean;
+    response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
     person: { id: string; name: string };
   } | null;
 }
@@ -494,6 +496,11 @@ export default function CoordinatorView() {
                     )}
                   </div>
 
+                  {/* Status Badges */}
+                  <div className="mb-2">
+                    <ItemStatusBadges assignment={item.assignment} />
+                  </div>
+
                   {/* Dietary tags - Always Visible */}
                   {(item.glutenFree || item.dairyFree || item.vegetarian) && (
                     <div className="flex gap-2 mb-2">
@@ -514,21 +521,6 @@ export default function CoordinatorView() {
                       )}
                     </div>
                   )}
-
-                  {/* Assignment Status Icon - Always Visible */}
-                  <div className="flex items-center gap-1.5 text-xs">
-                    {item.assignment ? (
-                      <>
-                        <Check className="size-3.5 text-green-600" />
-                        <span className="text-green-600 font-medium">Assigned</span>
-                      </>
-                    ) : (
-                      <>
-                        <AlertCircle className="size-3.5 text-amber-600" />
-                        <span className="text-amber-600 font-medium">Unassigned</span>
-                      </>
-                    )}
-                  </div>
                 </div>
 
                 {/* Collapse Toggle Button */}
@@ -586,10 +578,15 @@ export default function CoordinatorView() {
                             </button>
                           )}
                         </div>
-                        {item.assignment.acknowledged ? (
+                        {item.assignment.response === 'ACCEPTED' ? (
                           <div className="inline-flex items-center gap-1.5 bg-green-100 text-green-800 px-3 py-1.5 rounded-full text-sm font-semibold">
                             <Check className="size-4" />
                             Confirmed
+                          </div>
+                        ) : item.assignment.response === 'DECLINED' ? (
+                          <div className="inline-flex items-center gap-1.5 bg-red-100 text-red-800 px-3 py-1.5 rounded-full text-sm font-semibold">
+                            <AlertCircle className="size-4" />
+                            Declined
                           </div>
                         ) : (
                           <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full text-sm font-semibold">

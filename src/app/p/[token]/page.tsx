@@ -12,6 +12,7 @@ import {
   Maximize2,
   Minimize2,
 } from 'lucide-react';
+import ItemStatusBadges from '@/components/plan/ItemStatusBadges';
 
 interface Assignment {
   id: string;
@@ -253,6 +254,11 @@ export default function ParticipantView() {
                         </span>
                       </div>
                     )}
+
+                    {/* Status Badges */}
+                    <div className="mb-2">
+                      <ItemStatusBadges assignment={assignment} />
+                    </div>
 
                     {/* Dietary tags - Always Visible */}
                     {(assignment.item.glutenFree ||
