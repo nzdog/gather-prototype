@@ -36,6 +36,7 @@ interface TeamBoardProps {
   teams: Team[];
   people: Person[];
   onMovePerson: (personId: string, teamId: string | null) => Promise<void>;
+  onEditPerson?: (person: Person) => void;
 }
 
 function DraggablePersonChip({
@@ -43,12 +44,14 @@ function DraggablePersonChip({
   menuOpen,
   onMenuToggle,
   onClickMove,
+  onEditPerson,
   teams,
 }: {
   person: Person;
   menuOpen: string | null;
   onMenuToggle: (personId: string) => void;
   onClickMove: (person: Person, targetTeamId: string | null) => void;
+  onEditPerson?: (person: Person) => void;
   teams: Team[];
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -76,10 +79,18 @@ function DraggablePersonChip({
           >
             <GripVertical className="w-4 h-4 text-gray-400 flex-shrink-0" />
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">{person.name}</p>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEditPerson?.(person);
+            }}
+            className="flex-1 min-w-0 text-left hover:bg-gray-50 rounded px-1 -mx-1 transition-colors"
+          >
+            <p className="text-sm font-medium text-gray-900 truncate hover:text-blue-600 transition-colors">
+              {person.name}
+            </p>
             {person.email && <p className="text-xs text-gray-500 truncate">{person.email}</p>}
-          </div>
+          </button>
           {person.itemCount > 0 && (
             <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded flex-shrink-0">
               {person.itemCount} {person.itemCount === 1 ? 'item' : 'items'}
@@ -132,6 +143,7 @@ function DroppableTeamCard({
   menuOpen,
   onMenuToggle,
   onClickMove,
+  onEditPerson,
   teams,
 }: {
   team: Team | null;
@@ -139,6 +151,7 @@ function DroppableTeamCard({
   menuOpen: string | null;
   onMenuToggle: (personId: string) => void;
   onClickMove: (person: Person, targetTeamId: string | null) => void;
+  onEditPerson?: (person: Person) => void;
   teams: Team[];
 }) {
   const isUnassigned = team === null;
@@ -173,6 +186,7 @@ function DroppableTeamCard({
               menuOpen={menuOpen}
               onMenuToggle={onMenuToggle}
               onClickMove={onClickMove}
+              onEditPerson={onEditPerson}
               teams={teams}
             />
           ))
@@ -182,7 +196,7 @@ function DroppableTeamCard({
   );
 }
 
-export default function TeamBoard({ teams, people, onMovePerson }: TeamBoardProps) {
+export default function TeamBoard({ teams, people, onMovePerson, onEditPerson }: TeamBoardProps) {
   const [activePerson, setActivePerson] = useState<Person | null>(null);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
 
@@ -283,6 +297,7 @@ export default function TeamBoard({ teams, people, onMovePerson }: TeamBoardProp
             menuOpen={menuOpen}
             onMenuToggle={handleMenuToggle}
             onClickMove={handleClickMove}
+            onEditPerson={onEditPerson}
             teams={teams}
           />
 
@@ -295,6 +310,7 @@ export default function TeamBoard({ teams, people, onMovePerson }: TeamBoardProp
               menuOpen={menuOpen}
               onMenuToggle={handleMenuToggle}
               onClickMove={handleClickMove}
+              onEditPerson={onEditPerson}
               teams={teams}
             />
           ))}

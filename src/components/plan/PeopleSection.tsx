@@ -323,7 +323,7 @@ export default function PeopleSection({
             </table>
           </div>
         ) : (
-          <TeamBoard teams={teams} people={people} onMovePerson={onMovePerson} />
+          <TeamBoard teams={teams} people={people} onMovePerson={onMovePerson} onEditPerson={handleEditPerson} />
         )}
       </div>
 
