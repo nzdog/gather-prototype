@@ -21,13 +21,15 @@ The CSV import feature allows hosts to bulk import people into an event's Draft 
 ### Step 2: Map Columns
 - Each CSV column is displayed with a dropdown to select target field
 - **Smart suggestions** automatically map common column names:
-  - "Name", "Full Name" → Name
-  - "First Name", "Last Name", "fname" → Name
+  - "Name", "Full Name" → Full Name
+  - "First Name", "fname", "given" → First Name
+  - "Last Name", "lname", "surname", "family" → Last Name
   - "Email", "E-mail", "mail" → Email
   - "Phone", "Mobile", "Tel" → Phone
+- **First + Last Name formatting**: When both First Name and Last Name are mapped, names are stored as "Last, First" format to enable proper sorting by last name
 - Can manually override any mapping
 - Can set columns to "Ignore"
-- Must map at least one column to "Name" to proceed
+- Must map at least one name field (Full Name, or First/Last Name) to proceed
 
 ### Step 3: Review & Select
 - Preview table shows all normalized people
@@ -57,6 +59,7 @@ The CSV import feature allows hosts to bulk import people into an event's Draft 
 - Whitespace trimmed on all fields
 - Email normalized to lowercase
 - Phone: spaces/dashes stripped for comparison, original format stored
+- Names: When First Name and Last Name are both provided, combined as "Last, First" for sortability
 
 ## API Endpoint
 

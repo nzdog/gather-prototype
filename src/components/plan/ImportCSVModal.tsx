@@ -28,11 +28,13 @@ interface ParsedRow extends PersonRow {
 
 type FieldMapping = {
   csvColumn: string;
-  targetField: 'name' | 'email' | 'phone' | 'ignore';
+  targetField: 'name' | 'firstName' | 'lastName' | 'email' | 'phone' | 'ignore';
 };
 
 const TARGET_FIELDS = [
-  { value: 'name', label: 'Name' },
+  { value: 'name', label: 'Full Name' },
+  { value: 'firstName', label: 'First Name' },
+  { value: 'lastName', label: 'Last Name' },
   { value: 'email', label: 'Email' },
   { value: 'phone', label: 'Phone' },
   { value: 'ignore', label: 'Ignore' },
@@ -103,10 +105,16 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams }: Imp
       const lowerHeader = header.toLowerCase();
 
       // Smart suggestions based on common column names
-      if (lowerHeader.includes('name') && !lowerHeader.includes('first') && !lowerHeader.includes('last')) {
-        return { csvColumn: header, targetField: 'name' };
+      // Check for first name first
+      if (lowerHeader.includes('first') || lowerHeader === 'fname' || lowerHeader === 'given') {
+        return { csvColumn: header, targetField: 'firstName' };
       }
-      if (lowerHeader.includes('first') || lowerHeader === 'fname') {
+      // Check for last name
+      if (lowerHeader.includes('last') || lowerHeader === 'lname' || lowerHeader === 'surname' || lowerHeader === 'family') {
+        return { csvColumn: header, targetField: 'lastName' };
+      }
+      // Full name (catch-all for "name" without first/last)
+      if (lowerHeader.includes('name')) {
         return { csvColumn: header, targetField: 'name' };
       }
       if (lowerHeader.includes('email') || lowerHeader.includes('e-mail') || lowerHeader === 'mail') {
@@ -128,17 +136,20 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams }: Imp
     setMappings((prev) =>
       prev.map((m) =>
         m.csvColumn === csvColumn
-          ? { ...m, targetField: targetField as 'name' | 'email' | 'phone' | 'ignore' }
+          ? { ...m, targetField: targetField as 'name' | 'firstName' | 'lastName' | 'email' | 'phone' | 'ignore' }
           : m
       )
     );
   };
 
   const handleProceedToReview = () => {
-    // Check if at least one field is mapped to 'name'
+    // Check if at least one field is mapped to 'name' or firstName/lastName combination
     const hasNameMapping = mappings.some((m) => m.targetField === 'name');
-    if (!hasNameMapping) {
-      alert('You must map at least one column to "Name"');
+    const hasFirstName = mappings.some((m) => m.targetField === 'firstName');
+    const hasLastName = mappings.some((m) => m.targetField === 'lastName');
+
+    if (!hasNameMapping && !(hasFirstName || hasLastName)) {
+      alert('You must map at least one name field (Full Name, or First/Last Name)');
       return;
     }
 
@@ -152,13 +163,19 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams }: Imp
       };
 
       // Build person from mappings
-      let nameFields: string[] = [];
+      let fullNameFields: string[] = [];
+      let firstName = '';
+      let lastName = '';
 
       mappings.forEach((mapping, colIndex) => {
         const value = row[colIndex]?.trim() || '';
 
         if (mapping.targetField === 'name' && value) {
-          nameFields.push(value);
+          fullNameFields.push(value);
+        } else if (mapping.targetField === 'firstName' && value) {
+          firstName = value;
+        } else if (mapping.targetField === 'lastName' && value) {
+          lastName = value;
         } else if (mapping.targetField === 'email') {
           person.email = value || null;
         } else if (mapping.targetField === 'phone') {
@@ -166,8 +183,18 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams }: Imp
         }
       });
 
-      // Combine name fields
-      person.name = nameFields.join(' ').trim();
+      // Combine name fields with proper formatting
+      // If we have first and last name, format as "Last, First" for sortability
+      if (lastName && firstName) {
+        person.name = `${lastName}, ${firstName}`;
+      } else if (lastName) {
+        person.name = lastName;
+      } else if (firstName) {
+        person.name = firstName;
+      } else {
+        // Fall back to full name fields joined with spaces
+        person.name = fullNameFields.join(' ').trim();
+      }
 
       // Normalize
       if (person.email) {
@@ -389,6 +416,17 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams }: Imp
                   column names.
                 </p>
               </div>
+
+              {/* Show info when first+last name are mapped */}
+              {mappings.some((m) => m.targetField === 'firstName') &&
+                mappings.some((m) => m.targetField === 'lastName') && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <p className="text-sm text-green-900">
+                      <strong>✓ First + Last Name detected:</strong> Names will be stored as "Last, First"
+                      format to enable sorting by last name.
+                    </p>
+                  </div>
+                )}
 
               <div className="space-y-3">
                 {mappings.map((mapping, index) => (
