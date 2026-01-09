@@ -769,7 +769,15 @@ export default function PlanEditorPage() {
             </div>
             <div className="flex gap-3">
               <button
-                onClick={() => router.push(`/h/${eventId}`)}
+                onClick={() => {
+                  // Find the HOST token from invite links
+                  const hostLink = inviteLinks.find((link) => link.scope === 'HOST');
+                  if (hostLink) {
+                    window.open(`/h/${hostLink.token}?expand=all`, '_blank');
+                  } else {
+                    alert('Host view is not available yet. Please transition to CONFIRMING status first.');
+                  }
+                }}
                 className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
               >
                 View as Host
