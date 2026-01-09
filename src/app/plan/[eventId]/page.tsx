@@ -792,7 +792,7 @@ export default function PlanEditorPage() {
                   )}
                 </button>
               )}
-              {event.status === 'DRAFT' && teams.length > 0 && (
+              {(event.status === 'DRAFT' || event.status === 'CONFIRMING') && teams.length > 0 && (
                 <button
                   onClick={handleRegeneratePlan}
                   disabled={isRegenerating}
