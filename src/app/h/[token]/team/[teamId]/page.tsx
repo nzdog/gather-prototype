@@ -15,6 +15,7 @@ import {
   Maximize2,
   Minimize2,
 } from 'lucide-react';
+import ItemStatusBadges from '@/components/plan/ItemStatusBadges';
 
 interface Item {
   id: string;
@@ -253,6 +254,11 @@ export default function HostTeamView() {
                           CRITICAL
                         </span>
                       )}
+                    </div>
+
+                    {/* Status Badges */}
+                    <div className="mb-2">
+                      <ItemStatusBadges assignment={item.assignment} />
                     </div>
 
                     {/* Dietary tags - Always Visible */}

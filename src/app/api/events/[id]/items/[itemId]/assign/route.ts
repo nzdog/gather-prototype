@@ -4,11 +4,10 @@ import { prisma } from '@/lib/prisma';
 // POST /api/events/[id]/items/[itemId]/assign - Assign item to person
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string; itemId: string } }
+  context: { params: Promise<{ id: string; itemId: string }> }
 ) {
   try {
-    const eventId = params.id;
-    const itemId = params.itemId;
+    const { id: eventId, itemId } = await context.params;
     const body = await request.json();
     const { personId } = body;
 
@@ -106,11 +105,10 @@ export async function POST(
 // DELETE /api/events/[id]/items/[itemId]/assign - Unassign item
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: { id: string; itemId: string } }
+  context: { params: Promise<{ id: string; itemId: string }> }
 ) {
   try {
-    const eventId = params.id;
-    const itemId = params.itemId;
+    const { id: eventId, itemId } = await context.params;
 
     // Get item with assignment
     const item = await prisma.item.findUnique({
