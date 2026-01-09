@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Edit2, Users, Loader2 } from 'lucide-react';
+import { Plus, Edit2, Users, Loader2, Upload } from 'lucide-react';
 import AddPersonModal, { AddPersonFormData } from './AddPersonModal';
 import EditPersonModal from './EditPersonModal';
 import TeamBoard from './TeamBoard';
+import ImportCSVModal, { PersonRow } from './ImportCSVModal';
 
 interface Team {
   id: string;
@@ -40,6 +41,7 @@ export default function PeopleSection({
   const [view, setView] = useState<'table' | 'board'>('table');
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [isAutoAssigning, setIsAutoAssigning] = useState(false);
 
@@ -104,6 +106,36 @@ export default function PeopleSection({
   const handleEditPerson = (person: Person) => {
     setSelectedPerson(person);
     setEditModalOpen(true);
+  };
+
+  const handleBatchImport = async (people: PersonRow[]) => {
+    try {
+      const response = await fetch(`/api/events/${eventId}/people/batch-import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ people }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to import people');
+      }
+
+      const result = await response.json();
+
+      // Show summary
+      const { imported, skipped, errors } = result;
+      alert(
+        `Import complete!\n\n` +
+        `✓ Imported: ${imported}\n` +
+        (skipped > 0 ? `⊘ Skipped: ${skipped} (duplicates)\n` : '') +
+        (errors?.length > 0 ? `✗ Errors: ${errors.length}` : '')
+      );
+
+      onPeopleChanged?.();
+    } catch (error) {
+      throw error; // Re-throw so modal can show error
+    }
   };
 
   const handleAutoAssign = async () => {
@@ -202,6 +234,14 @@ export default function PeopleSection({
                   Auto-Assign
                 </>
               )}
+            </button>
+            {/* Import CSV Button */}
+            <button
+              onClick={() => setImportModalOpen(true)}
+              className="px-3 py-1 bg-purple-600 text-white rounded-md hover:bg-purple-700 flex items-center gap-2"
+            >
+              <Upload className="w-4 h-4" />
+              Import CSV
             </button>
             {/* Add Person Button */}
             <button
@@ -307,6 +347,14 @@ export default function PeopleSection({
         person={selectedPerson}
         teams={teams}
         eventId={eventId}
+      />
+
+      {/* Import CSV Modal */}
+      <ImportCSVModal
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onImport={handleBatchImport}
+        teams={teams}
       />
     </>
   );
