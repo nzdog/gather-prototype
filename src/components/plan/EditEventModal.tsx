@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
+import { useModal } from '@/contexts/ModalContext';
 
 interface Event {
   id: string;
@@ -46,8 +47,20 @@ export default function EditEventModal({
   event,
   eventId,
 }: EditEventModalProps) {
+  const { openModal, closeModal } = useModal();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [step, setStep] = useState(1); // 1=basics, 2=guests/dietary, 3=venue
+
+  // Modal blocking check
+  useEffect(() => {
+    if (isOpen) {
+      if (!openModal('edit-event-modal')) {
+        onClose();
+      }
+    } else {
+      closeModal();
+    }
+  }, [isOpen]);
 
   const [formData, setFormData] = useState({
     name: '',

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useModal } from '@/contexts/ModalContext';
 
 interface AddTeamModalProps {
   isOpen: boolean;
@@ -30,10 +31,22 @@ const DOMAINS = [
 ];
 
 export default function AddTeamModal({ isOpen, onClose, onAdd }: AddTeamModalProps) {
+  const { openModal, closeModal } = useModal();
   const [name, setName] = useState('');
   const [scope, setScope] = useState('');
   const [domain, setDomain] = useState('');
   const [adding, setAdding] = useState(false);
+
+  // Modal blocking check
+  useEffect(() => {
+    if (isOpen) {
+      if (!openModal('add-team-modal')) {
+        onClose();
+      }
+    } else {
+      closeModal();
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

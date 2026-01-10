@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { ChevronDown, ChevronRight, Plus, Save, Loader2 } from 'lucide-react';
+import { useParams, useRouter, useSearchParams, usePathname } from 'next/navigation';
+import { ChevronDown, ChevronRight, Plus, Save, Loader2, Maximize2, Users, AlertCircle, Package, Link as LinkIcon, Clock } from 'lucide-react';
 import ConflictList from '@/components/plan/ConflictList';
 import GateCheck from '@/components/plan/GateCheck';
 import FreezeCheck from '@/components/plan/FreezeCheck';
@@ -16,6 +16,8 @@ import RegenerateModal from '@/components/plan/RegenerateModal';
 import PeopleSection from '@/components/plan/PeopleSection';
 import EditEventModal from '@/components/plan/EditEventModal';
 import ItemStatusBadges from '@/components/plan/ItemStatusBadges';
+import SectionExpandModal from '@/components/plan/SectionExpandModal';
+import { ModalProvider } from '@/contexts/ModalContext';
 import { Conflict } from '@prisma/client';
 
 interface Event {
@@ -57,6 +59,7 @@ interface Team {
   };
   _count: {
     items: number;
+    members: number;
   };
   unassignedCount: number;
 }
@@ -112,9 +115,36 @@ interface Person {
   itemCount: number;
 }
 
+type SectionId =
+  | 'assessment'
+  | 'items'
+  | 'people'
+  | 'teams'
+  | 'gate'
+  | 'freeze'
+  | 'invites'
+  | 'history';
+
+const validSectionIds: SectionId[] = [
+  'assessment',
+  'items',
+  'people',
+  'teams',
+  'gate',
+  'freeze',
+  'invites',
+  'history',
+];
+
+function isValidSectionId(value: string): value is SectionId {
+  return validSectionIds.includes(value as SectionId);
+}
+
 export default function PlanEditorPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
   const eventId = params.eventId as string;
 
   const [event, setEvent] = useState<Event | null>(null);
@@ -146,6 +176,7 @@ export default function PlanEditorPage() {
   const [editEventModalOpen, setEditEventModalOpen] = useState(false);
   const [inviteLinks, setInviteLinks] = useState<any[]>([]);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const [expandedSection, setExpandedSection] = useState<SectionId | null>(null);
 
   // Mock hostId - in production, this would come from auth
   const MOCK_HOST_ID = 'cmjwbjrpw0000n99xs11r44qh';
@@ -172,6 +203,16 @@ export default function PlanEditorPage() {
       loadInviteLinks();
     }
   }, [event?.status]);
+
+  // Sync URL params to expanded section state
+  useEffect(() => {
+    const expand = searchParams.get('expand');
+    if (expand && isValidSectionId(expand)) {
+      setExpandedSection(expand as SectionId);
+    } else {
+      setExpandedSection(null);
+    }
+  }, [searchParams]);
 
   const loadEvent = async () => {
     try {
@@ -260,6 +301,19 @@ export default function PlanEditorPage() {
     } catch (err: any) {
       console.error('Error loading invite links:', err);
     }
+  };
+
+  // Section expansion handlers
+  const handleExpandSection = (sectionId: SectionId) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('expand', sectionId);
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  };
+
+  const handleCloseExpansion = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('expand');
+    router.push(params.toString() ? `${pathname}?${params.toString()}` : pathname, { scroll: false });
   };
 
   const handleGeneratePlan = async () => {
@@ -754,9 +808,10 @@ export default function PlanEditorPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b">
+    <ModalProvider>
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div>
@@ -865,7 +920,17 @@ export default function PlanEditorPage() {
             )}
             {/* Conflicts */}
             <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Plan Assessment</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">Plan Assessment</h2>
+                <button
+                  onClick={() => handleExpandSection('assessment')}
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+                  aria-label="Expand section"
+                  title="Expand full-screen"
+                >
+                  <Maximize2 className="w-5 h-5" />
+                </button>
+              </div>
               <ConflictList
                 eventId={eventId}
                 conflicts={conflicts}
@@ -876,7 +941,17 @@ export default function PlanEditorPage() {
             {/* Items with Placeholder Quantities */}
             {items.length > 0 && (
               <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">Items & Quantities</h2>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold text-gray-900">Items & Quantities</h2>
+                  <button
+                    onClick={() => handleExpandSection('items')}
+                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+                    aria-label="Expand section"
+                    title="Expand full-screen"
+                  >
+                    <Maximize2 className="w-5 h-5" />
+                  </button>
+                </div>
                 <div className="space-y-3">
                   {items.map((item) => {
                     const needsAction =
@@ -1012,6 +1087,7 @@ export default function PlanEditorPage() {
                   }
                 }}
                 onMovePerson={handleMovePerson}
+                onExpand={() => handleExpandSection('people')}
               />
             </div>
 
@@ -1027,6 +1103,7 @@ export default function PlanEditorPage() {
                     loadTeams();
                     loadConflicts();
                   }}
+                  onExpand={() => handleExpandSection('gate')}
                 />
               </div>
             )}
@@ -1034,17 +1111,32 @@ export default function PlanEditorPage() {
             {/* Freeze Check - Only show for CONFIRMING events */}
             {event.status === 'CONFIRMING' && (
               <div className="mb-6">
-                <FreezeCheck eventId={eventId} refreshTrigger={gateCheckRefresh} onFreezeComplete={() => {
-                  loadEvent();
-                  loadTeams();
-                }} />
+                <FreezeCheck
+                  eventId={eventId}
+                  refreshTrigger={gateCheckRefresh}
+                  onFreezeComplete={() => {
+                    loadEvent();
+                    loadTeams();
+                  }}
+                  onExpand={() => handleExpandSection('freeze')}
+                />
               </div>
             )}
 
             {/* Invite Links - Show for CONFIRMING, FROZEN, and COMPLETE events */}
             {['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status) && inviteLinks.length > 0 && (
               <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">Invite Links</h2>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold text-gray-900">Invite Links</h2>
+                  <button
+                    onClick={() => handleExpandSection('invites')}
+                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+                    aria-label="Expand section"
+                    title="Expand full-screen"
+                  >
+                    <Maximize2 className="w-5 h-5" />
+                  </button>
+                </div>
                 <p className="text-sm text-gray-600 mb-4">
                   Share these links with your team. Each link is personalized and grants access to the
                   appropriate view.
@@ -1139,20 +1231,34 @@ export default function PlanEditorPage() {
 
             {/* Revision History */}
             <div className="mb-6">
-              <RevisionHistory eventId={eventId} actorId={MOCK_HOST_ID} />
+              <RevisionHistory
+                eventId={eventId}
+                actorId={MOCK_HOST_ID}
+                onExpand={() => handleExpandSection('history')}
+              />
             </div>
 
             {/* Teams */}
             <div className="bg-white rounded-lg shadow-md p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold text-gray-900">Teams</h2>
-                <button
-                  onClick={() => setAddTeamModalOpen(true)}
-                  className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Team
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setAddTeamModalOpen(true)}
+                    className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Team
+                  </button>
+                  <button
+                    onClick={() => handleExpandSection('teams')}
+                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+                    aria-label="Expand section"
+                    title="Expand full-screen"
+                  >
+                    <Maximize2 className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
               {teams.length === 0 ? (
@@ -1183,7 +1289,7 @@ export default function PlanEditorPage() {
                               )}
                             </div>
                             <p className="text-sm text-gray-600">
-                              {team.coordinator.name} • {team._count.items} items
+                              {team.coordinator.name} • {team._count.members ?? 0} {(team._count.members ?? 0) === 1 ? 'member' : 'members'} • {team._count.items} items
                             </p>
                           </div>
                         </div>
@@ -1461,6 +1567,267 @@ export default function PlanEditorPage() {
           eventId={eventId}
         />
       )}
-    </div>
+
+      {/* Section Expansion Modals */}
+
+      {/* Plan Assessment Expansion */}
+      <SectionExpandModal
+        isOpen={expandedSection === 'assessment'}
+        onClose={handleCloseExpansion}
+        title="Plan Assessment"
+        icon={<AlertCircle className="w-6 h-6" />}
+      >
+        <ConflictList
+          eventId={eventId}
+          conflicts={conflicts}
+          onConflictsChanged={loadConflicts}
+        />
+      </SectionExpandModal>
+
+      {/* Items & Quantities Expansion */}
+      <SectionExpandModal
+        isOpen={expandedSection === 'items'}
+        onClose={handleCloseExpansion}
+        title="Items & Quantities"
+        icon={<Package className="w-6 h-6" />}
+      >
+        <div className="space-y-3">
+          {items.map((item) => {
+            const needsAction =
+              item.critical &&
+              item.quantityState === 'PLACEHOLDER' &&
+              !item.placeholderAcknowledged;
+
+            return (
+              <div
+                key={item.id}
+                className={`border rounded-lg p-4 ${
+                  needsAction ? 'border-orange-300 bg-orange-50' : 'border-gray-200'
+                }`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-medium text-gray-900">{item.name}</h3>
+                      {item.critical && (
+                        <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded">
+                          CRITICAL
+                        </span>
+                      )}
+                      <span className="text-sm text-gray-500">{item.team.name}</span>
+                    </div>
+
+                    <div className="mb-2">
+                      <ItemStatusBadges assignment={item.assignment} />
+                    </div>
+
+                    {item.description && (
+                      <p className="text-sm text-gray-600 mb-2">{item.description}</p>
+                    )}
+
+                    <div className="flex items-center gap-2 text-sm text-gray-600 mt-2">
+                      {item.quantityAmount && item.quantityUnit ? (
+                        <span className="font-medium text-gray-900">
+                          {item.quantityAmount} {item.quantityUnit}
+                        </span>
+                      ) : item.quantityText ? (
+                        <span className="text-gray-700 italic">{item.quantityText}</span>
+                      ) : (
+                        <span className="text-orange-600">No quantity set</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 ml-4">
+                    <button
+                      onClick={() => setEditingItem(item)}
+                      className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </SectionExpandModal>
+
+      {/* People Expansion */}
+      <SectionExpandModal
+        isOpen={expandedSection === 'people'}
+        onClose={handleCloseExpansion}
+        title="People"
+        icon={<Users className="w-6 h-6" />}
+      >
+        <PeopleSection
+          eventId={eventId}
+          teams={teams}
+          people={people}
+          onPeopleChanged={() => {
+            loadPeople();
+            loadTeams();
+            setGateCheckRefresh((prev) => prev + 1);
+            if (event && ['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status)) {
+              loadInviteLinks();
+            }
+          }}
+          onMovePerson={handleMovePerson}
+        />
+      </SectionExpandModal>
+
+      {/* Teams Expansion */}
+      <SectionExpandModal
+        isOpen={expandedSection === 'teams'}
+        onClose={handleCloseExpansion}
+        title="Teams"
+        icon={<Users className="w-6 h-6" />}
+      >
+        {teams.length === 0 ? (
+          <div className="text-center py-12 text-gray-500">
+            <p>No teams yet. Add your first team to get started.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {teams.map((team) => (
+              <div key={team.id} className="border border-gray-200 rounded-lg">
+                <div
+                  className="p-4 cursor-pointer hover:bg-gray-50 flex items-center justify-between"
+                  onClick={() => {
+                    const newExpanded = new Set(expandedTeams);
+                    if (newExpanded.has(team.id)) {
+                      newExpanded.delete(team.id);
+                    } else {
+                      newExpanded.add(team.id);
+                    }
+                    setExpandedTeams(newExpanded);
+                  }}
+                >
+                  <div className="flex items-center gap-3 flex-1">
+                    {expandedTeams.has(team.id) ? (
+                      <ChevronDown className="w-5 h-5 text-gray-400" />
+                    ) : (
+                      <ChevronRight className="w-5 h-5 text-gray-400" />
+                    )}
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-900">{team.name}</span>
+                        {team.unassignedCount > 0 && (
+                          <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs rounded">
+                            {team.unassignedCount} unassigned
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm text-gray-500 mt-1">
+                        Coordinator: {team.coordinator.name} • {team._count.members ?? 0} {(team._count.members ?? 0) === 1 ? 'member' : 'members'} • {team._count.items} items
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-sm text-gray-500">{team.scope}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </SectionExpandModal>
+
+      {/* Gate Check Expansion */}
+      {event && event.status === 'DRAFT' && (
+        <SectionExpandModal
+          isOpen={expandedSection === 'gate'}
+          onClose={handleCloseExpansion}
+          title="Gate Check"
+          icon={<AlertCircle className="w-6 h-6" />}
+        >
+          <GateCheck
+            eventId={eventId}
+            refreshTrigger={gateCheckRefresh}
+            onTransitionComplete={() => {
+              loadEvent();
+              loadTeams();
+              loadConflicts();
+            }}
+          />
+        </SectionExpandModal>
+      )}
+
+      {/* Freeze Check Expansion */}
+      {event && event.status === 'CONFIRMING' && (
+        <SectionExpandModal
+          isOpen={expandedSection === 'freeze'}
+          onClose={handleCloseExpansion}
+          title="Freeze Check"
+          icon={<AlertCircle className="w-6 h-6" />}
+        >
+          <FreezeCheck
+            eventId={eventId}
+            refreshTrigger={gateCheckRefresh}
+            onFreezeComplete={() => {
+              loadEvent();
+              loadTeams();
+            }}
+          />
+        </SectionExpandModal>
+      )}
+
+      {/* Invite Links Expansion */}
+      {event && ['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status) && (
+        <SectionExpandModal
+          isOpen={expandedSection === 'invites'}
+          onClose={handleCloseExpansion}
+          title="Invite Links"
+          icon={<LinkIcon className="w-6 h-6" />}
+        >
+          <p className="text-sm text-gray-600 mb-4">
+            Share these links with your team. Each link is personalized and grants access to the
+            appropriate view.
+          </p>
+          <div className="space-y-4">
+            {inviteLinks.map((link) => (
+              <div key={link.token} className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-1 text-xs font-medium rounded ${
+                        link.scope === 'HOST' ? 'bg-purple-100 text-purple-800' :
+                        link.scope === 'COORDINATOR' ? 'bg-blue-100 text-blue-800' :
+                        'bg-green-100 text-green-800'
+                      }`}>
+                        {link.scope}
+                      </span>
+                      <span className="font-medium text-gray-900">{link.personName}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1 font-mono truncate max-w-md">
+                      {link.url}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleCopyLink(link.url, link.token)}
+                    className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+                  >
+                    {copiedToken === link.token ? 'Copied!' : 'Copy Link'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </SectionExpandModal>
+      )}
+
+      {/* Revision History Expansion */}
+      <SectionExpandModal
+        isOpen={expandedSection === 'history'}
+        onClose={handleCloseExpansion}
+        title="Revision History"
+        icon={<Clock className="w-6 h-6" />}
+      >
+        <RevisionHistory
+          eventId={eventId}
+          actorId={MOCK_HOST_ID}
+        />
+      </SectionExpandModal>
+
+      </div>
+    </ModalProvider>
   );
 }

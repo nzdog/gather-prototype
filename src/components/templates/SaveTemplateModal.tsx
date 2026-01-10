@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useModal } from '@/contexts/ModalContext';
 
 interface SaveTemplateModalProps {
   isOpen: boolean;
@@ -21,8 +22,20 @@ export default function SaveTemplateModal({
   itemCount,
   occasionType,
 }: SaveTemplateModalProps) {
+  const { openModal, closeModal } = useModal();
   const [templateName, setTemplateName] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Modal blocking check
+  useEffect(() => {
+    if (isOpen) {
+      if (!openModal('save-template-modal')) {
+        onClose();
+      }
+    } else {
+      closeModal();
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
