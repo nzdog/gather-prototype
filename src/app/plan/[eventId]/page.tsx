@@ -1693,12 +1693,16 @@ export default function PlanEditorPage() {
               <div key={team.id} className="border border-gray-200 rounded-lg">
                 <div
                   className="p-4 cursor-pointer hover:bg-gray-50 flex items-center justify-between"
-                  onClick={() => {
+                  onClick={async () => {
                     const newExpanded = new Set(expandedTeams);
                     if (newExpanded.has(team.id)) {
                       newExpanded.delete(team.id);
                     } else {
                       newExpanded.add(team.id);
+                      // Load items when expanding
+                      if (!teamItems[team.id]) {
+                        await loadTeamItems(team.id);
+                      }
                     }
                     setExpandedTeams(newExpanded);
                   }}
@@ -1725,6 +1729,152 @@ export default function PlanEditorPage() {
                   </div>
                   <div className="text-sm text-gray-500">{team.scope}</div>
                 </div>
+
+                {/* Expanded Items Section */}
+                {expandedTeams.has(team.id) && (
+                  <div className="px-4 py-3 bg-gray-50 border-t">
+                    <div className="flex gap-2 mb-4">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTeamForItem(team);
+                          setAddItemModalOpen(true);
+                        }}
+                        className="px-3 py-1 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" />
+                        Add Item
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteTeam(team);
+                        }}
+                        className="px-3 py-1 bg-red-600 text-white text-sm rounded-md hover:bg-red-700 flex items-center gap-1"
+                      >
+                        Delete Team
+                      </button>
+                    </div>
+
+                    {/* Items List */}
+                    {loadingTeamItems.has(team.id) ? (
+                      <div className="text-center py-4 text-gray-500">
+                        <p className="text-sm">Loading items...</p>
+                      </div>
+                    ) : teamItems[team.id] && teamItems[team.id].length > 0 ? (
+                      <div className="space-y-2">
+                        {teamItems[team.id].map((item: any) => (
+                          <div
+                            key={item.id}
+                            className="bg-white border border-gray-200 rounded-md p-3"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <h4 className="font-medium text-gray-900">{item.name}</h4>
+                                  {item.critical && (
+                                    <span className="px-2 py-0.5 bg-red-100 text-red-800 text-xs rounded">
+                                      Critical
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="mt-2">
+                                  <ItemStatusBadges assignment={item.assignment} />
+                                </div>
+
+                                {item.description && (
+                                  <p className="text-sm text-gray-600 mt-1">
+                                    {item.description}
+                                  </p>
+                                )}
+
+                                {/* Quantity Display */}
+                                <div className="text-sm mt-2">
+                                  {item.quantityState === 'SPECIFIED' ? (
+                                    <span className="text-gray-700">
+                                      Quantity: {item.quantityAmount}{' '}
+                                      {item.quantityUnit?.toLowerCase()}
+                                    </span>
+                                  ) : (
+                                    <span className="text-orange-600">
+                                      Quantity: {item.quantityText || 'TBD'}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Dietary Tags */}
+                                {item.dietaryTags && item.dietaryTags.length > 0 && (
+                                  <div className="flex gap-1 mt-2">
+                                    {item.dietaryTags.map((tag: string) => (
+                                      <span
+                                        key={tag}
+                                        className="px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded"
+                                      >
+                                        {tag}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Right Side: Quick Assign + Action Buttons */}
+                              <div className="flex flex-col gap-3 ml-4 w-48">
+                                {/* Quick Assign Dropdown */}
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                                    Assign to
+                                  </label>
+                                  <select
+                                    value={item.assignment?.person?.id || ''}
+                                    onChange={(e) =>
+                                      handleQuickAssign(item.id, e.target.value, team.id)
+                                    }
+                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  >
+                                    <option value="">Unassigned</option>
+                                    {people
+                                      .filter((p) => p.team.id === team.id)
+                                      .map((person) => (
+                                        <option key={person.personId} value={person.personId}>
+                                          {person.name}
+                                        </option>
+                                      ))}
+                                  </select>
+                                  {people.filter((p) => p.team.id === team.id).length === 0 ? (
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      No people in this team yet
+                                    </p>
+                                  ) : null}
+                                </div>
+
+                                {/* Action Buttons */}
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => handleStartEditItem(item)}
+                                    className="flex-1 px-2 py-1 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteItem(item)}
+                                    className="flex-1 px-2 py-1 bg-red-600 text-white text-xs rounded-md hover:bg-red-700"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-4 text-gray-500">
+                        <p className="text-sm">No items yet. Add an item to get started.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
