@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { X, Upload, CheckCircle, AlertTriangle, ChevronRight, Download } from 'lucide-react';
+import { useModal } from '@/contexts/ModalContext';
 
 interface ImportCSVModalProps {
   isOpen: boolean;
@@ -41,6 +42,7 @@ const TARGET_FIELDS = [
 ] as const;
 
 export default function ImportCSVModal({ isOpen, onClose, onImport, teams }: ImportCSVModalProps) {
+  const { openModal, closeModal } = useModal();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
@@ -50,6 +52,17 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams }: Imp
   const [importing, setImporting] = useState(false);
   const [splitFullName, setSplitFullName] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Modal blocking check
+  useEffect(() => {
+    if (isOpen) {
+      if (!openModal('import-csv-modal')) {
+        onClose();
+      }
+    } else {
+      closeModal();
+    }
+  }, [isOpen]);
 
   const resetModal = () => {
     setStep(1);

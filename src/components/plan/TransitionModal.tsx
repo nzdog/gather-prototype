@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useModal } from '@/contexts/ModalContext';
 
 interface TransitionModalProps {
   eventId: string;
@@ -26,6 +27,7 @@ interface WeakSpot {
 }
 
 export default function TransitionModal({ eventId, onClose, onSuccess }: TransitionModalProps) {
+  const { openModal, closeModal } = useModal();
   const [loading, setLoading] = useState(true);
   const [transitioning, setTransitioning] = useState(false);
   const [summary, setSummary] = useState<PlanSummary | null>(null);
@@ -33,6 +35,16 @@ export default function TransitionModal({ eventId, onClose, onSuccess }: Transit
   const [showWeakSpots, setShowWeakSpots] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hostId, setHostId] = useState<string | null>(null);
+
+  // Modal blocking check - TransitionModal needs special handling since it's opened programmatically
+  useEffect(() => {
+    if (eventId) {
+      if (!openModal('transition-modal')) {
+        onClose();
+      }
+    }
+    return () => closeModal();
+  }, [eventId]);
 
   useEffect(() => {
     fetchPlanSummary();

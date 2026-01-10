@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Clock, RotateCcw, AlertCircle } from 'lucide-react';
+import { Clock, RotateCcw, AlertCircle, Maximize2 } from 'lucide-react';
 
 interface Revision {
   id: string;
@@ -14,9 +14,10 @@ interface Revision {
 interface RevisionHistoryProps {
   eventId: string;
   actorId: string; // For creating manual revisions
+  onExpand?: () => void;
 }
 
-export default function RevisionHistory({ eventId, actorId }: RevisionHistoryProps) {
+export default function RevisionHistory({ eventId, actorId, onExpand }: RevisionHistoryProps) {
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -147,14 +148,26 @@ export default function RevisionHistory({ eventId, actorId }: RevisionHistoryPro
     <div className="bg-white rounded-lg shadow-md p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold text-gray-900">Revision History</h2>
-        <button
-          onClick={handleCreateRevision}
-          disabled={creatingRevision}
-          className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
-        >
-          <Clock className="w-4 h-4" />
-          {creatingRevision ? 'Creating...' : 'Create Snapshot'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleCreateRevision}
+            disabled={creatingRevision}
+            className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            <Clock className="w-4 h-4" />
+            {creatingRevision ? 'Creating...' : 'Create Snapshot'}
+          </button>
+          {onExpand && (
+            <button
+              onClick={onExpand}
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+              aria-label="Expand section"
+              title="Expand full-screen"
+            >
+              <Maximize2 className="w-5 h-5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {revisions.length === 0 ? (

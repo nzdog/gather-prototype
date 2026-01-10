@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Edit2, Users, Loader2, Upload } from 'lucide-react';
+import { Plus, Edit2, Users, Loader2, Upload, Maximize2 } from 'lucide-react';
 import AddPersonModal, { AddPersonFormData } from './AddPersonModal';
 import EditPersonModal from './EditPersonModal';
 import TeamBoard from './TeamBoard';
@@ -29,6 +29,7 @@ interface PeopleSectionProps {
   people: Person[];
   onPeopleChanged?: () => void;
   onMovePerson: (personId: string, teamId: string | null) => Promise<void>;
+  onExpand?: () => void;
 }
 
 export default function PeopleSection({
@@ -36,7 +37,8 @@ export default function PeopleSection({
   teams,
   people,
   onPeopleChanged,
-  onMovePerson
+  onMovePerson,
+  onExpand
 }: PeopleSectionProps) {
   const [view, setView] = useState<'table' | 'board'>('table');
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -251,6 +253,17 @@ export default function PeopleSection({
               <Plus className="w-4 h-4" />
               Add Person
             </button>
+            {/* Expand Button */}
+            {onExpand && (
+              <button
+                onClick={onExpand}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+                aria-label="Expand section"
+                title="Expand full-screen"
+              >
+                <Maximize2 className="w-5 h-5" />
+              </button>
+            )}
           </div>
         </div>
 

@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, AlertCircle } from 'lucide-react';
+import { useModal } from '@/contexts/ModalContext';
 
 interface RegenerateModalProps {
   isOpen: boolean;
@@ -18,7 +19,19 @@ export default function RegenerateModal({
   manualTeamCount,
   manualItemCount,
 }: RegenerateModalProps) {
+  const { openModal, closeModal } = useModal();
   const [modifier, setModifier] = useState('');
+
+  // Modal blocking check
+  useEffect(() => {
+    if (isOpen) {
+      if (!openModal('regenerate-modal')) {
+        onClose();
+      }
+    } else {
+      closeModal();
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
