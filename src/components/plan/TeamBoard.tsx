@@ -209,26 +209,26 @@ export default function TeamBoard({ teams, people, onMovePerson, onEditPerson }:
   );
 
   // Group people by team
-  const peopleByTeam: Record<string, Person[]> = {};
-  const unassignedPeople: Person[] = [];
-
-  people.forEach((person) => {
-    if (!person.team.id) {
-      unassignedPeople.push(person);
-    } else {
-      if (!peopleByTeam[person.team.id]) {
-        peopleByTeam[person.team.id] = [];
+  const { assigned: peopleByTeam, unassigned: unassignedPeople } = people.reduce(
+    (acc, person) => {
+      if (!person.team.id) {
+        acc.unassigned.push(person);
+      } else {
+        const teamId = person.team.id;
+        acc.assigned[teamId] = acc.assigned[teamId] || [];
+        acc.assigned[teamId].push(person);
       }
-      peopleByTeam[person.team.id].push(person);
-    }
-  });
+      return acc;
+    },
+    { assigned: {} as Record<string, Person[]>, unassigned: [] as Person[] }
+  );
 
-  const handleDragStart = (event: DragStartEvent) => {
+  function handleDragStart(event: DragStartEvent): void {
     const person = people.find((p) => p.personId === event.active.id);
     setActivePerson(person || null);
-  };
+  }
 
-  const handleDragEnd = async (event: DragEndEvent) => {
+  async function handleDragEnd(event: DragEndEvent): Promise<void> {
     const { active, over } = event;
     setActivePerson(null);
 
@@ -236,31 +236,25 @@ export default function TeamBoard({ teams, people, onMovePerson, onEditPerson }:
 
     const personId = active.id as string;
     const targetTeamId = over.id === 'unassigned' ? null : (over.id as string);
-
-    // Find the person
     const person = people.find((p) => p.personId === personId);
+
     if (!person) return;
 
-    // Check if already in target team
-    if (
-      (targetTeamId === null && !person.team.id) ||
-      (targetTeamId && person.team.id === targetTeamId)
-    ) {
-      return; // No change needed
-    }
+    // Skip if already in target team
+    const currentTeamId = person.team.id || null;
+    if (currentTeamId === targetTeamId) return;
 
-    // Move the person
     await onMovePerson(personId, targetTeamId);
-  };
+  }
 
-  const handleClickMove = async (person: Person, targetTeamId: string | null) => {
+  async function handleClickMove(person: Person, targetTeamId: string | null): Promise<void> {
     setMenuOpen(null);
     await onMovePerson(person.personId, targetTeamId);
-  };
+  }
 
-  const handleMenuToggle = (personId: string) => {
+  function handleMenuToggle(personId: string): void {
     setMenuOpen(menuOpen === personId ? null : personId);
-  };
+  }
 
   const PersonChip = ({ person }: { person: Person }) => (
     <div className="flex items-center justify-between gap-2 px-3 py-2 bg-white border border-gray-200 rounded-md shadow-sm">

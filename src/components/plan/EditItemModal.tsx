@@ -90,13 +90,21 @@ export default function EditItemModal({
   people
 }: EditItemModalProps) {
   const { openModal, closeModal } = useModal();
+
+  // Form state
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [critical, setCritical] = useState(false);
-
-  // Quantity fields
   const [quantityAmount, setQuantityAmount] = useState<string>('');
   const [quantityUnit, setQuantityUnit] = useState('SERVINGS');
+  const [quantityState, setQuantityState] = useState('SPECIFIED');
+  const [placeholderAcknowledged, setPlaceholderAcknowledged] = useState(false);
+  const [dietaryTags, setDietaryTags] = useState<string[]>([]);
+  const [dayId, setDayId] = useState<string>('');
+  const [serveTime, setServeTime] = useState<string>('');
+  const [dropOffLocation, setDropOffLocation] = useState<string>('');
+  const [dropOffNote, setDropOffNote] = useState<string>('');
+  const [assignedPersonId, setAssignedPersonId] = useState<string>('');
 
   // Modal blocking check
   useEffect(() => {
@@ -108,47 +116,22 @@ export default function EditItemModal({
       closeModal();
     }
   }, [isOpen]);
-  const [quantityState, setQuantityState] = useState('SPECIFIED');
-  const [placeholderAcknowledged, setPlaceholderAcknowledged] = useState(false);
 
-  // Dietary tags
-  const [dietaryTags, setDietaryTags] = useState<string[]>([]);
-
-  // Timing fields
-  const [dayId, setDayId] = useState<string>('');
-  const [serveTime, setServeTime] = useState<string>('');
-
-  // Drop-off fields
-  const [dropOffLocation, setDropOffLocation] = useState<string>('');
-  const [dropOffNote, setDropOffNote] = useState<string>('');
-
-  // Assignment fields
-  const [assignedPersonId, setAssignedPersonId] = useState<string>('');
-
+  // Sync form state with item prop
   useEffect(() => {
     if (item) {
       setName(item.name);
       setDescription(item.description || '');
       setCritical(item.critical);
-
-      // Quantity fields
       setQuantityAmount(item.quantityAmount?.toString() || '');
       setQuantityUnit(item.quantityUnit || 'SERVINGS');
       setQuantityState(item.quantityState || 'SPECIFIED');
       setPlaceholderAcknowledged(item.placeholderAcknowledged || false);
-
-      // Dietary tags
       setDietaryTags(item.dietaryTags || []);
-
-      // Timing fields
       setDayId(item.dayId || '');
       setServeTime(item.serveTime || '');
-
-      // Drop-off fields
       setDropOffLocation(item.dropOffLocation || '');
       setDropOffNote(item.dropOffNote || '');
-
-      // Assignment fields
       setAssignedPersonId(item.assignment?.person?.id || '');
     }
   }, [item]);
@@ -174,28 +157,30 @@ export default function EditItemModal({
     };
 
     // Add quantity fields based on state
-    if (quantityState === 'SPECIFIED') {
-      updateData.quantityAmount = quantityAmount ? parseFloat(quantityAmount) : null;
-      updateData.quantityUnit = quantityUnit;
-      updateData.quantityState = 'SPECIFIED';
-      updateData.placeholderAcknowledged = false;
-    } else if (quantityState === 'PLACEHOLDER') {
-      updateData.quantityState = 'PLACEHOLDER';
-      updateData.placeholderAcknowledged = placeholderAcknowledged;
-      updateData.quantityAmount = null;
-      updateData.quantityUnit = null;
-    } else if (quantityState === 'NA') {
-      updateData.quantityState = 'NA';
-      updateData.quantityAmount = null;
-      updateData.quantityUnit = null;
-      updateData.placeholderAcknowledged = false;
+    switch (quantityState) {
+      case 'SPECIFIED':
+        updateData.quantityAmount = quantityAmount ? parseFloat(quantityAmount) : null;
+        updateData.quantityUnit = quantityUnit;
+        updateData.quantityState = 'SPECIFIED';
+        updateData.placeholderAcknowledged = false;
+        break;
+      case 'PLACEHOLDER':
+        updateData.quantityState = 'PLACEHOLDER';
+        updateData.placeholderAcknowledged = placeholderAcknowledged;
+        updateData.quantityAmount = null;
+        updateData.quantityUnit = null;
+        break;
+      case 'NA':
+        updateData.quantityState = 'NA';
+        updateData.quantityAmount = null;
+        updateData.quantityUnit = null;
+        updateData.placeholderAcknowledged = false;
+        break;
     }
 
-    // Add timing fields
+    // Add timing and drop-off fields
     updateData.dayId = dayId || null;
     updateData.serveTime = serveTime || null;
-
-    // Add drop-off fields
     updateData.dropOffLocation = dropOffLocation || null;
     updateData.dropOffNote = dropOffNote || null;
 

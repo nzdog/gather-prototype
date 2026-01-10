@@ -168,7 +168,7 @@ export default function PeopleSection({
     }
   };
 
-  const getRoleBadgeColor = (role: string) => {
+  function getRoleBadgeColor(role: string): string {
     switch (role) {
       case 'HOST':
         return 'bg-purple-100 text-purple-800';
@@ -179,7 +179,7 @@ export default function PeopleSection({
       default:
         return 'bg-gray-100 text-gray-800';
     }
-  };
+  }
 
   return (
     <>

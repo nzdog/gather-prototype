@@ -11,6 +11,14 @@ interface SectionExpandModalProps {
   children: React.ReactNode;
 }
 
+function restoreScrollPosition(): void {
+  const scrollY = document.body.style.top;
+  document.body.style.position = '';
+  document.body.style.top = '';
+  document.body.style.width = '';
+  window.scrollTo(0, parseInt(scrollY || '0') * -1);
+}
+
 export default function SectionExpandModal({
   isOpen,
   onClose,
@@ -24,11 +32,11 @@ export default function SectionExpandModal({
   useEffect(() => {
     if (!isOpen) return;
 
-    const handleEsc = (e: KeyboardEvent) => {
+    function handleEsc(e: KeyboardEvent): void {
       if (e.key === 'Escape') {
         onClose();
       }
-    };
+    }
 
     document.addEventListener('keydown', handleEsc);
     return () => document.removeEventListener('keydown', handleEsc);
@@ -36,31 +44,14 @@ export default function SectionExpandModal({
 
   // Scroll lock
   useEffect(() => {
-    if (isOpen) {
-      // Save current scroll position
-      const scrollY = window.scrollY;
-      document.body.style.position = 'fixed';
-      document.body.style.top = `-${scrollY}px`;
-      document.body.style.width = '100%';
-    } else {
-      // Restore scroll position
-      const scrollY = document.body.style.top;
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.width = '';
-      window.scrollTo(0, parseInt(scrollY || '0') * -1);
-    }
+    if (!isOpen) return;
 
-    // Cleanup on unmount
-    return () => {
-      if (isOpen) {
-        const scrollY = document.body.style.top;
-        document.body.style.position = '';
-        document.body.style.top = '';
-        document.body.style.width = '';
-        window.scrollTo(0, parseInt(scrollY || '0') * -1);
-      }
-    };
+    const scrollY = window.scrollY;
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
+
+    return restoreScrollPosition;
   }, [isOpen]);
 
   // Focus trap
@@ -76,27 +67,22 @@ export default function SectionExpandModal({
 
     if (!firstElement) return;
 
-    const handleTabKey = (e: KeyboardEvent) => {
+    function handleTabKey(e: KeyboardEvent): void {
       if (e.key !== 'Tab') return;
 
-      if (e.shiftKey) {
-        // Shift+Tab: if at first element, go to last
-        if (document.activeElement === firstElement) {
-          lastElement?.focus();
-          e.preventDefault();
-        }
-      } else {
-        // Tab: if at last element, go to first
-        if (document.activeElement === lastElement) {
-          firstElement?.focus();
-          e.preventDefault();
-        }
+      const atFirst = document.activeElement === firstElement;
+      const atLast = document.activeElement === lastElement;
+
+      if (e.shiftKey && atFirst) {
+        lastElement?.focus();
+        e.preventDefault();
+      } else if (!e.shiftKey && atLast) {
+        firstElement?.focus();
+        e.preventDefault();
       }
-    };
+    }
 
     modal.addEventListener('keydown', handleTabKey);
-
-    // Focus first element on open
     firstElement.focus();
 
     return () => modal.removeEventListener('keydown', handleTabKey);
@@ -104,11 +90,11 @@ export default function SectionExpandModal({
 
   if (!isOpen) return null;
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
+  function handleBackdropClick(e: React.MouseEvent): void {
     if (e.target === e.currentTarget) {
       onClose();
     }
-  };
+  }
 
   return (
     <div

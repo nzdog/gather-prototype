@@ -11,7 +11,7 @@ interface TeamDistribution {
 export async function POST(
   _request: NextRequest,
   context: { params: Promise<{ id: string }> }
-) {
+): Promise<NextResponse> {
   try {
     const { id: eventId } = await context.params;
 
@@ -144,12 +144,7 @@ export async function POST(
       summary: {
         totalUnassigned: unassignedParticipants.length,
         totalAssigned: assignments.length,
-        teamDistributions: teamDistributions.map((t) => ({
-          teamId: t.teamId,
-          teamName: t.teamName,
-          memberCount: t.memberCount,
-          totalItems: t.totalItems,
-        })),
+        teamDistributions,
       },
     });
   } catch (error: any) {
