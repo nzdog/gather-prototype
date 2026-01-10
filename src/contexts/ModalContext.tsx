@@ -28,7 +28,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
     setActiveModal(null);
   };
 
-  const isExpanded = activeModal?.startsWith('expand-') ?? false;
+  const isExpanded = activeModal !== null && activeModal.startsWith('expand-');
 
   return (
     <ModalContext.Provider value={{ activeModal, openModal, closeModal, isExpanded }}>
