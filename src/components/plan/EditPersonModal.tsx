@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, Trash2 } from 'lucide-react';
+import { useModal } from '@/contexts/ModalContext';
 
 interface Team {
   id: string;
@@ -47,11 +48,23 @@ export default function EditPersonModal({
   teams,
   eventId,
 }: EditPersonModalProps) {
+  const { openModal, closeModal } = useModal();
   const [role, setRole] = useState('PARTICIPANT');
   const [teamId, setTeamId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loadingAssignments, setLoadingAssignments] = useState(false);
+
+  // Modal blocking check
+  useEffect(() => {
+    if (isOpen) {
+      if (!openModal('edit-person-modal')) {
+        onClose();
+      }
+    } else {
+      closeModal();
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (person) {

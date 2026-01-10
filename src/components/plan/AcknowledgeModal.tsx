@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Conflict, MitigationPlanType } from '@prisma/client';
+import { useModal } from '@/contexts/ModalContext';
 
 interface AcknowledgeModalProps {
   isOpen: boolean;
@@ -20,10 +21,22 @@ export default function AcknowledgeModal({
   onClose,
   onSubmit,
 }: AcknowledgeModalProps) {
+  const { openModal, closeModal } = useModal();
   const [impactStatement, setImpactStatement] = useState('');
   const [impactUnderstood, setImpactUnderstood] = useState(false);
   const [mitigationPlanType, setMitigationPlanType] = useState<MitigationPlanType>('COMMUNICATE');
   const [errors, setErrors] = useState<string[]>([]);
+
+  // Modal blocking check
+  useEffect(() => {
+    if (isOpen) {
+      if (!openModal('acknowledge-modal')) {
+        onClose();
+      }
+    } else {
+      closeModal();
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

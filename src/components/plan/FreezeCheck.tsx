@@ -1,17 +1,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Maximize2 } from 'lucide-react';
 
 interface FreezeCheckProps {
   eventId: string;
   refreshTrigger?: number;
   onFreezeComplete?: () => void;
+  onExpand?: () => void;
 }
 
 export default function FreezeCheck({
   eventId,
   refreshTrigger,
   onFreezeComplete,
+  onExpand,
 }: FreezeCheckProps) {
   const [checking, setChecking] = useState(false);
   const [canFreeze, setCanFreeze] = useState(false);
@@ -136,12 +139,24 @@ export default function FreezeCheck({
           </div>
         </div>
 
-        <button
-          onClick={checkFreeze}
-          className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
-        >
-          Refresh
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={checkFreeze}
+            className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            Refresh
+          </button>
+          {onExpand && (
+            <button
+              onClick={onExpand}
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+              aria-label="Expand section"
+              title="Expand full-screen"
+            >
+              <Maximize2 className="w-5 h-5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Coverage Indicator */}

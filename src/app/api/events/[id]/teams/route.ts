@@ -19,6 +19,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         _count: {
           select: {
             items: true,
+            members: true,
           },
         },
         items: {

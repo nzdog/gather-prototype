@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { StructureTemplate } from '@prisma/client';
+import { useModal } from '@/contexts/ModalContext';
 
 interface CloneTemplateModalProps {
   isOpen: boolean;
@@ -26,6 +27,7 @@ export default function CloneTemplateModal({
   templateId,
   hostId,
 }: CloneTemplateModalProps) {
+  const { openModal, closeModal } = useModal();
   const [template, setTemplate] = useState<StructureTemplate | null>(null);
   // TODO: QuantitiesProfile feature (Section 3.11 of build spec) - for quantity scaling across templates
   const [_quantitiesProfile, _setQuantitiesProfile] = useState<QuantitiesProfile | null>(null);
@@ -39,9 +41,15 @@ export default function CloneTemplateModal({
   const [guestCount, setGuestCount] = useState('');
   const [applyQuantityScaling, setApplyQuantityScaling] = useState(false);
 
+  // Modal blocking check
   useEffect(() => {
     if (isOpen) {
+      if (!openModal('clone-template-modal')) {
+        onClose();
+      }
       fetchTemplateDetails();
+    } else {
+      closeModal();
     }
   }, [isOpen, templateId]);
 
