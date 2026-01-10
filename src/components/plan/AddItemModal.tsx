@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useModal } from '@/contexts/ModalContext';
 
 interface Day {
   id: string;
@@ -61,6 +62,7 @@ export default function AddItemModal({
   teamName,
   days,
 }: AddItemModalProps) {
+  const { openModal, closeModal } = useModal();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [quantityAmount, setQuantityAmount] = useState('');
@@ -72,6 +74,17 @@ export default function AddItemModal({
   const [dayId, setDayId] = useState<string>('');
   const [serveTime, setServeTime] = useState<string>('');
   const [adding, setAdding] = useState(false);
+
+  // Modal blocking check
+  useEffect(() => {
+    if (isOpen) {
+      if (!openModal('add-item-modal')) {
+        onClose();
+      }
+    } else {
+      closeModal();
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
+import { useModal } from '@/contexts/ModalContext';
 import ItemStatusBadges from './ItemStatusBadges';
 
 interface Day {
@@ -88,6 +89,7 @@ export default function EditItemModal({
   eventId,
   people
 }: EditItemModalProps) {
+  const { openModal, closeModal } = useModal();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [critical, setCritical] = useState(false);
@@ -95,6 +97,17 @@ export default function EditItemModal({
   // Quantity fields
   const [quantityAmount, setQuantityAmount] = useState<string>('');
   const [quantityUnit, setQuantityUnit] = useState('SERVINGS');
+
+  // Modal blocking check
+  useEffect(() => {
+    if (isOpen) {
+      if (!openModal('edit-item-modal')) {
+        onClose();
+      }
+    } else {
+      closeModal();
+    }
+  }, [isOpen]);
   const [quantityState, setQuantityState] = useState('SPECIFIED');
   const [placeholderAcknowledged, setPlaceholderAcknowledged] = useState(false);
 

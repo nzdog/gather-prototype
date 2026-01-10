@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Maximize2 } from 'lucide-react';
 import { GateBlock, GateBlockCode } from '@/lib/workflow';
 import TransitionModal from './TransitionModal';
 
@@ -8,6 +9,7 @@ interface GateCheckProps {
   eventId: string;
   onTransitionComplete?: () => void;
   refreshTrigger?: number;
+  onExpand?: () => void;
 }
 
 const blockStyles: Record<GateBlockCode, string> = {
@@ -38,6 +40,7 @@ export default function GateCheck({
   eventId,
   onTransitionComplete,
   refreshTrigger,
+  onExpand,
 }: GateCheckProps) {
   const [checking, setChecking] = useState(false);
   const [passed, setPassed] = useState<boolean | null>(null);
@@ -127,12 +130,24 @@ export default function GateCheck({
             </div>
           </div>
 
-          <button
-            onClick={runGateCheck}
-            className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            Refresh
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={runGateCheck}
+              className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Refresh
+            </button>
+            {onExpand && (
+              <button
+                onClick={onExpand}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+                aria-label="Expand section"
+                title="Expand full-screen"
+              >
+                <Maximize2 className="w-5 h-5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Blocks List */}

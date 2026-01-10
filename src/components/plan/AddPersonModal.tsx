@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
+import { useModal } from '@/contexts/ModalContext';
 
 interface Team {
   id: string;
@@ -24,6 +25,7 @@ interface AddPersonModalProps {
 }
 
 export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPersonModalProps) {
+  const { openModal, closeModal } = useModal();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -84,8 +86,21 @@ export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPer
 
   const handleClose = () => {
     setAddedPeople([]);
+    closeModal();
     onClose();
   };
+
+  // Modal blocking check
+  useEffect(() => {
+    if (isOpen) {
+      if (!openModal('add-person-modal')) {
+        // Blocked by expansion modal
+        onClose();
+      }
+    } else {
+      closeModal();
+    }
+  }, [isOpen]);
 
   // Keyboard shortcut: Cmd+Enter (Mac) or Ctrl+Enter (Windows/Linux)
   useEffect(() => {
