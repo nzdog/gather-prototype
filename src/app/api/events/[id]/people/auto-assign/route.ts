@@ -1,21 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-// Helper: Calculate workload score for a team
-function calculateWorkloadScore(totalItems: number, memberCount: number): number {
-  // Empty teams have highest priority (score = 0)
-  if (memberCount === 0) return 0;
-
-  // Workload = items per member
-  return totalItems / memberCount;
-}
-
-interface TeamWorkload {
+interface TeamDistribution {
   teamId: string;
   teamName: string;
   memberCount: number;
   totalItems: number;
-  workloadScore: number;
 }
 
 export async function POST(
@@ -89,16 +79,15 @@ export async function POST(
       );
     }
 
-    // 3. Initialize team workload tracking
-    const teamWorkloads: TeamWorkload[] = teams.map((team) => ({
+    // 3. Initialize team distribution tracking
+    const teamDistributions: TeamDistribution[] = teams.map((team) => ({
       teamId: team.id,
       teamName: team.name,
       memberCount: team.members.length,
       totalItems: team._count.items,
-      workloadScore: calculateWorkloadScore(team._count.items, team.members.length),
     }));
 
-    // 4. Calculate assignments using workload balancing
+    // 4. Calculate assignments using even distribution
     const assignments: Array<{
       personId: string;
       personName: string;
@@ -108,9 +97,9 @@ export async function POST(
     }> = [];
 
     for (const personEvent of unassignedParticipants) {
-      // Find team with lowest workload score
-      const targetTeam = teamWorkloads.reduce((lowest, current) =>
-        current.workloadScore < lowest.workloadScore ? current : lowest
+      // Find team with fewest members (even distribution)
+      const targetTeam = teamDistributions.reduce((lowest, current) =>
+        current.memberCount < lowest.memberCount ? current : lowest
       );
 
       // Record assignment
@@ -119,15 +108,11 @@ export async function POST(
         personName: personEvent.person.name,
         teamId: targetTeam.teamId,
         teamName: targetTeam.teamName,
-        reason: `Lowest workload (${targetTeam.totalItems} items, ${targetTeam.memberCount} members)`,
+        reason: `Even distribution (${targetTeam.memberCount} members before assignment)`,
       });
 
-      // Update workload for next iteration
+      // Update member count for next iteration
       targetTeam.memberCount += 1;
-      targetTeam.workloadScore = calculateWorkloadScore(
-        targetTeam.totalItems,
-        targetTeam.memberCount
-      );
     }
 
     // 5. Execute all assignments in a single transaction
@@ -159,12 +144,11 @@ export async function POST(
       summary: {
         totalUnassigned: unassignedParticipants.length,
         totalAssigned: assignments.length,
-        teamWorkloads: teamWorkloads.map((t) => ({
+        teamDistributions: teamDistributions.map((t) => ({
           teamId: t.teamId,
           teamName: t.teamName,
           memberCount: t.memberCount,
           totalItems: t.totalItems,
-          workloadScore: t.workloadScore,
         })),
       },
     });
