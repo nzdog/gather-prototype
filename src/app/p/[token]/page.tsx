@@ -13,6 +13,7 @@ import {
   Minimize2,
 } from 'lucide-react';
 import ItemStatusBadges from '@/components/plan/ItemStatusBadges';
+import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 
 interface Assignment {
   id: string;
@@ -147,17 +148,6 @@ export default function ParticipantView() {
     return `${formatter.format(start)}-${formatter.format(end).split(' ')[1]}`;
   };
 
-  const formatDropOff = (dropOffAt: string | null, dropOffNote: string | null) => {
-    if (dropOffNote) return dropOffNote;
-    if (!dropOffAt) return null;
-
-    const date = new Date(dropOffAt);
-    return new Intl.DateTimeFormat('en-NZ', {
-      timeZone: 'Pacific/Auckland',
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }).format(date);
-  };
 
   if (loading) {
     return (
@@ -302,27 +292,21 @@ export default function ParticipantView() {
                 {!collapsedAssignments.has(assignment.id) && (
                   <div className="space-y-4 mt-4">
                     {/* Drop-off Details */}
-                    {(assignment.item.day || assignment.item.dropOffLocation) && (
+                    {(assignment.item.day || assignment.item.dropOffLocation || assignment.item.dropOffNote || assignment.item.dropOffAt) && (
                       <div className="space-y-2">
                         {assignment.item.day && (
                           <div className="flex items-center gap-3">
                             <Calendar className="size-5 text-gray-400" />
-                            <span className="text-gray-900">
-                              {assignment.item.day.name}
-                              {formatDropOff(
-                                assignment.item.dropOffAt,
-                                assignment.item.dropOffNote
-                              ) &&
-                                `, ${formatDropOff(assignment.item.dropOffAt, assignment.item.dropOffNote)}`}
-                            </span>
+                            <span className="text-gray-900">{assignment.item.day.name}</span>
                           </div>
                         )}
-                        {assignment.item.dropOffLocation && (
-                          <div className="flex items-center gap-3">
-                            <MapPin className="size-5 text-gray-400" />
-                            <span className="text-gray-900">{assignment.item.dropOffLocation}</span>
-                          </div>
-                        )}
+                        <DropOffDisplay
+                          dropOffLocation={assignment.item.dropOffLocation}
+                          dropOffAt={assignment.item.dropOffAt}
+                          dropOffNote={assignment.item.dropOffNote}
+                          variant="stacked"
+                          showIcons={true}
+                        />
                       </div>
                     )}
 
