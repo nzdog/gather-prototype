@@ -19,6 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import ItemStatusBadges from '@/components/plan/ItemStatusBadges';
+import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 
 interface Assignment {
   id: string;
@@ -540,20 +541,21 @@ export default function CoordinatorView() {
               {/* Collapsible Content */}
               {!collapsedItems.has(item.id) && (
                 <div className="space-y-2">
-                  {/* Day and location */}
-                  <div className="text-sm text-gray-500 flex items-center gap-3">
+                  {/* Day and drop-off details */}
+                  <div className="space-y-2">
                     {item.day && (
-                      <span className="flex items-center gap-1">
-                        <Calendar className="size-4" />
-                        {item.day.name}
-                      </span>
+                      <div className="flex items-center gap-2 text-sm">
+                        <Calendar className="size-4 text-gray-400" />
+                        <span className="text-gray-900">{item.day.name}</span>
+                      </div>
                     )}
-                    {item.dropOffLocation && (
-                      <span className="flex items-center gap-1">
-                        <MapPin className="size-4" />
-                        {item.dropOffLocation}
-                      </span>
-                    )}
+                    <DropOffDisplay
+                      dropOffLocation={item.dropOffLocation}
+                      dropOffAt={item.dropOffAt}
+                      dropOffNote={item.dropOffNote}
+                      variant="inline"
+                      showIcons={true}
+                    />
                   </div>
 
                   {/* Notes */}

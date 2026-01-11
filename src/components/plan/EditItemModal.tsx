@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useModal } from '@/contexts/ModalContext';
 import ItemStatusBadges from './ItemStatusBadges';
+import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 
 interface Day {
   id: string;
@@ -233,9 +234,16 @@ export default function EditItemModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          {/* Status Badges */}
-          <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+          {/* Status Badges & Drop-off Summary */}
+          <div className="bg-gray-50 p-3 rounded-md border border-gray-200 space-y-2">
             <ItemStatusBadges assignment={item.assignment} />
+            <DropOffDisplay
+              dropOffLocation={item.dropOffLocation}
+              dropOffAt={null}
+              dropOffNote={item.dropOffNote}
+              variant="inline"
+              showIcons={true}
+            />
           </div>
 
           {/* Name */}

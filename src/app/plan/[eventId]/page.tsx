@@ -19,6 +19,7 @@ import ItemStatusBadges from '@/components/plan/ItemStatusBadges';
 import SectionExpandModal from '@/components/plan/SectionExpandModal';
 import { ModalProvider } from '@/contexts/ModalContext';
 import { Conflict } from '@prisma/client';
+import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 
 interface Event {
   id: string;
@@ -78,6 +79,9 @@ interface Item {
   dietaryTags: string[];
   dayId: string | null;
   serveTime: string | null;
+  dropOffLocation: string | null;
+  dropOffAt: string | null;
+  dropOffNote: string | null;
   team: {
     id: string;
     name: string;
@@ -943,14 +947,30 @@ export default function PlanEditorPage() {
               <div className="bg-white rounded-lg shadow-md p-6 mb-6">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xl font-semibold text-gray-900">Items & Quantities</h2>
-                  <button
-                    onClick={() => handleExpandSection('items')}
-                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
-                    aria-label="Expand section"
-                    title="Expand full-screen"
-                  >
-                    <Maximize2 className="w-5 h-5" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        if (teams.length > 0) {
+                          setSelectedTeamForItem(teams[0]);
+                          setAddItemModalOpen(true);
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 flex items-center gap-1.5 transition-colors"
+                      disabled={teams.length === 0}
+                      title="Add new item"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Item
+                    </button>
+                    <button
+                      onClick={() => handleExpandSection('items')}
+                      className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+                      aria-label="Expand section"
+                      title="Expand full-screen"
+                    >
+                      <Maximize2 className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-3">
                   {items.map((item) => {
@@ -985,6 +1005,15 @@ export default function PlanEditorPage() {
                             {item.description && (
                               <p className="text-sm text-gray-600 mb-2">{item.description}</p>
                             )}
+
+                            <DropOffDisplay
+                              dropOffLocation={item.dropOffLocation}
+                              dropOffAt={item.dropOffAt}
+                              dropOffNote={item.dropOffNote}
+                              variant="inline"
+                              showIcons={true}
+                              className="mb-2"
+                            />
 
                             {/* Quantity Display/Edit */}
                             {editingItemId === item.id ? (
@@ -1350,6 +1379,15 @@ export default function PlanEditorPage() {
                                         </p>
                                       )}
 
+                                      <DropOffDisplay
+                                        dropOffLocation={item.dropOffLocation}
+                                        dropOffAt={item.dropOffAt}
+                                        dropOffNote={item.dropOffNote}
+                                        variant="inline"
+                                        showIcons={true}
+                                        className="mt-2"
+                                      />
+
                                       {/* Quantity Display */}
                                       <div className="text-sm mt-2">
                                         {item.quantityState === 'SPECIFIED' ? (
@@ -1625,6 +1663,15 @@ export default function PlanEditorPage() {
                       <p className="text-sm text-gray-600 mb-2">{item.description}</p>
                     )}
 
+                    <DropOffDisplay
+                      dropOffLocation={item.dropOffLocation}
+                      dropOffAt={item.dropOffAt}
+                      dropOffNote={item.dropOffNote}
+                      variant="inline"
+                      showIcons={true}
+                      className="mb-2"
+                    />
+
                     <div className="flex items-center gap-2 text-sm text-gray-600 mt-2">
                       {item.quantityAmount && item.quantityUnit ? (
                         <span className="font-medium text-gray-900">
@@ -1788,6 +1835,15 @@ export default function PlanEditorPage() {
                                     {item.description}
                                   </p>
                                 )}
+
+                                <DropOffDisplay
+                                  dropOffLocation={item.dropOffLocation}
+                                  dropOffAt={item.dropOffAt}
+                                  dropOffNote={item.dropOffNote}
+                                  variant="inline"
+                                  showIcons={true}
+                                  className="mt-2"
+                                />
 
                                 {/* Quantity Display */}
                                 <div className="text-sm mt-2">
