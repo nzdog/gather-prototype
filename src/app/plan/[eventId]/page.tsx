@@ -48,6 +48,8 @@ interface Event {
   venueNotes: string | null;
   startDate: string;
   endDate: string;
+  lastCheckPlanAt: string | null;
+  hostId: string;
 }
 
 interface Team {
@@ -349,7 +351,12 @@ export default function PlanEditorPage() {
       const response = await fetch(`/api/events/${eventId}/check`, {
         method: 'POST',
       });
-      if (!response.ok) throw new Error('Failed to check plan');
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Check plan error:', errorData);
+        throw new Error(errorData.details || 'Failed to check plan');
+      }
 
       // After success, refresh all data
       await loadEvent();
@@ -361,7 +368,7 @@ export default function PlanEditorPage() {
       alert('Plan check complete! See conflicts below.');
     } catch (err: any) {
       console.error('Error checking plan:', err);
-      alert('Failed to check plan');
+      alert(`Failed to check plan: ${err.message}`);
     }
   };
 
@@ -944,6 +951,7 @@ export default function PlanEditorPage() {
                 eventId={eventId}
                 conflicts={conflicts}
                 onConflictsChanged={loadConflicts}
+                hasRunCheck={!!event.lastCheckPlanAt}
               />
             </div>
 
@@ -1625,6 +1633,7 @@ export default function PlanEditorPage() {
           eventId={eventId}
           conflicts={conflicts}
           onConflictsChanged={loadConflicts}
+          hasRunCheck={!!event.lastCheckPlanAt}
         />
       </SectionExpandModal>
 
