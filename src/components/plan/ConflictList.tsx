@@ -9,12 +9,14 @@ interface ConflictListProps {
   eventId: string;
   conflicts: Conflict[];
   onConflictsChanged?: () => void;
+  hasRunCheck?: boolean;
 }
 
 export default function ConflictList({
   eventId,
   conflicts,
   onConflictsChanged,
+  hasRunCheck = false,
 }: ConflictListProps) {
   const [acknowledgeModalOpen, setAcknowledgeModalOpen] = useState(false);
   const [selectedConflict, setSelectedConflict] = useState<Conflict | null>(null);
@@ -121,6 +123,16 @@ export default function ConflictList({
   };
 
   if (conflicts.length === 0) {
+    if (!hasRunCheck) {
+      return (
+        <div className="bg-gray-50 border-2 border-gray-300 rounded-lg p-6 text-center">
+          <span className="text-3xl">⏸️</span>
+          <p className="mt-2 text-gray-900 font-medium">No tests run yet</p>
+          <p className="text-sm text-gray-700">Click "Check Plan" to assess your plan for conflicts</p>
+        </div>
+      );
+    }
+
     return (
       <div className="bg-green-50 border-2 border-green-300 rounded-lg p-6 text-center">
         <span className="text-3xl">✓</span>
