@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams, usePathname } from 'next/navigation';
-import { ChevronDown, ChevronRight, Plus, Save, Loader2, Maximize2, Users, AlertCircle, Package, Link as LinkIcon, Clock } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, Save, Loader2, Maximize2, Users, AlertCircle, Package, Link as LinkIcon, Clock, Pencil } from 'lucide-react';
 import ConflictList from '@/components/plan/ConflictList';
 import GateCheck from '@/components/plan/GateCheck';
 import FreezeCheck from '@/components/plan/FreezeCheck';
@@ -696,7 +696,10 @@ export default function PlanEditorPage() {
 
       if (!response.ok) throw new Error('Failed to update item');
 
-      // Reload team items to show updated data
+      // Reload items list (for unexpanded view)
+      await loadItems();
+
+      // Reload team items to show updated data (for expanded view)
       if (item?.team?.id) {
         await loadTeamItems(item.team.id);
       }
@@ -1107,22 +1110,34 @@ export default function PlanEditorPage() {
                           </div>
 
                           {/* Action Buttons */}
-                          {needsAction && editingItemId !== item.id && (
-                            <div className="flex flex-col gap-2 ml-4">
+                          <div className="flex flex-col gap-2 ml-4">
+                            {needsAction && editingItemId !== item.id && (
+                              <>
+                                <button
+                                  onClick={() => handleStartEditQuantity(item)}
+                                  className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 whitespace-nowrap"
+                                >
+                                  Enter Quantity
+                                </button>
+                                <button
+                                  onClick={() => handleDeferToCoordinator(item.id)}
+                                  className="px-3 py-1 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 whitespace-nowrap"
+                                >
+                                  Defer to Coordinator
+                                </button>
+                              </>
+                            )}
+                            {editingItemId !== item.id && (
                               <button
-                                onClick={() => handleStartEditQuantity(item)}
-                                className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 whitespace-nowrap"
+                                onClick={() => handleStartEditItem(item)}
+                                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+                                title="Edit item"
+                                aria-label="Edit item"
                               >
-                                Enter Quantity
+                                <Pencil className="w-4 h-4" />
                               </button>
-                              <button
-                                onClick={() => handleDeferToCoordinator(item.id)}
-                                className="px-3 py-1 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 whitespace-nowrap"
-                              >
-                                Defer to Coordinator
-                              </button>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
