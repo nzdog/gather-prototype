@@ -82,6 +82,18 @@ export default function PeopleSection({
         throw new Error(error.error || 'Failed to update person');
       }
 
+      const result = await response.json();
+
+      // Show notification if someone was demoted from coordinator
+      if (result.demotedCoordinator) {
+        const { name, teamName } = result.demotedCoordinator;
+        alert(
+          `✓ Coordinator Updated\n\n` +
+          `${name} was automatically demoted from Coordinator to Participant on the ${teamName} team.\n\n` +
+          `Only one person can be coordinator per team.`
+        );
+      }
+
       onPeopleChanged?.();
     } catch (error) {
       throw error; // Re-throw so modal can show error
