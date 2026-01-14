@@ -9,7 +9,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   try {
     const { id: eventId } = await context.params;
     const body = await request.json();
-    const { modifier = '', preserveProtected = true, actorId } = body;
+    const { modifier = '', preserveProtected = true, actorId, preGeneratedPlan } = body;
 
     // Verify event exists and get all details
     const event = await prisma.event.findUnique({
@@ -125,18 +125,25 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       })),
     };
 
-    console.log(
-      '[Regenerate] Calling AI with params:',
-      JSON.stringify(regenerationParams, null, 2)
-    );
+    // Use pre-generated plan if provided (from preview), otherwise call AI
+    let aiResponse;
+    if (preGeneratedPlan) {
+      console.log('[Regenerate] Using pre-generated plan from preview');
+      aiResponse = preGeneratedPlan;
+    } else {
+      console.log(
+        '[Regenerate] Calling AI with params:',
+        JSON.stringify(regenerationParams, null, 2)
+      );
 
-    // Generate new plan using Claude AI
-    const aiResponse = await regeneratePlan(regenerationParams);
+      // Generate new plan using Claude AI
+      aiResponse = await regeneratePlan(regenerationParams);
 
-    console.log('[Regenerate] AI response received:', {
-      teams: aiResponse.teams.length,
-      items: aiResponse.items.length,
-    });
+      console.log('[Regenerate] AI response received:', {
+        teams: aiResponse.teams.length,
+        items: aiResponse.items.length,
+      });
+    }
 
     // Generate a unique batch ID for this regeneration run
     const generatedBatchId = `regen_${randomBytes(16).toString('hex')}`;

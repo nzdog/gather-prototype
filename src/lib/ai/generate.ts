@@ -75,6 +75,17 @@ export interface RegenerationParams extends EventParams {
     name: string;
     scope: string;
   }>;
+  currentPlan?: Array<{
+    teamName: string;
+    teamScope: string;
+    teamDomain: string;
+    items: Array<{
+      name: string;
+      quantity: string;
+      critical: boolean;
+      dietaryTags: string[];
+    }>;
+  }>;
 }
 
 /**

@@ -62,6 +62,14 @@ RULES (from Plan AI Protocol):
 4. Preserve protected items and teams - they will be provided as context, DO NOT remove or duplicate them
 5. Be proportionate - only say "must" for calculated requirements
 
+CRITICAL ADEQUACY RULES:
+- ALWAYS maintain adequate food quantities for ALL guests
+- If modifying style/theme, TRANSFORM items, don't reduce quantities
+- Ensure ALL dietary requirements are fully met (vegetarian, gluten-free, dairy-free, etc.)
+- Maintain coverage across essential categories: proteins, sides, desserts, beverages
+- When in doubt about whether to include an item, include it - better to have enough food
+- If the current plan has N items covering various categories, your regenerated plan should have similar breadth unless explicitly asked to reduce
+
 QUANTITY LABELS:
 - CALCULATED: Based on a formula (e.g., 200g meat per person × 40 guests = 8kg)
 - HEURISTIC: Based on experience/rules of thumb
@@ -211,6 +219,17 @@ export function buildRegenerationPrompt(params: {
     name: string;
     scope: string;
   }>;
+  currentPlan?: Array<{
+    teamName: string;
+    teamScope: string;
+    teamDomain: string;
+    items: Array<{
+      name: string;
+      quantity: string;
+      critical: boolean;
+      dietaryTags: string[];
+    }>;
+  }>;
 }): string {
   let prompt = `Regenerate the plan for a ${params.occasion} gathering with the following modification:
 
@@ -233,6 +252,19 @@ ${params.venue.ovenCount ? `- Ovens: ${params.venue.ovenCount}` : ''}
 ${params.venue.bbqAvailable ? `- BBQ: Available` : ''}
 `;
 
+  // Add current plan context
+  if (params.currentPlan && params.currentPlan.length > 0) {
+    prompt += `\nCURRENT PLAN (for reference - modify based on modifier):
+`;
+    for (const team of params.currentPlan) {
+      prompt += `\n${team.teamName} (${team.teamDomain}):
+  Scope: ${team.teamScope}
+  Items:
+${team.items.map(item => `    - ${item.name}: ${item.quantity}${item.critical ? ' [CRITICAL]' : ''}${item.dietaryTags.length > 0 ? ` (${item.dietaryTags.join(', ')})` : ''}`).join('\n')}
+`;
+    }
+  }
+
   if (params.protectedTeams && params.protectedTeams.length > 0) {
     prompt += `\nPROTECTED TEAMS (already exist - DO NOT duplicate):
 ${params.protectedTeams.map((team) => `- ${team.name}: ${team.scope}`).join('\n')}
@@ -245,13 +277,20 @@ ${params.protectedItems.map((item) => `- ${item.name} (${item.team}) - ${item.qu
 `;
   }
 
-  prompt += `\nApply the modifier while:
-- Respecting the event constraints
-- NOT duplicating protected teams (they already exist)
-- NOT including protected items in your output (they already exist)
-- Generating NEW teams and items based on the modifier
-- Labeling quantities appropriately
-- Explaining your reasoning`;
+  prompt += `\nYour task is to regenerate the plan by applying the modifier to the CURRENT PLAN above.
+
+IMPORTANT INSTRUCTIONS:
+- If the modifier is stylistic (e.g., "more festive", "more elegant"), TRANSFORM existing items to match the theme
+- If the modifier is additive (e.g., "add breakfast items"), ADD to the current plan
+- If the modifier is reductive (e.g., "remove desserts"), REMOVE from the current plan
+- MAINTAIN adequate food quantities for ${params.guests} guests across all categories
+- ENSURE dietary requirements are met (${params.dietary.vegetarian} vegetarian, ${params.dietary.glutenFree} gluten-free, ${params.dietary.dairyFree} dairy-free)
+- Keep critical items unless explicitly asked to remove them
+- Maintain coverage across proteins, sides, desserts, and drinks unless asked otherwise
+- Do NOT duplicate protected teams (they already exist)
+- Do NOT include protected items in your output (they already exist)
+- Label quantities appropriately (CALCULATED, HEURISTIC, PLACEHOLDER)
+- Explain your reasoning for changes`;
 
   return prompt;
 }
