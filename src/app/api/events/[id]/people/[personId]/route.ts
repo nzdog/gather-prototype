@@ -74,6 +74,9 @@ export async function PATCH(
     const finalRole = role !== undefined ? role : personEvent.role;
     const finalTeamId = 'teamId' in body ? teamId : personEvent.teamId;
 
+    // Track coordinator changes for user notification
+    let demotedCoordinator: { name: string; teamName: string } | null = null;
+
     // If person is being assigned as COORDINATOR to a team, handle coordinator transition
     if (finalRole === 'COORDINATOR' && finalTeamId) {
       // Find the current coordinator of this team (if any)
@@ -83,6 +86,10 @@ export async function PATCH(
           teamId: finalTeamId,
           role: 'COORDINATOR',
           personId: { not: personId }, // Don't include the person we're updating
+        },
+        include: {
+          person: true,
+          team: true,
         },
       });
 
@@ -99,6 +106,11 @@ export async function PATCH(
             role: 'PARTICIPANT',
           },
         });
+
+        demotedCoordinator = {
+          name: currentCoordinator.person.name,
+          teamName: currentCoordinator.team.name,
+        };
       }
 
       // Update the team's coordinatorId
@@ -160,6 +172,7 @@ export async function PATCH(
         team: updated.team || { id: '', name: 'Unassigned' },
         itemCount,
       },
+      demotedCoordinator,
     });
   } catch (error: any) {
     console.error('Error updating person:', error);
