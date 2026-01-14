@@ -336,8 +336,8 @@ export async function saveConflicts(eventId: string, conflicts: ConflictData[]):
           suggestion: conflict.suggestion as any,
         },
       });
-    } else if (existing.status === 'OPEN') {
-      // Update existing open conflict with new data
+    } else if (existing.status === 'OPEN' || existing.status === 'ACKNOWLEDGED' || existing.status === 'DELEGATED') {
+      // Update existing active conflict with new data
       await prisma.conflict.update({
         where: { id: existing.id },
         data: {
@@ -347,7 +347,23 @@ export async function saveConflicts(eventId: string, conflicts: ConflictData[]):
           suggestion: conflict.suggestion as any,
         },
       });
+    } else if (existing.status === 'RESOLVED' || existing.status === 'DISMISSED') {
+      // Reopen previously resolved/dismissed conflicts if they're detected again
+      await prisma.conflict.update({
+        where: { id: existing.id },
+        data: {
+          status: 'OPEN',
+          description: conflict.description,
+          affectedItems: conflict.affectedItems as any,
+          affectedDays: conflict.affectedDays as any,
+          suggestion: conflict.suggestion as any,
+          resolvedBy: null,
+          resolvedAt: null,
+          dismissedAt: null,
+          delegatedTo: null,
+          delegatedAt: null,
+        },
+      });
     }
-    // Don't update resolved/dismissed conflicts
   }
 }

@@ -431,6 +431,25 @@ export default function PlanEditorPage() {
       await loadConflicts();
       setGateCheckRefresh((prev) => prev + 1);
 
+      // Automatically run check plan if it was run before
+      if (event?.lastCheckPlanAt) {
+        console.log('Auto-running check plan after regeneration...');
+        try {
+          const checkResponse = await fetch(`/api/events/${eventId}/check`, {
+            method: 'POST',
+          });
+
+          if (checkResponse.ok) {
+            await loadEvent();
+            await loadConflicts();
+            console.log('Check plan completed successfully after regeneration');
+          }
+        } catch (checkError) {
+          console.error('Error auto-running check plan:', checkError);
+          // Don't fail the regeneration if check fails
+        }
+      }
+
       alert('Plan regenerated successfully!');
     } catch (err: any) {
       console.error('Error regenerating plan:', err);

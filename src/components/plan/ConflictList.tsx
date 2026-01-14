@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Conflict } from '@prisma/client';
 import ConflictCard from './ConflictCard';
 import AcknowledgeModal from './AcknowledgeModal';
+import ResolveWithAIModal from './ResolveWithAIModal';
 
 interface ConflictListProps {
   eventId: string;
@@ -20,6 +21,8 @@ export default function ConflictList({
 }: ConflictListProps) {
   const [acknowledgeModalOpen, setAcknowledgeModalOpen] = useState(false);
   const [selectedConflict, setSelectedConflict] = useState<Conflict | null>(null);
+  const [resolveWithAIModalOpen, setResolveWithAIModalOpen] = useState(false);
+  const [aiResolveConflict, setAiResolveConflict] = useState<Conflict | null>(null);
 
   // Group conflicts by severity (critical first)
   const criticalConflicts = conflicts.filter((c) => c.severity === 'CRITICAL');
@@ -39,6 +42,7 @@ export default function ConflictList({
       }
 
       onConflictsChanged?.();
+      alert('Conflict resolved successfully!');
     } catch (error) {
       console.error('Error resolving conflict:', error);
       alert('Failed to resolve conflict');
@@ -56,6 +60,7 @@ export default function ConflictList({
       }
 
       onConflictsChanged?.();
+      alert('Conflict dismissed successfully!');
     } catch (error) {
       console.error('Error dismissing conflict:', error);
       alert('Failed to dismiss conflict');
@@ -74,6 +79,7 @@ export default function ConflictList({
       }
 
       onConflictsChanged?.();
+      alert('Conflict delegated to coordinator successfully!');
     } catch (error) {
       console.error('Error delegating conflict:', error);
       alert(error instanceof Error ? error.message : 'Failed to delegate conflict');
@@ -86,6 +92,22 @@ export default function ConflictList({
       setSelectedConflict(conflict);
       setAcknowledgeModalOpen(true);
     }
+  };
+
+  const handleResolveWithAI = (conflictId: string) => {
+    const conflict = conflicts.find((c) => c.id === conflictId);
+    if (conflict) {
+      setAiResolveConflict(conflict);
+      setResolveWithAIModalOpen(true);
+    }
+  };
+
+  const handleAcceptAISuggestion = async (conflictId: string) => {
+    // The modal handles execution and resolution
+    // Just refresh the conflict list
+    setResolveWithAIModalOpen(false);
+    setAiResolveConflict(null);
+    onConflictsChanged?.();
   };
 
   const handleAcknowledgeSubmit = async (acknowledgement: {
@@ -116,6 +138,7 @@ export default function ConflictList({
       setAcknowledgeModalOpen(false);
       setSelectedConflict(null);
       onConflictsChanged?.();
+      alert('Conflict acknowledged successfully!');
     } catch (error) {
       console.error('Error acknowledging conflict:', error);
       alert(error instanceof Error ? error.message : 'Failed to acknowledge conflict');
@@ -156,6 +179,7 @@ export default function ConflictList({
               onDismiss={handleDismiss}
               onDelegate={handleDelegate}
               onAcknowledge={handleAcknowledge}
+              onResolveWithAI={handleResolveWithAI}
             />
           ))}
         </div>
@@ -175,6 +199,7 @@ export default function ConflictList({
               onDismiss={handleDismiss}
               onDelegate={handleDelegate}
               onAcknowledge={handleAcknowledge}
+              onResolveWithAI={handleResolveWithAI}
             />
           ))}
         </div>
@@ -192,6 +217,7 @@ export default function ConflictList({
               onDismiss={handleDismiss}
               onDelegate={handleDelegate}
               onAcknowledge={handleAcknowledge}
+              onResolveWithAI={handleResolveWithAI}
             />
           ))}
         </div>
@@ -207,6 +233,20 @@ export default function ConflictList({
             setSelectedConflict(null);
           }}
           onSubmit={handleAcknowledgeSubmit}
+        />
+      )}
+
+      {/* Resolve with AI Modal */}
+      {aiResolveConflict && (
+        <ResolveWithAIModal
+          isOpen={resolveWithAIModalOpen}
+          conflict={aiResolveConflict}
+          eventId={eventId}
+          onClose={() => {
+            setResolveWithAIModalOpen(false);
+            setAiResolveConflict(null);
+          }}
+          onAccept={handleAcceptAISuggestion}
         />
       )}
     </div>
