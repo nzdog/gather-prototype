@@ -4,11 +4,10 @@ import { prisma } from '@/lib/prisma';
 // PATCH /api/events/[id]/people/[personId] - Update person (role, team)
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string; personId: string } }
+  context: { params: Promise<{ id: string; personId: string }> }
 ) {
   try {
-    const eventId = params.id;
-    const personId = params.personId;
+    const { id: eventId, personId } = await context.params;
     const body = await request.json();
     const { role, teamId } = body;
 
@@ -71,6 +70,44 @@ export async function PATCH(
       });
     }
 
+    // Determine final role and teamId
+    const finalRole = role !== undefined ? role : personEvent.role;
+    const finalTeamId = 'teamId' in body ? teamId : personEvent.teamId;
+
+    // If person is being assigned as COORDINATOR to a team, handle coordinator transition
+    if (finalRole === 'COORDINATOR' && finalTeamId) {
+      // Find the current coordinator of this team (if any)
+      const currentCoordinator = await prisma.personEvent.findFirst({
+        where: {
+          eventId,
+          teamId: finalTeamId,
+          role: 'COORDINATOR',
+          personId: { not: personId }, // Don't include the person we're updating
+        },
+      });
+
+      // If there's already a coordinator, demote them to PARTICIPANT
+      if (currentCoordinator) {
+        await prisma.personEvent.update({
+          where: {
+            personId_eventId: {
+              personId: currentCoordinator.personId,
+              eventId,
+            },
+          },
+          data: {
+            role: 'PARTICIPANT',
+          },
+        });
+      }
+
+      // Update the team's coordinatorId
+      await prisma.team.update({
+        where: { id: finalTeamId },
+        data: { coordinatorId: personId },
+      });
+    }
+
     // Update PersonEvent
     const updated = await prisma.personEvent.update({
       where: {
@@ -80,8 +117,8 @@ export async function PATCH(
         },
       },
       data: {
-        role: role !== undefined ? role : personEvent.role,
-        teamId: 'teamId' in body ? teamId : personEvent.teamId,
+        role: finalRole,
+        teamId: finalTeamId,
       },
       include: {
         person: {
@@ -133,11 +170,10 @@ export async function PATCH(
 // DELETE /api/events/[id]/people/[personId] - Remove person from event
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: { id: string; personId: string } }
+  context: { params: Promise<{ id: string; personId: string }> }
 ) {
   try {
-    const eventId = params.id;
-    const personId = params.personId;
+    const { id: eventId, personId } = await context.params;
 
     // Execute removal in transaction
     await prisma.$transaction(async (tx) => {
