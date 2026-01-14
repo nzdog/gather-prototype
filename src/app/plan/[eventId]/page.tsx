@@ -397,7 +397,11 @@ export default function PlanEditorPage() {
     }
   };
 
-  const executeRegenerate = async (options: { preserveProtected: boolean; modifier: string }) => {
+  const executeRegenerate = async (options: {
+    preserveProtected: boolean;
+    modifier: string;
+    preGeneratedPlan?: any;
+  }) => {
     setRegenerateModalOpen(false);
     setIsRegenerating(true);
 
@@ -408,6 +412,7 @@ export default function PlanEditorPage() {
         body: JSON.stringify({
           preserveProtected: options.preserveProtected,
           modifier: options.modifier || undefined,
+          preGeneratedPlan: options.preGeneratedPlan || undefined,
         }),
       });
       if (!response.ok) throw new Error('Failed to regenerate plan');
@@ -1590,6 +1595,7 @@ export default function PlanEditorPage() {
         onRegenerate={executeRegenerate}
         manualTeamCount={manualTeamCount}
         manualItemCount={manualItemCount}
+        eventId={eventId}
       />
 
       {/* Edit Event Modal */}
