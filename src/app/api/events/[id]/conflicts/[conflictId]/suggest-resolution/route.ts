@@ -111,12 +111,26 @@ export async function POST(
 }
 
 function buildResolutionPrompt(conflict: any, event: any): string {
+  // Build affected items info for timing conflicts
+  let affectedItemsInfo = '';
+  if (conflict.type === 'TIMING' && conflict.affectedItems && Array.isArray(conflict.affectedItems)) {
+    const affectedItemIds = conflict.affectedItems;
+    const allItems = event.teams.flatMap((t: any) => t.items);
+    const items = allItems.filter((item: any) => affectedItemIds.includes(item.id));
+
+    if (items.length > 0) {
+      affectedItemsInfo = `\nAffected Items (causing timing conflict):\n${items.map((item: any) =>
+        `- "${item.name}" (id: ${item.id}, serveTime: ${item.serveTime || 'unknown'})`
+      ).join('\n')}\n`;
+    }
+  }
+
   const conflictInfo = `
 Conflict Type: ${conflict.type}
 Severity: ${conflict.severity}
 Title: ${conflict.title}
 Description: ${conflict.description}
-
+${affectedItemsInfo}
 Event Details:
 - Occasion: ${event.occasionType}
 - Guest Count: ${event.guestCount || 'Unknown'}
@@ -186,11 +200,25 @@ Please respond with a JSON object in this exact format:
           }
         ]
       }
+    },
+    // OPTION 3: Update existing item (for timing conflicts)
+    {
+      "type": "UPDATE_ITEM",
+      "itemId": "item_id_from_affected_items_list",
+      "data": {
+        "serveTime": "17:30",
+        "equipmentNeeds": null
+      }
     }
   ]
 }
 
 CRITICAL REQUIREMENTS:
+- For TIMING conflicts: Use UPDATE_ITEM to modify the affected items listed above
+  - Stagger serve times by changing "serveTime" (e.g., "17:00", "17:30", "18:00", "18:30")
+  - OR remove oven requirement by setting "equipmentNeeds": null
+  - MUST use the exact item IDs from the "Affected Items" list above
+  - Update enough items so remaining count doesn't exceed oven capacity
 - For dietary gaps: If no suitable team exists, use CREATE_TEAM with 2-3 complete item objects in the "items" array
 - For dietary gaps: If a suitable team exists, use multiple CREATE_ITEM actions (one per item needed)
 - For coverage gaps: Always use CREATE_TEAM with "domain" field and 2-3 complete items in the "items" array
@@ -202,6 +230,7 @@ CRITICAL REQUIREMENTS:
 - QuantityUnit options: "SERVINGS", "KG", "G", "L", "ML", "COUNT"
 
 Examples:
+- Timing conflict (6 items need oven, only 4 capacity): Use UPDATE_ITEM on 2 items to change serveTime from "18:00" to "17:30"
 - Vegetarian gap: CREATE_TEAM with domain "PROTEINS" or null, include 2 vegetarian main dishes with vegetarian:true
 - Coverage gap (missing DESSERTS): CREATE_TEAM with domain "DESSERTS", include 2-3 dessert items
 

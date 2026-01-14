@@ -248,7 +248,7 @@ export default function ResolveWithAIModal({
               </div>
               <p className="text-green-800 text-sm mb-2">{implementationResults.message}</p>
 
-              {/* Show details of what was created */}
+              {/* Show details of what was created/updated */}
               {implementationResults.results && implementationResults.results.length > 0 && (
                 <div className="mt-3 space-y-1">
                   {implementationResults.results.map((result: any, index: number) => (
@@ -256,6 +256,8 @@ export default function ResolveWithAIModal({
                       <div key={index} className="text-green-700 text-xs">
                         ✓ {result.action === 'CREATE_TEAM'
                           ? `Created team "${result.result.teamName}" with ${result.result.itemsCreated} item(s)`
+                          : result.action === 'UPDATE_ITEM'
+                          ? `Updated "${result.result.itemName}" (${result.result.updates?.join(', ')})`
                           : `Added "${result.result.itemName}" to ${result.result.teamName}`}
                       </div>
                     )

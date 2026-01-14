@@ -77,6 +77,9 @@ async function executeAction(eventId: string, action: any): Promise<any> {
     case 'CREATE_TEAM':
       return await createTeam(eventId, action);
 
+    case 'UPDATE_ITEM':
+      return await updateItem(eventId, action);
+
     default:
       throw new Error(`Unknown action type: ${action.type}`);
   }
@@ -167,5 +170,54 @@ async function createTeam(eventId: string, action: any): Promise<any> {
     teamName: team.name,
     itemsCreated: createdItems.length,
     items: createdItems,
+  };
+}
+
+async function updateItem(eventId: string, action: any): Promise<any> {
+  const { itemId, data } = action;
+
+  // Verify item exists and belongs to event
+  const item = await prisma.item.findFirst({
+    where: {
+      id: itemId,
+      team: { eventId }
+    },
+    include: {
+      team: true,
+    },
+  });
+
+  if (!item) {
+    throw new Error(`Item ${itemId} not found or does not belong to this event`);
+  }
+
+  // Build update data object
+  const updateData: any = {};
+
+  // Only update fields that are provided
+  if (data.serveTime !== undefined) {
+    updateData.serveTime = data.serveTime;
+  }
+  if (data.equipmentNeeds !== undefined) {
+    updateData.equipmentNeeds = data.equipmentNeeds;
+  }
+  if (data.prepStartTime !== undefined) {
+    updateData.prepStartTime = data.prepStartTime;
+  }
+  if (data.prepEndTime !== undefined) {
+    updateData.prepEndTime = data.prepEndTime;
+  }
+
+  // Update the item
+  const updatedItem = await prisma.item.update({
+    where: { id: itemId },
+    data: updateData,
+  });
+
+  return {
+    itemId: updatedItem.id,
+    itemName: updatedItem.name,
+    teamName: item.team.name,
+    updates: Object.keys(updateData),
   };
 }
