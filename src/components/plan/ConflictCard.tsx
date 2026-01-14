@@ -8,6 +8,7 @@ interface ConflictCardProps {
   onDismiss: (conflictId: string) => void;
   onDelegate: (conflictId: string) => void;
   onAcknowledge: (conflictId: string) => void;
+  onResolveWithAI: (conflictId: string) => void;
 }
 
 const severityStyles = {
@@ -34,6 +35,7 @@ export default function ConflictCard({
   onDismiss,
   onDelegate,
   onAcknowledge,
+  onResolveWithAI,
 }: ConflictCardProps) {
   const isCritical = conflict.severity === 'CRITICAL';
   const canDelegate = conflict.canDelegate;
@@ -97,10 +99,17 @@ export default function ConflictCard({
       {/* Actions */}
       <div className="flex gap-2 mt-4">
         <button
+          onClick={() => onResolveWithAI(conflict.id)}
+          className="px-3 py-1.5 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 transition flex items-center gap-1"
+        >
+          <span>✨</span>
+          Resolve with AI
+        </button>
+        <button
           onClick={() => onResolve(conflict.id)}
           className="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition"
         >
-          Resolve
+          Mark Resolved
         </button>
 
         {/* Only show action buttons if not already acknowledged or delegated */}
