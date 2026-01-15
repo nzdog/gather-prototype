@@ -119,3 +119,98 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     );
   }
 }
+
+// DELETE /api/events/[id] - Permanently delete an event
+export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  try {
+    const { id: eventId } = await context.params;
+
+    // Check if event exists
+    const existingEvent = await prisma.event.findUnique({
+      where: { id: eventId },
+    });
+
+    if (!existingEvent) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
+
+    // Delete event and all related data in a transaction
+    await prisma.$transaction(async (tx) => {
+      // Delete assignments (linked through items -> teams -> event)
+      await tx.assignment.deleteMany({
+        where: {
+          item: {
+            team: {
+              eventId,
+            },
+          },
+        },
+      });
+
+      // Delete items (linked through teams -> event)
+      await tx.item.deleteMany({
+        where: {
+          team: {
+            eventId,
+          },
+        },
+      });
+
+      // Delete teams
+      await tx.team.deleteMany({
+        where: { eventId },
+      });
+
+      // Delete days
+      await tx.day.deleteMany({
+        where: { eventId },
+      });
+
+      // Delete person-event relationships
+      await tx.personEvent.deleteMany({
+        where: { eventId },
+      });
+
+      // Delete access tokens
+      await tx.accessToken.deleteMany({
+        where: { eventId },
+      });
+
+      // Delete conflicts
+      await tx.conflict.deleteMany({
+        where: { eventId },
+      });
+
+      // Delete plan revisions
+      await tx.planRevision.deleteMany({
+        where: { eventId },
+      });
+
+      // Delete plan snapshots
+      await tx.planSnapshot.deleteMany({
+        where: { eventId },
+      });
+
+      // Delete audit entries
+      await tx.auditEntry.deleteMany({
+        where: { eventId },
+      });
+
+      // Finally, delete the event itself
+      await tx.event.delete({
+        where: { id: eventId },
+      });
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting event:', error);
+    return NextResponse.json(
+      {
+        error: 'Failed to delete event',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    );
+  }
+}
