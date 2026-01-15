@@ -80,6 +80,15 @@ export async function PATCH(
 
     // If person is being assigned as COORDINATOR to a team, handle coordinator transition
     if (finalRole === 'COORDINATOR' && finalTeamId) {
+      // First, delete ANY existing coordinator token for this team (belt and suspenders)
+      await prisma.accessToken.deleteMany({
+        where: {
+          eventId,
+          teamId: finalTeamId,
+          scope: 'COORDINATOR',
+        },
+      });
+
       // Find the current coordinator of this team (if any)
       const currentCoordinator = await prisma.personEvent.findFirst({
         where: {
@@ -105,15 +114,6 @@ export async function PATCH(
           },
           data: {
             role: 'PARTICIPANT',
-          },
-        });
-
-        // Delete old COORDINATOR token for demoted person
-        await prisma.accessToken.deleteMany({
-          where: {
-            personId: currentCoordinator.personId,
-            eventId,
-            scope: 'COORDINATOR',
           },
         });
 
@@ -171,20 +171,36 @@ export async function PATCH(
       },
     });
 
-    // Handle access token updates when role changes
-    if (role !== undefined && role !== personEvent.role) {
-      // Role changed - clean up old tokens and create new ones
-      if (finalRole === 'COORDINATOR') {
-        // Promoted to coordinator - delete old PARTICIPANT token
-        await prisma.accessToken.deleteMany({
-          where: {
-            personId,
-            eventId,
-            scope: 'PARTICIPANT',
-          },
-        });
-      } else if (personEvent.role === 'COORDINATOR' && finalRole === 'PARTICIPANT') {
-        // Demoted from coordinator - delete old COORDINATOR token
+    // Handle access token updates when role or team changes
+    const roleChanged = role !== undefined && role !== personEvent.role;
+    const teamChanged = 'teamId' in body && teamId !== personEvent.teamId;
+
+    if (roleChanged || teamChanged) {
+      // Clean up old tokens based on role changes
+      if (roleChanged) {
+        if (finalRole === 'COORDINATOR' && personEvent.role === 'PARTICIPANT') {
+          // Promoted to coordinator - delete old PARTICIPANT token
+          await prisma.accessToken.deleteMany({
+            where: {
+              personId,
+              eventId,
+              scope: 'PARTICIPANT',
+            },
+          });
+        } else if (personEvent.role === 'COORDINATOR' && finalRole === 'PARTICIPANT') {
+          // Demoted from coordinator - delete old COORDINATOR token
+          await prisma.accessToken.deleteMany({
+            where: {
+              personId,
+              eventId,
+              scope: 'COORDINATOR',
+            },
+          });
+        }
+      }
+
+      // If coordinator is moving teams, delete their old coordinator token
+      if (finalRole === 'COORDINATOR' && teamChanged) {
         await prisma.accessToken.deleteMany({
           where: {
             personId,
@@ -194,7 +210,7 @@ export async function PATCH(
         });
       }
 
-      // Create new tokens for the updated roles
+      // Create new tokens for the updated roles/teams
       await ensureEventTokens(eventId);
     }
 
