@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import TemplateList from '@/components/templates/TemplateList';
 import CloneTemplateModal from '@/components/templates/CloneTemplateModal';
+import { ModalProvider } from '@/contexts/ModalContext';
 
 export default function TemplatesPage() {
   const router = useRouter();
@@ -54,47 +55,49 @@ export default function TemplatesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Templates</h1>
-              <p className="mt-2 text-gray-600">
-                Save and reuse event structures for faster planning
-              </p>
+    <ModalProvider>
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <div className="bg-white border-b">
+          <div className="max-w-7xl mx-auto px-4 py-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">Templates</h1>
+                <p className="mt-2 text-gray-600">
+                  Save and reuse event structures for faster planning
+                </p>
+              </div>
+              <button
+                onClick={() => router.push('/plan/new')}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                Create New Event
+              </button>
             </div>
-            <button
-              onClick={() => router.push('/plan/new')}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              Create New Event
-            </button>
           </div>
         </div>
-      </div>
 
-      {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <TemplateList hostId={hostId} onClone={handleClone} onDelete={handleDelete} />
+        {/* Content */}
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <TemplateList hostId={hostId} onClone={handleClone} onDelete={handleDelete} />
+          </div>
         </div>
-      </div>
 
-      {/* Clone Modal */}
-      {selectedTemplateId && (
-        <CloneTemplateModal
-          isOpen={cloneModalOpen}
-          onClose={() => {
-            setCloneModalOpen(false);
-            setSelectedTemplateId(null);
-          }}
-          onClone={handleCloneComplete}
-          templateId={selectedTemplateId}
-          hostId={hostId}
-        />
-      )}
-    </div>
+        {/* Clone Modal */}
+        {selectedTemplateId && (
+          <CloneTemplateModal
+            isOpen={cloneModalOpen}
+            onClose={() => {
+              setCloneModalOpen(false);
+              setSelectedTemplateId(null);
+            }}
+            onClone={handleCloneComplete}
+            templateId={selectedTemplateId}
+            hostId={hostId}
+          />
+        )}
+      </div>
+    </ModalProvider>
   );
 }
