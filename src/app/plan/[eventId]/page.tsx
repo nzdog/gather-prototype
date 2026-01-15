@@ -531,7 +531,7 @@ export default function PlanEditorPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          hostId: MOCK_HOST_ID,
+          hostId: event?.hostId, // Use actual event hostId instead of MOCK_HOST_ID
           eventId: event?.id,
           name: templateName,
         }),
