@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Edit2, Users, Loader2, Upload, Maximize2 } from 'lucide-react';
+import { Plus, Edit2, Users, Loader2, Upload, Maximize2, UserCog } from 'lucide-react';
 import AddPersonModal, { AddPersonFormData } from './AddPersonModal';
 import EditPersonModal from './EditPersonModal';
 import TeamBoard from './TeamBoard';
 import ImportCSVModal, { PersonRow } from './ImportCSVModal';
+import AssignCoordinatorsModal from './AssignCoordinatorsModal';
 
 interface Team {
   id: string;
@@ -44,6 +45,7 @@ export default function PeopleSection({
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [assignCoordinatorsModalOpen, setAssignCoordinatorsModalOpen] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [isAutoAssigning, setIsAutoAssigning] = useState(false);
 
@@ -231,6 +233,15 @@ export default function PeopleSection({
             </div>
           </div>
           <div className="flex gap-2">
+            {/* Assign Coordinators Button */}
+            <button
+              onClick={() => setAssignCoordinatorsModalOpen(true)}
+              disabled={teams.length === 0}
+              className="px-3 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              <UserCog className="w-4 h-4" />
+              Assign Coordinators
+            </button>
             {/* Auto-Assign Button */}
             <button
               onClick={handleAutoAssign}
@@ -380,6 +391,30 @@ export default function PeopleSection({
         onClose={() => setImportModalOpen(false)}
         onImport={handleBatchImport}
         teams={teams}
+      />
+
+      {/* Assign Coordinators Modal */}
+      <AssignCoordinatorsModal
+        isOpen={assignCoordinatorsModalOpen}
+        onClose={() => setAssignCoordinatorsModalOpen(false)}
+        teams={teams.map(team => {
+          // Find the coordinator for this team
+          const coordinator = people.find(
+            p => p.team.id === team.id && p.role === 'COORDINATOR'
+          );
+          return {
+            id: team.id,
+            name: team.name,
+            coordinator: coordinator
+              ? { id: coordinator.personId, name: coordinator.name }
+              : { id: '', name: 'Unassigned' }
+          };
+        })}
+        people={people}
+        eventId={eventId}
+        onAssignmentsComplete={() => {
+          onPeopleChanged?.();
+        }}
       />
     </>
   );
