@@ -3,7 +3,7 @@
 // SECURITY: Host-only endpoint
 
 import { NextRequest, NextResponse } from 'next/server';
-import { listInviteLinks } from '@/lib/tokens';
+import { listInviteLinks, ensureEventTokens } from '@/lib/tokens';
 import { prisma } from '@/lib/prisma';
 
 // Force Node.js runtime for crypto support
@@ -54,7 +54,8 @@ export async function GET(
         );
       }
 
-      // Token auth passed - return invite links
+      // Token auth passed - ensure tokens are up to date, then return invite links
+      await ensureEventTokens(eventId);
       const inviteLinks = await listInviteLinks(eventId);
       return NextResponse.json({ inviteLinks });
     }
@@ -82,7 +83,8 @@ export async function GET(
         );
       }
 
-      // hostId auth passed - return invite links
+      // hostId auth passed - ensure tokens are up to date, then return invite links
+      await ensureEventTokens(eventId);
       const inviteLinks = await listInviteLinks(eventId);
       return NextResponse.json({ inviteLinks });
     }
