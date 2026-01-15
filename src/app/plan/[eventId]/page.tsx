@@ -226,6 +226,11 @@ export default function PlanEditorPage() {
       if (!response.ok) throw new Error('Failed to load event');
       const data = await response.json();
       setEvent(data.event);
+
+      // Save hostId to localStorage for templates page
+      if (data.event?.hostId) {
+        localStorage.setItem('gather_hostId', data.event.hostId);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
