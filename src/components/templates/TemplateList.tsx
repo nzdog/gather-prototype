@@ -102,45 +102,70 @@ export default function TemplateList({ hostId, onClone, onDelete }: TemplateList
         </div>
       ) : (
         <div className="grid gap-4">
-          {displayTemplates.map((template) => (
-            <div key={template.id} className="border rounded-lg p-4 hover:shadow-md transition">
-              <div className="flex justify-between items-start mb-2">
-                <div>
-                  <h3 className="font-semibold text-lg">{template.name}</h3>
-                  <p className="text-sm text-gray-600">
-                    {template.occasionType} • {(template.teams as any[]).length} teams
-                  </p>
-                  {template.createdFrom && (
-                    <p className="text-xs text-gray-500 mt-1">Created from event</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {activeTab === 'gather' && template.version && (
-                    <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
-                      v{template.version}
-                    </span>
-                  )}
-                </div>
-              </div>
+          {displayTemplates.map((template) => {
+            const teams = template.teams as any[];
+            const totalItems = teams.reduce((sum, team) => sum + (team.items?.length || 0), 0);
+            const createdDate = new Date(template.createdAt).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+            });
 
-              <div className="flex gap-2 mt-3">
-                <button
-                  onClick={() => onClone(template.id)}
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition"
-                >
-                  Use Template
-                </button>
-                {activeTab === 'my' && (
+            return (
+              <div key={template.id} className="border rounded-lg p-4 hover:shadow-md transition">
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="font-semibold text-lg">{template.name}</h3>
+                      {activeTab === 'gather' && template.version && (
+                        <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
+                          v{template.version}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600 mb-2">
+                      <span className="flex items-center gap-1">
+                        <span className="font-medium">Occasion:</span> {template.occasionType}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="font-medium">Teams:</span> {teams.length}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="font-medium">Items:</span> {totalItems}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="font-medium">Created:</span> {createdDate}
+                      </span>
+                    </div>
+
+                    {template.createdFrom && (
+                      <p className="text-xs text-gray-500">
+                        Saved from a completed event
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-2 mt-3">
                   <button
-                    onClick={() => handleDelete(template.id)}
-                    className="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition"
+                    onClick={() => onClone(template.id)}
+                    className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition"
                   >
-                    Delete
+                    Use Template
                   </button>
-                )}
+                  {activeTab === 'my' && (
+                    <button
+                      onClick={() => handleDelete(template.id)}
+                      className="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

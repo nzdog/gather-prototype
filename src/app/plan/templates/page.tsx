@@ -1,17 +1,32 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import TemplateList from '@/components/templates/TemplateList';
 import CloneTemplateModal from '@/components/templates/CloneTemplateModal';
 
-// Mock hostId - in production, this would come from auth
-const MOCK_HOST_ID = 'cmjwbjrpw0000n99xs11r44qh';
-
 export default function TemplatesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [cloneModalOpen, setCloneModalOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [hostId, setHostId] = useState<string>('');
+
+  // Get hostId from query params or localStorage
+  useEffect(() => {
+    const hostIdFromQuery = searchParams?.get('hostId');
+    const hostIdFromStorage = localStorage.getItem('gather_hostId');
+
+    if (hostIdFromQuery) {
+      setHostId(hostIdFromQuery);
+      localStorage.setItem('gather_hostId', hostIdFromQuery);
+    } else if (hostIdFromStorage) {
+      setHostId(hostIdFromStorage);
+    } else {
+      // Default fallback
+      setHostId('cmjwbjrpw0000n99xs11r44qh');
+    }
+  }, [searchParams]);
 
   const handleClone = (templateId: string) => {
     setSelectedTemplateId(templateId);
@@ -27,6 +42,16 @@ export default function TemplatesPage() {
     // Redirect to the new event
     router.push(`/plan/${eventId}`);
   };
+
+  if (!hostId) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600">Loading templates...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -53,7 +78,7 @@ export default function TemplatesPage() {
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="bg-white rounded-lg shadow-md p-6">
-          <TemplateList hostId={MOCK_HOST_ID} onClone={handleClone} onDelete={handleDelete} />
+          <TemplateList hostId={hostId} onClone={handleClone} onDelete={handleDelete} />
         </div>
       </div>
 
@@ -67,7 +92,7 @@ export default function TemplatesPage() {
           }}
           onClone={handleCloneComplete}
           templateId={selectedTemplateId}
-          hostId={MOCK_HOST_ID}
+          hostId={hostId}
         />
       )}
     </div>
