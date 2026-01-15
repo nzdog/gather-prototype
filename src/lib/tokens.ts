@@ -64,6 +64,49 @@ export async function ensureEventTokens(
     },
   });
 
+  // CLEANUP STEP: Remove orphaned coordinator tokens
+  // Build a set of valid coordinator tokens (teamId -> personId)
+  const validCoordinatorTokens = new Set<string>();
+  for (const team of event.teams) {
+    if (team.coordinatorId) {
+      validCoordinatorTokens.add(`${team.id}-${team.coordinatorId}`);
+    }
+  }
+
+  // Also include coordinators from PersonEvent role (backup)
+  for (const pe of personEvents) {
+    if (pe.role === 'COORDINATOR' && pe.teamId) {
+      validCoordinatorTokens.add(`${pe.teamId}-${pe.personId}`);
+    }
+  }
+
+  // Delete coordinator tokens that don't match current state
+  const existingCoordinatorTokens = await db.accessToken.findMany({
+    where: {
+      eventId,
+      scope: 'COORDINATOR',
+    },
+    select: {
+      id: true,
+      teamId: true,
+      personId: true,
+    },
+  });
+
+  const tokensToDelete = existingCoordinatorTokens.filter((token) => {
+    if (!token.teamId) return true; // Coordinator tokens should always have teamId
+    const key = `${token.teamId}-${token.personId}`;
+    return !validCoordinatorTokens.has(key);
+  });
+
+  if (tokensToDelete.length > 0) {
+    await db.accessToken.deleteMany({
+      where: {
+        id: { in: tokensToDelete.map((t) => t.id) },
+      },
+    });
+  }
+
   // Fetch all existing tokens for this event in ONE query
   const existingTokens = await db.accessToken.findMany({
     where: { eventId },
