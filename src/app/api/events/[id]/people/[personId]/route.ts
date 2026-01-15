@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { ensureEventTokens } from '@/lib/tokens';
 
 // PATCH /api/events/[id]/people/[personId] - Update person (role, team)
 export async function PATCH(
@@ -107,6 +108,15 @@ export async function PATCH(
           },
         });
 
+        // Delete old COORDINATOR token for demoted person
+        await prisma.accessToken.deleteMany({
+          where: {
+            personId: currentCoordinator.personId,
+            eventId,
+            scope: 'COORDINATOR',
+          },
+        });
+
         demotedCoordinator = {
           name: currentCoordinator.person.name,
           teamName: currentCoordinator.team.name,
@@ -160,6 +170,33 @@ export async function PATCH(
         },
       },
     });
+
+    // Handle access token updates when role changes
+    if (role !== undefined && role !== personEvent.role) {
+      // Role changed - clean up old tokens and create new ones
+      if (finalRole === 'COORDINATOR') {
+        // Promoted to coordinator - delete old PARTICIPANT token
+        await prisma.accessToken.deleteMany({
+          where: {
+            personId,
+            eventId,
+            scope: 'PARTICIPANT',
+          },
+        });
+      } else if (personEvent.role === 'COORDINATOR' && finalRole === 'PARTICIPANT') {
+        // Demoted from coordinator - delete old COORDINATOR token
+        await prisma.accessToken.deleteMany({
+          where: {
+            personId,
+            eventId,
+            scope: 'COORDINATOR',
+          },
+        });
+      }
+
+      // Create new tokens for the updated roles
+      await ensureEventTokens(eventId);
+    }
 
     return NextResponse.json({
       personEvent: {
