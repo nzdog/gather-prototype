@@ -1,6 +1,44 @@
+// GET /api/events - List events by hostId
 // POST /api/events - Create new event
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+
+export async function GET(request: NextRequest) {
+  try {
+    const searchParams = request.nextUrl.searchParams;
+    const hostId = searchParams.get('hostId');
+
+    if (!hostId) {
+      return NextResponse.json({ error: 'hostId is required' }, { status: 400 });
+    }
+
+    const events = await prisma.event.findMany({
+      where: { hostId },
+      include: {
+        _count: {
+          select: {
+            teams: true,
+            days: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    return NextResponse.json({ events });
+  } catch (error) {
+    console.error('Error fetching events:', error);
+    return NextResponse.json(
+      {
+        error: 'Failed to fetch events',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    );
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
