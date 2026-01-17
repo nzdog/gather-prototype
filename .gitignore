@@ -25,3 +25,9 @@ Thumbs.db
 
 # Claude
 .claude/
+
+# Debug/test scripts (one-off)
+check-conflicts.js
+check-timing-data.js
+setup-timing-conflict.js
+test-timing-conflict.js

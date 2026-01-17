@@ -66,6 +66,7 @@ interface HostData {
     status: string;
     guestCount: number | null;
   };
+  authStatus: 'unclaimed' | 'requires_signin' | 'authenticated';
   teams: Team[];
   freezeAllowed: boolean;
   criticalGapCount: number;
@@ -84,6 +85,9 @@ export default function HostView() {
   const [collapsedTeams, setCollapsedTeams] = useState<Set<string>>(new Set());
   const isInitialLoad = useRef(true);
   const expandAll = useRef(false);
+  const [claimEmail, setClaimEmail] = useState('');
+  const [claimSubmitted, setClaimSubmitted] = useState(false);
+  const [claimSubmitting, setClaimSubmitting] = useState(false);
 
   // Check URL params on mount
   useEffect(() => {
@@ -258,6 +262,35 @@ export default function HostView() {
     }
   };
 
+  const handleClaimSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!data || !claimEmail.trim()) return;
+
+    setClaimSubmitting(true);
+    try {
+      const response = await fetch('/api/auth/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: claimEmail.trim(),
+          personId: data.person.id,
+          returnToken: token,
+        }),
+      });
+
+      const result = await response.json();
+      if (result.ok) {
+        setClaimSubmitted(true);
+      }
+    } catch (err) {
+      console.error('Claim submission error:', err);
+      // Still show success to prevent enumeration
+      setClaimSubmitted(true);
+    } finally {
+      setClaimSubmitting(false);
+    }
+  };
+
   const formatDateRange = (startDate: string, endDate: string) => {
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -302,6 +335,70 @@ export default function HostView() {
     );
   }
 
+  // Show claim form if host account is unclaimed (Ticket 1.6)
+  if (data.authStatus === 'unclaimed') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Claim Your Account</h1>
+          <p className="text-gray-600 mb-6">
+            To continue managing your events, enter your email to create an account.
+          </p>
+
+          {claimSubmitted ? (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <p className="text-green-800 font-semibold mb-2">Check your email!</p>
+              <p className="text-green-700 text-sm">
+                We've sent a magic link to <strong>{claimEmail}</strong>. Click the link in the
+                email to complete your account setup and return to managing your events.
+              </p>
+            </div>
+          ) : (
+            <form onSubmit={handleClaimSubmit}>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+              <input
+                type="email"
+                value={claimEmail}
+                onChange={(e) => setClaimEmail(e.target.value)}
+                placeholder="your@email.com"
+                required
+                disabled={claimSubmitting}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed mb-4"
+              />
+              <button
+                type="submit"
+                disabled={claimSubmitting || !claimEmail.trim()}
+                className="w-full bg-accent text-white py-2 px-4 rounded-lg hover:bg-accent-dark disabled:bg-gray-300 disabled:cursor-not-allowed font-semibold"
+              >
+                {claimSubmitting ? 'Sending...' : 'Send Magic Link'}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Show sign-in prompt if account is claimed but user is not signed in (Ticket 1.6)
+  if (data.authStatus === 'requires_signin') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Sign In Required</h1>
+          <p className="text-gray-600 mb-6">
+            This account has been claimed. Please sign in to continue managing your events.
+          </p>
+          <a
+            href="/auth/signin"
+            className="block w-full bg-accent text-white py-2 px-4 rounded-lg hover:bg-accent-dark text-center font-semibold"
+          >
+            Sign In
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   const nextStatus = getNextStatus(data.event.status);
   const totalGaps = data.teams.reduce((sum, t) => sum + t.unassignedCount, 0);
 
@@ -315,7 +412,7 @@ export default function HostView() {
       <div className="bg-white border-b border-gray-200 px-6 py-5">
         <button
           onClick={() => window.close()}
-          className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 mb-3"
+          className="inline-flex items-center gap-1 text-sm text-accent hover:text-blue-800 mb-3"
         >
           <Home className="size-4" />
           Close Window
@@ -366,7 +463,7 @@ export default function HostView() {
           ) : (
             <button
               onClick={handleEditGuestCount}
-              className="text-sm text-blue-600 hover:underline"
+              className="text-sm text-accent hover:underline"
             >
               {data.event.guestCount ? `${data.event.guestCount} guests` : 'Add guest count'}
             </button>
@@ -602,7 +699,7 @@ export default function HostView() {
                     {/* View Items Button */}
                     <Link
                       href={`/h/${token}/team/${team.id}`}
-                      className="mt-4 mx-auto w-1/3 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+                      className="mt-4 mx-auto w-1/3 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-accent text-white text-sm rounded-lg hover:bg-accent-dark transition-colors"
                     >
                       <Eye className="size-3" />
                       View Items
@@ -624,7 +721,7 @@ export default function HostView() {
             className={`w-full h-14 rounded-lg font-semibold transition-all ${
               updating || (nextStatus === 'FROZEN' && !data.freezeAllowed)
                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-accent text-white hover:bg-accent-dark'
             }`}
           >
             {updating ? (

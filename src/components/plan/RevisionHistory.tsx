@@ -152,7 +152,7 @@ export default function RevisionHistory({ eventId, actorId, onExpand }: Revision
           <button
             onClick={handleCreateRevision}
             disabled={creatingRevision}
-            className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-3 py-1 bg-accent text-white text-sm rounded-md hover:bg-accent-dark disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
           >
             <Clock className="w-4 h-4" />
             {creatingRevision ? 'Creating...' : 'Create Snapshot'}

@@ -131,7 +131,7 @@ export default function NewPlanPage() {
         <div className="mb-8">
           <button
             onClick={() => router.push('/')}
-            className="text-blue-600 hover:text-blue-700 mb-4 flex items-center gap-2"
+            className="text-accent hover:text-accent-dark mb-4 flex items-center gap-2"
           >
             ← Back to Home
           </button>
@@ -147,7 +147,7 @@ export default function NewPlanPage() {
             <div
               key={s}
               className={`h-2 w-16 rounded-full ${
-                s === step ? 'bg-blue-600' : s < step ? 'bg-blue-300' : 'bg-gray-200'
+                s === step ? 'bg-accent' : s < step ? 'bg-blue-300' : 'bg-gray-200'
               }`}
             />
           ))}
@@ -180,7 +180,7 @@ export default function NewPlanPage() {
                   value={formData.name}
                   onChange={handleChange}
                   placeholder="e.g., Richardson Family Christmas 2025"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
                 />
               </div>
 
@@ -197,7 +197,7 @@ export default function NewPlanPage() {
                   name="occasionType"
                   value={formData.occasionType}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
                 >
                   <option value="">Select type</option>
                   <option value="CHRISTMAS">Christmas</option>
@@ -226,7 +226,7 @@ export default function NewPlanPage() {
                   onChange={handleChange}
                   rows={3}
                   placeholder="e.g., Three-day family gathering at the beach house"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
                 />
               </div>
 
@@ -247,7 +247,7 @@ export default function NewPlanPage() {
                     required
                     value={formData.startDate}
                     onChange={handleChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
                   />
                 </div>
 
@@ -263,7 +263,7 @@ export default function NewPlanPage() {
                     required
                     value={formData.endDate}
                     onChange={handleChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
                   />
                 </div>
               </div>
@@ -288,7 +288,7 @@ export default function NewPlanPage() {
                   console.log('Step 1 complete, formData:', formData);
                   setStep(2);
                 }}
-                className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700"
+                className="w-full px-6 py-3 bg-accent text-white rounded-lg font-semibold hover:bg-accent-dark"
               >
                 Next: Guest Details →
               </button>
@@ -319,7 +319,7 @@ export default function NewPlanPage() {
                   value={formData.guestCount}
                   onChange={handleChange}
                   placeholder="e.g., 40"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
                 />
               </div>
 
@@ -336,7 +336,7 @@ export default function NewPlanPage() {
                   name="guestCountConfidence"
                   value={formData.guestCountConfidence}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
                 >
                   <option value="HIGH">High - confirmed RSVPs</option>
                   <option value="MEDIUM">Medium - good estimate</option>
@@ -360,7 +360,7 @@ export default function NewPlanPage() {
                     min="1"
                     value={formData.guestCountMin}
                     onChange={handleChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
                   />
                 </div>
                 <div>
@@ -377,7 +377,7 @@ export default function NewPlanPage() {
                     min="1"
                     value={formData.guestCountMax}
                     onChange={handleChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
                   />
                 </div>
               </div>
@@ -475,7 +475,7 @@ export default function NewPlanPage() {
                     console.log('Step 2 complete, formData:', formData);
                     setStep(3);
                   }}
-                  className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700"
+                  className="flex-1 px-6 py-3 bg-accent text-white rounded-lg font-semibold hover:bg-accent-dark"
                 >
                   Next: Venue Details →
                 </button>
@@ -503,7 +503,7 @@ export default function NewPlanPage() {
                   value={formData.venueName}
                   onChange={handleChange}
                   placeholder="e.g., Beach House at Whangapoua"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
                 />
               </div>
 
@@ -517,7 +517,7 @@ export default function NewPlanPage() {
                   name="venueType"
                   value={formData.venueType}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
                 >
                   <option value="">Select type</option>
                   <option value="HOME">Home</option>
@@ -542,7 +542,7 @@ export default function NewPlanPage() {
                   name="venueKitchenAccess"
                   value={formData.venueKitchenAccess}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
                 >
                   <option value="">Select access level</option>
                   <option value="FULL">Full kitchen access</option>
