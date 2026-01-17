@@ -4,7 +4,7 @@ import { Resend } from 'resend';
 // Initialize Resend client lazily to ensure env vars are loaded
 let resendClient: Resend | null = null;
 
-function getResendClient(): Resend {
+export function getResendClient(): Resend {
   if (!resendClient) {
     resendClient = new Resend(process.env.RESEND_API_KEY);
   }
