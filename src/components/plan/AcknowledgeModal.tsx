@@ -132,7 +132,7 @@ export default function AcknowledgeModal({
               <textarea
                 value={impactStatement}
                 onChange={(e) => setImpactStatement(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
                 rows={4}
                 placeholder='Example: "Vegetarians will eat from sides and salads — confirmed with Sarah and Tom"'
               />
@@ -149,7 +149,7 @@ export default function AcknowledgeModal({
               <select
                 value={mitigationPlanType}
                 onChange={(e) => setMitigationPlanType(e.target.value as MitigationPlanType)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
               >
                 <option value="COMMUNICATE">Communicate to guests</option>
                 <option value="SUBSTITUTE">Provide substitute</option>

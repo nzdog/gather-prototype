@@ -1,3 +1,24 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    /* Accent colors */
+    --accent: #7D8B7A;
+    --accent-light: #A3ADA0;
+    --accent-dark: #6B7869;
+
+    /* Warm grey scale */
+    --warm-white: #FAF9F7;
+    --warm-grey-100: #F5F4F1;
+    --warm-grey-200: #E8E6E1;
+    --warm-grey-300: #D4D1CA;
+    --warm-grey-400: #A8A49B;
+    --warm-grey-500: #7A756B;
+    --warm-grey-600: #5C574E;
+    --warm-grey-700: #3D3935;
+    --warm-grey-800: #2A2724;
+    --warm-black: #1D1B19;
+  }
+}

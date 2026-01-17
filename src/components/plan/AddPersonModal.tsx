@@ -158,7 +158,7 @@ export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPer
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
               placeholder="e.g., John Smith"
               required
               autoFocus
@@ -174,7 +174,7 @@ export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPer
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
               placeholder="e.g., john@example.com"
             />
           </div>
@@ -188,7 +188,7 @@ export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPer
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
               placeholder="e.g., +1 234 567 8900"
             />
           </div>
@@ -201,7 +201,7 @@ export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPer
             <select
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
             >
               <option value="COORDINATOR">Coordinator</option>
               <option value="PARTICIPANT">Participant</option>
@@ -219,7 +219,7 @@ export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPer
             <select
               value={teamId || ''}
               onChange={(e) => setTeamId(e.target.value || null)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
             >
               <option value="">Unassigned</option>
               {teams.map((team) => (
@@ -238,7 +238,7 @@ export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPer
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Adding...' : 'Add Person'}
               <span className="ml-2 text-xs opacity-75">

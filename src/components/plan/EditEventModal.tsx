@@ -198,7 +198,7 @@ export default function EditEventModal({
                 onClick={() => setStep(s)}
                 className={`flex-1 py-2 px-4 rounded-md text-sm font-medium ${
                   step === s
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-accent text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
@@ -571,7 +571,7 @@ export default function EditEventModal({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Saving...' : 'Save Changes'}
             </button>

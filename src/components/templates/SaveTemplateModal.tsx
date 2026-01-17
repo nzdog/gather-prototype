@@ -95,7 +95,7 @@ export default function SaveTemplateModal({
               value={templateName}
               onChange={(e) => setTemplateName(e.target.value)}
               placeholder={`e.g., "${occasionType} Template"`}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
               autoFocus
             />
           </div>
@@ -112,7 +112,7 @@ export default function SaveTemplateModal({
           <button
             onClick={handleSave}
             disabled={saving || !templateName.trim()}
-            className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50"
+            className="px-4 py-2 text-sm bg-accent text-white rounded hover:bg-accent-dark transition disabled:opacity-50"
           >
             {saving ? 'Saving...' : 'Save Template'}
           </button>

@@ -174,7 +174,7 @@ export default function CloneTemplateModal({
               type="text"
               value={eventName}
               onChange={(e) => setEventName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
             />
           </div>
 
@@ -185,7 +185,7 @@ export default function CloneTemplateModal({
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
               />
             </div>
 
@@ -195,7 +195,7 @@ export default function CloneTemplateModal({
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
               />
             </div>
           </div>
@@ -209,7 +209,7 @@ export default function CloneTemplateModal({
               value={guestCount}
               onChange={(e) => setGuestCount(e.target.value)}
               placeholder="e.g., 30"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
             />
           </div>
 
@@ -261,7 +261,7 @@ export default function CloneTemplateModal({
           <button
             onClick={handleClone}
             disabled={cloning || !eventName.trim() || !startDate || !endDate}
-            className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50"
+            className="px-4 py-2 text-sm bg-accent text-white rounded hover:bg-accent-dark transition disabled:opacity-50"
           >
             {cloning ? 'Creating...' : 'Create Event from Template'}
           </button>

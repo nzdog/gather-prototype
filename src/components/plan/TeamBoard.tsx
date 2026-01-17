@@ -86,7 +86,7 @@ function DraggablePersonChip({
             }}
             className="flex-1 min-w-0 text-left hover:bg-gray-50 rounded px-1 -mx-1 transition-colors"
           >
-            <p className="text-sm font-medium text-gray-900 truncate hover:text-blue-600 transition-colors">
+            <p className="text-sm font-medium text-gray-900 truncate hover:text-accent transition-colors">
               {person.name}
             </p>
             {person.email && <p className="text-xs text-gray-500 truncate">{person.email}</p>}

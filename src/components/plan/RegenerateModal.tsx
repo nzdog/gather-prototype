@@ -124,7 +124,7 @@ export default function RegenerateModal({
           {/* Loading State */}
           {step === 'loading' && (
             <div className="flex flex-col items-center justify-center py-12">
-              <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-4" />
+              <Loader2 className="w-12 h-12 text-accent animate-spin mb-4" />
               <p className="text-gray-600">Claude is generating your preview...</p>
             </div>
           )}
@@ -184,7 +184,7 @@ export default function RegenerateModal({
               value={modifier}
               onChange={(e) => setModifier(e.target.value)}
               placeholder="e.g., More vegetarian options, Focus on appetizers, Add dessert team..."
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-blue-500 resize-none"
               rows={3}
             />
             <p className="text-sm text-gray-500 mt-1">
@@ -199,7 +199,7 @@ export default function RegenerateModal({
                     {/* Option 1: Keep Manual Additions */}
                     <button
                       onClick={() => handlePreview(true)}
-                      className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                      className="w-full px-6 py-3 bg-accent text-white rounded-lg font-semibold hover:bg-accent-dark transition-colors"
                     >
                       Preview Changes - Keep My Additions (Recommended)
                     </button>
@@ -223,7 +223,7 @@ export default function RegenerateModal({
                     {/* Simple Regenerate */}
                     <button
                       onClick={() => handlePreview(false)}
-                      className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                      className="w-full px-6 py-3 bg-accent text-white rounded-lg font-semibold hover:bg-accent-dark transition-colors"
                     >
                       Preview Changes
                     </button>

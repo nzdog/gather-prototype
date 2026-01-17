@@ -20,7 +20,7 @@ export default function Navigation() {
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-8">
             <Link href="/" className="flex items-center gap-2">
-              <div className="text-2xl font-bold text-blue-600">Gather</div>
+              <div className="text-2xl font-bold text-accent">Gather</div>
             </Link>
 
             <div className="flex items-center gap-1">
@@ -34,7 +34,7 @@ export default function Navigation() {
                     href={item.href}
                     className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                       isActive
-                        ? 'bg-blue-50 text-blue-600'
+                        ? 'bg-blue-50 text-accent'
                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                     }`}
                   >

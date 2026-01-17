@@ -103,7 +103,7 @@ export default function AddTeamModal({ isOpen, onClose, onAdd }: AddTeamModalPro
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Desserts Team"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                 autoFocus
                 disabled={adding}
               />
@@ -119,7 +119,7 @@ export default function AddTeamModal({ isOpen, onClose, onAdd }: AddTeamModalPro
                 onChange={(e) => setScope(e.target.value)}
                 placeholder="e.g., Responsible for all desserts including cakes, puddings, and ice cream"
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                 disabled={adding}
               />
             </div>
@@ -132,7 +132,7 @@ export default function AddTeamModal({ isOpen, onClose, onAdd }: AddTeamModalPro
               <select
                 value={domain}
                 onChange={(e) => setDomain(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                 disabled={adding}
               >
                 {DOMAINS.map((d) => (
@@ -160,7 +160,7 @@ export default function AddTeamModal({ isOpen, onClose, onAdd }: AddTeamModalPro
             <button
               type="submit"
               disabled={adding || !name.trim() || !scope.trim()}
-              className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50"
+              className="px-4 py-2 text-sm bg-accent text-white rounded hover:bg-accent-dark transition disabled:opacity-50"
             >
               {adding ? 'Adding...' : 'Add Team'}
             </button>
