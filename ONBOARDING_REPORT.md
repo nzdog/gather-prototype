@@ -368,7 +368,7 @@ Expected: Landing page with "Start planning" CTA
 **Format:**
 ```bash
 DATABASE_URL="postgresql://user@host:port/db"
-ANTHROPIC_API_KEY="sk-ant-api03-..."
+ANTHROPIC_API_KEY="[REDACTED]"
 ```
 
 **Local dev posture:**
@@ -847,7 +847,7 @@ User → POST /api/events/[id]/check
 #### Critical
 
 **Finding 1: Secrets committed to repository**
-- **Evidence:** .env:7 contains `ANTHROPIC_API_KEY="sk-ant-api03-..."`
+- **Evidence:** .env:7 contains `ANTHROPIC_API_KEY="[REDACTED]"`
 - **Blast Radius:** Critical
 - **Impact:** API key exposed in git history. Anyone with repo access can make API calls, incur costs, or exfiltrate data.
 - **Verification Step:** Run `git log -p .env` to check key in history. Check Anthropic console for usage.
