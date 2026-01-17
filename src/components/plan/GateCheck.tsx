@@ -181,7 +181,7 @@ export default function GateCheck({
             disabled={!passed}
             className={`w-full px-6 py-3 rounded-lg font-semibold text-lg transition-colors ${
               passed
-                ? 'bg-green-600 text-white hover:bg-green-700'
+                ? 'bg-accent text-white hover:bg-accent-dark'
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
             }`}
           >

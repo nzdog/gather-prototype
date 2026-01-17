@@ -237,7 +237,7 @@ export default function PeopleSection({
             <button
               onClick={() => setAssignCoordinatorsModalOpen(true)}
               disabled={teams.length === 0}
-              className="px-3 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-3 py-1 bg-accent text-white rounded-md hover:bg-accent-dark disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               <UserCog className="w-4 h-4" />
               Assign Coordinators
@@ -246,7 +246,7 @@ export default function PeopleSection({
             <button
               onClick={handleAutoAssign}
               disabled={isAutoAssigning || people.length === 0}
-              className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-3 py-1 bg-accent text-white rounded-md hover:bg-accent-dark disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isAutoAssigning ? (
                 <>
@@ -263,7 +263,7 @@ export default function PeopleSection({
             {/* Import CSV Button */}
             <button
               onClick={() => setImportModalOpen(true)}
-              className="px-3 py-1 bg-purple-600 text-white rounded-md hover:bg-purple-700 flex items-center gap-2"
+              className="px-3 py-1 bg-accent text-white rounded-md hover:bg-accent-dark flex items-center gap-2"
             >
               <Upload className="w-4 h-4" />
               Import CSV
@@ -271,7 +271,7 @@ export default function PeopleSection({
             {/* Add Person Button */}
             <button
               onClick={() => setAddModalOpen(true)}
-              className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"
+              className="px-3 py-1 bg-accent text-white rounded-md hover:bg-accent-dark flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
               Add Person
@@ -347,7 +347,7 @@ export default function PeopleSection({
                     <td className="py-3 px-4">
                       <button
                         onClick={() => handleEditPerson(person)}
-                        className="px-2 py-1 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 flex items-center gap-1"
+                        className="px-2 py-1 bg-accent text-white text-xs rounded-md hover:bg-accent-dark flex items-center gap-1"
                       >
                         <Edit2 className="w-3 h-3" />
                         Edit

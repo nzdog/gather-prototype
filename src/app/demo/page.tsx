@@ -110,7 +110,7 @@ export default function DemoLandingPage() {
           <div className="flex justify-center gap-4">
             <a
               href="/plan/new"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-md"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent-dark transition-colors shadow-md"
             >
               + Create New Plan
             </a>
@@ -159,7 +159,7 @@ export default function DemoLandingPage() {
         {/* Coordinator Section */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <ClipboardList className="size-6 text-blue-600" />
+            <ClipboardList className="size-6 text-accent" />
             <h2 className="text-xl font-bold text-gray-900">Coordinator Views</h2>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -176,7 +176,7 @@ export default function DemoLandingPage() {
                     </div>
                     <div className="text-sm text-gray-500 mt-0.5">{token.personName}</div>
                   </div>
-                  <div className="text-blue-600">→</div>
+                  <div className="text-accent">→</div>
                 </div>
               </a>
             ))}

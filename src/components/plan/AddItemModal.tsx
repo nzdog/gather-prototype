@@ -183,7 +183,7 @@ export default function AddItemModal({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Christmas Pudding"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                 autoFocus
                 disabled={adding}
               />
@@ -199,7 +199,7 @@ export default function AddItemModal({
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="e.g., Traditional pudding with brandy butter"
                 rows={2}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                 disabled={adding}
               />
             </div>
@@ -216,7 +216,7 @@ export default function AddItemModal({
                 <select
                   value={quantityState}
                   onChange={(e) => setQuantityState(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                   disabled={adding}
                 >
                   {QUANTITY_STATES.map((state) => (
@@ -238,7 +238,7 @@ export default function AddItemModal({
                       onChange={(e) => setQuantityAmount(e.target.value)}
                       placeholder="e.g., 100"
                       step="0.01"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                       disabled={adding}
                     />
                   </div>
@@ -247,7 +247,7 @@ export default function AddItemModal({
                     <select
                       value={quantityUnit}
                       onChange={(e) => setQuantityUnit(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                       disabled={adding}
                     >
                       {QUANTITY_UNITS.map((unit) => (
@@ -268,7 +268,7 @@ export default function AddItemModal({
                     id="add-placeholder-acknowledged"
                     checked={placeholderAcknowledged}
                     onChange={(e) => setPlaceholderAcknowledged(e.target.checked)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded"
                     disabled={adding}
                   />
                   <label
@@ -288,7 +288,7 @@ export default function AddItemModal({
                   type="checkbox"
                   checked={critical}
                   onChange={(e) => setCritical(e.target.checked)}
-                  className="w-4 h-4 text-blue-600"
+                  className="w-4 h-4 text-accent"
                   disabled={adding}
                 />
                 <span className="text-sm font-medium text-gray-700">Mark as Critical</span>
@@ -331,7 +331,7 @@ export default function AddItemModal({
                   <select
                     value={dayId}
                     onChange={(e) => setDayId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                     disabled={adding}
                   >
                     <option value="">All days</option>
@@ -348,7 +348,7 @@ export default function AddItemModal({
                     type="time"
                     value={serveTime}
                     onChange={(e) => setServeTime(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                     placeholder="e.g., 18:00"
                     disabled={adding}
                   />
@@ -370,7 +370,7 @@ export default function AddItemModal({
             <button
               type="submit"
               disabled={adding || !name.trim()}
-              className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50"
+              className="px-4 py-2 text-sm bg-accent text-white rounded hover:bg-accent-dark transition disabled:opacity-50"
             >
               {adding ? 'Adding...' : 'Add Item'}
             </button>
