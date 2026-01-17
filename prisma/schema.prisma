@@ -103,6 +103,7 @@ model Event {
   revisions        PlanRevision[]
   snapshots        PlanSnapshot[]
   structureChanges StructureChangeRequest[]
+  eventRoles       EventRole[]
 }
 
 model Day {
@@ -191,6 +192,12 @@ enum PersonRole {
   HOST
   COORDINATOR
   PARTICIPANT
+}
+
+enum EventRoleType {
+  HOST
+  COHOST
+  COORDINATOR
 }
 
 model Item {
@@ -319,8 +326,9 @@ model User {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  sessions  Session[]
-  people    Person[]
+  sessions   Session[]
+  people     Person[]
+  eventRoles EventRole[]
 
   @@index([email])
 }
@@ -348,6 +356,20 @@ model MagicLink {
   @@index([token])
   @@index([email])
   @@index([expiresAt])
+}
+
+model EventRole {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventId   String
+  event     Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  role      EventRoleType
+  createdAt DateTime      @default(now())
+
+  @@unique([userId, eventId])
+  @@index([userId])
+  @@index([eventId])
 }
 
 model AuditEntry {
