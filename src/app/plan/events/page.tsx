@@ -24,26 +24,15 @@ export default function EventsPage() {
   const router = useRouter();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
-  const [hostId, setHostId] = useState<string>('');
   const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
-    // Get hostId from localStorage
-    const storedHostId = localStorage.getItem('gather_hostId');
-    if (storedHostId) {
-      setHostId(storedHostId);
-      loadEvents(storedHostId);
-    } else {
-      // Fallback to default
-      const defaultHostId = 'cmjwbjrpw0000n99xs11r44qh';
-      setHostId(defaultHostId);
-      loadEvents(defaultHostId);
-    }
+    loadEvents();
   }, []);
 
-  const loadEvents = async (hostId: string) => {
+  const loadEvents = async () => {
     try {
-      const response = await fetch(`/api/events?hostId=${hostId}`);
+      const response = await fetch('/api/events');
       if (!response.ok) throw new Error('Failed to load events');
       const data = await response.json();
       setEvents(data.events || []);
@@ -93,7 +82,7 @@ export default function EventsPage() {
       if (!response.ok) throw new Error('Failed to archive event');
 
       // Reload events
-      loadEvents(hostId);
+      loadEvents();
     } catch (error) {
       console.error('Error archiving event:', error);
       alert('Failed to archive event. Please try again.');
@@ -129,7 +118,7 @@ export default function EventsPage() {
       if (!response.ok) throw new Error('Failed to delete event');
 
       // Reload events
-      loadEvents(hostId);
+      loadEvents();
       alert(`"${eventName}" has been permanently deleted.`);
     } catch (error) {
       console.error('Error deleting event:', error);
@@ -148,7 +137,7 @@ export default function EventsPage() {
       if (!response.ok) throw new Error('Failed to restore event');
 
       // Reload events
-      loadEvents(hostId);
+      loadEvents();
     } catch (error) {
       console.error('Error restoring event:', error);
       alert('Failed to restore event. Please try again.');

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
+import { getUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/prisma';
 import { computeTeamStatusFromItems, canFreeze, getCriticalGapCount } from '@/lib/workflow';
 
@@ -18,6 +19,20 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
 
   if (!context || context.scope !== 'HOST') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
+
+  // Check if host Person has linked User account (Ticket 1.6)
+  const needsClaim = !context.person.userId;
+  let authStatus: 'unclaimed' | 'requires_signin' | 'authenticated' = 'authenticated';
+
+  if (needsClaim) {
+    authStatus = 'unclaimed';
+  } else if (context.person.userId) {
+    // Person has linked User - check if session matches
+    const sessionUser = await getUser();
+    if (!sessionUser || sessionUser.id !== context.person.userId) {
+      authStatus = 'requires_signin';
+    }
   }
 
   // Fetch all teams with items and assignments
@@ -109,6 +124,7 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
       status: context.event.status,
       guestCount: context.event.guestCount,
     },
+    authStatus,
     teams: teamsWithStatus,
     freezeAllowed,
     criticalGapCount,

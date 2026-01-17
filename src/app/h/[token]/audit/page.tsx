@@ -112,7 +112,7 @@ export default function AuditLogPage() {
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
             >
               <option value="ALL">All Actions</option>
               {data.actionTypes.map((type) => (

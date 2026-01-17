@@ -75,7 +75,7 @@ export default function TemplateList({ hostId, onClone, onDelete }: TemplateList
           onClick={() => setActiveTab('my')}
           className={`px-4 py-2 font-medium ${
             activeTab === 'my'
-              ? 'border-b-2 border-blue-600 text-blue-600'
+              ? 'border-b-2 border-blue-600 text-accent'
               : 'text-gray-600 hover:text-gray-800'
           }`}
         >
@@ -85,7 +85,7 @@ export default function TemplateList({ hostId, onClone, onDelete }: TemplateList
           onClick={() => setActiveTab('gather')}
           className={`px-4 py-2 font-medium ${
             activeTab === 'gather'
-              ? 'border-b-2 border-blue-600 text-blue-600'
+              ? 'border-b-2 border-blue-600 text-accent'
               : 'text-gray-600 hover:text-gray-800'
           }`}
         >
@@ -150,7 +150,7 @@ export default function TemplateList({ hostId, onClone, onDelete }: TemplateList
                 <div className="flex gap-2 mt-3">
                   <button
                     onClick={() => onClone(template.id)}
-                    className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                    className="px-4 py-2 text-sm bg-accent text-white rounded hover:bg-accent-dark transition"
                   >
                     Use Template
                   </button>
