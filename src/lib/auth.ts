@@ -105,3 +105,28 @@ export async function resolveToken(token: string): Promise<AuthContext | null> {
     scope: accessToken.scope,
   };
 }
+
+/**
+ * Gets all events for a user along with their role in each event.
+ *
+ * @param userId - The user ID to fetch events for
+ * @returns Array of events with their associated role (HOST, COHOST, or COORDINATOR)
+ */
+export async function getUserEventsWithRole(userId: string) {
+  const eventRoles = await prisma.eventRole.findMany({
+    where: { userId },
+    include: {
+      event: true,
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+
+  return eventRoles.map((eventRole) => ({
+    event: eventRole.event,
+    role: eventRole.role,
+    eventRoleId: eventRole.id,
+    createdAt: eventRole.createdAt,
+  }));
+}
