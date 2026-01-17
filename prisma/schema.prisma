@@ -148,6 +148,10 @@ model Person {
   email String? @unique
   phone String?
 
+  // Link to global User account (optional - for migration)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
   // Relations
   hostedEvents     Event[]       @relation("EventHost")
   cohostedEvents   Event[]       @relation("EventCoHost")
@@ -159,6 +163,9 @@ model Person {
 
   // Plan phase: Host memory
   hostMemory HostMemory?
+
+  @@index([userId])
+  @@index([email])
 }
 
 // Join table: Person <-> Event (with team assignment)
@@ -300,6 +307,47 @@ enum TokenScope {
   HOST
   COORDINATOR
   PARTICIPANT
+}
+
+// ============================================
+// AUTHENTICATION MODELS (Phase 1)
+// ============================================
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  sessions  Session[]
+  people    Person[]
+
+  @@index([email])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId])
+}
+
+model MagicLink {
+  id        String    @id @default(cuid())
+  email     String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([token])
+  @@index([email])
+  @@index([expiresAt])
 }
 
 model AuditEntry {

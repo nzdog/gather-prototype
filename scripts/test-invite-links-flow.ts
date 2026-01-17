@@ -134,8 +134,6 @@ async function main() {
   const coordLink = tokensData.inviteLinks.find((l: any) => l.scope === 'COORDINATOR');
   const partLink = tokensData.inviteLinks.find((l: any) => l.scope === 'PARTICIPANT');
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || '';
-
   if (hostLink && hostLink.url.includes('/h/')) {
     console.log('✅ PASS: Host URL has /h/ prefix');
   } else {
