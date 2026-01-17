@@ -119,7 +119,7 @@ export async function PATCH(
 
         demotedCoordinator = {
           name: currentCoordinator.person.name,
-          teamName: currentCoordinator.team.name,
+          teamName: currentCoordinator.team?.name || 'Unknown Team',
         };
       }
 

@@ -41,7 +41,7 @@ const TARGET_FIELDS = [
   { value: 'ignore', label: 'Ignore' },
 ] as const;
 
-export default function ImportCSVModal({ isOpen, onClose, onImport, teams }: ImportCSVModalProps) {
+export default function ImportCSVModal({ isOpen, onClose, onImport, teams: _teams }: ImportCSVModalProps) {
   const { openModal, closeModal } = useModal();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -50,7 +50,7 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams }: Imp
   const [mappings, setMappings] = useState<FieldMapping[]>([]);
   const [parsedPeople, setParsedPeople] = useState<ParsedRow[]>([]);
   const [importing, setImporting] = useState(false);
-  const [splitFullName, setSplitFullName] = useState(false);
+  const [_splitFullName, __setSplitFullName] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Modal blocking check
@@ -72,7 +72,7 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams }: Imp
     setMappings([]);
     setParsedPeople([]);
     setImporting(false);
-    setSplitFullName(false);
+    // _setSplitFullName(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -407,7 +407,7 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams }: Imp
                 />
                 <label
                   htmlFor="csv-upload"
-                  className="cursor-pointer px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 inline-block"
+                  className="cursor-pointer px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark inline-block"
                 >
                   Choose CSV File
                 </label>
@@ -454,7 +454,7 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams }: Imp
                     <select
                       value={mapping.targetField}
                       onChange={(e) => handleMappingChange(mapping.csvColumn, e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                     >
                       {TARGET_FIELDS.map((field) => (
                         <option key={field.value} value={field.value}>
@@ -608,7 +608,7 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams }: Imp
             {step === 2 && (
               <button
                 onClick={handleProceedToReview}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                className="px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark"
               >
                 Next: Review
               </button>

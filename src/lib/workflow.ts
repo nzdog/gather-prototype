@@ -420,6 +420,7 @@ export async function runGateCheck(eventId: string): Promise<GateCheckResult> {
 export interface TransitionResult {
   success: boolean;
   snapshotId?: string;
+  tokenCount?: number;
   blocks?: GateBlock[];
   error?: string;
 }

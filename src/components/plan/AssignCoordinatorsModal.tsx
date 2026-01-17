@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Search, Check } from 'lucide-react';
 import { useModal } from '@/contexts/ModalContext';
 
@@ -242,7 +242,7 @@ export default function AssignCoordinatorsModal({
                       e.stopPropagation();
                       setExpandedDropdown(isExpanded ? null : assignment.teamId);
                     }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-left hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-left hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-accent"
                     disabled={isSubmitting}
                   >
                     {getSelectedPersonName(assignment.teamId)}
@@ -268,7 +268,7 @@ export default function AssignCoordinatorsModal({
                                 [assignment.teamId]: e.target.value,
                               }));
                             }}
-                            className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                            className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent text-sm"
                             autoFocus
                           />
                         </div>
@@ -313,7 +313,7 @@ export default function AssignCoordinatorsModal({
                                     {person.role} • {person.team.name || 'Unassigned'}
                                   </div>
                                 </div>
-                                {isSelected && <Check className="w-4 h-4 text-blue-600" />}
+                                {isSelected && <Check className="w-4 h-4 text-accent" />}
                               </button>
                             );
                           })
@@ -336,7 +336,7 @@ export default function AssignCoordinatorsModal({
           <button
             onClick={handleSubmit}
             disabled={isSubmitting}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting ? 'Assigning...' : 'Assign Coordinators'}
           </button>
