@@ -14,6 +14,7 @@ export default function VerifyPage() {
   useEffect(() => {
     const token = searchParams.get('token');
     const returnUrl = searchParams.get('returnUrl') || '/plan/events';
+    const personId = searchParams.get('personId');
 
     if (!token) {
       setError('invalid');
@@ -25,7 +26,7 @@ export default function VerifyPage() {
     fetch('/api/auth/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, returnUrl }),
+      body: JSON.stringify({ token, returnUrl, personId }),
     })
       .then(async (res) => {
         const data = await res.json();

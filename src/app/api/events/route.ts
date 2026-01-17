@@ -1,19 +1,26 @@
-// GET /api/events - List events by hostId
+// GET /api/events - List events where user has a role
 // POST /api/events - Create new event
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUser } from '@/lib/auth/session';
 
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const hostId = searchParams.get('hostId');
-
-    if (!hostId) {
-      return NextResponse.json({ error: 'hostId is required' }, { status: 400 });
+    // Get authenticated user
+    const user = await getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Fetch events where user has any role (HOST, COHOST, COORDINATOR)
     const events = await prisma.event.findMany({
-      where: { hostId },
+      where: {
+        eventRoles: {
+          some: {
+            userId: user.id
+          }
+        }
+      },
       include: {
         _count: {
           select: {
@@ -21,6 +28,10 @@ export async function GET(request: NextRequest) {
             days: true,
           },
         },
+        eventRoles: {
+          where: { userId: user.id },
+          select: { role: true }
+        }
       },
       orderBy: {
         createdAt: 'desc',

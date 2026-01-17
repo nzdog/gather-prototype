@@ -12,10 +12,14 @@ export async function POST() {
     }).catch(() => {
       // Session might not exist, ignore error
     });
-
-    // Clear cookie
-    cookies().delete('session');
   }
 
-  return Response.json({ ok: true });
+  // Clear cookie via response headers directly (more reliable than cookies() API)
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Set-Cookie': 'session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0'
+    }
+  });
 }
