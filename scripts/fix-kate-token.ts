@@ -36,7 +36,7 @@ async function main() {
   if (kataBefore) {
     console.log(`  Person: ${kataBefore.name} (${kataBefore.id})`);
     console.log(`  Role: ${kataBefore.eventMemberships[0]?.role || 'N/A'}`);
-    console.log(`  Team: ${kataBefore.eventMemberships[0]?.team.name || 'N/A'}`);
+    console.log(`  Team: ${kataBefore.eventMemberships[0]?.team?.name || 'N/A'}`);
     console.log(`  Tokens: ${kataBefore.tokens.length}`);
     kataBefore.tokens.forEach((t) => {
       console.log(`    - ${t.scope} token (teamId: ${t.teamId || 'null'})`);
@@ -71,7 +71,8 @@ async function main() {
   if (kateAfter) {
     console.log(`  Person: ${kateAfter.name} (${kateAfter.id})`);
     console.log(`  Role: ${kateAfter.eventMemberships[0]?.role || 'N/A'}`);
-    console.log(`  Team: ${kateAfter.eventMemberships[0]?.team.name || 'N/A'}`);
+    console.log(`  Team: ${kateAfter.eventMemberships[0]?.team?.name || 'N/A'}`);
+
     console.log(`  Tokens: ${kateAfter.tokens.length}`);
     kateAfter.tokens.forEach((t) => {
       console.log(`    - ${t.scope} token: ${t.token} (teamId: ${t.teamId || 'null'})`);
