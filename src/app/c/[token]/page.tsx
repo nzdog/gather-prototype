@@ -53,6 +53,8 @@ interface Item {
   notes: string | null;
   day: { id: string; name: string; date: string } | null;
   dropOffLocation: string | null;
+  dropOffAt: string | null;
+  dropOffNote: string | null;
   assignment: {
     id: string;
     acknowledged: boolean;
@@ -350,7 +352,7 @@ export default function CoordinatorView() {
       <div className="bg-white border-b border-gray-200 px-6 py-5">
         <a
           href="/"
-          className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 mb-3"
+          className="inline-flex items-center gap-1 text-sm text-accent hover:text-blue-800 mb-3"
         >
           <Home className="size-4" />
           Back to Demo
@@ -419,7 +421,7 @@ export default function CoordinatorView() {
             {data.event.status !== 'FROZEN' && (
               <button
                 onClick={() => setShowAddModal(true)}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
+                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-accent text-white hover:bg-accent-dark rounded-lg transition-colors"
               >
                 <Plus className="size-4" />
                 Add Item
@@ -752,7 +754,7 @@ export default function CoordinatorView() {
                     {!assignment.acknowledged ? (
                       <button
                         onClick={() => handleAcknowledge(assignment.id)}
-                        className="mx-auto px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-all flex items-center justify-center"
+                        className="mx-auto px-6 py-2.5 bg-accent text-white rounded-lg font-medium hover:bg-accent-dark transition-all flex items-center justify-center"
                       >
                         Please Confirm
                       </button>
@@ -817,7 +819,7 @@ export default function CoordinatorView() {
                   type="text"
                   value={newItem.name}
                   onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
                   placeholder="e.g., Potato salad"
                 />
               </div>
@@ -829,7 +831,7 @@ export default function CoordinatorView() {
                   type="text"
                   value={newItem.quantity}
                   onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
                   placeholder="e.g., 2 large bowls, Plenty"
                 />
               </div>
@@ -840,7 +842,7 @@ export default function CoordinatorView() {
                 <select
                   value={newItem.dayId}
                   onChange={(e) => setNewItem({ ...newItem, dayId: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
                 >
                   <option value="">Select day...</option>
                   {data.items[0]?.day && (
@@ -858,7 +860,7 @@ export default function CoordinatorView() {
                   type="text"
                   value={newItem.dropOffLocation}
                   onChange={(e) => setNewItem({ ...newItem, dropOffLocation: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
                   placeholder="e.g., Main kitchen"
                 />
               </div>
@@ -872,7 +874,7 @@ export default function CoordinatorView() {
                   type="text"
                   value={newItem.dropOffNote}
                   onChange={(e) => setNewItem({ ...newItem, dropOffNote: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
                   placeholder="e.g., Before 5pm"
                 />
               </div>
@@ -883,7 +885,7 @@ export default function CoordinatorView() {
                 <textarea
                   value={newItem.notes}
                   onChange={(e) => setNewItem({ ...newItem, notes: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
                   rows={3}
                   placeholder="Additional information..."
                 />
@@ -896,7 +898,7 @@ export default function CoordinatorView() {
                     type="checkbox"
                     checked={newItem.critical}
                     onChange={(e) => setNewItem({ ...newItem, critical: e.target.checked })}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    className="rounded border-gray-300 text-accent focus:ring-accent"
                   />
                   <span className="text-sm font-medium text-gray-700">Critical Item</span>
                 </label>
@@ -906,7 +908,7 @@ export default function CoordinatorView() {
                     type="checkbox"
                     checked={newItem.glutenFree}
                     onChange={(e) => setNewItem({ ...newItem, glutenFree: e.target.checked })}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    className="rounded border-gray-300 text-accent focus:ring-accent"
                   />
                   <span className="text-sm text-gray-700">Gluten Free</span>
                 </label>
@@ -916,7 +918,7 @@ export default function CoordinatorView() {
                     type="checkbox"
                     checked={newItem.dairyFree}
                     onChange={(e) => setNewItem({ ...newItem, dairyFree: e.target.checked })}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    className="rounded border-gray-300 text-accent focus:ring-accent"
                   />
                   <span className="text-sm text-gray-700">Dairy Free</span>
                 </label>
@@ -926,7 +928,7 @@ export default function CoordinatorView() {
                     type="checkbox"
                     checked={newItem.vegetarian}
                     onChange={(e) => setNewItem({ ...newItem, vegetarian: e.target.checked })}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    className="rounded border-gray-300 text-accent focus:ring-accent"
                   />
                   <span className="text-sm text-gray-700">Vegetarian</span>
                 </label>
@@ -942,7 +944,7 @@ export default function CoordinatorView() {
               </button>
               <button
                 onClick={handleCreateItem}
-                className="px-4 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm bg-accent text-white hover:bg-accent-dark rounded-lg transition-colors"
               >
                 Create Item
               </button>

@@ -137,7 +137,7 @@ export default function EventsPage() {
     }
   };
 
-  const handleRestore = async (eventId: string, eventName: string, e: React.MouseEvent) => {
+  const handleRestore = async (eventId: string, _eventName: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent event card click
 
     try {
@@ -188,13 +188,13 @@ export default function EventsPage() {
                   type="checkbox"
                   checked={showArchived}
                   onChange={(e) => setShowArchived(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                  className="w-4 h-4 text-accent rounded focus:ring-2 focus:ring-accent"
                 />
                 <span className="text-sm text-gray-700">Show Archived</span>
               </label>
               <button
                 onClick={() => router.push('/plan/new')}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                className="px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark"
               >
                 Create New Event
               </button>
@@ -219,7 +219,7 @@ export default function EventsPage() {
             {!showArchived && (
               <button
                 onClick={() => router.push('/plan/new')}
-                className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                className="px-6 py-3 bg-accent text-white rounded-md hover:bg-accent-dark"
               >
                 Create New Event
               </button>
@@ -272,7 +272,7 @@ export default function EventsPage() {
                       <>
                         <button
                           onClick={(e) => handleRestore(event.id, event.name, e)}
-                          className="px-3 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2"
+                          className="px-3 py-2 text-sm bg-accent text-white rounded hover:bg-accent-dark flex items-center gap-2"
                           title="Restore event"
                         >
                           <Archive className="w-4 h-4" />

@@ -25,7 +25,6 @@ export default function EventStageProgress({ currentStatus }: EventStageProgress
         {stages.map((stage, index) => {
           const isPast = index < currentIndex;
           const isCurrent = index === currentIndex;
-          const isFuture = index > currentIndex;
           const isLast = index === stages.length - 1;
 
           return (
@@ -37,7 +36,7 @@ export default function EventStageProgress({ currentStatus }: EventStageProgress
                     isPast
                       ? 'bg-green-600 text-white'
                       : isCurrent
-                      ? 'bg-blue-600 text-white ring-4 ring-blue-200'
+                      ? 'bg-accent text-white ring-4 ring-blue-200'
                       : 'bg-gray-200 text-gray-400'
                   }`}
                 >
@@ -47,7 +46,7 @@ export default function EventStageProgress({ currentStatus }: EventStageProgress
                   <p
                     className={`text-sm font-medium ${
                       isCurrent
-                        ? 'text-blue-600 font-semibold'
+                        ? 'text-accent font-semibold'
                         : isPast
                         ? 'text-gray-900'
                         : 'text-gray-400'
@@ -56,7 +55,7 @@ export default function EventStageProgress({ currentStatus }: EventStageProgress
                     {stage.label}
                   </p>
                   {isCurrent && (
-                    <p className="text-xs text-blue-600 font-medium mt-0.5">Current Status</p>
+                    <p className="text-xs text-accent font-medium mt-0.5">Current Status</p>
                   )}
                 </div>
               </div>

@@ -45,6 +45,7 @@ interface EditItemModalProps {
       name: string;
     };
     assignment?: {
+      response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
       person: {
         id: string;
         name: string;
@@ -253,7 +254,7 @@ export default function EditItemModal({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
               placeholder="e.g., Grilled Chicken Skewers"
               required
             />
@@ -266,7 +267,7 @@ export default function EditItemModal({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
               placeholder="Additional details about the item..."
             />
           </div>
@@ -283,7 +284,7 @@ export default function EditItemModal({
               <select
                 value={quantityState}
                 onChange={(e) => setQuantityState(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
               >
                 {QUANTITY_STATES.map((state) => (
                   <option key={state.value} value={state.value}>
@@ -303,7 +304,7 @@ export default function EditItemModal({
                     step="0.01"
                     value={quantityAmount}
                     onChange={(e) => setQuantityAmount(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                     placeholder="e.g., 100"
                   />
                 </div>
@@ -312,7 +313,7 @@ export default function EditItemModal({
                   <select
                     value={quantityUnit}
                     onChange={(e) => setQuantityUnit(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                   >
                     {QUANTITY_UNITS.map((unit) => (
                       <option key={unit.value} value={unit.value}>
@@ -332,7 +333,7 @@ export default function EditItemModal({
                   id="edit-placeholder-acknowledged"
                   checked={placeholderAcknowledged}
                   onChange={(e) => setPlaceholderAcknowledged(e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded"
                 />
                 <label
                   htmlFor="edit-placeholder-acknowledged"
@@ -355,7 +356,7 @@ export default function EditItemModal({
                     id={`edit-dietary-${tag.value}`}
                     checked={dietaryTags.includes(tag.value)}
                     onChange={() => handleDietaryTagToggle(tag.value)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded"
                   />
                   <label
                     htmlFor={`edit-dietary-${tag.value}`}
@@ -377,7 +378,7 @@ export default function EditItemModal({
                 <select
                   value={dayId}
                   onChange={(e) => setDayId(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                 >
                   <option value="">All days</option>
                   {days.map((day) => (
@@ -393,7 +394,7 @@ export default function EditItemModal({
                   type="time"
                   value={serveTime}
                   onChange={(e) => setServeTime(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                   placeholder="e.g., 18:00"
                 />
               </div>
@@ -412,7 +413,7 @@ export default function EditItemModal({
                   type="text"
                   value={dropOffLocation}
                   onChange={(e) => setDropOffLocation(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                   placeholder="e.g., Main Kitchen, Marquee"
                 />
               </div>
@@ -424,7 +425,7 @@ export default function EditItemModal({
                   type="text"
                   value={dropOffNote}
                   onChange={(e) => setDropOffNote(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                   placeholder="e.g., 12 noon, Before 5pm"
                 />
                 <p className="text-xs text-gray-500 mt-1">
@@ -444,7 +445,7 @@ export default function EditItemModal({
               <select
                 value={assignedPersonId}
                 onChange={(e) => setAssignedPersonId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
               >
                 <option value="">Unassigned</option>
                 {people
@@ -471,7 +472,7 @@ export default function EditItemModal({
                 id="edit-critical"
                 checked={critical}
                 onChange={(e) => setCritical(e.target.checked)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded"
               />
               <label htmlFor="edit-critical" className="ml-2 text-sm text-gray-700">
                 Mark as critical (must-have item)
@@ -483,7 +484,7 @@ export default function EditItemModal({
           <div className="flex gap-2 pt-4 border-t">
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark"
             >
               Save Changes
             </button>

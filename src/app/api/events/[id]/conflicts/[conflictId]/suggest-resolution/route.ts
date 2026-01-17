@@ -33,7 +33,7 @@ The JSON must follow this exact structure:
 For executableActions, use CREATE_TEAM with items array for new teams, or CREATE_ITEM for adding to existing teams.`;
 
 export async function POST(
-  request: NextRequest,
+  _request: NextRequest,
   context: { params: Promise<{ id: string; conflictId: string }> }
 ) {
   try {
@@ -240,7 +240,7 @@ Return ONLY the JSON object, no markdown formatting, no other text.`;
 /**
  * Generate fallback suggestion when Claude is not available
  */
-function generateFallbackSuggestion(conflict: any): AISuggestion {
+function generateFallbackSuggestion(_conflict: any): AISuggestion {
   console.log('[AI Resolution] Generating fallback suggestion');
 
   return {

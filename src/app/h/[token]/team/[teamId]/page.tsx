@@ -4,7 +4,6 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Calendar,
-  MapPin,
   ArrowLeft,
   Check,
   AlertCircle,
@@ -163,7 +162,7 @@ export default function HostTeamView() {
         {/* Back Button */}
         <button
           onClick={() => router.push(`/h/${token}`)}
-          className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 mb-4 font-medium"
+          className="inline-flex items-center gap-2 text-accent hover:text-blue-800 mb-4 font-medium"
         >
           <ArrowLeft className="size-5" />
           Back to Host View

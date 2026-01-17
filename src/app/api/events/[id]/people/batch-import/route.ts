@@ -111,7 +111,7 @@ export async function POST(
             personId: person.id,
             eventId,
             teamId: personData.teamId || null,
-            role: personData.role || 'PARTICIPANT',
+            role: (personData.role as any) || 'PARTICIPANT',
           },
         });
 

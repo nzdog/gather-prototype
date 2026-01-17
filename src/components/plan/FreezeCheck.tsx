@@ -59,7 +59,7 @@ export default function FreezeCheck({
 
     try {
       // Get host token - in production this would come from auth
-      const MOCK_HOST_ID = 'cmjwbjrpw0000n99xs11r44qh';
+      // const MOCK_HOST_ID = 'cmjwbjrpw0000n99xs11r44qh';
 
       // Get event to find host token
       const eventResponse = await fetch(`/api/events/${eventId}`);
@@ -186,7 +186,7 @@ export default function FreezeCheck({
           disabled={!canFreeze || freezing}
           className={`w-full px-6 py-3 rounded-lg font-semibold text-lg transition-colors ${
             canFreeze && !freezing
-              ? 'bg-blue-600 text-white hover:bg-blue-700'
+              ? 'bg-accent text-white hover:bg-accent-dark'
               : 'bg-gray-300 text-gray-500 cursor-not-allowed'
           }`}
         >

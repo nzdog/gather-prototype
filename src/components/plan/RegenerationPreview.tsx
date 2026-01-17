@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertCircle, ArrowRight, CheckCircle, Info } from 'lucide-react';
+import { ArrowRight, CheckCircle, Info } from 'lucide-react';
 
 interface PreviewData {
   current: {
@@ -70,7 +70,7 @@ export default function RegenerationPreview({
       {/* Summary */}
       <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
         <div className="flex items-start gap-3">
-          <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+          <Info className="w-5 h-5 text-accent flex-shrink-0 mt-0.5" />
           <div className="flex-1">
             <h3 className="font-semibold text-blue-900 mb-2">Preview: "{preview.modifier}"</h3>
             <p className="text-blue-800 text-sm mb-3">{preview.reasoning}</p>
@@ -160,7 +160,7 @@ export default function RegenerationPreview({
             {preview.proposed.teams.map((team, idx) => (
               <div key={idx} className="bg-blue-50 rounded p-3">
                 <div className="font-medium text-blue-900 mb-1">{team.name}</div>
-                <div className="text-xs text-blue-600 mb-2">{team.itemCount} items</div>
+                <div className="text-xs text-accent mb-2">{team.itemCount} items</div>
                 <div className="space-y-1">
                   {team.items.map((item, itemIdx) => (
                     <div key={itemIdx} className="text-sm text-blue-800">

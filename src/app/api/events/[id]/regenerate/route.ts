@@ -168,7 +168,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       teamsCreated++;
 
       // Create items for this team
-      const teamItems = aiResponse.items.filter((item) => item.teamName === teamData.name);
+      const teamItems = aiResponse.items.filter((item: any) => item.teamName === teamData.name);
 
       for (const itemData of teamItems) {
         // Determine quantity state and text

@@ -102,7 +102,7 @@ export default function ConflictList({
     }
   };
 
-  const handleAcceptAISuggestion = async (conflictId: string) => {
+  const handleAcceptAISuggestion = async (_conflictId: string) => {
     // The modal handles execution and resolution
     // Just refresh the conflict list
     setResolveWithAIModalOpen(false);

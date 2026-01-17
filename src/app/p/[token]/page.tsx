@@ -4,7 +4,6 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import {
   Calendar,
-  MapPin,
   Check,
   Home,
   ChevronDown,
@@ -171,7 +170,7 @@ export default function ParticipantView() {
       <div className="bg-white border-b border-gray-200 px-6 py-5">
         <a
           href="/"
-          className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 mb-3"
+          className="inline-flex items-center gap-1 text-sm text-accent hover:text-blue-800 mb-3"
         >
           <Home className="size-4" />
           Back to Demo
@@ -352,7 +351,7 @@ export default function ParticipantView() {
                               assignment.response === 'ACCEPTED' ? 'DECLINED' : 'ACCEPTED'
                             )
                           }
-                          className="text-sm text-blue-600 hover:underline"
+                          className="text-sm text-accent hover:underline"
                         >
                           Change to {assignment.response === 'ACCEPTED' ? 'Decline' : 'Accept'}
                         </button>
@@ -370,7 +369,7 @@ export default function ParticipantView() {
       <div className="bg-white border-t border-gray-200 px-6 py-4">
         <p className="text-center text-sm text-gray-500">
           Questions? Contact your coordinator
-          {data.team && <span className="text-blue-600"> {data.team.coordinator.name}</span>}
+          {data.team && <span className="text-accent"> {data.team.coordinator.name}</span>}
         </p>
       </div>
     </div>
