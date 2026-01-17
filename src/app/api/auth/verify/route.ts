@@ -7,7 +7,7 @@ type ErrorType = 'invalid' | 'expired' | 'used';
 
 export async function POST(req: Request) {
   try {
-    const { token, returnUrl } = await req.json();
+    const { token, returnUrl, personId } = await req.json();
 
     if (!token) {
       return Response.json(
@@ -50,6 +50,14 @@ export async function POST(req: Request) {
     if (!user) {
       user = await prisma.user.create({
         data: { email: magicLink.email },
+      });
+    }
+
+    // If personId provided (claim flow), link Person to User (Ticket 1.6)
+    if (personId) {
+      await prisma.person.update({
+        where: { id: personId },
+        data: { userId: user.id },
       });
     }
 
