@@ -1,11 +1,38 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { FileText, Plus, Home, Calendar, CreditCard } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { FileText, Plus, Home, Calendar, CreditCard, LogOut, LogIn } from 'lucide-react';
+import { useState } from 'react';
 
-export default function Navigation() {
+type User = {
+  id: string;
+  email: string;
+  name: string | null;
+} | null;
+
+type NavigationProps = {
+  user?: User;
+};
+
+export default function Navigation({ user }: NavigationProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    setIsSigningOut(true);
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+      });
+      router.push('/');
+      router.refresh();
+    } catch (error) {
+      console.error('Sign out error:', error);
+      setIsSigningOut(false);
+    }
+  };
 
   const navItems = [
     { href: '/', label: 'Home', icon: Home },
@@ -45,6 +72,31 @@ export default function Navigation() {
                 );
               })}
             </div>
+          </div>
+
+          {/* Auth section */}
+          <div className="flex items-center gap-3">
+            {user ? (
+              <>
+                <span className="text-sm text-gray-600">{user.email}</span>
+                <button
+                  onClick={handleSignOut}
+                  disabled={isSigningOut}
+                  className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <LogOut className="w-4 h-4" />
+                  {isSigningOut ? 'Signing out...' : 'Sign Out'}
+                </button>
+              </>
+            ) : (
+              <Link
+                href="/auth/signin"
+                className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-accent text-white hover:bg-accent-dark transition-colors"
+              >
+                <LogIn className="w-4 h-4" />
+                Sign In
+              </Link>
+            )}
           </div>
         </div>
       </div>

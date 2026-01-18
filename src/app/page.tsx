@@ -1,26 +1,28 @@
-'use client';
-
 import { Calendar, Users, Share2, CheckCircle } from 'lucide-react';
+import Link from 'next/link';
+import { getUser } from '@/lib/auth/session';
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const user = await getUser();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-accent-light/10 via-white to-accent/5">
-      <div className="max-w-5xl mx-auto px-4 py-16">
-        {/* Hero Section */}
-        <div className="text-center mb-16">
-          <h1 className="text-6xl font-bold text-gray-900 mb-6">Gather</h1>
-          <p className="text-2xl text-gray-600 mb-12 max-w-2xl mx-auto">
-            Coordinate group events without the chaos
-          </p>
+        <div className="max-w-5xl mx-auto px-4 py-16">
+          {/* Hero Section */}
+          <div className="text-center mb-16">
+            <h1 className="text-6xl font-bold text-gray-900 mb-6">Gather</h1>
+            <p className="text-2xl text-gray-600 mb-12 max-w-2xl mx-auto">
+              Coordinate group events without the chaos
+            </p>
 
-          {/* Primary CTA */}
-          <a
-            href="/plan/new"
-            className="inline-flex items-center gap-3 px-12 py-5 bg-accent text-white text-xl font-bold rounded-xl hover:bg-accent-dark transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
-          >
-            Start planning
-          </a>
-        </div>
+            {/* Primary CTA */}
+            <Link
+              href={user ? "/plan/events" : "/auth/signin"}
+              className="inline-flex items-center gap-3 px-12 py-5 bg-accent text-white text-xl font-bold rounded-xl hover:bg-accent-dark transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
+            >
+              {user ? "Your Events" : "Get Started"}
+            </Link>
+          </div>
 
         {/* How It Works */}
         <div className="mb-16">
