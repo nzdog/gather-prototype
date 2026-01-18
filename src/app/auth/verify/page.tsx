@@ -59,7 +59,7 @@ export default function VerifyPage() {
               className="h-16 w-16"
             />
           </div>
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent mx-auto"></div>
           <p className="mt-4 text-sm text-gray-600">Verifying your link...</p>
         </div>
       </div>
@@ -132,7 +132,7 @@ function ErrorDisplay({ error }: { error: ErrorType }) {
       <div className="mt-6">
         <a
           href="/auth/signin"
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent"
         >
           Request New Link
         </a>
