@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 type ErrorType = 'invalid' | 'expired' | 'used' | 'unknown';
 
@@ -49,6 +50,15 @@ export default function VerifyPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="text-center">
+          <div className="flex justify-center mb-8">
+            <Image
+              src="/brand/gather_symbol_60px_all-sage.svg"
+              alt="Gather"
+              width={60}
+              height={60}
+              className="h-16 w-16"
+            />
+          </div>
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-sm text-gray-600">Verifying your link...</p>
         </div>
@@ -93,6 +103,15 @@ function ErrorDisplay({ error }: { error: ErrorType }) {
 
   return (
     <div className="text-center">
+      <div className="flex justify-center mb-8">
+        <Image
+          src="/brand/gather_symbol_60px_all-sage.svg"
+          alt="Gather"
+          width={60}
+          height={60}
+          className="h-16 w-16"
+        />
+      </div>
       <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
         <svg
           className="h-6 w-6 text-red-600"

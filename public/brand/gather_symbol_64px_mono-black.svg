@@ -1,0 +1,18 @@
+<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="7" cy="7" r="2.5" fill="#1a1918"/>
+  <circle cx="15" cy="7" r="2.5" fill="#1a1918"/>
+  <circle cx="23" cy="7" r="2.5" fill="#1a1918"/>
+  <circle cx="31" cy="7" r="2.5" fill="#1a1918"/>
+  <circle cx="7" cy="15" r="2.5" fill="#1a1918"/>
+  <circle cx="15" cy="15" r="2.5" fill="#1a1918"/>
+  <circle cx="23" cy="15" r="2.5" fill="#d4d1cc"/>
+  <circle cx="31" cy="15" r="2.5" fill="#d4d1cc"/>
+  <circle cx="7" cy="23" r="2.5" fill="#1a1918"/>
+  <circle cx="15" cy="23" r="2.5" fill="#1a1918"/>
+  <circle cx="23" cy="23" r="2.5" fill="#1a1918"/>
+  <circle cx="31" cy="23" r="2.5" fill="#1a1918"/>
+  <circle cx="7" cy="31" r="2.5" fill="#1a1918"/>
+  <circle cx="15" cy="31" r="2.5" fill="#1a1918"/>
+  <circle cx="23" cy="31" r="2.5" fill="#1a1918"/>
+  <circle cx="31" cy="31" r="2.5" fill="#1a1918"/>
+</svg>
