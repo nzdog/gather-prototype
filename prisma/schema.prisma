@@ -258,6 +258,10 @@ model Item {
   isProtected       Boolean       @default(false)
   lastEditedBy      LastEditedBy?
 
+  // Plan phase: AI generation confirmation
+  aiGenerated       Boolean       @default(false) // Created by AI?
+  userConfirmed     Boolean       @default(false) // User has confirmed this item?
+
   // Relations
   teamId String
   team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)

@@ -8,9 +8,11 @@ import {
   PLAN_GENERATION_SYSTEM_PROMPT,
   PLAN_REGENERATION_SYSTEM_PROMPT,
   EXPLANATION_SYSTEM_PROMPT,
+  SELECTIVE_REGENERATION_SYSTEM_PROMPT,
   buildGenerationPrompt,
   buildRegenerationPrompt,
   buildExplanationPrompt,
+  buildSelectiveRegenerationPrompt,
 } from './prompts';
 
 // Type definitions for AI responses
@@ -43,6 +45,11 @@ export interface AIExplanationResponse {
   confidence: 'high' | 'medium' | 'low';
   reasoning: string;
   suggestions?: string[];
+}
+
+export interface AISelectiveRegenerationResponse {
+  items: AIItem[];
+  reasoning: string;
 }
 
 export interface EventParams {
@@ -210,6 +217,114 @@ export async function generateExplanation(conflict: {
     console.error('[AI Explain] Error generating explanation with Claude:', error);
     console.warn('[AI Explain] Falling back to mock explanation');
     return generateMockExplanation(conflict);
+  }
+}
+
+/**
+ * Generate selective items using Claude AI
+ */
+export async function generateSelectiveItems(
+  eventId: string,
+  keepItemIds: string[],
+  regenerateItemIds: string[]
+): Promise<AISelectiveRegenerationResponse> {
+  console.log('[AI Selective] Starting selective regeneration');
+  console.log('[AI Selective] Keep items:', keepItemIds.length);
+  console.log('[AI Selective] Regenerate items:', regenerateItemIds.length);
+
+  // Import prisma only when needed to avoid circular dependencies
+  const { prisma } = await import('@/lib/prisma');
+
+  // Fetch event details
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    include: {
+      days: true,
+      teams: {
+        include: {
+          items: {
+            include: {
+              assignment: {
+                include: {
+                  person: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!event) {
+    throw new Error('Event not found');
+  }
+
+  // Get kept items from database
+  const keptItems = event.teams.flatMap((team) =>
+    team.items.filter((item) => keepItemIds.includes(item.id))
+  );
+
+  // Get items to regenerate from database
+  const itemsToRegenerate = event.teams.flatMap((team) =>
+    team.items.filter((item) => regenerateItemIds.includes(item.id))
+  );
+
+  // Build event details string
+  const eventDetails = `${event.occasionType || 'gathering'} with ${event.guestCount || 10} guests for ${event.days.length || 1} day(s)`;
+
+  // Build confirmed items list
+  const confirmedItems = keptItems.map((item) => ({
+    name: item.name,
+    team: event.teams.find((t) => t.id === item.teamId)?.name || 'Unknown',
+    quantity:
+      item.quantityAmount && item.quantityUnit
+        ? `${item.quantityAmount}${item.quantityUnit}`
+        : undefined,
+    assignedTo: item.assignment?.person.name,
+  }));
+
+  // Build items to regenerate list
+  const regenerateList = itemsToRegenerate.map((item) => ({
+    name: item.name,
+    team: event.teams.find((t) => t.id === item.teamId)?.name || 'Unknown',
+  }));
+
+  // Check if Claude is available
+  if (!isClaudeAvailable()) {
+    console.warn('[AI Selective] Claude API not available, using fallback');
+    return generateMockSelectiveItems(itemsToRegenerate);
+  }
+
+  try {
+    // Build prompts
+    const systemPrompt = SELECTIVE_REGENERATION_SYSTEM_PROMPT;
+    const userPrompt = buildSelectiveRegenerationPrompt({
+      eventDetails,
+      confirmedItems,
+      itemsToRegenerate: regenerateList,
+    });
+
+    console.log('[AI Selective] Calling Claude API...');
+
+    // Call Claude and parse response
+    const response = await callClaudeForJSON<AISelectiveRegenerationResponse>(
+      systemPrompt,
+      userPrompt,
+      {
+        maxTokens: 2048,
+        temperature: 1.0,
+      }
+    );
+
+    console.log('[AI Selective] Successfully generated items');
+    console.log('[AI Selective] Items:', response.items.length);
+
+    return response;
+  } catch (error) {
+    console.error('[AI Selective] Error generating items with Claude:', error);
+    console.warn('[AI Selective] Falling back to mock data');
+    return generateMockSelectiveItems(itemsToRegenerate);
   }
 }
 
@@ -405,5 +520,30 @@ function generateMockExplanation(conflict: any): AIExplanationResponse {
     confidence: confidenceMap[conflict.claimType] || 'medium',
     reasoning: conflict.description,
     suggestions: ['This is a mock suggestion', 'Consider reviewing the plan'],
+  };
+}
+
+/**
+ * Fallback: Generate mock selective items
+ */
+function generateMockSelectiveItems(itemsToRegenerate: any[]): AISelectiveRegenerationResponse {
+  console.log('[AI Mock] Generating mock selective items');
+
+  const mockItems: AIItem[] = itemsToRegenerate.map((item, index) => ({
+    teamName: item.team?.name || 'Unknown',
+    name: `Replacement ${item.name} ${index + 1}`,
+    quantityAmount: 2,
+    quantityUnit: 'KG',
+    quantityLabel: 'HEURISTIC' as const,
+    quantityReasoning: 'Mock replacement quantity',
+    critical: false,
+    criticalReason: null,
+    dietaryTags: [],
+  }));
+
+  return {
+    items: mockItems,
+    reasoning:
+      'Mock selective regeneration. This is fallback data because Claude API is not available.',
   };
 }

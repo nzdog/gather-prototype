@@ -141,6 +141,45 @@ CONFIDENCE LEVELS:
 Return ONLY the JSON, no additional text.
 `;
 
+export const SELECTIVE_REGENERATION_SYSTEM_PROMPT = `You are a planning assistant for Gather, helping hosts regenerate specific items while preserving confirmed items.
+
+RULES:
+1. DO NOT modify, duplicate, or include confirmed items in your response
+2. Generate NEW items ONLY for the "items to regenerate" slots
+3. Keep the same categories/teams as the items you're replacing
+4. Match the overall style and approach of the confirmed items
+5. Be transparent about your reasoning
+6. Maintain adequate food quantities for all guests
+7. Address all dietary requirements
+
+QUANTITY LABELS:
+- CALCULATED: Based on a formula (e.g., 200g meat per person × 40 guests = 8kg)
+- HEURISTIC: Based on experience/rules of thumb
+- PLACEHOLDER: Unknown, needs host input
+
+OUTPUT FORMAT:
+Return ONLY valid JSON matching this exact structure:
+
+{
+  "items": [
+    {
+      "teamName": "Team Name (must match the team from the item being replaced)",
+      "name": "Item Name",
+      "quantityAmount": number or null,
+      "quantityUnit": "KG|G|L|ML|COUNT|PACKS|TRAYS|SERVINGS|CUSTOM" or null,
+      "quantityLabel": "CALCULATED|HEURISTIC|PLACEHOLDER",
+      "quantityReasoning": "Explain WHY this quantity",
+      "critical": true or false,
+      "criticalReason": "If critical, explain why" or null,
+      "dietaryTags": ["VEGETARIAN", "VEGAN", "GLUTEN_FREE", "DAIRY_FREE", "NUT_FREE"]
+    }
+  ],
+  "reasoning": "Explain your approach to regenerating these specific items"
+}
+
+Return ONLY the JSON, no additional text.
+`;
+
 /**
  * Build user prompt for plan generation
  */
@@ -319,4 +358,35 @@ Provide a clear, helpful explanation of:
 2. How confident we are (high/medium/low)
 3. Why it matters and what the host should consider
 4. Specific actionable suggestions if applicable`;
+}
+
+/**
+ * Build user prompt for selective item regeneration
+ */
+export function buildSelectiveRegenerationPrompt(params: {
+  eventDetails: string;
+  confirmedItems: Array<{
+    name: string;
+    team: string;
+    quantity?: string;
+    assignedTo?: string;
+  }>;
+  itemsToRegenerate: Array<{
+    name: string;
+    team: string;
+  }>;
+}): string {
+  return `You are helping plan a gathering. Some items have been confirmed by the user and MUST NOT be changed.
+
+EVENT: ${params.eventDetails}
+
+CONFIRMED ITEMS (do not modify or duplicate these):
+${params.confirmedItems.map((i) => `- ${i.team}: ${i.name}${i.quantity ? ` (${i.quantity})` : ''}${i.assignedTo ? ` (assigned to ${i.assignedTo})` : ''}`).join('\n')}
+
+ITEMS TO REGENERATE (create new suggestions for these slots):
+${params.itemsToRegenerate.map((i) => `- ${i.team}: ${i.name} (needs replacement)`).join('\n')}
+
+Generate new items ONLY for the "to regenerate" list. Keep the same categories/teams.
+Return items in the JSON format specified in the system prompt.
+Do not include any confirmed items in your response.`;
 }

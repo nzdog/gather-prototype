@@ -17,6 +17,7 @@ import PeopleSection from '@/components/plan/PeopleSection';
 import EditEventModal from '@/components/plan/EditEventModal';
 import ItemStatusBadges from '@/components/plan/ItemStatusBadges';
 import SectionExpandModal from '@/components/plan/SectionExpandModal';
+import GenerationReviewPanel from '@/components/plan/GenerationReviewPanel';
 import { ModalProvider } from '@/contexts/ModalContext';
 import { Conflict } from '@prisma/client';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
@@ -184,6 +185,23 @@ export default function PlanEditorPage() {
   const [inviteLinks, setInviteLinks] = useState<any[]>([]);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [expandedSection, setExpandedSection] = useState<SectionId | null>(null);
+
+  // Review mode for selective regeneration
+  const [reviewMode, setReviewMode] = useState(false);
+  const [reviewTeamGroups, setReviewTeamGroups] = useState<
+    Array<{
+      teamName: string;
+      items: Array<{
+        id: string;
+        name: string;
+        quantityAmount: number | null;
+        quantityUnit: string | null;
+        assignedTo?: string;
+        teamName: string;
+        isNew?: boolean;
+      }>;
+    }>
+  >([]);
 
   // Mock hostId - in production, this would come from auth
   const MOCK_HOST_ID = 'cmjwbjrpw0000n99xs11r44qh';
@@ -379,34 +397,96 @@ export default function PlanEditorPage() {
   };
 
   const handleRegeneratePlan = async () => {
-    // Check for manual/protected teams and items
+    // Load all current AI-generated items for selective regeneration
     try {
-      // Fetch all teams to check for manual ones
-      const teamsResponse = await fetch(`/api/events/${eventId}/teams`);
-      if (teamsResponse.ok) {
-        const teamsData = await teamsResponse.json();
-        const manualTeams = (teamsData.teams || []).filter((team: any) => team.source === 'MANUAL');
-        setManualTeamCount(manualTeams.length);
+      setIsRegenerating(true);
+
+      // First, mark all current items as AI-generated and unconfirmed
+      // This allows them to show up in the review panel
+      const markResponse = await fetch(`/api/events/${eventId}/items/mark-for-review`, {
+        method: 'POST',
+      });
+
+      if (!markResponse.ok) {
+        console.warn('Failed to mark items for review, continuing anyway');
       }
 
-      // Fetch all items to check for manual/protected ones
-      const itemsResponse = await fetch(`/api/events/${eventId}/items`);
-      if (itemsResponse.ok) {
-        const itemsData = await itemsResponse.json();
-        const manualItems = (itemsData.items || []).filter(
-          (item: any) => item.source === 'MANUAL' || item.isProtected === true
-        );
-        setManualItemCount(manualItems.length);
+      // Load items for review
+      const reviewResponse = await fetch(`/api/events/${eventId}/review-items`);
+      if (!reviewResponse.ok) {
+        throw new Error('Failed to load items for review');
       }
 
-      // Open the modal
-      setRegenerateModalOpen(true);
+      const reviewData = await reviewResponse.json();
+
+      if (!reviewData.teamGroups || reviewData.teamGroups.length === 0) {
+        alert('No items found to regenerate. Please generate a plan first.');
+        setIsRegenerating(false);
+        return;
+      }
+
+      setReviewTeamGroups(reviewData.teamGroups);
+      setReviewMode(true); // Enter review mode
     } catch (err: any) {
-      console.error('Error checking for manual items:', err);
-      // Fallback to simple confirmation
-      if (confirm('Regenerate plan? This will replace existing teams and items.')) {
-        executeRegenerate({ preserveProtected: false, modifier: '' });
+      console.error('Error loading items for review:', err);
+      alert('Failed to load items for regeneration. Please try again.');
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
+  const handleReviewRegenerateSelected = async (keepIds: string[], regenerateIds: string[]) => {
+    try {
+      const response = await fetch(`/api/events/${eventId}/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keepItemIds: keepIds,
+          regenerateItemIds: regenerateIds,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to regenerate items');
+
+      const data = await response.json();
+      console.log('Regeneration complete:', data);
+
+      // Reload review items to show ALL items (kept + newly regenerated)
+      const reviewResponse = await fetch(`/api/events/${eventId}/review-items`);
+      if (reviewResponse.ok) {
+        const reviewData = await reviewResponse.json();
+        setReviewTeamGroups(reviewData.teamGroups || []);
       }
+    } catch (err: any) {
+      console.error('Error regenerating items:', err);
+      throw err;
+    }
+  };
+
+  const handleReviewConfirmAndContinue = async () => {
+    try {
+      const response = await fetch(`/api/events/${eventId}/review-items`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) throw new Error('Failed to confirm items');
+
+      const data = await response.json();
+      console.log('Confirmed items:', data);
+
+      // Exit review mode and reload plan
+      setReviewMode(false);
+      setReviewTeamGroups([]);
+
+      // Refresh all data
+      await loadEvent();
+      await loadTeams();
+      await loadItems();
+      await loadConflicts();
+      setGateCheckRefresh((prev) => prev + 1);
+    } catch (err: any) {
+      console.error('Error confirming items:', err);
+      alert('Failed to confirm items');
     }
   };
 
@@ -965,8 +1045,28 @@ export default function PlanEditorPage() {
           </div>
         )}
 
-        {/* Card Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Review Mode - Selective Regeneration */}
+        {reviewMode ? (
+          <div className="mb-8">
+            <div className="mb-4">
+              <button
+                onClick={() => setReviewMode(false)}
+                className="text-sage-600 hover:text-sage-700 flex items-center gap-2"
+              >
+                ← Back to Plan View
+              </button>
+            </div>
+            <GenerationReviewPanel
+              teamGroups={reviewTeamGroups}
+              eventId={eventId}
+              onConfirmAndContinue={handleReviewConfirmAndContinue}
+              onRegenerateSelected={handleReviewRegenerateSelected}
+            />
+          </div>
+        ) : (
+          <>
+            {/* Card Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
           {/* Plan Assessment Card */}
           <div
@@ -1157,6 +1257,8 @@ export default function PlanEditorPage() {
           </div>
 
         </div>
+          </>
+        )}
       </div>
 
       {/* Hidden sections for modal expansion - all original components kept but hidden */}
