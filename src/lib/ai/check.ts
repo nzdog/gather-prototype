@@ -48,6 +48,7 @@ export async function detectConflicts(eventId: string): Promise<ConflictData[]> 
     include: {
       teams: {
         include: {
+          coordinator: true,
           items: {
             include: {
               day: true,
@@ -78,6 +79,10 @@ export async function detectConflicts(eventId: string): Promise<ConflictData[]> 
   // 4. Detect coverage gaps (missing expected domains)
   const coverageConflicts = await detectCoverageGaps(event);
   conflicts.push(...coverageConflicts);
+
+  // 5. Detect teams without coordinators
+  const coordinatorConflicts = await detectMissingCoordinators(event);
+  conflicts.push(...coordinatorConflicts);
 
   return conflicts;
 }
@@ -309,6 +314,39 @@ async function detectCoverageGaps(event: any): Promise<ConflictData[]> {
         },
       });
     }
+  }
+
+  return conflicts;
+}
+
+/**
+ * Detect teams without coordinators
+ */
+async function detectMissingCoordinators(event: any): Promise<ConflictData[]> {
+  const conflicts: ConflictData[] = [];
+
+  // Check each team for a coordinator
+  const teamsWithoutCoordinators = event.teams.filter((team: any) => {
+    // A team needs a coordinator if it exists
+    return !team.coordinator || !team.coordinatorId;
+  });
+
+  for (const team of teamsWithoutCoordinators) {
+    conflicts.push({
+      fingerprint: `missing-coordinator-${event.id}-${team.id}`,
+      type: 'STRUCTURAL_IMBALANCE',
+      severity: 'SIGNIFICANT',
+      claimType: 'PATTERN',
+      resolutionClass: 'FIX_IN_PLAN',
+      title: `Team "${team.name}" Needs a Coordinator`,
+      description: `The "${team.name}" team doesn't have a coordinator assigned. Each team should have a coordinator to manage responsibilities and track progress.`,
+      suggestion: {
+        action: 'assign_coordinator',
+        teamId: team.id,
+        teamName: team.name,
+        recommendation: 'Use the "Assign Coordinators" button in the People section to designate someone as the coordinator for this team.',
+      },
+    });
   }
 
   return conflicts;
