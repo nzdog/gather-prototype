@@ -42,9 +42,9 @@ interface TeamBoardProps {
 function getRoleBadgeColor(role: string): string {
   switch (role) {
     case 'HOST':
-      return 'bg-sage-600 text-white';
+      return 'bg-sage-100 text-sage-700';
     case 'COORDINATOR':
-      return 'bg-sage-500 text-white';
+      return 'bg-sage-100 text-sage-700';
     case 'PARTICIPANT':
       return 'bg-gray-200 text-gray-700';
     default:
