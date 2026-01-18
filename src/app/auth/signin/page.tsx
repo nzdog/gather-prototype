@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 
 export default function SignInPage() {
   const [email, setEmail] = useState('');
@@ -33,6 +34,15 @@ export default function SignInPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
+          <div className="flex justify-center mb-6">
+            <Image
+              src="/brand/gather_lockup_horizontal_all-sage.svg"
+              alt="Gather"
+              width={200}
+              height={60}
+              className="h-12 w-auto"
+            />
+          </div>
           <h1 className="text-3xl font-bold text-gray-900">Sign in to Gather</h1>
           <p className="mt-2 text-sm text-gray-600">
             Enter your email address and we'll send you a magic link to sign in.

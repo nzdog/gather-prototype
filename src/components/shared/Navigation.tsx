@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { FileText, Plus, Home, Calendar, CreditCard, LogOut, LogIn } from 'lucide-react';
 import { useState } from 'react';
+import Image from 'next/image';
 
 type User = {
   id: string;
@@ -48,7 +49,13 @@ export default function Navigation({ user }: NavigationProps) {
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-8">
             <Link href="/" className="flex items-center gap-2">
-              <div className="text-2xl font-bold text-accent">Gather</div>
+              <Image
+                src="/brand/gather_lockup_horizontal_mono-black.svg"
+                alt="Gather"
+                width={120}
+                height={32}
+                className="h-8 w-auto"
+              />
             </Link>
 
             <div className="flex items-center gap-1">
