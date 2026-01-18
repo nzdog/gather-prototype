@@ -208,7 +208,7 @@ export default function ConflictList({
       {/* Advisory Conflicts */}
       {advisoryConflicts.length > 0 && (
         <div>
-          <h2 className="text-xl font-bold text-blue-900 mb-3 uppercase tracking-wide">Advisory</h2>
+          <h2 className="text-xl font-bold text-sage-900 mb-3 uppercase tracking-wide">Advisory</h2>
           {advisoryConflicts.map((conflict) => (
             <ConflictCard
               key={conflict.id}

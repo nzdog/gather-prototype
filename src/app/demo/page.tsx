@@ -116,7 +116,7 @@ export default function DemoLandingPage() {
             </a>
             <a
               href="/plan/templates"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-colors shadow-md"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-sage-600 text-white font-semibold rounded-lg hover:bg-sage-700 transition-colors shadow-md"
             >
               📋 Templates
             </a>
@@ -132,7 +132,7 @@ export default function DemoLandingPage() {
         {/* Host Section */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <Users className="size-6 text-purple-600" />
+            <Users className="size-6 text-sage-600" />
             <h2 className="text-xl font-bold text-gray-900">Host View</h2>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -140,7 +140,7 @@ export default function DemoLandingPage() {
               <a
                 key={token.token}
                 href={`/h/${token.token}`}
-                className="block px-6 py-4 hover:bg-purple-50 transition-colors border-b border-gray-100 last:border-b-0"
+                className="block px-6 py-4 hover:bg-sage-50 transition-colors border-b border-gray-100 last:border-b-0"
               >
                 <div className="flex items-center justify-between">
                   <div>
@@ -149,7 +149,7 @@ export default function DemoLandingPage() {
                       Full event oversight • Manage teams • Freeze event
                     </div>
                   </div>
-                  <div className="text-purple-600">→</div>
+                  <div className="text-sage-600">→</div>
                 </div>
               </a>
             ))}
@@ -167,7 +167,7 @@ export default function DemoLandingPage() {
               <a
                 key={token.token}
                 href={`/c/${token.token}`}
-                className="block px-6 py-4 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
+                className="block px-6 py-4 hover:bg-sage-50 transition-colors border-b border-gray-100 last:border-b-0"
               >
                 <div className="flex items-center justify-between">
                   <div>
@@ -220,9 +220,9 @@ export default function DemoLandingPage() {
         </div>
 
         {/* Info Box */}
-        <div className="bg-blue-50 rounded-xl border border-blue-200 p-6 mt-8">
-          <h3 className="font-semibold text-blue-900 mb-2">About This Demo</h3>
-          <div className="text-sm text-blue-800 space-y-2">
+        <div className="bg-sage-50 rounded-xl border border-sage-200 p-6 mt-8">
+          <h3 className="font-semibold text-sage-900 mb-2">About This Demo</h3>
+          <div className="text-sm text-sage-800 space-y-2">
             <p>
               <strong>Host:</strong> Manages the entire event, oversees all teams, and controls
               event status (DRAFT → CONFIRMING → FROZEN → COMPLETE)

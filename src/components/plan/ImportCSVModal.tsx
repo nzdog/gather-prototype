@@ -385,12 +385,12 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams: _team
           {/* Step 1: Upload */}
           {step === 1 && (
             <div className="space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-900">
+              <div className="bg-sage-50 border border-sage-200 rounded-lg p-4">
+                <p className="text-sm text-sage-900">
                   <strong>CSV Format:</strong> Your CSV should include a header row with column names.
                   At minimum, include names. Email and phone are optional.
                 </p>
-                <p className="text-sm text-blue-900 mt-2">
+                <p className="text-sm text-sage-900 mt-2">
                   <strong>Example:</strong> Name, Email, Phone
                 </p>
               </div>
@@ -423,8 +423,8 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams: _team
           {/* Step 2: Map Columns */}
           {step === 2 && (
             <div className="space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-900">
+              <div className="bg-sage-50 border border-sage-200 rounded-lg p-4">
+                <p className="text-sm text-sage-900">
                   Map your CSV columns to Gather fields. We've made smart suggestions based on your
                   column names.
                 </p>
@@ -617,7 +617,7 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams: _team
               <button
                 onClick={handleImport}
                 disabled={importing || selectedCount === 0}
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-sage-600 text-white rounded-md hover:bg-sage-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {importing ? 'Importing...' : `Import ${selectedCount} ${selectedCount === 1 ? 'Person' : 'People'}`}
               </button>

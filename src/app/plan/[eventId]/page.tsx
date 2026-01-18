@@ -85,6 +85,7 @@ interface Item {
   dropOffLocation: string | null;
   dropOffAt: string | null;
   dropOffNote: string | null;
+  createdAt: string; // For checking if item is newly regenerated
   team: {
     id: string;
     name: string;
@@ -946,7 +947,7 @@ export default function PlanEditorPage() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">{event.name}</h1>
               <div className="mt-2 flex items-center gap-4 text-sm text-gray-600">
-                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded">{event.status}</span>
+                <span className="px-2 py-1 bg-sage-100 text-sage-800 rounded">{event.status}</span>
                 <span>{event.occasionType}</span>
                 {event.guestCount && <span>{event.guestCount} guests</span>}
               </div>
@@ -1030,14 +1031,14 @@ export default function PlanEditorPage() {
 
         {/* AI Generation Loading Banner */}
         {(isGenerating || isRegenerating) && (
-          <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6 shadow-sm">
+          <div className="bg-sage-50 border-2 border-sage-200 rounded-lg p-4 mb-6 shadow-sm">
             <div className="flex items-center gap-3">
               <Loader2 className="w-5 h-5 text-accent animate-spin flex-shrink-0" />
               <div>
-                <p className="text-blue-900 font-medium">
+                <p className="text-sage-900 font-medium">
                   🤖 Claude is {isGenerating ? 'creating' : 'adjusting'} your plan...
                 </p>
-                <p className="text-blue-700 text-sm mt-1">
+                <p className="text-sage-700 text-sm mt-1">
                   This usually takes 15-20 seconds. Please wait.
                 </p>
               </div>
@@ -1410,6 +1411,10 @@ export default function PlanEditorPage() {
               item.quantityState === 'PLACEHOLDER' &&
               !item.placeholderAcknowledged;
 
+            // Check if item was created in the last 60 seconds (newly regenerated)
+            const isNew = item.createdAt &&
+              new Date().getTime() - new Date(item.createdAt).getTime() < 60000;
+
             return (
               <div
                 key={item.id}
@@ -1421,6 +1426,11 @@ export default function PlanEditorPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="font-medium text-gray-900">{item.name}</h3>
+                      {isNew && (
+                        <span className="px-2 py-0.5 text-xs font-bold bg-orange-500 text-white rounded-md animate-pulse">
+                          NEW
+                        </span>
+                      )}
                       {item.critical && (
                         <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded">
                           CRITICAL
@@ -1561,7 +1571,7 @@ export default function PlanEditorPage() {
                           setSelectedTeamForItem(team);
                           setAddItemModalOpen(true);
                         }}
-                        className="px-3 py-1 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 flex items-center gap-1"
+                        className="px-3 py-1 bg-sage-600 text-white text-sm rounded-md hover:bg-sage-700 flex items-center gap-1"
                       >
                         <Plus className="w-3 h-3" />
                         Add Item
@@ -1769,8 +1779,8 @@ export default function PlanEditorPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className={`px-2 py-1 text-xs font-medium rounded ${
-                        link.scope === 'HOST' ? 'bg-purple-100 text-purple-800' :
-                        link.scope === 'COORDINATOR' ? 'bg-blue-100 text-blue-800' :
+                        link.scope === 'HOST' ? 'bg-sage-100 text-sage-800' :
+                        link.scope === 'COORDINATOR' ? 'bg-sage-100 text-sage-800' :
                         'bg-green-100 text-green-800'
                       }`}>
                         {link.scope}

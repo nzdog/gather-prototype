@@ -68,12 +68,12 @@ export default function RegenerationPreview({
   return (
     <div className="space-y-6">
       {/* Summary */}
-      <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+      <div className="bg-sage-50 border-2 border-sage-200 rounded-lg p-4">
         <div className="flex items-start gap-3">
           <Info className="w-5 h-5 text-accent flex-shrink-0 mt-0.5" />
           <div className="flex-1">
-            <h3 className="font-semibold text-blue-900 mb-2">Preview: "{preview.modifier}"</h3>
-            <p className="text-blue-800 text-sm mb-3">{preview.reasoning}</p>
+            <h3 className="font-semibold text-sage-900 mb-2">Preview: "{preview.modifier}"</h3>
+            <p className="text-sage-800 text-sm mb-3">{preview.reasoning}</p>
             <div className="flex gap-6 text-sm">
               <div>
                 <span className="font-medium">Teams:</span>{' '}
@@ -152,18 +152,18 @@ export default function RegenerationPreview({
 
         {/* Proposed Plan */}
         <div className="border-2 border-blue-300 rounded-lg p-4">
-          <h3 className="font-semibold text-blue-900 mb-3 flex items-center gap-2">
+          <h3 className="font-semibold text-sage-900 mb-3 flex items-center gap-2">
             Proposed Plan
             <ArrowRight className="w-4 h-4" />
           </h3>
           <div className="space-y-4 max-h-96 overflow-y-auto">
             {preview.proposed.teams.map((team, idx) => (
-              <div key={idx} className="bg-blue-50 rounded p-3">
-                <div className="font-medium text-blue-900 mb-1">{team.name}</div>
+              <div key={idx} className="bg-sage-50 rounded p-3">
+                <div className="font-medium text-sage-900 mb-1">{team.name}</div>
                 <div className="text-xs text-accent mb-2">{team.itemCount} items</div>
                 <div className="space-y-1">
                   {team.items.map((item, itemIdx) => (
-                    <div key={itemIdx} className="text-sm text-blue-800">
+                    <div key={itemIdx} className="text-sm text-sage-800">
                       • {item.name}:{' '}
                       {item.quantityAmount && item.quantityUnit
                         ? `${item.quantityAmount} ${item.quantityUnit}`
@@ -186,7 +186,7 @@ export default function RegenerationPreview({
       <div className="flex gap-3">
         <button
           onClick={onApprove}
-          className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors"
+          className="flex-1 px-6 py-3 bg-sage-600 text-white rounded-lg font-semibold hover:bg-sage-700 transition-colors"
         >
           Apply These Changes
         </button>

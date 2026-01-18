@@ -68,7 +68,7 @@ export default function SaveTemplateModal({
             Save the structure of "{eventName}" as a reusable template.
           </p>
 
-          <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-4 text-sm">
+          <div className="bg-sage-50 border border-sage-200 rounded p-3 mb-4 text-sm">
             <p className="font-medium mb-2">What's included:</p>
             <ul className="list-disc list-inside space-y-1 text-gray-700">
               <li>Team names and scopes ({teamCount} teams)</li>

@@ -14,13 +14,13 @@ interface ConflictCardProps {
 const severityStyles = {
   CRITICAL: 'bg-red-50 border-red-300 text-red-900',
   SIGNIFICANT: 'bg-orange-50 border-orange-300 text-orange-900',
-  ADVISORY: 'bg-blue-50 border-blue-300 text-blue-900',
+  ADVISORY: 'bg-sage-50 border-sage-300 text-sage-900',
 };
 
 const severityBadges = {
   CRITICAL: 'bg-red-100 text-red-800 border-red-300',
   SIGNIFICANT: 'bg-orange-100 text-orange-800 border-orange-300',
-  ADVISORY: 'bg-blue-100 text-blue-800 border-blue-300',
+  ADVISORY: 'bg-sage-100 text-sage-800 border-sage-300',
 };
 
 const severityIcons = {
@@ -67,7 +67,7 @@ export default function ConflictCard({
                 </span>
               )}
               {isDelegated && (
-                <span className="px-2 py-1 text-xs font-medium rounded-full border bg-purple-100 text-purple-800 border-purple-300">
+                <span className="px-2 py-1 text-xs font-medium rounded-full border bg-sage-100 text-sage-800 border-sage-300">
                   ↗ DELEGATED
                 </span>
               )}
@@ -100,14 +100,14 @@ export default function ConflictCard({
       <div className="flex gap-2 mt-4">
         <button
           onClick={() => onResolveWithAI(conflict.id)}
-          className="px-3 py-1.5 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 transition flex items-center gap-1"
+          className="px-3 py-1.5 text-sm bg-sage-600 text-white rounded hover:bg-sage-700 transition flex items-center gap-1"
         >
           <span>✨</span>
           Resolve with AI
         </button>
         <button
           onClick={() => onResolve(conflict.id)}
-          className="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition"
+          className="px-3 py-1.5 text-sm bg-sage-600 text-white rounded hover:bg-sage-700 transition"
         >
           Mark Resolved
         </button>
@@ -149,7 +149,7 @@ export default function ConflictCard({
           </div>
         )}
         {isDelegated && (
-          <div className="px-3 py-1.5 text-sm text-purple-800 bg-purple-50 rounded border border-purple-300">
+          <div className="px-3 py-1.5 text-sm text-sage-800 bg-sage-50 rounded border border-sage-300">
             Delegated to coordinator for resolution
           </div>
         )}

@@ -63,9 +63,9 @@ export default function AuditLogPage() {
   };
 
   const getActionBadgeColor = (actionType: string) => {
-    if (actionType.includes('ASSIGN')) return 'bg-blue-100 text-blue-800';
+    if (actionType.includes('ASSIGN')) return 'bg-sage-100 text-sage-800';
     if (actionType.includes('UNASSIGN')) return 'bg-yellow-100 text-yellow-800';
-    if (actionType.includes('STATUS')) return 'bg-purple-100 text-purple-800';
+    if (actionType.includes('STATUS')) return 'bg-sage-100 text-sage-800';
     if (actionType.includes('OVERRIDE') || actionType.includes('UNFREEZE'))
       return 'bg-red-100 text-red-800';
     if (actionType.includes('ACK')) return 'bg-green-100 text-green-800';
@@ -176,8 +176,8 @@ export default function AuditLogPage() {
 
         {/* Footer note */}
         {data.entries.length >= 100 && (
-          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-800">
+          <div className="mt-6 p-4 bg-sage-50 border border-sage-200 rounded-lg">
+            <p className="text-sm text-sage-800">
               Showing the most recent 100 entries. Older entries are stored in the database.
             </p>
           </div>

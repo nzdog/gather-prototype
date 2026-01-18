@@ -51,7 +51,7 @@ export default async function LandingPage() {
 
             {/* Step 2 */}
             <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200">
-              <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mb-4">
+              <div className="w-14 h-14 bg-sage-100 rounded-full flex items-center justify-center mb-4">
                 <Users className="w-7 h-7 text-green-600" />
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-3">2. Assign</h3>
@@ -63,8 +63,8 @@ export default async function LandingPage() {
 
             {/* Step 3 */}
             <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200">
-              <div className="w-14 h-14 bg-purple-100 rounded-full flex items-center justify-center mb-4">
-                <Share2 className="w-7 h-7 text-purple-600" />
+              <div className="w-14 h-14 bg-sage-100 rounded-full flex items-center justify-center mb-4">
+                <Share2 className="w-7 h-7 text-sage-600" />
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-3">3. Share</h3>
               <p className="text-gray-600">

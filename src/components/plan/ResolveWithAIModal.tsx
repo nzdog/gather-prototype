@@ -159,7 +159,7 @@ export default function ResolveWithAIModal({
           {/* Loading State */}
           {loading && (
             <div className="flex flex-col items-center justify-center py-12">
-              <Loader2 className="w-12 h-12 text-purple-600 animate-spin mb-4" />
+              <Loader2 className="w-12 h-12 text-sage-600 animate-spin mb-4" />
               <p className="text-gray-600">Generating resolution suggestion...</p>
             </div>
           )}
@@ -182,12 +182,12 @@ export default function ResolveWithAIModal({
           {suggestion && !loading && (
             <div className="space-y-4">
               {/* Summary */}
-              <div className="bg-blue-50 border border-blue-300 rounded-lg p-4">
-                <h4 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+              <div className="bg-sage-50 border border-sage-300 rounded-lg p-4">
+                <h4 className="font-semibold text-sage-900 mb-2 flex items-center gap-2">
                   <Sparkles className="w-4 h-4" />
                   Suggested Resolution
                 </h4>
-                <p className="text-blue-800">{suggestion.summary}</p>
+                <p className="text-sage-800">{suggestion.summary}</p>
               </div>
 
               {/* Actions */}
@@ -196,7 +196,7 @@ export default function ResolveWithAIModal({
                 <ol className="space-y-2">
                   {suggestion.actions.map((action, index) => (
                     <li key={index} className="flex items-start gap-3">
-                      <span className="flex-shrink-0 w-6 h-6 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
+                      <span className="flex-shrink-0 w-6 h-6 bg-sage-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
                         {index + 1}
                       </span>
                       <span className="text-gray-700 pt-0.5">{action}</span>
@@ -275,7 +275,7 @@ export default function ResolveWithAIModal({
           <div className="sticky bottom-0 bg-gray-50 px-6 py-4 border-t border-gray-200 rounded-b-lg flex gap-3">
             <button
               onClick={handleAccept}
-              className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition flex items-center justify-center gap-2"
+              className="flex-1 px-4 py-2 bg-sage-600 text-white rounded-md hover:bg-sage-700 transition flex items-center justify-center gap-2"
               disabled={implementing}
             >
               <CheckCircle className="w-4 h-4" />
@@ -285,7 +285,7 @@ export default function ResolveWithAIModal({
             </button>
             <button
               onClick={handleRegenerate}
-              className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition flex items-center gap-2"
+              className="px-4 py-2 bg-sage-600 text-white rounded-md hover:bg-sage-700 transition flex items-center gap-2"
             >
               <RotateCw className="w-4 h-4" />
               Regenerate

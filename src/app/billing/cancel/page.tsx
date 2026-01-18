@@ -36,7 +36,7 @@ export default function BillingCancelPage() {
         <div className="space-y-3">
           <Link
             href="/billing/upgrade"
-            className="block w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+            className="block w-full bg-sage-600 text-white px-4 py-2 rounded-md hover:bg-sage-700 transition-colors"
           >
             Try Again
           </Link>
@@ -50,7 +50,7 @@ export default function BillingCancelPage() {
 
         <div className="mt-8 pt-6 border-t border-gray-200">
           <p className="text-sm text-gray-500">
-            Need help? <a href="mailto:support@gather.app" className="text-blue-600 hover:underline">Contact support</a>
+            Need help? <a href="mailto:support@gather.app" className="text-sage-600 hover:underline">Contact support</a>
           </p>
         </div>
       </div>

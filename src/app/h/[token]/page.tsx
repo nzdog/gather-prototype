@@ -412,7 +412,7 @@ export default function HostView() {
       <div className="bg-white border-b border-gray-200 px-6 py-5">
         <button
           onClick={() => window.close()}
-          className="inline-flex items-center gap-1 text-sm text-accent hover:text-blue-800 mb-3"
+          className="inline-flex items-center gap-1 text-sm text-accent hover:text-sage-800 mb-3"
         >
           <Home className="size-4" />
           Close Window
@@ -448,7 +448,7 @@ export default function HostView() {
               <button
                 onClick={handleSaveGuestCount}
                 disabled={updating}
-                className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 disabled:bg-gray-300"
+                className="px-2 py-1 bg-sage-600 text-white text-xs rounded hover:bg-sage-700 disabled:bg-gray-300"
               >
                 Save
               </button>

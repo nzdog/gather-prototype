@@ -198,7 +198,7 @@ export default function RevisionHistory({ eventId, actorId, onExpand }: Revision
                 <button
                   onClick={() => handleRestore(revision)}
                   disabled={restoring !== null}
-                  className="px-3 py-1 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-1 ml-4"
+                  className="px-3 py-1 bg-sage-600 text-white text-sm rounded-md hover:bg-sage-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-1 ml-4"
                 >
                   <RotateCcw className="w-3 h-3" />
                   {restoring === revision.id ? 'Restoring...' : 'Restore'}

@@ -312,7 +312,7 @@ export default function AddItemModal({
                     disabled={adding}
                     className={`px-3 py-1 text-xs rounded-full border transition ${
                       dietaryTags.includes(tag.value)
-                        ? 'bg-blue-100 border-blue-300 text-blue-800'
+                        ? 'bg-sage-100 border-sage-300 text-sage-800'
                         : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
                     } disabled:opacity-50`}
                   >

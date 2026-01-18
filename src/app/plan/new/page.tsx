@@ -180,7 +180,7 @@ export default function NewPlanPage() {
           {/* Blocked Message */}
           <div className="bg-white rounded-lg shadow-md p-8 text-center">
             <div className="mb-6">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="w-16 h-16 bg-sage-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Calendar className="w-8 h-8 text-accent" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Event Limit Reached</h2>
@@ -250,7 +250,7 @@ export default function NewPlanPage() {
             <div
               key={s}
               className={`h-2 w-16 rounded-full ${
-                s === step ? 'bg-accent' : s < step ? 'bg-blue-300' : 'bg-gray-200'
+                s === step ? 'bg-accent' : s < step ? 'bg-sage-300' : 'bg-gray-200'
               }`}
             />
           ))}
@@ -763,7 +763,7 @@ export default function NewPlanPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 px-6 py-3 bg-sage-600 text-white rounded-lg font-semibold hover:bg-sage-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? 'Creating Event...' : 'Create Event ✓'}
                 </button>

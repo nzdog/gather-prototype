@@ -118,7 +118,7 @@ export default function TemplateList({ hostId, onClone, onDelete }: TemplateList
                     <div className="flex items-center gap-3 mb-2">
                       <h3 className="font-semibold text-lg">{template.name}</h3>
                       {activeTab === 'gather' && template.version && (
-                        <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
+                        <span className="px-2 py-1 text-xs bg-sage-100 text-sage-800 rounded">
                           v{template.version}
                         </span>
                       )}

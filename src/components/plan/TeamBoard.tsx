@@ -92,7 +92,7 @@ function DraggablePersonChip({
             {person.email && <p className="text-xs text-gray-500 truncate">{person.email}</p>}
           </button>
           {person.itemCount > 0 && (
-            <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded flex-shrink-0">
+            <span className="px-2 py-0.5 bg-sage-100 text-sage-800 text-xs rounded flex-shrink-0">
               {person.itemCount} {person.itemCount === 1 ? 'item' : 'items'}
             </span>
           )}
@@ -166,7 +166,7 @@ function DroppableTeamCard({
     <div
       ref={setNodeRef}
       className={`bg-gray-50 border-2 rounded-lg p-4 min-h-[200px] flex flex-col transition-colors ${
-        isOver ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+        isOver ? 'border-sage-500 bg-sage-50' : 'border-gray-200'
       }`}
     >
       <div className="mb-3">
@@ -265,7 +265,7 @@ export default function TeamBoard({ teams, people, onMovePerson, onEditPerson }:
           {person.email && <p className="text-xs text-gray-500 truncate">{person.email}</p>}
         </div>
         {person.itemCount > 0 && (
-          <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded flex-shrink-0">
+          <span className="px-2 py-0.5 bg-sage-100 text-sage-800 text-xs rounded flex-shrink-0">
             {person.itemCount} {person.itemCount === 1 ? 'item' : 'items'}
           </span>
         )}

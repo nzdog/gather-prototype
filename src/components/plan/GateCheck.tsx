@@ -15,8 +15,8 @@ interface GateCheckProps {
 const blockStyles: Record<GateBlockCode, string> = {
   CRITICAL_CONFLICT_UNACKNOWLEDGED: 'bg-red-50 border-red-300 text-red-900',
   CRITICAL_PLACEHOLDER_UNACKNOWLEDGED: 'bg-orange-50 border-orange-300 text-orange-900',
-  STRUCTURAL_MINIMUM_TEAMS: 'bg-purple-50 border-purple-300 text-purple-900',
-  STRUCTURAL_MINIMUM_ITEMS: 'bg-purple-50 border-purple-300 text-purple-900',
+  STRUCTURAL_MINIMUM_TEAMS: 'bg-sage-50 border-sage-300 text-sage-900',
+  STRUCTURAL_MINIMUM_ITEMS: 'bg-sage-50 border-sage-300 text-sage-900',
   UNSAVED_DRAFT_CHANGES: 'bg-yellow-50 border-yellow-300 text-yellow-900',
 };
 

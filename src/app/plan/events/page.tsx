@@ -46,8 +46,8 @@ export default function EventsPage() {
   const getStatusBadge = (status: string) => {
     const styles = {
       DRAFT: 'bg-gray-100 text-gray-800',
-      CONFIRMING: 'bg-blue-100 text-blue-800',
-      FROZEN: 'bg-purple-100 text-purple-800',
+      CONFIRMING: 'bg-sage-100 text-sage-800',
+      FROZEN: 'bg-sage-100 text-sage-800',
       COMPLETE: 'bg-green-100 text-green-800',
     };
     return styles[status as keyof typeof styles] || styles.DRAFT;

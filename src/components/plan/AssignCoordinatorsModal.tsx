@@ -228,7 +228,7 @@ export default function AssignCoordinatorsModal({
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="font-medium text-gray-900">{assignment.teamName}</h3>
                   {hasChanged && (
-                    <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
+                    <span className="px-2 py-1 bg-sage-100 text-sage-700 text-xs rounded">
                       Changed
                     </span>
                   )}
@@ -290,7 +290,7 @@ export default function AssignCoordinatorsModal({
                                   handleAssignmentChange(assignment.teamId, person.personId)
                                 }
                                 className={`w-full px-3 py-2 text-left hover:bg-gray-100 flex items-center justify-between ${
-                                  isSelected ? 'bg-blue-50' : ''
+                                  isSelected ? 'bg-sage-50' : ''
                                 } ${assignedToOther ? 'opacity-50' : ''}`}
                               >
                                 <div className="flex-1">
