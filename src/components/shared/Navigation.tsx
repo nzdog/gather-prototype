@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FileText, Plus, Home, Calendar } from 'lucide-react';
+import { FileText, Plus, Home, Calendar, CreditCard } from 'lucide-react';
 
 export default function Navigation() {
   const pathname = usePathname();
@@ -12,6 +12,7 @@ export default function Navigation() {
     { href: '/plan/events', label: 'Your Events', icon: Calendar },
     { href: '/plan/templates', label: 'Templates', icon: FileText },
     { href: '/plan/new', label: 'New Event', icon: Plus },
+    { href: '/billing', label: 'Billing', icon: CreditCard },
   ];
 
   return (

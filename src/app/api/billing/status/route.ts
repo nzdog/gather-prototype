@@ -29,6 +29,7 @@ export async function GET(_req: Request) {
             currentPeriodEnd: true,
             stripeSubscriptionId: true,
             stripePriceId: true,
+            trialEnd: true,
           },
         },
       },
