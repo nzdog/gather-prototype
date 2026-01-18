@@ -127,9 +127,28 @@ export async function POST(request: NextRequest) {
 
     // Create event and EventRole in a transaction
     const result = await prisma.$transaction(async (tx) => {
-      // Create event
+      // Find or create a Person record for this user
+      let person = await tx.person.findFirst({
+        where: { userId: user.id },
+      });
+
+      if (!person) {
+        // Create a new Person record linked to the user
+        person = await tx.person.create({
+          data: {
+            name: user.email.split('@')[0], // Use email prefix as default name
+            email: user.email,
+            userId: user.id,
+          },
+        });
+      }
+
+      // Create event with the person as host
       const event = await tx.event.create({
-        data: eventData,
+        data: {
+          ...eventData,
+          hostId: person.id, // Set the required hostId field
+        },
       });
 
       // Create EventRole for the user as HOST

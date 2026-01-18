@@ -1,12 +1,19 @@
 // POST /api/events/[id]/generate - Generate plan with AI
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { generatePlan, EventParams } from '@/lib/ai/generate';
+import { generatePlan, generateSelectiveItems, EventParams } from '@/lib/ai/generate';
 import { randomBytes } from 'crypto';
 
 export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
+
+    // Parse request body to check for selective regeneration
+    const body = await _request.json().catch(() => ({}));
+    const { keepItemIds, regenerateItemIds } = body as {
+      keepItemIds?: string[];
+      regenerateItemIds?: string[];
+    };
 
     // Verify event exists and get all details
     const event = await prisma.event.findUnique({
@@ -18,6 +25,106 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
 
     if (!event) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
+
+    // Handle selective regeneration
+    if (keepItemIds && regenerateItemIds) {
+      console.log('[Generate] Selective regeneration requested');
+      console.log('[Generate] Keep items:', keepItemIds.length);
+      console.log('[Generate] Regenerate items:', regenerateItemIds.length);
+
+      // Generate new items for the selected items
+      const aiResponse = await generateSelectiveItems(eventId, keepItemIds, regenerateItemIds);
+
+      console.log('[Generate] AI selective response received:', {
+        items: aiResponse.items.length,
+      });
+
+      // Update kept items to set aiGenerated: true (but NOT userConfirmed yet - wait until final confirmation)
+      await prisma.item.updateMany({
+        where: {
+          id: { in: keepItemIds },
+        },
+        data: {
+          aiGenerated: true,
+          userConfirmed: false, // Keep them in review mode until final confirmation
+        },
+      });
+
+      // Delete items marked for regeneration
+      await prisma.item.deleteMany({
+        where: {
+          id: { in: regenerateItemIds },
+        },
+      });
+
+      // Insert new AI-generated items
+      let itemsCreated = 0;
+      const generatedBatchId = `gen_${randomBytes(16).toString('hex')}`;
+
+      for (const itemData of aiResponse.items) {
+        // Find the team by name
+        const team = await prisma.team.findFirst({
+          where: {
+            eventId,
+            name: itemData.teamName,
+          },
+        });
+
+        if (!team) {
+          console.warn(`[Generate] Team not found: ${itemData.teamName}, skipping item`);
+          continue;
+        }
+
+        // Determine quantity state and text
+        let quantityState: 'SPECIFIED' | 'PLACEHOLDER';
+        let quantityText: string | null = null;
+
+        if (itemData.quantityLabel === 'PLACEHOLDER') {
+          quantityState = 'PLACEHOLDER';
+          quantityText = itemData.quantityReasoning;
+        } else {
+          quantityState = 'SPECIFIED';
+        }
+
+        await prisma.item.create({
+          data: {
+            name: itemData.name,
+            teamId: team.id,
+            quantityAmount: itemData.quantityAmount,
+            quantityUnit: itemData.quantityUnit as any,
+            quantityState,
+            quantityText,
+            quantityLabel: itemData.quantityLabel,
+            notes: itemData.quantityReasoning,
+            critical: itemData.critical,
+            criticalReason: itemData.criticalReason,
+            vegetarian: itemData.dietaryTags.includes('VEGETARIAN'),
+            glutenFree: itemData.dietaryTags.includes('GLUTEN_FREE'),
+            dairyFree: itemData.dietaryTags.includes('DAIRY_FREE'),
+            source: 'GENERATED',
+            generatedBatchId,
+            placeholderAcknowledged: false,
+            aiGenerated: true,
+            userConfirmed: false,
+          },
+        });
+
+        itemsCreated++;
+      }
+
+      console.log('[Generate] Selective regeneration complete:', {
+        kept: keepItemIds.length,
+        regenerated: itemsCreated,
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: 'Items regenerated successfully',
+        kept: keepItemIds.length,
+        regenerated: itemsCreated,
+        reasoning: aiResponse.reasoning,
+      });
     }
 
     // Build event parameters for AI
@@ -105,6 +212,8 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
             source: 'GENERATED',
             generatedBatchId,
             placeholderAcknowledged: false,
+            aiGenerated: true,
+            userConfirmed: false,
           },
         });
 
