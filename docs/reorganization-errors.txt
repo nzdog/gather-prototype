@@ -1,2 +1,0 @@
-fatal: not under version control, source=docs/# Phase 1 Complete — Auth System.md, destination=docs/04_roadmap/phase-1-complete.md
-[ERROR] Failed: # Phase 1 Complete — Auth System.md → 04_roadmap/phase-1-complete.md
