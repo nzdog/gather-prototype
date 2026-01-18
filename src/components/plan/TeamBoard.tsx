@@ -39,6 +39,32 @@ interface TeamBoardProps {
   onEditPerson?: (person: Person) => void;
 }
 
+function getRoleBadgeColor(role: string): string {
+  switch (role) {
+    case 'HOST':
+      return 'bg-sage-600 text-white';
+    case 'COORDINATOR':
+      return 'bg-sage-500 text-white';
+    case 'PARTICIPANT':
+      return 'bg-gray-200 text-gray-700';
+    default:
+      return 'bg-gray-100 text-gray-800';
+  }
+}
+
+function getRoleLabel(role: string): string {
+  switch (role) {
+    case 'HOST':
+      return 'Host';
+    case 'COORDINATOR':
+      return 'Coordinator';
+    case 'PARTICIPANT':
+      return 'Participant';
+    default:
+      return role;
+  }
+}
+
 function DraggablePersonChip({
   person,
   menuOpen,
@@ -86,9 +112,16 @@ function DraggablePersonChip({
             }}
             className="flex-1 min-w-0 text-left hover:bg-gray-50 rounded px-1 -mx-1 transition-colors"
           >
-            <p className="text-sm font-medium text-gray-900 truncate hover:text-accent transition-colors">
-              {person.name}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-medium text-gray-900 truncate hover:text-accent transition-colors">
+                {person.name}
+              </p>
+              {person.role === 'COORDINATOR' && (
+                <span className={`px-2 py-0.5 text-xs font-medium rounded ${getRoleBadgeColor(person.role)}`}>
+                  {getRoleLabel(person.role)}
+                </span>
+              )}
+            </div>
             {person.email && <p className="text-xs text-gray-500 truncate">{person.email}</p>}
           </button>
           {person.itemCount > 0 && (
@@ -261,7 +294,14 @@ export default function TeamBoard({ teams, people, onMovePerson, onEditPerson }:
       <div className="flex items-center gap-2 flex-1 min-w-0">
         <GripVertical className="w-4 h-4 text-gray-400 flex-shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-900 truncate">{person.name}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium text-gray-900 truncate">{person.name}</p>
+            {person.role === 'COORDINATOR' && (
+              <span className={`px-2 py-0.5 text-xs font-medium rounded ${getRoleBadgeColor(person.role)}`}>
+                {getRoleLabel(person.role)}
+              </span>
+            )}
+          </div>
           {person.email && <p className="text-xs text-gray-500 truncate">{person.email}</p>}
         </div>
         {person.itemCount > 0 && (
