@@ -136,8 +136,8 @@ model Team {
   eventId String
   event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
-  coordinatorId String
-  coordinator   Person @relation("TeamCoordinator", fields: [coordinatorId], references: [id])
+  coordinatorId String?
+  coordinator   Person? @relation("TeamCoordinator", fields: [coordinatorId], references: [id])
 
   items   Item[]
   members PersonEvent[]
