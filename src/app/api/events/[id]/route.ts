@@ -1,6 +1,8 @@
 // GET /api/events/[id] - Get event details
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUser } from '@/lib/auth/session';
+import { canEditEvent } from '@/lib/entitlements';
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -49,7 +51,12 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
-    const body = await request.json();
+
+    // Get authenticated user
+    const user = await getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     // Check if event exists
     const existingEvent = await prisma.event.findUnique({
@@ -59,6 +66,21 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     if (!existingEvent) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
+
+    // Check if user can edit this event
+    const allowed = await canEditEvent(user.id, eventId);
+    if (!allowed) {
+      return NextResponse.json(
+        {
+          error: 'Cannot edit event',
+          reason: 'SUBSCRIPTION_INACTIVE',
+          message: 'Your subscription is inactive. Please update your payment method or upgrade.',
+        },
+        { status: 403 }
+      );
+    }
+
+    const body = await request.json();
 
     // Update event with provided fields
     const updatedEvent = await prisma.event.update({
@@ -125,6 +147,12 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
   try {
     const { id: eventId } = await context.params;
 
+    // Get authenticated user
+    const user = await getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     // Check if event exists
     const existingEvent = await prisma.event.findUnique({
       where: { id: eventId },
@@ -132,6 +160,19 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
 
     if (!existingEvent) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
+
+    // Check if user can edit (delete) this event
+    const allowed = await canEditEvent(user.id, eventId);
+    if (!allowed) {
+      return NextResponse.json(
+        {
+          error: 'Cannot delete event',
+          reason: 'SUBSCRIPTION_INACTIVE',
+          message: 'Your subscription is inactive. Please update your payment method or upgrade.',
+        },
+        { status: 403 }
+      );
     }
 
     // Delete event and all related data in a transaction

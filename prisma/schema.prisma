@@ -21,6 +21,7 @@ model Event {
   status     EventStatus @default(DRAFT)
   archived   Boolean     @default(false)
   guestCount Int?
+  isLegacy   Boolean     @default(false)
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
 
@@ -320,17 +321,49 @@ enum TokenScope {
 // AUTHENTICATION MODELS (Phase 1)
 // ============================================
 
-model User {
-  id        String    @id @default(cuid())
-  email     String    @unique
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+enum BillingStatus {
+  FREE
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
 
-  sessions   Session[]
-  people     Person[]
-  eventRoles EventRole[]
+model User {
+  id            String        @id @default(cuid())
+  email         String        @unique
+  billingStatus BillingStatus @default(FREE)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  sessions     Session[]
+  people       Person[]
+  eventRoles   EventRole[]
+  subscription Subscription?
 
   @@index([email])
+}
+
+model Subscription {
+  id                   String        @id @default(cuid())
+  userId               String        @unique
+  user                 User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stripeCustomerId     String        @unique
+  stripeSubscriptionId String?       @unique
+  stripePriceId        String?
+  status               BillingStatus @default(FREE)
+  statusChangedAt      DateTime?
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean       @default(false)
+  trialStart           DateTime?
+  trialEnd             DateTime?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  @@index([stripeCustomerId])
+  @@index([stripeSubscriptionId])
+  @@index([status])
 }
 
 model Session {

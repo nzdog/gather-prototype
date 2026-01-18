@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth/session';
+import { canCreateEvent } from '@/lib/entitlements';
 
 export async function GET(request: NextRequest) {
   try {
@@ -53,6 +54,25 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Get authenticated user
+    const user = await getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Check if user can create a new event
+    const allowed = await canCreateEvent(user.id);
+    if (!allowed) {
+      return NextResponse.json(
+        {
+          error: 'Event limit reached',
+          reason: 'FREE_LIMIT',
+          upgradeUrl: '/billing/upgrade',
+        },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { name, startDate, endDate } = body;
 
@@ -64,32 +84,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // For prototype: Get or create a default host
-    // In production, this would come from authenticated session
-    let host = await prisma.person.findFirst({
-      where: {
-        name: 'Demo Host',
-      },
-    });
-
-    if (!host) {
-      // Create a default demo host if one doesn't exist
-      host = await prisma.person.create({
-        data: {
-          name: 'Demo Host',
-          email: 'demo@gather.app',
-        },
-      });
-    }
-
     // Build event data with all plan-phase fields
     const eventData: any = {
       name,
-      hostId: host.id,
       startDate: new Date(startDate),
       endDate: new Date(endDate),
       status: 'DRAFT',
       structureMode: 'EDITABLE',
+      isLegacy: false, // New events are not legacy
 
       // Core optional fields
       guestCount: body.guestCount || null,
@@ -123,14 +125,28 @@ export async function POST(request: NextRequest) {
       venueNotes: body.venueNotes || null,
     };
 
-    // Create event
-    const event = await prisma.event.create({
-      data: eventData,
+    // Create event and EventRole in a transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // Create event
+      const event = await tx.event.create({
+        data: eventData,
+      });
+
+      // Create EventRole for the user as HOST
+      await tx.eventRole.create({
+        data: {
+          userId: user.id,
+          eventId: event.id,
+          role: 'HOST',
+        },
+      });
+
+      return event;
     });
 
     return NextResponse.json({
       success: true,
-      event,
+      event: result,
     });
   } catch (error) {
     console.error('Error creating event:', error);

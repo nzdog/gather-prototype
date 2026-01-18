@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Calendar, Users, MapPin, ChefHat } from 'lucide-react';
 
@@ -9,6 +9,31 @@ export default function NewPlanPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [step, setStep] = useState(1); // Multi-step form: 1=basics, 2=guests, 3=venue
+  const [canCreate, setCanCreate] = useState<boolean | null>(null); // null = checking, true = can create, false = blocked
+  const [checkingEntitlement, setCheckingEntitlement] = useState(true);
+
+  // Check entitlement on page load
+  useEffect(() => {
+    async function checkEntitlement() {
+      try {
+        const response = await fetch('/api/entitlements/check-create');
+        if (response.ok) {
+          const data = await response.json();
+          setCanCreate(data.canCreate);
+        } else {
+          // If the endpoint doesn't exist or fails, assume user can create
+          setCanCreate(true);
+        }
+      } catch (err) {
+        // On error, assume user can create to avoid blocking them
+        console.error('Error checking entitlement:', err);
+        setCanCreate(true);
+      } finally {
+        setCheckingEntitlement(false);
+      }
+    }
+    checkEntitlement();
+  }, []);
 
   const [formData, setFormData] = useState({
     // Core
@@ -123,6 +148,84 @@ export default function NewPlanPage() {
       [e.target.name]: e.target.value,
     });
   };
+
+  // Show loading state while checking entitlement
+  if (checkingEntitlement) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent mx-auto mb-4"></div>
+          <p className="text-gray-600">Checking your plan...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show blocked message if user cannot create
+  if (canCreate === false) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-3xl mx-auto px-4 py-12">
+          {/* Header */}
+          <div className="mb-8">
+            <button
+              onClick={() => router.push('/')}
+              className="text-accent hover:text-accent-dark mb-4 flex items-center gap-2"
+            >
+              ← Back to Home
+            </button>
+            <h1 className="text-4xl font-bold text-gray-900 mb-2">Create New Plan</h1>
+          </div>
+
+          {/* Blocked Message */}
+          <div className="bg-white rounded-lg shadow-md p-8 text-center">
+            <div className="mb-6">
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Calendar className="w-8 h-8 text-accent" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Event Limit Reached</h2>
+              <p className="text-gray-600 text-lg">
+                You've used your free event this year. Upgrade for unlimited gatherings.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <button
+                onClick={() => router.push('/billing/upgrade')}
+                className="w-full px-6 py-3 bg-accent text-white rounded-lg font-semibold hover:bg-accent-dark"
+              >
+                Upgrade to Unlimited
+              </button>
+              <button
+                onClick={() => router.push('/')}
+                className="w-full px-6 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50"
+              >
+                View My Events
+              </button>
+            </div>
+
+            <div className="mt-8 pt-8 border-t border-gray-200">
+              <h3 className="font-semibold text-gray-900 mb-2">Upgrade Benefits</h3>
+              <ul className="text-left text-gray-600 space-y-2 max-w-md mx-auto">
+                <li className="flex items-start gap-2">
+                  <span className="text-green-500 mt-1">✓</span>
+                  <span>Unlimited events per year</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-500 mt-1">✓</span>
+                  <span>Priority support</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-500 mt-1">✓</span>
+                  <span>Advanced planning features</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
