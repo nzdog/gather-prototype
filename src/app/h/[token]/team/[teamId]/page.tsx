@@ -162,7 +162,7 @@ export default function HostTeamView() {
         {/* Back Button */}
         <button
           onClick={() => router.push(`/h/${token}`)}
-          className="inline-flex items-center gap-2 text-accent hover:text-blue-800 mb-4 font-medium"
+          className="inline-flex items-center gap-2 text-accent hover:text-sage-800 mb-4 font-medium"
         >
           <ArrowLeft className="size-5" />
           Back to Host View
@@ -265,12 +265,12 @@ export default function HostTeamView() {
                     {(item.glutenFree || item.dairyFree || item.vegetarian) && (
                       <div className="flex gap-2">
                         {item.glutenFree && (
-                          <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                          <span className="bg-sage-100 text-sage-800 text-xs px-2 py-1 rounded">
                             GF
                           </span>
                         )}
                         {item.dairyFree && (
-                          <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                          <span className="bg-sage-100 text-sage-800 text-xs px-2 py-1 rounded">
                             DF
                           </span>
                         )}

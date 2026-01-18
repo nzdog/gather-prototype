@@ -168,7 +168,7 @@ export default function GenerationReviewPanel({
           </button>
           <button
             onClick={handleConfirmAndContinue}
-            className="px-6 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors font-medium"
+            className="px-6 py-2 bg-sage-600 text-white rounded-md hover:bg-sage-700 transition-colors font-medium"
           >
             Confirm & Continue
           </button>

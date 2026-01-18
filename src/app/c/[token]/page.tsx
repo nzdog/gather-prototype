@@ -352,7 +352,7 @@ export default function CoordinatorView() {
       <div className="bg-white border-b border-gray-200 px-6 py-5">
         <a
           href="/"
-          className="inline-flex items-center gap-1 text-sm text-accent hover:text-blue-800 mb-3"
+          className="inline-flex items-center gap-1 text-sm text-accent hover:text-sage-800 mb-3"
         >
           <Home className="size-4" />
           Back to Demo
@@ -373,11 +373,11 @@ export default function CoordinatorView() {
 
       {/* Frozen State Banner */}
       {data.event.status === 'FROZEN' && (
-        <div className="bg-blue-50 px-6 py-4 flex items-start gap-3">
+        <div className="bg-sage-50 px-6 py-4 flex items-start gap-3">
           <span className="text-2xl">🔒</span>
           <div className="flex-1">
-            <h3 className="text-sm font-bold text-blue-900">Plan is FROZEN</h3>
-            <p className="text-xs text-blue-800 mt-1">
+            <h3 className="text-sm font-bold text-sage-900">Plan is FROZEN</h3>
+            <p className="text-xs text-sage-800 mt-1">
               Contact {data.host?.name || 'the host'} to request changes.
             </p>
           </div>
@@ -508,12 +508,12 @@ export default function CoordinatorView() {
                   {(item.glutenFree || item.dairyFree || item.vegetarian) && (
                     <div className="flex gap-2 mb-2">
                       {item.glutenFree && (
-                        <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                        <span className="bg-sage-100 text-sage-800 text-xs px-2 py-1 rounded">
                           GF
                         </span>
                       )}
                       {item.dairyFree && (
-                        <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                        <span className="bg-sage-100 text-sage-800 text-xs px-2 py-1 rounded">
                           DF
                         </span>
                       )}
@@ -646,8 +646,8 @@ export default function CoordinatorView() {
 
       {/* Your Assignments */}
       {data.myAssignments && data.myAssignments.length > 0 && (
-        <div className="px-4 md:px-6 py-4 bg-blue-50 border-t-2 border-blue-200">
-          <h2 className="text-sm uppercase tracking-wide text-blue-900 font-bold mb-3">
+        <div className="px-4 md:px-6 py-4 bg-sage-50 border-t-2 border-sage-200">
+          <h2 className="text-sm uppercase tracking-wide text-sage-900 font-bold mb-3">
             Your Personal Assignments
           </h2>
           <div
@@ -685,12 +685,12 @@ export default function CoordinatorView() {
                       assignment.item.vegetarian) && (
                       <div className="flex gap-2">
                         {assignment.item.glutenFree && (
-                          <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                          <span className="bg-sage-100 text-sage-800 text-xs px-2 py-1 rounded">
                             GF
                           </span>
                         )}
                         {assignment.item.dairyFree && (
-                          <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                          <span className="bg-sage-100 text-sage-800 text-xs px-2 py-1 rounded">
                             DF
                           </span>
                         )}

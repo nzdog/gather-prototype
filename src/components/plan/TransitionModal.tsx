@@ -229,11 +229,11 @@ export default function TransitionModal({ eventId, onClose, onSuccess }: Transit
             )}
 
             {/* What Happens Next */}
-            <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6">
-              <h3 className="font-semibold text-lg mb-2 text-blue-900">
+            <div className="bg-sage-50 border-2 border-sage-200 rounded-lg p-6 mb-6">
+              <h3 className="font-semibold text-lg mb-2 text-sage-900">
                 What "Structure Locked" Means
               </h3>
-              <ul className="space-y-2 text-sm text-blue-800">
+              <ul className="space-y-2 text-sm text-sage-800">
                 <li className="flex gap-2">
                   <span>🔒</span>
                   <span>Team structure will be locked (no adding/removing teams)</span>
@@ -273,7 +273,7 @@ export default function TransitionModal({ eventId, onClose, onSuccess }: Transit
               <button
                 onClick={handleProceed}
                 disabled={transitioning}
-                className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50"
+                className="flex-1 px-6 py-3 bg-sage-600 text-white rounded-lg font-semibold hover:bg-sage-700 disabled:opacity-50"
               >
                 {transitioning ? 'Transitioning...' : 'Yes, proceed →'}
               </button>
@@ -329,7 +329,7 @@ export default function TransitionModal({ eventId, onClose, onSuccess }: Transit
               <button
                 onClick={handleProceed}
                 disabled={transitioning}
-                className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50"
+                className="flex-1 px-6 py-3 bg-sage-600 text-white rounded-lg font-semibold hover:bg-sage-700 disabled:opacity-50"
               >
                 {transitioning ? 'Transitioning...' : 'Proceed anyway →'}
               </button>

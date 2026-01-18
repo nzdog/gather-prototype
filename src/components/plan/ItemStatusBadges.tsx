@@ -14,7 +14,7 @@ export default function ItemStatusBadges({ assignment }: ItemStatusBadgesProps) 
       <span
         className={`px-2 py-1 rounded text-xs font-medium ${
           isAssigned
-            ? 'bg-blue-100 text-blue-800'
+            ? 'bg-sage-100 text-sage-800'
             : 'bg-gray-100 text-gray-800'
         }`}
       >

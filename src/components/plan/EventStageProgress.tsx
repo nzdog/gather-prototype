@@ -34,7 +34,7 @@ export default function EventStageProgress({ currentStatus }: EventStageProgress
                 <div
                   className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-semibold transition-all ${
                     isPast
-                      ? 'bg-green-600 text-white'
+                      ? 'bg-sage-600 text-white'
                       : isCurrent
                       ? 'bg-accent text-white ring-4 ring-blue-200'
                       : 'bg-gray-200 text-gray-400'
@@ -65,7 +65,7 @@ export default function EventStageProgress({ currentStatus }: EventStageProgress
                 <div className="flex-1 mx-4 mb-8">
                   <div
                     className={`h-1 rounded transition-all ${
-                      index < currentIndex ? 'bg-green-600' : 'bg-gray-200'
+                      index < currentIndex ? 'bg-sage-600' : 'bg-gray-200'
                     }`}
                   />
                 </div>

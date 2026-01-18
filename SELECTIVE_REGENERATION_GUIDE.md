@@ -37,6 +37,11 @@ Created two new React components:
      - "Confirm & Continue" - saves kept items, moves to next step
    - Shows live count of items to keep vs regenerate
 
+3. **Items & Quantities List** (`src/app/plan/[eventId]/page.tsx`)
+   - **NEW**: Displays orange "NEW" badge on recently regenerated items (created in last 60 seconds)
+   - Badge appears in the main Items & Quantities modal after confirmation
+   - Helps track which items were recently added even after leaving review mode
+
 ### Phase 3: AI Logic ✅
 
 Updated AI generation system:

@@ -131,7 +131,7 @@ export default function BillingPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sage-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading billing information...</p>
         </div>
       </div>
@@ -236,10 +236,10 @@ export default function BillingPage() {
 
           {/* Trial Notice */}
           {isTrialing && subscription?.trialEnd && (
-            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
+            <div className="mb-6 p-4 bg-sage-50 border border-sage-200 rounded-md">
               <div className="flex items-start">
                 <svg
-                  className="w-5 h-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0"
+                  className="w-5 h-5 text-sage-600 mt-0.5 mr-3 flex-shrink-0"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -252,8 +252,8 @@ export default function BillingPage() {
                   />
                 </svg>
                 <div>
-                  <p className="font-semibold text-blue-900 mb-1">Trial Active</p>
-                  <p className="text-sm text-blue-800">
+                  <p className="font-semibold text-sage-900 mb-1">Trial Active</p>
+                  <p className="text-sm text-sage-800">
                     {trialDaysRemaining > 0 ? (
                       <>
                         You have{' '}
@@ -315,7 +315,7 @@ export default function BillingPage() {
             {isFree && (
               <button
                 onClick={() => router.push('/billing/upgrade')}
-                className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                className="flex-1 bg-sage-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-sage-700 transition-colors"
               >
                 Upgrade to Annual Plan
               </button>
@@ -324,7 +324,7 @@ export default function BillingPage() {
             {isCanceled && (
               <button
                 onClick={handleResubscribe}
-                className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                className="flex-1 bg-sage-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-sage-700 transition-colors"
               >
                 Resubscribe
               </button>
@@ -333,7 +333,7 @@ export default function BillingPage() {
             {isPastDue && (
               <button
                 onClick={handleUpdatePaymentMethod}
-                className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                className="flex-1 bg-sage-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-sage-700 transition-colors"
               >
                 Update Payment Method
               </button>
@@ -343,7 +343,7 @@ export default function BillingPage() {
               <>
                 <button
                   onClick={handleUpdatePaymentMethod}
-                  className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                  className="flex-1 bg-sage-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-sage-700 transition-colors"
                 >
                   Update Payment Method
                 </button>
@@ -359,7 +359,7 @@ export default function BillingPage() {
             {subscription?.cancelAtPeriodEnd && (
               <button
                 onClick={handleResubscribe}
-                className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                className="flex-1 bg-sage-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-sage-700 transition-colors"
               >
                 Resubscribe
               </button>
@@ -429,7 +429,7 @@ function StatusBadge({ status }: { status: BillingStatus }) {
       case 'ACTIVE':
         return 'bg-green-100 text-green-800';
       case 'TRIALING':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-sage-100 text-sage-800';
       case 'PAST_DUE':
         return 'bg-yellow-100 text-yellow-800';
       case 'CANCELED':

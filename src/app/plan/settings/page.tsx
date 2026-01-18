@@ -157,7 +157,7 @@ export default function SettingsPage() {
                 <div className="text-sm text-gray-600 mt-1">Completed Events</div>
               </div>
               <div className="text-center p-4 bg-gray-50 rounded-lg">
-                <div className="text-3xl font-bold text-purple-600">{stats.templatesSaved}</div>
+                <div className="text-3xl font-bold text-sage-600">{stats.templatesSaved}</div>
                 <div className="text-sm text-gray-600 mt-1">Templates Saved</div>
               </div>
               <div className="text-center p-4 bg-gray-50 rounded-lg">
@@ -171,10 +171,10 @@ export default function SettingsPage() {
             </div>
           )}
 
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="bg-sage-50 border border-sage-200 rounded-lg p-4">
             <div className="flex items-start gap-3">
               <Info className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
-              <div className="text-sm text-blue-900">
+              <div className="text-sm text-sage-900">
                 <p className="font-medium mb-1">How Host Memory Works</p>
                 <p>
                   Gather learns from your completed events to provide better suggestions for future
@@ -214,7 +214,7 @@ export default function SettingsPage() {
                     disabled={saving}
                     className="sr-only peer"
                   />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div>
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-sage-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div>
                 </label>
               </div>
 
@@ -244,7 +244,7 @@ export default function SettingsPage() {
                     disabled={saving}
                     className="sr-only peer"
                   />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div>
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-sage-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div>
                 </label>
               </div>
 
@@ -264,7 +264,7 @@ export default function SettingsPage() {
                     disabled={saving}
                     className="sr-only peer"
                   />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div>
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-sage-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div>
                 </label>
               </div>
             </div>

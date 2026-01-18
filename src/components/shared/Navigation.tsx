@@ -69,7 +69,7 @@ export default function Navigation({ user }: NavigationProps) {
                     href={item.href}
                     className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                       isActive
-                        ? 'bg-blue-50 text-accent'
+                        ? 'bg-sage-50 text-accent'
                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                     }`}
                   >

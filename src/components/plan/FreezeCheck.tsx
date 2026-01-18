@@ -170,7 +170,7 @@ export default function FreezeCheck({
                 <span className="font-semibold">Coverage complete</span> - All items are assigned
               </p>
             ) : (
-              <p className="text-sm text-blue-700 mt-1">
+              <p className="text-sm text-sage-700 mt-1">
                 <span className="font-semibold">{unassignedCount}</span> item
                 {unassignedCount !== 1 ? 's' : ''} unassigned
               </p>

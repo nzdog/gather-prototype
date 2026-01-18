@@ -215,7 +215,7 @@ export default function CloneTemplateModal({
 
           {/* Quantity Scaling Option */}
           {guestCount && (
-            <div className="bg-blue-50 border border-blue-200 rounded p-4">
+            <div className="bg-sage-50 border border-sage-200 rounded p-4">
               <label className="flex items-start gap-3">
                 <input
                   type="checkbox"

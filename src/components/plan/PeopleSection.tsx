@@ -185,9 +185,9 @@ export default function PeopleSection({
   function getRoleBadgeColor(role: string): string {
     switch (role) {
       case 'HOST':
-        return 'bg-purple-100 text-purple-800';
+        return 'bg-sage-100 text-sage-800';
       case 'COORDINATOR':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-sage-100 text-sage-800';
       case 'PARTICIPANT':
         return 'bg-green-100 text-green-800';
       default:

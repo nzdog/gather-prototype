@@ -80,7 +80,7 @@ export default function UpgradePage() {
           <button
             onClick={handleUpgrade}
             disabled={loading}
-            className="w-full bg-blue-600 text-white px-6 py-4 rounded-lg text-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            className="w-full bg-sage-600 text-white px-6 py-4 rounded-lg text-lg font-semibold hover:bg-sage-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
           >
             {loading ? 'Redirecting to checkout...' : 'Upgrade Now'}
           </button>

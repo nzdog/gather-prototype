@@ -167,8 +167,8 @@ export default function RegenerateModal({
 
           {/* No Manual Additions */}
           {!hasManualAdditions && (
-            <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
-              <p className="text-blue-900">
+            <div className="bg-sage-50 border-2 border-sage-200 rounded-lg p-4">
+              <p className="text-sage-900">
                 This will replace all generated teams and items with a fresh AI-generated plan.
               </p>
             </div>

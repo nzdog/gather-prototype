@@ -170,7 +170,7 @@ export default function ParticipantView() {
       <div className="bg-white border-b border-gray-200 px-6 py-5">
         <a
           href="/"
-          className="inline-flex items-center gap-1 text-sm text-accent hover:text-blue-800 mb-3"
+          className="inline-flex items-center gap-1 text-sm text-accent hover:text-sage-800 mb-3"
         >
           <Home className="size-4" />
           Back to Demo
@@ -255,12 +255,12 @@ export default function ParticipantView() {
                       assignment.item.vegetarian) && (
                       <div className="flex gap-2">
                         {assignment.item.glutenFree && (
-                          <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                          <span className="bg-sage-100 text-sage-800 text-xs px-2 py-1 rounded">
                             GF
                           </span>
                         )}
                         {assignment.item.dairyFree && (
-                          <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                          <span className="bg-sage-100 text-sage-800 text-xs px-2 py-1 rounded">
                             DF
                           </span>
                         )}
@@ -321,7 +321,7 @@ export default function ParticipantView() {
                       <div className="grid grid-cols-2 gap-3">
                         <button
                           onClick={() => handleResponse(assignment.id, 'ACCEPTED')}
-                          className="py-2.5 rounded-lg font-medium bg-green-600 text-white hover:bg-green-700 transition-all"
+                          className="py-2.5 rounded-lg font-medium bg-sage-600 text-white hover:bg-sage-700 transition-all"
                         >
                           Accept
                         </button>
