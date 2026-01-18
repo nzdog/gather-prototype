@@ -12,6 +12,7 @@ interface SubscriptionDetails {
   currentPeriodEnd: string | null;
   stripeSubscriptionId: string | null;
   stripePriceId: string | null;
+  trialEnd: string | null;
 }
 
 interface BillingStatusResponse {
@@ -98,6 +99,34 @@ export default function BillingPage() {
     }
   };
 
+  const handleUpdatePaymentMethod = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/billing/portal', {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to create portal session');
+      }
+
+      const { url } = await response.json();
+
+      if (!url) {
+        throw new Error('No portal URL returned');
+      }
+
+      // Redirect to Stripe Customer Portal
+      window.location.href = url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+      setLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -125,6 +154,17 @@ export default function BillingPage() {
   const isCanceled = billingStatus === 'CANCELED';
   const isPastDue = billingStatus === 'PAST_DUE';
   const isFree = billingStatus === 'FREE';
+  const isTrialing = billingStatus === 'TRIALING';
+
+  // Calculate trial days remaining
+  const trialDaysRemaining = subscription?.trialEnd
+    ? Math.max(
+        0,
+        Math.ceil(
+          (new Date(subscription.trialEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+        )
+      )
+    : 0;
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
@@ -194,6 +234,43 @@ export default function BillingPage() {
             </div>
           )}
 
+          {/* Trial Notice */}
+          {isTrialing && subscription?.trialEnd && (
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
+              <div className="flex items-start">
+                <svg
+                  className="w-5 h-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <div>
+                  <p className="font-semibold text-blue-900 mb-1">Trial Active</p>
+                  <p className="text-sm text-blue-800">
+                    {trialDaysRemaining > 0 ? (
+                      <>
+                        You have{' '}
+                        <span className="font-semibold">
+                          {trialDaysRemaining} day{trialDaysRemaining !== 1 ? 's' : ''}
+                        </span>{' '}
+                        remaining in your trial. After that, you'll be charged $69 NZD/year.
+                      </>
+                    ) : (
+                      <>Your trial ends today. You'll be charged $69 NZD/year.</>
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Plan Details */}
           <div className="space-y-3 mb-6">
             <PlanFeature
@@ -255,7 +332,7 @@ export default function BillingPage() {
 
             {isPastDue && (
               <button
-                onClick={handleResubscribe}
+                onClick={handleUpdatePaymentMethod}
                 className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
               >
                 Update Payment Method
@@ -263,11 +340,28 @@ export default function BillingPage() {
             )}
 
             {isActive && !subscription?.cancelAtPeriodEnd && (
+              <>
+                <button
+                  onClick={handleUpdatePaymentMethod}
+                  className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                >
+                  Update Payment Method
+                </button>
+                <button
+                  onClick={() => setShowCancelDialog(true)}
+                  className="flex-1 border border-gray-300 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
+                >
+                  Cancel Subscription
+                </button>
+              </>
+            )}
+
+            {subscription?.cancelAtPeriodEnd && (
               <button
-                onClick={() => setShowCancelDialog(true)}
-                className="flex-1 border border-gray-300 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
+                onClick={handleResubscribe}
+                className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
               >
-                Cancel Subscription
+                Resubscribe
               </button>
             )}
           </div>
