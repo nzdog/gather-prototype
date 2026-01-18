@@ -1,0 +1,26 @@
+=== GATHER DOCS REORGANIZATION ===
+Date: Sun 18 Jan 2026 13:02:11 NZDT
+Working directory: /Users/Nigel/Desktop/gather-prototype/docs
+
+[MKDIR] 00_overview
+[MKDIR] 01_product
+[MKDIR] 02_ux
+[MKDIR] 02_ux/research
+[MKDIR] 03_specs
+[MKDIR] 03_specs/_versions
+[MKDIR] 04_roadmap
+[MKDIR] 04_roadmap/tickets
+[MKDIR] 04_roadmap/tickets/phase-1
+[MKDIR] 04_roadmap/tickets/phase-2
+[MKDIR] 04_roadmap/tickets/mup-v1
+[MKDIR] 05_ops
+[MKDIR] 05_ops/testing
+[MKDIR] 07_meetings
+[MKDIR] assets
+[MKDIR] assets/code
+[MKDIR] _inbox
+[MKDIR] _archive
+[MKDIR] _archive/2026-01-18-gatherfiles
+[MKDIR] _archive/2026-01-18-mup-old
+[MKDIR] _archive/legacy-formats
+[MKDIR] _archive/debug-logs
