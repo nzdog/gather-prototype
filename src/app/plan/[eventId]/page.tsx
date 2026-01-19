@@ -185,6 +185,7 @@ export default function PlanEditorPage() {
   const [editEventModalOpen, setEditEventModalOpen] = useState(false);
   const [inviteLinks, setInviteLinks] = useState<any[]>([]);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const [copiedDirectory, setCopiedDirectory] = useState(false);
   const [expandedSection, setExpandedSection] = useState<SectionId | null>(null);
 
   // Review mode for selective regeneration
@@ -648,6 +649,19 @@ export default function PlanEditorPage() {
       await navigator.clipboard.writeText(url);
       setCopiedToken(token);
       setTimeout(() => setCopiedToken(null), 2000); // Reset after 2 seconds
+    } catch (err) {
+      console.error('Failed to copy:', err);
+      alert('Failed to copy link to clipboard');
+    }
+  };
+
+  const handleCopyDirectoryLink = async () => {
+    try {
+      const baseUrl = window.location.origin;
+      const directoryUrl = `${baseUrl}/gather/${eventId}/directory`;
+      await navigator.clipboard.writeText(directoryUrl);
+      setCopiedDirectory(true);
+      setTimeout(() => setCopiedDirectory(false), 2000); // Reset after 2 seconds
     } catch (err) {
       console.error('Failed to copy:', err);
       alert('Failed to copy link to clipboard');
@@ -1768,12 +1782,41 @@ export default function PlanEditorPage() {
           title="Invite Links"
           icon={<LinkIcon className="w-6 h-6" />}
         >
-          <p className="text-sm text-gray-600 mb-4">
-            Share these links with your team. Each link is personalized and grants access to the
-            appropriate view.
-          </p>
-          <div className="space-y-4">
-            {inviteLinks.map((link) => (
+          {/* Family Directory Link - Prominent Card */}
+          <div className="bg-sage-50 border-2 border-sage-300 rounded-lg p-6 mb-6">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 bg-sage-600 rounded-full flex items-center justify-center">
+                <Users className="w-6 h-6 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Family Directory Link
+                </h3>
+                <p className="text-sm text-gray-700 mb-3">
+                  Share this single link with your whole family. Everyone can click their name to access their personal page.
+                </p>
+                <div className="bg-white rounded-md p-3 mb-3 border border-sage-200">
+                  <p className="text-xs text-gray-500 font-mono break-all">
+                    {typeof window !== 'undefined' ? `${window.location.origin}/gather/${eventId}/directory` : `...loading`}
+                  </p>
+                </div>
+                <button
+                  onClick={handleCopyDirectoryLink}
+                  className="w-full sm:w-auto px-4 py-2 bg-sage-600 text-white text-sm font-medium rounded-md hover:bg-sage-700 transition-colors"
+                >
+                  {copiedDirectory ? '✓ Copied!' : 'Copy Directory Link'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Individual Invite Links Section */}
+          <div className="border-t border-gray-200 pt-6">
+            <p className="text-sm text-gray-600 mb-4">
+              Or share these individual links directly. Each link is personalized and grants access to the appropriate view.
+            </p>
+            <div className="space-y-4">
+              {inviteLinks.map((link) => (
               <div key={link.token} className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1800,6 +1843,7 @@ export default function PlanEditorPage() {
                 </div>
               </div>
             ))}
+            </div>
           </div>
         </SectionExpandModal>
       )}
