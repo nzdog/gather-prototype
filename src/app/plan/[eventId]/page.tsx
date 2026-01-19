@@ -1554,7 +1554,7 @@ export default function PlanEditorPage() {
                         )}
                       </div>
                       <div className="text-sm text-gray-500 mt-1">
-                        Coordinator: {team.coordinator.name} • {team._count.members ?? 0} {(team._count.members ?? 0) === 1 ? 'member' : 'members'} • {team._count.items} items
+                        Coordinator: {team.coordinator?.name || 'None'} • {team._count.members ?? 0} {(team._count.members ?? 0) === 1 ? 'member' : 'members'} • {team._count.items} items
                       </div>
                     </div>
                   </div>

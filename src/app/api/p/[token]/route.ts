@@ -78,10 +78,10 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
       ? {
           id: personEvent.team.id,
           name: personEvent.team.name,
-          coordinator: {
+          coordinator: personEvent.team.coordinator ? {
             id: personEvent.team.coordinator.id,
             name: personEvent.team.coordinator.name,
-          },
+          } : null,
         }
       : null,
     assignments: assignments.map((a) => ({
