@@ -273,12 +273,23 @@ export async function DELETE(
         });
       }
 
-      // 3. Delete access tokens for this person in this event
+      // 3. Clear coordinator assignments for teams where this person was coordinator
+      await tx.team.updateMany({
+        where: {
+          eventId,
+          coordinatorId: personId,
+        },
+        data: {
+          coordinatorId: null,
+        },
+      });
+
+      // 4. Delete access tokens for this person in this event
       await tx.accessToken.deleteMany({
         where: { personId, eventId },
       });
 
-      // 4. Delete PersonEvent (membership)
+      // 5. Delete PersonEvent (membership)
       await tx.personEvent.deleteMany({
         where: { personId, eventId },
       });
