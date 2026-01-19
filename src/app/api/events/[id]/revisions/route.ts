@@ -1,9 +1,11 @@
 // POST /api/events/[id]/revisions - Create manual revision snapshot
 // GET /api/events/[id]/revisions - List revisions (last 5)
+// SECURITY: POST requires HOST role, derives actorId from session
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createRevision } from '@/lib/workflow';
+import { requireEventRole } from '@/lib/auth/guards';
 
 /**
  * GET /api/events/[id]/revisions
@@ -55,16 +57,36 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 /**
  * POST /api/events/[id]/revisions
  * Create a manual revision snapshot
+ * SECURITY: Derives actorId from authenticated session user
  */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
-    const body = await request.json();
-    const { actorId, reason } = body;
 
-    if (!actorId) {
-      return NextResponse.json({ error: 'actorId is required in request body' }, { status: 400 });
+    // SECURITY: Require HOST role for creating revisions
+    const auth = await requireEventRole(eventId, ['HOST']);
+    if (auth instanceof NextResponse) return auth;
+
+    // SECURITY: Derive actorId from authenticated session user
+    let person = await prisma.person.findFirst({
+      where: { userId: auth.user.id },
+    });
+
+    if (!person) {
+      // Create Person record if it doesn't exist (migration support)
+      person = await prisma.person.create({
+        data: {
+          name: auth.user.email.split('@')[0],
+          email: auth.user.email,
+          userId: auth.user.id,
+        },
+      });
     }
+
+    const actorId = person.id;
+
+    const body = await request.json();
+    const { reason } = body;
 
     // Verify event exists
     const event = await prisma.event.findUnique({
