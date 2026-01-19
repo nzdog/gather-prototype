@@ -148,8 +148,8 @@ export default function ConflictList({
   if (conflicts.length === 0) {
     if (!hasRunCheck) {
       return (
-        <div className="bg-sage-50 border border-sage-200 rounded-lg p-8">
-          <div className="max-w-[240px] mx-auto text-center">
+        <div className="bg-sage-50 border border-sage-200 rounded-lg p-8 max-w-md mx-auto">
+          <div className="text-center">
             <div className="inline-flex items-center justify-center w-12 h-12 bg-sage-100 rounded-full mb-3">
               <svg className="w-6 h-6 text-sage-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -163,8 +163,8 @@ export default function ConflictList({
     }
 
     return (
-      <div className="bg-sage-50 border border-sage-200 rounded-lg p-8">
-        <div className="max-w-[240px] mx-auto text-center">
+      <div className="bg-sage-50 border border-sage-200 rounded-lg p-8 max-w-md mx-auto">
+        <div className="text-center">
           <div className="inline-flex items-center justify-center w-12 h-12 bg-sage-600 rounded-full mb-3">
             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
