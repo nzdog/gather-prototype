@@ -148,19 +148,27 @@ export default function ConflictList({
   if (conflicts.length === 0) {
     if (!hasRunCheck) {
       return (
-        <div className="bg-gray-50 border-2 border-gray-300 rounded-lg p-6 text-center">
-          <span className="text-3xl">⏸️</span>
-          <p className="mt-2 text-gray-900 font-medium">No tests run yet</p>
-          <p className="text-sm text-gray-700">Click "Check Plan" to assess your plan for conflicts</p>
+        <div className="bg-sage-50 border border-sage-200 rounded-lg p-8 text-center">
+          <div className="inline-flex items-center justify-center w-12 h-12 bg-sage-100 rounded-full mb-3">
+            <svg className="w-6 h-6 text-sage-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+          </div>
+          <p className="text-lg font-semibold text-sage-900 mb-1">Ready to check your plan</p>
+          <p className="text-sm text-sage-600">Click "Check Plan" to assess for potential conflicts</p>
         </div>
       );
     }
 
     return (
-      <div className="bg-green-50 border-2 border-green-300 rounded-lg p-6 text-center">
-        <span className="text-3xl">✓</span>
-        <p className="mt-2 text-green-900 font-medium">No conflicts found</p>
-        <p className="text-sm text-green-700">Your plan looks good!</p>
+      <div className="bg-sage-50 border border-sage-200 rounded-lg p-8 text-center">
+        <div className="inline-flex items-center justify-center w-12 h-12 bg-sage-600 rounded-full mb-3">
+          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <p className="text-lg font-semibold text-sage-900 mb-1">No conflicts found</p>
+        <p className="text-sm text-sage-600">Your plan is looking great!</p>
       </div>
     );
   }
