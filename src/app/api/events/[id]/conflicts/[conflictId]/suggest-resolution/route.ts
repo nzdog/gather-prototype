@@ -1,7 +1,9 @@
 // POST /api/events/[id]/conflicts/[conflictId]/suggest-resolution - Get AI resolution suggestion
+// SECURITY: Requires HOST role (AI high-cost operation)
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { callClaudeForJSON, isClaudeAvailable } from '@/lib/ai/claude';
+import { requireEventRole } from '@/lib/auth/guards';
 
 // Type definitions
 interface AISuggestion {
@@ -38,6 +40,10 @@ export async function POST(
 ) {
   try {
     const { id: eventId, conflictId } = await context.params;
+
+    // SECURITY: Require HOST role for AI resolution suggestions (high-cost operation)
+    const auth = await requireEventRole(eventId, ['HOST']);
+    if (auth instanceof NextResponse) return auth;
 
     // Verify conflict exists and belongs to event
     const conflict = await prisma.conflict.findUnique({

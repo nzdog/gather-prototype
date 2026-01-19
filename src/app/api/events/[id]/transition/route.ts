@@ -3,21 +3,49 @@
 // - Runs gate check first
 // - If passed: creates PlanSnapshot, updates event status to CONFIRMING, sets structureMode to LOCKED
 // - Records transitionAttempt with result
+// SECURITY: Requires HOST role, derives actorId from authenticated session
 
 import { NextRequest, NextResponse } from 'next/server';
 import { transitionToConfirming } from '@/lib/workflow';
+import { requireEventRole } from '@/lib/auth/guards';
+import { prisma } from '@/lib/prisma';
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id: eventId } = await context.params;
+
+  // SECURITY: Auth check MUST run first and MUST NOT be in try/catch that returns 500
+  // Invalid/missing auth must return 401, not 500
+  let auth;
   try {
-    const { id: eventId } = await context.params;
+    auth = await requireEventRole(eventId, ['HOST']);
+    if (auth instanceof NextResponse) return auth;
+  } catch (authError) {
+    // If auth throws (should not happen, but fail-closed), return 401
+    console.error('Auth check error:', authError);
+    return NextResponse.json(
+      { error: 'Unauthorized', message: 'Authentication required' },
+      { status: 401 }
+    );
+  }
 
-    // Parse request body to get actorId
-    const body = await request.json();
-    const actorId = body.actorId;
+  try {
+    // SECURITY: Derive actorId from authenticated session user (never trust request body)
+    let person = await prisma.person.findFirst({
+      where: { userId: auth.user.id },
+    });
 
-    if (!actorId) {
-      return NextResponse.json({ error: 'actorId is required in request body' }, { status: 400 });
+    if (!person) {
+      // Create Person record if it doesn't exist (migration support)
+      person = await prisma.person.create({
+        data: {
+          name: auth.user.email.split('@')[0],
+          email: auth.user.email,
+          userId: auth.user.id,
+        },
+      });
     }
+
+    const actorId = person.id;
 
     // Perform transition
     const result = await transitionToConfirming(eventId, actorId);
@@ -39,12 +67,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       message: 'Event successfully transitioned to CONFIRMING status',
     });
   } catch (error) {
+    // SECURITY: Never expose internal error details (no Prisma errors)
     console.error('Error transitioning event:', error);
     return NextResponse.json(
       {
         success: false,
-        error: 'Failed to transition event',
-        details: error instanceof Error ? error.message : 'Unknown error',
+        error: 'Internal Server Error',
       },
       { status: 500 }
     );
