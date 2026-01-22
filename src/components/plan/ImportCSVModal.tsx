@@ -56,7 +56,11 @@ export default function ImportCSVModal({
   const [parsedPeople, setParsedPeople] = useState<ParsedRow[]>([]);
   const [importing, setImporting] = useState(false);
   const [_splitFullName, __setSplitFullName] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // SECURITY: File validation constants
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
   // Modal blocking check
   useEffect(() => {
@@ -77,6 +81,7 @@ export default function ImportCSVModal({
     setMappings([]);
     setParsedPeople([]);
     setImporting(false);
+    setFileError(null);
     // _setSplitFullName(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -88,10 +93,31 @@ export default function ImportCSVModal({
     onClose();
   };
 
-  // Step 1: Parse CSV
+  // Step 1: Parse CSV with validation
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Reset previous error
+    setFileError(null);
+
+    // SECURITY: Validate file size
+    if (file.size > MAX_FILE_SIZE) {
+      setFileError('File too large. Maximum size is 5MB.');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    // SECURITY: Validate file type
+    if (!file.name.endsWith('.csv') && file.type !== 'text/csv') {
+      setFileError('Please select a CSV file.');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
 
     setCsvFile(file);
 
@@ -440,7 +466,15 @@ export default function ImportCSVModal({
                 >
                   Choose CSV File
                 </label>
-                {csvFile && (
+                {fileError && (
+                  <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                    <p className="text-sm text-red-600 flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4" />
+                      {fileError}
+                    </p>
+                  </div>
+                )}
+                {csvFile && !fileError && (
                   <p className="text-sm text-gray-600 mt-2">
                     Selected: {csvFile.name} ({csvHeaders.length} columns, {csvRows.length} rows)
                   </p>
