@@ -64,7 +64,7 @@ async function verify() {
 
     // 6. Test that we can query the new fields without errors
     console.log('6. Testing Prisma queries with new schema...');
-    const testUser = await prisma.user.findFirst({
+    await prisma.user.findFirst({
       include: { subscription: true }
     });
     console.log(`   ✅ Can query User with subscription relation\n`);

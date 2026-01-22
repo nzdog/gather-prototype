@@ -8,7 +8,7 @@ import { getUser } from '@/lib/auth/session';
  * Get template details.
  * SECURITY: Now uses session authentication instead of query param
  */
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
   // SECURITY: Require authenticated user session
   const user = await getUser();
   if (!user) {
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
  * Delete template (host templates only).
  * SECURITY: Now uses session authentication instead of body param
  */
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
   // SECURITY: Require authenticated user session
   const user = await getUser();
   if (!user) {

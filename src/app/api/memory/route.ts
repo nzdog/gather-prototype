@@ -8,7 +8,7 @@ import { getUser } from '@/lib/auth/session';
  * Get Host memory summary (events stored, patterns learned, defaults set).
  * SECURITY: Now uses session authentication instead of query param
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   // SECURITY: Require authenticated user session
   const user = await getUser();
   if (!user) {
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
  * Creates a DeletionReceipt for transparency.
  * SECURITY: Now uses session authentication instead of query param
  */
-export async function DELETE(request: NextRequest) {
+export async function DELETE(_request: NextRequest) {
   // SECURITY: Require authenticated user session
   const user = await getUser();
   if (!user) {
