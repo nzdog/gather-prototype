@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { canMutate, logAudit } from '@/lib/workflow';
+import { requireNotFrozen } from '@/lib/auth/guards';
 
 /**
  * PATCH /api/c/[token]/items/[itemId]
@@ -12,6 +13,7 @@ import { canMutate, logAudit } from '@/lib/workflow';
  * - Verify item.teamId === token.teamId before mutation
  * - Check canMutate() before updating
  * - Never accept teamId from client (ownership already verified)
+ * - Server-side frozen state validation
  */
 export async function PATCH(
   request: NextRequest,
@@ -22,6 +24,10 @@ export async function PATCH(
   if (!context || context.scope !== 'COORDINATOR' || !context.team) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
+
+  // SECURITY: Block mutations when FROZEN (server-side validation)
+  const frozenBlock = requireNotFrozen(context.event, false);
+  if (frozenBlock) return frozenBlock;
 
   // Verify item ownership
   const item = await prisma.item.findUnique({
@@ -113,6 +119,7 @@ export async function PATCH(
  * - CONFIRMING: blocked if critical
  * - DRAFT: always allowed
  * - Cascade will delete assignment (via schema)
+ * - Server-side frozen state validation
  */
 export async function DELETE(
   _request: NextRequest,
@@ -123,6 +130,10 @@ export async function DELETE(
   if (!context || context.scope !== 'COORDINATOR' || !context.team) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
+
+  // SECURITY: Block mutations when FROZEN (server-side validation)
+  const frozenBlock = requireNotFrozen(context.event, false);
+  if (frozenBlock) return frozenBlock;
 
   // Verify item ownership
   const item = await prisma.item.findUnique({

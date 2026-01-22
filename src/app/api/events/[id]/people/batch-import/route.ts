@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
 
 interface PersonToImport {
   name: string;
@@ -16,6 +17,11 @@ export async function POST(
 ) {
   try {
     const eventId = params.id;
+
+    // SECURITY: Require HOST role to batch import people (sensitive PII operation)
+    const auth = await requireEventRole(eventId, ['HOST']);
+    if (auth instanceof NextResponse) return auth;
+
     const body = await request.json();
     const { people } = body as { people: PersonToImport[] };
 

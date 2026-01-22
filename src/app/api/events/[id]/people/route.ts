@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
 
 // GET /api/events/[id]/people - List people on this event
 export async function GET(
@@ -8,6 +9,10 @@ export async function GET(
 ) {
   try {
     const eventId = params.id;
+
+    // Require HOST, COHOST, or COORDINATOR role
+    const auth = await requireEventRole(eventId, ['HOST', 'COHOST', 'COORDINATOR']);
+    if (auth instanceof NextResponse) return auth;
 
     const people = await prisma.personEvent.findMany({
       where: { eventId },
@@ -73,6 +78,11 @@ export async function POST(
 ) {
   try {
     const eventId = params.id;
+
+    // Only HOST and COHOST can add people
+    const auth = await requireEventRole(eventId, ['HOST', 'COHOST']);
+    if (auth instanceof NextResponse) return auth;
+
     const body = await request.json();
     const { name, email, phone, role, teamId } = body;
 

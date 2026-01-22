@@ -1,13 +1,21 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUser } from '@/lib/auth/session';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/demo/tokens
  * Returns all access tokens for the demo landing page
+ * SECURITY: Requires authenticated user session (sensitive data)
  */
 export async function GET() {
+  // SECURITY: Require authenticated user session
+  const user = await getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     console.log('[TokenAPI] Fetching all tokens from database...');
     const tokens = await prisma.accessToken.findMany({

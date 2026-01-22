@@ -2,10 +2,15 @@
 // POST /api/events/[id]/teams - Create a new team
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
+
+    // Require HOST, COHOST, or COORDINATOR role
+    const auth = await requireEventRole(eventId, ['HOST', 'COHOST', 'COORDINATOR']);
+    if (auth instanceof NextResponse) return auth;
 
     const teams = await prisma.team.findMany({
       where: { eventId },
@@ -66,6 +71,11 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
+
+    // Only HOST and COHOST can create teams
+    const auth = await requireEventRole(eventId, ['HOST', 'COHOST']);
+    if (auth instanceof NextResponse) return auth;
+
     const body = await request.json();
 
     const { name, scope, domain, coordinatorId } = body;

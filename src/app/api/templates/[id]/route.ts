@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUser } from '@/lib/auth/session';
 
 /**
- * GET /api/templates/[id]?hostId={hostId}
+ * GET /api/templates/[id]
  *
  * Get template details.
+ * SECURITY: Now uses session authentication instead of query param
  */
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-  const searchParams = request.nextUrl.searchParams;
-  const hostId = searchParams.get('hostId');
+  // SECURITY: Require authenticated user session
+  const user = await getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const hostId = user.id; // Use authenticated user's ID
 
   const template = await prisma.structureTemplate.findUnique({
     where: { id: params.id },
@@ -30,14 +37,16 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
  * DELETE /api/templates/[id]
  *
  * Delete template (host templates only).
+ * SECURITY: Now uses session authentication instead of body param
  */
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
-  const body = await request.json();
-  const { hostId } = body;
-
-  if (!hostId) {
-    return NextResponse.json({ error: 'hostId is required' }, { status: 400 });
+  // SECURITY: Require authenticated user session
+  const user = await getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const hostId = user.id; // Use authenticated user's ID
 
   const template = await prisma.structureTemplate.findUnique({
     where: { id: params.id },

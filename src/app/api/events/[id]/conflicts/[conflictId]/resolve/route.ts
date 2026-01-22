@@ -1,6 +1,7 @@
 // POST /api/events/[id]/conflicts/[conflictId]/resolve - Mark conflict as resolved
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
 
 export async function POST(
   request: NextRequest,
@@ -8,6 +9,10 @@ export async function POST(
 ) {
   try {
     const { id: eventId, conflictId } = await context.params;
+
+    // SECURITY: Require HOST role for conflict operations
+    const auth = await requireEventRole(eventId, ['HOST']);
+    if (auth instanceof NextResponse) return auth;
     const body = await request.json();
     const { resolvedBy } = body; // Host ID
 

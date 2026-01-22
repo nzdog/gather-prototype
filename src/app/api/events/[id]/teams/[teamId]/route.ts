@@ -1,6 +1,7 @@
 // DELETE /api/events/[id]/teams/[teamId] - Delete team
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
 
 export async function DELETE(
   _request: NextRequest,
@@ -8,6 +9,10 @@ export async function DELETE(
 ) {
   try {
     const { id: eventId, teamId } = await context.params;
+
+    // SECURITY: Require HOST role to delete teams
+    const auth = await requireEventRole(eventId, ['HOST']);
+    if (auth instanceof NextResponse) return auth;
 
     // Verify team exists and belongs to event
     const team = await prisma.team.findUnique({

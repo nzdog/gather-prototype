@@ -2,6 +2,7 @@
 // POST /api/events/[id]/teams/[teamId]/items - Create a new item for a team
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
 
 export async function GET(
   _request: NextRequest,
@@ -9,6 +10,10 @@ export async function GET(
 ) {
   try {
     const { id: eventId, teamId } = await context.params;
+
+    // SECURITY: Require HOST or COORDINATOR role for team items
+    const auth = await requireEventRole(eventId, ['HOST', 'COORDINATOR']);
+    if (auth instanceof NextResponse) return auth;
 
     // Verify team exists and belongs to event
     const team = await prisma.team.findUnique({
@@ -62,6 +67,10 @@ export async function POST(
 ) {
   try {
     const { id: eventId, teamId } = await context.params;
+
+    // SECURITY: Require HOST or COORDINATOR role for team items
+    const auth = await requireEventRole(eventId, ['HOST', 'COORDINATOR']);
+    if (auth instanceof NextResponse) return auth;
     const body = await request.json();
 
     const { name, description, quantityAmount, quantityUnit, critical, dietaryTags } = body;

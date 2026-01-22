@@ -1,16 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUser } from '@/lib/auth/session';
 
 /**
  * POST /api/templates/[id]/clone
  *
  * Clone template to new event.
  * Compares parameters (guest count) and offers quantity scaling if QuantitiesProfile exists.
+ * SECURITY: Now uses session authentication instead of body param
  */
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+  // SECURITY: Require authenticated user session
+  const user = await getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const hostId = user.id; // Use authenticated user's ID
   const body = await request.json();
   const {
-    hostId,
     eventName,
     startDate,
     endDate,
@@ -19,10 +27,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     occasionType,
   } = body;
 
-  if (!hostId || !eventName || !startDate || !endDate) {
+  if (!eventName || !startDate || !endDate) {
     return NextResponse.json(
       {
-        error: 'hostId, eventName, startDate, and endDate are required',
+        error: 'eventName, startDate, and endDate are required',
       },
       { status: 400 }
     );

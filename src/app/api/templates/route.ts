@@ -1,18 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUser } from '@/lib/auth/session';
 
 /**
- * GET /api/templates?hostId={hostId}
+ * GET /api/templates
  *
  * Returns Host's saved templates.
+ * SECURITY: Now uses session authentication instead of query param
  */
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const hostId = searchParams.get('hostId');
-
-  if (!hostId) {
-    return NextResponse.json({ error: 'hostId is required' }, { status: 400 });
+  // SECURITY: Require authenticated user session
+  const user = await getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const hostId = user.id; // Use authenticated user's ID
 
   const templates = await prisma.structureTemplate.findMany({
     where: {
@@ -32,13 +35,21 @@ export async function GET(request: NextRequest) {
  *
  * Create template from completed event.
  * Extracts structure (teams, items, days) but NOT dates, assignments, acknowledgements, or quantities.
+ * SECURITY: Now uses session authentication instead of body param
  */
 export async function POST(request: NextRequest) {
-  const body = await request.json();
-  const { hostId, eventId, name } = body;
+  // SECURITY: Require authenticated user session
+  const user = await getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
-  if (!hostId || !eventId || !name) {
-    return NextResponse.json({ error: 'hostId, eventId, and name are required' }, { status: 400 });
+  const hostId = user.id; // Use authenticated user's ID
+  const body = await request.json();
+  const { eventId, name } = body;
+
+  if (!eventId || !name) {
+    return NextResponse.json({ error: 'eventId and name are required' }, { status: 400 });
   }
 
   // Fetch the event with all structure

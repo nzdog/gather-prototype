@@ -1,18 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUser } from '@/lib/auth/session';
 
 /**
- * GET /api/memory?hostId={hostId}
+ * GET /api/memory
  *
  * Get Host memory summary (events stored, patterns learned, defaults set).
+ * SECURITY: Now uses session authentication instead of query param
  */
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const hostId = searchParams.get('hostId');
-
-  if (!hostId) {
-    return NextResponse.json({ error: 'hostId is required' }, { status: 400 });
+  // SECURITY: Require authenticated user session
+  const user = await getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const hostId = user.id; // Use authenticated user's ID
 
   // Get or create HostMemory
   let hostMemory = await prisma.hostMemory.findUnique({
@@ -69,18 +72,20 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * DELETE /api/memory?hostId={hostId}
+ * DELETE /api/memory
  *
  * Delete all Host memory.
  * Creates a DeletionReceipt for transparency.
+ * SECURITY: Now uses session authentication instead of query param
  */
 export async function DELETE(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const hostId = searchParams.get('hostId');
-
-  if (!hostId) {
-    return NextResponse.json({ error: 'hostId is required' }, { status: 400 });
+  // SECURITY: Require authenticated user session
+  const user = await getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const hostId = user.id; // Use authenticated user's ID
 
   const hostMemory = await prisma.hostMemory.findUnique({
     where: { hostId },

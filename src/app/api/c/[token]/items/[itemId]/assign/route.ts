@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { canMutate, logAudit, repairItemStatusAfterMutation } from '@/lib/workflow';
+import { requireNotFrozen } from '@/lib/auth/guards';
 
 /**
  * POST /api/c/[token]/items/[itemId]/assign
@@ -14,6 +15,7 @@ import { canMutate, logAudit, repairItemStatusAfterMutation } from '@/lib/workfl
  * - Check canMutate() before assigning
  * - After assignment create: call repairItemStatusAfterMutation(tx, itemId)
  * - Log ASSIGN_ITEM or REASSIGN_ITEM
+ * - Server-side frozen state validation
  */
 export async function POST(
   request: NextRequest,
@@ -24,6 +26,10 @@ export async function POST(
   if (!context || context.scope !== 'COORDINATOR' || !context.team) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
+
+  // SECURITY: Block mutations when FROZEN (server-side validation)
+  const frozenBlock = requireNotFrozen(context.event, false);
+  if (frozenBlock) return frozenBlock;
 
   // Verify item ownership
   const item = await prisma.item.findUnique({
@@ -126,6 +132,7 @@ export async function POST(
  * - Verify item.teamId === token.teamId
  * - After assignment delete: call repairItemStatusAfterMutation(tx, itemId)
  * - Log UNASSIGN_ITEM
+ * - Server-side frozen state validation
  */
 export async function DELETE(
   _request: NextRequest,
@@ -136,6 +143,10 @@ export async function DELETE(
   if (!context || context.scope !== 'COORDINATOR' || !context.team) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
+
+  // SECURITY: Block mutations when FROZEN (server-side validation)
+  const frozenBlock = requireNotFrozen(context.event, false);
+  if (frozenBlock) return frozenBlock;
 
   // Verify item ownership
   const item = await prisma.item.findUnique({

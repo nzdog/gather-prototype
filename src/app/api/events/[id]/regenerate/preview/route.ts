@@ -2,10 +2,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { regeneratePlan, RegenerationParams } from '@/lib/ai/generate';
+import { requireEventRole } from '@/lib/auth/guards';
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
+
+    // SECURITY: Require HOST role for AI preview (high-cost operation)
+    const auth = await requireEventRole(eventId, ['HOST']);
+    if (auth instanceof NextResponse) return auth;
+
     const body = await request.json();
     const { modifier = '', preserveProtected = true } = body;
 
