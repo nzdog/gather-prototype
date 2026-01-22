@@ -90,7 +90,12 @@ async function testLegacyCoordinatorTokenAccess() {
     const event = await createTestEvent(host.id, 'Coord Event');
     const team = await createTestTeam(event.id, 'Team A', coordinator.id);
     await createTestPersonEvent(coordinator.id, event.id, 'COORDINATOR', team.id);
-    const coordToken = await createTestAccessToken(coordinator.id, event.id, 'COORDINATOR', team.id);
+    const coordToken = await createTestAccessToken(
+      coordinator.id,
+      event.id,
+      'COORDINATOR',
+      team.id
+    );
 
     // Simulate token resolution
     const resolvedToken = await prisma.accessToken.findUnique({
@@ -240,7 +245,11 @@ async function testClaimedHostViaSession() {
     const user = await createTestUser(getTestEmail('claimed-host@test.com'));
 
     // Create person linked to user
-    const person = await createTestPerson('Claimed Host', getTestEmail('claimed-host@test.com'), user.id);
+    const person = await createTestPerson(
+      'Claimed Host',
+      getTestEmail('claimed-host@test.com'),
+      user.id
+    );
 
     // Create event
     const event = await createTestEvent(person.id, 'Claimed Host Event');
@@ -294,7 +303,11 @@ async function testClaimedHostViaOldToken() {
     const user = await createTestUser(getTestEmail('claimed-host-token@test.com'));
 
     // Create person linked to user
-    const person = await createTestPerson('Claimed Host 2', getTestEmail('claimed-host-token@test.com'), user.id);
+    const person = await createTestPerson(
+      'Claimed Host 2',
+      getTestEmail('claimed-host-token@test.com'),
+      user.id
+    );
 
     // Create event
     const event = await createTestEvent(person.id, 'Claimed Host Event 2');
@@ -401,13 +414,17 @@ async function testCreateEventClaimed() {
 
   try {
     const user = await createTestUser(getTestEmail('new-event-claimed@test.com'));
-    const person = await createTestPerson('Event Creator', getTestEmail('new-event-claimed@test.com'), user.id);
+    const person = await createTestPerson(
+      'Event Creator',
+      getTestEmail('new-event-claimed@test.com'),
+      user.id
+    );
 
     // Create event
     const event = await createTestEvent(person.id, 'New Event by Claimed User');
 
     // Create EventRole
-    const eventRole = await createTestEventRole(user.id, event.id, 'HOST');
+    await createTestEventRole(user.id, event.id, 'HOST');
 
     // Verify EventRole was created
     const foundEventRole = await prisma.eventRole.findFirst({
@@ -506,7 +523,6 @@ async function testDoNotBreakChecklist() {
     } else {
       recordFail('Person table broken');
     }
-
   } catch (error) {
     recordFail('"Do Not Break" checklist failed', error);
   }

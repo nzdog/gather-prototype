@@ -8,7 +8,7 @@
  * Run with: npx tsx scripts/verify-ticket-2.4.ts
  */
 
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync } from 'fs';
 import { join } from 'path';
 
 // ANSI color codes for output
@@ -94,10 +94,14 @@ if (syncContent) {
   );
 
   // Check status mapping
-  const hasTrialing = syncContent.includes("case 'trialing'") && syncContent.includes("return 'TRIALING'");
-  const hasActive = syncContent.includes("case 'active'") && syncContent.includes("return 'ACTIVE'");
-  const hasPastDue = syncContent.includes("case 'past_due'") && syncContent.includes("return 'PAST_DUE'");
-  const hasCanceled = syncContent.includes("case 'canceled'") || syncContent.includes("case 'unpaid'");
+  const hasTrialing =
+    syncContent.includes("case 'trialing'") && syncContent.includes("return 'TRIALING'");
+  const hasActive =
+    syncContent.includes("case 'active'") && syncContent.includes("return 'ACTIVE'");
+  const hasPastDue =
+    syncContent.includes("case 'past_due'") && syncContent.includes("return 'PAST_DUE'");
+  const hasCanceled =
+    syncContent.includes("case 'canceled'") || syncContent.includes("case 'unpaid'");
 
   check(
     'Status mapping: trialing → TRIALING',
@@ -105,17 +109,9 @@ if (syncContent) {
     'Correctly maps Stripe trialing status'
   );
 
-  check(
-    'Status mapping: active → ACTIVE',
-    hasActive,
-    'Correctly maps Stripe active status'
-  );
+  check('Status mapping: active → ACTIVE', hasActive, 'Correctly maps Stripe active status');
 
-  check(
-    'Status mapping: past_due → PAST_DUE',
-    hasPastDue,
-    'Correctly maps Stripe past_due status'
-  );
+  check('Status mapping: past_due → PAST_DUE', hasPastDue, 'Correctly maps Stripe past_due status');
 
   check(
     'Status mapping: canceled/unpaid → CANCELED',
@@ -126,7 +122,9 @@ if (syncContent) {
   // Check transaction usage
   check(
     'Uses Prisma transactions for atomic updates',
-    syncContent.includes('prisma.$transaction') && syncContent.includes('tx.subscription.update') && syncContent.includes('tx.user.update'),
+    syncContent.includes('prisma.$transaction') &&
+      syncContent.includes('tx.subscription.update') &&
+      syncContent.includes('tx.user.update'),
     'Ensures User and Subscription stay in sync'
   );
 
@@ -187,8 +185,7 @@ if (webhookContent) {
 
   check(
     'invoice.paid handler',
-    webhookContent.includes("case 'invoice.paid'") &&
-      webhookContent.includes('handleInvoicePaid'),
+    webhookContent.includes("case 'invoice.paid'") && webhookContent.includes('handleInvoicePaid'),
     'Handles successful invoice payments'
   );
 
@@ -220,20 +217,26 @@ if (schemaContent) {
   const hasStripeCustomerId = schemaContent.includes('stripeCustomerId');
   const hasStripeSubscriptionId = schemaContent.includes('stripeSubscriptionId');
   const hasStatus = schemaContent.includes('status') && schemaContent.includes('BillingStatus');
-  const hasPeriodFields = schemaContent.includes('currentPeriodStart') && schemaContent.includes('currentPeriodEnd');
+  const hasPeriodFields =
+    schemaContent.includes('currentPeriodStart') && schemaContent.includes('currentPeriodEnd');
   const hasCancelAtPeriodEnd = schemaContent.includes('cancelAtPeriodEnd');
   const hasTrialFields = schemaContent.includes('trialStart') && schemaContent.includes('trialEnd');
 
   check('Subscription model exists', hasSubscription, 'Required for storing subscription data');
   check('stripeCustomerId field exists', hasStripeCustomerId, 'Links to Stripe customer');
-  check('stripeSubscriptionId field exists', hasStripeSubscriptionId, 'Links to Stripe subscription');
+  check(
+    'stripeSubscriptionId field exists',
+    hasStripeSubscriptionId,
+    'Links to Stripe subscription'
+  );
   check('status field with BillingStatus enum', hasStatus, 'Tracks subscription status');
   check('currentPeriodStart/End fields exist', hasPeriodFields, 'Tracks billing cycle');
   check('cancelAtPeriodEnd field exists', hasCancelAtPeriodEnd, 'Tracks cancellation intent');
   check('trialStart/End fields exist', hasTrialFields, 'Tracks trial period');
 
   // Check User model has billingStatus
-  const userHasBillingStatus = schemaContent.includes('model User') &&
+  const userHasBillingStatus =
+    schemaContent.includes('model User') &&
     schemaContent.match(/model User[\s\S]*?billingStatus.*?BillingStatus/);
 
   check(
@@ -262,9 +265,13 @@ const passRate = ((passedChecks / totalChecks) * 100).toFixed(1);
 console.log(`\nPass rate: ${passRate}%`);
 
 if (failedChecks === 0) {
-  console.log(`\n${colors.green}✓ All checks passed! Ticket 2.4 implementation verified.${colors.reset}\n`);
+  console.log(
+    `\n${colors.green}✓ All checks passed! Ticket 2.4 implementation verified.${colors.reset}\n`
+  );
   process.exit(0);
 } else {
-  console.log(`\n${colors.red}✗ Some checks failed. Please review the implementation.${colors.reset}\n`);
+  console.log(
+    `\n${colors.red}✗ Some checks failed. Please review the implementation.${colors.reset}\n`
+  );
   process.exit(1);
 }

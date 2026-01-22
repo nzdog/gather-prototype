@@ -67,7 +67,9 @@ export default function FreezeCheck({
       const eventData = await eventResponse.json();
 
       // Get tokens to find host token
-      const tokensResponse = await fetch(`/api/events/${eventId}/tokens?hostId=${eventData.event.hostId}`);
+      const tokensResponse = await fetch(
+        `/api/events/${eventId}/tokens?hostId=${eventData.event.hostId}`
+      );
       if (!tokensResponse.ok) throw new Error('Failed to load tokens');
       const tokensData = await tokensResponse.json();
 

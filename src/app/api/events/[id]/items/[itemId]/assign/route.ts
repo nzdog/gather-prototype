@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole, requireNotFrozen } from '@/lib/auth/guards';
 
 // POST /api/events/[id]/items/[itemId]/assign - Assign item to person
 export async function POST(
@@ -8,6 +9,21 @@ export async function POST(
 ) {
   try {
     const { id: eventId, itemId } = await context.params;
+
+    // Require HOST, COHOST, or COORDINATOR role
+    const auth = await requireEventRole(eventId, ['HOST', 'COHOST', 'COORDINATOR']);
+    if (auth instanceof NextResponse) return auth;
+
+    // Get event to check frozen state
+    const event = await prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
+
+    // Block assignments when frozen (HOST can override)
+    const frozenBlock = requireNotFrozen(event, auth.role === 'HOST');
+    if (frozenBlock) return frozenBlock;
+
     const body = await request.json();
     const { personId } = body;
 
@@ -29,10 +45,7 @@ export async function POST(
     }
 
     if (item.team.eventId !== eventId) {
-      return NextResponse.json(
-        { error: 'Item does not belong to this event' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Item does not belong to this event' }, { status: 400 });
     }
 
     // Check if person is in the same team as the item
@@ -46,10 +59,7 @@ export async function POST(
     });
 
     if (!personEvent) {
-      return NextResponse.json(
-        { error: 'Person is not part of this event' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Person is not part of this event' }, { status: 404 });
     }
 
     if (personEvent.teamId !== item.teamId) {
@@ -110,6 +120,20 @@ export async function DELETE(
   try {
     const { id: eventId, itemId } = await context.params;
 
+    // Require HOST, COHOST, or COORDINATOR role
+    const auth = await requireEventRole(eventId, ['HOST', 'COHOST', 'COORDINATOR']);
+    if (auth instanceof NextResponse) return auth;
+
+    // Get event to check frozen state
+    const event = await prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
+
+    // Block unassignments when frozen (HOST can override)
+    const frozenBlock = requireNotFrozen(event, auth.role === 'HOST');
+    if (frozenBlock) return frozenBlock;
+
     // Get item with assignment
     const item = await prisma.item.findUnique({
       where: { id: itemId },
@@ -124,10 +148,7 @@ export async function DELETE(
     }
 
     if (item.team.eventId !== eventId) {
-      return NextResponse.json(
-        { error: 'Item does not belong to this event' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Item does not belong to this event' }, { status: 400 });
     }
 
     if (!item.assignment) {

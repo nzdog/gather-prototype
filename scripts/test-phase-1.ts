@@ -71,12 +71,12 @@ async function runTests() {
 
       // Get or create a host from seed data
       testHost = await prisma.person.findFirst({
-        where: { name: 'Jacqui & Ian' }
+        where: { name: 'Jacqui & Ian' },
       });
 
       if (!testHost) {
         testHost = await prisma.person.create({
-          data: { name: 'Test Host', email: 'test@example.com' }
+          data: { name: 'Test Host', email: 'test@example.com' },
         });
       }
 
@@ -143,7 +143,7 @@ async function runTests() {
           name: 'Christmas Eve',
           date: new Date('2025-12-24'),
           eventId: testEvent.id,
-        }
+        },
       });
 
       const day2 = await prisma.day.create({
@@ -151,7 +151,7 @@ async function runTests() {
           name: 'Christmas Day',
           date: new Date('2025-12-25'),
           eventId: testEvent.id,
-        }
+        },
       });
 
       testDays = [day1, day2];
@@ -166,7 +166,7 @@ async function runTests() {
     try {
       log('Listing days...');
       const days = await prisma.day.findMany({
-        where: { eventId: testEvent.id }
+        where: { eventId: testEvent.id },
       });
 
       if (days.length !== 2) {
@@ -191,7 +191,7 @@ async function runTests() {
           domain: 'PROTEINS',
           eventId: testEvent.id,
           coordinatorId: testHost.id,
-        }
+        },
       });
 
       const team2 = await prisma.team.create({
@@ -201,7 +201,7 @@ async function runTests() {
           domain: 'SIDES',
           eventId: testEvent.id,
           coordinatorId: testHost.id,
-        }
+        },
       });
 
       const team3 = await prisma.team.create({
@@ -211,7 +211,7 @@ async function runTests() {
           domain: 'DESSERTS',
           eventId: testEvent.id,
           coordinatorId: testHost.id,
-        }
+        },
       });
 
       testTeams = [team1, team2, team3];
@@ -250,7 +250,7 @@ async function runTests() {
           quantityState: 'SPECIFIED',
           teamId: testTeams[0].id, // Mains
           dayId: testDays[1].id, // Christmas Day
-        }
+        },
       });
 
       const item2 = await prisma.item.create({
@@ -261,7 +261,7 @@ async function runTests() {
           quantityState: 'SPECIFIED',
           teamId: testTeams[0].id, // Mains
           dayId: testDays[1].id, // Christmas Day
-        }
+        },
       });
 
       testItems.push(item1, item2);
@@ -282,7 +282,7 @@ async function runTests() {
           critical: true,
           teamId: testTeams[2].id, // Desserts
           dayId: testDays[1].id, // Christmas Day
-        }
+        },
       });
 
       testItems.push(item3);
@@ -355,7 +355,7 @@ async function runTests() {
 
       const item = await prisma.item.findUnique({
         where: { id: testItems[1].id },
-        include: { team: true }
+        include: { team: true },
       });
 
       if (!item || item.team.name !== 'Sides') {
@@ -374,11 +374,11 @@ async function runTests() {
       log('Deleting one item...');
 
       await prisma.item.delete({
-        where: { id: testItems[2].id } // Pavlova
+        where: { id: testItems[2].id }, // Pavlova
       });
 
       const items = await prisma.item.findMany({
-        where: { team: { eventId: testEvent.id } }
+        where: { team: { eventId: testEvent.id } },
       });
 
       if (items.length !== 2) {
@@ -397,11 +397,11 @@ async function runTests() {
       log('Deleting one team...');
 
       await prisma.team.delete({
-        where: { id: testTeams[2].id } // Desserts
+        where: { id: testTeams[2].id }, // Desserts
       });
 
       const teams = await prisma.team.findMany({
-        where: { eventId: testEvent.id }
+        where: { eventId: testEvent.id },
       });
 
       if (teams.length !== 2) {
@@ -420,11 +420,11 @@ async function runTests() {
       log('Deleting one day...');
 
       await prisma.day.delete({
-        where: { id: testDays[0].id } // Christmas Eve
+        where: { id: testDays[0].id }, // Christmas Eve
       });
 
       const days = await prisma.day.findMany({
-        where: { eventId: testEvent.id }
+        where: { eventId: testEvent.id },
       });
 
       if (days.length !== 1) {
@@ -443,11 +443,11 @@ async function runTests() {
       log('Cleaning up: deleting test event...');
 
       await prisma.event.delete({
-        where: { id: testEvent.id }
+        where: { id: testEvent.id },
       });
 
       const event = await prisma.event.findUnique({
-        where: { id: testEvent.id }
+        where: { id: testEvent.id },
       });
 
       if (event !== null) {
@@ -458,7 +458,6 @@ async function runTests() {
     } catch (error: any) {
       fail('16. Cleanup: Delete test event', error.message);
     }
-
   } catch (error: any) {
     console.error('\n❌ Fatal error during tests:', error.message);
   }
@@ -470,17 +469,19 @@ async function runTests() {
   console.log('='.repeat(50));
   console.log('\n📊 TEST SUMMARY\n');
 
-  const passed = results.filter(r => r.passed).length;
-  const failed = results.filter(r => !r.passed).length;
+  const passed = results.filter((r) => r.passed).length;
+  const failed = results.filter((r) => !r.passed).length;
 
   console.log(`Phase 1 Foundation: ${passed}/16 tests passed`);
 
   if (failed > 0) {
     console.log(`\n⚠️  ${failed} test(s) failed:\n`);
-    results.filter(r => !r.passed).forEach(r => {
-      console.log(`  - ${r.test}`);
-      console.log(`    ${r.error}\n`);
-    });
+    results
+      .filter((r) => !r.passed)
+      .forEach((r) => {
+        console.log(`  - ${r.test}`);
+        console.log(`    ${r.error}\n`);
+      });
   }
 
   console.log('');

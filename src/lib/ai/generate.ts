@@ -363,7 +363,9 @@ function validatePlanResponse(response: AIPlanResponse): void {
 
     if (item.critical && !item.criticalReason) {
       // Provide a default criticalReason if missing
-      console.warn(`[AI Validate] Critical item "${item.name}" missing criticalReason, using default`);
+      console.warn(
+        `[AI Validate] Critical item "${item.name}" missing criticalReason, using default`
+      );
       item.criticalReason = 'Important item for the event';
     }
   }

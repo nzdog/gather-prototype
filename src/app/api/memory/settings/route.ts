@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUser } from '@/lib/auth/session';
 
 /**
  * PATCH /api/memory/settings
@@ -8,14 +9,18 @@ import { prisma } from '@/lib/prisma';
  * Follows Theme 6 consent posture:
  * - Host memory ON by default with clear disclosure
  * - Aggregate contribution OFF by default, requires explicit opt-in
+ * SECURITY: Now uses session authentication instead of query param
  */
 export async function PATCH(request: NextRequest) {
-  const body = await request.json();
-  const { hostId, learningEnabled, aggregateContributionConsent, useHistoryByDefault } = body;
-
-  if (!hostId) {
-    return NextResponse.json({ error: 'hostId is required' }, { status: 400 });
+  // SECURITY: Require authenticated user session
+  const user = await getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const hostId = user.id; // Use authenticated user's ID
+  const body = await request.json();
+  const { learningEnabled, aggregateContributionConsent, useHistoryByDefault } = body;
 
   // Get or create HostMemory
   let hostMemory = await prisma.hostMemory.findUnique({

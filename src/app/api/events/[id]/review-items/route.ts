@@ -1,10 +1,15 @@
 // GET /api/events/[id]/review-items - Get AI-generated items for review
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
+
+    // SECURITY: Require HOST role for review operations
+    const auth = await requireEventRole(eventId, ['HOST']);
+    if (auth instanceof NextResponse) return auth;
 
     // Fetch all AI-generated items that haven't been confirmed yet
     const items = await prisma.item.findMany({
@@ -86,6 +91,10 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
+
+    // SECURITY: Require HOST role for review operations
+    const auth = await requireEventRole(eventId, ['HOST']);
+    if (auth instanceof NextResponse) return auth;
 
     // Mark all AI-generated items for this event as confirmed
     const result = await prisma.item.updateMany({

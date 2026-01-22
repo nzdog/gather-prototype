@@ -1,6 +1,7 @@
 // POST /api/events/[id]/suggestions/[suggestionId]/dismiss - Dismiss suggestion
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
 
 export async function POST(
   _request: NextRequest,
@@ -8,6 +9,10 @@ export async function POST(
 ) {
   try {
     const { id: eventId, suggestionId } = await context.params;
+
+    // SECURITY: Require HOST role for suggestion operations
+    const auth = await requireEventRole(eventId, ['HOST']);
+    if (auth instanceof NextResponse) return auth;
 
     // Get conflict
     const conflict = await prisma.conflict.findUnique({

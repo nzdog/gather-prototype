@@ -1,0 +1,23 @@
+[1m[33m=== Security Verification: Conditions B & C ===[0m
+
+Generating test fixtures...
+Cleaning up old test fixtures...
+✓ Cleanup complete
+
+Generating security test fixtures...
+
+1. Creating test user...
+   ✓ User: security-test@gather.test
+   ✓ Session token: 0817da417ad53e6a8334ab31363c81960681a6e7690cc9ef29632e59ab7a69b0
+
+2. Creating host person...
+
+[31mFatal error: 
+Invalid `prisma.person.create()` invocation in
+/Users/Nigel/Desktop/gather-prototype/tests/security-fixtures.ts:160:42
+
+  157 
+  158 // 2. Create host person
+  159 console.log('2. Creating host person...');
+→ 160 const hostPerson = await prisma.person.create(
+Unique constraint failed on the fields: (`email`)[0m

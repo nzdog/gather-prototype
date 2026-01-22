@@ -2,10 +2,15 @@
 // POST /api/events/[id]/teams - Create a new team
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
+
+    // Require HOST, COHOST, or COORDINATOR role
+    const auth = await requireEventRole(eventId, ['HOST', 'COHOST', 'COORDINATOR']);
+    if (auth instanceof NextResponse) return auth;
 
     const teams = await prisma.team.findMany({
       where: { eventId },
@@ -66,15 +71,54 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
+
+    // Only HOST and COHOST can create teams
+    const auth = await requireEventRole(eventId, ['HOST', 'COHOST']);
+    if (auth instanceof NextResponse) return auth;
+
     const body = await request.json();
 
     const { name, scope, domain, coordinatorId } = body;
 
-    if (!name || !scope || !coordinatorId) {
-      return NextResponse.json(
-        { error: 'name, scope, and coordinatorId are required' },
-        { status: 400 }
-      );
+    // SECURITY: Validate name
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+    }
+
+    if (name.length > 100) {
+      return NextResponse.json({ error: 'Name too long (max 100 characters)' }, { status: 400 });
+    }
+
+    // SECURITY: Validate scope (optional)
+    if (scope !== undefined && scope !== null) {
+      if (typeof scope !== 'string') {
+        return NextResponse.json({ error: 'Scope must be a string' }, { status: 400 });
+      }
+      if (scope.length > 50) {
+        return NextResponse.json({ error: 'Scope too long (max 50 characters)' }, { status: 400 });
+      }
+    }
+
+    // SECURITY: Validate domain (optional, must be valid enum value)
+    const validDomains = [
+      'PROTEINS',
+      'VEGETARIAN_MAINS',
+      'SIDES',
+      'SALADS',
+      'STARTERS',
+      'DESSERTS',
+      'DRINKS',
+      'LATER_FOOD',
+      'SETUP',
+      'CLEANUP',
+    ];
+    if (domain !== undefined && domain !== null && !validDomains.includes(domain)) {
+      return NextResponse.json({ error: 'Invalid domain value' }, { status: 400 });
+    }
+
+    // SECURITY: Validate coordinatorId
+    if (!coordinatorId || typeof coordinatorId !== 'string' || coordinatorId.trim().length === 0) {
+      return NextResponse.json({ error: 'Coordinator ID is required' }, { status: 400 });
     }
 
     // Verify event exists
@@ -86,16 +130,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
-    // Create team
+    // Create team with sanitized inputs
     const team = await prisma.team.create({
       data: {
-        name,
-        scope,
+        name: name.trim(),
+        scope: scope?.trim() || null,
         domain: domain || null,
         domainConfidence: domain ? 'HIGH' : 'MEDIUM',
         source: 'MANUAL',
         eventId,
-        coordinatorId,
+        coordinatorId: coordinatorId.trim(),
       },
       include: {
         coordinator: {

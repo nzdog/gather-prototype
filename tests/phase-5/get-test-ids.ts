@@ -8,9 +8,9 @@ async function getTestIds() {
     const host = await prisma.person.findFirst({
       where: {
         hostedEvents: {
-          some: {}
-        }
-      }
+          some: {},
+        },
+      },
     });
 
     if (!host) {
@@ -23,16 +23,16 @@ async function getTestIds() {
       where: {
         hostId: host.id,
         status: {
-          in: ['COMPLETE', 'CONFIRMING', 'FROZEN']
-        }
+          in: ['COMPLETE', 'CONFIRMING', 'FROZEN'],
+        },
       },
       include: {
         teams: {
           include: {
-            items: true
-          }
-        }
-      }
+            items: true,
+          },
+        },
+      },
     });
 
     if (!event) {
@@ -42,23 +42,29 @@ async function getTestIds() {
         include: {
           teams: {
             include: {
-              items: true
-            }
-          }
-        }
+              items: true,
+            },
+          },
+        },
       });
 
       if (anyEvent) {
         console.log('WARNING: Using a non-completed event for testing');
-        console.log(JSON.stringify({
-          hostId: host.id,
-          hostName: host.name,
-          eventId: anyEvent.id,
-          eventName: anyEvent.name,
-          eventStatus: anyEvent.status,
-          teamCount: anyEvent.teams.length,
-          itemCount: anyEvent.teams.reduce((sum, t) => sum + t.items.length, 0)
-        }, null, 2));
+        console.log(
+          JSON.stringify(
+            {
+              hostId: host.id,
+              hostName: host.name,
+              eventId: anyEvent.id,
+              eventName: anyEvent.name,
+              eventStatus: anyEvent.status,
+              teamCount: anyEvent.teams.length,
+              itemCount: anyEvent.teams.reduce((sum, t) => sum + t.items.length, 0),
+            },
+            null,
+            2
+          )
+        );
         process.exit(0);
       }
 
@@ -66,16 +72,21 @@ async function getTestIds() {
       process.exit(1);
     }
 
-    console.log(JSON.stringify({
-      hostId: host.id,
-      hostName: host.name,
-      eventId: event.id,
-      eventName: event.name,
-      eventStatus: event.status,
-      teamCount: event.teams.length,
-      itemCount: event.teams.reduce((sum, t) => sum + t.items.length, 0)
-    }, null, 2));
-
+    console.log(
+      JSON.stringify(
+        {
+          hostId: host.id,
+          hostName: host.name,
+          eventId: event.id,
+          eventName: event.name,
+          eventStatus: event.status,
+          teamCount: event.teams.length,
+          itemCount: event.teams.reduce((sum, t) => sum + t.items.length, 0),
+        },
+        null,
+        2
+      )
+    );
   } catch (error) {
     console.error('Error:', error);
     process.exit(1);

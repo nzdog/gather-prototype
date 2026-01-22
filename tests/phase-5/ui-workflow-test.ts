@@ -24,7 +24,7 @@ function log(message: string, color: 'blue' | 'green' | 'red' | 'yellow' = 'blue
     green: '\x1b[32m',
     red: '\x1b[31m',
     yellow: '\x1b[33m',
-    reset: '\x1b[0m'
+    reset: '\x1b[0m',
   };
   console.log(`${colors[color]}${message}${colors.reset}`);
 }
@@ -60,8 +60,8 @@ async function testSaveTemplate() {
       body: JSON.stringify({
         hostId: HOST_ID,
         eventId: EVENT_ID,
-        name: templateName
-      })
+        name: templateName,
+      }),
     });
 
     if (!response.ok) {
@@ -93,8 +93,8 @@ async function testSaveTemplate() {
     // Check that dates/assignments are NOT included
     logStep(flow, 'Step 3: Verify exclusions');
 
-    const hasAssignments = teams.some(t => t.items?.some((i: any) => i.assignment));
-    const hasQuantities = teams.some(t => t.items?.some((i: any) => i.quantityAmount));
+    const hasAssignments = teams.some((t) => t.items?.some((i: any) => i.assignment));
+    const hasQuantities = teams.some((t) => t.items?.some((i: any) => i.quantityAmount));
 
     if (hasAssignments) {
       logFail(flow, 'Verify exclusions', 'Assignments were incorrectly saved');
@@ -156,7 +156,6 @@ async function testViewTemplates() {
 
     const gatherData = await gatherResponse.json();
     logPass(flow, 'Get Gather templates', `Found ${gatherData.templates.length} templates`);
-
   } catch (error: any) {
     logFail(flow, 'Exception', error.message);
   }
@@ -182,8 +181,8 @@ async function testCloneTemplate(templateId: string) {
         endDate: '2026-12-26',
         guestCount: 30,
         applyQuantityScaling: false,
-        occasionType: 'CHRISTMAS'
-      })
+        occasionType: 'CHRISTMAS',
+      }),
     });
 
     if (!response.ok) {
@@ -271,7 +270,11 @@ async function testSettings() {
       return;
     }
 
-    logPass(flow, 'Get memory', `Templates: ${data.stats.templatesSaved}, Events: ${data.stats.completedEvents}`);
+    logPass(
+      flow,
+      'Get memory',
+      `Templates: ${data.stats.templatesSaved}, Events: ${data.stats.completedEvents}`
+    );
 
     // Verify defaults
     logStep(flow, 'Step 2: Verify default consent settings');
@@ -283,7 +286,11 @@ async function testSettings() {
     if (isCorrect) {
       logPass(flow, 'Verify defaults', 'Correct: learning=false, aggregate=false');
     } else {
-      logFail(flow, 'Verify defaults', `Wrong: learning=${data.hostMemory.learningEnabled}, aggregate=${data.hostMemory.aggregateContributionConsent}`);
+      logFail(
+        flow,
+        'Verify defaults',
+        `Wrong: learning=${data.hostMemory.learningEnabled}, aggregate=${data.hostMemory.aggregateContributionConsent}`
+      );
     }
 
     // Test toggle
@@ -294,8 +301,8 @@ async function testSettings() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         hostId: HOST_ID,
-        learningEnabled: true
-      })
+        learningEnabled: true,
+      }),
     });
 
     if (!updateResponse.ok) {
@@ -318,7 +325,6 @@ async function testSettings() {
     const patternsData = await patternsResponse.json();
 
     logPass(flow, 'Get patterns', `${patternsData.patterns.length} patterns`);
-
   } catch (error: any) {
     logFail(flow, 'Exception', error.message);
   }
@@ -337,7 +343,7 @@ async function testDeleteTemplate(templateId: string) {
     const response = await fetch(`${BASE_URL}/api/templates/${templateId}`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hostId: HOST_ID })
+      body: JSON.stringify({ hostId: HOST_ID }),
     });
 
     if (!response.ok) {
@@ -357,7 +363,6 @@ async function testDeleteTemplate(templateId: string) {
     } else {
       logFail(flow, 'Verify deletion', 'Template still exists');
     }
-
   } catch (error: any) {
     logFail(flow, 'Exception', error.message);
   }
@@ -369,8 +374,8 @@ function printSummary() {
   log('TEST SUMMARY', 'yellow');
   log('='.repeat(60), 'yellow');
 
-  const passed = results.filter(r => r.status === 'PASS').length;
-  const failed = results.filter(r => r.status === 'FAIL').length;
+  const passed = results.filter((r) => r.status === 'PASS').length;
+  const failed = results.filter((r) => r.status === 'FAIL').length;
   const total = results.length;
 
   log(`\nTotal Tests: ${total}`, 'blue');
@@ -379,9 +384,11 @@ function printSummary() {
 
   if (failed > 0) {
     log('\nFailed Tests:', 'red');
-    results.filter(r => r.status === 'FAIL').forEach(r => {
-      log(`  [${r.flow}] ${r.step}: ${r.error}`, 'red');
-    });
+    results
+      .filter((r) => r.status === 'FAIL')
+      .forEach((r) => {
+        log(`  [${r.flow}] ${r.step}: ${r.error}`, 'red');
+      });
   }
 
   const passRate = ((passed / total) * 100).toFixed(1);
@@ -411,11 +418,11 @@ async function runTests() {
   printSummary();
 
   // Exit code
-  const failed = results.filter(r => r.status === 'FAIL').length;
+  const failed = results.filter((r) => r.status === 'FAIL').length;
   process.exit(failed > 0 ? 1 : 0);
 }
 
-runTests().catch(error => {
+runTests().catch((error) => {
   console.error('Test runner error:', error);
   process.exit(1);
 });

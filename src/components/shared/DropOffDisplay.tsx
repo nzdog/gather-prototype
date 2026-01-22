@@ -45,9 +45,7 @@ export function DropOffDisplay({
             <span className="text-gray-900">{dropOffLocation}</span>
           </div>
         )}
-        {dropOffLocation && formattedTime && (
-          <span className="text-gray-400">·</span>
-        )}
+        {dropOffLocation && formattedTime && <span className="text-gray-400">·</span>}
         {formattedTime && (
           <div className="flex items-center gap-1.5">
             {showIcons && <Clock className="size-4 text-gray-400" />}

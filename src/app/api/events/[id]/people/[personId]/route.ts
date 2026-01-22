@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ensureEventTokens } from '@/lib/tokens';
+import { requireEventRole } from '@/lib/auth/guards';
 
 // PATCH /api/events/[id]/people/[personId] - Update person (role, team)
 export async function PATCH(
@@ -9,6 +10,11 @@ export async function PATCH(
 ) {
   try {
     const { id: eventId, personId } = await context.params;
+
+    // SECURITY: Require HOST or COORDINATOR role to update people
+    const auth = await requireEventRole(eventId, ['HOST', 'COORDINATOR']);
+    if (auth instanceof NextResponse) return auth;
+
     const body = await request.json();
     const { role, teamId } = body;
 
@@ -23,10 +29,7 @@ export async function PATCH(
     });
 
     if (!personEvent) {
-      return NextResponse.json(
-        { error: 'Person is not part of this event' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Person is not part of this event' }, { status: 404 });
     }
 
     // If teamId is being changed, validate it
@@ -240,6 +243,10 @@ export async function DELETE(
 ) {
   try {
     const { id: eventId, personId } = await context.params;
+
+    // SECURITY: Require HOST or COORDINATOR role to remove people
+    const auth = await requireEventRole(eventId, ['HOST', 'COORDINATOR']);
+    if (auth instanceof NextResponse) return auth;
 
     // Execute removal in transaction
     await prisma.$transaction(async (tx) => {

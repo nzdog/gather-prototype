@@ -30,11 +30,23 @@ check('Checkout endpoint file exists', checkoutRouteExists);
 
 if (checkoutRouteExists) {
   const checkoutContent = readFileSync(checkoutRoutePath, 'utf-8');
-  check('Checkout endpoint has POST handler', checkoutContent.includes('export async function POST'));
+  check(
+    'Checkout endpoint has POST handler',
+    checkoutContent.includes('export async function POST')
+  );
   check('Checkout endpoint uses getUser()', checkoutContent.includes('getUser()'));
-  check('Checkout endpoint uses stripe.customers.create()', checkoutContent.includes('stripe.customers.create'));
-  check('Checkout endpoint uses stripe.checkout.sessions.create()', checkoutContent.includes('stripe.checkout.sessions.create'));
-  check('Checkout endpoint creates/updates Subscription', checkoutContent.includes('prisma.subscription'));
+  check(
+    'Checkout endpoint uses stripe.customers.create()',
+    checkoutContent.includes('stripe.customers.create')
+  );
+  check(
+    'Checkout endpoint uses stripe.checkout.sessions.create()',
+    checkoutContent.includes('stripe.checkout.sessions.create')
+  );
+  check(
+    'Checkout endpoint creates/updates Subscription',
+    checkoutContent.includes('prisma.subscription')
+  );
   check('Checkout endpoint sets success_url', checkoutContent.includes('/billing/success'));
   check('Checkout endpoint sets cancel_url', checkoutContent.includes('/billing/cancel'));
 }
@@ -47,7 +59,10 @@ check('Success page exists', successPageExists);
 if (successPageExists) {
   const successContent = readFileSync(successPagePath, 'utf-8');
   check('Success page uses session_id parameter', successContent.includes('session_id'));
-  check('Success page has user-friendly UI', successContent.includes('Subscription Successful') || successContent.includes('Success'));
+  check(
+    'Success page has user-friendly UI',
+    successContent.includes('Subscription Successful') || successContent.includes('Success')
+  );
 }
 
 // 3. Verify cancel page exists
@@ -57,7 +72,10 @@ check('Cancel page exists', cancelPageExists);
 
 if (cancelPageExists) {
   const cancelContent = readFileSync(cancelPagePath, 'utf-8');
-  check('Cancel page has user-friendly UI', cancelContent.includes('Cancel') || cancelContent.includes('cancel'));
+  check(
+    'Cancel page has user-friendly UI',
+    cancelContent.includes('Cancel') || cancelContent.includes('cancel')
+  );
 }
 
 // 4. Verify upgrade page exists
@@ -67,9 +85,18 @@ check('Upgrade page exists', upgradePageExists);
 
 if (upgradePageExists) {
   const upgradeContent = readFileSync(upgradePagePath, 'utf-8');
-  check('Upgrade page has upgrade button', upgradeContent.includes('Upgrade') || upgradeContent.includes('upgrade'));
-  check('Upgrade page calls /api/billing/checkout', upgradeContent.includes('/api/billing/checkout'));
-  check('Upgrade page handles loading state', upgradeContent.includes('loading') || upgradeContent.includes('Loading'));
+  check(
+    'Upgrade page has upgrade button',
+    upgradeContent.includes('Upgrade') || upgradeContent.includes('upgrade')
+  );
+  check(
+    'Upgrade page calls /api/billing/checkout',
+    upgradeContent.includes('/api/billing/checkout')
+  );
+  check(
+    'Upgrade page handles loading state',
+    upgradeContent.includes('loading') || upgradeContent.includes('Loading')
+  );
 }
 
 console.log();

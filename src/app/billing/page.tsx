@@ -160,9 +160,7 @@ export default function BillingPage() {
   const trialDaysRemaining = subscription?.trialEnd
     ? Math.max(
         0,
-        Math.ceil(
-          (new Date(subscription.trialEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-        )
+        Math.ceil((new Date(subscription.trialEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
       )
     : 0;
 
@@ -170,9 +168,7 @@ export default function BillingPage() {
     <div className="min-h-screen bg-gray-50 py-12 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Billing & Subscription
-          </h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Billing & Subscription</h1>
           <p className="text-gray-600">Manage your Gather subscription</p>
         </div>
 
@@ -217,9 +213,7 @@ export default function BillingPage() {
                   />
                 </svg>
                 <div>
-                  <p className="font-semibold text-yellow-900 mb-1">
-                    Subscription Ending
-                  </p>
+                  <p className="font-semibold text-yellow-900 mb-1">Subscription Ending</p>
                   <p className="text-sm text-yellow-800">
                     Your subscription will end on{' '}
                     {new Date(subscription.currentPeriodEnd).toLocaleDateString('en-NZ', {
@@ -273,26 +267,11 @@ export default function BillingPage() {
 
           {/* Plan Details */}
           <div className="space-y-3 mb-6">
-            <PlanFeature
-              text="Unlimited events"
-              enabled={isActive}
-            />
-            <PlanFeature
-              text="AI-powered plan generation"
-              enabled={isActive}
-            />
-            <PlanFeature
-              text="Conflict detection"
-              enabled={isActive}
-            />
-            <PlanFeature
-              text="Team coordination tools"
-              enabled={isActive}
-            />
-            <PlanFeature
-              text="Priority support"
-              enabled={isActive}
-            />
+            <PlanFeature text="Unlimited events" enabled={isActive} />
+            <PlanFeature text="AI-powered plan generation" enabled={isActive} />
+            <PlanFeature text="Conflict detection" enabled={isActive} />
+            <PlanFeature text="Team coordination tools" enabled={isActive} />
+            <PlanFeature text="Priority support" enabled={isActive} />
           </div>
 
           {/* Period Information */}
@@ -382,12 +361,9 @@ export default function BillingPage() {
       {showCancelDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">
-              Cancel Subscription?
-            </h3>
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Cancel Subscription?</h3>
             <p className="text-gray-600 mb-6">
-              Your subscription will remain active until the end of your current billing
-              period{' '}
+              Your subscription will remain active until the end of your current billing period{' '}
               {subscription?.currentPeriodEnd && (
                 <>
                   on{' '}
@@ -473,19 +449,12 @@ function PlanFeature({ text, enabled }: { text: string; enabled: boolean }) {
   return (
     <div className="flex items-center">
       <svg
-        className={`w-5 h-5 mr-3 flex-shrink-0 ${
-          enabled ? 'text-green-600' : 'text-gray-400'
-        }`}
+        className={`w-5 h-5 mr-3 flex-shrink-0 ${enabled ? 'text-green-600' : 'text-gray-400'}`}
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
       >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M5 13l4 4L19 7"
-        />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
       </svg>
       <span className={enabled ? 'text-gray-700' : 'text-gray-400'}>{text}</span>
     </div>

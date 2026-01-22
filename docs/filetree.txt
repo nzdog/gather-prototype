@@ -1,0 +1,146 @@
+.
+├── _archive
+│   ├── 2026-01-18-gatherfiles
+│   │   └── builder-spec-v1.0.md
+│   ├── 2026-01-18-mup-old
+│   │   └── Gather_MUP_v1_Step_Mapping.md
+│   ├── 2026-01-18-reorganization
+│   │   ├── REORGANIZATION_SUMMARY.md
+│   │   └── reorganize-execute.sh
+│   ├── debug-logs
+│   │   └── reset-button-debug-summary.md
+│   ├── legacy-formats
+│   │   ├── files.zip
+│   │   ├── gather-magiclink-auth-phase1-tickets.docx
+│   │   ├── gather-magiclink-auth-phase1-tickets.rtf
+│   │   └── Gatherfiles.zip
+│   ├── README 2.md
+│   └── README.md
+├── _inbox
+│   ├── header-block.md
+│   └── README.md
+├── .claude
+│   └── settings.local.json
+├── .DS_Store
+├── 00_overview
+│   ├── changelog 2.md
+│   ├── changelog.md
+│   ├── next-ten-steps.md
+│   ├── onboarding-report.md
+│   └── project-overview.md
+├── 01_product
+│   └── scope-protocol.ini
+├── 02_ux
+│   ├── figma-spec.md
+│   ├── research
+│   │   ├── design-research-brief.md
+│   │   └── design-research-report.md
+│   └── ui-protocol.md
+├── 03_specs
+│   ├── _versions
+│   │   ├── builder-spec-v1.2.md
+│   │   ├── builder-spec-v1.3.1.md
+│   │   ├── builder-spec-v1.3.2.md
+│   │   ├── builder-spec-v1.3.md
+│   │   ├── implementation-plan-v1.3.2.md
+│   │   └── v1.3.2-to-v1.3.3-patch.md
+│   ├── .DS_Store
+│   ├── builder-spec-v1.3.3.md
+│   ├── csv-import-spec 2.md
+│   ├── csv-import-spec.md
+│   └── implementation-plan-v1.3.3.md
+├── 04_roadmap
+│   ├── .DS_Store
+│   ├── phase-1-complete.md
+│   ├── phase-1-implementation-summary 2.md
+│   ├── phase-1-implementation-summary.md
+│   ├── phase-4-completion.md
+│   ├── phase-5-completion.md
+│   ├── phase-6-completion.md
+│   ├── phase-6-final-report.md
+│   └── tickets
+│       ├── .DS_Store
+│       ├── mup-v1
+│       │   ├── fullscreen-expand-ticket.md
+│       │   ├── item-badge-ticket.md
+│       │   ├── mup-build-tickets.md
+│       │   ├── mup-step-mapping.md
+│       │   ├── shape-pass-ticket.md
+│       │   └── team-drag-drop-ticket.md
+│       ├── phase-1
+│       │   ├── ticket-1.2-auth.md
+│       │   ├── ticket-1.3-auth.md
+│       │   ├── ticket-1.4-auth.md
+│       │   ├── ticket-1.5-auth.md
+│       │   ├── ticket-1.6-auth.md
+│       │   ├── ticket-1.7-auth.md
+│       │   └── ticket-1.8-auth.md
+│       └── phase-2
+│           ├── stripe-ticket-1-spec.md
+│           ├── stripe-ticket-2-spec.md
+│           ├── TICKET_2.10_COMPLETE 2.md
+│           ├── TICKET_2.10_COMPLETE.md
+│           ├── TICKET_2.11_COMPLETE 2.md
+│           ├── TICKET_2.11_COMPLETE.md
+│           ├── TICKET_2.12_COMPLETE 2.md
+│           ├── TICKET_2.12_COMPLETE.md
+│           ├── ticket-2.1-subscription-schema.md
+│           ├── ticket-2.10-complete 2.md
+│           ├── ticket-2.10-complete.md
+│           ├── ticket-2.2-stripe-integration.md
+│           ├── ticket-2.3-billing-ui.md
+│           ├── ticket-2.4-complete 2.md
+│           ├── ticket-2.4-complete.md
+│           ├── ticket-2.4-entitlements.md
+│           ├── ticket-2.5-complete 2.md
+│           ├── ticket-2.5-complete.md
+│           ├── ticket-2.5-trial-flow 2.md
+│           ├── ticket-2.5-trial-flow.md
+│           ├── ticket-2.6-complete 2.md
+│           ├── ticket-2.6-complete.md
+│           ├── ticket-2.6b-complete 2.md
+│           ├── ticket-2.6b-complete.md
+│           ├── ticket-2.9-complete 2.md
+│           ├── ticket-2.9-complete.md
+│           ├── ticket-2.9b-complete 2.md
+│           └── ticket-2.9b-complete.md
+├── 05_ops
+│   ├── .DS_Store
+│   ├── build-checklist.md
+│   ├── handoff-document.md
+│   ├── mup-demo-script.md
+│   ├── mup-done-checklist.md
+│   └── testing
+│       ├── mup-v1-test-report 2.md
+│       ├── mup-v1-test-report.md
+│       ├── phase-3-testing-guide.md
+│       ├── phase-5-ui-test-results.md
+│       ├── phase-5-ui-testing-guide.md
+│       └── phase-6-test-results.md
+├── 06_research
+│   └── README.md
+├── 07_meetings
+│   ├── claude-ai-integration-report.md
+│   └── senior-dev-feedback.md
+├── 08_decisions
+│   ├── README 2.md
+│   └── README.md
+├── assets
+│   ├── .DS_Store
+│   ├── code
+│   │   └── gather-demo.jsx
+│   ├── diagrams
+│   └── images
+├── dry-run-reorganization 2.sh
+├── dry-run-reorganization.sh
+├── filetree.txt
+├── README 2.md
+├── README.md
+├── reorganization-20260118-211430 2.log
+├── reorganization-20260118-211430.log
+├── reorganize-execute-phase2 2.sh
+├── reorganize-execute-phase2.sh
+├── verify-reorganization 2.sh
+└── verify-reorganization.sh
+
+29 directories, 115 files

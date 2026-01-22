@@ -14,10 +14,7 @@ export async function POST(_req: Request) {
 
     if (!STRIPE_PRICE_ID) {
       console.error('[Checkout] STRIPE_PRICE_ID not configured');
-      return NextResponse.json(
-        { error: 'Stripe price ID not configured' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Stripe price ID not configured' }, { status: 500 });
     }
 
     // Get or create Subscription record
@@ -86,9 +83,6 @@ export async function POST(_req: Request) {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[Checkout] Error creating checkout session:', errorMessage);
-    return NextResponse.json(
-      { error: 'Failed to create checkout session' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to create checkout session' }, { status: 500 });
   }
 }

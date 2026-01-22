@@ -30,23 +30,20 @@ export async function POST(_req: Request) {
     });
 
     if (!subscription) {
-      return NextResponse.json(
-        { error: 'No subscription found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'No subscription found' }, { status: 404 });
     }
 
     if (!subscription.stripeCustomerId) {
-      return NextResponse.json(
-        { error: 'No Stripe customer ID found' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'No Stripe customer ID found' }, { status: 400 });
     }
 
     // Get app URL from env or construct from request
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
-    console.log('[Portal] Creating billing portal session for customer:', subscription.stripeCustomerId);
+    console.log(
+      '[Portal] Creating billing portal session for customer:',
+      subscription.stripeCustomerId
+    );
 
     // Create Stripe Billing Portal session
     const portalSession = await stripe.billingPortal.sessions.create({
@@ -63,9 +60,6 @@ export async function POST(_req: Request) {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[Portal] Error creating portal session:', errorMessage);
-    return NextResponse.json(
-      { error: 'Failed to create portal session' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to create portal session' }, { status: 500 });
   }
 }

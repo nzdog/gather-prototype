@@ -156,7 +156,9 @@ async function testMagicLinkVerify() {
 
     console.log(`  ✓ Users before: ${userCountBefore}`);
     console.log(`  ✓ Users after: ${userCountAfter}`);
-    console.log(`  ✓ No duplicate user created: ${userCountBefore === userCountAfter ? 'Yes' : 'No'}`);
+    console.log(
+      `  ✓ No duplicate user created: ${userCountBefore === userCountAfter ? 'Yes' : 'No'}`
+    );
     console.log();
 
     // Verify final state
@@ -167,7 +169,9 @@ async function testMagicLinkVerify() {
     });
     console.log(`  User email: ${finalUser?.email}`);
     console.log(`  Sessions created: ${finalUser?.sessions.length}`);
-    console.log(`  MagicLinks created: ${await prisma.magicLink.count({ where: { email: testEmail } })}`);
+    console.log(
+      `  MagicLinks created: ${await prisma.magicLink.count({ where: { email: testEmail } })}`
+    );
     console.log();
 
     // Clean up

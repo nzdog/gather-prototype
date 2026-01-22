@@ -65,10 +65,12 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
       id: team.id,
       name: team.name,
       scope: team.scope,
-      coordinator: team.coordinator ? {
-        id: team.coordinator.id,
-        name: team.coordinator.name,
-      } : null,
+      coordinator: team.coordinator
+        ? {
+            id: team.coordinator.id,
+            name: team.coordinator.name,
+          }
+        : null,
       status,
       itemCount: team.items.length,
       unassignedCount,

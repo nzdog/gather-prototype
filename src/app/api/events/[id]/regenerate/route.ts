@@ -4,10 +4,16 @@ import { prisma } from '@/lib/prisma';
 import { createRevision } from '@/lib/workflow';
 import { regeneratePlan, RegenerationParams } from '@/lib/ai/generate';
 import { randomBytes } from 'crypto';
+import { requireEventRole } from '@/lib/auth/guards';
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
+
+    // SECURITY: Require HOST role for AI regeneration (high-cost operation)
+    const auth = await requireEventRole(eventId, ['HOST']);
+    if (auth instanceof NextResponse) return auth;
+
     const body = await request.json();
     const { modifier = '', preserveProtected = true, actorId, preGeneratedPlan } = body;
 

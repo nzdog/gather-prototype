@@ -2,10 +2,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { detectConflicts, saveConflicts } from '@/lib/ai/check';
+import { requireEventRole } from '@/lib/auth/guards';
 
 export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
+
+    // SECURITY: Require HOST role for AI conflict check (high-cost operation)
+    const auth = await requireEventRole(eventId, ['HOST']);
+    if (auth instanceof NextResponse) return auth;
 
     // Verify event exists
     const event = await prisma.event.findUnique({

@@ -1,27 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUser } from '@/lib/auth/session';
 
 /**
- * GET /api/templates/[id]?hostId={hostId}
+ * GET /api/templates/[id]
  *
  * Get template details.
+ * SECURITY: Verifies ownership before returning template data
  */
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-  const searchParams = request.nextUrl.searchParams;
-  const hostId = searchParams.get('hostId');
+export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+  // SECURITY: Require authenticated user session
+  const user = await getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
-  const template = await prisma.structureTemplate.findUnique({
+  // SECURITY: Fetch only ownership fields before authorization check
+  const templateCheck = await prisma.structureTemplate.findUnique({
     where: { id: params.id },
+    select: { hostId: true, templateSource: true },
   });
 
-  if (!template) {
+  if (!templateCheck) {
     return NextResponse.json({ error: 'Template not found' }, { status: 404 });
   }
 
-  // If it's a host template, verify ownership
-  if (template.templateSource === 'HOST' && template.hostId !== hostId) {
+  // SECURITY: Verify ownership for host templates before fetching full data
+  if (templateCheck.templateSource === 'HOST' && templateCheck.hostId !== user.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
+
+  // Authorization passed - fetch full template
+  const template = await prisma.structureTemplate.findUnique({
+    where: { id: params.id },
+  });
 
   return NextResponse.json({ template });
 }
@@ -30,27 +42,31 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
  * DELETE /api/templates/[id]
  *
  * Delete template (host templates only).
+ * SECURITY: Verifies ownership before deletion to prevent authorization bypass
  */
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
-  const body = await request.json();
-  const { hostId } = body;
-
-  if (!hostId) {
-    return NextResponse.json({ error: 'hostId is required' }, { status: 400 });
+export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
+  // SECURITY: Require authenticated user session
+  const user = await getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // SECURITY: Fetch only ownership fields before authorization check
   const template = await prisma.structureTemplate.findUnique({
     where: { id: params.id },
+    select: { hostId: true, templateSource: true },
   });
 
   if (!template) {
     return NextResponse.json({ error: 'Template not found' }, { status: 404 });
   }
 
-  if (template.hostId !== hostId) {
+  // SECURITY: Verify ownership before deletion
+  if (template.hostId !== user.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
+  // SECURITY: Prevent deletion of curated templates
   if (template.templateSource === 'GATHER_CURATED') {
     return NextResponse.json({ error: 'Cannot delete Gather curated templates' }, { status: 403 });
   }

@@ -10,7 +10,7 @@ import { transitionToConfirming } from '@/lib/workflow';
 import { requireEventRole } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
 
-export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id: eventId } = await context.params;
 
   // SECURITY: Auth check MUST run first and MUST NOT be in try/catch that returns 500
