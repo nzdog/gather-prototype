@@ -6,10 +6,16 @@ export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/demo/tokens
- * Returns all access tokens for the demo landing page
- * SECURITY: Requires authenticated user session (sensitive data)
+ * DEV ONLY: Returns all access tokens for the demo landing page
+ * SECURITY: This endpoint is DISABLED IN PRODUCTION
+ * WARNING: Exposes sensitive authentication tokens - only for local development
  */
 export async function GET() {
+  // SECURITY: Disable in production - this endpoint exposes all tokens
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
   // SECURITY: Require authenticated user session
   const user = await getUser();
   if (!user) {
