@@ -8,30 +8,30 @@ export default async function LandingPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-accent-light/10 via-white to-accent/5">
-        <div className="max-w-5xl mx-auto px-4 py-16">
-          {/* Hero Section */}
-          <div className="text-center mb-16">
-            <div className="flex justify-center mb-6">
-              <Image
-                src="/brand/gather_lockup_horizontal_all-sage.svg"
-                alt="Gather"
-                width={280}
-                height={80}
-                className="h-20 w-auto"
-              />
-            </div>
-            <p className="text-2xl text-gray-600 mb-12 max-w-2xl mx-auto">
-              Coordinate group events without the chaos
-            </p>
-
-            {/* Primary CTA */}
-            <Link
-              href={user ? "/plan/events" : "/auth/signin"}
-              className="inline-flex items-center gap-3 px-12 py-5 bg-accent text-white text-xl font-bold rounded-xl hover:bg-accent-dark transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
-            >
-              {user ? "Your Events" : "Get Started"}
-            </Link>
+      <div className="max-w-5xl mx-auto px-4 py-16">
+        {/* Hero Section */}
+        <div className="text-center mb-16">
+          <div className="flex justify-center mb-6">
+            <Image
+              src="/brand/gather_lockup_horizontal_all-sage.svg"
+              alt="Gather"
+              width={280}
+              height={80}
+              className="h-20 w-auto"
+            />
           </div>
+          <p className="text-2xl text-gray-600 mb-12 max-w-2xl mx-auto">
+            Coordinate group events without the chaos
+          </p>
+
+          {/* Primary CTA */}
+          <Link
+            href={user ? '/plan/events' : '/auth/signin'}
+            className="inline-flex items-center gap-3 px-12 py-5 bg-accent text-white text-xl font-bold rounded-xl hover:bg-accent-dark transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
+          >
+            {user ? 'Your Events' : 'Get Started'}
+          </Link>
+        </div>
 
         {/* How It Works */}
         <div className="mb-16">
@@ -130,10 +130,13 @@ export default async function LandingPage() {
           </p>
           <p className="text-gray-500 text-sm">
             Browse{' '}
-            <a href="/plan/templates" className="text-accent hover:text-accent-dark underline font-medium">
+            <a
+              href="/plan/templates"
+              className="text-accent hover:text-accent-dark underline font-medium"
+            >
               event templates
-            </a>
-            {' '}to get started quickly
+            </a>{' '}
+            to get started quickly
           </p>
         </div>
       </div>

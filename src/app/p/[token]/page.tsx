@@ -147,7 +147,6 @@ export default function ParticipantView() {
     return `${formatter.format(start)}-${formatter.format(end).split(' ')[1]}`;
   };
 
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -291,7 +290,10 @@ export default function ParticipantView() {
                 {!collapsedAssignments.has(assignment.id) && (
                   <div className="space-y-4 mt-4">
                     {/* Drop-off Details */}
-                    {(assignment.item.day || assignment.item.dropOffLocation || assignment.item.dropOffNote || assignment.item.dropOffAt) && (
+                    {(assignment.item.day ||
+                      assignment.item.dropOffLocation ||
+                      assignment.item.dropOffNote ||
+                      assignment.item.dropOffAt) && (
                       <div className="space-y-2">
                         {assignment.item.day && (
                           <div className="flex items-center gap-3">
@@ -336,9 +338,7 @@ export default function ParticipantView() {
                       <div className="flex flex-col gap-2">
                         <div
                           className={`w-full py-2.5 rounded-lg font-medium text-white flex items-center justify-center gap-2 ${
-                            assignment.response === 'ACCEPTED'
-                              ? 'bg-green-500'
-                              : 'bg-gray-500'
+                            assignment.response === 'ACCEPTED' ? 'bg-green-500' : 'bg-gray-500'
                           }`}
                         >
                           <Check className="size-5" />

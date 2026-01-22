@@ -36,8 +36,8 @@ export default function EventStageProgress({ currentStatus }: EventStageProgress
                     isPast
                       ? 'bg-sage-600 text-white'
                       : isCurrent
-                      ? 'bg-accent text-white ring-4 ring-blue-200'
-                      : 'bg-gray-200 text-gray-400'
+                        ? 'bg-accent text-white ring-4 ring-blue-200'
+                        : 'bg-gray-200 text-gray-400'
                   }`}
                 >
                   {isPast ? <Check className="w-6 h-6" /> : stage.icon}
@@ -48,8 +48,8 @@ export default function EventStageProgress({ currentStatus }: EventStageProgress
                       isCurrent
                         ? 'text-accent font-semibold'
                         : isPast
-                        ? 'text-gray-900'
-                        : 'text-gray-400'
+                          ? 'text-gray-900'
+                          : 'text-gray-400'
                     }`}
                   >
                     {stage.label}

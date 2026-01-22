@@ -96,9 +96,7 @@ export default function AssignCoordinatorsModal({
 
   // Check if a person is assigned to another team (not the current one)
   const isPersonAssignedToOtherTeam = (personId: string, currentTeamId: string) => {
-    return assignments.some(
-      (a) => a.teamId !== currentTeamId && a.selectedPersonId === personId
-    );
+    return assignments.some((a) => a.teamId !== currentTeamId && a.selectedPersonId === personId);
   };
 
   // Get the team name a person is assigned to (if any)
@@ -112,9 +110,7 @@ export default function AssignCoordinatorsModal({
   const getFilteredPeople = (teamId: string) => {
     const searchTerm = searchTerms[teamId] || '';
     // Only filter by search term, show all people (we'll disable assigned ones)
-    return people.filter((person) =>
-      person.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    return people.filter((person) => person.name.toLowerCase().includes(searchTerm.toLowerCase()));
   };
 
   const getSelectedPersonName = (teamId: string) => {
@@ -126,9 +122,7 @@ export default function AssignCoordinatorsModal({
 
   const handleSubmit = async () => {
     // Find teams where coordinator has changed
-    const changes = assignments.filter(
-      (a) => a.selectedPersonId !== a.currentCoordinatorId
-    );
+    const changes = assignments.filter((a) => a.selectedPersonId !== a.currentCoordinatorId);
 
     if (changes.length === 0) {
       alert('No changes to save');
@@ -137,10 +131,12 @@ export default function AssignCoordinatorsModal({
 
     const confirmMessage =
       `Assign ${changes.length} coordinator(s)?\n\n` +
-      changes.map((c) => {
-        const person = people.find((p) => p.personId === c.selectedPersonId);
-        return `• ${c.teamName} → ${person?.name}`;
-      }).join('\n');
+      changes
+        .map((c) => {
+          const person = people.find((p) => p.personId === c.selectedPersonId);
+          return `• ${c.teamName} → ${person?.name}`;
+        })
+        .join('\n');
 
     if (!confirm(confirmMessage)) return;
 
@@ -151,17 +147,14 @@ export default function AssignCoordinatorsModal({
     try {
       for (const change of changes) {
         try {
-          const response = await fetch(
-            `/api/events/${eventId}/people/${change.selectedPersonId}`,
-            {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                role: 'COORDINATOR',
-                teamId: change.teamId,
-              }),
-            }
-          );
+          const response = await fetch(`/api/events/${eventId}/people/${change.selectedPersonId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              role: 'COORDINATOR',
+              teamId: change.teamId,
+            }),
+          });
 
           if (response.ok) {
             successCount++;
@@ -203,9 +196,7 @@ export default function AssignCoordinatorsModal({
         <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Assign Coordinators</h2>
-            <p className="text-sm text-gray-600 mt-1">
-              Assign one coordinator per team
-            </p>
+            <p className="text-sm text-gray-600 mt-1">Assign one coordinator per team</p>
           </div>
           <button
             onClick={onClose}
@@ -279,8 +270,14 @@ export default function AssignCoordinatorsModal({
                         {filteredPeople.length > 0 ? (
                           filteredPeople.map((person) => {
                             const isSelected = assignment.selectedPersonId === person.personId;
-                            const assignedToOther = isPersonAssignedToOtherTeam(person.personId, assignment.teamId);
-                            const assignedTeamName = getAssignedTeamName(person.personId, assignment.teamId);
+                            const assignedToOther = isPersonAssignedToOtherTeam(
+                              person.personId,
+                              assignment.teamId
+                            );
+                            const assignedTeamName = getAssignedTeamName(
+                              person.personId,
+                              assignment.teamId
+                            );
 
                             return (
                               <button
@@ -295,7 +292,9 @@ export default function AssignCoordinatorsModal({
                               >
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <span className={`text-sm ${assignedToOther ? 'text-gray-500' : 'text-gray-900'}`}>
+                                    <span
+                                      className={`text-sm ${assignedToOther ? 'text-gray-500' : 'text-gray-900'}`}
+                                    >
                                       {person.name}
                                     </span>
                                     {assignedToOther && assignedTeamName && (

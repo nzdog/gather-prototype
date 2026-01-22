@@ -64,17 +64,19 @@ check(
 
 if (schemaContent) {
   // Check for isLegacy field in Event model
-  const hasIsLegacy = schemaContent.includes('isLegacy') &&
+  const hasIsLegacy =
+    schemaContent.includes('isLegacy') &&
     schemaContent.match(/model Event[\s\S]*?isLegacy.*?Boolean/);
 
   check(
     'Event.isLegacy field exists',
     !!hasIsLegacy,
-    'Required to identify legacy events that don\'t count against limits'
+    "Required to identify legacy events that don't count against limits"
   );
 
   // Check for statusChangedAt field in Subscription model
-  const hasStatusChangedAt = schemaContent.includes('statusChangedAt') &&
+  const hasStatusChangedAt =
+    schemaContent.includes('statusChangedAt') &&
     schemaContent.match(/model Subscription[\s\S]*?statusChangedAt.*?DateTime/);
 
   check(
@@ -133,25 +135,29 @@ if (entitlementsContent) {
 
   check(
     'Handles TRIALING status',
-    entitlementsContent.includes("'TRIALING'") || entitlementsContent.includes('BillingStatus.TRIALING'),
+    entitlementsContent.includes("'TRIALING'") ||
+      entitlementsContent.includes('BillingStatus.TRIALING'),
     'TRIALING: unlimited events'
   );
 
   check(
     'Handles ACTIVE status',
-    entitlementsContent.includes("'ACTIVE'") || entitlementsContent.includes('BillingStatus.ACTIVE'),
+    entitlementsContent.includes("'ACTIVE'") ||
+      entitlementsContent.includes('BillingStatus.ACTIVE'),
     'ACTIVE: unlimited events'
   );
 
   check(
     'Handles PAST_DUE status',
-    entitlementsContent.includes("'PAST_DUE'") || entitlementsContent.includes('BillingStatus.PAST_DUE'),
+    entitlementsContent.includes("'PAST_DUE'") ||
+      entitlementsContent.includes('BillingStatus.PAST_DUE'),
     'PAST_DUE: can edit existing (within grace period), cannot create'
   );
 
   check(
     'Handles CANCELED status',
-    entitlementsContent.includes("'CANCELED'") || entitlementsContent.includes('BillingStatus.CANCELED'),
+    entitlementsContent.includes("'CANCELED'") ||
+      entitlementsContent.includes('BillingStatus.CANCELED'),
     'CANCELED: read-only (no create, no edit)'
   );
 
@@ -159,7 +165,7 @@ if (entitlementsContent) {
   check(
     'Checks isLegacy flag',
     entitlementsContent.includes('isLegacy'),
-    'Legacy events don\'t count against limits and remain editable'
+    "Legacy events don't count against limits and remain editable"
   );
 
   // Check for grace period logic
@@ -180,7 +186,8 @@ if (entitlementsContent) {
   // Check for EventRole filtering
   check(
     'Filters by HOST role',
-    entitlementsContent.includes("role: 'HOST'") || entitlementsContent.includes('EventRoleType.HOST'),
+    entitlementsContent.includes("role: 'HOST'") ||
+      entitlementsContent.includes('EventRoleType.HOST'),
     'Only counts events where user is HOST'
   );
 
@@ -199,13 +206,17 @@ if (entitlementsContent) {
 
   check(
     'Returns number | "unlimited" for getEventLimit',
-    !!entitlementsContent.match(/getEventLimit[\s\S]*?(number \| 'unlimited'|'unlimited' \| number)/),
+    !!entitlementsContent.match(
+      /getEventLimit[\s\S]*?(number \| 'unlimited'|'unlimited' \| number)/
+    ),
     'Returns limit count or "unlimited"'
   );
 
   check(
     'Returns number | "unlimited" for getRemainingEvents',
-    !!entitlementsContent.match(/getRemainingEvents[\s\S]*?(number \| 'unlimited'|'unlimited' \| number)/),
+    !!entitlementsContent.match(
+      /getRemainingEvents[\s\S]*?(number \| 'unlimited'|'unlimited' \| number)/
+    ),
     'Returns remaining count or "unlimited"'
   );
 }
@@ -252,7 +263,8 @@ console.log(`\n${colors.yellow}4. Business Logic Validation${colors.reset}`);
 
 if (entitlementsContent) {
   // Validate FREE tier logic
-  const hasFreeLimit = entitlementsContent.includes('FREE_TIER_LIMIT') ||
+  const hasFreeLimit =
+    entitlementsContent.includes('FREE_TIER_LIMIT') ||
     !!entitlementsContent.match(/eventCount < 1/) ||
     !!entitlementsContent.match(/limit.*1/);
 
@@ -263,7 +275,8 @@ if (entitlementsContent) {
   );
 
   // Validate unlimited tiers
-  const hasUnlimitedForTrialing = !!entitlementsContent.match(/TRIALING.*unlimited/i) ||
+  const hasUnlimitedForTrialing =
+    !!entitlementsContent.match(/TRIALING.*unlimited/i) ||
     !!entitlementsContent.match(/if.*TRIALING.*ACTIVE.*return true/);
 
   check(
@@ -273,7 +286,8 @@ if (entitlementsContent) {
   );
 
   // Validate PAST_DUE cannot create
-  const pastDueCannotCreate = entitlementsContent.match(/PAST_DUE.*return false/) ||
+  const pastDueCannotCreate =
+    entitlementsContent.match(/PAST_DUE.*return false/) ||
     entitlementsContent.match(/if.*PAST_DUE.*CANCELED.*\n.*return false/);
 
   check(
@@ -283,7 +297,8 @@ if (entitlementsContent) {
   );
 
   // Validate CANCELED cannot edit
-  const canceledCannotEdit = entitlementsContent.includes('CANCELED') &&
+  const canceledCannotEdit =
+    entitlementsContent.includes('CANCELED') &&
     entitlementsContent.includes('canEditEvent') &&
     /CANCELED['\s\S]*?return false/.test(entitlementsContent);
 
@@ -294,13 +309,15 @@ if (entitlementsContent) {
   );
 
   // Validate legacy events bypass
-  const legacyBypass = !!(entitlementsContent.match(/if.*isLegacy.*return true/) ||
-    entitlementsContent.match(/isLegacy.*false/));
+  const legacyBypass = !!(
+    entitlementsContent.match(/if.*isLegacy.*return true/) ||
+    entitlementsContent.match(/isLegacy.*false/)
+  );
 
   check(
     'Legacy events bypass restrictions',
     legacyBypass,
-    'Legacy events always editable and don\'t count against limits'
+    "Legacy events always editable and don't count against limits"
   );
 }
 
@@ -323,9 +340,13 @@ const passRate = ((passedChecks / totalChecks) * 100).toFixed(1);
 console.log(`\nPass rate: ${passRate}%`);
 
 if (failedChecks === 0) {
-  console.log(`\n${colors.green}✓ All checks passed! Ticket 2.5 implementation verified.${colors.reset}\n`);
+  console.log(
+    `\n${colors.green}✓ All checks passed! Ticket 2.5 implementation verified.${colors.reset}\n`
+  );
   process.exit(0);
 } else {
-  console.log(`\n${colors.red}✗ Some checks failed. Please review the implementation.${colors.reset}\n`);
+  console.log(
+    `\n${colors.red}✗ Some checks failed. Please review the implementation.${colors.reset}\n`
+  );
   process.exit(1);
 }

@@ -39,7 +39,7 @@ export default function PeopleSection({
   people,
   onPeopleChanged,
   onMovePerson,
-  onExpand
+  onExpand,
 }: PeopleSectionProps) {
   const [view, setView] = useState<'table' | 'board'>('table');
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -91,8 +91,8 @@ export default function PeopleSection({
         const { name, teamName } = result.demotedCoordinator;
         alert(
           `✓ Coordinator Updated\n\n` +
-          `${name} was automatically demoted from Coordinator to Participant on the ${teamName} team.\n\n` +
-          `Only one person can be coordinator per team.`
+            `${name} was automatically demoted from Coordinator to Participant on the ${teamName} team.\n\n` +
+            `Only one person can be coordinator per team.`
         );
       }
 
@@ -143,9 +143,9 @@ export default function PeopleSection({
       const { imported, skipped, errors } = result;
       alert(
         `Import complete!\n\n` +
-        `✓ Imported: ${imported}\n` +
-        (skipped > 0 ? `⊘ Skipped: ${skipped} (duplicates)\n` : '') +
-        (errors?.length > 0 ? `✗ Errors: ${errors.length}` : '')
+          `✓ Imported: ${imported}\n` +
+          (skipped > 0 ? `⊘ Skipped: ${skipped} (duplicates)\n` : '') +
+          (errors?.length > 0 ? `✗ Errors: ${errors.length}` : '')
       );
 
       onPeopleChanged?.();
@@ -291,9 +291,7 @@ export default function PeopleSection({
         </div>
 
         {view === 'board' && (
-          <p className="text-xs text-gray-500 mb-4">
-            Move people between teams in Board view.
-          </p>
+          <p className="text-xs text-gray-500 mb-4">Move people between teams in Board view.</p>
         )}
 
         {people.length === 0 ? (
@@ -305,21 +303,11 @@ export default function PeopleSection({
             <table className="w-full">
               <thead>
                 <tr className="border-b">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">
-                    Name
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">
-                    Role
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">
-                    Team
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">
-                    Items
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">
-                    Actions
-                  </th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Name</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Role</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Team</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Items</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -328,9 +316,7 @@ export default function PeopleSection({
                     <td className="py-3 px-4">
                       <div>
                         <p className="font-medium text-gray-900">{person.name}</p>
-                        {person.email && (
-                          <p className="text-sm text-gray-600">{person.email}</p>
-                        )}
+                        {person.email && <p className="text-sm text-gray-600">{person.email}</p>}
                       </div>
                     </td>
                     <td className="py-3 px-4">
@@ -359,7 +345,12 @@ export default function PeopleSection({
             </table>
           </div>
         ) : (
-          <TeamBoard teams={teams} people={people} onMovePerson={onMovePerson} onEditPerson={handleEditPerson} />
+          <TeamBoard
+            teams={teams}
+            people={people}
+            onMovePerson={onMovePerson}
+            onEditPerson={handleEditPerson}
+          />
         )}
       </div>
 
@@ -397,17 +388,15 @@ export default function PeopleSection({
       <AssignCoordinatorsModal
         isOpen={assignCoordinatorsModalOpen}
         onClose={() => setAssignCoordinatorsModalOpen(false)}
-        teams={teams.map(team => {
+        teams={teams.map((team) => {
           // Find the coordinator for this team
-          const coordinator = people.find(
-            p => p.team.id === team.id && p.role === 'COORDINATOR'
-          );
+          const coordinator = people.find((p) => p.team.id === team.id && p.role === 'COORDINATOR');
           return {
             id: team.id,
             name: team.name,
             coordinator: coordinator
               ? { id: coordinator.personId, name: coordinator.name }
-              : { id: '', name: 'Unassigned' }
+              : { id: '', name: 'Unassigned' },
           };
         })}
         people={people}

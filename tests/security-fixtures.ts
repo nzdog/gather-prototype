@@ -104,9 +104,9 @@ async function cleanup() {
   await prisma.event.deleteMany({
     where: {
       name: {
-        in: ['Security Test Event (DRAFT)', 'Security Test Event (FROZEN)']
-      }
-    }
+        in: ['Security Test Event (DRAFT)', 'Security Test Event (FROZEN)'],
+      },
+    },
   });
 
   // Delete test people (order matters due to relations)
@@ -119,26 +119,26 @@ async function cleanup() {
           'coord-b@test.local',
           'part-a@test.local',
           'part-b@test.local',
-          'frozen@test.local'
-        ]
-      }
-    }
+          'frozen@test.local',
+        ],
+      },
+    },
   });
 
   // Delete old test user sessions
   await prisma.session.deleteMany({
     where: {
       user: {
-        email: 'security-test@gather.test'
-      }
-    }
+        email: 'security-test@gather.test',
+      },
+    },
   });
 
   // Delete old test user
   await prisma.user.deleteMany({
     where: {
-      email: 'security-test@gather.test'
-    }
+      email: 'security-test@gather.test',
+    },
   });
 
   console.log('✓ Cleanup complete\n');
@@ -152,8 +152,8 @@ async function generateFixtures(): Promise<Fixtures> {
   const user = await prisma.user.create({
     data: {
       email: 'security-test@gather.test',
-      billingStatus: 'ACTIVE'
-    }
+      billingStatus: 'ACTIVE',
+    },
   });
 
   const sessionToken = randomBytes(32).toString('hex');
@@ -164,8 +164,8 @@ async function generateFixtures(): Promise<Fixtures> {
     data: {
       userId: user.id,
       token: sessionToken,
-      expiresAt
-    }
+      expiresAt,
+    },
   });
 
   console.log(`   ✓ User: ${user.email}`);
@@ -174,7 +174,7 @@ async function generateFixtures(): Promise<Fixtures> {
   // 2. Create host person (or find existing)
   console.log('2. Creating host person...');
   let hostPerson = await prisma.person.findFirst({
-    where: { userId: user.id }
+    where: { userId: user.id },
   });
 
   if (!hostPerson) {
@@ -182,8 +182,8 @@ async function generateFixtures(): Promise<Fixtures> {
       data: {
         name: 'Security Test Host',
         email: user.email,
-        userId: user.id
-      }
+        userId: user.id,
+      },
     });
   }
   console.log(`   ✓ Host: ${hostPerson.name}\n`);
@@ -197,8 +197,8 @@ async function generateFixtures(): Promise<Fixtures> {
       endDate: new Date('2026-06-03'),
       status: 'DRAFT',
       hostId: hostPerson.id,
-      guestCount: 20
-    }
+      guestCount: 20,
+    },
   });
   console.log(`   ✓ Event ID: ${eventDraft.id}\n`);
 
@@ -211,8 +211,8 @@ async function generateFixtures(): Promise<Fixtures> {
       endDate: new Date('2026-07-03'),
       status: 'FROZEN',
       hostId: hostPerson.id,
-      guestCount: 20
-    }
+      guestCount: 20,
+    },
   });
   console.log(`   ✓ Event ID: ${eventFrozen.id}\n`);
 
@@ -220,8 +220,8 @@ async function generateFixtures(): Promise<Fixtures> {
   await prisma.eventRole.createMany({
     data: [
       { userId: user.id, eventId: eventDraft.id, role: 'HOST' },
-      { userId: user.id, eventId: eventFrozen.id, role: 'HOST' }
-    ]
+      { userId: user.id, eventId: eventFrozen.id, role: 'HOST' },
+    ],
   });
 
   // 6. Create Team A and Team B for DRAFT event
@@ -229,15 +229,15 @@ async function generateFixtures(): Promise<Fixtures> {
   const teamA = await prisma.team.create({
     data: {
       name: 'Team A',
-      eventId: eventDraft.id
-    }
+      eventId: eventDraft.id,
+    },
   });
 
   const teamB = await prisma.team.create({
     data: {
       name: 'Team B',
-      eventId: eventDraft.id
-    }
+      eventId: eventDraft.id,
+    },
   });
   console.log(`   ✓ Team A: ${teamA.id}`);
   console.log(`   ✓ Team B: ${teamB.id}\n`);
@@ -247,62 +247,62 @@ async function generateFixtures(): Promise<Fixtures> {
 
   // Team A coordinator
   const coordAPersonData = await prisma.person.create({
-    data: { name: 'Team A Coordinator', email: 'coord-a@test.local' }
+    data: { name: 'Team A Coordinator', email: 'coord-a@test.local' },
   });
   await prisma.personEvent.create({
     data: {
       personId: coordAPersonData.id,
       eventId: eventDraft.id,
       teamId: teamA.id,
-      role: 'COORDINATOR'
-    }
+      role: 'COORDINATOR',
+    },
   });
   await prisma.team.update({
     where: { id: teamA.id },
-    data: { coordinatorId: coordAPersonData.id }
+    data: { coordinatorId: coordAPersonData.id },
   });
 
   // Team A participant
   const partAPersonData = await prisma.person.create({
-    data: { name: 'Team A Participant', email: 'part-a@test.local' }
+    data: { name: 'Team A Participant', email: 'part-a@test.local' },
   });
   await prisma.personEvent.create({
     data: {
       personId: partAPersonData.id,
       eventId: eventDraft.id,
       teamId: teamA.id,
-      role: 'PARTICIPANT'
-    }
+      role: 'PARTICIPANT',
+    },
   });
 
   // Team B coordinator
   const coordBPersonData = await prisma.person.create({
-    data: { name: 'Team B Coordinator', email: 'coord-b@test.local' }
+    data: { name: 'Team B Coordinator', email: 'coord-b@test.local' },
   });
   await prisma.personEvent.create({
     data: {
       personId: coordBPersonData.id,
       eventId: eventDraft.id,
       teamId: teamB.id,
-      role: 'COORDINATOR'
-    }
+      role: 'COORDINATOR',
+    },
   });
   await prisma.team.update({
     where: { id: teamB.id },
-    data: { coordinatorId: coordBPersonData.id }
+    data: { coordinatorId: coordBPersonData.id },
   });
 
   // Team B participant
   const partBPersonData = await prisma.person.create({
-    data: { name: 'Team B Participant', email: 'part-b@test.local' }
+    data: { name: 'Team B Participant', email: 'part-b@test.local' },
   });
   await prisma.personEvent.create({
     data: {
       personId: partBPersonData.id,
       eventId: eventDraft.id,
       teamId: teamB.id,
-      role: 'PARTICIPANT'
-    }
+      role: 'PARTICIPANT',
+    },
   });
 
   console.log(`   ✓ Team A members created`);
@@ -314,32 +314,32 @@ async function generateFixtures(): Promise<Fixtures> {
     data: {
       name: 'Item A1',
       teamId: teamA.id,
-      status: 'UNASSIGNED'
-    }
+      status: 'UNASSIGNED',
+    },
   });
 
   const itemA2 = await prisma.item.create({
     data: {
       name: 'Item A2',
       teamId: teamA.id,
-      status: 'UNASSIGNED'
-    }
+      status: 'UNASSIGNED',
+    },
   });
 
   const itemB1 = await prisma.item.create({
     data: {
       name: 'Item B1',
       teamId: teamB.id,
-      status: 'UNASSIGNED'
-    }
+      status: 'UNASSIGNED',
+    },
   });
 
   const itemB2 = await prisma.item.create({
     data: {
       name: 'Item B2',
       teamId: teamB.id,
-      status: 'UNASSIGNED'
-    }
+      status: 'UNASSIGNED',
+    },
   });
 
   console.log(`   ✓ Items created\n`);
@@ -354,8 +354,8 @@ async function generateFixtures(): Promise<Fixtures> {
       scope: 'HOST',
       personId: hostPerson.id,
       eventId: eventDraft.id,
-      expiresAt: new Date('2026-12-31')
-    }
+      expiresAt: new Date('2026-12-31'),
+    },
   });
 
   const coordAToken = randomBytes(32).toString('hex');
@@ -366,8 +366,8 @@ async function generateFixtures(): Promise<Fixtures> {
       personId: coordAPersonData.id,
       eventId: eventDraft.id,
       teamId: teamA.id,
-      expiresAt: new Date('2026-12-31')
-    }
+      expiresAt: new Date('2026-12-31'),
+    },
   });
 
   const coordBToken = randomBytes(32).toString('hex');
@@ -378,8 +378,8 @@ async function generateFixtures(): Promise<Fixtures> {
       personId: coordBPersonData.id,
       eventId: eventDraft.id,
       teamId: teamB.id,
-      expiresAt: new Date('2026-12-31')
-    }
+      expiresAt: new Date('2026-12-31'),
+    },
   });
 
   const partAToken = randomBytes(32).toString('hex');
@@ -389,8 +389,8 @@ async function generateFixtures(): Promise<Fixtures> {
       scope: 'PARTICIPANT',
       personId: partAPersonData.id,
       eventId: eventDraft.id,
-      expiresAt: new Date('2026-12-31')
-    }
+      expiresAt: new Date('2026-12-31'),
+    },
   });
 
   const partBToken = randomBytes(32).toString('hex');
@@ -400,8 +400,8 @@ async function generateFixtures(): Promise<Fixtures> {
       scope: 'PARTICIPANT',
       personId: partBPersonData.id,
       eventId: eventDraft.id,
-      expiresAt: new Date('2026-12-31')
-    }
+      expiresAt: new Date('2026-12-31'),
+    },
   });
 
   console.log(`   ✓ Access tokens generated\n`);
@@ -412,22 +412,22 @@ async function generateFixtures(): Promise<Fixtures> {
       id: user.id,
       email: user.email,
       sessionToken,
-      sessionCookie: `session=${sessionToken}`
+      sessionCookie: `session=${sessionToken}`,
     },
     eventDraft: {
       id: eventDraft.id,
       name: eventDraft.name,
-      status: eventDraft.status
+      status: eventDraft.status,
     },
     eventFrozen: {
       id: eventFrozen.id,
       name: eventFrozen.name,
-      status: eventFrozen.status
+      status: eventFrozen.status,
     },
     host: {
       id: hostPerson.id,
       name: hostPerson.name,
-      token: hostToken
+      token: hostToken,
     },
     teamA: {
       id: teamA.id,
@@ -436,18 +436,18 @@ async function generateFixtures(): Promise<Fixtures> {
         id: coordAPersonData.id,
         name: coordAPersonData.name,
         personId: coordAPersonData.id,
-        token: coordAToken
+        token: coordAToken,
       },
       participant: {
         id: partAPersonData.id,
         name: partAPersonData.name,
         personId: partAPersonData.id,
-        token: partAToken
+        token: partAToken,
       },
       items: [
         { id: itemA1.id, name: itemA1.name },
-        { id: itemA2.id, name: itemA2.name }
-      ]
+        { id: itemA2.id, name: itemA2.name },
+      ],
     },
     teamB: {
       id: teamB.id,
@@ -456,19 +456,19 @@ async function generateFixtures(): Promise<Fixtures> {
         id: coordBPersonData.id,
         name: coordBPersonData.name,
         personId: coordBPersonData.id,
-        token: coordBToken
+        token: coordBToken,
       },
       participant: {
         id: partBPersonData.id,
         name: partBPersonData.name,
         personId: partBPersonData.id,
-        token: partBToken
+        token: partBToken,
       },
       items: [
         { id: itemB1.id, name: itemB1.name },
-        { id: itemB2.id, name: itemB2.name }
-      ]
-    }
+        { id: itemB2.id, name: itemB2.name },
+      ],
+    },
   };
 
   return fixtures;

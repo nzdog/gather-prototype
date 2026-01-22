@@ -25,9 +25,7 @@ export default function BillingCancelPage() {
           </div>
         </div>
 
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">
-          Checkout Cancelled
-        </h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Checkout Cancelled</h1>
 
         <p className="text-gray-600 mb-8">
           You have cancelled the checkout process. No charges were made to your account.
@@ -50,7 +48,10 @@ export default function BillingCancelPage() {
 
         <div className="mt-8 pt-6 border-t border-gray-200">
           <p className="text-sm text-gray-500">
-            Need help? <a href="mailto:support@gather.app" className="text-sage-600 hover:underline">Contact support</a>
+            Need help?{' '}
+            <a href="mailto:support@gather.app" className="text-sage-600 hover:underline">
+              Contact support
+            </a>
           </p>
         </div>
       </div>

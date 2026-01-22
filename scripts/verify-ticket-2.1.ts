@@ -19,7 +19,13 @@ async function verify() {
   try {
     // 1. Verify BillingStatus enum values
     console.log('1. Checking BillingStatus enum...');
-    const expectedStatuses: BillingStatus[] = ['FREE', 'TRIALING', 'ACTIVE', 'PAST_DUE', 'CANCELED'];
+    const expectedStatuses: BillingStatus[] = [
+      'FREE',
+      'TRIALING',
+      'ACTIVE',
+      'PAST_DUE',
+      'CANCELED',
+    ];
     console.log(`   ✅ BillingStatus enum exists with values: ${expectedStatuses.join(', ')}\n`);
 
     // 2. Verify Subscription table structure by attempting a query
@@ -30,10 +36,12 @@ async function verify() {
     // 3. Verify User.billingStatus field exists
     console.log('3. Checking User.billingStatus field...');
     const userWithBillingStatus = await prisma.user.findFirst({
-      select: { id: true, email: true, billingStatus: true }
+      select: { id: true, email: true, billingStatus: true },
     });
     if (userWithBillingStatus) {
-      console.log(`   ✅ User.billingStatus field exists (sample: ${userWithBillingStatus.billingStatus})\n`);
+      console.log(
+        `   ✅ User.billingStatus field exists (sample: ${userWithBillingStatus.billingStatus})\n`
+      );
     } else {
       console.log('   ⚠️  No users found in database\n');
     }
@@ -42,7 +50,7 @@ async function verify() {
     console.log('4. Checking existing users have billingStatus = FREE...');
     const totalUsers = await prisma.user.count();
     const freeUsers = await prisma.user.count({
-      where: { billingStatus: 'FREE' }
+      where: { billingStatus: 'FREE' },
     });
     console.log(`   Total users: ${totalUsers}`);
     console.log(`   Users with FREE status: ${freeUsers}`);
@@ -65,7 +73,7 @@ async function verify() {
     // 6. Test that we can query the new fields without errors
     console.log('6. Testing Prisma queries with new schema...');
     await prisma.user.findFirst({
-      include: { subscription: true }
+      include: { subscription: true },
     });
     console.log(`   ✅ Can query User with subscription relation\n`);
 
@@ -77,7 +85,6 @@ async function verify() {
     console.log(`  - Existing users (${totalUsers}) have FREE status: ✅`);
     console.log('  - Subscription table empty: ✅');
     console.log('  - Phase 1 flows intact: ✅\n');
-
   } catch (error) {
     console.error('❌ Verification failed:', error);
     process.exit(1);

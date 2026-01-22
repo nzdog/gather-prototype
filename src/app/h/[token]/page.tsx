@@ -461,10 +461,7 @@ export default function HostView() {
               </button>
             </div>
           ) : (
-            <button
-              onClick={handleEditGuestCount}
-              className="text-sm text-accent hover:underline"
-            >
+            <button onClick={handleEditGuestCount} className="text-sm text-accent hover:underline">
               {data.event.guestCount ? `${data.event.guestCount} guests` : 'Add guest count'}
             </button>
           )}
@@ -570,12 +567,15 @@ export default function HostView() {
         >
           {sortedTeams.map((team) => {
             const assignedCount = team.items.filter((i) => i.assignment).length;
-            const pendingCount = team.items.filter((i) => i.assignment?.response === 'PENDING')
-              .length;
-            const acceptedCount = team.items.filter((i) => i.assignment?.response === 'ACCEPTED')
-              .length;
-            const declinedCount = team.items.filter((i) => i.assignment?.response === 'DECLINED')
-              .length;
+            const pendingCount = team.items.filter(
+              (i) => i.assignment?.response === 'PENDING'
+            ).length;
+            const acceptedCount = team.items.filter(
+              (i) => i.assignment?.response === 'ACCEPTED'
+            ).length;
+            const declinedCount = team.items.filter(
+              (i) => i.assignment?.response === 'DECLINED'
+            ).length;
             // Gap count includes unassigned items AND declined items
             const gapCount = team.items.filter(
               (i) => i.assignment === null || i.assignment?.response === 'DECLINED'

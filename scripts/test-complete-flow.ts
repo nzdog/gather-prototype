@@ -18,7 +18,7 @@ const BASE_URL = 'http://localhost:3002';
 
 async function main() {
   console.log('🧪 Complete Flow Test: Plan → Confirming → Views\n');
-  console.log('=' .repeat(60));
+  console.log('='.repeat(60));
 
   // =========================================================================
   // STEP 1: Create event with host
@@ -336,7 +336,7 @@ async function main() {
   // =========================================================================
   // SUMMARY
   // =========================================================================
-  console.log('=' .repeat(60));
+  console.log('='.repeat(60));
   console.log('\n✨ COMPLETE FLOW TEST SUMMARY\n');
   console.log('✅ Event created and populated with people');
   console.log('✅ Teams created with Kate as Coordinator');

@@ -140,9 +140,7 @@ export default function TemplateList({ hostId, onClone, onDelete }: TemplateList
                     </div>
 
                     {template.createdFrom && (
-                      <p className="text-xs text-gray-500">
-                        Saved from a completed event
-                      </p>
+                      <p className="text-xs text-gray-500">Saved from a completed event</p>
                     )}
                   </div>
                 </div>

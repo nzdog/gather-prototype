@@ -134,7 +134,8 @@ async function seedTestConflicts(eventId: string) {
       claimType: 'RISK',
       resolutionClass: 'DELEGATE_ALLOWED',
       title: 'Missing quantities for 3 items',
-      description: 'Some items are missing quantity specifications. Coordinators can help determine amounts.',
+      description:
+        'Some items are missing quantity specifications. Coordinators can help determine amounts.',
       affectedItems: [],
       affectedParties: ['Team coordinators'],
       inputsReferenced: [],
@@ -198,7 +199,8 @@ async function seedTestConflicts(eventId: string) {
       claimType: 'PATTERN',
       resolutionClass: 'INFORMATIONAL',
       title: 'Teams are unbalanced',
-      description: 'Mains has 12 items; Salads has 1. Consider redistributing for better coordination.',
+      description:
+        'Mains has 12 items; Salads has 1. Consider redistributing for better coordination.',
       affectedParties: ['Team coordinators'],
       inputsReferenced: [],
       status: 'OPEN',
@@ -218,7 +220,8 @@ async function seedTestConflicts(eventId: string) {
       claimType: 'PATTERN',
       resolutionClass: 'INFORMATIONAL',
       title: 'No team covers drinks',
-      description: 'Based on domain mapping, no team appears to cover drinks. This may be intentional.',
+      description:
+        'Based on domain mapping, no team appears to cover drinks. This may be intentional.',
       inputsReferenced: [
         {
           type: 'event',

@@ -7,9 +7,7 @@ import Stripe from 'stripe';
  * Maps Stripe subscription status to our BillingStatus enum.
  * Stripe is the source of truth for subscription state.
  */
-export function mapStripeToBillingStatus(
-  stripeStatus: Stripe.Subscription.Status
-): BillingStatus {
+export function mapStripeToBillingStatus(stripeStatus: Stripe.Subscription.Status): BillingStatus {
   switch (stripeStatus) {
     case 'trialing':
       return 'TRIALING';
@@ -25,9 +23,7 @@ export function mapStripeToBillingStatus(
       // Treat incomplete subscriptions as free until they're completed
       return 'FREE';
     default:
-      console.warn(
-        `[Billing Sync] Unknown Stripe status: ${stripeStatus}, defaulting to FREE`
-      );
+      console.warn(`[Billing Sync] Unknown Stripe status: ${stripeStatus}, defaulting to FREE`);
       return 'FREE';
   }
 }
@@ -63,10 +59,7 @@ export async function syncSubscriptionFromStripe(
   });
 
   if (!existingSubscription) {
-    console.error(
-      '[Billing Sync] No subscription found for Stripe customer:',
-      stripeCustomerId
-    );
+    console.error('[Billing Sync] No subscription found for Stripe customer:', stripeCustomerId);
     return null;
   }
 
@@ -81,12 +74,8 @@ export async function syncSubscriptionFromStripe(
     ? new Date(firstItem.current_period_end * 1000)
     : new Date();
   const cancelAtPeriodEnd = subscription.cancel_at_period_end;
-  const trialStart = subscription.trial_start
-    ? new Date(subscription.trial_start * 1000)
-    : null;
-  const trialEnd = subscription.trial_end
-    ? new Date(subscription.trial_end * 1000)
-    : null;
+  const trialStart = subscription.trial_start ? new Date(subscription.trial_start * 1000) : null;
+  const trialEnd = subscription.trial_end ? new Date(subscription.trial_end * 1000) : null;
 
   // Check if status is changing to track statusChangedAt
   const statusChanged = existingSubscription.status !== status;
@@ -145,10 +134,7 @@ export async function handleSubscriptionDeleted(
   });
 
   if (!existingSubscription) {
-    console.error(
-      '[Billing Sync] No subscription found for deleted customer:',
-      stripeCustomerId
-    );
+    console.error('[Billing Sync] No subscription found for deleted customer:', stripeCustomerId);
     return null;
   }
 
@@ -198,10 +184,7 @@ export async function handleInvoicePaid(
   });
 
   if (!existingSubscription) {
-    console.error(
-      '[Billing Sync] No subscription found for customer:',
-      stripeCustomerId
-    );
+    console.error('[Billing Sync] No subscription found for customer:', stripeCustomerId);
     return null;
   }
 
@@ -253,10 +236,7 @@ export async function handleInvoicePaymentFailed(
   });
 
   if (!existingSubscription) {
-    console.error(
-      '[Billing Sync] No subscription found for customer:',
-      stripeCustomerId
-    );
+    console.error('[Billing Sync] No subscription found for customer:', stripeCustomerId);
     return null;
   }
 

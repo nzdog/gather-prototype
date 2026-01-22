@@ -48,7 +48,10 @@ function parseInventory(inventoryPath: string): RouteRow[] {
     }
 
     if (inTable && line.startsWith('|')) {
-      const parts = line.split('|').map(p => p.trim()).filter(p => p);
+      const parts = line
+        .split('|')
+        .map((p) => p.trim())
+        .filter((p) => p);
 
       if (parts.length >= 8 && parts[0] !== 'Path') {
         routes.push({
@@ -59,7 +62,7 @@ function parseInventory(inventoryPath: string): RouteRow[] {
           requiredRoles: parts[4],
           teamScoped: parts[5] === 'YES',
           frozenRule: parts[6],
-          filePath: parts[7]
+          filePath: parts[7],
         });
       }
     }
@@ -83,12 +86,12 @@ function isHighCost(route: RouteRow): boolean {
     '/summary',
     'anthropic',
     'openai',
-    'ai/'
+    'ai/',
   ];
 
-  return highCostPatterns.some(pattern =>
-    route.path.toLowerCase().includes(pattern) ||
-    route.filePath.toLowerCase().includes(pattern)
+  return highCostPatterns.some(
+    (pattern) =>
+      route.path.toLowerCase().includes(pattern) || route.filePath.toLowerCase().includes(pattern)
   );
 }
 
@@ -103,38 +106,27 @@ function isSensitiveRead(route: RouteRow): boolean {
     'dietary',
     'contact',
     'email',
-    'phone'
+    'phone',
   ];
 
-  return sensitivePatterns.some(pattern =>
-    route.path.toLowerCase().includes(pattern)
-  );
+  return sensitivePatterns.some((pattern) => route.path.toLowerCase().includes(pattern));
 }
 
 function isAdmin(route: RouteRow): boolean {
-  const adminPatterns = [
-    '/auth/',
-    '/billing/',
-    '/memory',
-    '/templates',
-    '/demo/',
-    '/entitlements'
-  ];
+  const adminPatterns = ['/auth/', '/billing/', '/memory', '/templates', '/demo/', '/entitlements'];
 
-  return adminPatterns.some(pattern =>
-    route.path.toLowerCase().includes(pattern)
-  );
+  return adminPatterns.some((pattern) => route.path.toLowerCase().includes(pattern));
 }
 
 function triageUnknownRoutes(routes: RouteRow[]): TriageResult {
-  const unknownRoutes = routes.filter(r => r.authType === 'UNKNOWN');
+  const unknownRoutes = routes.filter((r) => r.authType === 'UNKNOWN');
 
   const result: TriageResult = {
     mutation: [],
     highCost: [],
     sensitiveRead: [],
     admin: [],
-    lowRisk: []
+    lowRisk: [],
   };
 
   for (const route of unknownRoutes) {
@@ -178,7 +170,7 @@ function main() {
 
   const routes = parseInventory(inventoryPath);
   const totalRoutes = routes.length;
-  const unknownRoutes = routes.filter(r => r.authType === 'UNKNOWN');
+  const unknownRoutes = routes.filter((r) => r.authType === 'UNKNOWN');
   const unknownCount = unknownRoutes.length;
 
   console.log('=== UNKNOWN ROUTES TRIAGE ===\n');
@@ -197,10 +189,10 @@ function main() {
   // Top 10 highest risk
   console.log('--- TOP 10 HIGHEST RISK UNKNOWN ROUTES ---');
   const highRisk = [
-    ...triage.mutation.filter(r => isHighCost(r) || isSensitiveRead(r)),
-    ...triage.mutation.filter(r => !isHighCost(r) && !isSensitiveRead(r)).slice(0, 5),
-    ...triage.highCost.filter(r => !r.mutation).slice(0, 3),
-    ...triage.sensitiveRead.filter(r => !r.mutation).slice(0, 2)
+    ...triage.mutation.filter((r) => isHighCost(r) || isSensitiveRead(r)),
+    ...triage.mutation.filter((r) => !isHighCost(r) && !isSensitiveRead(r)).slice(0, 5),
+    ...triage.highCost.filter((r) => !r.mutation).slice(0, 3),
+    ...triage.sensitiveRead.filter((r) => !r.mutation).slice(0, 2),
   ].slice(0, 10);
 
   highRisk.forEach((route, i) => {
@@ -217,22 +209,22 @@ function main() {
 
   // Detailed breakdown
   console.log('\n--- MUTATION ROUTES (UNKNOWN) ---');
-  triage.mutation.forEach(r => {
+  triage.mutation.forEach((r) => {
     console.log(`- ${r.method} ${r.path} [${r.filePath}]`);
   });
 
   console.log('\n--- HIGH_COST AI ROUTES (UNKNOWN) ---');
-  triage.highCost.forEach(r => {
+  triage.highCost.forEach((r) => {
     console.log(`- ${r.method} ${r.path} [${r.filePath}]`);
   });
 
   console.log('\n--- SENSITIVE_READ ROUTES (UNKNOWN) ---');
-  triage.sensitiveRead.forEach(r => {
+  triage.sensitiveRead.forEach((r) => {
     console.log(`- ${r.method} ${r.path} [${r.filePath}]`);
   });
 
   console.log('\n--- ADMIN/ACCOUNT ROUTES (UNKNOWN) ---');
-  triage.admin.forEach(r => {
+  triage.admin.forEach((r) => {
     console.log(`- ${r.method} ${r.path} [${r.filePath}]`);
   });
 }

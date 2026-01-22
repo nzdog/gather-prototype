@@ -29,14 +29,17 @@ async function main() {
 
   // Step 1: Transition to CONFIRMING
   console.log('1️⃣  Transitioning to CONFIRMING...');
-  const transitionResponse = await fetch(`http://localhost:3002/api/events/${event.id}/transition`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      actorId: event.hostId,
-      toStatus: 'CONFIRMING',
-    }),
-  });
+  const transitionResponse = await fetch(
+    `http://localhost:3002/api/events/${event.id}/transition`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        actorId: event.hostId,
+        toStatus: 'CONFIRMING',
+      }),
+    }
+  );
 
   if (!transitionResponse.ok) {
     const error = await transitionResponse.json();

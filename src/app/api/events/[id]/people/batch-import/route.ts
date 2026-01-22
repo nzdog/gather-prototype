@@ -11,10 +11,7 @@ interface PersonToImport {
 }
 
 // POST /api/events/[id]/people/batch-import - Import multiple people at once
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const eventId = params.id;
 
@@ -26,10 +23,7 @@ export async function POST(
     const { people } = body as { people: PersonToImport[] };
 
     if (!Array.isArray(people) || people.length === 0) {
-      return NextResponse.json(
-        { error: 'No people provided for import' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'No people provided for import' }, { status: 400 });
     }
 
     // Validate event exists

@@ -5,20 +5,20 @@
 @layer base {
   :root {
     /* Accent colors */
-    --accent: #7D8B7A;
-    --accent-light: #A3ADA0;
-    --accent-dark: #6B7869;
+    --accent: #7d8b7a;
+    --accent-light: #a3ada0;
+    --accent-dark: #6b7869;
 
     /* Warm grey scale */
-    --warm-white: #FAF9F7;
-    --warm-grey-100: #F5F4F1;
-    --warm-grey-200: #E8E6E1;
-    --warm-grey-300: #D4D1CA;
-    --warm-grey-400: #A8A49B;
-    --warm-grey-500: #7A756B;
-    --warm-grey-600: #5C574E;
-    --warm-grey-700: #3D3935;
-    --warm-grey-800: #2A2724;
-    --warm-black: #1D1B19;
+    --warm-white: #faf9f7;
+    --warm-grey-100: #f5f4f1;
+    --warm-grey-200: #e8e6e1;
+    --warm-grey-300: #d4d1ca;
+    --warm-grey-400: #a8a49b;
+    --warm-grey-500: #7a756b;
+    --warm-grey-600: #5c574e;
+    --warm-grey-700: #3d3935;
+    --warm-grey-800: #2a2724;
+    --warm-black: #1d1b19;
   }
 }

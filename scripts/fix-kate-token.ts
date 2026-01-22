@@ -16,11 +16,11 @@ async function main() {
   console.log(`✓ Found event: ${event.name} (${event.id})`);
 
   // Check Kate's current tokens
-  console.log('\n📋 Kate\'s tokens BEFORE fix:');
+  console.log("\n📋 Kate's tokens BEFORE fix:");
   const kataBefore = await prisma.person.findFirst({
     where: {
       name: 'Kate',
-      eventMemberships: { some: { eventId: event.id } }
+      eventMemberships: { some: { eventId: event.id } },
     },
     include: {
       tokens: {
@@ -51,11 +51,11 @@ async function main() {
   console.log('✓ Done');
 
   // Check Kate's tokens after
-  console.log('\n📋 Kate\'s tokens AFTER fix:');
+  console.log("\n📋 Kate's tokens AFTER fix:");
   const kateAfter = await prisma.person.findFirst({
     where: {
       name: 'Kate',
-      eventMemberships: { some: { eventId: event.id } }
+      eventMemberships: { some: { eventId: event.id } },
     },
     include: {
       tokens: {

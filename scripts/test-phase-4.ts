@@ -69,12 +69,12 @@ async function runTests() {
       log('Creating test event in DRAFT status...');
 
       testHost = await prisma.person.findFirst({
-        where: { name: 'Jacqui & Ian' }
+        where: { name: 'Jacqui & Ian' },
       });
 
       if (!testHost) {
         testHost = await prisma.person.create({
-          data: { name: 'Test Host Phase 4', email: 'test-phase4@example.com' }
+          data: { name: 'Test Host Phase 4', email: 'test-phase4@example.com' },
         });
       }
 
@@ -157,11 +157,11 @@ async function runTests() {
 
       // Verify teams and items were created
       const teams = await prisma.team.findMany({
-        where: { eventId: testEvent.id }
+        where: { eventId: testEvent.id },
       });
 
       const items = await prisma.item.findMany({
-        where: { team: { eventId: testEvent.id } }
+        where: { team: { eventId: testEvent.id } },
       });
 
       if (teams.length === 0) {
@@ -231,16 +231,12 @@ async function runTests() {
       log(`  Found ${criticalConflicts.length} CRITICAL conflicts`);
 
       for (const conflict of criticalConflicts) {
-        await apiCall(
-          'POST',
-          `/api/events/${testEvent.id}/conflicts/${conflict.id}/acknowledge`,
-          {
-            acknowledgedBy: testHost.id,
-            impactStatement: `Acknowledged ${conflict.type} - will handle via alternative arrangements with affected guests`,
-            impactUnderstood: true,
-            mitigationPlanType: 'COMMUNICATE',
-          }
-        );
+        await apiCall('POST', `/api/events/${testEvent.id}/conflicts/${conflict.id}/acknowledge`, {
+          acknowledgedBy: testHost.id,
+          impactStatement: `Acknowledged ${conflict.type} - will handle via alternative arrangements with affected guests`,
+          impactUnderstood: true,
+          mitigationPlanType: 'COMMUNICATE',
+        });
       }
 
       if (criticalConflicts.length > 0) {
@@ -447,7 +443,8 @@ async function runTests() {
       }
 
       // Check for error in either error field or blocks
-      const hasError = response.data.error || (response.data.blocks && response.data.blocks.length > 0);
+      const hasError =
+        response.data.error || (response.data.blocks && response.data.blocks.length > 0);
 
       if (!hasError) {
         throw new Error('No error message or blocks returned');
@@ -471,14 +468,13 @@ async function runTests() {
       log('Cleaning up test data...');
 
       await prisma.event.delete({
-        where: { id: testEvent.id }
+        where: { id: testEvent.id },
       });
 
       pass('13. Cleanup successful');
     } catch (error: any) {
       fail('13. Cleanup successful', error.message);
     }
-
   } catch (error: any) {
     console.error('\n❌ Fatal error during tests:', error.message);
   }
@@ -490,17 +486,19 @@ async function runTests() {
   console.log('='.repeat(50));
   console.log('\n📊 TEST SUMMARY\n');
 
-  const passed = results.filter(r => r.passed).length;
-  const failed = results.filter(r => !r.passed).length;
+  const passed = results.filter((r) => r.passed).length;
+  const failed = results.filter((r) => !r.passed).length;
 
   console.log(`Phase 4 Gate & Transition: ${passed}/13 tests passed`);
 
   if (failed > 0) {
     console.log(`\n⚠️  ${failed} test(s) failed:\n`);
-    results.filter(r => !r.passed).forEach(r => {
-      console.log(`  - ${r.test}`);
-      console.log(`    ${r.error}\n`);
-    });
+    results
+      .filter((r) => !r.passed)
+      .forEach((r) => {
+        console.log(`  - ${r.test}`);
+        console.log(`    ${r.error}\n`);
+      });
   }
 
   console.log('');

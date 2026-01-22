@@ -3,10 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
 
 // GET /api/events/[id]/people - List people on this event
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const eventId = params.id;
 
@@ -72,10 +69,7 @@ export async function GET(
 }
 
 // POST /api/events/[id]/people - Add person to event
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const eventId = params.id;
 
@@ -87,10 +81,7 @@ export async function POST(
     const { name, email, phone, role, teamId } = body;
 
     if (!name) {
-      return NextResponse.json(
-        { error: 'Name is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
     // Validate team belongs to event (if teamId provided)
@@ -134,10 +125,7 @@ export async function POST(
     });
 
     if (existing) {
-      return NextResponse.json(
-        { error: 'Person is already part of this event' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Person is already part of this event' }, { status: 400 });
     }
 
     // Create PersonEvent linking person to event and team

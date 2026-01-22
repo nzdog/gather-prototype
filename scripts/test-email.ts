@@ -48,7 +48,9 @@ async function testEmail() {
     console.log('Verification checklist:');
     console.log('  [ ] Email arrived within 30 seconds');
     console.log('  [ ] Subject line is "Sign in to Gather"');
-    console.log(`  [ ] Link includes token parameter: /auth/verify?token=${testToken.substring(0, 16)}...`);
+    console.log(
+      `  [ ] Link includes token parameter: /auth/verify?token=${testToken.substring(0, 16)}...`
+    );
     console.log('  [ ] Link format is correct');
     console.log('  [ ] "Expires in 15 minutes" message is present');
     console.log('\n📬 Check your inbox (and spam folder) now!');

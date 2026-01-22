@@ -4,10 +4,7 @@ import { requireEventRole } from '@/lib/auth/guards';
 
 // GET /api/events/[id]/assignments - List all assignments
 // SECURITY: Requires event role authentication
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const eventId = params.id;
 

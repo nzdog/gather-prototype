@@ -31,10 +31,7 @@ type PrismaClient = typeof prisma | Prisma.TransactionClient;
  * @param eventId - Event to ensure tokens for
  * @param tx - Optional transaction client for atomic operations
  */
-export async function ensureEventTokens(
-  eventId: string,
-  tx?: PrismaClient
-): Promise<void> {
+export async function ensureEventTokens(eventId: string, tx?: PrismaClient): Promise<void> {
   const db = tx || prisma;
 
   // Fetch all necessary data in one query

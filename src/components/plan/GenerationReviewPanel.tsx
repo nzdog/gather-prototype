@@ -109,7 +109,8 @@ export default function GenerationReviewPanel({
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-sage-900 mb-2">Review Generated Items</h2>
         <p className="text-sage-600">
-          Review the AI-generated items below. You can keep items you like or regenerate specific ones.
+          Review the AI-generated items below. You can keep items you like or regenerate specific
+          ones.
         </p>
       </div>
 

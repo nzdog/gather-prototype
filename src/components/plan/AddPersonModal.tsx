@@ -33,10 +33,13 @@ export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPer
   const [teamId, setTeamId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [addedPeople, setAddedPeople] = useState<Array<{ name: string; team: string; role: string }>>([]);
+  const [addedPeople, setAddedPeople] = useState<
+    Array<{ name: string; team: string; role: string }>
+  >([]);
 
   // Detect platform for keyboard shortcut display
-  const isMac = typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+  const isMac =
+    typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -57,8 +60,10 @@ export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPer
       });
 
       // Add to list of added people
-      const teamName = teamId ? teams.find(t => t.id === teamId)?.name || 'Unassigned' : 'Unassigned';
-      setAddedPeople(prev => [...prev, { name: addedName, team: teamName, role }]);
+      const teamName = teamId
+        ? teams.find((t) => t.id === teamId)?.name || 'Unassigned'
+        : 'Unassigned';
+      setAddedPeople((prev) => [...prev, { name: addedName, team: teamName, role }]);
 
       // Show success message
       setSuccessMessage(`${addedName} added successfully!`);
@@ -141,7 +146,9 @@ export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPer
           <div className="flex-1 overflow-y-auto">
             {/* Success Message - Always reserve space to prevent jumping */}
             <div className="mx-4 mt-4 h-14 flex items-center">
-              <div className={`w-full transition-opacity duration-200 ${successMessage ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+              <div
+                className={`w-full transition-opacity duration-200 ${successMessage ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+              >
                 <div className="p-3 bg-green-50 border border-green-200 rounded-md">
                   <p className="text-sm text-green-800">{successMessage || '\u00A0'}</p>
                 </div>
@@ -149,115 +156,105 @@ export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPer
             </div>
 
             <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          {/* Name */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Name *
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
-              placeholder="e.g., John Smith"
-              required
-              autoFocus
-            />
-          </div>
+              {/* Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                  placeholder="e.g., John Smith"
+                  required
+                  autoFocus
+                />
+              </div>
 
-          {/* Email */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email (optional)
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
-              placeholder="e.g., john@example.com"
-            />
-          </div>
+              {/* Email */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email (optional)
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                  placeholder="e.g., john@example.com"
+                />
+              </div>
 
-          {/* Phone */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Phone (optional)
-            </label>
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
-              placeholder="e.g., +1 234 567 8900"
-            />
-          </div>
+              {/* Phone */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Phone (optional)
+                </label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                  placeholder="e.g., +1 234 567 8900"
+                />
+              </div>
 
-          {/* Role */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Role
-            </label>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
-            >
-              <option value="COORDINATOR">Coordinator</option>
-              <option value="PARTICIPANT">Participant</option>
-            </select>
-            <p className="text-xs text-gray-500 mt-1">
-              Coordinators lead teams. Participants help with items.
-            </p>
-          </div>
+              {/* Role */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                >
+                  <option value="COORDINATOR">Coordinator</option>
+                  <option value="PARTICIPANT">Participant</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Coordinators lead teams. Participants help with items.
+                </p>
+              </div>
 
-          {/* Team */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Team
-            </label>
-            <select
-              value={teamId || ''}
-              onChange={(e) => setTeamId(e.target.value || null)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
-            >
-              <option value="">Unassigned</option>
-              {teams.map((team) => (
-                <option key={team.id} value={team.id}>
-                  {team.name}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-gray-500 mt-1">
-              You can assign people to teams later.
-            </p>
-          </div>
+              {/* Team */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Team</label>
+                <select
+                  value={teamId || ''}
+                  onChange={(e) => setTeamId(e.target.value || null)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                >
+                  <option value="">Unassigned</option>
+                  {teams.map((team) => (
+                    <option key={team.id} value={team.id}>
+                      {team.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">You can assign people to teams later.</p>
+              </div>
 
-          {/* Actions */}
-          <div className="flex gap-2 pt-4 border-t">
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? 'Adding...' : 'Add Person'}
-              <span className="ml-2 text-xs opacity-75">
-                ({isMac ? '⌘' : 'Ctrl'}+↵)
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={handleClose}
-              disabled={isSubmitting}
-              className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50"
-            >
-              Close
-            </button>
-          </div>
-          <p className="text-xs text-gray-500 text-center -mt-2">
-            Modal will stay open • Press {isMac ? '⌘' : 'Ctrl'}+Enter to add quickly
-          </p>
-        </form>
+              {/* Actions */}
+              <div className="flex gap-2 pt-4 border-t">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting ? 'Adding...' : 'Add Person'}
+                  <span className="ml-2 text-xs opacity-75">({isMac ? '⌘' : 'Ctrl'}+↵)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  disabled={isSubmitting}
+                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50"
+                >
+                  Close
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 text-center -mt-2">
+                Modal will stay open • Press {isMac ? '⌘' : 'Ctrl'}+Enter to add quickly
+              </p>
+            </form>
           </div>
 
           {/* Right Side - Added People List */}
@@ -284,11 +281,13 @@ export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPer
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-xs text-gray-600">{person.team}</span>
                         <span className="text-xs text-gray-400">•</span>
-                        <span className={`text-xs px-1.5 py-0.5 rounded ${
-                          person.role === 'COORDINATOR'
-                            ? 'bg-sage-100 text-sage-700'
-                            : 'bg-sage-100 text-sage-700'
-                        }`}>
+                        <span
+                          className={`text-xs px-1.5 py-0.5 rounded ${
+                            person.role === 'COORDINATOR'
+                              ? 'bg-sage-100 text-sage-700'
+                              : 'bg-sage-100 text-sage-700'
+                          }`}
+                        >
                           {person.role}
                         </span>
                       </div>

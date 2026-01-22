@@ -45,20 +45,20 @@ function main() {
   const classifications = loadClassifications();
 
   // Find critical violations
-  const criticalMutationNoAuth = classifications.filter(c =>
-    c.securityIssues.some(i => i.includes('CRITICAL') && i.includes('Mutation'))
+  const criticalMutationNoAuth = classifications.filter((c) =>
+    c.securityIssues.some((i) => i.includes('CRITICAL') && i.includes('Mutation'))
   );
 
-  const criticalAINoAuth = classifications.filter(c =>
-    c.securityIssues.some(i => i.includes('CRITICAL') && i.includes('AI/high-cost'))
+  const criticalAINoAuth = classifications.filter((c) =>
+    c.securityIssues.some((i) => i.includes('CRITICAL') && i.includes('AI/high-cost'))
   );
 
-  const sensitiveNoAuth = classifications.filter(c =>
-    c.securityIssues.some(i => i.includes('HIGH') && i.includes('Sensitive'))
+  const sensitiveNoAuth = classifications.filter((c) =>
+    c.securityIssues.some((i) => i.includes('HIGH') && i.includes('Sensitive'))
   );
 
-  const weakAuth = classifications.filter(c =>
-    c.authType === 'WEAK_PARAM' || c.securityIssues.some(i => i.includes('WEAK'))
+  const weakAuth = classifications.filter(
+    (c) => c.authType === 'WEAK_PARAM' || c.securityIssues.some((i) => i.includes('WEAK'))
   );
 
   let failures = 0;
@@ -66,10 +66,12 @@ function main() {
   // Gate 1: Mutation routes
   console.log(`${BOLD}Gate 1: Mutation Routes${RESET}`);
   if (criticalMutationNoAuth.length > 0) {
-    console.log(`${RED}✗ FAIL: ${criticalMutationNoAuth.length} mutation routes with NO authentication${RESET}\n`);
+    console.log(
+      `${RED}✗ FAIL: ${criticalMutationNoAuth.length} mutation routes with NO authentication${RESET}\n`
+    );
     failures++;
 
-    criticalMutationNoAuth.forEach(route => {
+    criticalMutationNoAuth.forEach((route) => {
       console.log(`  ${route.methods.join(', ')} ${route.apiPath}`);
       console.log(`    File: ${route.filePath}`);
       console.log(`    Auth: ${route.authType}`);
@@ -82,10 +84,12 @@ function main() {
   // Gate 2: AI/High-cost routes
   console.log(`${BOLD}Gate 2: AI/High-Cost Routes${RESET}`);
   if (criticalAINoAuth.length > 0) {
-    console.log(`${RED}✗ FAIL: ${criticalAINoAuth.length} AI/high-cost routes with NO authentication${RESET}\n`);
+    console.log(
+      `${RED}✗ FAIL: ${criticalAINoAuth.length} AI/high-cost routes with NO authentication${RESET}\n`
+    );
     failures++;
 
-    criticalAINoAuth.forEach(route => {
+    criticalAINoAuth.forEach((route) => {
       console.log(`  ${route.methods.join(', ')} ${route.apiPath}`);
       console.log(`    File: ${route.filePath}`);
       console.log(`    Auth: ${route.authType}`);
@@ -98,10 +102,12 @@ function main() {
   // Gate 3: Sensitive data routes
   console.log(`${BOLD}Gate 3: Sensitive Data Routes${RESET}`);
   if (sensitiveNoAuth.length > 0) {
-    console.log(`${RED}✗ FAIL: ${sensitiveNoAuth.length} sensitive routes with NO authentication${RESET}\n`);
+    console.log(
+      `${RED}✗ FAIL: ${sensitiveNoAuth.length} sensitive routes with NO authentication${RESET}\n`
+    );
     failures++;
 
-    sensitiveNoAuth.forEach(route => {
+    sensitiveNoAuth.forEach((route) => {
       console.log(`  ${route.methods.join(', ')} ${route.apiPath}`);
       console.log(`    File: ${route.filePath}`);
       console.log(`    Auth: ${route.authType}`);
@@ -114,14 +120,16 @@ function main() {
   // Gate 4: Weak authentication
   console.log(`${BOLD}Gate 4: Weak Authentication${RESET}`);
   if (weakAuth.length > 0) {
-    console.log(`${YELLOW}⚠  WARNING: ${weakAuth.length} routes with WEAK authentication${RESET}\n`);
+    console.log(
+      `${YELLOW}⚠  WARNING: ${weakAuth.length} routes with WEAK authentication${RESET}\n`
+    );
     // Don't fail CI for weak auth, just warn
 
-    weakAuth.forEach(route => {
+    weakAuth.forEach((route) => {
       console.log(`  ${route.methods.join(', ')} ${route.apiPath}`);
       console.log(`    File: ${route.filePath}`);
       console.log(`    Auth: ${route.authType}`);
-      route.securityIssues.forEach(issue => console.log(`    ${issue}`));
+      route.securityIssues.forEach((issue) => console.log(`    ${issue}`));
       console.log('');
     });
   } else {
@@ -131,7 +139,9 @@ function main() {
   // Summary
   console.log(`${BOLD}${YELLOW}=== SUMMARY ===${RESET}`);
   console.log(`Total routes analyzed: ${classifications.length}`);
-  console.log(`Critical violations: ${failures > 0 ? RED : GREEN}${criticalMutationNoAuth.length + criticalAINoAuth.length + sensitiveNoAuth.length}${RESET}`);
+  console.log(
+    `Critical violations: ${failures > 0 ? RED : GREEN}${criticalMutationNoAuth.length + criticalAINoAuth.length + sensitiveNoAuth.length}${RESET}`
+  );
   console.log(`Weak auth warnings: ${YELLOW}${weakAuth.length}${RESET}\n`);
 
   if (failures > 0) {

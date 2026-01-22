@@ -53,7 +53,7 @@ const eventsRouteContent = readFile('src/app/api/events/route.ts');
 
 check(
   'POST /api/events imports canCreateEvent',
-  eventsRouteContent.includes("import { canCreateEvent }") &&
+  eventsRouteContent.includes('import { canCreateEvent }') &&
     eventsRouteContent.includes("from '@/lib/entitlements'")
 );
 
@@ -63,7 +63,7 @@ check(
 check(
   'POST /api/events gets authenticated user',
   eventsRouteContent.includes('const user = await getUser()') &&
-    eventsRouteContent.includes("status: 401")
+    eventsRouteContent.includes('status: 401')
 );
 
 // ============================================================================
@@ -99,8 +99,7 @@ check(
 // ============================================================================
 check(
   'POST /api/events creates EventRole for user as HOST',
-  eventsRouteContent.includes('eventRole.create') &&
-    eventsRouteContent.includes("role: 'HOST'")
+  eventsRouteContent.includes('eventRole.create') && eventsRouteContent.includes("role: 'HOST'")
 );
 
 // ============================================================================
@@ -111,7 +110,7 @@ const eventIdRouteContent = readFile('src/app/api/events/[id]/route.ts');
 
 check(
   'PATCH /api/events/[id] imports canEditEvent',
-  eventIdRouteContent.includes("import { canEditEvent }") &&
+  eventIdRouteContent.includes('import { canEditEvent }') &&
     eventIdRouteContent.includes("from '@/lib/entitlements'")
 );
 
@@ -177,8 +176,8 @@ const newPlanPageContent = readFile('src/app/plan/new/page.tsx');
 
 check(
   '/plan/new page imports useEffect',
-  newPlanPageContent.includes("import { useState, useEffect }") ||
-    (newPlanPageContent.includes("useState") && newPlanPageContent.includes("useEffect"))
+  newPlanPageContent.includes('import { useState, useEffect }') ||
+    (newPlanPageContent.includes('useState') && newPlanPageContent.includes('useEffect'))
 );
 
 // ============================================================================
@@ -186,8 +185,7 @@ check(
 // ============================================================================
 check(
   '/plan/new page has canCreate state',
-  newPlanPageContent.includes('canCreate') &&
-    newPlanPageContent.includes('setCanCreate')
+  newPlanPageContent.includes('canCreate') && newPlanPageContent.includes('setCanCreate')
 );
 
 // ============================================================================
@@ -213,8 +211,7 @@ check(
 // ============================================================================
 check(
   '/plan/new page has upgrade button linking to /billing/upgrade',
-  newPlanPageContent.includes('/billing/upgrade') &&
-    newPlanPageContent.match(/upgrade/i) !== null
+  newPlanPageContent.includes('/billing/upgrade') && newPlanPageContent.match(/upgrade/i) !== null
 );
 
 // ============================================================================
@@ -223,10 +220,7 @@ check(
 console.log('\n📝 Check 19: GET /api/entitlements/check-create Endpoint');
 const checkCreateExists = fileExists('src/app/api/entitlements/check-create/route.ts');
 
-check(
-  'GET /api/entitlements/check-create endpoint exists',
-  checkCreateExists
-);
+check('GET /api/entitlements/check-create endpoint exists', checkCreateExists);
 
 // ============================================================================
 // Check 20: GET /api/entitlements/check-create uses canCreateEvent
@@ -236,7 +230,7 @@ if (checkCreateExists) {
 
   check(
     'GET /api/entitlements/check-create imports canCreateEvent',
-    checkCreateContent.includes("import { canCreateEvent }") &&
+    checkCreateContent.includes('import { canCreateEvent }') &&
       checkCreateContent.includes("from '@/lib/entitlements'")
   );
 
@@ -260,17 +254,18 @@ if (checkCreateExists) {
   check('GET /api/entitlements/check-create imports canCreateEvent', false, 'File does not exist');
   check('GET /api/entitlements/check-create checks authentication', false, 'File does not exist');
   check('GET /api/entitlements/check-create calls canCreateEvent', false, 'File does not exist');
-  check('GET /api/entitlements/check-create returns canCreate property', false, 'File does not exist');
+  check(
+    'GET /api/entitlements/check-create returns canCreate property',
+    false,
+    'File does not exist'
+  );
 }
 
 // ============================================================================
 // Check 24: Verification script exists
 // ============================================================================
 console.log('\n📝 Check 24: Documentation');
-check(
-  'Verification script exists (this file)',
-  fileExists('scripts/verify-ticket-2.6.ts')
-);
+check('Verification script exists (this file)', fileExists('scripts/verify-ticket-2.6.ts'));
 
 // ============================================================================
 // Summary

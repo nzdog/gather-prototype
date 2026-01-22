@@ -70,11 +70,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       preservedItems = await prisma.item.findMany({
         where: {
           team: { eventId },
-          OR: [
-            { source: 'MANUAL' },
-            { source: 'HOST_EDITED' },
-            { isProtected: true },
-          ],
+          OR: [{ source: 'MANUAL' }, { source: 'HOST_EDITED' }, { isProtected: true }],
         },
         include: {
           team: true,

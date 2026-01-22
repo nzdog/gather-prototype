@@ -422,11 +422,7 @@ async function testSuite3_RouteProtection() {
         : `Missing: ${!hasImport ? 'import' : ''} ${!hasCheck ? 'frozen check' : ''} ${!hasPatchFrozen || !hasDeleteFrozen ? 'both PATCH and DELETE checks' : ''}`
     );
   } catch (error: any) {
-    logTest(
-      'Coordinator item edit/delete routes have frozen validation',
-      false,
-      error.message
-    );
+    logTest('Coordinator item edit/delete routes have frozen validation', false, error.message);
   }
 
   // Test 3.6: Verify coordinator assign route has frozen validation
@@ -437,8 +433,7 @@ async function testSuite3_RouteProtection() {
     );
     const hasImport = coordAssignRoute.includes("from '@/lib/auth/guards'");
     const hasCheck = coordAssignRoute.includes('requireNotFrozen');
-    const hasPostFrozen =
-      coordAssignRoute.includes('// SECURITY: Block mutations when FROZEN');
+    const hasPostFrozen = coordAssignRoute.includes('// SECURITY: Block mutations when FROZEN');
     const hasDeleteFrozen =
       coordAssignRoute.split('// SECURITY: Block mutations when FROZEN').length > 2; // Should appear twice
     logTest(

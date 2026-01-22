@@ -101,7 +101,10 @@ export async function POST(
     });
 
     console.log('[AI Resolution] Successfully generated resolution');
-    console.log('[AI Resolution] Executable Actions Count:', suggestion.executableActions?.length || 0);
+    console.log(
+      '[AI Resolution] Executable Actions Count:',
+      suggestion.executableActions?.length || 0
+    );
 
     return NextResponse.json({
       suggestion,
@@ -119,15 +122,22 @@ export async function POST(
 function buildResolutionPrompt(conflict: any, event: any): string {
   // Build affected items info for timing conflicts
   let affectedItemsInfo = '';
-  if (conflict.type === 'TIMING' && conflict.affectedItems && Array.isArray(conflict.affectedItems)) {
+  if (
+    conflict.type === 'TIMING' &&
+    conflict.affectedItems &&
+    Array.isArray(conflict.affectedItems)
+  ) {
     const affectedItemIds = conflict.affectedItems;
     const allItems = event.teams.flatMap((t: any) => t.items);
     const items = allItems.filter((item: any) => affectedItemIds.includes(item.id));
 
     if (items.length > 0) {
-      affectedItemsInfo = `\nAffected Items (causing timing conflict):\n${items.map((item: any) =>
-        `- "${item.name}" (id: ${item.id}, serveTime: ${item.serveTime || 'unknown'})`
-      ).join('\n')}\n`;
+      affectedItemsInfo = `\nAffected Items (causing timing conflict):\n${items
+        .map(
+          (item: any) =>
+            `- "${item.name}" (id: ${item.id}, serveTime: ${item.serveTime || 'unknown'})`
+        )
+        .join('\n')}\n`;
     }
   }
 
