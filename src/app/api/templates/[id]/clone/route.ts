@@ -7,7 +7,7 @@ import { getUser } from '@/lib/auth/session';
  *
  * Clone template to new event.
  * Compares parameters (guest count) and offers quantity scaling if QuantitiesProfile exists.
- * SECURITY: Now uses session authentication instead of body param
+ * SECURITY: Verifies ownership before cloning, validates date parameters
  */
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   // SECURITY: Require authenticated user session
@@ -36,18 +36,37 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     );
   }
 
-  // Fetch the template
+  // SECURITY: Validate date parameters
+  if (startDate && isNaN(Date.parse(startDate))) {
+    return NextResponse.json({ error: 'Invalid start date' }, { status: 400 });
+  }
+
+  if (endDate && isNaN(Date.parse(endDate))) {
+    return NextResponse.json({ error: 'Invalid end date' }, { status: 400 });
+  }
+
+  // SECURITY: Fetch only ownership fields before authorization check
+  const templateCheck = await prisma.structureTemplate.findUnique({
+    where: { id: params.id },
+    select: { hostId: true, templateSource: true },
+  });
+
+  if (!templateCheck) {
+    return NextResponse.json({ error: 'Template not found' }, { status: 404 });
+  }
+
+  // SECURITY: Verify ownership for host templates before accessing template data
+  if (templateCheck.templateSource === 'HOST' && templateCheck.hostId !== hostId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
+
+  // Authorization passed - fetch full template for cloning
   const template = await prisma.structureTemplate.findUnique({
     where: { id: params.id },
   });
 
   if (!template) {
     return NextResponse.json({ error: 'Template not found' }, { status: 404 });
-  }
-
-  // If it's a host template, verify ownership
-  if (template.templateSource === 'HOST' && template.hostId !== hostId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
   // Get host person
