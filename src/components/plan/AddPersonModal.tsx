@@ -39,7 +39,7 @@ export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPer
 
   // Detect platform for keyboard shortcut display
   const isMac =
-    typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
