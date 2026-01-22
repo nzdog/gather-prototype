@@ -10,10 +10,7 @@ export async function POST(req: Request) {
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email || !emailRegex.test(email)) {
-      return Response.json(
-        { error: 'Invalid email address' },
-        { status: 400 }
-      );
+      return Response.json({ error: 'Invalid email address' }, { status: 400 });
     }
 
     // Rate limit check: max 3 requests per email per 15 minutes

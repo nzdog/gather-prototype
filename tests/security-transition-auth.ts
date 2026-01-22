@@ -27,10 +27,17 @@ const YELLOW = '\x1b[33m';
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
 
-function log(msg: string) { console.log(msg); }
-function pass(test: string) { total++; passed++; log(`${GREEN}✓${RESET} ${test}`); }
+function log(msg: string) {
+  console.log(msg);
+}
+function pass(test: string) {
+  total++;
+  passed++;
+  log(`${GREEN}✓${RESET} ${test}`);
+}
 function fail(test: string, detail: string) {
-  total++; failed++;
+  total++;
+  failed++;
   log(`${RED}✗${RESET} ${test}`);
   log(`  ${RED}${detail}${RESET}`);
   failures.push(`${test}: ${detail}`);
@@ -45,8 +52,8 @@ async function testUnauthTransitionFailClosed() {
 
   const res = await fetch(`${BASE_URL}/api/events/${fixtures.eventDraft.id}/transition`, {
     method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({actorId: 'not-a-real-id', to: 'FROZEN'})
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ actorId: 'not-a-real-id', to: 'FROZEN' }),
   });
 
   const body = await res.text();
@@ -57,19 +64,27 @@ async function testUnauthTransitionFailClosed() {
   } else if (res.status === 403) {
     pass('POST /api/events/:id/transition without auth returns 403 (acceptable)');
   } else if (res.status === 500) {
-    fail('Unauthenticated transition returns 500',
-      `CRITICAL: Returns 500 instead of 401. This exposes internal errors. Body: ${body.substring(0, 200)}`);
+    fail(
+      'Unauthenticated transition returns 500',
+      `CRITICAL: Returns 500 instead of 401. This exposes internal errors. Body: ${body.substring(0, 200)}`
+    );
   } else {
-    fail('Unauthenticated transition status',
-      `Expected 401/403, got ${res.status}. Body: ${body.substring(0, 200)}`);
+    fail(
+      'Unauthenticated transition status',
+      `Expected 401/403, got ${res.status}. Body: ${body.substring(0, 200)}`
+    );
   }
 
   // Secondary check: Response must not leak Prisma details
-  if (body.toLowerCase().includes('prisma') ||
-      body.toLowerCase().includes('foreign key') ||
-      body.toLowerCase().includes('actorId_fkey')) {
-    fail('Prisma error leak in unauth response',
-      `Response body contains internal database details: ${body.substring(0, 300)}`);
+  if (
+    body.toLowerCase().includes('prisma') ||
+    body.toLowerCase().includes('foreign key') ||
+    body.toLowerCase().includes('actorId_fkey')
+  ) {
+    fail(
+      'Prisma error leak in unauth response',
+      `Response body contains internal database details: ${body.substring(0, 300)}`
+    );
   } else {
     pass('Unauthenticated response does not leak internal details');
   }
@@ -84,10 +99,10 @@ async function testInvalidSessionTransition() {
   const res = await fetch(`${BASE_URL}/api/events/${fixtures.eventDraft.id}/transition`, {
     method: 'POST',
     headers: {
-      'Content-Type':'application/json',
-      'Cookie': 'session=INVALID_SESSION_TOKEN_SHOULD_FAIL'
+      'Content-Type': 'application/json',
+      Cookie: 'session=INVALID_SESSION_TOKEN_SHOULD_FAIL',
     },
-    body: JSON.stringify({actorId: 'fake-actor', to: 'FROZEN'})
+    body: JSON.stringify({ actorId: 'fake-actor', to: 'FROZEN' }),
   });
 
   const body = await res.text();
@@ -97,11 +112,15 @@ async function testInvalidSessionTransition() {
   } else if (res.status === 403) {
     pass('POST /api/events/:id/transition with invalid session returns 403 (acceptable)');
   } else if (res.status === 500) {
-    fail('Invalid session returns 500',
-      `Should return 401, got 500. Body: ${body.substring(0, 200)}`);
+    fail(
+      'Invalid session returns 500',
+      `Should return 401, got 500. Body: ${body.substring(0, 200)}`
+    );
   } else {
-    fail('Invalid session status',
-      `Expected 401/403, got ${res.status}. Body: ${body.substring(0, 200)}`);
+    fail(
+      'Invalid session status',
+      `Expected 401/403, got ${res.status}. Body: ${body.substring(0, 200)}`
+    );
   }
 }
 
@@ -116,9 +135,9 @@ async function testAuthenticatedTransition() {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Cookie': fixtures.user.sessionCookie
+      Cookie: fixtures.user.sessionCookie,
     },
-    body: JSON.stringify({}) // No actorId - should be derived from session
+    body: JSON.stringify({}), // No actorId - should be derived from session
   });
 
   const body = await res.text();
@@ -130,14 +149,20 @@ async function testAuthenticatedTransition() {
     // 400 is acceptable if there are gate blocks or validation errors
     pass('Authenticated host gets validation error (400) - acceptable');
   } else if (res.status === 401 || res.status === 403) {
-    fail('Authenticated transition auth failure',
-      `Valid auth but got ${res.status}. Body: ${body.substring(0, 200)}`);
+    fail(
+      'Authenticated transition auth failure',
+      `Valid auth but got ${res.status}. Body: ${body.substring(0, 200)}`
+    );
   } else if (res.status === 500) {
-    fail('Authenticated transition returns 500',
-      `Should not return 500 for authed request. Body: ${body.substring(0, 200)}`);
+    fail(
+      'Authenticated transition returns 500',
+      `Should not return 500 for authed request. Body: ${body.substring(0, 200)}`
+    );
   } else {
-    fail('Authenticated transition unexpected status',
-      `Got ${res.status}. Body: ${body.substring(0, 200)}`);
+    fail(
+      'Authenticated transition unexpected status',
+      `Got ${res.status}. Body: ${body.substring(0, 200)}`
+    );
   }
 }
 
@@ -154,19 +179,19 @@ async function testNoPrismaLeak() {
       url: `${BASE_URL}/api/events/${fixtures.eventDraft.id}/transition`,
       options: {
         method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({actorId: 'not-a-real-id', to: 'FROZEN'})
-      }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actorId: 'not-a-real-id', to: 'FROZEN' }),
+      },
     },
     {
       name: 'Unauth with non-existent event',
       url: `${BASE_URL}/api/events/cm000000000000000000000000/transition`,
       options: {
         method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({actorId: 'fake', to: 'FROZEN'})
-      }
-    }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actorId: 'fake', to: 'FROZEN' }),
+      },
+    },
   ];
 
   let anyLeak = false;
@@ -186,17 +211,19 @@ async function testNoPrismaLeak() {
       '.findUnique',
       '.create',
       '@prisma',
-      'PrismaClientKnownRequestError'
+      'PrismaClientKnownRequestError',
     ];
 
-    const foundLeaks = leakPatterns.filter(pattern =>
+    const foundLeaks = leakPatterns.filter((pattern) =>
       body.toLowerCase().includes(pattern.toLowerCase())
     );
 
     if (foundLeaks.length > 0) {
       anyLeak = true;
-      fail(`Prisma leak in ${test.name}`,
-        `Found internal details: ${foundLeaks.join(', ')}. Body: ${body.substring(0, 300)}`);
+      fail(
+        `Prisma leak in ${test.name}`,
+        `Found internal details: ${foundLeaks.join(', ')}. Body: ${body.substring(0, 300)}`
+      );
     }
   }
 
@@ -229,14 +256,13 @@ async function main() {
 
     if (failed > 0) {
       log(`\n${BOLD}${RED}Failures:${RESET}`);
-      failures.forEach(f => log(`  - ${f}`));
+      failures.forEach((f) => log(`  - ${f}`));
       log(`\n${RED}${BOLD}✗ SECURITY TEST FAILED${RESET}`);
       process.exitCode = 1;
       return;
     } else {
       log(`\n${GREEN}${BOLD}✓ ALL SECURITY TESTS PASSED${RESET}`);
     }
-
   } catch (error) {
     console.error(`${RED}${BOLD}Test setup/execution error:${RESET}`, error);
     process.exitCode = 1;

@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth/session';
 import { canCreateEvent } from '@/lib/entitlements';
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     // Get authenticated user
     const user = await getUser();
@@ -18,9 +18,9 @@ export async function GET(request: NextRequest) {
       where: {
         eventRoles: {
           some: {
-            userId: user.id
-          }
-        }
+            userId: user.id,
+          },
+        },
       },
       include: {
         _count: {
@@ -31,8 +31,8 @@ export async function GET(request: NextRequest) {
         },
         eventRoles: {
           where: { userId: user.id },
-          select: { role: true }
-        }
+          select: { role: true },
+        },
       },
       orderBy: {
         createdAt: 'desc',

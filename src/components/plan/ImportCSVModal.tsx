@@ -41,7 +41,12 @@ const TARGET_FIELDS = [
   { value: 'ignore', label: 'Ignore' },
 ] as const;
 
-export default function ImportCSVModal({ isOpen, onClose, onImport, teams: _teams }: ImportCSVModalProps) {
+export default function ImportCSVModal({
+  isOpen,
+  onClose,
+  onImport,
+  teams: _teams,
+}: ImportCSVModalProps) {
   const { openModal, closeModal } = useModal();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -51,7 +56,11 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams: _team
   const [parsedPeople, setParsedPeople] = useState<ParsedRow[]>([]);
   const [importing, setImporting] = useState(false);
   const [_splitFullName, __setSplitFullName] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // SECURITY: File validation constants
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
   // Modal blocking check
   useEffect(() => {
@@ -72,6 +81,7 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams: _team
     setMappings([]);
     setParsedPeople([]);
     setImporting(false);
+    setFileError(null);
     // _setSplitFullName(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -83,10 +93,31 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams: _team
     onClose();
   };
 
-  // Step 1: Parse CSV
+  // Step 1: Parse CSV with validation
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Reset previous error
+    setFileError(null);
+
+    // SECURITY: Validate file size
+    if (file.size > MAX_FILE_SIZE) {
+      setFileError('File too large. Maximum size is 5MB.');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    // SECURITY: Validate file type
+    if (!file.name.endsWith('.csv') && file.type !== 'text/csv') {
+      setFileError('Please select a CSV file.');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
 
     setCsvFile(file);
 
@@ -123,17 +154,30 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams: _team
         return { csvColumn: header, targetField: 'firstName' };
       }
       // Check for last name
-      if (lowerHeader.includes('last') || lowerHeader === 'lname' || lowerHeader === 'surname' || lowerHeader === 'family') {
+      if (
+        lowerHeader.includes('last') ||
+        lowerHeader === 'lname' ||
+        lowerHeader === 'surname' ||
+        lowerHeader === 'family'
+      ) {
         return { csvColumn: header, targetField: 'lastName' };
       }
       // Full name (catch-all for "name" without first/last)
       if (lowerHeader.includes('name')) {
         return { csvColumn: header, targetField: 'name' };
       }
-      if (lowerHeader.includes('email') || lowerHeader.includes('e-mail') || lowerHeader === 'mail') {
+      if (
+        lowerHeader.includes('email') ||
+        lowerHeader.includes('e-mail') ||
+        lowerHeader === 'mail'
+      ) {
         return { csvColumn: header, targetField: 'email' };
       }
-      if (lowerHeader.includes('phone') || lowerHeader.includes('mobile') || lowerHeader.includes('tel')) {
+      if (
+        lowerHeader.includes('phone') ||
+        lowerHeader.includes('mobile') ||
+        lowerHeader.includes('tel')
+      ) {
         return { csvColumn: header, targetField: 'phone' };
       }
 
@@ -149,7 +193,16 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams: _team
     setMappings((prev) =>
       prev.map((m) =>
         m.csvColumn === csvColumn
-          ? { ...m, targetField: targetField as 'name' | 'firstName' | 'lastName' | 'email' | 'phone' | 'ignore' }
+          ? {
+              ...m,
+              targetField: targetField as
+                | 'name'
+                | 'firstName'
+                | 'lastName'
+                | 'email'
+                | 'phone'
+                | 'ignore',
+            }
           : m
       )
     );
@@ -258,7 +311,9 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams: _team
       if (indices.length > 1) {
         indices.forEach((i) => {
           people[i]._isDuplicate = true;
-          people[i]._validationWarnings.push(`Duplicate email (rows: ${indices.map((idx) => people[idx]._rowIndex).join(', ')})`);
+          people[i]._validationWarnings.push(
+            `Duplicate email (rows: ${indices.map((idx) => people[idx]._rowIndex).join(', ')})`
+          );
         });
       }
     });
@@ -268,7 +323,9 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams: _team
         indices.forEach((i) => {
           if (!people[i]._isDuplicate) {
             people[i]._isDuplicate = true;
-            people[i]._validationWarnings.push(`Duplicate name+phone (rows: ${indices.map((idx) => people[idx]._rowIndex).join(', ')})`);
+            people[i]._validationWarnings.push(
+              `Duplicate name+phone (rows: ${indices.map((idx) => people[idx]._rowIndex).join(', ')})`
+            );
           }
         });
       }
@@ -291,9 +348,7 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams: _team
 
     setParsedPeople((prev) =>
       prev.map((p) =>
-        p._validationErrors.length === 0
-          ? { ...p, _selected: !allValidSelected }
-          : p
+        p._validationErrors.length === 0 ? { ...p, _selected: !allValidSelected } : p
       )
     );
   };
@@ -387,8 +442,8 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams: _team
             <div className="space-y-4">
               <div className="bg-sage-50 border border-sage-200 rounded-lg p-4">
                 <p className="text-sm text-sage-900">
-                  <strong>CSV Format:</strong> Your CSV should include a header row with column names.
-                  At minimum, include names. Email and phone are optional.
+                  <strong>CSV Format:</strong> Your CSV should include a header row with column
+                  names. At minimum, include names. Email and phone are optional.
                 </p>
                 <p className="text-sm text-sage-900 mt-2">
                   <strong>Example:</strong> Name, Email, Phone
@@ -411,7 +466,15 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams: _team
                 >
                   Choose CSV File
                 </label>
-                {csvFile && (
+                {fileError && (
+                  <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                    <p className="text-sm text-red-600 flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4" />
+                      {fileError}
+                    </p>
+                  </div>
+                )}
+                {csvFile && !fileError && (
                   <p className="text-sm text-gray-600 mt-2">
                     Selected: {csvFile.name} ({csvHeaders.length} columns, {csvRows.length} rows)
                   </p>
@@ -435,8 +498,8 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams: _team
                 mappings.some((m) => m.targetField === 'lastName') && (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                     <p className="text-sm text-green-900">
-                      <strong>✓ First + Last Name detected:</strong> Names will be stored as "Last, First"
-                      format to enable sorting by last name.
+                      <strong>✓ First + Last Name detected:</strong> Names will be stored as "Last,
+                      First" format to enable sorting by last name.
                     </p>
                   </div>
                 )}
@@ -508,7 +571,8 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams: _team
                         <input
                           type="checkbox"
                           checked={
-                            parsedPeople.filter((p) => p._validationErrors.length === 0).length > 0 &&
+                            parsedPeople.filter((p) => p._validationErrors.length === 0).length >
+                              0 &&
                             parsedPeople
                               .filter((p) => p._validationErrors.length === 0)
                               .every((p) => p._selected)
@@ -517,9 +581,7 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams: _team
                           className="w-4 h-4"
                         />
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-700">
-                        Row
-                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-700">Row</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-700">
                         Name
                       </th>
@@ -619,7 +681,9 @@ export default function ImportCSVModal({ isOpen, onClose, onImport, teams: _team
                 disabled={importing || selectedCount === 0}
                 className="px-4 py-2 bg-sage-600 text-white rounded-md hover:bg-sage-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {importing ? 'Importing...' : `Import ${selectedCount} ${selectedCount === 1 ? 'Person' : 'People'}`}
+                {importing
+                  ? 'Importing...'
+                  : `Import ${selectedCount} ${selectedCount === 1 ? 'Person' : 'People'}`}
               </button>
             )}
           </div>

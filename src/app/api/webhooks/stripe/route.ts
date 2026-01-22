@@ -26,16 +26,12 @@ export async function POST(req: Request) {
   let event: Stripe.Event;
 
   try {
-    event = stripe.webhooks.constructEvent(
-      body,
-      signature,
-      STRIPE_WEBHOOK_SECRET
-    );
+    event = stripe.webhooks.constructEvent(body, signature, STRIPE_WEBHOOK_SECRET);
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown error';
     console.error('[Stripe Webhook] Signature verification failed:', errorMessage);
     return new Response(`Webhook signature verification failed: ${errorMessage}`, {
-      status: 400
+      status: 400,
     });
   }
 
@@ -70,8 +66,9 @@ export async function POST(req: Request) {
         const invoice = event.data.object as Stripe.Invoice;
         const stripeCustomerId = invoice.customer as string;
         // In API version 2025-12-15.clover, subscription details are nested
-        const stripeSubscriptionId =
-          invoice.parent?.subscription_details?.subscription as string | null;
+        const stripeSubscriptionId = invoice.parent?.subscription_details?.subscription as
+          | string
+          | null;
         console.log('[Stripe Webhook] Invoice paid:', invoice.id);
         await handleInvoicePaid(stripeCustomerId, stripeSubscriptionId);
         break;
@@ -91,13 +88,13 @@ export async function POST(req: Request) {
 
     return new Response(JSON.stringify({ received: true }), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     });
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown error';
     console.error('[Stripe Webhook] Error processing event:', errorMessage);
     return new Response(`Webhook processing error: ${errorMessage}`, {
-      status: 500
+      status: 500,
     });
   }
 }

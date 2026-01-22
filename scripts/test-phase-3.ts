@@ -68,12 +68,12 @@ async function runTests() {
       log('Creating test event with conflict triggers...');
 
       testHost = await prisma.person.findFirst({
-        where: { name: 'Jacqui & Ian' }
+        where: { name: 'Jacqui & Ian' },
       });
 
       if (!testHost) {
         testHost = await prisma.person.create({
-          data: { name: 'Test Host Phase 3', email: 'test-phase3@example.com' }
+          data: { name: 'Test Host Phase 3', email: 'test-phase3@example.com' },
         });
       }
 
@@ -215,7 +215,7 @@ async function runTests() {
       log('Dismissing a conflict...');
 
       // Get a new conflict to dismiss
-      const activeConflicts = testConflicts.filter(c => c.status === 'OPEN');
+      const activeConflicts = testConflicts.filter((c) => c.status === 'OPEN');
 
       if (activeConflicts.length === 0) {
         throw new Error('No open conflicts to dismiss');
@@ -250,7 +250,10 @@ async function runTests() {
     try {
       log('Listing dismissed conflicts...');
 
-      const response = await apiCall('GET', `/api/events/${testEvent.id}/conflicts?status=dismissed`);
+      const response = await apiCall(
+        'GET',
+        `/api/events/${testEvent.id}/conflicts?status=dismissed`
+      );
 
       if (!response.conflicts || !Array.isArray(response.conflicts)) {
         throw new Error('No conflicts array returned');
@@ -276,7 +279,10 @@ async function runTests() {
       log('Acknowledging a CRITICAL conflict...');
 
       // Find a CRITICAL conflict (dietary gap)
-      const allConflictsResponse = await apiCall('GET', `/api/events/${testEvent.id}/conflicts?status=all`);
+      const allConflictsResponse = await apiCall(
+        'GET',
+        `/api/events/${testEvent.id}/conflicts?status=all`
+      );
       const criticalConflict = allConflictsResponse.conflicts.find(
         (c: any) => c.severity === 'CRITICAL' && c.status === 'OPEN'
       );
@@ -290,7 +296,8 @@ async function runTests() {
         `/api/events/${testEvent.id}/conflicts/${criticalConflict.id}/acknowledge`,
         {
           acknowledgedBy: testHost.id,
-          impactStatement: 'Vegetarian guests will eat from sides and salads - confirmed with affected guests directly',
+          impactStatement:
+            'Vegetarian guests will eat from sides and salads - confirmed with affected guests directly',
           impactUnderstood: true,
           mitigationPlanType: 'COMMUNICATE',
         }
@@ -324,7 +331,9 @@ async function runTests() {
       }
 
       log(`  Acknowledgement created with ID: ${ack.id}`);
-      log(`  Visibility: cohosts=${ack.visibilityCohosts}, coordinators=${ack.visibilityCoordinators}`);
+      log(
+        `  Visibility: cohosts=${ack.visibilityCohosts}, coordinators=${ack.visibilityCoordinators}`
+      );
 
       pass('7. Acknowledge CRITICAL conflict with validation');
     } catch (error: any) {
@@ -337,7 +346,10 @@ async function runTests() {
     try {
       log('Testing acknowledgement validation (short statement)...');
 
-      const allConflictsResponse = await apiCall('GET', `/api/events/${testEvent.id}/conflicts?status=all`);
+      const allConflictsResponse = await apiCall(
+        'GET',
+        `/api/events/${testEvent.id}/conflicts?status=all`
+      );
       const criticalConflict = allConflictsResponse.conflicts.find(
         (c: any) => c.severity === 'CRITICAL' && c.status === 'OPEN'
       );
@@ -409,7 +421,10 @@ async function runTests() {
     try {
       log('Testing acknowledgement validation (missing reference)...');
 
-      const allConflictsResponse = await apiCall('GET', `/api/events/${testEvent.id}/conflicts?status=all`);
+      const allConflictsResponse = await apiCall(
+        'GET',
+        `/api/events/${testEvent.id}/conflicts?status=all`
+      );
       const criticalConflict = allConflictsResponse.conflicts.find(
         (c: any) => c.severity === 'CRITICAL' && c.status === 'OPEN'
       );
@@ -448,7 +463,10 @@ async function runTests() {
     try {
       log('Testing acknowledgement validation (impactUnderstood=false)...');
 
-      const allConflictsResponse = await apiCall('GET', `/api/events/${testEvent.id}/conflicts?status=all`);
+      const allConflictsResponse = await apiCall(
+        'GET',
+        `/api/events/${testEvent.id}/conflicts?status=all`
+      );
       const criticalConflict = allConflictsResponse.conflicts.find(
         (c: any) => c.severity === 'CRITICAL' && c.status === 'OPEN'
       );
@@ -487,7 +505,10 @@ async function runTests() {
     try {
       log('Testing acknowledgement validation (missing mitigationPlanType)...');
 
-      const allConflictsResponse = await apiCall('GET', `/api/events/${testEvent.id}/conflicts?status=all`);
+      const allConflictsResponse = await apiCall(
+        'GET',
+        `/api/events/${testEvent.id}/conflicts?status=all`
+      );
       const criticalConflict = allConflictsResponse.conflicts.find(
         (c: any) => c.severity === 'CRITICAL' && c.status === 'OPEN'
       );
@@ -547,14 +568,13 @@ async function runTests() {
       log('Cleaning up test data...');
 
       await prisma.event.delete({
-        where: { id: testEvent.id }
+        where: { id: testEvent.id },
       });
 
       pass('10. Cleanup test data');
     } catch (error: any) {
       fail('10. Cleanup test data', error.message);
     }
-
   } catch (error: any) {
     console.error('\n❌ Fatal error during tests:', error.message);
   }
@@ -566,17 +586,19 @@ async function runTests() {
   console.log('='.repeat(50));
   console.log('\n📊 TEST SUMMARY\n');
 
-  const passed = results.filter(r => r.passed).length;
-  const failed = results.filter(r => !r.passed).length;
+  const passed = results.filter((r) => r.passed).length;
+  const failed = results.filter((r) => !r.passed).length;
 
   console.log(`Phase 3 Conflict System: ${passed}/11 tests passed`);
 
   if (failed > 0) {
     console.log(`\n⚠️  ${failed} test(s) failed:\n`);
-    results.filter(r => !r.passed).forEach(r => {
-      console.log(`  - ${r.test}`);
-      console.log(`    ${r.error}\n`);
-    });
+    results
+      .filter((r) => !r.passed)
+      .forEach((r) => {
+        console.log(`  - ${r.test}`);
+        console.log(`    ${r.error}\n`);
+      });
   }
 
   console.log('');

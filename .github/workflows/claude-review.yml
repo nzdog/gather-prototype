@@ -1,0 +1,175 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  review:
+    name: Claude Review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Get changed files
+        id: files
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          git diff --name-only origin/${{ github.base_ref }}...HEAD -- '*.ts' '*.tsx' '*.js' '*.jsx' '*.yml' '*.yaml' ':!*.test.*' ':!*.spec.*' > changed_files.txt
+          echo "Changed files:"
+          cat changed_files.txt
+          echo "count=$(wc -l < changed_files.txt | tr -d ' ')" >> $GITHUB_OUTPUT
+
+      - name: Generate file diffs
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          mkdir -p diffs
+
+          # Create individual diff for each file
+          while IFS= read -r file; do
+            if [ -n "$file" ]; then
+              safe_name=$(echo "$file" | tr '/' '_')
+              git diff origin/${{ github.base_ref }}...HEAD -- "$file" > "diffs/${safe_name}.diff"
+            fi
+          done < changed_files.txt
+
+          echo "Generated diffs:"
+          ls -la diffs/
+
+      - name: Claude Code Review
+        uses: actions/github-script@v7
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            // Read all diff files
+            const diffsDir = 'diffs';
+            const diffFiles = fs.readdirSync(diffsDir).filter(f => f.endsWith('.diff'));
+
+            if (diffFiles.length === 0) {
+              console.log('No code changes to review');
+              return;
+            }
+
+            // Group files into chunks (~25KB per chunk to stay within limits)
+            const maxChunkSize = 25000;
+            const chunks = [];
+            let currentChunk = { files: [], content: '', size: 0 };
+
+            for (const diffFile of diffFiles) {
+              const content = fs.readFileSync(path.join(diffsDir, diffFile), 'utf8');
+              const fileName = diffFile.replace('.diff', '').replace(/_/g, '/');
+
+              if (content.trim() === '') continue;
+
+              const entry = `\n### File: ${fileName}\n\`\`\`diff\n${content}\n\`\`\`\n`;
+
+              if (currentChunk.size + entry.length > maxChunkSize && currentChunk.files.length > 0) {
+                chunks.push(currentChunk);
+                currentChunk = { files: [], content: '', size: 0 };
+              }
+
+              currentChunk.files.push(fileName);
+              currentChunk.content += entry;
+              currentChunk.size += entry.length;
+            }
+
+            if (currentChunk.files.length > 0) {
+              chunks.push(currentChunk);
+            }
+
+            console.log(`Processing ${diffFiles.length} files in ${chunks.length} chunk(s)`);
+
+            // Review each chunk
+            const reviews = [];
+
+            for (let i = 0; i < chunks.length; i++) {
+              const chunk = chunks[i];
+              console.log(`Reviewing chunk ${i + 1}/${chunks.length}: ${chunk.files.length} files`);
+
+              const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-api-key': process.env.ANTHROPIC_API_KEY,
+                  'anthropic-version': '2023-06-01'
+                },
+                body: JSON.stringify({
+                  model: 'claude-sonnet-4-20250514',
+                  max_tokens: 4096,
+                  messages: [{
+                    role: 'user',
+                    content: `You are a senior code reviewer. Review these file changes and identify ONLY actionable issues.
+
+            Focus on:
+            1. **Security** - Auth bypass, injection, data exposure, missing validation
+            2. **Bugs** - Logic errors, null refs, race conditions, edge cases
+            3. **Performance** - N+1 queries, memory leaks, inefficient loops
+
+            Rules:
+            - Be concise - one line per issue
+            - Skip minor style issues (formatting, naming preferences)
+            - Skip demo/example/test files unless they have real bugs
+            - If a file looks good, don't mention it
+            - Group issues by severity: 🔴 Critical, 🟠 Warning, 🟡 Suggestion
+
+            Files in this batch: ${chunk.files.join(', ')}
+
+            ${chunk.content}
+            `
+                  }]
+                })
+              });
+
+              const data = await response.json();
+
+              if (data.error) {
+                console.log('Claude API error:', data.error);
+                reviews.push(`**Chunk ${i + 1} error:** ${data.error.message}`);
+                continue;
+              }
+
+              reviews.push(data.content[0].text);
+
+              // Rate limiting - wait 1 second between calls
+              if (i < chunks.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+              }
+            }
+
+            // Build summary
+            const changedFiles = fs.readFileSync('changed_files.txt', 'utf8').trim().split('\n').filter(f => f);
+
+            const summary = `## 🤖 Claude Code Review
+
+            **Files reviewed:** ${changedFiles.length}
+            **Review chunks:** ${chunks.length}
+
+            ---
+
+            ${reviews.join('\n\n---\n\n')}
+
+            ---
+            *Automated review by Claude*`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: summary
+            });

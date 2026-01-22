@@ -299,7 +299,7 @@ ${params.venue.bbqAvailable ? `- BBQ: Available` : ''}
       prompt += `\n${team.teamName} (${team.teamDomain}):
   Scope: ${team.teamScope}
   Items:
-${team.items.map(item => `    - ${item.name}: ${item.quantity}${item.critical ? ' [CRITICAL]' : ''}${item.dietaryTags.length > 0 ? ` (${item.dietaryTags.join(', ')})` : ''}`).join('\n')}
+${team.items.map((item) => `    - ${item.name}: ${item.quantity}${item.critical ? ' [CRITICAL]' : ''}${item.dietaryTags.length > 0 ? ` (${item.dietaryTags.join(', ')})` : ''}`).join('\n')}
 `;
     }
   }

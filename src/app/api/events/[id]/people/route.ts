@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
 
 // GET /api/events/[id]/people - List people on this event
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const eventId = params.id;
+
+    // Require HOST, COHOST, or COORDINATOR role
+    const auth = await requireEventRole(eventId, ['HOST', 'COHOST', 'COORDINATOR']);
+    if (auth instanceof NextResponse) return auth;
 
     const people = await prisma.personEvent.findMany({
       where: { eventId },
@@ -67,20 +69,19 @@ export async function GET(
 }
 
 // POST /api/events/[id]/people - Add person to event
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const eventId = params.id;
+
+    // Only HOST and COHOST can add people
+    const auth = await requireEventRole(eventId, ['HOST', 'COHOST']);
+    if (auth instanceof NextResponse) return auth;
+
     const body = await request.json();
     const { name, email, phone, role, teamId } = body;
 
     if (!name) {
-      return NextResponse.json(
-        { error: 'Name is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
     // Validate team belongs to event (if teamId provided)
@@ -124,10 +125,7 @@ export async function POST(
     });
 
     if (existing) {
-      return NextResponse.json(
-        { error: 'Person is already part of this event' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Person is already part of this event' }, { status: 400 });
     }
 
     // Create PersonEvent linking person to event and team

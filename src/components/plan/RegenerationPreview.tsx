@@ -77,14 +77,18 @@ export default function RegenerationPreview({
             <div className="flex gap-6 text-sm">
               <div>
                 <span className="font-medium">Teams:</span>{' '}
-                <span className={teamsDiff > 0 ? 'text-green-700' : teamsDiff < 0 ? 'text-red-700' : ''}>
+                <span
+                  className={teamsDiff > 0 ? 'text-green-700' : teamsDiff < 0 ? 'text-red-700' : ''}
+                >
                   {preview.current.totalTeams} → {preview.proposed.totalTeams}
                   {teamsDiff !== 0 && ` (${teamsDiff > 0 ? '+' : ''}${teamsDiff})`}
                 </span>
               </div>
               <div>
                 <span className="font-medium">Items:</span>{' '}
-                <span className={itemsDiff > 0 ? 'text-green-700' : itemsDiff < 0 ? 'text-red-700' : ''}>
+                <span
+                  className={itemsDiff > 0 ? 'text-green-700' : itemsDiff < 0 ? 'text-red-700' : ''}
+                >
                   {preview.current.totalItems} → {preview.proposed.totalItems}
                   {itemsDiff !== 0 && ` (${itemsDiff > 0 ? '+' : ''}${itemsDiff})`}
                 </span>

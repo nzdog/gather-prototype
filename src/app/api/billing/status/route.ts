@@ -46,9 +46,6 @@ export async function GET(_req: Request) {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[Billing Status] Error fetching status:', errorMessage);
-    return NextResponse.json(
-      { error: 'Failed to fetch billing status' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch billing status' }, { status: 500 });
   }
 }

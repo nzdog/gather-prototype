@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
 
 interface PersonToImport {
   name: string;
@@ -10,20 +11,19 @@ interface PersonToImport {
 }
 
 // POST /api/events/[id]/people/batch-import - Import multiple people at once
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const eventId = params.id;
+
+    // SECURITY: Require HOST role to batch import people (sensitive PII operation)
+    const auth = await requireEventRole(eventId, ['HOST']);
+    if (auth instanceof NextResponse) return auth;
+
     const body = await request.json();
     const { people } = body as { people: PersonToImport[] };
 
     if (!Array.isArray(people) || people.length === 0) {
-      return NextResponse.json(
-        { error: 'No people provided for import' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'No people provided for import' }, { status: 400 });
     }
 
     // Validate event exists

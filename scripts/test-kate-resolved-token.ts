@@ -3,7 +3,7 @@ import { resolveToken } from '../src/lib/auth';
 const token = '486803efed95048a4dd783fffe26913f174d8df62f299a427759cc88654defef';
 
 async function test() {
-  console.log('🔍 Testing Kate\'s new coordinator token resolution...\n');
+  console.log("🔍 Testing Kate's new coordinator token resolution...\n");
   const result = await resolveToken(token);
 
   if (!result) {
@@ -29,7 +29,7 @@ async function test() {
   process.exit(0);
 }
 
-test().catch(err => {
+test().catch((err) => {
   console.error('Error:', err);
   process.exit(1);
 });

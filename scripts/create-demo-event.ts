@@ -13,12 +13,12 @@ async function createDemoEvent() {
   try {
     // Get or create host
     let host = await prisma.person.findFirst({
-      where: { name: 'Jacqui & Ian' }
+      where: { name: 'Jacqui & Ian' },
     });
 
     if (!host) {
       host = await prisma.person.create({
-        data: { name: 'Demo Host', email: 'demo@gather.app' }
+        data: { name: 'Demo Host', email: 'demo@gather.app' },
       });
     }
 
@@ -46,7 +46,9 @@ async function createDemoEvent() {
     console.log(`✓ Event created: ${event.name}`);
     console.log(`  ID: ${event.id}`);
     console.log(`  Occasion: ${event.occasionType}`);
-    console.log(`  Guests: ${event.guestCount} (${event.dietaryVegetarian} vegetarian, ${event.dietaryGlutenFree} GF)`);
+    console.log(
+      `  Guests: ${event.guestCount} (${event.dietaryVegetarian} vegetarian, ${event.dietaryGlutenFree} GF)`
+    );
     console.log('');
 
     // Create teams
@@ -152,7 +154,6 @@ async function createDemoEvent() {
     console.log('   - Suggestions to fix issues');
     console.log('   - Gate check preventing transition');
     console.log('');
-
   } catch (error) {
     console.error('❌ Error creating demo event:', error);
   } finally {

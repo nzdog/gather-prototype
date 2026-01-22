@@ -99,10 +99,7 @@ function DraggablePersonChip({
         }`}
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <div
-            {...listeners}
-            className="cursor-grab active:cursor-grabbing"
-          >
+          <div {...listeners} className="cursor-grab active:cursor-grabbing">
             <GripVertical className="w-4 h-4 text-gray-400 flex-shrink-0" />
           </div>
           <button
@@ -117,7 +114,9 @@ function DraggablePersonChip({
                 {person.name}
               </p>
               {person.role === 'COORDINATOR' && (
-                <span className={`px-2 py-0.5 text-xs font-medium rounded ${getRoleBadgeColor(person.role)}`}>
+                <span
+                  className={`px-2 py-0.5 text-xs font-medium rounded ${getRoleBadgeColor(person.role)}`}
+                >
                   {getRoleLabel(person.role)}
                 </span>
               )}
@@ -143,9 +142,7 @@ function DraggablePersonChip({
           {menuOpen === person.personId && (
             <div className="absolute right-0 top-8 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-10">
               <div className="py-1">
-                <div className="px-3 py-2 text-xs font-medium text-gray-500 border-b">
-                  Move to
-                </div>
+                <div className="px-3 py-2 text-xs font-medium text-gray-500 border-b">Move to</div>
                 {teams.map((team) => (
                   <button
                     key={team.id}
@@ -297,7 +294,9 @@ export default function TeamBoard({ teams, people, onMovePerson, onEditPerson }:
           <div className="flex items-center gap-2">
             <p className="text-sm font-medium text-gray-900 truncate">{person.name}</p>
             {person.role === 'COORDINATOR' && (
-              <span className={`px-2 py-0.5 text-xs font-medium rounded ${getRoleBadgeColor(person.role)}`}>
+              <span
+                className={`px-2 py-0.5 text-xs font-medium rounded ${getRoleBadgeColor(person.role)}`}
+              >
                 {getRoleLabel(person.role)}
               </span>
             )}

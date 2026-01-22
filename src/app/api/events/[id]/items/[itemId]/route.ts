@@ -2,13 +2,19 @@
 // DELETE /api/events/[id]/items/[itemId] - Delete item
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
 
 export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string; itemId: string }> }
 ) {
   try {
-    const { id: _eventId, itemId } = await context.params;
+    const { id: eventId, itemId } = await context.params;
+
+    // SECURITY: Require HOST or COORDINATOR role to update items
+    const auth = await requireEventRole(eventId, ['HOST', 'COORDINATOR']);
+    if (auth instanceof NextResponse) return auth;
+
     const body = await request.json();
 
     // Fetch current item to check if it's generated
@@ -105,6 +111,10 @@ export async function DELETE(
 ) {
   try {
     const { id: eventId, itemId } = await context.params;
+
+    // SECURITY: Require HOST or COORDINATOR role to delete items
+    const auth = await requireEventRole(eventId, ['HOST', 'COORDINATOR']);
+    if (auth instanceof NextResponse) return auth;
 
     // Verify item exists
     const item = await prisma.item.findUnique({

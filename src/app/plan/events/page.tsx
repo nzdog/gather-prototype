@@ -25,6 +25,8 @@ export default function EventsPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [showArchived, setShowArchived] = useState(false);
+  const [eventToDelete, setEventToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [confirmText, setConfirmText] = useState('');
 
   useEffect(() => {
     loadEvents();
@@ -89,29 +91,17 @@ export default function EventsPage() {
     }
   };
 
-  const handleDelete = async (eventId: string, eventName: string, e: React.MouseEvent) => {
+  const handleDelete = (eventId: string, eventName: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent event card click
+    setEventToDelete({ id: eventId, name: eventName });
+    setConfirmText(''); // Reset confirmation text
+  };
 
-    const confirmed = confirm(
-      `⚠️ PERMANENTLY DELETE "${eventName}"?\n\n` +
-      `This action CANNOT be undone.\n\n` +
-      `All data will be lost:\n` +
-      `• Teams and items\n` +
-      `• People and assignments\n` +
-      `• History and revisions\n\n` +
-      `Type the event name to confirm deletion.`
-    );
-
-    if (!confirmed) return;
-
-    const userInput = prompt(`Type "${eventName}" to confirm permanent deletion:`);
-    if (userInput !== eventName) {
-      alert('Event name did not match. Deletion cancelled.');
-      return;
-    }
+  const executeDelete = async () => {
+    if (!eventToDelete) return;
 
     try {
-      const response = await fetch(`/api/events/${eventId}`, {
+      const response = await fetch(`/api/events/${eventToDelete.id}`, {
         method: 'DELETE',
       });
 
@@ -119,12 +109,20 @@ export default function EventsPage() {
 
       // Reload events
       loadEvents();
-      alert(`"${eventName}" has been permanently deleted.`);
+      alert(`"${eventToDelete.name}" has been permanently deleted.`);
+      closeDeleteModal();
     } catch (error) {
       console.error('Error deleting event:', error);
       alert('Failed to delete event. Please try again.');
     }
   };
+
+  const closeDeleteModal = () => {
+    setEventToDelete(null);
+    setConfirmText(''); // Reset confirmation text when closing
+  };
+
+  const canDelete = confirmText === eventToDelete?.name;
 
   const handleRestore = async (eventId: string, _eventName: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent event card click
@@ -166,9 +164,7 @@ export default function EventsPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Your Events</h1>
-              <p className="mt-2 text-gray-600">
-                Manage and access all your events
-              </p>
+              <p className="mt-2 text-gray-600">Manage and access all your events</p>
             </div>
             <div className="flex items-center gap-4">
               {/* Toggle for archived events */}
@@ -294,6 +290,62 @@ export default function EventsPage() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {eventToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+            <div className="mb-4">
+              <h2 className="text-xl font-bold text-red-600 mb-2">⚠️ Permanently Delete Event</h2>
+              <p className="text-gray-700 font-semibold mb-3">{eventToDelete.name}</p>
+              <div className="bg-red-50 border border-red-200 rounded p-3 mb-4">
+                <p className="text-sm text-red-800 font-medium mb-2">
+                  This action CANNOT be undone. All data will be lost:
+                </p>
+                <ul className="text-sm text-red-700 space-y-1 list-disc list-inside">
+                  <li>Teams and items</li>
+                  <li>People and assignments</li>
+                  <li>History and revisions</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Type the event name to confirm deletion:
+              </label>
+              <input
+                type="text"
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                placeholder={`Type "${eventToDelete.name}" to confirm`}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={closeDeleteModal}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={executeDelete}
+                disabled={!canDelete}
+                className={`flex-1 px-4 py-2 rounded-md font-medium ${
+                  canDelete
+                    ? 'bg-red-600 text-white hover:bg-red-700'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                Delete Permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

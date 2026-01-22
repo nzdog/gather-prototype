@@ -55,10 +55,12 @@ export async function GET(
     team: {
       id: team.id,
       name: team.name,
-      coordinator: team.coordinator ? {
-        id: team.coordinator.id,
-        name: team.coordinator.name,
-      } : null,
+      coordinator: team.coordinator
+        ? {
+            id: team.coordinator.id,
+            name: team.coordinator.name,
+          }
+        : null,
     },
     items: items.map((item) => ({
       id: item.id,

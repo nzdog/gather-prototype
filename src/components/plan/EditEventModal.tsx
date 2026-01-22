@@ -213,9 +213,7 @@ export default function EditEventModal({
               <h3 className="text-lg font-medium text-gray-900 mb-4">Event Basics</h3>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Event Name *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Event Name *</label>
                 <input
                   type="text"
                   value={formData.name}
@@ -239,9 +237,7 @@ export default function EditEventModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    End Date *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">End Date *</label>
                   <input
                     type="date"
                     value={formData.endDate}
@@ -274,9 +270,7 @@ export default function EditEventModal({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                 <textarea
                   value={formData.occasionDescription}
                   onChange={(e) =>
@@ -295,9 +289,7 @@ export default function EditEventModal({
               <h3 className="text-lg font-medium text-gray-900 mb-4">Guests & Dietary</h3>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Guest Count
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Guest Count</label>
                 <input
                   type="number"
                   value={formData.guestCount}
@@ -485,9 +477,7 @@ export default function EditEventModal({
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Oven Count
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Oven Count</label>
                   <input
                     type="number"
                     value={formData.venueOvenCount}

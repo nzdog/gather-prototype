@@ -32,17 +32,11 @@ export async function POST(_req: Request) {
     });
 
     if (!subscription) {
-      return NextResponse.json(
-        { error: 'No subscription found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'No subscription found' }, { status: 404 });
     }
 
     if (!subscription.stripeSubscriptionId) {
-      return NextResponse.json(
-        { error: 'No active subscription to cancel' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'No active subscription to cancel' }, { status: 400 });
     }
 
     // Check if already canceled
@@ -92,9 +86,6 @@ export async function POST(_req: Request) {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[Cancel] Error canceling subscription:', errorMessage);
-    return NextResponse.json(
-      { error: 'Failed to cancel subscription' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to cancel subscription' }, { status: 500 });
   }
 }

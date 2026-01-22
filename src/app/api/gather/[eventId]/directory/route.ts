@@ -86,9 +86,6 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('Error fetching directory:', error);
-    return NextResponse.json(
-      { error: 'Failed to load directory' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to load directory' }, { status: 500 });
   }
 }

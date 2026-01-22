@@ -103,9 +103,7 @@ export default function DirectoryPage() {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-sage-600 rounded-full mb-4">
               <Users className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-3">
-              {data.event.name}
-            </h1>
+            <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-3">{data.event.name}</h1>
             <div className="flex items-center justify-center gap-4 text-gray-600">
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4" />
@@ -129,9 +127,7 @@ export default function DirectoryPage() {
       {/* Content */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="text-center mb-8">
-          <h2 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-2">
-            Who are you?
-          </h2>
+          <h2 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-2">Who are you?</h2>
           <p className="text-gray-600">Select your name to view your assignments</p>
         </div>
 
@@ -169,9 +165,7 @@ export default function DirectoryPage() {
                   </span>
                 </div>
                 <h3 className="font-semibold text-gray-900 text-lg">{person.name}</h3>
-                {!person.token && (
-                  <p className="text-xs text-gray-500 mt-2">No access yet</p>
-                )}
+                {!person.token && <p className="text-xs text-gray-500 mt-2">No access yet</p>}
               </button>
             ))}
           </div>

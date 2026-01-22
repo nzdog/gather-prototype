@@ -114,7 +114,9 @@ export default function ResolveWithAIModal({
       }, 2000);
     } catch (err) {
       console.error('Error implementing changes:', err);
-      setError('Failed to implement changes automatically. Please try again or make changes manually.');
+      setError(
+        'Failed to implement changes automatically. Please try again or make changes manually.'
+      );
       setImplementing(false);
     }
   };
@@ -139,10 +141,7 @@ export default function ResolveWithAIModal({
               <Sparkles className="w-6 h-6" />
               <h2 className="text-xl font-semibold">AI Resolution Suggestion</h2>
             </div>
-            <button
-              onClick={handleClose}
-              className="text-white hover:text-gray-200 transition"
-            >
+            <button onClick={handleClose} className="text-white hover:text-gray-200 transition">
               <XCircle className="w-6 h-6" />
             </button>
           </div>
@@ -215,8 +214,9 @@ export default function ResolveWithAIModal({
               {suggestion.executableActions && suggestion.executableActions.length > 0 ? (
                 <div className="bg-green-50 border border-green-300 rounded-lg p-3">
                   <p className="text-green-900 text-sm">
-                    <strong>✨ Auto-Implementation Available:</strong> Clicking "Accept & Implement" will
-                    automatically add these items to your plan and mark the conflict as resolved.
+                    <strong>✨ Auto-Implementation Available:</strong> Clicking "Accept & Implement"
+                    will automatically add these items to your plan and mark the conflict as
+                    resolved.
                   </p>
                 </div>
               ) : (
@@ -251,21 +251,25 @@ export default function ResolveWithAIModal({
               {/* Show details of what was created/updated */}
               {implementationResults.results && implementationResults.results.length > 0 && (
                 <div className="mt-3 space-y-1">
-                  {implementationResults.results.map((result: any, index: number) => (
-                    result.success && (
-                      <div key={index} className="text-green-700 text-xs">
-                        ✓ {result.action === 'CREATE_TEAM'
-                          ? `Created team "${result.result.teamName}" with ${result.result.itemsCreated} item(s)`
-                          : result.action === 'UPDATE_ITEM'
-                          ? `Updated "${result.result.itemName}" (${result.result.updates?.join(', ')})`
-                          : `Added "${result.result.itemName}" to ${result.result.teamName}`}
-                      </div>
-                    )
-                  ))}
+                  {implementationResults.results.map(
+                    (result: any, index: number) =>
+                      result.success && (
+                        <div key={index} className="text-green-700 text-xs">
+                          ✓{' '}
+                          {result.action === 'CREATE_TEAM'
+                            ? `Created team "${result.result.teamName}" with ${result.result.itemsCreated} item(s)`
+                            : result.action === 'UPDATE_ITEM'
+                              ? `Updated "${result.result.itemName}" (${result.result.updates?.join(', ')})`
+                              : `Added "${result.result.itemName}" to ${result.result.teamName}`}
+                        </div>
+                      )
+                  )}
                 </div>
               )}
 
-              <p className="text-green-700 text-xs mt-3 font-medium">Refreshing page to show new items...</p>
+              <p className="text-green-700 text-xs mt-3 font-medium">
+                Refreshing page to show new items...
+              </p>
             </div>
           )}
         </div>

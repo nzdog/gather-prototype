@@ -1,78 +1,273 @@
 import { useState } from 'react';
-import { Calendar, MapPin, Check, AlertCircle, ChevronRight, ChevronLeft, Plus, Lock, Users } from 'lucide-react';
+import {
+  Calendar,
+  MapPin,
+  Check,
+  AlertCircle,
+  ChevronRight,
+  ChevronLeft,
+  Plus,
+  Lock,
+} from 'lucide-react';
 
 // ============================================================
 // DATA - Richardson Family Christmas 2024
 // ============================================================
 
 const gatheringData = {
-  name: "Richardson Family Christmas",
-  dates: "Dec 24-26",
+  name: 'Richardson Family Christmas',
+  dates: 'Dec 24-26',
   guestCount: 27,
-  host: "Kate",
+  host: 'Kate',
   teams: [
     {
       id: 'puddings',
       name: 'Puddings',
       coordinator: 'Ian',
       items: [
-        { id: 1, name: 'Christmas Pudding', quantity: 1, day: 'Christmas Day', location: 'Marquee', assignee: null, critical: true, notes: 'Traditional recipe please' },
-        { id: 2, name: 'Brandy Butter', quantity: 1, day: 'Christmas Day', location: 'Marquee', assignee: null, critical: true, notes: 'Homemade preferred' },
-        { id: 3, name: 'Ice Cream', quantity: 2, day: 'Christmas Day', location: 'Marquee', assignee: null, critical: false, notes: 'Vanilla and berry' },
-        { id: 4, name: 'Pavlova', quantity: 2, day: 'Christmas Day', location: 'Marquee', assignee: 'Kate', critical: false, confirmed: true, notes: 'Please bring in disposable containers. Keep refrigerated until serving.' },
-        { id: 5, name: 'Trifle', quantity: 1, day: 'Christmas Day', location: 'Marquee', assignee: 'Sarah', critical: false, confirmed: true, notes: '' },
-      ]
+        {
+          id: 1,
+          name: 'Christmas Pudding',
+          quantity: 1,
+          day: 'Christmas Day',
+          location: 'Marquee',
+          assignee: null,
+          critical: true,
+          notes: 'Traditional recipe please',
+        },
+        {
+          id: 2,
+          name: 'Brandy Butter',
+          quantity: 1,
+          day: 'Christmas Day',
+          location: 'Marquee',
+          assignee: null,
+          critical: true,
+          notes: 'Homemade preferred',
+        },
+        {
+          id: 3,
+          name: 'Ice Cream',
+          quantity: 2,
+          day: 'Christmas Day',
+          location: 'Marquee',
+          assignee: null,
+          critical: false,
+          notes: 'Vanilla and berry',
+        },
+        {
+          id: 4,
+          name: 'Pavlova',
+          quantity: 2,
+          day: 'Christmas Day',
+          location: 'Marquee',
+          assignee: 'Kate',
+          critical: false,
+          confirmed: true,
+          notes: 'Please bring in disposable containers. Keep refrigerated until serving.',
+        },
+        {
+          id: 5,
+          name: 'Trifle',
+          quantity: 1,
+          day: 'Christmas Day',
+          location: 'Marquee',
+          assignee: 'Sarah',
+          critical: false,
+          confirmed: true,
+          notes: '',
+        },
+      ],
     },
     {
       id: 'mains',
       name: 'Mains & Proteins',
       coordinator: 'Kate',
       items: [
-        { id: 6, name: 'Ham', quantity: 1, day: 'Christmas Day', location: 'Marquee', assignee: 'Nigel', critical: true, confirmed: true, notes: 'Glazed, pre-sliced helpful' },
-        { id: 7, name: 'Turkey', quantity: 1, day: 'Christmas Day', location: 'Marquee', assignee: 'Mike', critical: true, confirmed: false, notes: 'Free range, about 8kg' },
-        { id: 8, name: 'Roast Vegetables', quantity: 3, day: 'Christmas Day', location: 'Marquee', assignee: 'Jacqui', critical: false, confirmed: true, notes: 'Mix of root vegetables' },
-        { id: 9, name: 'Gravy', quantity: 2, day: 'Christmas Day', location: 'Marquee', assignee: 'Sarah', critical: false, confirmed: true, notes: '' },
-      ]
+        {
+          id: 6,
+          name: 'Ham',
+          quantity: 1,
+          day: 'Christmas Day',
+          location: 'Marquee',
+          assignee: 'Nigel',
+          critical: true,
+          confirmed: true,
+          notes: 'Glazed, pre-sliced helpful',
+        },
+        {
+          id: 7,
+          name: 'Turkey',
+          quantity: 1,
+          day: 'Christmas Day',
+          location: 'Marquee',
+          assignee: 'Mike',
+          critical: true,
+          confirmed: false,
+          notes: 'Free range, about 8kg',
+        },
+        {
+          id: 8,
+          name: 'Roast Vegetables',
+          quantity: 3,
+          day: 'Christmas Day',
+          location: 'Marquee',
+          assignee: 'Jacqui',
+          critical: false,
+          confirmed: true,
+          notes: 'Mix of root vegetables',
+        },
+        {
+          id: 9,
+          name: 'Gravy',
+          quantity: 2,
+          day: 'Christmas Day',
+          location: 'Marquee',
+          assignee: 'Sarah',
+          critical: false,
+          confirmed: true,
+          notes: '',
+        },
+      ],
     },
     {
       id: 'drinks',
       name: 'Drinks',
       coordinator: 'Sarah',
       items: [
-        { id: 10, name: 'Champagne', quantity: 6, day: 'Christmas Day', location: 'Marquee', assignee: 'David', critical: false, confirmed: true, notes: 'For the toast' },
-        { id: 11, name: 'Red Wine', quantity: 8, day: 'Christmas Day', location: 'Marquee', assignee: 'Mike', critical: false, confirmed: true, notes: '' },
-        { id: 12, name: 'White Wine', quantity: 6, day: 'Christmas Day', location: 'Marquee', assignee: 'Lisa', critical: false, confirmed: true, notes: '' },
-        { id: 13, name: 'Soft Drinks', quantity: 1, day: 'Christmas Day', location: 'Marquee', assignee: 'Tom', critical: false, confirmed: true, notes: 'Variety pack' },
-      ]
+        {
+          id: 10,
+          name: 'Champagne',
+          quantity: 6,
+          day: 'Christmas Day',
+          location: 'Marquee',
+          assignee: 'David',
+          critical: false,
+          confirmed: true,
+          notes: 'For the toast',
+        },
+        {
+          id: 11,
+          name: 'Red Wine',
+          quantity: 8,
+          day: 'Christmas Day',
+          location: 'Marquee',
+          assignee: 'Mike',
+          critical: false,
+          confirmed: true,
+          notes: '',
+        },
+        {
+          id: 12,
+          name: 'White Wine',
+          quantity: 6,
+          day: 'Christmas Day',
+          location: 'Marquee',
+          assignee: 'Lisa',
+          critical: false,
+          confirmed: true,
+          notes: '',
+        },
+        {
+          id: 13,
+          name: 'Soft Drinks',
+          quantity: 1,
+          day: 'Christmas Day',
+          location: 'Marquee',
+          assignee: 'Tom',
+          critical: false,
+          confirmed: true,
+          notes: 'Variety pack',
+        },
+      ],
     },
     {
       id: 'setup',
       name: 'Setup & Cleanup',
       coordinator: 'Jacqui',
       items: [
-        { id: 14, name: 'Table Setup', quantity: 1, day: 'Christmas Eve', location: 'Marquee', assignee: 'Team', critical: false, confirmed: true, notes: '4pm start' },
-        { id: 15, name: 'Decorations', quantity: 1, day: 'Christmas Eve', location: 'Marquee', assignee: 'Lisa', critical: false, confirmed: true, notes: '' },
-        { id: 16, name: 'Cleanup Crew', quantity: 1, day: 'Boxing Day', location: 'Marquee', assignee: 'Team', critical: false, confirmed: true, notes: '10am' },
-      ]
+        {
+          id: 14,
+          name: 'Table Setup',
+          quantity: 1,
+          day: 'Christmas Eve',
+          location: 'Marquee',
+          assignee: 'Team',
+          critical: false,
+          confirmed: true,
+          notes: '4pm start',
+        },
+        {
+          id: 15,
+          name: 'Decorations',
+          quantity: 1,
+          day: 'Christmas Eve',
+          location: 'Marquee',
+          assignee: 'Lisa',
+          critical: false,
+          confirmed: true,
+          notes: '',
+        },
+        {
+          id: 16,
+          name: 'Cleanup Crew',
+          quantity: 1,
+          day: 'Boxing Day',
+          location: 'Marquee',
+          assignee: 'Team',
+          critical: false,
+          confirmed: true,
+          notes: '10am',
+        },
+      ],
     },
     {
       id: 'later',
       name: 'Later Food',
       coordinator: 'Nigel',
       items: [
-        { id: 17, name: 'Cheese Board', quantity: 2, day: 'Christmas Day', location: "Kate's House", assignee: 'David', critical: false, confirmed: true, notes: '' },
-        { id: 18, name: 'Crackers & Bread', quantity: 1, day: 'Christmas Day', location: "Kate's House", assignee: null, critical: false, notes: '' },
-        { id: 19, name: 'Fruit Platter', quantity: 1, day: 'Christmas Day', location: "Kate's House", assignee: 'Lisa', critical: false, confirmed: true, notes: '' },
-      ]
-    }
-  ]
+        {
+          id: 17,
+          name: 'Cheese Board',
+          quantity: 2,
+          day: 'Christmas Day',
+          location: "Kate's House",
+          assignee: 'David',
+          critical: false,
+          confirmed: true,
+          notes: '',
+        },
+        {
+          id: 18,
+          name: 'Crackers & Bread',
+          quantity: 1,
+          day: 'Christmas Day',
+          location: "Kate's House",
+          assignee: null,
+          critical: false,
+          notes: '',
+        },
+        {
+          id: 19,
+          name: 'Fruit Platter',
+          quantity: 1,
+          day: 'Christmas Day',
+          location: "Kate's House",
+          assignee: 'Lisa',
+          critical: false,
+          confirmed: true,
+          notes: '',
+        },
+      ],
+    },
+  ],
 };
 
 // Helper to compute team status
-function getTeamStatus(team: typeof gatheringData.teams[0]) {
-  const unassigned = team.items.filter(i => !i.assignee);
-  const criticalUnassigned = unassigned.filter(i => i.critical);
-  
+function getTeamStatus(team: (typeof gatheringData.teams)[0]) {
+  const unassigned = team.items.filter((i) => !i.assignee);
+  const criticalUnassigned = unassigned.filter((i) => i.critical);
+
   if (criticalUnassigned.length > 0) {
     return { status: 'CRITICAL_GAP', gapCount: criticalUnassigned.length };
   } else if (unassigned.length > 0) {
@@ -85,9 +280,15 @@ function getTeamStatus(team: typeof gatheringData.teams[0]) {
 // PARTICIPANT VIEW
 // ============================================================
 
-function ParticipantView({ item, onBack }: { item: typeof gatheringData.teams[0]['items'][0], onBack: () => void }) {
+function ParticipantView({
+  item,
+  onBack,
+}: {
+  item: (typeof gatheringData.teams)[0]['items'][0];
+  onBack: () => void;
+}) {
   const [confirmed, setConfirmed] = useState(item.confirmed || false);
-  
+
   return (
     <div className="h-full flex flex-col bg-gray-50">
       {/* Header */}
@@ -97,7 +298,9 @@ function ParticipantView({ item, onBack }: { item: typeof gatheringData.teams[0]
           <span className="font-medium">Back</span>
         </button>
         <div className="text-lg text-gray-900">{gatheringData.name}</div>
-        <div className="text-sm text-gray-500 mt-1">{gatheringData.dates} · {gatheringData.guestCount} guests</div>
+        <div className="text-sm text-gray-500 mt-1">
+          {gatheringData.dates} · {gatheringData.guestCount} guests
+        </div>
       </div>
 
       {/* Content */}
@@ -132,9 +335,7 @@ function ParticipantView({ item, onBack }: { item: typeof gatheringData.teams[0]
           <button
             onClick={() => setConfirmed(!confirmed)}
             className={`w-full h-14 rounded-lg font-medium transition-all ${
-              confirmed
-                ? 'bg-green-500 text-white'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
+              confirmed ? 'bg-green-500 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'
             }`}
           >
             {confirmed ? (
@@ -163,14 +364,18 @@ function ParticipantView({ item, onBack }: { item: typeof gatheringData.teams[0]
 // COORDINATOR VIEW
 // ============================================================
 
-function CoordinatorView({ team, onBack, onSelectItem }: { 
-  team: typeof gatheringData.teams[0], 
-  onBack: () => void,
-  onSelectItem: (item: typeof gatheringData.teams[0]['items'][0]) => void 
+function CoordinatorView({
+  team,
+  onBack,
+  onSelectItem,
+}: {
+  team: (typeof gatheringData.teams)[0];
+  onBack: () => void;
+  onSelectItem: (item: (typeof gatheringData.teams)[0]['items'][0]) => void;
 }) {
   const items = team.items;
-  const unassignedCount = items.filter(i => !i.assignee).length;
-  const criticalCount = items.filter(i => !i.assignee && i.critical).length;
+  const unassignedCount = items.filter((i) => !i.assignee).length;
+  const criticalCount = items.filter((i) => !i.assignee && i.critical).length;
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
@@ -191,9 +396,15 @@ function CoordinatorView({ team, onBack, onSelectItem }: {
 
       {/* Status Bar */}
       {unassignedCount > 0 ? (
-        <div className={`${criticalCount > 0 ? 'bg-red-50' : 'bg-amber-50'} px-6 py-4 flex items-center gap-3`}>
-          <AlertCircle className={`size-5 ${criticalCount > 0 ? 'text-red-500' : 'text-amber-500'}`} />
-          <span className={`font-semibold ${criticalCount > 0 ? 'text-red-900' : 'text-amber-900'}`}>
+        <div
+          className={`${criticalCount > 0 ? 'bg-red-50' : 'bg-amber-50'} px-6 py-4 flex items-center gap-3`}
+        >
+          <AlertCircle
+            className={`size-5 ${criticalCount > 0 ? 'text-red-500' : 'text-amber-500'}`}
+          />
+          <span
+            className={`font-semibold ${criticalCount > 0 ? 'text-red-900' : 'text-amber-900'}`}
+          >
             {criticalCount > 0
               ? `${criticalCount} critical ${criticalCount === 1 ? 'item needs' : 'items need'} assignment`
               : `${unassignedCount} ${unassignedCount === 1 ? 'item needs' : 'items need'} assignment`}
@@ -201,7 +412,9 @@ function CoordinatorView({ team, onBack, onSelectItem }: {
         </div>
       ) : (
         <div className="bg-green-50 px-6 py-4 flex items-center gap-3">
-          <div className="size-5 rounded-full bg-green-500 flex items-center justify-center text-white text-xs">✓</div>
+          <div className="size-5 rounded-full bg-green-500 flex items-center justify-center text-white text-xs">
+            ✓
+          </div>
           <span className="font-semibold text-green-900">All items assigned</span>
         </div>
       )}
@@ -234,7 +447,9 @@ function CoordinatorView({ team, onBack, onSelectItem }: {
                   <div className="text-sm text-gray-500 mb-2">
                     {item.day} · {item.location}
                   </div>
-                  <div className={`text-sm font-medium ${item.assignee ? 'text-gray-900' : 'text-amber-600'}`}>
+                  <div
+                    className={`text-sm font-medium ${item.assignee ? 'text-gray-900' : 'text-amber-600'}`}
+                  >
                     {item.assignee || 'Unassigned'}
                   </div>
                 </div>
@@ -259,13 +474,19 @@ function CoordinatorView({ team, onBack, onSelectItem }: {
 // HOST VIEW
 // ============================================================
 
-function HostView({ onSelectTeam }: { onSelectTeam: (team: typeof gatheringData.teams[0]) => void }) {
-  const teams = gatheringData.teams.map(team => ({
+function HostView({
+  onSelectTeam,
+}: {
+  onSelectTeam: (team: (typeof gatheringData.teams)[0]) => void;
+}) {
+  const teams = gatheringData.teams.map((team) => ({
     ...team,
-    ...getTeamStatus(team)
+    ...getTeamStatus(team),
   }));
 
-  const criticalGaps = teams.filter(t => t.status === 'CRITICAL_GAP').reduce((acc, t) => acc + t.gapCount, 0);
+  const criticalGaps = teams
+    .filter((t) => t.status === 'CRITICAL_GAP')
+    .reduce((acc, t) => acc + t.gapCount, 0);
   const totalGaps = teams.reduce((acc, t) => acc + t.gapCount, 0);
 
   return (
@@ -276,7 +497,9 @@ function HostView({ onSelectTeam }: { onSelectTeam: (team: typeof gatheringData.
         <div className="flex items-center gap-2 mt-2">
           <span className="text-sm text-gray-500">{gatheringData.dates}</span>
           <span className="text-gray-300">·</span>
-          <button className="text-sm text-blue-600 hover:underline">{gatheringData.guestCount} guests</button>
+          <button className="text-sm text-blue-600 hover:underline">
+            {gatheringData.guestCount} guests
+          </button>
         </div>
       </div>
 
@@ -290,14 +513,18 @@ function HostView({ onSelectTeam }: { onSelectTeam: (team: typeof gatheringData.
         </div>
       ) : totalGaps > 0 ? (
         <div className="bg-amber-50 px-6 py-4 flex items-center gap-3">
-          <div className="size-6 rounded-full bg-amber-500 flex items-center justify-center text-white text-sm">!</div>
+          <div className="size-6 rounded-full bg-amber-500 flex items-center justify-center text-white text-sm">
+            !
+          </div>
           <span className="font-semibold text-amber-900">
             Ready to freeze ({totalGaps} non-critical {totalGaps === 1 ? 'gap' : 'gaps'})
           </span>
         </div>
       ) : (
         <div className="bg-green-50 px-6 py-4 flex items-center gap-3">
-          <div className="size-6 rounded-full bg-green-500 flex items-center justify-center text-white text-sm">✓</div>
+          <div className="size-6 rounded-full bg-green-500 flex items-center justify-center text-white text-sm">
+            ✓
+          </div>
           <span className="font-semibold text-green-900">Ready to freeze</span>
         </div>
       )}
@@ -327,8 +554,8 @@ function HostView({ onSelectTeam }: { onSelectTeam: (team: typeof gatheringData.
                         team.status === 'CRITICAL_GAP'
                           ? 'bg-red-500'
                           : team.status === 'GAP'
-                          ? 'bg-amber-500'
-                          : 'bg-green-500'
+                            ? 'bg-amber-500'
+                            : 'bg-green-500'
                       }`}
                     />
                     <div className="flex-1">
@@ -342,15 +569,15 @@ function HostView({ onSelectTeam }: { onSelectTeam: (team: typeof gatheringData.
                         team.status === 'CRITICAL_GAP'
                           ? 'text-red-600'
                           : team.status === 'GAP'
-                          ? 'text-amber-600'
-                          : 'text-green-600'
+                            ? 'text-amber-600'
+                            : 'text-green-600'
                       }`}
                     >
                       {team.status === 'CRITICAL_GAP'
                         ? `${team.gapCount} critical gaps`
                         : team.status === 'GAP'
-                        ? `${team.gapCount} ${team.gapCount === 1 ? 'gap' : 'gaps'}`
-                        : 'All assigned'}
+                          ? `${team.gapCount} ${team.gapCount === 1 ? 'gap' : 'gaps'}`
+                          : 'All assigned'}
                     </span>
                     <ChevronRight className="size-5 text-gray-400" />
                   </div>
@@ -384,10 +611,16 @@ function HostView({ onSelectTeam }: { onSelectTeam: (team: typeof gatheringData.
 // HOST TEAM VIEW (drill-down from Host)
 // ============================================================
 
-function HostTeamView({ team, onBack }: { team: typeof gatheringData.teams[0], onBack: () => void }) {
+function HostTeamView({
+  team,
+  onBack,
+}: {
+  team: (typeof gatheringData.teams)[0];
+  onBack: () => void;
+}) {
   const items = team.items;
-  const unassignedCount = items.filter(i => !i.assignee).length;
-  const criticalCount = items.filter(i => !i.assignee && i.critical).length;
+  const unassignedCount = items.filter((i) => !i.assignee).length;
+  const criticalCount = items.filter((i) => !i.assignee && i.critical).length;
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
@@ -418,7 +651,9 @@ function HostTeamView({ team, onBack }: { team: typeof gatheringData.teams[0], o
         </div>
       ) : (
         <div className="bg-green-50 px-6 py-4 flex items-center gap-3">
-          <div className="size-5 rounded-full bg-green-500 flex items-center justify-center text-white text-xs">✓</div>
+          <div className="size-5 rounded-full bg-green-500 flex items-center justify-center text-white text-xs">
+            ✓
+          </div>
           <span className="font-semibold text-green-900">All items assigned</span>
         </div>
       )}
@@ -434,10 +669,7 @@ function HostTeamView({ team, onBack }: { team: typeof gatheringData.teams[0], o
             return 0;
           })
           .map((item) => (
-            <div
-              key={item.id}
-              className="bg-white border-b border-gray-200 px-6 py-4"
-            >
+            <div key={item.id} className="bg-white border-b border-gray-200 px-6 py-4">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
@@ -450,7 +682,9 @@ function HostTeamView({ team, onBack }: { team: typeof gatheringData.teams[0], o
                   <div className="text-sm text-gray-500 mb-2">
                     {item.day} · {item.location}
                   </div>
-                  <div className={`text-sm font-medium ${item.assignee ? 'text-gray-900' : 'text-amber-600'}`}>
+                  <div
+                    className={`text-sm font-medium ${item.assignee ? 'text-gray-900' : 'text-amber-600'}`}
+                  >
                     {item.assignee || 'Unassigned'}
                   </div>
                 </div>
@@ -474,10 +708,10 @@ function RoleSelector({ onSelectRole }: { onSelectRole: (role: string, context?:
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Gather Demo</h1>
           <p className="text-gray-500">Richardson Family Christmas</p>
         </div>
-        
+
         <div className="w-full max-w-sm space-y-3">
           <p className="text-sm text-gray-500 text-center mb-4">Choose your view:</p>
-          
+
           <button
             onClick={() => onSelectRole('participant', gatheringData.teams[0].items[3])} // Kate's Pavlova
             className="w-full bg-white rounded-lg border border-gray-200 p-4 text-left hover:border-blue-300 hover:shadow-sm transition-all"
@@ -485,7 +719,7 @@ function RoleSelector({ onSelectRole }: { onSelectRole: (role: string, context?:
             <div className="font-semibold text-gray-900 mb-1">👤 Participant</div>
             <div className="text-sm text-gray-500">You're Kate bringing Pavlova</div>
           </button>
-          
+
           <button
             onClick={() => onSelectRole('coordinator', gatheringData.teams[0])} // Puddings team
             className="w-full bg-white rounded-lg border border-gray-200 p-4 text-left hover:border-blue-300 hover:shadow-sm transition-all"
@@ -493,7 +727,7 @@ function RoleSelector({ onSelectRole }: { onSelectRole: (role: string, context?:
             <div className="font-semibold text-gray-900 mb-1">📋 Coordinator</div>
             <div className="text-sm text-gray-500">You're Ian coordinating Puddings</div>
           </button>
-          
+
           <button
             onClick={() => onSelectRole('host')}
             className="w-full bg-white rounded-lg border border-gray-200 p-4 text-left hover:border-blue-300 hover:shadow-sm transition-all"
@@ -503,7 +737,7 @@ function RoleSelector({ onSelectRole }: { onSelectRole: (role: string, context?:
           </button>
         </div>
       </div>
-      
+
       <div className="p-6 text-center">
         <p className="text-xs text-gray-400">Tap any role to see that person's view</p>
       </div>
@@ -516,14 +750,16 @@ function RoleSelector({ onSelectRole }: { onSelectRole: (role: string, context?:
 // ============================================================
 
 export default function App() {
-  const [view, setView] = useState<'selector' | 'participant' | 'coordinator' | 'host' | 'hostTeam'>('selector');
+  const [view, setView] = useState<
+    'selector' | 'participant' | 'coordinator' | 'host' | 'hostTeam'
+  >('selector');
   const [context, setContext] = useState<any>(null);
-  
+
   const handleSelectRole = (role: string, ctx?: any) => {
     setContext(ctx);
     setView(role as any);
   };
-  
+
   const handleBack = () => {
     if (view === 'hostTeam') {
       setView('host');
@@ -532,13 +768,13 @@ export default function App() {
       setContext(null);
     }
   };
-  
-  const handleSelectTeam = (team: typeof gatheringData.teams[0]) => {
+
+  const handleSelectTeam = (team: (typeof gatheringData.teams)[0]) => {
     setContext(team);
     setView('hostTeam');
   };
-  
-  const handleSelectItem = (item: typeof gatheringData.teams[0]['items'][0]) => {
+
+  const handleSelectItem = (item: (typeof gatheringData.teams)[0]['items'][0]) => {
     setContext(item);
     setView('participant');
   };
@@ -547,8 +783,12 @@ export default function App() {
     <div className="h-screen w-full bg-gray-100">
       <div className="h-full max-w-md mx-auto bg-white shadow-xl">
         {view === 'selector' && <RoleSelector onSelectRole={handleSelectRole} />}
-        {view === 'participant' && context && <ParticipantView item={context} onBack={handleBack} />}
-        {view === 'coordinator' && context && <CoordinatorView team={context} onBack={handleBack} onSelectItem={handleSelectItem} />}
+        {view === 'participant' && context && (
+          <ParticipantView item={context} onBack={handleBack} />
+        )}
+        {view === 'coordinator' && context && (
+          <CoordinatorView team={context} onBack={handleBack} onSelectItem={handleSelectItem} />
+        )}
         {view === 'host' && <HostView onSelectTeam={handleSelectTeam} />}
         {view === 'hostTeam' && context && <HostTeamView team={context} onBack={handleBack} />}
       </div>

@@ -69,11 +69,7 @@ check(
 if (billingPageContent) {
   // Check for status badge component
   const hasStatusBadge = billingPageContent.includes('StatusBadge');
-  check(
-    'Has status badge component',
-    hasStatusBadge,
-    'Required to display billing status'
-  );
+  check('Has status badge component', hasStatusBadge, 'Required to display billing status');
 
   // Check for all status checks
   const hasAllStatusChecks =
@@ -91,8 +87,7 @@ if (billingPageContent) {
 
   // Check for trial days calculation
   const hasTrialDaysCalc =
-    billingPageContent.includes('trialDaysRemaining') &&
-    billingPageContent.includes('trialEnd');
+    billingPageContent.includes('trialDaysRemaining') && billingPageContent.includes('trialEnd');
 
   check(
     'Calculates trial days remaining',
@@ -102,55 +97,33 @@ if (billingPageContent) {
 
   // Check for trial notice display
   const hasTrialNotice =
-    billingPageContent.includes('Trial Active') ||
-    billingPageContent.includes('Trial Notice');
+    billingPageContent.includes('Trial Active') || billingPageContent.includes('Trial Notice');
 
-  check(
-    'Displays trial notice for TRIALING status',
-    hasTrialNotice,
-    'Shows remaining trial days'
-  );
+  check('Displays trial notice for TRIALING status', hasTrialNotice, 'Shows remaining trial days');
 
   // Check for cancellation notice
   const hasCancelNotice = billingPageContent.includes('cancelAtPeriodEnd');
-  check(
-    'Shows cancellation notice',
-    hasCancelNotice,
-    'Required for canceled subscriptions'
-  );
+  check('Shows cancellation notice', hasCancelNotice, 'Required for canceled subscriptions');
 
   // Check for upgrade button
   const hasUpgradeButton =
-    billingPageContent.includes('Upgrade') &&
-    billingPageContent.includes('isFree');
+    billingPageContent.includes('Upgrade') && billingPageContent.includes('isFree');
 
-  check(
-    'Has Upgrade button for FREE users',
-    hasUpgradeButton,
-    'Links to /billing/upgrade'
-  );
+  check('Has Upgrade button for FREE users', hasUpgradeButton, 'Links to /billing/upgrade');
 
   // Check for cancel button
   const hasCancelButton =
     billingPageContent.includes('Cancel Subscription') ||
     billingPageContent.includes('setShowCancelDialog');
 
-  check(
-    'Has Cancel button for ACTIVE users',
-    hasCancelButton,
-    'Opens cancel confirmation dialog'
-  );
+  check('Has Cancel button for ACTIVE users', hasCancelButton, 'Opens cancel confirmation dialog');
 
   // Check for resubscribe button
   const hasResubscribeButton =
     billingPageContent.includes('Resubscribe') &&
     (billingPageContent.includes('isCanceled') || billingPageContent.includes('cancelAtPeriodEnd'));
 
-  check(
-    'Has Resubscribe button',
-    hasResubscribeButton,
-    'For canceled subscriptions'
-  );
+  check('Has Resubscribe button', hasResubscribeButton, 'For canceled subscriptions');
 }
 
 // ============================================
@@ -189,11 +162,7 @@ if (billingPageContent) {
 
   // Check that portal endpoint is called
   const callsPortalEndpoint = billingPageContent.includes('/api/billing/portal');
-  check(
-    'Calls /api/billing/portal endpoint',
-    callsPortalEndpoint,
-    'For payment method updates'
-  );
+  check('Calls /api/billing/portal endpoint', callsPortalEndpoint, 'For payment method updates');
 }
 
 // ============================================
@@ -224,27 +193,15 @@ if (portalContent) {
 
   // Check for customer ID usage
   const usesCustomerId = portalContent.includes('stripeCustomerId');
-  check(
-    'Uses Stripe customer ID',
-    usesCustomerId,
-    'Required for portal session'
-  );
+  check('Uses Stripe customer ID', usesCustomerId, 'Required for portal session');
 
   // Check for return URL
   const hasReturnUrl = portalContent.includes('return_url');
-  check(
-    'Sets return URL',
-    hasReturnUrl,
-    'Should redirect back to /billing'
-  );
+  check('Sets return URL', hasReturnUrl, 'Should redirect back to /billing');
 
   // Check for authentication
   const hasAuth = portalContent.includes('getUser');
-  check(
-    'Requires authentication',
-    hasAuth,
-    'Uses getUser() from session'
-  );
+  check('Requires authentication', hasAuth, 'Uses getUser() from session');
 }
 
 // ============================================
@@ -264,11 +221,7 @@ check(
 if (statusContent) {
   // Check that trialEnd is included in select
   const includesTrialEnd = statusContent.includes('trialEnd');
-  check(
-    'Returns trialEnd in response',
-    includesTrialEnd,
-    'Required for trial days calculation'
-  );
+  check('Returns trialEnd in response', includesTrialEnd, 'Required for trial days calculation');
 }
 
 // ============================================
@@ -288,11 +241,7 @@ check(
 if (navContent) {
   // Check for billing link
   const hasBillingLink = navContent.includes('/billing');
-  check(
-    'Navigation includes billing link',
-    hasBillingLink,
-    'Users can access /billing from nav'
-  );
+  check('Navigation includes billing link', hasBillingLink, 'Users can access /billing from nav');
 
   // Check for CreditCard icon (commonly used for billing)
   const hasBillingIcon =
@@ -329,6 +278,8 @@ if (passRate === 100) {
   console.log(`\n${colors.green}✓ All checks passed! Ticket 2.11 is complete.${colors.reset}\n`);
   process.exit(0);
 } else {
-  console.log(`\n${colors.red}✗ Some checks failed. Please review the errors above.${colors.reset}\n`);
+  console.log(
+    `\n${colors.red}✗ Some checks failed. Please review the errors above.${colors.reset}\n`
+  );
   process.exit(1);
 }

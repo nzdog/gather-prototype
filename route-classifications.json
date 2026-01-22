@@ -1,0 +1,594 @@
+[
+  {
+    "filePath": "src/app/api/auth/claim/route.ts",
+    "apiPath": "/api/auth/claim",
+    "methods": ["POST"],
+    "authType": "PUBLIC",
+    "authEvidence": ["auth flow endpoint (intentionally public)"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/auth/logout/route.ts",
+    "apiPath": "/api/auth/logout",
+    "methods": ["POST"],
+    "authType": "PUBLIC",
+    "authEvidence": ["cookie session check", "auth flow endpoint (intentionally public)"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/auth/magic-link/route.ts",
+    "apiPath": "/api/auth/magic-link",
+    "methods": ["POST"],
+    "authType": "PUBLIC",
+    "authEvidence": ["auth flow endpoint (intentionally public)"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/auth/verify/route.ts",
+    "apiPath": "/api/auth/verify",
+    "methods": ["POST"],
+    "authType": "PUBLIC",
+    "authEvidence": ["cookie session check", "auth flow endpoint (intentionally public)"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/billing/cancel/route.ts",
+    "apiPath": "/api/billing/cancel",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["getUser()"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/billing/checkout/route.ts",
+    "apiPath": "/api/billing/checkout",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["getUser()"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/billing/portal/route.ts",
+    "apiPath": "/api/billing/portal",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["getUser()"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/billing/status/route.ts",
+    "apiPath": "/api/billing/status",
+    "methods": ["GET"],
+    "authType": "SESSION",
+    "authEvidence": ["getUser()"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/c/[token]/route.ts",
+    "apiPath": "/api/c/:token",
+    "methods": ["GET"],
+    "authType": "TOKEN",
+    "authEvidence": ["resolveToken"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/c/[token]/ack/[assignmentId]/route.ts",
+    "apiPath": "/api/c/:token/ack/:assignmentId",
+    "methods": ["POST"],
+    "authType": "TOKEN",
+    "authEvidence": ["resolveToken"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/c/[token]/items/route.ts",
+    "apiPath": "/api/c/:token/items",
+    "methods": ["POST"],
+    "authType": "TOKEN",
+    "authEvidence": ["resolveToken"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/c/[token]/items/[itemId]/route.ts",
+    "apiPath": "/api/c/:token/items/:itemId",
+    "methods": ["PATCH", "DELETE"],
+    "authType": "TOKEN",
+    "authEvidence": ["resolveToken"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/c/[token]/items/[itemId]/assign/route.ts",
+    "apiPath": "/api/c/:token/items/:itemId/assign",
+    "methods": ["POST", "DELETE"],
+    "authType": "TOKEN",
+    "authEvidence": ["resolveToken"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/demo/reset/route.ts",
+    "apiPath": "/api/demo/reset",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["getUser()"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/demo/tokens/route.ts",
+    "apiPath": "/api/demo/tokens",
+    "methods": ["GET"],
+    "authType": "SESSION",
+    "authEvidence": ["getUser()"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/entitlements/check-create/route.ts",
+    "apiPath": "/api/entitlements/check-create",
+    "methods": ["GET"],
+    "authType": "SESSION",
+    "authEvidence": ["getUser()"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/route.ts",
+    "apiPath": "/api/events",
+    "methods": ["GET", "POST"],
+    "authType": "SESSION",
+    "authEvidence": ["getUser()"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/route.ts",
+    "apiPath": "/api/events/:id",
+    "methods": ["GET", "PATCH", "DELETE"],
+    "authType": "SESSION",
+    "authEvidence": ["getUser()"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/archive/route.ts",
+    "apiPath": "/api/events/:id/archive",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/assignments/route.ts",
+    "apiPath": "/api/events/:id/assignments",
+    "methods": ["GET"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/check/route.ts",
+    "apiPath": "/api/events/:id/check",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/conflicts/route.ts",
+    "apiPath": "/api/events/:id/conflicts",
+    "methods": ["GET"],
+    "authType": "NONE",
+    "authEvidence": [],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/conflicts/[conflictId]/route.ts",
+    "apiPath": "/api/events/:id/conflicts/:conflictId",
+    "methods": ["GET"],
+    "authType": "NONE",
+    "authEvidence": [],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/conflicts/[conflictId]/acknowledge/route.ts",
+    "apiPath": "/api/events/:id/conflicts/:conflictId/acknowledge",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/conflicts/[conflictId]/delegate/route.ts",
+    "apiPath": "/api/events/:id/conflicts/:conflictId/delegate",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/conflicts/[conflictId]/dismiss/route.ts",
+    "apiPath": "/api/events/:id/conflicts/:conflictId/dismiss",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/conflicts/[conflictId]/execute-resolution/route.ts",
+    "apiPath": "/api/events/:id/conflicts/:conflictId/execute-resolution",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/conflicts/[conflictId]/resolve/route.ts",
+    "apiPath": "/api/events/:id/conflicts/:conflictId/resolve",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/conflicts/[conflictId]/suggest-resolution/route.ts",
+    "apiPath": "/api/events/:id/conflicts/:conflictId/suggest-resolution",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/conflicts/dismissed/route.ts",
+    "apiPath": "/api/events/:id/conflicts/dismissed",
+    "methods": ["GET"],
+    "authType": "NONE",
+    "authEvidence": [],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/days/route.ts",
+    "apiPath": "/api/events/:id/days",
+    "methods": ["GET"],
+    "authType": "NONE",
+    "authEvidence": [],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/gate-check/route.ts",
+    "apiPath": "/api/events/:id/gate-check",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/generate/route.ts",
+    "apiPath": "/api/events/:id/generate",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/items/route.ts",
+    "apiPath": "/api/events/:id/items",
+    "methods": ["GET"],
+    "authType": "NONE",
+    "authEvidence": [],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/items/[itemId]/route.ts",
+    "apiPath": "/api/events/:id/items/:itemId",
+    "methods": ["PATCH", "DELETE"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/items/[itemId]/assign/route.ts",
+    "apiPath": "/api/events/:id/items/:itemId/assign",
+    "methods": ["POST", "DELETE"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/items/mark-for-review/route.ts",
+    "apiPath": "/api/events/:id/items/mark-for-review",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/people/route.ts",
+    "apiPath": "/api/events/:id/people",
+    "methods": ["GET", "POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/people/[personId]/route.ts",
+    "apiPath": "/api/events/:id/people/:personId",
+    "methods": ["PATCH", "DELETE"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/people/auto-assign/route.ts",
+    "apiPath": "/api/events/:id/people/auto-assign",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/people/batch-import/route.ts",
+    "apiPath": "/api/events/:id/people/batch-import",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/regenerate/route.ts",
+    "apiPath": "/api/events/:id/regenerate",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/regenerate/preview/route.ts",
+    "apiPath": "/api/events/:id/regenerate/preview",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/restore/route.ts",
+    "apiPath": "/api/events/:id/restore",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/review-items/route.ts",
+    "apiPath": "/api/events/:id/review-items",
+    "methods": ["GET", "POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/revisions/route.ts",
+    "apiPath": "/api/events/:id/revisions",
+    "methods": ["GET", "POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/revisions/[revisionId]/route.ts",
+    "apiPath": "/api/events/:id/revisions/:revisionId",
+    "methods": ["GET"],
+    "authType": "NONE",
+    "authEvidence": [],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/revisions/[revisionId]/restore/route.ts",
+    "apiPath": "/api/events/:id/revisions/:revisionId/restore",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/suggestions/route.ts",
+    "apiPath": "/api/events/:id/suggestions",
+    "methods": ["GET"],
+    "authType": "NONE",
+    "authEvidence": [],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/suggestions/[suggestionId]/route.ts",
+    "apiPath": "/api/events/:id/suggestions/:suggestionId",
+    "methods": ["GET"],
+    "authType": "NONE",
+    "authEvidence": [],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/suggestions/[suggestionId]/accept/route.ts",
+    "apiPath": "/api/events/:id/suggestions/:suggestionId/accept",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/suggestions/[suggestionId]/dismiss/route.ts",
+    "apiPath": "/api/events/:id/suggestions/:suggestionId/dismiss",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/suggestions/[suggestionId]/explain/route.ts",
+    "apiPath": "/api/events/:id/suggestions/:suggestionId/explain",
+    "methods": ["GET"],
+    "authType": "NONE",
+    "authEvidence": [],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/summary/route.ts",
+    "apiPath": "/api/events/:id/summary",
+    "methods": ["GET"],
+    "authType": "NONE",
+    "authEvidence": [],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/teams/route.ts",
+    "apiPath": "/api/events/:id/teams",
+    "methods": ["GET", "POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/teams/[teamId]/route.ts",
+    "apiPath": "/api/events/:id/teams/:teamId",
+    "methods": ["DELETE"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/teams/[teamId]/items/route.ts",
+    "apiPath": "/api/events/:id/teams/:teamId/items",
+    "methods": ["GET", "POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/tokens/route.ts",
+    "apiPath": "/api/events/:id/tokens",
+    "methods": ["GET"],
+    "authType": "CUSTOM",
+    "authEvidence": ["custom param-based auth with validation", "bearer token fallback"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/transition/route.ts",
+    "apiPath": "/api/events/:id/transition",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/gather/[eventId]/directory/route.ts",
+    "apiPath": "/api/gather/:eventId/directory",
+    "methods": ["GET"],
+    "authType": "PUBLIC",
+    "authEvidence": ["public directory"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/h/[token]/route.ts",
+    "apiPath": "/api/h/:token",
+    "methods": ["GET"],
+    "authType": "TOKEN",
+    "authEvidence": ["getUser()", "resolveToken"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/h/[token]/audit/route.ts",
+    "apiPath": "/api/h/:token/audit",
+    "methods": ["GET"],
+    "authType": "TOKEN",
+    "authEvidence": ["resolveToken"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/h/[token]/status/route.ts",
+    "apiPath": "/api/h/:token/status",
+    "methods": ["PATCH"],
+    "authType": "TOKEN",
+    "authEvidence": ["resolveToken"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/h/[token]/team/[teamId]/route.ts",
+    "apiPath": "/api/h/:token/team/:teamId",
+    "methods": ["GET"],
+    "authType": "TOKEN",
+    "authEvidence": ["resolveToken"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/memory/route.ts",
+    "apiPath": "/api/memory",
+    "methods": ["GET", "DELETE"],
+    "authType": "SESSION",
+    "authEvidence": ["getUser()"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/memory/patterns/route.ts",
+    "apiPath": "/api/memory/patterns",
+    "methods": ["GET"],
+    "authType": "SESSION",
+    "authEvidence": ["getUser()"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/memory/settings/route.ts",
+    "apiPath": "/api/memory/settings",
+    "methods": ["PATCH"],
+    "authType": "SESSION",
+    "authEvidence": ["getUser()"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/p/[token]/route.ts",
+    "apiPath": "/api/p/:token",
+    "methods": ["GET"],
+    "authType": "TOKEN",
+    "authEvidence": ["resolveToken"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/p/[token]/ack/[assignmentId]/route.ts",
+    "apiPath": "/api/p/:token/ack/:assignmentId",
+    "methods": ["POST"],
+    "authType": "TOKEN",
+    "authEvidence": ["resolveToken"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/templates/route.ts",
+    "apiPath": "/api/templates",
+    "methods": ["GET", "POST"],
+    "authType": "SESSION",
+    "authEvidence": ["getUser()"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/templates/[id]/route.ts",
+    "apiPath": "/api/templates/:id",
+    "methods": ["GET", "DELETE"],
+    "authType": "SESSION",
+    "authEvidence": ["getUser()"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/templates/[id]/clone/route.ts",
+    "apiPath": "/api/templates/:id/clone",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["getUser()"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/templates/gather/route.ts",
+    "apiPath": "/api/templates/gather",
+    "methods": ["GET"],
+    "authType": "NONE",
+    "authEvidence": [],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/webhooks/stripe/route.ts",
+    "apiPath": "/api/webhooks/stripe",
+    "methods": ["POST"],
+    "authType": "PUBLIC",
+    "authEvidence": ["webhook endpoint"],
+    "securityIssues": []
+  }
+]

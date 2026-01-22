@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { canMutate, logAudit } from '@/lib/workflow';
+import { requireNotFrozen } from '@/lib/auth/guards';
 
 /**
  * POST /api/c/[token]/items
@@ -12,6 +13,7 @@ import { canMutate, logAudit } from '@/lib/workflow';
  * - Force teamId from token, NEVER from client
  * - Check canMutate() before creating
  * - All operations in transaction
+ * - Server-side frozen state validation
  */
 export async function POST(request: NextRequest, { params }: { params: { token: string } }) {
   const context = await resolveToken(params.token);
@@ -19,6 +21,10 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
   if (!context || context.scope !== 'COORDINATOR' || !context.team) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
+
+  // SECURITY: Block mutations when FROZEN (server-side validation)
+  const frozenBlock = requireNotFrozen(context.event, false);
+  if (frozenBlock) return frozenBlock;
 
   // Check if mutations are allowed
   if (!canMutate(context.event.status, 'createItem')) {

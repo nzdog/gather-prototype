@@ -15,10 +15,11 @@ async function testAddTeam() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: 'Beverages Team',
-        scope: 'Responsible for all drinks including hot beverages, soft drinks, and alcoholic options',
+        scope:
+          'Responsible for all drinks including hot beverages, soft drinks, and alcoholic options',
         domain: 'DRINKS',
-        coordinatorId: HOST_ID
-      })
+        coordinatorId: HOST_ID,
+      }),
     });
 
     if (!response.ok) {
@@ -53,8 +54,8 @@ async function testAddItem(teamId: string) {
         quantityAmount: 50,
         quantityUnit: 'SERVINGS',
         critical: true,
-        dietaryTags: ['vegetarian', 'vegan']
-      })
+        dietaryTags: ['vegetarian', 'vegan'],
+      }),
     });
 
     if (!response.ok) {
