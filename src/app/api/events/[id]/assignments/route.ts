@@ -11,8 +11,8 @@ export async function GET(
   try {
     const eventId = params.id;
 
-    // SECURITY: Require HOST, COORDINATOR, or PARTICIPANT role to view assignments
-    const auth = await requireEventRole(eventId, ['HOST', 'COORDINATOR', 'PARTICIPANT']);
+    // SECURITY: Require HOST or COORDINATOR role to view assignments
+    const auth = await requireEventRole(eventId, ['HOST', 'COORDINATOR']);
     if (auth instanceof NextResponse) return auth;
 
     const assignments = await prisma.assignment.findMany({
