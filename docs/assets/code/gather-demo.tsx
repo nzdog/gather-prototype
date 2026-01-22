@@ -8,7 +8,6 @@ import {
   ChevronLeft,
   Plus,
   Lock,
-  Users,
 } from 'lucide-react';
 
 // ============================================================
