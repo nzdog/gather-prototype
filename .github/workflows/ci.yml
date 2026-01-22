@@ -33,6 +33,7 @@ jobs:
       - name: Build
         env:
           DATABASE_URL: postgresql://user:pass@localhost:5432/ci_db
+          STRIPE_SECRET_KEY: sk_test_dummy_key_for_ci_build_only
         run: npx next build
 
       - name: Audit
