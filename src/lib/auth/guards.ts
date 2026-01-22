@@ -52,10 +52,8 @@ export async function requireEventRole(
   // 1. Require authenticated user session
   const user = await getUser();
   if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized', message: 'Authentication required' },
-      { status: 401 }
-    );
+    console.error('[Auth] Session auth failed: No authenticated user', { eventId, allowedRoles });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   // 2. Check if user has a role for this event
@@ -68,13 +66,12 @@ export async function requireEventRole(
   });
 
   if (!eventRole) {
-    return NextResponse.json(
-      {
-        error: 'Forbidden',
-        message: `Requires one of: ${allowedRoles.join(', ')}`,
-      },
-      { status: 403 }
-    );
+    console.error('[Auth] Event role check failed: User lacks required role', {
+      userId: user.id,
+      eventId,
+      allowedRoles,
+    });
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   return {
@@ -105,20 +102,20 @@ export async function requireTokenScope(
   const context = await resolveToken(token);
 
   if (!context) {
-    return NextResponse.json(
-      { error: 'Unauthorized', message: 'Invalid or expired token' },
-      { status: 401 }
-    );
+    console.error('[Auth] Token auth failed: Invalid or expired token', {
+      tokenPrefix: token.substring(0, 8),
+      requiredScope,
+    });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   if (context.scope !== requiredScope) {
-    return NextResponse.json(
-      {
-        error: 'Forbidden',
-        message: `Requires ${requiredScope} scope, got ${context.scope}`,
-      },
-      { status: 403 }
-    );
+    console.error('[Auth] Token scope check failed: Insufficient scope', {
+      tokenPrefix: token.substring(0, 8),
+      requiredScope,
+      actualScope: context.scope,
+    });
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   return context;
@@ -140,25 +137,20 @@ export async function requireTokenScope(
  */
 export function requireNotFrozen(event: Event, allowOverride = false): NextResponse | void {
   if (event.status === 'FROZEN' && !allowOverride) {
-    return NextResponse.json(
-      {
-        error: 'Forbidden',
-        message: 'Cannot modify items when event is FROZEN',
-        status: event.status,
-      },
-      { status: 403 }
-    );
+    console.error('[Auth] Mutation blocked: Event is FROZEN', {
+      eventId: event.id,
+      eventStatus: event.status,
+      allowOverride,
+    });
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   if (event.status === 'COMPLETE') {
-    return NextResponse.json(
-      {
-        error: 'Forbidden',
-        message: 'Cannot modify completed event',
-        status: event.status,
-      },
-      { status: 403 }
-    );
+    console.error('[Auth] Mutation blocked: Event is COMPLETE', {
+      eventId: event.id,
+      eventStatus: event.status,
+    });
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 }
 
@@ -174,13 +166,12 @@ export function requireNotFrozen(event: Event, allowOverride = false): NextRespo
 export function requireTeamAccess(context: AuthContext, teamId: string): NextResponse | void {
   if (context.scope === 'COORDINATOR') {
     if (!context.team || context.team.id !== teamId) {
-      return NextResponse.json(
-        {
-          error: 'Forbidden',
-          message: 'Coordinator can only access own team',
-        },
-        { status: 403 }
-      );
+      console.error('[Auth] Team access denied: Coordinator accessing wrong team', {
+        scope: context.scope,
+        coordinatorTeamId: context.team?.id,
+        requestedTeamId: teamId,
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
   }
 }
@@ -196,13 +187,11 @@ export function requireTeamAccess(context: AuthContext, teamId: string): NextRes
  */
 export function requireSameTeam(personTeamId: string, itemTeamId: string): NextResponse | void {
   if (personTeamId !== itemTeamId) {
-    return NextResponse.json(
-      {
-        error: 'Bad Request',
-        message: 'Person must be in same team as item',
-      },
-      { status: 400 }
-    );
+    console.error('[Auth] Team assignment validation failed: Person and item in different teams', {
+      personTeamId,
+      itemTeamId,
+    });
+    return NextResponse.json({ error: 'Bad Request' }, { status: 400 });
   }
 }
 
@@ -249,8 +238,11 @@ export async function requireEventRoleOrToken(
   }
 
   // Both auth methods failed
-  return NextResponse.json(
-    { error: 'Unauthorized', message: 'Authentication required' },
-    { status: 401 }
-  );
+  console.error('[Auth] Multi-auth failed: Both session and token auth failed', {
+    eventId,
+    allowedEventRoles,
+    tokenProvided: !!token,
+    allowedTokenScope,
+  });
+  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 }
