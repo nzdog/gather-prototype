@@ -17,7 +17,7 @@ interface GenerationReviewPanelProps {
 
 export default function GenerationReviewPanel({
   teamGroups,
-  eventId,
+  eventId: _eventId,
   onConfirmAndContinue,
   onRegenerateSelected,
 }: GenerationReviewPanelProps) {

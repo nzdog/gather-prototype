@@ -8,7 +8,7 @@ import { getUser } from '@/lib/auth/session';
  * List learned patterns for the host.
  * SECURITY: Now uses session authentication instead of query param
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   // SECURITY: Require authenticated user session
   const user = await getUser();
   if (!user) {

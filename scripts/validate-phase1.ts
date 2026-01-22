@@ -407,7 +407,7 @@ async function testCreateEventClaimed() {
     const event = await createTestEvent(person.id, 'New Event by Claimed User');
 
     // Create EventRole
-    const eventRole = await createTestEventRole(user.id, event.id, 'HOST');
+    await createTestEventRole(user.id, event.id, 'HOST');
 
     // Verify EventRole was created
     const foundEventRole = await prisma.eventRole.findFirst({

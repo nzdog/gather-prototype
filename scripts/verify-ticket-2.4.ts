@@ -8,7 +8,7 @@
  * Run with: npx tsx scripts/verify-ticket-2.4.ts
  */
 
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync } from 'fs';
 import { join } from 'path';
 
 // ANSI color codes for output

@@ -1,7 +1,5 @@
 'use client';
 
-import { useState } from 'react';
-
 export type ItemDecision = 'keep' | 'regenerate' | 'pending';
 
 export interface ReviewItem {

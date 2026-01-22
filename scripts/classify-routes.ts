@@ -71,7 +71,6 @@ function analyzeRouteFile(filePath: string): RouteAnalysis {
   // PUBLIC endpoints
   const isWebhook = apiPath.includes('/webhooks/');
   const isPublicDirectory = apiPath.includes('/gather/') && apiPath.includes('/directory');
-  const hasPublicComment = content.includes('PUBLIC') || content.includes('No auth required');
 
   if (isWebhook || isPublicDirectory) {
     authType = 'PUBLIC';
@@ -95,7 +94,6 @@ function analyzeRouteFile(filePath: string): RouteAnalysis {
   if ((hasHostIdParam || hasPersonIdParam) && authType === 'NONE') {
     // Check if there's ANY validation beyond param presence
     const hasEventOwnerCheck = content.includes('event.hostId') && content.includes('!==');
-    const hasPersonCheck = content.includes('person.') && content.includes('where');
 
     if (hasEventOwnerCheck || hasBearerTokenFallback) {
       authType = 'CUSTOM';

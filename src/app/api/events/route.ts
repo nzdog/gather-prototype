@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth/session';
 import { canCreateEvent } from '@/lib/entitlements';
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     // Get authenticated user
     const user = await getUser();

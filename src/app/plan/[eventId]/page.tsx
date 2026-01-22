@@ -180,8 +180,8 @@ export default function PlanEditorPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [regenerateModalOpen, setRegenerateModalOpen] = useState(false);
-  const [manualTeamCount, setManualTeamCount] = useState(0);
-  const [manualItemCount, setManualItemCount] = useState(0);
+  const [manualTeamCount, _setManualTeamCount] = useState(0);
+  const [manualItemCount, _setManualItemCount] = useState(0);
   const [editEventModalOpen, setEditEventModalOpen] = useState(false);
   const [inviteLinks, setInviteLinks] = useState<any[]>([]);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
