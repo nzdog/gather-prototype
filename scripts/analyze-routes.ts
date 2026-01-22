@@ -18,8 +18,14 @@ interface RouteInfo {
   notes: string[];
 }
 
-function analyzeRouteFile(filePath: string): RouteInfo {
-  const content = fs.readFileSync(filePath, 'utf-8');
+function analyzeRouteFile(filePath: string): RouteInfo | null {
+  let content: string;
+  try {
+    content = fs.readFileSync(filePath, 'utf-8');
+  } catch (error) {
+    console.error(`Failed to read file: ${filePath}`, error);
+    return null;
+  }
 
   // Derive API path from file path
   const relPath = filePath.replace(process.cwd(), '').replace('/src/app/api', '');
@@ -118,7 +124,13 @@ function main() {
   const routes: RouteInfo[] = [];
 
   function findRoutes(dir: string) {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch (error) {
+      console.error(`Failed to read directory: ${dir}`, error);
+      return;
+    }
 
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
@@ -126,7 +138,10 @@ function main() {
       if (entry.isDirectory()) {
         findRoutes(fullPath);
       } else if (entry.name === 'route.ts') {
-        routes.push(analyzeRouteFile(fullPath));
+        const routeInfo = analyzeRouteFile(fullPath);
+        if (routeInfo) {
+          routes.push(routeInfo);
+        }
       }
     }
   }
