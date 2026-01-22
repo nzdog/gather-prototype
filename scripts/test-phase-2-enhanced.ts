@@ -67,12 +67,12 @@ async function runTests() {
       log('Setting up test event...');
 
       testHost = await prisma.person.findFirst({
-        where: { name: 'Jacqui & Ian' }
+        where: { name: 'Jacqui & Ian' },
       });
 
       if (!testHost) {
         testHost = await prisma.person.create({
-          data: { name: 'Test Host Enhanced', email: 'test-enhanced@example.com' }
+          data: { name: 'Test Host Enhanced', email: 'test-enhanced@example.com' },
         });
       }
 
@@ -135,7 +135,10 @@ async function runTests() {
       const suggestionsResponse = await apiCall('GET', `/api/events/${testEvent.id}/suggestions`);
       const suggestionId = suggestionsResponse.suggestions[0].id;
 
-      const response = await apiCall('GET', `/api/events/${testEvent.id}/suggestions/${suggestionId}`);
+      const response = await apiCall(
+        'GET',
+        `/api/events/${testEvent.id}/suggestions/${suggestionId}`
+      );
 
       if (!response.suggestion) {
         throw new Error('No suggestion returned');
@@ -159,7 +162,10 @@ async function runTests() {
       const suggestionsResponse = await apiCall('GET', `/api/events/${testEvent.id}/suggestions`);
       const suggestionId = suggestionsResponse.suggestions[0].id;
 
-      const response = await apiCall('GET', `/api/events/${testEvent.id}/suggestions/${suggestionId}/explain`);
+      const response = await apiCall(
+        'GET',
+        `/api/events/${testEvent.id}/suggestions/${suggestionId}/explain`
+      );
 
       if (!response.explanation) {
         throw new Error('No explanation returned');
@@ -171,7 +177,10 @@ async function runTests() {
         throw new Error('Explanation missing source');
       }
 
-      if (!exp.claimType || !['CONSTRAINT', 'RISK', 'PATTERN', 'PREFERENCE', 'ASSUMPTION'].includes(exp.claimType)) {
+      if (
+        !exp.claimType ||
+        !['CONSTRAINT', 'RISK', 'PATTERN', 'PREFERENCE', 'ASSUMPTION'].includes(exp.claimType)
+      ) {
         throw new Error(`Invalid claimType: ${exp.claimType}`);
       }
 
@@ -258,14 +267,10 @@ async function runTests() {
     try {
       log('Regenerating plan with modifier...');
 
-      const response = await apiCall(
-        'POST',
-        `/api/events/${testEvent.id}/regenerate`,
-        {
-          modifier: 'More vegetarian options',
-          preserveProtected: false,
-        }
-      );
+      const response = await apiCall('POST', `/api/events/${testEvent.id}/regenerate`, {
+        modifier: 'More vegetarian options',
+        preserveProtected: false,
+      });
 
       if (!response.success) {
         throw new Error('Regenerate failed');
@@ -334,14 +339,13 @@ async function runTests() {
       log('Cleaning up...');
 
       await prisma.event.delete({
-        where: { id: testEvent.id }
+        where: { id: testEvent.id },
       });
 
       pass('8. Cleanup successful');
     } catch (error: any) {
       fail('8. Cleanup successful', error.message);
     }
-
   } catch (error: any) {
     console.error('\n❌ Fatal error during tests:', error.message);
   }
@@ -353,17 +357,19 @@ async function runTests() {
   console.log('='.repeat(50));
   console.log('\n📊 TEST SUMMARY\n');
 
-  const passed = results.filter(r => r.passed).length;
-  const failed = results.filter(r => !r.passed).length;
+  const passed = results.filter((r) => r.passed).length;
+  const failed = results.filter((r) => !r.passed).length;
 
   console.log(`Phase 2 Enhanced: ${passed}/8 tests passed`);
 
   if (failed > 0) {
     console.log(`\n⚠️  ${failed} test(s) failed:\n`);
-    results.filter(r => !r.passed).forEach(r => {
-      console.log(`  - ${r.test}`);
-      console.log(`    ${r.error}\n`);
-    });
+    results
+      .filter((r) => !r.passed)
+      .forEach((r) => {
+        console.log(`  - ${r.test}`);
+        console.log(`    ${r.error}\n`);
+      });
   }
 
   console.log('');

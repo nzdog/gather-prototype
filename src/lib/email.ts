@@ -11,10 +11,7 @@ export function getResendClient(): Resend {
   return resendClient;
 }
 
-export async function sendMagicLinkEmail(
-  to: string,
-  token: string
-) {
+export async function sendMagicLinkEmail(to: string, token: string) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const link = `${baseUrl}/auth/verify?token=${token}`;
 

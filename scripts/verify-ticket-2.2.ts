@@ -21,9 +21,7 @@ async function verify() {
     // 1. Verify Stripe SDK is installed
     console.log('1. Checking Stripe SDK installation...');
     try {
-      const packageJson = JSON.parse(
-        readFileSync(join(process.cwd(), 'package.json'), 'utf-8')
-      );
+      const packageJson = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf-8'));
       if (packageJson.dependencies?.stripe) {
         console.log(`   ✅ Stripe SDK installed (version: ${packageJson.dependencies.stripe})\n`);
       } else {

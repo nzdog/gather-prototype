@@ -53,8 +53,12 @@ async function main() {
   // Summary
   console.log('📊 Summary:');
   console.log(`  Total coordinators: ${coordTokens.length}`);
-  console.log(`  Kate has coordinator token: ${coordTokens.some((t) => t.person.name === 'Kate') ? '✓ YES' : '❌ NO'}`);
-  console.log(`  Demo Host has coordinator tokens: ${coordTokens.filter((t) => t.person.name === 'Demo Host').length}`);
+  console.log(
+    `  Kate has coordinator token: ${coordTokens.some((t) => t.person.name === 'Kate') ? '✓ YES' : '❌ NO'}`
+  );
+  console.log(
+    `  Demo Host has coordinator tokens: ${coordTokens.filter((t) => t.person.name === 'Demo Host').length}`
+  );
 
   await prisma.$disconnect();
 }

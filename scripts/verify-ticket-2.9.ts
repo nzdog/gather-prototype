@@ -77,10 +77,7 @@ addCheck(
 
 addCheck(
   'Cancel endpoint finds user subscription',
-  fileContains(
-    'src/app/api/billing/cancel/route.ts',
-    'prisma.subscription.findUnique'
-  ),
+  fileContains('src/app/api/billing/cancel/route.ts', 'prisma.subscription.findUnique'),
   'Fetches subscription from database'
 );
 
@@ -104,19 +101,13 @@ addCheck(
 
 addCheck(
   'Cancel endpoint returns success response',
-  fileContainsAll('src/app/api/billing/cancel/route.ts', [
-    'success: true',
-    'currentPeriodEnd',
-  ]),
+  fileContainsAll('src/app/api/billing/cancel/route.ts', ['success: true', 'currentPeriodEnd']),
   'Returns success message with period end date'
 );
 
 addCheck(
   'Cancel endpoint handles already canceled',
-  fileContains(
-    'src/app/api/billing/cancel/route.ts',
-    'subscription.cancelAtPeriodEnd'
-  ),
+  fileContains('src/app/api/billing/cancel/route.ts', 'subscription.cancelAtPeriodEnd'),
   'Checks if already scheduled for cancellation'
 );
 
@@ -163,10 +154,7 @@ addCheck(
 
 addCheck(
   'Billing page has cancel button',
-  fileContainsAll('src/app/billing/page.tsx', [
-    'Cancel Subscription',
-    'handleCancelSubscription',
-  ]),
+  fileContainsAll('src/app/billing/page.tsx', ['Cancel Subscription', 'handleCancelSubscription']),
   'Shows cancel button for active subscriptions'
 );
 
@@ -192,29 +180,19 @@ addCheck(
 
 addCheck(
   'Billing page has resubscribe button',
-  fileContainsAll('src/app/billing/page.tsx', [
-    'isCanceled',
-    'Resubscribe',
-    'handleResubscribe',
-  ]),
+  fileContainsAll('src/app/billing/page.tsx', ['isCanceled', 'Resubscribe', 'handleResubscribe']),
   'Shows resubscribe button for CANCELED users'
 );
 
 addCheck(
   'Billing page resubscribe uses checkout endpoint',
-  fileContainsAll('src/app/billing/page.tsx', [
-    'handleResubscribe',
-    '/api/billing/checkout',
-  ]),
+  fileContainsAll('src/app/billing/page.tsx', ['handleResubscribe', '/api/billing/checkout']),
   'Resubscribe uses existing checkout flow'
 );
 
 addCheck(
   'Billing page shows status badge',
-  fileContainsAll('src/app/billing/page.tsx', [
-    'StatusBadge',
-    'billingStatus',
-  ]),
+  fileContainsAll('src/app/billing/page.tsx', ['StatusBadge', 'billingStatus']),
   'Displays current billing status'
 );
 
@@ -245,28 +223,19 @@ addCheck(
 
 addCheck(
   'Sync function updates cancelAtPeriodEnd',
-  fileContains(
-    'src/lib/billing/sync.ts',
-    'subscription.cancel_at_period_end'
-  ),
+  fileContains('src/lib/billing/sync.ts', 'subscription.cancel_at_period_end'),
   'Extracts and syncs cancelAtPeriodEnd from Stripe'
 );
 
 addCheck(
   'Sync function updates status from Stripe',
-  fileContainsAll('src/lib/billing/sync.ts', [
-    'mapStripeToBillingStatus',
-    'status',
-  ]),
+  fileContainsAll('src/lib/billing/sync.ts', ['mapStripeToBillingStatus', 'status']),
   'Maps Stripe status to BillingStatus enum'
 );
 
 addCheck(
   'Sync function handles canceled status',
-  fileContainsAll('src/lib/billing/sync.ts', [
-    "case 'canceled':",
-    'CANCELED',
-  ]),
+  fileContainsAll('src/lib/billing/sync.ts', ["case 'canceled':", 'CANCELED']),
   'Maps Stripe canceled to CANCELED status'
 );
 
@@ -314,10 +283,7 @@ addCheck(
 
 addCheck(
   'Schema has CANCELED status',
-  fileContainsAll('prisma/schema.prisma', [
-    'enum BillingStatus',
-    'CANCELED',
-  ]),
+  fileContainsAll('prisma/schema.prisma', ['enum BillingStatus', 'CANCELED']),
   'BillingStatus.CANCELED enum value exists'
 );
 
@@ -327,11 +293,7 @@ addCheck(
 
 console.log('\n7️⃣  Documentation\n');
 
-addCheck(
-  'Verification script exists',
-  fileExists('scripts/verify-ticket-2.9.ts'),
-  'This script'
-);
+addCheck('Verification script exists', fileExists('scripts/verify-ticket-2.9.ts'), 'This script');
 
 // ============================================
 // Summary

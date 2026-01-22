@@ -18,9 +18,9 @@ export async function GET(_request: NextRequest) {
       where: {
         eventRoles: {
           some: {
-            userId: user.id
-          }
-        }
+            userId: user.id,
+          },
+        },
       },
       include: {
         _count: {
@@ -31,8 +31,8 @@ export async function GET(_request: NextRequest) {
         },
         eventRoles: {
           where: { userId: user.id },
-          select: { role: true }
-        }
+          select: { role: true },
+        },
       },
       orderBy: {
         createdAt: 'desc',

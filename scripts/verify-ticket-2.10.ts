@@ -66,14 +66,11 @@ check(
 
 if (schemaContent) {
   // Check for isLegacy field in Event model
-  const hasIsLegacy = schemaContent.includes('isLegacy') &&
+  const hasIsLegacy =
+    schemaContent.includes('isLegacy') &&
     schemaContent.match(/model Event[\s\S]*?isLegacy.*?Boolean/);
 
-  check(
-    'Event.isLegacy field exists',
-    !!hasIsLegacy,
-    'Required to identify legacy events'
-  );
+  check('Event.isLegacy field exists', !!hasIsLegacy, 'Required to identify legacy events');
 
   // Check that default is false
   const isLegacyDefaultFalse = schemaContent.match(/isLegacy.*Boolean.*@default\(false\)/);
@@ -102,15 +99,13 @@ check(
 if (migrationContent) {
   check(
     'Updates events to isLegacy: true',
-    migrationContent.includes('isLegacy: true') &&
-      migrationContent.includes('updateMany'),
+    migrationContent.includes('isLegacy: true') && migrationContent.includes('updateMany'),
     'Script marks existing events as legacy'
   );
 
   check(
     'Filters for non-legacy events',
-    migrationContent.includes('isLegacy: false') ||
-      migrationContent.includes('where'),
+    migrationContent.includes('isLegacy: false') || migrationContent.includes('where'),
     'Only updates events not already marked as legacy'
   );
 
@@ -144,7 +139,8 @@ check(
 
 if (entitlementsContent) {
   // Check canCreateEvent excludes legacy events from count
-  const excludesLegacyFromCount = entitlementsContent.includes('canCreateEvent') &&
+  const excludesLegacyFromCount =
+    entitlementsContent.includes('canCreateEvent') &&
     entitlementsContent.includes('isLegacy: false');
 
   check(
@@ -154,7 +150,8 @@ if (entitlementsContent) {
   );
 
   // Check canEditEvent allows editing legacy events
-  const legacyAlwaysEditable = entitlementsContent.includes('canEditEvent') &&
+  const legacyAlwaysEditable =
+    entitlementsContent.includes('canEditEvent') &&
     entitlementsContent.includes('event.isLegacy') &&
     entitlementsContent.match(/canEditEvent[\s\S]*?event\.isLegacy[\s\S]*?return true/);
 
@@ -169,7 +166,9 @@ if (entitlementsContent) {
     if (!entitlementsContent.includes('canEditEvent')) return false;
 
     // Find the canEditEvent function
-    const funcMatch = entitlementsContent.match(/export async function canEditEvent[\s\S]*?(?=export async function|$)/);
+    const funcMatch = entitlementsContent.match(
+      /export async function canEditEvent[\s\S]*?(?=export async function|$)/
+    );
     if (!funcMatch) return false;
 
     const funcBody = funcMatch[0];
@@ -177,9 +176,9 @@ if (entitlementsContent) {
     // Look for where billingStatus is destructured or first used in a conditional
     const billingCheckIndex = funcBody.search(/const \{ billingStatus \}|if.*billingStatus/);
 
-    return legacyCheckIndex !== -1 &&
-           billingCheckIndex !== -1 &&
-           legacyCheckIndex < billingCheckIndex;
+    return (
+      legacyCheckIndex !== -1 && billingCheckIndex !== -1 && legacyCheckIndex < billingCheckIndex
+    );
   })();
 
   check(
@@ -189,7 +188,8 @@ if (entitlementsContent) {
   );
 
   // Check getRemainingEvents excludes legacy events
-  const remainingExcludesLegacy = entitlementsContent.includes('getRemainingEvents') &&
+  const remainingExcludesLegacy =
+    entitlementsContent.includes('getRemainingEvents') &&
     entitlementsContent.match(/getRemainingEvents[\s\S]*?isLegacy: false/);
 
   check(
@@ -226,7 +226,9 @@ console.log(`\n${colors.yellow}5. Business Logic Validation${colors.reset}`);
 
 if (entitlementsContent) {
   // Validate legacy events bypass CANCELED status
-  const bypassesCanceled = entitlementsContent.match(/canEditEvent[\s\S]*?isLegacy[\s\S]*?CANCELED/);
+  const bypassesCanceled = entitlementsContent.match(
+    /canEditEvent[\s\S]*?isLegacy[\s\S]*?CANCELED/
+  );
 
   check(
     'Legacy events editable even when CANCELED',
@@ -244,8 +246,8 @@ if (entitlementsContent) {
   );
 
   // Validate FREE tier can still edit legacy events
-  const freeCanEditLegacy = entitlementsContent.includes('isLegacy') &&
-    entitlementsContent.includes('canEditEvent');
+  const freeCanEditLegacy =
+    entitlementsContent.includes('isLegacy') && entitlementsContent.includes('canEditEvent');
 
   check(
     'FREE users can edit legacy events',
@@ -273,9 +275,13 @@ const passRate = ((passedChecks / totalChecks) * 100).toFixed(1);
 console.log(`\nPass rate: ${passRate}%`);
 
 if (failedChecks === 0) {
-  console.log(`\n${colors.green}✓ All checks passed! Ticket 2.10 implementation verified.${colors.reset}\n`);
+  console.log(
+    `\n${colors.green}✓ All checks passed! Ticket 2.10 implementation verified.${colors.reset}\n`
+  );
   process.exit(0);
 } else {
-  console.log(`\n${colors.red}✗ Some checks failed. Please review the implementation.${colors.reset}\n`);
+  console.log(
+    `\n${colors.red}✗ Some checks failed. Please review the implementation.${colors.reset}\n`
+  );
   process.exit(1);
 }

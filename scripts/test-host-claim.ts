@@ -113,7 +113,9 @@ async function testHostClaimFlow() {
     const result1 = await response1.json();
     console.log(`  Response status: ${response1.status}`);
     console.log(`  authStatus: ${result1.authStatus}`);
-    console.log(`  ✓ authStatus is 'unclaimed': ${result1.authStatus === 'unclaimed' ? 'Yes' : 'No'}`);
+    console.log(
+      `  ✓ authStatus is 'unclaimed': ${result1.authStatus === 'unclaimed' ? 'Yes' : 'No'}`
+    );
     console.log();
 
     // Test 3: Submit claim request
@@ -218,7 +220,9 @@ async function testHostClaimFlow() {
     const magicLinkCount = await prisma.magicLink.count({
       where: { email: 'different@email.com' },
     });
-    console.log(`  ✓ No MagicLink created for re-claim attempt: ${magicLinkCount === 0 ? 'Yes' : 'No'}`);
+    console.log(
+      `  ✓ No MagicLink created for re-claim attempt: ${magicLinkCount === 0 ? 'Yes' : 'No'}`
+    );
     console.log();
 
     // Clean up
@@ -248,7 +252,9 @@ async function testHostClaimFlow() {
     console.log('  [✓] Claim flow sends magic link to entered email');
     console.log('  [✓] After verification: User created/found, Person.userId set');
     console.log('  [✓] After linking: session created');
-    console.log('  [✓] If already linked: API returns authStatus: requires_signin (without session)');
+    console.log(
+      '  [✓] If already linked: API returns authStatus: requires_signin (without session)'
+    );
     console.log('  [✓] If session user matches linked User: authStatus: authenticated');
     console.log('\nManual Testing Required:');
     console.log('  [ ] Access legacy host link → see claim prompt in UI');

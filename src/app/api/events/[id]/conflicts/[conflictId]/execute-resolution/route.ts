@@ -185,7 +185,7 @@ async function updateItem(eventId: string, action: any): Promise<any> {
   const item = await prisma.item.findFirst({
     where: {
       id: itemId,
-      team: { eventId }
+      team: { eventId },
     },
     include: {
       team: true,

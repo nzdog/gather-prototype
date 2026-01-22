@@ -20,10 +20,7 @@ export async function POST() {
 
   // SECURITY: Only allow in development environment
   if (process.env.NODE_ENV === 'production') {
-    return NextResponse.json(
-      { error: 'Not Found' },
-      { status: 404 }
-    );
+    return NextResponse.json({ error: 'Not Found' }, { status: 404 });
   }
 
   try {
@@ -34,16 +31,13 @@ export async function POST() {
     // --skip-generate: Don't regenerate Prisma client (already generated)
     console.log('[Reset] Running Prisma migrate reset...');
 
-    const { stdout, stderr } = await execAsync(
-      'npx prisma migrate reset --force --skip-generate',
-      {
-        env: {
-          ...process.env,
-          // Auto-confirm the reset
-          PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION: 'yes'
-        }
-      }
-    );
+    const { stdout, stderr } = await execAsync('npx prisma migrate reset --force --skip-generate', {
+      env: {
+        ...process.env,
+        // Auto-confirm the reset
+        PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION: 'yes',
+      },
+    });
 
     console.log('[Reset] Migrate reset stdout:', stdout);
     if (stderr) {

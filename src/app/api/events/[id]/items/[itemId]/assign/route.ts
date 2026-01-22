@@ -45,10 +45,7 @@ export async function POST(
     }
 
     if (item.team.eventId !== eventId) {
-      return NextResponse.json(
-        { error: 'Item does not belong to this event' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Item does not belong to this event' }, { status: 400 });
     }
 
     // Check if person is in the same team as the item
@@ -62,10 +59,7 @@ export async function POST(
     });
 
     if (!personEvent) {
-      return NextResponse.json(
-        { error: 'Person is not part of this event' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Person is not part of this event' }, { status: 404 });
     }
 
     if (personEvent.teamId !== item.teamId) {
@@ -154,10 +148,7 @@ export async function DELETE(
     }
 
     if (item.team.eventId !== eventId) {
-      return NextResponse.json(
-        { error: 'Item does not belong to this event' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Item does not belong to this event' }, { status: 400 });
     }
 
     if (!item.assignment) {

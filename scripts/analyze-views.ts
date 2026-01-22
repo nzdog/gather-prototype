@@ -69,7 +69,10 @@ async function main() {
     { name: 'Team "Desserts" shown', test: coordHtml.includes('Desserts') },
     { name: 'Coordinator role/label', test: coordHtml.includes('Coordinator') },
     { name: 'Chocolate Cake (assigned to Kate)', test: coordHtml.includes('Chocolate Cake') },
-    { name: 'Can see team items', test: coordHtml.includes('Cookies') || coordHtml.includes('item') },
+    {
+      name: 'Can see team items',
+      test: coordHtml.includes('Cookies') || coordHtml.includes('item'),
+    },
   ];
 
   coordChecks.forEach((check) => {
@@ -109,9 +112,18 @@ async function main() {
     { name: 'Event name present', test: planHtml.includes('Integration Test Event') },
     { name: 'Status CONFIRMING shown', test: planHtml.includes('CONFIRMING') },
     { name: 'Invite Links section', test: planHtml.includes('Invite Links') },
-    { name: 'Host link displayed', test: planHtml.includes('/h/') && planHtml.includes(hostToken?.token || '') },
-    { name: 'Coordinator link displayed', test: planHtml.includes('/c/') && planHtml.includes(coordToken?.token || '') },
-    { name: 'Participant link displayed', test: planHtml.includes('/p/') && planHtml.includes(partToken?.token || '') },
+    {
+      name: 'Host link displayed',
+      test: planHtml.includes('/h/') && planHtml.includes(hostToken?.token || ''),
+    },
+    {
+      name: 'Coordinator link displayed',
+      test: planHtml.includes('/c/') && planHtml.includes(coordToken?.token || ''),
+    },
+    {
+      name: 'Participant link displayed',
+      test: planHtml.includes('/p/') && planHtml.includes(partToken?.token || ''),
+    },
     { name: 'Copy Link buttons', test: planHtml.includes('Copy Link') },
   ];
 

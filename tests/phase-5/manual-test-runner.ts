@@ -16,7 +16,7 @@ const BASE_URL = 'http://localhost:3000';
 const TEST_CONFIG = {
   hostId: 'cmjwbjrpw0000n99xs11r44qh',
   eventId: 'cmjwbjrqa000un99xtt121fx5',
-  templateName: 'Test Template ' + new Date().toISOString()
+  templateName: 'Test Template ' + new Date().toISOString(),
 } as any;
 
 interface TestResult {
@@ -73,8 +73,8 @@ async function testCreateTemplate() {
     body: JSON.stringify({
       hostId: TEST_CONFIG.hostId,
       eventId: TEST_CONFIG.eventId,
-      name: TEST_CONFIG.templateName
-    })
+      name: TEST_CONFIG.templateName,
+    }),
   });
 
   const data = await response.json();
@@ -141,8 +141,8 @@ async function testCloneTemplate() {
       endDate: new Date('2026-12-26').toISOString(),
       guestCount: 30,
       applyQuantityScaling: false,
-      occasionType: 'CHRISTMAS'
-    })
+      occasionType: 'CHRISTMAS',
+    }),
   });
 
   const data = await response.json();
@@ -202,8 +202,8 @@ async function testUpdateMemorySettings() {
     body: JSON.stringify({
       hostId: TEST_CONFIG.hostId,
       learningEnabled: true,
-      aggregateContributionConsent: false
-    })
+      aggregateContributionConsent: false,
+    }),
   });
 
   const data = await response.json();
@@ -226,7 +226,7 @@ async function testDeleteTemplate() {
   const response = await fetch(`${BASE_URL}/api/templates/${TEST_CONFIG.templateId}`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ hostId: TEST_CONFIG.hostId })
+    body: JSON.stringify({ hostId: TEST_CONFIG.hostId }),
   });
 
   const data = await response.json();
@@ -272,8 +272,8 @@ async function runAllTests() {
   console.log('Test Summary');
   console.log('='.repeat(60));
 
-  const passed = results.filter(r => r.passed).length;
-  const failed = results.filter(r => !r.passed).length;
+  const passed = results.filter((r) => r.passed).length;
+  const failed = results.filter((r) => !r.passed).length;
 
   console.log(`\nTotal Tests: ${results.length}`);
   console.log(`✅ Passed: ${passed}`);
@@ -281,9 +281,11 @@ async function runAllTests() {
 
   if (failed > 0) {
     console.log('\nFailed Tests:');
-    results.filter(r => !r.passed).forEach(r => {
-      console.log(`  - ${r.name}: ${r.error}`);
-    });
+    results
+      .filter((r) => !r.passed)
+      .forEach((r) => {
+        console.log(`  - ${r.name}: ${r.error}`);
+      });
   }
 
   console.log('');

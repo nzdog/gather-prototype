@@ -29,10 +29,7 @@ export async function PATCH(
     });
 
     if (!personEvent) {
-      return NextResponse.json(
-        { error: 'Person is not part of this event' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Person is not part of this event' }, { status: 404 });
     }
 
     // If teamId is being changed, validate it

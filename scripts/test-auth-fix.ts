@@ -161,7 +161,7 @@ async function main() {
   console.log('✅ Plan page can load invite links without localStorage\n');
 
   console.log('🎉 All auth tests passed!\n');
-  console.log('💡 The Plan page can now load invite links using the event\'s hostId');
+  console.log("💡 The Plan page can now load invite links using the event's hostId");
   console.log('   No need for localStorage or manual token management.\n');
 }
 

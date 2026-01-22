@@ -344,7 +344,8 @@ async function detectMissingCoordinators(event: any): Promise<ConflictData[]> {
         action: 'assign_coordinator',
         teamId: team.id,
         teamName: team.name,
-        recommendation: 'Use the "Assign Coordinators" button in the People section to designate someone as the coordinator for this team.',
+        recommendation:
+          'Use the "Assign Coordinators" button in the People section to designate someone as the coordinator for this team.',
       },
     });
   }
@@ -374,7 +375,11 @@ export async function saveConflicts(eventId: string, conflicts: ConflictData[]):
           suggestion: conflict.suggestion as any,
         },
       });
-    } else if (existing.status === 'OPEN' || existing.status === 'ACKNOWLEDGED' || existing.status === 'DELEGATED') {
+    } else if (
+      existing.status === 'OPEN' ||
+      existing.status === 'ACKNOWLEDGED' ||
+      existing.status === 'DELEGATED'
+    ) {
       // Update existing active conflict with new data
       await prisma.conflict.update({
         where: { id: existing.id },

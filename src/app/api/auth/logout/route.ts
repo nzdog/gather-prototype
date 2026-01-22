@@ -7,11 +7,13 @@ export async function POST() {
 
   if (sessionToken) {
     // Delete session from database
-    await prisma.session.delete({
-      where: { token: sessionToken }
-    }).catch(() => {
-      // Session might not exist, ignore error
-    });
+    await prisma.session
+      .delete({
+        where: { token: sessionToken },
+      })
+      .catch(() => {
+        // Session might not exist, ignore error
+      });
   }
 
   // Clear cookie via response headers directly (more reliable than cookies() API)
@@ -19,7 +21,7 @@ export async function POST() {
     status: 200,
     headers: {
       'Content-Type': 'application/json',
-      'Set-Cookie': 'session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0'
-    }
+      'Set-Cookie': 'session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
+    },
   });
 }

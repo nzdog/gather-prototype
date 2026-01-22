@@ -10,10 +10,7 @@ export async function POST(req: Request) {
     const { token, returnUrl, personId } = await req.json();
 
     if (!token) {
-      return Response.json(
-        { success: false, error: 'invalid' as ErrorType },
-        { status: 400 }
-      );
+      return Response.json({ success: false, error: 'invalid' as ErrorType }, { status: 400 });
     }
 
     // Find the magic link
@@ -131,9 +128,6 @@ export async function POST(req: Request) {
     console.error('Magic link verification error:', error);
     console.error('Error details:', error instanceof Error ? error.message : 'Unknown error');
     console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-    return Response.json(
-      { success: false, error: 'invalid' as ErrorType },
-      { status: 500 }
-    );
+    return Response.json({ success: false, error: 'invalid' as ErrorType }, { status: 500 });
   }
 }

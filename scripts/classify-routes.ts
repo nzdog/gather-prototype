@@ -27,9 +27,7 @@ function analyzeRouteFile(filePath: string): RouteAnalysis {
 
   // Derive API path - CRITICAL: Must preserve /api prefix for HTTP endpoints
   const relPath = filePath.replace(process.cwd(), '').replace('/src/app', '');
-  const apiPath = relPath
-    .replace('/route.ts', '')
-    .replace(/\[(\w+)\]/g, ':$1');
+  const apiPath = relPath.replace('/route.ts', '').replace(/\[(\w+)\]/g, ':$1');
 
   // Detect methods
   const methods: string[] = [];
@@ -85,8 +83,9 @@ function analyzeRouteFile(filePath: string): RouteAnalysis {
   }
 
   // WEAK PARAM auth (hostId/personId without session validation)
-  const hasHostIdParam = content.includes("searchParams.get('hostId')") ||
-                         content.includes('hostId') && content.includes('query');
+  const hasHostIdParam =
+    content.includes("searchParams.get('hostId')") ||
+    (content.includes('hostId') && content.includes('query'));
   const hasPersonIdParam = content.includes("searchParams.get('personId')");
   const hasBearerTokenFallback = content.includes('Bearer') || content.includes('authorization');
 
@@ -111,15 +110,16 @@ function analyzeRouteFile(filePath: string): RouteAnalysis {
   // NO AUTH detection
   if (authType === 'NONE' && !isPublicDirectory && !isWebhook) {
     // Check for mutation
-    const mutationMethods = methods.filter(m => ['POST', 'PATCH', 'PUT', 'DELETE'].includes(m));
+    const mutationMethods = methods.filter((m) => ['POST', 'PATCH', 'PUT', 'DELETE'].includes(m));
     const hasPrismaWrite = content.match(/prisma\.\w+\.(create|update|delete|upsert)/);
 
     // ENHANCED: Also detect indirect mutations via workflow/helper functions
-    const hasWorkflowMutation = content.includes('transitionToConfirming') ||
-                                content.includes('transitionToFrozen') ||
-                                content.includes('createEvent') ||
-                                content.includes('updateEvent') ||
-                                content.includes('deleteEvent');
+    const hasWorkflowMutation =
+      content.includes('transitionToConfirming') ||
+      content.includes('transitionToFrozen') ||
+      content.includes('createEvent') ||
+      content.includes('updateEvent') ||
+      content.includes('deleteEvent');
 
     // CRITICAL: Any POST/PATCH/PUT/DELETE with NONE auth is a mutation risk
     // Even if we don't see direct Prisma calls, mutation methods should have auth
@@ -128,27 +128,31 @@ function analyzeRouteFile(filePath: string): RouteAnalysis {
         securityIssues.push('🚨 CRITICAL: Mutation route with NO authentication');
       } else {
         // Even without detected DB writes, POST/PATCH/PUT/DELETE with NONE auth is suspicious
-        securityIssues.push('🚨 CRITICAL: Mutation method (POST/PATCH/PUT/DELETE) with NO authentication');
+        securityIssues.push(
+          '🚨 CRITICAL: Mutation method (POST/PATCH/PUT/DELETE) with NO authentication'
+        );
       }
     }
 
     // Check for AI/high-cost operations
-    const isHighCost = content.includes('anthropic') ||
-                       content.includes('generatePlan') ||
-                       content.includes('detectConflicts') ||
-                       content.includes('suggestResolution');
+    const isHighCost =
+      content.includes('anthropic') ||
+      content.includes('generatePlan') ||
+      content.includes('detectConflicts') ||
+      content.includes('suggestResolution');
 
     if (isHighCost) {
       securityIssues.push('🚨 CRITICAL: AI/high-cost route with NO authentication');
     }
 
     // Check for sensitive data
-    const isSensitive = apiPath.includes('/tokens') ||
-                        apiPath.includes('/people') ||
-                        apiPath.includes('/assignments') ||
-                        apiPath.includes('/directory') ||
-                        content.includes('email') ||
-                        content.includes('phone');
+    const isSensitive =
+      apiPath.includes('/tokens') ||
+      apiPath.includes('/people') ||
+      apiPath.includes('/assignments') ||
+      apiPath.includes('/directory') ||
+      content.includes('email') ||
+      content.includes('phone');
 
     if (isSensitive) {
       securityIssues.push('⚠️ HIGH: Sensitive data route with NO authentication');
@@ -169,7 +173,7 @@ function analyzeRouteFile(filePath: string): RouteAnalysis {
     methods,
     authType,
     authEvidence,
-    securityIssues
+    securityIssues,
   };
 }
 
@@ -195,8 +199,8 @@ function main() {
 
   // Sort by security issues (critical first), then by auth type
   analyses.sort((a, b) => {
-    const aCritical = a.securityIssues.some(i => i.includes('CRITICAL'));
-    const bCritical = b.securityIssues.some(i => i.includes('CRITICAL'));
+    const aCritical = a.securityIssues.some((i) => i.includes('CRITICAL'));
+    const bCritical = b.securityIssues.some((i) => i.includes('CRITICAL'));
 
     if (aCritical && !bCritical) return -1;
     if (!aCritical && bCritical) return 1;
@@ -207,13 +211,13 @@ function main() {
   // Statistics
   const stats = {
     total: analyses.length,
-    session: analyses.filter(a => a.authType === 'SESSION').length,
-    token: analyses.filter(a => a.authType === 'TOKEN').length,
-    custom: analyses.filter(a => a.authType === 'CUSTOM').length,
-    public: analyses.filter(a => a.authType === 'PUBLIC').length,
-    weakParam: analyses.filter(a => a.authType === 'WEAK_PARAM').length,
-    none: analyses.filter(a => a.authType === 'NONE').length,
-    withIssues: analyses.filter(a => a.securityIssues.length > 0).length
+    session: analyses.filter((a) => a.authType === 'SESSION').length,
+    token: analyses.filter((a) => a.authType === 'TOKEN').length,
+    custom: analyses.filter((a) => a.authType === 'CUSTOM').length,
+    public: analyses.filter((a) => a.authType === 'PUBLIC').length,
+    weakParam: analyses.filter((a) => a.authType === 'WEAK_PARAM').length,
+    none: analyses.filter((a) => a.authType === 'NONE').length,
+    withIssues: analyses.filter((a) => a.securityIssues.length > 0).length,
   };
 
   console.log('=== ROUTE CLASSIFICATION RESULTS ===\n');
@@ -228,39 +232,39 @@ function main() {
   console.log(`  Routes with issues: ${stats.withIssues}\n`);
 
   // Critical issues
-  const critical = analyses.filter(a =>
-    a.securityIssues.some(i => i.includes('CRITICAL'))
-  );
+  const critical = analyses.filter((a) => a.securityIssues.some((i) => i.includes('CRITICAL')));
 
   if (critical.length > 0) {
     console.log('🚨 CRITICAL SECURITY ISSUES:\n');
-    critical.forEach(a => {
+    critical.forEach((a) => {
       console.log(`${a.methods.join(', ')} ${a.apiPath}`);
       console.log(`  File: ${a.filePath}`);
-      a.securityIssues.forEach(issue => console.log(`  ${issue}`));
+      a.securityIssues.forEach((issue) => console.log(`  ${issue}`));
       console.log('');
     });
   }
 
   // High priority issues
-  const highPriority = analyses.filter(a =>
-    a.securityIssues.some(i => i.includes('HIGH') || i.includes('WEAK'))
+  const highPriority = analyses.filter((a) =>
+    a.securityIssues.some((i) => i.includes('HIGH') || i.includes('WEAK'))
   );
 
   if (highPriority.length > 0) {
     console.log('⚠️  HIGH PRIORITY ISSUES:\n');
-    highPriority.forEach(a => {
+    highPriority.forEach((a) => {
       console.log(`${a.methods.join(', ')} ${a.apiPath}`);
       console.log(`  Type: ${a.authType}`);
-      a.securityIssues.forEach(issue => console.log(`  ${issue}`));
+      a.securityIssues.forEach((issue) => console.log(`  ${issue}`));
       console.log('');
     });
   }
 
   // Output classifications for inventory update
   console.log('\n=== CLASSIFICATIONS FOR INVENTORY UPDATE ===\n');
-  analyses.forEach(a => {
-    console.log(`${a.apiPath} | ${a.methods.join(', ')} | ${a.authType} | ${a.authEvidence.join(', ') || 'none'}`);
+  analyses.forEach((a) => {
+    console.log(
+      `${a.apiPath} | ${a.methods.join(', ')} | ${a.authType} | ${a.authEvidence.join(', ') || 'none'}`
+    );
   });
 
   // Save to JSON for programmatic use

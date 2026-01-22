@@ -141,59 +141,63 @@ export default function RegenerateModal({
           {/* Input State */}
           {step === 'input' && (
             <div className="space-y-6">
-          {/* Manual Additions Warning */}
-          {hasManualAdditions && (
-            <div className="bg-amber-50 border-2 border-amber-200 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <h3 className="font-semibold text-amber-900 mb-2">You have manual additions:</h3>
-                  <ul className="text-amber-800 space-y-1">
-                    {manualTeamCount > 0 && (
-                      <li>
-                        • {manualTeamCount} team{manualTeamCount !== 1 ? 's' : ''} added manually
-                      </li>
-                    )}
-                    {manualItemCount > 0 && (
-                      <li>
-                        • {manualItemCount} item{manualItemCount !== 1 ? 's' : ''} added manually
-                      </li>
-                    )}
-                  </ul>
+              {/* Manual Additions Warning */}
+              {hasManualAdditions && (
+                <div className="bg-amber-50 border-2 border-amber-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h3 className="font-semibold text-amber-900 mb-2">
+                        You have manual additions:
+                      </h3>
+                      <ul className="text-amber-800 space-y-1">
+                        {manualTeamCount > 0 && (
+                          <li>
+                            • {manualTeamCount} team{manualTeamCount !== 1 ? 's' : ''} added
+                            manually
+                          </li>
+                        )}
+                        {manualItemCount > 0 && (
+                          <li>
+                            • {manualItemCount} item{manualItemCount !== 1 ? 's' : ''} added
+                            manually
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  </div>
                 </div>
+              )}
+
+              {/* No Manual Additions */}
+              {!hasManualAdditions && (
+                <div className="bg-sage-50 border-2 border-sage-200 rounded-lg p-4">
+                  <p className="text-sage-900">
+                    This will replace all generated teams and items with a fresh AI-generated plan.
+                  </p>
+                </div>
+              )}
+
+              {/* Modifier Input */}
+              <div>
+                <label htmlFor="modifier" className="block text-sm font-medium text-gray-700 mb-2">
+                  What changes would you like? (optional)
+                </label>
+                <textarea
+                  id="modifier"
+                  value={modifier}
+                  onChange={(e) => setModifier(e.target.value)}
+                  placeholder="e.g., More vegetarian options, Focus on appetizers, Add dessert team..."
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-blue-500 resize-none"
+                  rows={3}
+                />
+                <p className="text-sm text-gray-500 mt-1">
+                  Tell Claude how to adjust the plan. Leave blank for a standard regeneration.
+                </p>
               </div>
-            </div>
-          )}
 
-          {/* No Manual Additions */}
-          {!hasManualAdditions && (
-            <div className="bg-sage-50 border-2 border-sage-200 rounded-lg p-4">
-              <p className="text-sage-900">
-                This will replace all generated teams and items with a fresh AI-generated plan.
-              </p>
-            </div>
-          )}
-
-          {/* Modifier Input */}
-          <div>
-            <label htmlFor="modifier" className="block text-sm font-medium text-gray-700 mb-2">
-              What changes would you like? (optional)
-            </label>
-            <textarea
-              id="modifier"
-              value={modifier}
-              onChange={(e) => setModifier(e.target.value)}
-              placeholder="e.g., More vegetarian options, Focus on appetizers, Add dessert team..."
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-blue-500 resize-none"
-              rows={3}
-            />
-            <p className="text-sm text-gray-500 mt-1">
-              Tell Claude how to adjust the plan. Leave blank for a standard regeneration.
-            </p>
-          </div>
-
-          {/* Footer / Actions */}
-          <div className="space-y-3">
+              {/* Footer / Actions */}
+              <div className="space-y-3">
                 {hasManualAdditions ? (
                   <>
                     {/* Option 1: Keep Manual Additions */}
@@ -233,15 +237,15 @@ export default function RegenerateModal({
                   </>
                 )}
 
-            {/* Cancel */}
-            <button
-              onClick={handleCancel}
-              className="w-full px-6 py-3 bg-white border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
+                {/* Cancel */}
+                <button
+                  onClick={handleCancel}
+                  className="w-full px-6 py-3 bg-white border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>

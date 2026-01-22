@@ -16,9 +16,9 @@ async function verifyMigration() {
 
     // Check Person.userId is NULL for all existing records
     const people = await prisma.person.findMany({
-      select: { id: true, email: true, userId: true }
+      select: { id: true, email: true, userId: true },
     });
-    const linked = people.filter(p => p.userId !== null);
+    const linked = people.filter((p) => p.userId !== null);
     console.log(`✓ Person.userId exists (${people.length} people, ${linked.length} linked)`);
 
     // Verify AccessToken unchanged
@@ -27,7 +27,7 @@ async function verifyMigration() {
 
     // Test User creation
     const testUser = await prisma.user.create({
-      data: { email: 'test-migration@example.com' }
+      data: { email: 'test-migration@example.com' },
     });
     console.log(`✓ User creation works (id: ${testUser.id})`);
 
@@ -36,8 +36,8 @@ async function verifyMigration() {
       data: {
         userId: testUser.id,
         token: 'test-token-' + Date.now(),
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
-      }
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+      },
     });
     console.log(`✓ Session creation works (id: ${testSession.id})`);
 
@@ -46,8 +46,8 @@ async function verifyMigration() {
       data: {
         email: 'test-migration@example.com',
         token: 'magic-test-' + Date.now(),
-        expiresAt: new Date(Date.now() + 15 * 60 * 1000) // 15 minutes
-      }
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
+      },
     });
     console.log(`✓ MagicLink creation works (id: ${testMagicLink.id})`);
 

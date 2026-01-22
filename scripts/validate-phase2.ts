@@ -75,7 +75,10 @@ function logSection(title: string) {
 // Helper Functions
 // ============================================
 
-async function createTestUser(email: string, billingStatus: 'FREE' | 'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'CANCELED' = 'FREE') {
+async function createTestUser(
+  email: string,
+  billingStatus: 'FREE' | 'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'CANCELED' = 'FREE'
+) {
   const user = await prisma.user.create({
     data: {
       email,
@@ -113,7 +116,11 @@ async function createTestEvent(hostId: string, name: string, isLegacy: boolean =
   return event;
 }
 
-async function createTestEventRole(userId: string, eventId: string, role: 'HOST' | 'COHOST' | 'COORDINATOR' = 'HOST') {
+async function createTestEventRole(
+  userId: string,
+  eventId: string,
+  role: 'HOST' | 'COHOST' | 'COORDINATOR' = 'HOST'
+) {
   const eventRole = await prisma.eventRole.create({
     data: {
       userId,
@@ -539,7 +546,7 @@ async function testLegacyEventEditAnyStatus() {
 }
 
 async function testLegacyEventsDontCount() {
-  logSection('Test 14: Legacy events don\'t count against free limit');
+  logSection("Test 14: Legacy events don't count against free limit");
 
   try {
     const user = await createTestUser(getTestEmail('legacy-limit'), 'FREE');
@@ -626,7 +633,7 @@ async function testLegacyTokens() {
       },
     });
 
-    const scopes = tokens.map(t => t.scope).sort();
+    const scopes = tokens.map((t) => t.scope).sort();
     const expectedScopes = ['HOST', 'COORDINATOR', 'PARTICIPANT'].sort();
 
     if (JSON.stringify(scopes) !== JSON.stringify(expectedScopes)) {
@@ -716,7 +723,7 @@ async function testSessionLogout() {
     }
 
     // Remove from cleanup list since we already deleted it
-    createdResources.sessions = createdResources.sessions.filter(id => id !== session.id);
+    createdResources.sessions = createdResources.sessions.filter((id) => id !== session.id);
 
     recordPass('Phase 1: Session/logout flow intact');
   } catch (error) {
@@ -789,9 +796,13 @@ async function cleanup() {
 // ============================================
 
 async function main() {
-  console.log(`\n${colors.blue}╔════════════════════════════════════════════════════════════════════╗`);
+  console.log(
+    `\n${colors.blue}╔════════════════════════════════════════════════════════════════════╗`
+  );
   console.log(`║         Phase 2 Comprehensive Validation (Ticket 2.12)            ║`);
-  console.log(`╚════════════════════════════════════════════════════════════════════╝${colors.reset}\n`);
+  console.log(
+    `╚════════════════════════════════════════════════════════════════════╝${colors.reset}\n`
+  );
 
   try {
     // Phase 2 Subscription Tests
@@ -827,21 +838,28 @@ async function main() {
 
     if (failedTests > 0) {
       console.log(`\n${colors.red}Failed Tests:${colors.reset}`);
-      failedTestNames.forEach(name => {
+      failedTestNames.forEach((name) => {
         console.log(`  ${colors.red}✗${colors.reset} ${name}`);
       });
     }
 
     if (failedTests === 0) {
-      console.log(`\n${colors.green}🎉 All validation tests passed! Phase 2 is complete.${colors.reset}`);
+      console.log(
+        `\n${colors.green}🎉 All validation tests passed! Phase 2 is complete.${colors.reset}`
+      );
       console.log(`${colors.cyan}All Phase 1 functionality remains intact.${colors.reset}\n`);
       process.exit(0);
     } else {
-      console.log(`\n${colors.red}⚠️  ${failedTests} test(s) failed. Please review and fix.${colors.reset}\n`);
+      console.log(
+        `\n${colors.red}⚠️  ${failedTests} test(s) failed. Please review and fix.${colors.reset}\n`
+      );
       process.exit(1);
     }
   } catch (error) {
-    console.error(`\n${colors.red}❌ Validation script encountered an error:${colors.reset}`, error);
+    console.error(
+      `\n${colors.red}❌ Validation script encountered an error:${colors.reset}`,
+      error
+    );
     process.exit(1);
   } finally {
     await cleanup();

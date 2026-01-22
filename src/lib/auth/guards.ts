@@ -138,10 +138,7 @@ export async function requireTokenScope(
  * if (block) return block; // Mutation blocked
  * // Mutation allowed, proceed
  */
-export function requireNotFrozen(
-  event: Event,
-  allowOverride = false
-): NextResponse | void {
+export function requireNotFrozen(event: Event, allowOverride = false): NextResponse | void {
   if (event.status === 'FROZEN' && !allowOverride) {
     return NextResponse.json(
       {
@@ -174,10 +171,7 @@ export function requireNotFrozen(
  * @param teamId - The team ID being accessed
  * @returns void if allowed, NextResponse error if team mismatch
  */
-export function requireTeamAccess(
-  context: AuthContext,
-  teamId: string
-): NextResponse | void {
+export function requireTeamAccess(context: AuthContext, teamId: string): NextResponse | void {
   if (context.scope === 'COORDINATOR') {
     if (!context.team || context.team.id !== teamId) {
       return NextResponse.json(
@@ -200,10 +194,7 @@ export function requireTeamAccess(
  * @param itemTeamId - The team ID of the item
  * @returns void if same team, NextResponse error if mismatch
  */
-export function requireSameTeam(
-  personTeamId: string,
-  itemTeamId: string
-): NextResponse | void {
+export function requireSameTeam(personTeamId: string, itemTeamId: string): NextResponse | void {
   if (personTeamId !== itemTeamId) {
     return NextResponse.json(
       {

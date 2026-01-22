@@ -94,12 +94,12 @@ export default function EventsPage() {
 
     const confirmed = confirm(
       `⚠️ PERMANENTLY DELETE "${eventName}"?\n\n` +
-      `This action CANNOT be undone.\n\n` +
-      `All data will be lost:\n` +
-      `• Teams and items\n` +
-      `• People and assignments\n` +
-      `• History and revisions\n\n` +
-      `Type the event name to confirm deletion.`
+        `This action CANNOT be undone.\n\n` +
+        `All data will be lost:\n` +
+        `• Teams and items\n` +
+        `• People and assignments\n` +
+        `• History and revisions\n\n` +
+        `Type the event name to confirm deletion.`
     );
 
     if (!confirmed) return;
@@ -166,9 +166,7 @@ export default function EventsPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Your Events</h1>
-              <p className="mt-2 text-gray-600">
-                Manage and access all your events
-              </p>
+              <p className="mt-2 text-gray-600">Manage and access all your events</p>
             </div>
             <div className="flex items-center gap-4">
               {/* Toggle for archived events */}

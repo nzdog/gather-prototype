@@ -22,10 +22,14 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "prisma migrate reset",
-    "railway:setup": "prisma migrate deploy && prisma db seed"
+    "railway:setup": "prisma migrate deploy && prisma db seed",
+    "prepare": "husky"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,json,css,md}": "prettier --write"
   },
   "keywords": [],
   "author": "",
@@ -52,6 +56,8 @@
     "autoprefixer": "^10.4.23",
     "dotenv": "^17.2.3",
     "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
     "postcss": "^8.5.6",
     "prettier": "^3.7.4",
     "prisma": "^6.19.1",

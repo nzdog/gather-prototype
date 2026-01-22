@@ -57,12 +57,11 @@ export default function BillingSuccessPage() {
           </div>
         </div>
 
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">
-          Subscription Successful!
-        </h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Subscription Successful!</h1>
 
         <p className="text-gray-600 mb-6">
-          Thank you for subscribing to Gather. Your subscription is now active and you have full access to all features.
+          Thank you for subscribing to Gather. Your subscription is now active and you have full
+          access to all features.
         </p>
 
         <div className="bg-gray-50 rounded-lg p-4 mb-6">

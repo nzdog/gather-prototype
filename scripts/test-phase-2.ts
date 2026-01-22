@@ -69,12 +69,12 @@ async function runTests() {
 
       // Get or create a host
       testHost = await prisma.person.findFirst({
-        where: { name: 'Jacqui & Ian' }
+        where: { name: 'Jacqui & Ian' },
       });
 
       if (!testHost) {
         testHost = await prisma.person.create({
-          data: { name: 'Test Host AI', email: 'test-ai@example.com' }
+          data: { name: 'Test Host AI', email: 'test-ai@example.com' },
         });
       }
 
@@ -128,7 +128,7 @@ async function runTests() {
 
       // Verify teams were created
       const teams = await prisma.team.findMany({
-        where: { eventId: testEvent.id }
+        where: { eventId: testEvent.id },
       });
 
       if (teams.length === 0) {
@@ -137,7 +137,7 @@ async function runTests() {
 
       // Verify items were created
       const items = await prisma.item.findMany({
-        where: { team: { eventId: testEvent.id } }
+        where: { team: { eventId: testEvent.id } },
       });
 
       if (items.length === 0) {
@@ -145,8 +145,8 @@ async function runTests() {
       }
 
       // Check for structured quantities
-      const itemsWithQuantity = items.filter(i =>
-        i.quantityAmount !== null || i.quantityState === 'SPECIFIED'
+      const itemsWithQuantity = items.filter(
+        (i) => i.quantityAmount !== null || i.quantityState === 'SPECIFIED'
       );
 
       if (itemsWithQuantity.length === 0) {
@@ -307,7 +307,7 @@ async function runTests() {
           title: 'Test Dietary Gap',
           description: 'This is a test conflict for dismissal testing',
           status: 'OPEN',
-        }
+        },
       });
 
       // Verify it was created
@@ -322,7 +322,9 @@ async function runTests() {
       );
 
       if (dismissResponse.conflict.status !== 'DISMISSED') {
-        throw new Error(`Conflict status is ${dismissResponse.conflict.status}, expected DISMISSED`);
+        throw new Error(
+          `Conflict status is ${dismissResponse.conflict.status}, expected DISMISSED`
+        );
       }
 
       if (!dismissResponse.conflict.dismissedAt) {
@@ -344,10 +346,16 @@ async function runTests() {
       const allResponse = await apiCall('GET', `/api/events/${testEvent.id}/conflicts?status=all`);
 
       // Get only resolved
-      const resolvedResponse = await apiCall('GET', `/api/events/${testEvent.id}/conflicts?status=resolved`);
+      const resolvedResponse = await apiCall(
+        'GET',
+        `/api/events/${testEvent.id}/conflicts?status=resolved`
+      );
 
       // Get only dismissed
-      const dismissedResponse = await apiCall('GET', `/api/events/${testEvent.id}/conflicts?status=dismissed`);
+      const dismissedResponse = await apiCall(
+        'GET',
+        `/api/events/${testEvent.id}/conflicts?status=dismissed`
+      );
 
       // Verify we have different counts
       if (!allResponse.conflicts || !resolvedResponse.conflicts || !dismissedResponse.conflicts) {
@@ -380,11 +388,11 @@ async function runTests() {
       log('Cleaning up: deleting test event...');
 
       await prisma.event.delete({
-        where: { id: testEvent.id }
+        where: { id: testEvent.id },
       });
 
       const event = await prisma.event.findUnique({
-        where: { id: testEvent.id }
+        where: { id: testEvent.id },
       });
 
       if (event !== null) {
@@ -395,7 +403,6 @@ async function runTests() {
     } catch (error: any) {
       fail('9. Cleanup: Delete test event', error.message);
     }
-
   } catch (error: any) {
     console.error('\n❌ Fatal error during tests:', error.message);
   }
@@ -407,17 +414,19 @@ async function runTests() {
   console.log('='.repeat(50));
   console.log('\n📊 TEST SUMMARY\n');
 
-  const passed = results.filter(r => r.passed).length;
-  const failed = results.filter(r => !r.passed).length;
+  const passed = results.filter((r) => r.passed).length;
+  const failed = results.filter((r) => !r.passed).length;
 
   console.log(`Phase 2 AI Integration: ${passed}/9 tests passed`);
 
   if (failed > 0) {
     console.log(`\n⚠️  ${failed} test(s) failed:\n`);
-    results.filter(r => !r.passed).forEach(r => {
-      console.log(`  - ${r.test}`);
-      console.log(`    ${r.error}\n`);
-    });
+    results
+      .filter((r) => !r.passed)
+      .forEach((r) => {
+        console.log(`  - ${r.test}`);
+        console.log(`    ${r.error}\n`);
+      });
   }
 
   console.log('');

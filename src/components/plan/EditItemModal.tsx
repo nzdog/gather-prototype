@@ -89,7 +89,7 @@ export default function EditItemModal({
   item,
   days,
   eventId,
-  people
+  people,
 }: EditItemModalProps) {
   const { openModal, closeModal } = useModal();
 
@@ -439,9 +439,7 @@ export default function EditItemModal({
           <div className="border-t pt-4">
             <h3 className="text-sm font-medium text-gray-900 mb-3">Assignment</h3>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Assigned to
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Assigned to</label>
               <select
                 value={assignedPersonId}
                 onChange={(e) => setAssignedPersonId(e.target.value)}

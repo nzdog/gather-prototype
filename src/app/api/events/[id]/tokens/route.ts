@@ -9,10 +9,7 @@ import { prisma } from '@/lib/prisma';
 // Force Node.js runtime for crypto support
 export const runtime = 'nodejs';
 
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
 
@@ -34,10 +31,7 @@ export async function GET(
       });
 
       if (!accessToken) {
-        return NextResponse.json(
-          { error: 'Unauthorized: Invalid token' },
-          { status: 403 }
-        );
+        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 403 });
       }
 
       if (accessToken.scope !== 'HOST') {
@@ -69,10 +63,7 @@ export async function GET(
       });
 
       if (!event) {
-        return NextResponse.json(
-          { error: 'Event not found' },
-          { status: 404 }
-        );
+        return NextResponse.json({ error: 'Event not found' }, { status: 404 });
       }
 
       // Allow both host and co-host to access invite links
@@ -91,7 +82,9 @@ export async function GET(
 
     // No authentication method provided
     return NextResponse.json(
-      { error: 'Unauthorized: No authentication provided. Use Bearer token or hostId query param.' },
+      {
+        error: 'Unauthorized: No authentication provided. Use Bearer token or hostId query param.',
+      },
       { status: 403 }
     );
   } catch (error) {
