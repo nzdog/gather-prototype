@@ -36,6 +36,6 @@ jobs:
           STRIPE_SECRET_KEY: sk_test_dummy_key_for_ci_build_only
         run: npx next build
 
-      - name: Audit
+      - name: Security audit
         run: npm audit --audit-level=high
         continue-on-error: true
