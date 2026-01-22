@@ -1,6 +1,7 @@
 // POST /api/events/[id]/conflicts/[conflictId]/acknowledge - Acknowledge Critical conflict
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
 import { MitigationPlanType } from '@prisma/client';
 
 interface AcknowledgeRequest {
@@ -22,6 +23,10 @@ export async function POST(
 ) {
   try {
     const { id: eventId, conflictId } = await context.params;
+
+    // SECURITY: Require HOST role for conflict operations
+    const auth = await requireEventRole(eventId, ['HOST']);
+    if (auth instanceof NextResponse) return auth;
     const body: AcknowledgeRequest = await request.json();
 
     // Verify conflict exists and belongs to event

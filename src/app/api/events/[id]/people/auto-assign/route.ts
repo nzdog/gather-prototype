@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
 
 interface TeamDistribution {
   teamId: string;
@@ -14,6 +15,10 @@ export async function POST(
 ): Promise<NextResponse> {
   try {
     const { id: eventId } = await context.params;
+
+    // SECURITY: Require HOST role for auto-assignment operations
+    const auth = await requireEventRole(eventId, ['HOST']);
+    if (auth instanceof NextResponse) return auth;
 
     // 1. Fetch all teams with their stats
     const teams = await prisma.team.findMany({

@@ -1,10 +1,15 @@
 // POST /api/events/[id]/items/mark-for-review - Mark all items as AI-generated and unconfirmed for review
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
 
 export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
+
+    // SECURITY: Require HOST role to mark items for review
+    const auth = await requireEventRole(eventId, ['HOST']);
+    if (auth instanceof NextResponse) return auth;
 
     // Mark all items for this event as aiGenerated: true and userConfirmed: false
     // This allows them to show up in the review panel

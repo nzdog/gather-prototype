@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
 
 // POST /api/events/[id]/archive - Archive an event
 export async function POST(
@@ -8,6 +9,10 @@ export async function POST(
 ) {
   try {
     const { id } = await context.params;
+
+    // SECURITY: Require HOST role to archive events
+    const auth = await requireEventRole(id, ['HOST']);
+    if (auth instanceof NextResponse) return auth;
 
     const event = await prisma.event.update({
       where: { id },
