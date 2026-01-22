@@ -22,8 +22,14 @@ interface RouteAnalysis {
   securityIssues: string[];
 }
 
-function analyzeRouteFile(filePath: string): RouteAnalysis {
-  const content = fs.readFileSync(filePath, 'utf-8');
+function analyzeRouteFile(filePath: string): RouteAnalysis | null {
+  let content: string;
+  try {
+    content = fs.readFileSync(filePath, 'utf-8');
+  } catch (error) {
+    console.error(`Failed to read file: ${filePath}`, error);
+    return null;
+  }
 
   // Derive API path - CRITICAL: Must preserve /api prefix for HTTP endpoints
   const relPath = filePath.replace(process.cwd(), '').replace('/src/app', '');
@@ -182,7 +188,13 @@ function main() {
   const analyses: RouteAnalysis[] = [];
 
   function findRoutes(dir: string) {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch (error) {
+      console.error(`Failed to read directory: ${dir}`, error);
+      return;
+    }
 
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
@@ -190,7 +202,10 @@ function main() {
       if (entry.isDirectory()) {
         findRoutes(fullPath);
       } else if (entry.name === 'route.ts') {
-        analyses.push(analyzeRouteFile(fullPath));
+        const analysis = analyzeRouteFile(fullPath);
+        if (analysis) {
+          analyses.push(analysis);
+        }
       }
     }
   }
@@ -269,8 +284,12 @@ function main() {
 
   // Save to JSON for programmatic use
   const outputPath = path.join(process.cwd(), 'route-classifications.json');
-  fs.writeFileSync(outputPath, JSON.stringify(analyses, null, 2));
-  console.log(`\n✓ Saved detailed analysis to ${outputPath}`);
+  try {
+    fs.writeFileSync(outputPath, JSON.stringify(analyses, null, 2));
+    console.log(`\n✓ Saved detailed analysis to ${outputPath}`);
+  } catch (error) {
+    console.error(`Failed to write output file: ${outputPath}`, error);
+  }
 }
 
 main();
