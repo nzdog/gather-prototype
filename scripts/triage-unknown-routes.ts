@@ -11,6 +11,25 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+/**
+ * SECURITY: Sanitizes file paths to prevent path traversal attacks
+ * @param filePath - The file path to sanitize
+ * @param baseDir - The base directory that the path must be within
+ * @returns Sanitized absolute path if safe, null if path traversal detected
+ */
+function sanitizePath(filePath: string, baseDir: string): string | null {
+  const resolved = path.resolve(baseDir, filePath);
+  const normalizedBase = path.resolve(baseDir);
+
+  // SECURITY: Ensure resolved path is within base directory
+  if (!resolved.startsWith(normalizedBase + path.sep) && resolved !== normalizedBase) {
+    console.error(`⚠️  SECURITY: Path traversal attempt blocked: ${filePath}`);
+    return null;
+  }
+
+  return resolved;
+}
+
 interface RouteRow {
   path: string;
   method: string;
@@ -31,7 +50,15 @@ interface TriageResult {
 }
 
 function parseInventory(inventoryPath: string): RouteRow[] {
-  const content = fs.readFileSync(inventoryPath, 'utf-8');
+  // SECURITY: Sanitize inventory path before file system access
+  const projectRoot = path.resolve(__dirname, '..');
+  const safePath = sanitizePath(inventoryPath, projectRoot);
+
+  if (!safePath) {
+    throw new Error('Invalid inventory path - path traversal detected');
+  }
+
+  const content = fs.readFileSync(safePath, 'utf-8');
   const lines = content.split('\n');
 
   const routes: RouteRow[] = [];
@@ -161,7 +188,15 @@ function triageUnknownRoutes(routes: RouteRow[]): TriageResult {
 }
 
 function main() {
-  const inventoryPath = path.join(__dirname, '../SECURITY_ROUTE_INVENTORY.md');
+  // SECURITY: Construct and sanitize inventory path
+  const projectRoot = path.resolve(__dirname, '..');
+  const requestedPath = path.join(projectRoot, 'SECURITY_ROUTE_INVENTORY.md');
+  const inventoryPath = sanitizePath(requestedPath, projectRoot);
+
+  if (!inventoryPath) {
+    console.error('ERROR: Invalid inventory path - security check failed');
+    process.exit(1);
+  }
 
   if (!fs.existsSync(inventoryPath)) {
     console.error('ERROR: SECURITY_ROUTE_INVENTORY.md not found');
