@@ -211,6 +211,15 @@ export function requireSameTeam(personTeamId: string, itemTeamId: string): NextR
  *
  * Useful for routes accessible by both session users and token links.
  *
+ * Auth flow:
+ * 1. Try session-based event role auth (requireEventRole checks user internally)
+ * 2. If that fails AND token provided, try token-based auth
+ * 3. If both fail, return 401
+ *
+ * SECURITY: Token auth MUST be attempted if token provided, regardless of session state.
+ * The previous implementation had a logic error where pre-checking user existence
+ * created an unnecessary dependency between session and token auth paths.
+ *
  * @param eventId - The event ID to check
  * @param allowedEventRoles - Roles allowed via session auth
  * @param token - Optional token for token-based auth
@@ -223,20 +232,19 @@ export async function requireEventRoleOrToken(
   token?: string,
   allowedTokenScope?: TokenScope
 ): Promise<EventRoleAuth | AuthContext | NextResponse> {
-  // Try session-based auth first
-  const user = await getUser();
-  if (user) {
-    const eventAuth = await requireEventRole(eventId, allowedEventRoles);
-    if (!(eventAuth instanceof NextResponse)) {
-      return eventAuth;
-    }
+  // SECURITY: Try session-based auth first (requireEventRole checks user internally)
+  // Don't pre-check user existence - let requireEventRole handle it
+  const eventAuth = await requireEventRole(eventId, allowedEventRoles);
+  if (!(eventAuth instanceof NextResponse)) {
+    return eventAuth; // Session auth succeeded
   }
 
-  // Try token-based auth if token provided
+  // SECURITY: Session auth failed - try token-based auth if token provided
+  // This MUST be attempted regardless of whether a user session exists
   if (token && allowedTokenScope) {
     const tokenAuth = await requireTokenScope(token, allowedTokenScope);
     if (!(tokenAuth instanceof NextResponse)) {
-      return tokenAuth;
+      return tokenAuth; // Token auth succeeded
     }
   }
 
