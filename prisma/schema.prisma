@@ -170,6 +170,10 @@ model Person {
   // Invite phase: Nudge timing anchor
   inviteAnchorAt DateTime?
 
+  // Invite phase: Nudge tracking
+  nudge24hSentAt DateTime?
+  nudge48hSentAt DateTime?
+
   // Relations
   hostedEvents     Event[]       @relation("EventHost")
   cohostedEvents   Event[]       @relation("EventCoHost")

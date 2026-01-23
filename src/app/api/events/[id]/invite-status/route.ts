@@ -5,6 +5,13 @@ import { getOptOutStatuses } from '@/lib/sms/opt-out-service';
 
 export type InviteStatus = 'NOT_SENT' | 'SENT' | 'OPENED' | 'RESPONDED';
 
+function getNudgeStatus(person: any): string {
+  if (person.nudge48hSentAt) return '48h sent';
+  if (person.nudge24hSentAt) return '24h sent';
+  if (!person.phoneNumber) return 'no phone';
+  return 'pending';
+}
+
 interface PersonInviteStatus {
   id: string;
   name: string;
@@ -18,6 +25,9 @@ interface PersonInviteStatus {
   canReceiveSms: boolean;
   claimedAt: string | null;
   claimedBy: string | null;
+  nudge24hSentAt: string | null;
+  nudge48hSentAt: string | null;
+  nudgeStatus: string;
 }
 
 export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
@@ -57,6 +67,16 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
                   createdAt: true,
                 },
               },
+            },
+            select: {
+              id: true,
+              name: true,
+              phoneNumber: true,
+              inviteAnchorAt: true,
+              nudge24hSentAt: true,
+              nudge48hSentAt: true,
+              tokens: true,
+              assignments: true,
             },
           },
         },
@@ -111,6 +131,9 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
       canReceiveSms: !!person.phoneNumber && !hasOptedOut,
       claimedAt: token?.claimedAt?.toISOString() || null,
       claimedBy: token?.claimedBy || null,
+      nudge24hSentAt: person.nudge24hSentAt?.toISOString() || null,
+      nudge48hSentAt: person.nudge48hSentAt?.toISOString() || null,
+      nudgeStatus: getNudgeStatus(person),
     };
   });
 
@@ -133,6 +156,16 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     canReceive: peopleStatus.filter((p) => p.canReceiveSms).length,
   };
 
+  // Nudge summary
+  const nudgeSummary = {
+    sent24h: peopleStatus.filter((p) => p.nudge24hSentAt).length,
+    sent48h: peopleStatus.filter((p) => p.nudge48hSentAt).length,
+    pending24h: peopleStatus.filter((p) => p.canReceiveSms && !p.nudge24hSentAt && !p.openedAt)
+      .length,
+    pending48h: peopleStatus.filter((p) => p.canReceiveSms && !p.nudge48hSentAt && !p.respondedAt)
+      .length,
+  };
+
   return NextResponse.json({
     eventStatus: event.status,
     inviteSendConfirmedAt: event.inviteSendConfirmedAt?.toISOString() || null,
@@ -144,6 +177,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
       unclaimed: peopleStatus.filter((p) => !p.claimedAt).length,
     },
     smsSummary,
+    nudgeSummary,
     people: peopleStatus,
   });
 }

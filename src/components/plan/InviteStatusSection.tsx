@@ -19,6 +19,9 @@ interface PersonStatus {
   status: 'NOT_SENT' | 'SENT' | 'OPENED' | 'RESPONDED';
   hasPhone: boolean;
   smsOptedOut: boolean;
+  nudge24hSentAt?: string | null;
+  nudge48hSentAt?: string | null;
+  nudgeStatus?: string;
 }
 
 interface InviteStatusData {
@@ -38,6 +41,12 @@ interface InviteStatusData {
     withoutPhone: number;
     optedOut: number;
     canReceive: number;
+  };
+  nudgeSummary?: {
+    sent24h: number;
+    sent48h: number;
+    pending24h: number;
+    pending48h: number;
   };
   people: PersonStatus[];
 }
@@ -212,6 +221,40 @@ export function InviteStatusSection({ eventId }: Props) {
           <p className="text-xs text-gray-500 mt-2">
             Auto-reminders will be sent to {data.smsSummary.canReceive} people
           </p>
+        </div>
+      )}
+
+      {/* Nudge summary */}
+      {data.nudgeSummary && (
+        <div className="border-t pt-4 mt-4">
+          <h4 className="text-sm font-medium text-gray-700 mb-2">Auto-Reminders</h4>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-600">24h reminders sent</span>
+              <span className="font-medium">{data.nudgeSummary.sent24h}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">48h reminders sent</span>
+              <span className="font-medium">{data.nudgeSummary.sent48h}</span>
+            </div>
+            {(data.nudgeSummary.pending24h > 0 || data.nudgeSummary.pending48h > 0) && (
+              <p className="text-xs text-gray-500 mt-2">
+                {data.nudgeSummary.pending24h > 0 && (
+                  <span>
+                    {data.nudgeSummary.pending24h} pending 24h reminder
+                    {data.nudgeSummary.pending24h !== 1 ? 's' : ''}
+                  </span>
+                )}
+                {data.nudgeSummary.pending24h > 0 && data.nudgeSummary.pending48h > 0 && ', '}
+                {data.nudgeSummary.pending48h > 0 && (
+                  <span>
+                    {data.nudgeSummary.pending48h} pending 48h reminder
+                    {data.nudgeSummary.pending48h !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
         </div>
       )}
 
