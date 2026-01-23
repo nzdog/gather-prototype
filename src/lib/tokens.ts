@@ -292,3 +292,14 @@ export async function listInviteLinks(eventId: string): Promise<InviteLink[]> {
 function generateToken(): string {
   return randomBytes(32).toString('hex');
 }
+
+/**
+ * Generates a cryptographically secure, URL-safe token.
+ * Used for shared links and other public-facing tokens.
+ *
+ * @param length - Number of random bytes to generate (default: 32)
+ * @returns URL-safe base64url-encoded token string
+ */
+export function generateSecureToken(length: number = 32): string {
+  return randomBytes(length).toString('base64url');
+}

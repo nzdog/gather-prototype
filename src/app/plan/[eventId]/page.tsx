@@ -14,6 +14,9 @@ import {
   Link as LinkIcon,
   Clock,
   Calendar,
+  CheckCircle,
+  Eye,
+  Send,
 } from 'lucide-react';
 import ConflictList from '@/components/plan/ConflictList';
 import GateCheck from '@/components/plan/GateCheck';
@@ -30,6 +33,8 @@ import EditEventModal from '@/components/plan/EditEventModal';
 import ItemStatusBadges from '@/components/plan/ItemStatusBadges';
 import SectionExpandModal from '@/components/plan/SectionExpandModal';
 import GenerationReviewPanel from '@/components/plan/GenerationReviewPanel';
+import { InviteStatusSection } from '@/components/plan/InviteStatusSection';
+import { SharedLinkSection } from '@/components/plan/SharedLinkSection';
 import { ModalProvider } from '@/contexts/ModalContext';
 import { Conflict } from '@prisma/client';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
@@ -196,7 +201,9 @@ export default function PlanEditorPage() {
   const [manualItemCount, _setManualItemCount] = useState(0);
   const [editEventModalOpen, setEditEventModalOpen] = useState(false);
   const [inviteLinks, setInviteLinks] = useState<any[]>([]);
+  const [personStatuses, setPersonStatuses] = useState<Map<string, any>>(new Map());
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const [resettingClaim, setResettingClaim] = useState<string | null>(null);
   const [copiedDirectory, setCopiedDirectory] = useState(false);
   const [expandedSection, setExpandedSection] = useState<SectionId | null>(null);
 
@@ -342,6 +349,23 @@ export default function PlanEditorPage() {
 
       const data = await response.json();
       setInviteLinks(data.inviteLinks || []);
+
+      // Also fetch invite status if in CONFIRMING status
+      if (event.status === 'CONFIRMING') {
+        try {
+          const statusResponse = await fetch(`/api/events/${eventId}/invite-status`);
+          if (statusResponse.ok) {
+            const statusData = await statusResponse.json();
+            const statusMap = new Map<string, any>();
+            statusData.people.forEach((p: any) => {
+              statusMap.set(p.id, p);
+            });
+            setPersonStatuses(statusMap);
+          }
+        } catch (err) {
+          console.error('Error loading invite status:', err);
+        }
+      }
     } catch (err: any) {
       console.error('Error loading invite links:', err);
     }
@@ -679,6 +703,33 @@ export default function PlanEditorPage() {
     } catch (err) {
       console.error('Failed to copy:', err);
       alert('Failed to copy link to clipboard');
+    }
+  };
+
+  const handleResetClaim = async (personId: string, personName: string) => {
+    if (!confirm(`Reset claim for ${personName}? They will need to claim their name again.`)) {
+      return;
+    }
+
+    setResettingClaim(personId);
+    try {
+      const res = await fetch(`/api/events/${eventId}/people/${personId}/reset-claim`, {
+        method: 'POST',
+      });
+
+      if (res.ok) {
+        // Reload invite links to refresh status
+        await loadInviteLinks();
+        alert(`Claim reset for ${personName}. They can now claim their name again.`);
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to reset claim');
+      }
+    } catch (err) {
+      console.error('Failed to reset claim:', err);
+      alert('Failed to reset claim');
+    } finally {
+      setResettingClaim(null);
     }
   };
 
@@ -1797,6 +1848,18 @@ export default function PlanEditorPage() {
             title="Invite Links"
             icon={<LinkIcon className="w-6 h-6" />}
           >
+            {/* Shared Link Section - Show in CONFIRMING and FROZEN */}
+            <div className="mb-6">
+              <SharedLinkSection eventId={eventId} eventStatus={event.status} />
+            </div>
+
+            {/* Invite Status Section - Only show in CONFIRMING */}
+            {event.status === 'CONFIRMING' && (
+              <div className="mb-6">
+                <InviteStatusSection eventId={eventId} />
+              </div>
+            )}
+
             {/* Family Directory Link - Prominent Card */}
             <div className="bg-sage-50 border-2 border-sage-300 rounded-lg p-6 mb-6">
               <div className="flex items-start gap-4">
@@ -1835,37 +1898,89 @@ export default function PlanEditorPage() {
                 access to the appropriate view.
               </p>
               <div className="space-y-4">
-                {inviteLinks.map((link) => (
-                  <div key={link.token} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`px-2 py-1 text-xs font-medium rounded ${
-                              link.scope === 'HOST'
-                                ? 'bg-sage-100 text-sage-800'
-                                : link.scope === 'COORDINATOR'
-                                  ? 'bg-sage-100 text-sage-800'
-                                  : 'bg-green-100 text-green-800'
-                            }`}
-                          >
-                            {link.scope}
+                {inviteLinks.map((link) => {
+                  const personData = personStatuses.get(link.personId);
+                  const status = personData?.status;
+                  const getStatusIcon = () => {
+                    switch (status) {
+                      case 'RESPONDED':
+                        return (
+                          <span title="Responded">
+                            <CheckCircle className="w-4 h-4 text-green-500" />
                           </span>
-                          <span className="font-medium text-gray-900">{link.personName}</span>
+                        );
+                      case 'OPENED':
+                        return (
+                          <span title="Opened link">
+                            <Eye className="w-4 h-4 text-blue-500" />
+                          </span>
+                        );
+                      case 'SENT':
+                        return (
+                          <span title="Invite sent">
+                            <Send className="w-4 h-4 text-yellow-500" />
+                          </span>
+                        );
+                      case 'NOT_SENT':
+                        return (
+                          <span title="Not sent yet">
+                            <Clock className="w-4 h-4 text-gray-400" />
+                          </span>
+                        );
+                      default:
+                        return null;
+                    }
+                  };
+
+                  return (
+                    <div key={link.token} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`px-2 py-1 text-xs font-medium rounded ${
+                                link.scope === 'HOST'
+                                  ? 'bg-sage-100 text-sage-800'
+                                  : link.scope === 'COORDINATOR'
+                                    ? 'bg-sage-100 text-sage-800'
+                                    : 'bg-green-100 text-green-800'
+                              }`}
+                            >
+                              {link.scope}
+                            </span>
+                            {getStatusIcon()}
+                            <span className="font-medium text-gray-900">{link.personName}</span>
+                            {personData?.claimedAt && (
+                              <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded">
+                                Claimed
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1 font-mono truncate max-w-md">
+                            {link.url}
+                          </p>
                         </div>
-                        <p className="text-xs text-gray-500 mt-1 font-mono truncate max-w-md">
-                          {link.url}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleCopyLink(link.url, link.token)}
+                            className="px-3 py-1 bg-accent text-white text-sm rounded-md hover:bg-accent-dark"
+                          >
+                            {copiedToken === link.token ? 'Copied!' : 'Copy Link'}
+                          </button>
+                          {personData?.claimedAt && link.scope === 'PARTICIPANT' && (
+                            <button
+                              onClick={() => handleResetClaim(link.personId, link.personName)}
+                              disabled={resettingClaim === link.personId}
+                              className="px-3 py-1 text-xs text-gray-500 hover:text-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {resettingClaim === link.personId ? 'Resetting...' : 'Reset claim'}
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <button
-                        onClick={() => handleCopyLink(link.url, link.token)}
-                        className="px-3 py-1 bg-accent text-white text-sm rounded-md hover:bg-accent-dark"
-                      >
-                        {copiedToken === link.token ? 'Copied!' : 'Copy Link'}
-                      </button>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </SectionExpandModal>
