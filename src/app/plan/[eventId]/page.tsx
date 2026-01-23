@@ -35,6 +35,10 @@ import SectionExpandModal from '@/components/plan/SectionExpandModal';
 import GenerationReviewPanel from '@/components/plan/GenerationReviewPanel';
 import { InviteStatusSection } from '@/components/plan/InviteStatusSection';
 import { SharedLinkSection } from '@/components/plan/SharedLinkSection';
+import { InviteFunnel } from '@/components/plan/InviteFunnel';
+import { WhosMissing } from '@/components/plan/WhosMissing';
+import { CopyPlanAsText } from '@/components/plan/CopyPlanAsText';
+import { PersonInviteDetailModal } from '@/components/plan/PersonInviteDetailModal';
 import { ModalProvider } from '@/contexts/ModalContext';
 import { Conflict } from '@prisma/client';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
@@ -206,6 +210,13 @@ export default function PlanEditorPage() {
   const [resettingClaim, setResettingClaim] = useState<string | null>(null);
   const [copiedDirectory, setCopiedDirectory] = useState(false);
   const [expandedSection, setExpandedSection] = useState<SectionId | null>(null);
+  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
+  const [inviteStatusData, setInviteStatusData] = useState<any | null>(null);
+
+  // Debug: Log when selectedPersonId changes
+  useEffect(() => {
+    console.log('selectedPersonId changed:', selectedPersonId);
+  }, [selectedPersonId]);
 
   // Review mode for selective regeneration
   const [reviewMode, setReviewMode] = useState(false);
@@ -361,6 +372,7 @@ export default function PlanEditorPage() {
               statusMap.set(p.id, p);
             });
             setPersonStatuses(statusMap);
+            setInviteStatusData(statusData); // Store full data for Phase 6 components
           }
         } catch (err) {
           console.error('Error loading invite status:', err);
@@ -1856,9 +1868,56 @@ export default function PlanEditorPage() {
             {/* Invite Status Section - Only show in CONFIRMING */}
             {event.status === 'CONFIRMING' && (
               <div className="mb-6">
-                <InviteStatusSection eventId={eventId} />
+                <InviteStatusSection
+                  eventId={eventId}
+                  onPersonClick={setSelectedPersonId}
+                  onDataUpdate={setInviteStatusData}
+                />
               </div>
             )}
+
+            {/* Phase 6 Components - Invite Funnel */}
+            {event.status === 'CONFIRMING' && inviteStatusData && (
+              <div className="mb-6">
+                <InviteFunnel
+                  data={{
+                    total: inviteStatusData.counts.total,
+                    sent: inviteStatusData.counts.total - inviteStatusData.counts.notSent,
+                    opened: inviteStatusData.counts.opened + inviteStatusData.counts.responded,
+                    responded: inviteStatusData.counts.responded,
+                    confirmed: inviteStatusData.people.filter((p: any) => p.response === 'ACCEPTED')
+                      .length,
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Phase 6 Components - Who's Missing */}
+            {event.status === 'CONFIRMING' && inviteStatusData && (
+              <div className="mb-6">
+                <WhosMissing
+                  people={inviteStatusData.people.map((p: any) => ({
+                    id: p.id,
+                    name: p.name,
+                    status: p.status,
+                    hasPhone: p.hasPhone,
+                    lastAction: p.response,
+                    daysSinceAnchor: p.inviteAnchorAt
+                      ? Math.floor(
+                          (Date.now() - new Date(p.inviteAnchorAt).getTime()) /
+                            (1000 * 60 * 60 * 24)
+                        )
+                      : null,
+                  }))}
+                  onPersonClick={setSelectedPersonId}
+                />
+              </div>
+            )}
+
+            {/* Phase 6 Components - Copy Plan as Text */}
+            <div className="mb-6">
+              <CopyPlanAsText eventId={eventId} />
+            </div>
 
             {/* Family Directory Link - Prominent Card */}
             <div className="bg-sage-50 border-2 border-sage-300 rounded-lg p-6 mb-6">
@@ -1995,6 +2054,19 @@ export default function PlanEditorPage() {
         >
           <RevisionHistory eventId={eventId} actorId={MOCK_HOST_ID} />
         </SectionExpandModal>
+
+        {/* Phase 6 - Person Detail Modal */}
+        {selectedPersonId && (
+          <PersonInviteDetailModal
+            eventId={eventId}
+            personId={selectedPersonId}
+            onClose={() => {
+              console.log('Closing person detail modal');
+              setSelectedPersonId(null);
+            }}
+            onUpdate={loadInviteLinks}
+          />
+        )}
       </div>
     </ModalProvider>
   );

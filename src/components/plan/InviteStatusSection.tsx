@@ -53,20 +53,28 @@ interface InviteStatusData {
 
 interface Props {
   eventId: string;
+  onPersonClick?: (personId: string) => void;
+  onDataUpdate?: (data: InviteStatusData) => void;
 }
 
-export function InviteStatusSection({ eventId }: Props) {
+export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Props) {
   const [data, setData] = useState<InviteStatusData | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAllPeople, setShowAllPeople] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     try {
       const res = await fetch(`/api/events/${eventId}/invite-status`);
       if (res.ok) {
-        setData(await res.json());
+        const statusData = await res.json();
+        setData(statusData);
         setError(null);
+        // Notify parent of data update
+        if (onDataUpdate) {
+          onDataUpdate(statusData);
+        }
       } else {
         setError('Failed to load invite status');
       }
@@ -75,7 +83,7 @@ export function InviteStatusSection({ eventId }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [eventId]);
+  }, [eventId, onDataUpdate]);
 
   useEffect(() => {
     fetchStatus();
@@ -285,6 +293,49 @@ export function InviteStatusSection({ eventId }: Props) {
         </div>
       )}
 
+      {/* People list section */}
+      {data.people && data.people.length > 0 && onPersonClick && (
+        <div className="border-t pt-4 mt-4">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-medium text-gray-700">People</h4>
+            <button
+              onClick={() => setShowAllPeople(!showAllPeople)}
+              className="text-xs text-sage-600 hover:underline"
+            >
+              {showAllPeople ? 'Show less' : `Show all ${data.people.length}`}
+            </button>
+          </div>
+
+          <div className="space-y-1">
+            {(showAllPeople ? data.people : data.people.slice(0, 5)).map((person) => (
+              <div
+                key={person.id}
+                className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50 cursor-pointer"
+                onClick={() => {
+                  console.log('Person clicked:', person.id, person.name);
+                  if (onPersonClick) {
+                    onPersonClick(person.id);
+                  }
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <StatusIcon status={person.status} />
+                  <span className="text-sm">{person.name}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  {person.nudge24hSentAt && (
+                    <span className="text-xs bg-yellow-100 text-yellow-700 px-1 rounded">24h</span>
+                  )}
+                  {person.nudge48hSentAt && (
+                    <span className="text-xs bg-amber-100 text-amber-700 px-1 rounded">48h</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Last confirmed timestamp */}
       {inviteSendConfirmedAt && (
         <p className="text-xs text-gray-500 pt-2 border-t">
@@ -293,6 +344,21 @@ export function InviteStatusSection({ eventId }: Props) {
       )}
     </div>
   );
+}
+
+function StatusIcon({ status }: { status: string }) {
+  switch (status) {
+    case 'RESPONDED':
+      return <CheckCircle className="w-4 h-4 text-green-500" />;
+    case 'OPENED':
+      return <Eye className="w-4 h-4 text-blue-500" />;
+    case 'SENT':
+      return <Send className="w-4 h-4 text-yellow-500" />;
+    case 'NOT_SENT':
+      return <Clock className="w-4 h-4 text-gray-400" />;
+    default:
+      return null;
+  }
 }
 
 function StatusCard({
