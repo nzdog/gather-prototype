@@ -16,6 +16,7 @@ interface PersonInviteStatus {
   id: string;
   name: string;
   status: InviteStatus;
+  response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
   inviteAnchorAt: string | null;
   openedAt: string | null;
   respondedAt: string | null;
@@ -42,7 +43,13 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
       people: {
         include: {
           person: {
-            include: {
+            select: {
+              id: true,
+              name: true,
+              phoneNumber: true,
+              inviteAnchorAt: true,
+              nudge24hSentAt: true,
+              nudge48hSentAt: true,
               tokens: {
                 where: {
                   scope: 'PARTICIPANT',
@@ -67,16 +74,6 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
                   createdAt: true,
                 },
               },
-            },
-            select: {
-              id: true,
-              name: true,
-              phoneNumber: true,
-              inviteAnchorAt: true,
-              nudge24hSentAt: true,
-              nudge48hSentAt: true,
-              tokens: true,
-              assignments: true,
             },
           },
         },
@@ -118,10 +115,22 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
       ? optOutStatuses.get(person.phoneNumber) || false
       : false;
 
+    // Determine overall response (if any assignment is ACCEPTED, consider confirmed; if any DECLINED, consider declined)
+    let response: 'PENDING' | 'ACCEPTED' | 'DECLINED' = 'PENDING';
+    if (person.assignments.length > 0) {
+      const responses = person.assignments.map((a: any) => a.response);
+      if (responses.every((r: string) => r === 'ACCEPTED')) {
+        response = 'ACCEPTED';
+      } else if (responses.some((r: string) => r === 'DECLINED')) {
+        response = 'DECLINED';
+      }
+    }
+
     return {
       id: person.id,
       name: person.name,
       status,
+      response,
       inviteAnchorAt: person.inviteAnchorAt?.toISOString() || null,
       openedAt: token?.openedAt?.toISOString() || null,
       respondedAt: respondedAssignment?.createdAt?.toISOString() || null,
