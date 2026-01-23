@@ -179,6 +179,7 @@ model Person {
   auditActions     AuditEntry[]
   tokens           AccessToken[]
   inviteEvents     InviteEvent[]
+  receivedOptOuts  SmsOptOut[]   @relation("HostOptOuts")
 
   // Plan phase: Host memory
   hostMemory HostMemory?
@@ -325,6 +326,20 @@ model InviteEvent {
   @@index([personId])
   @@index([type])
   @@index([createdAt])
+}
+
+// SMS Opt-Out tracking (per-host)
+model SmsOptOut {
+  id          String   @id @default(cuid())
+  phoneNumber String   // E.164 format
+  hostId      String   // The host they opted out from
+  host        Person   @relation("HostOptOuts", fields: [hostId], references: [id], onDelete: Cascade)
+  optedOutAt  DateTime @default(now())
+  rawMessage  String?  // The actual STOP message (for audit)
+
+  @@unique([phoneNumber, hostId])
+  @@index([phoneNumber])
+  @@index([hostId])
 }
 
 // Dedicated token table for magic link auth
