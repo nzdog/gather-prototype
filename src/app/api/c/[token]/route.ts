@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { computeTeamStatusFromItems } from '@/lib/workflow';
+import { logInviteEvent } from '@/lib/invite-events';
 
 /**
  * GET /api/c/[token]
@@ -14,12 +15,44 @@ import { computeTeamStatusFromItems } from '@/lib/workflow';
  * - Compute status synchronously (no await)
  * - Other teams' statuses via item.groupBy aggregate only
  */
-export async function GET(_request: NextRequest, { params }: { params: { token: string } }) {
+export async function GET(request: NextRequest, { params }: { params: { token: string } }) {
   const context = await resolveToken(params.token);
 
   if (!context || context.scope !== 'COORDINATOR' || !context.team) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
+
+  // Track first link open (non-blocking)
+  prisma.accessToken
+    .findFirst({
+      where: {
+        token: params.token,
+        openedAt: null,
+      },
+      select: { id: true },
+    })
+    .then(async (accessToken) => {
+      if (accessToken) {
+        const userAgent = request.headers.get('user-agent') || 'unknown';
+        await Promise.all([
+          prisma.accessToken.update({
+            where: { id: accessToken.id },
+            data: { openedAt: new Date() },
+          }),
+          logInviteEvent({
+            eventId: context.event.id,
+            personId: context.person.id,
+            type: 'LINK_OPENED',
+            metadata: {
+              tokenScope: 'COORDINATOR',
+              teamId: context.team!.id,
+              userAgent: userAgent.substring(0, 200),
+            },
+          }),
+        ]);
+      }
+    })
+    .catch((err) => console.error('[LinkOpen] Failed to track:', err));
 
   // 1. Fetch coordinator's own team items (scoped to token.teamId)
   const myItems = await prisma.item.findMany({

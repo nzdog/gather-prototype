@@ -29,7 +29,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     // Validate event exists
     const event = await prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, inviteSendConfirmedAt: true },
     });
 
     if (!event) {
@@ -80,12 +80,20 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         }
 
         if (!person) {
+          // Create new person with anchor if invites already confirmed
           person = await prisma.person.create({
             data: {
               name: personData.name.trim(),
               email: personData.email || null,
               phone: personData.phone || null,
+              inviteAnchorAt: event.inviteSendConfirmedAt || null,
             },
+          });
+        } else if (event.inviteSendConfirmedAt && !person.inviteAnchorAt) {
+          // If person exists but doesn't have an anchor, set it
+          person = await prisma.person.update({
+            where: { id: person.id },
+            data: { inviteAnchorAt: event.inviteSendConfirmedAt },
           });
         }
 

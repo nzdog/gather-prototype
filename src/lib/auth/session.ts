@@ -12,8 +12,8 @@ export async function getUser() {
   });
 
   if (!session || session.expiresAt < new Date()) {
-    // Clear expired session cookie
-    cookies().delete('session');
+    // Session expired or not found
+    // Note: Cookie deletion can only happen in Route Handlers/Server Actions
     return null;
   }
 

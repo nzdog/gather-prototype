@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ensureEventTokens } from '@/lib/tokens';
 import { requireEventRole } from '@/lib/auth/guards';
+import { normalizePhoneNumber } from '@/lib/phone';
 
 // PATCH /api/events/[id]/people/[personId] - Update person (role, team)
 export async function PATCH(
@@ -16,7 +17,7 @@ export async function PATCH(
     if (auth instanceof NextResponse) return auth;
 
     const body = await request.json();
-    const { role, teamId } = body;
+    const { role, teamId, name, email, phoneNumber } = body;
 
     // Find the PersonEvent record
     const personEvent = await prisma.personEvent.findUnique({
@@ -30,6 +31,21 @@ export async function PATCH(
 
     if (!personEvent) {
       return NextResponse.json({ error: 'Person is not part of this event' }, { status: 404 });
+    }
+
+    // Update Person fields if provided (name, email, phoneNumber)
+    const personUpdateData: Record<string, unknown> = {};
+    if (name !== undefined) personUpdateData.name = name;
+    if (email !== undefined) personUpdateData.email = email || null;
+    if (phoneNumber !== undefined) {
+      personUpdateData.phoneNumber = phoneNumber ? normalizePhoneNumber(phoneNumber) : null;
+    }
+
+    if (Object.keys(personUpdateData).length > 0) {
+      await prisma.person.update({
+        where: { id: personId },
+        data: personUpdateData,
+      });
     }
 
     // If teamId is being changed, validate it
