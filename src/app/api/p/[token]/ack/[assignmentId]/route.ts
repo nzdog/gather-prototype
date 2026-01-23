@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logAudit } from '@/lib/workflow';
+import { logInviteEvent } from '@/lib/invite-events';
 import { AssignmentResponse } from '@prisma/client';
 
 /**
@@ -40,6 +41,7 @@ export async function POST(
   const result = await prisma.$transaction(async (tx) => {
     const assignment = await tx.assignment.findUnique({
       where: { id: params.assignmentId },
+      include: { item: true },
     });
 
     // Verify assignment exists and belongs to this participant
@@ -51,6 +53,8 @@ export async function POST(
     if (assignment.response === response) {
       return { found: true, changed: false };
     }
+
+    const previousResponse = assignment.response;
 
     // Update response and log
     await tx.assignment.update({
@@ -67,8 +71,28 @@ export async function POST(
       details: `${response === 'ACCEPTED' ? 'Accepted' : 'Declined'} assignment for item ${assignment.itemId}`,
     });
 
-    return { found: true, changed: true };
+    return {
+      found: true,
+      changed: true,
+      item: assignment.item,
+      previousResponse,
+    };
   });
+
+  // Track response submission (non-blocking)
+  if (result.found && result.changed && result.item) {
+    logInviteEvent({
+      eventId: context.event.id,
+      personId: context.person.id,
+      type: 'RESPONSE_SUBMITTED',
+      metadata: {
+        itemId: result.item.id,
+        itemName: result.item.name,
+        response: response,
+        previousResponse: result.previousResponse,
+      },
+    }).catch((err) => console.error('[ResponseTracking] Failed to log:', err));
+  }
 
   if (!result.found) {
     return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });

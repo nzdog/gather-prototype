@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useModal } from '@/contexts/ModalContext';
+import { normalizePhoneNumber, isInternationalNumber } from '@/lib/phone';
 
 interface Team {
   id: string;
@@ -29,6 +30,7 @@ export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPer
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [phoneError, setPhoneError] = useState('');
   const [role, setRole] = useState('PARTICIPANT');
   const [teamId, setTeamId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -41,6 +43,27 @@ export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPer
   const isMac =
     typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
 
+  const validatePhone = (value: string): boolean => {
+    if (!value.trim()) {
+      setPhoneError('');
+      return true; // Optional field
+    }
+
+    if (isInternationalNumber(value)) {
+      setPhoneError('International numbers not supported yet. NZ numbers only.');
+      return false;
+    }
+
+    const normalized = normalizePhoneNumber(value);
+    if (!normalized) {
+      setPhoneError('Please enter a valid NZ mobile number (e.g., 021 123 4567)');
+      return false;
+    }
+
+    setPhoneError('');
+    return true;
+  };
+
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!name.trim()) {
@@ -48,13 +71,19 @@ export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPer
       return;
     }
 
+    if (!validatePhone(phone)) {
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const addedName = name.trim();
+      const normalizedPhone = phone.trim() ? normalizePhoneNumber(phone) : null;
+
       await onAdd({
         name: addedName,
         email: email.trim(),
-        phone: phone.trim(),
+        phone: normalizedPhone || '',
         role,
         teamId,
       });
@@ -193,9 +222,16 @@ export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPer
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
-                  placeholder="e.g., +1 234 567 8900"
+                  onBlur={() => validatePhone(phone)}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
+                    phoneError ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  placeholder="021 123 4567"
                 />
+                {phoneError && <p className="text-sm text-red-500 mt-1">{phoneError}</p>}
+                <p className="text-xs text-gray-500 mt-1">
+                  Used for automatic reminders. NZ mobile numbers only.
+                </p>
               </div>
 
               {/* Role */}

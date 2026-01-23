@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, Upload, CheckCircle, AlertTriangle, ChevronRight, Download } from 'lucide-react';
 import { useModal } from '@/contexts/ModalContext';
+import { normalizePhoneNumber, isInternationalNumber } from '@/lib/phone';
 
 interface ImportCSVModalProps {
   isOpen: boolean;
@@ -272,8 +273,22 @@ export default function ImportCSVModal({
       }
 
       if (person.phone) {
-        // Store original formatting but strip for comparison
-        person.phone = person.phone.replace(/[\s\-()]/g, '');
+        const rawPhone = person.phone;
+
+        // Check if international (not supported)
+        if (isInternationalNumber(rawPhone)) {
+          person._validationWarnings.push('International number (will be skipped)');
+          person.phone = null;
+        } else {
+          // Try to normalize to E.164
+          const normalized = normalizePhoneNumber(rawPhone);
+          if (normalized) {
+            person.phone = normalized;
+          } else {
+            person._validationWarnings.push('Invalid phone number (will be skipped)');
+            person.phone = null;
+          }
+        }
       }
 
       // Validation

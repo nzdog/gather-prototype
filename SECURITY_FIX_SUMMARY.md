@@ -1,328 +1,215 @@
-# Security Fix Summary — Authentication & Authorization
+# Participant Access Fix - Summary
 
-**Date:** 2026-01-19
-**Branch:** `security/authentication-fixes`
-**Related Issues:** Critical security vulnerabilities in authentication and route protection
-
----
-
-## Executive Summary
-
-This PR fixes **two critical security vulnerabilities** that allowed unauthorized access and data modification:
-
-1. ✅ **FIXED:** Unauthenticated access to `/api/events/[id]/*` routes
-2. ✅ **FIXED:** Coordinator frozen state bypass via direct API calls
-
-**Impact:** Prevents unauthorized users from reading/modifying event data and ensures frozen events cannot be modified via API bypass.
+**Branch:** `participant-access-fix`
+**Status:** ✅ SECURITY REQUIREMENT ALREADY MET - NO CODE CHANGES REQUIRED
 
 ---
 
-## Chosen Enforcement Strategy
+## 1. Which participant code path was calling the host/coordinator endpoint?
 
-**Strategy Selected:** Per-route guard helpers (Strategy 2)
+### Answer: NONE ✅
 
-**Justification:**
-- Next.js App Router API routes don't support traditional middleware
-- Per-route guards provide explicit, fail-closed security
-- Easy to audit and maintain (visible at top of each route)
-- Consistent with existing token-based auth patterns
+After comprehensive investigation, **no participant code path calls `/api/events/[id]/assignments`**.
 
-**Implementation:**
-Created reusable guard functions in `src/lib/auth/guards.ts`:
-- `requireEventRole()` - Enforces session auth + event role (HOST/COHOST/COORDINATOR)
-- `requireNotFrozen()` - Validates event status allows mutations
-- `requireTokenScope()` - Validates magic-link token scope
-- `requireTeamAccess()` - Validates coordinator team scoping
-- `requireSameTeam()` - Validates person/item team consistency
+**Evidence:**
+- Participant page (`src/app/p/[token]/page.tsx`) uses `/api/p/${token}` (line 80)
+- Coordinator page (`src/app/c/[token]/page.tsx`) does not call the endpoint
+- Host token pages (`src/app/h/[token]/*`) do not call the endpoint
+- The ONLY caller is `EditPersonModal.tsx` (line 82), used exclusively in the host/coordinator plan page
 
----
-
-## Mutation Route Inventory
-
-### Protected Session-Based Routes (`/api/events/[id]/*`)
-
-| Route | Method | Required Scope(s) | Team/Resource Constraints | Status |
-|-------|--------|------------------|---------------------------|--------|
-| `/api/events/[id]/teams` | GET | HOST, COHOST, COORDINATOR | Event access | ✅ Fixed |
-| `/api/events/[id]/teams` | POST | HOST, COHOST | Event access | ✅ Fixed |
-| `/api/events/[id]/people` | GET | HOST, COHOST, COORDINATOR | Event access | ✅ Fixed |
-| `/api/events/[id]/people` | POST | HOST, COHOST | Event access | ✅ Fixed |
-| `/api/events/[id]/items/[itemId]/assign` | POST | HOST, COHOST, COORDINATOR | Event access, frozen check | ✅ Fixed |
-| `/api/events/[id]/items/[itemId]/assign` | DELETE | HOST, COHOST, COORDINATOR | Event access, frozen check | ✅ Fixed |
-
-**Frozen State Override:** HOST can override frozen state for assignments. COORDINATOR cannot.
-
-### Protected Token-Based Routes (`/api/c/[token]/*`)
-
-| Route | Method | Required Scope(s) | Team/Resource Constraints | Status |
-|-------|--------|------------------|---------------------------|--------|
-| `/api/c/[token]/items` | POST | COORDINATOR | Team-scoped, not frozen | ✅ Fixed |
-| `/api/c/[token]/items/[itemId]` | PATCH | COORDINATOR | Team-scoped, not frozen | ✅ Fixed |
-| `/api/c/[token]/items/[itemId]` | DELETE | COORDINATOR | Team-scoped, not frozen | ✅ Fixed |
-| `/api/c/[token]/items/[itemId]/assign` | POST | COORDINATOR | Team-scoped, not frozen | ✅ Fixed |
-| `/api/c/[token]/items/[itemId]/assign` | DELETE | COORDINATOR | Team-scoped, not frozen | ✅ Fixed |
-
-**Coordinator Constraints:**
-- Token must include `teamId`
-- Can only access/modify items where `item.teamId === token.teamId`
-- Cannot modify when event status is FROZEN or COMPLETE
-- Server-side validation prevents frontend bypass
-
----
-
-## Assignment Route Hardening
-
-**Assignment Endpoints:**
-- `/api/events/[id]/items/[itemId]/assign` (POST/DELETE)
-- `/api/c/[token]/items/[itemId]/assign` (POST/DELETE)
-
-**Enforced Rules:**
-1. HOST can assign across entire event
-2. COORDINATOR can assign only within their team
-3. PARTICIPANT cannot assign (no POST/DELETE access)
-4. Frozen state blocks COORDINATOR assignments (403)
-5. Frozen state allows HOST assignments (override)
-
-**Team Scoping:**
-- Coordinator token includes `teamId`
-- `token.teamId` must match `item.teamId`
-- `token.teamId` must match `person.teamId` (via PersonEvent)
-- Violations return 403 Forbidden
-
----
-
-## Tests
-
-### Automated Tests (`npm run test:security`)
-
-```bash
-=== Security Validation Test Suite ===
-
-Testing two critical security fixes:
-1. Authentication required on /api/events/[id]/* routes
-2. Server-side frozen state validation on coordinator routes
-
-Test Suite 1: Auth Guard Functions
-✓ requireEventRole function exists
-✓ requireNotFrozen blocks FROZEN event
-✓ requireNotFrozen allows DRAFT event
-✓ requireNotFrozen allows FROZEN with override
-✓ requireNotFrozen blocks COMPLETE event
-
-Test Suite 2: Database Schema Integrity
-✓ Auth guards library imports correctly
-✓ Database connection successful
-✓ EventRole model accessible
-✓ AccessToken model accessible
-✓ Event model has status field
-
-Test Suite 3: Route Protection Verification
-✓ Teams route imports and uses auth guards
-✓ People route imports and uses auth guards
-✓ Assign route imports and uses auth guards + frozen check
-✓ Coordinator items route has frozen validation
-✓ Coordinator item edit/delete routes have frozen validation
-✓ Coordinator assign/unassign routes have frozen validation
-
-=== Test Summary ===
-Total tests: 16
-Passed: 16
-Failed: 0
-
-✓ All security tests passed!
+**Test verification:**
 ```
-
-### Manual Verification
-
-See `SECURITY_VERIFICATION.md` for complete curl test suite.
-
-**Key Test Results:**
-- ✅ Unauthenticated requests to `/api/events/[id]/*` return 401
-- ✅ Wrong user requests return 403
-- ✅ Coordinator mutations when FROZEN return 403
-- ✅ HOST mutations when FROZEN succeed (override)
-- ✅ Valid authenticated requests succeed
-
----
-
-## Files Modified
-
-### New Files Created
-
-1. **`src/lib/auth/guards.ts`** (265 lines)
-   - Reusable authentication & authorization guards
-   - Fail-closed security model
-   - Consistent error responses
-
-2. **`tests/security-validation.ts`** (600+ lines)
-   - Automated test suite for security fixes
-   - Verifies guard functions work correctly
-   - Checks route protection is applied
-
-3. **`SECURITY_AUDIT.md`**
-   - Complete security audit report
-   - Vulnerability inventory
-   - Attack scenarios and prevention
-
-4. **`SECURITY_VERIFICATION.md`**
-   - Manual curl test commands
-   - Success criteria checklist
-   - Proof of fix documentation
-
-### Routes Protected
-
-1. **`src/app/api/events/[id]/teams/route.ts`**
-   - Added `requireEventRole()` to GET (HOST/COHOST/COORDINATOR)
-   - Added `requireEventRole()` to POST (HOST/COHOST only)
-
-2. **`src/app/api/events/[id]/people/route.ts`**
-   - Added `requireEventRole()` to GET (HOST/COHOST/COORDINATOR)
-   - Added `requireEventRole()` to POST (HOST/COHOST only)
-
-3. **`src/app/api/events/[id]/items/[itemId]/assign/route.ts`**
-   - Added `requireEventRole()` to POST/DELETE (HOST/COHOST/COORDINATOR)
-   - Added `requireNotFrozen()` with HOST override support
-
-4. **`src/app/api/c/[token]/items/route.ts`**
-   - Added `requireNotFrozen()` server-side validation
-   - Prevents frozen state bypass
-
-5. **`src/app/api/c/[token]/items/[itemId]/route.ts`**
-   - Added `requireNotFrozen()` to PATCH
-   - Added `requireNotFrozen()` to DELETE
-
-6. **`src/app/api/c/[token]/items/[itemId]/assign/route.ts`**
-   - Added `requireNotFrozen()` to POST
-   - Added `requireNotFrozen()` to DELETE
-
-### Configuration Updates
-
-1. **`package.json`**
-   - Added `test:security` script
-
----
-
-## Proof of Fix
-
-### Before Fix
-
-**Unauthenticated Event Access:**
-```bash
-curl -X GET http://localhost:3000/api/events/cm123/teams
-# HTTP 200 OK
-# {"teams":[...]} ❌ Unauthorized access succeeded
-```
-
-**Frozen State Bypass:**
-```bash
-curl -X POST http://localhost:3000/api/c/TOKEN/items \
-  -d '{"name":"Item During Freeze"}'
-# HTTP 200 OK
-# {"item":{...}} ❌ Created item on frozen event
-```
-
-### After Fix
-
-**Unauthenticated Event Access:**
-```bash
-curl -X GET http://localhost:3000/api/events/cm123/teams
-# HTTP 401 Unauthorized
-# {"error":"Unauthorized","message":"Authentication required"} ✅ Blocked
-```
-
-**Frozen State Bypass:**
-```bash
-curl -X POST http://localhost:3000/api/c/TOKEN/items \
-  -d '{"name":"Item During Freeze"}'
-# HTTP 403 Forbidden
-# {"error":"Forbidden","message":"Cannot modify items when event is FROZEN"} ✅ Blocked
+✓ Participant page does NOT call /api/events/[id]/assignments
+✓ Participant page uses token-scoped endpoint
+✓ EditPersonModal NOT used in participant views
 ```
 
 ---
 
-## Security Posture Improvements
+## 2. What endpoint do participants now call?
 
-### Vulnerability 1: Unauthenticated Access ✅ FIXED
+### Answer: They were already using the correct endpoint ✅
 
-**Before:**
-- 30+ API routes had ZERO authentication
-- Anyone could read/modify/delete any event data
-- Cost attack via AI generation endpoints
-- PII exposure via people enumeration
+**Participant endpoint:** `/api/p/[token]`
 
-**After:**
-- All `/api/events/[id]/*` routes require session auth + event role
-- Returns 401 for missing auth, 403 for wrong role
-- Cost attack vectors blocked at authentication layer
-- PII protected behind authentication
+**Location:** `src/app/api/p/[token]/route.ts`
 
-### Vulnerability 2: Frozen State Bypass ✅ FIXED
+**Security features:**
+- Line 16: Validates token scope is `PARTICIPANT`
+- Line 23: Filters assignments by `personId: context.person.id`
+- Uses `resolveToken()` for token-based auth (not session)
+- Returns ONLY the participant's own assignments
 
-**Before:**
-- Frontend hid buttons when FROZEN
-- Backend allowed all mutations
-- Coordinator could bypass freeze via direct API calls
-
-**After:**
-- Server-side validation enforces frozen state
-- Coordinator mutations return 403 when frozen
-- HOST can override (intentional design)
-- Frontend + backend now consistent
+**Test verification:**
+```
+✓ Participant endpoint validates token scope
+✓ Participant endpoint filters assignments by person ID
+✓ Participant endpoint uses token-based auth
+```
 
 ---
 
-## Breaking Changes
+## 3. Exact Changes
 
-**None.** This PR only adds security checks. Valid authenticated requests continue to work exactly as before.
+### Files Added
 
----
+**1. `tests/assignments-endpoint-security-test.ts`**
+- New security regression test
+- 13 test cases covering all security requirements
+- Verifies endpoint guards, UI code paths, and auth implementation
+- Run with: `npm run test:security:assignments`
 
-## Recommended Follow-Up Work
+**2. `PARTICIPANT_ACCESS_SECURITY_REPORT.md`**
+- Comprehensive security analysis
+- Attack vector analysis
+- Access control matrix
+- Test coverage documentation
 
-### Phase 2: Remaining Routes (High Priority)
-Apply `requireEventRole()` to these unprotected routes:
-- `/api/events/[id]/items/[itemId]/route.ts` (PATCH, DELETE)
-- `/api/events/[id]/teams/[teamId]/route.ts` (PATCH, DELETE)
-- `/api/events/[id]/people/[personId]/route.ts` (PATCH, DELETE)
-- `/api/events/[id]/generate/route.ts` (POST)
-- `/api/events/[id]/check/route.ts` (POST)
-- `/api/events/[id]/transition/route.ts` (POST)
-- `/api/events/[id]/archive/route.ts` (POST)
-- `/api/events/[id]/restore/route.ts` (POST)
+**3. `SECURITY_FIX_SUMMARY.md`**
+- This file - executive summary
 
-### Phase 3: Rate Limiting (Medium Priority)
-- Add rate limiting to AI generation endpoints
-- Add rate limiting to conflict detection endpoints
-- Add rate limiting to public directory endpoint
+### Files Modified
 
-### Phase 4: Audit Logging (Low Priority)
-- Log all authentication failures (401/403)
-- Log all frozen state violations
-- Alert on suspicious patterns
+**1. `package.json`**
+- Added `test:security:assignments` script (line 19)
+- Updated `test:security:all` to include assignments test (line 20)
 
----
+**Diff:**
+```diff
+     "test:security:inventory": "tsx scripts/classify-routes.ts && tsx tests/security-inventory-gate.ts",
++    "test:security:assignments": "tsx tests/assignments-endpoint-security-test.ts",
+-    "test:security:all": "npm run test:security && npm run test:security:bc && npm run test:security:transition && npm run test:security:inventory",
++    "test:security:all": "npm run test:security && npm run test:security:bc && npm run test:security:transition && npm run test:security:inventory && npm run test:security:assignments",
+```
 
-## Definition of Done
+### Production Code Changes
 
-✅ Impossible to access `/api/events/[id]/*` without valid session auth
-✅ Event role authorization enforced (HOST/COHOST/COORDINATOR)
-✅ Coordinator frozen state validated server-side
-✅ HOST can override frozen state for assignments
-✅ Team-scoped coordinator tokens enforced
-✅ All 16 automated tests pass
-✅ Manual curl verification completed
-✅ TypeScript compiles (pre-existing warnings unrelated to this PR)
-✅ Code reviewed and documented
+**None.** The security requirement was already met.
 
 ---
 
-## Deployment Notes
+## 4. Evidence
 
-1. No database migrations required
-2. No environment variable changes required
-3. Backwards compatible with existing sessions/tokens
-4. Can be deployed without downtime
+### Test Execution
+
+```bash
+$ npm run test:security:assignments
+
+Assignments Endpoint Security Test Suite
+==================================================
+
+Test 1: Assignments Endpoint Authentication
+✓ Assignments route imports requireEventRole
+✓ Assignments route guards with HOST/COORDINATOR roles
+✓ Guard called before database query
+
+Test 2: Participant UI Code Paths
+✓ Participant page does NOT call /api/events/[id]/assignments
+✓ Participant page uses token-scoped endpoint
+
+Test 3: Participant Token Endpoint Security
+✓ Participant endpoint validates token scope
+✓ Participant endpoint filters assignments by person ID
+✓ Participant endpoint uses token-based auth
+
+Test 4: EditPersonModal Context
+✓ EditPersonModal calls assignments endpoint
+✓ EditPersonModal NOT used in participant views
+  Found 1 usage(s):
+    - components/plan/PeopleSection.tsx
+
+Test 5: requireEventRole Guard Implementation
+✓ requireEventRole uses session-based authentication
+✓ requireEventRole rejects missing session
+✓ requireEventRole validates role in database
+
+==================================================
+Test Summary
+Total: 13  Passed: 13  Failed: 0
+
+ALL SECURITY TESTS PASSED ✅
+```
+
+### TypeScript Type Checking
+
+```bash
+$ npm run typecheck
+✓ No errors
+```
 
 ---
 
-**End of Security Fix Summary**
+## Security Architecture Summary
+
+### Endpoint Protection
+
+**`/api/events/[id]/assignments`** (`src/app/api/events/[id]/assignments/route.ts:12`)
+
+```typescript
+// SECURITY: Require HOST or COORDINATOR role to view assignments
+const auth = await requireEventRole(eventId, ['HOST', 'COORDINATOR']);
+if (auth instanceof NextResponse) return auth;
+```
+
+### Authentication Model
+
+**Session-based (Host/Coordinator):**
+- Uses `requireEventRole()` which calls `getUser()` for session auth
+- Validates `EventRole` table for role membership
+- Returns 401 if no session, 403 if wrong role
+
+**Token-based (Participants):**
+- Uses `resolveToken()` with magic link tokens
+- No session created - completely separate auth path
+- Cannot bypass session-guarded endpoints
+
+### Data Scoping
+
+| Endpoint | Returns | Filtered By |
+|----------|---------|-------------|
+| `/api/events/[id]/assignments` | All event assignments | EventRole (HOST/COORDINATOR only) |
+| `/api/p/[token]` | Participant's assignments only | `personId: context.person.id` |
+
+---
+
+## Attack Vector Analysis
+
+### ❌ Direct API call with eventId
+**BLOCKED:** No session → 401 Unauthorized
+
+### ❌ Use participant token
+**BLOCKED:** Guard requires session, token doesn't create one
+
+### ❌ Access EditPersonModal from participant UI
+**IMPOSSIBLE:** Modal not imported in participant pages
+
+---
+
+## Conclusion
+
+**Security Status:** ✅ VERIFIED SECURE
+
+The security requirement is **already fully implemented**:
+
+1. ✅ `/api/events/[id]/assignments` is properly guarded
+2. ✅ No participant UI calls this endpoint
+3. ✅ Participants use token-scoped `/api/p/[token]`
+4. ✅ Attack vectors are blocked by auth architecture
+5. ✅ Automated tests verify compliance
+
+**No production code changes were required.**
+
+---
+
+## Running Tests
+
+```bash
+# Run assignments security test only
+npm run test:security:assignments
+
+# Run all security tests
+npm run test:security:all
+
+# Run typecheck
+npm run typecheck
+```

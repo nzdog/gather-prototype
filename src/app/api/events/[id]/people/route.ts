@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
+import { normalizePhoneNumber } from '@/lib/phone';
 
 // GET /api/events/[id]/people - List people on this event
 export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
@@ -84,6 +85,19 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
+    // Normalize phone number (API should accept raw input and normalize)
+    const normalizedPhone = phone ? normalizePhoneNumber(phone) : null;
+
+    // Get event to check if invites have been confirmed
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { inviteSendConfirmedAt: true, status: true },
+    });
+
+    if (!event) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
+
     // Validate team belongs to event (if teamId provided)
     if (teamId) {
       const team = await prisma.team.findFirst({
@@ -105,12 +119,20 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     if (!person) {
+      // Create new person with anchor if invites already confirmed
       person = await prisma.person.create({
         data: {
           name,
           email: email || null,
-          phone: phone || null,
+          phoneNumber: normalizedPhone,
+          inviteAnchorAt: event.inviteSendConfirmedAt || null,
         },
+      });
+    } else if (event.inviteSendConfirmedAt && !person.inviteAnchorAt) {
+      // If person exists but doesn't have an anchor, set it
+      person = await prisma.person.update({
+        where: { id: person.id },
+        data: { inviteAnchorAt: event.inviteSendConfirmedAt },
       });
     }
 
