@@ -1,7 +1,17 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { CheckCircle, Clock, Eye, Send, AlertCircle, RefreshCw } from 'lucide-react';
+import {
+  CheckCircle,
+  Clock,
+  Eye,
+  Send,
+  AlertCircle,
+  RefreshCw,
+  Phone,
+  PhoneOff,
+  Ban,
+} from 'lucide-react';
 
 interface PersonStatus {
   id: string;
@@ -22,6 +32,12 @@ interface InviteStatusData {
     opened: number;
     responded: number;
     withPhone: number;
+  };
+  smsSummary?: {
+    withPhone: number;
+    withoutPhone: number;
+    optedOut: number;
+    canReceive: number;
   };
   people: PersonStatus[];
 }
@@ -172,6 +188,32 @@ export function InviteStatusSection({ eventId }: Props) {
           textColor="text-green-700"
         />
       </div>
+
+      {/* SMS summary */}
+      {data.smsSummary && (
+        <div className="border-t pt-4">
+          <h4 className="text-sm font-medium text-gray-700 mb-2">SMS Reminders</h4>
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div className="flex items-center gap-2">
+              <Phone className="w-4 h-4 text-gray-400" />
+              <span>{data.smsSummary.withPhone} with phone</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <PhoneOff className="w-4 h-4 text-gray-400" />
+              <span>{data.smsSummary.withoutPhone} without</span>
+            </div>
+            {data.smsSummary.optedOut > 0 && (
+              <div className="flex items-center gap-2 col-span-2 text-amber-600">
+                <Ban className="w-4 h-4" />
+                <span>{data.smsSummary.optedOut} opted out</span>
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            Auto-reminders will be sent to {data.smsSummary.canReceive} people
+          </p>
+        </div>
+      )}
 
       {/* Error message */}
       {error && (

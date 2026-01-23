@@ -16,7 +16,8 @@
     "test:security:transition": "tsx tests/security-transition-auth.ts",
     "test:security:classify": "tsx scripts/classify-routes.ts",
     "test:security:inventory": "tsx scripts/classify-routes.ts && tsx tests/security-inventory-gate.ts",
-    "test:security:all": "npm run test:security && npm run test:security:bc && npm run test:security:transition && npm run test:security:inventory",
+    "test:security:assignments": "tsx tests/assignments-endpoint-security-test.ts",
+    "test:security:all": "npm run test:security && npm run test:security:bc && npm run test:security:transition && npm run test:security:inventory && npm run test:security:assignments",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
@@ -47,12 +48,14 @@
     "react-dom": "^18.3.1",
     "resend": "^6.7.0",
     "stripe": "^20.2.0",
-    "tsx": "^4.21.0"
+    "tsx": "^4.21.0",
+    "twilio": "^5.12.0"
   },
   "devDependencies": {
     "@types/node": "^25.0.3",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "@types/twilio": "^3.19.2",
     "autoprefixer": "^10.4.23",
     "dotenv": "^17.2.3",
     "eslint-config-prettier": "^10.1.8",

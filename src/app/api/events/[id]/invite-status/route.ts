@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getOptOutStatuses } from '@/lib/sms/opt-out-service';
 // import { requireEventRole } from '@/lib/auth/guards'
 
 export type InviteStatus = 'NOT_SENT' | 'SENT' | 'OPENED' | 'RESPONDED';
@@ -12,7 +13,9 @@ interface PersonInviteStatus {
   openedAt: string | null;
   respondedAt: string | null;
   hasPhone: boolean;
+  phoneNumber: string | null;
   smsOptedOut: boolean;
+  canReceiveSms: boolean;
   claimedAt: string | null;
   claimedBy: string | null;
 }
@@ -65,6 +68,13 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({ error: 'Event not found' }, { status: 404 });
   }
 
+  // Get opt-out statuses for people with phones (per-host)
+  const phonesInEvent = event.people
+    .map((pe: any) => pe.person.phoneNumber)
+    .filter((phone: string | null) => !!phone) as string[];
+
+  const optOutStatuses = await getOptOutStatuses(phonesInEvent, event.hostId);
+
   // Calculate status for each person
   const peopleStatus: PersonInviteStatus[] = event.people.map((personEvent: any) => {
     const person = personEvent.person;
@@ -84,6 +94,10 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
       status = 'NOT_SENT';
     }
 
+    const hasOptedOut = person.phoneNumber
+      ? optOutStatuses.get(person.phoneNumber) || false
+      : false;
+
     return {
       id: person.id,
       name: person.name,
@@ -92,7 +106,9 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
       openedAt: token?.openedAt?.toISOString() || null,
       respondedAt: respondedAssignment?.createdAt?.toISOString() || null,
       hasPhone: !!person.phoneNumber,
-      smsOptedOut: person.smsOptedOut,
+      phoneNumber: person.phoneNumber,
+      smsOptedOut: hasOptedOut,
+      canReceiveSms: !!person.phoneNumber && !hasOptedOut,
       claimedAt: token?.claimedAt?.toISOString() || null,
       claimedBy: token?.claimedBy || null,
     };
@@ -109,6 +125,14 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     optedOut: peopleStatus.filter((p) => p.smsOptedOut).length,
   };
 
+  // SMS summary
+  const smsSummary = {
+    withPhone: peopleStatus.filter((p) => p.hasPhone).length,
+    withoutPhone: peopleStatus.filter((p) => !p.hasPhone).length,
+    optedOut: peopleStatus.filter((p) => p.smsOptedOut).length,
+    canReceive: peopleStatus.filter((p) => p.canReceiveSms).length,
+  };
+
   return NextResponse.json({
     eventStatus: event.status,
     inviteSendConfirmedAt: event.inviteSendConfirmedAt?.toISOString() || null,
@@ -119,6 +143,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
       claimed: peopleStatus.filter((p) => p.claimedAt).length,
       unclaimed: peopleStatus.filter((p) => !p.claimedAt).length,
     },
+    smsSummary,
     people: peopleStatus,
   });
 }
