@@ -93,6 +93,13 @@ model Event {
   currentRevisionId String?
   currentRevision   PlanRevision? @relation("EventCurrentRevision", fields: [currentRevisionId], references: [id])
 
+  // Invite phase: Send confirmation tracking
+  inviteSendConfirmedAt DateTime?
+
+  // Invite phase: Shared link mode
+  sharedLinkToken   String?  @unique
+  sharedLinkEnabled Boolean  @default(false)
+
   // Relations
   days             Day[]
   teams            Team[]
@@ -105,6 +112,7 @@ model Event {
   snapshots        PlanSnapshot[]
   structureChanges StructureChangeRequest[]
   eventRoles       EventRole[]
+  inviteEvents     InviteEvent[]
 }
 
 model Day {
@@ -154,6 +162,14 @@ model Person {
   userId String?
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
+  // Invite phase: Contact and preferences
+  phoneNumber   String?
+  smsOptedOut   Boolean   @default(false)
+  smsOptedOutAt DateTime?
+
+  // Invite phase: Nudge timing anchor
+  inviteAnchorAt DateTime?
+
   // Relations
   hostedEvents     Event[]       @relation("EventHost")
   cohostedEvents   Event[]       @relation("EventCoHost")
@@ -162,6 +178,7 @@ model Person {
   assignments      Assignment[]
   auditActions     AuditEntry[]
   tokens           AccessToken[]
+  inviteEvents     InviteEvent[]
 
   // Plan phase: Host memory
   hostMemory HostMemory?
@@ -294,6 +311,22 @@ model Assignment {
   // See "Remove Person Procedure" in Section 6
 }
 
+model InviteEvent {
+  id        String          @id @default(cuid())
+  eventId   String
+  event     Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  personId  String?
+  person    Person?         @relation(fields: [personId], references: [id], onDelete: SetNull)
+  type      InviteEventType
+  metadata  Json?
+  createdAt DateTime        @default(now())
+
+  @@index([eventId])
+  @@index([personId])
+  @@index([type])
+  @@index([createdAt])
+}
+
 // Dedicated token table for magic link auth
 model AccessToken {
   id        String     @id @default(cuid())
@@ -311,6 +344,11 @@ model AccessToken {
   // Required for coordinator-scoped tokens
   teamId String?
   team   Team?   @relation(fields: [teamId], references: [id])
+
+  // Invite tracking
+  openedAt  DateTime?
+  claimedAt DateTime?
+  claimedBy String?
 
   @@unique([eventId, personId, scope, teamId])
 }
@@ -968,4 +1006,19 @@ enum AssignmentResponse {
   PENDING
   ACCEPTED
   DECLINED
+}
+
+enum InviteEventType {
+  INVITE_SEND_CONFIRMED
+  LINK_OPENED
+  NAME_CLAIMED
+  RESPONSE_SUBMITTED
+  NUDGE_SENT_AUTO
+  NUDGE_DEFERRED_QUIET
+  SMS_OPT_OUT_RECEIVED
+  SMS_BLOCKED_OPT_OUT
+  SMS_BLOCKED_INVALID
+  SMS_SEND_FAILED
+  MANUAL_OVERRIDE_MARKED
+  CLAIM_RESET
 }
