@@ -113,6 +113,18 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           continue;
         }
 
+        // Determine reachability tier and contact method based on contact info
+        let reachabilityTier: 'DIRECT' | 'UNTRACKABLE' = 'UNTRACKABLE';
+        let contactMethod: 'EMAIL' | 'SMS' | 'NONE' = 'NONE';
+
+        if (person.phoneNumber || person.phone) {
+          contactMethod = 'SMS';
+          reachabilityTier = 'DIRECT';
+        } else if (person.email) {
+          contactMethod = 'EMAIL';
+          reachabilityTier = 'DIRECT';
+        }
+
         // Create PersonEvent linking person to event
         await prisma.personEvent.create({
           data: {
@@ -120,6 +132,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             eventId,
             teamId: personData.teamId || null,
             role: (personData.role as any) || 'PARTICIPANT',
+            reachabilityTier,
+            contactMethod,
           },
         });
 

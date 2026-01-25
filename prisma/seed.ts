@@ -17,16 +17,27 @@ async function main() {
   const personByName = new Map();
 
   const peopleData = [
-    // Host (also Veg & Sides coordinator)
-    { name: 'Jacqui & Ian', role: 'HOST', teamName: 'Vegetables & Sides' },
-    // Coordinators
-    { name: 'Joanna', role: 'COORDINATOR', teamName: 'Entrées & Nibbles' },
-    { name: 'Kate', role: 'COORDINATOR', teamName: 'Mains – Proteins' },
-    { name: 'Anika', role: 'COORDINATOR', teamName: 'Puddings' },
-    { name: 'Gus', role: 'COORDINATOR', teamName: 'Later Food' },
-    { name: 'Ian', role: 'COORDINATOR', teamName: 'Drinks' },
+    // Host (also Veg & Sides coordinator) - with phone for SMS
+    { name: 'Jacqui & Ian', role: 'HOST', teamName: 'Vegetables & Sides', phone: '+64211234567' },
+    // Coordinators - mix of contact methods
+    {
+      name: 'Joanna',
+      role: 'COORDINATOR',
+      teamName: 'Entrées & Nibbles',
+      email: 'joanna@example.com',
+    },
+    { name: 'Kate', role: 'COORDINATOR', teamName: 'Mains – Proteins', phone: '+64211234568' },
+    {
+      name: 'Anika',
+      role: 'COORDINATOR',
+      teamName: 'Puddings',
+      email: 'anika@example.com',
+      phone: '+64211234569',
+    },
+    { name: 'Gus', role: 'COORDINATOR', teamName: 'Later Food', email: 'gus@example.com' },
+    { name: 'Ian', role: 'COORDINATOR', teamName: 'Drinks', phone: '+64211234570' },
     { name: 'Elliot', role: 'COORDINATOR', teamName: 'Setup' },
-    { name: 'Nigel', role: 'COORDINATOR', teamName: 'Clean-up' },
+    { name: 'Nigel', role: 'COORDINATOR', teamName: 'Clean-up', email: 'nigel@example.com' },
     // Entrées & Nibbles participants
     { name: 'Pete', role: 'PARTICIPANT', teamName: 'Entrées & Nibbles' },
     { name: 'Jack', role: 'PARTICIPANT', teamName: 'Entrées & Nibbles' },
@@ -58,7 +69,11 @@ async function main() {
   console.log('Creating people...');
   for (const personData of peopleData) {
     const person = await prisma.person.create({
-      data: { name: personData.name },
+      data: {
+        name: personData.name,
+        email: (personData as any).email || null,
+        phoneNumber: (personData as any).phone || null,
+      },
     });
     personByName.set(personData.name, {
       ...person,
@@ -153,12 +168,27 @@ async function main() {
   let membershipCount = 0;
   for (const [_name, person] of personByName) {
     const team = teamByName.get(person.teamName);
+
+    // Determine reachability tier and contact method based on contact info
+    let reachabilityTier: 'DIRECT' | 'UNTRACKABLE' = 'UNTRACKABLE';
+    let contactMethod: 'EMAIL' | 'SMS' | 'NONE' = 'NONE';
+
+    if (person.phoneNumber || person.phone) {
+      contactMethod = 'SMS';
+      reachabilityTier = 'DIRECT';
+    } else if (person.email) {
+      contactMethod = 'EMAIL';
+      reachabilityTier = 'DIRECT';
+    }
+
     await prisma.personEvent.create({
       data: {
         personId: person.id,
         eventId: event.id,
         teamId: team.id,
         role: person.role,
+        reachabilityTier,
+        contactMethod,
       },
     });
     membershipCount++;
