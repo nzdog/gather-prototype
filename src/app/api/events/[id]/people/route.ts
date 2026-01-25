@@ -150,6 +150,18 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: 'Person is already part of this event' }, { status: 400 });
     }
 
+    // Determine reachability tier and contact method based on contact info
+    let reachabilityTier: 'DIRECT' | 'UNTRACKABLE' = 'UNTRACKABLE';
+    let contactMethod: 'EMAIL' | 'SMS' | 'NONE' = 'NONE';
+
+    if (person.phoneNumber || person.phone) {
+      contactMethod = 'SMS';
+      reachabilityTier = 'DIRECT';
+    } else if (person.email) {
+      contactMethod = 'EMAIL';
+      reachabilityTier = 'DIRECT';
+    }
+
     // Create PersonEvent linking person to event and team
     const personEvent = await prisma.personEvent.create({
       data: {
@@ -157,6 +169,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         eventId,
         teamId: teamId || null,
         role: role || 'PARTICIPANT',
+        reachabilityTier,
+        contactMethod,
       },
       include: {
         person: {

@@ -208,6 +208,13 @@ model PersonEvent {
 
   role PersonRole @default(PARTICIPANT)
 
+  // Reachability tracking
+  reachabilityTier   ReachabilityTier @default(UNTRACKABLE)
+  contactMethod      ContactMethod    @default(NONE)
+  proxyPersonEventId String?
+  proxy              PersonEvent?     @relation("ProxyRelation", fields: [proxyPersonEventId], references: [id])
+  householdMembers   PersonEvent[]    @relation("ProxyRelation")
+
   @@unique([personId, eventId]) // One person, one team per event
 }
 
@@ -215,6 +222,19 @@ enum PersonRole {
   HOST
   COORDINATOR
   PARTICIPANT
+}
+
+enum ReachabilityTier {
+  DIRECT
+  PROXY
+  SHARED
+  UNTRACKABLE
+}
+
+enum ContactMethod {
+  EMAIL
+  SMS
+  NONE
 }
 
 enum EventRoleType {
