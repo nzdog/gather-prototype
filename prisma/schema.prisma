@@ -113,6 +113,7 @@ model Event {
   structureChanges StructureChangeRequest[]
   eventRoles       EventRole[]
   inviteEvents     InviteEvent[]
+  households       Household[]
 }
 
 model Day {
@@ -184,6 +185,7 @@ model Person {
   tokens           AccessToken[]
   inviteEvents     InviteEvent[]
   receivedOptOuts  SmsOptOut[]   @relation("HostOptOuts")
+  households       Household[]
 
   // Plan phase: Host memory
   hostMemory HostMemory?
@@ -215,7 +217,38 @@ model PersonEvent {
   proxy              PersonEvent?     @relation("ProxyRelation", fields: [proxyPersonEventId], references: [id])
   householdMembers   PersonEvent[]    @relation("ProxyRelation")
 
+  // Household member link (if this PersonEvent was claimed from a household slot)
+  householdMember HouseholdMember?
+
   @@unique([personId, eventId]) // One person, one team per event
+}
+
+model Household {
+  id            String   @id @default(cuid())
+  eventId       String
+  proxyPersonId String
+  name          String?
+  createdAt     DateTime @default(now())
+
+  event       Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  proxyPerson Person            @relation(fields: [proxyPersonId], references: [id])
+  members     HouseholdMember[]
+
+  @@unique([eventId, proxyPersonId])
+}
+
+model HouseholdMember {
+  id                String    @id @default(cuid())
+  householdId       String
+  name              String
+  claimedAt         DateTime?
+  personEventId     String?   @unique
+  proxyNudgeCount   Int       @default(0)
+  lastProxyNudgeAt  DateTime?
+  escalatedAt       DateTime?
+
+  household   Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  personEvent PersonEvent? @relation(fields: [personEventId], references: [id])
 }
 
 enum PersonRole {
