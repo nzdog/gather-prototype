@@ -211,11 +211,12 @@ model PersonEvent {
   role PersonRole @default(PARTICIPANT)
 
   // Reachability tracking
-  reachabilityTier   ReachabilityTier @default(UNTRACKABLE)
-  contactMethod      ContactMethod    @default(NONE)
-  proxyPersonEventId String?
-  proxy              PersonEvent?     @relation("ProxyRelation", fields: [proxyPersonEventId], references: [id])
-  householdMembers   PersonEvent[]    @relation("ProxyRelation")
+  reachabilityTier      ReachabilityTier @default(UNTRACKABLE)
+  contactMethod         ContactMethod    @default(NONE)
+  claimedViaSharedLink  Boolean          @default(false)
+  proxyPersonEventId    String?
+  proxy                 PersonEvent?     @relation("ProxyRelation", fields: [proxyPersonEventId], references: [id])
+  householdMembers      PersonEvent[]    @relation("ProxyRelation")
 
   // Household member link (if this PersonEvent was claimed from a household slot)
   householdMember HouseholdMember?
