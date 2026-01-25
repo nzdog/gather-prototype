@@ -98,28 +98,48 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
   const forwardedFor = headersList.get('x-forwarded-for') || '';
   const deviceId = generateDeviceId(userAgent, forwardedFor);
 
-  // Claim the name (update token)
+  // Claim the name (update token and set reachability tier)
   const now = new Date();
 
-  await prisma.accessToken.update({
-    where: { id: accessToken.id },
-    data: {
-      claimedAt: now,
-      claimedBy: deviceId,
-      openedAt: accessToken.openedAt || now, // Also mark as opened if not already
-    },
-  });
+  await prisma.$transaction(async (tx) => {
+    // Update the access token to mark it as claimed
+    await tx.accessToken.update({
+      where: { id: accessToken.id },
+      data: {
+        claimedAt: now,
+        claimedBy: deviceId,
+        openedAt: accessToken.openedAt || now, // Also mark as opened if not already
+      },
+    });
 
-  // Log the claim event
-  await logInviteEvent({
-    eventId: event.id,
-    personId: person.id,
-    type: 'NAME_CLAIMED',
-    metadata: {
-      deviceId,
-      sharedLinkToken: token,
-      personName: person.name,
-    },
+    // Update PersonEvent to set reachability tier and claimed via shared link flag
+    await tx.personEvent.update({
+      where: {
+        personId_eventId: {
+          personId: person.id,
+          eventId: event.id,
+        },
+      },
+      data: {
+        reachabilityTier: 'SHARED',
+        claimedViaSharedLink: true,
+      },
+    });
+
+    // Log the claim event
+    await logInviteEvent(
+      {
+        eventId: event.id,
+        personId: person.id,
+        type: 'NAME_CLAIMED',
+        metadata: {
+          deviceId,
+          sharedLinkToken: token,
+          personName: person.name,
+        },
+      },
+      tx
+    );
   });
 
   return NextResponse.json({

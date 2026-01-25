@@ -1,5 +1,5 @@
 import { prisma } from './prisma';
-import { InviteEventType } from '@prisma/client';
+import { InviteEventType, Prisma } from '@prisma/client';
 
 interface LogInviteEventParams {
   eventId: string;
@@ -8,14 +8,15 @@ interface LogInviteEventParams {
   metadata?: Record<string, unknown>;
 }
 
-export async function logInviteEvent({
-  eventId,
-  personId,
-  type,
-  metadata,
-}: LogInviteEventParams): Promise<void> {
+type PrismaClient = typeof prisma | Prisma.TransactionClient;
+
+export async function logInviteEvent(
+  { eventId, personId, type, metadata }: LogInviteEventParams,
+  tx?: PrismaClient
+): Promise<void> {
+  const db = tx || prisma;
   try {
-    await prisma.inviteEvent.create({
+    await db.inviteEvent.create({
       data: {
         eventId,
         personId: personId ?? null,
