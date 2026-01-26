@@ -29,6 +29,7 @@ interface PersonInviteStatus {
   nudge24hSentAt: string | null;
   nudge48hSentAt: string | null;
   nudgeStatus: string;
+  reachabilityTier: 'DIRECT' | 'PROXY' | 'SHARED' | 'UNTRACKABLE';
 }
 
 export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
@@ -41,7 +42,8 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     where: { id: eventId },
     include: {
       people: {
-        include: {
+        select: {
+          reachabilityTier: true,
           person: {
             select: {
               id: true,
@@ -143,6 +145,11 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
       nudge24hSentAt: person.nudge24hSentAt?.toISOString() || null,
       nudge48hSentAt: person.nudge48hSentAt?.toISOString() || null,
       nudgeStatus: getNudgeStatus(person),
+      reachabilityTier: personEvent.reachabilityTier as
+        | 'DIRECT'
+        | 'PROXY'
+        | 'SHARED'
+        | 'UNTRACKABLE',
     };
   });
 
@@ -175,6 +182,27 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
       .length,
   };
 
+  // Reachability breakdown
+  const reachability = {
+    direct: 0,
+    proxy: 0,
+    shared: 0,
+    untrackable: 0,
+  };
+
+  event.people.forEach((personEvent: any) => {
+    const tier = personEvent.reachabilityTier;
+    if (tier === 'DIRECT') {
+      reachability.direct++;
+    } else if (tier === 'PROXY') {
+      reachability.proxy++;
+    } else if (tier === 'SHARED') {
+      reachability.shared++;
+    } else if (tier === 'UNTRACKABLE') {
+      reachability.untrackable++;
+    }
+  });
+
   return NextResponse.json({
     eventStatus: event.status,
     inviteSendConfirmedAt: event.inviteSendConfirmedAt?.toISOString() || null,
@@ -187,6 +215,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     },
     smsSummary,
     nudgeSummary,
+    reachability,
     people: peopleStatus,
   });
 }

@@ -12,6 +12,7 @@ import {
   PhoneOff,
   Ban,
 } from 'lucide-react';
+import { ReachabilityBar } from './ReachabilityBar';
 
 interface PersonStatus {
   id: string;
@@ -22,6 +23,7 @@ interface PersonStatus {
   nudge24hSentAt?: string | null;
   nudge48hSentAt?: string | null;
   nudgeStatus?: string;
+  reachabilityTier: 'DIRECT' | 'PROXY' | 'SHARED' | 'UNTRACKABLE';
 }
 
 interface InviteStatusData {
@@ -47,6 +49,12 @@ interface InviteStatusData {
     sent48h: number;
     pending24h: number;
     pending48h: number;
+  };
+  reachability?: {
+    direct: number;
+    proxy: number;
+    shared: number;
+    untrackable: number;
   };
   people: PersonStatus[];
 }
@@ -229,6 +237,37 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
           <p className="text-xs text-gray-500 mt-2">
             Auto-reminders will be sent to {data.smsSummary.canReceive} people
           </p>
+        </div>
+      )}
+
+      {/* Reachability breakdown */}
+      {data.reachability && (
+        <div className="border-t pt-4">
+          <h4 className="text-sm font-medium text-gray-700 mb-3">Reachability Breakdown</h4>
+
+          {/* Warning banner if untrackable > 0 */}
+          {data.reachability.shared + data.reachability.untrackable > 0 && (
+            <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-amber-800">
+                  <p className="font-medium">
+                    {data.reachability.shared + data.reachability.untrackable}{' '}
+                    {data.reachability.shared + data.reachability.untrackable === 1
+                      ? 'person is'
+                      : 'people are'}{' '}
+                    untrackable
+                  </p>
+                  <p className="text-xs mt-1">
+                    You won't be able to send automated nudges to these people. Consider collecting
+                    contact info.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <ReachabilityBar data={data.reachability} people={data.people} />
         </div>
       )}
 
