@@ -231,6 +231,62 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     notSure: event.people.filter((pe: any) => pe.rsvpStatus === 'NOT_SURE').length,
   };
 
+  // Attendance breakdown (RSVP data excluding host)
+  // Note: event.people already excludes host via PersonEvent relation
+  const attendance = {
+    total: event.people.length,
+    yes: event.people.filter((pe: any) => pe.rsvpStatus === 'YES').length,
+    no: event.people.filter((pe: any) => pe.rsvpStatus === 'NO').length,
+    notSure: event.people.filter((pe: any) => pe.rsvpStatus === 'NOT_SURE').length,
+    pending: event.people.filter((pe: any) => pe.rsvpStatus === 'PENDING').length,
+  };
+
+  // Items breakdown (Assignment status)
+  // Fetch all items and their assignments for this event
+  const allItems = await prisma.item.findMany({
+    where: {
+      team: {
+        eventId: eventId,
+      },
+    },
+    include: {
+      assignment: {
+        select: {
+          response: true,
+          person: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const items = {
+    total: allItems.length,
+    confirmed: allItems.filter((item) => item.assignment?.response === 'ACCEPTED').length,
+    declined: allItems.filter((item) => item.assignment?.response === 'DECLINED').length,
+    pending: allItems.filter((item) => item.assignment?.response === 'PENDING').length,
+    gaps: allItems.filter((item) => !item.assignment || item.assignment.response === 'DECLINED')
+      .length,
+  };
+
+  // Item details for expanded view
+  const itemDetails = allItems.map((item) => ({
+    id: item.id,
+    name: item.name,
+    status: item.assignment
+      ? item.assignment.response === 'ACCEPTED'
+        ? 'confirmed'
+        : item.assignment.response === 'DECLINED'
+          ? 'declined'
+          : 'pending'
+      : 'gap',
+    assignee: item.assignment?.person?.name || null,
+  }));
+
   return NextResponse.json({
     eventStatus: event.status,
     inviteSendConfirmedAt: event.inviteSendConfirmedAt?.toISOString() || null,
@@ -246,6 +302,9 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     proxyNudgeSummary,
     reachability,
     rsvp,
+    attendance,
+    items,
+    itemDetails,
     people: peopleStatus,
   });
 }
