@@ -50,6 +50,12 @@ interface InviteStatusData {
     pending24h: number;
     pending48h: number;
   };
+  proxyNudgeSummary?: {
+    totalHouseholds: number;
+    householdsWithUnclaimed: number;
+    householdsEscalated: number;
+    nudgesSent: number;
+  };
   reachability?: {
     direct: number;
     proxy: number;
@@ -302,6 +308,36 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
               </p>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Proxy nudge summary */}
+      {data.proxyNudgeSummary && data.proxyNudgeSummary.totalHouseholds > 0 && (
+        <div className="border-t pt-4 mt-4">
+          <h4 className="text-sm font-medium text-gray-700 mb-2">Household Proxy Nudges</h4>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Total households</span>
+              <span className="font-medium">{data.proxyNudgeSummary.totalHouseholds}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">With unclaimed members</span>
+              <span className="font-medium">{data.proxyNudgeSummary.householdsWithUnclaimed}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Proxy nudges sent</span>
+              <span className="font-medium">{data.proxyNudgeSummary.nudgesSent}</span>
+            </div>
+            {data.proxyNudgeSummary.householdsEscalated > 0 && (
+              <div className="flex justify-between text-amber-700">
+                <span>Escalated</span>
+                <span className="font-medium">{data.proxyNudgeSummary.householdsEscalated}</span>
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            Proxies receive reminders when household members don&apos;t claim their slots
+          </p>
         </div>
       )}
 

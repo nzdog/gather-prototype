@@ -1,5 +1,7 @@
 import { findNudgeCandidates } from './nudge-eligibility';
 import { processNudges } from './nudge-sender';
+import { findProxyNudgeCandidates } from './proxy-nudge-eligibility';
+import { processProxyNudges } from './proxy-nudge-sender';
 import { isSmsEnabled } from './twilio-client';
 
 export interface NudgeRunResult {
@@ -10,10 +12,23 @@ export interface NudgeRunResult {
     eligible48h: number;
     skipped: { reason: string; count: number }[];
   };
+  proxyCandidates?: {
+    eligible24h: number;
+    eligible48h: number;
+    eligibleEscalation: number;
+    skipped: { reason: string; count: number }[];
+  };
   results: {
     sent: number;
     succeeded: number;
     failed: number;
+    deferred: number;
+  };
+  proxyResults?: {
+    sent: number;
+    succeeded: number;
+    failed: number;
+    escalated: number;
     deferred: number;
   };
   errors: string[];
@@ -42,7 +57,7 @@ export async function runNudgeScheduler(): Promise<NudgeRunResult> {
   }
 
   try {
-    // Find eligible candidates
+    // Find eligible candidates for direct nudges
     const candidates = await findNudgeCandidates();
 
     console.log(
@@ -53,7 +68,7 @@ export async function runNudgeScheduler(): Promise<NudgeRunResult> {
       console.log('[Nudge Scheduler] Skipped:', candidates.skipped);
     }
 
-    // Process nudges
+    // Process direct nudges
     const processResult = await processNudges(candidates);
 
     const succeeded = processResult.sent.filter((r) => r.success).length;
@@ -68,6 +83,37 @@ export async function runNudgeScheduler(): Promise<NudgeRunResult> {
       .filter((r) => !r.success)
       .forEach((r) => errors.push(`${r.personName}: ${r.error}`));
 
+    // Find eligible candidates for proxy nudges
+    const proxyCandidates = await findProxyNudgeCandidates();
+
+    console.log(
+      `[Nudge Scheduler] Found ${proxyCandidates.eligible24h.length} proxy households for 24h, ${proxyCandidates.eligible48h.length} for 48h, ${proxyCandidates.eligibleEscalation.length} for escalation`
+    );
+
+    if (proxyCandidates.skipped.length > 0) {
+      console.log('[Nudge Scheduler] Proxy skipped:', proxyCandidates.skipped);
+    }
+
+    // Process proxy nudges
+    const proxyProcessResult = await processProxyNudges(proxyCandidates);
+
+    const proxySucceeded = proxyProcessResult.sent.filter((r) => r.success).length;
+    const proxyFailed = proxyProcessResult.sent.filter((r) => !r.success).length;
+    const escalated = proxyProcessResult.escalated.filter((r) => r.success).length;
+
+    console.log(
+      `[Nudge Scheduler] Proxy sent: ${proxyProcessResult.sent.length}, Succeeded: ${proxySucceeded}, Failed: ${proxyFailed}, Escalated: ${escalated}, Deferred: ${proxyProcessResult.deferred}`
+    );
+
+    // Collect proxy errors
+    proxyProcessResult.sent
+      .filter((r) => !r.success)
+      .forEach((r) => errors.push(`Proxy ${r.proxyName}: ${r.error}`));
+
+    proxyProcessResult.escalated
+      .filter((r) => !r.success)
+      .forEach((r) => errors.push(`Escalation ${r.proxyName}: ${r.error}`));
+
     return {
       timestamp,
       smsEnabled: true,
@@ -76,11 +122,24 @@ export async function runNudgeScheduler(): Promise<NudgeRunResult> {
         eligible48h: candidates.eligible48h.length,
         skipped: candidates.skipped,
       },
+      proxyCandidates: {
+        eligible24h: proxyCandidates.eligible24h.length,
+        eligible48h: proxyCandidates.eligible48h.length,
+        eligibleEscalation: proxyCandidates.eligibleEscalation.length,
+        skipped: proxyCandidates.skipped,
+      },
       results: {
         sent: processResult.sent.length,
         succeeded,
         failed,
         deferred: processResult.deferred,
+      },
+      proxyResults: {
+        sent: proxyProcessResult.sent.length,
+        succeeded: proxySucceeded,
+        failed: proxyFailed,
+        escalated,
+        deferred: proxyProcessResult.deferred,
       },
       errors,
     };

@@ -15,6 +15,12 @@ export interface NudgeTemplateParams {
   personName?: string;
 }
 
+export interface ProxyNudgeTemplateParams {
+  eventName: string;
+  unclaimedCount: number;
+  dashboardLink: string;
+}
+
 /**
  * 24h "Open Rescue" nudge
  * Sent when someone hasn't opened their link yet
@@ -62,4 +68,16 @@ export function getMessageInfo(message: string): {
     segments: getMessageSegments(message),
     hasUnicode,
   };
+}
+
+/**
+ * Proxy household reminder nudge
+ * Sent to proxy when household members haven't claimed their slots
+ */
+export function getProxyHouseholdReminderMessage(params: ProxyNudgeTemplateParams): string {
+  const { eventName, unclaimedCount, dashboardLink } = params;
+
+  const peopleText = unclaimedCount === 1 ? 'person' : 'people';
+
+  return `${eventName}: ${unclaimedCount} ${peopleText} in your group haven't confirmed yet. Can you check in with them? ${dashboardLink} — Reply STOP to opt out`;
 }

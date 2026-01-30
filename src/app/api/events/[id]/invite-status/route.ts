@@ -203,6 +203,24 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     }
   });
 
+  // Household proxy nudge summary
+  const households = await prisma.household.findMany({
+    where: { eventId },
+    include: {
+      members: true,
+    },
+  });
+
+  const proxyNudgeSummary = {
+    totalHouseholds: households.length,
+    householdsWithUnclaimed: households.filter((h) => h.members.some((m) => !m.claimedAt)).length,
+    householdsEscalated: households.filter((h) => h.members.some((m) => m.escalatedAt)).length,
+    nudgesSent: households.reduce((sum, h) => {
+      const maxCount = Math.max(...h.members.map((m) => m.proxyNudgeCount), 0);
+      return sum + maxCount;
+    }, 0),
+  };
+
   return NextResponse.json({
     eventStatus: event.status,
     inviteSendConfirmedAt: event.inviteSendConfirmedAt?.toISOString() || null,
@@ -215,6 +233,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     },
     smsSummary,
     nudgeSummary,
+    proxyNudgeSummary,
     reachability,
     people: peopleStatus,
   });
