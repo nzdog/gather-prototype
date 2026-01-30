@@ -31,3 +31,6 @@ check-conflicts.js
 check-timing-data.js
 setup-timing-conflict.js
 test-timing-conflict.js
+send-test-sms-direct.js
+test-send-sms.ts
+tests/assignments-endpoint-security-test.ts
