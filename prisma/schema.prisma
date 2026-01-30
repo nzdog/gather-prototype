@@ -221,6 +221,10 @@ model PersonEvent {
   // Household member link (if this PersonEvent was claimed from a household slot)
   householdMember HouseholdMember?
 
+  // RSVP tracking
+  rsvpStatus      RsvpStatus @default(PENDING)
+  rsvpRespondedAt DateTime?
+
   @@unique([personId, eventId]) // One person, one team per event
 }
 
@@ -1079,6 +1083,13 @@ enum AssignmentResponse {
   PENDING
   ACCEPTED
   DECLINED
+}
+
+enum RsvpStatus {
+  PENDING
+  YES
+  NO
+  NOT_SURE
 }
 
 enum InviteEventType {

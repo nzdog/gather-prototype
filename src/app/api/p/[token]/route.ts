@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logInviteEvent } from '@/lib/invite-events';
+import { RsvpStatus } from '@prisma/client';
 
 /**
  * GET /api/p/[token]
@@ -118,6 +119,8 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
             : null,
         }
       : null,
+    rsvpStatus: personEvent?.rsvpStatus || 'PENDING',
+    rsvpRespondedAt: personEvent?.rsvpRespondedAt?.toISOString() || null,
     assignments: assignments.map((a) => ({
       id: a.id,
       response: a.response,
@@ -143,5 +146,57 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
           : null,
       },
     })),
+  });
+}
+
+/**
+ * PATCH /api/p/[token]
+ *
+ * Updates participant's RSVP status.
+ */
+export async function PATCH(request: NextRequest, { params }: { params: { token: string } }) {
+  const context = await resolveToken(params.token);
+
+  if (!context || context.scope !== 'PARTICIPANT') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
+
+  const body = await request.json();
+  const { rsvpStatus } = body;
+
+  // Validate rsvpStatus
+  const validStatuses: RsvpStatus[] = ['YES', 'NO', 'NOT_SURE'];
+  if (!rsvpStatus || !validStatuses.includes(rsvpStatus)) {
+    return NextResponse.json(
+      { error: 'Invalid RSVP status. Must be YES, NO, or NOT_SURE' },
+      { status: 400 }
+    );
+  }
+
+  // Find PersonEvent
+  const personEvent = await prisma.personEvent.findFirst({
+    where: {
+      personId: context.person.id,
+      eventId: context.event.id,
+    },
+  });
+
+  if (!personEvent) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
+  // Update RSVP status
+  const updated = await prisma.personEvent.update({
+    where: { id: personEvent.id },
+    data: {
+      rsvpStatus,
+      rsvpRespondedAt: new Date(),
+    },
+  });
+
+  return NextResponse.json({
+    success: true,
+    rsvpStatus: updated.rsvpStatus,
+    rsvpRespondedAt: updated.rsvpRespondedAt?.toISOString() || null,
   });
 }

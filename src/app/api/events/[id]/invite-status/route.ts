@@ -44,6 +44,8 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
       people: {
         select: {
           reachabilityTier: true,
+          rsvpStatus: true,
+          rsvpRespondedAt: true,
           person: {
             select: {
               id: true,
@@ -221,6 +223,14 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     }, 0),
   };
 
+  // RSVP breakdown
+  const rsvp = {
+    pending: event.people.filter((pe: any) => pe.rsvpStatus === 'PENDING').length,
+    yes: event.people.filter((pe: any) => pe.rsvpStatus === 'YES').length,
+    no: event.people.filter((pe: any) => pe.rsvpStatus === 'NO').length,
+    notSure: event.people.filter((pe: any) => pe.rsvpStatus === 'NOT_SURE').length,
+  };
+
   return NextResponse.json({
     eventStatus: event.status,
     inviteSendConfirmedAt: event.inviteSendConfirmedAt?.toISOString() || null,
@@ -235,6 +245,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     nudgeSummary,
     proxyNudgeSummary,
     reachability,
+    rsvp,
     people: peopleStatus,
   });
 }
