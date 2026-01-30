@@ -20,9 +20,23 @@ export interface NudgeCandidate {
   nudge48hSentAt: Date | null;
 }
 
+export interface RsvpFollowupCandidate {
+  personEventId: string;
+  personId: string;
+  personName: string;
+  phoneNumber: string;
+  eventId: string;
+  eventName: string;
+  hostId: string;
+  hostName: string;
+  rsvpRespondedAt: Date;
+  participantToken: string;
+}
+
 export interface EligibilityResult {
   eligible24h: NudgeCandidate[];
   eligible48h: NudgeCandidate[];
+  eligibleRsvpFollowup?: RsvpFollowupCandidate[];
   skipped: {
     reason: string;
     count: number;
@@ -171,9 +185,13 @@ export async function findNudgeCandidates(): Promise<EligibilityResult> {
     }
   }
 
+  // Find RSVP followup candidates
+  const rsvpFollowupResult = await findRsvpFollowupCandidates();
+
   return {
     eligible24h,
     eligible48h,
+    eligibleRsvpFollowup: rsvpFollowupResult.eligible,
     skipped: Array.from(skipReasons.entries()).map(([reason, count]) => ({
       reason,
       count,
@@ -191,6 +209,115 @@ export async function findNudgeCandidatesForEvent(eventId: string): Promise<Elig
   return {
     eligible24h: allCandidates.eligible24h.filter((c) => c.eventId === eventId),
     eligible48h: allCandidates.eligible48h.filter((c) => c.eventId === eventId),
+    eligibleRsvpFollowup: allCandidates.eligibleRsvpFollowup?.filter((c) => c.eventId === eventId),
     skipped: allCandidates.skipped,
+  };
+}
+
+/**
+ * Find participants with NOT_SURE RSVP status older than 48h who need forced conversion
+ */
+export async function findRsvpFollowupCandidates(): Promise<{
+  eligible: RsvpFollowupCandidate[];
+  skipped: { reason: string; count: number }[];
+}> {
+  const now = new Date();
+  const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+
+  // Find all PersonEvents with NOT_SURE status older than 48h without followup sent
+  const candidates = await prisma.personEvent.findMany({
+    where: {
+      rsvpStatus: 'NOT_SURE',
+      rsvpRespondedAt: {
+        not: null,
+        lte: fortyEightHoursAgo,
+      },
+      rsvpFollowupSentAt: null,
+      event: {
+        status: 'CONFIRMING',
+      },
+    },
+    include: {
+      person: {
+        select: {
+          id: true,
+          name: true,
+          phoneNumber: true,
+        },
+      },
+      event: {
+        select: {
+          id: true,
+          name: true,
+          hostId: true,
+          host: {
+            select: { name: true },
+          },
+        },
+      },
+    },
+  });
+
+  const eligible: RsvpFollowupCandidate[] = [];
+  const skipReasons: Map<string, number> = new Map();
+
+  const addSkip = (reason: string) => {
+    skipReasons.set(reason, (skipReasons.get(reason) || 0) + 1);
+  };
+
+  for (const personEvent of candidates) {
+    // Skip if no phone number
+    if (!personEvent.person.phoneNumber) {
+      addSkip('No phone number');
+      continue;
+    }
+
+    // Skip if invalid phone
+    if (!isValidNZNumber(personEvent.person.phoneNumber)) {
+      addSkip('Invalid/non-NZ phone');
+      continue;
+    }
+
+    // Check opt-out
+    const optedOut = await isOptedOut(personEvent.person.phoneNumber, personEvent.event.hostId);
+    if (optedOut) {
+      addSkip('Opted out');
+      continue;
+    }
+
+    // Find participant token
+    const token = await prisma.accessToken.findFirst({
+      where: {
+        personId: personEvent.person.id,
+        eventId: personEvent.event.id,
+        scope: 'PARTICIPANT',
+      },
+    });
+
+    if (!token) {
+      addSkip('No participant token');
+      continue;
+    }
+
+    eligible.push({
+      personEventId: personEvent.id,
+      personId: personEvent.person.id,
+      personName: personEvent.person.name,
+      phoneNumber: personEvent.person.phoneNumber,
+      eventId: personEvent.event.id,
+      eventName: personEvent.event.name,
+      hostId: personEvent.event.hostId,
+      hostName: personEvent.event.host?.name || 'The host',
+      rsvpRespondedAt: personEvent.rsvpRespondedAt!,
+      participantToken: token.token,
+    });
+  }
+
+  return {
+    eligible,
+    skipped: Array.from(skipReasons.entries()).map(([reason, count]) => ({
+      reason,
+      count,
+    })),
   };
 }

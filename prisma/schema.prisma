@@ -222,8 +222,9 @@ model PersonEvent {
   householdMember HouseholdMember?
 
   // RSVP tracking
-  rsvpStatus      RsvpStatus @default(PENDING)
-  rsvpRespondedAt DateTime?
+  rsvpStatus         RsvpStatus @default(PENDING)
+  rsvpRespondedAt    DateTime?
+  rsvpFollowupSentAt DateTime?
 
   @@unique([personId, eventId]) // One person, one team per event
 }

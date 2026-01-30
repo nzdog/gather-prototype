@@ -2,13 +2,29 @@ import { prisma } from '@/lib/prisma';
 import { sendSms } from './send-sms';
 import { logInviteEvent } from '@/lib/invite-events';
 import { isQuietHours, getMinutesUntilQuietEnd } from './quiet-hours';
-import { get24hNudgeMessage, get48hNudgeMessage, getMessageInfo } from './nudge-templates';
-import { NudgeCandidate } from './nudge-eligibility';
+import {
+  get24hNudgeMessage,
+  get48hNudgeMessage,
+  getRsvpFollowupMessage,
+  getMessageInfo,
+} from './nudge-templates';
+import { NudgeCandidate, RsvpFollowupCandidate } from './nudge-eligibility';
 
 export interface NudgeSendResult {
   personId: string;
   personName: string;
   nudgeType: '24h' | '48h';
+  success: boolean;
+  messageId?: string;
+  error?: string;
+  deferred?: boolean;
+  deferredUntil?: Date;
+}
+
+export interface RsvpFollowupSendResult {
+  personEventId: string;
+  personId: string;
+  personName: string;
   success: boolean;
   messageId?: string;
   error?: string;
@@ -153,4 +169,115 @@ export async function processNudges(candidates: {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Send RSVP followup nudge to force conversion from NOT_SURE to YES/NO
+ */
+export async function sendRsvpFollowupNudge(
+  candidate: RsvpFollowupCandidate
+): Promise<RsvpFollowupSendResult> {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const link = `${baseUrl}/p/${candidate.participantToken}`;
+
+  // Get message template
+  const message = getRsvpFollowupMessage({
+    hostName: candidate.hostName,
+    eventName: candidate.eventName,
+    link,
+  });
+
+  const messageInfo = getMessageInfo(message);
+
+  // Send SMS
+  const result = await sendSms({
+    to: candidate.phoneNumber,
+    message,
+    eventId: candidate.eventId,
+    personId: candidate.personId,
+    metadata: {
+      nudgeType: 'rsvp_followup',
+      messageLength: messageInfo.length,
+      messageSegments: messageInfo.segments,
+    },
+  });
+
+  if (result.success) {
+    // Update PersonEvent record to mark followup as sent
+    await prisma.personEvent.update({
+      where: { id: candidate.personEventId },
+      data: { rsvpFollowupSentAt: new Date() },
+    });
+
+    return {
+      personEventId: candidate.personEventId,
+      personId: candidate.personId,
+      personName: candidate.personName,
+      success: true,
+      messageId: result.messageId,
+    };
+  } else {
+    return {
+      personEventId: candidate.personEventId,
+      personId: candidate.personId,
+      personName: candidate.personName,
+      success: false,
+      error: result.error,
+    };
+  }
+}
+
+/**
+ * Process all eligible RSVP followup nudges
+ */
+export async function processRsvpFollowupNudges(candidates: RsvpFollowupCandidate[]): Promise<{
+  sent: RsvpFollowupSendResult[];
+  deferred: number;
+  deferredUntilMinutes: number;
+}> {
+  // Check quiet hours
+  if (isQuietHours()) {
+    const minutesUntil = getMinutesUntilQuietEnd();
+
+    // Log deferral for each candidate
+    for (const candidate of candidates) {
+      await logInviteEvent({
+        eventId: candidate.eventId,
+        personId: candidate.personId,
+        type: 'NUDGE_DEFERRED_QUIET',
+        metadata: {
+          deferredMinutes: minutesUntil,
+          phoneNumber: candidate.phoneNumber,
+          nudgeType: 'rsvp_followup',
+        },
+      });
+    }
+
+    console.log(
+      `[RSVP Followup] Quiet hours - deferring ${candidates.length} followup nudges for ${minutesUntil} minutes`
+    );
+
+    return {
+      sent: [],
+      deferred: candidates.length,
+      deferredUntilMinutes: minutesUntil,
+    };
+  }
+
+  const results: RsvpFollowupSendResult[] = [];
+
+  // Send RSVP followup nudges
+  for (const candidate of candidates) {
+    const result = await sendRsvpFollowupNudge(candidate);
+    results.push(result);
+
+    // Small delay between sends to avoid rate limiting
+    await sleep(500);
+  }
+
+  return {
+    sent: results,
+    deferred: 0,
+    deferredUntilMinutes: 0,
+  };
 }
