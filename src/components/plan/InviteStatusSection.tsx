@@ -38,6 +38,26 @@ interface InviteStatusData {
     responded: number;
     withPhone: number;
   };
+  attendance?: {
+    total: number;
+    yes: number;
+    no: number;
+    notSure: number;
+    pending: number;
+  };
+  items?: {
+    total: number;
+    confirmed: number;
+    declined: number;
+    pending: number;
+    gaps: number;
+  };
+  itemDetails?: Array<{
+    id: string;
+    name: string;
+    status: 'confirmed' | 'declined' | 'pending' | 'gap';
+    assignee: string | null;
+  }>;
   smsSummary?: {
     withPhone: number;
     withoutPhone: number;
@@ -77,6 +97,8 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAllPeople, setShowAllPeople] = useState(false);
+  const [expandedAttendance, setExpandedAttendance] = useState(false);
+  const [expandedItems, setExpandedItems] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -159,8 +181,7 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
 
   if (!data) return null;
 
-  const { counts, hasUnsentPeople, inviteSendConfirmedAt } = data;
-  const responseRate = counts.total > 0 ? Math.round((counts.responded / counts.total) * 100) : 0;
+  const { counts, hasUnsentPeople, inviteSendConfirmedAt, attendance, items, itemDetails } = data;
 
   return (
     <div className="bg-white rounded-lg border p-4 space-y-4">
@@ -172,23 +193,205 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
         </button>
       </div>
 
-      {/* Progress bar */}
-      <div className="space-y-2">
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-600">
-            {counts.responded} of {counts.total} responded
-          </span>
-          <span className="font-medium">{responseRate}%</span>
-        </div>
-        <div className="w-full bg-gray-200 rounded-full h-2.5">
-          <div
-            className="bg-green-500 h-2.5 rounded-full transition-all duration-300"
-            style={{ width: `${responseRate}%` }}
-          />
-        </div>
-      </div>
+      {/* Attendance Section */}
+      {attendance && (
+        <div className="space-y-2 border-b pb-4">
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium text-gray-900">Attendance</h4>
+            <button
+              onClick={() => setExpandedAttendance(!expandedAttendance)}
+              className="text-xs text-sage-600 hover:underline"
+            >
+              {expandedAttendance ? 'Hide details' : 'Show details'}
+            </button>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-600">
+              {attendance.yes} of {attendance.total} confirmed
+            </span>
+            <span className="font-medium">
+              {attendance.total > 0 ? Math.round((attendance.yes / attendance.total) * 100) : 0}%
+            </span>
+          </div>
+          {/* Multi-segment progress bar for attendance */}
+          <div className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden flex">
+            {attendance.total > 0 && (
+              <>
+                {/* YES segment - green */}
+                <div
+                  className="bg-green-500 h-full transition-all duration-300"
+                  style={{ width: `${(attendance.yes / attendance.total) * 100}%` }}
+                  title={`${attendance.yes} Yes`}
+                />
+                {/* NO segment - red */}
+                <div
+                  className="bg-red-500 h-full transition-all duration-300"
+                  style={{ width: `${(attendance.no / attendance.total) * 100}%` }}
+                  title={`${attendance.no} No`}
+                />
+                {/* NOT_SURE segment - amber */}
+                <div
+                  className="bg-amber-500 h-full transition-all duration-300"
+                  style={{ width: `${(attendance.notSure / attendance.total) * 100}%` }}
+                  title={`${attendance.notSure} Not Sure`}
+                />
+                {/* PENDING segment - gray */}
+                <div
+                  className="bg-gray-400 h-full transition-all duration-300"
+                  style={{ width: `${(attendance.pending / attendance.total) * 100}%` }}
+                  title={`${attendance.pending} Pending`}
+                />
+              </>
+            )}
+          </div>
 
-      {/* Status breakdown */}
+          {/* Expanded attendance details */}
+          {expandedAttendance && (
+            <div className="mt-3 space-y-2 text-sm">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-green-500 rounded-sm"></div>
+                  <span className="text-gray-700">
+                    Yes: <span className="font-medium">{attendance.yes}</span>
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-red-500 rounded-sm"></div>
+                  <span className="text-gray-700">
+                    No: <span className="font-medium">{attendance.no}</span>
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-amber-500 rounded-sm"></div>
+                  <span className="text-gray-700">
+                    Not sure: <span className="font-medium">{attendance.notSure}</span>
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-gray-400 rounded-sm"></div>
+                  <span className="text-gray-700">
+                    Pending: <span className="font-medium">{attendance.pending}</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Items Section */}
+      {items && (
+        <div className="space-y-2 border-b pb-4">
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium text-gray-900">Items</h4>
+            <button
+              onClick={() => setExpandedItems(!expandedItems)}
+              className="text-xs text-sage-600 hover:underline"
+            >
+              {expandedItems ? 'Hide details' : 'Show details'}
+            </button>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-600">
+              {items.total - items.gaps} of {items.total} items covered
+            </span>
+            <span className="font-medium">
+              {items.total > 0 ? Math.round(((items.total - items.gaps) / items.total) * 100) : 0}%
+            </span>
+          </div>
+          {/* Multi-segment progress bar for items */}
+          <div className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden flex">
+            {items.total > 0 && (
+              <>
+                {/* CONFIRMED segment - green */}
+                <div
+                  className="bg-green-500 h-full transition-all duration-300"
+                  style={{ width: `${(items.confirmed / items.total) * 100}%` }}
+                  title={`${items.confirmed} Confirmed`}
+                />
+                {/* PENDING segment - amber */}
+                <div
+                  className="bg-amber-500 h-full transition-all duration-300"
+                  style={{ width: `${(items.pending / items.total) * 100}%` }}
+                  title={`${items.pending} Pending`}
+                />
+                {/* GAPS segment - red with pattern to distinguish from declined */}
+                <div
+                  className="bg-red-500 h-full transition-all duration-300"
+                  style={{ width: `${(items.gaps / items.total) * 100}%` }}
+                  title={`${items.gaps} Gaps`}
+                />
+              </>
+            )}
+          </div>
+
+          {/* Expanded items details */}
+          {expandedItems && (
+            <div className="mt-3 space-y-2 text-sm">
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-green-500 rounded-sm"></div>
+                  <span className="text-gray-700">
+                    Confirmed: <span className="font-medium">{items.confirmed}</span>
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-amber-500 rounded-sm"></div>
+                  <span className="text-gray-700">
+                    Pending: <span className="font-medium">{items.pending}</span>
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-red-500 rounded-sm"></div>
+                  <span className="text-gray-700">
+                    Gaps: <span className="font-medium">{items.gaps}</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Item details table */}
+              {itemDetails && itemDetails.length > 0 && (
+                <div className="border rounded-md overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="text-left px-2 py-1 font-medium text-gray-700">Item</th>
+                        <th className="text-left px-2 py-1 font-medium text-gray-700">Status</th>
+                        <th className="text-left px-2 py-1 font-medium text-gray-700">Assignee</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {itemDetails.map((item) => (
+                        <tr key={item.id} className="border-t">
+                          <td className="px-2 py-1 text-gray-900">{item.name}</td>
+                          <td className="px-2 py-1">
+                            <span
+                              className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                item.status === 'confirmed'
+                                  ? 'bg-green-100 text-green-700'
+                                  : item.status === 'pending'
+                                    ? 'bg-amber-100 text-amber-700'
+                                    : item.status === 'declined'
+                                      ? 'bg-red-100 text-red-700'
+                                      : 'bg-red-100 text-red-700'
+                              }`}
+                            >
+                              {item.status === 'gap' ? 'Gap' : item.status}
+                            </span>
+                          </td>
+                          <td className="px-2 py-1 text-gray-700">{item.assignee || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Legacy status breakdown - keep for backward compatibility */}
       <div className="grid grid-cols-4 gap-2 text-center text-sm">
         <StatusCard
           icon={<Clock className="w-4 h-4" />}
