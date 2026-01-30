@@ -88,6 +88,131 @@ export async function canFreeze(eventId: string): Promise<boolean> {
 }
 
 /**
+ * ============================================
+ * EPIC 4: FREEZE WARNINGS
+ * ============================================
+ */
+
+export interface FreezeWarning {
+  type: 'LOW_COMPLIANCE' | 'CRITICAL_GAPS';
+  message: string;
+  details: string[];
+}
+
+export interface FreezeCheckResult {
+  canFreeze: boolean; // always true — warnings don't block
+  warnings: FreezeWarning[];
+  complianceRate: number; // 0-100
+  criticalGaps: {
+    itemId: string;
+    itemName: string;
+  }[];
+}
+
+/**
+ * Checks freeze readiness and returns warnings.
+ * Warnings never block freeze - canFreeze is always true.
+ *
+ * Compliance calculation:
+ * - Numerator: Assignments with status = ACCEPTED where assignee has reachabilityTier != UNTRACKABLE
+ * - Denominator: Total assignments where assignee has reachabilityTier != UNTRACKABLE
+ * - Exclude untrackable from both — can't measure what you can't reach
+ *
+ * Warning triggers:
+ * - complianceRate < 80: LOW_COMPLIANCE warning
+ * - Any critical item with no accepted assignment: CRITICAL_GAPS warning
+ */
+export async function checkFreezeReadiness(eventId: string): Promise<FreezeCheckResult> {
+  const warnings: FreezeWarning[] = [];
+
+  // Get all assignments for trackable guests
+  const allAssignments = await prisma.assignment.findMany({
+    where: {
+      item: {
+        team: { eventId },
+      },
+      person: {
+        eventMemberships: {
+          some: {
+            eventId,
+            reachabilityTier: {
+              not: 'UNTRACKABLE',
+            },
+          },
+        },
+      },
+    },
+    include: {
+      person: {
+        select: {
+          id: true,
+          name: true,
+          eventMemberships: {
+            where: { eventId },
+            select: { reachabilityTier: true },
+          },
+        },
+      },
+    },
+  });
+
+  // Calculate compliance rate
+  const totalTrackable = allAssignments.length;
+  const acceptedCount = allAssignments.filter((a) => a.response === 'ACCEPTED').length;
+  const complianceRate =
+    totalTrackable === 0 ? 100 : Math.round((acceptedCount / totalTrackable) * 100);
+
+  // Check for low compliance
+  if (complianceRate < 80 && totalTrackable > 0) {
+    const pendingAssignments = allAssignments.filter(
+      (a) => a.response === 'PENDING' || a.response === 'DECLINED'
+    );
+    const details = pendingAssignments.map(
+      (a) => `${a.person.name} (${a.response.toLowerCase().replace('_', ' ')})`
+    );
+
+    warnings.push({
+      type: 'LOW_COMPLIANCE',
+      message: `Only ${complianceRate}% of guests have confirmed`,
+      details,
+    });
+  }
+
+  // Check for critical gaps
+  const criticalItems = await prisma.item.findMany({
+    where: {
+      team: { eventId },
+      critical: true,
+    },
+    include: {
+      assignment: true,
+    },
+  });
+
+  const criticalGaps = criticalItems
+    .filter((item) => !item.assignment || item.assignment.response !== 'ACCEPTED')
+    .map((item) => ({
+      itemId: item.id,
+      itemName: item.name,
+    }));
+
+  if (criticalGaps.length > 0) {
+    warnings.push({
+      type: 'CRITICAL_GAPS',
+      message: `${criticalGaps.length} critical item(s) have no owner`,
+      details: criticalGaps.map((g) => g.itemName),
+    });
+  }
+
+  return {
+    canFreeze: true,
+    warnings,
+    complianceRate,
+    criticalGaps,
+  };
+}
+
+/**
  * Returns the count of unassigned items blocking freeze (T6).
  * Used for UI messaging ("Cannot freeze: N items unassigned").
  *

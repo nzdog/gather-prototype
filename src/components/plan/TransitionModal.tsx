@@ -5,8 +5,15 @@ import { useModal } from '@/contexts/ModalContext';
 
 interface TransitionModalProps {
   eventId: string;
+  currentStatus?: 'DRAFT' | 'CONFIRMING' | 'FROZEN' | 'COMPLETE';
   onClose: () => void;
   onSuccess: () => void;
+}
+
+interface FreezeWarning {
+  type: 'LOW_COMPLIANCE' | 'CRITICAL_GAPS';
+  message: string;
+  details: string[];
 }
 
 interface PlanSummary {
@@ -26,7 +33,12 @@ interface WeakSpot {
   icon: string;
 }
 
-export default function TransitionModal({ eventId, onClose, onSuccess }: TransitionModalProps) {
+export default function TransitionModal({
+  eventId,
+  currentStatus,
+  onClose,
+  onSuccess,
+}: TransitionModalProps) {
   const { openModal, closeModal } = useModal();
   const [loading, setLoading] = useState(true);
   const [transitioning, setTransitioning] = useState(false);
@@ -35,6 +47,10 @@ export default function TransitionModal({ eventId, onClose, onSuccess }: Transit
   const [showWeakSpots, setShowWeakSpots] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hostId, setHostId] = useState<string | null>(null);
+  const [freezeWarnings, setFreezeWarnings] = useState<FreezeWarning[]>([]);
+  const [showFreezeWarnings, setShowFreezeWarnings] = useState(false);
+
+  const isFreezeTransition = currentStatus === 'CONFIRMING';
 
   // Modal blocking check - TransitionModal needs special handling since it's opened programmatically
   useEffect(() => {
@@ -156,6 +172,16 @@ export default function TransitionModal({ eventId, onClose, onSuccess }: Transit
       const result = await response.json();
 
       if (result.success) {
+        // For freeze transitions, check if there are warnings
+        if (isFreezeTransition && result.freezeWarnings && result.freezeWarnings.length > 0) {
+          // If we haven't shown warnings yet, show them now
+          if (!showFreezeWarnings) {
+            setFreezeWarnings(result.freezeWarnings);
+            setShowFreezeWarnings(true);
+            setTransitioning(false);
+            return;
+          }
+        }
         onSuccess();
       } else {
         throw new Error(result.error || 'Transition failed');
@@ -187,12 +213,78 @@ export default function TransitionModal({ eventId, onClose, onSuccess }: Transit
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        {!showWeakSpots ? (
+        {showFreezeWarnings && freezeWarnings.length > 0 ? (
+          <>
+            {/* Freeze Warnings View */}
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold mb-2">Heads up before you freeze</h2>
+              <p className="text-gray-600">
+                You can still freeze the plan, but here are some things to be aware of:
+              </p>
+            </div>
+
+            {/* Warnings List */}
+            <div className="space-y-4 mb-6">
+              {freezeWarnings.map((warning, index) => (
+                <div key={index} className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl">⚠️</span>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-yellow-900 mb-2">{warning.message}</h3>
+                      {warning.details.length > 0 && (
+                        <ul className="text-sm text-yellow-800 space-y-1">
+                          {warning.details.slice(0, 5).map((detail, i) => (
+                            <li key={i}>• {detail}</li>
+                          ))}
+                          {warning.details.length > 5 && (
+                            <li className="italic">...and {warning.details.length - 5} more</li>
+                          )}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Error Display */}
+            {error && (
+              <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 mb-6">
+                <p className="text-red-800">{error}</p>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={onClose}
+                disabled={transitioning}
+                className="flex-1 px-6 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={handleProceed}
+                disabled={transitioning}
+                className="flex-1 px-6 py-3 bg-sage-600 text-white rounded-lg font-semibold hover:bg-sage-700 disabled:opacity-50"
+              >
+                {transitioning ? 'Freezing...' : 'Freeze Anyway'}
+              </button>
+            </div>
+          </>
+        ) : !showWeakSpots ? (
           <>
             {/* Transition Confirmation */}
             <div className="mb-6">
-              <h2 className="text-2xl font-bold mb-2">Ready to Move to CONFIRMING?</h2>
-              <p className="text-gray-600">Review your plan summary before transitioning.</p>
+              <h2 className="text-2xl font-bold mb-2">
+                {isFreezeTransition ? 'Freeze this plan?' : 'Ready to Move to CONFIRMING?'}
+              </h2>
+              <p className="text-gray-600">
+                {isFreezeTransition
+                  ? 'Freezing will lock the plan and prevent further changes.'
+                  : 'Review your plan summary before transitioning.'}
+              </p>
             </div>
 
             {/* Plan Summary */}
@@ -229,29 +321,31 @@ export default function TransitionModal({ eventId, onClose, onSuccess }: Transit
             )}
 
             {/* What Happens Next */}
-            <div className="bg-sage-50 border-2 border-sage-200 rounded-lg p-6 mb-6">
-              <h3 className="font-semibold text-lg mb-2 text-sage-900">
-                What "Structure Locked" Means
-              </h3>
-              <ul className="space-y-2 text-sm text-sage-800">
-                <li className="flex gap-2">
-                  <span>🔒</span>
-                  <span>Team structure will be locked (no adding/removing teams)</span>
-                </li>
-                <li className="flex gap-2">
-                  <span>✏️</span>
-                  <span>You can still edit item details and assignments</span>
-                </li>
-                <li className="flex gap-2">
-                  <span>📸</span>
-                  <span>A snapshot of your current plan will be saved</span>
-                </li>
-                <li className="flex gap-2">
-                  <span>👥</span>
-                  <span>Coordinators can continue working on their teams</span>
-                </li>
-              </ul>
-            </div>
+            {!isFreezeTransition && (
+              <div className="bg-sage-50 border-2 border-sage-200 rounded-lg p-6 mb-6">
+                <h3 className="font-semibold text-lg mb-2 text-sage-900">
+                  What "Structure Locked" Means
+                </h3>
+                <ul className="space-y-2 text-sm text-sage-800">
+                  <li className="flex gap-2">
+                    <span>🔒</span>
+                    <span>Team structure will be locked (no adding/removing teams)</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span>✏️</span>
+                    <span>You can still edit item details and assignments</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span>📸</span>
+                    <span>A snapshot of your current plan will be saved</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span>👥</span>
+                    <span>Coordinators can continue working on their teams</span>
+                  </li>
+                </ul>
+              </div>
+            )}
 
             {/* Error Display */}
             {error && (
@@ -262,20 +356,38 @@ export default function TransitionModal({ eventId, onClose, onSuccess }: Transit
 
             {/* Action Buttons */}
             <div className="flex gap-3">
-              <button
-                onClick={handleNotYet}
-                disabled={transitioning}
-                className="flex-1 px-6 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 disabled:opacity-50"
-              >
-                Not yet, keep planning
-              </button>
+              {!isFreezeTransition && (
+                <button
+                  onClick={handleNotYet}
+                  disabled={transitioning}
+                  className="flex-1 px-6 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Not yet, keep planning
+                </button>
+              )}
+
+              {isFreezeTransition && (
+                <button
+                  onClick={onClose}
+                  disabled={transitioning}
+                  className="flex-1 px-6 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              )}
 
               <button
                 onClick={handleProceed}
                 disabled={transitioning}
                 className="flex-1 px-6 py-3 bg-sage-600 text-white rounded-lg font-semibold hover:bg-sage-700 disabled:opacity-50"
               >
-                {transitioning ? 'Transitioning...' : 'Yes, proceed →'}
+                {transitioning
+                  ? isFreezeTransition
+                    ? 'Freezing...'
+                    : 'Transitioning...'
+                  : isFreezeTransition
+                    ? 'Freeze Plan'
+                    : 'Yes, proceed →'}
               </button>
             </div>
           </>
