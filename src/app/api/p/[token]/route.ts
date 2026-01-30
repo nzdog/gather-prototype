@@ -121,6 +121,7 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
       : null,
     rsvpStatus: personEvent?.rsvpStatus || 'PENDING',
     rsvpRespondedAt: personEvent?.rsvpRespondedAt?.toISOString() || null,
+    rsvpFollowupSentAt: personEvent?.rsvpFollowupSentAt?.toISOString() || null,
     assignments: assignments.map((a) => ({
       id: a.id,
       response: a.response,

@@ -61,6 +61,7 @@ interface ParticipantData {
   } | null;
   rsvpStatus: 'PENDING' | 'YES' | 'NO' | 'NOT_SURE';
   rsvpRespondedAt: string | null;
+  rsvpFollowupSentAt: string | null;
   assignments: Assignment[];
 }
 
@@ -209,10 +210,64 @@ export default function ParticipantView() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
-        {/* RSVP Question */}
+        {/* RSVP Question - PENDING state */}
         {data.rsvpStatus === 'PENDING' && (
           <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 mb-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">Are you coming?</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <button
+                onClick={() => handleRsvpResponse('YES')}
+                className="py-3 rounded-lg font-medium bg-sage-600 text-white hover:bg-sage-700 transition-all"
+              >
+                Yes
+              </button>
+              <button
+                onClick={() => handleRsvpResponse('NO')}
+                className="py-3 rounded-lg font-medium bg-gray-400 text-white hover:bg-gray-500 transition-all"
+              >
+                No
+              </button>
+              <button
+                onClick={() => handleRsvpResponse('NOT_SURE')}
+                className="py-3 rounded-lg font-medium bg-gray-300 text-gray-800 hover:bg-gray-400 transition-all"
+              >
+                Not sure
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* RSVP Question - NOT_SURE state with followup sent (forced conversion) */}
+        {data.rsvpStatus === 'NOT_SURE' && data.rsvpFollowupSentAt && (
+          <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 mb-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Are you coming?</h2>
+            <p className="text-gray-600 mb-4">
+              We need to finalize the headcount — please let us know if you're coming.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                onClick={() => handleRsvpResponse('YES')}
+                className="py-3 rounded-lg font-medium bg-sage-600 text-white hover:bg-sage-700 transition-all"
+              >
+                Yes
+              </button>
+              <button
+                onClick={() => handleRsvpResponse('NO')}
+                className="py-3 rounded-lg font-medium bg-gray-400 text-white hover:bg-gray-500 transition-all"
+              >
+                No
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* RSVP Question - NOT_SURE state without followup (show all 3 options) */}
+        {data.rsvpStatus === 'NOT_SURE' && !data.rsvpFollowupSentAt && (
+          <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 mb-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Are you coming?</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              You selected "Not sure" — you can update your response here.
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <button
                 onClick={() => handleRsvpResponse('YES')}

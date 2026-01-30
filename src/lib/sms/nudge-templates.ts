@@ -81,3 +81,13 @@ export function getProxyHouseholdReminderMessage(params: ProxyNudgeTemplateParam
 
   return `${eventName}: ${unclaimedCount} ${peopleText} in your group haven't confirmed yet. Can you check in with them? ${dashboardLink} — Reply STOP to opt out`;
 }
+
+/**
+ * RSVP Followup nudge
+ * Sent 48h after "Not sure" response to force conversion to Yes/No
+ */
+export function getRsvpFollowupMessage(params: NudgeTemplateParams): string {
+  const { eventName, link } = params;
+
+  return `${eventName}: We need a final answer — are you coming? ${link} — Reply STOP to opt out`;
+}
