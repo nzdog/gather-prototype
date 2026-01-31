@@ -80,7 +80,7 @@ export default function FrozenEditModal({
     }
   }, [isOpen]);
 
-  // Sync form state with item prop
+  // Sync form state with item prop (only when item ID changes, not on every re-render)
   useEffect(() => {
     if (item) {
       setCritical(item.critical);
@@ -89,7 +89,7 @@ export default function FrozenEditModal({
       setDescription(item.description || '');
       setNewPersonId('');
     }
-  }, [item]);
+  }, [item?.id]);
 
   if (!isOpen || !item) return null;
 

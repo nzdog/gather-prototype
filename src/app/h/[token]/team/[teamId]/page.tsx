@@ -18,6 +18,7 @@ import {
 import ItemStatusBadges from '@/components/plan/ItemStatusBadges';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 import FrozenEditModal from '@/components/plan/FrozenEditModal';
+import { ModalProvider } from '@/contexts/ModalContext';
 
 interface Item {
   id: string;
@@ -180,244 +181,249 @@ export default function HostTeamView() {
   });
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-5">
-        {/* Back Button */}
-        <button
-          onClick={() => router.push(`/h/${token}`)}
-          className="inline-flex items-center gap-2 text-accent hover:text-sage-800 mb-4 font-medium"
-        >
-          <ArrowLeft className="size-5" />
-          Back to Host View
-        </button>
+    <ModalProvider>
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        {/* Header */}
+        <div className="bg-white border-b border-gray-200 px-6 py-5">
+          {/* Back Button */}
+          <button
+            onClick={() => router.push(`/h/${token}`)}
+            className="inline-flex items-center gap-2 text-accent hover:text-sage-800 mb-4 font-medium"
+          >
+            <ArrowLeft className="size-5" />
+            Back to Host View
+          </button>
 
-        <div className="text-sm font-medium text-gray-500 mb-1">{data.event.name}</div>
-        <h1 className="text-2xl font-bold text-gray-900">{data.team.name}</h1>
-        <div className="text-sm text-gray-500 mt-1">Coordinator: {data.team.coordinator.name}</div>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm uppercase tracking-wide text-gray-500">
-            Team Items {data.event.status === 'FROZEN' ? '(Frozen - Limited Edits)' : '(Read Only)'}
-          </h2>
-          <div className="flex items-center gap-2">
-            {data && data.items.length > 0 && (
-              <button
-                onClick={toggleAllItems}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                {collapsedItems.size === 0 ? (
-                  <>
-                    <Minimize2 className="size-4" />
-                    Collapse All
-                  </>
-                ) : (
-                  <>
-                    <Maximize2 className="size-4" />
-                    Expand All
-                  </>
-                )}
-              </button>
-            )}
-            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`p-1.5 rounded transition-colors ${
-                  viewMode === 'grid'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-                title="Grid view"
-              >
-                <Grid3x3 className="size-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-1.5 rounded transition-colors ${
-                  viewMode === 'list'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-                title="List view"
-              >
-                <List className="size-4" />
-              </button>
-            </div>
+          <div className="text-sm font-medium text-gray-500 mb-1">{data.event.name}</div>
+          <h1 className="text-2xl font-bold text-gray-900">{data.team.name}</h1>
+          <div className="text-sm text-gray-500 mt-1">
+            Coordinator: {data.team.coordinator.name}
           </div>
         </div>
 
-        {data.items.length === 0 ? (
-          <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 text-center">
-            <p className="text-gray-600">No items yet</p>
-          </div>
-        ) : (
-          <div
-            className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}
-          >
-            {sortedItems.map((item) => (
-              <div
-                key={item.id}
-                className={`bg-white border border-gray-200 rounded-lg shadow-sm p-4 hover:shadow-md transition-shadow ${
-                  viewMode === 'list' ? 'w-full max-w-md' : ''
-                }`}
-              >
-                {/* Card Header - Always Visible */}
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      {!item.assignment && item.critical && (
-                        <AlertCircle className="size-4 text-red-500 flex-shrink-0" />
-                      )}
-                      <span className="font-semibold text-gray-900">{item.name}</span>
-                      {item.quantity && (
-                        <span className="text-gray-500 flex-shrink-0">×{item.quantity}</span>
-                      )}
-                      {!item.assignment && item.critical && (
-                        <span className="bg-red-100 text-red-800 text-xs font-semibold px-2 py-1 rounded flex-shrink-0">
-                          CRITICAL
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Status Badges */}
-                    <div className="mb-2">
-                      <ItemStatusBadges assignment={item.assignment} />
-                    </div>
-
-                    {/* Dietary tags - Always Visible */}
-                    {(item.glutenFree || item.dairyFree || item.vegetarian) && (
-                      <div className="flex gap-2">
-                        {item.glutenFree && (
-                          <span className="bg-sage-100 text-sage-800 text-xs px-2 py-1 rounded">
-                            GF
-                          </span>
-                        )}
-                        {item.dairyFree && (
-                          <span className="bg-sage-100 text-sage-800 text-xs px-2 py-1 rounded">
-                            DF
-                          </span>
-                        )}
-                        {item.vegetarian && (
-                          <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">
-                            V
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Collapse Toggle Button */}
-                  <button
-                    onClick={() => toggleItemCollapse(item.id)}
-                    className="ml-2 p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0 border border-gray-300"
-                    title={collapsedItems.has(item.id) ? 'Expand' : 'Collapse'}
-                  >
-                    {collapsedItems.has(item.id) ? (
-                      <ChevronRight className="size-5 text-gray-700" />
-                    ) : (
-                      <ChevronDown className="size-5 text-gray-700" />
-                    )}
-                  </button>
-                </div>
-
-                {/* Collapsible Content */}
-                {!collapsedItems.has(item.id) && (
-                  <div className="space-y-2">
-                    {/* Day and drop-off details */}
-                    <div className="space-y-2">
-                      {item.day && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <Calendar className="size-4 text-gray-400" />
-                          <span className="text-gray-900">{item.day.name}</span>
-                        </div>
-                      )}
-                      <DropOffDisplay
-                        dropOffLocation={item.dropOffLocation}
-                        dropOffAt={item.dropOffAt}
-                        dropOffNote={item.dropOffNote}
-                        variant="stacked"
-                        showIcons={true}
-                      />
-                    </div>
-
-                    {/* Notes */}
-                    {item.notes && (
-                      <div className="text-sm text-gray-600 mb-2 italic">{item.notes}</div>
-                    )}
-
-                    {/* Assignment Status - Read Only */}
-                    <div className="mt-3">
-                      {item.assignment ? (
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-gray-900">
-                              {item.assignment.person.name}
-                            </span>
-                            {item.assignment.response === 'ACCEPTED' ? (
-                              <div className="inline-flex items-center gap-1.5 bg-green-100 text-green-800 px-3 py-1.5 rounded-full text-sm font-semibold">
-                                <Check className="size-4" />
-                                Accepted
-                              </div>
-                            ) : item.assignment.response === 'DECLINED' ? (
-                              <div className="inline-flex items-center gap-1.5 bg-red-100 text-red-800 px-3 py-1.5 rounded-full text-sm font-semibold">
-                                <AlertCircle className="size-4" />
-                                Declined
-                              </div>
-                            ) : (
-                              <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full text-sm font-semibold">
-                                <AlertCircle className="size-4" />
-                                Pending
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="bg-gray-50 border border-gray-200 rounded px-3 py-2 text-sm text-gray-500">
-                          Unassigned
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Frozen Edit Button - Only show when FROZEN */}
-                    {data.event.status === 'FROZEN' && (
-                      <div className="mt-3 pt-3 border-t border-gray-200">
-                        <button
-                          onClick={() => handleEditItem(item)}
-                          className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-yellow-600 text-white text-sm rounded-md hover:bg-yellow-700 transition-colors"
-                        >
-                          <Edit className="size-4" />
-                          Edit (Surgical Change)
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm uppercase tracking-wide text-gray-500">
+              Team Items{' '}
+              {data.event.status === 'FROZEN' ? '(Frozen - Limited Edits)' : '(Read Only)'}
+            </h2>
+            <div className="flex items-center gap-2">
+              {data && data.items.length > 0 && (
+                <button
+                  onClick={toggleAllItems}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  {collapsedItems.size === 0 ? (
+                    <>
+                      <Minimize2 className="size-4" />
+                      Collapse All
+                    </>
+                  ) : (
+                    <>
+                      <Maximize2 className="size-4" />
+                      Expand All
+                    </>
+                  )}
+                </button>
+              )}
+              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`p-1.5 rounded transition-colors ${
+                    viewMode === 'grid'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                  title="Grid view"
+                >
+                  <Grid3x3 className="size-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`p-1.5 rounded transition-colors ${
+                    viewMode === 'list'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                  title="List view"
+                >
+                  <List className="size-4" />
+                </button>
               </div>
-            ))}
+            </div>
           </div>
+
+          {data.items.length === 0 ? (
+            <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 text-center">
+              <p className="text-gray-600">No items yet</p>
+            </div>
+          ) : (
+            <div
+              className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}
+            >
+              {sortedItems.map((item) => (
+                <div
+                  key={item.id}
+                  className={`bg-white border border-gray-200 rounded-lg shadow-sm p-4 hover:shadow-md transition-shadow ${
+                    viewMode === 'list' ? 'w-full max-w-md' : ''
+                  }`}
+                >
+                  {/* Card Header - Always Visible */}
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        {item.critical && (
+                          <AlertCircle className="size-4 text-red-500 flex-shrink-0" />
+                        )}
+                        <span className="font-semibold text-gray-900">{item.name}</span>
+                        {item.quantity && (
+                          <span className="text-gray-500 flex-shrink-0">×{item.quantity}</span>
+                        )}
+                        {item.critical && (
+                          <span className="bg-red-100 text-red-800 text-xs font-semibold px-2 py-1 rounded flex-shrink-0">
+                            CRITICAL
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Status Badges */}
+                      <div className="mb-2">
+                        <ItemStatusBadges assignment={item.assignment} />
+                      </div>
+
+                      {/* Dietary tags - Always Visible */}
+                      {(item.glutenFree || item.dairyFree || item.vegetarian) && (
+                        <div className="flex gap-2">
+                          {item.glutenFree && (
+                            <span className="bg-sage-100 text-sage-800 text-xs px-2 py-1 rounded">
+                              GF
+                            </span>
+                          )}
+                          {item.dairyFree && (
+                            <span className="bg-sage-100 text-sage-800 text-xs px-2 py-1 rounded">
+                              DF
+                            </span>
+                          )}
+                          {item.vegetarian && (
+                            <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">
+                              V
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Collapse Toggle Button */}
+                    <button
+                      onClick={() => toggleItemCollapse(item.id)}
+                      className="ml-2 p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0 border border-gray-300"
+                      title={collapsedItems.has(item.id) ? 'Expand' : 'Collapse'}
+                    >
+                      {collapsedItems.has(item.id) ? (
+                        <ChevronRight className="size-5 text-gray-700" />
+                      ) : (
+                        <ChevronDown className="size-5 text-gray-700" />
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Collapsible Content */}
+                  {!collapsedItems.has(item.id) && (
+                    <div className="space-y-2">
+                      {/* Day and drop-off details */}
+                      <div className="space-y-2">
+                        {item.day && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <Calendar className="size-4 text-gray-400" />
+                            <span className="text-gray-900">{item.day.name}</span>
+                          </div>
+                        )}
+                        <DropOffDisplay
+                          dropOffLocation={item.dropOffLocation}
+                          dropOffAt={item.dropOffAt}
+                          dropOffNote={item.dropOffNote}
+                          variant="stacked"
+                          showIcons={true}
+                        />
+                      </div>
+
+                      {/* Notes */}
+                      {item.notes && (
+                        <div className="text-sm text-gray-600 mb-2 italic">{item.notes}</div>
+                      )}
+
+                      {/* Assignment Status - Read Only */}
+                      <div className="mt-3">
+                        {item.assignment ? (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-gray-900">
+                                {item.assignment.person.name}
+                              </span>
+                              {item.assignment.response === 'ACCEPTED' ? (
+                                <div className="inline-flex items-center gap-1.5 bg-green-100 text-green-800 px-3 py-1.5 rounded-full text-sm font-semibold">
+                                  <Check className="size-4" />
+                                  Accepted
+                                </div>
+                              ) : item.assignment.response === 'DECLINED' ? (
+                                <div className="inline-flex items-center gap-1.5 bg-red-100 text-red-800 px-3 py-1.5 rounded-full text-sm font-semibold">
+                                  <AlertCircle className="size-4" />
+                                  Declined
+                                </div>
+                              ) : (
+                                <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full text-sm font-semibold">
+                                  <AlertCircle className="size-4" />
+                                  Pending
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="bg-gray-50 border border-gray-200 rounded px-3 py-2 text-sm text-gray-500">
+                            Unassigned
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Frozen Edit Button - Only show when FROZEN */}
+                      {data.event.status === 'FROZEN' && (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <button
+                            onClick={() => handleEditItem(item)}
+                            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-yellow-600 text-white text-sm rounded-md hover:bg-yellow-700 transition-colors"
+                          >
+                            <Edit className="size-4" />
+                            Edit (Surgical Change)
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Frozen Edit Modal */}
+        {showEditModal && editingItem && data && (
+          <FrozenEditModal
+            isOpen={showEditModal}
+            onClose={() => {
+              setShowEditModal(false);
+              setEditingItem(null);
+            }}
+            onSuccess={handleEditSuccess}
+            item={{
+              ...editingItem,
+              team: data.team,
+            }}
+            eventId={data.event.id}
+            people={data.people || []}
+          />
         )}
       </div>
-
-      {/* Frozen Edit Modal */}
-      {showEditModal && editingItem && data && (
-        <FrozenEditModal
-          isOpen={showEditModal}
-          onClose={() => {
-            setShowEditModal(false);
-            setEditingItem(null);
-          }}
-          onSuccess={handleEditSuccess}
-          item={{
-            ...editingItem,
-            team: data.team,
-          }}
-          eventId={data.event.id}
-          people={data.people || []}
-        />
-      )}
-    </div>
+    </ModalProvider>
   );
 }
