@@ -16,6 +16,8 @@ import {
   Maximize2,
   Minimize2,
 } from 'lucide-react';
+import TransitionModal from '@/components/plan/TransitionModal';
+import { ModalProvider } from '@/contexts/ModalContext';
 
 interface Item {
   id: string;
@@ -88,6 +90,7 @@ export default function HostView() {
   const [claimEmail, setClaimEmail] = useState('');
   const [claimSubmitted, setClaimSubmitted] = useState(false);
   const [claimSubmitting, setClaimSubmitting] = useState(false);
+  const [showFreezeModal, setShowFreezeModal] = useState(false);
 
   // Check URL params on mount
   useEffect(() => {
@@ -139,6 +142,12 @@ export default function HostView() {
 
   const handleStatusChange = async (newStatus: string) => {
     if (!data) return;
+
+    // Use TransitionModal for freezing
+    if (data.event.status === 'CONFIRMING' && newStatus === 'FROZEN') {
+      setShowFreezeModal(true);
+      return;
+    }
 
     let unfreezeReason: string | null = null;
 
@@ -407,342 +416,361 @@ export default function HostView() {
   const sortedTeams = [...data.teams].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-5">
-        <button
-          onClick={() => window.close()}
-          className="inline-flex items-center gap-1 text-sm text-accent hover:text-sage-800 mb-3"
-        >
-          <Home className="size-4" />
-          Close Window
-        </button>
-        <div className="flex items-start justify-between mb-2">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{data.event.name}</h1>
-            <p className="text-sm text-gray-600 mt-1">Host: {data.person.name}</p>
-          </div>
-          <a
-            href={`/h/${token}/audit`}
-            className="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700 transition"
+    <ModalProvider>
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        {/* Header */}
+        <div className="bg-white border-b border-gray-200 px-6 py-5">
+          <button
+            onClick={() => window.close()}
+            className="inline-flex items-center gap-1 text-sm text-accent hover:text-sage-800 mb-3"
           >
-            📋 Audit Log
-          </a>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500">
-            {formatDateRange(data.event.startDate, data.event.endDate)}
-          </span>
-          <span className="text-gray-300">·</span>
-          {editingGuestCount ? (
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                value={guestCountValue}
-                onChange={(e) => setGuestCountValue(e.target.value)}
-                className="px-2 py-1 border border-gray-300 rounded w-20 text-sm"
-                placeholder="Guests"
-                min="0"
-                disabled={updating}
-              />
-              <button
-                onClick={handleSaveGuestCount}
-                disabled={updating}
-                className="px-2 py-1 bg-sage-600 text-white text-xs rounded hover:bg-sage-700 disabled:bg-gray-300"
-              >
-                Save
-              </button>
-              <button
-                onClick={handleCancelEditGuestCount}
-                disabled={updating}
-                className="px-2 py-1 bg-gray-400 text-white text-xs rounded hover:bg-gray-500 disabled:bg-gray-300"
-              >
-                Cancel
-              </button>
+            <Home className="size-4" />
+            Close Window
+          </button>
+          <div className="flex items-start justify-between mb-2">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">{data.event.name}</h1>
+              <p className="text-sm text-gray-600 mt-1">Host: {data.person.name}</p>
             </div>
-          ) : (
-            <button onClick={handleEditGuestCount} className="text-sm text-accent hover:underline">
-              {data.event.guestCount ? `${data.event.guestCount} guests` : 'Add guest count'}
-            </button>
-          )}
-        </div>
-        <div className="flex items-center gap-2 mt-3">
-          <span className="text-xs uppercase tracking-wide text-gray-500 bg-gray-100 px-2 py-1 rounded">
-            {data.event.status}
-          </span>
-          {canUnfreeze(data.event.status) && (
-            <button
-              onClick={() => handleStatusChange('CONFIRMING')}
-              disabled={updating}
-              className="text-xs px-2 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:bg-gray-300"
+            <a
+              href={`/h/${token}/audit`}
+              className="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700 transition"
             >
-              Unfreeze
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Status Banner */}
-      {data.event.status !== 'COMPLETE' && (
-        <>
-          {data.criticalGapCount > 0 ? (
-            <div className="bg-red-50 px-6 py-4 flex items-center gap-3">
-              <AlertCircle className="size-6 text-red-500" />
-              <span className="font-semibold text-red-900">
-                {data.criticalGapCount} critical{' '}
-                {data.criticalGapCount === 1 ? 'gap remains' : 'gaps remain'}
-              </span>
-            </div>
-          ) : totalGaps > 0 ? (
-            <div className="bg-amber-50 px-6 py-4 flex items-center gap-3">
-              <div className="size-6 rounded-full bg-amber-500 flex items-center justify-center text-white text-sm">
-                !
-              </div>
-              <span className="font-semibold text-amber-900">
-                Ready to freeze ({totalGaps} non-critical {totalGaps === 1 ? 'gap' : 'gaps'})
-              </span>
-            </div>
-          ) : (
-            <div className="bg-green-50 px-6 py-4 flex items-center gap-3">
-              <div className="size-6 rounded-full bg-green-500 flex items-center justify-center text-white text-sm">
-                ✓
-              </div>
-              <span className="font-semibold text-green-900">Ready to freeze</span>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Teams List */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm uppercase tracking-wide text-gray-500">Teams</h2>
+              📋 Audit Log
+            </a>
+          </div>
           <div className="flex items-center gap-2">
-            {data && data.teams.length > 0 && (
+            <span className="text-sm text-gray-500">
+              {formatDateRange(data.event.startDate, data.event.endDate)}
+            </span>
+            <span className="text-gray-300">·</span>
+            {editingGuestCount ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  value={guestCountValue}
+                  onChange={(e) => setGuestCountValue(e.target.value)}
+                  className="px-2 py-1 border border-gray-300 rounded w-20 text-sm"
+                  placeholder="Guests"
+                  min="0"
+                  disabled={updating}
+                />
+                <button
+                  onClick={handleSaveGuestCount}
+                  disabled={updating}
+                  className="px-2 py-1 bg-sage-600 text-white text-xs rounded hover:bg-sage-700 disabled:bg-gray-300"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={handleCancelEditGuestCount}
+                  disabled={updating}
+                  className="px-2 py-1 bg-gray-400 text-white text-xs rounded hover:bg-gray-500 disabled:bg-gray-300"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
               <button
-                onClick={toggleAllTeams}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                onClick={handleEditGuestCount}
+                className="text-sm text-accent hover:underline"
               >
-                {collapsedTeams.size === 0 ? (
-                  <>
-                    <Minimize2 className="size-4" />
-                    Collapse All
-                  </>
-                ) : (
-                  <>
-                    <Maximize2 className="size-4" />
-                    Expand All
-                  </>
-                )}
+                {data.event.guestCount ? `${data.event.guestCount} guests` : 'Add guest count'}
               </button>
             )}
-            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+          </div>
+          <div className="flex items-center gap-2 mt-3">
+            <span className="text-xs uppercase tracking-wide text-gray-500 bg-gray-100 px-2 py-1 rounded">
+              {data.event.status}
+            </span>
+            {canUnfreeze(data.event.status) && (
               <button
-                onClick={() => setViewMode('grid')}
-                className={`p-1.5 rounded transition-colors ${
-                  viewMode === 'grid'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-                title="Grid view"
+                onClick={() => handleStatusChange('CONFIRMING')}
+                disabled={updating}
+                className="text-xs px-2 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:bg-gray-300"
               >
-                <Grid3x3 className="size-4" />
+                Unfreeze
               </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-1.5 rounded transition-colors ${
-                  viewMode === 'list'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-                title="List view"
-              >
-                <List className="size-4" />
-              </button>
-            </div>
+            )}
           </div>
         </div>
-        <div
-          className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}
-        >
-          {sortedTeams.map((team) => {
-            const assignedCount = team.items.filter((i) => i.assignment).length;
-            const pendingCount = team.items.filter(
-              (i) => i.assignment?.response === 'PENDING'
-            ).length;
-            const acceptedCount = team.items.filter(
-              (i) => i.assignment?.response === 'ACCEPTED'
-            ).length;
-            const declinedCount = team.items.filter(
-              (i) => i.assignment?.response === 'DECLINED'
-            ).length;
-            // Gap count includes unassigned items AND declined items
-            const gapCount = team.items.filter(
-              (i) => i.assignment === null || i.assignment?.response === 'DECLINED'
-            ).length;
-            const criticalGapCount = team.items.filter(
-              (i) => i.critical && (i.assignment === null || i.assignment?.response === 'DECLINED')
-            ).length;
 
-            return (
-              <div
-                key={team.id}
-                className={`bg-white rounded-lg border-2 shadow-sm hover:shadow-md transition-shadow p-5 ${
-                  viewMode === 'list' ? 'w-full max-w-md' : ''
-                } ${
-                  team.status === 'CRITICAL_GAP'
-                    ? 'border-red-300'
-                    : team.status === 'GAP'
-                      ? 'border-amber-300'
-                      : 'border-green-300'
-                }`}
-              >
-                {/* Card Header - Always Visible */}
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <div
-                      className={`size-3 rounded-full mt-1.5 flex-shrink-0 ${
-                        team.status === 'CRITICAL_GAP'
-                          ? 'bg-red-500'
-                          : team.status === 'GAP'
-                            ? 'bg-amber-500'
-                            : 'bg-green-500'
-                      }`}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-gray-900 text-lg mb-1">{team.name}</h3>
-                      <p className="text-sm text-gray-600">{team.coordinator.name}</p>
+        {/* Status Banner - Only show in CONFIRMING status */}
+        {data.event.status === 'CONFIRMING' && (
+          <>
+            {data.criticalGapCount > 0 ? (
+              <div className="bg-red-50 px-6 py-4 flex items-center gap-3">
+                <AlertCircle className="size-6 text-red-500" />
+                <span className="font-semibold text-red-900">
+                  {data.criticalGapCount} critical{' '}
+                  {data.criticalGapCount === 1 ? 'gap remains' : 'gaps remain'}
+                </span>
+              </div>
+            ) : totalGaps > 0 ? (
+              <div className="bg-amber-50 px-6 py-4 flex items-center gap-3">
+                <div className="size-6 rounded-full bg-amber-500 flex items-center justify-center text-white text-sm">
+                  !
+                </div>
+                <span className="font-semibold text-amber-900">
+                  Ready to freeze ({totalGaps} non-critical {totalGaps === 1 ? 'gap' : 'gaps'})
+                </span>
+              </div>
+            ) : (
+              <div className="bg-green-50 px-6 py-4 flex items-center gap-3">
+                <div className="size-6 rounded-full bg-green-500 flex items-center justify-center text-white text-sm">
+                  ✓
+                </div>
+                <span className="font-semibold text-green-900">Ready to freeze</span>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Teams List */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm uppercase tracking-wide text-gray-500">Teams</h2>
+            <div className="flex items-center gap-2">
+              {data && data.teams.length > 0 && (
+                <button
+                  onClick={toggleAllTeams}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  {collapsedTeams.size === 0 ? (
+                    <>
+                      <Minimize2 className="size-4" />
+                      Collapse All
+                    </>
+                  ) : (
+                    <>
+                      <Maximize2 className="size-4" />
+                      Expand All
+                    </>
+                  )}
+                </button>
+              )}
+              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`p-1.5 rounded transition-colors ${
+                    viewMode === 'grid'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                  title="Grid view"
+                >
+                  <Grid3x3 className="size-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`p-1.5 rounded transition-colors ${
+                    viewMode === 'list'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                  title="List view"
+                >
+                  <List className="size-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+          <div
+            className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}
+          >
+            {sortedTeams.map((team) => {
+              const assignedCount = team.items.filter((i) => i.assignment).length;
+              const pendingCount = team.items.filter(
+                (i) => i.assignment?.response === 'PENDING'
+              ).length;
+              const acceptedCount = team.items.filter(
+                (i) => i.assignment?.response === 'ACCEPTED'
+              ).length;
+              const declinedCount = team.items.filter(
+                (i) => i.assignment?.response === 'DECLINED'
+              ).length;
+              // Gap count includes unassigned items AND declined items
+              const gapCount = team.items.filter(
+                (i) => i.assignment === null || i.assignment?.response === 'DECLINED'
+              ).length;
+              const criticalGapCount = team.items.filter(
+                (i) =>
+                  i.critical && (i.assignment === null || i.assignment?.response === 'DECLINED')
+              ).length;
+
+              return (
+                <div
+                  key={team.id}
+                  className={`bg-white rounded-lg border-2 shadow-sm hover:shadow-md transition-shadow p-5 ${
+                    viewMode === 'list' ? 'w-full max-w-md' : ''
+                  } ${
+                    team.status === 'CRITICAL_GAP'
+                      ? 'border-red-300'
+                      : team.status === 'GAP'
+                        ? 'border-amber-300'
+                        : 'border-green-300'
+                  }`}
+                >
+                  {/* Card Header - Always Visible */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      <div
+                        className={`size-3 rounded-full mt-1.5 flex-shrink-0 ${
+                          team.status === 'CRITICAL_GAP'
+                            ? 'bg-red-500'
+                            : team.status === 'GAP'
+                              ? 'bg-amber-500'
+                              : 'bg-green-500'
+                        }`}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-gray-900 text-lg mb-1">{team.name}</h3>
+                        <p className="text-sm text-gray-600">{team.coordinator.name}</p>
+                      </div>
                     </div>
+
+                    {/* Collapse Toggle Button */}
+                    <button
+                      onClick={() => toggleTeamCollapse(team.id)}
+                      className="ml-2 p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0 border border-gray-300"
+                      title={collapsedTeams.has(team.id) ? 'Expand' : 'Collapse'}
+                    >
+                      {collapsedTeams.has(team.id) ? (
+                        <ChevronRight className="size-5 text-gray-700" />
+                      ) : (
+                        <ChevronDown className="size-5 text-gray-700" />
+                      )}
+                    </button>
                   </div>
 
-                  {/* Collapse Toggle Button */}
-                  <button
-                    onClick={() => toggleTeamCollapse(team.id)}
-                    className="ml-2 p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0 border border-gray-300"
-                    title={collapsedTeams.has(team.id) ? 'Expand' : 'Collapse'}
-                  >
-                    {collapsedTeams.has(team.id) ? (
-                      <ChevronRight className="size-5 text-gray-700" />
+                  {/* Status Badge - Always Visible */}
+                  <div className="mb-3">
+                    {team.status === 'CRITICAL_GAP' ? (
+                      <div className="inline-flex items-center gap-1.5 bg-red-100 text-red-800 px-3 py-1.5 rounded-full text-sm font-semibold">
+                        <AlertCircle className="size-4" />
+                        {criticalGapCount} critical {criticalGapCount === 1 ? 'gap' : 'gaps'}
+                      </div>
+                    ) : team.status === 'GAP' ? (
+                      <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full text-sm font-semibold">
+                        <AlertCircle className="size-4" />
+                        {gapCount} {gapCount === 1 ? 'gap' : 'gaps'}
+                      </div>
                     ) : (
-                      <ChevronDown className="size-5 text-gray-700" />
+                      <div className="inline-flex items-center gap-1.5 bg-green-100 text-green-800 px-3 py-1.5 rounded-full text-sm font-semibold">
+                        <Users className="size-4" />
+                        All assigned
+                      </div>
                     )}
-                  </button>
-                </div>
+                  </div>
 
-                {/* Status Badge - Always Visible */}
-                <div className="mb-3">
-                  {team.status === 'CRITICAL_GAP' ? (
-                    <div className="inline-flex items-center gap-1.5 bg-red-100 text-red-800 px-3 py-1.5 rounded-full text-sm font-semibold">
-                      <AlertCircle className="size-4" />
-                      {criticalGapCount} critical {criticalGapCount === 1 ? 'gap' : 'gaps'}
-                    </div>
-                  ) : team.status === 'GAP' ? (
-                    <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full text-sm font-semibold">
-                      <AlertCircle className="size-4" />
-                      {gapCount} {gapCount === 1 ? 'gap' : 'gaps'}
-                    </div>
-                  ) : (
-                    <div className="inline-flex items-center gap-1.5 bg-green-100 text-green-800 px-3 py-1.5 rounded-full text-sm font-semibold">
-                      <Users className="size-4" />
-                      All assigned
-                    </div>
+                  {/* Collapsible Content */}
+                  {!collapsedTeams.has(team.id) && (
+                    <>
+                      {/* Stats Grid */}
+                      <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-200">
+                        <div>
+                          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                            Total Items
+                          </div>
+                          <div className="text-xl font-bold text-gray-900">{team.itemCount}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                            Assigned
+                          </div>
+                          <div className="text-xl font-bold text-green-600">{assignedCount}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                            Unassigned
+                          </div>
+                          <div
+                            className={`text-xl font-bold ${team.unassignedCount > 0 ? 'text-amber-600' : 'text-gray-400'}`}
+                          >
+                            {team.unassignedCount}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                            Pending
+                          </div>
+                          <div className="text-xl font-bold text-gray-600">{pendingCount}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                            Confirmed
+                          </div>
+                          <div className="text-xl font-bold text-green-600">{acceptedCount}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                            Declined
+                          </div>
+                          <div className="text-xl font-bold text-red-600">{declinedCount}</div>
+                        </div>
+                      </div>
+
+                      {/* View Items Button */}
+                      <Link
+                        href={`/h/${token}/team/${team.id}`}
+                        className="mt-4 mx-auto w-1/3 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-accent text-white text-sm rounded-lg hover:bg-accent-dark transition-colors"
+                      >
+                        <Eye className="size-3" />
+                        View Items
+                      </Link>
+                    </>
                   )}
                 </div>
-
-                {/* Collapsible Content */}
-                {!collapsedTeams.has(team.id) && (
-                  <>
-                    {/* Stats Grid */}
-                    <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-200">
-                      <div>
-                        <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-                          Total Items
-                        </div>
-                        <div className="text-xl font-bold text-gray-900">{team.itemCount}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-                          Assigned
-                        </div>
-                        <div className="text-xl font-bold text-green-600">{assignedCount}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-                          Unassigned
-                        </div>
-                        <div
-                          className={`text-xl font-bold ${team.unassignedCount > 0 ? 'text-amber-600' : 'text-gray-400'}`}
-                        >
-                          {team.unassignedCount}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-                          Pending
-                        </div>
-                        <div className="text-xl font-bold text-gray-600">{pendingCount}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-                          Confirmed
-                        </div>
-                        <div className="text-xl font-bold text-green-600">{acceptedCount}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-                          Declined
-                        </div>
-                        <div className="text-xl font-bold text-red-600">{declinedCount}</div>
-                      </div>
-                    </div>
-
-                    {/* View Items Button */}
-                    <Link
-                      href={`/h/${token}/team/${team.id}`}
-                      className="mt-4 mx-auto w-1/3 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-accent text-white text-sm rounded-lg hover:bg-accent-dark transition-colors"
-                    >
-                      <Eye className="size-3" />
-                      View Items
-                    </Link>
-                  </>
-                )}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-      </div>
 
-      {/* Bottom Action Bar */}
-      {data.event.status !== 'COMPLETE' && nextStatus && (
-        <div className="bg-white border-t border-gray-200 px-6 py-4">
-          <button
-            onClick={() => handleStatusChange(nextStatus)}
-            disabled={updating || (nextStatus === 'FROZEN' && !data.freezeAllowed)}
-            className={`w-full h-14 rounded-lg font-semibold transition-all ${
-              updating || (nextStatus === 'FROZEN' && !data.freezeAllowed)
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'bg-accent text-white hover:bg-accent-dark'
-            }`}
-          >
-            {updating ? (
-              'Updating...'
-            ) : nextStatus === 'FROZEN' ? (
-              <span className="flex items-center justify-center gap-2">
-                <Lock className="size-5" />
-                Freeze Event
-              </span>
-            ) : (
-              `${nextStatus === 'COMPLETE' ? 'Mark as ' : ''}${nextStatus}`
+        {/* Bottom Action Bar */}
+        {data.event.status !== 'COMPLETE' && nextStatus && (
+          <div className="bg-white border-t border-gray-200 px-6 py-4">
+            <button
+              onClick={() => handleStatusChange(nextStatus)}
+              disabled={updating || (nextStatus === 'FROZEN' && !data.freezeAllowed)}
+              className={`w-full h-14 rounded-lg font-semibold transition-all ${
+                updating || (nextStatus === 'FROZEN' && !data.freezeAllowed)
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-accent text-white hover:bg-accent-dark'
+              }`}
+            >
+              {updating ? (
+                'Updating...'
+              ) : nextStatus === 'FROZEN' ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Lock className="size-5" />
+                  Freeze Event
+                </span>
+              ) : (
+                `${nextStatus === 'COMPLETE' ? 'Mark as ' : ''}${nextStatus}`
+              )}
+            </button>
+            {nextStatus === 'FROZEN' && !data.freezeAllowed && (
+              <p className="text-center text-sm text-red-600 mt-2">
+                Cannot freeze: {data.criticalGapCount} critical{' '}
+                {data.criticalGapCount === 1 ? 'gap' : 'gaps'}
+              </p>
             )}
-          </button>
-          {nextStatus === 'FROZEN' && !data.freezeAllowed && (
-            <p className="text-center text-sm text-red-600 mt-2">
-              Cannot freeze: {data.criticalGapCount} critical{' '}
-              {data.criticalGapCount === 1 ? 'gap' : 'gaps'}
-            </p>
-          )}
-        </div>
-      )}
-    </div>
+          </div>
+        )}
+
+        {/* Freeze Modal */}
+        {showFreezeModal && data && (
+          <TransitionModal
+            eventId={data.event.id}
+            currentStatus="CONFIRMING"
+            onClose={() => setShowFreezeModal(false)}
+            onSuccess={() => {
+              setShowFreezeModal(false);
+              fetchData();
+            }}
+          />
+        )}
+      </div>
+    </ModalProvider>
   );
 }

@@ -111,7 +111,9 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
 
   // Freeze is always allowed - warnings are shown in modal but don't block
   const freezeAllowed = true;
-  const criticalGapCount = 0; // Deprecated - warnings handled by checkFreezeReadiness()
+
+  // Calculate total critical gaps across all teams
+  const criticalGapCount = teamsWithStatus.reduce((sum, team) => sum + team.criticalGapCount, 0);
 
   return NextResponse.json({
     person: {
