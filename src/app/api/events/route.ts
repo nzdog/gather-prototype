@@ -1,9 +1,10 @@
 // GET /api/events - List events where user has a role
-// POST /api/events - Create new event
+// POST /api/events - Create new event (requires payment)
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth/session';
-import { canCreateEvent } from '@/lib/entitlements';
+import { stripe } from '@/lib/stripe';
+import { getResendClient } from '@/lib/email';
 
 export async function GET(_request: NextRequest) {
   try {
@@ -60,27 +61,59 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user can create a new event
-    const allowed = await canCreateEvent(user.id);
-    if (!allowed) {
-      return NextResponse.json(
-        {
-          error: 'Event limit reached',
-          reason: 'FREE_LIMIT',
-          upgradeUrl: '/billing/upgrade',
-        },
-        { status: 403 }
-      );
-    }
-
     const body = await request.json();
-    const { name, startDate, endDate } = body;
+    const { name, startDate, endDate, stripeSessionId } = body;
 
     // Validate required fields
     if (!name || !startDate || !endDate) {
       return NextResponse.json(
         { error: 'Missing required fields: name, startDate, endDate' },
         { status: 400 }
+      );
+    }
+
+    // Require payment session
+    if (!stripeSessionId) {
+      return NextResponse.json(
+        { error: 'Payment required. Missing stripeSessionId.' },
+        { status: 402 }
+      );
+    }
+
+    // Verify Stripe session
+    let session;
+    try {
+      session = await stripe.checkout.sessions.retrieve(stripeSessionId);
+    } catch (err) {
+      console.error('[Event Creation] Invalid Stripe session:', stripeSessionId, err);
+      return NextResponse.json({ error: 'Invalid payment session' }, { status: 400 });
+    }
+
+    // Verify payment is completed
+    if (session.payment_status !== 'paid') {
+      console.error('[Event Creation] Payment not completed:', session.payment_status);
+      return NextResponse.json({ error: 'Payment not completed' }, { status: 402 });
+    }
+
+    // Verify session belongs to authenticated user
+    if (session.metadata?.userId !== user.id) {
+      console.error('[Event Creation] Payment session user mismatch');
+      return NextResponse.json(
+        { error: 'Payment session does not belong to authenticated user' },
+        { status: 403 }
+      );
+    }
+
+    // Check session hasn't been used already
+    const existingEvent = await prisma.event.findFirst({
+      where: { stripePaymentIntentId: session.payment_intent as string },
+    });
+
+    if (existingEvent) {
+      console.error('[Event Creation] Payment already used for event:', existingEvent.id);
+      return NextResponse.json(
+        { error: 'Payment already used for another event' },
+        { status: 409 }
       );
     }
 
@@ -92,6 +125,11 @@ export async function POST(request: NextRequest) {
       status: 'DRAFT',
       structureMode: 'EDITABLE',
       isLegacy: false, // New events are not legacy
+
+      // Payment tracking
+      stripePaymentIntentId: session.payment_intent as string,
+      paidAt: new Date(),
+      amountPaid: session.amount_total,
 
       // Core optional fields
       guestCount: body.guestCount || null,
@@ -162,6 +200,36 @@ export async function POST(request: NextRequest) {
 
       return event;
     });
+
+    console.log('[Event Creation] Event created with payment:', result.id);
+
+    // Send receipt email
+    try {
+      const resend = getResendClient();
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const amountFormatted = ((result.amountPaid || 1200) / 100).toFixed(2);
+
+      await resend.emails.send({
+        from: process.env.EMAIL_FROM || 'Gather <noreply@gather.app>',
+        to: user.email,
+        subject: `Receipt: ${result.name} — Gather`,
+        text: `Thanks for using Gather!
+
+Event: ${result.name}
+Date: ${new Date(result.startDate).toLocaleDateString()}
+Amount: $${amountFormatted} NZD
+
+Manage your event: ${baseUrl}/plan/${result.id}
+
+Questions? Reply to this email.
+`,
+      });
+
+      console.log('[Event Creation] Receipt email sent to:', user.email);
+    } catch (emailError) {
+      // Don't fail event creation if email fails
+      console.error('[Event Creation] Failed to send receipt email:', emailError);
+    }
 
     return NextResponse.json({
       success: true,

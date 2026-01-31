@@ -1,13 +1,9 @@
 // src/app/api/webhooks/stripe/route.ts
+// Per-event payment model: Only handle checkout completion for logging
+// Event creation happens via API, not webhooks
 import { stripe, STRIPE_WEBHOOK_SECRET } from '@/lib/stripe';
 import { headers } from 'next/headers';
 import Stripe from 'stripe';
-import {
-  syncSubscriptionFromStripe,
-  handleSubscriptionDeleted,
-  handleInvoicePaid,
-  handleInvoicePaymentFailed,
-} from '@/lib/billing/sync';
 
 export async function POST(req: Request) {
   const body = await req.text();
@@ -40,45 +36,27 @@ export async function POST(req: Request) {
   // Handle webhook events
   try {
     switch (event.type) {
-      case 'customer.subscription.created': {
-        const subscription = event.data.object as Stripe.Subscription;
-        console.log('[Stripe Webhook] Subscription created:', subscription.id);
-        await syncSubscriptionFromStripe(subscription);
+      case 'checkout.session.completed': {
+        const session = event.data.object as Stripe.Checkout.Session;
+        console.log('[Stripe Webhook] Checkout session completed:', {
+          sessionId: session.id,
+          paymentStatus: session.payment_status,
+          amountTotal: session.amount_total,
+          userId: session.metadata?.userId,
+        });
+        // Note: Event creation happens via POST /api/events, not here
         break;
       }
 
-      case 'customer.subscription.updated': {
-        const subscription = event.data.object as Stripe.Subscription;
-        console.log('[Stripe Webhook] Subscription updated:', subscription.id);
-        await syncSubscriptionFromStripe(subscription);
+      case 'payment_intent.succeeded': {
+        const paymentIntent = event.data.object as Stripe.PaymentIntent;
+        console.log('[Stripe Webhook] Payment intent succeeded:', paymentIntent.id);
         break;
       }
 
-      case 'customer.subscription.deleted': {
-        const subscription = event.data.object as Stripe.Subscription;
-        const stripeCustomerId = subscription.customer as string;
-        console.log('[Stripe Webhook] Subscription deleted:', subscription.id);
-        await handleSubscriptionDeleted(stripeCustomerId);
-        break;
-      }
-
-      case 'invoice.paid': {
-        const invoice = event.data.object as Stripe.Invoice;
-        const stripeCustomerId = invoice.customer as string;
-        // In API version 2025-12-15.clover, subscription details are nested
-        const stripeSubscriptionId = invoice.parent?.subscription_details?.subscription as
-          | string
-          | null;
-        console.log('[Stripe Webhook] Invoice paid:', invoice.id);
-        await handleInvoicePaid(stripeCustomerId, stripeSubscriptionId);
-        break;
-      }
-
-      case 'invoice.payment_failed': {
-        const invoice = event.data.object as Stripe.Invoice;
-        const stripeCustomerId = invoice.customer as string;
-        console.log('[Stripe Webhook] Invoice payment failed:', invoice.id);
-        await handleInvoicePaymentFailed(stripeCustomerId);
+      case 'payment_intent.payment_failed': {
+        const paymentIntent = event.data.object as Stripe.PaymentIntent;
+        console.log('[Stripe Webhook] Payment intent failed:', paymentIntent.id);
         break;
       }
 

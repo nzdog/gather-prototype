@@ -105,6 +105,11 @@ model Event {
   complianceAtFreeze Float?
   freezeReason       String?
 
+  // Payment tracking (per-event payment model)
+  stripePaymentIntentId String?   @unique
+  paidAt                DateTime?
+  amountPaid            Int?      // cents, e.g. 1200 = $12.00 NZD
+
   // Relations
   days             Day[]
   teams            Team[]

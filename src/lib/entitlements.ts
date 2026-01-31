@@ -1,244 +1,79 @@
 // src/lib/entitlements.ts
+// Simplified entitlements for per-event payment model
+// Payment verification is now handled at event creation time via Stripe session validation
 import { prisma } from '@/lib/prisma';
 
 /**
- * Entitlement service for managing event creation and editing permissions
- * based on user billing status.
+ * Entitlement service for managing event editing permissions.
  *
- * Rules:
- * - FREE: 1 event per rolling 12 months (excluding legacy events)
- * - TRIALING: unlimited
- * - ACTIVE: unlimited
- * - PAST_DUE: can edit existing (within 7 days), cannot create new
- * - CANCELED: read-only (no create, no edit)
- *
- * Legacy events (isLegacy: true) don't count against free tier limits
- * and remain editable regardless of billing status.
+ * Per-event payment model:
+ * - No event creation limits (payment is the gate at checkout)
+ * - Legacy events remain editable
+ * - Paid events are always editable by their host
+ * - Subscription status is deprecated but kept for migration
  */
-
-const GRACE_PERIOD_DAYS = 7;
-const FREE_TIER_LIMIT = 1;
-const ROLLING_PERIOD_MONTHS = 12;
 
 /**
- * Checks if a user can create a new event based on their billing status
- * and current event count.
+ * Checks if a user can create a new event.
+ * With per-event payments, this always returns true since payment
+ * verification happens during checkout/creation flow.
  *
  * @param userId - The user ID to check
- * @returns true if the user can create a new event, false otherwise
+ * @returns true (payment is verified at creation time)
  */
-export async function canCreateEvent(userId: string): Promise<boolean> {
-  // Get user with billing status
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { billingStatus: true },
-  });
-
-  if (!user) {
-    return false;
-  }
-
-  const { billingStatus } = user;
-
-  // TRIALING and ACTIVE users have unlimited events
-  if (billingStatus === 'TRIALING' || billingStatus === 'ACTIVE') {
-    return true;
-  }
-
-  // PAST_DUE and CANCELED users cannot create new events
-  if (billingStatus === 'PAST_DUE' || billingStatus === 'CANCELED') {
-    return false;
-  }
-
-  // FREE users: check if they're within their limit
-  if (billingStatus === 'FREE') {
-    const twelveMonthsAgo = new Date();
-    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - ROLLING_PERIOD_MONTHS);
-
-    // Count non-legacy events where user is HOST created in last 12 months
-    const eventCount = await prisma.eventRole.count({
-      where: {
-        userId,
-        role: 'HOST',
-        createdAt: {
-          gte: twelveMonthsAgo,
-        },
-        event: {
-          isLegacy: false,
-        },
-      },
-    });
-
-    return eventCount < FREE_TIER_LIMIT;
-  }
-
-  // Default: deny
-  return false;
+export async function canCreateEvent(_userId: string): Promise<boolean> {
+  // No limits - payment is verified during event creation
+  return true;
 }
 
 /**
- * Checks if a user can edit a specific event based on their billing status
- * and the event's properties.
+ * Checks if a user can edit a specific event.
+ * Users can edit events they host, regardless of payment status.
  *
  * @param userId - The user ID to check
  * @param eventId - The event ID to check
- * @returns true if the user can edit the event, false otherwise
+ * @returns true if the user has a HOST role for this event
  */
 export async function canEditEvent(userId: string, eventId: string): Promise<boolean> {
-  // Get user with billing status and subscription
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      billingStatus: true,
-      subscription: {
-        select: {
-          status: true,
-          statusChangedAt: true,
-        },
-      },
-    },
-  });
-
-  if (!user) {
-    return false;
-  }
-
-  // Get the event
-  const event = await prisma.event.findUnique({
-    where: { id: eventId },
-    select: { isLegacy: true },
-  });
-
-  if (!event) {
-    return false;
-  }
-
-  // Legacy events are always editable
-  if (event.isLegacy) {
-    return true;
-  }
-
-  const { billingStatus } = user;
-
-  // TRIALING and ACTIVE users can edit all events
-  if (billingStatus === 'TRIALING' || billingStatus === 'ACTIVE') {
-    return true;
-  }
-
-  // FREE users can edit their events
-  if (billingStatus === 'FREE') {
-    return true;
-  }
-
-  // PAST_DUE users: check grace period
-  if (billingStatus === 'PAST_DUE') {
-    const statusChangedAt = user.subscription?.statusChangedAt;
-
-    if (!statusChangedAt) {
-      // No status change timestamp, deny edit
-      return false;
-    }
-
-    const gracePeriodEnd = new Date(statusChangedAt);
-    gracePeriodEnd.setDate(gracePeriodEnd.getDate() + GRACE_PERIOD_DAYS);
-
-    // Can edit if within grace period
-    return new Date() <= gracePeriodEnd;
-  }
-
-  // CANCELED users cannot edit (unless legacy, which is checked above)
-  if (billingStatus === 'CANCELED') {
-    return false;
-  }
-
-  // Default: deny
-  return false;
-}
-
-/**
- * Gets the event creation limit for a user based on their billing status.
- *
- * @param userId - The user ID to check
- * @returns The event limit as a number or 'unlimited'
- */
-export async function getEventLimit(userId: string): Promise<number | 'unlimited'> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { billingStatus: true },
-  });
-
-  if (!user) {
-    return 0;
-  }
-
-  const { billingStatus } = user;
-
-  // TRIALING and ACTIVE users have unlimited events
-  if (billingStatus === 'TRIALING' || billingStatus === 'ACTIVE') {
-    return 'unlimited';
-  }
-
-  // FREE users have a limit of 1 event per rolling 12 months
-  if (billingStatus === 'FREE') {
-    return FREE_TIER_LIMIT;
-  }
-
-  // PAST_DUE and CANCELED users cannot create new events
-  if (billingStatus === 'PAST_DUE' || billingStatus === 'CANCELED') {
-    return 0;
-  }
-
-  // Default
-  return 0;
-}
-
-/**
- * Gets the number of remaining events a user can create based on their
- * billing status and current usage.
- *
- * @param userId - The user ID to check
- * @returns The remaining event count as a number or 'unlimited'
- */
-export async function getRemainingEvents(userId: string): Promise<number | 'unlimited'> {
-  const limit = await getEventLimit(userId);
-
-  // If unlimited, return 'unlimited'
-  if (limit === 'unlimited') {
-    return 'unlimited';
-  }
-
-  // If limit is 0, return 0
-  if (limit === 0) {
-    return 0;
-  }
-
-  // For FREE users, calculate remaining based on rolling 12 months
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { billingStatus: true },
-  });
-
-  if (!user || user.billingStatus !== 'FREE') {
-    return 0;
-  }
-
-  const twelveMonthsAgo = new Date();
-  twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - ROLLING_PERIOD_MONTHS);
-
-  // Count non-legacy events where user is HOST created in last 12 months
-  const eventCount = await prisma.eventRole.count({
+  // Check if user has HOST or COHOST role for this event
+  const eventRole = await prisma.eventRole.findUnique({
     where: {
-      userId,
-      role: 'HOST',
-      createdAt: {
-        gte: twelveMonthsAgo,
+      userId_eventId: {
+        userId,
+        eventId,
       },
-      event: {
-        isLegacy: false,
-      },
+    },
+    select: {
+      role: true,
     },
   });
 
-  const remaining = Math.max(0, limit - eventCount);
-  return remaining;
+  if (!eventRole) {
+    return false;
+  }
+
+  // Allow editing if user is HOST or COHOST
+  return eventRole.role === 'HOST' || eventRole.role === 'COHOST';
+}
+
+/**
+ * Gets the event creation limit for a user.
+ * With per-event payments, this is always unlimited.
+ *
+ * @param _userId - The user ID to check
+ * @returns 'unlimited'
+ */
+export async function getEventLimit(_userId: string): Promise<number | 'unlimited'> {
+  return 'unlimited';
+}
+
+/**
+ * Gets the number of remaining events a user can create.
+ * With per-event payments, this is always unlimited.
+ *
+ * @param _userId - The user ID to check
+ * @returns 'unlimited'
+ */
+export async function getRemainingEvents(_userId: string): Promise<number | 'unlimited'> {
+  return 'unlimited';
 }
