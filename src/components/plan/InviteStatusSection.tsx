@@ -13,6 +13,8 @@ import {
   Ban,
 } from 'lucide-react';
 import { ReachabilityBar } from './ReachabilityBar';
+import { ReadyToFreezeIndicator } from './ReadyToFreezeIndicator';
+import TransitionModal from './TransitionModal';
 
 interface PersonStatus {
   id: string;
@@ -82,6 +84,12 @@ interface InviteStatusData {
     shared: number;
     untrackable: number;
   };
+  threshold?: {
+    complianceRate: number;
+    thresholdReached: boolean;
+    criticalGaps: number;
+    readyToFreeze: boolean;
+  };
   people: PersonStatus[];
 }
 
@@ -99,6 +107,7 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
   const [showAllPeople, setShowAllPeople] = useState(false);
   const [expandedAttendance, setExpandedAttendance] = useState(false);
   const [expandedItems, setExpandedItems] = useState(false);
+  const [showTransitionModal, setShowTransitionModal] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -391,6 +400,18 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
         </div>
       )}
 
+      {/* Ready to Freeze Indicator */}
+      {data.threshold?.readyToFreeze && data.eventStatus === 'CONFIRMING' && items && (
+        <div className="mb-4">
+          <ReadyToFreezeIndicator
+            confirmed={items.confirmed}
+            total={items.total}
+            complianceRate={data.threshold.complianceRate}
+            onLockPlan={() => setShowTransitionModal(true)}
+          />
+        </div>
+      )}
+
       {/* Legacy status breakdown - keep for backward compatibility */}
       <div className="grid grid-cols-4 gap-2 text-center text-sm">
         <StatusCard
@@ -619,6 +640,20 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
         <p className="text-xs text-gray-500 pt-2 border-t">
           Last confirmed: {new Date(inviteSendConfirmedAt).toLocaleString()}
         </p>
+      )}
+
+      {/* Transition Modal for Freeze */}
+      {showTransitionModal && (
+        <TransitionModal
+          eventId={eventId}
+          currentStatus={data.eventStatus as 'DRAFT' | 'CONFIRMING' | 'FROZEN' | 'COMPLETE'}
+          onClose={() => setShowTransitionModal(false)}
+          onSuccess={() => {
+            setShowTransitionModal(false);
+            // Refresh data after successful freeze
+            fetchStatus();
+          }}
+        />
       )}
     </div>
   );

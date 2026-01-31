@@ -287,6 +287,60 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     assignee: item.assignment?.person?.name || null,
   }));
 
+  // Calculate threshold metrics (compliance rate and readiness for freeze)
+  // Get all assignments for trackable guests (exclude UNTRACKABLE)
+  const allTrackableAssignments = await prisma.assignment.findMany({
+    where: {
+      item: {
+        team: { eventId },
+      },
+      person: {
+        eventMemberships: {
+          some: {
+            eventId,
+            reachabilityTier: {
+              not: 'UNTRACKABLE',
+            },
+          },
+        },
+      },
+    },
+    include: {
+      person: {
+        select: {
+          eventMemberships: {
+            where: { eventId },
+            select: { reachabilityTier: true },
+          },
+        },
+      },
+    },
+  });
+
+  // Calculate compliance rate
+  const totalTrackable = allTrackableAssignments.length;
+  const acceptedCount = allTrackableAssignments.filter((a) => a.response === 'ACCEPTED').length;
+  const complianceRate = totalTrackable === 0 ? 1.0 : acceptedCount / totalTrackable;
+
+  // Check for critical gaps (critical items without ACCEPTED assignment)
+  const criticalItems = await prisma.item.findMany({
+    where: {
+      team: { eventId },
+      critical: true,
+    },
+    include: {
+      assignment: true,
+    },
+  });
+
+  const criticalGaps = criticalItems.filter(
+    (item) => !item.assignment || item.assignment.response !== 'ACCEPTED'
+  ).length;
+
+  // Ready to freeze if compliance >= 80% AND no critical gaps
+  const thresholdReached = complianceRate >= 0.8;
+  const readyToFreeze = thresholdReached && criticalGaps === 0;
+
   return NextResponse.json({
     eventStatus: event.status,
     inviteSendConfirmedAt: event.inviteSendConfirmedAt?.toISOString() || null,
@@ -305,6 +359,12 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     attendance,
     items,
     itemDetails,
+    threshold: {
+      complianceRate,
+      thresholdReached,
+      criticalGaps,
+      readyToFreeze,
+    },
     people: peopleStatus,
   });
 }
