@@ -11,7 +11,7 @@ interface TransitionModalProps {
 }
 
 interface FreezeWarning {
-  type: 'LOW_COMPLIANCE' | 'CRITICAL_GAPS';
+  type: 'LOW_COMPLIANCE' | 'CRITICAL_GAPS' | 'UNASSIGNED_ITEMS';
   message: string;
   details: string[];
 }
@@ -156,6 +156,27 @@ export default function TransitionModal({
         throw new Error('Host ID not available');
       }
 
+      // For freeze transitions, check warnings first without freezing
+      if (isFreezeTransition && !showFreezeWarnings) {
+        // Check warnings without actually freezing
+        const checkResponse = await fetch(`/api/events/${eventId}/freeze-check`, {
+          method: 'POST',
+        });
+
+        if (checkResponse.ok) {
+          const checkResult = await checkResponse.json();
+          if (checkResult.warnings && checkResult.warnings.length > 0) {
+            // Show warnings, don't freeze yet
+            setFreezeWarnings(checkResult.warnings);
+            setShowFreezeWarnings(true);
+            setTransitioning(false);
+            return;
+          }
+        }
+        // If no warnings or check failed, proceed with freeze
+      }
+
+      // Actually perform the transition
       const response = await fetch(`/api/events/${eventId}/transition`, {
         method: 'POST',
         headers: {
@@ -172,16 +193,6 @@ export default function TransitionModal({
       const result = await response.json();
 
       if (result.success) {
-        // For freeze transitions, check if there are warnings
-        if (isFreezeTransition && result.freezeWarnings && result.freezeWarnings.length > 0) {
-          // If we haven't shown warnings yet, show them now
-          if (!showFreezeWarnings) {
-            setFreezeWarnings(result.freezeWarnings);
-            setShowFreezeWarnings(true);
-            setTransitioning(false);
-            return;
-          }
-        }
         onSuccess();
       } else {
         throw new Error(result.error || 'Transition failed');

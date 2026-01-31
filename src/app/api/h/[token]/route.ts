@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { getUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/prisma';
-import { computeTeamStatusFromItems, canFreeze, getCriticalGapCount } from '@/lib/workflow';
+import { computeTeamStatusFromItems } from '@/lib/workflow';
 
 /**
  * GET /api/h/[token]
@@ -11,7 +11,7 @@ import { computeTeamStatusFromItems, canFreeze, getCriticalGapCount } from '@/li
  *
  * CRITICAL:
  * - Compute status for each team synchronously (no await)
- * - Use canFreeze() for freeze allowed (queries assignment:null)
+ * - Freeze is always allowed (warnings shown in modal, don't block)
  * - No repair (GET route - no DB writes)
  */
 export async function GET(_request: NextRequest, { params }: { params: { token: string } }) {
@@ -109,9 +109,9 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
     };
   });
 
-  // Check if freeze is allowed (queries assignment:null directly)
-  const freezeAllowed = await canFreeze(context.event.id);
-  const criticalGapCount = freezeAllowed ? 0 : await getCriticalGapCount(context.event.id);
+  // Freeze is always allowed - warnings are shown in modal but don't block
+  const freezeAllowed = true;
+  const criticalGapCount = 0; // Deprecated - warnings handled by checkFreezeReadiness()
 
   return NextResponse.json({
     person: {

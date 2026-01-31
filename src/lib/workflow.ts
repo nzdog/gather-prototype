@@ -94,7 +94,7 @@ export async function canFreeze(eventId: string): Promise<boolean> {
  */
 
 export interface FreezeWarning {
-  type: 'LOW_COMPLIANCE' | 'CRITICAL_GAPS';
+  type: 'LOW_COMPLIANCE' | 'CRITICAL_GAPS' | 'UNASSIGNED_ITEMS';
   message: string;
   details: string[];
 }
@@ -119,11 +119,32 @@ export interface FreezeCheckResult {
  * - Exclude untrackable from both — can't measure what you can't reach
  *
  * Warning triggers:
+ * - Any items unassigned: UNASSIGNED_ITEMS warning
  * - complianceRate < 80: LOW_COMPLIANCE warning
  * - Any critical item with no accepted assignment: CRITICAL_GAPS warning
  */
 export async function checkFreezeReadiness(eventId: string): Promise<FreezeCheckResult> {
   const warnings: FreezeWarning[] = [];
+
+  // Check for unassigned items
+  const unassignedItems = await prisma.item.findMany({
+    where: {
+      team: { eventId },
+      assignment: null,
+    },
+    select: {
+      id: true,
+      name: true,
+    },
+  });
+
+  if (unassignedItems.length > 0) {
+    warnings.push({
+      type: 'UNASSIGNED_ITEMS',
+      message: `${unassignedItems.length} item(s) are not yet assigned`,
+      details: unassignedItems.map((item) => item.name),
+    });
+  }
 
   // Get all assignments for trackable guests
   const allAssignments = await prisma.assignment.findMany({

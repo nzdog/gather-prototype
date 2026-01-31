@@ -17,10 +17,12 @@ import {
   CheckCircle,
   Eye,
   Send,
+  Lock,
 } from 'lucide-react';
 import ConflictList from '@/components/plan/ConflictList';
 import GateCheck from '@/components/plan/GateCheck';
 import FreezeCheck from '@/components/plan/FreezeCheck';
+import UnfreezeSection from '@/components/plan/UnfreezeSection';
 import EventStageProgress from '@/components/plan/EventStageProgress';
 import SaveTemplateModal from '@/components/templates/SaveTemplateModal';
 import AddTeamModal, { TeamFormData } from '@/components/plan/AddTeamModal';
@@ -152,6 +154,7 @@ type SectionId =
   | 'teams'
   | 'gate'
   | 'freeze'
+  | 'unfreeze'
   | 'invites'
   | 'history';
 
@@ -162,6 +165,7 @@ const validSectionIds: SectionId[] = [
   'teams',
   'gate',
   'freeze',
+  'unfreeze',
   'invites',
   'history',
 ];
@@ -1286,6 +1290,28 @@ export default function PlanEditorPage() {
                   </div>
                 )}
 
+                {/* Unfreeze Card - Only show for FROZEN */}
+                {event.status === 'FROZEN' && (
+                  <div
+                    onClick={() => handleExpandSection('unfreeze')}
+                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group border-2 border-yellow-300"
+                  >
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center group-hover:bg-yellow-200 transition-colors">
+                        <Lock className="w-6 h-6 text-yellow-600" />
+                      </div>
+                      <h2 className="text-xl font-semibold text-gray-900">Plan Frozen</h2>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-600 mb-2">The plan is locked</p>
+                      <p className="text-sm font-medium text-yellow-700">
+                        Click to unfreeze and make changes
+                      </p>
+                    </div>
+                    <div className="text-sm text-yellow-600 font-medium">Click to unfreeze →</div>
+                  </div>
+                )}
+
                 {/* Invite Links Card */}
                 {['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status) &&
                   inviteLinks.length > 0 && (
@@ -1388,6 +1414,7 @@ export default function PlanEditorPage() {
           />
           <FreezeCheck
             eventId={eventId}
+            currentStatus={event?.status as any}
             refreshTrigger={gateCheckRefresh}
             onFreezeComplete={() => {
               loadEvent();
@@ -1395,6 +1422,16 @@ export default function PlanEditorPage() {
             }}
             onExpand={() => handleExpandSection('freeze')}
           />
+          {event?.status === 'FROZEN' && (
+            <UnfreezeSection
+              eventId={eventId}
+              onUnfreezeComplete={() => {
+                loadEvent();
+                loadTeams();
+              }}
+              onExpand={() => handleExpandSection('unfreeze')}
+            />
+          )}
           <RevisionHistory
             eventId={eventId}
             actorId={MOCK_HOST_ID}
@@ -1843,8 +1880,27 @@ export default function PlanEditorPage() {
           >
             <FreezeCheck
               eventId={eventId}
+              currentStatus={event?.status as any}
               refreshTrigger={gateCheckRefresh}
               onFreezeComplete={() => {
+                loadEvent();
+                loadTeams();
+              }}
+            />
+          </SectionExpandModal>
+        )}
+
+        {/* Unfreeze Expansion */}
+        {event && event.status === 'FROZEN' && (
+          <SectionExpandModal
+            isOpen={expandedSection === 'unfreeze'}
+            onClose={handleCloseExpansion}
+            title="Unfreeze Plan"
+            icon={<Lock className="w-6 h-6" />}
+          >
+            <UnfreezeSection
+              eventId={eventId}
+              onUnfreezeComplete={() => {
                 loadEvent();
                 loadTeams();
               }}

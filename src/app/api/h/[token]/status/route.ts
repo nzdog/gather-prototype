@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { canFreeze, getCriticalGapCount, canTransition, logAudit } from '@/lib/workflow';
+import { canTransition, logAudit } from '@/lib/workflow';
 
 /**
  * PATCH /api/h/[token]/status
@@ -11,7 +11,7 @@ import { canFreeze, getCriticalGapCount, canTransition, logAudit } from '@/lib/w
  * CRITICAL:
  * - Capture fromStatus BEFORE any updates (for audit and transition validation)
  * - Validate transition with canTransition()
- * - If FROZEN: check canFreeze() (queries assignment:null)
+ * - Freeze warnings are handled by /api/events/[id]/transition endpoint (soft warnings, don't block)
  * - Transaction: update + audit + optional override log
  * - Log override when unfreezing (FROZEN → CONFIRMING)
  */
@@ -59,19 +59,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { token:
       );
     }
 
-    // Freeze gate check (T6 - all items must be assigned)
-    if (status === 'FROZEN') {
-      const allowed = await canFreeze(context.event.id);
-      if (!allowed) {
-        const unassignedCount = await getCriticalGapCount(context.event.id);
-        return NextResponse.json(
-          {
-            error: `Cannot freeze: ${unassignedCount} item${unassignedCount !== 1 ? 's' : ''} unassigned`,
-          },
-          { status: 400 }
-        );
-      }
-    }
+    // Note: Hard freeze gate removed - now using soft warnings in /api/events/[id]/transition
+    // Warnings inform but don't block freeze action
 
     updateData.status = status;
   }
