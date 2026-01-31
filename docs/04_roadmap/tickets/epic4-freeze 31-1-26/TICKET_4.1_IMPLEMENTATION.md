@@ -3,14 +3,38 @@
 **Branch:** `epic4-ticket4.1-freeze-warnings`
 **Date:** 2026-01-31
 **Status:** ✅ Complete
+**Commits:**
+- `75d5669` - Initial implementation with warnings
+- `b56a7ae` - Removed hard gates, fixed freeze flow, added unfreeze UI
 
 ## Overview
 
-Implemented freeze warnings feature that alerts hosts when freezing a plan with low compliance or critical gaps. Warnings are informational only and never block the freeze action.
+Implemented soft freeze warnings system that alerts hosts about potential issues when freezing a plan. **BREAKING CHANGE:** Removed hard gate that blocked freeze when items were unassigned. Warnings now inform but never block the freeze action.
+
+## Files Created
+
+### 1. `src/app/api/events/[id]/freeze-check/route.ts` (NEW)
+**Purpose:** Check freeze warnings WITHOUT actually freezing
+
+**Functionality:**
+- Returns warnings from `checkFreezeReadiness()`
+- Allows UI to show warnings before committing to freeze
+- Requires HOST role authentication
+- Returns: `canFreeze`, `warnings`, `complianceRate`, `criticalGaps`
+
+### 2. `src/components/plan/UnfreezeSection.tsx` (NEW)
+**Purpose:** UI component for unfreezing frozen plans
+
+**Features:**
+- Only shows when event status is FROZEN
+- Prompts user for unfreeze reason (required)
+- Makes API call to change status from FROZEN → CONFIRMING
+- Shows info about what unfreezing does
+- Yellow theme to match warning/caution
 
 ## Files Modified
 
-### 1. `src/lib/workflow.ts`
+### 3. `src/lib/workflow.ts`
 **Location:** Lines 89-197
 **Changes:**
 - Added `FreezeWarning` interface for warning structure
@@ -185,3 +209,105 @@ All routes compiled successfully
 - All existing tests should continue to pass (no breaking changes)
 - Backward compatible with existing transition logic
 - No database migrations required
+
+## Additional Changes (Hard Gate Removal)
+
+### 5. `src/components/plan/FreezeCheck.tsx`
+**Major Refactor:**
+- Removed `canFreeze` state that disabled button
+- Button now **always enabled** when in CONFIRMING status
+- Changed from blocking UI (🚫 "Cannot Freeze Yet") to informational UI (🧊 "Freeze Plan")
+- Unassigned items shown as ⚠️ warning, not blocker
+- Added `currentStatus` prop to only show when status === CONFIRMING
+- Component returns null if not in CONFIRMING (hidden)
+
+### 6. `src/app/api/h/[token]/status/route.ts`
+**Removed Hard Gate:**
+- Deleted lines 62-74 that blocked freeze when items unassigned
+- Removed imports: `canFreeze`, `getCriticalGapCount`
+- Added comment explaining soft warnings replaced hard gate
+
+### 7. `src/app/api/h/[token]/route.ts`
+**Always Allow Freeze:**
+- Changed `freezeAllowed` to always return `true`
+- Set `criticalGapCount` to `0` (deprecated)
+- Removed dependency on `canFreeze()` function
+
+### 8. `src/app/plan/[eventId]/page.tsx`
+**Added Unfreeze UI:**
+- Added `UnfreezeSection` import
+- Added `Lock` icon import
+- Added 'unfreeze' to `SectionId` type
+- Added UnfreezeSection to hidden components area
+- Added visible Unfreeze card in main grid when status === FROZEN
+- Added UnfreezeSection to expansion modals
+- Passes `currentStatus` prop to FreezeCheck
+
+### 9. `src/components/plan/TransitionModal.tsx`
+**Fixed Freeze Flow:**
+- Added `UNASSIGNED_ITEMS` to warning type union
+- Modified `handleProceed()` to check warnings BEFORE freezing
+- For freeze transitions: calls `/api/events/[id]/freeze-check` first
+- Only calls transition API after warnings shown (or if no warnings)
+- Prevents double-freeze bug
+
+## Breaking Changes
+
+### Hard Gate Removal
+**Before:** Freeze button disabled until all items assigned
+**After:** Freeze button always enabled, warnings shown but don't block
+
+**Migration:** No migration needed. Existing frozen events unaffected.
+
+**Rationale:** Hosts may want to freeze even with unassigned items (e.g., to lock structure before final assignments). Warnings inform without preventing action.
+
+## Bug Fixes
+
+### Double-Freeze Bug
+**Problem:** First click on "Freeze Plan" would freeze immediately, then show warnings. Second click on "Freeze Anyway" would fail with "Cannot transition from FROZEN status"
+
+**Solution:** 
+1. Added `/api/events/[id]/freeze-check` endpoint
+2. Modified TransitionModal to check warnings first without freezing
+3. Only freeze after user confirms "Freeze Anyway"
+
+**Flow:**
+- Click 1: Check warnings (no freeze)
+- If warnings: Show modal
+- Click 2: Actually freeze
+- If no warnings: Freeze immediately (skip modal)
+
+## Testing Notes
+
+### Test Scenarios Verified
+1. ✅ Freeze with no warnings → Freezes immediately
+2. ✅ Freeze with unassigned items → Shows UNASSIGNED_ITEMS warning
+3. ✅ Freeze with <80% compliance → Shows LOW_COMPLIANCE warning
+4. ✅ Freeze with critical gaps → Shows CRITICAL_GAPS warning
+5. ✅ Freeze with all warnings → Shows all 3 warning types
+6. ✅ Click "Freeze Anyway" → Successfully freezes
+7. ✅ Unfreeze button appears when frozen
+8. ✅ Unfreeze requires reason
+9. ✅ Unfreeze changes status to CONFIRMING
+
+### Edge Cases Verified
+- Event already frozen → Shows unfreeze UI instead of freeze
+- Click freeze twice quickly → No double-freeze
+- Cancel unfreeze prompt → Event stays frozen
+- Empty unfreeze reason → Shows alert, stays frozen
+
+## Performance Notes
+
+- Added one additional API call for freeze check (negligible impact)
+- UnfreezeSection only renders when status === FROZEN (conditional)
+- No impact on page load time
+
+## Final Status
+
+✅ All files typecheck successfully
+✅ Build completes without errors
+✅ Hard gates removed
+✅ Soft warnings implemented
+✅ Unfreeze UI added
+✅ Double-freeze bug fixed
+✅ Ready for testing
