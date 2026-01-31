@@ -16,6 +16,13 @@ interface FreezeWarning {
   details: string[];
 }
 
+const FREEZE_REASONS = [
+  { value: 'time_pressure', label: 'Time pressure — event is soon' },
+  { value: 'handling_offline', label: 'Handling remaining items offline' },
+  { value: 'small_event', label: 'Small event — this is enough' },
+  { value: 'other', label: 'Other' },
+] as const;
+
 interface PlanSummary {
   teamCount: number;
   itemCount: number;
@@ -49,6 +56,8 @@ export default function TransitionModal({
   const [hostId, setHostId] = useState<string | null>(null);
   const [freezeWarnings, setFreezeWarnings] = useState<FreezeWarning[]>([]);
   const [showFreezeWarnings, setShowFreezeWarnings] = useState(false);
+  const [complianceRate, setComplianceRate] = useState<number | null>(null);
+  const [freezeReason, setFreezeReason] = useState<string>('');
 
   const isFreezeTransition = currentStatus === 'CONFIRMING';
 
@@ -165,6 +174,8 @@ export default function TransitionModal({
 
         if (checkResponse.ok) {
           const checkResult = await checkResponse.json();
+          setComplianceRate(checkResult.complianceRate ?? null);
+
           if (checkResult.warnings && checkResult.warnings.length > 0) {
             // Show warnings, don't freeze yet
             setFreezeWarnings(checkResult.warnings);
@@ -177,12 +188,19 @@ export default function TransitionModal({
       }
 
       // Actually perform the transition
+      const requestBody: { actorId: string; freezeReason?: string } = { actorId: hostId };
+
+      // Include freeze reason if freezing and compliance < 80%
+      if (isFreezeTransition && complianceRate !== null && complianceRate < 80 && freezeReason) {
+        requestBody.freezeReason = freezeReason;
+      }
+
       const response = await fetch(`/api/events/${eventId}/transition`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ actorId: hostId }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -258,6 +276,35 @@ export default function TransitionModal({
               ))}
             </div>
 
+            {/* Reason Picker (only show if compliance < 80%) */}
+            {complianceRate !== null && complianceRate < 80 && (
+              <div className="mb-6">
+                <h3 className="font-semibold text-lg mb-3">Why are you freezing early?</h3>
+                <div className="space-y-2">
+                  {FREEZE_REASONS.map((reason) => (
+                    <label
+                      key={reason.value}
+                      className="flex items-center gap-3 p-3 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                      style={{
+                        borderColor: freezeReason === reason.value ? '#4A7C59' : '#E5E7EB',
+                        backgroundColor: freezeReason === reason.value ? '#F0F4F1' : 'white',
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="freezeReason"
+                        value={reason.value}
+                        checked={freezeReason === reason.value}
+                        onChange={(e) => setFreezeReason(e.target.value)}
+                        className="w-4 h-4 text-sage-600"
+                      />
+                      <span className="text-sm font-medium">{reason.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Error Display */}
             {error && (
               <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 mb-6">
@@ -277,7 +324,9 @@ export default function TransitionModal({
 
               <button
                 onClick={handleProceed}
-                disabled={transitioning}
+                disabled={
+                  transitioning || (complianceRate !== null && complianceRate < 80 && !freezeReason)
+                }
                 className="flex-1 px-6 py-3 bg-sage-600 text-white rounded-lg font-semibold hover:bg-sage-700 disabled:opacity-50"
               >
                 {transitioning ? 'Freezing...' : 'Freeze Anyway'}

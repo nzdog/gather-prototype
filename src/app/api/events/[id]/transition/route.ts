@@ -16,6 +16,7 @@ import { prisma } from '@/lib/prisma';
 
 export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id: eventId } = await context.params;
+  const body = await _request.json();
 
   // SECURITY: Auth check MUST run first and MUST NOT be in try/catch that returns 500
   // Invalid/missing auth must return 401, not 500
@@ -88,6 +89,24 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       // Check freeze readiness (warnings only, doesn't block)
       const freezeCheck = await checkFreezeReadiness(eventId);
 
+      // Validate freeze reason requirement
+      const freezeReason = body.freezeReason as string | undefined;
+
+      if (freezeCheck.complianceRate < 80) {
+        if (!freezeReason) {
+          return NextResponse.json(
+            { error: 'Reason required when freezing below 80% compliance' },
+            { status: 400 }
+          );
+        }
+
+        // Validate reason value
+        const validReasons = ['time_pressure', 'handling_offline', 'small_event', 'other'];
+        if (!validReasons.includes(freezeReason)) {
+          return NextResponse.json({ error: 'Invalid freeze reason' }, { status: 400 });
+        }
+      }
+
       // Validate transition is allowed
       if (!canTransition(event.status, 'FROZEN')) {
         return NextResponse.json(
@@ -100,7 +119,12 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       await prisma.$transaction(async (tx) => {
         await tx.event.update({
           where: { id: eventId },
-          data: { status: 'FROZEN' },
+          data: {
+            status: 'FROZEN',
+            frozenAt: new Date(),
+            complianceAtFreeze: freezeCheck.complianceRate,
+            freezeReason: freezeCheck.complianceRate < 80 ? freezeReason : null,
+          },
         });
 
         await logAudit(tx, {
@@ -109,7 +133,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
           actionType: 'TRANSITION_TO_FROZEN',
           targetType: 'Event',
           targetId: eventId,
-          details: `Transitioned event to FROZEN status. Compliance: ${freezeCheck.complianceRate}%. Warnings: ${freezeCheck.warnings.length}`,
+          details: `Transitioned event to FROZEN status. Compliance: ${freezeCheck.complianceRate}%. Warnings: ${freezeCheck.warnings.length}${freezeReason ? `. Reason: ${freezeReason}` : ''}`,
         });
       });
 
