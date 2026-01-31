@@ -23,9 +23,9 @@ export function ReadyToFreezeIndicator({
   // Determine copy based on count
   const getCopy = () => {
     if (confirmed === total) {
-      return `All ${total} confirmed — ready to lock`;
+      return `All ${total} confirmed — ready to freeze`;
     }
-    return `${confirmed} of ${total} confirmed — ready to lock`;
+    return `${confirmed} of ${total} confirmed — ready to freeze`;
   };
 
   return (
@@ -39,7 +39,7 @@ export function ReadyToFreezeIndicator({
           onClick={onLockPlan}
           className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors"
         >
-          Lock Plan
+          Freeze Plan
         </button>
       </div>
     </div>
