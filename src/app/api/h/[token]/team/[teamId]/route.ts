@@ -44,6 +44,15 @@ export async function GET(
     orderBy: [{ critical: 'desc' }, { name: 'asc' }],
   });
 
+  // Fetch all people in this event for frozen edit modal
+  const people = await prisma.personEvent.findMany({
+    where: { eventId: context.event.id },
+    include: {
+      person: { select: { id: true, name: true } },
+      team: { select: { id: true, name: true } },
+    },
+  });
+
   return NextResponse.json({
     event: {
       id: context.event.id,
@@ -92,6 +101,17 @@ export async function GET(
             },
           }
         : null,
+    })),
+    people: people.map((pe) => ({
+      id: pe.person.id,
+      personId: pe.person.id,
+      name: pe.person.name,
+      team: pe.team
+        ? {
+            id: pe.team.id,
+            name: pe.team.name,
+          }
+        : { id: '', name: 'Unassigned' },
     })),
   });
 }
