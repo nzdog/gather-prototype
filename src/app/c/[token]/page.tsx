@@ -99,6 +99,20 @@ interface CoordinatorData {
   myAssignments: Assignment[];
 }
 
+function getFriendlyErrorMessage(error: string | null): string {
+  if (!error)
+    return 'Something went wrong loading your page. Try refreshing — if it keeps happening, ask your host to send you a new link.';
+
+  const lowerError = error.toLowerCase();
+  if (lowerError.includes('expired') || lowerError.includes('invalid')) {
+    return 'This link may have expired. Ask your host to send you a new one.';
+  }
+  if (lowerError.includes('not found') || lowerError.includes('404')) {
+    return "We couldn't find your coordinator page. Check you're using the right link, or ask your host to resend it.";
+  }
+  return 'Something went wrong loading your page. Try refreshing — if it keeps happening, ask your host to send you a new link.';
+}
+
 export default function CoordinatorView() {
   const params = useParams();
   const token = params.token as string;
@@ -311,7 +325,9 @@ export default function CoordinatorView() {
   if (error || !data) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-red-600">Error: {error || 'Failed to load'}</div>
+        <div className="text-red-600 max-w-md text-center px-4">
+          {getFriendlyErrorMessage(error)}
+        </div>
       </div>
     );
   }
