@@ -44,6 +44,8 @@ import { PersonInviteDetailModal } from '@/components/plan/PersonInviteDetailMod
 import { ModalProvider } from '@/contexts/ModalContext';
 import { Conflict } from '@prisma/client';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
+import SetupChecklistBanner from '@/components/plan/SetupChecklistBanner';
+import { useEventSetupProgress } from '@/hooks/useEventSetupProgress';
 
 interface Event {
   id: string;
@@ -216,6 +218,8 @@ export default function PlanEditorPage() {
   const [expandedSection, setExpandedSection] = useState<SectionId | null>(null);
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
   const [inviteStatusData, setInviteStatusData] = useState<any | null>(null);
+  const [checklistDismissed, setChecklistDismissed] = useState(false);
+  const [checklistStepContext, setChecklistStepContext] = useState<string | null>(null);
 
   // Debug: Log when selectedPersonId changes
   useEffect(() => {
@@ -274,6 +278,19 @@ export default function PlanEditorPage() {
       setExpandedSection(null);
     }
   }, [searchParams]);
+
+  // Load checklist dismissed state from localStorage
+  useEffect(() => {
+    if (eventId && typeof window !== 'undefined') {
+      try {
+        const dismissed = localStorage.getItem(`gather_checklist_dismissed_${eventId}`);
+        setChecklistDismissed(dismissed === 'true');
+      } catch (err) {
+        // localStorage unavailable, keep banner visible
+        console.warn('localStorage unavailable:', err);
+      }
+    }
+  }, [eventId]);
 
   const loadEvent = async () => {
     try {
@@ -1006,6 +1023,59 @@ export default function PlanEditorPage() {
     }
   };
 
+  // Setup checklist handlers
+  const handleChecklistOpenEditDetails = () => {
+    setChecklistStepContext('Step 2 of 5: Add event details');
+    setEditEventModalOpen(true);
+  };
+
+  const handleChecklistOpenAddPerson = () => {
+    setChecklistStepContext('Step 3 of 5: Add people');
+    handleExpandSection('people');
+  };
+
+  const handleChecklistOpenCreatePlan = () => {
+    setChecklistStepContext(null);
+    if (teams.length === 0) {
+      handleGeneratePlan();
+    } else {
+      setAddTeamModalOpen(true);
+    }
+  };
+
+  const handleChecklistRunPlanCheck = () => {
+    setChecklistStepContext(null);
+    handleCheckPlan();
+  };
+
+  const handleChecklistDismiss = () => {
+    setChecklistDismissed(true);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(`gather_checklist_dismissed_${eventId}`, 'true');
+      } catch (err) {
+        console.warn('Failed to save dismissed state:', err);
+      }
+    }
+  };
+
+  // Clear checklist step context when modals close
+  const handleEditEventModalClose = () => {
+    setEditEventModalOpen(false);
+    setChecklistStepContext(null);
+  };
+
+  // Setup progress hook
+  const setupProgress = useEventSetupProgress({
+    event,
+    people,
+    teams,
+    onOpenEditDetails: handleChecklistOpenEditDetails,
+    onOpenAddPerson: handleChecklistOpenAddPerson,
+    onOpenCreatePlan: handleChecklistOpenCreatePlan,
+    onRunPlanCheck: handleChecklistRunPlanCheck,
+  });
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -1127,6 +1197,11 @@ export default function PlanEditorPage() {
         <div className="max-w-7xl mx-auto px-4 py-8">
           {/* Event Stage Progress */}
           <EventStageProgress currentStatus={event.status as any} />
+
+          {/* Setup Checklist Banner - Only show in DRAFT status and not dismissed */}
+          {event.status === 'DRAFT' && !checklistDismissed && (
+            <SetupChecklistBanner progress={setupProgress} onDismiss={handleChecklistDismiss} />
+          )}
 
           {/* AI Generation Loading Banner */}
           {(isGenerating || isRegenerating) && (
@@ -1401,6 +1476,7 @@ export default function PlanEditorPage() {
             }}
             onMovePerson={handleMovePerson}
             onExpand={() => handleExpandSection('people')}
+            stepLabel={undefined}
           />
           <GateCheck
             eventId={eventId}
@@ -1498,13 +1574,14 @@ export default function PlanEditorPage() {
         {event && (
           <EditEventModal
             isOpen={editEventModalOpen}
-            onClose={() => setEditEventModalOpen(false)}
+            onClose={handleEditEventModalClose}
             onSave={() => {
               loadEvent();
-              setEditEventModalOpen(false);
+              handleEditEventModalClose();
             }}
             event={event}
             eventId={eventId}
+            stepLabel={checklistStepContext || undefined}
           />
         )}
 
@@ -1630,8 +1707,10 @@ export default function PlanEditorPage() {
               if (event && ['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status)) {
                 loadInviteLinks();
               }
+              setChecklistStepContext(null);
             }}
             onMovePerson={handleMovePerson}
+            stepLabel={checklistStepContext || undefined}
           />
         </SectionExpandModal>
 

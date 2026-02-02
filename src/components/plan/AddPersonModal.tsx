@@ -23,9 +23,16 @@ interface AddPersonModalProps {
   onClose: () => void;
   onAdd: (data: AddPersonFormData) => Promise<void>;
   teams: Team[];
+  stepLabel?: string;
 }
 
-export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPersonModalProps) {
+export default function AddPersonModal({
+  isOpen,
+  onClose,
+  onAdd,
+  teams,
+  stepLabel,
+}: AddPersonModalProps) {
   const { openModal, closeModal } = useModal();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -164,7 +171,10 @@ export default function AddPersonModal({ isOpen, onClose, onAdd, teams }: AddPer
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold text-gray-900">Add People</h2>
+          <div>
+            {stepLabel && <p className="text-xs text-gray-400 mb-1">{stepLabel}</p>}
+            <h2 className="text-lg font-semibold text-gray-900">Add People</h2>
+          </div>
           <button onClick={handleClose} className="text-gray-400 hover:text-gray-600">
             <X className="w-5 h-5" />
           </button>

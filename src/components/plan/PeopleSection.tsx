@@ -31,6 +31,7 @@ interface PeopleSectionProps {
   onPeopleChanged?: () => void;
   onMovePerson: (personId: string, teamId: string | null) => Promise<void>;
   onExpand?: () => void;
+  stepLabel?: string;
 }
 
 export default function PeopleSection({
@@ -40,6 +41,7 @@ export default function PeopleSection({
   onPeopleChanged,
   onMovePerson,
   onExpand,
+  stepLabel,
 }: PeopleSectionProps) {
   const [view, setView] = useState<'table' | 'board'>('table');
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -360,6 +362,7 @@ export default function PeopleSection({
         onClose={() => setAddModalOpen(false)}
         onAdd={handleAddPerson}
         teams={teams}
+        stepLabel={stepLabel}
       />
 
       {/* Edit Person Modal */}

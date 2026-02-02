@@ -38,6 +38,7 @@ interface EditEventModalProps {
   onSave: () => void;
   event: Event | null;
   eventId: string;
+  stepLabel?: string;
 }
 
 export default function EditEventModal({
@@ -46,6 +47,7 @@ export default function EditEventModal({
   onSave,
   event,
   eventId,
+  stepLabel,
 }: EditEventModalProps) {
   const { openModal, closeModal } = useModal();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -182,7 +184,10 @@ export default function EditEventModal({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white z-10">
-          <h2 className="text-lg font-semibold text-gray-900">Edit Event Details</h2>
+          <div>
+            {stepLabel && <p className="text-xs text-gray-400 mb-1">{stepLabel}</p>}
+            <h2 className="text-lg font-semibold text-gray-900">Edit Event Details</h2>
+          </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X className="w-5 h-5" />
           </button>
