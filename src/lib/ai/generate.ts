@@ -98,9 +98,15 @@ export interface RegenerationParams extends EventParams {
 /**
  * Generate initial plan using Claude AI
  */
-export async function generatePlan(params: EventParams): Promise<AIPlanResponse> {
+export async function generatePlan(
+  params: EventParams,
+  hostDescription?: string
+): Promise<AIPlanResponse> {
   console.log('[AI Generate] Starting plan generation');
   console.log('[AI Generate] Params:', JSON.stringify(params, null, 2));
+  if (hostDescription) {
+    console.log('[AI Generate] Host description:', hostDescription);
+  }
 
   // Check if Claude is available
   if (!isClaudeAvailable()) {
@@ -111,7 +117,7 @@ export async function generatePlan(params: EventParams): Promise<AIPlanResponse>
   try {
     // Build prompts
     const systemPrompt = PLAN_GENERATION_SYSTEM_PROMPT;
-    const userPrompt = buildGenerationPrompt(params);
+    const userPrompt = buildGenerationPrompt(params, hostDescription);
 
     console.log('[AI Generate] Calling Claude API...');
 

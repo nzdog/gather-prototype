@@ -101,6 +101,15 @@ QUANTITY LABELS:
 - HEURISTIC: Based on experience/rules of thumb (e.g., "usually 2-3 desserts for this size")
 - PLACEHOLDER: Unknown, needs host input (e.g., "TBD based on final guest count")
 
+CRITICAL ITEMS:
+- Only 3-5 items per plan should be critical, maximum
+- Critical means "the event genuinely fails without this item"
+- Main proteins: critical (no main course = no meal)
+- Key dietary alternatives for guests with restrictions: critical (someone can't eat = event failure)
+- Everything else: NOT critical
+- Sauces, condiments, bread, drinks, setup items, cleanup items, side dishes, extra desserts = NEVER critical
+- When in doubt, mark it as NOT critical
+
 OUTPUT FORMAT:
 You must return ONLY valid JSON matching this exact structure:
 
@@ -266,24 +275,27 @@ Return ONLY the JSON, no additional text.
 /**
  * Build user prompt for plan generation
  */
-export function buildGenerationPrompt(params: {
-  occasion: string;
-  guests: number;
-  dietary: {
-    vegetarian: number;
-    glutenFree: number;
-    dairyFree: number;
-    nutFree: number;
-    other?: string;
-  };
-  venue: {
-    name: string;
-    ovenCount?: number;
-    bbqAvailable?: boolean;
-    fridgeSpace?: string;
-  };
-  days: number;
-}): string {
+export function buildGenerationPrompt(
+  params: {
+    occasion: string;
+    guests: number;
+    dietary: {
+      vegetarian: number;
+      glutenFree: number;
+      dairyFree: number;
+      nutFree: number;
+      other?: string;
+    };
+    venue: {
+      name: string;
+      ovenCount?: number;
+      bbqAvailable?: boolean;
+      fridgeSpace?: string;
+    };
+    days: number;
+  },
+  hostDescription?: string
+): string {
   // Calculate target item count based on guest size
   let itemTarget: string;
   if (params.guests < 10) {
@@ -302,7 +314,7 @@ EVENT DETAILS:
 - Occasion: ${params.occasion}
 - Guests: ${params.guests} people
 - Duration: ${params.days} day(s)
-
+${hostDescription ? `\nHOST DESCRIPTION:\n${hostDescription}\n` : ''}
 DIETARY REQUIREMENTS:
 ${params.dietary.vegetarian > 0 ? `- ${params.dietary.vegetarian} vegetarian guest(s)` : ''}
 ${params.dietary.glutenFree > 0 ? `- ${params.dietary.glutenFree} gluten-free guest(s)` : ''}

@@ -30,6 +30,7 @@ import AddItemModal, { ItemFormData } from '@/components/plan/AddItemModal';
 import EditItemModal from '@/components/plan/EditItemModal';
 import RevisionHistory from '@/components/plan/RevisionHistory';
 import RegenerateModal from '@/components/plan/RegenerateModal';
+import HostDescriptionModal from '@/components/plan/HostDescriptionModal';
 import PeopleSection from '@/components/plan/PeopleSection';
 import EditEventModal from '@/components/plan/EditEventModal';
 import ItemStatusBadges from '@/components/plan/ItemStatusBadges';
@@ -207,6 +208,7 @@ export default function PlanEditorPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [regenerateModalOpen, setRegenerateModalOpen] = useState(false);
+  const [hostDescriptionModalOpen, setHostDescriptionModalOpen] = useState(false);
   const [manualTeamCount, _setManualTeamCount] = useState(0);
   const [manualItemCount, _setManualItemCount] = useState(0);
   const [editEventModalOpen, setEditEventModalOpen] = useState(false);
@@ -419,11 +421,17 @@ export default function PlanEditorPage() {
     });
   };
 
-  const handleGeneratePlan = async () => {
+  const handleGeneratePlan = async (hostDescription?: string) => {
     setIsGenerating(true);
     try {
       const response = await fetch(`/api/events/${eventId}/generate`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          hostDescription: hostDescription || undefined,
+        }),
       });
       if (!response.ok) throw new Error('Failed to generate plan');
 
@@ -1037,7 +1045,7 @@ export default function PlanEditorPage() {
   const handleChecklistOpenCreatePlan = () => {
     setChecklistStepContext(null);
     if (teams.length === 0) {
-      handleGeneratePlan();
+      setHostDescriptionModalOpen(true);
     } else {
       setAddTeamModalOpen(true);
     }
@@ -1137,7 +1145,7 @@ export default function PlanEditorPage() {
                 </button>
                 {event.status === 'DRAFT' && teams.length === 0 && (
                   <button
-                    onClick={handleGeneratePlan}
+                    onClick={() => setHostDescriptionModalOpen(true)}
                     disabled={isGenerating}
                     className={`px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark flex items-center gap-2 ${
                       isGenerating ? 'opacity-75 cursor-not-allowed' : ''
@@ -1570,6 +1578,14 @@ export default function PlanEditorPage() {
           manualTeamCount={manualTeamCount}
           manualItemCount={manualItemCount}
           eventId={eventId}
+        />
+
+        {/* Host Description Modal */}
+        <HostDescriptionModal
+          isOpen={hostDescriptionModalOpen}
+          onClose={() => setHostDescriptionModalOpen(false)}
+          onGenerate={handleGeneratePlan}
+          onSkip={() => handleGeneratePlan()}
         />
 
         {/* Edit Event Modal */}

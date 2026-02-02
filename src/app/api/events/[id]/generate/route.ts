@@ -13,11 +13,12 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
     const auth = await requireEventRole(eventId, ['HOST']);
     if (auth instanceof NextResponse) return auth;
 
-    // Parse request body to check for selective regeneration
+    // Parse request body to check for selective regeneration and host description
     const body = await _request.json().catch(() => ({}));
-    const { keepItemIds, regenerateItemIds } = body as {
+    const { keepItemIds, regenerateItemIds, hostDescription } = body as {
       keepItemIds?: string[];
       regenerateItemIds?: string[];
+      hostDescription?: string;
     };
 
     // Verify event exists and get all details
@@ -155,7 +156,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
     console.log('[Generate] Calling AI with params:', JSON.stringify(eventParams, null, 2));
 
     // Generate plan using Claude AI
-    const aiResponse = await generatePlan(eventParams);
+    const aiResponse = await generatePlan(eventParams, hostDescription);
 
     console.log('[Generate] AI response received:', {
       teams: aiResponse.teams.length,
