@@ -23,7 +23,7 @@ import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 
 interface Assignment {
   id: string;
-  acknowledged: boolean;
+  response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
   item: {
     id: string;
     name: string;
@@ -57,7 +57,6 @@ interface Item {
   dropOffNote: string | null;
   assignment: {
     id: string;
-    acknowledged: boolean;
     response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
     person: { id: string; name: string };
   } | null;
@@ -192,20 +191,6 @@ export default function CoordinatorView() {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to unassign';
       alert(message);
-    }
-  };
-
-  const handleAcknowledge = async (assignmentId: string) => {
-    try {
-      const response = await fetch(`/api/c/${token}/ack/${assignmentId}`, {
-        method: 'POST',
-      });
-      if (!response.ok) {
-        throw new Error('Failed to acknowledge');
-      }
-      await fetchData();
-    } catch (err) {
-      console.error('Failed to acknowledge:', err);
     }
   };
 
@@ -658,7 +643,7 @@ export default function CoordinatorView() {
                 key={assignment.id}
                 className={`bg-white rounded-lg p-4 shadow-sm border ${
                   viewMode === 'list' ? 'w-full max-w-md' : ''
-                } ${assignment.acknowledged ? 'border-green-300' : 'border-blue-300'}`}
+                } ${assignment.response === 'ACCEPTED' ? 'border-green-300' : assignment.response === 'DECLINED' ? 'border-red-300' : 'border-blue-300'}`}
               >
                 {/* Card Header - Always Visible */}
                 <div className="flex items-start justify-between mb-2">
@@ -750,18 +735,21 @@ export default function CoordinatorView() {
                       </div>
                     )}
 
-                    {/* Acknowledge Button */}
-                    {!assignment.acknowledged ? (
-                      <button
-                        onClick={() => handleAcknowledge(assignment.id)}
-                        className="mx-auto px-6 py-2.5 bg-accent text-white rounded-lg font-medium hover:bg-accent-dark transition-all flex items-center justify-center"
-                      >
-                        Please Confirm
-                      </button>
-                    ) : (
+                    {/* Response Status */}
+                    {assignment.response === 'ACCEPTED' ? (
                       <div className="flex items-center justify-center gap-2 text-green-600 font-medium py-2.5">
                         <Check className="size-5" />
-                        Confirmed
+                        Accepted
+                      </div>
+                    ) : assignment.response === 'DECLINED' ? (
+                      <div className="flex items-center justify-center gap-2 text-red-600 font-medium py-2.5">
+                        <AlertCircle className="size-5" />
+                        Declined
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2 text-amber-600 font-medium py-2.5">
+                        <AlertCircle className="size-5" />
+                        Awaiting your response
                       </div>
                     )}
                   </div>
