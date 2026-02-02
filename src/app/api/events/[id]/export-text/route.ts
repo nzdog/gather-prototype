@@ -1,17 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-// import { requireEventRole } from '@/lib/auth/guards'
+import { requireEventRole } from '@/lib/auth/guards';
 import { formatPhoneForDisplay } from '@/lib/phone';
 
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
-  const { id: eventId } = params;
+export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id: eventId } = await context.params;
 
-  // TODO: Add authentication when session is properly configured
-  // For now, allow open access to match the invite-status endpoint pattern
-  // const authResult = await requireEventRole(eventId, ['HOST'])
-  // if (authResult instanceof NextResponse) {
-  //   return authResult
-  // }
+  // SECURITY: Auth check MUST run first and MUST NOT be in try/catch that returns 500
+  // Invalid/missing auth must return 401, not 500
+  let auth;
+  try {
+    auth = await requireEventRole(eventId, ['HOST']);
+    if (auth instanceof NextResponse) return auth;
+  } catch (authError) {
+    // If auth throws (should not happen, but fail-closed), return 401
+    console.error('Auth check error:', authError);
+    return NextResponse.json(
+      { error: 'Unauthorized', message: 'Authentication required' },
+      { status: 401 }
+    );
+  }
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },

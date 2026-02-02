@@ -488,6 +488,11 @@ export default function ParticipantView() {
                               <Check className="size-5" />
                               {assignment.response === 'ACCEPTED' ? 'Accepted' : 'Declined'}
                             </div>
+                            <p className="text-sm text-gray-500 text-center">
+                              {assignment.response === 'ACCEPTED'
+                                ? "Your host can see you've confirmed ✓"
+                                : 'Your host has been notified'}
+                            </p>
                             {data.event.status !== 'FROZEN' && (
                               <button
                                 onClick={() =>
