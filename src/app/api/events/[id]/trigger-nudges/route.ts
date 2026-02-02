@@ -2,18 +2,28 @@ import { NextRequest, NextResponse } from 'next/server';
 import { findNudgeCandidatesForEvent } from '@/lib/sms/nudge-eligibility';
 import { processNudges } from '@/lib/sms/nudge-sender';
 import { isSmsEnabled } from '@/lib/sms/twilio-client';
+import { requireEventRole } from '@/lib/auth/guards';
 
-export async function POST(_request: NextRequest, { params }: { params: { id: string } }) {
-  const { id: eventId } = params;
+export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id: eventId } = await context.params;
 
-  // TODO: Add authentication when session is properly configured
-  // For now, allow open access to match the event endpoint pattern
-
-  if (!isSmsEnabled()) {
-    return NextResponse.json({ error: 'SMS is not configured' }, { status: 400 });
+  // SECURITY: Auth check MUST run first and MUST NOT be in try/catch that returns 500
+  let auth;
+  try {
+    auth = await requireEventRole(eventId, ['HOST']);
+    if (auth instanceof NextResponse) return auth;
+  } catch (authError) {
+    console.error('Auth check error:', authError);
+    return NextResponse.json(
+      { error: 'Unauthorized', message: 'Authentication required' },
+      { status: 401 }
+    );
   }
 
   try {
+    if (!isSmsEnabled()) {
+      return NextResponse.json({ error: 'SMS is not configured' }, { status: 400 });
+    }
     // Find candidates for this event only
     const candidates = await findNudgeCandidatesForEvent(eventId);
 
@@ -38,7 +48,7 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
       })),
     });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    console.error('Error triggering nudges:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
