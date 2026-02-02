@@ -168,13 +168,12 @@ export default function EditEventModal({
         throw new Error(error.error || 'Failed to update event');
       }
 
-      onSave();
-
       // If opened from checklist and on steps 1 or 2, advance to next step
-      // Otherwise close the modal
+      // Otherwise save and close the modal
       if (stepLabel && step < 3) {
         setStep(step + 1);
       } else {
+        onSave();
         onClose();
       }
     } catch (error: any) {
