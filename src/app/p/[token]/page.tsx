@@ -50,6 +50,7 @@ interface ParticipantData {
     endDate: string;
     status: string;
     guestCount: number | null;
+    venueName: string | null;
   };
   team: {
     id: string;
@@ -199,6 +200,9 @@ export default function ParticipantView() {
           {formatDateRange(data.event.startDate, data.event.endDate)}
           {data.event.guestCount && ` · ${data.event.guestCount} guests`}
         </div>
+        {data.event.venueName && (
+          <div className="text-sm text-gray-500 mt-1">📍 {data.event.venueName}</div>
+        )}
         {data.team && (
           <div className="mt-3 pt-3 border-t border-gray-100">
             <p className="text-xs text-gray-500">You're part of:</p>
@@ -207,6 +211,19 @@ export default function ParticipantView() {
           </div>
         )}
       </div>
+
+      {/* Frozen State Banner */}
+      {data.event.status === 'FROZEN' && (
+        <div className="bg-sage-50 px-6 py-4 flex items-start gap-3 border-b border-sage-100">
+          <span className="text-2xl">🔒</span>
+          <div className="flex-1">
+            <h3 className="text-sm font-bold text-sage-900">This plan has been finalised</h3>
+            <p className="text-xs text-sage-800 mt-1">
+              Contact your host if you need to make changes.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
@@ -441,41 +458,50 @@ export default function ParticipantView() {
 
                         {/* Response Buttons */}
                         {assignment.response === 'PENDING' ? (
-                          <div className="grid grid-cols-2 gap-3">
-                            <button
-                              onClick={() => handleResponse(assignment.id, 'ACCEPTED')}
-                              className="py-2.5 rounded-lg font-medium bg-sage-600 text-white hover:bg-sage-700 transition-all"
-                            >
-                              Accept
-                            </button>
-                            <button
-                              onClick={() => handleResponse(assignment.id, 'DECLINED')}
-                              className="py-2.5 rounded-lg font-medium bg-gray-400 text-white hover:bg-gray-500 transition-all"
-                            >
-                              Decline
-                            </button>
-                          </div>
+                          data.event.status === 'FROZEN' ? (
+                            <div className="py-3 rounded-lg bg-gray-100 text-gray-600 text-center text-sm">
+                              Plan is locked
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 gap-3">
+                              <button
+                                onClick={() => handleResponse(assignment.id, 'ACCEPTED')}
+                                className="py-3 rounded-lg font-medium bg-sage-600 text-white hover:bg-sage-700 transition-all"
+                              >
+                                Accept
+                              </button>
+                              <button
+                                onClick={() => handleResponse(assignment.id, 'DECLINED')}
+                                className="py-3 rounded-lg font-medium bg-gray-400 text-white hover:bg-gray-500 transition-all"
+                              >
+                                Decline
+                              </button>
+                            </div>
+                          )
                         ) : (
                           <div className="flex flex-col gap-2">
                             <div
-                              className={`w-full py-2.5 rounded-lg font-medium text-white flex items-center justify-center gap-2 ${
+                              className={`w-full py-3 rounded-lg font-medium text-white flex items-center justify-center gap-2 ${
                                 assignment.response === 'ACCEPTED' ? 'bg-green-500' : 'bg-gray-500'
                               }`}
                             >
                               <Check className="size-5" />
                               {assignment.response === 'ACCEPTED' ? 'Accepted' : 'Declined'}
                             </div>
-                            <button
-                              onClick={() =>
-                                handleResponse(
-                                  assignment.id,
-                                  assignment.response === 'ACCEPTED' ? 'DECLINED' : 'ACCEPTED'
-                                )
-                              }
-                              className="text-sm text-accent hover:underline"
-                            >
-                              Change to {assignment.response === 'ACCEPTED' ? 'Decline' : 'Accept'}
-                            </button>
+                            {data.event.status !== 'FROZEN' && (
+                              <button
+                                onClick={() =>
+                                  handleResponse(
+                                    assignment.id,
+                                    assignment.response === 'ACCEPTED' ? 'DECLINED' : 'ACCEPTED'
+                                  )
+                                }
+                                className="text-sm text-accent hover:underline"
+                              >
+                                Change to{' '}
+                                {assignment.response === 'ACCEPTED' ? 'Decline' : 'Accept'}
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

@@ -25,6 +25,11 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
+  // Check if event is frozen
+  if (context.event.status === 'FROZEN') {
+    return NextResponse.json({ error: 'Plan is frozen — responses are locked' }, { status: 400 });
+  }
+
   // Parse request body for response type
   const body = await request.json();
   const { response } = body;

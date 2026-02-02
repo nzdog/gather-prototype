@@ -106,6 +106,7 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
       endDate: context.event.endDate,
       status: context.event.status,
       guestCount: context.event.guestCount,
+      venueName: context.event.venueName,
     },
     team: personEvent?.team
       ? {
