@@ -117,7 +117,7 @@ export async function generatePlan(params: EventParams): Promise<AIPlanResponse>
 
     // Call Claude and parse response
     const response = await callClaudeForJSON<AIPlanResponse>(systemPrompt, userPrompt, {
-      maxTokens: 4096,
+      maxTokens: 8192,
       temperature: 1.0,
     });
 
@@ -160,7 +160,7 @@ export async function regeneratePlan(params: RegenerationParams): Promise<AIPlan
 
     // Call Claude and parse response
     const response = await callClaudeForJSON<AIPlanResponse>(systemPrompt, userPrompt, {
-      maxTokens: 4096,
+      maxTokens: 8192,
       temperature: 1.0,
     });
 

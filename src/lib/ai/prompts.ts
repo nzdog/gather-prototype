@@ -13,6 +13,89 @@ RULES (from Plan AI Protocol):
 5. Stay silent unless asked - don't proactively add suggestions
 6. Respect memory consent - only use host history if provided
 
+DETAIL LEVEL (CRITICAL - THIS IS THE MOST IMPORTANT SECTION):
+- Think like someone ACTUALLY shopping for and cooking this meal - not planning categories
+- Every dish that needs a separate recipe OR separate purchase is its own item
+- Accompaniments are ALWAYS separate items (gravy ≠ turkey, butter ≠ bread, cream ≠ dessert)
+- Sauces, condiments, toppings, and garnishes are ALWAYS their own items
+- MINIMUM 25 items for 20+ guests, MINIMUM 30 items for 30+ guests (not 10-15!)
+- Organize items into 5-8 teams with 4-8 items each
+- Include ALL: serving equipment, table items, setup tasks, cleanup supplies, utensils, disposables
+- Break down EVERY course fully: main + sauce + sides + garnishes + table items + serving equipment
+- If you're under 25 items, you're NOT being detailed enough - add more specific items!
+
+GOOD vs BAD Examples:
+
+BAD - Too vague, only 5 items for 30 guests (AVOID THIS):
+  - "Christmas Pudding - 4 KG"
+  - "Mulled Wine - 10 L"
+  - "Turkey Dinner" (way too broad!)
+  - "Vegetables" (which ones??)
+  - "Desserts" (not specific!)
+
+GOOD - Detailed breakdown, 30+ items for 30 guests (DO THIS):
+
+Proteins Team (5 items):
+  - "Roast Turkey (whole) - 7.5 KG"
+  - "Turkey Gravy - 2 L" (separate!)
+  - "Glazed Ham - 5 KG"
+  - "Honey Mustard Glaze - 500 ML" (separate!)
+  - "Vegetarian Nut Roast - 2.5 KG"
+
+Sides Team (7 items):
+  - "Roast Potatoes - 7.5 KG"
+  - "Honey Roast Carrots - 3 KG"
+  - "Green Beans - 2 KG"
+  - "Bread Sauce - 1 L"
+  - "Cranberry Sauce - 500 G"
+  - "Bread Rolls - 36 COUNT"
+  - "Butter (for table) - 500 G" (separate!)
+
+Desserts Team (5 items):
+  - "Christmas Pudding - 2 COUNT"
+  - "Brandy Butter - 500 G" (separate!)
+  - "Custard - 1.5 L" (separate!)
+  - "Pavlova - 3 COUNT"
+  - "Whipped Cream (for pavlova) - 600 ML" (separate!)
+
+Drinks Team (5 items):
+  - "Mulled Wine - 4 L"
+  - "Mulled Wine Spices - 2 PACKS"
+  - "Sparkling Water - 6 L"
+  - "Orange Juice - 3 L"
+  - "Wine Glasses - 40 COUNT"
+
+Setup Team (4 items):
+  - "Serving Platters - 8 COUNT"
+  - "Serving Spoons - 12 COUNT"
+  - "Table Napkins - 40 COUNT"
+  - "Tablecloths - 2 COUNT"
+
+Cleanup Team (3 items):
+  - "Garbage Bags - 10 COUNT"
+  - "Food Storage Containers - 15 COUNT"
+  - "Dishwashing Liquid - 2 BOTTLES"
+
+Total: 29 items across 6 teams - this is the level of detail we want!
+
+TEAM STRUCTURE:
+- Create 5-8 teams based on meal flow and cooking requirements
+- Each team should have 4-8 specific items
+- Typical teams: Proteins, Sides, Salads, Desserts, Drinks, Setup/Equipment, Cleanup
+- Integrate dietary items within teams (e.g., vegetarian protein in Proteins team)
+- Only create separate dietary teams if 10+ guests have that requirement
+
+DIETARY REQUIREMENTS:
+- Integrate dietary items within existing teams when possible
+- For small dietary groups (<10 guests), add items to relevant teams (e.g., vegetarian main in Proteins)
+- For large dietary groups (10+ guests), consider a dedicated team
+- Tag all items with appropriate dietary tags (VEGETARIAN, VEGAN, GLUTEN_FREE, etc.)
+
+CULTURAL CONTEXT:
+- Consider regional and seasonal context (e.g., Christmas in NZ = summer, pavlova not hot cocoa)
+- Adapt traditional dishes to local climate and customs
+- Include culturally appropriate accompaniments and serving styles
+
 QUANTITY LABELS:
 - CALCULATED: Based on a formula (e.g., 200g meat per person × 40 guests = 8kg)
 - HEURISTIC: Based on experience/rules of thumb (e.g., "usually 2-3 desserts for this size")
@@ -201,6 +284,18 @@ export function buildGenerationPrompt(params: {
   };
   days: number;
 }): string {
+  // Calculate target item count based on guest size
+  let itemTarget: string;
+  if (params.guests < 10) {
+    itemTarget = '15-25';
+  } else if (params.guests <= 25) {
+    itemTarget = '25-35';
+  } else if (params.guests <= 50) {
+    itemTarget = '35-50';
+  } else {
+    itemTarget = '45-60';
+  }
+
   return `Generate a plan for a ${params.occasion} gathering.
 
 EVENT DETAILS:
@@ -221,12 +316,37 @@ ${params.venue.ovenCount ? `- Ovens available: ${params.venue.ovenCount}` : ''}
 ${params.venue.bbqAvailable ? `- BBQ available: Yes` : ''}
 ${params.venue.fridgeSpace ? `- Fridge space: ${params.venue.fridgeSpace}` : ''}
 
-Generate a comprehensive plan with teams and items. Remember to:
+ITEM TARGET: Generate ${itemTarget} items across 5-8 teams (this is NOT optional!)
+
+Generate a DETAILED plan with teams and items. Critical requirements:
+- Think like you're ACTUALLY shopping and cooking - individual items, NOT categories
+- Every sauce, gravy, condiment, topping is a SEPARATE item
+- Every serving item, utensil, setup/cleanup task is a SEPARATE item
+- Break down each course: main dish + its gravy + its sauce + its accompaniments + serving items
+- Include table items (butter, bread rolls, napkins, serving platters)
+- Include beverage accompaniments (glasses, ice, garnishes)
+- Include setup items (tablecloths, serving equipment)
+- Include cleanup items (bags, containers, cleaning supplies)
 - Label ALL quantities with CALCULATED, HEURISTIC, or PLACEHOLDER
 - Explain your reasoning for each quantity
 - Mark critical items and explain why they're critical
 - Address all dietary requirements
-- Consider the venue constraints`;
+- Consider the venue constraints
+
+HOW TO THINK THROUGH ITEM BREAKDOWN:
+For a turkey dinner, DON'T just list "Turkey" - think through EVERYTHING needed:
+- Proteins Team: Turkey, Glazed Ham, Vegetarian Nut Roast
+- Sauces Team or within Sides: Turkey Gravy, Cranberry Sauce, Bread Sauce, Honey Mustard Glaze
+- Sides Team: Roast Potatoes, Honey Carrots, Green Beans, Brussels Sprouts, Stuffing
+- Breads: Bread Rolls, Butter (for table)
+- Desserts: Christmas Pudding, Brandy Butter, Custard, Pavlova, Whipped Cream
+- Drinks: Mulled Wine, Mulled Wine Spices, Sparkling Wine, Orange Juice, Wine Glasses, Water Glasses
+- Setup: Serving Platters, Serving Spoons, Table Napkins, Tablecloths, Centerpiece
+- Cleanup: Garbage Bags, Food Storage Containers, Dishwashing Liquid, Paper Towels
+
+Count these up - that's already 29 items for ONE meal! You need ${itemTarget} items for this event.
+
+Remember: ${itemTarget} items means you need to be SPECIFIC - not "vegetables" but "roast potatoes", "honey carrots", "green beans" as separate items!`;
 }
 
 /**
