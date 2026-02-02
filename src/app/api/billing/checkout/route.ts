@@ -35,8 +35,8 @@ export async function POST(req: Request) {
           quantity: 1,
         },
       ],
-      success_url: `${appUrl}/events/new?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${appUrl}/events/new?canceled=true`,
+      success_url: `${appUrl}/plan/new?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${appUrl}/plan/new?canceled=true`,
       metadata: {
         userId: user.id,
       },
