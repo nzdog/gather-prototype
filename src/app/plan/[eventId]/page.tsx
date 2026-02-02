@@ -1195,8 +1195,10 @@ export default function PlanEditorPage() {
         </div>
 
         <div className="max-w-7xl mx-auto px-4 py-8">
-          {/* Event Stage Progress */}
-          <EventStageProgress currentStatus={event.status as any} />
+          {/* Event Stage Progress - Hide when checklist is visible */}
+          {!(event.status === 'DRAFT' && !checklistDismissed) && (
+            <EventStageProgress currentStatus={event.status as any} />
+          )}
 
           {/* Setup Checklist Banner - Only show in DRAFT status and not dismissed */}
           {event.status === 'DRAFT' && !checklistDismissed && (
