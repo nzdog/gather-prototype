@@ -169,7 +169,14 @@ export default function EditEventModal({
       }
 
       onSave();
-      onClose();
+
+      // If opened from checklist and on steps 1 or 2, advance to next step
+      // Otherwise close the modal
+      if (stepLabel && step < 3) {
+        setStep(step + 1);
+      } else {
+        onClose();
+      }
     } catch (error: any) {
       console.error('Error updating event:', error);
       alert(error.message || 'Failed to update event');
@@ -568,7 +575,7 @@ export default function EditEventModal({
               disabled={isSubmitting}
               className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSubmitting ? 'Saving...' : 'Save Changes'}
+              {isSubmitting ? 'Saving...' : stepLabel && step < 3 ? 'Next' : 'Save Changes'}
             </button>
             <button
               type="button"
