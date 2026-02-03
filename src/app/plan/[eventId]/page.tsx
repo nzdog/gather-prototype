@@ -2220,6 +2220,15 @@ export default function PlanEditorPage() {
             onUpdate={loadInviteLinks}
           />
         )}
+
+        {/* Footer */}
+        <div className="bg-white border-t border-gray-200 px-6 py-4 mt-8">
+          <p className="text-center text-sm text-gray-400">
+            <a href="/privacy" className="hover:text-gray-600 hover:underline">
+              Privacy Policy
+            </a>
+          </p>
+        </div>
       </div>
     </ModalProvider>
   );

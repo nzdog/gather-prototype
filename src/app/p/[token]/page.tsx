@@ -541,6 +541,11 @@ export default function ParticipantView() {
           Questions? Contact your coordinator
           {data.team && <span className="text-accent"> {data.team.coordinator.name}</span>}
         </p>
+        <p className="text-center text-sm text-gray-400 mt-2">
+          <a href="/privacy" className="hover:text-gray-600 hover:underline">
+            Privacy Policy
+          </a>
+        </p>
       </div>
     </div>
   );
