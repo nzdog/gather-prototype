@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { getUser } from '@/lib/auth/session';
 
 const execAsync = promisify(exec);
 
@@ -12,16 +11,13 @@ const execAsync = promisify(exec);
  * SECURITY: Requires authenticated user AND development environment
  */
 export async function POST() {
-  // SECURITY: Require authenticated user session
-  const user = await getUser();
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   // SECURITY: Only allow in development environment
   if (process.env.NODE_ENV === 'production') {
     return NextResponse.json({ error: 'Not Found' }, { status: 404 });
   }
+
+  // Note: No auth required for demo endpoint in development
+  // This is a dev-only endpoint for resetting demo data
 
   try {
     console.log('[Reset] Starting full database reset...');

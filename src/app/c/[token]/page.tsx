@@ -352,7 +352,7 @@ export default function CoordinatorView() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-5">
         <a
-          href="/"
+          href="/demo"
           className="inline-flex items-center gap-1 text-sm text-accent hover:text-sage-800 mb-3"
         >
           <Home className="size-4" />

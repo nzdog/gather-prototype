@@ -20,6 +20,13 @@ export default function Navigation({ user }: NavigationProps) {
   const router = useRouter();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
+  // Hide navigation on token-based views (they have their own headers)
+  const isTokenView =
+    pathname?.startsWith('/h/') || pathname?.startsWith('/c/') || pathname?.startsWith('/p/');
+  if (isTokenView) {
+    return null;
+  }
+
   const handleSignOut = async () => {
     setIsSigningOut(true);
     try {
@@ -34,8 +41,12 @@ export default function Navigation({ user }: NavigationProps) {
     }
   };
 
+  // Use /demo as home if we're on demo page
+  const isDemo = pathname === '/demo';
+  const homeHref = isDemo ? '/demo' : '/';
+
   const navItems = [
-    { href: '/', label: 'Home', icon: Home },
+    { href: homeHref, label: 'Home', icon: Home },
     { href: '/plan/events', label: 'Your Events', icon: Calendar },
     { href: '/plan/templates', label: 'Templates', icon: FileText },
     { href: '/plan/new', label: 'New Event', icon: Plus },

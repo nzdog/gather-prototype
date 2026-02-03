@@ -22,16 +22,19 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
   }
 
   // Check if host Person has linked User account (Ticket 1.6)
-  const needsClaim = !context.person.userId;
+  // In development mode, bypass authentication for demo purposes
   let authStatus: 'unclaimed' | 'requires_signin' | 'authenticated' = 'authenticated';
 
-  if (needsClaim) {
-    authStatus = 'unclaimed';
-  } else if (context.person.userId) {
-    // Person has linked User - check if session matches
-    const sessionUser = await getUser();
-    if (!sessionUser || sessionUser.id !== context.person.userId) {
-      authStatus = 'requires_signin';
+  if (process.env.NODE_ENV !== 'development') {
+    const needsClaim = !context.person.userId;
+    if (needsClaim) {
+      authStatus = 'unclaimed';
+    } else if (context.person.userId) {
+      // Person has linked User - check if session matches
+      const sessionUser = await getUser();
+      if (!sessionUser || sessionUser.id !== context.person.userId) {
+        authStatus = 'requires_signin';
+      }
     }
   }
 
