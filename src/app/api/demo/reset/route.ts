@@ -22,23 +22,32 @@ export async function POST() {
   try {
     console.log('[Reset] Starting full database reset...');
 
-    // Use Prisma migrate reset to drop all tables and re-run migrations + seed
-    // --force: Skip confirmation prompt
-    // --skip-generate: Don't regenerate Prisma client (already generated)
-    console.log('[Reset] Running Prisma migrate reset...');
+    // Step 1: Drop all tables and sync schema
+    console.log('[Reset] Step 1: Dropping tables and syncing schema...');
+    const { stdout: pushStdout, stderr: pushStderr } = await execAsync(
+      'npx prisma db push --force-reset --accept-data-loss --skip-generate',
+      {
+        env: {
+          ...process.env,
+          PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION: 'yes',
+        },
+      }
+    );
 
-    const { stdout, stderr } = await execAsync('npx prisma migrate reset --force --skip-generate', {
-      env: {
-        ...process.env,
-        // Auto-confirm the reset
-        PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION: 'yes',
-      },
-    });
-
-    console.log('[Reset] Migrate reset stdout:', stdout);
-    if (stderr) {
-      console.warn('[Reset] Migrate reset stderr:', stderr);
+    console.log('[Reset] Schema sync stdout:', pushStdout);
+    if (pushStderr) {
+      console.warn('[Reset] Schema sync stderr:', pushStderr);
     }
+
+    // Step 2: Run seed script
+    console.log('[Reset] Step 2: Running seed script...');
+    const { stdout: seedStdout, stderr: seedStderr } = await execAsync('npx tsx prisma/seed.ts');
+
+    console.log('[Reset] Seed stdout:', seedStdout);
+    if (seedStderr) {
+      console.warn('[Reset] Seed stderr:', seedStderr);
+    }
+
     console.log('[Reset] Database reset and seeded successfully');
 
     return NextResponse.json({
