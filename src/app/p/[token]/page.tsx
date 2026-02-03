@@ -247,6 +247,14 @@ export default function ParticipantView() {
         {data.rsvpStatus === 'PENDING' && (
           <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 mb-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">Are you coming?</h2>
+            {data.assignments.length > 0 && (
+              <p className="text-gray-600 mb-4">
+                You'll be asked to bring{' '}
+                <strong>
+                  {data.assignments.length} {data.assignments.length === 1 ? 'item' : 'items'}
+                </strong>
+              </p>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <button
                 onClick={() => handleRsvpResponse('YES')}
@@ -277,6 +285,14 @@ export default function ParticipantView() {
             <p className="text-gray-600 mb-4">
               We need to finalize the headcount — please let us know if you're coming.
             </p>
+            {data.assignments.length > 0 && (
+              <p className="text-gray-600 mb-4">
+                You'll be asked to bring{' '}
+                <strong>
+                  {data.assignments.length} {data.assignments.length === 1 ? 'item' : 'items'}
+                </strong>
+              </p>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
                 onClick={() => handleRsvpResponse('YES')}
@@ -301,6 +317,14 @@ export default function ParticipantView() {
             <p className="text-sm text-gray-500 mb-4">
               You selected "Not sure" — you can update your response here.
             </p>
+            {data.assignments.length > 0 && (
+              <p className="text-gray-600 mb-4">
+                You'll be asked to bring{' '}
+                <strong>
+                  {data.assignments.length} {data.assignments.length === 1 ? 'item' : 'items'}
+                </strong>
+              </p>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <button
                 onClick={() => handleRsvpResponse('YES')}
