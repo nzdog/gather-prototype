@@ -118,6 +118,78 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
   // Calculate total critical gaps across all teams
   const criticalGapCount = teamsWithStatus.reduce((sum, team) => sum + team.criticalGapCount, 0);
 
+  // Conditionally fetch invite status and people when event is in CONFIRMING status
+  let inviteStatus = null;
+  let people = null;
+
+  if (context.event.status === 'CONFIRMING') {
+    const eventWithPeople = await prisma.event.findUnique({
+      where: { id: context.event.id },
+      select: {
+        inviteSendConfirmedAt: true,
+        people: {
+          select: {
+            rsvpStatus: true,
+            person: {
+              select: {
+                id: true,
+                name: true,
+                inviteAnchorAt: true,
+                tokens: {
+                  where: { scope: 'PARTICIPANT', eventId: context.event.id },
+                  select: { openedAt: true },
+                },
+                assignments: {
+                  where: { item: { team: { eventId: context.event.id } } },
+                  select: { response: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (eventWithPeople) {
+      const peopleStatus = eventWithPeople.people.map((pe) => {
+        const person = pe.person;
+        const token = person.tokens[0];
+        const hasResponded = person.assignments.some((a) => a.response !== 'PENDING');
+
+        let status: 'NOT_SENT' | 'SENT' | 'OPENED' | 'RESPONDED';
+        if (hasResponded) status = 'RESPONDED';
+        else if (token?.openedAt) status = 'OPENED';
+        else if (person.inviteAnchorAt) status = 'SENT';
+        else status = 'NOT_SENT';
+
+        const responses = person.assignments.map((a) => a.response);
+        let response: 'PENDING' | 'ACCEPTED' | 'DECLINED' = 'PENDING';
+        if (responses.length > 0) {
+          if (responses.every((r) => r === 'ACCEPTED')) response = 'ACCEPTED';
+          else if (responses.some((r) => r === 'DECLINED')) response = 'DECLINED';
+        }
+
+        return {
+          id: person.id,
+          name: person.name,
+          status,
+          response,
+          rsvpStatus: pe.rsvpStatus,
+        };
+      });
+
+      inviteStatus = {
+        total: peopleStatus.length,
+        notSent: peopleStatus.filter((p) => p.status === 'NOT_SENT').length,
+        sent: peopleStatus.filter((p) => p.status === 'SENT').length,
+        opened: peopleStatus.filter((p) => p.status === 'OPENED').length,
+        responded: peopleStatus.filter((p) => p.status === 'RESPONDED').length,
+        inviteSendConfirmedAt: eventWithPeople.inviteSendConfirmedAt?.toISOString() ?? null,
+      };
+      people = peopleStatus;
+    }
+  }
+
   return NextResponse.json({
     person: {
       id: context.person.id,
@@ -135,5 +207,7 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
     teams: teamsWithStatus,
     freezeAllowed,
     criticalGapCount,
+    inviteStatus,
+    people,
   });
 }
