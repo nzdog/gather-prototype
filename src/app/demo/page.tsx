@@ -14,6 +14,7 @@ export default function DemoLandingPage() {
   const [tokens, setTokens] = useState<Token[]>([]);
   const [loading, setLoading] = useState(true);
   const [resetting, setResetting] = useState(false);
+  const [openingDashboard, setOpeningDashboard] = useState(false);
 
   useEffect(() => {
     fetchTokens();
@@ -43,6 +44,24 @@ export default function DemoLandingPage() {
       console.error('Failed to load tokens:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOpenDashboard = async () => {
+    setOpeningDashboard(true);
+    try {
+      const response = await fetch('/api/demo/session', { method: 'POST' });
+      if (response.ok) {
+        const { eventId } = await response.json();
+        window.location.href = `/plan/${eventId}`;
+      } else {
+        alert('Failed to create demo session');
+        setOpeningDashboard(false);
+      }
+    } catch (err) {
+      console.error('Failed to open dashboard:', err);
+      alert('Failed to open planning dashboard');
+      setOpeningDashboard(false);
     }
   };
 
@@ -126,6 +145,32 @@ export default function DemoLandingPage() {
             >
               ⚙️ Settings
             </a>
+          </div>
+        </div>
+
+        {/* Planning Dashboard */}
+        <div className="mb-8">
+          <div className="bg-white rounded-xl shadow-sm border-2 border-indigo-200 overflow-hidden">
+            <div className="px-6 py-5 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-semibold tracking-widest text-indigo-500 uppercase mb-1">
+                  Planning Dashboard
+                </div>
+                <div className="font-semibold text-gray-900">
+                  See the full host dashboard where Sarah built this event
+                </div>
+                <div className="text-sm text-gray-500 mt-0.5">
+                  Authenticated session • Full event management view
+                </div>
+              </div>
+              <button
+                onClick={handleOpenDashboard}
+                disabled={openingDashboard}
+                className="ml-6 flex-shrink-0 inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {openingDashboard ? 'Opening…' : 'Open Planning Dashboard →'}
+              </button>
+            </div>
           </div>
         </div>
 

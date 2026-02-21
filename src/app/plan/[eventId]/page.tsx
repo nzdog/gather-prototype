@@ -1112,6 +1112,16 @@ export default function PlanEditorPage() {
   return (
     <ModalProvider>
       <div className="min-h-screen bg-gray-50">
+        {/* Demo back-link */}
+        {event.name === 'Henderson Family Christmas 2025' && (
+          <div className="bg-indigo-50 border-b border-indigo-100">
+            <div className="max-w-7xl mx-auto px-4 py-2">
+              <a href="/demo" className="text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+                ← Back to Demo
+              </a>
+            </div>
+          </div>
+        )}
         {/* Header */}
         <div className="bg-white border-b">
           <div className="max-w-7xl mx-auto px-4 py-6">
