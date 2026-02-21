@@ -563,6 +563,17 @@ export default function HostView() {
       ? Math.round((data.inviteStatus.responded / data.inviteStatus.total) * 100)
       : 0;
 
+  const outcomesTotal = data.people ? data.people.length : 0;
+  const outcomesConfirmed = data.people
+    ? data.people.filter((p) => p.response === 'ACCEPTED').length
+    : 0;
+  const outcomesDeclined = data.people
+    ? data.people.filter((p) => p.response === 'DECLINED').length
+    : 0;
+  const outcomesPending = data.people
+    ? data.people.filter((p) => p.response === 'PENDING').length
+    : 0;
+
   return (
     <ModalProvider>
       <div className="min-h-screen flex flex-col bg-gray-50">
@@ -586,7 +597,11 @@ export default function HostView() {
                 disabled={copyState === 'copying'}
                 className="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded hover:bg-gray-200 transition disabled:opacity-50"
               >
-                {copyState === 'copied' ? '✓ Copied!' : copyState === 'copying' ? '...' : '📋 Copy Plan'}
+                {copyState === 'copied'
+                  ? '✓ Copied!'
+                  : copyState === 'copying'
+                    ? '...'
+                    : '📋 Copy Plan'}
               </button>
               <a
                 href={`/h/${token}/audit`}
@@ -683,306 +698,344 @@ export default function HostView() {
           </>
         )}
 
-        {/* Invite Status Summary - CONFIRMING only */}
-        {data.event.status === 'CONFIRMING' && data.inviteStatus && (
-          <div className="bg-white border-b px-6 py-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
-                Responses
-              </h2>
-              <span className="text-2xl font-bold text-gray-900">
-                {data.inviteStatus.responded}/{data.inviteStatus.total}
-                <span className="text-sm font-normal text-gray-500 ml-1">({invitePct}%)</span>
-              </span>
-            </div>
-
-            {/* Multi-segment progress bar */}
-            {data.inviteStatus.total > 0 && (
-              <div className="flex h-2 rounded-full overflow-hidden bg-gray-100">
-                <div
-                  className="bg-green-500"
-                  style={{
-                    width: `${(data.inviteStatus.responded / data.inviteStatus.total) * 100}%`,
-                  }}
-                />
-                <div
-                  className="bg-amber-400"
-                  style={{
-                    width: `${(data.inviteStatus.opened / data.inviteStatus.total) * 100}%`,
-                  }}
-                />
-                <div
-                  className="bg-blue-400"
-                  style={{
-                    width: `${(data.inviteStatus.sent / data.inviteStatus.total) * 100}%`,
-                  }}
-                />
-              </div>
-            )}
-
-            {/* Count row */}
-            <div className="flex items-center gap-3 text-xs text-gray-500">
-              {data.inviteStatus.notSent > 0 && (
-                <span>{data.inviteStatus.notSent} not sent</span>
-              )}
-              {data.inviteStatus.sent > 0 && <span>{data.inviteStatus.sent} sent</span>}
-              {data.inviteStatus.opened > 0 && <span>{data.inviteStatus.opened} opened</span>}
-              {data.inviteStatus.responded > 0 && (
-                <span className="text-green-600 font-medium">
-                  {data.inviteStatus.responded} responded
-                </span>
-              )}
-            </div>
-
-            {/* Confirm sent button */}
-            {!data.inviteStatus.inviteSendConfirmedAt && (
-              <button
-                onClick={handleConfirmSent}
-                disabled={confirmingSent}
-                className="w-full py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-50 transition-colors"
-              >
-                {confirmingSent ? 'Confirming...' : "I've sent the invites"}
-              </button>
-            )}
-            {data.inviteStatus.inviteSendConfirmedAt && (
-              <p className="text-xs text-gray-400">
-                ✓ Invites confirmed sent{' '}
-                {new Date(data.inviteStatus.inviteSendConfirmedAt).toLocaleDateString('en-NZ')}
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* People List - CONFIRMING only */}
-        {data.event.status === 'CONFIRMING' && data.people && data.people.length > 0 && (
-          <div className="bg-white border-b px-6 py-4">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-3">
-              People
-            </h2>
-            <div className="space-y-1">
-              {(showAllPeople ? data.people : data.people.slice(0, 6)).map((person) => (
-                <button
-                  key={person.id}
-                  onClick={() => setSelectedPerson(person)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors text-left"
-                >
-                  <StatusIcon status={person.status} />
-                  <span className="flex-1 text-sm text-gray-800">{person.name}</span>
-                  <ResponseBadge response={person.response} />
-                </button>
-              ))}
-            </div>
-            {data.people.length > 6 && (
-              <div className="mt-3 text-center">
-                <button
-                  onClick={() => setShowAllPeople(!showAllPeople)}
-                  className="text-sm text-gray-500 hover:text-gray-700"
-                >
-                  {showAllPeople ? 'Show less' : `Show all ${data.people.length}`}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Teams List */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm uppercase tracking-wide text-gray-500">Teams</h2>
-            <div className="flex items-center gap-2">
-              {data && data.teams.length > 0 && (
-                <button
-                  onClick={toggleAllTeams}
-                  className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  {collapsedTeams.size === 0 ? (
-                    <>
-                      <Minimize2 className="size-4" />
-                      Collapse All
-                    </>
-                  ) : (
-                    <>
-                      <Maximize2 className="size-4" />
-                      Expand All
-                    </>
-                  )}
-                </button>
-              )}
-              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`p-1.5 rounded transition-colors ${
-                    viewMode === 'grid'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                  title="Grid view"
-                >
-                  <Grid3x3 className="size-4" />
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`p-1.5 rounded transition-colors ${
-                    viewMode === 'list'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                  title="List view"
-                >
-                  <List className="size-4" />
-                </button>
+        {/* Scrollable content area */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Teams List */}
+          <div className="p-4 md:p-6">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm uppercase tracking-wide text-gray-500">Teams</h2>
+              <div className="flex items-center gap-2">
+                {data && data.teams.length > 0 && (
+                  <button
+                    onClick={toggleAllTeams}
+                    className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    {collapsedTeams.size === 0 ? (
+                      <>
+                        <Minimize2 className="size-4" />
+                        Collapse All
+                      </>
+                    ) : (
+                      <>
+                        <Maximize2 className="size-4" />
+                        Expand All
+                      </>
+                    )}
+                  </button>
+                )}
+                <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                  <button
+                    onClick={() => setViewMode('grid')}
+                    className={`p-1.5 rounded transition-colors ${
+                      viewMode === 'grid'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                    title="Grid view"
+                  >
+                    <Grid3x3 className="size-4" />
+                  </button>
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={`p-1.5 rounded transition-colors ${
+                      viewMode === 'list'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                    title="List view"
+                  >
+                    <List className="size-4" />
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-          <div
-            className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}
-          >
-            {sortedTeams.map((team) => {
-              const assignedCount = team.items.filter((i) => i.assignment).length;
-              const pendingCount = team.items.filter(
-                (i) => i.assignment?.response === 'PENDING'
-              ).length;
-              const acceptedCount = team.items.filter(
-                (i) => i.assignment?.response === 'ACCEPTED'
-              ).length;
-              const declinedCount = team.items.filter(
-                (i) => i.assignment?.response === 'DECLINED'
-              ).length;
-              // Gap count includes unassigned items AND declined items
-              const gapCount = team.items.filter(
-                (i) => i.assignment === null || i.assignment?.response === 'DECLINED'
-              ).length;
-              const criticalGapCount = team.items.filter(
-                (i) =>
-                  i.critical && (i.assignment === null || i.assignment?.response === 'DECLINED')
-              ).length;
+            <div
+              className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}
+            >
+              {sortedTeams.map((team) => {
+                const assignedCount = team.items.filter((i) => i.assignment).length;
+                const pendingCount = team.items.filter(
+                  (i) => i.assignment?.response === 'PENDING'
+                ).length;
+                const acceptedCount = team.items.filter(
+                  (i) => i.assignment?.response === 'ACCEPTED'
+                ).length;
+                const declinedCount = team.items.filter(
+                  (i) => i.assignment?.response === 'DECLINED'
+                ).length;
+                // Gap count includes unassigned items AND declined items
+                const gapCount = team.items.filter(
+                  (i) => i.assignment === null || i.assignment?.response === 'DECLINED'
+                ).length;
+                const criticalGapCount = team.items.filter(
+                  (i) =>
+                    i.critical && (i.assignment === null || i.assignment?.response === 'DECLINED')
+                ).length;
 
-              return (
-                <div
-                  key={team.id}
-                  className={`bg-white rounded-lg border-2 shadow-sm hover:shadow-md transition-shadow p-5 ${
-                    viewMode === 'list' ? 'w-full max-w-md' : ''
-                  } ${
-                    team.status === 'CRITICAL_GAP'
-                      ? 'border-red-300'
-                      : team.status === 'GAP'
-                        ? 'border-amber-300'
-                        : 'border-green-300'
-                  }`}
-                >
-                  {/* Card Header - Always Visible */}
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-start gap-3 flex-1 min-w-0">
-                      <div
-                        className={`size-3 rounded-full mt-1.5 flex-shrink-0 ${
-                          team.status === 'CRITICAL_GAP'
-                            ? 'bg-red-500'
-                            : team.status === 'GAP'
-                              ? 'bg-amber-500'
-                              : 'bg-green-500'
-                        }`}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-gray-900 text-lg mb-1">{team.name}</h3>
-                        <p className="text-sm text-gray-600">{team.coordinator.name}</p>
+                return (
+                  <div
+                    key={team.id}
+                    className={`bg-white rounded-lg border-2 shadow-sm hover:shadow-md transition-shadow p-5 ${
+                      viewMode === 'list' ? 'w-full max-w-md' : ''
+                    } ${
+                      team.status === 'CRITICAL_GAP'
+                        ? 'border-red-300'
+                        : team.status === 'GAP'
+                          ? 'border-amber-300'
+                          : 'border-green-300'
+                    }`}
+                  >
+                    {/* Card Header - Always Visible */}
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-start gap-3 flex-1 min-w-0">
+                        <div
+                          className={`size-3 rounded-full mt-1.5 flex-shrink-0 ${
+                            team.status === 'CRITICAL_GAP'
+                              ? 'bg-red-500'
+                              : team.status === 'GAP'
+                                ? 'bg-amber-500'
+                                : 'bg-green-500'
+                          }`}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-bold text-gray-900 text-lg mb-1">{team.name}</h3>
+                          <p className="text-sm text-gray-600">{team.coordinator.name}</p>
+                        </div>
                       </div>
+
+                      {/* Collapse Toggle Button */}
+                      <button
+                        onClick={() => toggleTeamCollapse(team.id)}
+                        className="ml-2 p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0 border border-gray-300"
+                        title={collapsedTeams.has(team.id) ? 'Expand' : 'Collapse'}
+                      >
+                        {collapsedTeams.has(team.id) ? (
+                          <ChevronRight className="size-5 text-gray-700" />
+                        ) : (
+                          <ChevronDown className="size-5 text-gray-700" />
+                        )}
+                      </button>
                     </div>
 
-                    {/* Collapse Toggle Button */}
-                    <button
-                      onClick={() => toggleTeamCollapse(team.id)}
-                      className="ml-2 p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0 border border-gray-300"
-                      title={collapsedTeams.has(team.id) ? 'Expand' : 'Collapse'}
-                    >
-                      {collapsedTeams.has(team.id) ? (
-                        <ChevronRight className="size-5 text-gray-700" />
+                    {/* Status Badge - Always Visible */}
+                    <div className="mb-3">
+                      {team.status === 'CRITICAL_GAP' ? (
+                        <div className="inline-flex items-center gap-1.5 bg-red-100 text-red-800 px-3 py-1.5 rounded-full text-sm font-semibold">
+                          <AlertCircle className="size-4" />
+                          {criticalGapCount} critical {criticalGapCount === 1 ? 'gap' : 'gaps'}
+                        </div>
+                      ) : team.status === 'GAP' ? (
+                        <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full text-sm font-semibold">
+                          <AlertCircle className="size-4" />
+                          {gapCount} {gapCount === 1 ? 'gap' : 'gaps'}
+                        </div>
                       ) : (
-                        <ChevronDown className="size-5 text-gray-700" />
+                        <div className="inline-flex items-center gap-1.5 bg-green-100 text-green-800 px-3 py-1.5 rounded-full text-sm font-semibold">
+                          <Users className="size-4" />
+                          All assigned
+                        </div>
                       )}
-                    </button>
-                  </div>
+                    </div>
 
-                  {/* Status Badge - Always Visible */}
-                  <div className="mb-3">
-                    {team.status === 'CRITICAL_GAP' ? (
-                      <div className="inline-flex items-center gap-1.5 bg-red-100 text-red-800 px-3 py-1.5 rounded-full text-sm font-semibold">
-                        <AlertCircle className="size-4" />
-                        {criticalGapCount} critical {criticalGapCount === 1 ? 'gap' : 'gaps'}
-                      </div>
-                    ) : team.status === 'GAP' ? (
-                      <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full text-sm font-semibold">
-                        <AlertCircle className="size-4" />
-                        {gapCount} {gapCount === 1 ? 'gap' : 'gaps'}
-                      </div>
-                    ) : (
-                      <div className="inline-flex items-center gap-1.5 bg-green-100 text-green-800 px-3 py-1.5 rounded-full text-sm font-semibold">
-                        <Users className="size-4" />
-                        All assigned
-                      </div>
+                    {/* Collapsible Content */}
+                    {!collapsedTeams.has(team.id) && (
+                      <>
+                        {/* Stats Grid */}
+                        <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-200">
+                          <div>
+                            <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                              Total Items
+                            </div>
+                            <div className="text-xl font-bold text-gray-900">{team.itemCount}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                              Assigned
+                            </div>
+                            <div className="text-xl font-bold text-green-600">{assignedCount}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                              Unassigned
+                            </div>
+                            <div
+                              className={`text-xl font-bold ${team.unassignedCount > 0 ? 'text-amber-600' : 'text-gray-400'}`}
+                            >
+                              {team.unassignedCount}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                              Pending
+                            </div>
+                            <div className="text-xl font-bold text-gray-600">{pendingCount}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                              Confirmed
+                            </div>
+                            <div className="text-xl font-bold text-green-600">{acceptedCount}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                              Declined
+                            </div>
+                            <div className="text-xl font-bold text-red-600">{declinedCount}</div>
+                          </div>
+                        </div>
+
+                        {/* View Items Button */}
+                        <Link
+                          href={`/h/${token}/team/${team.id}`}
+                          className="mt-4 mx-auto w-1/3 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-accent text-white text-sm rounded-lg hover:bg-accent-dark transition-colors"
+                        >
+                          <Eye className="size-3" />
+                          View Items
+                        </Link>
+                      </>
                     )}
                   </div>
-
-                  {/* Collapsible Content */}
-                  {!collapsedTeams.has(team.id) && (
-                    <>
-                      {/* Stats Grid */}
-                      <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-200">
-                        <div>
-                          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-                            Total Items
-                          </div>
-                          <div className="text-xl font-bold text-gray-900">{team.itemCount}</div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-                            Assigned
-                          </div>
-                          <div className="text-xl font-bold text-green-600">{assignedCount}</div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-                            Unassigned
-                          </div>
-                          <div
-                            className={`text-xl font-bold ${team.unassignedCount > 0 ? 'text-amber-600' : 'text-gray-400'}`}
-                          >
-                            {team.unassignedCount}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-                            Pending
-                          </div>
-                          <div className="text-xl font-bold text-gray-600">{pendingCount}</div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-                            Confirmed
-                          </div>
-                          <div className="text-xl font-bold text-green-600">{acceptedCount}</div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-                            Declined
-                          </div>
-                          <div className="text-xl font-bold text-red-600">{declinedCount}</div>
-                        </div>
-                      </div>
-
-                      {/* View Items Button */}
-                      <Link
-                        href={`/h/${token}/team/${team.id}`}
-                        className="mt-4 mx-auto w-1/3 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-accent text-white text-sm rounded-lg hover:bg-accent-dark transition-colors"
-                      >
-                        <Eye className="size-3" />
-                        View Items
-                      </Link>
-                    </>
-                  )}
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
+
+          {/* Invite Status Summary - CONFIRMING only */}
+          {data.event.status === 'CONFIRMING' && data.inviteStatus && (
+            <div className="bg-white border-b px-6 py-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+                  Responses
+                </h2>
+                <span className="text-2xl font-bold text-gray-900">
+                  {data.inviteStatus.responded}/{data.inviteStatus.total}
+                  <span className="text-sm font-normal text-gray-500 ml-1">({invitePct}%)</span>
+                </span>
+              </div>
+
+              {/* Invite funnel bar */}
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                Invite Status
+              </p>
+              {data.inviteStatus.total > 0 && (
+                <div className="flex h-2 rounded-full overflow-hidden bg-gray-100">
+                  <div
+                    className="bg-green-500"
+                    style={{
+                      width: `${(data.inviteStatus.responded / data.inviteStatus.total) * 100}%`,
+                    }}
+                  />
+                  <div
+                    className="bg-amber-400"
+                    style={{
+                      width: `${(data.inviteStatus.opened / data.inviteStatus.total) * 100}%`,
+                    }}
+                  />
+                  <div
+                    className="bg-blue-400"
+                    style={{
+                      width: `${(data.inviteStatus.sent / data.inviteStatus.total) * 100}%`,
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Invite funnel count row */}
+              <div className="flex items-center gap-3 text-xs text-gray-500">
+                {data.inviteStatus.notSent > 0 && <span>{data.inviteStatus.notSent} not sent</span>}
+                {data.inviteStatus.sent > 0 && <span>{data.inviteStatus.sent} sent</span>}
+                {data.inviteStatus.opened > 0 && <span>{data.inviteStatus.opened} opened</span>}
+                {data.inviteStatus.responded > 0 && (
+                  <span className="text-green-600 font-medium">
+                    {data.inviteStatus.responded} responded
+                  </span>
+                )}
+              </div>
+
+              {/* Outcomes bar */}
+              {outcomesTotal > 0 && (
+                <>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    Outcomes
+                  </p>
+                  <div className="flex h-2 rounded-full overflow-hidden bg-gray-100">
+                    <div
+                      className="bg-green-500"
+                      style={{ width: `${(outcomesConfirmed / outcomesTotal) * 100}%` }}
+                    />
+                    <div
+                      className="bg-red-500"
+                      style={{ width: `${(outcomesDeclined / outcomesTotal) * 100}%` }}
+                    />
+                    <div
+                      className="bg-amber-400"
+                      style={{ width: `${(outcomesPending / outcomesTotal) * 100}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-gray-500">
+                    {outcomesConfirmed > 0 && (
+                      <span className="text-green-600 font-medium">
+                        {outcomesConfirmed} confirmed
+                      </span>
+                    )}
+                    {outcomesDeclined > 0 && (
+                      <span className="text-red-600 font-medium">{outcomesDeclined} declined</span>
+                    )}
+                    {outcomesPending > 0 && <span>{outcomesPending} pending</span>}
+                  </div>
+                </>
+              )}
+
+              {/* Confirm sent button */}
+              {!data.inviteStatus.inviteSendConfirmedAt && (
+                <button
+                  onClick={handleConfirmSent}
+                  disabled={confirmingSent}
+                  className="w-full py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-50 transition-colors"
+                >
+                  {confirmingSent ? 'Confirming...' : "I've sent the invites"}
+                </button>
+              )}
+              {data.inviteStatus.inviteSendConfirmedAt && (
+                <p className="text-xs text-gray-400">
+                  ✓ Invites confirmed sent{' '}
+                  {new Date(data.inviteStatus.inviteSendConfirmedAt).toLocaleDateString('en-NZ')}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* People List - CONFIRMING only */}
+          {data.event.status === 'CONFIRMING' && data.people && data.people.length > 0 && (
+            <div className="bg-white border-b px-6 py-4">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-3">
+                People
+              </h2>
+              <div className="space-y-1">
+                {(showAllPeople ? data.people : data.people.slice(0, 6)).map((person) => (
+                  <button
+                    key={person.id}
+                    onClick={() => setSelectedPerson(person)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                  >
+                    <StatusIcon status={person.status} />
+                    <span className="flex-1 text-sm text-gray-800">{person.name}</span>
+                    <ResponseBadge response={person.response} />
+                  </button>
+                ))}
+              </div>
+              {data.people.length > 6 && (
+                <div className="mt-3 text-center">
+                  <button
+                    onClick={() => setShowAllPeople(!showAllPeople)}
+                    className="text-sm text-gray-500 hover:text-gray-700"
+                  >
+                    {showAllPeople ? 'Show less' : `Show all ${data.people.length}`}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Bottom Action Bar */}
