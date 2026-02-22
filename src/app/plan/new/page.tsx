@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Calendar } from 'lucide-react';
 
@@ -9,6 +9,7 @@ type PageState = 'form' | 'creating' | 'canceled' | 'error';
 export default function NewPlanPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const creatingRef = useRef(false);
   const [pageState, setPageState] = useState<PageState>('form');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -17,6 +18,20 @@ export default function NewPlanPage() {
     startDate: '',
     endDate: '',
   });
+
+  // Restore form data on plain page load (e.g. returning from sign-in redirect)
+  useEffect(() => {
+    const sessionId = searchParams.get('session_id');
+    const canceled = searchParams.get('canceled');
+    if (!sessionId && !canceled) {
+      const saved = sessionStorage.getItem('gather_new_event');
+      if (saved) {
+        try {
+          setFormData(JSON.parse(saved));
+        } catch {}
+      }
+    }
+  }, []);
 
   // Handle Stripe return flow
   useEffect(() => {
@@ -38,8 +53,9 @@ export default function NewPlanPage() {
       return;
     }
 
-    if (sessionId) {
-      // User returned from Stripe - create event
+    if (sessionId && !creatingRef.current) {
+      // User returned from Stripe - create event (guard prevents double-invoke in dev/Strict Mode)
+      creatingRef.current = true;
       setPageState('creating');
       createEventWithPayment(sessionId);
     }
@@ -47,26 +63,13 @@ export default function NewPlanPage() {
 
   const createEventWithPayment = async (sessionId: string) => {
     try {
-      // Restore form data from sessionStorage
-      const saved = sessionStorage.getItem('gather_new_event');
-      if (!saved) {
-        throw new Error('Event details not found. Please try again.');
-      }
-
-      const savedData = JSON.parse(saved);
-
-      // Call event creation API with payment session
+      // Call event creation API — email and event data come from the Stripe session
       const response = await fetch('/api/events', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          name: savedData.name,
-          startDate: savedData.startDate,
-          endDate: savedData.endDate,
-          stripeSessionId: sessionId,
-        }),
+        body: JSON.stringify({ stripeSessionId: sessionId }),
       });
 
       if (!response.ok) {
@@ -75,8 +78,6 @@ export default function NewPlanPage() {
         // Handle specific error cases
         if (response.status === 402) {
           throw new Error("Payment wasn't completed. Please try again.");
-        } else if (response.status === 403) {
-          throw new Error("Payment session doesn't match your account. Please try again.");
         } else if (response.status === 409) {
           // Payment already used
           setError('This payment was already used to create an event.');
@@ -97,8 +98,9 @@ export default function NewPlanPage() {
       // Clear sessionStorage
       sessionStorage.removeItem('gather_new_event');
 
-      // Redirect to event page
-      router.push(`/plan/${result.event.id}`);
+      // Redirect to event page, opening the setup wizard automatically
+      // Use full page load so the server layout picks up the new session cookie
+      window.location.href = `/plan/${result.event.id}?setup=true`;
     } catch (err) {
       console.error('Error creating event:', err);
       setError(
@@ -117,50 +119,40 @@ export default function NewPlanPage() {
     });
   };
 
+  // Core checkout logic — no auth required
+  const startCheckout = async (data: typeof formData) => {
+    // Save form data so we can restore it if payment is canceled
+    sessionStorage.setItem('gather_new_event', JSON.stringify(data));
+
+    const response = await fetch('/api/billing/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eventName: data.name,
+        startDate: data.startDate,
+        endDate: data.endDate,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to create checkout session');
+    }
+
+    const result = await response.json();
+    window.location.href = result.checkoutUrl;
+  };
+
   const handlePayAndCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
     try {
-      // Validate form
-      if (!formData.name) {
-        throw new Error('Event name is required');
-      }
-      if (!formData.startDate) {
-        throw new Error('Start date is required');
-      }
-      if (!formData.endDate) {
-        throw new Error('End date is required');
-      }
+      if (!formData.name) throw new Error('Event name is required');
+      if (!formData.startDate) throw new Error('Start date is required');
+      if (!formData.endDate) throw new Error('End date is required');
 
-      // Store form values in sessionStorage
-      sessionStorage.setItem('gather_new_event', JSON.stringify(formData));
-
-      // Create Stripe checkout session
-      const response = await fetch('/api/billing/checkout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          eventName: formData.name,
-        }),
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          // Redirect to sign in
-          router.push('/auth/signin?redirect=/plan/new');
-          return;
-        }
-        throw new Error('Failed to create checkout session');
-      }
-
-      const result = await response.json();
-
-      // Redirect to Stripe Checkout
-      window.location.href = result.checkoutUrl;
+      await startCheckout(formData);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Connection failed. Check your internet and try again.'
