@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, CheckCircle } from 'lucide-react';
 import { useModal } from '@/contexts/ModalContext';
 
 interface Event {
@@ -39,6 +39,7 @@ interface EditEventModalProps {
   event: Event | null;
   eventId: string;
   stepLabel?: string;
+  showPaymentConfirmation?: boolean;
 }
 
 export default function EditEventModal({
@@ -48,6 +49,7 @@ export default function EditEventModal({
   event,
   eventId,
   stepLabel,
+  showPaymentConfirmation,
 }: EditEventModalProps) {
   const { openModal, closeModal } = useModal();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -198,6 +200,16 @@ export default function EditEventModal({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {showPaymentConfirmation && step === 1 && (
+          <div className="flex items-start gap-3 px-6 py-4 bg-green-50 border-b border-green-100">
+            <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+            <p className="text-sm text-green-800">
+              <span className="font-medium">Payment received!</span> A receipt has been sent to your
+              email. Continue setting up your event below.
+            </p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="p-6">
           {/* Step Navigation */}

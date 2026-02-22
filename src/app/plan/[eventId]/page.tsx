@@ -222,6 +222,7 @@ export default function PlanEditorPage() {
   const [inviteStatusData, setInviteStatusData] = useState<any | null>(null);
   const [checklistDismissed, setChecklistDismissed] = useState(false);
   const [checklistStepContext, setChecklistStepContext] = useState<string | null>(null);
+  const [isPostPayment, setIsPostPayment] = useState(false);
 
   // Debug: Log when selectedPersonId changes
   useEffect(() => {
@@ -280,6 +281,16 @@ export default function PlanEditorPage() {
       setExpandedSection(null);
     }
   }, [searchParams]);
+
+  // Auto-open Edit Event wizard after post-payment redirect
+  useEffect(() => {
+    if (searchParams.get('setup') === 'true') {
+      setChecklistStepContext('Step 1 of 3: Event Basics');
+      setIsPostPayment(true);
+      setEditEventModalOpen(true);
+      window.history.replaceState({}, '', `/plan/${eventId}`);
+    }
+  }, [searchParams, eventId]);
 
   // Load checklist dismissed state from localStorage
   useEffect(() => {
@@ -1071,6 +1082,7 @@ export default function PlanEditorPage() {
   const handleEditEventModalClose = () => {
     setEditEventModalOpen(false);
     setChecklistStepContext(null);
+    setIsPostPayment(false);
   };
 
   // Setup progress hook
@@ -1610,6 +1622,7 @@ export default function PlanEditorPage() {
             event={event}
             eventId={eventId}
             stepLabel={checklistStepContext || undefined}
+            showPaymentConfirmation={isPostPayment}
           />
         )}
 
