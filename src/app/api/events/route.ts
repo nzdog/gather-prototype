@@ -1,10 +1,11 @@
 // GET /api/events - List events where user has a role
-// POST /api/events - Create new event (requires payment)
+// POST /api/events - Create new event (requires payment, no auth needed)
 import { NextRequest, NextResponse } from 'next/server';
+import { randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth/session';
 import { stripe } from '@/lib/stripe';
-import { getResendClient } from '@/lib/email';
+import { sendWelcomeEmail } from '@/lib/email';
 
 export async function GET(_request: NextRequest) {
   try {
@@ -55,22 +56,8 @@ export async function GET(_request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Get authenticated user
-    const user = await getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const body = await request.json();
-    const { name, startDate, endDate, stripeSessionId } = body;
-
-    // Validate required fields
-    if (!name || !startDate || !endDate) {
-      return NextResponse.json(
-        { error: 'Missing required fields: name, startDate, endDate' },
-        { status: 400 }
-      );
-    }
+    const { stripeSessionId } = body;
 
     // Require payment session
     if (!stripeSessionId) {
@@ -81,32 +68,38 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify Stripe session
-    let session;
+    let stripeSession;
     try {
-      session = await stripe.checkout.sessions.retrieve(stripeSessionId);
+      stripeSession = await stripe.checkout.sessions.retrieve(stripeSessionId);
     } catch (err) {
       console.error('[Event Creation] Invalid Stripe session:', stripeSessionId, err);
       return NextResponse.json({ error: 'Invalid payment session' }, { status: 400 });
     }
 
     // Verify payment is completed
-    if (session.payment_status !== 'paid') {
-      console.error('[Event Creation] Payment not completed:', session.payment_status);
+    if (stripeSession.payment_status !== 'paid') {
+      console.error('[Event Creation] Payment not completed:', stripeSession.payment_status);
       return NextResponse.json({ error: 'Payment not completed' }, { status: 402 });
     }
 
-    // Verify session belongs to authenticated user
-    if (session.metadata?.userId !== user.id) {
-      console.error('[Event Creation] Payment session user mismatch');
+    // Get email from Stripe (collected during checkout)
+    const email = stripeSession.customer_details?.email;
+    if (!email) {
+      return NextResponse.json({ error: 'No email from Stripe' }, { status: 400 });
+    }
+
+    // Get event data from Stripe metadata
+    const { eventName, startDate, endDate } = stripeSession.metadata || {};
+    if (!eventName || !startDate || !endDate) {
       return NextResponse.json(
-        { error: 'Payment session does not belong to authenticated user' },
-        { status: 403 }
+        { error: 'Missing event data from payment session' },
+        { status: 400 }
       );
     }
 
     // Check session hasn't been used already
     const existingEvent = await prisma.event.findFirst({
-      where: { stripePaymentIntentId: session.payment_intent as string },
+      where: { stripePaymentIntentId: stripeSession.payment_intent as string },
     });
 
     if (existingEvent) {
@@ -117,124 +110,85 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build event data with all plan-phase fields
-    const eventData: any = {
-      name,
+    // Build event data
+    const eventData = {
+      name: eventName,
       startDate: new Date(startDate),
       endDate: new Date(endDate),
-      status: 'DRAFT',
-      structureMode: 'EDITABLE',
-      isLegacy: false, // New events are not legacy
-
-      // Payment tracking
-      stripePaymentIntentId: session.payment_intent as string,
+      status: 'DRAFT' as const,
+      structureMode: 'EDITABLE' as const,
+      isLegacy: false,
+      stripePaymentIntentId: stripeSession.payment_intent as string,
       paidAt: new Date(),
-      amountPaid: session.amount_total,
-
-      // Core optional fields
-      guestCount: body.guestCount || null,
-
-      // Occasion
-      occasionType: body.occasionType || null,
-      occasionDescription: body.occasionDescription || null,
-
-      // Guest parameters
-      guestCountConfidence: body.guestCountConfidence || 'MEDIUM',
-      guestCountMin: body.guestCountMin || null,
-      guestCountMax: body.guestCountMax || null,
-
-      // Dietary
-      dietaryStatus: body.dietaryStatus || 'UNSPECIFIED',
-      dietaryVegetarian: body.dietaryVegetarian || 0,
-      dietaryVegan: body.dietaryVegan || 0,
-      dietaryGlutenFree: body.dietaryGlutenFree || 0,
-      dietaryDairyFree: body.dietaryDairyFree || 0,
-      dietaryAllergies: body.dietaryAllergies || null,
-
-      // Venue
-      venueName: body.venueName || null,
-      venueType: body.venueType || null,
-      venueKitchenAccess: body.venueKitchenAccess || null,
-      venueOvenCount: body.venueOvenCount || 0,
-      venueStoretopBurners: body.venueStoretopBurners || null,
-      venueBbqAvailable: body.venueBbqAvailable !== undefined ? body.venueBbqAvailable : null,
-      venueTimingStart: body.venueTimingStart || null,
-      venueTimingEnd: body.venueTimingEnd || null,
-      venueNotes: body.venueNotes || null,
+      amountPaid: stripeSession.amount_total,
+      guestCountConfidence: 'MEDIUM' as const,
+      dietaryStatus: 'UNSPECIFIED' as const,
+      dietaryVegetarian: 0,
+      dietaryVegan: 0,
+      dietaryGlutenFree: 0,
+      dietaryDairyFree: 0,
+      venueOvenCount: 0,
     };
 
-    // Create event and EventRole in a transaction
-    const result = await prisma.$transaction(async (tx) => {
-      // Find or create a Person record for this user
-      let person = await tx.person.findFirst({
-        where: { userId: user.id },
-      });
+    // Create user, person, event, and event role in a transaction
+    const { event, user } = await prisma.$transaction(async (tx) => {
+      // Find or create User by email
+      let user = await tx.user.findUnique({ where: { email } });
+      if (!user) {
+        user = await tx.user.create({ data: { email } });
+      }
 
+      // Find or create Person linked to User
+      let person = await tx.person.findFirst({ where: { userId: user.id } });
       if (!person) {
-        // Create a new Person record linked to the user
         person = await tx.person.create({
           data: {
-            name: user.email.split('@')[0], // Use email prefix as default name
-            email: user.email,
+            name: email.split('@')[0],
+            email,
             userId: user.id,
           },
         });
       }
 
-      // Create event with the person as host
+      // Create event with person as host
       const event = await tx.event.create({
-        data: {
-          ...eventData,
-          hostId: person.id, // Set the required hostId field
-        },
+        data: { ...eventData, hostId: person.id },
       });
 
-      // Create EventRole for the user as HOST
+      // Create EventRole for user as HOST
       await tx.eventRole.create({
-        data: {
-          userId: user.id,
-          eventId: event.id,
-          role: 'HOST',
-        },
+        data: { userId: user.id, eventId: event.id, role: 'HOST' },
       });
 
-      return event;
+      return { event, user };
     });
 
-    console.log('[Event Creation] Event created with payment:', result.id);
+    console.log('[Event Creation] Event created with payment:', event.id);
 
-    // Send receipt email
-    try {
-      const resend = getResendClient();
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-      const amountFormatted = ((result.amountPaid || 1200) / 100).toFixed(2);
+    // Create session to log the user in automatically
+    const sessionToken = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
-      await resend.emails.send({
-        from: process.env.EMAIL_FROM || 'Gather <noreply@gather.app>',
-        to: user.email,
-        subject: `Receipt: ${result.name} — Gather`,
-        text: `Thanks for using Gather!
-
-Event: ${result.name}
-Date: ${new Date(result.startDate).toLocaleDateString()}
-Amount: $${amountFormatted} NZD
-
-Manage your event: ${baseUrl}/plan/${result.id}
-
-Questions? Reply to this email.
-`,
-      });
-
-      console.log('[Event Creation] Receipt email sent to:', user.email);
-    } catch (emailError) {
-      // Don't fail event creation if email fails
-      console.error('[Event Creation] Failed to send receipt email:', emailError);
-    }
-
-    return NextResponse.json({
-      success: true,
-      event: result,
+    await prisma.session.create({
+      data: { token: sessionToken, userId: user.id, expiresAt },
     });
+
+    // Build response with session cookie
+    const response = NextResponse.json({ success: true, event });
+    response.cookies.set('session', sessionToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      expires: expiresAt,
+      path: '/',
+    });
+
+    // Send welcome email with magic link for future access (fire and forget)
+    sendWelcomeEmail(email, event.name, event.id).catch((emailError) => {
+      console.error('[Event Creation] Failed to send welcome email:', emailError);
+    });
+
+    return response;
   } catch (error) {
     console.error('Error creating event:', error);
     return NextResponse.json(

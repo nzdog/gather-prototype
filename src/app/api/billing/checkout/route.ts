@@ -1,19 +1,12 @@
 // src/app/api/billing/checkout/route.ts
 // Per-event payment: $12 one-time payment (not subscription)
 import { NextResponse } from 'next/server';
-import { getUser } from '@/lib/auth/session';
 import { stripe } from '@/lib/stripe';
 
 export async function POST(req: Request) {
   try {
-    // Get authenticated user
-    const user = await getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const body = await req.json();
-    const { eventName } = body;
+    const { eventName, startDate, endDate } = body;
 
     // Get app URL from env or construct from request
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
@@ -38,7 +31,9 @@ export async function POST(req: Request) {
       success_url: `${appUrl}/plan/new?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/plan/new?canceled=true`,
       metadata: {
-        userId: user.id,
+        eventName: eventName || '',
+        startDate: startDate || '',
+        endDate: endDate || '',
       },
     });
 

@@ -26,7 +26,7 @@ export default async function LandingPage() {
 
           {/* Primary CTA */}
           <Link
-            href={user ? '/plan/events' : '/auth/signin'}
+            href={user ? '/plan/events' : '/plan/new'}
             className="inline-flex items-center gap-3 px-12 py-5 bg-accent text-white text-xl font-bold rounded-xl hover:bg-accent-dark transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
           >
             {user ? 'Your Events' : 'Get Started'}
