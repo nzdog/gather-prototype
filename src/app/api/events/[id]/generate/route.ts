@@ -167,6 +167,19 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
     const generatedBatchId = `gen_${randomBytes(16).toString('hex')}`;
     console.log('[Generate] Batch ID:', generatedBatchId);
 
+    // Log any items that won't be saved due to teamName mismatch
+    const allTeamNames = aiResponse.teams.map((t) => t.name);
+    const unmatchedItems = aiResponse.items.filter((item) => !allTeamNames.includes(item.teamName));
+    console.log(
+      `[Generate] AI generated ${aiResponse.teams.length} teams, ${aiResponse.items.length} items`
+    );
+    if (unmatchedItems.length > 0) {
+      console.warn(
+        `[Generate] ${unmatchedItems.length} items dropped due to teamName mismatch:`,
+        unmatchedItems.map((i) => `"${i.name}" (teamName: "${i.teamName}")`).slice(0, 5)
+      );
+    }
+
     // Create teams and items in database
     let teamsCreated = 0;
     let itemsCreated = 0;

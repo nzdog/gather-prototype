@@ -18,7 +18,6 @@ export default function HostDescriptionModal({
 }: HostDescriptionModalProps) {
   const { openModal, closeModal } = useModal();
   const [description, setDescription] = useState('');
-  const [generating, setGenerating] = useState(false);
 
   // Modal blocking check
   useEffect(() => {
@@ -35,7 +34,6 @@ export default function HostDescriptionModal({
   useEffect(() => {
     if (!isOpen) {
       setDescription('');
-      setGenerating(false);
     }
   }, [isOpen]);
 
@@ -46,18 +44,10 @@ export default function HostDescriptionModal({
     onClose();
   };
 
-  const handleGenerate = async (e: React.FormEvent) => {
+  const handleGenerate = (e: React.FormEvent) => {
     e.preventDefault();
-    setGenerating(true);
-    try {
-      await onGenerate(description.trim());
-      onClose();
-    } catch (error) {
-      console.error('Error generating plan:', error);
-      alert('Failed to generate plan. Please try again.');
-    } finally {
-      setGenerating(false);
-    }
+    onClose();
+    onGenerate(description.trim());
   };
 
   return (
@@ -88,17 +78,15 @@ export default function HostDescriptionModal({
               <button
                 type="button"
                 onClick={handleSkip}
-                disabled={generating}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:opacity-50"
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
               >
                 Skip
               </button>
               <button
                 type="submit"
-                disabled={generating}
-                className="px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark disabled:opacity-50 flex items-center gap-2"
+                className="px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark flex items-center gap-2"
               >
-                {generating ? <>Generating...</> : <>Generate Plan →</>}
+                Generate Plan →
               </button>
             </div>
           </form>

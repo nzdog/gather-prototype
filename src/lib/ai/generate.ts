@@ -137,8 +137,7 @@ export async function generatePlan(
     return response;
   } catch (error) {
     console.error('[AI Generate] Error generating plan with Claude:', error);
-    console.warn('[AI Generate] Falling back to mock data');
-    return generateMockPlan(params);
+    throw error;
   }
 }
 

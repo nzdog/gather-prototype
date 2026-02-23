@@ -11,7 +11,7 @@ const anthropic = new Anthropic({
 });
 
 // Default model configuration
-const DEFAULT_MODEL = 'claude-3-5-haiku-20241022'; // Fast and cost-effective
+const DEFAULT_MODEL = 'claude-sonnet-4-20250514'; // Better instruction-following for structured outputs
 const DEFAULT_MAX_TOKENS = 4096;
 const DEFAULT_TIMEOUT = 30000; // 30 seconds
 
@@ -119,6 +119,16 @@ export async function callClaude(
  * Handles cases where Claude might wrap JSON in markdown code blocks
  */
 export function parseClaudeJSON<T>(response: ClaudeResponse): T {
+  if (response.stopReason === 'max_tokens') {
+    console.error(
+      '[Claude API] AI response truncated - max_tokens reached. Response length:',
+      response.content.length
+    );
+    throw new Error(
+      'AI response truncated at token limit - increase maxTokens or reduce prompt complexity'
+    );
+  }
+
   let jsonText = response.content.trim();
 
   // Remove markdown code blocks if present
