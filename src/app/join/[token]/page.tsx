@@ -3,11 +3,11 @@ import { notFound } from 'next/navigation';
 import { NameSelectionClient } from './NameSelectionClient';
 
 interface Props {
-  params: { token: string };
+  params: Promise<{ token: string }>;
 }
 
 export default async function SharedLinkPage({ params }: Props) {
-  const { token } = params;
+  const { token } = await params;
 
   // Find event by shared link token
   const event = await prisma.event.findFirst({
