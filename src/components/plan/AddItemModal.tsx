@@ -9,11 +9,17 @@ interface Day {
   date: string;
 }
 
+interface Team {
+  id: string;
+  name: string;
+}
+
 interface AddItemModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAdd: (itemData: ItemFormData) => Promise<void>;
-  teamName: string;
+  teamName?: string;
+  teams?: Team[];
   days: Day[];
 }
 
@@ -28,6 +34,7 @@ export interface ItemFormData {
   description?: string;
   dayId?: string | null;
   serveTime?: string | null;
+  teamId?: string;
 }
 
 const QUANTITY_UNITS = [
@@ -60,6 +67,7 @@ export default function AddItemModal({
   onClose,
   onAdd,
   teamName,
+  teams,
   days,
 }: AddItemModalProps) {
   const { openModal, closeModal } = useModal();
@@ -73,6 +81,7 @@ export default function AddItemModal({
   const [dietaryTags, setDietaryTags] = useState<string[]>([]);
   const [dayId, setDayId] = useState<string>('');
   const [serveTime, setServeTime] = useState<string>('');
+  const [selectedTeamId, setSelectedTeamId] = useState<string>('');
   const [adding, setAdding] = useState(false);
 
   // Modal blocking check
@@ -104,6 +113,11 @@ export default function AddItemModal({
       return;
     }
 
+    if (teams && !selectedTeamId) {
+      alert('Please select a team');
+      return;
+    }
+
     setAdding(true);
     try {
       const itemData: ItemFormData = {
@@ -129,6 +143,9 @@ export default function AddItemModal({
       if (dayId) itemData.dayId = dayId;
       if (serveTime) itemData.serveTime = serveTime;
 
+      // Add team ID when using team selector
+      if (teams && selectedTeamId) itemData.teamId = selectedTeamId;
+
       await onAdd(itemData);
 
       // Reset form
@@ -142,6 +159,7 @@ export default function AddItemModal({
       setDietaryTags([]);
       setDayId('');
       setServeTime('');
+      setSelectedTeamId('');
       onClose();
     } catch (error) {
       console.error('Error adding item:', error);
@@ -163,18 +181,41 @@ export default function AddItemModal({
       setDietaryTags([]);
       setDayId('');
       setServeTime('');
+      setSelectedTeamId('');
       onClose();
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] overflow-y-auto">
       <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 my-8">
-        <h2 className="text-xl font-bold mb-2">Add Item to {teamName}</h2>
+        <h2 className="text-xl font-bold mb-2">
+          {teamName ? `Add Item to ${teamName}` : 'Add Item'}
+        </h2>
         <p className="text-sm text-gray-600 mb-4">Add a new item to this team's responsibility</p>
 
         <form onSubmit={handleSubmit}>
           <div className="space-y-4 mb-6">
+            {/* Team Selector — shown when no team is pre-selected */}
+            {teams && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Team *</label>
+                <select
+                  value={selectedTeamId}
+                  onChange={(e) => setSelectedTeamId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                  disabled={adding}
+                >
+                  <option value="">Select a team…</option>
+                  {teams.map((team) => (
+                    <option key={team.id} value={team.id}>
+                      {team.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* Item Name */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Item Name *</label>

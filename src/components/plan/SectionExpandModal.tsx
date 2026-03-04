@@ -8,6 +8,7 @@ interface SectionExpandModalProps {
   onClose: () => void;
   title: string;
   icon?: React.ReactNode;
+  headerActions?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -24,6 +25,7 @@ export default function SectionExpandModal({
   onClose,
   title,
   icon,
+  headerActions,
   children,
 }: SectionExpandModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
@@ -114,13 +116,16 @@ export default function SectionExpandModal({
               {title}
             </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
-            aria-label="Close expanded view"
-          >
-            <X className="w-6 h-6" />
-          </button>
+          <div className="flex items-center gap-3">
+            {headerActions}
+            <button
+              onClick={onClose}
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+              aria-label="Close expanded view"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}

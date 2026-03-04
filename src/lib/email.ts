@@ -1,4 +1,5 @@
 // src/lib/email.ts
+// Force rebuild for env var pickup
 import { Resend } from 'resend';
 import { randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';

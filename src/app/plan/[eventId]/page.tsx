@@ -811,10 +811,11 @@ export default function PlanEditorPage() {
   };
 
   const handleAddItem = async (itemData: ItemFormData) => {
-    if (!selectedTeamForItem) return;
+    const team = selectedTeamForItem ?? teams.find((t) => t.id === itemData.teamId) ?? null;
+    if (!team) return;
 
     try {
-      const response = await fetch(`/api/events/${eventId}/teams/${selectedTeamForItem.id}/items`, {
+      const response = await fetch(`/api/events/${eventId}/teams/${team.id}/items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(itemData),
@@ -824,9 +825,10 @@ export default function PlanEditorPage() {
         throw new Error('Failed to add item');
       }
 
-      // Reload teams and team items, refresh gate check
+      // Reload teams, team items, global items list, and refresh gate check
       await loadTeams();
-      await loadTeamItems(selectedTeamForItem.id);
+      await loadTeamItems(team.id);
+      await loadItems();
       setGateCheckRefresh((prev) => prev + 1);
     } catch (error: any) {
       console.error('Error adding item:', error);
@@ -1568,18 +1570,17 @@ export default function PlanEditorPage() {
         />
 
         {/* Add Item Modal */}
-        {selectedTeamForItem && (
-          <AddItemModal
-            isOpen={addItemModalOpen}
-            onClose={() => {
-              setAddItemModalOpen(false);
-              setSelectedTeamForItem(null);
-            }}
-            onAdd={handleAddItem}
-            teamName={selectedTeamForItem.name}
-            days={days}
-          />
-        )}
+        <AddItemModal
+          isOpen={addItemModalOpen}
+          onClose={() => {
+            setAddItemModalOpen(false);
+            setSelectedTeamForItem(null);
+          }}
+          onAdd={handleAddItem}
+          teamName={selectedTeamForItem?.name}
+          teams={!selectedTeamForItem ? teams : undefined}
+          days={days}
+        />
 
         {/* Edit Item Modal */}
         <EditItemModal
@@ -1649,6 +1650,20 @@ export default function PlanEditorPage() {
           onClose={handleCloseExpansion}
           title="Items & Quantities"
           icon={<Package className="w-6 h-6" />}
+          headerActions={
+            event?.status === 'DRAFT' ? (
+              <button
+                onClick={() => {
+                  setSelectedTeamForItem(null);
+                  setAddItemModalOpen(true);
+                }}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition"
+              >
+                <Plus className="w-4 h-4" />
+                Add Item
+              </button>
+            ) : undefined
+          }
         >
           <div className="space-y-3">
             {items.map((item) => {
