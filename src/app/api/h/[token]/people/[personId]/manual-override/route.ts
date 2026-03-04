@@ -5,15 +5,15 @@ import { logInviteEvent } from '@/lib/invite-events';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { token: string; personId: string } }
+  context: { params: Promise<{ token: string; personId: string }> }
 ) {
-  const context = await resolveToken(params.token);
-  if (!context || context.scope !== 'HOST') {
+  const { token, personId } = await context.params;
+  const resolvedContext = await resolveToken(token);
+  if (!resolvedContext || resolvedContext.scope !== 'HOST') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
-  const { personId } = params;
-  const eventId = context.event.id;
+  const eventId = resolvedContext.event.id;
 
   let response: 'ACCEPTED' | 'DECLINED';
   let reason = '';

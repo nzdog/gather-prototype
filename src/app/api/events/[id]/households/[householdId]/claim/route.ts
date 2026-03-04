@@ -4,11 +4,11 @@ import { prisma } from '@/lib/prisma';
 // POST /api/events/[id]/households/[householdId]/claim - Member claims their slot
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string; householdId: string } }
+  context: { params: Promise<{ id: string; householdId: string }> }
 ) {
   try {
-    const eventId = params.id;
-    const householdId = params.householdId;
+    const { id, householdId } = await context.params;
+    const eventId = id;
 
     const body = await request.json();
     const { memberId, name, email, phone } = body;

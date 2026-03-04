@@ -12,10 +12,11 @@ import { RsvpStatus } from '@prisma/client';
  * CRITICAL: No repair loop. This is a GET route - no DB writes.
  * Status is read as-is from database.
  */
-export async function GET(request: NextRequest, { params }: { params: { token: string } }) {
-  const context = await resolveToken(params.token);
+export async function GET(request: NextRequest, context: { params: Promise<{ token: string }> }) {
+  const { token } = await context.params;
+  const resolvedContext = await resolveToken(token);
 
-  if (!context || context.scope !== 'PARTICIPANT') {
+  if (!resolvedContext || resolvedContext.scope !== 'PARTICIPANT') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
   prisma.accessToken
     .findFirst({
       where: {
-        token: params.token,
+        token: token,
         openedAt: null,
       },
       select: { id: true },
@@ -37,11 +38,11 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
             data: { openedAt: new Date() },
           }),
           logInviteEvent({
-            eventId: context.event.id,
-            personId: context.person.id,
+            eventId: resolvedContext.event.id,
+            personId: resolvedContext.person.id,
             type: 'LINK_OPENED',
             metadata: {
-              tokenScope: context.scope,
+              tokenScope: resolvedContext.scope,
               userAgent: userAgent.substring(0, 200),
             },
           }),
@@ -53,10 +54,10 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
   // Fetch participant's assignments
   const assignments = await prisma.assignment.findMany({
     where: {
-      personId: context.person.id,
+      personId: resolvedContext.person.id,
       item: {
         team: {
-          eventId: context.event.id,
+          eventId: resolvedContext.event.id,
         },
       },
     },
@@ -82,8 +83,8 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
   // Get team info (participant belongs to one team)
   const personEvent = await prisma.personEvent.findFirst({
     where: {
-      personId: context.person.id,
-      eventId: context.event.id,
+      personId: resolvedContext.person.id,
+      eventId: resolvedContext.event.id,
     },
     include: {
       team: {
@@ -96,17 +97,17 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
 
   return NextResponse.json({
     person: {
-      id: context.person.id,
-      name: context.person.name,
+      id: resolvedContext.person.id,
+      name: resolvedContext.person.name,
     },
     event: {
-      id: context.event.id,
-      name: context.event.name,
-      startDate: context.event.startDate,
-      endDate: context.event.endDate,
-      status: context.event.status,
-      guestCount: context.event.guestCount,
-      venueName: context.event.venueName,
+      id: resolvedContext.event.id,
+      name: resolvedContext.event.name,
+      startDate: resolvedContext.event.startDate,
+      endDate: resolvedContext.event.endDate,
+      status: resolvedContext.event.status,
+      guestCount: resolvedContext.event.guestCount,
+      venueName: resolvedContext.event.venueName,
     },
     team: personEvent?.team
       ? {
@@ -156,10 +157,11 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
  *
  * Updates participant's RSVP status.
  */
-export async function PATCH(request: NextRequest, { params }: { params: { token: string } }) {
-  const context = await resolveToken(params.token);
+export async function PATCH(request: NextRequest, context: { params: Promise<{ token: string }> }) {
+  const { token } = await context.params;
+  const resolvedContext = await resolveToken(token);
 
-  if (!context || context.scope !== 'PARTICIPANT') {
+  if (!resolvedContext || resolvedContext.scope !== 'PARTICIPANT') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -178,8 +180,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { token:
   // Find PersonEvent
   const personEvent = await prisma.personEvent.findFirst({
     where: {
-      personId: context.person.id,
-      eventId: context.event.id,
+      personId: resolvedContext.person.id,
+      eventId: resolvedContext.event.id,
     },
   });
 

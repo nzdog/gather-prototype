@@ -10,29 +10,30 @@ import { prisma } from '@/lib/prisma';
  */
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { token: string; teamId: string } }
+  context: { params: Promise<{ token: string; teamId: string }> }
 ) {
-  const context = await resolveToken(params.token);
+  const { token, teamId } = await context.params;
+  const resolvedContext = await resolveToken(token);
 
-  if (!context || context.scope !== 'HOST') {
+  if (!resolvedContext || resolvedContext.scope !== 'HOST') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
   // Verify team belongs to this event
   const team = await prisma.team.findUnique({
-    where: { id: params.teamId },
+    where: { id: teamId },
     include: {
       coordinator: true,
     },
   });
 
-  if (!team || team.eventId !== context.event.id) {
+  if (!team || team.eventId !== resolvedContext.event.id) {
     return NextResponse.json({ error: 'Team not found' }, { status: 404 });
   }
 
   // Fetch team items with assignments
   const items = await prisma.item.findMany({
-    where: { teamId: params.teamId },
+    where: { teamId: teamId },
     include: {
       assignment: {
         include: {
@@ -46,7 +47,7 @@ export async function GET(
 
   // Fetch all people in this event for frozen edit modal
   const people = await prisma.personEvent.findMany({
-    where: { eventId: context.event.id },
+    where: { eventId: resolvedContext.event.id },
     include: {
       person: { select: { id: true, name: true } },
       team: { select: { id: true, name: true } },
@@ -55,11 +56,11 @@ export async function GET(
 
   return NextResponse.json({
     event: {
-      id: context.event.id,
-      name: context.event.name,
-      startDate: context.event.startDate.toISOString(),
-      endDate: context.event.endDate.toISOString(),
-      status: context.event.status,
+      id: resolvedContext.event.id,
+      name: resolvedContext.event.name,
+      startDate: resolvedContext.event.startDate.toISOString(),
+      endDate: resolvedContext.event.endDate.toISOString(),
+      status: resolvedContext.event.status,
     },
     team: {
       id: team.id,

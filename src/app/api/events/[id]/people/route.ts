@@ -4,9 +4,10 @@ import { requireEventRole } from '@/lib/auth/guards';
 import { normalizePhoneNumber } from '@/lib/phone';
 
 // GET /api/events/[id]/people - List people on this event
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const eventId = params.id;
+    const { id } = await context.params;
+    const eventId = id;
 
     // Require HOST, COHOST, or COORDINATOR role
     const auth = await requireEventRole(eventId, ['HOST', 'COHOST', 'COORDINATOR']);
@@ -70,9 +71,10 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 }
 
 // POST /api/events/[id]/people - Add person to event
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const eventId = params.id;
+    const { id } = await context.params;
+    const eventId = id;
 
     // Only HOST and COHOST can add people
     const auth = await requireEventRole(eventId, ['HOST', 'COHOST']);

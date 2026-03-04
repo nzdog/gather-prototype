@@ -8,10 +8,11 @@ import { prisma } from '@/lib/prisma';
  * Returns audit log entries for the event.
  * Supports filtering by actionType.
  */
-export async function GET(request: NextRequest, { params }: { params: { token: string } }) {
-  const context = await resolveToken(params.token);
+export async function GET(request: NextRequest, context: { params: Promise<{ token: string }> }) {
+  const { token } = await context.params;
+  const resolvedContext = await resolveToken(token);
 
-  if (!context || context.scope !== 'HOST') {
+  if (!resolvedContext || resolvedContext.scope !== 'HOST') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
 
   // Build where clause
   const where: any = {
-    eventId: context.event.id,
+    eventId: resolvedContext.event.id,
   };
 
   if (actionTypeFilter && actionTypeFilter !== 'ALL') {
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
   // Get unique action types for filter dropdown
   const actionTypes = await prisma.auditEntry.findMany({
     where: {
-      eventId: context.event.id,
+      eventId: resolvedContext.event.id,
     },
     select: {
       actionType: true,

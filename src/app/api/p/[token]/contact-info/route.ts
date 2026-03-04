@@ -9,10 +9,11 @@ import { normalizePhoneNumber } from '@/lib/phone';
  * Allows participants to add their contact information (email or phone).
  * When contact info is added, upgrades reachabilityTier from SHARED to DIRECT.
  */
-export async function PATCH(request: NextRequest, { params }: { params: { token: string } }) {
-  const context = await resolveToken(params.token);
+export async function PATCH(request: NextRequest, context: { params: Promise<{ token: string }> }) {
+  const { token } = await context.params;
+  const resolvedContext = await resolveToken(token);
 
-  if (!context || context.scope !== 'PARTICIPANT') {
+  if (!resolvedContext || resolvedContext.scope !== 'PARTICIPANT') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -56,7 +57,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { token:
   await prisma.$transaction(async (tx) => {
     // Update Person with new contact info
     await tx.person.update({
-      where: { id: context.person.id },
+      where: { id: resolvedContext.person.id },
       data: personUpdateData,
     });
 
@@ -64,8 +65,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { token:
     await tx.personEvent.update({
       where: {
         personId_eventId: {
-          personId: context.person.id,
-          eventId: context.event.id,
+          personId: resolvedContext.person.id,
+          eventId: resolvedContext.event.id,
         },
       },
       data: {

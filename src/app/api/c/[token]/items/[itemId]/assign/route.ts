@@ -19,33 +19,34 @@ import { requireNotFrozen } from '@/lib/auth/guards';
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { token: string; itemId: string } }
+  context: { params: Promise<{ token: string; itemId: string }> }
 ) {
-  const context = await resolveToken(params.token);
+  const { token, itemId } = await context.params;
+  const resolvedContext = await resolveToken(token);
 
-  if (!context || context.scope !== 'COORDINATOR' || !context.team) {
+  if (!resolvedContext || resolvedContext.scope !== 'COORDINATOR' || !resolvedContext.team) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
   // SECURITY: Block mutations when FROZEN (server-side validation)
-  const frozenBlock = requireNotFrozen(context.event, false);
+  const frozenBlock = requireNotFrozen(resolvedContext.event, false);
   if (frozenBlock) return frozenBlock;
 
   // Verify item ownership
   const item = await prisma.item.findUnique({
-    where: { id: params.itemId },
+    where: { id: itemId },
     include: { assignment: true },
   });
 
-  if (!item || item.teamId !== context.team.id) {
+  if (!item || item.teamId !== resolvedContext.team.id) {
     return NextResponse.json({ error: 'Item not found' }, { status: 404 });
   }
 
   // Check if mutations are allowed
-  if (!canMutate(context.event.status, 'assignItem')) {
+  if (!canMutate(resolvedContext.event.status, 'assignItem')) {
     return NextResponse.json(
       {
-        error: `Cannot assign items while event is ${context.event.status}`,
+        error: `Cannot assign items while event is ${resolvedContext.event.status}`,
       },
       { status: 403 }
     );
@@ -61,11 +62,11 @@ export async function POST(
   const personEvent = await prisma.personEvent.findFirst({
     where: {
       personId: body.personId,
-      eventId: context.event.id,
+      eventId: resolvedContext.event.id,
     },
   });
 
-  if (!personEvent || personEvent.teamId !== context.team.id) {
+  if (!personEvent || personEvent.teamId !== resolvedContext.team.id) {
     return NextResponse.json(
       {
         error: 'Person must be in the same team as the item',
@@ -89,7 +90,7 @@ export async function POST(
     // Create new assignment
     const assignment = await tx.assignment.create({
       data: {
-        itemId: params.itemId,
+        itemId: itemId,
         personId: body.personId,
       },
       include: {
@@ -100,20 +101,20 @@ export async function POST(
     // Clear notes if it contains "UNASSIGNED" message from seed data
     if (item.notes && item.notes.includes('UNASSIGNED')) {
       await tx.item.update({
-        where: { id: params.itemId },
+        where: { id: itemId },
         data: { notes: null },
       });
     }
 
     // Repair item status after assignment mutation
-    await repairItemStatusAfterMutation(tx, params.itemId);
+    await repairItemStatusAfterMutation(tx, itemId);
 
     await logAudit(tx, {
-      eventId: context.event.id,
-      actorId: context.person.id,
+      eventId: resolvedContext.event.id,
+      actorId: resolvedContext.person.id,
       actionType,
       targetType: 'Item',
-      targetId: params.itemId,
+      targetId: itemId,
       details: `${isReassignment ? 'Reassigned' : 'Assigned'} ${item.name} to ${assignment.person.name}`,
     });
 
@@ -136,21 +137,22 @@ export async function POST(
  */
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: { token: string; itemId: string } }
+  context: { params: Promise<{ token: string; itemId: string }> }
 ) {
-  const context = await resolveToken(params.token);
+  const { token, itemId } = await context.params;
+  const resolvedContext = await resolveToken(token);
 
-  if (!context || context.scope !== 'COORDINATOR' || !context.team) {
+  if (!resolvedContext || resolvedContext.scope !== 'COORDINATOR' || !resolvedContext.team) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
   // SECURITY: Block mutations when FROZEN (server-side validation)
-  const frozenBlock = requireNotFrozen(context.event, false);
+  const frozenBlock = requireNotFrozen(resolvedContext.event, false);
   if (frozenBlock) return frozenBlock;
 
   // Verify item ownership
   const item = await prisma.item.findUnique({
-    where: { id: params.itemId },
+    where: { id: itemId },
     include: {
       assignment: {
         include: {
@@ -160,7 +162,7 @@ export async function DELETE(
     },
   });
 
-  if (!item || item.teamId !== context.team.id) {
+  if (!item || item.teamId !== resolvedContext.team.id) {
     return NextResponse.json({ error: 'Item not found' }, { status: 404 });
   }
 
@@ -169,10 +171,10 @@ export async function DELETE(
   }
 
   // Check if mutations are allowed
-  if (!canMutate(context.event.status, 'assignItem')) {
+  if (!canMutate(resolvedContext.event.status, 'assignItem')) {
     return NextResponse.json(
       {
-        error: `Cannot unassign items while event is ${context.event.status}`,
+        error: `Cannot unassign items while event is ${resolvedContext.event.status}`,
       },
       { status: 403 }
     );
@@ -185,14 +187,14 @@ export async function DELETE(
     });
 
     // Repair item status after assignment deletion
-    await repairItemStatusAfterMutation(tx, params.itemId);
+    await repairItemStatusAfterMutation(tx, itemId);
 
     await logAudit(tx, {
-      eventId: context.event.id,
-      actorId: context.person.id,
+      eventId: resolvedContext.event.id,
+      actorId: resolvedContext.person.id,
       actionType: 'UNASSIGN_ITEM',
       targetType: 'Item',
-      targetId: params.itemId,
+      targetId: itemId,
       details: `Unassigned ${item.name} from ${item.assignment!.person.name}`,
     });
   });

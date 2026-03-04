@@ -3,9 +3,10 @@ import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
 
 // GET /api/events/[id]/households - List households for event
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const eventId = params.id;
+    const { id } = await context.params;
+    const eventId = id;
 
     // Require HOST, COHOST, or COORDINATOR role
     const auth = await requireEventRole(eventId, ['HOST', 'COHOST', 'COORDINATOR']);
@@ -55,9 +56,10 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 }
 
 // POST /api/events/[id]/households - Host creates household with proxy
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const eventId = params.id;
+    const { id } = await context.params;
+    const eventId = id;
 
     // Only HOST and COHOST can create households
     const auth = await requireEventRole(eventId, ['HOST', 'COHOST']);

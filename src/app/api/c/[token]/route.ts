@@ -15,10 +15,11 @@ import { logInviteEvent } from '@/lib/invite-events';
  * - Compute status synchronously (no await)
  * - Other teams' statuses via item.groupBy aggregate only
  */
-export async function GET(request: NextRequest, { params }: { params: { token: string } }) {
-  const context = await resolveToken(params.token);
+export async function GET(request: NextRequest, context: { params: Promise<{ token: string }> }) {
+  const { token } = await context.params;
+  const resolvedContext = await resolveToken(token);
 
-  if (!context || context.scope !== 'COORDINATOR' || !context.team) {
+  if (!resolvedContext || resolvedContext.scope !== 'COORDINATOR' || !resolvedContext.team) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
   prisma.accessToken
     .findFirst({
       where: {
-        token: params.token,
+        token: token,
         openedAt: null,
       },
       select: { id: true },
@@ -40,12 +41,12 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
             data: { openedAt: new Date() },
           }),
           logInviteEvent({
-            eventId: context.event.id,
-            personId: context.person.id,
+            eventId: resolvedContext.event.id,
+            personId: resolvedContext.person.id,
             type: 'LINK_OPENED',
             metadata: {
               tokenScope: 'COORDINATOR',
-              teamId: context.team!.id,
+              teamId: resolvedContext.team!.id,
               userAgent: userAgent.substring(0, 200),
             },
           }),
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
 
   // 1. Fetch coordinator's own team items (scoped to token.teamId)
   const myItems = await prisma.item.findMany({
-    where: { teamId: context.team.id },
+    where: { teamId: resolvedContext.team.id },
     include: {
       assignment: {
         include: {
@@ -74,8 +75,8 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
   // 2. Fetch other teams (id + name only)
   const otherTeams = await prisma.team.findMany({
     where: {
-      eventId: context.event.id,
-      id: { not: context.team.id },
+      eventId: resolvedContext.event.id,
+      id: { not: resolvedContext.team.id },
     },
     select: { id: true, name: true },
   });
@@ -104,8 +105,8 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
   // 5. Get team members for assignment dropdown
   const teamMembers = await prisma.personEvent.findMany({
     where: {
-      eventId: context.event.id,
-      teamId: context.team.id,
+      eventId: resolvedContext.event.id,
+      teamId: resolvedContext.team.id,
     },
     include: {
       person: true,
@@ -115,7 +116,7 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
   // 6. Get host information
   const hostToken = await prisma.accessToken.findFirst({
     where: {
-      eventId: context.event.id,
+      eventId: resolvedContext.event.id,
       scope: 'HOST',
     },
     include: {
@@ -126,7 +127,7 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
   // 7. Get coordinator's own assignments (items assigned to them personally)
   const allMyAssignments = await prisma.assignment.findMany({
     where: {
-      personId: context.person.id,
+      personId: resolvedContext.person.id,
     },
     include: {
       item: {
@@ -139,23 +140,25 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
   });
 
   // Filter to only assignments for this event (via item's team)
-  const myAssignments = allMyAssignments.filter((a) => a.item.team.eventId === context.event.id);
+  const myAssignments = allMyAssignments.filter(
+    (a) => a.item.team.eventId === resolvedContext.event.id
+  );
 
   return NextResponse.json({
     person: {
-      id: context.person.id,
-      name: context.person.name,
+      id: resolvedContext.person.id,
+      name: resolvedContext.person.name,
     },
     event: {
-      id: context.event.id,
-      name: context.event.name,
-      status: context.event.status,
-      guestCount: context.event.guestCount,
+      id: resolvedContext.event.id,
+      name: resolvedContext.event.name,
+      status: resolvedContext.event.status,
+      guestCount: resolvedContext.event.guestCount,
     },
     team: {
-      id: context.team.id,
-      name: context.team.name,
-      scope: context.team.scope,
+      id: resolvedContext.team.id,
+      name: resolvedContext.team.name,
+      scope: resolvedContext.team.scope,
     },
     host: hostToken
       ? {

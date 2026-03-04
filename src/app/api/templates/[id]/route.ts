@@ -8,7 +8,8 @@ import { getUser } from '@/lib/auth/session';
  * Get template details.
  * SECURITY: Verifies ownership before returning template data
  */
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   // SECURITY: Require authenticated user session
   const user = await getUser();
   if (!user) {
@@ -17,7 +18,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 
   // SECURITY: Fetch only ownership fields before authorization check
   const templateCheck = await prisma.structureTemplate.findUnique({
-    where: { id: params.id },
+    where: { id: id },
     select: { hostId: true, templateSource: true },
   });
 
@@ -32,7 +33,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 
   // Authorization passed - fetch full template
   const template = await prisma.structureTemplate.findUnique({
-    where: { id: params.id },
+    where: { id: id },
   });
 
   return NextResponse.json({ template });
@@ -44,7 +45,8 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
  * Delete template (host templates only).
  * SECURITY: Verifies ownership before deletion to prevent authorization bypass
  */
-export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   // SECURITY: Require authenticated user session
   const user = await getUser();
   if (!user) {
@@ -53,7 +55,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: { id: 
 
   // SECURITY: Fetch only ownership fields before authorization check
   const template = await prisma.structureTemplate.findUnique({
-    where: { id: params.id },
+    where: { id: id },
     select: { hostId: true, templateSource: true },
   });
 
@@ -72,7 +74,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: { id: 
   }
 
   await prisma.structureTemplate.delete({
-    where: { id: params.id },
+    where: { id: id },
   });
 
   return NextResponse.json({ message: 'Template deleted successfully' });

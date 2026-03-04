@@ -14,10 +14,11 @@ import { computeTeamStatusFromItems } from '@/lib/workflow';
  * - Freeze is always allowed (warnings shown in modal, don't block)
  * - No repair (GET route - no DB writes)
  */
-export async function GET(_request: NextRequest, { params }: { params: { token: string } }) {
-  const context = await resolveToken(params.token);
+export async function GET(_request: NextRequest, context: { params: Promise<{ token: string }> }) {
+  const { token } = await context.params;
+  const resolvedContext = await resolveToken(token);
 
-  if (!context || context.scope !== 'HOST') {
+  if (!resolvedContext || resolvedContext.scope !== 'HOST') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -26,13 +27,13 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
   let authStatus: 'unclaimed' | 'requires_signin' | 'authenticated' = 'authenticated';
 
   if (process.env.NODE_ENV !== 'development') {
-    const needsClaim = !context.person.userId;
+    const needsClaim = !resolvedContext.person.userId;
     if (needsClaim) {
       authStatus = 'unclaimed';
-    } else if (context.person.userId) {
+    } else if (resolvedContext.person.userId) {
       // Person has linked User - check if session matches
       const sessionUser = await getUser();
-      if (!sessionUser || sessionUser.id !== context.person.userId) {
+      if (!sessionUser || sessionUser.id !== resolvedContext.person.userId) {
         authStatus = 'requires_signin';
       }
     }
@@ -40,7 +41,7 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
 
   // Fetch all teams with items and assignments
   const teams = await prisma.team.findMany({
-    where: { eventId: context.event.id },
+    where: { eventId: resolvedContext.event.id },
     include: {
       coordinator: true,
       items: {
@@ -122,9 +123,9 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
   let inviteStatus = null;
   let people = null;
 
-  if (context.event.status === 'CONFIRMING') {
+  if (resolvedContext.event.status === 'CONFIRMING') {
     const eventWithPeople = await prisma.event.findUnique({
-      where: { id: context.event.id },
+      where: { id: resolvedContext.event.id },
       select: {
         inviteSendConfirmedAt: true,
         people: {
@@ -136,11 +137,11 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
                 name: true,
                 inviteAnchorAt: true,
                 tokens: {
-                  where: { scope: 'PARTICIPANT', eventId: context.event.id },
+                  where: { scope: 'PARTICIPANT', eventId: resolvedContext.event.id },
                   select: { openedAt: true },
                 },
                 assignments: {
-                  where: { item: { team: { eventId: context.event.id } } },
+                  where: { item: { team: { eventId: resolvedContext.event.id } } },
                   select: { response: true },
                 },
               },
@@ -192,16 +193,16 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
 
   return NextResponse.json({
     person: {
-      id: context.person.id,
-      name: context.person.name,
+      id: resolvedContext.person.id,
+      name: resolvedContext.person.name,
     },
     event: {
-      id: context.event.id,
-      name: context.event.name,
-      startDate: context.event.startDate,
-      endDate: context.event.endDate,
-      status: context.event.status,
-      guestCount: context.event.guestCount,
+      id: resolvedContext.event.id,
+      name: resolvedContext.event.name,
+      startDate: resolvedContext.event.startDate,
+      endDate: resolvedContext.event.endDate,
+      status: resolvedContext.event.status,
+      guestCount: resolvedContext.event.guestCount,
     },
     authStatus,
     teams: teamsWithStatus,

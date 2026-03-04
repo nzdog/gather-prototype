@@ -9,7 +9,8 @@ import { getUser } from '@/lib/auth/session';
  * Compares parameters (guest count) and offers quantity scaling if QuantitiesProfile exists.
  * SECURITY: Verifies ownership before cloning, validates date parameters
  */
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   // SECURITY: Require authenticated user session
   const user = await getUser();
   if (!user) {
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   // SECURITY: Fetch only ownership fields before authorization check
   const templateCheck = await prisma.structureTemplate.findUnique({
-    where: { id: params.id },
+    where: { id: id },
     select: { hostId: true, templateSource: true },
   });
 
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   // Authorization passed - fetch full template for cloning
   const template = await prisma.structureTemplate.findUnique({
-    where: { id: params.id },
+    where: { id: id },
   });
 
   if (!template) {

@@ -11,11 +11,12 @@ import { AssignmentResponse } from '@prisma/client';
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { token: string; assignmentId: string } }
+  context: { params: Promise<{ token: string; assignmentId: string }> }
 ) {
-  const context = await resolveToken(params.token);
+  const { token, assignmentId } = await context.params;
+  const resolvedContext = await resolveToken(token);
 
-  if (!context || context.scope !== 'COORDINATOR') {
+  if (!resolvedContext || resolvedContext.scope !== 'COORDINATOR') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -33,13 +34,13 @@ export async function POST(
 
   // Verify assignment belongs to this person
   const assignment = await prisma.assignment.findUnique({
-    where: { id: params.assignmentId },
+    where: { id: assignmentId },
     include: {
       item: true,
     },
   });
 
-  if (!assignment || assignment.personId !== context.person.id) {
+  if (!assignment || assignment.personId !== resolvedContext.person.id) {
     return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
   }
 
@@ -51,16 +52,16 @@ export async function POST(
   // Update response in transaction
   await prisma.$transaction(async (tx) => {
     await tx.assignment.update({
-      where: { id: params.assignmentId },
+      where: { id: assignmentId },
       data: { response: response as AssignmentResponse },
     });
 
     await logAudit(tx, {
-      eventId: context.event.id,
-      actorId: context.person.id,
+      eventId: resolvedContext.event.id,
+      actorId: resolvedContext.person.id,
       actionType: response === 'ACCEPTED' ? 'ACCEPT_ASSIGNMENT' : 'DECLINE_ASSIGNMENT',
       targetType: 'Assignment',
-      targetId: params.assignmentId,
+      targetId: assignmentId,
       details: `${response === 'ACCEPTED' ? 'Accepted' : 'Declined'} ${assignment.item.name}`,
     });
   });

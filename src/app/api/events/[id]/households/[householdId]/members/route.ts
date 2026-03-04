@@ -5,11 +5,11 @@ import { requireEventRole } from '@/lib/auth/guards';
 // POST /api/events/[id]/households/[householdId]/members - Proxy adds member names
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string; householdId: string } }
+  context: { params: Promise<{ id: string; householdId: string }> }
 ) {
   try {
-    const eventId = params.id;
-    const householdId = params.householdId;
+    const { id, householdId } = await context.params;
+    const eventId = id;
 
     // Require HOST, COHOST, or COORDINATOR role
     // In production, you might want to verify the user is the proxy person

@@ -11,9 +11,10 @@ interface PersonToImport {
 }
 
 // POST /api/events/[id]/people/batch-import - Import multiple people at once
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const eventId = params.id;
+    const { id } = await context.params;
+    const eventId = id;
 
     // SECURITY: Require HOST role to batch import people (sensitive PII operation)
     const auth = await requireEventRole(eventId, ['HOST']);

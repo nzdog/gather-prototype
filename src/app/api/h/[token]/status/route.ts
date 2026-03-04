@@ -15,15 +15,16 @@ import { canTransition, logAudit } from '@/lib/workflow';
  * - Transaction: update + audit + optional override log
  * - Log override when unfreezing (FROZEN → CONFIRMING)
  */
-export async function PATCH(request: NextRequest, { params }: { params: { token: string } }) {
-  const context = await resolveToken(params.token);
+export async function PATCH(request: NextRequest, context: { params: Promise<{ token: string }> }) {
+  const { token } = await context.params;
+  const resolvedContext = await resolveToken(token);
 
-  if (!context || context.scope !== 'HOST') {
+  if (!resolvedContext || resolvedContext.scope !== 'HOST') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   // Capture old status BEFORE any updates
-  const fromStatus = context.event.status;
+  const fromStatus = resolvedContext.event.status;
 
   const body = await request.json();
   const { status, guestCount, unfreezeReason } = body;
@@ -77,29 +78,29 @@ export async function PATCH(request: NextRequest, { params }: { params: { token:
   // Single transaction for update + all audit logs
   const updated = await prisma.$transaction(async (tx) => {
     const event = await tx.event.update({
-      where: { id: context.event.id },
+      where: { id: resolvedContext.event.id },
       data: updateData,
     });
 
     // Only log if status changed (not for guest count changes)
     if (status !== undefined) {
       await logAudit(tx, {
-        eventId: context.event.id,
-        actorId: context.person.id,
+        eventId: resolvedContext.event.id,
+        actorId: resolvedContext.person.id,
         actionType: 'EVENT_STATUS_CHANGE',
         targetType: 'Event',
-        targetId: context.event.id,
+        targetId: resolvedContext.event.id,
         details: `Changed status from ${fromStatus} to ${status}`,
       });
 
       // Log override in same transaction with reason
       if (fromStatus === 'FROZEN' && status === 'CONFIRMING') {
         await logAudit(tx, {
-          eventId: context.event.id,
-          actorId: context.person.id,
+          eventId: resolvedContext.event.id,
+          actorId: resolvedContext.person.id,
           actionType: 'OVERRIDE_UNFREEZE',
           targetType: 'Event',
-          targetId: context.event.id,
+          targetId: resolvedContext.event.id,
           details: `Host unfroze event. Reason: ${unfreezeReason}`,
         });
       }

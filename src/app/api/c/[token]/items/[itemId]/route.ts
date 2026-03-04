@@ -17,32 +17,33 @@ import { requireNotFrozen } from '@/lib/auth/guards';
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { token: string; itemId: string } }
+  context: { params: Promise<{ token: string; itemId: string }> }
 ) {
-  const context = await resolveToken(params.token);
+  const { token, itemId } = await context.params;
+  const resolvedContext = await resolveToken(token);
 
-  if (!context || context.scope !== 'COORDINATOR' || !context.team) {
+  if (!resolvedContext || resolvedContext.scope !== 'COORDINATOR' || !resolvedContext.team) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
   // SECURITY: Block mutations when FROZEN (server-side validation)
-  const frozenBlock = requireNotFrozen(context.event, false);
+  const frozenBlock = requireNotFrozen(resolvedContext.event, false);
   if (frozenBlock) return frozenBlock;
 
   // Verify item ownership
   const item = await prisma.item.findUnique({
-    where: { id: params.itemId },
+    where: { id: itemId },
   });
 
-  if (!item || item.teamId !== context.team.id) {
+  if (!item || item.teamId !== resolvedContext.team.id) {
     return NextResponse.json({ error: 'Item not found' }, { status: 404 });
   }
 
   // Check if mutations are allowed
-  if (!canMutate(context.event.status, 'editItem')) {
+  if (!canMutate(resolvedContext.event.status, 'editItem')) {
     return NextResponse.json(
       {
-        error: `Cannot edit items while event is ${context.event.status}`,
+        error: `Cannot edit items while event is ${resolvedContext.event.status}`,
       },
       { status: 403 }
     );
@@ -67,7 +68,7 @@ export async function PATCH(
   // Update item in transaction
   const updatedItem = await prisma.$transaction(async (tx) => {
     const updated = await tx.item.update({
-      where: { id: params.itemId },
+      where: { id: itemId },
       data: {
         name: body.name ?? item.name,
         quantity: body.quantity !== undefined ? body.quantity : item.quantity,
@@ -94,11 +95,11 @@ export async function PATCH(
     });
 
     await logAudit(tx, {
-      eventId: context.event.id,
-      actorId: context.person.id,
+      eventId: resolvedContext.event.id,
+      actorId: resolvedContext.person.id,
       actionType: 'EDIT_ITEM',
       targetType: 'Item',
-      targetId: params.itemId,
+      targetId: itemId,
       details: `Updated item: ${updated.name}`,
     });
 
@@ -123,32 +124,33 @@ export async function PATCH(
  */
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: { token: string; itemId: string } }
+  context: { params: Promise<{ token: string; itemId: string }> }
 ) {
-  const context = await resolveToken(params.token);
+  const { token, itemId } = await context.params;
+  const resolvedContext = await resolveToken(token);
 
-  if (!context || context.scope !== 'COORDINATOR' || !context.team) {
+  if (!resolvedContext || resolvedContext.scope !== 'COORDINATOR' || !resolvedContext.team) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
   // SECURITY: Block mutations when FROZEN (server-side validation)
-  const frozenBlock = requireNotFrozen(context.event, false);
+  const frozenBlock = requireNotFrozen(resolvedContext.event, false);
   if (frozenBlock) return frozenBlock;
 
   // Verify item ownership
   const item = await prisma.item.findUnique({
-    where: { id: params.itemId },
+    where: { id: itemId },
   });
 
-  if (!item || item.teamId !== context.team.id) {
+  if (!item || item.teamId !== resolvedContext.team.id) {
     return NextResponse.json({ error: 'Item not found' }, { status: 404 });
   }
 
   // Check if deletion is allowed (allow both critical and non-critical)
-  if (!canMutate(context.event.status, 'deleteItem', false)) {
+  if (!canMutate(resolvedContext.event.status, 'deleteItem', false)) {
     return NextResponse.json(
       {
-        error: `Cannot delete items while event is ${context.event.status}`,
+        error: `Cannot delete items while event is ${resolvedContext.event.status}`,
       },
       { status: 403 }
     );
@@ -157,15 +159,15 @@ export async function DELETE(
   // Delete item in transaction (cascade will delete assignment)
   await prisma.$transaction(async (tx) => {
     await tx.item.delete({
-      where: { id: params.itemId },
+      where: { id: itemId },
     });
 
     await logAudit(tx, {
-      eventId: context.event.id,
-      actorId: context.person.id,
+      eventId: resolvedContext.event.id,
+      actorId: resolvedContext.person.id,
       actionType: 'DELETE_ITEM',
       targetType: 'Item',
-      targetId: params.itemId,
+      targetId: itemId,
       details: `Deleted item: ${item.name}`,
     });
   });

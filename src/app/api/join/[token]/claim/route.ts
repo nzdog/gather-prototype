@@ -3,8 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { logInviteEvent } from '@/lib/invite-events';
 import { headers } from 'next/headers';
 
-export async function POST(request: NextRequest, { params }: { params: { token: string } }) {
-  const { token } = params;
+export async function POST(request: NextRequest, context: { params: Promise<{ token: string }> }) {
+  const { token } = await context.params;
 
   // Parse request body
   let body: { personId?: string };

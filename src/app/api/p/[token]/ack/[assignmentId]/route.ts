@@ -17,16 +17,17 @@ import { AssignmentResponse } from '@prisma/client';
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { token: string; assignmentId: string } }
+  context: { params: Promise<{ token: string; assignmentId: string }> }
 ) {
-  const context = await resolveToken(params.token);
+  const { token, assignmentId } = await context.params;
+  const resolvedContext = await resolveToken(token);
 
-  if (!context || context.scope !== 'PARTICIPANT') {
+  if (!resolvedContext || resolvedContext.scope !== 'PARTICIPANT') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
   // Check if event is frozen
-  if (context.event.status === 'FROZEN') {
+  if (resolvedContext.event.status === 'FROZEN') {
     return NextResponse.json({ error: 'Plan is frozen — responses are locked' }, { status: 400 });
   }
 
@@ -45,12 +46,12 @@ export async function POST(
   // Update response inside transaction
   const result = await prisma.$transaction(async (tx) => {
     const assignment = await tx.assignment.findUnique({
-      where: { id: params.assignmentId },
+      where: { id: assignmentId },
       include: { item: true },
     });
 
     // Verify assignment exists and belongs to this participant
-    if (!assignment || assignment.personId !== context.person.id) {
+    if (!assignment || assignment.personId !== resolvedContext.person.id) {
       return { found: false };
     }
 
@@ -63,16 +64,16 @@ export async function POST(
 
     // Update response and log
     await tx.assignment.update({
-      where: { id: params.assignmentId },
+      where: { id: assignmentId },
       data: { response: response as AssignmentResponse },
     });
 
     await logAudit(tx, {
-      eventId: context.event.id,
-      actorId: context.person.id,
+      eventId: resolvedContext.event.id,
+      actorId: resolvedContext.person.id,
       actionType: response === 'ACCEPTED' ? 'ACCEPT_ASSIGNMENT' : 'DECLINE_ASSIGNMENT',
       targetType: 'Assignment',
-      targetId: params.assignmentId,
+      targetId: assignmentId,
       details: `${response === 'ACCEPTED' ? 'Accepted' : 'Declined'} assignment for item ${assignment.itemId}`,
     });
 
@@ -87,8 +88,8 @@ export async function POST(
   // Track response submission (non-blocking)
   if (result.found && result.changed && result.item) {
     logInviteEvent({
-      eventId: context.event.id,
-      personId: context.person.id,
+      eventId: resolvedContext.event.id,
+      personId: resolvedContext.person.id,
       type: 'RESPONSE_SUBMITTED',
       metadata: {
         itemId: result.item.id,

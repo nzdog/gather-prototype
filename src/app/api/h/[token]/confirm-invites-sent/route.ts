@@ -3,13 +3,14 @@ import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logInviteEvent } from '@/lib/invite-events';
 
-export async function POST(_req: NextRequest, { params }: { params: { token: string } }) {
-  const context = await resolveToken(params.token);
-  if (!context || context.scope !== 'HOST') {
+export async function POST(_req: NextRequest, context: { params: Promise<{ token: string }> }) {
+  const { token } = await context.params;
+  const resolvedContext = await resolveToken(token);
+  if (!resolvedContext || resolvedContext.scope !== 'HOST') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
-  const eventId = context.event.id;
+  const eventId = resolvedContext.event.id;
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },
