@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 
 export async function getUser() {
-  const sessionToken = cookies().get('session')?.value;
+  const sessionToken = (await cookies()).get('session')?.value;
   if (!sessionToken) return null;
 
   const session = await prisma.session.findUnique({

@@ -74,7 +74,7 @@ export async function POST() {
       data: { userId: user.id, token: sessionToken, expiresAt },
     });
 
-    cookies().set('session', sessionToken, {
+    (await cookies()).set('session', sessionToken, {
       httpOnly: true,
       secure: (process.env.NODE_ENV as string) === 'production',
       sameSite: 'lax',

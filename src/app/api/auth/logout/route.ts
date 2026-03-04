@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 
 export async function POST() {
-  const sessionToken = cookies().get('session')?.value;
+  const sessionToken = (await cookies()).get('session')?.value;
 
   if (sessionToken) {
     // Delete session from database

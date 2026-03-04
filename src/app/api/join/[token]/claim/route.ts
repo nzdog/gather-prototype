@@ -93,7 +93,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
   }
 
   // Generate device identifier for audit
-  const headersList = headers();
+  const headersList = await headers();
   const userAgent = headersList.get('user-agent') || '';
   const forwardedFor = headersList.get('x-forwarded-for') || '';
   const deviceId = generateDeviceId(userAgent, forwardedFor);

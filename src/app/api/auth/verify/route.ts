@@ -112,7 +112,7 @@ export async function POST(req: Request) {
     });
 
     // Set httpOnly cookie
-    cookies().set('session', sessionToken, {
+    (await cookies()).set('session', sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
