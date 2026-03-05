@@ -50,3 +50,36 @@ This is a chore-level issue requiring explicit authorisation.
 **First seen:** GTC-002 preflight
 
 ---
+
+### KB-003 — window.history.replaceState() does not update Next.js useSearchParams()
+**Symptom:** A URL param that was removed via window.history.replaceState()
+reappears in searchParams when a handler builds a new URL from the current
+params, re-triggering effects that depend on that param.
+**Cause:** window.history.replaceState() updates the browser URL but does
+not sync Next.js useSearchParams() state. Handlers that build URLs by
+copying current searchParams will carry stale params forward.
+**Fix pattern:** When building a navigation URL from searchParams, always
+explicitly call params.delete() on any param that should not persist before
+calling router.push(). Do not rely on the browser URL as the source of
+truth for searchParams state.
+**Do not:** Use window.history.replaceState() to manage params that affect
+Next.js effect hooks or URL-derived state.
+**First seen:** GTC-003
+
+---
+
+### KB-004 — Default seed creates a CONFIRMING event, not a DRAFT event
+**Symptom:** Reproduction steps requiring a DRAFT event fail when run
+against the default seed — the seeded event is in CONFIRMING status.
+**Cause:** prisma/seed.ts creates an event in CONFIRMING state by default.
+DRAFT events from prior test sessions may exist in the DB but cannot be
+relied upon.
+**Fix pattern:** For tickets requiring a DRAFT event, either:
+1. Create the event via UI steps (pay → complete setup modal), or
+2. Direct DB insert to set status to DRAFT (include rollback note), or
+3. Update seed.ts to include a DRAFT event (only if authorised by ticket).
+**Do not:** Assume default seed produces a DRAFT event. Always verify
+event status before beginning reproduction steps.
+**First seen:** GTC-003
+
+---
