@@ -16,6 +16,10 @@ regardless of ticket type:
    - Feature tickets: FEATURE-TICKET-TEMPLATE.md
    - Chore tickets: CHORE-TICKET-TEMPLATE.md
    - Spike tickets: SPIKE-TICKET-TEMPLATE.md
+2b. If the ticket involves unexpected platform behaviour, stale UI state,
+       auth anomalies, or DB irregularities, read GATHER-KNOWN-BEHAVIOURS.md
+       before proceeding.
+
 3. Perform a ticket compliance check against the relevant template.
    Return a punch-list of any fields that are:
    - Empty or unfilled (placeholders not replaced)
