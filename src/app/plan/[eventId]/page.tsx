@@ -1052,7 +1052,14 @@ export default function PlanEditorPage() {
 
   const handleChecklistOpenAddPerson = () => {
     setChecklistStepContext('Step 3 of 5: Add people');
-    handleExpandSection('people');
+    // Strip `setup` before navigating — if the user arrived via post-payment
+    // (?setup=true), window.history.replaceState clears the visible URL but
+    // Next.js searchParams still carries setup=true. Carrying it into the
+    // expand URL re-triggers the setup effect and opens EditEventModal instead.
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('setup');
+    params.set('expand', 'people');
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
   const handleChecklistOpenCreatePlan = () => {
