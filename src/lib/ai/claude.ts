@@ -11,7 +11,7 @@ const anthropic = new Anthropic({
 });
 
 // Default model configuration
-const DEFAULT_MODEL = 'claude-sonnet-4-20250514'; // Better instruction-following for structured outputs
+const DEFAULT_MODEL = 'claude-sonnet-4-6'; // Latest Sonnet - better instruction-following for structured outputs
 const DEFAULT_MAX_TOKENS = 4096;
 const DEFAULT_TIMEOUT = 30000; // 30 seconds
 
