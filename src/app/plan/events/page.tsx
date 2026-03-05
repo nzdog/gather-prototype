@@ -29,6 +29,12 @@ export default function EventsPage() {
   const [confirmText, setConfirmText] = useState('');
 
   useEffect(() => {
+    // router.refresh() forces the root layout (server component) to re-render
+    // with the current session cookie. Without this, Next.js serves the
+    // prefetched RSC payload for /plan/events — cached while the user was on
+    // /auth/verify before the session cookie was set — causing the nav to
+    // show "Sign In" even when the user is authenticated (GTC-002).
+    router.refresh();
     loadEvents();
   }, []);
 
