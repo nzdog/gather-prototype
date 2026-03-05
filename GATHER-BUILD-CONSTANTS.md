@@ -1,0 +1,211 @@
+# GATHER BUILD CONSTANTS
+
+Reference file for AI executors and developers. Keep this file accurate.
+Last updated: 2026-03-05.
+CLAUDE.md reviewed: no conflicts or additions found.
+
+---
+
+## Base Branch
+
+`master` — all work branches off `master` and PRs merge back to `master`.
+
+Branching convention: feature branches are not enforced by tooling; the repo has
+dependabot branches (`dependabot/npm_and_yarn/*`) alongside `master`. Use
+descriptive branch names prefixed by ticket ID where applicable (e.g. `GTC-001-fix-session-cookies`).
+
+---
+
+## Run Commands
+
+```bash
+# Install dependencies
+npm install
+
+# Start local dev server (Turbopack)
+npm run dev
+```
+
+> **Important:** Do NOT set `"type": "commonjs"` in `package.json`. Next.js
+> handles module transpilation internally; that field causes Turbopack to reject
+> ESM source files with HTTP 500 errors.
+
+---
+
+## Test Commands
+
+No Jest, Vitest, or Playwright config files are present in this repo.
+The test suite consists of security-validation scripts run via `tsx`.
+
+```bash
+# Full security test suite
+npm run test:security:all
+
+# Individual suites
+npm run test:security                  # core security validation
+npm run test:security:bc               # boundary-condition verification
+npm run test:security:transition       # transition auth checks
+npm run test:security:inventory        # route inventory gate
+npm run test:security:assignments      # assignments endpoint security
+
+# Route classification (utility, not a test gate)
+npm run test:security:classify
+```
+
+---
+
+## Preflight Sanity Sequence
+
+| Step | Command | Expected success signal |
+|------|---------|------------------------|
+| Install | `npm install` | Exits 0, no peer-dep errors |
+| DB migrate | `npm run db:migrate` | `All migrations have been successfully applied` |
+| Boot | `npm run dev` | Turbopack prints `Ready` on `http://localhost:3000` |
+| Smoke | `npm run test:security` | Exits 0 |
+| Security suite | `npm run test:security:all` | Exits 0 |
+
+---
+
+## DB Commands
+
+```bash
+# Apply pending migrations (dev — also generates Prisma client)
+npm run db:migrate
+
+# Apply migrations without prompts (CI / production)
+npm run db:migrate:deploy
+
+# Reset database (drops all data, re-applies all migrations, re-runs seed)
+npm run db:reset
+
+# Seed database only
+npm run db:seed
+
+# Regenerate Prisma client without migrating
+npm run db:generate
+```
+
+Database: PostgreSQL, configured via `DATABASE_URL`.
+Seed file: `prisma/seed.ts` (run via `tsx`).
+
+---
+
+## Async Trigger Methods
+
+### Stripe Webhooks (local)
+
+Use the Stripe CLI to forward webhook events to the local server:
+
+```bash
+stripe listen --forward-to localhost:3000/api/webhooks/stripe
+```
+
+This outputs a `whsec_...` signing secret — use it as `STRIPE_WEBHOOK_SECRET`
+in your `.env` for the duration of the local session.
+
+To trigger a specific event manually:
+
+```bash
+stripe trigger payment_intent.succeeded
+stripe trigger customer.subscription.created
+stripe trigger customer.subscription.updated
+stripe trigger customer.subscription.deleted
+```
+
+### Stripe Webhooks (staging/production)
+
+Configure the webhook endpoint in **Stripe Dashboard > Developers > Webhooks**.
+Point it to `https://<your-domain>/api/webhooks/stripe`. Copy the signing secret
+into the `STRIPE_WEBHOOK_SECRET` environment variable on the deployment platform.
+
+### SMS / Twilio (test)
+
+Use Twilio test credentials (Test Account SID and Auth Token from the Twilio
+Console). Test credentials accept API calls but do not send real SMS messages.
+Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_PHONE_NUMBER` in
+`.env` to the test values.
+
+To trigger the auto-nudge cron job locally, call the endpoint directly:
+
+```bash
+# Via Authorization header (GET or POST both accepted)
+curl http://localhost:3000/api/cron/nudges \
+  -H "Authorization: Bearer <CRON_SECRET>"
+
+# Via query param
+curl "http://localhost:3000/api/cron/nudges?secret=<CRON_SECRET>"
+```
+
+**Cron routes in `src/app/api/cron/`:**
+
+| Route file | Method | HTTP path | Purpose | Intended schedule |
+|------------|--------|-----------|---------|-------------------|
+| `src/app/api/cron/nudges/route.ts` | GET / POST | `/api/cron/nudges` | Runs the nudge scheduler — sends SMS auto-nudges to event participants | Every 15 minutes |
+
+---
+
+## Environment Variables
+
+All variables below are required unless marked OPTIONAL.
+Actual values are redacted. Copy `.env.example` to `.env` and fill in real values.
+
+| Variable | Purpose | Location |
+|----------|---------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | `.env` / Railway env |
+| `ANTHROPIC_API_KEY` | Claude AI plan generation | `.env` / deployment env |
+| `RESEND_API_KEY` | Magic-link transactional email | `.env` / deployment env |
+| `EMAIL_FROM` | Sender address for transactional email | `.env` / deployment env |
+| `NEXT_PUBLIC_APP_URL` | Base URL for magic-link generation | `.env` / deployment env |
+| `STRIPE_SECRET_KEY` | Stripe API access | `.env` / deployment env |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signature verification | `.env` / deployment env |
+| `STRIPE_PRICE_ID` | Stripe subscription price ID | `.env` / deployment env |
+| `TWILIO_ACCOUNT_SID` | SMS via Twilio (OPTIONAL) | `.env` / deployment env |
+| `TWILIO_AUTH_TOKEN` | SMS via Twilio (OPTIONAL) | `.env` / deployment env |
+| `TWILIO_PHONE_NUMBER` | Twilio sender number (OPTIONAL) | `.env` / deployment env |
+| `CRON_SECRET` | Authenticates cron-job HTTP requests | `.env` / deployment env |
+
+Template: `.env.example` at repo root.
+
+---
+
+## Do-Not-Touch Zones
+
+The following areas must not be refactored without explicit instruction. They are
+high-risk, tightly coupled to security invariants, or carry subtle correctness
+requirements verified by the security test suite.
+
+### 1. Session & Cookie Management (`src/lib/auth*`, `src/middleware*`)
+Role-scoped session cookies were a hard-won fix (GTC-001). The cookie naming and
+scoping logic that separates host sessions from participant sessions must not be
+changed. Breaking this re-introduces session collision bugs.
+
+### 2. Magic-Link Auth Flow (`src/app/api/auth/`, `prisma/schema.prisma` — `MagicLink`, `Session`, `User`)
+The tokenised magic-link flow is the sole authentication mechanism. Any change
+to token generation, expiry, consumption, or session creation risks locking
+users out entirely.
+
+### 3. AccessToken & Scope System (`prisma/schema.prisma` — `AccessToken`, `TokenScope`)
+Participant, coordinator, and host access is gated by `AccessToken.scope`. The
+uniqueness constraint `[eventId, personId, scope, teamId]` and the scoped cookie
+system are interdependent. Do not alter token issuance, validation, or scope
+logic without a full security re-audit.
+
+### 4. Stripe Integration (`src/app/api/webhooks/stripe/`, `src/lib/stripe*`, `prisma/schema.prisma` — `Subscription`, `User.billingStatus`)
+Webhook signature verification, idempotency, and billing-status transitions are
+critical for payment integrity. Changes here affect real money.
+
+### 5. Prisma Migrations (`prisma/migrations/`)
+Never hand-edit migration SQL files. Never delete or reorder migrations. Always
+use `prisma migrate dev` to generate new migrations. The production deploy
+command (`prisma migrate deploy`) applies them in order.
+
+### 6. Security Test Suite (`tests/security-*.ts`, `scripts/classify-routes.ts`)
+These tests define the security contract for the API surface. Do not weaken or
+skip assertions to make tests pass. If a test fails, fix the underlying issue.
+
+### 7. SMS Opt-Out Logic (`prisma/schema.prisma` — `SmsOptOut`, `Person.smsOptedOut`)
+Opt-out state must be respected in all nudge-sending code paths. Bypassing it
+could constitute illegal sending under TCPA/spam regulations.
+
+### 8. `package.json` — do not add `"type": "commonjs"`
+See CLAUDE.md. This field breaks Turbopack and returns HTTP 500 on all routes.
