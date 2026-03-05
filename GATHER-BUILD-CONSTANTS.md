@@ -6,6 +6,38 @@ CLAUDE.md reviewed: no conflicts or additions found.
 
 ---
 
+## Executor Preamble
+Every AI executor must follow these steps in order before touching any code,
+regardless of ticket type:
+
+1. Read this file (GATHER-BUILD-CONSTANTS.md) in full
+2. Read the relevant ticket template in full:
+   - Bug tickets: BUG-TICKET-TEMPLATE.md
+   - Feature tickets: FEATURE-TICKET-TEMPLATE.md
+   - Chore tickets: CHORE-TICKET-TEMPLATE.md
+   - Spike tickets: SPIKE-TICKET-TEMPLATE.md
+3. Perform a ticket compliance check against the relevant template.
+   Return a punch-list of any fields that are:
+   - Empty or unfilled (placeholders not replaced)
+   - Inconsistent with another field in the same ticket
+   - Ambiguous in a way that would require interpretation to execute
+   - Missing required information for the declared severity level
+   - In conflict with this constants file
+
+   Format:
+   TICKET COMPLIANCE CHECK — GTC-XXX
+   [ ] Issue: [field name] — [what is wrong and what is needed]
+   CLEAR — no issues found (if applicable)
+
+   If any issues found → STOP and paste punch-list. Await instruction.
+   If CLEAR → state "Compliance check passed — proceeding to preflight"
+   and continue.
+
+4. Run the Preflight Sanity Sequence defined in this file
+5. Proceed to ticket execution
+
+---
+
 ## Base Branch
 
 `master` — all work branches off `master` and PRs merge back to `master`.
