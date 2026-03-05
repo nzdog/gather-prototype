@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { generatePlan, generateSelectiveItems, EventParams } from '@/lib/ai/generate';
+import { resolveGeneratedTeamCoordinatorId } from '@/lib/ai/coordinator-assignment';
 import { randomBytes } from 'crypto';
 import { requireEventRole } from '@/lib/auth/guards';
 
@@ -191,7 +192,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
           scope: teamData.scope,
           domain: teamData.domain as any,
           eventId,
-          coordinatorId: event.hostId,
+          coordinatorId: resolveGeneratedTeamCoordinatorId(),
           source: 'GENERATED',
         },
       });

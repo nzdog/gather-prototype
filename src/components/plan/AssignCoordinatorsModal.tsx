@@ -71,8 +71,8 @@ export default function AssignCoordinatorsModal({
       const initialAssignments = teams.map((team) => ({
         teamId: team.id,
         teamName: team.name,
-        currentCoordinatorId: team.coordinator.id,
-        selectedPersonId: team.coordinator.id,
+        currentCoordinatorId: team.coordinator?.id ?? '',
+        selectedPersonId: team.coordinator?.id ?? '',
       }));
       setAssignments(initialAssignments);
     }
