@@ -29,6 +29,7 @@ export default function ResolveWithAIModal({
   const [loading, setLoading] = useState(false);
   const [suggestion, setSuggestion] = useState<AISuggestion | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [aiUnavailable, setAiUnavailable] = useState(false);
   const [implementing, setImplementing] = useState(false);
   const [implementationResults, setImplementationResults] = useState<any>(null);
 
@@ -42,6 +43,7 @@ export default function ResolveWithAIModal({
   const loadSuggestion = async () => {
     setLoading(true);
     setError(null);
+    setAiUnavailable(false);
 
     try {
       const response = await fetch(
@@ -51,6 +53,11 @@ export default function ResolveWithAIModal({
           headers: { 'Content-Type': 'application/json' },
         }
       );
+
+      if (response.status === 503) {
+        setAiUnavailable(true);
+        return;
+      }
 
       if (!response.ok) {
         throw new Error('Failed to generate suggestion');
@@ -71,9 +78,37 @@ export default function ResolveWithAIModal({
     loadSuggestion();
   };
 
+  const handleMarkResolved = async () => {
+    try {
+      const response = await fetch(`/api/events/${eventId}/conflicts/${conflict.id}/resolve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      if (!response.ok) throw new Error('Failed to resolve conflict');
+      onAccept(conflict.id);
+      onClose();
+    } catch (err) {
+      console.error('Error resolving conflict:', err);
+      setError('Failed to resolve conflict. Please try again.');
+    }
+  };
+
   const handleAccept = async () => {
     if (!suggestion?.executableActions || suggestion.executableActions.length === 0) {
-      // No executable actions, just mark as resolved
+      // No executable actions — call resolve endpoint to actually mark it resolved
+      try {
+        const response = await fetch(`/api/events/${eventId}/conflicts/${conflict.id}/resolve`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        if (!response.ok) throw new Error('Failed to resolve conflict');
+      } catch (err) {
+        console.error('Error resolving conflict:', err);
+        setError('Failed to resolve conflict. Please try again.');
+        return;
+      }
       onAccept(conflict.id);
       onClose();
       return;
@@ -124,6 +159,7 @@ export default function ResolveWithAIModal({
   const handleClose = () => {
     setSuggestion(null);
     setError(null);
+    setAiUnavailable(false);
     setImplementing(false);
     setImplementationResults(null);
     onClose();
@@ -160,6 +196,24 @@ export default function ResolveWithAIModal({
             <div className="flex flex-col items-center justify-center py-12">
               <Loader2 className="w-12 h-12 text-sage-600 animate-spin mb-4" />
               <p className="text-gray-600">Generating resolution suggestion...</p>
+            </div>
+          )}
+
+          {/* AI Unavailable State */}
+          {aiUnavailable && (
+            <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 mb-4">
+              <p className="text-yellow-900 font-medium mb-2">
+                AI suggestions are currently unavailable
+              </p>
+              <p className="text-yellow-800 text-sm mb-4">
+                You can mark this conflict as resolved manually or dismiss it.
+              </p>
+              <button
+                onClick={handleMarkResolved}
+                className="px-4 py-2 bg-sage-600 text-white rounded-md hover:bg-sage-700 text-sm"
+              >
+                Mark Resolved
+              </button>
             </div>
           )}
 
@@ -275,7 +329,7 @@ export default function ResolveWithAIModal({
         </div>
 
         {/* Footer Actions */}
-        {suggestion && !loading && !implementing && !implementationResults && (
+        {suggestion && !loading && !implementing && !implementationResults && !aiUnavailable && (
           <div className="sticky bottom-0 bg-gray-50 px-6 py-4 border-t border-gray-200 rounded-b-lg flex gap-3">
             <button
               onClick={handleAccept}

@@ -81,11 +81,11 @@ export async function POST(
 
     // Check if Claude is available
     if (!isClaudeAvailable()) {
-      console.warn('[AI Resolution] Claude API not available, using fallback');
-      return NextResponse.json({
-        suggestion: generateFallbackSuggestion(conflict),
-        rawResponse: 'Claude API not available',
-      });
+      console.warn('[AI Resolution] Claude API not available');
+      return NextResponse.json(
+        { error: 'AI suggestions are currently unavailable' },
+        { status: 503 }
+      );
     }
 
     // Build prompts
@@ -251,18 +251,4 @@ Examples:
 - Coverage gap (missing DESSERTS): CREATE_TEAM with domain "DESSERTS", include 2-3 dessert items
 
 Return ONLY the JSON object, no markdown formatting, no other text.`;
-}
-
-/**
- * Generate fallback suggestion when Claude is not available
- */
-function generateFallbackSuggestion(_conflict: any): AISuggestion {
-  console.log('[AI Resolution] Generating fallback suggestion');
-
-  return {
-    summary: 'Add appropriate items to resolve this conflict.',
-    actions: ['Review the conflict details and make necessary adjustments'],
-    rationale: 'This will address the identified gap in the plan.',
-    executableActions: [],
-  };
 }
