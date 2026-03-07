@@ -18,6 +18,7 @@
     "test:security:inventory": "tsx scripts/classify-routes.ts && tsx tests/security-inventory-gate.ts",
     "test:security:assignments": "tsx tests/assignments-endpoint-security-test.ts",
     "test:demo-ui": "tsx tests/demo-ui-isolation.ts",
+    "test:conflict-labels": "tsx tests/conflict-action-labels.ts",
     "test:security:all": "npm run test:security && npm run test:security:bc && npm run test:security:transition && npm run test:security:inventory && npm run test:security:assignments",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
