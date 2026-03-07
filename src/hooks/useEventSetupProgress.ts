@@ -37,85 +37,106 @@ interface UseEventSetupProgressParams {
   event: Event | null;
   people: Person[];
   teams: Team[];
+  unresolvedConflictCount: number;
   onOpenEditDetails: () => void;
   onOpenAddPerson: () => void;
   onOpenCreatePlan: () => void;
   onRunPlanCheck: () => void;
 }
 
-export function useEventSetupProgress({
-  event,
-  people,
-  teams,
-  onOpenEditDetails,
-  onOpenAddPerson,
-  onOpenCreatePlan,
-  onRunPlanCheck,
-}: UseEventSetupProgressParams): SetupProgress {
-  const progress = useMemo(() => {
-    if (!event) {
-      // Return empty progress if no event
-      const emptySteps: SetupStep[] = [
-        { number: 1, label: 'Create event', complete: false, action: () => {} },
-        { number: 2, label: 'Add event details', complete: false, action: () => {} },
-        { number: 3, label: 'Add people', complete: false, action: () => {} },
-        { number: 4, label: 'Create your plan', complete: false, action: () => {} },
-        { number: 5, label: 'Run plan check', complete: false, action: () => {} },
-      ];
-      return {
-        steps: emptySteps,
-        completedCount: 0,
-        totalSteps: 5,
-        allComplete: false,
-        nextStep: emptySteps[0],
-      };
-    }
+/**
+ * Pure computation extracted so it can be imported and tested without React.
+ * The hook below wraps this in useMemo.
+ */
+export function computeSetupProgress(params: UseEventSetupProgressParams): SetupProgress {
+  const {
+    event,
+    people,
+    teams,
+    unresolvedConflictCount,
+    onOpenEditDetails,
+    onOpenAddPerson,
+    onOpenCreatePlan,
+    onRunPlanCheck,
+  } = params;
 
-    const steps: SetupStep[] = [
-      {
-        number: 1,
-        label: 'Create event',
-        complete: true, // Always true - they're on this page
-        action: () => {}, // No action for completed step
-      },
-      {
-        number: 2,
-        label: 'Add event details',
-        complete: event.guestCount != null && event.guestCount > 0,
-        action: onOpenEditDetails,
-      },
-      {
-        number: 3,
-        label: 'Add people',
-        complete: people.filter((p) => p.personId !== event.hostId).length > 0,
-        action: onOpenAddPerson,
-      },
-      {
-        number: 4,
-        label: 'Create your plan',
-        complete: teams.length > 0,
-        action: onOpenCreatePlan,
-      },
-      {
-        number: 5,
-        label: 'Run plan check',
-        complete: event.lastCheckPlanAt != null,
-        action: onRunPlanCheck,
-      },
+  if (!event) {
+    const emptySteps: SetupStep[] = [
+      { number: 1, label: 'Create event', complete: false, action: () => {} },
+      { number: 2, label: 'Add event details', complete: false, action: () => {} },
+      { number: 3, label: 'Add people', complete: false, action: () => {} },
+      { number: 4, label: 'Create your plan', complete: false, action: () => {} },
+      { number: 5, label: 'Run plan check', complete: false, action: () => {} },
     ];
-
-    const completedCount = steps.filter((s) => s.complete).length;
-    const allComplete = completedCount === steps.length;
-    const nextStep = steps.find((s) => !s.complete) || null;
-
     return {
-      steps,
-      completedCount,
-      totalSteps: steps.length,
-      allComplete,
-      nextStep,
+      steps: emptySteps,
+      completedCount: 0,
+      totalSteps: 5,
+      allComplete: false,
+      nextStep: emptySteps[0],
     };
-  }, [event, people, teams, onOpenEditDetails, onOpenAddPerson, onOpenCreatePlan, onRunPlanCheck]);
+  }
 
-  return progress;
+  const steps: SetupStep[] = [
+    {
+      number: 1,
+      label: 'Create event',
+      complete: true, // Always true - they're on this page
+      action: () => {}, // No action for completed step
+    },
+    {
+      number: 2,
+      label: 'Add event details',
+      complete: event.guestCount != null && event.guestCount > 0,
+      action: onOpenEditDetails,
+    },
+    {
+      number: 3,
+      label: 'Add people',
+      complete: people.filter((p) => p.personId !== event.hostId).length > 0,
+      action: onOpenAddPerson,
+    },
+    {
+      number: 4,
+      label: 'Create your plan',
+      complete: teams.length > 0,
+      action: onOpenCreatePlan,
+    },
+    {
+      number: 5,
+      label: 'Run plan check',
+      complete: event.lastCheckPlanAt != null,
+      action: onRunPlanCheck,
+    },
+  ];
+
+  const completedCount = steps.filter((s) => s.complete).length;
+  // Do not show "All set" while unresolved conflicts remain, even if all steps are done.
+  const allComplete = completedCount === steps.length && unresolvedConflictCount === 0;
+  const nextStep = steps.find((s) => !s.complete) || null;
+
+  return {
+    steps,
+    completedCount,
+    totalSteps: steps.length,
+    allComplete,
+    nextStep,
+  };
+}
+
+export function useEventSetupProgress(params: UseEventSetupProgressParams): SetupProgress {
+  return useMemo(
+    () => computeSetupProgress(params),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      params.event,
+      params.people,
+      params.teams,
+      params.unresolvedConflictCount,
+      params.onOpenEditDetails,
+      params.onOpenAddPerson,
+      params.onOpenCreatePlan,
+      params.onRunPlanCheck,
+    ]
+  );
 }

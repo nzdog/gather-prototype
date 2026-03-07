@@ -1099,6 +1099,7 @@ export default function PlanEditorPage() {
     event,
     people,
     teams,
+    unresolvedConflictCount: conflicts.length,
     onOpenEditDetails: handleChecklistOpenEditDetails,
     onOpenAddPerson: handleChecklistOpenAddPerson,
     onOpenCreatePlan: handleChecklistOpenCreatePlan,
