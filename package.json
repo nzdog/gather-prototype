@@ -20,6 +20,7 @@
     "test:demo-ui": "tsx tests/demo-ui-isolation.ts",
     "test:conflict-labels": "tsx tests/conflict-action-labels.ts",
     "test:setup-progress-banner": "tsx tests/setup-progress-banner-test.ts",
+    "test:setup-modal-header": "tsx tests/setup-modal-header-test.ts",
     "test:security:all": "npm run test:security && npm run test:security:bc && npm run test:security:transition && npm run test:security:inventory && npm run test:security:assignments",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

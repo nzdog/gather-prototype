@@ -42,6 +42,16 @@ interface EditEventModalProps {
   showPaymentConfirmation?: boolean;
 }
 
+const STEP_LABELS: Record<number, string> = {
+  1: 'Step 1 of 3: Event Basics',
+  2: 'Step 2 of 3: Guests & Dietary',
+  3: 'Step 3 of 3: Venue Details',
+};
+
+export function getStepLabel(step: number): string {
+  return STEP_LABELS[step] ?? `Step ${step} of 3`;
+}
+
 export default function EditEventModal({
   isOpen,
   onClose,
@@ -63,6 +73,13 @@ export default function EditEventModal({
       }
     } else {
       closeModal();
+    }
+  }, [isOpen]);
+
+  // Reset to step 1 each time the modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setStep(1);
     }
   }, [isOpen]);
 
@@ -193,7 +210,7 @@ export default function EditEventModal({
       <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white z-10">
           <div>
-            {stepLabel && <p className="text-xs text-gray-400 mb-1">{stepLabel}</p>}
+            {stepLabel && <p className="text-xs text-gray-400 mb-1">{getStepLabel(step)}</p>}
             <h2 className="text-lg font-semibold text-gray-900">Edit Event Details</h2>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
