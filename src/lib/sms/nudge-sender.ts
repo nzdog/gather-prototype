@@ -39,7 +39,7 @@ export async function sendNudge(
   candidate: NudgeCandidate,
   nudgeType: '24h' | '48h'
 ): Promise<NudgeSendResult> {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
   const link = `${baseUrl}/p/${candidate.participantToken}`;
 
   // Get message template
@@ -177,7 +177,7 @@ function sleep(ms: number): Promise<void> {
 export async function sendRsvpFollowupNudge(
   candidate: RsvpFollowupCandidate
 ): Promise<RsvpFollowupSendResult> {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
   const link = `${baseUrl}/p/${candidate.participantToken}`;
 
   // Get message template

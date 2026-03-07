@@ -268,9 +268,7 @@ export async function listInviteLinks(eventId: string): Promise<InviteLink[]> {
       role = 'Participant';
     }
 
-    // Determine URL prefix based on scope
-    const prefix = t.scope === 'HOST' ? 'h' : t.scope === 'COORDINATOR' ? 'c' : 'p';
-    const url = `${baseUrl}/${prefix}/${t.token}`;
+    const url = buildTokenUrl(baseUrl, t.scope, t.token);
 
     return {
       personId: t.person.id,
@@ -291,6 +289,15 @@ export async function listInviteLinks(eventId: string): Promise<InviteLink[]> {
  */
 function generateToken(): string {
   return randomBytes(32).toString('hex');
+}
+
+/**
+ * Builds an invite URL for a given scope and token.
+ * Exported for unit testing.
+ */
+export function buildTokenUrl(baseUrl: string, scope: TokenScope, token: string): string {
+  const prefix = scope === 'HOST' ? 'h' : scope === 'COORDINATOR' ? 'c' : 'p';
+  return `${baseUrl.replace(/\/$/, '')}/${prefix}/${token}`;
 }
 
 /**
