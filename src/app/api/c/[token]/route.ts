@@ -144,7 +144,17 @@ export async function GET(request: NextRequest, context: { params: Promise<{ tok
     (a) => a.item.team.eventId === resolvedContext.event.id
   );
 
+  // FRAGILITY NOTE: isDemo is determined by matching event.name against the
+  // demo seed constant (DEMO_EVENT_NAME). No stable demo discriminator exists
+  // in the current schema — isDemo boolean would require a migration, demo
+  // eventId regenerates on every db:seed, and the host email has a cold-start
+  // failure mode. Name collision risk is accepted (a real user would need to
+  // name their event exactly "Henderson Family Christmas 2025"). If a proper
+  // isDemo field is added to the schema in future, replace this check.
+  const DEMO_EVENT_NAME = 'Henderson Family Christmas 2025';
+
   return NextResponse.json({
+    isDemo: resolvedContext.event.name === DEMO_EVENT_NAME,
     person: {
       id: resolvedContext.person.id,
       name: resolvedContext.person.name,

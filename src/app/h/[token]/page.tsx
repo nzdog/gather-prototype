@@ -68,6 +68,7 @@ type PersonSummary = {
 };
 
 interface HostData {
+  isDemo: boolean;
   person: {
     id: string;
     name: string;
@@ -579,13 +580,15 @@ export default function HostView() {
       <div className="min-h-screen flex flex-col bg-gray-50">
         {/* Header */}
         <div className="bg-white border-b border-gray-200 px-6 py-5">
-          <Link
-            href="/demo"
-            className="inline-flex items-center gap-1 text-sm text-accent hover:text-sage-800 mb-3"
-          >
-            <Home className="size-4" />
-            Back to Demo
-          </Link>
+          {data.isDemo && (
+            <Link
+              href="/demo"
+              className="inline-flex items-center gap-1 text-sm text-accent hover:text-sage-800 mb-3"
+            >
+              <Home className="size-4" />
+              Back to Demo
+            </Link>
+          )}
           <div className="flex items-start justify-between mb-2">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">{data.event.name}</h1>

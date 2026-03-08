@@ -74,6 +74,7 @@ interface OtherTeam {
 }
 
 interface CoordinatorData {
+  isDemo: boolean;
   person: {
     id: string;
     name: string;
@@ -351,13 +352,15 @@ export default function CoordinatorView() {
     <div className="min-h-screen flex flex-col bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-5">
-        <a
-          href="/demo"
-          className="inline-flex items-center gap-1 text-sm text-accent hover:text-sage-800 mb-3"
-        >
-          <Home className="size-4" />
-          Back to Demo
-        </a>
+        {data.isDemo && (
+          <a
+            href="/demo"
+            className="inline-flex items-center gap-1 text-sm text-accent hover:text-sage-800 mb-3"
+          >
+            <Home className="size-4" />
+            Back to Demo
+          </a>
+        )}
         <div className="text-sm font-medium text-gray-500 mb-1">{data.event.name}</div>
         <h1 className="text-2xl font-bold text-gray-900">{data.team.name}</h1>
         <p className="text-sm text-gray-600 mt-1">Coordinator: {data.person.name}</p>
