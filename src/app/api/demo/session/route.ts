@@ -11,13 +11,9 @@ const DEMO_HOST_EMAIL = 'sarah.henderson@demo.gather';
  *
  * Creates an authenticated session for the demo host (Sarah Henderson)
  * so the planning dashboard at /plan/[eventId] is accessible.
- * SECURITY: DEV ONLY — disabled in production.
+ * Safe for production: scoped to the demo event and demo user only.
  */
 export async function POST() {
-  if (process.env.NODE_ENV === 'production') {
-    return NextResponse.json({ error: 'Not Found' }, { status: 404 });
-  }
-
   try {
     // Find demo event
     const event = await prisma.event.findFirst({

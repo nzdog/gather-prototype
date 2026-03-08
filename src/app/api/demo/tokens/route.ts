@@ -3,33 +3,43 @@ import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
+const DEMO_EVENT_NAME = 'Henderson Family Christmas 2025';
+
+// The three specific demo personas shown on the /demo page
+const DEMO_PERSONAS = [
+  { name: 'Sarah Henderson', scope: 'HOST' },
+  { name: 'Rob Henderson', scope: 'COORDINATOR' },
+  { name: 'Emma Henderson', scope: 'PARTICIPANT' },
+] as const;
+
 /**
  * GET /api/demo/tokens
- * DEV ONLY: Returns all access tokens for the demo landing page
- * SECURITY: This endpoint is DISABLED IN PRODUCTION
- * WARNING: Exposes sensitive authentication tokens - only for local development
+ * Returns access tokens for the three demo personas on the /demo landing page.
+ * Scoped to specific named personas in the demo event — does not expose all tokens.
  */
 export async function GET() {
-  // SECURITY: Disable in production - this endpoint exposes all tokens
-  if (process.env.NODE_ENV === 'production') {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  }
-
-  // Note: No auth required for demo endpoint in development
-  // This is a dev-only endpoint for viewing demo tokens
-
   try {
-    console.log('[TokenAPI] Fetching all tokens from database...');
+    const event = await prisma.event.findFirst({
+      where: { name: DEMO_EVENT_NAME },
+      select: { id: true },
+    });
+
+    if (!event) {
+      return NextResponse.json({ tokens: [] });
+    }
+
     const tokens = await prisma.accessToken.findMany({
+      where: {
+        eventId: event.id,
+        person: {
+          name: { in: DEMO_PERSONAS.map((p) => p.name) },
+        },
+        scope: { in: DEMO_PERSONAS.map((p) => p.scope) },
+      },
       include: {
         person: true,
-        team: {
-          select: {
-            name: true,
-          },
-        },
+        team: { select: { name: true } },
       },
-      orderBy: [{ scope: 'asc' }, { person: { name: 'asc' } }],
     });
 
     const formattedTokens = tokens.map((t) => ({
@@ -38,16 +48,6 @@ export async function GET() {
       personName: t.person.name,
       teamName: t.team?.name,
     }));
-
-    console.log(`[TokenAPI] Returning ${formattedTokens.length} tokens`);
-    if (formattedTokens.length > 0) {
-      console.log(
-        `[TokenAPI] First HOST token: ${formattedTokens.find((t) => t.scope === 'HOST')?.token.substring(0, 16)}...`
-      );
-      console.log(
-        `[TokenAPI] First COORD token: ${formattedTokens.find((t) => t.scope === 'COORDINATOR')?.token.substring(0, 16)}...`
-      );
-    }
 
     return NextResponse.json({ tokens: formattedTokens });
   } catch (error) {

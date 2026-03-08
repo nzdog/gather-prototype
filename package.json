@@ -21,6 +21,7 @@
     "test:conflict-labels": "tsx tests/conflict-action-labels.ts",
     "test:setup-progress-banner": "tsx tests/setup-progress-banner-test.ts",
     "test:setup-modal-header": "tsx tests/setup-modal-header-test.ts",
+    "test:demo-endpoints": "tsx tests/demo-endpoints-test.ts",
     "test:url-no-double-slash": "tsx tests/url-no-double-slash-test.ts",
     "test:security:all": "npm run test:security && npm run test:security:bc && npm run test:security:transition && npm run test:security:inventory && npm run test:security:assignments",
     "db:generate": "prisma generate",
