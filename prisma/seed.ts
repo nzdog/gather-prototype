@@ -283,6 +283,7 @@ async function main() {
       startDate: makeNzdtChristmas2025Date('2025-12-24', '00:00'),
       endDate: makeNzdtChristmas2025Date('2025-12-26', '23:59'),
       status: 'CONFIRMING',
+      isDemo: true,
       occasionType: 'CHRISTMAS',
       guestCount: 43,
       hostId: sarah.id,

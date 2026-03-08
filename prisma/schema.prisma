@@ -16,6 +16,7 @@ model Event {
   archived                   Boolean                  @default(false)
   guestCount                 Int?
   isLegacy                   Boolean                  @default(false)
+  isDemo                     Boolean                  @default(false)
   createdAt                  DateTime                 @default(now())
   updatedAt                  DateTime                 @updatedAt
   occasionType               OccasionType?
