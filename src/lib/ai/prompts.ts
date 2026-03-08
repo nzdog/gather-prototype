@@ -79,8 +79,10 @@ Cleanup Team (3 items):
 Total: 29 items across 6 teams - this is the level of detail we want!
 
 TEAM STRUCTURE:
-- Create 5-8 teams based on meal flow and cooking requirements
+- Create between the minimum and maximum number of teams stated in the user prompt
 - Each team should have 4-8 specific items
+- EVERY team name MUST be UNIQUE — no two teams may share the same name, even partially
+- If you find yourself wanting a second "Cleanup" team, merge it into the existing Cleanup team instead
 - Typical teams: Proteins, Sides, Salads, Desserts, Drinks, Setup/Equipment, Cleanup
 - Integrate dietary items within teams (e.g., vegetarian protein in Proteins team)
 - Only create separate dietary teams if 10+ guests have that requirement
@@ -153,6 +155,7 @@ RULES (from Plan AI Protocol):
 3. Respect the modifier - apply the requested changes
 4. Preserve protected items and teams - they will be provided as context, DO NOT remove or duplicate them
 5. Be proportionate - only say "must" for calculated requirements
+6. EVERY team name MUST be UNIQUE — no two teams in your output may share the same name, and no output team may duplicate a protected team name
 
 CRITICAL ADEQUACY RULES:
 - ALWAYS maintain adequate food quantities for ALL guests
@@ -308,6 +311,19 @@ export function buildGenerationPrompt(
     itemTarget = '45-60';
   }
 
+  // Calculate team count range based on guest size
+  // Smaller events need fewer teams; too many teams for a small group is confusing
+  let teamTarget: string;
+  if (params.guests < 10) {
+    teamTarget = '3-5';
+  } else if (params.guests <= 20) {
+    teamTarget = '4-6';
+  } else if (params.guests <= 40) {
+    teamTarget = '5-7';
+  } else {
+    teamTarget = '5-8';
+  }
+
   return `Generate a plan for a ${params.occasion} gathering.
 
 EVENT DETAILS:
@@ -328,7 +344,9 @@ ${params.venue.ovenCount ? `- Ovens available: ${params.venue.ovenCount}` : ''}
 ${params.venue.bbqAvailable ? `- BBQ available: Yes` : ''}
 ${params.venue.fridgeSpace ? `- Fridge space: ${params.venue.fridgeSpace}` : ''}
 
-ITEM TARGET: Generate ${itemTarget} items across 5-8 teams (this is NOT optional!)
+TEAM COUNT: Use exactly ${teamTarget} teams — no more, no fewer (this is NOT optional!)
+UNIQUENESS RULE: Every team name must be distinct — do NOT create two teams with the same name. Merge items into one team rather than creating a duplicate.
+ITEM TARGET: Generate ${itemTarget} items spread across those ${teamTarget} teams (this is NOT optional!)
 
 Generate a DETAILED plan with teams and items. Critical requirements:
 - Think like you're ACTUALLY shopping and cooking - individual items, NOT categories
