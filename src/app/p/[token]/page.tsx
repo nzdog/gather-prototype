@@ -59,7 +59,7 @@ interface ParticipantData {
     coordinator: {
       id: string;
       name: string;
-    };
+    } | null;
   } | null;
   rsvpStatus: 'PENDING' | 'YES' | 'NO' | 'NOT_SURE';
   rsvpRespondedAt: string | null;
@@ -226,7 +226,9 @@ export default function ParticipantView() {
           <div className="mt-3 pt-3 border-t border-gray-100">
             <p className="text-xs text-gray-500">You're part of:</p>
             <p className="font-semibold text-gray-900 mt-1">{data.team.name}</p>
-            <p className="text-sm text-gray-500">Coordinator: {data.team.coordinator.name}</p>
+            {data.team.coordinator && (
+              <p className="text-sm text-gray-500">Coordinator: {data.team.coordinator.name}</p>
+            )}
           </div>
         )}
       </div>
@@ -566,7 +568,9 @@ export default function ParticipantView() {
       <div className="bg-white border-t border-gray-200 px-6 py-4">
         <p className="text-center text-sm text-gray-500">
           Questions? Contact your coordinator
-          {data.team && <span className="text-accent"> {data.team.coordinator.name}</span>}
+          {data.team && data.team.coordinator && (
+            <span className="text-accent"> {data.team.coordinator.name}</span>
+          )}
         </p>
         <p className="text-center text-sm text-gray-400 mt-2">
           <a href="/privacy" className="hover:text-gray-600 hover:underline">
