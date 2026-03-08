@@ -267,7 +267,10 @@ export default function BillingPage() {
 
           {/* Plan Details */}
           <div className="space-y-3 mb-6">
-            <PlanFeature text="Unlimited events" enabled={isActive} />
+            <PlanFeature
+              text="Pay per event — $12 NZD per event, no subscription"
+              enabled={isActive}
+            />
             <PlanFeature text="AI-powered plan generation" enabled={isActive} />
             <PlanFeature text="Conflict detection" enabled={isActive} />
             <PlanFeature text="Team coordination tools" enabled={isActive} />
