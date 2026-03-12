@@ -6,9 +6,10 @@ import { SetupProgress, SetupStep } from '@/hooks/useEventSetupProgress';
 interface SetupChecklistBannerProps {
   progress: SetupProgress;
   onDismiss: () => void;
+  onMoveToConfirming?: () => void;
 }
 
-export default function SetupChecklistBanner({ progress, onDismiss }: SetupChecklistBannerProps) {
+export default function SetupChecklistBanner({ progress, onDismiss, onMoveToConfirming }: SetupChecklistBannerProps) {
   const { steps, completedCount, totalSteps, allComplete, nextStep } = progress;
 
   const handleStepClick = (step: SetupStep) => {
@@ -109,6 +110,18 @@ export default function SetupChecklistBanner({ progress, onDismiss }: SetupCheck
             </button>
           )}
         </div>
+
+        {/* CTA — only when all 5 steps complete */}
+        {allComplete && onMoveToConfirming && (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <button
+              onClick={onMoveToConfirming}
+              className="w-full px-6 py-3 bg-accent text-white rounded-lg font-semibold text-base hover:bg-accent-dark transition-colors"
+            >
+              Move to confirming and I&apos;ll let everyone know what they need to do
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

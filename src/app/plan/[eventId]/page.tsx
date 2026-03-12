@@ -205,6 +205,7 @@ export default function PlanEditorPage() {
   const [loadingTeamItems, setLoadingTeamItems] = useState<Set<string>>(new Set());
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [gateCheckRefresh, setGateCheckRefresh] = useState(0);
+  const [bannerGateCheckTrigger, setBannerGateCheckTrigger] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [regenerateModalOpen, setRegenerateModalOpen] = useState(false);
@@ -1242,7 +1243,11 @@ export default function PlanEditorPage() {
 
           {/* Setup Checklist Banner - Only show in DRAFT status and not dismissed */}
           {event.status === 'DRAFT' && !checklistDismissed && (
-            <SetupChecklistBanner progress={setupProgress} onDismiss={handleChecklistDismiss} />
+            <SetupChecklistBanner
+              progress={setupProgress}
+              onDismiss={handleChecklistDismiss}
+              onMoveToConfirming={() => setBannerGateCheckTrigger((t) => t + 1)}
+            />
           )}
 
           {/* AI Generation Loading Banner */}
@@ -1523,6 +1528,7 @@ export default function PlanEditorPage() {
           <GateCheck
             eventId={eventId}
             refreshTrigger={gateCheckRefresh}
+            autoOpenTrigger={bannerGateCheckTrigger}
             onTransitionComplete={() => {
               loadEvent();
               loadTeams();

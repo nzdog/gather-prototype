@@ -10,6 +10,7 @@ interface GateCheckProps {
   onTransitionComplete?: () => void;
   refreshTrigger?: number;
   onExpand?: () => void;
+  autoOpenTrigger?: number;
 }
 
 const blockStyles: Record<GateBlockCode, string> = {
@@ -41,6 +42,7 @@ export default function GateCheck({
   onTransitionComplete,
   refreshTrigger,
   onExpand,
+  autoOpenTrigger,
 }: GateCheckProps) {
   const [checking, setChecking] = useState(false);
   const [passed, setPassed] = useState<boolean | null>(null);
@@ -74,6 +76,29 @@ export default function GateCheck({
   useEffect(() => {
     runGateCheck();
   }, [eventId, refreshTrigger]);
+
+  useEffect(() => {
+    if (!autoOpenTrigger) return;
+    const runAndOpen = async () => {
+      setChecking(true);
+      setError(null);
+      try {
+        const response = await fetch(`/api/events/${eventId}/gate-check`, { method: 'POST' });
+        if (!response.ok) throw new Error('Failed to run gate check');
+        const result = await response.json();
+        setPassed(result.passed);
+        setBlocks(result.blocks || []);
+        if (result.passed) {
+          setShowModal(true);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to run gate check');
+      } finally {
+        setChecking(false);
+      }
+    };
+    runAndOpen();
+  }, [autoOpenTrigger]);
 
   const handleMoveToConfirming = () => {
     setShowModal(true);
