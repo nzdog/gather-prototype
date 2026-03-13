@@ -412,6 +412,24 @@ export default function DemoLandingPage() {
 
         <hr className="border-gray-200 mb-10" />
 
+        {/* ── Conversion CTA ───────────────────────────────────── */}
+        <section className="mb-10 text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">
+            Ready to coordinate your own event?
+          </h2>
+          <p className="text-gray-600 mb-6">
+            Create your event in minutes. Pay $12 when you&rsquo;re ready to share.
+          </p>
+          <a
+            href="/plan/new"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-sage-600 text-white font-semibold rounded-lg hover:bg-sage-700 transition-colors text-sm"
+          >
+            Get Started →
+          </a>
+        </section>
+
+        <hr className="border-gray-200 mb-10" />
+
         {/* ── Reset ────────────────────────────────────────────── */}
         <section className="text-center">
           <button
