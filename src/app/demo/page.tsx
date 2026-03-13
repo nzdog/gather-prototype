@@ -172,6 +172,9 @@ export default function DemoLandingPage() {
                 Sarah reviewed the suggestions, tweaked a few items, and removed the ones that
                 didn&rsquo;t fit her family.
               </p>
+              <p className="text-gray-400 text-sm mt-3 italic">
+                Gather&rsquo;s AI read the event details and built this plan in seconds.
+              </p>
             </StepBlock>
 
             <StepBlock

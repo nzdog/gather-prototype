@@ -77,6 +77,7 @@ interface Event {
   endDate: string;
   lastCheckPlanAt: string | null;
   hostId: string;
+  isDemo: boolean;
 }
 
 interface Team {
@@ -1136,7 +1137,7 @@ export default function PlanEditorPage() {
     <ModalProvider>
       <div className="min-h-screen bg-gray-50">
         {/* Demo back-link */}
-        {event.name === 'Henderson Family Christmas 2025' && (
+        {event.isDemo && (
           <div className="bg-indigo-50 border-b border-indigo-100">
             <div className="max-w-7xl mx-auto px-4 py-2">
               <a href="/demo" className="text-sm text-indigo-600 hover:text-indigo-800 font-medium">
@@ -1194,7 +1195,8 @@ export default function PlanEditorPage() {
                     )}
                   </button>
                 )}
-                {(event.status === 'DRAFT' || event.status === 'CONFIRMING') &&
+                {!event.isDemo &&
+                  (event.status === 'DRAFT' || event.status === 'CONFIRMING') &&
                   teams.length > 0 && (
                     <button
                       onClick={handleRegeneratePlan}

@@ -120,7 +120,7 @@ You must return ONLY valid JSON matching this exact structure:
     {
       "name": "Team Name",
       "scope": "Clear description of what this team handles",
-      "domain": "PROTEINS|VEGETARIAN_MAINS|SIDES|SALADS|STARTERS|DESSERTS|DRINKS|LATER_FOOD|SETUP|CLEANUP|CUSTOM"
+      "domain": "PROTEINS|VEGETARIAN_MAINS|SIDES|SALADS|STARTERS|DESSERTS|DRINKS|LATER_FOOD|SETUP|CLEANUP"
     }
   ],
   "items": [
@@ -187,7 +187,7 @@ Return ONLY valid JSON matching this exact structure:
     {
       "name": "Team Name",
       "scope": "Clear description",
-      "domain": "PROTEINS|VEGETARIAN_MAINS|SIDES|SALADS|STARTERS|DESSERTS|DRINKS|LATER_FOOD|SETUP|CLEANUP|CUSTOM"
+      "domain": "PROTEINS|VEGETARIAN_MAINS|SIDES|SALADS|STARTERS|DESSERTS|DRINKS|LATER_FOOD|SETUP|CLEANUP"
     }
   ],
   "items": [
