@@ -1290,213 +1290,221 @@ export default function PlanEditorPage() {
           ) : (
             <>
               {/* Card Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* Plan Assessment Card */}
-                <div
-                  onClick={() => handleExpandSection('assessment')}
-                  className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
-                >
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
-                      <AlertCircle className="w-6 h-6 text-accent" />
-                    </div>
-                    <h2 className="text-xl font-semibold text-gray-900">Plan Assessment</h2>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-3xl font-bold text-gray-900 mb-2">{conflicts.length}</p>
-                    <p className="text-sm text-gray-600">
-                      {conflicts.length === 0
-                        ? 'No conflicts found'
-                        : `Conflict${conflicts.length > 1 ? 's' : ''} to review`}
-                    </p>
-                  </div>
-                  <div className="text-sm text-accent font-medium">Click to expand →</div>
-                </div>
-
-                {/* Items & Quantities Card */}
-                <div
-                  onClick={() => handleExpandSection('items')}
-                  className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
-                >
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
-                      <Package className="w-6 h-6 text-accent" />
-                    </div>
-                    <h2 className="text-xl font-semibold text-gray-900">Items & Quantities</h2>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-3xl font-bold text-gray-900 mb-2">{items.length}</p>
-                    <p className="text-sm text-gray-600">
-                      {items.filter((i) => !i.assignment).length} unassigned
-                    </p>
-                  </div>
-                  <div className="text-sm text-accent font-medium">Click to expand →</div>
-                </div>
-
-                {/* People Card */}
-                <div
-                  onClick={() => handleExpandSection('people')}
-                  className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
-                >
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
-                      <Users className="w-6 h-6 text-accent" />
-                    </div>
-                    <h2 className="text-xl font-semibold text-gray-900">People</h2>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-3xl font-bold text-gray-900 mb-2">{people.length}</p>
-                    <p className="text-sm text-gray-600">
-                      {people.filter((p) => p.role === 'COORDINATOR').length} coordinators,{' '}
-                      {people.filter((p) => p.role === 'PARTICIPANT').length} participants
-                    </p>
-                  </div>
-                  <div className="text-sm text-accent font-medium">Click to expand →</div>
-                </div>
-
-                {/* Teams Card */}
-                <div
-                  onClick={() => handleExpandSection('teams')}
-                  className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
-                >
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
-                      <Users className="w-6 h-6 text-accent" />
-                    </div>
-                    <h2 className="text-xl font-semibold text-gray-900">Teams</h2>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-3xl font-bold text-gray-900 mb-2">{teams.length}</p>
-                    <p className="text-sm text-gray-600">
-                      {teams.reduce((sum, team) => sum + team._count.items, 0)} total items
-                    </p>
-                  </div>
-                  <div className="text-sm text-accent font-medium">Click to expand →</div>
-                </div>
-
-                {/* Gate Check Card - Only show for DRAFT */}
-                {event.status === 'DRAFT' && (
+              <div className="relative">
+                {isGenerating && (
                   <div
-                    onClick={() => handleExpandSection('gate')}
+                    className="absolute inset-0 bg-white/60 rounded-lg z-10"
+                    style={{ cursor: 'wait', pointerEvents: 'all' }}
+                  />
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {/* Plan Assessment Card */}
+                  <div
+                    onClick={() => handleExpandSection('assessment')}
                     className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
                   >
                     <div className="flex items-center gap-3 mb-4">
                       <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
                         <AlertCircle className="w-6 h-6 text-accent" />
                       </div>
-                      <h2 className="text-xl font-semibold text-gray-900">Gate Check</h2>
+                      <h2 className="text-xl font-semibold text-gray-900">Plan Assessment</h2>
                     </div>
                     <div className="flex-1">
+                      <p className="text-3xl font-bold text-gray-900 mb-2">{conflicts.length}</p>
                       <p className="text-sm text-gray-600">
-                        Review readiness to transition to confirming
+                        {conflicts.length === 0
+                          ? 'No conflicts found'
+                          : `Conflict${conflicts.length > 1 ? 's' : ''} to review`}
                       </p>
                     </div>
                     <div className="text-sm text-accent font-medium">Click to expand →</div>
                   </div>
-                )}
 
-                {/* Freeze Check Card - Only show for CONFIRMING */}
-                {event.status === 'CONFIRMING' && (
+                  {/* Items & Quantities Card */}
                   <div
-                    onClick={() => handleExpandSection('freeze')}
+                    onClick={() => handleExpandSection('items')}
                     className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
                   >
                     <div className="flex items-center gap-3 mb-4">
                       <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
-                        <AlertCircle className="w-6 h-6 text-accent" />
+                        <Package className="w-6 h-6 text-accent" />
                       </div>
-                      <h2 className="text-xl font-semibold text-gray-900">Freeze Check</h2>
+                      <h2 className="text-xl font-semibold text-gray-900">Items & Quantities</h2>
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm text-gray-600">Review before freezing plan</p>
+                      <p className="text-3xl font-bold text-gray-900 mb-2">{items.length}</p>
+                      <p className="text-sm text-gray-600">
+                        {items.filter((i) => !i.assignment).length} unassigned
+                      </p>
                     </div>
                     <div className="text-sm text-accent font-medium">Click to expand →</div>
                   </div>
-                )}
 
-                {/* Unfreeze Card - Only show for FROZEN */}
-                {event.status === 'FROZEN' && (
+                  {/* People Card */}
                   <div
-                    onClick={() => handleExpandSection('unfreeze')}
-                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group border-2 border-yellow-300"
+                    onClick={() => handleExpandSection('people')}
+                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
                   >
                     <div className="flex items-center gap-3 mb-4">
-                      <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center group-hover:bg-yellow-200 transition-colors">
-                        <Lock className="w-6 h-6 text-yellow-600" />
+                      <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
+                        <Users className="w-6 h-6 text-accent" />
                       </div>
-                      <h2 className="text-xl font-semibold text-gray-900">Plan Frozen</h2>
+                      <h2 className="text-xl font-semibold text-gray-900">People</h2>
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm text-gray-600 mb-2">The plan is locked</p>
-                      <p className="text-sm font-medium text-yellow-700">
-                        Click to unfreeze and make changes
+                      <p className="text-3xl font-bold text-gray-900 mb-2">{people.length}</p>
+                      <p className="text-sm text-gray-600">
+                        {people.filter((p) => p.role === 'COORDINATOR').length} coordinators,{' '}
+                        {people.filter((p) => p.role === 'PARTICIPANT').length} participants
                       </p>
                     </div>
-                    <div className="text-sm text-yellow-600 font-medium">Click to unfreeze →</div>
+                    <div className="text-sm text-accent font-medium">Click to expand →</div>
                   </div>
-                )}
 
-                {/* Invite Links Card */}
-                {['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status) &&
-                  inviteLinks.length > 0 && (
+                  {/* Teams Card */}
+                  <div
+                    onClick={() => handleExpandSection('teams')}
+                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
+                  >
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
+                        <Users className="w-6 h-6 text-accent" />
+                      </div>
+                      <h2 className="text-xl font-semibold text-gray-900">Teams</h2>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-3xl font-bold text-gray-900 mb-2">{teams.length}</p>
+                      <p className="text-sm text-gray-600">
+                        {teams.reduce((sum, team) => sum + team._count.items, 0)} total items
+                      </p>
+                    </div>
+                    <div className="text-sm text-accent font-medium">Click to expand →</div>
+                  </div>
+
+                  {/* Gate Check Card - Only show for DRAFT */}
+                  {event.status === 'DRAFT' && (
                     <div
-                      onClick={() => handleExpandSection('invites')}
+                      onClick={() => handleExpandSection('gate')}
                       className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
                     >
                       <div className="flex items-center gap-3 mb-4">
                         <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
-                          <LinkIcon className="w-6 h-6 text-accent" />
+                          <AlertCircle className="w-6 h-6 text-accent" />
                         </div>
-                        <h2 className="text-xl font-semibold text-gray-900">Invite Links</h2>
+                        <h2 className="text-xl font-semibold text-gray-900">Gate Check</h2>
                       </div>
                       <div className="flex-1">
-                        <p className="text-3xl font-bold text-gray-900 mb-2">
-                          {inviteLinks.length}
+                        <p className="text-sm text-gray-600">
+                          Review readiness to transition to confirming
                         </p>
-                        <p className="text-sm text-gray-600">Personalized links ready to share</p>
                       </div>
                       <div className="text-sm text-accent font-medium">Click to expand →</div>
                     </div>
                   )}
 
-                {/* Revision History Card */}
-                <div
-                  onClick={() => handleExpandSection('history')}
-                  className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
-                >
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
-                      <Clock className="w-6 h-6 text-accent" />
+                  {/* Freeze Check Card - Only show for CONFIRMING */}
+                  {event.status === 'CONFIRMING' && (
+                    <div
+                      onClick={() => handleExpandSection('freeze')}
+                      className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
+                    >
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
+                          <AlertCircle className="w-6 h-6 text-accent" />
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-900">Freeze Check</h2>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-600">Review before freezing plan</p>
+                      </div>
+                      <div className="text-sm text-accent font-medium">Click to expand →</div>
                     </div>
-                    <h2 className="text-xl font-semibold text-gray-900">Revision History</h2>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-600">View all changes and updates</p>
-                  </div>
-                  <div className="text-sm text-accent font-medium">Click to expand →</div>
-                </div>
+                  )}
 
-                {/* Event Details Card */}
-                <div
-                  onClick={() => setEditEventModalOpen(true)}
-                  className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
-                >
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
-                      <Calendar className="w-6 h-6 text-accent" />
+                  {/* Unfreeze Card - Only show for FROZEN */}
+                  {event.status === 'FROZEN' && (
+                    <div
+                      onClick={() => handleExpandSection('unfreeze')}
+                      className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group border-2 border-yellow-300"
+                    >
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center group-hover:bg-yellow-200 transition-colors">
+                          <Lock className="w-6 h-6 text-yellow-600" />
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-900">Plan Frozen</h2>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-600 mb-2">The plan is locked</p>
+                        <p className="text-sm font-medium text-yellow-700">
+                          Click to unfreeze and make changes
+                        </p>
+                      </div>
+                      <div className="text-sm text-yellow-600 font-medium">Click to unfreeze →</div>
                     </div>
-                    <h2 className="text-xl font-semibold text-gray-900">Event Details</h2>
+                  )}
+
+                  {/* Invite Links Card */}
+                  {['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status) &&
+                    inviteLinks.length > 0 && (
+                      <div
+                        onClick={() => handleExpandSection('invites')}
+                        className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
+                      >
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
+                            <LinkIcon className="w-6 h-6 text-accent" />
+                          </div>
+                          <h2 className="text-xl font-semibold text-gray-900">Invite Links</h2>
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-3xl font-bold text-gray-900 mb-2">
+                            {inviteLinks.length}
+                          </p>
+                          <p className="text-sm text-gray-600">Personalized links ready to share</p>
+                        </div>
+                        <div className="text-sm text-accent font-medium">Click to expand →</div>
+                      </div>
+                    )}
+
+                  {/* Revision History Card */}
+                  <div
+                    onClick={() => handleExpandSection('history')}
+                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
+                  >
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
+                        <Clock className="w-6 h-6 text-accent" />
+                      </div>
+                      <h2 className="text-xl font-semibold text-gray-900">Revision History</h2>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-600">View all changes and updates</p>
+                    </div>
+                    <div className="text-sm text-accent font-medium">Click to expand →</div>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-600 mb-2">
-                      <span className="font-medium">{event.occasionType}</span>
-                    </p>
-                    <p className="text-sm text-gray-600">{event.guestCount} guests</p>
-                    <p className="text-xs text-gray-500 mt-2">
-                      {new Date(event.startDate).toLocaleDateString()}
-                    </p>
+
+                  {/* Event Details Card */}
+                  <div
+                    onClick={() => setEditEventModalOpen(true)}
+                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
+                  >
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
+                        <Calendar className="w-6 h-6 text-accent" />
+                      </div>
+                      <h2 className="text-xl font-semibold text-gray-900">Event Details</h2>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-600 mb-2">
+                        <span className="font-medium">{event.occasionType}</span>
+                      </p>
+                      <p className="text-sm text-gray-600">{event.guestCount} guests</p>
+                      <p className="text-xs text-gray-500 mt-2">
+                        {new Date(event.startDate).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="text-sm text-accent font-medium">Click to edit →</div>
                   </div>
-                  <div className="text-sm text-accent font-medium">Click to edit →</div>
                 </div>
               </div>
             </>
