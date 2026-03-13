@@ -25,12 +25,22 @@ export default async function LandingPage() {
           </p>
 
           {/* Primary CTA */}
-          <Link
-            href={user ? '/plan/events' : '/plan/new'}
-            className="inline-flex items-center gap-3 px-12 py-5 bg-accent text-white text-xl font-bold rounded-xl hover:bg-accent-dark transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
-          >
-            {user ? 'Your Events' : 'Get Started'}
-          </Link>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Link
+              href={user ? '/plan/events' : '/plan/new'}
+              className="inline-flex items-center gap-3 px-12 py-5 bg-accent text-white text-xl font-bold rounded-xl hover:bg-accent-dark transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
+            >
+              {user ? 'Your Events' : 'Get Started'}
+            </Link>
+            {!user && (
+              <Link
+                href="/demo"
+                className="inline-flex items-center gap-2 px-10 py-5 border-2 border-accent text-accent text-xl font-semibold rounded-xl hover:bg-accent-light/10 transition-all"
+              >
+                See it in action →
+              </Link>
+            )}
+          </div>
         </div>
 
         {/* How It Works */}
@@ -121,13 +131,7 @@ export default async function LandingPage() {
         </div>
 
         {/* Secondary Links */}
-        <div className="text-center space-y-4">
-          <p className="text-gray-500 text-sm">
-            Want to explore first?{' '}
-            <a href="/demo" className="text-accent hover:text-accent-dark underline font-medium">
-              Try the interactive demo
-            </a>
-          </p>
+        <div className="text-center">
           <p className="text-gray-500 text-sm">
             Browse{' '}
             <a
