@@ -31,6 +31,7 @@ interface PeopleSectionProps {
   onPeopleChanged?: () => void;
   onMovePerson: (personId: string, teamId: string | null) => Promise<void>;
   onExpand?: () => void;
+  onGeneratePlan?: () => void;
   stepLabel?: string;
 }
 
@@ -41,6 +42,7 @@ export default function PeopleSection({
   onPeopleChanged,
   onMovePerson,
   onExpand,
+  onGeneratePlan,
   stepLabel,
 }: PeopleSectionProps) {
   const [view, setView] = useState<'table' | 'board'>('table');
@@ -50,6 +52,7 @@ export default function PeopleSection({
   const [assignCoordinatorsModalOpen, setAssignCoordinatorsModalOpen] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [isAutoAssigning, setIsAutoAssigning] = useState(false);
+  const [noPlanError, setNoPlanError] = useState(false);
 
   const handleAddPerson = async (data: AddPersonFormData) => {
     try {
@@ -157,6 +160,15 @@ export default function PeopleSection({
   };
 
   const handleAutoAssign = async () => {
+    setNoPlanError(false);
+
+    // Client-side guard: no teams means no plan has been generated yet.
+    // Show the contextual banner immediately — no API call needed.
+    if (teams.length === 0) {
+      setNoPlanError(true);
+      return;
+    }
+
     setIsAutoAssigning(true);
     try {
       const response = await fetch(`/api/events/${eventId}/people/auto-assign`, {
@@ -164,15 +176,18 @@ export default function PeopleSection({
         headers: { 'Content-Type': 'application/json' },
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to auto-assign people');
+        if (data.code === 'NO_TEAMS') {
+          setNoPlanError(true);
+          return;
+        }
+        throw new Error(data.error || 'Failed to auto-assign people');
       }
 
-      const result = await response.json();
-
       // Success feedback
-      alert(`Successfully assigned ${result.assigned} people to teams!`);
+      alert(`Successfully assigned ${data.assigned} people to teams!`);
 
       // Refresh data
       onPeopleChanged?.();
@@ -291,6 +306,25 @@ export default function PeopleSection({
             )}
           </div>
         </div>
+
+        {noPlanError && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-md flex items-start justify-between gap-3">
+            <p className="text-sm text-amber-800">
+              Generate your plan first — it creates the teams your people will be assigned to.
+            </p>
+            {onGeneratePlan && (
+              <button
+                onClick={() => {
+                  setNoPlanError(false);
+                  onGeneratePlan();
+                }}
+                className="shrink-0 px-3 py-1 bg-accent text-white text-sm rounded-md hover:bg-accent-dark whitespace-nowrap"
+              >
+                Generate Plan →
+              </button>
+            )}
+          </div>
+        )}
 
         {view === 'board' && (
           <p className="text-xs text-gray-500 mb-4">Move people between teams in Board view.</p>

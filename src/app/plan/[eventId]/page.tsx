@@ -455,6 +455,9 @@ export default function PlanEditorPage() {
       await loadConflicts();
       setGateCheckRefresh((prev) => prev + 1);
 
+      // Close any expanded section so the user lands on the full plan page
+      handleCloseExpansion();
+
       alert('Plan generated! Demo team and items created.');
     } catch (err: any) {
       console.error('Error generating plan:', err);
@@ -1533,6 +1536,7 @@ export default function PlanEditorPage() {
             }}
             onMovePerson={handleMovePerson}
             onExpand={() => handleExpandSection('people')}
+            onGeneratePlan={() => setHostDescriptionModalOpen(true)}
             stepLabel={undefined}
           />
           <GateCheck
@@ -1790,6 +1794,7 @@ export default function PlanEditorPage() {
               setChecklistStepContext(null);
             }}
             onMovePerson={handleMovePerson}
+            onGeneratePlan={() => setHostDescriptionModalOpen(true)}
             stepLabel={checklistStepContext || undefined}
           />
         </SectionExpandModal>
