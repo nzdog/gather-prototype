@@ -74,18 +74,8 @@ No Jest, Vitest, or Playwright config files are present in this repo.
 The test suite consists of security-validation scripts run via `tsx`.
 
 ```bash
-# Full security test suite
-npm run test:security:all
-
-# Individual suites
-npm run test:security                  # core security validation
-npm run test:security:bc               # boundary-condition verification
-npm run test:security:transition       # transition auth checks
-npm run test:security:inventory        # route inventory gate
-npm run test:security:assignments      # assignments endpoint security
-
-# Route classification (utility, not a test gate)
-npm run test:security:classify
+# Security test suite (preflight gate)
+npm run test:security
 ```
 
 ---
@@ -105,13 +95,6 @@ npm run test:security:classify
 >   history. `prisma migrate dev` detects drift and prompts for reset;
 >   `prisma migrate deploy` errors with P3005. The DB is functional — security
 >   tests confirm connection. Fix requires baselining the existing schema.
-> - Three test files referenced in `package.json` do not exist in the repo,
->   causing `npm run test:security:all` to exit non-zero:
->   - `tests/security-bc-verification.ts`
->   - `tests/security-transition-auth.ts`
->   - `tests/assignments-endpoint-security-test.ts`
->   The smoke test (`npm run test:security`) is the valid preflight gate until
->   these files are written.
 
 ---
 
