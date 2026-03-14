@@ -38,7 +38,7 @@ a fresh server render. Apply at the route level only.
 
 ---
 
-### KB-002 — DB schema drift (P3005)
+### KB-002 — DB schema drift (P3005) ✓ RESOLVED
 **Symptom:** `npm run db:migrate` reports schema drift — DB schema is ahead
 of migration history.
 **Cause:** Pre-existing condition. Schema was modified outside the migration
@@ -48,6 +48,9 @@ the ticket explicitly authorises a migration fix with rollback plan.
 **Do not:** Run `prisma migrate reset` or alter migration files to resolve.
 This is a chore-level issue requiring explicit authorisation.
 **First seen:** GTC-002 preflight
+**Resolved:** 2026-03-14. Production `npx prisma migrate status` returned clean —
+all 15 migrations applied, no drift, no pending migrations. `prisma migrate dev`
+is now safe to use.
 
 ---
 
