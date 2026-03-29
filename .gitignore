@@ -25,6 +25,7 @@ Thumbs.db
 
 # Claude
 .claude/
+docs/_inbox/
 
 # Debug/test scripts (one-off)
 check-conflicts.js
