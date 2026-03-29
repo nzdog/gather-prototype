@@ -271,9 +271,7 @@ export async function generateSelectiveItems(
   );
 
   // Get items to regenerate from database
-  const itemsToRegenerate = event.teams.flatMap((team) =>
-    team.items.filter((item) => regenerateItemIds.includes(item.id))
-  );
+  const itemsToRegenerate = buildItemsToRegenerate(event.teams, regenerateItemIds);
 
   // Build event details string
   const eventDetails = `${event.occasionType || 'gathering'} with ${event.guestCount || 10} guests for ${event.days.length || 1} day(s)`;
@@ -531,9 +529,30 @@ function generateMockExplanation(conflict: any): AIExplanationResponse {
 }
 
 /**
+ * Builds the list of items to regenerate from event teams, enriched with a .team back-reference
+ * so that downstream consumers (mock fallback, logging) can resolve the team name without
+ * a separate lookup.
+ *
+ * Pre-fix: this was an inline flatMap with no team attachment — items had no .team property,
+ * causing generateMockSelectiveItems to fall back to teamName:'Unknown' for every item.
+ */
+export function buildItemsToRegenerate(
+  teams: Array<{ id: string; name: string; items: Array<{ id: string; [key: string]: any }> }>,
+  regenerateItemIds: string[]
+): Array<{ team: { name: string }; [key: string]: any }> {
+  return teams.flatMap((team) =>
+    team.items
+      .filter((item) => regenerateItemIds.includes(item.id))
+      .map((item) => ({ ...item, team: { name: team.name } }))
+  );
+}
+
+/**
  * Fallback: Generate mock selective items
  */
-function generateMockSelectiveItems(itemsToRegenerate: any[]): AISelectiveRegenerationResponse {
+export function generateMockSelectiveItems(
+  itemsToRegenerate: any[]
+): AISelectiveRegenerationResponse {
   console.log('[AI Mock] Generating mock selective items');
 
   const mockItems: AIItem[] = itemsToRegenerate.map((item, index) => ({
@@ -553,4 +572,22 @@ function generateMockSelectiveItems(itemsToRegenerate: any[]): AISelectiveRegene
     reasoning:
       'Mock selective regeneration. This is fallback data because Claude API is not available.',
   };
+}
+
+/**
+ * Returns team names referenced in items that have no corresponding entry in existingTeamNames.
+ * Used by the generate route to detect and surface mismatched team names before silently dropping items.
+ */
+export function findMissingTeamNames(
+  items: { teamName: string }[],
+  existingTeamNames: string[]
+): string[] {
+  const nameSet = new Set(existingTeamNames);
+  const missing = new Set<string>();
+  for (const item of items) {
+    if (!nameSet.has(item.teamName)) {
+      missing.add(item.teamName);
+    }
+  }
+  return Array.from(missing);
 }

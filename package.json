@@ -19,6 +19,7 @@
     "test:demo-endpoints": "tsx tests/demo-endpoints-test.ts",
     "test:participant-null-coordinator": "tsx tests/participant-view-null-coordinator-test.ts",
     "test:coordinator-conflict-detection": "tsx tests/coordinator-conflict-detection-test.ts",
+    "test:regen-all-items": "tsx tests/regen-all-items-test.ts",
     "test:url-no-double-slash": "tsx tests/url-no-double-slash-test.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

@@ -241,7 +241,7 @@ export const SELECTIVE_REGENERATION_SYSTEM_PROMPT = `You are a planning assistan
 RULES:
 1. DO NOT modify, duplicate, or include confirmed items in your response
 2. Generate NEW items ONLY for the "items to regenerate" slots
-3. Keep the same categories/teams as the items you're replacing
+3. Use only the exact team names from the "items to regenerate" list — do not invent new team names or use any name not present in that list
 4. Match the overall style and approach of the confirmed items
 5. Be transparent about your reasoning
 6. Maintain adequate food quantities for all guests

@@ -1,7 +1,12 @@
 // POST /api/events/[id]/generate - Generate plan with AI
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { generatePlan, generateSelectiveItems, EventParams } from '@/lib/ai/generate';
+import {
+  generatePlan,
+  generateSelectiveItems,
+  findMissingTeamNames,
+  EventParams,
+} from '@/lib/ai/generate';
 import { resolveGeneratedTeamCoordinatorId } from '@/lib/ai/coordinator-assignment';
 import { randomBytes } from 'crypto';
 import { requireEventRole } from '@/lib/auth/guards';
@@ -47,6 +52,30 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
         items: aiResponse.items.length,
       });
 
+      // Validate all AI-generated team names before touching the DB.
+      // An unresolvable team name (e.g. 'Unknown' from the mock, or an invented name from Claude)
+      // previously caused items to be silently dropped, returning success with 0 items.
+      const existingTeams = await prisma.team.findMany({
+        where: { eventId },
+        select: { name: true },
+      });
+      const existingTeamNames = existingTeams.map((t) => t.name);
+      const missingTeamNames = findMissingTeamNames(aiResponse.items, existingTeamNames);
+
+      if (missingTeamNames.length > 0) {
+        console.error(
+          '[Generate] AI returned items with unresolvable team names:',
+          missingTeamNames
+        );
+        return NextResponse.json(
+          {
+            error: 'Regeneration failed: AI returned items for teams that do not exist',
+            missingTeamNames,
+          },
+          { status: 422 }
+        );
+      }
+
       // Update kept items to set aiGenerated: true (but NOT userConfirmed yet - wait until final confirmation)
       await prisma.item.updateMany({
         where: {
@@ -70,7 +99,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       const generatedBatchId = `gen_${randomBytes(16).toString('hex')}`;
 
       for (const itemData of aiResponse.items) {
-        // Find the team by name
+        // Find the team by name using the pre-fetched map (all names already validated above)
         const team = await prisma.team.findFirst({
           where: {
             eventId,
@@ -79,7 +108,8 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
         });
 
         if (!team) {
-          console.warn(`[Generate] Team not found: ${itemData.teamName}, skipping item`);
+          // Should never reach here after the upfront validation, but guard defensively
+          console.error(`[Generate] Team not found after validation: ${itemData.teamName}`);
           continue;
         }
 
