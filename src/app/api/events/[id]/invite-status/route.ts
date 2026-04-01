@@ -36,16 +36,39 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
   const { id: eventId } = await context.params;
 
   // SECURITY: Auth check MUST run first and MUST NOT be in try/catch that returns 500
-  let auth;
-  try {
-    auth = await requireEventRole(eventId, ['HOST']);
-    if (auth instanceof NextResponse) return auth;
-  } catch (authError) {
-    console.error('Auth check error:', authError);
-    return NextResponse.json(
-      { error: 'Unauthorized', message: 'Authentication required' },
-      { status: 401 }
-    );
+  // Two authentication methods supported (mirrors /api/events/[id]/tokens/route.ts):
+  // 1. Session-based auth via requireEventRole (hosts with active sessions)
+  // 2. ?hostId= query param (hosts visiting via token link, no session)
+  const { searchParams } = new URL(_request.url);
+  const hostIdParam = searchParams.get('hostId');
+
+  if (hostIdParam) {
+    // Method 2: hostId query param auth
+    const eventForAuth = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { hostId: true, coHostId: true },
+    });
+
+    if (!eventForAuth) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
+
+    if (eventForAuth.hostId !== hostIdParam && eventForAuth.coHostId !== hostIdParam) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+  } else {
+    // Method 1: Session-based auth
+    let auth;
+    try {
+      auth = await requireEventRole(eventId, ['HOST']);
+      if (auth instanceof NextResponse) return auth;
+    } catch (authError) {
+      console.error('Auth check error:', authError);
+      return NextResponse.json(
+        { error: 'Unauthorized', message: 'Authentication required' },
+        { status: 401 }
+      );
+    }
   }
 
   try {

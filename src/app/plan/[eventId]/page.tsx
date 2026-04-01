@@ -400,7 +400,9 @@ export default function PlanEditorPage() {
       // Also fetch invite status if in CONFIRMING status
       if (event.status === 'CONFIRMING') {
         try {
-          const statusResponse = await fetch(`/api/events/${eventId}/invite-status`);
+          const statusResponse = await fetch(
+            `/api/events/${eventId}/invite-status?hostId=${event.hostId}`
+          );
           if (statusResponse.ok) {
             const statusData = await statusResponse.json();
             const statusMap = new Map<string, any>();
