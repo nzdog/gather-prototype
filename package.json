@@ -21,6 +21,7 @@
     "test:coordinator-conflict-detection": "tsx tests/coordinator-conflict-detection-test.ts",
     "test:regen-all-items": "tsx tests/regen-all-items-test.ts",
     "test:url-no-double-slash": "tsx tests/url-no-double-slash-test.ts",
+    "test:edit-item-frozen-block": "tsx tests/edit-item-frozen-block-test.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",

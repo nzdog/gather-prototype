@@ -1,10 +1,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Lock } from 'lucide-react';
 import { useModal } from '@/contexts/ModalContext';
 import ItemStatusBadges from './ItemStatusBadges';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
+
+/**
+ * Returns true if the event status prevents unrestricted item editing.
+ * FROZEN events must not open the full edit form — user must unfreeze first.
+ */
+export function isEditItemBlocked(eventStatus: string): boolean {
+  return eventStatus === 'FROZEN';
+}
 
 interface Day {
   id: string;
@@ -26,6 +34,7 @@ interface EditItemModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (itemId: string, data: any) => void;
+  eventStatus?: string;
   item: {
     id: string;
     name: string;
@@ -86,6 +95,7 @@ export default function EditItemModal({
   isOpen,
   onClose,
   onSave,
+  eventStatus,
   item,
   days,
   eventId,
@@ -139,6 +149,42 @@ export default function EditItemModal({
   }, [item]);
 
   if (!isOpen || !item) return null;
+
+  // FROZEN events: block edit entirely — direct user to unfreeze first
+  if (isEditItemBlocked(eventStatus ?? '')) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]">
+        <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+          <div className="flex items-center justify-between p-4 border-b">
+            <h2 className="text-lg font-semibold text-gray-900">Edit Item</h2>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="p-6 flex flex-col items-center text-center gap-4">
+            <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+              <Lock className="w-6 h-6 text-yellow-600" />
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">Plan is frozen</p>
+              <p className="text-sm text-gray-600">
+                Items cannot be edited while the plan is frozen. To make changes, unfreeze the plan
+                first using the{' '}
+                <span className="font-medium text-yellow-700">Click to unfreeze →</span> card on the
+                plan page.
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleDietaryTagToggle = (tag: string) => {
     setDietaryTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));

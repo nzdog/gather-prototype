@@ -1615,6 +1615,7 @@ export default function PlanEditorPage() {
           isOpen={!!editingItem}
           onClose={() => setEditingItem(null)}
           onSave={handleSaveEditItem}
+          eventStatus={event?.status}
           item={editingItem}
           days={days}
           eventId={eventId}
