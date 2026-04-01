@@ -26,6 +26,7 @@ interface Person {
 
 interface PeopleSectionProps {
   eventId: string;
+  hostId?: string;
   teams: Team[];
   people: Person[];
   onPeopleChanged?: () => void;
@@ -37,6 +38,7 @@ interface PeopleSectionProps {
 
 export default function PeopleSection({
   eventId,
+  hostId,
   teams,
   people,
   onPeopleChanged,
@@ -131,7 +133,10 @@ export default function PeopleSection({
 
   const handleBatchImport = async (people: PersonRow[]) => {
     try {
-      const response = await fetch(`/api/events/${eventId}/people/batch-import`, {
+      const url = hostId
+        ? `/api/events/${eventId}/people/batch-import?hostId=${hostId}`
+        : `/api/events/${eventId}/people/batch-import`;
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ people }),

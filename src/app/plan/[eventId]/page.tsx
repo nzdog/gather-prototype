@@ -1526,6 +1526,7 @@ export default function PlanEditorPage() {
           />
           <PeopleSection
             eventId={eventId}
+            hostId={event?.hostId}
             teams={teams}
             people={people}
             onPeopleChanged={() => {
@@ -1785,6 +1786,7 @@ export default function PlanEditorPage() {
         >
           <PeopleSection
             eventId={eventId}
+            hostId={event?.hostId}
             teams={teams}
             people={people}
             onPeopleChanged={() => {

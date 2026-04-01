@@ -23,6 +23,7 @@
     "test:url-no-double-slash": "tsx tests/url-no-double-slash-test.ts",
     "test:edit-item-frozen-block": "tsx tests/edit-item-frozen-block-test.ts",
     "test:invite-status-auth": "tsx tests/invite-status-auth-test.ts",
+    "test:batch-import-auth": "tsx tests/batch-import-auth-test.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
