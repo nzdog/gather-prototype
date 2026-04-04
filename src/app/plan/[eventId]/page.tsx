@@ -215,6 +215,7 @@ export default function PlanEditorPage() {
   const [manualItemCount, _setManualItemCount] = useState(0);
   const [editEventModalOpen, setEditEventModalOpen] = useState(false);
   const [inviteLinks, setInviteLinks] = useState<any[]>([]);
+  const [inviteLinksError, setInviteLinksError] = useState(false);
   const [personStatuses, setPersonStatuses] = useState<Map<string, any>>(new Map());
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [resettingClaim, setResettingClaim] = useState<string | null>(null);
@@ -391,10 +392,12 @@ export default function PlanEditorPage() {
 
       if (!response.ok) {
         console.error('Failed to load invite links:', response.status);
+        setInviteLinksError(true);
         return;
       }
 
       const data = await response.json();
+      setInviteLinksError(false);
       setInviteLinks(data.inviteLinks || []);
 
       // Also fetch invite status if in CONFIRMING status
@@ -1172,16 +1175,23 @@ export default function PlanEditorPage() {
                     const hostLink = inviteLinks.find((link) => link.scope === 'HOST');
                     if (hostLink) {
                       window.open(`/h/${hostLink.token}?expand=all`, '_blank');
-                    } else {
+                    } else if (event.status === 'DRAFT') {
                       alert(
                         'Host view is not available yet. Please transition to CONFIRMING status first.'
                       );
+                    } else {
+                      alert('Host link unavailable — try refreshing the page.');
                     }
                   }}
                   className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
                 >
                   View as Host
                 </button>
+                {inviteLinksError && (
+                  <span className="self-center text-sm text-red-600">
+                    Failed to load host link — try refreshing.
+                  </span>
+                )}
                 {event.status === 'DRAFT' && teams.length === 0 && (
                   <button
                     onClick={() => setHostDescriptionModalOpen(true)}
