@@ -187,14 +187,8 @@ export default function EditEventModal({
         throw new Error(error.error || 'Failed to update event');
       }
 
-      // If opened from checklist and on steps 1 or 2, advance to next step
-      // Otherwise save and close the modal
-      if (stepLabel && step < 3) {
-        setStep(step + 1);
-      } else {
-        onSave();
-        onClose();
-      }
+      onSave();
+      onClose();
     } catch (error: any) {
       console.error('Error updating event:', error);
       alert(error.message || 'Failed to update event');
@@ -598,13 +592,23 @@ export default function EditEventModal({
 
           {/* Actions */}
           <div className="flex gap-2 pt-6 border-t mt-6">
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? 'Saving...' : stepLabel && step < 3 ? 'Next' : 'Save Changes'}
-            </button>
+            {stepLabel && step < 3 ? (
+              <button
+                type="button"
+                onClick={() => setStep(step + 1)}
+                className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark"
+              >
+                Next
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? 'Saving...' : 'Save Changes'}
+              </button>
+            )}
             <button
               type="button"
               onClick={onClose}

@@ -42,6 +42,19 @@ regardless of ticket type:
 
 ---
 
+## Executor Output Contract
+
+For every ticket executed, before committing:
+
+1. Fill in the **Evidence (Executor-Completed)** section of the ticket with root cause,
+   files changed, test results, assertions checked, and commit hash.
+2. Save the completed ticket as `docs/tickets/GTC-XXX.md` (using the ticket number)
+   in the repo — create the `docs/tickets/` folder if it doesn't exist.
+3. Commit everything together — the fix, the regression test, and the completed
+   ticket — in a single commit.
+
+---
+
 ## Base Branch
 
 `master` — all work branches off `master` and PRs merge back to `master`.
