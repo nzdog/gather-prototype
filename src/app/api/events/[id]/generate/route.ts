@@ -273,6 +273,24 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
 
     console.log('[Generate] Successfully created:', { teamsCreated, itemsCreated });
 
+    // If Claude returned items but none were created, team names in items don't match
+    // the team names in the teams array. Surface this as a 422 rather than silent success.
+    if (itemsCreated === 0 && aiResponse.items.length > 0) {
+      const missingTeamNames = findMissingTeamNames(aiResponse.items, allTeamNames);
+      console.error('[Generate] Item mismatch: 0 items created despite AI returning items', {
+        aiItemCount: aiResponse.items.length,
+        missingTeamNames,
+      });
+      return NextResponse.json(
+        {
+          error:
+            'Plan generation failed: AI returned items with team names that do not match any created team. Please try again.',
+          missingTeamNames,
+        },
+        { status: 422 }
+      );
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Plan generated successfully with Claude AI',

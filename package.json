@@ -26,6 +26,7 @@
     "test:batch-import-auth": "tsx tests/batch-import-auth-test.ts",
     "test:setup-modal-next-button": "tsx tests/setup-modal-next-button-test.ts",
     "test:view-as-host-alert": "tsx tests/view-as-host-alert-test.ts",
+    "test:initial-plan-mismatch": "tsx tests/initial-plan-mismatch-test.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",

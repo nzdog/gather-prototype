@@ -139,6 +139,12 @@ You must return ONLY valid JSON matching this exact structure:
   "reasoning": "Overall explanation of the plan approach and key decisions"
 }
 
+CRITICAL CONSISTENCY RULE — TEAM NAMES:
+Every item's teamName MUST exactly match one of the team names in the teams array above.
+Copy the team name character-for-character into each item's teamName field.
+Do not abbreviate, pluralise, reword, or vary the team name in any way.
+A teamName that does not exactly match a team name in the teams array will cause that item to be silently lost — it will not appear in the plan at all.
+
 CRITICAL RULES:
 - Every item MUST have a quantityLabel
 - Every item MUST have quantityReasoning explaining the quantity
