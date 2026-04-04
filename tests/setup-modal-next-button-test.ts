@@ -26,8 +26,9 @@ function assert(label: string, condition: boolean) {
 }
 
 // ── Helper: mirrors the button-selection condition in EditEventModal ──────────
+// GTC-031: condition no longer depends on stepLabel — step < 3 is sufficient.
 function showsNextButton(stepLabel: string | undefined, step: number): boolean {
-  return !!(stepLabel && step < 3);
+  return step < 3;
 }
 
 // ── 1. Step labels (regression from GTC-009) ─────────────────────────────────
@@ -62,9 +63,10 @@ assert('Post-payment mode, step 1 → shows Next button', showsNextButton(PAYMEN
 assert('Post-payment mode, step 2 → shows Next button', showsNextButton(PAYMENT_LABEL, 2));
 assert('Post-payment mode, step 3 → shows Save Changes', !showsNextButton(PAYMENT_LABEL, 3));
 
-// ── 5. Direct edit mode (no stepLabel) — always shows Save Changes ────────────
-assert('Direct edit mode, step 1 → shows Save Changes', !showsNextButton(undefined, 1));
-assert('Direct edit mode, step 2 → shows Save Changes', !showsNextButton(undefined, 2));
+// ── 5. Dashboard card / direct edit mode (no stepLabel) — GTC-031 fix ────────
+// stepLabel being absent must not suppress Next on steps 1 and 2.
+assert('Direct edit mode, step 1 → shows Next button (GTC-031)', showsNextButton(undefined, 1));
+assert('Direct edit mode, step 2 → shows Next button (GTC-031)', showsNextButton(undefined, 2));
 assert('Direct edit mode, step 3 → shows Save Changes', !showsNextButton(undefined, 3));
 
 // ── 6. Next click advances step (pure logic) ─────────────────────────────────

@@ -592,7 +592,7 @@ export default function EditEventModal({
 
           {/* Actions */}
           <div className="flex gap-2 pt-6 border-t mt-6">
-            {stepLabel && step < 3 ? (
+            {step < 3 ? (
               <button
                 type="button"
                 onClick={() => setStep(step + 1)}
