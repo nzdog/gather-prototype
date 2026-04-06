@@ -294,7 +294,7 @@ export default function PlanEditorPage() {
       setChecklistStepContext('Step 1 of 3: Event Basics');
       setIsPostPayment(true);
       setEditEventModalOpen(true);
-      window.history.replaceState({}, '', `/plan/${eventId}`);
+      router.replace(`/plan/${eventId}`, { scroll: false });
     }
   }, [searchParams, eventId]);
 
