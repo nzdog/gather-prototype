@@ -252,7 +252,16 @@ export default function GuidedPlanBuilder({
   onBack,
   onSubmit,
 }: GuidedPlanBuilderProps) {
-  const occasionKey = eventContext.occasionType?.toLowerCase() ?? '';
+  const OCCASION_CONFIG_MAP: Record<string, string> = {
+    CHRISTMAS: 'christmas',
+    BIRTHDAY: 'birthday_adult',
+    EASTER: 'easter',
+    WEDDING: 'wedding_reception',
+  };
+  const occasionKey =
+    (eventContext.occasionType && OCCASION_CONFIG_MAP[eventContext.occasionType]) ??
+    eventContext.occasionType?.toLowerCase() ??
+    '';
   const occasionConfig: OccasionConfig | null = planConfig[occasionKey] ?? null;
 
   const defaultCategoryKeys: string[] = occasionConfig?.defaultCategories ?? [];
