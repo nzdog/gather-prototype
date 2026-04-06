@@ -671,6 +671,17 @@ export function compileGuidedPrompt(
     }
   }
 
+  // Build explicit team name instruction from selected categories
+  const selectedCategoryNames = Object.keys(selections)
+    .map((key) => categoryLabels[key] || key)
+    .filter(Boolean);
+
+  if (selectedCategoryNames.length > 0) {
+    parts.push(
+      `TEAM NAMES INSTRUCTION: Use exactly these team names, in this order: [${selectedCategoryNames.join(', ')}]. Do not rename, merge, or reorder teams. Each team name must match exactly.`
+    );
+  }
+
   return parts.join(' ');
 }
 

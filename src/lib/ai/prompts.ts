@@ -145,6 +145,9 @@ Copy the team name character-for-character into each item's teamName field.
 Do not abbreviate, pluralise, reword, or vary the team name in any way.
 A teamName that does not exactly match a team name in the teams array will cause that item to be silently lost — it will not appear in the plan at all.
 
+HOST-PROVIDED TEAM NAMES:
+When the host description includes a "TEAM NAMES INSTRUCTION" with specific team names, you MUST use those exact names as your team names — same spelling, same order. Do not rename, merge, reorder, or invent alternative names. The host chose these names deliberately in the guided builder, and the plan must reflect their choices exactly. Create additional teams (e.g. Setup, Cleanup) only if the host's list does not already cover those functions.
+
 CRITICAL RULES:
 - Every item MUST have a quantityLabel
 - Every item MUST have quantityReasoning explaining the quantity
