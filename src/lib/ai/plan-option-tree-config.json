@@ -10,6 +10,7 @@
           {
             "level": 1,
             "question": "What style of mains?",
+            "breadcrumbLabel": "Style",
             "options": [
               "Traditional roast",
               "NZ summer BBQ",
@@ -23,6 +24,7 @@
           {
             "level": 2,
             "question": "Any specific dishes?",
+            "breadcrumbLabel": "Dishes",
             "options": ["Glazed ham", "Roast lamb", "Roast chicken", "Turkey", "Beef brisket"],
             "dependsOn": {
               "levelIndex": 0,
@@ -76,6 +78,7 @@
           {
             "level": 3,
             "question": "Dietary requirements?",
+            "breadcrumbLabel": "Dietary",
             "options": [
               "Gluten free option needed",
               "Dairy free option needed",
@@ -94,6 +97,7 @@
           {
             "level": 1,
             "question": "What kind of dessert?",
+            "breadcrumbLabel": "Type",
             "options": [
               "Pavlova (classic NZ)",
               "Christmas pudding",
@@ -112,6 +116,7 @@
           {
             "level": 1,
             "question": "What kind of sides?",
+            "breadcrumbLabel": "Type",
             "options": [
               "Green salads",
               "Roasted vegetables",
@@ -130,6 +135,7 @@
           {
             "level": 1,
             "question": "What non-alcoholic drinks?",
+            "breadcrumbLabel": "Type",
             "options": [
               "Juices & cordials",
               "Sparkling water",
@@ -154,6 +160,7 @@
           {
             "level": 1,
             "question": "What style of mains?",
+            "breadcrumbLabel": "Style",
             "options": [
               "Casual finger food",
               "Sit-down meal",
@@ -172,6 +179,7 @@
           {
             "level": 1,
             "question": "What kind of cake?",
+            "breadcrumbLabel": "Type",
             "options": ["Single tier", "Multi-tier", "Cupcakes", "Dessert table", "No cake"],
             "freeText": true,
             "freeTextPlaceholder": "Cake details..."
@@ -184,6 +192,7 @@
           {
             "level": 1,
             "question": "What kind of snacks?",
+            "breadcrumbLabel": "Type",
             "options": [
               "Chips & dips",
               "Cheese board",
@@ -202,6 +211,7 @@
           {
             "level": 1,
             "question": "What non-alcoholic drinks?",
+            "breadcrumbLabel": "Type",
             "options": ["Soft drinks", "Juice boxes", "Sparkling water", "Tea & coffee", "Mixed"],
             "freeText": true,
             "freeTextPlaceholder": "Describe your drinks..."

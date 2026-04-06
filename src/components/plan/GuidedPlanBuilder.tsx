@@ -36,6 +36,7 @@ interface DependsOnConfig {
 interface LevelConfig {
   level: number;
   question: string;
+  breadcrumbLabel?: string;
   options: string[];
   dependsOn?: DependsOnConfig;
   freeText: boolean;
@@ -101,6 +102,28 @@ const GENERIC_LEVEL: LevelConfig = {
   freeText: true,
   freeTextPlaceholder: 'Describe what you need...',
 };
+
+/** Derive a short breadcrumb label from a level question, e.g. "What style of mains?" → "Style" */
+function shortenLevelQuestion(question: string): string {
+  // Strip trailing punctuation
+  const q = question.replace(/[?.!]+$/, '').trim();
+  // "What style of X" / "What kind of X" → descriptor word (Style, Kind, Type)
+  const whatOf = q.match(/^What\s+(style|kind|type)\s+of\s+/i);
+  if (whatOf) return capitalize(whatOf[1]);
+  // "Any specific X" / "Any X" → X (the object noun)
+  const any = q.match(/^Any\s+(?:specific\s+)?(.+)$/i);
+  if (any) return capitalize(any[1]);
+  // "Do you need X" → X
+  const doYou = q.match(/^Do\s+you\s+(?:need|want|have)\s+(.+)$/i);
+  if (doYou) return capitalize(doYou[1]);
+  // Fallback: use last 1-2 words (the noun phrase)
+  const words = q.split(/\s+/);
+  return capitalize(words.length <= 2 ? q : words.slice(-2).join(' '));
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 const OCCASION_LABELS: Record<string, string> = {
   CHRISTMAS: 'Christmas',
@@ -442,21 +465,26 @@ export default function GuidedPlanBuilder({
           onClick: () =>
             setView({ name: 'category', categoryKey: view.categoryKey, levelIndex: 0 }),
         });
-        // Show selected option(s) from previous level as intermediate crumb
-        const prevSel = selections[view.categoryKey]?.[view.levelIndex - 1];
-        const prevLabel =
-          prevSel?.options[0] ?? catConfig.levels[view.levelIndex - 1]?.question ?? '';
+        // Show level labels (not selected values) for intermediate levels
+        for (let i = 0; i < view.levelIndex; i++) {
+          const lvl = catConfig.levels[i];
+          const label =
+            lvl?.breadcrumbLabel ?? shortenLevelQuestion(lvl?.question ?? `Level ${i + 1}`);
+          const idx = i;
+          crumbs.push({
+            label,
+            onClick: () =>
+              setView({
+                name: 'category',
+                categoryKey: view.categoryKey,
+                levelIndex: idx,
+              }),
+          });
+        }
+        const currentLvl = catConfig.levels[view.levelIndex];
         crumbs.push({
-          label: prevLabel,
-          onClick: () =>
-            setView({
-              name: 'category',
-              categoryKey: view.categoryKey,
-              levelIndex: view.levelIndex - 1,
-            }),
-        });
-        crumbs.push({
-          label: catConfig.levels[view.levelIndex]?.question ?? `Level ${view.levelIndex + 1}`,
+          label:
+            currentLvl?.breadcrumbLabel ?? currentLvl?.question ?? `Level ${view.levelIndex + 1}`,
         });
       }
     }
