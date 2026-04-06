@@ -1,0 +1,213 @@
+{
+  "christmas": {
+    "label": "Christmas",
+    "nzNotes": "Summer event in NZ — seafood, salads, and outdoor settings common alongside traditional roasts",
+    "defaultCategories": ["mains", "dessert", "sides", "drinks_non_alcoholic"],
+    "categories": {
+      "mains": {
+        "label": "Mains",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of mains?",
+            "options": [
+              "Traditional roast",
+              "NZ summer BBQ",
+              "Seafood spread",
+              "Vegetarian / Vegan focus",
+              "Mixed"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your mains..."
+          },
+          {
+            "level": 2,
+            "question": "Any specific dishes?",
+            "options": ["Glazed ham", "Roast lamb", "Roast chicken", "Turkey", "Beef brisket"],
+            "dependsOn": {
+              "levelIndex": 0,
+              "map": {
+                "Traditional roast": [
+                  "Glazed ham",
+                  "Roast lamb",
+                  "Roast chicken",
+                  "Turkey",
+                  "Beef brisket"
+                ],
+                "NZ summer BBQ": [
+                  "BBQ sausages",
+                  "Steak",
+                  "Chicken skewers",
+                  "Lamb chops",
+                  "Burger patties"
+                ],
+                "Seafood spread": [
+                  "Prawns",
+                  "Smoked salmon",
+                  "Oysters",
+                  "Fish fillets",
+                  "Crayfish"
+                ],
+                "Vegetarian / Vegan focus": [
+                  "Stuffed peppers",
+                  "Vegetable Wellington",
+                  "Mushroom risotto",
+                  "Tofu stir-fry",
+                  "Nut roast"
+                ],
+                "Mixed": [
+                  "Glazed ham",
+                  "Roast lamb",
+                  "Roast chicken",
+                  "Turkey",
+                  "Beef brisket",
+                  "BBQ sausages",
+                  "Steak",
+                  "Prawns",
+                  "Smoked salmon",
+                  "Stuffed peppers",
+                  "Vegetable Wellington"
+                ]
+              }
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Add specific dishes..."
+          },
+          {
+            "level": 3,
+            "question": "Dietary requirements?",
+            "options": [
+              "Gluten free option needed",
+              "Dairy free option needed",
+              "Nut free",
+              "Halal",
+              "None"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary notes..."
+          }
+        ]
+      },
+      "dessert": {
+        "label": "Dessert",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What kind of dessert?",
+            "options": [
+              "Pavlova (classic NZ)",
+              "Christmas pudding",
+              "Trifle",
+              "Ice cream",
+              "Mixed dessert table"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your dessert..."
+          }
+        ]
+      },
+      "sides": {
+        "label": "Sides & Salads",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What kind of sides?",
+            "options": [
+              "Green salads",
+              "Roasted vegetables",
+              "Potato dishes",
+              "Bread rolls",
+              "Mixed"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your sides..."
+          }
+        ]
+      },
+      "drinks_non_alcoholic": {
+        "label": "Drinks (Non-alcoholic)",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What non-alcoholic drinks?",
+            "options": [
+              "Juices & cordials",
+              "Sparkling water",
+              "Soft drinks",
+              "Tea & coffee",
+              "Mixed"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your drinks..."
+          }
+        ]
+      }
+    }
+  },
+  "birthday": {
+    "label": "Birthday",
+    "defaultCategories": ["mains", "cake", "snacks", "drinks_non_alcoholic"],
+    "categories": {
+      "mains": {
+        "label": "Mains",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of mains?",
+            "options": [
+              "Casual finger food",
+              "Sit-down meal",
+              "BBQ",
+              "Pizza / shared platters",
+              "Mixed"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your mains..."
+          }
+        ]
+      },
+      "cake": {
+        "label": "Cake",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What kind of cake?",
+            "options": ["Single tier", "Multi-tier", "Cupcakes", "Dessert table", "No cake"],
+            "freeText": true,
+            "freeTextPlaceholder": "Cake details..."
+          }
+        ]
+      },
+      "snacks": {
+        "label": "Table Snacks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What kind of snacks?",
+            "options": [
+              "Chips & dips",
+              "Cheese board",
+              "Fruit platter",
+              "Party pies & sausage rolls",
+              "Mixed"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your snacks..."
+          }
+        ]
+      },
+      "drinks_non_alcoholic": {
+        "label": "Drinks (Non-alcoholic)",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What non-alcoholic drinks?",
+            "options": ["Soft drinks", "Juice boxes", "Sparkling water", "Tea & coffee", "Mixed"],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your drinks..."
+          }
+        ]
+      }
+    }
+  }
+}
