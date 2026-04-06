@@ -36,6 +36,7 @@ import PeopleSection from '@/components/plan/PeopleSection';
 import EditEventModal from '@/components/plan/EditEventModal';
 import ItemStatusBadges from '@/components/plan/ItemStatusBadges';
 import SectionExpandModal from '@/components/plan/SectionExpandModal';
+import ModalTabBar, { ModalTabId } from '@/components/plan/ModalTabBar';
 import GenerationReviewPanel from '@/components/plan/GenerationReviewPanel';
 import { InviteStatusSection } from '@/components/plan/InviteStatusSection';
 import { SharedLinkSection } from '@/components/plan/SharedLinkSection';
@@ -227,6 +228,7 @@ export default function PlanEditorPage() {
   const [checklistDismissed, setChecklistDismissed] = useState(false);
   const [checklistStepContext, setChecklistStepContext] = useState<string | null>(null);
   const [isPostPayment, setIsPostPayment] = useState(false);
+  const [modalBreadcrumbTrail, setModalBreadcrumbTrail] = useState<ModalTabId[]>([]);
 
   // Debug: Log when selectedPersonId changes
   useEffect(() => {
@@ -438,6 +440,67 @@ export default function PlanEditorPage() {
     router.push(params.toString() ? `${pathname}?${params.toString()}` : pathname, {
       scroll: false,
     });
+    setModalBreadcrumbTrail([]);
+  };
+
+  // Inter-modal tab navigation handler
+  const handleModalTabNavigate = (tabId: ModalTabId, fromTab: ModalTabId) => {
+    if (tabId === fromTab) return;
+
+    // Compute new breadcrumb trail
+    const newTrail = (() => {
+      const prev = modalBreadcrumbTrail.length > 0 ? modalBreadcrumbTrail : [fromTab];
+      // If navigating to a tab already in the trail, truncate to it
+      const idx = prev.indexOf(tabId);
+      if (idx >= 0) return prev.slice(0, idx + 1);
+      // Otherwise append the new destination
+      return [...prev, tabId];
+    })();
+
+    setModalBreadcrumbTrail(newTrail);
+
+    if (tabId === 'details') {
+      // Close any expansion modal, open EditEventModal
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('expand');
+      router.push(params.toString() ? `${pathname}?${params.toString()}` : pathname, {
+        scroll: false,
+      });
+      setEditEventModalOpen(true);
+    } else {
+      // If coming from EditEventModal, close it
+      if (fromTab === 'details') {
+        setEditEventModalOpen(false);
+      }
+      // Navigate to the target section modal
+      handleExpandSection(tabId as SectionId);
+    }
+  };
+
+  // Build a tab bar for a given section
+  const buildTabBar = (currentTab: ModalTabId) => {
+    if (!event) return undefined;
+    return (
+      <ModalTabBar
+        activeTab={currentTab}
+        eventStatus={event.status}
+        onNavigate={(tabId) => handleModalTabNavigate(tabId, currentTab)}
+        onCloseToDashboard={() => {
+          if (currentTab === 'details') {
+            setEditEventModalOpen(false);
+          } else {
+            handleCloseExpansion();
+          }
+          setModalBreadcrumbTrail([]);
+        }}
+        breadcrumbTrail={
+          modalBreadcrumbTrail.length > 0 &&
+          modalBreadcrumbTrail[modalBreadcrumbTrail.length - 1] === currentTab
+            ? modalBreadcrumbTrail
+            : [currentTab]
+        }
+      />
+    );
   };
 
   const handleGeneratePlan = async (hostDescription?: string) => {
@@ -1103,6 +1166,7 @@ export default function PlanEditorPage() {
     setEditEventModalOpen(false);
     setChecklistStepContext(null);
     setIsPostPayment(false);
+    setModalBreadcrumbTrail([]);
   };
 
   // Setup progress hook
@@ -1646,6 +1710,7 @@ export default function PlanEditorPage() {
             eventId={eventId}
             stepLabel={checklistStepContext || undefined}
             showPaymentConfirmation={isPostPayment}
+            tabBar={buildTabBar('details')}
           />
         )}
 
@@ -1657,16 +1722,40 @@ export default function PlanEditorPage() {
           onClose={handleCloseExpansion}
           title="Plan Status"
           icon={<AlertCircle className="w-6 h-6" />}
+          tabBar={buildTabBar('planstatus')}
         >
           {/* Conflicts section — always visible */}
           <div className="mb-8">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Conflicts</h3>
-            <ConflictList
-              eventId={eventId}
-              conflicts={conflicts}
-              onConflictsChanged={loadConflicts}
-              hasRunCheck={!!event.lastCheckPlanAt}
-            />
+            {items.length === 0 && teams.length === 0 ? (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 max-w-md mx-auto">
+                <div className="text-center">
+                  <div className="inline-flex items-center justify-center w-12 h-12 bg-gray-100 rounded-full mb-3">
+                    <AlertCircle className="w-6 h-6 text-gray-400" />
+                  </div>
+                  <p className="text-lg font-semibold text-gray-900 mb-1">No plan yet</p>
+                  <p className="text-sm text-gray-500 mb-4">
+                    Generate a plan to check for conflicts
+                  </p>
+                  {event?.status === 'DRAFT' && (
+                    <button
+                      onClick={() => setHostDescriptionModalOpen(true)}
+                      className="px-4 py-2 bg-accent text-white text-sm font-medium rounded-md hover:bg-accent-dark transition-colors inline-flex items-center gap-1.5"
+                    >
+                      Generate Plan
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <ConflictList
+                eventId={eventId}
+                conflicts={conflicts}
+                onConflictsChanged={loadConflicts}
+                hasRunCheck={!!event.lastCheckPlanAt}
+              />
+            )}
           </div>
 
           {/* Freeze Readiness section — only visible in CONFIRMING */}
@@ -1692,6 +1781,7 @@ export default function PlanEditorPage() {
           onClose={handleCloseExpansion}
           title="Items & Quantities"
           icon={<Package className="w-6 h-6" />}
+          tabBar={buildTabBar('items')}
           headerActions={
             <div className="flex items-center gap-2">
               {items.length > 0 && (
@@ -1793,143 +1883,177 @@ export default function PlanEditorPage() {
             </div>
           }
         >
-          {(() => {
-            // Group items by team name
-            const grouped = [...items].reduce<Record<string, Item[]>>((acc, item) => {
-              const key = item.team.name;
-              if (!acc[key]) acc[key] = [];
-              acc[key].push(item);
-              return acc;
-            }, {});
-            // Sort categories by displayOrder when available (guided build),
-            // fall back to alphabetical (quick generate / manual teams)
-            const hasDisplayOrder = items.some((item) => item.team.displayOrder > 0);
-            const categoryNames = Object.keys(grouped).sort((a, b) => {
-              if (hasDisplayOrder) {
-                const orderA = grouped[a][0]?.team.displayOrder ?? 0;
-                const orderB = grouped[b][0]?.team.displayOrder ?? 0;
-                if (orderA !== orderB) return orderA - orderB;
-              }
-              return a.localeCompare(b);
-            });
-
-            return (
-              <div className="space-y-2">
-                {categoryNames.map((categoryName) => {
-                  const categoryItems = grouped[categoryName];
-                  const isExpanded = expandedItemCategories.has(categoryName);
-
-                  return (
-                    <div
-                      key={categoryName}
-                      className="border border-gray-200 rounded-lg overflow-hidden"
-                    >
-                      {/* Accordion Header */}
-                      <button
-                        onClick={() => {
-                          setExpandedItemCategories((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(categoryName)) {
-                              next.delete(categoryName);
-                            } else {
-                              next.add(categoryName);
-                            }
-                            return next;
-                          });
-                        }}
-                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          {isExpanded ? (
-                            <ChevronDown className="w-5 h-5 text-gray-400" />
-                          ) : (
-                            <ChevronRight className="w-5 h-5 text-gray-400" />
-                          )}
-                          <span className="font-medium text-gray-900">{categoryName}</span>
-                          <span className="text-sm text-gray-500">
-                            · {categoryItems.length} {categoryItems.length === 1 ? 'item' : 'items'}
-                          </span>
-                        </div>
-                      </button>
-
-                      {/* Accordion Body — three-column table */}
-                      <div
-                        className={`transition-all duration-200 ease-in-out overflow-hidden ${
-                          isExpanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'
-                        }`}
-                      >
-                        <div className="border-t border-gray-200">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wider">
-                                <th className="px-4 py-2 font-medium">Item</th>
-                                <th className="px-4 py-2 font-medium">Category</th>
-                                <th className="px-4 py-2 font-medium text-right">Action</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                              {categoryItems.map((item) => {
-                                const isNew =
-                                  item.createdAt &&
-                                  new Date().getTime() - new Date(item.createdAt).getTime() < 60000;
-
-                                return (
-                                  <tr key={item.id} className="hover:bg-gray-50">
-                                    <td className="px-4 py-3">
-                                      <div className="flex items-center gap-2">
-                                        <span className="font-medium text-gray-900">
-                                          {item.name}
-                                        </span>
-                                        {isNew && (
-                                          <span className="px-1.5 py-0.5 text-xs font-bold bg-orange-500 text-white rounded animate-pulse">
-                                            NEW
-                                          </span>
-                                        )}
-                                        {item.critical && (
-                                          <span className="px-1.5 py-0.5 bg-red-100 text-red-700 text-xs rounded">
-                                            CRITICAL
-                                          </span>
-                                        )}
-                                      </div>
-                                      <div className="text-xs text-gray-500 mt-0.5">
-                                        {item.quantityAmount && item.quantityUnit ? (
-                                          <span>
-                                            {item.quantityAmount} {item.quantityUnit}
-                                          </span>
-                                        ) : item.quantityText ? (
-                                          <span className="italic">{item.quantityText}</span>
-                                        ) : (
-                                          <span className="text-orange-600">No quantity set</span>
-                                        )}
-                                      </div>
-                                    </td>
-                                    <td className="px-4 py-3 text-gray-400">{item.team.name}</td>
-                                    <td className="px-4 py-3 text-right">
-                                      <button
-                                        onClick={() => setEditingItem(item)}
-                                        className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md"
-                                      >
-                                        Edit
-                                      </button>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                {categoryNames.length === 0 && (
-                  <div className="text-center py-12 text-gray-500">
-                    <p>No items yet. Generate a plan or add items manually.</p>
-                  </div>
+          {items.length === 0 ? (
+            <div className="text-center py-16">
+              <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-600 mb-6">
+                No items yet. Generate a plan or add items manually.
+              </p>
+              <div className="flex items-center justify-center gap-3">
+                {event?.status === 'DRAFT' && (
+                  <button
+                    onClick={() => setHostDescriptionModalOpen(true)}
+                    className="px-4 py-2 bg-accent text-white text-sm font-medium rounded-md hover:bg-accent-dark transition-colors flex items-center gap-1.5"
+                  >
+                    Generate Plan
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                )}
+                {event?.status === 'DRAFT' && (
+                  <button
+                    onClick={() => {
+                      setSelectedTeamForItem(null);
+                      setAddItemModalOpen(true);
+                    }}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-50 transition-colors flex items-center gap-1.5"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Item
+                  </button>
                 )}
               </div>
-            );
-          })()}
+            </div>
+          ) : (
+            (() => {
+              // Group items by team name
+              const grouped = [...items].reduce<Record<string, Item[]>>((acc, item) => {
+                const key = item.team.name;
+                if (!acc[key]) acc[key] = [];
+                acc[key].push(item);
+                return acc;
+              }, {});
+              // Sort categories by displayOrder when available (guided build),
+              // fall back to alphabetical (quick generate / manual teams)
+              const hasDisplayOrder = items.some((item) => item.team.displayOrder > 0);
+              const categoryNames = Object.keys(grouped).sort((a, b) => {
+                if (hasDisplayOrder) {
+                  const orderA = grouped[a][0]?.team.displayOrder ?? 0;
+                  const orderB = grouped[b][0]?.team.displayOrder ?? 0;
+                  if (orderA !== orderB) return orderA - orderB;
+                }
+                return a.localeCompare(b);
+              });
+
+              return (
+                <div className="space-y-2">
+                  {categoryNames.map((categoryName) => {
+                    const categoryItems = grouped[categoryName];
+                    const isExpanded = expandedItemCategories.has(categoryName);
+
+                    return (
+                      <div
+                        key={categoryName}
+                        className="border border-gray-200 rounded-lg overflow-hidden"
+                      >
+                        {/* Accordion Header */}
+                        <button
+                          onClick={() => {
+                            setExpandedItemCategories((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(categoryName)) {
+                                next.delete(categoryName);
+                              } else {
+                                next.add(categoryName);
+                              }
+                              return next;
+                            });
+                          }}
+                          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            {isExpanded ? (
+                              <ChevronDown className="w-5 h-5 text-gray-400" />
+                            ) : (
+                              <ChevronRight className="w-5 h-5 text-gray-400" />
+                            )}
+                            <span className="font-medium text-gray-900">{categoryName}</span>
+                            <span className="text-sm text-gray-500">
+                              · {categoryItems.length}{' '}
+                              {categoryItems.length === 1 ? 'item' : 'items'}
+                            </span>
+                          </div>
+                        </button>
+
+                        {/* Accordion Body — three-column table */}
+                        <div
+                          className={`transition-all duration-200 ease-in-out overflow-hidden ${
+                            isExpanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'
+                          }`}
+                        >
+                          <div className="border-t border-gray-200">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wider">
+                                  <th className="px-4 py-2 font-medium">Item</th>
+                                  <th className="px-4 py-2 font-medium">Category</th>
+                                  <th className="px-4 py-2 font-medium text-right">Action</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                {categoryItems.map((item) => {
+                                  const isNew =
+                                    item.createdAt &&
+                                    new Date().getTime() - new Date(item.createdAt).getTime() <
+                                      60000;
+
+                                  return (
+                                    <tr key={item.id} className="hover:bg-gray-50">
+                                      <td className="px-4 py-3">
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-medium text-gray-900">
+                                            {item.name}
+                                          </span>
+                                          {isNew && (
+                                            <span className="px-1.5 py-0.5 text-xs font-bold bg-orange-500 text-white rounded animate-pulse">
+                                              NEW
+                                            </span>
+                                          )}
+                                          {item.critical && (
+                                            <span className="px-1.5 py-0.5 bg-red-100 text-red-700 text-xs rounded">
+                                              CRITICAL
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="text-xs text-gray-500 mt-0.5">
+                                          {item.quantityAmount && item.quantityUnit ? (
+                                            <span>
+                                              {item.quantityAmount} {item.quantityUnit}
+                                            </span>
+                                          ) : item.quantityText ? (
+                                            <span className="italic">{item.quantityText}</span>
+                                          ) : (
+                                            <span className="text-orange-600">No quantity set</span>
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-3 text-gray-400">{item.team.name}</td>
+                                      <td className="px-4 py-3 text-right">
+                                        <button
+                                          onClick={() => setEditingItem(item)}
+                                          className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md"
+                                        >
+                                          Edit
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {categoryNames.length === 0 && (
+                    <div className="text-center py-12 text-gray-500">
+                      <p>No items yet. Generate a plan or add items manually.</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()
+          )}
         </SectionExpandModal>
 
         {/* People Expansion */}
@@ -1938,6 +2062,7 @@ export default function PlanEditorPage() {
           onClose={handleCloseExpansion}
           title="People"
           icon={<Users className="w-6 h-6" />}
+          tabBar={buildTabBar('people')}
         >
           <PeopleSection
             eventId={eventId}
@@ -1965,10 +2090,34 @@ export default function PlanEditorPage() {
           onClose={handleCloseExpansion}
           title="Teams"
           icon={<Users className="w-6 h-6" />}
+          tabBar={buildTabBar('teams')}
         >
           {teams.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <p>No teams yet. Add your first team to get started.</p>
+            <div className="text-center py-16">
+              <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-600 mb-6">
+                No teams yet. Generate a plan to create teams automatically.
+              </p>
+              <div className="flex items-center justify-center gap-3">
+                {event?.status === 'DRAFT' && (
+                  <button
+                    onClick={() => setHostDescriptionModalOpen(true)}
+                    className="px-4 py-2 bg-accent text-white text-sm font-medium rounded-md hover:bg-accent-dark transition-colors flex items-center gap-1.5"
+                  >
+                    Generate Plan
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                )}
+                {event?.status === 'DRAFT' && (
+                  <button
+                    onClick={() => setAddTeamModalOpen(true)}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-50 transition-colors flex items-center gap-1.5"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Team
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <div className="space-y-2">
@@ -2199,6 +2348,7 @@ export default function PlanEditorPage() {
             onClose={handleCloseExpansion}
             title="Invite Links"
             icon={<LinkIcon className="w-6 h-6" />}
+            tabBar={buildTabBar('invites')}
           >
             {/* Shared Link Section - Show in CONFIRMING and FROZEN */}
             <div className="mb-6">
@@ -2391,6 +2541,7 @@ export default function PlanEditorPage() {
           onClose={handleCloseExpansion}
           title="Revision History"
           icon={<Clock className="w-6 h-6" />}
+          tabBar={buildTabBar('history')}
         >
           <RevisionHistory eventId={eventId} actorId={MOCK_HOST_ID} />
         </SectionExpandModal>

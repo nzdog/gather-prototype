@@ -9,6 +9,8 @@ interface SectionExpandModalProps {
   title: string;
   icon?: React.ReactNode;
   headerActions?: React.ReactNode;
+  /** Optional tab bar rendered between header and content */
+  tabBar?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -26,6 +28,7 @@ export default function SectionExpandModal({
   title,
   icon,
   headerActions,
+  tabBar,
   children,
 }: SectionExpandModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
@@ -127,6 +130,9 @@ export default function SectionExpandModal({
             </button>
           </div>
         </div>
+
+        {/* Tab bar (optional) */}
+        {tabBar}
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">{children}</div>

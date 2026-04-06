@@ -40,6 +40,8 @@ interface EditEventModalProps {
   eventId: string;
   stepLabel?: string;
   showPaymentConfirmation?: boolean;
+  /** Optional tab bar rendered between header and form content */
+  tabBar?: React.ReactNode;
 }
 
 const STEP_LABELS: Record<number, string> = {
@@ -60,6 +62,7 @@ export default function EditEventModal({
   eventId,
   stepLabel,
   showPaymentConfirmation,
+  tabBar,
 }: EditEventModalProps) {
   const { openModal, closeModal } = useModal();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -216,6 +219,8 @@ export default function EditEventModal({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {tabBar}
 
         {showPaymentConfirmation && step === 1 && (
           <div className="flex items-start gap-3 px-6 py-4 bg-green-50 border-b border-green-100">
