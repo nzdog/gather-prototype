@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, CheckCircle } from 'lucide-react';
 import { useModal } from '@/contexts/ModalContext';
 
@@ -64,6 +64,10 @@ export default function EditEventModal({
   const { openModal, closeModal } = useModal();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [step, setStep] = useState(1); // 1=basics, 2=guests/dietary, 3=venue
+  // Guard: React's synchronous re-render can swap the Next (type=button) node
+  // for Save Changes (type=submit) mid-click, causing a spurious form submission.
+  // This ref stays true during the same event loop tick as a Next click.
+  const isAdvancingStep = useRef(false);
 
   // Modal blocking check
   useEffect(() => {
@@ -148,6 +152,7 @@ export default function EditEventModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isAdvancingStep.current) return;
     setIsSubmitting(true);
 
     try {
@@ -595,7 +600,13 @@ export default function EditEventModal({
             {step < 3 ? (
               <button
                 type="button"
-                onClick={() => setStep(step + 1)}
+                onClick={() => {
+                  isAdvancingStep.current = true;
+                  setStep(step + 1);
+                  setTimeout(() => {
+                    isAdvancingStep.current = false;
+                  }, 0);
+                }}
                 className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark"
               >
                 Next
