@@ -158,8 +158,7 @@ type SectionId =
   | 'items'
   | 'people'
   | 'teams'
-  | 'gate'
-  | 'freeze'
+  | 'planstatus'
   | 'unfreeze'
   | 'invites'
   | 'history';
@@ -169,8 +168,7 @@ const validSectionIds: SectionId[] = [
   'items',
   'people',
   'teams',
-  'gate',
-  'freeze',
+  'planstatus',
   'unfreeze',
   'invites',
   'history',
@@ -1233,12 +1231,6 @@ export default function PlanEditorPage() {
                       )}
                     </button>
                   )}
-                <button
-                  onClick={handleCheckPlan}
-                  className="px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark"
-                >
-                  Check Plan
-                </button>
                 {(event.status === 'CONFIRMING' ||
                   event.status === 'FROZEN' ||
                   event.status === 'COMPLETE') && (
@@ -1316,23 +1308,45 @@ export default function PlanEditorPage() {
                   />
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {/* Plan Assessment Card */}
+                  {/* Event Details Card */}
                   <div
-                    onClick={() => handleExpandSection('assessment')}
+                    onClick={() => setEditEventModalOpen(true)}
                     className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
                   >
                     <div className="flex items-center gap-3 mb-4">
                       <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
-                        <AlertCircle className="w-6 h-6 text-accent" />
+                        <Calendar className="w-6 h-6 text-accent" />
                       </div>
-                      <h2 className="text-xl font-semibold text-gray-900">Plan Assessment</h2>
+                      <h2 className="text-xl font-semibold text-gray-900">Event Details</h2>
                     </div>
                     <div className="flex-1">
-                      <p className="text-3xl font-bold text-gray-900 mb-2">{conflicts.length}</p>
+                      <p className="text-sm text-gray-600 mb-2">
+                        <span className="font-medium">{event.occasionType}</span>
+                      </p>
+                      <p className="text-sm text-gray-600">{event.guestCount} guests</p>
+                      <p className="text-xs text-gray-500 mt-2">
+                        {new Date(event.startDate).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="text-sm text-accent font-medium">Click to edit →</div>
+                  </div>
+
+                  {/* People Card */}
+                  <div
+                    onClick={() => handleExpandSection('people')}
+                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
+                  >
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
+                        <Users className="w-6 h-6 text-accent" />
+                      </div>
+                      <h2 className="text-xl font-semibold text-gray-900">People</h2>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-3xl font-bold text-gray-900 mb-2">{people.length}</p>
                       <p className="text-sm text-gray-600">
-                        {conflicts.length === 0
-                          ? 'No conflicts found'
-                          : `Conflict${conflicts.length > 1 ? 's' : ''} to review`}
+                        {people.filter((p) => p.role === 'COORDINATOR').length} coordinators,{' '}
+                        {people.filter((p) => p.role === 'PARTICIPANT').length} participants
                       </p>
                     </div>
                     <div className="text-sm text-accent font-medium">Click to expand →</div>
@@ -1358,27 +1372,6 @@ export default function PlanEditorPage() {
                     <div className="text-sm text-accent font-medium">Click to expand →</div>
                   </div>
 
-                  {/* People Card */}
-                  <div
-                    onClick={() => handleExpandSection('people')}
-                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
-                  >
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
-                        <Users className="w-6 h-6 text-accent" />
-                      </div>
-                      <h2 className="text-xl font-semibold text-gray-900">People</h2>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-3xl font-bold text-gray-900 mb-2">{people.length}</p>
-                      <p className="text-sm text-gray-600">
-                        {people.filter((p) => p.role === 'COORDINATOR').length} coordinators,{' '}
-                        {people.filter((p) => p.role === 'PARTICIPANT').length} participants
-                      </p>
-                    </div>
-                    <div className="text-sm text-accent font-medium">Click to expand →</div>
-                  </div>
-
                   {/* Teams Card */}
                   <div
                     onClick={() => handleExpandSection('teams')}
@@ -1399,45 +1392,35 @@ export default function PlanEditorPage() {
                     <div className="text-sm text-accent font-medium">Click to expand →</div>
                   </div>
 
-                  {/* Gate Check Card - Only show for DRAFT */}
-                  {event.status === 'DRAFT' && (
-                    <div
-                      onClick={() => handleExpandSection('gate')}
-                      className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
-                    >
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
-                          <AlertCircle className="w-6 h-6 text-accent" />
-                        </div>
-                        <h2 className="text-xl font-semibold text-gray-900">Gate Check</h2>
+                  {/* Plan Status Card — merged Plan Assessment + Gate Check + Freeze Check */}
+                  <div
+                    onClick={() => handleExpandSection('planstatus')}
+                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
+                  >
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
+                        <AlertCircle className="w-6 h-6 text-accent" />
                       </div>
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-600">
-                          Review readiness to transition to confirming
-                        </p>
-                      </div>
-                      <div className="text-sm text-accent font-medium">Click to expand →</div>
+                      <h2 className="text-xl font-semibold text-gray-900">Plan Status</h2>
                     </div>
-                  )}
-
-                  {/* Freeze Check Card - Only show for CONFIRMING */}
-                  {event.status === 'CONFIRMING' && (
-                    <div
-                      onClick={() => handleExpandSection('freeze')}
-                      className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
-                    >
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
-                          <AlertCircle className="w-6 h-6 text-accent" />
-                        </div>
-                        <h2 className="text-xl font-semibold text-gray-900">Freeze Check</h2>
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-600">Review before freezing plan</p>
-                      </div>
-                      <div className="text-sm text-accent font-medium">Click to expand →</div>
+                    <div className="flex-1">
+                      <p className="text-3xl font-bold text-gray-900 mb-2">{conflicts.length}</p>
+                      <p className="text-sm text-gray-600">
+                        {conflicts.length === 0
+                          ? '0 conflicts'
+                          : `${conflicts.length} conflict${conflicts.length > 1 ? 's' : ''}`}
+                        {' · '}
+                        {event.status === 'FROZEN'
+                          ? 'Plan frozen'
+                          : event.status === 'COMPLETE'
+                            ? 'Complete'
+                            : items.filter((i) => !i.assignment).length === 0
+                              ? 'Ready to freeze'
+                              : `${items.filter((i) => !i.assignment).length} unassigned`}
+                      </p>
                     </div>
-                  )}
+                    <div className="text-sm text-accent font-medium">Click to expand →</div>
+                  </div>
 
                   {/* Unfreeze Card - Only show for FROZEN */}
                   {event.status === 'FROZEN' && (
@@ -1500,29 +1483,6 @@ export default function PlanEditorPage() {
                     </div>
                     <div className="text-sm text-accent font-medium">Click to expand →</div>
                   </div>
-
-                  {/* Event Details Card */}
-                  <div
-                    onClick={() => setEditEventModalOpen(true)}
-                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
-                  >
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
-                        <Calendar className="w-6 h-6 text-accent" />
-                      </div>
-                      <h2 className="text-xl font-semibold text-gray-900">Event Details</h2>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm text-gray-600 mb-2">
-                        <span className="font-medium">{event.occasionType}</span>
-                      </p>
-                      <p className="text-sm text-gray-600">{event.guestCount} guests</p>
-                      <p className="text-xs text-gray-500 mt-2">
-                        {new Date(event.startDate).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <div className="text-sm text-accent font-medium">Click to edit →</div>
-                  </div>
                 </div>
               </div>
             </>
@@ -1564,7 +1524,7 @@ export default function PlanEditorPage() {
               loadTeams();
               loadConflicts();
             }}
-            onExpand={() => handleExpandSection('gate')}
+            onExpand={() => handleExpandSection('planstatus')}
           />
           <FreezeCheck
             eventId={eventId}
@@ -1574,7 +1534,7 @@ export default function PlanEditorPage() {
               loadEvent();
               loadTeams();
             }}
-            onExpand={() => handleExpandSection('freeze')}
+            onExpand={() => handleExpandSection('planstatus')}
           />
           {event?.status === 'FROZEN' && (
             <UnfreezeSection
@@ -1691,19 +1651,39 @@ export default function PlanEditorPage() {
 
         {/* Section Expansion Modals */}
 
-        {/* Plan Assessment Expansion */}
+        {/* Plan Status Expansion — merged Plan Assessment + Gate Check + Freeze Check */}
         <SectionExpandModal
-          isOpen={expandedSection === 'assessment'}
+          isOpen={expandedSection === 'planstatus' || expandedSection === 'assessment'}
           onClose={handleCloseExpansion}
-          title="Plan Assessment"
+          title="Plan Status"
           icon={<AlertCircle className="w-6 h-6" />}
         >
-          <ConflictList
-            eventId={eventId}
-            conflicts={conflicts}
-            onConflictsChanged={loadConflicts}
-            hasRunCheck={!!event.lastCheckPlanAt}
-          />
+          {/* Conflicts section — always visible */}
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Conflicts</h3>
+            <ConflictList
+              eventId={eventId}
+              conflicts={conflicts}
+              onConflictsChanged={loadConflicts}
+              hasRunCheck={!!event.lastCheckPlanAt}
+            />
+          </div>
+
+          {/* Freeze Readiness section — only visible in CONFIRMING */}
+          {event && event.status === 'CONFIRMING' && (
+            <div className="border-t border-gray-200 pt-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Freeze Readiness</h3>
+              <FreezeCheck
+                eventId={eventId}
+                currentStatus={event?.status as any}
+                refreshTrigger={gateCheckRefresh}
+                onFreezeComplete={() => {
+                  loadEvent();
+                  loadTeams();
+                }}
+              />
+            </div>
+          )}
         </SectionExpandModal>
 
         {/* Items & Quantities Expansion */}
@@ -2193,46 +2173,6 @@ export default function PlanEditorPage() {
             </div>
           )}
         </SectionExpandModal>
-
-        {/* Gate Check Expansion */}
-        {event && event.status === 'DRAFT' && (
-          <SectionExpandModal
-            isOpen={expandedSection === 'gate'}
-            onClose={handleCloseExpansion}
-            title="Gate Check"
-            icon={<AlertCircle className="w-6 h-6" />}
-          >
-            <GateCheck
-              eventId={eventId}
-              refreshTrigger={gateCheckRefresh}
-              onTransitionComplete={() => {
-                loadEvent();
-                loadTeams();
-                loadConflicts();
-              }}
-            />
-          </SectionExpandModal>
-        )}
-
-        {/* Freeze Check Expansion */}
-        {event && event.status === 'CONFIRMING' && (
-          <SectionExpandModal
-            isOpen={expandedSection === 'freeze'}
-            onClose={handleCloseExpansion}
-            title="Freeze Check"
-            icon={<AlertCircle className="w-6 h-6" />}
-          >
-            <FreezeCheck
-              eventId={eventId}
-              currentStatus={event?.status as any}
-              refreshTrigger={gateCheckRefresh}
-              onFreezeComplete={() => {
-                loadEvent();
-                loadTeams();
-              }}
-            />
-          </SectionExpandModal>
-        )}
 
         {/* Unfreeze Expansion */}
         {event && event.status === 'FROZEN' && (
