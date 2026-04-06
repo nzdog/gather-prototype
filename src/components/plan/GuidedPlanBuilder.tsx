@@ -324,12 +324,23 @@ export default function GuidedPlanBuilder({
   }
 
   function resolveOptionGroups(categoryKey: string, level: LevelConfig): OptionGroup[] {
-    if (!level.dependsOn) return [{ label: null, options: level.options }];
+    const fallbackOptions = level.options ?? [];
 
-    const { levelIndex: srcIdx, map } = level.dependsOn;
+    if (!level.dependsOn) return [{ label: null, options: fallbackOptions }];
+
+    // Support both wrapped { levelIndex, map } and flat { "Option": [...] } formats
+    const dep = level.dependsOn as unknown as Record<string, unknown>;
+    const srcIdx = typeof dep.levelIndex === 'number' ? dep.levelIndex : 0;
+    const map: Record<string, string[]> =
+      dep.map && typeof dep.map === 'object'
+        ? (dep.map as Record<string, string[]>)
+        : (Object.fromEntries(
+            Object.entries(dep).filter(([k]) => k !== 'levelIndex' && k !== 'map')
+          ) as Record<string, string[]>);
+
     const srcSelections = selections[categoryKey]?.[srcIdx]?.options ?? [];
 
-    if (srcSelections.length === 0) return [{ label: null, options: level.options }];
+    if (srcSelections.length === 0) return [{ label: null, options: fallbackOptions }];
 
     const seen = new Set<string>();
     const groups: OptionGroup[] = [];
@@ -349,7 +360,7 @@ export default function GuidedPlanBuilder({
       }
     }
 
-    return groups.length > 0 ? groups : [{ label: null, options: level.options }];
+    return groups.length > 0 ? groups : [{ label: null, options: fallbackOptions }];
   }
 
   function isCategoryConfigured(key: string): boolean {
@@ -642,7 +653,7 @@ export default function GuidedPlanBuilder({
         {/* Options — checkbox list, grouped by parent L1 selection when dependsOn */}
         {(() => {
           const groups = resolveOptionGroups(categoryKey, currentLevel);
-          const hasAnyOptions = groups.some((g) => g.options.length > 0);
+          const hasAnyOptions = groups.some((g) => (g.options?.length ?? 0) > 0);
           if (!hasAnyOptions) return null;
 
           const showSectionLabels = groups.length > 1 && groups[0].label !== null;
