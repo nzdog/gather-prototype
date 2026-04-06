@@ -1651,6 +1651,7 @@ export default function PlanEditorPage() {
           onClose={() => setHostDescriptionModalOpen(false)}
           onGenerate={handleGeneratePlan}
           onSkip={() => handleGeneratePlan()}
+          eventLoading={loading}
           eventContext={
             event
               ? {

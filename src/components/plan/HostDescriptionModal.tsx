@@ -10,6 +10,7 @@ interface HostDescriptionModalProps {
   onGenerate: (hostDescription: string) => Promise<void>;
   onSkip: () => void;
   eventContext?: GuidedEventContext;
+  eventLoading?: boolean;
 }
 
 type ModalView = 'choice' | 'quick' | 'guided';
@@ -20,6 +21,7 @@ export default function HostDescriptionModal({
   onGenerate,
   onSkip,
   eventContext,
+  eventLoading,
 }: HostDescriptionModalProps) {
   const { openModal, closeModal } = useModal();
   const [description, setDescription] = useState('');
@@ -184,8 +186,16 @@ export default function HostDescriptionModal({
             />
           )}
 
-          {/* Fallback: if guided selected but no event context, drop back to quick */}
-          {view === 'guided' && !eventContext && (
+          {/* Loading: event data still in flight */}
+          {view === 'guided' && !eventContext && eventLoading && (
+            <div className="flex flex-col items-center justify-center py-12">
+              <div className="w-6 h-6 border-2 border-gray-300 border-t-accent rounded-full animate-spin mb-3" />
+              <p className="text-sm text-gray-500">Loading event details...</p>
+            </div>
+          )}
+
+          {/* Fallback: event loaded but context genuinely unavailable */}
+          {view === 'guided' && !eventContext && !eventLoading && (
             <div>
               <p className="text-sm text-gray-500 mb-4">
                 Event data unavailable — using Quick Generate.
