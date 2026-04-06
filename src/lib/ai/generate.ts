@@ -123,7 +123,7 @@ export async function generatePlan(
 
     // Call Claude and parse response
     const response = await callClaudeForJSON<AIPlanResponse>(systemPrompt, userPrompt, {
-      maxTokens: 8192,
+      maxTokens: 16384,
       temperature: 1.0,
     });
 
@@ -165,7 +165,7 @@ export async function regeneratePlan(params: RegenerationParams): Promise<AIPlan
 
     // Call Claude and parse response
     const response = await callClaudeForJSON<AIPlanResponse>(systemPrompt, userPrompt, {
-      maxTokens: 8192,
+      maxTokens: 16384,
       temperature: 1.0,
     });
 
@@ -573,6 +573,108 @@ export function generateMockSelectiveItems(
       'Mock selective regeneration. This is fallback data because Claude API is not available.',
   };
 }
+
+// ─── Guided Plan Builder types ──────────────────────────────────────────────
+
+export interface GuidedLevelSelection {
+  options: string[];
+  freeText: string;
+}
+
+/** categoryKey → levelIndex → selection */
+export type GuidedSelections = Record<string, Record<number, GuidedLevelSelection>>;
+
+export interface GuidedEventContext {
+  occasionType: string | null;
+  guestCount: number | null;
+  startDate: string;
+  venueName: string | null;
+  venueKitchenAccess: string | null;
+  dietaryGlutenFree: number;
+  dietaryDairyFree: number;
+  dietaryVegetarian: number;
+  dietaryVegan: number;
+  dietaryAllergies: string | null;
+}
+
+/**
+ * Compile a Guided Build selection set + event context into a rich natural-language
+ * prompt string that is passed to generatePlan() as the hostDescription argument.
+ */
+export function compileGuidedPrompt(
+  eventContext: GuidedEventContext,
+  selections: GuidedSelections,
+  categoryLabels: Record<string, string>
+): string {
+  const parts: string[] = [];
+
+  // Event context line
+  const OCCASION_LABELS: Record<string, string> = {
+    CHRISTMAS: 'Christmas',
+    BIRTHDAY: 'Birthday',
+    THANKSGIVING: 'Thanksgiving',
+    EASTER: 'Easter',
+    WEDDING: 'Wedding',
+    REUNION: 'Reunion',
+    RETREAT: 'Retreat',
+    GRADUATION: 'Graduation',
+    CORPORATE: 'Corporate',
+    OTHER: 'Gathering',
+  };
+  const occasionLabel =
+    (eventContext.occasionType && OCCASION_LABELS[eventContext.occasionType]) ||
+    eventContext.occasionType ||
+    'Gathering';
+  const guests = eventContext.guestCount
+    ? `${eventContext.guestCount} guests`
+    : 'unknown number of guests';
+  const date = eventContext.startDate
+    ? new Date(eventContext.startDate).toLocaleDateString('en-NZ', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      })
+    : '';
+  const venue = eventContext.venueName ? `${eventContext.venueName} venue` : '';
+  const kitchen = eventContext.venueKitchenAccess
+    ? `kitchen access: ${eventContext.venueKitchenAccess.toLowerCase()}`
+    : '';
+
+  let contextLine = `${occasionLabel} event, ${guests}`;
+  if (date) contextLine += `, ${date}`;
+  if (venue) contextLine += `. ${venue}`;
+  if (kitchen) contextLine += ` with ${kitchen}`;
+  parts.push(contextLine + '.');
+
+  // Dietary requirements
+  const dietaryItems: string[] = [];
+  if (eventContext.dietaryVegetarian > 0)
+    dietaryItems.push(`${eventContext.dietaryVegetarian} vegetarian`);
+  if (eventContext.dietaryVegan > 0) dietaryItems.push(`${eventContext.dietaryVegan} vegan`);
+  if (eventContext.dietaryGlutenFree > 0) dietaryItems.push('gluten free option required');
+  if (eventContext.dietaryDairyFree > 0) dietaryItems.push('dairy free option required');
+  if (eventContext.dietaryAllergies) dietaryItems.push(eventContext.dietaryAllergies);
+  if (dietaryItems.length > 0) {
+    parts.push(`Dietary requirements: ${dietaryItems.join(', ')}.`);
+  }
+
+  // Category selections
+  for (const [categoryKey, levelSelections] of Object.entries(selections)) {
+    const label = categoryLabels[categoryKey] || categoryKey;
+    const pieces: string[] = [];
+    for (const levelSel of Object.values(levelSelections)) {
+      if (levelSel.options.length > 0) pieces.push(levelSel.options.join(', '));
+      if (levelSel.freeText.trim()) pieces.push(levelSel.freeText.trim());
+    }
+    if (pieces.length > 0) {
+      parts.push(`${label}: ${pieces.join(' — ')}.`);
+    }
+  }
+
+  return parts.join(' ');
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 
 /**
  * Returns team names referenced in items that have no corresponding entry in existingTeamNames.
