@@ -1,8 +1,17 @@
 {
   "christmas": {
     "label": "Christmas",
-    "nzNotes": "Summer event in NZ — seafood, salads, and outdoor settings common alongside traditional roasts",
-    "defaultCategories": ["mains", "dessert", "sides", "drinks_non_alcoholic"],
+    "nzNotes": "NZ Christmas is in summer (December). Expect outdoor dining, BBQs, seafood, and fresh salads alongside traditional roasts. Pavlova is the quintessential NZ Christmas dessert. Glazed ham and roast lamb are iconic. Summer fruits (strawberries, cherries) are in season.",
+    "defaultCategories": [
+      "mains",
+      "dessert",
+      "sides_salads",
+      "drinks_alcoholic",
+      "drinks_non_alcoholic",
+      "table_snacks",
+      "cleanup",
+      "furniture_equipment"
+    ],
     "categories": {
       "mains": {
         "label": "Mains",
@@ -10,84 +19,76 @@
           {
             "level": 1,
             "question": "What style of mains?",
-            "breadcrumbLabel": "Style",
             "options": [
               "Traditional roast",
               "NZ summer BBQ",
               "Seafood spread",
-              "Vegetarian / Vegan focus",
-              "Mixed"
+              "Hangi-inspired",
+              "Vegetarian/Vegan focus"
             ],
             "freeText": true,
-            "freeTextPlaceholder": "Describe your mains..."
+            "freeTextPlaceholder": "Describe your mains...",
+            "breadcrumbLabel": "Style"
           },
           {
             "level": 2,
-            "question": "Any specific dishes?",
-            "breadcrumbLabel": "Dishes",
-            "options": ["Glazed ham", "Roast lamb", "Roast chicken", "Turkey", "Beef brisket"],
+            "question": "Which dishes?",
             "dependsOn": {
-              "levelIndex": 0,
-              "map": {
-                "Traditional roast": [
-                  "Glazed ham",
-                  "Roast lamb",
-                  "Roast chicken",
-                  "Turkey",
-                  "Beef brisket"
-                ],
-                "NZ summer BBQ": [
-                  "BBQ sausages",
-                  "Steak",
-                  "Chicken skewers",
-                  "Lamb chops",
-                  "Burger patties"
-                ],
-                "Seafood spread": [
-                  "Prawns",
-                  "Smoked salmon",
-                  "Oysters",
-                  "Fish fillets",
-                  "Crayfish"
-                ],
-                "Vegetarian / Vegan focus": [
-                  "Stuffed peppers",
-                  "Vegetable Wellington",
-                  "Mushroom risotto",
-                  "Tofu stir-fry",
-                  "Nut roast"
-                ],
-                "Mixed": [
-                  "Glazed ham",
-                  "Roast lamb",
-                  "Roast chicken",
-                  "Turkey",
-                  "Beef brisket",
-                  "BBQ sausages",
-                  "Steak",
-                  "Prawns",
-                  "Smoked salmon",
-                  "Stuffed peppers",
-                  "Vegetable Wellington"
-                ]
-              }
+              "Traditional roast": [
+                "Glazed ham",
+                "Roast lamb",
+                "Roast chicken",
+                "Roast beef",
+                "Roast pork"
+              ],
+              "NZ summer BBQ": [
+                "Sausages and burgers",
+                "Marinated chicken",
+                "Lamb chops",
+                "Seafood on the grill",
+                "Mixed grill"
+              ],
+              "Seafood spread": [
+                "Green-lipped mussels",
+                "Prawns and shrimp",
+                "Smoked salmon",
+                "Fish fillets",
+                "Mixed seafood platter"
+              ],
+              "Hangi-inspired": [
+                "Pork and chicken hangi",
+                "Lamb and kumara",
+                "Full traditional hangi",
+                "Modern hangi-style roast",
+                "Vegetable hangi"
+              ],
+              "Vegetarian/Vegan focus": [
+                "Stuffed peppers and vegetables",
+                "Vegetable Wellington",
+                "Grilled halloumi and veg",
+                "Plant-based roast",
+                "Mixed vegetarian platters"
+              ]
             },
             "freeText": true,
-            "freeTextPlaceholder": "Add specific dishes..."
+            "freeTextPlaceholder": "Specify dishes...",
+            "breadcrumbLabel": "Dishes"
           },
           {
             "level": 3,
-            "question": "Dietary requirements?",
-            "breadcrumbLabel": "Dietary",
+            "question": "Any dietary requirements to accommodate?",
             "options": [
-              "Gluten free option needed",
-              "Dairy free option needed",
-              "Nut free",
-              "Halal",
-              "None"
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
             ],
+            "multiSelect": true,
             "freeText": true,
-            "freeTextPlaceholder": "Other dietary notes..."
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -96,80 +97,369 @@
         "levels": [
           {
             "level": 1,
-            "question": "What kind of dessert?",
-            "breadcrumbLabel": "Type",
+            "question": "What style of dessert?",
             "options": [
-              "Pavlova (classic NZ)",
+              "Classic NZ pavlova centrepiece",
+              "Trifle and creams",
+              "Summer fruit desserts",
               "Christmas pudding",
-              "Trifle",
-              "Ice cream",
               "Mixed dessert table"
             ],
             "freeText": true,
-            "freeTextPlaceholder": "Describe your dessert..."
+            "freeTextPlaceholder": "Describe your dessert...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Which desserts?",
+            "dependsOn": {
+              "Trifle and creams": [
+                "Classic sherry trifle",
+                "Berry trifle",
+                "Chocolate trifle",
+                "Eton mess",
+                "Cream puffs"
+              ],
+              "Summer fruit desserts": [
+                "Fresh fruit salad",
+                "Berry crumble",
+                "Grilled stone fruit with ice cream",
+                "Summer pudding",
+                "Fruit tart"
+              ],
+              "Christmas pudding": [
+                "Traditional Christmas pudding",
+                "Ice cream Christmas pudding",
+                "Sticky date pudding",
+                "Steamed pudding with custard",
+                "Brandy pudding"
+              ],
+              "Mixed dessert table": [
+                "Pavlova plus trifle",
+                "Mini desserts selection",
+                "Dessert grazing table",
+                "Classic NZ selection",
+                "Make your own sundae station"
+              ],
+              "Classic NZ pavlova centrepiece": [
+                "Classic pavlova with cream and kiwifruit",
+                "Berry pavlova",
+                "Mini pavlovas",
+                "Passionfruit pavlova",
+                "Deconstructed pavlova"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify desserts...",
+            "breadcrumbLabel": "Desserts"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
           }
         ]
       },
-      "sides": {
+      "sides_salads": {
         "label": "Sides & Salads",
         "levels": [
           {
             "level": 1,
-            "question": "What kind of sides?",
-            "breadcrumbLabel": "Type",
+            "question": "What style of sides?",
             "options": [
-              "Green salads",
-              "Roasted vegetables",
-              "Potato dishes",
-              "Bread rolls",
+              "Fresh summer salads",
+              "Roast vegetables",
+              "Traditional sides (potatoes, kumara)",
+              "Grain salads",
               "Mixed"
             ],
             "freeText": true,
-            "freeTextPlaceholder": "Describe your sides..."
+            "freeTextPlaceholder": "Describe your sides...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Which sides?",
+            "dependsOn": {
+              "Fresh summer salads": [
+                "Garden salad",
+                "Caesar salad",
+                "Greek salad",
+                "Coleslaw",
+                "Potato salad"
+              ],
+              "Roast vegetables": [
+                "Roast kumara",
+                "Roast potatoes",
+                "Roast pumpkin",
+                "Mixed roast veg",
+                "Honey-glazed carrots"
+              ],
+              "Traditional sides (potatoes, kumara)": [
+                "Roast potatoes",
+                "Kumara mash",
+                "Potato bake",
+                "Creamed corn",
+                "Steamed vegetables"
+              ],
+              "Grain salads": [
+                "Couscous salad",
+                "Quinoa salad",
+                "Rice salad",
+                "Pearl barley salad",
+                "Tabouleh"
+              ],
+              "Mixed": [
+                "Salads and roast veg",
+                "Seasonal mix",
+                "Classic kiwi sides",
+                "Light and fresh selection",
+                "Hearty sides"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify sides...",
+            "breadcrumbLabel": "Sides"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "drinks_alcoholic": {
+        "label": "Alcoholic Drinks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of alcoholic drinks?",
+            "options": [
+              "Beer and cider",
+              "Wine",
+              "Spirits and cocktails",
+              "BYO (guests bring own)",
+              "Mixed / Full bar"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your drinks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Beer and cider": [
+                "NZ craft beer selection",
+                "Mainstream lager (Tui, Steinlager, DB)",
+                "Cider selection",
+                "Mix of beer and cider",
+                "Light / low-alcohol beer"
+              ],
+              "Wine": [
+                "NZ Sauvignon Blanc (Marlborough)",
+                "Red wine (Central Otago Pinot Noir)",
+                "Ros\u00e9",
+                "Sparkling / Champagne",
+                "Mixed wine selection"
+              ],
+              "Spirits and cocktails": [
+                "Pre-mixed cocktails",
+                "Gin and tonic bar",
+                "Rum and mixer",
+                "Whisky selection",
+                "Vodka and mixer"
+              ],
+              "BYO (guests bring own)": [
+                "Guests bring everything",
+                "Host provides ice and mixers only",
+                "Host provides non-alcoholic base"
+              ],
+              "Mixed / Full bar": [
+                "Full selection",
+                "Beer and wine only",
+                "Beer, wine and one spirit",
+                "Cocktail bar setup"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify drinks...",
+            "breadcrumbLabel": "Preferences"
+          },
+          {
+            "level": 3,
+            "question": "Anything else to consider?",
+            "options": [
+              "Provide low/no-alcohol alternatives",
+              "Under-18s will be present",
+              "Designated driver considerations"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other drink notes...",
+            "breadcrumbLabel": "Other"
           }
         ]
       },
       "drinks_non_alcoholic": {
-        "label": "Drinks (Non-alcoholic)",
+        "label": "Non-Alcoholic Drinks",
         "levels": [
           {
             "level": 1,
-            "question": "What non-alcoholic drinks?",
-            "breadcrumbLabel": "Type",
+            "question": "What type of non-alcoholic drinks?",
             "options": [
-              "Juices & cordials",
-              "Sparkling water",
-              "Soft drinks",
-              "Tea & coffee",
-              "Mixed"
+              "Soft drinks and juice",
+              "Mocktails",
+              "Hot drinks",
+              "Water and sparkling water",
+              "Mixed selection"
             ],
             "freeText": true,
-            "freeTextPlaceholder": "Describe your drinks..."
+            "freeTextPlaceholder": "Describe your drinks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Soft drinks and juice": [
+                "L&P and classic NZ fizzy",
+                "Fresh juices and cordials",
+                "Kombucha",
+                "Sparkling juice",
+                "Mixed soft drinks"
+              ],
+              "Mocktails": [
+                "Fruit-based mocktails",
+                "Virgin mojito / pi\u00f1a colada",
+                "Sparkling mocktails",
+                "Iced teas and lemonades",
+                "Shrubs and sodas"
+              ],
+              "Hot drinks": [
+                "Tea and coffee",
+                "Milo",
+                "Hot chocolate",
+                "Herbal teas",
+                "Full hot drink station"
+              ],
+              "Water and sparkling water": [
+                "Still water",
+                "Sparkling water",
+                "Infused water",
+                "Both still and sparkling"
+              ],
+              "Mixed selection": [
+                "Full non-alcoholic bar",
+                "Soft drinks, juice and water",
+                "Mocktails and soft drinks",
+                "Juice and kombucha"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify drinks...",
+            "breadcrumbLabel": "Preferences"
           }
         ]
-      }
-    }
-  },
-  "birthday": {
-    "label": "Birthday",
-    "defaultCategories": ["mains", "cake", "snacks", "drinks_non_alcoholic"],
-    "categories": {
-      "mains": {
-        "label": "Mains",
+      },
+      "table_snacks": {
+        "label": "Table Snacks",
         "levels": [
           {
             "level": 1,
-            "question": "What style of mains?",
-            "breadcrumbLabel": "Style",
+            "question": "What type of snacks?",
             "options": [
-              "Casual finger food",
-              "Sit-down meal",
-              "BBQ",
-              "Pizza / shared platters",
-              "Mixed"
+              "Cheese and crackers",
+              "Dips and nibbles",
+              "Finger food",
+              "Charcuterie / grazing board",
+              "Nuts and dried fruit"
             ],
             "freeText": true,
-            "freeTextPlaceholder": "Describe your mains..."
+            "freeTextPlaceholder": "Describe your snacks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Cheese and crackers": [
+                "NZ cheese selection (Kapiti, Mainland)",
+                "International cheese board",
+                "Simple cheddar and crackers",
+                "Brie and camembert",
+                "Aged and smoked cheeses"
+              ],
+              "Dips and nibbles": [
+                "Hummus and pita",
+                "Guacamole and corn chips",
+                "French onion dip",
+                "Salsa and corn chips",
+                "Mixed dip platter"
+              ],
+              "Finger food": [
+                "Mini pies and sausage rolls",
+                "Spring rolls",
+                "Stuffed mushrooms",
+                "Bruschetta",
+                "Mixed finger food"
+              ],
+              "Charcuterie / grazing board": [
+                "Meat and cheese board",
+                "Vegetarian grazing board",
+                "Mediterranean antipasto",
+                "Seasonal NZ produce",
+                "Mixed charcuterie"
+              ],
+              "Nuts and dried fruit": [
+                "Mixed nuts",
+                "Seasoned nuts",
+                "Dried fruit and nut mix",
+                "Trail mix",
+                "Mixed"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify snacks...",
+            "breadcrumbLabel": "Preferences"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -178,43 +468,5096 @@
         "levels": [
           {
             "level": 1,
-            "question": "What kind of cake?",
-            "breadcrumbLabel": "Type",
-            "options": ["Single tier", "Multi-tier", "Cupcakes", "Dessert table", "No cake"],
+            "question": "What type of cake?",
+            "options": [
+              "Christmas cake (fruit)",
+              "Yule log",
+              "Decorated celebration cake",
+              "Pavlova as centrepiece",
+              "No cake"
+            ],
             "freeText": true,
-            "freeTextPlaceholder": "Cake details..."
+            "freeTextPlaceholder": "Describe your cake...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
           }
         ]
       },
-      "snacks": {
-        "label": "Table Snacks",
+      "cleanup": {
+        "label": "Cleanup",
         "levels": [
           {
             "level": 1,
-            "question": "What kind of snacks?",
-            "breadcrumbLabel": "Type",
+            "question": "What areas need cleaning up?",
             "options": [
-              "Chips & dips",
-              "Cheese board",
-              "Fruit platter",
-              "Party pies & sausage rolls",
-              "Mixed"
+              "Kitchen and dishes",
+              "Outdoor / BBQ area",
+              "Full venue tidy-up",
+              "Rubbish and recycling",
+              "All areas"
             ],
             "freeText": true,
-            "freeTextPlaceholder": "Describe your snacks..."
+            "freeTextPlaceholder": "Describe cleanup needs...",
+            "breadcrumbLabel": "Areas"
+          }
+        ]
+      },
+      "furniture_equipment": {
+        "label": "Furniture & Equipment",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What equipment is needed?",
+            "options": [
+              "Tables and chairs",
+              "BBQ and cooking equipment",
+              "Marquee / gazebo",
+              "AV and sound system",
+              "Serving equipment and crockery"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe equipment needs...",
+            "breadcrumbLabel": "Equipment"
+          },
+          {
+            "level": 2,
+            "question": "Any specifics?",
+            "dependsOn": {
+              "Tables and chairs": [
+                "Trestle tables and folding chairs",
+                "Round tables",
+                "High bar tables",
+                "Mix of seating",
+                "Kids tables"
+              ],
+              "BBQ and cooking equipment": [
+                "Gas BBQ",
+                "Charcoal BBQ",
+                "Large BBQ / spit roast",
+                "Hangi equipment",
+                "Multiple BBQs"
+              ],
+              "Marquee / gazebo": [
+                "Small gazebo (4x3m)",
+                "Medium marquee (6x6m)",
+                "Large marquee",
+                "Shade sails",
+                "Multiple options"
+              ],
+              "AV and sound system": [
+                "Bluetooth speaker",
+                "PA system",
+                "Microphone for speeches",
+                "Projector and screen",
+                "Full AV setup"
+              ],
+              "Serving equipment and crockery": [
+                "Plates, cutlery, glasses",
+                "Platters and serving boards",
+                "Chafing dishes",
+                "Disposable eco-friendly",
+                "Mix"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify equipment...",
+            "breadcrumbLabel": "Preferences"
+          }
+        ]
+      }
+    }
+  },
+  "birthday_adult": {
+    "label": "Birthday (Adult)",
+    "nzNotes": "Adult birthdays in NZ often feature 'bring a plate' culture. Expect a mix of homemade and store-bought. Pavlova is a popular birthday dessert alongside cake. NZ craft beer and local wines are common. Outdoor settings are popular in warmer months.",
+    "defaultCategories": [
+      "mains",
+      "entree_starters",
+      "dessert",
+      "drinks_alcoholic",
+      "drinks_non_alcoholic",
+      "table_snacks",
+      "cake",
+      "cleanup"
+    ],
+    "categories": {
+      "mains": {
+        "label": "Mains",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of mains?",
+            "options": [
+              "Shared plates / mezze",
+              "Sit-down dinner",
+              "Finger food and canap\u00e9s",
+              "BBQ",
+              "Themed cuisine"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your mains...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Which dishes?",
+            "dependsOn": {
+              "Shared plates / mezze": [
+                "Mediterranean mezze",
+                "Asian-style shared plates",
+                "Tapas selection",
+                "NZ-style shared platters",
+                "Mixed cuisine sharing"
+              ],
+              "Sit-down dinner": [
+                "Roast dinner",
+                "Steak and sides",
+                "Chicken and vegetables",
+                "Pasta main",
+                "Fish and chips (elevated)"
+              ],
+              "Finger food and canap\u00e9s": [
+                "Mini pies and sausage rolls",
+                "Bruschetta and crostini",
+                "Sliders and mini burgers",
+                "Stuffed mushrooms and arancini",
+                "Mixed canap\u00e9s"
+              ],
+              "BBQ": [
+                "Classic sausage sizzle",
+                "Steak and chops",
+                "Marinated chicken",
+                "Seafood BBQ",
+                "Mixed BBQ grill"
+              ],
+              "Themed cuisine": [
+                "Mexican fiesta",
+                "Italian feast",
+                "Asian street food",
+                "Indian curry night",
+                "Hawaiian luau"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify dishes...",
+            "breadcrumbLabel": "Dishes"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "entree_starters": {
+        "label": "Entr\u00e9e & Starters",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of starters?",
+            "options": [
+              "Antipasto / grazing platter",
+              "Soup",
+              "Finger food canap\u00e9s",
+              "Dips and breads",
+              "Salad entr\u00e9e"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your starters...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Antipasto / grazing platter": [
+                "Meat and cheese",
+                "Vegetarian grazing",
+                "Mediterranean antipasto",
+                "NZ charcuterie",
+                "Seasonal grazing"
+              ],
+              "Soup": [
+                "Seasonal vegetable",
+                "Pumpkin",
+                "Seafood chowder",
+                "French onion",
+                "Chilled gazpacho (summer)"
+              ],
+              "Finger food canap\u00e9s": [
+                "Bruschetta",
+                "Blini with smoked salmon",
+                "Mini arancini",
+                "Stuffed mushrooms",
+                "Mixed canap\u00e9s"
+              ],
+              "Dips and breads": [
+                "Hummus and pita",
+                "Tzatziki and crudit\u00e9s",
+                "Baba ganoush",
+                "Rewena bread and dips",
+                "Mixed dip platter"
+              ],
+              "Salad entr\u00e9e": [
+                "Caprese",
+                "Caesar",
+                "Garden salad",
+                "Roasted beetroot and goat cheese",
+                "Seasonal NZ greens"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify starters...",
+            "breadcrumbLabel": "Preferences"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "dessert": {
+        "label": "Dessert",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of dessert?",
+            "options": [
+              "Dessert table",
+              "Pavlova",
+              "Cheesecake",
+              "Ice cream and toppings bar",
+              "Simple desserts"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your dessert...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Which desserts?",
+            "dependsOn": {
+              "Dessert table": [
+                "Mini dessert selection",
+                "Classic NZ treats",
+                "International desserts",
+                "Chocolate themed",
+                "Fruit-focused"
+              ],
+              "Pavlova": [
+                "Classic pavlova with cream and kiwifruit",
+                "Berry pavlova",
+                "Mini pavlovas",
+                "Passionfruit pavlova",
+                "Deconstructed pavlova"
+              ],
+              "Cheesecake": [
+                "Baked New York style",
+                "No-bake classic",
+                "Lemon cheesecake",
+                "Chocolate cheesecake",
+                "Individual mini cheesecakes"
+              ],
+              "Ice cream and toppings bar": [
+                "Hokey pokey ice cream",
+                "Classic vanilla and chocolate",
+                "NZ gelato",
+                "Sorbet selection",
+                "Mixed with toppings"
+              ],
+              "Simple desserts": [
+                "Fruit salad",
+                "Lamingtons",
+                "Brownie platter",
+                "Cookies and cream",
+                "Mixed simple treats"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify desserts...",
+            "breadcrumbLabel": "Desserts"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "drinks_alcoholic": {
+        "label": "Alcoholic Drinks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of alcoholic drinks?",
+            "options": [
+              "Beer and cider",
+              "Wine",
+              "Spirits and cocktails",
+              "BYO (guests bring own)",
+              "Mixed / Full bar"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your drinks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Beer and cider": [
+                "NZ craft beer selection",
+                "Mainstream lager (Tui, Steinlager, DB)",
+                "Cider selection",
+                "Mix of beer and cider",
+                "Light / low-alcohol beer"
+              ],
+              "Wine": [
+                "NZ Sauvignon Blanc (Marlborough)",
+                "Red wine (Central Otago Pinot Noir)",
+                "Ros\u00e9",
+                "Sparkling / Champagne",
+                "Mixed wine selection"
+              ],
+              "Spirits and cocktails": [
+                "Pre-mixed cocktails",
+                "Gin and tonic bar",
+                "Rum and mixer",
+                "Whisky selection",
+                "Vodka and mixer"
+              ],
+              "BYO (guests bring own)": [
+                "Guests bring everything",
+                "Host provides ice and mixers only",
+                "Host provides non-alcoholic base"
+              ],
+              "Mixed / Full bar": [
+                "Full selection",
+                "Beer and wine only",
+                "Beer, wine and one spirit",
+                "Cocktail bar setup"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify drinks...",
+            "breadcrumbLabel": "Preferences"
+          },
+          {
+            "level": 3,
+            "question": "Anything else to consider?",
+            "options": [
+              "Provide low/no-alcohol alternatives",
+              "Under-18s will be present",
+              "Designated driver considerations"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other drink notes...",
+            "breadcrumbLabel": "Other"
           }
         ]
       },
       "drinks_non_alcoholic": {
-        "label": "Drinks (Non-alcoholic)",
+        "label": "Non-Alcoholic Drinks",
         "levels": [
           {
             "level": 1,
-            "question": "What non-alcoholic drinks?",
-            "breadcrumbLabel": "Type",
-            "options": ["Soft drinks", "Juice boxes", "Sparkling water", "Tea & coffee", "Mixed"],
+            "question": "What type of non-alcoholic drinks?",
+            "options": [
+              "Soft drinks and juice",
+              "Mocktails",
+              "Hot drinks",
+              "Water and sparkling water",
+              "Mixed selection"
+            ],
             "freeText": true,
-            "freeTextPlaceholder": "Describe your drinks..."
+            "freeTextPlaceholder": "Describe your drinks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Soft drinks and juice": [
+                "L&P and classic NZ fizzy",
+                "Fresh juices and cordials",
+                "Kombucha",
+                "Sparkling juice",
+                "Mixed soft drinks"
+              ],
+              "Mocktails": [
+                "Fruit-based mocktails",
+                "Virgin mojito / pi\u00f1a colada",
+                "Sparkling mocktails",
+                "Iced teas and lemonades",
+                "Shrubs and sodas"
+              ],
+              "Hot drinks": [
+                "Tea and coffee",
+                "Milo",
+                "Hot chocolate",
+                "Herbal teas",
+                "Full hot drink station"
+              ],
+              "Water and sparkling water": [
+                "Still water",
+                "Sparkling water",
+                "Infused water",
+                "Both still and sparkling"
+              ],
+              "Mixed selection": [
+                "Full non-alcoholic bar",
+                "Soft drinks, juice and water",
+                "Mocktails and soft drinks",
+                "Juice and kombucha"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify drinks...",
+            "breadcrumbLabel": "Preferences"
+          }
+        ]
+      },
+      "table_snacks": {
+        "label": "Table Snacks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of snacks?",
+            "options": [
+              "Cheese and crackers",
+              "Dips and nibbles",
+              "Finger food",
+              "Charcuterie / grazing board",
+              "Nuts and dried fruit"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your snacks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Cheese and crackers": [
+                "NZ cheese selection (Kapiti, Mainland)",
+                "International cheese board",
+                "Simple cheddar and crackers",
+                "Brie and camembert",
+                "Aged and smoked cheeses"
+              ],
+              "Dips and nibbles": [
+                "Hummus and pita",
+                "Guacamole and corn chips",
+                "French onion dip",
+                "Salsa and corn chips",
+                "Mixed dip platter"
+              ],
+              "Finger food": [
+                "Mini pies and sausage rolls",
+                "Spring rolls",
+                "Stuffed mushrooms",
+                "Bruschetta",
+                "Mixed finger food"
+              ],
+              "Charcuterie / grazing board": [
+                "Meat and cheese board",
+                "Vegetarian grazing board",
+                "Mediterranean antipasto",
+                "Seasonal NZ produce",
+                "Mixed charcuterie"
+              ],
+              "Nuts and dried fruit": [
+                "Mixed nuts",
+                "Seasoned nuts",
+                "Dried fruit and nut mix",
+                "Trail mix",
+                "Mixed"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify snacks...",
+            "breadcrumbLabel": "Preferences"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "cake": {
+        "label": "Cake",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of birthday cake?",
+            "options": [
+              "Classic birthday cake",
+              "Naked cake",
+              "Cheesecake",
+              "Cupcake tower",
+              "Gelato cake"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your cake...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "cleanup": {
+        "label": "Cleanup",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What areas need cleaning up?",
+            "options": [
+              "Kitchen and dishes",
+              "Outdoor / BBQ area",
+              "Full venue tidy-up",
+              "Rubbish and recycling",
+              "All areas"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe cleanup needs...",
+            "breadcrumbLabel": "Areas"
+          }
+        ]
+      }
+    }
+  },
+  "birthday_kids": {
+    "label": "Birthday (Kids)",
+    "nzNotes": "NZ kids' parties are relaxed and outdoor-focused when weather allows. Lolly cake, fairy bread, cheerios (cocktail sausages), and party pies are kiwi staples. Bouncy castles and pass-the-parcel are classic. Lolly bags for going home are expected. Keep food simple and kid-friendly.",
+    "defaultCategories": [
+      "table_snacks",
+      "cake",
+      "drinks_non_alcoholic",
+      "activities_entertainment",
+      "cleanup",
+      "decorations"
+    ],
+    "categories": {
+      "mains": {
+        "label": "Mains",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of party food?",
+            "options": [
+              "Classic party food (sausage rolls, nuggets)",
+              "Finger food",
+              "BBQ",
+              "Themed food",
+              "Healthy options"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your party food...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Which dishes?",
+            "dependsOn": {
+              "Classic party food (sausage rolls, nuggets)": [
+                "Sausage rolls and party pies",
+                "Chicken nuggets and chips",
+                "Cheerios (cocktail sausages)",
+                "Mini hot dogs",
+                "Mixed classic party food"
+              ],
+              "Finger food": [
+                "Sandwiches (cut into shapes)",
+                "Pinwheels",
+                "Cheese and crackers",
+                "Fruit skewers",
+                "Mixed finger food"
+              ],
+              "BBQ": [
+                "Sausage sizzle",
+                "Burgers",
+                "Chicken drumsticks",
+                "Hot dogs",
+                "Mixed BBQ kids menu"
+              ],
+              "Themed food": [
+                "Pizza party",
+                "Taco bar",
+                "Pasta bar",
+                "Sushi (kid-friendly)",
+                "Pancake station"
+              ],
+              "Healthy options": [
+                "Veggie sticks and dip",
+                "Fruit platters",
+                "Wraps and sandwiches",
+                "Rice paper rolls",
+                "Mixed healthy snacks"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify dishes...",
+            "breadcrumbLabel": "Dishes"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "table_snacks": {
+        "label": "Table Snacks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of snacks?",
+            "options": [
+              "Cheese and crackers",
+              "Dips and nibbles",
+              "Finger food",
+              "Charcuterie / grazing board",
+              "Nuts and dried fruit"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your snacks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Cheese and crackers": [
+                "NZ cheese selection (Kapiti, Mainland)",
+                "International cheese board",
+                "Simple cheddar and crackers",
+                "Brie and camembert",
+                "Aged and smoked cheeses"
+              ],
+              "Dips and nibbles": [
+                "Hummus and pita",
+                "Guacamole and corn chips",
+                "French onion dip",
+                "Salsa and corn chips",
+                "Mixed dip platter"
+              ],
+              "Finger food": [
+                "Mini pies and sausage rolls",
+                "Spring rolls",
+                "Stuffed mushrooms",
+                "Bruschetta",
+                "Mixed finger food"
+              ],
+              "Charcuterie / grazing board": [
+                "Meat and cheese board",
+                "Vegetarian grazing board",
+                "Mediterranean antipasto",
+                "Seasonal NZ produce",
+                "Mixed charcuterie"
+              ],
+              "Nuts and dried fruit": [
+                "Mixed nuts",
+                "Seasoned nuts",
+                "Dried fruit and nut mix",
+                "Trail mix",
+                "Mixed"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify snacks...",
+            "breadcrumbLabel": "Preferences"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "cake": {
+        "label": "Cake",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of birthday cake?",
+            "options": [
+              "Themed birthday cake",
+              "Cupcake tower",
+              "Lolly cake",
+              "Smash cake",
+              "Decorated layer cake"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your cake...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "drinks_non_alcoholic": {
+        "label": "Non-Alcoholic Drinks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of non-alcoholic drinks?",
+            "options": [
+              "Soft drinks and juice",
+              "Mocktails",
+              "Hot drinks",
+              "Water and sparkling water",
+              "Mixed selection"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your drinks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Soft drinks and juice": [
+                "L&P and classic NZ fizzy",
+                "Fresh juices and cordials",
+                "Kombucha",
+                "Sparkling juice",
+                "Mixed soft drinks"
+              ],
+              "Mocktails": [
+                "Fruit-based mocktails",
+                "Virgin mojito / pi\u00f1a colada",
+                "Sparkling mocktails",
+                "Iced teas and lemonades",
+                "Shrubs and sodas"
+              ],
+              "Hot drinks": [
+                "Tea and coffee",
+                "Milo",
+                "Hot chocolate",
+                "Herbal teas",
+                "Full hot drink station"
+              ],
+              "Water and sparkling water": [
+                "Still water",
+                "Sparkling water",
+                "Infused water",
+                "Both still and sparkling"
+              ],
+              "Mixed selection": [
+                "Full non-alcoholic bar",
+                "Soft drinks, juice and water",
+                "Mocktails and soft drinks",
+                "Juice and kombucha"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify drinks...",
+            "breadcrumbLabel": "Preferences"
+          }
+        ]
+      },
+      "dessert": {
+        "label": "Dessert",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of dessert?",
+            "options": [
+              "Ice cream and toppings",
+              "Lolly cake",
+              "Party jelly / desserts",
+              "Fairy bread and sweet treats",
+              "Simple desserts"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your dessert...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Which desserts?",
+            "dependsOn": {
+              "Ice cream and toppings": [
+                "Hokey pokey ice cream",
+                "Classic vanilla and chocolate",
+                "Ice cream sundae station",
+                "Ice cream cones",
+                "Mixed flavours"
+              ],
+              "Lolly cake": [
+                "Classic lolly cake",
+                "Lolly cake slices",
+                "Lolly log",
+                "Lolly cake pops",
+                "Mixed with other treats"
+              ],
+              "Party jelly / desserts": [
+                "Jelly cups",
+                "Jelly and ice cream",
+                "Mousse cups",
+                "Fruit jelly",
+                "Mixed party desserts"
+              ],
+              "Fairy bread and sweet treats": [
+                "Classic fairy bread",
+                "Chocolate crackles",
+                "Marshmallow treats",
+                "Sweet popcorn",
+                "Mixed sweet treats"
+              ],
+              "Simple desserts": [
+                "Fruit platter",
+                "Cookies",
+                "Brownie bites",
+                "Mini muffins",
+                "Mixed sweet plate"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify desserts...",
+            "breadcrumbLabel": "Desserts"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "activities_entertainment": {
+        "label": "Activities & Entertainment",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of entertainment?",
+            "options": [
+              "Outdoor games",
+              "Craft activities",
+              "Pass the parcel / party games",
+              "Bouncy castle / inflatables",
+              "Entertainer (magician, face painting)"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe activities...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any specifics?",
+            "dependsOn": {
+              "Outdoor games": [
+                "Sack races and egg-and-spoon",
+                "Water games (summer)",
+                "Scavenger hunt",
+                "Sports games (cricket, rugby)",
+                "Mixed outdoor games"
+              ],
+              "Craft activities": [
+                "Painting and drawing",
+                "Bead and jewellery making",
+                "Clay and playdough",
+                "T-shirt decorating",
+                "Mixed craft station"
+              ],
+              "Pass the parcel / party games": [
+                "Pass the parcel",
+                "Musical chairs",
+                "Pin the tail",
+                "Treasure hunt",
+                "Mixed party games"
+              ],
+              "Bouncy castle / inflatables": [
+                "Small bouncy castle",
+                "Large bouncy castle",
+                "Obstacle course inflatable",
+                "Water slide (summer)",
+                "Multiple inflatables"
+              ],
+              "Entertainer (magician, face painting)": [
+                "Magician",
+                "Face painting",
+                "Balloon artist",
+                "Clown / entertainer",
+                "Character appearance"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify activities...",
+            "breadcrumbLabel": "Preferences"
+          }
+        ]
+      },
+      "cleanup": {
+        "label": "Cleanup",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What areas need cleaning up?",
+            "options": [
+              "Kitchen and dishes",
+              "Outdoor / BBQ area",
+              "Full venue tidy-up",
+              "Rubbish and recycling",
+              "All areas"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe cleanup needs...",
+            "breadcrumbLabel": "Areas"
+          }
+        ]
+      },
+      "decorations": {
+        "label": "Decorations",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of decorations?",
+            "options": [
+              "Minimal / natural",
+              "Themed and coordinated",
+              "DIY",
+              "Flowers and centrepieces",
+              "Professional styling"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your decorations...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Any specifics?",
+            "dependsOn": {
+              "Minimal / natural": [
+                "Natural greenery",
+                "Simple candles",
+                "Minimal table settings",
+                "Fairy lights",
+                "Potted plants"
+              ],
+              "Themed and coordinated": [
+                "Colour palette (specify)",
+                "Event theme (specify)",
+                "Seasonal theme",
+                "Rustic / boho",
+                "Modern / minimalist"
+              ],
+              "DIY": [
+                "Handmade decorations",
+                "Balloon arch",
+                "Photo display",
+                "Table centrepieces",
+                "Bunting and banners"
+              ],
+              "Flowers and centrepieces": [
+                "Fresh flower centrepieces",
+                "Mixed floral arrangements",
+                "Single-stem bud vases",
+                "Dried flowers",
+                "Artificial florals"
+              ],
+              "Professional styling": [
+                "Full event styling",
+                "Backdrop and arch",
+                "Luxury table settings",
+                "Foliage and feature walls",
+                "Custom signage"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify decorations...",
+            "breadcrumbLabel": "Preferences"
+          }
+        ]
+      }
+    }
+  },
+  "bbq_casual": {
+    "label": "Casual BBQ",
+    "nzNotes": "The BBQ is central to NZ social life. Sausage sizzle is iconic. Lamb chops, marinated chicken, and seafood on the grill are common. Expect BYO drinks culture. Classic sides are coleslaw, potato salad, and bread rolls. Outdoor setting assumed \u2014 consider shade and seating.",
+    "defaultCategories": [
+      "mains",
+      "sides_salads",
+      "drinks_alcoholic",
+      "drinks_non_alcoholic",
+      "table_snacks",
+      "furniture_equipment",
+      "cleanup"
+    ],
+    "categories": {
+      "mains": {
+        "label": "Mains",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of BBQ?",
+            "options": [
+              "Classic sausage sizzle",
+              "Premium BBQ meats",
+              "Seafood on the grill",
+              "Vegetarian BBQ",
+              "Mixed grill"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your BBQ...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Which items?",
+            "dependsOn": {
+              "Classic sausage sizzle": [
+                "Beef sausages",
+                "Lamb and rosemary sausages",
+                "Chicken sausages",
+                "Veggie sausages",
+                "Mixed sausage selection"
+              ],
+              "Premium BBQ meats": [
+                "Scotch fillet steaks",
+                "Lamb chops",
+                "Marinated chicken",
+                "Pork ribs",
+                "Mixed premium cuts"
+              ],
+              "Seafood on the grill": [
+                "Prawns",
+                "Fish fillets",
+                "Green-lipped mussels",
+                "Calamari",
+                "Mixed seafood BBQ"
+              ],
+              "Vegetarian BBQ": [
+                "Halloumi and vegetable skewers",
+                "Corn on the cob",
+                "Portobello mushrooms",
+                "Veggie burgers",
+                "Mixed vegetarian grill"
+              ],
+              "Mixed grill": [
+                "Sausages and steaks",
+                "Chicken and lamb chops",
+                "Meat and seafood mix",
+                "Something for everyone",
+                "Custom mix"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify items...",
+            "breadcrumbLabel": "Dishes"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "sides_salads": {
+        "label": "Sides & Salads",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of sides?",
+            "options": [
+              "Classic coleslaw",
+              "Potato salad",
+              "Green salad",
+              "Bread rolls",
+              "Mixed salads"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your sides...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Which sides?",
+            "dependsOn": {
+              "Classic coleslaw": [
+                "Creamy coleslaw",
+                "Vinegar-based slaw",
+                "Asian-style slaw",
+                "Apple slaw",
+                "Mixed slaw"
+              ],
+              "Potato salad": [
+                "Classic creamy potato salad",
+                "Mustard potato salad",
+                "Warm potato salad",
+                "Kumara salad",
+                "Mixed potato dishes"
+              ],
+              "Green salad": [
+                "Garden salad",
+                "Caesar salad",
+                "Rocket and parmesan",
+                "Mixed leaf",
+                "Seasonal greens"
+              ],
+              "Bread rolls": [
+                "White and wholemeal rolls",
+                "Garlic bread",
+                "Rewena bread",
+                "Ciabatta",
+                "Mixed breads"
+              ],
+              "Mixed salads": [
+                "Classic BBQ sides combo",
+                "Fresh and light selection",
+                "Hearty salads",
+                "Seasonal mix",
+                "Custom selection"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify sides...",
+            "breadcrumbLabel": "Sides"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "drinks_alcoholic": {
+        "label": "Alcoholic Drinks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of alcoholic drinks?",
+            "options": [
+              "Beer and cider",
+              "Wine",
+              "Spirits and cocktails",
+              "BYO (guests bring own)",
+              "Mixed / Full bar"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your drinks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Beer and cider": [
+                "NZ craft beer selection",
+                "Mainstream lager (Tui, Steinlager, DB)",
+                "Cider selection",
+                "Mix of beer and cider",
+                "Light / low-alcohol beer"
+              ],
+              "Wine": [
+                "NZ Sauvignon Blanc (Marlborough)",
+                "Red wine (Central Otago Pinot Noir)",
+                "Ros\u00e9",
+                "Sparkling / Champagne",
+                "Mixed wine selection"
+              ],
+              "Spirits and cocktails": [
+                "Pre-mixed cocktails",
+                "Gin and tonic bar",
+                "Rum and mixer",
+                "Whisky selection",
+                "Vodka and mixer"
+              ],
+              "BYO (guests bring own)": [
+                "Guests bring everything",
+                "Host provides ice and mixers only",
+                "Host provides non-alcoholic base"
+              ],
+              "Mixed / Full bar": [
+                "Full selection",
+                "Beer and wine only",
+                "Beer, wine and one spirit",
+                "Cocktail bar setup"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify drinks...",
+            "breadcrumbLabel": "Preferences"
+          },
+          {
+            "level": 3,
+            "question": "Anything else to consider?",
+            "options": [
+              "Provide low/no-alcohol alternatives",
+              "Under-18s will be present",
+              "Designated driver considerations"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other drink notes...",
+            "breadcrumbLabel": "Other"
+          }
+        ]
+      },
+      "drinks_non_alcoholic": {
+        "label": "Non-Alcoholic Drinks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of non-alcoholic drinks?",
+            "options": [
+              "Soft drinks and juice",
+              "Mocktails",
+              "Hot drinks",
+              "Water and sparkling water",
+              "Mixed selection"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your drinks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Soft drinks and juice": [
+                "L&P and classic NZ fizzy",
+                "Fresh juices and cordials",
+                "Kombucha",
+                "Sparkling juice",
+                "Mixed soft drinks"
+              ],
+              "Mocktails": [
+                "Fruit-based mocktails",
+                "Virgin mojito / pi\u00f1a colada",
+                "Sparkling mocktails",
+                "Iced teas and lemonades",
+                "Shrubs and sodas"
+              ],
+              "Hot drinks": [
+                "Tea and coffee",
+                "Milo",
+                "Hot chocolate",
+                "Herbal teas",
+                "Full hot drink station"
+              ],
+              "Water and sparkling water": [
+                "Still water",
+                "Sparkling water",
+                "Infused water",
+                "Both still and sparkling"
+              ],
+              "Mixed selection": [
+                "Full non-alcoholic bar",
+                "Soft drinks, juice and water",
+                "Mocktails and soft drinks",
+                "Juice and kombucha"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify drinks...",
+            "breadcrumbLabel": "Preferences"
+          }
+        ]
+      },
+      "table_snacks": {
+        "label": "Table Snacks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of snacks?",
+            "options": [
+              "Cheese and crackers",
+              "Dips and nibbles",
+              "Finger food",
+              "Charcuterie / grazing board",
+              "Nuts and dried fruit"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your snacks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Cheese and crackers": [
+                "NZ cheese selection (Kapiti, Mainland)",
+                "International cheese board",
+                "Simple cheddar and crackers",
+                "Brie and camembert",
+                "Aged and smoked cheeses"
+              ],
+              "Dips and nibbles": [
+                "Hummus and pita",
+                "Guacamole and corn chips",
+                "French onion dip",
+                "Salsa and corn chips",
+                "Mixed dip platter"
+              ],
+              "Finger food": [
+                "Mini pies and sausage rolls",
+                "Spring rolls",
+                "Stuffed mushrooms",
+                "Bruschetta",
+                "Mixed finger food"
+              ],
+              "Charcuterie / grazing board": [
+                "Meat and cheese board",
+                "Vegetarian grazing board",
+                "Mediterranean antipasto",
+                "Seasonal NZ produce",
+                "Mixed charcuterie"
+              ],
+              "Nuts and dried fruit": [
+                "Mixed nuts",
+                "Seasoned nuts",
+                "Dried fruit and nut mix",
+                "Trail mix",
+                "Mixed"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify snacks...",
+            "breadcrumbLabel": "Preferences"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "dessert": {
+        "label": "Dessert",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of dessert?",
+            "options": ["Pavlova", "Ice cream", "Fresh fruit", "Lamingtons", "Simple desserts"],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your dessert...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Which desserts?",
+            "dependsOn": {
+              "Pavlova": [
+                "Classic pavlova with cream and kiwifruit",
+                "Berry pavlova",
+                "Mini pavlovas",
+                "Passionfruit pavlova",
+                "Deconstructed pavlova"
+              ],
+              "Ice cream": [
+                "Hokey pokey ice cream",
+                "Classic vanilla and chocolate",
+                "Ice cream sandwiches",
+                "Sorbet selection",
+                "Mixed with toppings"
+              ],
+              "Fresh fruit": [
+                "Fruit platter",
+                "Fruit skewers",
+                "Grilled fruit",
+                "Fruit salad",
+                "Mixed seasonal fruit"
+              ],
+              "Lamingtons": [
+                "Classic chocolate lamingtons",
+                "Raspberry lamingtons",
+                "Mini lamingtons",
+                "Lamington cake",
+                "Mixed NZ treats"
+              ],
+              "Simple desserts": [
+                "Brownies",
+                "Slice selection",
+                "Cookies",
+                "Banana cake",
+                "Mixed simple treats"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify desserts...",
+            "breadcrumbLabel": "Desserts"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "cake": {
+        "label": "Cake",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of cake?",
+            "options": ["Simple cake", "Cupcakes", "No cake", "Lamington cake", "Sheet cake"],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your cake...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "furniture_equipment": {
+        "label": "Furniture & Equipment",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What equipment is needed?",
+            "options": [
+              "Tables and chairs",
+              "BBQ and cooking equipment",
+              "Marquee / gazebo",
+              "AV and sound system",
+              "Serving equipment and crockery"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe equipment needs...",
+            "breadcrumbLabel": "Equipment"
+          },
+          {
+            "level": 2,
+            "question": "Any specifics?",
+            "dependsOn": {
+              "Tables and chairs": [
+                "Trestle tables and folding chairs",
+                "Round tables",
+                "High bar tables",
+                "Mix of seating",
+                "Kids tables"
+              ],
+              "BBQ and cooking equipment": [
+                "Gas BBQ",
+                "Charcoal BBQ",
+                "Large BBQ / spit roast",
+                "Hangi equipment",
+                "Multiple BBQs"
+              ],
+              "Marquee / gazebo": [
+                "Small gazebo (4x3m)",
+                "Medium marquee (6x6m)",
+                "Large marquee",
+                "Shade sails",
+                "Multiple options"
+              ],
+              "AV and sound system": [
+                "Bluetooth speaker",
+                "PA system",
+                "Microphone for speeches",
+                "Projector and screen",
+                "Full AV setup"
+              ],
+              "Serving equipment and crockery": [
+                "Plates, cutlery, glasses",
+                "Platters and serving boards",
+                "Chafing dishes",
+                "Disposable eco-friendly",
+                "Mix"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify equipment...",
+            "breadcrumbLabel": "Preferences"
+          }
+        ]
+      },
+      "cleanup": {
+        "label": "Cleanup",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What areas need cleaning up?",
+            "options": [
+              "Kitchen and dishes",
+              "Outdoor / BBQ area",
+              "Full venue tidy-up",
+              "Rubbish and recycling",
+              "All areas"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe cleanup needs...",
+            "breadcrumbLabel": "Areas"
+          }
+        ]
+      }
+    }
+  },
+  "wedding_reception": {
+    "label": "Wedding Reception",
+    "nzNotes": "NZ weddings often blend formal and relaxed styles. Outdoor and vineyard weddings are very popular. Pavlova is a common wedding dessert alongside the cake. NZ wines (Marlborough Sauvignon Blanc, Central Otago Pinot Noir) feature prominently. Speeches are a big tradition. Many weddings include M\u0101ori cultural elements (karakia, waiata, haka).",
+    "defaultCategories": [
+      "mains",
+      "entree_starters",
+      "dessert",
+      "sides_salads",
+      "drinks_alcoholic",
+      "drinks_non_alcoholic",
+      "cake",
+      "decorations",
+      "cleanup",
+      "furniture_equipment"
+    ],
+    "categories": {
+      "mains": {
+        "label": "Mains",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of mains?",
+            "options": [
+              "Canap\u00e9s / cocktail style",
+              "Plated sit-down",
+              "Shared / family style",
+              "Food stations",
+              "Buffet"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your mains...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Which dishes?",
+            "dependsOn": {
+              "Canap\u00e9s / cocktail style": [
+                "Seafood canap\u00e9s",
+                "Mini sliders and bites",
+                "Asian-inspired bites",
+                "Classic NZ finger food",
+                "Mixed canap\u00e9 selection"
+              ],
+              "Plated sit-down": [
+                "Eye fillet steak",
+                "Roast lamb",
+                "Pan-seared fish",
+                "Chicken supreme",
+                "Vegetarian main"
+              ],
+              "Shared / family style": [
+                "Roast meats and vegetables",
+                "Mediterranean sharing",
+                "NZ-style family platters",
+                "Asian banquet style",
+                "Mixed sharing plates"
+              ],
+              "Food stations": [
+                "Carvery station",
+                "Seafood station",
+                "Asian noodle station",
+                "Pizza station",
+                "Multiple stations"
+              ],
+              "Buffet": [
+                "Classic NZ buffet",
+                "International buffet",
+                "Roast and salad buffet",
+                "Seafood buffet",
+                "Mixed buffet"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify dishes...",
+            "breadcrumbLabel": "Dishes"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "entree_starters": {
+        "label": "Entr\u00e9e & Starters",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of starters?",
+            "options": [
+              "Antipasto / grazing platter",
+              "Soup",
+              "Finger food canap\u00e9s",
+              "Dips and breads",
+              "Salad entr\u00e9e"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your starters...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Antipasto / grazing platter": [
+                "Meat and cheese",
+                "Vegetarian grazing",
+                "Mediterranean antipasto",
+                "NZ charcuterie",
+                "Seasonal grazing"
+              ],
+              "Soup": [
+                "Seasonal vegetable",
+                "Pumpkin",
+                "Seafood chowder",
+                "French onion",
+                "Chilled gazpacho (summer)"
+              ],
+              "Finger food canap\u00e9s": [
+                "Bruschetta",
+                "Blini with smoked salmon",
+                "Mini arancini",
+                "Stuffed mushrooms",
+                "Mixed canap\u00e9s"
+              ],
+              "Dips and breads": [
+                "Hummus and pita",
+                "Tzatziki and crudit\u00e9s",
+                "Baba ganoush",
+                "Rewena bread and dips",
+                "Mixed dip platter"
+              ],
+              "Salad entr\u00e9e": [
+                "Caprese",
+                "Caesar",
+                "Garden salad",
+                "Roasted beetroot and goat cheese",
+                "Seasonal NZ greens"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify starters...",
+            "breadcrumbLabel": "Preferences"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "dessert": {
+        "label": "Dessert",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of dessert?",
+            "options": [
+              "Dessert table",
+              "Cheese tower",
+              "Macarons and petit fours",
+              "Individual plated desserts",
+              "Pavlova"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your dessert...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Which desserts?",
+            "dependsOn": {
+              "Dessert table": [
+                "Mini desserts selection",
+                "Classic NZ treats",
+                "Elegant petit fours",
+                "Donut wall",
+                "Mixed dessert display"
+              ],
+              "Cheese tower": [
+                "NZ artisan cheese tower",
+                "International cheese selection",
+                "Cheese with fruit and crackers",
+                "Cheese and charcuterie",
+                "Mini cheese wheels"
+              ],
+              "Macarons and petit fours": [
+                "French macarons",
+                "Chocolate truffles",
+                "Mini tarts",
+                "Petit fours selection",
+                "Mixed elegant sweets"
+              ],
+              "Individual plated desserts": [
+                "Panna cotta",
+                "Cr\u00e8me br\u00fbl\u00e9e",
+                "Chocolate fondant",
+                "Pavlova individual",
+                "Seasonal fruit dessert"
+              ],
+              "Pavlova": [
+                "Classic pavlova with cream and berries",
+                "Mini individual pavlovas",
+                "Passionfruit pavlova",
+                "Pavlova roulade",
+                "Chocolate pavlova"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify desserts...",
+            "breadcrumbLabel": "Desserts"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "sides_salads": {
+        "label": "Sides & Salads",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of sides?",
+            "options": [
+              "Fresh salads",
+              "Roast vegetables",
+              "Grain and pulse salads",
+              "Seasonal sides",
+              "Mixed"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your sides...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Which sides?",
+            "dependsOn": {
+              "Fresh salads": [
+                "Garden salad",
+                "Caesar salad",
+                "Rocket and pear",
+                "Caprese",
+                "Mixed green salads"
+              ],
+              "Roast vegetables": [
+                "Roast kumara",
+                "Roast potatoes",
+                "Seasonal roast vegetables",
+                "Honey-glazed root veg",
+                "Mixed roast platter"
+              ],
+              "Grain and pulse salads": [
+                "Couscous salad",
+                "Quinoa salad",
+                "Lentil salad",
+                "Pearl barley salad",
+                "Mixed grain salad"
+              ],
+              "Seasonal sides": [
+                "Spring vegetables",
+                "Summer salads",
+                "Autumn roast veg",
+                "Winter comfort sides",
+                "Seasonal mix"
+              ],
+              "Mixed": [
+                "Salads and roast veg",
+                "Light and fresh selection",
+                "Classic sides combo",
+                "Elegant side selection",
+                "Custom mix"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify sides...",
+            "breadcrumbLabel": "Sides"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "drinks_alcoholic": {
+        "label": "Alcoholic Drinks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of alcoholic drinks?",
+            "options": [
+              "Beer and cider",
+              "Wine",
+              "Spirits and cocktails",
+              "BYO (guests bring own)",
+              "Mixed / Full bar"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your drinks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Beer and cider": [
+                "NZ craft beer selection",
+                "Mainstream lager (Tui, Steinlager, DB)",
+                "Cider selection",
+                "Mix of beer and cider",
+                "Light / low-alcohol beer"
+              ],
+              "Wine": [
+                "NZ Sauvignon Blanc (Marlborough)",
+                "Red wine (Central Otago Pinot Noir)",
+                "Ros\u00e9",
+                "Sparkling / Champagne",
+                "Mixed wine selection"
+              ],
+              "Spirits and cocktails": [
+                "Pre-mixed cocktails",
+                "Gin and tonic bar",
+                "Rum and mixer",
+                "Whisky selection",
+                "Vodka and mixer"
+              ],
+              "BYO (guests bring own)": [
+                "Guests bring everything",
+                "Host provides ice and mixers only",
+                "Host provides non-alcoholic base"
+              ],
+              "Mixed / Full bar": [
+                "Full selection",
+                "Beer and wine only",
+                "Beer, wine and one spirit",
+                "Cocktail bar setup"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify drinks...",
+            "breadcrumbLabel": "Preferences"
+          },
+          {
+            "level": 3,
+            "question": "Anything else to consider?",
+            "options": [
+              "Provide low/no-alcohol alternatives",
+              "Under-18s will be present",
+              "Designated driver considerations"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other drink notes...",
+            "breadcrumbLabel": "Other"
+          }
+        ]
+      },
+      "drinks_non_alcoholic": {
+        "label": "Non-Alcoholic Drinks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of non-alcoholic drinks?",
+            "options": [
+              "Soft drinks and juice",
+              "Mocktails",
+              "Hot drinks",
+              "Water and sparkling water",
+              "Mixed selection"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your drinks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Soft drinks and juice": [
+                "L&P and classic NZ fizzy",
+                "Fresh juices and cordials",
+                "Kombucha",
+                "Sparkling juice",
+                "Mixed soft drinks"
+              ],
+              "Mocktails": [
+                "Fruit-based mocktails",
+                "Virgin mojito / pi\u00f1a colada",
+                "Sparkling mocktails",
+                "Iced teas and lemonades",
+                "Shrubs and sodas"
+              ],
+              "Hot drinks": [
+                "Tea and coffee",
+                "Milo",
+                "Hot chocolate",
+                "Herbal teas",
+                "Full hot drink station"
+              ],
+              "Water and sparkling water": [
+                "Still water",
+                "Sparkling water",
+                "Infused water",
+                "Both still and sparkling"
+              ],
+              "Mixed selection": [
+                "Full non-alcoholic bar",
+                "Soft drinks, juice and water",
+                "Mocktails and soft drinks",
+                "Juice and kombucha"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify drinks...",
+            "breadcrumbLabel": "Preferences"
+          }
+        ]
+      },
+      "cake": {
+        "label": "Cake",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of wedding cake?",
+            "options": [
+              "Traditional tiered wedding cake",
+              "Naked cake",
+              "Cheese tower",
+              "Macaron tower",
+              "Modern alternative"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your cake...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "decorations": {
+        "label": "Decorations",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of decorations?",
+            "options": [
+              "Minimal / natural",
+              "Themed and coordinated",
+              "DIY",
+              "Flowers and centrepieces",
+              "Professional styling"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your decorations...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Any specifics?",
+            "dependsOn": {
+              "Minimal / natural": [
+                "Natural greenery",
+                "Simple candles",
+                "Minimal table settings",
+                "Fairy lights",
+                "Potted plants"
+              ],
+              "Themed and coordinated": [
+                "Colour palette (specify)",
+                "Event theme (specify)",
+                "Seasonal theme",
+                "Rustic / boho",
+                "Modern / minimalist"
+              ],
+              "DIY": [
+                "Handmade decorations",
+                "Balloon arch",
+                "Photo display",
+                "Table centrepieces",
+                "Bunting and banners"
+              ],
+              "Flowers and centrepieces": [
+                "Fresh flower centrepieces",
+                "Mixed floral arrangements",
+                "Single-stem bud vases",
+                "Dried flowers",
+                "Artificial florals"
+              ],
+              "Professional styling": [
+                "Full event styling",
+                "Backdrop and arch",
+                "Luxury table settings",
+                "Foliage and feature walls",
+                "Custom signage"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify decorations...",
+            "breadcrumbLabel": "Preferences"
+          }
+        ]
+      },
+      "cleanup": {
+        "label": "Cleanup",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What areas need cleaning up?",
+            "options": [
+              "Kitchen and dishes",
+              "Outdoor / BBQ area",
+              "Full venue tidy-up",
+              "Rubbish and recycling",
+              "All areas"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe cleanup needs...",
+            "breadcrumbLabel": "Areas"
+          }
+        ]
+      },
+      "furniture_equipment": {
+        "label": "Furniture & Equipment",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What equipment is needed?",
+            "options": [
+              "Tables and chairs",
+              "BBQ and cooking equipment",
+              "Marquee / gazebo",
+              "AV and sound system",
+              "Serving equipment and crockery"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe equipment needs...",
+            "breadcrumbLabel": "Equipment"
+          },
+          {
+            "level": 2,
+            "question": "Any specifics?",
+            "dependsOn": {
+              "Tables and chairs": [
+                "Trestle tables and folding chairs",
+                "Round tables",
+                "High bar tables",
+                "Mix of seating",
+                "Kids tables"
+              ],
+              "BBQ and cooking equipment": [
+                "Gas BBQ",
+                "Charcoal BBQ",
+                "Large BBQ / spit roast",
+                "Hangi equipment",
+                "Multiple BBQs"
+              ],
+              "Marquee / gazebo": [
+                "Small gazebo (4x3m)",
+                "Medium marquee (6x6m)",
+                "Large marquee",
+                "Shade sails",
+                "Multiple options"
+              ],
+              "AV and sound system": [
+                "Bluetooth speaker",
+                "PA system",
+                "Microphone for speeches",
+                "Projector and screen",
+                "Full AV setup"
+              ],
+              "Serving equipment and crockery": [
+                "Plates, cutlery, glasses",
+                "Platters and serving boards",
+                "Chafing dishes",
+                "Disposable eco-friendly",
+                "Mix"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify equipment...",
+            "breadcrumbLabel": "Preferences"
+          }
+        ]
+      }
+    }
+  },
+  "baby_shower": {
+    "label": "Baby Shower",
+    "nzNotes": "NZ baby showers are typically relaxed afternoon affairs. Light food (finger food, afternoon tea) is standard. Gender reveal elements are optional but popular. Games like 'guess the baby item' and 'baby bingo' are common. Decorations tend to be pastel or themed. Non-alcoholic drinks are the focus, with options for those not pregnant.",
+    "defaultCategories": [
+      "entree_starters",
+      "table_snacks",
+      "dessert",
+      "cake",
+      "drinks_non_alcoholic",
+      "decorations",
+      "activities_entertainment"
+    ],
+    "categories": {
+      "mains": {
+        "label": "Mains",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of food?",
+            "options": [
+              "Afternoon tea",
+              "Light finger food",
+              "Brunch spread",
+              "Light lunch",
+              "Themed treats"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your food...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Which dishes?",
+            "dependsOn": {
+              "Afternoon tea": [
+                "Scones with jam and cream",
+                "Ribbon sandwiches",
+                "Mini quiches",
+                "Petite pastries",
+                "Mixed afternoon tea"
+              ],
+              "Light finger food": [
+                "Mini sandwiches",
+                "Savoury pinwheels",
+                "Bruschetta",
+                "Stuffed mushrooms",
+                "Mixed finger food"
+              ],
+              "Brunch spread": [
+                "Eggs benedict",
+                "Avocado toast",
+                "Pastries and fruit",
+                "Yoghurt and granola",
+                "Mixed brunch"
+              ],
+              "Light lunch": [
+                "Quiche and salad",
+                "Soup and bread rolls",
+                "Wraps and sandwiches",
+                "Rice paper rolls",
+                "Mixed light lunch"
+              ],
+              "Themed treats": [
+                "Baby-themed cookies",
+                "Themed sandwiches",
+                "Colour-coordinated food",
+                "Miniature everything",
+                "Mixed themed food"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify dishes...",
+            "breadcrumbLabel": "Dishes"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "entree_starters": {
+        "label": "Entr\u00e9e & Starters",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of starters?",
+            "options": [
+              "Antipasto / grazing platter",
+              "Soup",
+              "Finger food canap\u00e9s",
+              "Dips and breads",
+              "Salad entr\u00e9e"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your starters...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Antipasto / grazing platter": [
+                "Meat and cheese",
+                "Vegetarian grazing",
+                "Mediterranean antipasto",
+                "NZ charcuterie",
+                "Seasonal grazing"
+              ],
+              "Soup": [
+                "Seasonal vegetable",
+                "Pumpkin",
+                "Seafood chowder",
+                "French onion",
+                "Chilled gazpacho (summer)"
+              ],
+              "Finger food canap\u00e9s": [
+                "Bruschetta",
+                "Blini with smoked salmon",
+                "Mini arancini",
+                "Stuffed mushrooms",
+                "Mixed canap\u00e9s"
+              ],
+              "Dips and breads": [
+                "Hummus and pita",
+                "Tzatziki and crudit\u00e9s",
+                "Baba ganoush",
+                "Rewena bread and dips",
+                "Mixed dip platter"
+              ],
+              "Salad entr\u00e9e": [
+                "Caprese",
+                "Caesar",
+                "Garden salad",
+                "Roasted beetroot and goat cheese",
+                "Seasonal NZ greens"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify starters...",
+            "breadcrumbLabel": "Preferences"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "table_snacks": {
+        "label": "Table Snacks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of snacks?",
+            "options": [
+              "Cheese and crackers",
+              "Dips and nibbles",
+              "Finger food",
+              "Charcuterie / grazing board",
+              "Nuts and dried fruit"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your snacks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Cheese and crackers": [
+                "NZ cheese selection (Kapiti, Mainland)",
+                "International cheese board",
+                "Simple cheddar and crackers",
+                "Brie and camembert",
+                "Aged and smoked cheeses"
+              ],
+              "Dips and nibbles": [
+                "Hummus and pita",
+                "Guacamole and corn chips",
+                "French onion dip",
+                "Salsa and corn chips",
+                "Mixed dip platter"
+              ],
+              "Finger food": [
+                "Mini pies and sausage rolls",
+                "Spring rolls",
+                "Stuffed mushrooms",
+                "Bruschetta",
+                "Mixed finger food"
+              ],
+              "Charcuterie / grazing board": [
+                "Meat and cheese board",
+                "Vegetarian grazing board",
+                "Mediterranean antipasto",
+                "Seasonal NZ produce",
+                "Mixed charcuterie"
+              ],
+              "Nuts and dried fruit": [
+                "Mixed nuts",
+                "Seasoned nuts",
+                "Dried fruit and nut mix",
+                "Trail mix",
+                "Mixed"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify snacks...",
+            "breadcrumbLabel": "Preferences"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "dessert": {
+        "label": "Dessert",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of dessert?",
+            "options": [
+              "Cupcakes",
+              "Sweet treats platter",
+              "Dessert table",
+              "Macarons",
+              "Simple cake"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your dessert...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Which desserts?",
+            "dependsOn": {
+              "Cupcakes": [
+                "Vanilla cupcakes",
+                "Chocolate cupcakes",
+                "Themed decorated cupcakes",
+                "Mini cupcakes",
+                "Mixed flavour cupcakes"
+              ],
+              "Sweet treats platter": [
+                "Mini slices and brownies",
+                "Cookies and biscuits",
+                "Scones with cream",
+                "NZ classics (lamingtons, lolly cake)",
+                "Mixed sweet platter"
+              ],
+              "Dessert table": [
+                "Mini dessert selection",
+                "Themed desserts",
+                "Colour-coordinated sweets",
+                "Classic favourites",
+                "Elegant petit fours"
+              ],
+              "Macarons": [
+                "Pastel macarons",
+                "Flavoured macarons",
+                "Macaron tower",
+                "Mixed macaron box",
+                "Custom coloured macarons"
+              ],
+              "Simple cake": [
+                "Sponge cake",
+                "Carrot cake",
+                "Lemon cake",
+                "Banana cake",
+                "Simple decorated cake"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify desserts...",
+            "breadcrumbLabel": "Desserts"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "cake": {
+        "label": "Cake",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of cake?",
+            "options": [
+              "Reveal cake",
+              "Cupcake tower",
+              "Drip cake",
+              "Decorated sheet cake",
+              "Gender reveal cake"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your cake...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "drinks_non_alcoholic": {
+        "label": "Non-Alcoholic Drinks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of non-alcoholic drinks?",
+            "options": [
+              "Soft drinks and juice",
+              "Mocktails",
+              "Hot drinks",
+              "Water and sparkling water",
+              "Mixed selection"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your drinks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Soft drinks and juice": [
+                "L&P and classic NZ fizzy",
+                "Fresh juices and cordials",
+                "Kombucha",
+                "Sparkling juice",
+                "Mixed soft drinks"
+              ],
+              "Mocktails": [
+                "Fruit-based mocktails",
+                "Virgin mojito / pi\u00f1a colada",
+                "Sparkling mocktails",
+                "Iced teas and lemonades",
+                "Shrubs and sodas"
+              ],
+              "Hot drinks": [
+                "Tea and coffee",
+                "Milo",
+                "Hot chocolate",
+                "Herbal teas",
+                "Full hot drink station"
+              ],
+              "Water and sparkling water": [
+                "Still water",
+                "Sparkling water",
+                "Infused water",
+                "Both still and sparkling"
+              ],
+              "Mixed selection": [
+                "Full non-alcoholic bar",
+                "Soft drinks, juice and water",
+                "Mocktails and soft drinks",
+                "Juice and kombucha"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify drinks...",
+            "breadcrumbLabel": "Preferences"
+          }
+        ]
+      },
+      "decorations": {
+        "label": "Decorations",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of decorations?",
+            "options": [
+              "Minimal / natural",
+              "Themed and coordinated",
+              "DIY",
+              "Flowers and centrepieces",
+              "Professional styling"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your decorations...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Any specifics?",
+            "dependsOn": {
+              "Minimal / natural": [
+                "Natural greenery",
+                "Simple candles",
+                "Minimal table settings",
+                "Fairy lights",
+                "Potted plants"
+              ],
+              "Themed and coordinated": [
+                "Colour palette (specify)",
+                "Event theme (specify)",
+                "Seasonal theme",
+                "Rustic / boho",
+                "Modern / minimalist"
+              ],
+              "DIY": [
+                "Handmade decorations",
+                "Balloon arch",
+                "Photo display",
+                "Table centrepieces",
+                "Bunting and banners"
+              ],
+              "Flowers and centrepieces": [
+                "Fresh flower centrepieces",
+                "Mixed floral arrangements",
+                "Single-stem bud vases",
+                "Dried flowers",
+                "Artificial florals"
+              ],
+              "Professional styling": [
+                "Full event styling",
+                "Backdrop and arch",
+                "Luxury table settings",
+                "Foliage and feature walls",
+                "Custom signage"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify decorations...",
+            "breadcrumbLabel": "Preferences"
+          }
+        ]
+      },
+      "activities_entertainment": {
+        "label": "Activities & Entertainment",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of activities?",
+            "options": [
+              "Games and activities (name that baby item, bingo)",
+              "Photo booth",
+              "Gift opening ceremony",
+              "Craft (decorate onesies)",
+              "Relaxed / no structured activities"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe activities...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any specifics?",
+            "dependsOn": {
+              "Games and activities (name that baby item, bingo)": [
+                "Baby bingo",
+                "Guess the baby photo",
+                "Name that baby item",
+                "Baby trivia",
+                "Mixed games"
+              ],
+              "Photo booth": [
+                "DIY photo booth",
+                "Professional photo booth",
+                "Polaroid station",
+                "Themed props",
+                "Digital photo station"
+              ],
+              "Gift opening ceremony": [
+                "Structured gift opening",
+                "Casual gift table",
+                "Wishing well",
+                "Group gift reveal",
+                "Relaxed opening"
+              ],
+              "Craft (decorate onesies)": [
+                "Decorate onesies",
+                "Make a memory book page",
+                "Decorate bibs",
+                "Write advice cards",
+                "Mixed craft activities"
+              ],
+              "Relaxed / no structured activities": [
+                "Background music",
+                "Casual mingling",
+                "Simple photo opportunities",
+                "No planned activities",
+                "Gentle background games"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify activities...",
+            "breadcrumbLabel": "Preferences"
+          }
+        ]
+      },
+      "breakfast_brunch": {
+        "label": "Breakfast & Brunch",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of brunch?",
+            "options": [
+              "Classic cooked breakfast",
+              "Continental spread",
+              "Eggs and toast stations",
+              "Pastry and bakery",
+              "Smoothie and acai bowls"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your brunch...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Classic cooked breakfast": [
+                "Full cooked breakfast (eggs, bacon, toast)",
+                "Eggs benedict",
+                "Omelette station",
+                "Shakshuka",
+                "Mixed cooked"
+              ],
+              "Continental spread": [
+                "Pastries and croissants",
+                "Fruit platter",
+                "Yoghurt and granola",
+                "Cold meats and cheese",
+                "Mixed continental"
+              ],
+              "Eggs and toast stations": [
+                "Poached eggs on toast",
+                "Avocado toast",
+                "Scrambled eggs",
+                "Eggs your way station",
+                "Mixed egg dishes"
+              ],
+              "Pastry and bakery": [
+                "Croissants and danish",
+                "Muffins and scones",
+                "Banana bread",
+                "Mixed pastries",
+                "NZ bakery classics"
+              ],
+              "Smoothie and acai bowls": [
+                "Acai bowls",
+                "Green smoothies",
+                "Fruit smoothies",
+                "Smoothie bar",
+                "Mixed health bowls"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify brunch items...",
+            "breadcrumbLabel": "Preferences"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      }
+    }
+  },
+  "engagement_party": {
+    "label": "Engagement Party",
+    "nzNotes": "NZ engagement parties are typically celebratory and social, ranging from casual backyard affairs to more formal events. Grazing tables are very trendy. Sparkling wine or champagne for toasts is expected. Often a mix of the couple's friends and family, so cater broadly. 'Bring a plate' is common for casual engagement parties.",
+    "defaultCategories": [
+      "entree_starters",
+      "mains",
+      "dessert",
+      "drinks_alcoholic",
+      "drinks_non_alcoholic",
+      "table_snacks",
+      "cake",
+      "decorations"
+    ],
+    "categories": {
+      "entree_starters": {
+        "label": "Entr\u00e9e & Starters",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of starters?",
+            "options": [
+              "Antipasto / grazing platter",
+              "Soup",
+              "Finger food canap\u00e9s",
+              "Dips and breads",
+              "Salad entr\u00e9e"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your starters...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Antipasto / grazing platter": [
+                "Meat and cheese",
+                "Vegetarian grazing",
+                "Mediterranean antipasto",
+                "NZ charcuterie",
+                "Seasonal grazing"
+              ],
+              "Soup": [
+                "Seasonal vegetable",
+                "Pumpkin",
+                "Seafood chowder",
+                "French onion",
+                "Chilled gazpacho (summer)"
+              ],
+              "Finger food canap\u00e9s": [
+                "Bruschetta",
+                "Blini with smoked salmon",
+                "Mini arancini",
+                "Stuffed mushrooms",
+                "Mixed canap\u00e9s"
+              ],
+              "Dips and breads": [
+                "Hummus and pita",
+                "Tzatziki and crudit\u00e9s",
+                "Baba ganoush",
+                "Rewena bread and dips",
+                "Mixed dip platter"
+              ],
+              "Salad entr\u00e9e": [
+                "Caprese",
+                "Caesar",
+                "Garden salad",
+                "Roasted beetroot and goat cheese",
+                "Seasonal NZ greens"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify starters...",
+            "breadcrumbLabel": "Preferences"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "mains": {
+        "label": "Mains",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of mains?",
+            "options": [
+              "Canap\u00e9s and finger food",
+              "Shared plates",
+              "Grazing tables",
+              "Sit-down dinner",
+              "Food stations"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your mains...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Which dishes?",
+            "dependsOn": {
+              "Canap\u00e9s and finger food": [
+                "Mini pies and sausage rolls",
+                "Sliders and mini burgers",
+                "Bruschetta and crostini",
+                "Asian-inspired bites",
+                "Mixed canap\u00e9 selection"
+              ],
+              "Shared plates": [
+                "Mediterranean sharing",
+                "Asian-style shared plates",
+                "NZ-style platters",
+                "Tapas",
+                "Mixed sharing plates"
+              ],
+              "Grazing tables": [
+                "Full grazing table",
+                "Cheese and charcuterie focus",
+                "Mediterranean grazing",
+                "NZ produce grazing",
+                "Mixed grazing spread"
+              ],
+              "Sit-down dinner": [
+                "Roast dinner",
+                "Steak and sides",
+                "Pan-seared fish",
+                "Chicken main",
+                "Vegetarian sit-down"
+              ],
+              "Food stations": [
+                "Slider station",
+                "Taco station",
+                "Sushi station",
+                "Pizza station",
+                "Multiple stations"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify dishes...",
+            "breadcrumbLabel": "Dishes"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "dessert": {
+        "label": "Dessert",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of dessert?",
+            "options": [
+              "Dessert table",
+              "Pavlova",
+              "Cheesecake",
+              "Sweet treats platter",
+              "Individual desserts"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your dessert...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Which desserts?",
+            "dependsOn": {
+              "Dessert table": [
+                "Mini desserts selection",
+                "Classic NZ treats",
+                "Elegant sweets",
+                "Themed desserts",
+                "Mixed dessert display"
+              ],
+              "Pavlova": [
+                "Classic pavlova with cream and kiwifruit",
+                "Berry pavlova",
+                "Mini pavlovas",
+                "Passionfruit pavlova",
+                "Deconstructed pavlova"
+              ],
+              "Cheesecake": [
+                "Baked New York style",
+                "No-bake classic",
+                "Lemon cheesecake",
+                "Chocolate cheesecake",
+                "Individual mini cheesecakes"
+              ],
+              "Sweet treats platter": [
+                "Brownies and slices",
+                "Cookies and biscuits",
+                "Lamingtons",
+                "Mixed NZ treats",
+                "Macarons and truffles"
+              ],
+              "Individual desserts": [
+                "Panna cotta",
+                "Cr\u00e8me br\u00fbl\u00e9e",
+                "Chocolate mousse",
+                "Mini tarts",
+                "Seasonal fruit dessert"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify desserts...",
+            "breadcrumbLabel": "Desserts"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "drinks_alcoholic": {
+        "label": "Alcoholic Drinks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of alcoholic drinks?",
+            "options": [
+              "Beer and cider",
+              "Wine",
+              "Spirits and cocktails",
+              "BYO (guests bring own)",
+              "Mixed / Full bar"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your drinks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Beer and cider": [
+                "NZ craft beer selection",
+                "Mainstream lager (Tui, Steinlager, DB)",
+                "Cider selection",
+                "Mix of beer and cider",
+                "Light / low-alcohol beer"
+              ],
+              "Wine": [
+                "NZ Sauvignon Blanc (Marlborough)",
+                "Red wine (Central Otago Pinot Noir)",
+                "Ros\u00e9",
+                "Sparkling / Champagne",
+                "Mixed wine selection"
+              ],
+              "Spirits and cocktails": [
+                "Pre-mixed cocktails",
+                "Gin and tonic bar",
+                "Rum and mixer",
+                "Whisky selection",
+                "Vodka and mixer"
+              ],
+              "BYO (guests bring own)": [
+                "Guests bring everything",
+                "Host provides ice and mixers only",
+                "Host provides non-alcoholic base"
+              ],
+              "Mixed / Full bar": [
+                "Full selection",
+                "Beer and wine only",
+                "Beer, wine and one spirit",
+                "Cocktail bar setup"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify drinks...",
+            "breadcrumbLabel": "Preferences"
+          },
+          {
+            "level": 3,
+            "question": "Anything else to consider?",
+            "options": [
+              "Provide low/no-alcohol alternatives",
+              "Under-18s will be present",
+              "Designated driver considerations"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other drink notes...",
+            "breadcrumbLabel": "Other"
+          }
+        ]
+      },
+      "drinks_non_alcoholic": {
+        "label": "Non-Alcoholic Drinks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of non-alcoholic drinks?",
+            "options": [
+              "Soft drinks and juice",
+              "Mocktails",
+              "Hot drinks",
+              "Water and sparkling water",
+              "Mixed selection"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your drinks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Soft drinks and juice": [
+                "L&P and classic NZ fizzy",
+                "Fresh juices and cordials",
+                "Kombucha",
+                "Sparkling juice",
+                "Mixed soft drinks"
+              ],
+              "Mocktails": [
+                "Fruit-based mocktails",
+                "Virgin mojito / pi\u00f1a colada",
+                "Sparkling mocktails",
+                "Iced teas and lemonades",
+                "Shrubs and sodas"
+              ],
+              "Hot drinks": [
+                "Tea and coffee",
+                "Milo",
+                "Hot chocolate",
+                "Herbal teas",
+                "Full hot drink station"
+              ],
+              "Water and sparkling water": [
+                "Still water",
+                "Sparkling water",
+                "Infused water",
+                "Both still and sparkling"
+              ],
+              "Mixed selection": [
+                "Full non-alcoholic bar",
+                "Soft drinks, juice and water",
+                "Mocktails and soft drinks",
+                "Juice and kombucha"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify drinks...",
+            "breadcrumbLabel": "Preferences"
+          }
+        ]
+      },
+      "table_snacks": {
+        "label": "Table Snacks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of snacks?",
+            "options": [
+              "Cheese and crackers",
+              "Dips and nibbles",
+              "Finger food",
+              "Charcuterie / grazing board",
+              "Nuts and dried fruit"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your snacks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Cheese and crackers": [
+                "NZ cheese selection (Kapiti, Mainland)",
+                "International cheese board",
+                "Simple cheddar and crackers",
+                "Brie and camembert",
+                "Aged and smoked cheeses"
+              ],
+              "Dips and nibbles": [
+                "Hummus and pita",
+                "Guacamole and corn chips",
+                "French onion dip",
+                "Salsa and corn chips",
+                "Mixed dip platter"
+              ],
+              "Finger food": [
+                "Mini pies and sausage rolls",
+                "Spring rolls",
+                "Stuffed mushrooms",
+                "Bruschetta",
+                "Mixed finger food"
+              ],
+              "Charcuterie / grazing board": [
+                "Meat and cheese board",
+                "Vegetarian grazing board",
+                "Mediterranean antipasto",
+                "Seasonal NZ produce",
+                "Mixed charcuterie"
+              ],
+              "Nuts and dried fruit": [
+                "Mixed nuts",
+                "Seasoned nuts",
+                "Dried fruit and nut mix",
+                "Trail mix",
+                "Mixed"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify snacks...",
+            "breadcrumbLabel": "Preferences"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "cake": {
+        "label": "Cake",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of cake?",
+            "options": [
+              "Celebration cake",
+              "Cupcake tower",
+              "Dessert tower",
+              "Simple decorated cake",
+              "No cake"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your cake...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "decorations": {
+        "label": "Decorations",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of decorations?",
+            "options": [
+              "Minimal / natural",
+              "Themed and coordinated",
+              "DIY",
+              "Flowers and centrepieces",
+              "Professional styling"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your decorations...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Any specifics?",
+            "dependsOn": {
+              "Minimal / natural": [
+                "Natural greenery",
+                "Simple candles",
+                "Minimal table settings",
+                "Fairy lights",
+                "Potted plants"
+              ],
+              "Themed and coordinated": [
+                "Colour palette (specify)",
+                "Event theme (specify)",
+                "Seasonal theme",
+                "Rustic / boho",
+                "Modern / minimalist"
+              ],
+              "DIY": [
+                "Handmade decorations",
+                "Balloon arch",
+                "Photo display",
+                "Table centrepieces",
+                "Bunting and banners"
+              ],
+              "Flowers and centrepieces": [
+                "Fresh flower centrepieces",
+                "Mixed floral arrangements",
+                "Single-stem bud vases",
+                "Dried flowers",
+                "Artificial florals"
+              ],
+              "Professional styling": [
+                "Full event styling",
+                "Backdrop and arch",
+                "Luxury table settings",
+                "Foliage and feature walls",
+                "Custom signage"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify decorations...",
+            "breadcrumbLabel": "Preferences"
+          }
+        ]
+      },
+      "activities_entertainment": {
+        "label": "Activities & Entertainment",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What activities or entertainment?",
+            "options": [
+              "Photo booth",
+              "Speeches and toasts",
+              "Games",
+              "Live music / DJ",
+              "Relaxed mingling"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe activities...",
+            "breadcrumbLabel": "Activities"
+          },
+          {
+            "level": 2,
+            "question": "Any specifics?",
+            "dependsOn": {
+              "Photo booth": [
+                "DIY photo booth",
+                "Professional photo booth",
+                "Polaroid station",
+                "Themed props",
+                "Digital photo booth"
+              ],
+              "Speeches and toasts": [
+                "Best friend speech",
+                "Family speeches",
+                "Couple's speech",
+                "Open mic toasts",
+                "Structured speech order"
+              ],
+              "Games": [
+                "How well do you know the couple",
+                "Engagement bingo",
+                "Trivia about the couple",
+                "Scavenger hunt",
+                "Mixed party games"
+              ],
+              "Live music / DJ": [
+                "Acoustic musician",
+                "DJ",
+                "Band",
+                "Spotify playlist",
+                "Mixed entertainment"
+              ],
+              "Relaxed mingling": [
+                "Background music",
+                "Conversation starters",
+                "Memory sharing station",
+                "Casual atmosphere",
+                "No planned activities"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify activities...",
+            "breadcrumbLabel": "Preferences"
+          }
+        ]
+      }
+    }
+  },
+  "easter": {
+    "label": "Easter",
+    "nzNotes": "Easter in NZ is in autumn (March/April). Cooler weather means roasts and warm dishes are popular. Roast lamb is the traditional NZ Easter centrepiece. Hot cross buns are central \u2014 often homemade. Feijoas are in season. ANZAC biscuits are a staple. Easter egg hunts for kids. It's a long weekend (Friday-Monday) so expect larger gatherings.",
+    "defaultCategories": [
+      "mains",
+      "dessert",
+      "sides_salads",
+      "drinks_non_alcoholic",
+      "table_snacks",
+      "cleanup"
+    ],
+    "categories": {
+      "mains": {
+        "label": "Mains",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of mains?",
+            "options": [
+              "Roast lamb (traditional NZ)",
+              "BBQ",
+              "Picnic spread",
+              "Family roast",
+              "Vegetarian"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your mains...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Which dishes?",
+            "dependsOn": {
+              "Roast lamb (traditional NZ)": [
+                "Roast leg of lamb",
+                "Rack of lamb",
+                "Slow-cooked lamb shoulder",
+                "Lamb shanks",
+                "Lamb with mint sauce"
+              ],
+              "BBQ": [
+                "Lamb chops",
+                "Sausages and burgers",
+                "Marinated chicken",
+                "Steak",
+                "Mixed autumn BBQ"
+              ],
+              "Picnic spread": [
+                "Quiche and salad",
+                "Cold meats and bread",
+                "Pies and sausage rolls",
+                "Sandwiches and wraps",
+                "Mixed picnic basket"
+              ],
+              "Family roast": [
+                "Roast beef",
+                "Roast chicken",
+                "Roast pork",
+                "Mixed roast meats",
+                "Roast with all the trimmings"
+              ],
+              "Vegetarian": [
+                "Vegetable Wellington",
+                "Stuffed peppers",
+                "Mushroom and lentil roast",
+                "Vegetable curry",
+                "Mixed vegetarian dishes"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify dishes...",
+            "breadcrumbLabel": "Dishes"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "dessert": {
+        "label": "Dessert",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of dessert?",
+            "options": [
+              "Hot cross bun pudding",
+              "Chocolate desserts",
+              "Simnel cake",
+              "Pavlova",
+              "ANZAC biscuits and cookies"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your dessert...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Which desserts?",
+            "dependsOn": {
+              "Hot cross bun pudding": [
+                "Hot cross bun bread and butter pudding",
+                "Hot cross bun French toast",
+                "Toasted hot cross buns with butter",
+                "Hot cross bun ice cream sandwiches",
+                "Mixed hot cross bun treats"
+              ],
+              "Chocolate desserts": [
+                "Easter egg chocolate mousse",
+                "Chocolate tart",
+                "Chocolate fondant",
+                "Chocolate brownie",
+                "Mixed chocolate selection"
+              ],
+              "Simnel cake": [
+                "Traditional simnel cake",
+                "Modern simnel cake",
+                "Mini simnel cakes",
+                "Simnel cupcakes",
+                "Simnel-inspired treats"
+              ],
+              "Pavlova": [
+                "Classic pavlova with cream and kiwifruit",
+                "Feijoa pavlova",
+                "Berry pavlova",
+                "Mini pavlovas",
+                "Autumnal pavlova"
+              ],
+              "ANZAC biscuits and cookies": [
+                "Classic ANZAC biscuits",
+                "ANZAC slice",
+                "Easter cookies",
+                "Ginger crunch",
+                "Mixed NZ biscuit tin"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify desserts...",
+            "breadcrumbLabel": "Desserts"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "sides_salads": {
+        "label": "Sides & Salads",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of sides?",
+            "options": ["Roast vegetables", "Classic sides", "Salads", "Bread", "Mixed"],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your sides...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Which sides?",
+            "dependsOn": {
+              "Roast vegetables": [
+                "Roast kumara",
+                "Roast potatoes",
+                "Roast pumpkin",
+                "Mixed roast veg",
+                "Honey-glazed carrots"
+              ],
+              "Classic sides": [
+                "Creamed corn",
+                "Steamed vegetables",
+                "Potato bake",
+                "Yorkshire puddings",
+                "Gravy and condiments"
+              ],
+              "Salads": [
+                "Autumn salad",
+                "Coleslaw",
+                "Potato salad",
+                "Garden salad",
+                "Mixed salad selection"
+              ],
+              "Bread": [
+                "Rewena bread",
+                "Hot cross buns",
+                "Garlic bread",
+                "Bread rolls",
+                "Mixed breads"
+              ],
+              "Mixed": [
+                "Roast veg and salads",
+                "Classic sides combo",
+                "Autumn seasonal mix",
+                "Light and hearty mix",
+                "Custom selection"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify sides...",
+            "breadcrumbLabel": "Sides"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "drinks_non_alcoholic": {
+        "label": "Non-Alcoholic Drinks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of non-alcoholic drinks?",
+            "options": [
+              "Soft drinks and juice",
+              "Mocktails",
+              "Hot drinks",
+              "Water and sparkling water",
+              "Mixed selection"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your drinks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Soft drinks and juice": [
+                "L&P and classic NZ fizzy",
+                "Fresh juices and cordials",
+                "Kombucha",
+                "Sparkling juice",
+                "Mixed soft drinks"
+              ],
+              "Mocktails": [
+                "Fruit-based mocktails",
+                "Virgin mojito / pi\u00f1a colada",
+                "Sparkling mocktails",
+                "Iced teas and lemonades",
+                "Shrubs and sodas"
+              ],
+              "Hot drinks": [
+                "Tea and coffee",
+                "Milo",
+                "Hot chocolate",
+                "Herbal teas",
+                "Full hot drink station"
+              ],
+              "Water and sparkling water": [
+                "Still water",
+                "Sparkling water",
+                "Infused water",
+                "Both still and sparkling"
+              ],
+              "Mixed selection": [
+                "Full non-alcoholic bar",
+                "Soft drinks, juice and water",
+                "Mocktails and soft drinks",
+                "Juice and kombucha"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify drinks...",
+            "breadcrumbLabel": "Preferences"
+          }
+        ]
+      },
+      "drinks_alcoholic": {
+        "label": "Alcoholic Drinks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of alcoholic drinks?",
+            "options": [
+              "Beer and cider",
+              "Wine",
+              "Spirits and cocktails",
+              "BYO (guests bring own)",
+              "Mixed / Full bar"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your drinks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Beer and cider": [
+                "NZ craft beer selection",
+                "Mainstream lager (Tui, Steinlager, DB)",
+                "Cider selection",
+                "Mix of beer and cider",
+                "Light / low-alcohol beer"
+              ],
+              "Wine": [
+                "NZ Sauvignon Blanc (Marlborough)",
+                "Red wine (Central Otago Pinot Noir)",
+                "Ros\u00e9",
+                "Sparkling / Champagne",
+                "Mixed wine selection"
+              ],
+              "Spirits and cocktails": [
+                "Pre-mixed cocktails",
+                "Gin and tonic bar",
+                "Rum and mixer",
+                "Whisky selection",
+                "Vodka and mixer"
+              ],
+              "BYO (guests bring own)": [
+                "Guests bring everything",
+                "Host provides ice and mixers only",
+                "Host provides non-alcoholic base"
+              ],
+              "Mixed / Full bar": [
+                "Full selection",
+                "Beer and wine only",
+                "Beer, wine and one spirit",
+                "Cocktail bar setup"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify drinks...",
+            "breadcrumbLabel": "Preferences"
+          },
+          {
+            "level": 3,
+            "question": "Anything else to consider?",
+            "options": [
+              "Provide low/no-alcohol alternatives",
+              "Under-18s will be present",
+              "Designated driver considerations"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other drink notes...",
+            "breadcrumbLabel": "Other"
+          }
+        ]
+      },
+      "table_snacks": {
+        "label": "Table Snacks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of snacks?",
+            "options": [
+              "Cheese and crackers",
+              "Dips and nibbles",
+              "Finger food",
+              "Charcuterie / grazing board",
+              "Nuts and dried fruit"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your snacks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Cheese and crackers": [
+                "NZ cheese selection (Kapiti, Mainland)",
+                "International cheese board",
+                "Simple cheddar and crackers",
+                "Brie and camembert",
+                "Aged and smoked cheeses"
+              ],
+              "Dips and nibbles": [
+                "Hummus and pita",
+                "Guacamole and corn chips",
+                "French onion dip",
+                "Salsa and corn chips",
+                "Mixed dip platter"
+              ],
+              "Finger food": [
+                "Mini pies and sausage rolls",
+                "Spring rolls",
+                "Stuffed mushrooms",
+                "Bruschetta",
+                "Mixed finger food"
+              ],
+              "Charcuterie / grazing board": [
+                "Meat and cheese board",
+                "Vegetarian grazing board",
+                "Mediterranean antipasto",
+                "Seasonal NZ produce",
+                "Mixed charcuterie"
+              ],
+              "Nuts and dried fruit": [
+                "Mixed nuts",
+                "Seasoned nuts",
+                "Dried fruit and nut mix",
+                "Trail mix",
+                "Mixed"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify snacks...",
+            "breadcrumbLabel": "Preferences"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "cake": {
+        "label": "Cake",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of cake?",
+            "options": [
+              "Simnel cake",
+              "Easter egg cake",
+              "Hot cross bun display",
+              "Simple celebration cake",
+              "No cake"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your cake...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "cleanup": {
+        "label": "Cleanup",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What areas need cleaning up?",
+            "options": [
+              "Kitchen and dishes",
+              "Outdoor / BBQ area",
+              "Full venue tidy-up",
+              "Rubbish and recycling",
+              "All areas"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe cleanup needs...",
+            "breadcrumbLabel": "Areas"
+          }
+        ]
+      }
+    }
+  },
+  "anniversary": {
+    "label": "Anniversary",
+    "nzNotes": "NZ anniversary celebrations range from intimate dinners to larger family gatherings. Often a more refined affair. Speeches and toasts are common. A slideshow or memory display is a popular touch. NZ wines pair well with the occasion. Pavlova or a decorated cake is typical. Consider the couple's original wedding theme or era for inspiration.",
+    "defaultCategories": [
+      "mains",
+      "entree_starters",
+      "dessert",
+      "drinks_alcoholic",
+      "drinks_non_alcoholic",
+      "cake",
+      "decorations"
+    ],
+    "categories": {
+      "mains": {
+        "label": "Mains",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of mains?",
+            "options": [
+              "Intimate dinner",
+              "Shared plates",
+              "Canap\u00e9s / cocktail style",
+              "Buffet",
+              "Themed cuisine"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your mains...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Which dishes?",
+            "dependsOn": {
+              "Intimate dinner": [
+                "Eye fillet steak",
+                "Roast lamb",
+                "Pan-seared fish",
+                "Chicken supreme",
+                "Seafood platter"
+              ],
+              "Shared plates": [
+                "Mediterranean sharing",
+                "NZ-style platters",
+                "Asian banquet",
+                "Tapas selection",
+                "Mixed sharing plates"
+              ],
+              "Canap\u00e9s / cocktail style": [
+                "Seafood canap\u00e9s",
+                "Mini sliders",
+                "Bruschetta and crostini",
+                "Asian-inspired bites",
+                "Mixed canap\u00e9 selection"
+              ],
+              "Buffet": [
+                "Classic NZ buffet",
+                "International buffet",
+                "Roast and salad buffet",
+                "Seafood buffet",
+                "Mixed buffet"
+              ],
+              "Themed cuisine": [
+                "Italian feast",
+                "French dinner",
+                "NZ fine dining",
+                "Asian fusion",
+                "Era-themed (match wedding year)"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify dishes...",
+            "breadcrumbLabel": "Dishes"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "entree_starters": {
+        "label": "Entr\u00e9e & Starters",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of starters?",
+            "options": [
+              "Antipasto / grazing platter",
+              "Soup",
+              "Finger food canap\u00e9s",
+              "Dips and breads",
+              "Salad entr\u00e9e"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your starters...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Antipasto / grazing platter": [
+                "Meat and cheese",
+                "Vegetarian grazing",
+                "Mediterranean antipasto",
+                "NZ charcuterie",
+                "Seasonal grazing"
+              ],
+              "Soup": [
+                "Seasonal vegetable",
+                "Pumpkin",
+                "Seafood chowder",
+                "French onion",
+                "Chilled gazpacho (summer)"
+              ],
+              "Finger food canap\u00e9s": [
+                "Bruschetta",
+                "Blini with smoked salmon",
+                "Mini arancini",
+                "Stuffed mushrooms",
+                "Mixed canap\u00e9s"
+              ],
+              "Dips and breads": [
+                "Hummus and pita",
+                "Tzatziki and crudit\u00e9s",
+                "Baba ganoush",
+                "Rewena bread and dips",
+                "Mixed dip platter"
+              ],
+              "Salad entr\u00e9e": [
+                "Caprese",
+                "Caesar",
+                "Garden salad",
+                "Roasted beetroot and goat cheese",
+                "Seasonal NZ greens"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify starters...",
+            "breadcrumbLabel": "Preferences"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "dessert": {
+        "label": "Dessert",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of dessert?",
+            "options": [
+              "Shared dessert (fondue or pavlova)",
+              "Plated individual desserts",
+              "Dessert table",
+              "Classic pavlova",
+              "Cheesecake"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your dessert...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Which desserts?",
+            "dependsOn": {
+              "Plated individual desserts": [
+                "Panna cotta",
+                "Cr\u00e8me br\u00fbl\u00e9e",
+                "Chocolate fondant",
+                "Tiramisu",
+                "Seasonal fruit dessert"
+              ],
+              "Dessert table": [
+                "Mini desserts selection",
+                "Classic NZ treats",
+                "Elegant petit fours",
+                "Mixed sweets",
+                "Themed dessert display"
+              ],
+              "Classic pavlova": [
+                "Classic pavlova with cream and kiwifruit",
+                "Berry pavlova",
+                "Mini pavlovas",
+                "Passionfruit pavlova",
+                "Deconstructed pavlova"
+              ],
+              "Cheesecake": [
+                "Baked New York style",
+                "No-bake classic",
+                "Lemon cheesecake",
+                "Chocolate cheesecake",
+                "Individual mini cheesecakes"
+              ],
+              "Shared dessert (fondue or pavlova)": [
+                "Chocolate fondue",
+                "Classic pavlova",
+                "Dessert sharing platter",
+                "Fruit and cheese",
+                "Mixed shared desserts"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify desserts...",
+            "breadcrumbLabel": "Desserts"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "drinks_alcoholic": {
+        "label": "Alcoholic Drinks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of alcoholic drinks?",
+            "options": [
+              "Beer and cider",
+              "Wine",
+              "Spirits and cocktails",
+              "BYO (guests bring own)",
+              "Mixed / Full bar"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your drinks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Beer and cider": [
+                "NZ craft beer selection",
+                "Mainstream lager (Tui, Steinlager, DB)",
+                "Cider selection",
+                "Mix of beer and cider",
+                "Light / low-alcohol beer"
+              ],
+              "Wine": [
+                "NZ Sauvignon Blanc (Marlborough)",
+                "Red wine (Central Otago Pinot Noir)",
+                "Ros\u00e9",
+                "Sparkling / Champagne",
+                "Mixed wine selection"
+              ],
+              "Spirits and cocktails": [
+                "Pre-mixed cocktails",
+                "Gin and tonic bar",
+                "Rum and mixer",
+                "Whisky selection",
+                "Vodka and mixer"
+              ],
+              "BYO (guests bring own)": [
+                "Guests bring everything",
+                "Host provides ice and mixers only",
+                "Host provides non-alcoholic base"
+              ],
+              "Mixed / Full bar": [
+                "Full selection",
+                "Beer and wine only",
+                "Beer, wine and one spirit",
+                "Cocktail bar setup"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify drinks...",
+            "breadcrumbLabel": "Preferences"
+          },
+          {
+            "level": 3,
+            "question": "Anything else to consider?",
+            "options": [
+              "Provide low/no-alcohol alternatives",
+              "Under-18s will be present",
+              "Designated driver considerations"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other drink notes...",
+            "breadcrumbLabel": "Other"
+          }
+        ]
+      },
+      "drinks_non_alcoholic": {
+        "label": "Non-Alcoholic Drinks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of non-alcoholic drinks?",
+            "options": [
+              "Soft drinks and juice",
+              "Mocktails",
+              "Hot drinks",
+              "Water and sparkling water",
+              "Mixed selection"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your drinks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Soft drinks and juice": [
+                "L&P and classic NZ fizzy",
+                "Fresh juices and cordials",
+                "Kombucha",
+                "Sparkling juice",
+                "Mixed soft drinks"
+              ],
+              "Mocktails": [
+                "Fruit-based mocktails",
+                "Virgin mojito / pi\u00f1a colada",
+                "Sparkling mocktails",
+                "Iced teas and lemonades",
+                "Shrubs and sodas"
+              ],
+              "Hot drinks": [
+                "Tea and coffee",
+                "Milo",
+                "Hot chocolate",
+                "Herbal teas",
+                "Full hot drink station"
+              ],
+              "Water and sparkling water": [
+                "Still water",
+                "Sparkling water",
+                "Infused water",
+                "Both still and sparkling"
+              ],
+              "Mixed selection": [
+                "Full non-alcoholic bar",
+                "Soft drinks, juice and water",
+                "Mocktails and soft drinks",
+                "Juice and kombucha"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify drinks...",
+            "breadcrumbLabel": "Preferences"
+          }
+        ]
+      },
+      "cake": {
+        "label": "Cake",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of cake?",
+            "options": [
+              "Tiered celebration cake",
+              "Naked cake",
+              "Cheesecake",
+              "Simple decorated cake",
+              "No cake"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your cake...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "decorations": {
+        "label": "Decorations",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of decorations?",
+            "options": [
+              "Minimal / natural",
+              "Themed and coordinated",
+              "DIY",
+              "Flowers and centrepieces",
+              "Professional styling"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your decorations...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Any specifics?",
+            "dependsOn": {
+              "Minimal / natural": [
+                "Natural greenery",
+                "Simple candles",
+                "Minimal table settings",
+                "Fairy lights",
+                "Potted plants"
+              ],
+              "Themed and coordinated": [
+                "Colour palette (specify)",
+                "Event theme (specify)",
+                "Seasonal theme",
+                "Rustic / boho",
+                "Modern / minimalist"
+              ],
+              "DIY": [
+                "Handmade decorations",
+                "Balloon arch",
+                "Photo display",
+                "Table centrepieces",
+                "Bunting and banners"
+              ],
+              "Flowers and centrepieces": [
+                "Fresh flower centrepieces",
+                "Mixed floral arrangements",
+                "Single-stem bud vases",
+                "Dried flowers",
+                "Artificial florals"
+              ],
+              "Professional styling": [
+                "Full event styling",
+                "Backdrop and arch",
+                "Luxury table settings",
+                "Foliage and feature walls",
+                "Custom signage"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify decorations...",
+            "breadcrumbLabel": "Preferences"
+          }
+        ]
+      },
+      "activities_entertainment": {
+        "label": "Activities & Entertainment",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of entertainment?",
+            "options": [
+              "Slideshow / memory display",
+              "Speeches and toasts",
+              "Live music",
+              "Photo booth",
+              "Relaxed"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe activities...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any specifics?",
+            "dependsOn": {
+              "Slideshow / memory display": [
+                "Photo slideshow",
+                "Memory timeline display",
+                "Photo wall",
+                "Video montage",
+                "Scrapbook display"
+              ],
+              "Speeches and toasts": [
+                "Formal speeches",
+                "Casual toasts",
+                "Open mic for guests",
+                "Pre-planned tributes",
+                "Mixed speeches and toasts"
+              ],
+              "Live music": [
+                "Solo musician",
+                "Small band",
+                "DJ",
+                "Background acoustic",
+                "Full entertainment setup"
+              ],
+              "Photo booth": [
+                "DIY photo booth",
+                "Professional photo booth",
+                "Polaroid station",
+                "Themed props",
+                "Digital photo station"
+              ],
+              "Relaxed": [
+                "Background music only",
+                "Casual mingling",
+                "Garden games",
+                "No planned entertainment",
+                "Simple and relaxed"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify activities...",
+            "breadcrumbLabel": "Preferences"
+          }
+        ]
+      }
+    }
+  },
+  "farewell": {
+    "label": "Farewell",
+    "nzNotes": "NZ farewells are warm, communal events \u2014 whether someone is heading overseas (OE is a kiwi tradition), changing jobs, or moving towns. Food is often casual and shared. 'Bring a plate' culture is strong. Speeches and tributes are common. Destination-themed food is a fun touch if someone is moving overseas. Lamingtons and classic NZ baking often feature.",
+    "defaultCategories": [
+      "table_snacks",
+      "mains",
+      "drinks_alcoholic",
+      "drinks_non_alcoholic",
+      "cake",
+      "cleanup"
+    ],
+    "categories": {
+      "table_snacks": {
+        "label": "Table Snacks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of snacks?",
+            "options": [
+              "Cheese and crackers",
+              "Dips and nibbles",
+              "Finger food",
+              "Charcuterie / grazing board",
+              "Nuts and dried fruit"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your snacks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Cheese and crackers": [
+                "NZ cheese selection (Kapiti, Mainland)",
+                "International cheese board",
+                "Simple cheddar and crackers",
+                "Brie and camembert",
+                "Aged and smoked cheeses"
+              ],
+              "Dips and nibbles": [
+                "Hummus and pita",
+                "Guacamole and corn chips",
+                "French onion dip",
+                "Salsa and corn chips",
+                "Mixed dip platter"
+              ],
+              "Finger food": [
+                "Mini pies and sausage rolls",
+                "Spring rolls",
+                "Stuffed mushrooms",
+                "Bruschetta",
+                "Mixed finger food"
+              ],
+              "Charcuterie / grazing board": [
+                "Meat and cheese board",
+                "Vegetarian grazing board",
+                "Mediterranean antipasto",
+                "Seasonal NZ produce",
+                "Mixed charcuterie"
+              ],
+              "Nuts and dried fruit": [
+                "Mixed nuts",
+                "Seasoned nuts",
+                "Dried fruit and nut mix",
+                "Trail mix",
+                "Mixed"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify snacks...",
+            "breadcrumbLabel": "Preferences"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "mains": {
+        "label": "Mains",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of mains?",
+            "options": ["Finger food", "Shared plates", "BBQ", "Themed (destination)", "Buffet"],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your mains...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Which dishes?",
+            "dependsOn": {
+              "Finger food": [
+                "Mini pies and sausage rolls",
+                "Sliders and mini burgers",
+                "Spring rolls",
+                "Bruschetta and crostini",
+                "Mixed finger food"
+              ],
+              "Shared plates": [
+                "Mediterranean sharing",
+                "NZ-style platters",
+                "Asian shared plates",
+                "Tapas",
+                "Mixed sharing"
+              ],
+              "BBQ": [
+                "Classic sausage sizzle",
+                "Steak and chops",
+                "Marinated chicken",
+                "Seafood BBQ",
+                "Mixed BBQ"
+              ],
+              "Themed (destination)": [
+                "British pub food",
+                "American BBQ",
+                "Asian street food",
+                "European cuisine",
+                "Destination-inspired menu"
+              ],
+              "Buffet": [
+                "Classic NZ buffet",
+                "International buffet",
+                "Comfort food buffet",
+                "Light buffet",
+                "Mixed buffet"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify dishes...",
+            "breadcrumbLabel": "Dishes"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "dessert": {
+        "label": "Dessert",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What style of dessert?",
+            "options": [
+              "Sweet treats platter",
+              "Pavlova",
+              "Lamingtons",
+              "Simple desserts",
+              "Mixed"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your dessert...",
+            "breadcrumbLabel": "Style"
+          },
+          {
+            "level": 2,
+            "question": "Which desserts?",
+            "dependsOn": {
+              "Sweet treats platter": [
+                "Mini slices and brownies",
+                "Cookies and biscuits",
+                "NZ classics (lamingtons, lolly cake)",
+                "Mixed sweet platter",
+                "Themed treats"
+              ],
+              "Pavlova": [
+                "Classic pavlova with cream and kiwifruit",
+                "Berry pavlova",
+                "Mini pavlovas",
+                "Passionfruit pavlova",
+                "Deconstructed pavlova"
+              ],
+              "Lamingtons": [
+                "Classic chocolate lamingtons",
+                "Raspberry lamingtons",
+                "Mini lamingtons",
+                "Lamington cake",
+                "Mixed NZ treats"
+              ],
+              "Simple desserts": [
+                "Fruit platter",
+                "Ice cream",
+                "Brownies",
+                "Cookies",
+                "Mixed simple treats"
+              ],
+              "Mixed": [
+                "Pavlova and lamingtons",
+                "Sweet treats and fruit",
+                "Dessert buffet",
+                "NZ classics spread",
+                "Mixed selection"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify desserts...",
+            "breadcrumbLabel": "Desserts"
+          },
+          {
+            "level": 3,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "drinks_alcoholic": {
+        "label": "Alcoholic Drinks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of alcoholic drinks?",
+            "options": [
+              "Beer and cider",
+              "Wine",
+              "Spirits and cocktails",
+              "BYO (guests bring own)",
+              "Mixed / Full bar"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your drinks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Beer and cider": [
+                "NZ craft beer selection",
+                "Mainstream lager (Tui, Steinlager, DB)",
+                "Cider selection",
+                "Mix of beer and cider",
+                "Light / low-alcohol beer"
+              ],
+              "Wine": [
+                "NZ Sauvignon Blanc (Marlborough)",
+                "Red wine (Central Otago Pinot Noir)",
+                "Ros\u00e9",
+                "Sparkling / Champagne",
+                "Mixed wine selection"
+              ],
+              "Spirits and cocktails": [
+                "Pre-mixed cocktails",
+                "Gin and tonic bar",
+                "Rum and mixer",
+                "Whisky selection",
+                "Vodka and mixer"
+              ],
+              "BYO (guests bring own)": [
+                "Guests bring everything",
+                "Host provides ice and mixers only",
+                "Host provides non-alcoholic base"
+              ],
+              "Mixed / Full bar": [
+                "Full selection",
+                "Beer and wine only",
+                "Beer, wine and one spirit",
+                "Cocktail bar setup"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify drinks...",
+            "breadcrumbLabel": "Preferences"
+          },
+          {
+            "level": 3,
+            "question": "Anything else to consider?",
+            "options": [
+              "Provide low/no-alcohol alternatives",
+              "Under-18s will be present",
+              "Designated driver considerations"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other drink notes...",
+            "breadcrumbLabel": "Other"
+          }
+        ]
+      },
+      "drinks_non_alcoholic": {
+        "label": "Non-Alcoholic Drinks",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of non-alcoholic drinks?",
+            "options": [
+              "Soft drinks and juice",
+              "Mocktails",
+              "Hot drinks",
+              "Water and sparkling water",
+              "Mixed selection"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your drinks...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any preferences?",
+            "dependsOn": {
+              "Soft drinks and juice": [
+                "L&P and classic NZ fizzy",
+                "Fresh juices and cordials",
+                "Kombucha",
+                "Sparkling juice",
+                "Mixed soft drinks"
+              ],
+              "Mocktails": [
+                "Fruit-based mocktails",
+                "Virgin mojito / pi\u00f1a colada",
+                "Sparkling mocktails",
+                "Iced teas and lemonades",
+                "Shrubs and sodas"
+              ],
+              "Hot drinks": [
+                "Tea and coffee",
+                "Milo",
+                "Hot chocolate",
+                "Herbal teas",
+                "Full hot drink station"
+              ],
+              "Water and sparkling water": [
+                "Still water",
+                "Sparkling water",
+                "Infused water",
+                "Both still and sparkling"
+              ],
+              "Mixed selection": [
+                "Full non-alcoholic bar",
+                "Soft drinks, juice and water",
+                "Mocktails and soft drinks",
+                "Juice and kombucha"
+              ]
+            },
+            "freeText": true,
+            "freeTextPlaceholder": "Specify drinks...",
+            "breadcrumbLabel": "Preferences"
+          }
+        ]
+      },
+      "cake": {
+        "label": "Cake",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What type of cake?",
+            "options": [
+              "Decorated farewell cake",
+              "Sheet cake",
+              "Cupcake tower",
+              "Lamington cake",
+              "Simple cake"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe your cake...",
+            "breadcrumbLabel": "Type"
+          },
+          {
+            "level": 2,
+            "question": "Any dietary requirements to accommodate?",
+            "options": [
+              "Vegetarian option needed",
+              "Vegan option needed",
+              "Gluten-free needed",
+              "Dairy-free needed",
+              "Nut-free needed",
+              "Halal needed"
+            ],
+            "multiSelect": true,
+            "freeText": true,
+            "freeTextPlaceholder": "Other dietary needs...",
+            "breadcrumbLabel": "Dietary"
+          }
+        ]
+      },
+      "cleanup": {
+        "label": "Cleanup",
+        "levels": [
+          {
+            "level": 1,
+            "question": "What areas need cleaning up?",
+            "options": [
+              "Kitchen and dishes",
+              "Outdoor / BBQ area",
+              "Full venue tidy-up",
+              "Rubbish and recycling",
+              "All areas"
+            ],
+            "freeText": true,
+            "freeTextPlaceholder": "Describe cleanup needs...",
+            "breadcrumbLabel": "Areas"
           }
         ]
       }
