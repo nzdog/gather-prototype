@@ -5,6 +5,7 @@ Before starting work on this ticket:
 3. Confirm you're on the new branch before making any changes
 
 Previous tickets completed:
+
 - Ticket 1.1: Added ReachabilityTier enum and contactMethod to PersonEvent
 - Ticket 1.2: Added Household and HouseholdMember models
 - Ticket 1.3: Enhanced shared link claim, added contact-info upgrade endpoint
@@ -37,17 +38,18 @@ src/app/(dashboard)/...           — Show escalation status
 ### 1. Eligibility (`nudge-eligibility.ts`)
 
 Find proxy nudge targets where:
+
 - `HouseholdMember.claimedAt IS NULL`
 - `HouseholdMember.escalatedAt IS NULL`
 - Household proxy has valid phone (`PersonEvent.contactMethod = SMS`)
 
 ### 2. Schedule
 
-| Trigger | Condition | Action |
-|---------|-----------|--------|
-| 24h after `Household.createdAt` | `proxyNudgeCount = 0` | Send first nudge, increment count |
-| 48h after `Household.createdAt` | `proxyNudgeCount = 1` | Send second nudge, increment count |
-| After 2nd nudge | `proxyNudgeCount = 2` | Set `escalatedAt = now()`, stop nudging |
+| Trigger                         | Condition             | Action                                  |
+| ------------------------------- | --------------------- | --------------------------------------- |
+| 24h after `Household.createdAt` | `proxyNudgeCount = 0` | Send first nudge, increment count       |
+| 48h after `Household.createdAt` | `proxyNudgeCount = 1` | Send second nudge, increment count      |
+| After 2nd nudge                 | `proxyNudgeCount = 2` | Set `escalatedAt = now()`, stop nudging |
 
 ### 3. Template (`nudge-templates.ts`)
 
@@ -60,15 +62,16 @@ PROXY_HOUSEHOLD_REMINDER: {
 
 ### 4. Error Handling
 
-| Condition | Response |
-|-----------|----------|
-| Proxy has no phone | Skip, log warning |
-| SMS send fails | Log error, don't increment `proxyNudgeCount` |
-| Household deleted mid-cron | Skip gracefully |
+| Condition                  | Response                                     |
+| -------------------------- | -------------------------------------------- |
+| Proxy has no phone         | Skip, log warning                            |
+| SMS send fails             | Log error, don't increment `proxyNudgeCount` |
+| Household deleted mid-cron | Skip gracefully                              |
 
 ### 5. Dashboard
 
 Show on household row:
+
 - Nudge count badge (0/1/2)
 - "Escalated" label when `escalatedAt` is set
 - Last nudge timestamp
@@ -120,9 +123,8 @@ Show on household row:
 7. **Verification as script** — reproducible steps with assertions
 8. **Edge cases** — the gotchas that would otherwise surface in PR review
 
-
-
 ---
+
 After completing all work and verification:
 
 1. Create `TICKET_1.5_IMPLEMENTATION.md` in the project root documenting:
@@ -133,6 +135,7 @@ After completing all work and verification:
    - Any implementation decisions or notes
 
 2. Stage and commit all changes:
+
 ```bash
 git add .
 git commit -m "Ticket 1.5: Proxy nudge logic for unclaimed household slots"

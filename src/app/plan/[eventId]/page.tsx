@@ -1651,6 +1651,22 @@ export default function PlanEditorPage() {
           onClose={() => setHostDescriptionModalOpen(false)}
           onGenerate={handleGeneratePlan}
           onSkip={() => handleGeneratePlan()}
+          eventContext={
+            event
+              ? {
+                  occasionType: event.occasionType,
+                  guestCount: event.guestCount,
+                  startDate: event.startDate,
+                  venueName: event.venueName,
+                  venueKitchenAccess: event.venueKitchenAccess,
+                  dietaryGlutenFree: event.dietaryGlutenFree,
+                  dietaryDairyFree: event.dietaryDairyFree,
+                  dietaryVegetarian: event.dietaryVegetarian,
+                  dietaryVegan: event.dietaryVegan,
+                  dietaryAllergies: event.dietaryAllergies,
+                }
+              : undefined
+          }
         />
 
         {/* Edit Event Modal */}

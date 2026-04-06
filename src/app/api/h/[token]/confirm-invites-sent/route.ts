@@ -30,10 +30,7 @@ export async function POST(_req: NextRequest, context: { params: Promise<{ token
   }
 
   if (event.status !== 'CONFIRMING') {
-    return NextResponse.json(
-      { error: 'Event must be in CONFIRMING status' },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: 'Event must be in CONFIRMING status' }, { status: 400 });
   }
 
   const now = new Date();

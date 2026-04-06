@@ -9,7 +9,11 @@ interface SetupChecklistBannerProps {
   onMoveToConfirming?: () => void;
 }
 
-export default function SetupChecklistBanner({ progress, onDismiss, onMoveToConfirming }: SetupChecklistBannerProps) {
+export default function SetupChecklistBanner({
+  progress,
+  onDismiss,
+  onMoveToConfirming,
+}: SetupChecklistBannerProps) {
   const { steps, completedCount, totalSteps, allComplete, nextStep } = progress;
 
   const handleStepClick = (step: SetupStep) => {
