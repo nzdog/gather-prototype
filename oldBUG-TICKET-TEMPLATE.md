@@ -124,29 +124,3 @@ Stop and report (do not proceed) if:
 [ ] Evidence package assembled
 [ ] Commit hash recorded
 [ ] No stop conditions triggered without resolution
-
----
-
-## Evidence (Executor-Completed)
-
-> This section is filled in by the executor before committing.
-> Do not leave blank. Do not commit without completing this section.
-
-**Root cause confirmed**
-[One paragraph — what was actually wrong and where]
-
-**Files changed**
-[List each file and what changed — one line per file]
-
-**Test results**
-- RED: [paste output or "N/A — Medium/Low severity"]
-- GREEN: [paste output]
-
-**Assertions checked**
-- [ ] [assertion 1]
-- [ ] [assertion 2]
-- [ ] Adjacent flows verified: [list]
-
-**Security suite:** [16/16 or note any deviation]
-
-**Commit hash:** [hash]
