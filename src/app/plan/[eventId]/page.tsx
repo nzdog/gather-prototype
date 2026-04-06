@@ -18,6 +18,7 @@ import {
   Eye,
   Send,
   Lock,
+  Download,
 } from 'lucide-react';
 import ConflictList from '@/components/plan/ConflictList';
 import GateCheck from '@/components/plan/GateCheck';
@@ -116,6 +117,7 @@ interface Item {
   team: {
     id: string;
     name: string;
+    displayOrder: number;
   };
   assignment: {
     response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
@@ -195,6 +197,7 @@ export default function PlanEditorPage() {
   const [error, setError] = useState('');
 
   const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
+  const [expandedItemCategories, setExpandedItemCategories] = useState<Set<string>>(new Set());
   const [_editingItemId, _setEditingItemId] = useState<string | null>(null);
   const [_editQuantityAmount, _setEditQuantityAmount] = useState('');
   const [_editQuantityUnit, _setEditQuantityUnit] = useState('SERVINGS');
@@ -1710,98 +1713,243 @@ export default function PlanEditorPage() {
           title="Items & Quantities"
           icon={<Package className="w-6 h-6" />}
           headerActions={
-            event?.status === 'DRAFT' ? (
-              <button
-                onClick={() => {
-                  setSelectedTeamForItem(null);
-                  setAddItemModalOpen(true);
-                }}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition"
-              >
-                <Plus className="w-4 h-4" />
-                Add Item
-              </button>
-            ) : undefined
+            <div className="flex items-center gap-2">
+              {items.length > 0 && (
+                <button
+                  onClick={() => {
+                    const printWindow = window.open('', '_blank');
+                    if (!printWindow) return;
+
+                    // Build sorted categories matching accordion order
+                    const grouped = items.reduce<Record<string, Item[]>>((acc, item) => {
+                      const key = item.team.name;
+                      if (!acc[key]) acc[key] = [];
+                      acc[key].push(item);
+                      return acc;
+                    }, {});
+                    const hasOrder = items.some((i) => i.team.displayOrder > 0);
+                    const cats = Object.keys(grouped).sort((a, b) => {
+                      if (hasOrder) {
+                        const oA = grouped[a][0]?.team.displayOrder ?? 0;
+                        const oB = grouped[b][0]?.team.displayOrder ?? 0;
+                        if (oA !== oB) return oA - oB;
+                      }
+                      return a.localeCompare(b);
+                    });
+
+                    const eventName = event?.name || 'Event';
+                    const eventDate = event?.startDate
+                      ? new Date(event.startDate).toLocaleDateString('en-NZ', {
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric',
+                        })
+                      : '';
+
+                    const gatherLogo = `<svg viewBox="0 0 240 40" fill="none" xmlns="http://www.w3.org/2000/svg" style="height:32px;width:auto;"><circle cx="7" cy="7" r="2.5" fill="#6b7c6f"/><circle cx="15" cy="7" r="2.5" fill="#6b7c6f"/><circle cx="23" cy="7" r="2.5" fill="#6b7c6f"/><circle cx="31" cy="7" r="2.5" fill="#6b7c6f"/><circle cx="7" cy="15" r="2.5" fill="#6b7c6f"/><circle cx="15" cy="15" r="2.5" fill="#6b7c6f"/><circle cx="23" cy="15" r="2.5" fill="rgba(107,124,111,0.3)"/><circle cx="31" cy="15" r="2.5" fill="rgba(107,124,111,0.3)"/><circle cx="7" cy="23" r="2.5" fill="#6b7c6f"/><circle cx="15" cy="23" r="2.5" fill="#6b7c6f"/><circle cx="23" cy="23" r="2.5" fill="#6b7c6f"/><circle cx="31" cy="23" r="2.5" fill="#6b7c6f"/><circle cx="7" cy="31" r="2.5" fill="#6b7c6f"/><circle cx="15" cy="31" r="2.5" fill="#6b7c6f"/><circle cx="23" cy="31" r="2.5" fill="#6b7c6f"/><circle cx="31" cy="31" r="2.5" fill="#6b7c6f"/><text x="56" y="29" fill="#6b7c6f" style="font-family:'Source Serif 4',Georgia,serif;font-size:28px;font-weight:400;letter-spacing:-0.01em;">Gather</text></svg>`;
+
+                    let html = `<!DOCTYPE html><html><head><title>${eventName} — Items</title>
+                      <style>
+                        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 800px; margin: 0 auto; padding: 24px; color: #111; }
+                        .logo { margin-bottom: 16px; }
+                        h1 { font-size: 20px; margin-bottom: 2px; }
+                        .date { font-size: 14px; color: #666; margin-bottom: 24px; }
+                        h2 { font-size: 16px; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin-top: 20px; }
+                        table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+                        th, td { text-align: left; padding: 6px 8px; font-size: 13px; border-bottom: 1px solid #eee; }
+                        th { font-weight: 600; color: #555; font-size: 11px; text-transform: uppercase; }
+                        .qty { color: #555; }
+                        .status-confirmed { color: #16a34a; }
+                        .status-pending { color: #d97706; }
+                        .status-unassigned { color: #999; font-style: italic; }
+                        @media print { body { padding: 0; } .logo svg text { fill: #333; } }
+                      </style></head><body>`;
+                    html += `<div class="logo">${gatherLogo}</div>`;
+                    html += `<h1>${eventName}</h1>`;
+                    if (eventDate) html += `<div class="date">${eventDate}</div>`;
+
+                    for (const cat of cats) {
+                      const catItems = grouped[cat];
+                      html += `<h2>${cat}</h2><table><thead><tr><th>Item</th><th>Qty</th><th>Assigned To</th><th>Status</th></tr></thead><tbody>`;
+                      for (const item of catItems) {
+                        const qty =
+                          item.quantityAmount && item.quantityUnit
+                            ? `${item.quantityAmount} ${item.quantityUnit}`
+                            : item.quantityText || '—';
+                        const assignee =
+                          item.assignment?.person?.name ||
+                          '<span class="status-unassigned">Unassigned</span>';
+                        const status = item.assignment
+                          ? `<span class="status-${item.assignment.response === 'ACCEPTED' ? 'confirmed' : 'pending'}">${item.assignment.response === 'ACCEPTED' ? 'Confirmed' : 'Pending'}</span>`
+                          : '';
+                        html += `<tr><td>${item.name}</td><td class="qty">${qty}</td><td>${assignee}</td><td>${status}</td></tr>`;
+                      }
+                      html += `</tbody></table>`;
+                    }
+
+                    html += `</body></html>`;
+                    printWindow.document.write(html);
+                    printWindow.document.close();
+                    printWindow.print();
+                  }}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition"
+                >
+                  <Download className="w-4 h-4" />
+                  Download PDF
+                </button>
+              )}
+              {event?.status === 'DRAFT' && (
+                <button
+                  onClick={() => {
+                    setSelectedTeamForItem(null);
+                    setAddItemModalOpen(true);
+                  }}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Item
+                </button>
+              )}
+            </div>
           }
         >
-          <div className="space-y-3">
-            {items.map((item) => {
-              const needsAction =
-                item.critical &&
-                item.quantityState === 'PLACEHOLDER' &&
-                !item.placeholderAcknowledged;
+          {(() => {
+            // Group items by team name
+            const grouped = [...items].reduce<Record<string, Item[]>>((acc, item) => {
+              const key = item.team.name;
+              if (!acc[key]) acc[key] = [];
+              acc[key].push(item);
+              return acc;
+            }, {});
+            // Sort categories by displayOrder when available (guided build),
+            // fall back to alphabetical (quick generate / manual teams)
+            const hasDisplayOrder = items.some((item) => item.team.displayOrder > 0);
+            const categoryNames = Object.keys(grouped).sort((a, b) => {
+              if (hasDisplayOrder) {
+                const orderA = grouped[a][0]?.team.displayOrder ?? 0;
+                const orderB = grouped[b][0]?.team.displayOrder ?? 0;
+                if (orderA !== orderB) return orderA - orderB;
+              }
+              return a.localeCompare(b);
+            });
 
-              // Check if item was created in the last 60 seconds (newly regenerated)
-              const isNew =
-                item.createdAt && new Date().getTime() - new Date(item.createdAt).getTime() < 60000;
+            return (
+              <div className="space-y-2">
+                {categoryNames.map((categoryName) => {
+                  const categoryItems = grouped[categoryName];
+                  const isExpanded = expandedItemCategories.has(categoryName);
 
-              return (
-                <div
-                  key={item.id}
-                  className={`border rounded-lg p-4 ${
-                    needsAction ? 'border-orange-300 bg-orange-50' : 'border-gray-200'
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-medium text-gray-900">{item.name}</h3>
-                        {isNew && (
-                          <span className="px-2 py-0.5 text-xs font-bold bg-orange-500 text-white rounded-md animate-pulse">
-                            NEW
-                          </span>
-                        )}
-                        {item.critical && (
-                          <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded">
-                            CRITICAL
-                          </span>
-                        )}
-                        <span className="text-sm text-gray-500">{item.team.name}</span>
-                      </div>
-
-                      <div className="mb-2">
-                        <ItemStatusBadges assignment={item.assignment} />
-                      </div>
-
-                      {item.description && (
-                        <p className="text-sm text-gray-600 mb-2">{item.description}</p>
-                      )}
-
-                      <DropOffDisplay
-                        dropOffLocation={item.dropOffLocation}
-                        dropOffAt={item.dropOffAt}
-                        dropOffNote={item.dropOffNote}
-                        variant="inline"
-                        showIcons={true}
-                        className="mb-2"
-                      />
-
-                      <div className="flex items-center gap-2 text-sm text-gray-600 mt-2">
-                        {item.quantityAmount && item.quantityUnit ? (
-                          <span className="font-medium text-gray-900">
-                            {item.quantityAmount} {item.quantityUnit}
-                          </span>
-                        ) : item.quantityText ? (
-                          <span className="text-gray-700 italic">{item.quantityText}</span>
-                        ) : (
-                          <span className="text-orange-600">No quantity set</span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2 ml-4">
+                  return (
+                    <div
+                      key={categoryName}
+                      className="border border-gray-200 rounded-lg overflow-hidden"
+                    >
+                      {/* Accordion Header */}
                       <button
-                        onClick={() => setEditingItem(item)}
-                        className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md"
+                        onClick={() => {
+                          setExpandedItemCategories((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(categoryName)) {
+                              next.delete(categoryName);
+                            } else {
+                              next.add(categoryName);
+                            }
+                            return next;
+                          });
+                        }}
+                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
                       >
-                        Edit
+                        <div className="flex items-center gap-3">
+                          {isExpanded ? (
+                            <ChevronDown className="w-5 h-5 text-gray-400" />
+                          ) : (
+                            <ChevronRight className="w-5 h-5 text-gray-400" />
+                          )}
+                          <span className="font-medium text-gray-900">{categoryName}</span>
+                          <span className="text-sm text-gray-500">
+                            · {categoryItems.length} {categoryItems.length === 1 ? 'item' : 'items'}
+                          </span>
+                        </div>
                       </button>
+
+                      {/* Accordion Body — three-column table */}
+                      <div
+                        className={`transition-all duration-200 ease-in-out overflow-hidden ${
+                          isExpanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'
+                        }`}
+                      >
+                        <div className="border-t border-gray-200">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wider">
+                                <th className="px-4 py-2 font-medium">Item</th>
+                                <th className="px-4 py-2 font-medium">Category</th>
+                                <th className="px-4 py-2 font-medium text-right">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {categoryItems.map((item) => {
+                                const isNew =
+                                  item.createdAt &&
+                                  new Date().getTime() - new Date(item.createdAt).getTime() < 60000;
+
+                                return (
+                                  <tr key={item.id} className="hover:bg-gray-50">
+                                    <td className="px-4 py-3">
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-medium text-gray-900">
+                                          {item.name}
+                                        </span>
+                                        {isNew && (
+                                          <span className="px-1.5 py-0.5 text-xs font-bold bg-orange-500 text-white rounded animate-pulse">
+                                            NEW
+                                          </span>
+                                        )}
+                                        {item.critical && (
+                                          <span className="px-1.5 py-0.5 bg-red-100 text-red-700 text-xs rounded">
+                                            CRITICAL
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="text-xs text-gray-500 mt-0.5">
+                                        {item.quantityAmount && item.quantityUnit ? (
+                                          <span>
+                                            {item.quantityAmount} {item.quantityUnit}
+                                          </span>
+                                        ) : item.quantityText ? (
+                                          <span className="italic">{item.quantityText}</span>
+                                        ) : (
+                                          <span className="text-orange-600">No quantity set</span>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-3 text-gray-400">{item.team.name}</td>
+                                    <td className="px-4 py-3 text-right">
+                                      <button
+                                        onClick={() => setEditingItem(item)}
+                                        className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md"
+                                      >
+                                        Edit
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
                     </div>
+                  );
+                })}
+                {categoryNames.length === 0 && (
+                  <div className="text-center py-12 text-gray-500">
+                    <p>No items yet. Generate a plan or add items manually.</p>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                )}
+              </div>
+            );
+          })()}
         </SectionExpandModal>
 
         {/* People Expansion */}

@@ -215,7 +215,8 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
     let teamsCreated = 0;
     let itemsCreated = 0;
 
-    for (const teamData of aiResponse.teams) {
+    for (let i = 0; i < aiResponse.teams.length; i++) {
+      const teamData = aiResponse.teams[i];
       const team = await prisma.team.create({
         data: {
           name: teamData.name,
@@ -224,6 +225,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
           eventId,
           coordinatorId: resolveGeneratedTeamCoordinatorId(),
           source: 'GENERATED',
+          displayOrder: i + 1,
         },
       });
 

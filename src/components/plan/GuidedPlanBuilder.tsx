@@ -234,6 +234,20 @@ function compilePromptInline(
     }
   }
 
+  // Build explicit team name instruction from selected categories
+  const selectedCategoryNames = Object.keys(selections)
+    .map((key) => categoryLabels[key] || key)
+    .filter(Boolean);
+
+  if (selectedCategoryNames.length > 0) {
+    parts.push(
+      `TEAM NAMES INSTRUCTION: Use exactly these team names, in this order: [${selectedCategoryNames.join(', ')}]. Do not rename, merge, or reorder teams. Each team name must match exactly.`
+    );
+    parts.push(
+      `CATEGORY RESTRICTION: Generate items ONLY for the teams listed above. Do not create any additional teams or categories beyond those specified. If you would normally suggest items for a category not in this list (e.g. setup, equipment, cleanup), omit them entirely.`
+    );
+  }
+
   return parts.join(' ');
 }
 

@@ -15,6 +15,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
           select: {
             id: true,
             name: true,
+            displayOrder: true,
           },
         },
         assignment: {
