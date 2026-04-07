@@ -54,4 +54,4 @@ Built the complete wrap-up flow: when a host clicks "Wrap up event" on a FROZEN 
 11. All pre-populated query params are sanitised against XSS
 
 ### Commit hash
-_[To be filled after commit]_
+`02244d2`
