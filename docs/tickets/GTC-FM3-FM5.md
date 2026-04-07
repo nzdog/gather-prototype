@@ -34,4 +34,4 @@ Four prompt additions inserted at the top of `PLAN_GENERATION_SYSTEM_PROMPT`, be
   - `src/lib/ai/prompts.ts` — Four NZ override blocks added to `PLAN_GENERATION_SYSTEM_PROMPT`
 - **Test plan generation output:** Requires live API call with `ANTHROPIC_API_KEY` — deferred to manual verification per Definition of Done items 6–9
 - **Security tests:** 16/16 pass (`npm run test:security`)
-- **Commit hash:** _[to be filled after commit]_
+- **Commit hash:** `ab272d5`
