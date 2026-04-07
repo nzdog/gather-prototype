@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams, usePathname } from 'next/navigation';
 import {
   ChevronDown,
@@ -229,6 +229,7 @@ export default function PlanEditorPage() {
   const [checklistStepContext, setChecklistStepContext] = useState<string | null>(null);
   const [isPostPayment, setIsPostPayment] = useState(false);
   const [modalBreadcrumbTrail, setModalBreadcrumbTrail] = useState<ModalTabId[]>([]);
+  const pendingModalAction = useRef<'generate' | null>(null);
 
   // Debug: Log when selectedPersonId changes
   useEffect(() => {
@@ -287,6 +288,14 @@ export default function PlanEditorPage() {
       setExpandedSection(null);
     }
   }, [searchParams]);
+
+  // Execute pending action after expansion modal fully closes
+  useEffect(() => {
+    if (expandedSection === null && pendingModalAction.current === 'generate') {
+      pendingModalAction.current = null;
+      setHostDescriptionModalOpen(true);
+    }
+  }, [expandedSection]);
 
   // Auto-open Edit Event wizard after post-payment redirect
   useEffect(() => {
@@ -1739,7 +1748,10 @@ export default function PlanEditorPage() {
                   </p>
                   {event?.status === 'DRAFT' && (
                     <button
-                      onClick={() => setHostDescriptionModalOpen(true)}
+                      onClick={() => {
+                        pendingModalAction.current = 'generate';
+                        handleCloseExpansion();
+                      }}
                       className="px-4 py-2 bg-accent text-white text-sm font-medium rounded-md hover:bg-accent-dark transition-colors inline-flex items-center gap-1.5"
                     >
                       Generate Plan
@@ -1892,7 +1904,10 @@ export default function PlanEditorPage() {
               <div className="flex items-center justify-center gap-3">
                 {event?.status === 'DRAFT' && (
                   <button
-                    onClick={() => setHostDescriptionModalOpen(true)}
+                    onClick={() => {
+                      pendingModalAction.current = 'generate';
+                      handleCloseExpansion();
+                    }}
                     className="px-4 py-2 bg-accent text-white text-sm font-medium rounded-md hover:bg-accent-dark transition-colors flex items-center gap-1.5"
                   >
                     Generate Plan
@@ -2101,7 +2116,10 @@ export default function PlanEditorPage() {
               <div className="flex items-center justify-center gap-3">
                 {event?.status === 'DRAFT' && (
                   <button
-                    onClick={() => setHostDescriptionModalOpen(true)}
+                    onClick={() => {
+                      pendingModalAction.current = 'generate';
+                      handleCloseExpansion();
+                    }}
                     className="px-4 py-2 bg-accent text-white text-sm font-medium rounded-md hover:bg-accent-dark transition-colors flex items-center gap-1.5"
                   >
                     Generate Plan
