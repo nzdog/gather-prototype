@@ -57,7 +57,6 @@ export function NudgeComposer({
   const [message, setMessage] = useState(() =>
     generateMessage('warm', { personName, taskItem, eventName, eventDate })
   );
-  const [edited, setEdited] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +79,6 @@ export function NudgeComposer({
     // If user edited, switching template replaces their edits
     setVariant(v);
     setMessage(generateMessage(v, { personName, taskItem, eventName, eventDate }));
-    setEdited(false);
   }
 
   async function handleSend() {
@@ -148,10 +146,7 @@ export function NudgeComposer({
       {/* Message editor */}
       <textarea
         value={message}
-        onChange={(e) => {
-          setMessage(e.target.value);
-          setEdited(true);
-        }}
+        onChange={(e) => setMessage(e.target.value)}
         rows={4}
         className="w-full text-sm border border-gray-300 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-sage-500 focus:border-transparent"
       />
