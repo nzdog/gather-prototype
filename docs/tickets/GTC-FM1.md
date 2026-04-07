@@ -39,4 +39,4 @@ When a host views their event dashboard and sees guests with unacknowledged task
   7. 24hr cooldown window: 23h-old nudge still locked, 25h-old nudge unlocked, null = unlocked
   8. Contact method fallback: SMS preferred > email fallback > none when no contact
 
-- **Commit hash:** _[to be filled after commit]_
+- **Commit hash:** `7bc243b`
