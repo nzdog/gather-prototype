@@ -420,8 +420,13 @@ export default function DemoLandingPage() {
           <h2 className="text-2xl font-bold text-gray-900 mb-3">
             Ready to coordinate your own event?
           </h2>
-          <p className="text-gray-600 mb-6">
-            Create your event in minutes. Pay $12 when you&rsquo;re ready to share.
+          <p className="text-gray-600 mb-4">
+            Your event is waiting. Set it up free — pay $12 when you&rsquo;re ready to invite your
+            people.
+          </p>
+          <p className="text-gray-500 text-sm mb-6">
+            Gather has been used for birthdays, school reunions, Christmas dinners, and
+            end-of-season sports parties.
           </p>
           <a
             href="/plan/new"
