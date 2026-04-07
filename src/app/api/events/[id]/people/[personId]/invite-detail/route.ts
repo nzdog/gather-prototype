@@ -47,6 +47,11 @@ export async function GET(
           select: {
             response: true,
             createdAt: true,
+            item: {
+              select: {
+                name: true,
+              },
+            },
           },
         },
         inviteEvents: {
@@ -68,6 +73,23 @@ export async function GET(
       return NextResponse.json({ error: 'Person not found' }, { status: 404 });
     }
 
+    // Fetch event name and date for nudge template personalisation
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { name: true, startDate: true, hostId: true },
+    });
+
+    // Fetch most recent host nudge for this person+event
+    const lastHostNudge = await prisma.inviteEvent.findFirst({
+      where: {
+        eventId,
+        personId,
+        type: 'NUDGE_SENT_HOST',
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+
     const token = person.tokens[0];
     const hasResponded = person.assignments.some((a) => a.response !== 'PENDING');
     const respondedAssignment = person.assignments.find((a) => a.response !== 'PENDING');
@@ -87,17 +109,12 @@ export async function GET(
     // Get response type
     const response = respondedAssignment?.response || 'PENDING';
 
-    // Check opt-out
+    // Check opt-out (reuse event.hostId fetched above)
     const optOut = person.phoneNumber
       ? await prisma.smsOptOut.findFirst({
           where: {
             phoneNumber: person.phoneNumber,
-            hostId: (
-              await prisma.event.findUnique({
-                where: { id: eventId },
-                select: { hostId: true },
-              })
-            )?.hostId,
+            hostId: event?.hostId,
           },
         })
       : null;
@@ -118,6 +135,13 @@ export async function GET(
       canReceiveSms: !!person.phoneNumber && !optOut,
       nudge24hSentAt: person.nudge24hSentAt?.toISOString() || null,
       nudge48hSentAt: person.nudge48hSentAt?.toISOString() || null,
+      lastHostNudgeAt: lastHostNudge?.createdAt?.toISOString() || null,
+      eventName: event?.name || null,
+      eventDate: event?.startDate?.toISOString() || null,
+      assignments: person.assignments.map((a: any) => ({
+        response: a.response,
+        itemName: a.item?.name || null,
+      })),
       inviteEvents: person.inviteEvents.map((e) => ({
         type: e.type,
         createdAt: e.createdAt.toISOString(),

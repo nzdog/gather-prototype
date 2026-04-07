@@ -28,6 +28,29 @@ export async function sendMagicLinkEmail(to: string, token: string) {
   });
 }
 
+export async function sendNudgeEmail(params: {
+  to: string;
+  subject: string;
+  body: string;
+  eventId: string;
+  personId: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const resend = getResendClient();
+    await resend.emails.send({
+      from: process.env.EMAIL_FROM || 'Gather <noreply@gather.app>',
+      to: params.to,
+      subject: params.subject,
+      text: params.body,
+    });
+    return { success: true };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`[Email] Failed to send nudge to ${params.to}:`, errorMessage);
+    return { success: false, error: errorMessage };
+  }
+}
+
 export async function sendWelcomeEmail(email: string, eventName: string, eventId: string) {
   const token = randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days

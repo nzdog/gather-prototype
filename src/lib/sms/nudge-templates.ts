@@ -83,6 +83,45 @@ export function getProxyHouseholdReminderMessage(params: ProxyNudgeTemplateParam
 }
 
 /**
+ * Host-initiated nudge templates
+ * Four tone variants, personalised with guest name, task item, event name, event date.
+ * These are longer than auto-nudge SMS (multi-segment) — that's intentional per ticket spec.
+ */
+export type HostNudgeVariant = 'warm' | 'casual' | 'gentle' | 'direct';
+
+export interface HostNudgeTemplateParams {
+  guestFirstName: string;
+  taskItem: string;
+  eventName: string;
+  eventDate: string;
+}
+
+const HOST_NUDGE_TEMPLATES: Record<HostNudgeVariant, (p: HostNudgeTemplateParams) => string> = {
+  warm: (p) =>
+    `Hey ${p.guestFirstName} — just checking in! Still all good to bring ${p.taskItem} to ${p.eventName} on ${p.eventDate}? Let me know if anything's changed 😊`,
+  casual: (p) =>
+    `Oi ${p.guestFirstName} 👋 Quick one — are you still sorted for ${p.taskItem} at ${p.eventName}? Just want to make sure we're covered!`,
+  gentle: (p) =>
+    `Hi ${p.guestFirstName}, hope you're well! Just a gentle reminder that you've been assigned ${p.taskItem} for ${p.eventName} on ${p.eventDate}. Let me know if that still works for you.`,
+  direct: (p) =>
+    `Hi ${p.guestFirstName} — confirming you're still bringing ${p.taskItem} to ${p.eventName} on ${p.eventDate}. Reply to let me know either way. Thanks!`,
+};
+
+export function getHostNudgeMessage(
+  variant: HostNudgeVariant,
+  params: HostNudgeTemplateParams
+): string {
+  return HOST_NUDGE_TEMPLATES[variant](params);
+}
+
+export const HOST_NUDGE_VARIANT_LABELS: Record<HostNudgeVariant, string> = {
+  warm: 'Warm',
+  casual: 'Casual',
+  gentle: 'Gentle reminder',
+  direct: 'Direct',
+};
+
+/**
  * RSVP Followup nudge
  * Sent 48h after "Not sure" response to force conversion to Yes/No
  */

@@ -1,8 +1,22 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, User, Phone, Mail, Clock, CheckCircle, XCircle, Eye, Send, Bell } from 'lucide-react';
+import {
+  X,
+  User,
+  Phone,
+  Mail,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Eye,
+  Send,
+  Bell,
+  MessageSquare,
+  AlertCircle,
+} from 'lucide-react';
 import { formatPhoneForDisplay } from '@/lib/phone';
+import { NudgeComposer } from './NudgeComposer';
 
 interface PersonDetail {
   id: string;
@@ -19,7 +33,14 @@ interface PersonDetail {
   canReceiveSms: boolean;
   nudge24hSentAt: string | null;
   nudge48hSentAt: string | null;
+  lastHostNudgeAt: string | null;
   claimedAt: string | null;
+  eventName: string | null;
+  eventDate: string | null;
+  assignments: {
+    response: string;
+    itemName: string | null;
+  }[];
   inviteEvents: {
     type: string;
     createdAt: string;
@@ -40,6 +61,7 @@ export function PersonInviteDetailModal({ eventId, personId, onClose, onUpdate }
   const [marking, setMarking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showManualButtons, setShowManualButtons] = useState(false);
+  const [showNudgeComposer, setShowNudgeComposer] = useState(false);
 
   useEffect(() => {
     fetchPersonDetail();
@@ -187,15 +209,15 @@ export function PersonInviteDetailModal({ eventId, personId, onClose, onUpdate }
             </div>
           </div>
 
-          {/* Nudges */}
-          {(person.nudge24hSentAt || person.nudge48hSentAt) && (
+          {/* Reminders */}
+          {(person.nudge24hSentAt || person.nudge48hSentAt || person.lastHostNudgeAt) && (
             <div className="border rounded-lg p-3">
-              <h3 className="font-medium text-sm text-gray-700 mb-2">Auto-Reminders</h3>
+              <h3 className="font-medium text-sm text-gray-700 mb-2">Reminders</h3>
               <div className="space-y-2">
                 {person.nudge24hSentAt && (
                   <div className="flex items-center gap-2 text-sm">
                     <Bell className="w-4 h-4 text-yellow-600" />
-                    <span>24h reminder sent</span>
+                    <span>24h auto-reminder sent</span>
                     <span className="text-gray-500">
                       {new Date(person.nudge24hSentAt).toLocaleString()}
                     </span>
@@ -204,14 +226,39 @@ export function PersonInviteDetailModal({ eventId, personId, onClose, onUpdate }
                 {person.nudge48hSentAt && (
                   <div className="flex items-center gap-2 text-sm">
                     <Bell className="w-4 h-4 text-amber-600" />
-                    <span>48h reminder sent</span>
+                    <span>48h auto-reminder sent</span>
                     <span className="text-gray-500">
                       {new Date(person.nudge48hSentAt).toLocaleString()}
                     </span>
                   </div>
                 )}
+                {person.lastHostNudgeAt && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <MessageSquare className="w-4 h-4 text-sage-600" />
+                    <span>Nudged</span>
+                    <span className="text-gray-500">
+                      {new Date(person.lastHostNudgeAt).toLocaleString()}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
+          )}
+
+          {/* Host Nudge Section */}
+          {person.response === 'PENDING' && (
+            <HostNudgeSection
+              eventId={eventId}
+              person={person}
+              showComposer={showNudgeComposer}
+              onOpenComposer={() => setShowNudgeComposer(true)}
+              onCloseComposer={() => setShowNudgeComposer(false)}
+              onSent={() => {
+                setShowNudgeComposer(false);
+                fetchPersonDetail();
+                onUpdate();
+              }}
+            />
           )}
 
           {/* Error */}
@@ -292,6 +339,90 @@ function StatusBadge({ status, response }: { status: string; response: string | 
     <span className={`text-xs ${config.bg} ${config.text} px-2 py-0.5 rounded-full`}>
       {config.label}
     </span>
+  );
+}
+
+function HostNudgeSection({
+  eventId,
+  person,
+  showComposer,
+  onOpenComposer,
+  onCloseComposer,
+  onSent,
+}: {
+  eventId: string;
+  person: PersonDetail;
+  showComposer: boolean;
+  onOpenComposer: () => void;
+  onCloseComposer: () => void;
+  onSent: () => void;
+}) {
+  const hasContact = person.hasPhone || !!person.email;
+  const COOLDOWN_MS = 24 * 60 * 60 * 1000;
+  const isOnCooldown =
+    person.lastHostNudgeAt && new Date(person.lastHostNudgeAt).getTime() > Date.now() - COOLDOWN_MS;
+
+  // Determine contact method
+  const contactMethod: 'sms' | 'email' = person.canReceiveSms ? 'sms' : 'email';
+
+  // Build task item string from pending assignments
+  const pendingItems = person.assignments
+    .filter((a) => a.response === 'PENDING' && a.itemName)
+    .map((a) => a.itemName!);
+  const taskItem =
+    pendingItems.length === 0
+      ? 'your assigned items'
+      : pendingItems.length === 1
+        ? pendingItems[0]
+        : pendingItems.slice(0, 2).join(' and ');
+
+  const eventDate = person.eventDate
+    ? new Date(person.eventDate).toLocaleDateString('en-NZ', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+      })
+    : 'the event date';
+
+  if (!hasContact) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-3">
+        <AlertCircle className="w-4 h-4 flex-shrink-0" />
+        <span>No contact details — nudge unavailable</span>
+      </div>
+    );
+  }
+
+  if (showComposer) {
+    return (
+      <NudgeComposer
+        eventId={eventId}
+        personId={person.id}
+        personName={person.name}
+        taskItem={taskItem}
+        eventName={person.eventName || 'the event'}
+        eventDate={eventDate}
+        contactMethod={contactMethod}
+        onSent={onSent}
+        onCancel={onCloseComposer}
+      />
+    );
+  }
+
+  return (
+    <button
+      onClick={onOpenComposer}
+      disabled={!!isOnCooldown}
+      title={
+        isOnCooldown
+          ? 'Nudge sent less than 24 hours ago'
+          : `Send a nudge via ${contactMethod === 'sms' ? 'SMS' : 'email'}`
+      }
+      className="w-full py-2.5 px-4 border border-sage-300 text-sage-700 rounded-lg hover:bg-sage-50 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors flex items-center justify-center gap-2"
+    >
+      <MessageSquare className="w-4 h-4" />
+      {isOnCooldown ? 'Nudge sent less than 24 hours ago' : 'Send Nudge'}
+    </button>
   );
 }
 
