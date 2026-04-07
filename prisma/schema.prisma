@@ -166,6 +166,8 @@ model PersonEvent {
   householdMembers     PersonEvent[]    @relation("ProxyRelation")
   team                 Team?            @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
+  nudgeLogs   NudgeLog[]
+
   @@unique([personId, eventId])
 }
 
@@ -959,4 +961,16 @@ model WrapUpLink {
   @@index([eventId])
   @@index([token])
   @@index([dispatched, createdAt])
+}
+
+model NudgeLog {
+  id            String      @id @default(cuid())
+  personEventId String
+  nudgeType     String
+  scheduledFor  DateTime
+  sentAt        DateTime?
+  status        String
+  errorMessage  String?
+  createdAt     DateTime    @default(now())
+  personEvent   PersonEvent @relation(fields: [personEventId], references: [id], onDelete: Cascade)
 }
