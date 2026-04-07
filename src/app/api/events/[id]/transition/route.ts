@@ -151,6 +151,47 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       });
     }
 
+    // Handle FROZEN → COMPLETE transition (wrap-up)
+    // Note: The primary wrap-up flow is POST /api/events/[id]/wrap-up which
+    // also generates WrapUpLinks. This transition handler is for status-only use.
+    if (event.status === 'FROZEN' && body.targetStatus === 'COMPLETE') {
+      if (!canTransition(event.status, 'COMPLETE')) {
+        return NextResponse.json(
+          { error: 'Cannot transition from FROZEN to COMPLETE' },
+          { status: 400 }
+        );
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.event.update({
+          where: { id: eventId },
+          data: {
+            status: 'COMPLETE',
+            wrappedAt: new Date(),
+          },
+        });
+
+        await logAudit(tx, {
+          eventId,
+          actorId,
+          actionType: 'TRANSITION_TO_COMPLETE',
+          targetType: 'Event',
+          targetId: eventId,
+          details: 'Transitioned event to COMPLETE status via transition endpoint.',
+        });
+      });
+
+      const updatedEvent = await prisma.event.findUnique({
+        where: { id: eventId },
+      });
+
+      return NextResponse.json({
+        success: true,
+        event: updatedEvent,
+        message: 'Event successfully transitioned to COMPLETE status',
+      });
+    }
+
     // Invalid transition
     return NextResponse.json(
       { error: `Cannot transition from ${event.status} status` },

@@ -63,6 +63,7 @@ model Event {
   frozenAt                   DateTime?
   complianceAtFreeze         Float?
   freezeReason               String?
+  wrappedAt                  DateTime?
   stripePaymentIntentId      String?                  @unique
   paidAt                     DateTime?
   amountPaid                 Int?
@@ -85,6 +86,7 @@ model Event {
   snapshots                  PlanSnapshot[]
   structureChanges           StructureChangeRequest[]
   teams                      Team[]
+  wrapUpLinks                WrapUpLink[]
 }
 
 model Day {
@@ -138,6 +140,7 @@ model Person {
   eventMemberships PersonEvent[]
   receivedOptOuts  SmsOptOut[]   @relation("HostOptOuts")
   coordinatedTeams Team[]        @relation("TeamCoordinator")
+  wrapUpLinks      WrapUpLink[]
 
   @@index([userId])
   @@index([email])
@@ -931,4 +934,29 @@ enum InviteEventType {
   MANUAL_OVERRIDE_MARKED
   CLAIM_RESET
   NUDGE_SENT_HOST
+  WRAPUP_MESSAGE_SENT
+  WRAPUP_MESSAGE_FAILED
+}
+
+model WrapUpLink {
+  id           String    @id @default(cuid())
+  token        String    @unique
+  eventId      String
+  personId     String
+  guestName    String
+  guestEmail   String?
+  guestPhone   String?
+  channel      String
+  dispatched   Boolean   @default(false)
+  dispatchedAt DateTime?
+  failed       Boolean   @default(false)
+  failReason   String?
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+  event        Event     @relation(fields: [eventId], references: [id])
+  person       Person    @relation(fields: [personId], references: [id])
+
+  @@index([eventId])
+  @@index([token])
+  @@index([dispatched, createdAt])
 }

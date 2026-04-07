@@ -6,6 +6,18 @@ import { Calendar } from 'lucide-react';
 
 type PageState = 'form' | 'creating' | 'canceled' | 'error';
 
+// Sanitise pre-populated query params to prevent XSS
+function sanitiseParam(value: string | null): string {
+  if (!value) return '';
+  return value
+    .replace(/<[^>]*>/g, '')
+    .replace(/[<>"'`]/g, '')
+    .replace(/javascript:/gi, '')
+    .replace(/on\w+\s*=/gi, '')
+    .trim()
+    .slice(0, 200);
+}
+
 export default function NewPlanPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -18,6 +30,30 @@ export default function NewPlanPage() {
     startDate: '',
     endDate: '',
   });
+  const [prefilledContact, setPrefilledContact] = useState<{
+    name: string;
+    email: string;
+    phone: string;
+    ref: string;
+  } | null>(null);
+  const [showExpiredNotice, setShowExpiredNotice] = useState(false);
+
+  // Handle pre-populated params from wrap-up links and expired notice
+  useEffect(() => {
+    const expired = searchParams.get('expired');
+    if (expired === 'true') {
+      setShowExpiredNotice(true);
+    }
+
+    const refName = sanitiseParam(searchParams.get('name'));
+    const refEmail = sanitiseParam(searchParams.get('email'));
+    const refPhone = sanitiseParam(searchParams.get('phone'));
+    const ref = sanitiseParam(searchParams.get('ref'));
+
+    if (refName || refEmail || refPhone) {
+      setPrefilledContact({ name: refName, email: refEmail, phone: refPhone, ref });
+    }
+  }, [searchParams]);
 
   // Restore form data on plain page load (e.g. returning from sign-in redirect)
   useEffect(() => {
@@ -123,6 +159,10 @@ export default function NewPlanPage() {
   const startCheckout = async (data: typeof formData) => {
     // Save form data so we can restore it if payment is canceled
     sessionStorage.setItem('gather_new_event', JSON.stringify(data));
+    // Persist pre-filled contact for use after payment
+    if (prefilledContact) {
+      sessionStorage.setItem('gather_prefilled_contact', JSON.stringify(prefilledContact));
+    }
 
     const response = await fetch('/api/billing/checkout', {
       method: 'POST',
@@ -245,6 +285,37 @@ export default function NewPlanPage() {
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Create Your Event</h1>
           <p className="text-gray-600">Enter your event details and pay $12 to get started.</p>
         </div>
+
+        {/* Expired Link Notice */}
+        {showExpiredNotice && (
+          <div className="bg-amber-50 border-2 border-amber-200 rounded-lg p-4 mb-6 flex items-start justify-between">
+            <div>
+              <p className="text-amber-800 font-medium">This link has expired</p>
+              <p className="text-amber-700 text-sm mt-1">
+                The pre-filled link you followed is no longer active, but you can still create an
+                event below.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowExpiredNotice(false)}
+              className="text-amber-600 hover:text-amber-800 text-lg leading-none ml-4"
+              aria-label="Dismiss"
+            >
+              &times;
+            </button>
+          </div>
+        )}
+
+        {/* Pre-filled Contact Info */}
+        {prefilledContact && prefilledContact.name && (
+          <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 mb-6">
+            <p className="text-green-800 font-medium">Welcome, {prefilledContact.name}!</p>
+            <p className="text-green-700 text-sm mt-1">
+              Your details are pre-filled — just add your event info below and you&apos;re good to
+              go.
+            </p>
+          </div>
+        )}
 
         {/* Error Display */}
         {error && (

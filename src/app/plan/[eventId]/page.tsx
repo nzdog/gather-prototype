@@ -19,6 +19,7 @@ import {
   Send,
   Lock,
   Download,
+  Gift,
 } from 'lucide-react';
 import ConflictList from '@/components/plan/ConflictList';
 import GateCheck from '@/components/plan/GateCheck';
@@ -162,7 +163,8 @@ type SectionId =
   | 'planstatus'
   | 'unfreeze'
   | 'invites'
-  | 'history';
+  | 'history'
+  | 'wrapup';
 
 const validSectionIds: SectionId[] = [
   'assessment',
@@ -173,6 +175,7 @@ const validSectionIds: SectionId[] = [
   'unfreeze',
   'invites',
   'history',
+  'wrapup',
 ];
 
 function isValidSectionId(value: string): value is SectionId {
@@ -228,6 +231,30 @@ export default function PlanEditorPage() {
   const [checklistDismissed, setChecklistDismissed] = useState(false);
   const [checklistStepContext, setChecklistStepContext] = useState<string | null>(null);
   const [isPostPayment, setIsPostPayment] = useState(false);
+  const [wrapUpLoading, setWrapUpLoading] = useState(false);
+  const [wrapUpResult, setWrapUpResult] = useState<{
+    success: boolean;
+    guestsToNotify?: number;
+    guestsSkipped?: number;
+    warning?: boolean;
+    message?: string;
+  } | null>(null);
+  const [wrapUpDispatch, setWrapUpDispatch] = useState<{
+    total: number;
+    sent: number;
+    failed: number;
+    skipped: number;
+    pending: number;
+    guests: Array<{
+      personId: string;
+      name: string;
+      channel: string;
+      dispatched: boolean;
+      failed: boolean;
+      failReason: string | null;
+    }>;
+  } | null>(null);
+  const [wrapUpRetrying, setWrapUpRetrying] = useState(false);
   const [modalBreadcrumbTrail, setModalBreadcrumbTrail] = useState<ModalTabId[]>([]);
   const pendingModalAction = useRef<'generate' | null>(null);
 
@@ -838,6 +865,51 @@ export default function PlanEditorPage() {
     } catch (err) {
       console.error('Failed to copy:', err);
       alert('Failed to copy link to clipboard');
+    }
+  };
+
+  const handleWrapUp = async (confirmEarly = false) => {
+    setWrapUpLoading(true);
+    setWrapUpResult(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/wrap-up`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmEarly }),
+      });
+      const data = await res.json();
+      setWrapUpResult(data);
+      if (data.success) {
+        loadEvent();
+      }
+    } catch {
+      setWrapUpResult({ success: false, message: 'Failed to wrap up event.' });
+    } finally {
+      setWrapUpLoading(false);
+    }
+  };
+
+  const loadWrapUpStatus = async () => {
+    try {
+      const res = await fetch(`/api/events/${eventId}/wrap-up/status`);
+      const data = await res.json();
+      if (data.success) {
+        setWrapUpDispatch(data);
+      }
+    } catch {
+      // silent — status is informational
+    }
+  };
+
+  const handleWrapUpRetry = async () => {
+    setWrapUpRetrying(true);
+    try {
+      await fetch(`/api/events/${eventId}/wrap-up/retry`, { method: 'POST' });
+      await loadWrapUpStatus();
+    } catch {
+      // silent
+    } finally {
+      setWrapUpRetrying(false);
     }
   };
 
@@ -1514,6 +1586,51 @@ export default function PlanEditorPage() {
                         </p>
                       </div>
                       <div className="text-sm text-yellow-600 font-medium">Click to unfreeze →</div>
+                    </div>
+                  )}
+
+                  {/* Wrap Up Card - Show for FROZEN (not yet wrapped) and COMPLETE (show status) */}
+                  {(event.status === 'FROZEN' || event.status === 'COMPLETE') && (
+                    <div
+                      onClick={() => handleExpandSection('wrapup')}
+                      className={`bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group ${
+                        event.status === 'COMPLETE'
+                          ? 'border-2 border-green-300'
+                          : 'border-2 border-accent/30'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 mb-4">
+                        <div
+                          className={`w-12 h-12 rounded-lg flex items-center justify-center group-hover:opacity-80 transition-colors ${
+                            event.status === 'COMPLETE' ? 'bg-green-100' : 'bg-accent-light/20'
+                          }`}
+                        >
+                          <Gift
+                            className={`w-6 h-6 ${event.status === 'COMPLETE' ? 'text-green-600' : 'text-accent'}`}
+                          />
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-900">
+                          {event.status === 'COMPLETE' ? 'Wrapped Up' : 'Wrap Up Event'}
+                        </h2>
+                      </div>
+                      <div className="flex-1">
+                        {event.status === 'COMPLETE' ? (
+                          <p className="text-sm text-gray-600">
+                            Thank-you messages sent. Click to view dispatch status.
+                          </p>
+                        ) : (
+                          <p className="text-sm text-gray-600">
+                            Send a thank-you to your guests and close the event.
+                          </p>
+                        )}
+                      </div>
+                      <div
+                        className={`text-sm font-medium ${
+                          event.status === 'COMPLETE' ? 'text-green-600' : 'text-accent'
+                        }`}
+                      >
+                        {event.status === 'COMPLETE' ? 'View status →' : 'Wrap up →'}
+                      </div>
                     </div>
                   )}
 
@@ -2550,6 +2667,177 @@ export default function PlanEditorPage() {
                 })}
               </div>
             </div>
+          </SectionExpandModal>
+        )}
+
+        {/* Wrap Up Expansion */}
+        {event && (event.status === 'FROZEN' || event.status === 'COMPLETE') && (
+          <SectionExpandModal
+            isOpen={expandedSection === 'wrapup'}
+            onClose={handleCloseExpansion}
+            title={event.status === 'COMPLETE' ? 'Wrap-Up Status' : 'Wrap Up Event'}
+            icon={<Gift className="w-6 h-6" />}
+          >
+            {event.status === 'FROZEN' && !wrapUpResult?.success && (
+              <div className="space-y-6">
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    Send a thank-you to your guests and wrap up {event.name}?
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    This will close the event, and each guest will receive a personalised thank-you
+                    message acknowledging what they brought. Messages are sent via SMS (or email if
+                    no phone number) within a few minutes.
+                  </p>
+                  {wrapUpResult?.warning && (
+                    <div className="bg-yellow-100 border border-yellow-300 rounded-md p-3 mb-4">
+                      <p className="text-sm font-medium text-yellow-800">{wrapUpResult.message}</p>
+                      <button
+                        onClick={() => handleWrapUp(true)}
+                        disabled={wrapUpLoading}
+                        className="mt-2 px-4 py-2 bg-yellow-600 text-white text-sm rounded-md hover:bg-yellow-700 disabled:opacity-50"
+                      >
+                        {wrapUpLoading ? 'Wrapping up...' : 'Yes, wrap up anyway'}
+                      </button>
+                    </div>
+                  )}
+                  {!wrapUpResult?.warning && (
+                    <button
+                      onClick={() => handleWrapUp()}
+                      disabled={wrapUpLoading}
+                      className="px-6 py-3 bg-accent text-white font-medium rounded-lg hover:bg-accent-dark disabled:opacity-50 transition-colors"
+                    >
+                      {wrapUpLoading ? (
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Wrapping up...
+                        </span>
+                      ) : (
+                        'Wrap up & send thank-you messages'
+                      )}
+                    </button>
+                  )}
+                  {wrapUpResult && !wrapUpResult.success && !wrapUpResult.warning && (
+                    <p className="mt-3 text-sm text-red-600">{wrapUpResult.message}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {(event.status === 'COMPLETE' || wrapUpResult?.success) && (
+              <div className="space-y-6">
+                {wrapUpResult?.success && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                      <h3 className="text-lg font-semibold text-green-800">Done!</h3>
+                    </div>
+                    <p className="text-sm text-green-700">{wrapUpResult.message}</p>
+                    {(wrapUpResult.guestsSkipped ?? 0) > 0 && (
+                      <p className="text-sm text-gray-600 mt-1">
+                        Could not reach {wrapUpResult.guestsSkipped} guest(s) — no contact details
+                        on file.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Dispatch Status</h3>
+                    <button
+                      onClick={loadWrapUpStatus}
+                      className="text-sm text-accent hover:text-accent-dark"
+                    >
+                      Refresh
+                    </button>
+                  </div>
+
+                  {wrapUpDispatch ? (
+                    <div>
+                      <div className="grid grid-cols-4 gap-4 mb-6">
+                        <div className="bg-gray-50 rounded-lg p-3 text-center">
+                          <p className="text-2xl font-bold text-gray-900">{wrapUpDispatch.total}</p>
+                          <p className="text-xs text-gray-500">Total</p>
+                        </div>
+                        <div className="bg-green-50 rounded-lg p-3 text-center">
+                          <p className="text-2xl font-bold text-green-700">{wrapUpDispatch.sent}</p>
+                          <p className="text-xs text-gray-500">Sent</p>
+                        </div>
+                        <div className="bg-red-50 rounded-lg p-3 text-center">
+                          <p className="text-2xl font-bold text-red-700">{wrapUpDispatch.failed}</p>
+                          <p className="text-xs text-gray-500">Failed</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-3 text-center">
+                          <p className="text-2xl font-bold text-gray-500">
+                            {wrapUpDispatch.skipped}
+                          </p>
+                          <p className="text-xs text-gray-500">Skipped</p>
+                        </div>
+                      </div>
+
+                      {wrapUpDispatch.pending > 0 && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+                          <p className="text-sm text-blue-700">
+                            {wrapUpDispatch.pending} message(s) still queued — they will be sent
+                            shortly.
+                          </p>
+                        </div>
+                      )}
+
+                      {wrapUpDispatch.failed > 0 && (
+                        <button
+                          onClick={handleWrapUpRetry}
+                          disabled={wrapUpRetrying}
+                          className="mb-4 px-4 py-2 bg-red-600 text-white text-sm rounded-md hover:bg-red-700 disabled:opacity-50"
+                        >
+                          {wrapUpRetrying
+                            ? 'Retrying...'
+                            : `Retry ${wrapUpDispatch.failed} failed message(s)`}
+                        </button>
+                      )}
+
+                      <div className="space-y-2">
+                        {wrapUpDispatch.guests.map((g) => (
+                          <div
+                            key={g.personId}
+                            className="flex items-center justify-between py-2 px-3 bg-white rounded border border-gray-100"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-gray-900">{g.name}</span>
+                              <span className="text-xs text-gray-400 uppercase">{g.channel}</span>
+                            </div>
+                            <div>
+                              {g.channel === 'skipped' ? (
+                                <span className="text-xs text-gray-400">No contact</span>
+                              ) : g.failed ? (
+                                <span
+                                  className="text-xs text-red-600"
+                                  title={g.failReason || undefined}
+                                >
+                                  Failed
+                                </span>
+                              ) : g.dispatched ? (
+                                <span className="text-xs text-green-600">Sent</span>
+                              ) : (
+                                <span className="text-xs text-blue-600">Queued</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={loadWrapUpStatus}
+                      className="px-4 py-2 bg-accent text-white text-sm rounded-md hover:bg-accent-dark"
+                    >
+                      Load dispatch status
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </SectionExpandModal>
         )}
 

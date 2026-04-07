@@ -16,6 +16,7 @@
     "test:conflict-labels": "tsx tests/conflict-action-labels.ts",
     "test:setup-progress-banner": "tsx tests/setup-progress-banner-test.ts",
     "test:host-nudge": "tsx tests/host-nudge-test.ts",
+    "test:wrap-up": "tsx tests/wrap-up-dispatch-test.ts",
     "test:setup-modal-header": "tsx tests/setup-modal-header-test.ts",
     "test:demo-endpoints": "tsx tests/demo-endpoints-test.ts",
     "test:participant-null-coordinator": "tsx tests/participant-view-null-coordinator-test.ts",
