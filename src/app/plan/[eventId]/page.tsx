@@ -1953,6 +1953,7 @@ export default function PlanEditorPage() {
                 currentStatus={event?.status as any}
                 refreshTrigger={gateCheckRefresh}
                 onFreezeComplete={() => {
+                  handleCloseExpansion();
                   loadEvent();
                   loadTeams();
                 }}
