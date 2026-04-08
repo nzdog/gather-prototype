@@ -86,8 +86,9 @@ export function NameSelectionClient({ eventName, eventToken, hostName, people }:
         return;
       }
 
-      // Success - redirect to participant view
-      router.push(`/p/${data.participantToken}`);
+      // Success - redirect to appropriate view
+      const prefix = data.redirectPrefix || 'p';
+      router.push(`/${prefix}/${data.participantToken}`);
     } catch (e) {
       setError('Connection error. Please check your internet and try again.');
     } finally {

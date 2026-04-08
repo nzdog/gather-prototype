@@ -41,7 +41,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
     return NextResponse.json({ error: 'This event is not accepting responses' }, { status: 400 });
   }
 
-  // Find person and their participant token
+  // Find person and their access token for this event
   const person = await prisma.person.findFirst({
     where: {
       id: personId,
@@ -56,12 +56,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
       name: true,
       tokens: {
         where: {
-          scope: 'PARTICIPANT',
           eventId: event.id,
         },
         select: {
           id: true,
           token: true,
+          scope: true,
           claimedAt: true,
           claimedBy: true,
           openedAt: true,
@@ -74,15 +74,30 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
     return NextResponse.json({ error: 'Person not found in this event' }, { status: 404 });
   }
 
-  const accessToken = person.tokens[0];
+  // Prefer PARTICIPANT token, but fall back to COORDINATOR or HOST
+  const participantToken = person.tokens.find((t) => t.scope === 'PARTICIPANT');
+  const anyToken = participantToken || person.tokens[0];
 
-  if (!accessToken) {
-    // This shouldn't happen - tokens are created at transition
+  if (!anyToken) {
     return NextResponse.json(
       { error: 'No access token found. Please contact the host.' },
       { status: 500 }
     );
   }
+
+  // If person has a non-PARTICIPANT token (coordinator/host), redirect them
+  // to their role-appropriate view instead of claiming
+  if (!participantToken) {
+    const prefix = anyToken.scope === 'HOST' ? 'h' : anyToken.scope === 'COORDINATOR' ? 'c' : 'p';
+    return NextResponse.json({
+      success: true,
+      participantToken: anyToken.token,
+      personName: person.name,
+      redirectPrefix: prefix,
+    });
+  }
+
+  const accessToken = participantToken;
 
   // Check if already claimed
   if (accessToken.claimedAt) {

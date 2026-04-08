@@ -24,6 +24,7 @@ export default async function SharedLinkPage({ params }: Props) {
         select: { name: true },
       },
       people: {
+        where: { role: 'PARTICIPANT' },
         select: {
           id: true,
           person: {
