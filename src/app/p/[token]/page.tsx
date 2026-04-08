@@ -103,12 +103,8 @@ export default function ParticipantView() {
       const result = await response.json();
       setData(result);
 
-      // Only initialize collapsed state on first load
+      // Only initialize collapsed state on first load — expanded by default
       if (isInitialLoad.current) {
-        const allAssignmentIds = new Set<string>(
-          result.assignments.map((assignment: any) => assignment.id)
-        );
-        setCollapsedAssignments(allAssignmentIds);
         isInitialLoad.current = false;
       }
     } catch (err) {
