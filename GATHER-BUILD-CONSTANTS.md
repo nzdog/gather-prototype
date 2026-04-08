@@ -186,6 +186,7 @@ curl "http://localhost:3000/api/cron/nudges?secret=<CRON_SECRET>"
 | Route file | Method | HTTP path | Purpose | Intended schedule |
 |------------|--------|-----------|---------|-------------------|
 | `src/app/api/cron/nudges/route.ts` | GET / POST | `/api/cron/nudges` | Runs the nudge scheduler — sends SMS auto-nudges to event participants | Every 15 minutes |
+| `src/app/api/cron/wrap-up-dispatch/route.ts` | GET / POST | `/api/cron/wrap-up-dispatch` | Dispatches pending wrap-up thank-you messages (10 min delay after creation) | Every 10 minutes |
 
 ---
 
