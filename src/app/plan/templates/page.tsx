@@ -23,9 +23,6 @@ export default function TemplatesPage() {
       localStorage.setItem('gather_hostId', hostIdFromQuery);
     } else if (hostIdFromStorage) {
       setHostId(hostIdFromStorage);
-    } else {
-      // Default fallback
-      setHostId('cmjwbjrpw0000n99xs11r44qh');
     }
   }, [searchParams]);
 

@@ -4,9 +4,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertCircle, Trash2, Info } from 'lucide-react';
 
-// Mock hostId - in production, this would come from auth
-const MOCK_HOST_ID = 'cmjwbjrpw0000n99xs11r44qh';
-
 interface HostMemory {
   id: string;
   learningEnabled: boolean;
@@ -23,18 +20,30 @@ interface MemoryStats {
 
 export default function SettingsPage() {
   const router = useRouter();
+  const [hostId, setHostId] = useState<string>('');
   const [hostMemory, setHostMemory] = useState<HostMemory | null>(null);
   const [stats, setStats] = useState<MemoryStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    loadHostMemory();
+    const storedHostId = localStorage.getItem('gather_hostId');
+    if (storedHostId) {
+      setHostId(storedHostId);
+    } else {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    if (hostId) {
+      loadHostMemory();
+    }
+  }, [hostId]);
 
   const loadHostMemory = async () => {
     try {
-      const response = await fetch(`/api/memory?hostId=${MOCK_HOST_ID}`);
+      const response = await fetch(`/api/memory?hostId=${hostId}`);
       if (!response.ok) throw new Error('Failed to load host memory');
 
       const data = await response.json();
@@ -68,7 +77,7 @@ export default function SettingsPage() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          hostId: MOCK_HOST_ID,
+          hostId: hostId,
           [field]: newValue,
         }),
       });
@@ -99,7 +108,7 @@ export default function SettingsPage() {
     if (!doubleConfirm) return;
 
     try {
-      const response = await fetch(`/api/memory?hostId=${MOCK_HOST_ID}`, {
+      const response = await fetch(`/api/memory?hostId=${hostId}`, {
         method: 'DELETE',
       });
 
@@ -120,6 +129,22 @@ export default function SettingsPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-gray-600">Loading settings...</div>
+      </div>
+    );
+  }
+
+  if (!hostId) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600">No host session found. Please open an event first.</p>
+          <button
+            onClick={() => router.push('/demo')}
+            className="mt-4 text-blue-600 hover:text-blue-800 underline"
+          >
+            Go to demo
+          </button>
+        </div>
       </div>
     );
   }

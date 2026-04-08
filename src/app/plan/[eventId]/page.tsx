@@ -280,9 +280,6 @@ export default function PlanEditorPage() {
     }>
   >([]);
 
-  // Mock hostId - in production, this would come from auth
-  const MOCK_HOST_ID = 'cmjwbjrpw0000n99xs11r44qh';
-
   useEffect(() => {
     // Handle invalid eventId (like "new")
     if (eventId === 'new' || !eventId) {
@@ -823,7 +820,7 @@ export default function PlanEditorPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          hostId: event?.hostId, // Use actual event hostId instead of MOCK_HOST_ID
+          hostId: event?.hostId,
           eventId: event?.id,
           name: templateName,
         }),
@@ -947,7 +944,7 @@ export default function PlanEditorPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...teamData,
-          coordinatorId: MOCK_HOST_ID, // Host is initial coordinator
+          coordinatorId: event?.hostId, // Host is initial coordinator
         }),
       });
 
@@ -1738,7 +1735,7 @@ export default function PlanEditorPage() {
           )}
           <RevisionHistory
             eventId={eventId}
-            actorId={MOCK_HOST_ID}
+            actorId={event?.hostId ?? ''}
             onExpand={() => handleExpandSection('history')}
           />
         </div>
@@ -2849,7 +2846,7 @@ export default function PlanEditorPage() {
           icon={<Clock className="w-6 h-6" />}
           tabBar={buildTabBar('history')}
         >
-          <RevisionHistory eventId={eventId} actorId={MOCK_HOST_ID} />
+          <RevisionHistory eventId={eventId} actorId={event?.hostId ?? ''} />
         </SectionExpandModal>
 
         {/* Phase 6 - Person Detail Modal */}
