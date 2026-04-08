@@ -236,6 +236,7 @@ export default function PlanEditorPage() {
   const [inviteStatusData, setInviteStatusData] = useState<any | null>(null);
   const [checklistDismissed, setChecklistDismissed] = useState(false);
   const [nextStepDismissed, setNextStepDismissed] = useState(false);
+  const [inviteHighlightSeen, setInviteHighlightSeen] = useState(false);
   const [checklistStepContext, setChecklistStepContext] = useState<string | null>(null);
   const [isPostPayment, setIsPostPayment] = useState(false);
   const [wrapUpLoading, setWrapUpLoading] = useState(false);
@@ -322,6 +323,13 @@ export default function PlanEditorPage() {
       setExpandedSection(null);
     }
   }, [searchParams]);
+
+  // Dismiss invite highlight after host opens the Invite Links modal once
+  useEffect(() => {
+    if (expandedSection === 'invites') {
+      setInviteHighlightSeen(true);
+    }
+  }, [expandedSection]);
 
   // Execute pending action after expansion modal fully closes
   useEffect(() => {
@@ -1659,7 +1667,11 @@ export default function PlanEditorPage() {
                     inviteLinks.length > 0 && (
                       <div
                         onClick={() => handleExpandSection('invites')}
-                        className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
+                        className={`bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group ${
+                          event.status === 'CONFIRMING' && !inviteHighlightSeen
+                            ? 'border-2 border-blue-400 ring-2 ring-blue-100'
+                            : ''
+                        }`}
                       >
                         <div className="flex items-center gap-3 mb-4">
                           <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">

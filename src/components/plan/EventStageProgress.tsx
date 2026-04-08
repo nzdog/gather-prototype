@@ -93,6 +93,10 @@ export default function EventStageProgress({ currentStatus }: EventStageProgress
               Share invite links with your team and assign all items to people. Once all items are
               assigned, you can transition to FROZEN to lock the plan for execution.
             </p>
+            <p className="mt-3 text-blue-700 bg-blue-50 border border-blue-200 rounded-md px-3 py-2">
+              Share your invite links with guests and wait for them to confirm their items. Once
+              everyone has responded, you can freeze the plan and lock it for the event.
+            </p>
           </div>
         )}
         {currentStatus === 'FROZEN' && (
