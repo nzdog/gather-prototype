@@ -44,6 +44,7 @@ import { InviteStatusSection } from '@/components/plan/InviteStatusSection';
 import { SharedLinkSection } from '@/components/plan/SharedLinkSection';
 import { InviteFunnel } from '@/components/plan/InviteFunnel';
 import { WhosMissing } from '@/components/plan/WhosMissing';
+import NextStepBanner from '@/components/plan/NextStepBanner';
 import { CopyPlanAsText } from '@/components/plan/CopyPlanAsText';
 import { PersonInviteDetailModal } from '@/components/plan/PersonInviteDetailModal';
 import { ModalProvider } from '@/contexts/ModalContext';
@@ -234,6 +235,7 @@ export default function PlanEditorPage() {
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
   const [inviteStatusData, setInviteStatusData] = useState<any | null>(null);
   const [checklistDismissed, setChecklistDismissed] = useState(false);
+  const [nextStepDismissed, setNextStepDismissed] = useState(false);
   const [checklistStepContext, setChecklistStepContext] = useState<string | null>(null);
   const [isPostPayment, setIsPostPayment] = useState(false);
   const [wrapUpLoading, setWrapUpLoading] = useState(false);
@@ -566,6 +568,9 @@ export default function PlanEditorPage() {
       handleCloseExpansion();
 
       toast.success('Plan generated! Demo team and items created.');
+
+      // Reset session dismiss so the next-step CTA appears after fresh generation
+      setNextStepDismissed(false);
     } catch (err: any) {
       console.error('Error generating plan:', err);
       toast.error('Failed to generate plan');
@@ -1178,6 +1183,10 @@ export default function PlanEditorPage() {
     }
   };
 
+  const handleNextStepDismiss = () => {
+    setNextStepDismissed(true);
+  };
+
   const handleBannerMoveToConfirming = async () => {
     setTransitionLoading(true);
     try {
@@ -1383,6 +1392,19 @@ export default function PlanEditorPage() {
               </div>
             </div>
           )}
+
+          {/* Next Step CTA — shown when unassigned items exist, session-dismissible */}
+          {!nextStepDismissed &&
+            !isGenerating &&
+            !isRegenerating &&
+            teams.length > 0 &&
+            items.length > 0 &&
+            items.some((i) => !i.assignment) && (
+              <NextStepBanner
+                onStartAssigning={() => handleExpandSection('teams')}
+                onDismiss={handleNextStepDismiss}
+              />
+            )}
 
           {/* Review Mode - Selective Regeneration */}
           {reviewMode ? (
