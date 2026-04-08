@@ -276,7 +276,7 @@ SELECT status FROM "Conflict" WHERE id = 'conflict-id';
 
 ## Known Limitations / Future Work
 
-1. **User Authentication**: Currently using placeholder "current-user-id" - needs proper auth integration
+1. **User Authentication**: Resolved — conflict resolution now uses `event.hostId` from the authenticated session (GTC-044)
 2. **Optimistic Updates**: UI could benefit from optimistic updates instead of full reload
 3. **Real-time Notifications**: Reopened conflicts don't trigger notifications yet
 4. **Conflict Creation**: No UI for manually creating conflicts (relies on AI detection)

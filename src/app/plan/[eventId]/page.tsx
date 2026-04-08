@@ -1680,6 +1680,7 @@ export default function PlanEditorPage() {
         <div className="hidden">
           <ConflictList
             eventId={eventId}
+            hostId={event?.hostId ?? ''}
             conflicts={conflicts}
             onConflictsChanged={loadConflicts}
             hasRunCheck={!!event.lastCheckPlanAt}
@@ -1877,6 +1878,7 @@ export default function PlanEditorPage() {
             ) : (
               <ConflictList
                 eventId={eventId}
+                hostId={event?.hostId ?? ''}
                 conflicts={conflicts}
                 onConflictsChanged={loadConflicts}
                 hasRunCheck={!!event.lastCheckPlanAt}

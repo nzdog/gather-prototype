@@ -8,6 +8,7 @@ import ResolveWithAIModal from './ResolveWithAIModal';
 
 interface ConflictListProps {
   eventId: string;
+  hostId: string;
   conflicts: Conflict[];
   onConflictsChanged?: () => void;
   hasRunCheck?: boolean;
@@ -15,6 +16,7 @@ interface ConflictListProps {
 
 export default function ConflictList({
   eventId,
+  hostId,
   conflicts,
   onConflictsChanged,
   hasRunCheck = false,
@@ -34,7 +36,7 @@ export default function ConflictList({
       const response = await fetch(`/api/events/${eventId}/conflicts/${conflictId}/resolve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resolvedBy: 'current-user-id' }), // TODO: Get actual user ID
+        body: JSON.stringify({ resolvedBy: hostId }),
       });
 
       if (!response.ok) {
@@ -125,7 +127,7 @@ export default function ConflictList({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             ...acknowledgement,
-            acknowledgedBy: 'current-user-id', // TODO: Get actual user ID
+            acknowledgedBy: hostId,
           }),
         }
       );
