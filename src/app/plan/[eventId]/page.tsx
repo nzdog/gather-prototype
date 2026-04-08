@@ -266,6 +266,13 @@ export default function PlanEditorPage() {
   const [modalBreadcrumbTrail, setModalBreadcrumbTrail] = useState<ModalTabId[]>([]);
   const pendingModalAction = useRef<'generate' | null>(null);
 
+  // Batch assignment state for Teams modal
+  const [pendingAssignments, setPendingAssignments] = useState<
+    Record<string, { personId: string; teamId: string }>
+  >({});
+  const [showDiscardWarning, setShowDiscardWarning] = useState(false);
+  const [savingAssignments, setSavingAssignments] = useState(false);
+
   // Review mode for selective regeneration
   const [reviewMode, setReviewMode] = useState(false);
   const [reviewTeamGroups, setReviewTeamGroups] = useState<
@@ -952,54 +959,85 @@ export default function PlanEditorPage() {
     }
   };
 
-  const handleQuickAssign = async (itemId: string, personId: string, teamId: string) => {
-    try {
-      if (personId) {
-        // Assign to person
-        const response = await fetch(`/api/events/${eventId}/items/${itemId}/assign`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ personId }),
-        });
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Failed to assign item');
-        }
+  // Stage an assignment change locally (no API call)
+  const handleStageAssignment = (
+    itemId: string,
+    personId: string,
+    teamId: string,
+    currentPersonId: string
+  ) => {
+    setPendingAssignments((prev) => {
+      const next = { ...prev };
+      // If the new value matches the original server state, remove from pending
+      if (personId === currentPersonId) {
+        delete next[itemId];
       } else {
-        // Unassign
-        const response = await fetch(`/api/events/${eventId}/items/${itemId}/assign`, {
-          method: 'DELETE',
-        });
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Failed to unassign item');
+        next[itemId] = { personId, teamId };
+      }
+      return next;
+    });
+  };
+
+  // Save all pending assignments in batch
+  const handleSaveAllAssignments = async () => {
+    const entries = Object.entries(pendingAssignments);
+    if (entries.length === 0) return;
+
+    setSavingAssignments(true);
+    try {
+      for (const [itemId, { personId }] of entries) {
+        if (personId) {
+          const response = await fetch(`/api/events/${eventId}/items/${itemId}/assign`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ personId }),
+          });
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || `Failed to assign item ${itemId}`);
+          }
+        } else {
+          const response = await fetch(`/api/events/${eventId}/items/${itemId}/assign`, {
+            method: 'DELETE',
+          });
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || `Failed to unassign item ${itemId}`);
+          }
         }
       }
 
-      // Reload team items, teams, and gate check
-      await loadTeamItems(teamId);
-      await loadTeams();
+      // Clear pending and reload data
+      setPendingAssignments({});
+      const affectedTeamIds = new Set(entries.map(([, { teamId }]) => teamId));
+      await Promise.all([
+        ...Array.from(affectedTeamIds).map((tid) => loadTeamItems(tid)),
+        loadTeams(),
+        loadItems(),
+      ]);
       setGateCheckRefresh((prev) => prev + 1);
+      toast.success(`Saved ${entries.length} assignment${entries.length > 1 ? 's' : ''}`);
     } catch (error: any) {
-      console.error('Error assigning item:', error);
-      toast.error(error.message || 'Failed to assign item');
+      toast.error(error.message || 'Failed to save assignments');
+    } finally {
+      setSavingAssignments(false);
     }
   };
 
-  // Commented out unused function
-  // const toggleTeamExpanded = async (teamId: string) => {
-  //   const newExpanded = new Set(expandedTeams);
-  //   if (newExpanded.has(teamId)) {
-  //     newExpanded.delete(teamId);
-  //   } else {
-  //     newExpanded.add(teamId);
-  //     // Load items when expanding
-  //     if (!teamItems[teamId]) {
-  //       await loadTeamItems(teamId);
-  //     }
-  //   }
-  //   setExpandedTeams(newExpanded);
-  // };
+  // Teams modal close handler with unsaved changes warning
+  const handleTeamsModalClose = () => {
+    if (Object.keys(pendingAssignments).length > 0) {
+      setShowDiscardWarning(true);
+    } else {
+      handleCloseExpansion();
+    }
+  };
+
+  const handleDiscardAndClose = () => {
+    setPendingAssignments({});
+    setShowDiscardWarning(false);
+    handleCloseExpansion();
+  };
 
   const handleStartEditItem = (item: Item) => {
     setEditingItem(item);
@@ -2219,7 +2257,7 @@ export default function PlanEditorPage() {
         {/* Teams Expansion */}
         <SectionExpandModal
           isOpen={expandedSection === 'teams'}
-          onClose={handleCloseExpansion}
+          onClose={handleTeamsModalClose}
           title="Teams"
           icon={<Users className="w-6 h-6" />}
           tabBar={buildTabBar('teams')}
@@ -2403,11 +2441,24 @@ export default function PlanEditorPage() {
                                       Assign to
                                     </label>
                                     <select
-                                      value={item.assignment?.person?.id || ''}
-                                      onChange={(e) =>
-                                        handleQuickAssign(item.id, e.target.value, team.id)
+                                      value={
+                                        pendingAssignments[item.id] !== undefined
+                                          ? pendingAssignments[item.id].personId
+                                          : item.assignment?.person?.id || ''
                                       }
-                                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                                      onChange={(e) =>
+                                        handleStageAssignment(
+                                          item.id,
+                                          e.target.value,
+                                          team.id,
+                                          item.assignment?.person?.id || ''
+                                        )
+                                      }
+                                      className={`w-full px-2 py-1 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
+                                        pendingAssignments[item.id] !== undefined
+                                          ? 'border-amber-400 bg-amber-50'
+                                          : 'border-gray-300'
+                                      }`}
                                     >
                                       <option value="">Unassigned</option>
                                       {people
@@ -2418,6 +2469,9 @@ export default function PlanEditorPage() {
                                           </option>
                                         ))}
                                     </select>
+                                    {pendingAssignments[item.id] !== undefined && (
+                                      <p className="text-xs text-amber-600 mt-0.5">Unsaved</p>
+                                    )}
                                     {people.filter((p) => p.team.id === team.id).length === 0 ? (
                                       <p className="text-xs text-gray-500 mt-1">
                                         No people in this team yet
@@ -2456,7 +2510,59 @@ export default function PlanEditorPage() {
               ))}
             </div>
           )}
+
+          {/* Batch Save Bar */}
+          {Object.keys(pendingAssignments).length > 0 && (
+            <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 flex items-center justify-between shadow-lg rounded-b-lg">
+              <span className="text-sm text-amber-700 font-medium">
+                {Object.keys(pendingAssignments).length} unsaved assignment
+                {Object.keys(pendingAssignments).length > 1 ? 's' : ''}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPendingAssignments({})}
+                  className="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200"
+                >
+                  Discard
+                </button>
+                <button
+                  onClick={handleSaveAllAssignments}
+                  disabled={savingAssignments}
+                  className="px-4 py-2 text-sm text-white bg-accent rounded-md hover:bg-accent-dark disabled:opacity-50"
+                >
+                  {savingAssignments ? 'Saving...' : 'Save All'}
+                </button>
+              </div>
+            </div>
+          )}
         </SectionExpandModal>
+
+        {/* Unsaved changes warning for Teams modal */}
+        {showDiscardWarning && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-[70] flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Unsaved changes</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                You have {Object.keys(pendingAssignments).length} unsaved assignment
+                {Object.keys(pendingAssignments).length > 1 ? 's' : ''}. Close without saving?
+              </p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setShowDiscardWarning(false)}
+                  className="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200"
+                >
+                  Go Back
+                </button>
+                <button
+                  onClick={handleDiscardAndClose}
+                  className="px-4 py-2 text-sm text-white bg-red-600 rounded-md hover:bg-red-700"
+                >
+                  Discard & Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Unfreeze Expansion */}
         {event && event.status === 'FROZEN' && (
