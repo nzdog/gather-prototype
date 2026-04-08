@@ -1409,7 +1409,10 @@ export default function PlanEditorPage() {
         <div className="max-w-7xl mx-auto px-4 py-8">
           {/* Event Stage Progress - Hide when checklist is visible */}
           {!(event.status === 'DRAFT' && !checklistDismissed) && (
-            <EventStageProgress currentStatus={event.status as any} />
+            <EventStageProgress
+              currentStatus={event.status as any}
+              onFreezeClick={() => handleExpandSection('planstatus')}
+            />
           )}
 
           {/* Setup Checklist Banner - Only show in DRAFT status and not dismissed */}

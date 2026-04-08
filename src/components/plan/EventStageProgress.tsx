@@ -7,6 +7,7 @@ type EventStatus = 'DRAFT' | 'CONFIRMING' | 'FROZEN' | 'COMPLETE';
 
 interface EventStageProgressProps {
   currentStatus: EventStatus;
+  onFreezeClick?: () => void;
 }
 
 const stages: { status: EventStatus; label: string; icon: string }[] = [
@@ -16,7 +17,16 @@ const stages: { status: EventStatus; label: string; icon: string }[] = [
   { status: 'COMPLETE', label: STATUS_LABELS.COMPLETE, icon: '✅' },
 ];
 
-export default function EventStageProgress({ currentStatus }: EventStageProgressProps) {
+function getFrozenStepLabel(currentStatus: EventStatus): string {
+  if (currentStatus === 'CONFIRMING') return 'Freeze Event';
+  if (currentStatus === 'FROZEN' || currentStatus === 'COMPLETE') return 'Frozen';
+  return STATUS_LABELS.FROZEN;
+}
+
+export default function EventStageProgress({
+  currentStatus,
+  onFreezeClick,
+}: EventStageProgressProps) {
   const currentIndex = stages.findIndex((s) => s.status === currentStatus);
 
   return (
@@ -27,17 +37,39 @@ export default function EventStageProgress({ currentStatus }: EventStageProgress
           const isCurrent = index === currentIndex;
           const isLast = index === stages.length - 1;
 
+          const isFrozenStep = stage.status === 'FROZEN';
+          const isClickableFreezeStep =
+            isFrozenStep && currentStatus === 'CONFIRMING' && onFreezeClick;
+          const displayLabel = isFrozenStep ? getFrozenStepLabel(currentStatus) : stage.label;
+
           return (
             <div key={stage.status} className="flex items-center flex-1">
               {/* Stage Circle */}
-              <div className="flex flex-col items-center">
+              <div
+                className={`flex flex-col items-center${isClickableFreezeStep ? ' cursor-pointer group' : ''}`}
+                onClick={isClickableFreezeStep ? onFreezeClick : undefined}
+                role={isClickableFreezeStep ? 'button' : undefined}
+                tabIndex={isClickableFreezeStep ? 0 : undefined}
+                onKeyDown={
+                  isClickableFreezeStep
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onFreezeClick();
+                        }
+                      }
+                    : undefined
+                }
+              >
                 <div
                   className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-semibold transition-all ${
                     isPast
                       ? 'bg-sage-600 text-white'
                       : isCurrent
                         ? 'bg-accent text-white ring-4 ring-blue-200'
-                        : 'bg-gray-200 text-gray-400'
+                        : isClickableFreezeStep
+                          ? 'bg-blue-100 text-blue-600 ring-2 ring-blue-300 group-hover:ring-blue-400 group-hover:bg-blue-200'
+                          : 'bg-gray-200 text-gray-400'
                   }`}
                 >
                   {isPast ? <Check className="w-6 h-6" /> : stage.icon}
@@ -49,10 +81,12 @@ export default function EventStageProgress({ currentStatus }: EventStageProgress
                         ? 'text-accent font-semibold'
                         : isPast
                           ? 'text-gray-900'
-                          : 'text-gray-400'
+                          : isClickableFreezeStep
+                            ? 'text-blue-600 font-semibold group-hover:text-blue-700'
+                            : 'text-gray-400'
                     }`}
                   >
-                    {stage.label}
+                    {displayLabel}
                   </p>
                   {isCurrent && (
                     <p className="text-xs text-accent font-medium mt-0.5">Current Status</p>
