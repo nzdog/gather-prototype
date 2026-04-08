@@ -41,8 +41,6 @@ export async function checkAndResetDismissedConflicts(eventId: string): Promise<
       });
 
       reopenedConflicts.push(reopened);
-
-      console.log(`Reopened conflict ${conflict.id}: ${shouldReopen.reason}`);
     }
   }
 

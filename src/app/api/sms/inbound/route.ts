@@ -21,9 +21,6 @@ export async function POST(request: NextRequest) {
     const body = formData.get('Body') as string;
     const messageSid = formData.get('MessageSid') as string;
 
-    // Log for debugging
-    console.log(`[SMS Inbound] From: ${from}, Body: "${body}", SID: ${messageSid}`);
-
     if (!from || !body) {
       console.warn('[SMS Inbound] Missing From or Body');
       return new NextResponse('OK', { status: 200 });
@@ -39,14 +36,11 @@ export async function POST(request: NextRequest) {
 
     // Check if this is an opt-out message
     if (!isOptOutMessage(body)) {
-      // Not an opt-out - log and ignore
-      console.log(`[SMS Inbound] Non-opt-out message from ${normalizedPhone}: "${body}"`);
       return new NextResponse('OK', { status: 200 });
     }
 
     // Process opt-out
     const keyword = getOptOutKeyword(body);
-    console.log(`[SMS Inbound] Processing opt-out from ${normalizedPhone}, keyword: ${keyword}`);
 
     // Find the most recent host who sent to this number
     // by looking at recent NUDGE_SENT_AUTO events
@@ -71,9 +65,6 @@ export async function POST(request: NextRequest) {
     });
 
     if (!recentNudge || !recentNudge.event) {
-      console.log(
-        `[SMS Inbound] No recent nudge found for ${normalizedPhone}, cannot determine host`
-      );
       // Still return 200 - don't retry
       return new NextResponse('OK', { status: 200 });
     }
@@ -138,8 +129,6 @@ export async function POST(request: NextRequest) {
         hostName: recentNudge.event.host?.name,
       },
     });
-
-    console.log(`[SMS Inbound] Opt-out processed for ${normalizedPhone} from host ${hostId}`);
 
     // Return 200 to acknowledge receipt
     // Optionally, you could return TwiML to send a confirmation message

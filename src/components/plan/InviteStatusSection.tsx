@@ -611,7 +611,6 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
                 key={person.id}
                 className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50 cursor-pointer"
                 onClick={() => {
-                  console.log('Person clicked:', person.id, person.name);
                   if (onPersonClick) {
                     onPersonClick(person.id);
                   }

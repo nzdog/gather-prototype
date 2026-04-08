@@ -163,8 +163,6 @@ export async function POST(request: NextRequest) {
       return { event, user };
     });
 
-    console.log('[Event Creation] Event created with payment:', event.id);
-
     // Create session to log the user in automatically
     const sessionToken = randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days

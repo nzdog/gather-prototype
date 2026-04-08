@@ -48,19 +48,9 @@ export async function POST(_req: Request) {
       });
     }
 
-    console.log('[Cancel] Canceling subscription:', subscription.stripeSubscriptionId);
-
     // Update Stripe subscription to cancel at period end
-    const stripeSubscription = await stripe.subscriptions.update(
-      subscription.stripeSubscriptionId,
-      {
-        cancel_at_period_end: true,
-      }
-    );
-
-    console.log('[Cancel] Stripe subscription updated:', {
-      id: stripeSubscription.id,
-      cancel_at_period_end: stripeSubscription.cancel_at_period_end,
+    await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
+      cancel_at_period_end: true,
     });
 
     // Update local subscription record
@@ -69,12 +59,6 @@ export async function POST(_req: Request) {
       data: {
         cancelAtPeriodEnd: true,
       },
-    });
-
-    console.log('[Cancel] Local subscription updated:', {
-      userId: user.id,
-      cancelAtPeriodEnd: true,
-      currentPeriodEnd: updatedSubscription.currentPeriodEnd,
     });
 
     return NextResponse.json({

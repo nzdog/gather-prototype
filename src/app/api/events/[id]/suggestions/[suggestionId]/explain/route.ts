@@ -27,8 +27,6 @@ export async function GET(
     }
 
     // Generate explanation using Claude AI
-    console.log('[Explain] Generating explanation for conflict:', conflict.id);
-
     const aiExplanation = await generateExplanation({
       type: conflict.type,
       severity: conflict.severity,
@@ -57,8 +55,6 @@ export async function GET(
       reasoning: aiExplanation.reasoning,
       suggestions: aiExplanation.suggestions,
     };
-
-    console.log('[Explain] Successfully generated explanation');
 
     return NextResponse.json({
       explanation,

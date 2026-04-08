@@ -20,11 +20,8 @@ export async function POST() {
   // This is a dev-only endpoint for resetting demo data
 
   try {
-    console.log('[Reset] Starting full database reset...');
-
     // Step 1: Drop all tables and sync schema
-    console.log('[Reset] Step 1: Dropping tables and syncing schema...');
-    const { stdout: pushStdout, stderr: pushStderr } = await execAsync(
+    const { stderr: pushStderr } = await execAsync(
       'npx prisma db push --force-reset --accept-data-loss --skip-generate',
       {
         env: {
@@ -34,21 +31,16 @@ export async function POST() {
       }
     );
 
-    console.log('[Reset] Schema sync stdout:', pushStdout);
     if (pushStderr) {
       console.warn('[Reset] Schema sync stderr:', pushStderr);
     }
 
     // Step 2: Run seed script
-    console.log('[Reset] Step 2: Running seed script...');
-    const { stdout: seedStdout, stderr: seedStderr } = await execAsync('npx tsx prisma/seed.ts');
+    const { stderr: seedStderr } = await execAsync('npx tsx prisma/seed.ts');
 
-    console.log('[Reset] Seed stdout:', seedStdout);
     if (seedStderr) {
       console.warn('[Reset] Seed stderr:', seedStderr);
     }
-
-    console.log('[Reset] Database reset and seeded successfully');
 
     return NextResponse.json({
       success: true,

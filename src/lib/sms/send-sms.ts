@@ -32,7 +32,6 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
 
   // Check if SMS is configured
   if (!isSmsEnabled()) {
-    console.log(`[SMS] Disabled - would send to ${to}: "${message.substring(0, 50)}..."`);
     return {
       success: false,
       blocked: 'SMS_DISABLED',

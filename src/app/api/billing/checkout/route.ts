@@ -37,8 +37,6 @@ export async function POST(req: Request) {
       },
     });
 
-    console.log('[Checkout] Created one-time payment session:', session.id);
-
     return NextResponse.json({
       checkoutUrl: session.url,
       sessionId: session.id,
