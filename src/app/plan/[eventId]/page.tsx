@@ -24,6 +24,7 @@ import {
 import ConflictList from '@/components/plan/ConflictList';
 import GateCheck from '@/components/plan/GateCheck';
 import FreezeCheck from '@/components/plan/FreezeCheck';
+import TransitionModal from '@/components/plan/TransitionModal';
 import UnfreezeSection from '@/components/plan/UnfreezeSection';
 import EventStageProgress from '@/components/plan/EventStageProgress';
 import SaveTemplateModal from '@/components/templates/SaveTemplateModal';
@@ -213,7 +214,8 @@ export default function PlanEditorPage() {
   const [loadingTeamItems, setLoadingTeamItems] = useState<Set<string>>(new Set());
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [gateCheckRefresh, setGateCheckRefresh] = useState(0);
-  const [bannerGateCheckTrigger, setBannerGateCheckTrigger] = useState(0);
+  const [showTransitionModal, setShowTransitionModal] = useState(false);
+  const [transitionLoading, setTransitionLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [regenerateModalOpen, setRegenerateModalOpen] = useState(false);
@@ -259,11 +261,6 @@ export default function PlanEditorPage() {
   const [wrapUpRetrying, setWrapUpRetrying] = useState(false);
   const [modalBreadcrumbTrail, setModalBreadcrumbTrail] = useState<ModalTabId[]>([]);
   const pendingModalAction = useRef<'generate' | null>(null);
-
-  // Debug: Log when selectedPersonId changes
-  useEffect(() => {
-    console.log('selectedPersonId changed:', selectedPersonId);
-  }, [selectedPersonId]);
 
   // Review mode for selective regeneration
   const [reviewMode, setReviewMode] = useState(false);
@@ -649,8 +646,7 @@ export default function PlanEditorPage() {
 
       if (!response.ok) throw new Error('Failed to regenerate items');
 
-      const data = await response.json();
-      console.log('Regeneration complete:', data);
+      await response.json();
 
       // Reload review items to show ALL items (kept + newly regenerated)
       const reviewResponse = await fetch(`/api/events/${eventId}/review-items`);
@@ -672,8 +668,7 @@ export default function PlanEditorPage() {
 
       if (!response.ok) throw new Error('Failed to confirm items');
 
-      const data = await response.json();
-      console.log('Confirmed items:', data);
+      await response.json();
 
       // Exit review mode and reload plan
       setReviewMode(false);
@@ -720,7 +715,6 @@ export default function PlanEditorPage() {
 
       // Automatically run check plan if it was run before
       if (event?.lastCheckPlanAt) {
-        console.log('Auto-running check plan after regeneration...');
         try {
           const checkResponse = await fetch(`/api/events/${eventId}/check`, {
             method: 'POST',
@@ -729,7 +723,6 @@ export default function PlanEditorPage() {
           if (checkResponse.ok) {
             await loadEvent();
             await loadConflicts();
-            console.log('Check plan completed successfully after regeneration');
           }
         } catch (checkError) {
           console.error('Error auto-running check plan:', checkError);
@@ -1241,6 +1234,29 @@ export default function PlanEditorPage() {
     }
   };
 
+  const handleBannerMoveToConfirming = async () => {
+    setTransitionLoading(true);
+    try {
+      const response = await fetch(`/api/events/${eventId}/gate-check`, { method: 'POST' });
+      if (!response.ok) {
+        toast.error('Failed to run gate check');
+        return;
+      }
+      const result = await response.json();
+      if (result.passed) {
+        setShowTransitionModal(true);
+      } else {
+        // Gate check failed — open the plan status section so user can see blocking issues
+        handleExpandSection('planstatus');
+        toast.error(`${result.blocks?.length || 0} issue(s) must be resolved before transitioning`);
+      }
+    } catch {
+      toast.error('Failed to run gate check');
+    } finally {
+      setTransitionLoading(false);
+    }
+  };
+
   // Clear checklist step context when modals close
   const handleEditEventModalClose = () => {
     setEditEventModalOpen(false);
@@ -1402,7 +1418,8 @@ export default function PlanEditorPage() {
             <SetupChecklistBanner
               progress={setupProgress}
               onDismiss={handleChecklistDismiss}
-              onMoveToConfirming={() => setBannerGateCheckTrigger((t) => t + 1)}
+              onMoveToConfirming={handleBannerMoveToConfirming}
+              transitionLoading={transitionLoading}
             />
           )}
 
@@ -1708,7 +1725,6 @@ export default function PlanEditorPage() {
           <GateCheck
             eventId={eventId}
             refreshTrigger={gateCheckRefresh}
-            autoOpenTrigger={bannerGateCheckTrigger}
             onTransitionComplete={() => {
               loadEvent();
               loadTeams();
@@ -1822,6 +1838,21 @@ export default function PlanEditorPage() {
               : undefined
           }
         />
+
+        {/* Transition Modal — DRAFT → CONFIRMING (rendered at page level, not inside hidden div) */}
+        {showTransitionModal && (
+          <TransitionModal
+            eventId={eventId}
+            onClose={() => setShowTransitionModal(false)}
+            onSuccess={() => {
+              setShowTransitionModal(false);
+              loadEvent();
+              loadTeams();
+              loadConflicts();
+              toast.success('Event moved to CONFIRMING — invites are ready to send!');
+            }}
+          />
+        )}
 
         {/* Edit Event Modal */}
         {event && (
@@ -2859,7 +2890,6 @@ export default function PlanEditorPage() {
             eventId={eventId}
             personId={selectedPersonId}
             onClose={() => {
-              console.log('Closing person detail modal');
               setSelectedPersonId(null);
             }}
             onUpdate={loadInviteLinks}
