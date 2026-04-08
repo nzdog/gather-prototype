@@ -49,30 +49,39 @@ export async function GET(
       },
     });
 
-    // Get participant tokens for each person
+    // Get access tokens for each person (any scope — HOST, COORDINATOR, or PARTICIPANT)
     const tokens = await prisma.accessToken.findMany({
-      where: {
-        eventId,
-        scope: 'PARTICIPANT',
-      },
+      where: { eventId },
       select: {
         personId: true,
         token: true,
+        scope: true,
       },
     });
 
-    // Create a map of personId -> token
-    const tokenMap = new Map<string, string>();
+    // Create a map of personId -> { token, scope, prefix }
+    // Prefer PARTICIPANT token; fall back to COORDINATOR or HOST
+    const tokenMap = new Map<string, { token: string; scope: string }>();
+    // First pass: add all tokens (later scopes may overwrite earlier ones)
+    const scopePriority: Record<string, number> = { PARTICIPANT: 3, COORDINATOR: 2, HOST: 1 };
     tokens.forEach((t) => {
-      tokenMap.set(t.personId, t.token);
+      const existing = tokenMap.get(t.personId);
+      if (!existing || (scopePriority[t.scope] || 0) > (scopePriority[existing.scope] || 0)) {
+        tokenMap.set(t.personId, { token: t.token, scope: t.scope });
+      }
     });
 
     // Build response with people and their tokens
-    const peopleWithTokens = people.map((pe) => ({
-      id: pe.person.id,
-      name: pe.person.name,
-      token: tokenMap.get(pe.person.id) || null,
-    }));
+    const prefixMap: Record<string, string> = { HOST: 'h', COORDINATOR: 'c', PARTICIPANT: 'p' };
+    const peopleWithTokens = people.map((pe) => {
+      const entry = tokenMap.get(pe.person.id);
+      return {
+        id: pe.person.id,
+        name: pe.person.name,
+        token: entry?.token || null,
+        tokenPrefix: entry ? prefixMap[entry.scope] || 'p' : null,
+      };
+    });
 
     return NextResponse.json({
       event: {

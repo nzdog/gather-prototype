@@ -9,6 +9,7 @@ interface Person {
   id: string;
   name: string;
   token: string | null;
+  tokenPrefix: string | null;
 }
 
 interface DirectoryData {
@@ -52,7 +53,8 @@ export default function DirectoryPage() {
 
   const handlePersonClick = (person: Person) => {
     if (person.token) {
-      router.push(`/p/${person.token}`);
+      const prefix = person.tokenPrefix || 'p';
+      router.push(`/${prefix}/${person.token}`);
     } else {
       toast.warning('This person does not have access yet. Please contact the host.');
     }
