@@ -30,6 +30,7 @@
     "test:setup-modal-dashboard-entry": "tsx tests/setup-modal-dashboard-entry-test.ts",
     "test:view-as-host-alert": "tsx tests/view-as-host-alert-test.ts",
     "test:initial-plan-mismatch": "tsx tests/initial-plan-mismatch-test.ts",
+    "test:auto-assign": "tsx tests/auto-assign-items-host-test.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",

@@ -202,7 +202,8 @@ export default function PeopleSection({
       }
 
       // Success feedback
-      toast.success(`Successfully assigned ${data.assigned} people to teams!`);
+      const itemMsg = data.itemsAssigned > 0 ? ` and ${data.itemsAssigned} items to people` : '';
+      toast.success(`Successfully assigned ${data.assigned} people to teams${itemMsg}!`);
 
       // Refresh data
       onPeopleChanged?.();
