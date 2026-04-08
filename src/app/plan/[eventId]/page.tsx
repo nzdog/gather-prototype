@@ -253,6 +253,7 @@ export default function PlanEditorPage() {
     failed: number;
     skipped: number;
     pending: number;
+    earliestCreatedAt: string | null;
     guests: Array<{
       personId: string;
       name: string;
@@ -264,6 +265,7 @@ export default function PlanEditorPage() {
   } | null>(null);
   const [wrapUpRetrying, setWrapUpRetrying] = useState(false);
   const [wrapUpStatusLoading, setWrapUpStatusLoading] = useState(false);
+  const [countdownMinutes, setCountdownMinutes] = useState<number | null>(null);
   const [modalBreadcrumbTrail, setModalBreadcrumbTrail] = useState<ModalTabId[]>([]);
   const pendingModalAction = useRef<'generate' | null>(null);
 
@@ -361,6 +363,29 @@ export default function PlanEditorPage() {
       }
     }
   }, [eventId]);
+
+  // Countdown timer for wrap-up dispatch (updates every 30s)
+  useEffect(() => {
+    if (
+      !wrapUpDispatch?.pending ||
+      wrapUpDispatch.pending === 0 ||
+      !wrapUpDispatch.earliestCreatedAt
+    ) {
+      setCountdownMinutes(null);
+      return;
+    }
+
+    const computeMinutes = () => {
+      const createdAt = new Date(wrapUpDispatch.earliestCreatedAt!).getTime();
+      const dispatchAt = createdAt + 10 * 60 * 1000; // 10-minute delay
+      const remaining = Math.ceil((dispatchAt - Date.now()) / 60000);
+      setCountdownMinutes(remaining > 0 ? remaining : 0);
+    };
+
+    computeMinutes();
+    const interval = setInterval(computeMinutes, 30000);
+    return () => clearInterval(interval);
+  }, [wrapUpDispatch?.pending, wrapUpDispatch?.earliestCreatedAt]);
 
   const loadEvent = async () => {
     try {
@@ -2805,7 +2830,7 @@ export default function PlanEditorPage() {
           <SectionExpandModal
             isOpen={expandedSection === 'wrapup'}
             onClose={handleCloseExpansion}
-            title={event.status === 'COMPLETE' ? 'Completion Status' : 'Complete Event'}
+            title="Event Complete"
             icon={<Gift className="w-6 h-6" />}
           >
             {event.status === 'FROZEN' && !wrapUpResult?.success && (
@@ -2910,9 +2935,16 @@ export default function PlanEditorPage() {
                       {wrapUpDispatch.pending > 0 && (
                         <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
                           <p className="text-sm text-blue-700">
-                            {wrapUpDispatch.pending} message(s) still queued — they will be sent
-                            shortly.
+                            {wrapUpDispatch.pending} message(s) still queued — messages will be sent
+                            within 10–20 minutes.
                           </p>
+                          {countdownMinutes !== null && (
+                            <p className="text-sm font-medium text-blue-800 mt-1">
+                              {countdownMinutes > 0
+                                ? `Sending in ${countdownMinutes} minute${countdownMinutes !== 1 ? 's' : ''}`
+                                : 'Sending now — refresh to check status'}
+                            </p>
+                          )}
                         </div>
                       )}
 
