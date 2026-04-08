@@ -29,13 +29,12 @@ export default function NewPlanPage() {
     name: '',
     startDate: '',
     endDate: '',
+    hostName: '',
+    email: '',
+    phone: '',
   });
-  const [prefilledContact, setPrefilledContact] = useState<{
-    name: string;
-    email: string;
-    phone: string;
-    ref: string;
-  } | null>(null);
+  const [referralRef, setReferralRef] = useState('');
+  const [showWelcome, setShowWelcome] = useState(false);
   const [showExpiredNotice, setShowExpiredNotice] = useState(false);
 
   // Handle pre-populated params from wrap-up links and expired notice
@@ -51,7 +50,16 @@ export default function NewPlanPage() {
     const ref = sanitiseParam(searchParams.get('ref'));
 
     if (refName || refEmail || refPhone) {
-      setPrefilledContact({ name: refName, email: refEmail, phone: refPhone, ref });
+      setFormData((prev) => ({
+        ...prev,
+        hostName: refName,
+        email: refEmail,
+        phone: refPhone,
+      }));
+      setShowWelcome(!!refName);
+    }
+    if (ref) {
+      setReferralRef(ref);
     }
   }, [searchParams]);
 
@@ -159,9 +167,17 @@ export default function NewPlanPage() {
   const startCheckout = async (data: typeof formData) => {
     // Save form data so we can restore it if payment is canceled
     sessionStorage.setItem('gather_new_event', JSON.stringify(data));
-    // Persist pre-filled contact for use after payment
-    if (prefilledContact) {
-      sessionStorage.setItem('gather_prefilled_contact', JSON.stringify(prefilledContact));
+    // Persist contact info for use after payment
+    if (data.hostName || data.email || data.phone) {
+      sessionStorage.setItem(
+        'gather_prefilled_contact',
+        JSON.stringify({
+          name: data.hostName,
+          email: data.email,
+          phone: data.phone,
+          ref: referralRef,
+        })
+      );
     }
 
     const response = await fetch('/api/billing/checkout', {
@@ -306,15 +322,11 @@ export default function NewPlanPage() {
           </div>
         )}
 
-        {/* Pre-filled Contact Info */}
-        {prefilledContact && prefilledContact.name && (
-          <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 mb-6">
-            <p className="text-green-800 font-medium">Welcome, {prefilledContact.name}!</p>
-            <p className="text-green-700 text-sm mt-1">
-              Your details are pre-filled — just add your event info below and you&apos;re good to
-              go.
-            </p>
-          </div>
+        {/* Subtle welcome for referred users */}
+        {showWelcome && formData.hostName && (
+          <p className="text-green-700 text-sm mb-4">
+            Welcome back, {formData.hostName} — your details are pre-filled below.
+          </p>
         )}
 
         {/* Error Display */}
@@ -339,6 +351,54 @@ export default function NewPlanPage() {
               value={formData.name}
               onChange={handleChange}
               placeholder="e.g., Richardson Family BBQ"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent text-lg"
+            />
+          </div>
+
+          {/* Your Name */}
+          <div>
+            <label htmlFor="hostName" className="block text-sm font-medium text-gray-700 mb-2">
+              Your Name
+            </label>
+            <input
+              type="text"
+              id="hostName"
+              name="hostName"
+              value={formData.hostName}
+              onChange={handleChange}
+              placeholder="e.g., Sarah Richardson"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent text-lg"
+            />
+          </div>
+
+          {/* Email */}
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+              Email
+            </label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              placeholder="e.g., sarah@example.com"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent text-lg"
+            />
+          </div>
+
+          {/* Phone */}
+          <div>
+            <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
+              Phone
+            </label>
+            <input
+              type="tel"
+              id="phone"
+              name="phone"
+              value={formData.phone}
+              onChange={handleChange}
+              placeholder="e.g., 021 123 4567"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent text-lg"
             />
           </div>
