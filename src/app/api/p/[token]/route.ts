@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
+import { getUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/prisma';
 import { logInviteEvent } from '@/lib/invite-events';
 import { RsvpStatus } from '@prisma/client';
@@ -18,6 +19,59 @@ export async function GET(request: NextRequest, context: { params: Promise<{ tok
 
   if (!resolvedContext || resolvedContext.scope !== 'PARTICIPANT') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
+
+  // Check if the viewer is the host of this event (for link preview)
+  const user = await getUser();
+  if (user) {
+    const hostRole = await prisma.eventRole.findFirst({
+      where: {
+        userId: user.id,
+        eventId: resolvedContext.event.id,
+        role: 'HOST',
+      },
+    });
+
+    if (hostRole) {
+      // Fetch assignments for preview (same query as below, but skip tracking)
+      const assignments = await prisma.assignment.findMany({
+        where: {
+          personId: resolvedContext.person.id,
+          item: { team: { eventId: resolvedContext.event.id } },
+        },
+        include: {
+          item: {
+            include: {
+              day: true,
+            },
+          },
+        },
+        orderBy: { item: { name: 'asc' } },
+      });
+
+      return NextResponse.json({
+        isHostPreview: true,
+        person: {
+          id: resolvedContext.person.id,
+          name: resolvedContext.person.name,
+        },
+        event: {
+          id: resolvedContext.event.id,
+          name: resolvedContext.event.name,
+        },
+        assignments: assignments.map((a) => ({
+          id: a.id,
+          response: a.response,
+          item: {
+            id: a.item.id,
+            name: a.item.name,
+            quantity: a.item.quantity,
+            critical: a.item.critical,
+            day: a.item.day ? { id: a.item.day.id, name: a.item.day.name } : null,
+          },
+        })),
+      });
+    }
   }
 
   // Track first link open (non-blocking)

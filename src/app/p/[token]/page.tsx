@@ -14,6 +14,23 @@ import {
 import ItemStatusBadges from '@/components/plan/ItemStatusBadges';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 
+interface HostPreviewData {
+  isHostPreview: true;
+  person: { id: string; name: string };
+  event: { id: string; name: string };
+  assignments: {
+    id: string;
+    response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+    item: {
+      id: string;
+      name: string;
+      quantity: string | null;
+      critical: boolean;
+      day: { id: string; name: string } | null;
+    };
+  }[];
+}
+
 interface Assignment {
   id: string;
   response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
@@ -85,6 +102,7 @@ export default function ParticipantView() {
   const params = useParams();
   const token = params.token as string;
   const [data, setData] = useState<ParticipantData | null>(null);
+  const [hostPreview, setHostPreview] = useState<HostPreviewData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [collapsedAssignments, setCollapsedAssignments] = useState<Set<string>>(new Set());
@@ -103,6 +121,12 @@ export default function ParticipantView() {
         throw new Error('Failed to load data');
       }
       const result = await response.json();
+
+      if (result.isHostPreview) {
+        setHostPreview(result);
+        return;
+      }
+
       setData(result);
 
       if (isInitialLoad.current) {
@@ -219,7 +243,7 @@ export default function ParticipantView() {
     );
   }
 
-  if (error || !data) {
+  if (error || (!data && !hostPreview)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-red-600 max-w-md text-center px-4">
@@ -228,6 +252,63 @@ export default function ParticipantView() {
       </div>
     );
   }
+
+  if (hostPreview) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-6 min-h-screen flex flex-col items-center justify-center">
+          <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 w-full max-w-md text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-sage-100 rounded-full mb-4">
+              <Check className="size-8 text-sage-600" />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Link checked, good to send</h1>
+            <p className="text-gray-600 mb-6">
+              This invite link is for <strong>{hostPreview.person.name}</strong> to{' '}
+              <strong>{hostPreview.event.name}</strong>.
+            </p>
+
+            {hostPreview.assignments.length > 0 && (
+              <div className="text-left border-t border-gray-100 pt-4 mb-6">
+                <h2 className="text-sm uppercase tracking-wide text-gray-500 mb-3">
+                  Assigned Items ({hostPreview.assignments.length})
+                </h2>
+                <ul className="space-y-2">
+                  {hostPreview.assignments.map((a) => (
+                    <li key={a.id} className="flex items-center gap-2 text-sm text-gray-700">
+                      <span className="font-medium">{a.item.name}</span>
+                      {a.item.quantity && <span className="text-gray-400">x{a.item.quantity}</span>}
+                      {a.item.critical && (
+                        <span className="bg-red-100 text-red-800 text-xs font-semibold px-1.5 py-0.5 rounded">
+                          CRITICAL
+                        </span>
+                      )}
+                      {a.item.day && (
+                        <span className="text-gray-400 text-xs">({a.item.day.name})</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {hostPreview.assignments.length === 0 && (
+              <p className="text-sm text-gray-500 mb-6">No items assigned yet.</p>
+            )}
+
+            <a
+              href={`/plan/${hostPreview.event.id}`}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-sage-600 text-white rounded-lg hover:bg-sage-700 transition-colors font-medium"
+            >
+              Back to event
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // After hostPreview and error early-returns, data is guaranteed non-null
+  if (!data) return null;
 
   return (
     <div className="min-h-screen bg-gray-50">
