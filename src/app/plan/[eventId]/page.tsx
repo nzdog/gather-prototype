@@ -834,7 +834,7 @@ export default function PlanEditorPage() {
         loadEvent();
       }
     } catch {
-      setWrapUpResult({ success: false, message: 'Failed to wrap up event.' });
+      setWrapUpResult({ success: false, message: 'Failed to complete event.' });
     } finally {
       setWrapUpLoading(false);
     }
@@ -1484,6 +1484,73 @@ export default function PlanEditorPage() {
                   />
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {/* Plan Frozen Card - Only show for FROZEN */}
+                  {event.status === 'FROZEN' && (
+                    <div
+                      onClick={() => handleExpandSection('unfreeze')}
+                      className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group border-2 border-yellow-300"
+                    >
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center group-hover:bg-yellow-200 transition-colors">
+                          <Lock className="w-6 h-6 text-yellow-600" />
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-900">Plan Frozen</h2>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-600 mb-2">The plan is locked</p>
+                        <p className="text-sm font-medium text-yellow-700">
+                          Click to unfreeze and make changes
+                        </p>
+                      </div>
+                      <div className="text-sm text-yellow-600 font-medium">Click to unfreeze →</div>
+                    </div>
+                  )}
+
+                  {/* Complete Event Card - Show for FROZEN (not yet complete) and COMPLETE (show status) */}
+                  {(event.status === 'FROZEN' || event.status === 'COMPLETE') && (
+                    <div
+                      onClick={() => handleExpandSection('wrapup')}
+                      className={`bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group ${
+                        event.status === 'COMPLETE'
+                          ? 'border-2 border-green-300'
+                          : 'border-2 border-accent/30'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 mb-4">
+                        <div
+                          className={`w-12 h-12 rounded-lg flex items-center justify-center group-hover:opacity-80 transition-colors ${
+                            event.status === 'COMPLETE' ? 'bg-green-100' : 'bg-accent-light/20'
+                          }`}
+                        >
+                          <Gift
+                            className={`w-6 h-6 ${event.status === 'COMPLETE' ? 'text-green-600' : 'text-accent'}`}
+                          />
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-900">
+                          {event.status === 'COMPLETE' ? 'Event Complete' : 'Complete Event'}
+                        </h2>
+                      </div>
+                      <div className="flex-1">
+                        {event.status === 'COMPLETE' ? (
+                          <p className="text-sm text-gray-600">
+                            Thank-you messages sent. Click to view dispatch status.
+                          </p>
+                        ) : (
+                          <p className="text-sm text-gray-600">
+                            Send a thank-you to your guests and close the event.
+                          </p>
+                        )}
+                      </div>
+                      <div
+                        className={`text-sm font-medium ${
+                          event.status === 'COMPLETE' ? 'text-green-600' : 'text-accent'
+                        }`}
+                      >
+                        {event.status === 'COMPLETE' ? 'View status →' : 'Complete event →'}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Event Details Card */}
                   <div
                     onClick={() => setEditEventModalOpen(true)}
@@ -1597,73 +1664,6 @@ export default function PlanEditorPage() {
                     </div>
                     <div className="text-sm text-accent font-medium">Click to expand →</div>
                   </div>
-
-                  {/* Unfreeze Card - Only show for FROZEN */}
-                  {event.status === 'FROZEN' && (
-                    <div
-                      onClick={() => handleExpandSection('unfreeze')}
-                      className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group border-2 border-yellow-300"
-                    >
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center group-hover:bg-yellow-200 transition-colors">
-                          <Lock className="w-6 h-6 text-yellow-600" />
-                        </div>
-                        <h2 className="text-xl font-semibold text-gray-900">Plan Frozen</h2>
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-600 mb-2">The plan is locked</p>
-                        <p className="text-sm font-medium text-yellow-700">
-                          Click to unfreeze and make changes
-                        </p>
-                      </div>
-                      <div className="text-sm text-yellow-600 font-medium">Click to unfreeze →</div>
-                    </div>
-                  )}
-
-                  {/* Wrap Up Card - Show for FROZEN (not yet wrapped) and COMPLETE (show status) */}
-                  {(event.status === 'FROZEN' || event.status === 'COMPLETE') && (
-                    <div
-                      onClick={() => handleExpandSection('wrapup')}
-                      className={`bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group ${
-                        event.status === 'COMPLETE'
-                          ? 'border-2 border-green-300'
-                          : 'border-2 border-accent/30'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 mb-4">
-                        <div
-                          className={`w-12 h-12 rounded-lg flex items-center justify-center group-hover:opacity-80 transition-colors ${
-                            event.status === 'COMPLETE' ? 'bg-green-100' : 'bg-accent-light/20'
-                          }`}
-                        >
-                          <Gift
-                            className={`w-6 h-6 ${event.status === 'COMPLETE' ? 'text-green-600' : 'text-accent'}`}
-                          />
-                        </div>
-                        <h2 className="text-xl font-semibold text-gray-900">
-                          {event.status === 'COMPLETE' ? 'Wrapped Up' : 'Wrap Up Event'}
-                        </h2>
-                      </div>
-                      <div className="flex-1">
-                        {event.status === 'COMPLETE' ? (
-                          <p className="text-sm text-gray-600">
-                            Thank-you messages sent. Click to view dispatch status.
-                          </p>
-                        ) : (
-                          <p className="text-sm text-gray-600">
-                            Send a thank-you to your guests and close the event.
-                          </p>
-                        )}
-                      </div>
-                      <div
-                        className={`text-sm font-medium ${
-                          event.status === 'COMPLETE' ? 'text-green-600' : 'text-accent'
-                        }`}
-                      >
-                        {event.status === 'COMPLETE' ? 'View status →' : 'Wrap up →'}
-                      </div>
-                    </div>
-                  )}
 
                   {/* Invite Links Card */}
                   {['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status) &&
@@ -2795,19 +2795,19 @@ export default function PlanEditorPage() {
           </SectionExpandModal>
         )}
 
-        {/* Wrap Up Expansion */}
+        {/* Complete Event Expansion */}
         {event && (event.status === 'FROZEN' || event.status === 'COMPLETE') && (
           <SectionExpandModal
             isOpen={expandedSection === 'wrapup'}
             onClose={handleCloseExpansion}
-            title={event.status === 'COMPLETE' ? 'Wrap-Up Status' : 'Wrap Up Event'}
+            title={event.status === 'COMPLETE' ? 'Completion Status' : 'Complete Event'}
             icon={<Gift className="w-6 h-6" />}
           >
             {event.status === 'FROZEN' && !wrapUpResult?.success && (
               <div className="space-y-6">
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    Send a thank-you to your guests and wrap up {event.name}?
+                    Send a thank-you to your guests and complete {event.name}?
                   </h3>
                   <p className="text-sm text-gray-600 mb-4">
                     This will close the event, and each guest will receive a personalised thank-you
@@ -2822,7 +2822,7 @@ export default function PlanEditorPage() {
                         disabled={wrapUpLoading}
                         className="mt-2 px-4 py-2 bg-yellow-600 text-white text-sm rounded-md hover:bg-yellow-700 disabled:opacity-50"
                       >
-                        {wrapUpLoading ? 'Wrapping up...' : 'Yes, wrap up anyway'}
+                        {wrapUpLoading ? 'Completing...' : 'Yes, complete anyway'}
                       </button>
                     </div>
                   )}
@@ -2835,10 +2835,10 @@ export default function PlanEditorPage() {
                       {wrapUpLoading ? (
                         <span className="flex items-center gap-2">
                           <Loader2 className="w-4 h-4 animate-spin" />
-                          Wrapping up...
+                          Completing...
                         </span>
                       ) : (
-                        'Wrap up & send thank-you messages'
+                        'Complete event & send thank-you messages'
                       )}
                     </button>
                   )}
