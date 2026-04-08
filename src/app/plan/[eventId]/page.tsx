@@ -475,6 +475,10 @@ export default function PlanEditorPage() {
       scroll: false,
     });
     setModalBreadcrumbTrail([]);
+    // Refresh dashboard card data after any expansion modal close
+    loadItems();
+    loadTeams();
+    loadPeople();
   };
 
   // Inter-modal tab navigation handler
