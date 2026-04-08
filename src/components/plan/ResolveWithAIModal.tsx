@@ -137,9 +137,6 @@ export default function ResolveWithAIModal({
       const results = await response.json();
       setImplementationResults(results);
 
-      // Show success message with details
-      console.log('Implementation results:', results);
-
       // Show success for 2 seconds, then close and trigger refresh
       setTimeout(() => {
         onAccept(conflict.id);

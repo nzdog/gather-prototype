@@ -208,10 +208,6 @@ export async function processProxyNudges(candidates: {
       });
     }
 
-    console.log(
-      `[Proxy Nudge] Quiet hours - deferring ${allCandidates.length} proxy nudges for ${minutesUntil} minutes`
-    );
-
     return {
       sent: [],
       escalated: [],

@@ -31,37 +31,23 @@ export async function POST(req: Request) {
     });
   }
 
-  console.log('[Stripe Webhook] Received event:', event.type, 'id:', event.id);
-
   // Handle webhook events
   try {
     switch (event.type) {
       case 'checkout.session.completed': {
-        const session = event.data.object as Stripe.Checkout.Session;
-        console.log('[Stripe Webhook] Checkout session completed:', {
-          sessionId: session.id,
-          paymentStatus: session.payment_status,
-          amountTotal: session.amount_total,
-          userId: session.metadata?.userId,
-        });
         // Note: Event creation happens via POST /api/events, not here
         break;
       }
 
       case 'payment_intent.succeeded': {
-        const paymentIntent = event.data.object as Stripe.PaymentIntent;
-        console.log('[Stripe Webhook] Payment intent succeeded:', paymentIntent.id);
         break;
       }
 
       case 'payment_intent.payment_failed': {
-        const paymentIntent = event.data.object as Stripe.PaymentIntent;
-        console.log('[Stripe Webhook] Payment intent failed:', paymentIntent.id);
         break;
       }
 
       default:
-        console.log('[Stripe Webhook] Unhandled event type:', event.type);
     }
 
     return new Response(JSON.stringify({ received: true }), {

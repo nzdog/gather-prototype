@@ -73,8 +73,6 @@ export default function ReviewDemoPage() {
       if (!response.ok) throw new Error('Failed to regenerate items');
 
       const data = await response.json();
-      console.log('Regeneration complete:', data);
-
       // Reload the review items to show ALL items (kept + newly regenerated)
       await loadReviewItems();
 
@@ -96,7 +94,6 @@ export default function ReviewDemoPage() {
       if (!response.ok) throw new Error('Failed to confirm items');
 
       const data = await response.json();
-      console.log('Confirmed items:', data);
 
       toast.success(`Confirmed ${data.confirmedCount} items!`);
 

@@ -49,11 +49,8 @@ export async function runNudgeScheduler(): Promise<NudgeRunResult> {
   const timestamp = new Date();
   const errors: string[] = [];
 
-  console.log(`[Nudge Scheduler] Starting run at ${timestamp.toISOString()}`);
-
   // Check if SMS is enabled
   if (!isSmsEnabled()) {
-    console.log('[Nudge Scheduler] SMS not enabled - skipping');
     return {
       timestamp,
       smsEnabled: false,
@@ -67,23 +64,11 @@ export async function runNudgeScheduler(): Promise<NudgeRunResult> {
     // Find eligible candidates for direct nudges
     const candidates = await findNudgeCandidates();
 
-    console.log(
-      `[Nudge Scheduler] Found ${candidates.eligible24h.length} for 24h, ${candidates.eligible48h.length} for 48h`
-    );
-
-    if (candidates.skipped.length > 0) {
-      console.log('[Nudge Scheduler] Skipped:', candidates.skipped);
-    }
-
     // Process direct nudges
     const processResult = await processNudges(candidates);
 
     const succeeded = processResult.sent.filter((r) => r.success).length;
     const failed = processResult.sent.filter((r) => !r.success).length;
-
-    console.log(
-      `[Nudge Scheduler] Sent: ${processResult.sent.length}, Succeeded: ${succeeded}, Failed: ${failed}, Deferred: ${processResult.deferred}`
-    );
 
     // Collect errors
     processResult.sent
@@ -93,21 +78,11 @@ export async function runNudgeScheduler(): Promise<NudgeRunResult> {
     // Find eligible candidates for RSVP followup
     const rsvpFollowupResult = await findRsvpFollowupCandidates();
 
-    console.log(`[Nudge Scheduler] Found ${rsvpFollowupResult.eligible.length} for RSVP followup`);
-
-    if (rsvpFollowupResult.skipped.length > 0) {
-      console.log('[Nudge Scheduler] RSVP followup skipped:', rsvpFollowupResult.skipped);
-    }
-
     // Process RSVP followup nudges
     const rsvpFollowupProcessResult = await processRsvpFollowupNudges(rsvpFollowupResult.eligible);
 
     const rsvpFollowupSucceeded = rsvpFollowupProcessResult.sent.filter((r) => r.success).length;
     const rsvpFollowupFailed = rsvpFollowupProcessResult.sent.filter((r) => !r.success).length;
-
-    console.log(
-      `[Nudge Scheduler] RSVP followup sent: ${rsvpFollowupProcessResult.sent.length}, Succeeded: ${rsvpFollowupSucceeded}, Failed: ${rsvpFollowupFailed}, Deferred: ${rsvpFollowupProcessResult.deferred}`
-    );
 
     // Collect RSVP followup errors
     rsvpFollowupProcessResult.sent
@@ -117,24 +92,12 @@ export async function runNudgeScheduler(): Promise<NudgeRunResult> {
     // Find eligible candidates for proxy nudges
     const proxyCandidates = await findProxyNudgeCandidates();
 
-    console.log(
-      `[Nudge Scheduler] Found ${proxyCandidates.eligible24h.length} proxy households for 24h, ${proxyCandidates.eligible48h.length} for 48h, ${proxyCandidates.eligibleEscalation.length} for escalation`
-    );
-
-    if (proxyCandidates.skipped.length > 0) {
-      console.log('[Nudge Scheduler] Proxy skipped:', proxyCandidates.skipped);
-    }
-
     // Process proxy nudges
     const proxyProcessResult = await processProxyNudges(proxyCandidates);
 
     const proxySucceeded = proxyProcessResult.sent.filter((r) => r.success).length;
     const proxyFailed = proxyProcessResult.sent.filter((r) => !r.success).length;
     const escalated = proxyProcessResult.escalated.filter((r) => r.success).length;
-
-    console.log(
-      `[Nudge Scheduler] Proxy sent: ${proxyProcessResult.sent.length}, Succeeded: ${proxySucceeded}, Failed: ${proxyFailed}, Escalated: ${escalated}, Deferred: ${proxyProcessResult.deferred}`
-    );
 
     // Collect proxy errors
     proxyProcessResult.sent

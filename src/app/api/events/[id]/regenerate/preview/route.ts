@@ -104,15 +104,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       currentPlan,
     };
 
-    console.log('[Preview] Calling AI with params for preview');
-
     // Generate new plan using Claude AI (without saving)
     const aiResponse = await regeneratePlan(regenerationParams);
-
-    console.log('[Preview] AI response received:', {
-      teams: aiResponse.teams.length,
-      items: aiResponse.items.length,
-    });
 
     // Format the response to show what will change
     const preview = {

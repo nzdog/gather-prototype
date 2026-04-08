@@ -102,12 +102,6 @@ export async function generatePlan(
   params: EventParams,
   hostDescription?: string
 ): Promise<AIPlanResponse> {
-  console.log('[AI Generate] Starting plan generation');
-  console.log('[AI Generate] Params:', JSON.stringify(params, null, 2));
-  if (hostDescription) {
-    console.log('[AI Generate] Host description:', hostDescription);
-  }
-
   // Check if Claude is available
   if (!isClaudeAvailable()) {
     console.warn('[AI Generate] Claude API not available, using fallback mock data');
@@ -119,17 +113,11 @@ export async function generatePlan(
     const systemPrompt = PLAN_GENERATION_SYSTEM_PROMPT;
     const userPrompt = buildGenerationPrompt(params, hostDescription);
 
-    console.log('[AI Generate] Calling Claude API...');
-
     // Call Claude and parse response
     const response = await callClaudeForJSON<AIPlanResponse>(systemPrompt, userPrompt, {
       maxTokens: 16384,
       temperature: 1.0,
     });
-
-    console.log('[AI Generate] Successfully generated plan');
-    console.log('[AI Generate] Teams:', response.teams.length);
-    console.log('[AI Generate] Items:', response.items.length);
 
     // Validate response structure
     validatePlanResponse(response);
@@ -145,11 +133,6 @@ export async function generatePlan(
  * Regenerate plan with modifier using Claude AI
  */
 export async function regeneratePlan(params: RegenerationParams): Promise<AIPlanResponse> {
-  console.log('[AI Regenerate] Starting plan regeneration');
-  console.log('[AI Regenerate] Modifier:', params.modifier);
-  console.log('[AI Regenerate] Protected items:', params.protectedItems?.length || 0);
-  console.log('[AI Regenerate] Protected teams:', params.protectedTeams?.length || 0);
-
   // Check if Claude is available
   if (!isClaudeAvailable()) {
     console.warn('[AI Regenerate] Claude API not available, using fallback mock data');
@@ -161,17 +144,11 @@ export async function regeneratePlan(params: RegenerationParams): Promise<AIPlan
     const systemPrompt = PLAN_REGENERATION_SYSTEM_PROMPT;
     const userPrompt = buildRegenerationPrompt(params);
 
-    console.log('[AI Regenerate] Calling Claude API...');
-
     // Call Claude and parse response
     const response = await callClaudeForJSON<AIPlanResponse>(systemPrompt, userPrompt, {
       maxTokens: 16384,
       temperature: 1.0,
     });
-
-    console.log('[AI Regenerate] Successfully regenerated plan');
-    console.log('[AI Regenerate] Teams:', response.teams.length);
-    console.log('[AI Regenerate] Items:', response.items.length);
 
     // Validate response structure
     validatePlanResponse(response);
@@ -194,8 +171,6 @@ export async function generateExplanation(conflict: {
   description: string;
   metadata?: any;
 }): Promise<AIExplanationResponse> {
-  console.log('[AI Explain] Generating explanation for conflict:', conflict.type);
-
   // Check if Claude is available
   if (!isClaudeAvailable()) {
     console.warn('[AI Explain] Claude API not available, using fallback');
@@ -207,15 +182,11 @@ export async function generateExplanation(conflict: {
     const systemPrompt = EXPLANATION_SYSTEM_PROMPT;
     const userPrompt = buildExplanationPrompt(conflict);
 
-    console.log('[AI Explain] Calling Claude API...');
-
     // Call Claude and parse response
     const response = await callClaudeForJSON<AIExplanationResponse>(systemPrompt, userPrompt, {
       maxTokens: 1024,
       temperature: 0.7, // Lower temperature for more consistent explanations
     });
-
-    console.log('[AI Explain] Successfully generated explanation');
 
     return response;
   } catch (error) {
@@ -233,10 +204,6 @@ export async function generateSelectiveItems(
   keepItemIds: string[],
   regenerateItemIds: string[]
 ): Promise<AISelectiveRegenerationResponse> {
-  console.log('[AI Selective] Starting selective regeneration');
-  console.log('[AI Selective] Keep items:', keepItemIds.length);
-  console.log('[AI Selective] Regenerate items:', regenerateItemIds.length);
-
   // Import prisma only when needed to avoid circular dependencies
   const { prisma } = await import('@/lib/prisma');
 
@@ -308,8 +275,6 @@ export async function generateSelectiveItems(
       itemsToRegenerate: regenerateList,
     });
 
-    console.log('[AI Selective] Calling Claude API...');
-
     // Call Claude and parse response
     const response = await callClaudeForJSON<AISelectiveRegenerationResponse>(
       systemPrompt,
@@ -319,9 +284,6 @@ export async function generateSelectiveItems(
         temperature: 1.0,
       }
     );
-
-    console.log('[AI Selective] Successfully generated items');
-    console.log('[AI Selective] Items:', response.items.length);
 
     return response;
   } catch (error) {
@@ -372,16 +334,12 @@ function validatePlanResponse(response: AIPlanResponse): void {
       item.criticalReason = 'Important item for the event';
     }
   }
-
-  console.log('[AI Validate] Plan response validated successfully');
 }
 
 /**
  * Fallback: Generate mock plan when Claude is unavailable
  */
 function generateMockPlan(params: EventParams): AIPlanResponse {
-  console.log('[AI Mock] Generating mock plan');
-
   const teams: AITeam[] = [
     {
       name: 'Main Dishes',
@@ -462,8 +420,6 @@ function generateMockPlan(params: EventParams): AIPlanResponse {
  * Fallback: Generate mock plan with modifier
  */
 function generateMockPlanWithModifier(params: RegenerationParams): AIPlanResponse {
-  console.log('[AI Mock] Generating mock plan with modifier:', params.modifier);
-
   const mockPlan = generateMockPlan(params);
 
   // Simple modifier logic
@@ -510,8 +466,6 @@ function generateMockPlanWithModifier(params: RegenerationParams): AIPlanRespons
  * Fallback: Generate mock explanation
  */
 function generateMockExplanation(conflict: any): AIExplanationResponse {
-  console.log('[AI Mock] Generating mock explanation');
-
   const confidenceMap: Record<string, 'high' | 'medium' | 'low'> = {
     CONSTRAINT: 'high',
     RISK: 'medium',
@@ -553,8 +507,6 @@ export function buildItemsToRegenerate(
 export function generateMockSelectiveItems(
   itemsToRegenerate: any[]
 ): AISelectiveRegenerationResponse {
-  console.log('[AI Mock] Generating mock selective items');
-
   const mockItems: AIItem[] = itemsToRegenerate.map((item, index) => ({
     teamName: item.team?.name || 'Unknown',
     name: `Replacement ${item.name} ${index + 1}`,

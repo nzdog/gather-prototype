@@ -36,7 +36,6 @@ export async function POST(req: Request) {
     });
 
     // Send magic link email
-    console.log('RESEND_API_KEY exists:', !!process.env.RESEND_API_KEY);
     await sendMagicLinkEmail(email, token);
 
     return Response.json({ ok: true });

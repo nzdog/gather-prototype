@@ -76,7 +76,6 @@ export function WhosMissing({ people, onPersonClick }: Props) {
           <button
             key={person.id}
             onClick={() => {
-              console.log('WhosMissing: Person clicked:', person.id, person.name);
               onPersonClick(person.id);
             }}
             className="w-full flex items-center justify-between p-2 bg-white rounded-lg hover:bg-amber-100 transition-colors text-left"

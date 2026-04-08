@@ -92,19 +92,11 @@ export async function POST(
     const systemPrompt = RESOLUTION_SYSTEM_PROMPT;
     const userPrompt = buildResolutionPrompt(conflict, event);
 
-    console.log('[AI Resolution] Calling Claude API...');
-
     // Call Claude and parse JSON response
     const suggestion = await callClaudeForJSON<AISuggestion>(systemPrompt, userPrompt, {
       maxTokens: 2000,
       temperature: 0.7,
     });
-
-    console.log('[AI Resolution] Successfully generated resolution');
-    console.log(
-      '[AI Resolution] Executable Actions Count:',
-      suggestion.executableActions?.length || 0
-    );
 
     return NextResponse.json({
       suggestion,

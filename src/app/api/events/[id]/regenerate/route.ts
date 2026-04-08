@@ -68,23 +68,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         },
       });
 
-      console.log('[Regenerate] Rule A - Preserving items:', {
-        total: preservedItems.length,
-        manual: preservedItems.filter((i) => i.source === 'MANUAL').length,
-        hostEdited: preservedItems.filter((i) => i.source === 'HOST_EDITED').length,
-        protected: preservedItems.filter((i) => i.isProtected).length,
-      });
-
       // Delete only GENERATED items (safe to overwrite)
-      const deleteResult = await prisma.item.deleteMany({
+      await prisma.item.deleteMany({
         where: {
           team: { eventId },
           source: 'GENERATED', // Only delete AI-generated items that haven't been edited
           isProtected: false, // Don't delete protected items even if generated
         },
       });
-
-      console.log('[Regenerate] Rule A - Deleted GENERATED items:', deleteResult.count);
 
       // Delete teams that have no items left and are not protected
       const teams = await prisma.team.findMany({
@@ -135,26 +126,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // Use pre-generated plan if provided (from preview), otherwise call AI
     let aiResponse;
     if (preGeneratedPlan) {
-      console.log('[Regenerate] Using pre-generated plan from preview');
       aiResponse = preGeneratedPlan;
     } else {
-      console.log(
-        '[Regenerate] Calling AI with params:',
-        JSON.stringify(regenerationParams, null, 2)
-      );
-
       // Generate new plan using Claude AI
       aiResponse = await regeneratePlan(regenerationParams);
-
-      console.log('[Regenerate] AI response received:', {
-        teams: aiResponse.teams.length,
-        items: aiResponse.items.length,
-      });
     }
 
     // Generate a unique batch ID for this regeneration run
     const generatedBatchId = `regen_${randomBytes(16).toString('hex')}`;
-    console.log('[Regenerate] Batch ID:', generatedBatchId);
 
     // Create teams and items
     let teamsCreated = 0;

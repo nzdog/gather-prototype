@@ -45,13 +45,6 @@ export async function syncSubscriptionFromStripe(
   const stripeSubscriptionId = subscription.id;
   const status = mapStripeToBillingStatus(subscription.status);
 
-  console.log('[Billing Sync] Syncing subscription:', {
-    stripeCustomerId,
-    stripeSubscriptionId,
-    stripeStatus: subscription.status,
-    mappedStatus: status,
-  });
-
   // Find the subscription record by Stripe customer ID
   const existingSubscription = await prisma.subscription.findUnique({
     where: { stripeCustomerId },
@@ -107,12 +100,6 @@ export async function syncSubscriptionFromStripe(
     });
   });
 
-  console.log('[Billing Sync] Subscription synced successfully:', {
-    userId: existingSubscription.userId,
-    status,
-    stripeSubscriptionId,
-  });
-
   return {
     userId: existingSubscription.userId,
     status,
@@ -126,8 +113,6 @@ export async function syncSubscriptionFromStripe(
 export async function handleSubscriptionDeleted(
   stripeCustomerId: string
 ): Promise<{ userId: string; status: BillingStatus } | null> {
-  console.log('[Billing Sync] Handling subscription deletion:', stripeCustomerId);
-
   // Find the subscription record
   const existingSubscription = await prisma.subscription.findUnique({
     where: { stripeCustomerId },
@@ -155,10 +140,6 @@ export async function handleSubscriptionDeleted(
     });
   });
 
-  console.log('[Billing Sync] Subscription marked as CANCELED:', {
-    userId: existingSubscription.userId,
-  });
-
   return {
     userId: existingSubscription.userId,
     status: 'CANCELED',
@@ -173,11 +154,6 @@ export async function handleInvoicePaid(
   stripeCustomerId: string,
   stripeSubscriptionId: string | null
 ): Promise<{ userId: string; status: BillingStatus } | null> {
-  console.log('[Billing Sync] Handling invoice paid:', {
-    stripeCustomerId,
-    stripeSubscriptionId,
-  });
-
   // Find the subscription record
   const existingSubscription = await prisma.subscription.findUnique({
     where: { stripeCustomerId },
@@ -191,7 +167,6 @@ export async function handleInvoicePaid(
   // Only update to ACTIVE if we have a subscription ID
   // (invoice.paid can fire for one-time payments too)
   if (!stripeSubscriptionId) {
-    console.log('[Billing Sync] Invoice paid but no subscription ID, skipping');
     return null;
   }
 
@@ -211,10 +186,6 @@ export async function handleInvoicePaid(
     });
   });
 
-  console.log('[Billing Sync] Subscription marked as ACTIVE after payment:', {
-    userId: existingSubscription.userId,
-  });
-
   return {
     userId: existingSubscription.userId,
     status: 'ACTIVE',
@@ -228,8 +199,6 @@ export async function handleInvoicePaid(
 export async function handleInvoicePaymentFailed(
   stripeCustomerId: string
 ): Promise<{ userId: string; status: BillingStatus } | null> {
-  console.log('[Billing Sync] Handling invoice payment failure:', stripeCustomerId);
-
   // Find the subscription record
   const existingSubscription = await prisma.subscription.findUnique({
     where: { stripeCustomerId },
@@ -254,10 +223,6 @@ export async function handleInvoicePaymentFailed(
       where: { id: existingSubscription.userId },
       data: { billingStatus: 'PAST_DUE' },
     });
-  });
-
-  console.log('[Billing Sync] Subscription marked as PAST_DUE:', {
-    userId: existingSubscription.userId,
   });
 
   return {

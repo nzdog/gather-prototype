@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useToast } from '@/contexts/ToastContext';
 import { Plus, Edit2, Users, Loader2, Upload, Maximize2, UserCog } from 'lucide-react';
 import AddPersonModal, { AddPersonFormData } from './AddPersonModal';
@@ -77,37 +77,37 @@ export default function PeopleSection({
     }
   };
 
-  const handleUpdatePerson = async (
-    personId: string,
-    data: { role?: string; teamId?: string | null }
-  ) => {
-    try {
-      const response = await fetch(`/api/events/${eventId}/people/${personId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
+  const handleUpdatePerson = useCallback(
+    async (personId: string, data: { role?: string; teamId?: string | null }) => {
+      try {
+        const response = await fetch(`/api/events/${eventId}/people/${personId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to update person');
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to update person');
+        }
+
+        const result = await response.json();
+
+        // Show notification if someone was demoted from coordinator
+        if (result.demotedCoordinator) {
+          const { name, teamName } = result.demotedCoordinator;
+          toast.info(
+            `${name} was automatically demoted from Coordinator to Participant on the ${teamName} team. Only one person can be coordinator per team.`
+          );
+        }
+
+        onPeopleChanged?.();
+      } catch (error) {
+        throw error; // Re-throw so modal can show error
       }
-
-      const result = await response.json();
-
-      // Show notification if someone was demoted from coordinator
-      if (result.demotedCoordinator) {
-        const { name, teamName } = result.demotedCoordinator;
-        toast.info(
-          `${name} was automatically demoted from Coordinator to Participant on the ${teamName} team. Only one person can be coordinator per team.`
-        );
-      }
-
-      onPeopleChanged?.();
-    } catch (error) {
-      throw error; // Re-throw so modal can show error
-    }
-  };
+    },
+    [eventId, toast, onPeopleChanged]
+  );
 
   const handleRemovePerson = async (personId: string) => {
     try {
@@ -130,6 +130,17 @@ export default function PeopleSection({
     setSelectedPerson(person);
     setEditModalOpen(true);
   };
+
+  const handleRoleChange = useCallback(
+    async (personId: string, newRole: string) => {
+      try {
+        await handleUpdatePerson(personId, { role: newRole });
+      } catch (error: any) {
+        toast.error(error.message || 'Failed to update role');
+      }
+    },
+    [handleUpdatePerson]
+  );
 
   const handleBatchImport = async (people: PersonRow[]) => {
     try {
@@ -191,7 +202,8 @@ export default function PeopleSection({
       }
 
       // Success feedback
-      toast.success(`Successfully assigned ${data.assigned} people to teams!`);
+      const itemMsg = data.itemsAssigned > 0 ? ` and ${data.itemsAssigned} items to people` : '';
+      toast.success(`Successfully assigned ${data.assigned} people to teams${itemMsg}!`);
 
       // Refresh data
       onPeopleChanged?.();
@@ -311,6 +323,12 @@ export default function PeopleSection({
           </div>
         </div>
 
+        {/* Explanatory message for host */}
+        <p className="text-sm text-gray-600 mb-4">
+          Review your guests and assign coordinators to lead each team. Coordinators will receive
+          their team&apos;s details and can manage item confirmations.
+        </p>
+
         {noPlanError && (
           <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-md flex items-start justify-between gap-3">
             <p className="text-sm text-amber-800">
@@ -360,11 +378,33 @@ export default function PeopleSection({
                       </div>
                     </td>
                     <td className="py-3 px-4">
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-medium ${getRoleBadgeColor(person.role)}`}
-                      >
-                        {person.role}
-                      </span>
+                      {person.personId === hostId ? (
+                        <select
+                          value="HOST"
+                          disabled
+                          className={`px-2 py-1 rounded text-xs font-medium border border-gray-200 cursor-not-allowed opacity-75 ${getRoleBadgeColor('HOST')}`}
+                        >
+                          <option value="HOST">Host</option>
+                          <option value="COORDINATOR" disabled>
+                            Coordinator
+                          </option>
+                          <option value="PARTICIPANT" disabled>
+                            Participant
+                          </option>
+                        </select>
+                      ) : (
+                        <select
+                          value={person.role}
+                          onChange={(e) => handleRoleChange(person.personId, e.target.value)}
+                          className={`px-2 py-1 rounded text-xs font-medium border border-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent ${getRoleBadgeColor(person.role)}`}
+                        >
+                          <option value="HOST" disabled>
+                            Host
+                          </option>
+                          <option value="COORDINATOR">Coordinator</option>
+                          <option value="PARTICIPANT">Participant</option>
+                        </select>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-900">{person.team.name}</td>
                     <td className="py-3 px-4">

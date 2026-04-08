@@ -49,7 +49,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
     // Must be FROZEN to wrap up
     if (event.status !== 'FROZEN') {
       return NextResponse.json(
-        { error: `Cannot wrap up event in ${event.status} status. Event must be FROZEN.` },
+        { error: `Cannot complete event in ${event.status} status. Event must be FROZEN.` },
         { status: 400 }
       );
     }

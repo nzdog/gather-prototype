@@ -242,6 +242,7 @@ export interface DispatchSummary {
   failed: number;
   skipped: number;
   pending: number;
+  earliestCreatedAt: string | null;
   guests: Array<{
     personId: string;
     name: string;
@@ -261,7 +262,19 @@ export async function getDispatchSummary(eventId: string): Promise<DispatchSumma
   const sent = links.filter((l) => l.dispatched && !l.failed && l.channel !== 'skipped').length;
   const failed = links.filter((l) => l.dispatched && l.failed).length;
   const skipped = links.filter((l) => l.channel === 'skipped').length;
-  const pending = links.filter((l) => !l.dispatched).length;
+  const pendingLinks2 = links.filter((l) => !l.dispatched);
+  const pending = pendingLinks2.length;
+
+  // Earliest createdAt among pending (undispatched) links — used for countdown timer
+  const earliestCreatedAt =
+    pendingLinks2.length > 0
+      ? pendingLinks2
+          .reduce(
+            (earliest, l) => (l.createdAt < earliest ? l.createdAt : earliest),
+            pendingLinks2[0].createdAt
+          )
+          .toISOString()
+      : null;
 
   return {
     total: links.length,
@@ -269,6 +282,7 @@ export async function getDispatchSummary(eventId: string): Promise<DispatchSumma
     failed,
     skipped,
     pending,
+    earliestCreatedAt,
     guests: links.map((l) => ({
       personId: l.personId,
       name: l.guestName,

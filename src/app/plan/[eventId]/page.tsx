@@ -44,6 +44,7 @@ import { InviteStatusSection } from '@/components/plan/InviteStatusSection';
 import { SharedLinkSection } from '@/components/plan/SharedLinkSection';
 import { InviteFunnel } from '@/components/plan/InviteFunnel';
 import { WhosMissing } from '@/components/plan/WhosMissing';
+import NextStepBanner from '@/components/plan/NextStepBanner';
 import { CopyPlanAsText } from '@/components/plan/CopyPlanAsText';
 import { PersonInviteDetailModal } from '@/components/plan/PersonInviteDetailModal';
 import { ModalProvider } from '@/contexts/ModalContext';
@@ -218,6 +219,7 @@ export default function PlanEditorPage() {
   const [transitionLoading, setTransitionLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [isCheckingPlan, setIsCheckingPlan] = useState(false);
   const [regenerateModalOpen, setRegenerateModalOpen] = useState(false);
   const [hostDescriptionModalOpen, setHostDescriptionModalOpen] = useState(false);
   const [manualTeamCount, _setManualTeamCount] = useState(0);
@@ -233,6 +235,8 @@ export default function PlanEditorPage() {
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
   const [inviteStatusData, setInviteStatusData] = useState<any | null>(null);
   const [checklistDismissed, setChecklistDismissed] = useState(false);
+  const [nextStepDismissed, setNextStepDismissed] = useState(false);
+  const [inviteHighlightSeen, setInviteHighlightSeen] = useState(false);
   const [checklistStepContext, setChecklistStepContext] = useState<string | null>(null);
   const [isPostPayment, setIsPostPayment] = useState(false);
   const [wrapUpLoading, setWrapUpLoading] = useState(false);
@@ -249,6 +253,7 @@ export default function PlanEditorPage() {
     failed: number;
     skipped: number;
     pending: number;
+    earliestCreatedAt: string | null;
     guests: Array<{
       personId: string;
       name: string;
@@ -259,8 +264,17 @@ export default function PlanEditorPage() {
     }>;
   } | null>(null);
   const [wrapUpRetrying, setWrapUpRetrying] = useState(false);
+  const [wrapUpStatusLoading, setWrapUpStatusLoading] = useState(false);
+  const [countdownMinutes, setCountdownMinutes] = useState<number | null>(null);
   const [modalBreadcrumbTrail, setModalBreadcrumbTrail] = useState<ModalTabId[]>([]);
   const pendingModalAction = useRef<'generate' | null>(null);
+
+  // Batch assignment state for Teams modal
+  const [pendingAssignments, setPendingAssignments] = useState<
+    Record<string, { personId: string; teamId: string }>
+  >({});
+  const [showDiscardWarning, setShowDiscardWarning] = useState(false);
+  const [savingAssignments, setSavingAssignments] = useState(false);
 
   // Review mode for selective regeneration
   const [reviewMode, setReviewMode] = useState(false);
@@ -312,6 +326,13 @@ export default function PlanEditorPage() {
     }
   }, [searchParams]);
 
+  // Dismiss invite highlight after host opens the Invite Links modal once
+  useEffect(() => {
+    if (expandedSection === 'invites') {
+      setInviteHighlightSeen(true);
+    }
+  }, [expandedSection]);
+
   // Execute pending action after expansion modal fully closes
   useEffect(() => {
     if (expandedSection === null && pendingModalAction.current === 'generate') {
@@ -342,6 +363,29 @@ export default function PlanEditorPage() {
       }
     }
   }, [eventId]);
+
+  // Countdown timer for wrap-up dispatch (updates every 30s)
+  useEffect(() => {
+    if (
+      !wrapUpDispatch?.pending ||
+      wrapUpDispatch.pending === 0 ||
+      !wrapUpDispatch.earliestCreatedAt
+    ) {
+      setCountdownMinutes(null);
+      return;
+    }
+
+    const computeMinutes = () => {
+      const createdAt = new Date(wrapUpDispatch.earliestCreatedAt!).getTime();
+      const dispatchAt = createdAt + 10 * 60 * 1000; // 10-minute delay
+      const remaining = Math.ceil((dispatchAt - Date.now()) / 60000);
+      setCountdownMinutes(remaining > 0 ? remaining : 0);
+    };
+
+    computeMinutes();
+    const interval = setInterval(computeMinutes, 30000);
+    return () => clearInterval(interval);
+  }, [wrapUpDispatch?.pending, wrapUpDispatch?.earliestCreatedAt]);
 
   const loadEvent = async () => {
     try {
@@ -473,6 +517,10 @@ export default function PlanEditorPage() {
       scroll: false,
     });
     setModalBreadcrumbTrail([]);
+    // Refresh dashboard card data after any expansion modal close
+    loadItems();
+    loadTeams();
+    loadPeople();
   };
 
   // Inter-modal tab navigation handler
@@ -560,6 +608,9 @@ export default function PlanEditorPage() {
       handleCloseExpansion();
 
       toast.success('Plan generated! Demo team and items created.');
+
+      // Reset session dismiss so the next-step CTA appears after fresh generation
+      setNextStepDismissed(false);
     } catch (err: any) {
       console.error('Error generating plan:', err);
       toast.error('Failed to generate plan');
@@ -569,6 +620,7 @@ export default function PlanEditorPage() {
   };
 
   const handleCheckPlan = async () => {
+    setIsCheckingPlan(true);
     try {
       const response = await fetch(`/api/events/${eventId}/check`, {
         method: 'POST',
@@ -591,6 +643,8 @@ export default function PlanEditorPage() {
     } catch (err: any) {
       console.error('Error checking plan:', err);
       toast.error(`Failed to check plan: ${err.message}`);
+    } finally {
+      setIsCheckingPlan(false);
     }
   };
 
@@ -739,76 +793,6 @@ export default function PlanEditorPage() {
     }
   };
 
-  // Commented out unused function
-  // const handleDeferToCoordinator = async (itemId: string) => {
-  //   try {
-  //     const response = await fetch(`/api/events/${eventId}/items/${itemId}`, {
-  //       method: 'PATCH',
-  //       headers: { 'Content-Type': 'application/json' },
-  //       body: JSON.stringify({
-  //         placeholderAcknowledged: true,
-  //         quantityDeferredTo: 'COORDINATOR',
-  //       }),
-  //     });
-  //     if (!response.ok) throw new Error('Failed to update item');
-  //
-  //     // Reload items and conflicts
-  //     await loadItems();
-  //     await loadConflicts();
-  //   } catch (err: any) {
-  //     console.error('Error deferring item:', err);
-  //     alert('Failed to defer item');
-  //   }
-  // };
-
-  // Commented out unused function
-  // const handleStartEditQuantity = (item: Item) => {
-  //   setEditingItemId(item.id);
-  //   setEditQuantityAmount(item.quantityAmount?.toString() || '');
-  //   setEditQuantityUnit(item.quantityUnit || 'SERVINGS');
-  // };
-
-  // Commented out unused function
-  // const handleSaveQuantity = async (itemId: string) => {
-  //   try {
-  //     const amount = parseFloat(editQuantityAmount);
-  //     if (isNaN(amount) || amount <= 0) {
-  //       alert('Please enter a valid quantity');
-  //       return;
-  //     }
-  //
-  //     const response = await fetch(`/api/events/${eventId}/items/${itemId}`, {
-  //       method: 'PATCH',
-  //       headers: { 'Content-Type': 'application/json' },
-  //       body: JSON.stringify({
-  //         quantityAmount: amount,
-  //         quantityUnit: editQuantityUnit,
-  //         quantityState: 'SPECIFIED',
-  //       }),
-  //     });
-  //     if (!response.ok) throw new Error('Failed to update item');
-  //
-  //     // Reload items and conflicts
-  //     await loadItems();
-  //     await loadConflicts();
-  //
-  //     // Clear editing state
-  //     setEditingItemId(null);
-  //     setEditQuantityAmount('');
-  //     setEditQuantityUnit('SERVINGS');
-  //   } catch (err: any) {
-  //     console.error('Error saving quantity:', err);
-  //     alert('Failed to save quantity');
-  //   }
-  // };
-
-  // Commented out unused function
-  // const handleCancelEdit = () => {
-  //   setEditingItemId(null);
-  //   setEditQuantityAmount('');
-  //   setEditQuantityUnit('SERVINGS');
-  // };
-
   const handleSaveAsTemplate = async (templateName: string) => {
     try {
       const response = await fetch('/api/templates', {
@@ -875,21 +859,26 @@ export default function PlanEditorPage() {
         loadEvent();
       }
     } catch {
-      setWrapUpResult({ success: false, message: 'Failed to wrap up event.' });
+      setWrapUpResult({ success: false, message: 'Failed to complete event.' });
     } finally {
       setWrapUpLoading(false);
     }
   };
 
   const loadWrapUpStatus = async () => {
+    setWrapUpStatusLoading(true);
     try {
-      const res = await fetch(`/api/events/${eventId}/wrap-up/status`);
+      const res = await fetch(`/api/events/${eventId}/wrap-up/status`, {
+        cache: 'no-store',
+      });
       const data = await res.json();
       if (data.success) {
         setWrapUpDispatch(data);
       }
     } catch {
       // silent — status is informational
+    } finally {
+      setWrapUpStatusLoading(false);
     }
   };
 
@@ -1003,54 +992,85 @@ export default function PlanEditorPage() {
     }
   };
 
-  const handleQuickAssign = async (itemId: string, personId: string, teamId: string) => {
-    try {
-      if (personId) {
-        // Assign to person
-        const response = await fetch(`/api/events/${eventId}/items/${itemId}/assign`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ personId }),
-        });
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Failed to assign item');
-        }
+  // Stage an assignment change locally (no API call)
+  const handleStageAssignment = (
+    itemId: string,
+    personId: string,
+    teamId: string,
+    currentPersonId: string
+  ) => {
+    setPendingAssignments((prev) => {
+      const next = { ...prev };
+      // If the new value matches the original server state, remove from pending
+      if (personId === currentPersonId) {
+        delete next[itemId];
       } else {
-        // Unassign
-        const response = await fetch(`/api/events/${eventId}/items/${itemId}/assign`, {
-          method: 'DELETE',
-        });
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Failed to unassign item');
+        next[itemId] = { personId, teamId };
+      }
+      return next;
+    });
+  };
+
+  // Save all pending assignments in batch
+  const handleSaveAllAssignments = async () => {
+    const entries = Object.entries(pendingAssignments);
+    if (entries.length === 0) return;
+
+    setSavingAssignments(true);
+    try {
+      for (const [itemId, { personId }] of entries) {
+        if (personId) {
+          const response = await fetch(`/api/events/${eventId}/items/${itemId}/assign`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ personId }),
+          });
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || `Failed to assign item ${itemId}`);
+          }
+        } else {
+          const response = await fetch(`/api/events/${eventId}/items/${itemId}/assign`, {
+            method: 'DELETE',
+          });
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || `Failed to unassign item ${itemId}`);
+          }
         }
       }
 
-      // Reload team items, teams, and gate check
-      await loadTeamItems(teamId);
-      await loadTeams();
+      // Clear pending and reload data
+      setPendingAssignments({});
+      const affectedTeamIds = new Set(entries.map(([, { teamId }]) => teamId));
+      await Promise.all([
+        ...Array.from(affectedTeamIds).map((tid) => loadTeamItems(tid)),
+        loadTeams(),
+        loadItems(),
+      ]);
       setGateCheckRefresh((prev) => prev + 1);
+      toast.success(`Saved ${entries.length} assignment${entries.length > 1 ? 's' : ''}`);
     } catch (error: any) {
-      console.error('Error assigning item:', error);
-      toast.error(error.message || 'Failed to assign item');
+      toast.error(error.message || 'Failed to save assignments');
+    } finally {
+      setSavingAssignments(false);
     }
   };
 
-  // Commented out unused function
-  // const toggleTeamExpanded = async (teamId: string) => {
-  //   const newExpanded = new Set(expandedTeams);
-  //   if (newExpanded.has(teamId)) {
-  //     newExpanded.delete(teamId);
-  //   } else {
-  //     newExpanded.add(teamId);
-  //     // Load items when expanding
-  //     if (!teamItems[teamId]) {
-  //       await loadTeamItems(teamId);
-  //     }
-  //   }
-  //   setExpandedTeams(newExpanded);
-  // };
+  // Teams modal close handler with unsaved changes warning
+  const handleTeamsModalClose = () => {
+    if (Object.keys(pendingAssignments).length > 0) {
+      setShowDiscardWarning(true);
+    } else {
+      handleCloseExpansion();
+    }
+  };
+
+  const handleDiscardAndClose = () => {
+    setPendingAssignments({});
+    setShowDiscardWarning(false);
+    handleCloseExpansion();
+  };
 
   const handleStartEditItem = (item: Item) => {
     setEditingItem(item);
@@ -1234,6 +1254,10 @@ export default function PlanEditorPage() {
     }
   };
 
+  const handleNextStepDismiss = () => {
+    setNextStepDismissed(true);
+  };
+
   const handleBannerMoveToConfirming = async () => {
     setTransitionLoading(true);
     try {
@@ -1410,7 +1434,10 @@ export default function PlanEditorPage() {
         <div className="max-w-7xl mx-auto px-4 py-8">
           {/* Event Stage Progress - Hide when checklist is visible */}
           {!(event.status === 'DRAFT' && !checklistDismissed) && (
-            <EventStageProgress currentStatus={event.status as any} />
+            <EventStageProgress
+              currentStatus={event.status as any}
+              onFreezeClick={() => handleExpandSection('planstatus')}
+            />
           )}
 
           {/* Setup Checklist Banner - Only show in DRAFT status and not dismissed */}
@@ -1439,6 +1466,19 @@ export default function PlanEditorPage() {
               </div>
             </div>
           )}
+
+          {/* Next Step CTA — shown when unassigned items exist, session-dismissible */}
+          {!nextStepDismissed &&
+            !isGenerating &&
+            !isRegenerating &&
+            teams.length > 0 &&
+            items.length > 0 &&
+            items.some((i) => !i.assignment) && (
+              <NextStepBanner
+                onStartAssigning={() => handleExpandSection('teams')}
+                onDismiss={handleNextStepDismiss}
+              />
+            )}
 
           {/* Review Mode - Selective Regeneration */}
           {reviewMode ? (
@@ -1469,6 +1509,77 @@ export default function PlanEditorPage() {
                   />
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {/* Plan Frozen Card - Only show for FROZEN */}
+                  {event.status === 'FROZEN' && (
+                    <div
+                      onClick={() => handleExpandSection('unfreeze')}
+                      className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group border-2 border-yellow-300"
+                    >
+                      <div className="flex items-center gap-4 mb-4">
+                        <div className="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center ring-4 ring-amber-200/50">
+                          <CheckCircle className="w-8 h-8 text-amber-600" />
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-900">
+                          Everything&apos;s in place
+                        </h2>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-700 leading-relaxed">
+                          Your guests know what they&apos;re bringing. Nothing left to do but show
+                          up.
+                        </p>
+                      </div>
+                      <div className="text-xs text-amber-500/70 group-hover:text-amber-600 transition-colors">
+                        Click to unfreeze →
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Complete Event Card - Show for FROZEN (not yet complete) and COMPLETE (show status) */}
+                  {(event.status === 'FROZEN' || event.status === 'COMPLETE') && (
+                    <div
+                      onClick={() => handleExpandSection('wrapup')}
+                      className={`bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group ${
+                        event.status === 'COMPLETE'
+                          ? 'border-2 border-green-300'
+                          : 'border-2 border-accent/30'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 mb-4">
+                        <div
+                          className={`w-12 h-12 rounded-lg flex items-center justify-center group-hover:opacity-80 transition-colors ${
+                            event.status === 'COMPLETE' ? 'bg-green-100' : 'bg-accent-light/20'
+                          }`}
+                        >
+                          <Gift
+                            className={`w-6 h-6 ${event.status === 'COMPLETE' ? 'text-green-600' : 'text-accent'}`}
+                          />
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-900">
+                          {event.status === 'COMPLETE' ? 'Event Complete' : 'Complete Event'}
+                        </h2>
+                      </div>
+                      <div className="flex-1">
+                        {event.status === 'COMPLETE' ? (
+                          <p className="text-sm text-gray-600">
+                            Thank-you messages sent. Click to view dispatch status.
+                          </p>
+                        ) : (
+                          <p className="text-sm text-gray-600">
+                            Send a thank-you to your guests and close the event.
+                          </p>
+                        )}
+                      </div>
+                      <div
+                        className={`text-sm font-medium ${
+                          event.status === 'COMPLETE' ? 'text-green-600' : 'text-accent'
+                        }`}
+                      >
+                        {event.status === 'COMPLETE' ? 'View status →' : 'Complete event →'}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Event Details Card */}
                   <div
                     onClick={() => setEditEventModalOpen(true)}
@@ -1583,79 +1694,16 @@ export default function PlanEditorPage() {
                     <div className="text-sm text-accent font-medium">Click to expand →</div>
                   </div>
 
-                  {/* Unfreeze Card - Only show for FROZEN */}
-                  {event.status === 'FROZEN' && (
-                    <div
-                      onClick={() => handleExpandSection('unfreeze')}
-                      className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group border-2 border-yellow-300"
-                    >
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center group-hover:bg-yellow-200 transition-colors">
-                          <Lock className="w-6 h-6 text-yellow-600" />
-                        </div>
-                        <h2 className="text-xl font-semibold text-gray-900">Plan Frozen</h2>
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-600 mb-2">The plan is locked</p>
-                        <p className="text-sm font-medium text-yellow-700">
-                          Click to unfreeze and make changes
-                        </p>
-                      </div>
-                      <div className="text-sm text-yellow-600 font-medium">Click to unfreeze →</div>
-                    </div>
-                  )}
-
-                  {/* Wrap Up Card - Show for FROZEN (not yet wrapped) and COMPLETE (show status) */}
-                  {(event.status === 'FROZEN' || event.status === 'COMPLETE') && (
-                    <div
-                      onClick={() => handleExpandSection('wrapup')}
-                      className={`bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group ${
-                        event.status === 'COMPLETE'
-                          ? 'border-2 border-green-300'
-                          : 'border-2 border-accent/30'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 mb-4">
-                        <div
-                          className={`w-12 h-12 rounded-lg flex items-center justify-center group-hover:opacity-80 transition-colors ${
-                            event.status === 'COMPLETE' ? 'bg-green-100' : 'bg-accent-light/20'
-                          }`}
-                        >
-                          <Gift
-                            className={`w-6 h-6 ${event.status === 'COMPLETE' ? 'text-green-600' : 'text-accent'}`}
-                          />
-                        </div>
-                        <h2 className="text-xl font-semibold text-gray-900">
-                          {event.status === 'COMPLETE' ? 'Wrapped Up' : 'Wrap Up Event'}
-                        </h2>
-                      </div>
-                      <div className="flex-1">
-                        {event.status === 'COMPLETE' ? (
-                          <p className="text-sm text-gray-600">
-                            Thank-you messages sent. Click to view dispatch status.
-                          </p>
-                        ) : (
-                          <p className="text-sm text-gray-600">
-                            Send a thank-you to your guests and close the event.
-                          </p>
-                        )}
-                      </div>
-                      <div
-                        className={`text-sm font-medium ${
-                          event.status === 'COMPLETE' ? 'text-green-600' : 'text-accent'
-                        }`}
-                      >
-                        {event.status === 'COMPLETE' ? 'View status →' : 'Wrap up →'}
-                      </div>
-                    </div>
-                  )}
-
                   {/* Invite Links Card */}
                   {['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status) &&
                     inviteLinks.length > 0 && (
                       <div
                         onClick={() => handleExpandSection('invites')}
-                        className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
+                        className={`bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group ${
+                          event.status === 'CONFIRMING' && !inviteHighlightSeen
+                            ? 'border-2 border-blue-400 ring-2 ring-blue-100'
+                            : ''
+                        }`}
                       >
                         <div className="flex items-center gap-3 mb-4">
                           <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
@@ -1851,6 +1899,10 @@ export default function PlanEditorPage() {
               loadConflicts();
               toast.success('Event moved to CONFIRMING — invites are ready to send!');
             }}
+            onGoToAssign={() => {
+              setShowTransitionModal(false);
+              handleExpandSection('teams');
+            }}
           />
         )}
 
@@ -1915,6 +1967,8 @@ export default function PlanEditorPage() {
                 conflicts={conflicts}
                 onConflictsChanged={loadConflicts}
                 hasRunCheck={!!event.lastCheckPlanAt}
+                onCheckPlan={handleCheckPlan}
+                isCheckingPlan={isCheckingPlan}
               />
             )}
           </div>
@@ -1928,6 +1982,7 @@ export default function PlanEditorPage() {
                 currentStatus={event?.status as any}
                 refreshTrigger={gateCheckRefresh}
                 onFreezeComplete={() => {
+                  handleCloseExpansion();
                   loadEvent();
                   loadTeams();
                 }}
@@ -1991,6 +2046,7 @@ export default function PlanEditorPage() {
                         th { font-weight: 600; color: #555; font-size: 11px; text-transform: uppercase; }
                         .qty { color: #555; }
                         .status-confirmed { color: #16a34a; }
+                        .status-declined { color: #dc2626; }
                         .status-pending { color: #d97706; }
                         .status-unassigned { color: #999; font-style: italic; }
                         @media print { body { padding: 0; } .logo svg text { fill: #333; } }
@@ -2011,7 +2067,7 @@ export default function PlanEditorPage() {
                           item.assignment?.person?.name ||
                           '<span class="status-unassigned">Unassigned</span>';
                         const status = item.assignment
-                          ? `<span class="status-${item.assignment.response === 'ACCEPTED' ? 'confirmed' : 'pending'}">${item.assignment.response === 'ACCEPTED' ? 'Confirmed' : 'Pending'}</span>`
+                          ? `<span class="status-${item.assignment.response === 'ACCEPTED' ? 'confirmed' : item.assignment.response === 'DECLINED' ? 'declined' : 'pending'}">${item.assignment.response === 'ACCEPTED' ? 'Confirmed' : item.assignment.response === 'DECLINED' ? 'Declined' : 'Pending'}</span>`
                           : '';
                         html += `<tr><td>${item.name}</td><td class="qty">${qty}</td><td>${assignee}</td><td>${status}</td></tr>`;
                       }
@@ -2150,6 +2206,7 @@ export default function PlanEditorPage() {
                                 <tr className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wider">
                                   <th className="px-4 py-2 font-medium">Item</th>
                                   <th className="px-4 py-2 font-medium">Category</th>
+                                  <th className="px-4 py-2 font-medium">Status</th>
                                   <th className="px-4 py-2 font-medium text-right">Action</th>
                                 </tr>
                               </thead>
@@ -2191,6 +2248,32 @@ export default function PlanEditorPage() {
                                         </div>
                                       </td>
                                       <td className="px-4 py-3 text-gray-400">{item.team.name}</td>
+                                      <td className="px-4 py-3">
+                                        {item.assignment ? (
+                                          <span
+                                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
+                                              item.assignment.response === 'ACCEPTED'
+                                                ? 'bg-green-100 text-green-800'
+                                                : item.assignment.response === 'DECLINED'
+                                                  ? 'bg-red-100 text-red-800'
+                                                  : 'bg-amber-100 text-amber-800'
+                                            }`}
+                                          >
+                                            {item.assignment.response === 'ACCEPTED'
+                                              ? 'Confirmed'
+                                              : item.assignment.response === 'DECLINED'
+                                                ? 'Declined'
+                                                : 'Pending'}
+                                            <span className="text-xs text-inherit opacity-70">
+                                              — {item.assignment.person.name}
+                                            </span>
+                                          </span>
+                                        ) : (
+                                          <span className="text-xs text-gray-400 italic">
+                                            Unassigned
+                                          </span>
+                                        )}
+                                      </td>
                                       <td className="px-4 py-3 text-right">
                                         <button
                                           onClick={() => setEditingItem(item)}
@@ -2251,7 +2334,7 @@ export default function PlanEditorPage() {
         {/* Teams Expansion */}
         <SectionExpandModal
           isOpen={expandedSection === 'teams'}
-          onClose={handleCloseExpansion}
+          onClose={handleTeamsModalClose}
           title="Teams"
           icon={<Users className="w-6 h-6" />}
           tabBar={buildTabBar('teams')}
@@ -2435,11 +2518,24 @@ export default function PlanEditorPage() {
                                       Assign to
                                     </label>
                                     <select
-                                      value={item.assignment?.person?.id || ''}
-                                      onChange={(e) =>
-                                        handleQuickAssign(item.id, e.target.value, team.id)
+                                      value={
+                                        pendingAssignments[item.id] !== undefined
+                                          ? pendingAssignments[item.id].personId
+                                          : item.assignment?.person?.id || ''
                                       }
-                                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                                      onChange={(e) =>
+                                        handleStageAssignment(
+                                          item.id,
+                                          e.target.value,
+                                          team.id,
+                                          item.assignment?.person?.id || ''
+                                        )
+                                      }
+                                      className={`w-full px-2 py-1 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
+                                        pendingAssignments[item.id] !== undefined
+                                          ? 'border-amber-400 bg-amber-50'
+                                          : 'border-gray-300'
+                                      }`}
                                     >
                                       <option value="">Unassigned</option>
                                       {people
@@ -2450,6 +2546,9 @@ export default function PlanEditorPage() {
                                           </option>
                                         ))}
                                     </select>
+                                    {pendingAssignments[item.id] !== undefined && (
+                                      <p className="text-xs text-amber-600 mt-0.5">Unsaved</p>
+                                    )}
                                     {people.filter((p) => p.team.id === team.id).length === 0 ? (
                                       <p className="text-xs text-gray-500 mt-1">
                                         No people in this team yet
@@ -2488,7 +2587,59 @@ export default function PlanEditorPage() {
               ))}
             </div>
           )}
+
+          {/* Batch Save Bar */}
+          {Object.keys(pendingAssignments).length > 0 && (
+            <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 flex items-center justify-between shadow-lg rounded-b-lg">
+              <span className="text-sm text-amber-700 font-medium">
+                {Object.keys(pendingAssignments).length} unsaved assignment
+                {Object.keys(pendingAssignments).length > 1 ? 's' : ''}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPendingAssignments({})}
+                  className="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200"
+                >
+                  Discard
+                </button>
+                <button
+                  onClick={handleSaveAllAssignments}
+                  disabled={savingAssignments}
+                  className="px-4 py-2 text-sm text-white bg-accent rounded-md hover:bg-accent-dark disabled:opacity-50"
+                >
+                  {savingAssignments ? 'Saving...' : 'Save All'}
+                </button>
+              </div>
+            </div>
+          )}
         </SectionExpandModal>
+
+        {/* Unsaved changes warning for Teams modal */}
+        {showDiscardWarning && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-[70] flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Unsaved changes</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                You have {Object.keys(pendingAssignments).length} unsaved assignment
+                {Object.keys(pendingAssignments).length > 1 ? 's' : ''}. Close without saving?
+              </p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setShowDiscardWarning(false)}
+                  className="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200"
+                >
+                  Go Back
+                </button>
+                <button
+                  onClick={handleDiscardAndClose}
+                  className="px-4 py-2 text-sm text-white bg-red-600 rounded-md hover:bg-red-700"
+                >
+                  Discard & Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Unfreeze Expansion */}
         {event && event.status === 'FROZEN' && (
@@ -2702,19 +2853,19 @@ export default function PlanEditorPage() {
           </SectionExpandModal>
         )}
 
-        {/* Wrap Up Expansion */}
+        {/* Complete Event Expansion */}
         {event && (event.status === 'FROZEN' || event.status === 'COMPLETE') && (
           <SectionExpandModal
             isOpen={expandedSection === 'wrapup'}
             onClose={handleCloseExpansion}
-            title={event.status === 'COMPLETE' ? 'Wrap-Up Status' : 'Wrap Up Event'}
+            title="Event Complete"
             icon={<Gift className="w-6 h-6" />}
           >
             {event.status === 'FROZEN' && !wrapUpResult?.success && (
               <div className="space-y-6">
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    Send a thank-you to your guests and wrap up {event.name}?
+                    Send a thank-you to your guests and complete {event.name}?
                   </h3>
                   <p className="text-sm text-gray-600 mb-4">
                     This will close the event, and each guest will receive a personalised thank-you
@@ -2729,7 +2880,7 @@ export default function PlanEditorPage() {
                         disabled={wrapUpLoading}
                         className="mt-2 px-4 py-2 bg-yellow-600 text-white text-sm rounded-md hover:bg-yellow-700 disabled:opacity-50"
                       >
-                        {wrapUpLoading ? 'Wrapping up...' : 'Yes, wrap up anyway'}
+                        {wrapUpLoading ? 'Completing...' : 'Yes, complete anyway'}
                       </button>
                     </div>
                   )}
@@ -2742,10 +2893,10 @@ export default function PlanEditorPage() {
                       {wrapUpLoading ? (
                         <span className="flex items-center gap-2">
                           <Loader2 className="w-4 h-4 animate-spin" />
-                          Wrapping up...
+                          Completing...
                         </span>
                       ) : (
-                        'Wrap up & send thank-you messages'
+                        'Complete event & send thank-you messages'
                       )}
                     </button>
                   )}
@@ -2779,9 +2930,10 @@ export default function PlanEditorPage() {
                     <h3 className="text-lg font-semibold text-gray-900">Dispatch Status</h3>
                     <button
                       onClick={loadWrapUpStatus}
-                      className="text-sm text-accent hover:text-accent-dark"
+                      disabled={wrapUpStatusLoading}
+                      className="text-sm text-accent hover:text-accent-dark disabled:opacity-50"
                     >
-                      Refresh
+                      {wrapUpStatusLoading ? 'Refreshing…' : 'Refresh'}
                     </button>
                   </div>
 
@@ -2811,9 +2963,16 @@ export default function PlanEditorPage() {
                       {wrapUpDispatch.pending > 0 && (
                         <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
                           <p className="text-sm text-blue-700">
-                            {wrapUpDispatch.pending} message(s) still queued — they will be sent
-                            shortly.
+                            {wrapUpDispatch.pending} message(s) still queued — messages will be sent
+                            within 10–20 minutes.
                           </p>
+                          {countdownMinutes !== null && (
+                            <p className="text-sm font-medium text-blue-800 mt-1">
+                              {countdownMinutes > 0
+                                ? `Sending in ${countdownMinutes} minute${countdownMinutes !== 1 ? 's' : ''}`
+                                : 'Sending now — refresh to check status'}
+                            </p>
+                          )}
                         </div>
                       )}
 
@@ -2862,9 +3021,10 @@ export default function PlanEditorPage() {
                   ) : (
                     <button
                       onClick={loadWrapUpStatus}
-                      className="px-4 py-2 bg-accent text-white text-sm rounded-md hover:bg-accent-dark"
+                      disabled={wrapUpStatusLoading}
+                      className="px-4 py-2 bg-accent text-white text-sm rounded-md hover:bg-accent-dark disabled:opacity-50"
                     >
-                      Load dispatch status
+                      {wrapUpStatusLoading ? 'Loading…' : 'Load dispatch status'}
                     </button>
                   )}
                 </div>

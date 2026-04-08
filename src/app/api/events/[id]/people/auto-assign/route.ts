@@ -20,6 +20,19 @@ export async function POST(
     const auth = await requireEventRole(eventId, ['HOST']);
     if (auth instanceof NextResponse) return auth;
 
+    // Fetch event to identify the host
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { hostId: true },
+    });
+
+    if (!event) {
+      return NextResponse.json(
+        { success: false, error: 'Event not found', code: 'NOT_FOUND' },
+        { status: 404 }
+      );
+    }
+
     // 1. Fetch all teams with their stats
     const teams = await prisma.team.findMany({
       where: { eventId },
@@ -33,10 +46,11 @@ export async function POST(
         },
         members: {
           where: {
-            role: { not: 'HOST' }, // Don't count hosts in member count
+            role: { not: 'HOST' },
           },
           select: {
             id: true,
+            personId: true,
           },
         },
       },
@@ -54,12 +68,23 @@ export async function POST(
       );
     }
 
-    // 2. Fetch all unassigned participants
+    // Ensure host PersonEvent has HOST role (not PARTICIPANT)
+    await prisma.personEvent.updateMany({
+      where: {
+        eventId,
+        personId: event.hostId,
+        role: { not: 'HOST' },
+      },
+      data: { role: 'HOST' },
+    });
+
+    // 2. Fetch all unassigned participants, excluding the host
     const unassignedParticipants = await prisma.personEvent.findMany({
       where: {
         eventId,
         role: 'PARTICIPANT',
         teamId: null,
+        personId: { not: event.hostId },
       },
       include: {
         person: {
@@ -120,8 +145,17 @@ export async function POST(
       targetTeam.memberCount += 1;
     }
 
-    // 5. Execute all assignments in a single transaction
+    // 5. Execute all team assignments and item distribution in a single transaction
+    const itemAssignments: Array<{
+      itemId: string;
+      itemName: string;
+      personId: string;
+      personName: string;
+      teamName: string;
+    }> = [];
+
     await prisma.$transaction(async (tx) => {
+      // 5a. Assign people to teams
       for (const assignment of assignments) {
         await tx.personEvent.update({
           where: {
@@ -135,20 +169,83 @@ export async function POST(
           },
         });
       }
+
+      // 5b. Distribute unassigned items among team members
+      for (const team of teams) {
+        // Get unassigned items for this team
+        const unassignedItems = await tx.item.findMany({
+          where: {
+            teamId: team.id,
+            assignment: null,
+          },
+          select: { id: true, name: true },
+          orderBy: { createdAt: 'asc' },
+        });
+
+        if (unassignedItems.length === 0) continue;
+
+        // Get all team members (existing + newly assigned), excluding host
+        const existingMemberIds = team.members
+          .filter((m) => m.personId !== event.hostId)
+          .map((m) => m.personId);
+        const newMemberIds = assignments.filter((a) => a.teamId === team.id).map((a) => a.personId);
+        const allMemberIds = [...new Set([...existingMemberIds, ...newMemberIds])];
+
+        if (allMemberIds.length === 0) continue;
+
+        // Build a name lookup from assignments + existing team members
+        const memberNameMap = new Map<string, string>();
+        for (const a of assignments) {
+          memberNameMap.set(a.personId, a.personName);
+        }
+
+        // Round-robin distribute items among team members
+        for (let i = 0; i < unassignedItems.length; i++) {
+          const item = unassignedItems[i];
+          const personId = allMemberIds[i % allMemberIds.length];
+
+          await tx.assignment.create({
+            data: {
+              itemId: item.id,
+              personId,
+            },
+          });
+
+          await tx.item.update({
+            where: { id: item.id },
+            data: { status: 'ASSIGNED' },
+          });
+
+          itemAssignments.push({
+            itemId: item.id,
+            itemName: item.name,
+            personId,
+            personName: memberNameMap.get(personId) || 'Team member',
+            teamName: teams.find((t) => t.id === team.id)?.name || '',
+          });
+        }
+      }
     });
 
     // 6. Return success with assignment details
     return NextResponse.json({
       success: true,
       assigned: assignments.length,
+      itemsAssigned: itemAssignments.length,
       assignments: assignments.map((a) => ({
         personName: a.personName,
         teamName: a.teamName,
         reason: a.reason,
       })),
+      itemAssignments: itemAssignments.map((ia) => ({
+        itemName: ia.itemName,
+        personName: ia.personName,
+        teamName: ia.teamName,
+      })),
       summary: {
         totalUnassigned: unassignedParticipants.length,
         totalAssigned: assignments.length,
+        totalItemsAssigned: itemAssignments.length,
         teamDistributions,
       },
     });

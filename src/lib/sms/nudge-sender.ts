@@ -130,10 +130,6 @@ export async function processNudges(candidates: {
       });
     }
 
-    console.log(
-      `[Nudge] Quiet hours - deferring ${allCandidates.length} nudges for ${minutesUntil} minutes`
-    );
-
     return {
       sent: [],
       deferred: allCandidates.length,
@@ -252,10 +248,6 @@ export async function processRsvpFollowupNudges(candidates: RsvpFollowupCandidat
         },
       });
     }
-
-    console.log(
-      `[RSVP Followup] Quiet hours - deferring ${candidates.length} followup nudges for ${minutesUntil} minutes`
-    );
 
     return {
       sent: [],

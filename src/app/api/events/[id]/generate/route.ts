@@ -41,16 +41,8 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
 
     // Handle selective regeneration
     if (keepItemIds && regenerateItemIds) {
-      console.log('[Generate] Selective regeneration requested');
-      console.log('[Generate] Keep items:', keepItemIds.length);
-      console.log('[Generate] Regenerate items:', regenerateItemIds.length);
-
       // Generate new items for the selected items
       const aiResponse = await generateSelectiveItems(eventId, keepItemIds, regenerateItemIds);
-
-      console.log('[Generate] AI selective response received:', {
-        items: aiResponse.items.length,
-      });
 
       // Validate all AI-generated team names before touching the DB.
       // An unresolvable team name (e.g. 'Unknown' from the mock, or an invented name from Claude)
@@ -150,11 +142,6 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
         itemsCreated++;
       }
 
-      console.log('[Generate] Selective regeneration complete:', {
-        kept: keepItemIds.length,
-        regenerated: itemsCreated,
-      });
-
       return NextResponse.json({
         success: true,
         message: 'Items regenerated successfully',
@@ -184,26 +171,15 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       days: event.days.length || 1,
     };
 
-    console.log('[Generate] Calling AI with params:', JSON.stringify(eventParams, null, 2));
-
     // Generate plan using Claude AI
     const aiResponse = await generatePlan(eventParams, hostDescription);
 
-    console.log('[Generate] AI response received:', {
-      teams: aiResponse.teams.length,
-      items: aiResponse.items.length,
-    });
-
     // Generate a unique batch ID for this generation run
     const generatedBatchId = `gen_${randomBytes(16).toString('hex')}`;
-    console.log('[Generate] Batch ID:', generatedBatchId);
 
     // Log any items that won't be saved due to teamName mismatch
     const allTeamNames = aiResponse.teams.map((t) => t.name);
     const unmatchedItems = aiResponse.items.filter((item) => !allTeamNames.includes(item.teamName));
-    console.log(
-      `[Generate] AI generated ${aiResponse.teams.length} teams, ${aiResponse.items.length} items`
-    );
     if (unmatchedItems.length > 0) {
       console.warn(
         `[Generate] ${unmatchedItems.length} items dropped due to teamName mismatch:`,
@@ -272,8 +248,6 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
         itemsCreated++;
       }
     }
-
-    console.log('[Generate] Successfully created:', { teamsCreated, itemsCreated });
 
     // If Claude returned items but none were created, team names in items don't match
     // the team names in the teams array. Surface this as a 422 rather than silent success.

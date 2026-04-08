@@ -49,11 +49,6 @@ export async function callClaude(
     const maxTokens = config.maxTokens || DEFAULT_MAX_TOKENS;
     const temperature = config.temperature ?? 1.0;
 
-    // Log the request (for debugging)
-    console.log('[Claude API] Calling with model:', model);
-    console.log('[Claude API] System prompt length:', systemPrompt.length);
-    console.log('[Claude API] User prompt length:', userPrompt.length);
-
     // Make the API call
     const message = await anthropic.messages.create({
       model,
@@ -73,12 +68,6 @@ export async function callClaude(
       .filter((block) => block.type === 'text')
       .map((block) => (block as Anthropic.TextBlock).text)
       .join('\n');
-
-    // Log usage statistics
-    console.log('[Claude API] Response received');
-    console.log('[Claude API] Input tokens:', message.usage.input_tokens);
-    console.log('[Claude API] Output tokens:', message.usage.output_tokens);
-    console.log('[Claude API] Stop reason:', message.stop_reason);
 
     return {
       content: responseText,

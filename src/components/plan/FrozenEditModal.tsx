@@ -139,8 +139,7 @@ export default function FrozenEditModal({
         throw new Error(error.error || 'Failed to perform frozen edit');
       }
 
-      const result = await response.json();
-      console.log('Frozen edit result:', result);
+      await response.json();
 
       // Reset form
       setReason('');

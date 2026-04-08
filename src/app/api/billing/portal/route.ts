@@ -40,20 +40,10 @@ export async function POST(_req: Request) {
     // Get app URL from env or construct from request
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
-    console.log(
-      '[Portal] Creating billing portal session for customer:',
-      subscription.stripeCustomerId
-    );
-
     // Create Stripe Billing Portal session
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: subscription.stripeCustomerId,
       return_url: `${appUrl}/billing`,
-    });
-
-    console.log('[Portal] Portal session created:', {
-      id: portalSession.id,
-      url: portalSession.url,
     });
 
     return NextResponse.json({ url: portalSession.url });

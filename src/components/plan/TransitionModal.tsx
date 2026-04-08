@@ -3,11 +3,19 @@
 import { useState, useEffect } from 'react';
 import { useModal } from '@/contexts/ModalContext';
 
+interface UnassignedItem {
+  id: string;
+  name: string;
+  critical: boolean;
+  team: { id: string; name: string };
+}
+
 interface TransitionModalProps {
   eventId: string;
   currentStatus?: 'DRAFT' | 'CONFIRMING' | 'FROZEN' | 'COMPLETE';
   onClose: () => void;
   onSuccess: () => void;
+  onGoToAssign?: () => void;
 }
 
 interface FreezeWarning {
@@ -45,6 +53,7 @@ export default function TransitionModal({
   currentStatus,
   onClose,
   onSuccess,
+  onGoToAssign,
 }: TransitionModalProps) {
   const { openModal, closeModal } = useModal();
   const [loading, setLoading] = useState(true);
@@ -58,6 +67,7 @@ export default function TransitionModal({
   const [showFreezeWarnings, setShowFreezeWarnings] = useState(false);
   const [complianceRate, setComplianceRate] = useState<number | null>(null);
   const [freezeReason, setFreezeReason] = useState<string>('');
+  const [unassignedItems, setUnassignedItems] = useState<UnassignedItem[]>([]);
 
   const isFreezeTransition = currentStatus === 'CONFIRMING';
 
@@ -87,12 +97,13 @@ export default function TransitionModal({
         setHostId(eventData.event.hostId);
       }
 
-      // Fetch event data to build summary
-      const response = await fetch(`/api/events/${eventId}/summary`);
+      // Fetch event summary and items in parallel
+      const [summaryResponse, itemsResponse] = await Promise.all([
+        fetch(`/api/events/${eventId}/summary`),
+        fetch(`/api/events/${eventId}/items`),
+      ]);
 
-      if (!response.ok) {
-        // If summary endpoint doesn't exist, construct it from other sources
-        // For now, use placeholder data - this would normally fetch from an API
+      if (!summaryResponse.ok) {
         setSummary({
           teamCount: 8,
           itemCount: 55,
@@ -103,8 +114,29 @@ export default function TransitionModal({
           criticalPlaceholderCount: 3,
         });
       } else {
-        const data = await response.json();
+        const data = await summaryResponse.json();
         setSummary(data);
+      }
+
+      // Extract unassigned items
+      if (itemsResponse.ok) {
+        const itemsData = await itemsResponse.json();
+        const unassigned = itemsData.items
+          .filter((item: { assignment: unknown }) => !item.assignment)
+          .map(
+            (item: {
+              id: string;
+              name: string;
+              critical: boolean;
+              team: { id: string; name: string };
+            }) => ({
+              id: item.id,
+              name: item.name,
+              critical: item.critical,
+              team: { id: item.team.id, name: item.team.name },
+            })
+          );
+        setUnassignedItems(unassigned);
       }
 
       // Calculate weak spots
@@ -379,6 +411,56 @@ export default function TransitionModal({
                 </div>
               </div>
             )}
+
+            {/* Unassigned Items Section */}
+            {unassignedItems.length > 0 ? (
+              <div className="bg-amber-50 border-2 border-amber-200 rounded-lg p-6 mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-lg text-amber-900">
+                    {unassignedItems.length} Unassigned Item
+                    {unassignedItems.length !== 1 ? 's' : ''}
+                  </h3>
+                  {onGoToAssign && (
+                    <button
+                      onClick={onGoToAssign}
+                      className="text-sm font-medium text-amber-700 hover:text-amber-900 underline"
+                    >
+                      Go to Teams to assign
+                    </button>
+                  )}
+                </div>
+                <ul className="space-y-2">
+                  {unassignedItems.slice(0, 8).map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex items-center justify-between bg-white rounded px-3 py-2"
+                    >
+                      <div className="flex items-center gap-2">
+                        {item.critical && (
+                          <span className="px-1.5 py-0.5 bg-red-100 text-red-700 text-xs rounded font-medium">
+                            Critical
+                          </span>
+                        )}
+                        <span className="text-sm font-medium text-gray-900">{item.name}</span>
+                      </div>
+                      <span className="text-xs text-gray-500">{item.team.name}</span>
+                    </li>
+                  ))}
+                  {unassignedItems.length > 8 && (
+                    <li className="text-sm text-amber-700 italic px-3">
+                      ...and {unassignedItems.length - 8} more
+                    </li>
+                  )}
+                </ul>
+              </div>
+            ) : summary && summary.itemCount > 0 ? (
+              <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 mb-6">
+                <div className="flex items-center gap-2 text-green-700">
+                  <span className="text-lg">&#10003;</span>
+                  <span className="font-medium text-sm">All items assigned</span>
+                </div>
+              </div>
+            ) : null}
 
             {/* What Happens Next */}
             {!isFreezeTransition && (

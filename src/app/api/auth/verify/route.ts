@@ -52,16 +52,12 @@ export async function POST(req: Request) {
 
     // If personId provided (claim flow), link Person to User and create EventRole records (Ticket 1.6 + 1.7)
     if (personId) {
-      console.log('[Verify] Claim flow - personId:', personId, 'userId:', user.id);
       await prisma.$transaction(async (tx) => {
         // Link Person to User
-        console.log('[Verify] Updating Person.userId...');
         await tx.person.update({
           where: { id: personId },
           data: { userId: user.id },
         });
-        console.log('[Verify] Person.userId updated successfully');
-
         // Find all events where this Person is host or co-host
         const hostedEvents = await tx.event.findMany({
           where: { hostId: personId },
