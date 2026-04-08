@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Users, Calendar, Loader2 } from 'lucide-react';
+import { useToast } from '@/contexts/ToastContext';
 
 interface Person {
   id: string;
@@ -24,6 +25,7 @@ interface DirectoryData {
 export default function DirectoryPage() {
   const params = useParams();
   const router = useRouter();
+  const toast = useToast();
   const eventId = params.eventId as string;
   const [data, setData] = useState<DirectoryData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,7 +54,7 @@ export default function DirectoryPage() {
     if (person.token) {
       router.push(`/p/${person.token}`);
     } else {
-      alert('This person does not have access yet. Please contact the host.');
+      toast.warning('This person does not have access yet. Please contact the host.');
     }
   };
 

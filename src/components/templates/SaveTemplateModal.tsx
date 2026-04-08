@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useModal } from '@/contexts/ModalContext';
+import { useToast } from '@/contexts/ToastContext';
 
 interface SaveTemplateModalProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ export default function SaveTemplateModal({
   occasionType,
 }: SaveTemplateModalProps) {
   const { openModal, closeModal } = useModal();
+  const toast = useToast();
   const [templateName, setTemplateName] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -41,7 +43,7 @@ export default function SaveTemplateModal({
 
   const handleSave = async () => {
     if (!templateName.trim()) {
-      alert('Please enter a template name');
+      toast.warning('Please enter a template name');
       return;
     }
 
@@ -52,7 +54,7 @@ export default function SaveTemplateModal({
       onClose();
     } catch (error) {
       console.error('Error saving template:', error);
-      alert('Error saving template. Please try again.');
+      toast.error('Error saving template. Please try again.');
     } finally {
       setSaving(false);
     }

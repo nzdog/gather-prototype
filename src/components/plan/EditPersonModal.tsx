@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X, Trash2 } from 'lucide-react';
 import { useModal } from '@/contexts/ModalContext';
+import { useToast } from '@/contexts/ToastContext';
 
 interface Team {
   id: string;
@@ -49,6 +50,7 @@ export default function EditPersonModal({
   eventId,
 }: EditPersonModalProps) {
   const { openModal, closeModal } = useModal();
+  const toast = useToast();
   const [role, setRole] = useState('PARTICIPANT');
   const [teamId, setTeamId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -130,7 +132,7 @@ export default function EditPersonModal({
       onClose();
     } catch (error: any) {
       console.error('Error updating person:', error);
-      alert(error.message || 'Failed to update person');
+      toast.error(error.message || 'Failed to update person');
     } finally {
       setIsSubmitting(false);
     }
@@ -152,7 +154,7 @@ export default function EditPersonModal({
       onClose();
     } catch (error: any) {
       console.error('Error removing person:', error);
-      alert(error.message || 'Failed to remove person');
+      toast.error(error.message || 'Failed to remove person');
     } finally {
       setIsSubmitting(false);
     }

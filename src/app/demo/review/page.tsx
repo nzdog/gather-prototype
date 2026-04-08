@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useToast } from '@/contexts/ToastContext';
 import GenerationReviewPanel from '@/components/plan/GenerationReviewPanel';
 import { ReviewItem } from '@/components/plan/ItemReviewCard';
 
@@ -23,6 +24,7 @@ interface TeamGroup {
 export default function ReviewDemoPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const toast = useToast();
   const eventId = searchParams.get('eventId');
 
   const [teamGroups, setTeamGroups] = useState<TeamGroup[]>([]);
@@ -76,8 +78,8 @@ export default function ReviewDemoPage() {
       // Reload the review items to show ALL items (kept + newly regenerated)
       await loadReviewItems();
 
-      alert(
-        `Successfully regenerated ${data.regenerated} items!\n\nYou can now review ALL items again (both kept and newly generated).`
+      toast.success(
+        `Successfully regenerated ${data.regenerated} items! You can now review ALL items again (both kept and newly generated).`
       );
     } catch (err: any) {
       console.error('Error regenerating items:', err);
@@ -96,13 +98,13 @@ export default function ReviewDemoPage() {
       const data = await response.json();
       console.log('Confirmed items:', data);
 
-      alert(`Confirmed ${data.confirmedCount} items!`);
+      toast.success(`Confirmed ${data.confirmedCount} items!`);
 
       // Navigate to the plan page
       router.push(`/plan/${eventId}`);
     } catch (err: any) {
       console.error('Error confirming items:', err);
-      alert('Failed to confirm items');
+      toast.error('Failed to confirm items');
     }
   };
 

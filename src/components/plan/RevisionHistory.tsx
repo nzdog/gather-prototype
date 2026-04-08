@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useToast } from '@/contexts/ToastContext';
 import { Clock, RotateCcw, AlertCircle, Maximize2 } from 'lucide-react';
 
 interface Revision {
@@ -18,6 +19,7 @@ interface RevisionHistoryProps {
 }
 
 export default function RevisionHistory({ eventId, actorId, onExpand }: RevisionHistoryProps) {
+  const toast = useToast();
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -62,10 +64,10 @@ export default function RevisionHistory({ eventId, actorId, onExpand }: Revision
 
       // Reload revisions
       await loadRevisions();
-      alert('Revision created successfully!');
+      toast.success('Revision created successfully!');
     } catch (err: any) {
       console.error('Error creating revision:', err);
-      alert('Failed to create revision: ' + err.message);
+      toast.error('Failed to create revision: ' + err.message);
     } finally {
       setCreatingRevision(false);
     }
@@ -86,12 +88,12 @@ export default function RevisionHistory({ eventId, actorId, onExpand }: Revision
 
       if (!response.ok) throw new Error('Failed to restore revision');
 
-      alert(`Successfully restored to revision #${revision.revisionNumber}`);
+      toast.success(`Successfully restored to revision #${revision.revisionNumber}`);
       // Reload the page to show restored state
       window.location.reload();
     } catch (err: any) {
       console.error('Error restoring revision:', err);
-      alert('Failed to restore revision: ' + err.message);
+      toast.error('Failed to restore revision: ' + err.message);
     } finally {
       setRestoring(null);
     }

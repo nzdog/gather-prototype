@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X, AlertCircle } from 'lucide-react';
 import { useModal } from '@/contexts/ModalContext';
+import { useToast } from '@/contexts/ToastContext';
 
 interface Person {
   id: string;
@@ -51,6 +52,7 @@ export default function FrozenEditModal({
   people,
 }: FrozenEditModalProps) {
   const { openModal, closeModal } = useModal();
+  const toast = useToast();
 
   // Form state
   const [action, setAction] = useState<ActionType>('reassign');
@@ -97,7 +99,7 @@ export default function FrozenEditModal({
     e.preventDefault();
 
     if (!reason.trim()) {
-      alert('Please provide a reason for this change');
+      toast.warning('Please provide a reason for this change');
       return;
     }
 
@@ -149,7 +151,7 @@ export default function FrozenEditModal({
       onClose();
     } catch (error: any) {
       console.error('Error performing frozen edit:', error);
-      alert(error.message || 'Failed to perform frozen edit');
+      toast.error(error.message || 'Failed to perform frozen edit');
     } finally {
       setIsSubmitting(false);
     }

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, Upload, CheckCircle, AlertTriangle, ChevronRight, Download } from 'lucide-react';
 import { useModal } from '@/contexts/ModalContext';
+import { useToast } from '@/contexts/ToastContext';
 import { normalizePhoneNumber, isInternationalNumber } from '@/lib/phone';
 
 interface ImportCSVModalProps {
@@ -49,6 +50,7 @@ export default function ImportCSVModal({
   teams: _teams,
 }: ImportCSVModalProps) {
   const { openModal, closeModal } = useModal();
+  const toast = useToast();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
@@ -133,7 +135,7 @@ export default function ImportCSVModal({
   const parseCSV = (text: string) => {
     const lines = text.trim().split('\n');
     if (lines.length === 0) {
-      alert('CSV file is empty');
+      toast.warning('CSV file is empty');
       return;
     }
 
@@ -216,7 +218,7 @@ export default function ImportCSVModal({
     const hasLastName = mappings.some((m) => m.targetField === 'lastName');
 
     if (!hasNameMapping && !(hasFirstName || hasLastName)) {
-      alert('You must map at least one name field (Full Name, or First/Last Name)');
+      toast.warning('You must map at least one name field (Full Name, or First/Last Name)');
       return;
     }
 
@@ -379,7 +381,7 @@ export default function ImportCSVModal({
       }));
 
     if (selectedPeople.length === 0) {
-      alert('No people selected for import');
+      toast.warning('No people selected for import');
       return;
     }
 
@@ -388,7 +390,7 @@ export default function ImportCSVModal({
       await onImport(selectedPeople);
       handleClose();
     } catch (error: any) {
-      alert(error.message || 'Failed to import people');
+      toast.error(error.message || 'Failed to import people');
     } finally {
       setImporting(false);
     }

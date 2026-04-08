@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X, Search, Check } from 'lucide-react';
 import { useModal } from '@/contexts/ModalContext';
+import { useToast } from '@/contexts/ToastContext';
 
 interface Team {
   id: string;
@@ -49,6 +50,7 @@ export default function AssignCoordinatorsModal({
   onAssignmentsComplete,
 }: AssignCoordinatorsModalProps) {
   const { openModal, closeModal } = useModal();
+  const toast = useToast();
   const [assignments, setAssignments] = useState<TeamAssignment[]>([]);
   const [searchTerms, setSearchTerms] = useState<Record<string, string>>({});
   const [expandedDropdown, setExpandedDropdown] = useState<string | null>(null);
@@ -125,7 +127,7 @@ export default function AssignCoordinatorsModal({
     const changes = assignments.filter((a) => a.selectedPersonId !== a.currentCoordinatorId);
 
     if (changes.length === 0) {
-      alert('No changes to save');
+      toast.info('No changes to save');
       return;
     }
 
@@ -168,12 +170,13 @@ export default function AssignCoordinatorsModal({
         }
       }
 
-      const message =
-        `✓ Coordinator Assignments Complete\n\n` +
-        `${successCount} coordinator(s) assigned successfully` +
-        (errorCount > 0 ? `\n${errorCount} assignment(s) failed` : '');
-
-      alert(message);
+      if (errorCount > 0) {
+        toast.warning(
+          `${successCount} coordinator(s) assigned successfully, ${errorCount} assignment(s) failed`
+        );
+      } else {
+        toast.success(`${successCount} coordinator(s) assigned successfully`);
+      }
 
       if (successCount > 0) {
         onAssignmentsComplete();
@@ -181,7 +184,7 @@ export default function AssignCoordinatorsModal({
       }
     } catch (error) {
       console.error('Error assigning coordinators:', error);
-      alert('Failed to assign coordinators');
+      toast.error('Failed to assign coordinators');
     } finally {
       setIsSubmitting(false);
     }

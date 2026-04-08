@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useToast } from '@/contexts/ToastContext';
 import { Conflict } from '@prisma/client';
 import ConflictCard from './ConflictCard';
 import AcknowledgeModal from './AcknowledgeModal';
@@ -21,6 +22,7 @@ export default function ConflictList({
   onConflictsChanged,
   hasRunCheck = false,
 }: ConflictListProps) {
+  const toast = useToast();
   const [acknowledgeModalOpen, setAcknowledgeModalOpen] = useState(false);
   const [selectedConflict, setSelectedConflict] = useState<Conflict | null>(null);
   const [resolveWithAIModalOpen, setResolveWithAIModalOpen] = useState(false);
@@ -44,10 +46,10 @@ export default function ConflictList({
       }
 
       onConflictsChanged?.();
-      alert('Conflict resolved successfully!');
+      toast.success('Conflict resolved successfully!');
     } catch (error) {
       console.error('Error resolving conflict:', error);
-      alert('Failed to resolve conflict');
+      toast.error('Failed to resolve conflict');
     }
   };
 
@@ -62,10 +64,10 @@ export default function ConflictList({
       }
 
       onConflictsChanged?.();
-      alert('Conflict dismissed successfully!');
+      toast.success('Conflict dismissed successfully!');
     } catch (error) {
       console.error('Error dismissing conflict:', error);
-      alert('Failed to dismiss conflict');
+      toast.error('Failed to dismiss conflict');
     }
   };
 
@@ -81,10 +83,10 @@ export default function ConflictList({
       }
 
       onConflictsChanged?.();
-      alert('Conflict delegated to coordinator successfully!');
+      toast.success('Conflict delegated to coordinator successfully!');
     } catch (error) {
       console.error('Error delegating conflict:', error);
-      alert(error instanceof Error ? error.message : 'Failed to delegate conflict');
+      toast.error(error instanceof Error ? error.message : 'Failed to delegate conflict');
     }
   };
 
@@ -140,10 +142,10 @@ export default function ConflictList({
       setAcknowledgeModalOpen(false);
       setSelectedConflict(null);
       onConflictsChanged?.();
-      alert('Conflict acknowledged successfully!');
+      toast.success('Conflict acknowledged successfully!');
     } catch (error) {
       console.error('Error acknowledging conflict:', error);
-      alert(error instanceof Error ? error.message : 'Failed to acknowledge conflict');
+      toast.error(error instanceof Error ? error.message : 'Failed to acknowledge conflict');
     }
   };
 

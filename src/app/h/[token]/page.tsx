@@ -22,6 +22,7 @@ import {
 import TransitionModal from '@/components/plan/TransitionModal';
 import { ModalProvider } from '@/contexts/ModalContext';
 import { HostPersonModal } from '@/components/h/HostPersonModal';
+import { useToast } from '@/contexts/ToastContext';
 
 interface Item {
   id: string;
@@ -192,6 +193,7 @@ function ResponseBadge({ response }: { response: string }) {
 export default function HostView() {
   const params = useParams();
   const token = params.token as string;
+  const toast = useToast();
   const [data, setData] = useState<HostData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -296,7 +298,7 @@ export default function HostView() {
       }
 
       if (unfreezeReason.trim() === '') {
-        alert('A reason is required to unfreeze the event.');
+        toast.warning('A reason is required to unfreeze the event.');
         return;
       }
     }
@@ -320,7 +322,7 @@ export default function HostView() {
 
       await fetchData();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update status');
+      toast.error(err instanceof Error ? err.message : 'Failed to update status');
     } finally {
       setUpdating(false);
     }
@@ -337,7 +339,7 @@ export default function HostView() {
     const newCount = guestCountValue.trim() === '' ? null : parseInt(guestCountValue, 10);
 
     if (guestCountValue.trim() !== '' && (isNaN(newCount!) || newCount! < 0)) {
-      alert('Please enter a valid number');
+      toast.warning('Please enter a valid number');
       return;
     }
 
@@ -358,7 +360,7 @@ export default function HostView() {
       setEditingGuestCount(false);
       await fetchData();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update guest count');
+      toast.error(err instanceof Error ? err.message : 'Failed to update guest count');
     } finally {
       setUpdating(false);
     }

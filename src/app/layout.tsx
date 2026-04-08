@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import Navigation from '@/components/shared/Navigation';
+import Providers from '@/components/shared/Providers';
 import { getUser } from '@/lib/auth/session';
 
 export const metadata: Metadata = {
@@ -17,8 +18,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en">
       <body>
-        <Navigation user={user} />
-        {children}
+        <Providers>
+          <Navigation user={user} />
+          {children}
+        </Providers>
       </body>
     </html>
   );

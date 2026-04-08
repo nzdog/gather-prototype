@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertCircle, Trash2, Info } from 'lucide-react';
+import { useToast } from '@/contexts/ToastContext';
 
 interface HostMemory {
   id: string;
@@ -20,6 +21,7 @@ interface MemoryStats {
 
 export default function SettingsPage() {
   const router = useRouter();
+  const toast = useToast();
   const [hostId, setHostId] = useState<string>('');
   const [hostMemory, setHostMemory] = useState<HostMemory | null>(null);
   const [stats, setStats] = useState<MemoryStats | null>(null);
@@ -88,7 +90,7 @@ export default function SettingsPage() {
       setHostMemory(data.hostMemory);
     } catch (error) {
       console.error('Error updating settings:', error);
-      alert('Failed to update settings');
+      toast.error('Failed to update settings');
     } finally {
       setSaving(false);
     }
@@ -115,13 +117,15 @@ export default function SettingsPage() {
       if (!response.ok) throw new Error('Failed to delete memory');
 
       await response.json();
-      alert('Your data has been deleted. A deletion receipt has been created for transparency.');
+      toast.success(
+        'Your data has been deleted. A deletion receipt has been created for transparency.'
+      );
 
       // Reload
       await loadHostMemory();
     } catch (error) {
       console.error('Error deleting memory:', error);
-      alert('Failed to delete data');
+      toast.error('Failed to delete data');
     }
   };
 

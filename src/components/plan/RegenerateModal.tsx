@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X, AlertCircle, Loader2 } from 'lucide-react';
 import { useModal } from '@/contexts/ModalContext';
+import { useToast } from '@/contexts/ToastContext';
 import RegenerationPreview from './RegenerationPreview';
 
 interface RegenerateModalProps {
@@ -29,6 +30,7 @@ export default function RegenerateModal({
   eventId,
 }: RegenerateModalProps) {
   const { openModal, closeModal } = useModal();
+  const toast = useToast();
   const [modifier, setModifier] = useState('');
   const [step, setStep] = useState<Step>('input');
   const [preview, setPreview] = useState<any>(null);
@@ -79,7 +81,7 @@ export default function RegenerateModal({
       setStep('preview');
     } catch (error) {
       console.error('Error generating preview:', error);
-      alert('Failed to generate preview. Please try again.');
+      toast.error('Failed to generate preview. Please try again.');
       setStep('input');
     }
   };

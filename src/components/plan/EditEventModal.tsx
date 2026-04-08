@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, CheckCircle } from 'lucide-react';
 import { useModal } from '@/contexts/ModalContext';
+import { useToast } from '@/contexts/ToastContext';
 
 interface Event {
   id: string;
@@ -65,6 +66,7 @@ export default function EditEventModal({
   tabBar,
 }: EditEventModalProps) {
   const { openModal, closeModal } = useModal();
+  const toast = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [step, setStep] = useState(1); // 1=basics, 2=guests/dietary, 3=venue
   // Guard: React's synchronous re-render can swap the Next (type=button) node
@@ -199,7 +201,7 @@ export default function EditEventModal({
       onClose();
     } catch (error: any) {
       console.error('Error updating event:', error);
-      alert(error.message || 'Failed to update event');
+      toast.error(error.message || 'Failed to update event');
     } finally {
       setIsSubmitting(false);
     }
