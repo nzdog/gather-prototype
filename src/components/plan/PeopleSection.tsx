@@ -77,37 +77,37 @@ export default function PeopleSection({
     }
   };
 
-  const handleUpdatePerson = async (
-    personId: string,
-    data: { role?: string; teamId?: string | null }
-  ) => {
-    try {
-      const response = await fetch(`/api/events/${eventId}/people/${personId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
+  const handleUpdatePerson = useCallback(
+    async (personId: string, data: { role?: string; teamId?: string | null }) => {
+      try {
+        const response = await fetch(`/api/events/${eventId}/people/${personId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to update person');
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to update person');
+        }
+
+        const result = await response.json();
+
+        // Show notification if someone was demoted from coordinator
+        if (result.demotedCoordinator) {
+          const { name, teamName } = result.demotedCoordinator;
+          toast.info(
+            `${name} was automatically demoted from Coordinator to Participant on the ${teamName} team. Only one person can be coordinator per team.`
+          );
+        }
+
+        onPeopleChanged?.();
+      } catch (error) {
+        throw error; // Re-throw so modal can show error
       }
-
-      const result = await response.json();
-
-      // Show notification if someone was demoted from coordinator
-      if (result.demotedCoordinator) {
-        const { name, teamName } = result.demotedCoordinator;
-        toast.info(
-          `${name} was automatically demoted from Coordinator to Participant on the ${teamName} team. Only one person can be coordinator per team.`
-        );
-      }
-
-      onPeopleChanged?.();
-    } catch (error) {
-      throw error; // Re-throw so modal can show error
-    }
-  };
+    },
+    [eventId, toast, onPeopleChanged]
+  );
 
   const handleRemovePerson = async (personId: string) => {
     try {
@@ -139,7 +139,7 @@ export default function PeopleSection({
         toast.error(error.message || 'Failed to update role');
       }
     },
-    [eventId]
+    [handleUpdatePerson]
   );
 
   const handleBatchImport = async (people: PersonRow[]) => {
