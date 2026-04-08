@@ -89,6 +89,8 @@ export default function ParticipantView() {
   const [error, setError] = useState<string | null>(null);
   const [collapsedAssignments, setCollapsedAssignments] = useState<Set<string>>(new Set());
   const isInitialLoad = useRef(true);
+  // Tracks the continuous RSVP+items flow: rsvp → items → complete
+  const [viewPhase, setViewPhase] = useState<'rsvp' | 'items' | 'complete'>('rsvp');
 
   useEffect(() => {
     fetchData();
@@ -103,9 +105,16 @@ export default function ParticipantView() {
       const result = await response.json();
       setData(result);
 
-      // Only initialize collapsed state on first load — expanded by default
       if (isInitialLoad.current) {
         isInitialLoad.current = false;
+        if (result.rsvpStatus === 'YES') {
+          const allResponded =
+            result.assignments.length > 0 &&
+            result.assignments.every((a: Assignment) => a.response !== 'PENDING');
+          setViewPhase(allResponded ? 'complete' : 'items');
+        } else {
+          setViewPhase('rsvp');
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -115,6 +124,12 @@ export default function ParticipantView() {
   };
 
   const handleRsvpResponse = async (rsvpStatus: 'YES' | 'NO' | 'NOT_SURE') => {
+    // Optimistically transition to items phase on Yes — no waiting for fetch
+    if (rsvpStatus === 'YES' && data) {
+      setData({ ...data, rsvpStatus: 'YES' });
+      setViewPhase('items');
+    }
+
     try {
       const response = await fetch(`/api/p/${token}`, {
         method: 'PATCH',
@@ -126,11 +141,28 @@ export default function ParticipantView() {
       }
       await fetchData();
     } catch (err) {
-      console.error('Failed to record RSVP:', err);
+      // Revert optimistic update on failure
+      if (rsvpStatus === 'YES') {
+        await fetchData();
+      }
     }
   };
 
   const handleResponse = async (assignmentId: string, responseType: 'ACCEPTED' | 'DECLINED') => {
+    // Optimistically update assignment response
+    if (data) {
+      const updatedAssignments = data.assignments.map((a) =>
+        a.id === assignmentId ? { ...a, response: responseType } : a
+      );
+      setData({ ...data, assignments: updatedAssignments });
+
+      // Check if all items are now responded to
+      const allResponded = updatedAssignments.every((a) => a.response !== 'PENDING');
+      if (allResponded) {
+        setViewPhase('complete');
+      }
+    }
+
     try {
       const response = await fetch(`/api/p/${token}/ack/${assignmentId}`, {
         method: 'POST',
@@ -142,7 +174,8 @@ export default function ParticipantView() {
       }
       await fetchData();
     } catch (err) {
-      console.error('Failed to record response:', err);
+      // Revert on failure
+      await fetchData();
     }
   };
 
@@ -246,7 +279,7 @@ export default function ParticipantView() {
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6">
           {/* RSVP Question - PENDING state */}
-          {data.rsvpStatus === 'PENDING' && (
+          {data.rsvpStatus === 'PENDING' && viewPhase === 'rsvp' && (
             <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 mb-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-4">Are you coming?</h2>
               {data.assignments.length > 0 && (
@@ -364,9 +397,51 @@ export default function ParticipantView() {
             </div>
           )}
 
-          {/* Assignments Section - Only show if YES or NOT_SURE */}
-          {(data.rsvpStatus === 'YES' || data.rsvpStatus === 'NOT_SURE') && (
+          {/* Completion State — all items responded */}
+          {data.rsvpStatus === 'YES' && viewPhase === 'complete' && (
+            <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 mb-6 text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-sage-100 rounded-full mb-4">
+                <Check className="size-8 text-sage-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                You're all set. See you there.
+              </h2>
+              <p className="text-gray-600 mb-6">
+                {data.assignments.filter((a) => a.response === 'ACCEPTED').length > 0 && (
+                  <>
+                    You're bringing{' '}
+                    {data.assignments.filter((a) => a.response === 'ACCEPTED').length}{' '}
+                    {data.assignments.filter((a) => a.response === 'ACCEPTED').length === 1
+                      ? 'item'
+                      : 'items'}
+                    .{' '}
+                  </>
+                )}
+                Your host has been notified.
+              </p>
+              {data.event.status !== 'FROZEN' && (
+                <button
+                  onClick={() => setViewPhase('items')}
+                  className="text-sm text-accent hover:underline"
+                >
+                  Review or change your responses
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Assignments Section - Show in items phase for YES, or always for NOT_SURE */}
+          {((data.rsvpStatus === 'YES' && viewPhase === 'items') ||
+            data.rsvpStatus === 'NOT_SURE') && (
             <>
+              {data.rsvpStatus === 'YES' && viewPhase === 'items' && (
+                <div className="mb-4">
+                  <p className="text-sm text-sage-700 font-medium">
+                    Here's what you're asked to bring — confirm each item below.
+                  </p>
+                </div>
+              )}
+
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm uppercase tracking-wide text-gray-500">Your Assignments</h2>
                 {data && data.assignments.length > 0 && (
