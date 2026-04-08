@@ -1855,6 +1855,10 @@ export default function PlanEditorPage() {
               loadConflicts();
               toast.success('Event moved to CONFIRMING — invites are ready to send!');
             }}
+            onGoToAssign={() => {
+              setShowTransitionModal(false);
+              handleExpandSection('teams');
+            }}
           />
         )}
 
