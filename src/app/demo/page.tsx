@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useToast } from '@/contexts/ToastContext';
 
 interface Token {
   scope: string;
@@ -10,6 +11,7 @@ interface Token {
 }
 
 export default function DemoLandingPage() {
+  const toast = useToast();
   const [tokens, setTokens] = useState<Token[]>([]);
   const [loading, setLoading] = useState(true);
   const [resetting, setResetting] = useState(false);
@@ -47,12 +49,12 @@ export default function DemoLandingPage() {
         const { eventId } = await response.json();
         window.location.href = `/plan/${eventId}`;
       } else {
-        alert('Failed to create demo session');
+        toast.error('Failed to create demo session');
         setOpeningDashboard(false);
       }
     } catch (err) {
       console.error('Failed to open dashboard:', err);
-      alert('Failed to open planning dashboard');
+      toast.error('Failed to open planning dashboard');
       setOpeningDashboard(false);
     }
   };
@@ -74,12 +76,12 @@ export default function DemoLandingPage() {
         window.location.href = `/demo?reset=${Date.now()}`;
       } else {
         const error = await response.json();
-        alert(`Failed to reset: ${error.error}`);
+        toast.error(`Failed to reset: ${error.error}`);
         setResetting(false);
       }
     } catch (err) {
       console.error('Reset failed:', err);
-      alert('Failed to reset database');
+      toast.error('Failed to reset database');
       setResetting(false);
     }
   };

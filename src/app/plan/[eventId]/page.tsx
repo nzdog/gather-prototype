@@ -24,6 +24,7 @@ import {
 import ConflictList from '@/components/plan/ConflictList';
 import GateCheck from '@/components/plan/GateCheck';
 import FreezeCheck from '@/components/plan/FreezeCheck';
+import TransitionModal from '@/components/plan/TransitionModal';
 import UnfreezeSection from '@/components/plan/UnfreezeSection';
 import EventStageProgress from '@/components/plan/EventStageProgress';
 import SaveTemplateModal from '@/components/templates/SaveTemplateModal';
@@ -46,6 +47,7 @@ import { WhosMissing } from '@/components/plan/WhosMissing';
 import { CopyPlanAsText } from '@/components/plan/CopyPlanAsText';
 import { PersonInviteDetailModal } from '@/components/plan/PersonInviteDetailModal';
 import { ModalProvider } from '@/contexts/ModalContext';
+import { useToast } from '@/contexts/ToastContext';
 import { Conflict } from '@prisma/client';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 import SetupChecklistBanner from '@/components/plan/SetupChecklistBanner';
@@ -188,6 +190,7 @@ export default function PlanEditorPage() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const eventId = params.eventId as string;
+  const toast = useToast();
 
   const [event, setEvent] = useState<Event | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -211,7 +214,8 @@ export default function PlanEditorPage() {
   const [loadingTeamItems, setLoadingTeamItems] = useState<Set<string>>(new Set());
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [gateCheckRefresh, setGateCheckRefresh] = useState(0);
-  const [bannerGateCheckTrigger, setBannerGateCheckTrigger] = useState(0);
+  const [showTransitionModal, setShowTransitionModal] = useState(false);
+  const [transitionLoading, setTransitionLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [regenerateModalOpen, setRegenerateModalOpen] = useState(false);
@@ -258,11 +262,6 @@ export default function PlanEditorPage() {
   const [modalBreadcrumbTrail, setModalBreadcrumbTrail] = useState<ModalTabId[]>([]);
   const pendingModalAction = useRef<'generate' | null>(null);
 
-  // Debug: Log when selectedPersonId changes
-  useEffect(() => {
-    console.log('selectedPersonId changed:', selectedPersonId);
-  }, [selectedPersonId]);
-
   // Review mode for selective regeneration
   const [reviewMode, setReviewMode] = useState(false);
   const [reviewTeamGroups, setReviewTeamGroups] = useState<
@@ -279,9 +278,6 @@ export default function PlanEditorPage() {
       }>;
     }>
   >([]);
-
-  // Mock hostId - in production, this would come from auth
-  const MOCK_HOST_ID = 'cmjwbjrpw0000n99xs11r44qh';
 
   useEffect(() => {
     // Handle invalid eventId (like "new")
@@ -563,10 +559,10 @@ export default function PlanEditorPage() {
       // Close any expanded section so the user lands on the full plan page
       handleCloseExpansion();
 
-      alert('Plan generated! Demo team and items created.');
+      toast.success('Plan generated! Demo team and items created.');
     } catch (err: any) {
       console.error('Error generating plan:', err);
-      alert('Failed to generate plan');
+      toast.error('Failed to generate plan');
     } finally {
       setIsGenerating(false);
     }
@@ -591,10 +587,10 @@ export default function PlanEditorPage() {
       await loadConflicts();
       setGateCheckRefresh((prev) => prev + 1);
 
-      alert('Plan check complete! See conflicts below.');
+      toast.success('Plan check complete! See conflicts below.');
     } catch (err: any) {
       console.error('Error checking plan:', err);
-      alert(`Failed to check plan: ${err.message}`);
+      toast.error(`Failed to check plan: ${err.message}`);
     }
   };
 
@@ -622,7 +618,7 @@ export default function PlanEditorPage() {
       const reviewData = await reviewResponse.json();
 
       if (!reviewData.teamGroups || reviewData.teamGroups.length === 0) {
-        alert('No items found to regenerate. Please generate a plan first.');
+        toast.warning('No items found to regenerate. Please generate a plan first.');
         setIsRegenerating(false);
         return;
       }
@@ -631,7 +627,7 @@ export default function PlanEditorPage() {
       setReviewMode(true); // Enter review mode
     } catch (err: any) {
       console.error('Error loading items for review:', err);
-      alert('Failed to load items for regeneration. Please try again.');
+      toast.error('Failed to load items for regeneration. Please try again.');
     } finally {
       setIsRegenerating(false);
     }
@@ -650,8 +646,7 @@ export default function PlanEditorPage() {
 
       if (!response.ok) throw new Error('Failed to regenerate items');
 
-      const data = await response.json();
-      console.log('Regeneration complete:', data);
+      await response.json();
 
       // Reload review items to show ALL items (kept + newly regenerated)
       const reviewResponse = await fetch(`/api/events/${eventId}/review-items`);
@@ -673,8 +668,7 @@ export default function PlanEditorPage() {
 
       if (!response.ok) throw new Error('Failed to confirm items');
 
-      const data = await response.json();
-      console.log('Confirmed items:', data);
+      await response.json();
 
       // Exit review mode and reload plan
       setReviewMode(false);
@@ -688,7 +682,7 @@ export default function PlanEditorPage() {
       setGateCheckRefresh((prev) => prev + 1);
     } catch (err: any) {
       console.error('Error confirming items:', err);
-      alert('Failed to confirm items');
+      toast.error('Failed to confirm items');
     }
   };
 
@@ -721,7 +715,6 @@ export default function PlanEditorPage() {
 
       // Automatically run check plan if it was run before
       if (event?.lastCheckPlanAt) {
-        console.log('Auto-running check plan after regeneration...');
         try {
           const checkResponse = await fetch(`/api/events/${eventId}/check`, {
             method: 'POST',
@@ -730,7 +723,6 @@ export default function PlanEditorPage() {
           if (checkResponse.ok) {
             await loadEvent();
             await loadConflicts();
-            console.log('Check plan completed successfully after regeneration');
           }
         } catch (checkError) {
           console.error('Error auto-running check plan:', checkError);
@@ -738,10 +730,10 @@ export default function PlanEditorPage() {
         }
       }
 
-      alert('Plan regenerated successfully!');
+      toast.success('Plan regenerated successfully!');
     } catch (err: any) {
       console.error('Error regenerating plan:', err);
-      alert('Failed to regenerate plan');
+      toast.error('Failed to regenerate plan');
     } finally {
       setIsRegenerating(false);
     }
@@ -823,7 +815,7 @@ export default function PlanEditorPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          hostId: event?.hostId, // Use actual event hostId instead of MOCK_HOST_ID
+          hostId: event?.hostId,
           eventId: event?.id,
           name: templateName,
         }),
@@ -834,7 +826,7 @@ export default function PlanEditorPage() {
       }
 
       await response.json();
-      alert(`Template "${templateName}" saved successfully!`);
+      toast.success(`Template "${templateName}" saved successfully!`);
 
       // Optionally redirect to templates page
       // router.push('/plan/templates');
@@ -851,7 +843,7 @@ export default function PlanEditorPage() {
       setTimeout(() => setCopiedToken(null), 2000); // Reset after 2 seconds
     } catch (err) {
       console.error('Failed to copy:', err);
-      alert('Failed to copy link to clipboard');
+      toast.error('Failed to copy link to clipboard');
     }
   };
 
@@ -864,7 +856,7 @@ export default function PlanEditorPage() {
       setTimeout(() => setCopiedDirectory(false), 2000); // Reset after 2 seconds
     } catch (err) {
       console.error('Failed to copy:', err);
-      alert('Failed to copy link to clipboard');
+      toast.error('Failed to copy link to clipboard');
     }
   };
 
@@ -927,14 +919,14 @@ export default function PlanEditorPage() {
       if (res.ok) {
         // Reload invite links to refresh status
         await loadInviteLinks();
-        alert(`Claim reset for ${personName}. They can now claim their name again.`);
+        toast.success(`Claim reset for ${personName}. They can now claim their name again.`);
       } else {
         const data = await res.json();
-        alert(data.error || 'Failed to reset claim');
+        toast.error(data.error || 'Failed to reset claim');
       }
     } catch (err) {
       console.error('Failed to reset claim:', err);
-      alert('Failed to reset claim');
+      toast.error('Failed to reset claim');
     } finally {
       setResettingClaim(null);
     }
@@ -947,7 +939,7 @@ export default function PlanEditorPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...teamData,
-          coordinatorId: MOCK_HOST_ID, // Host is initial coordinator
+          coordinatorId: event?.hostId, // Host is initial coordinator
         }),
       });
 
@@ -960,7 +952,7 @@ export default function PlanEditorPage() {
       setGateCheckRefresh((prev) => prev + 1);
     } catch (error: any) {
       console.error('Error adding team:', error);
-      alert('Failed to add team');
+      toast.error('Failed to add team');
       throw error;
     }
   };
@@ -987,7 +979,7 @@ export default function PlanEditorPage() {
       setGateCheckRefresh((prev) => prev + 1);
     } catch (error: any) {
       console.error('Error adding item:', error);
-      alert('Failed to add item');
+      toast.error('Failed to add item');
       throw error;
     }
   };
@@ -1041,7 +1033,7 @@ export default function PlanEditorPage() {
       setGateCheckRefresh((prev) => prev + 1);
     } catch (error: any) {
       console.error('Error assigning item:', error);
-      alert(error.message || 'Failed to assign item');
+      toast.error(error.message || 'Failed to assign item');
     }
   };
 
@@ -1090,7 +1082,7 @@ export default function PlanEditorPage() {
       setGateCheckRefresh((prev) => prev + 1);
     } catch (error: any) {
       console.error('Error updating item:', error);
-      alert('Failed to update item');
+      toast.error('Failed to update item');
       throw error; // Re-throw to prevent modal from closing
     }
   };
@@ -1111,7 +1103,7 @@ export default function PlanEditorPage() {
       setGateCheckRefresh((prev) => prev + 1);
     } catch (error: any) {
       console.error('Error deleting item:', error);
-      alert('Failed to delete item');
+      toast.error('Failed to delete item');
     }
   };
 
@@ -1146,7 +1138,7 @@ export default function PlanEditorPage() {
       setGateCheckRefresh((prev) => prev + 1);
     } catch (error: any) {
       console.error('Error deleting team:', error);
-      alert('Failed to delete team');
+      toast.error('Failed to delete team');
     }
   };
 
@@ -1195,7 +1187,7 @@ export default function PlanEditorPage() {
       console.error('Error moving person:', error);
       // Revert optimistic update
       setPeople(originalPeople);
-      alert("Couldn't save. Try again.");
+      toast.error("Couldn't save. Try again.");
     }
   };
 
@@ -1239,6 +1231,29 @@ export default function PlanEditorPage() {
       } catch (err) {
         console.warn('Failed to save dismissed state:', err);
       }
+    }
+  };
+
+  const handleBannerMoveToConfirming = async () => {
+    setTransitionLoading(true);
+    try {
+      const response = await fetch(`/api/events/${eventId}/gate-check`, { method: 'POST' });
+      if (!response.ok) {
+        toast.error('Failed to run gate check');
+        return;
+      }
+      const result = await response.json();
+      if (result.passed) {
+        setShowTransitionModal(true);
+      } else {
+        // Gate check failed — open the plan status section so user can see blocking issues
+        handleExpandSection('planstatus');
+        toast.error(`${result.blocks?.length || 0} issue(s) must be resolved before transitioning`);
+      }
+    } catch {
+      toast.error('Failed to run gate check');
+    } finally {
+      setTransitionLoading(false);
     }
   };
 
@@ -1322,11 +1337,11 @@ export default function PlanEditorPage() {
                     if (hostLink) {
                       window.open(`/h/${hostLink.token}?expand=all`, '_blank');
                     } else if (event.status === 'DRAFT') {
-                      alert(
+                      toast.warning(
                         'Host view is not available yet. Please transition to CONFIRMING status first.'
                       );
                     } else {
-                      alert('Host link unavailable — try refreshing the page.');
+                      toast.error('Host link unavailable — try refreshing the page.');
                     }
                   }}
                   className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
@@ -1403,7 +1418,8 @@ export default function PlanEditorPage() {
             <SetupChecklistBanner
               progress={setupProgress}
               onDismiss={handleChecklistDismiss}
-              onMoveToConfirming={() => setBannerGateCheckTrigger((t) => t + 1)}
+              onMoveToConfirming={handleBannerMoveToConfirming}
+              transitionLoading={transitionLoading}
             />
           )}
 
@@ -1683,6 +1699,7 @@ export default function PlanEditorPage() {
         <div className="hidden">
           <ConflictList
             eventId={eventId}
+            hostId={event?.hostId ?? ''}
             conflicts={conflicts}
             onConflictsChanged={loadConflicts}
             hasRunCheck={!!event.lastCheckPlanAt}
@@ -1708,7 +1725,6 @@ export default function PlanEditorPage() {
           <GateCheck
             eventId={eventId}
             refreshTrigger={gateCheckRefresh}
-            autoOpenTrigger={bannerGateCheckTrigger}
             onTransitionComplete={() => {
               loadEvent();
               loadTeams();
@@ -1738,7 +1754,7 @@ export default function PlanEditorPage() {
           )}
           <RevisionHistory
             eventId={eventId}
-            actorId={MOCK_HOST_ID}
+            actorId={event?.hostId ?? ''}
             onExpand={() => handleExpandSection('history')}
           />
         </div>
@@ -1823,6 +1839,21 @@ export default function PlanEditorPage() {
           }
         />
 
+        {/* Transition Modal — DRAFT → CONFIRMING (rendered at page level, not inside hidden div) */}
+        {showTransitionModal && (
+          <TransitionModal
+            eventId={eventId}
+            onClose={() => setShowTransitionModal(false)}
+            onSuccess={() => {
+              setShowTransitionModal(false);
+              loadEvent();
+              loadTeams();
+              loadConflicts();
+              toast.success('Event moved to CONFIRMING — invites are ready to send!');
+            }}
+          />
+        )}
+
         {/* Edit Event Modal */}
         {event && (
           <EditEventModal
@@ -1880,6 +1911,7 @@ export default function PlanEditorPage() {
             ) : (
               <ConflictList
                 eventId={eventId}
+                hostId={event?.hostId ?? ''}
                 conflicts={conflicts}
                 onConflictsChanged={loadConflicts}
                 hasRunCheck={!!event.lastCheckPlanAt}
@@ -2849,7 +2881,7 @@ export default function PlanEditorPage() {
           icon={<Clock className="w-6 h-6" />}
           tabBar={buildTabBar('history')}
         >
-          <RevisionHistory eventId={eventId} actorId={MOCK_HOST_ID} />
+          <RevisionHistory eventId={eventId} actorId={event?.hostId ?? ''} />
         </SectionExpandModal>
 
         {/* Phase 6 - Person Detail Modal */}
@@ -2858,7 +2890,6 @@ export default function PlanEditorPage() {
             eventId={eventId}
             personId={selectedPersonId}
             onClose={() => {
-              console.log('Closing person detail modal');
               setSelectedPersonId(null);
             }}
             onUpdate={loadInviteLinks}

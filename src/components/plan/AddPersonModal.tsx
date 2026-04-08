@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useModal } from '@/contexts/ModalContext';
+import { useToast } from '@/contexts/ToastContext';
 import { normalizePhoneNumber, isInternationalNumber } from '@/lib/phone';
 
 interface Team {
@@ -34,6 +35,7 @@ export default function AddPersonModal({
   stepLabel,
 }: AddPersonModalProps) {
   const { openModal, closeModal } = useModal();
+  const toast = useToast();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -74,7 +76,7 @@ export default function AddPersonModal({
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!name.trim()) {
-      alert('Name is required');
+      toast.warning('Name is required');
       return;
     }
 
@@ -119,7 +121,7 @@ export default function AddPersonModal({
       }, 100);
     } catch (error: any) {
       console.error('Error adding person:', error);
-      alert(error.message || 'Failed to add person');
+      toast.error(error.message || 'Failed to add person');
     } finally {
       setIsSubmitting(false);
     }

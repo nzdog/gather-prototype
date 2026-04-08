@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, ReactNode } from 'react';
+import { useToast } from '@/contexts/ToastContext';
 
 interface ModalContextValue {
   activeModal: string | null;
@@ -13,11 +14,12 @@ const ModalContext = createContext<ModalContextValue | undefined>(undefined);
 
 export function ModalProvider({ children }: { children: ReactNode }) {
   const [activeModal, setActiveModal] = useState<string | null>(null);
+  const toast = useToast();
 
   const openModal = (id: string): boolean => {
     // Check if an expansion modal is currently open
     if (activeModal?.startsWith('expand-')) {
-      alert('Please close the expanded section before opening this dialog.');
+      toast.warning('Please close the expanded section before opening this dialog.');
       return false;
     }
     setActiveModal(id);

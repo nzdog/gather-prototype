@@ -1,18 +1,20 @@
 'use client';
 
-import { Check } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
 import { SetupProgress, SetupStep } from '@/hooks/useEventSetupProgress';
 
 interface SetupChecklistBannerProps {
   progress: SetupProgress;
   onDismiss: () => void;
   onMoveToConfirming?: () => void;
+  transitionLoading?: boolean;
 }
 
 export default function SetupChecklistBanner({
   progress,
   onDismiss,
   onMoveToConfirming,
+  transitionLoading,
 }: SetupChecklistBannerProps) {
   const { steps, completedCount, totalSteps, allComplete, nextStep } = progress;
 
@@ -120,9 +122,19 @@ export default function SetupChecklistBanner({
           <div className="mt-4 pt-4 border-t border-gray-100">
             <button
               onClick={onMoveToConfirming}
-              className="w-full px-6 py-3 bg-accent text-white rounded-lg font-semibold text-base hover:bg-accent-dark transition-colors"
+              disabled={transitionLoading}
+              className={`w-full px-6 py-3 bg-accent text-white rounded-lg font-semibold text-base hover:bg-accent-dark transition-colors flex items-center justify-center gap-2 ${
+                transitionLoading ? 'opacity-75 cursor-not-allowed' : ''
+              }`}
             >
-              Move to confirming and I&apos;ll let everyone know what they need to do
+              {transitionLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Checking readiness...
+                </>
+              ) : (
+                'Move to confirming and I\u2019ll let everyone know what they need to do'
+              )}
             </button>
           </div>
         )}

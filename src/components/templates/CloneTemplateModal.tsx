@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { StructureTemplate } from '@prisma/client';
 import { useModal } from '@/contexts/ModalContext';
+import { useToast } from '@/contexts/ToastContext';
 
 interface CloneTemplateModalProps {
   isOpen: boolean;
@@ -28,6 +29,7 @@ export default function CloneTemplateModal({
   hostId,
 }: CloneTemplateModalProps) {
   const { openModal, closeModal } = useModal();
+  const toast = useToast();
   const [template, setTemplate] = useState<StructureTemplate | null>(null);
   // TODO: QuantitiesProfile feature (Section 3.11 of build spec) - for quantity scaling across templates
   const [_quantitiesProfile, _setQuantitiesProfile] = useState<QuantitiesProfile | null>(null);
@@ -76,12 +78,12 @@ export default function CloneTemplateModal({
 
   const handleClone = async () => {
     if (!eventName.trim() || !startDate || !endDate) {
-      alert('Please fill in all required fields');
+      toast.warning('Please fill in all required fields');
       return;
     }
 
     if (!guestCount && applyQuantityScaling) {
-      alert('Please enter a guest count to apply quantity scaling');
+      toast.warning('Please enter a guest count to apply quantity scaling');
       return;
     }
 
@@ -108,11 +110,11 @@ export default function CloneTemplateModal({
         onClose();
       } else {
         const error = await response.json();
-        alert(`Error cloning template: ${error.error || 'Unknown error'}`);
+        toast.error(`Error cloning template: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error cloning template:', error);
-      alert('Error cloning template. Please try again.');
+      toast.error('Error cloning template. Please try again.');
     } finally {
       setCloning(false);
     }

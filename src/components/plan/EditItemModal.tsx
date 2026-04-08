@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X, Lock } from 'lucide-react';
 import { useModal } from '@/contexts/ModalContext';
+import { useToast } from '@/contexts/ToastContext';
 import ItemStatusBadges from './ItemStatusBadges';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 
@@ -102,6 +103,7 @@ export default function EditItemModal({
   people,
 }: EditItemModalProps) {
   const { openModal, closeModal } = useModal();
+  const toast = useToast();
 
   // Form state
   const [name, setName] = useState('');
@@ -193,7 +195,7 @@ export default function EditItemModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
-      alert('Item name is required');
+      toast.warning('Item name is required');
       return;
     }
 
@@ -265,7 +267,7 @@ export default function EditItemModal({
       onClose();
     } catch (error: any) {
       console.error('Error saving item:', error);
-      alert(error.message || 'Failed to save item');
+      toast.error(error.message || 'Failed to save item');
       // Don't close modal on error
     }
   };

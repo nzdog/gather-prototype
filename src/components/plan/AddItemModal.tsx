@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useModal } from '@/contexts/ModalContext';
+import { useToast } from '@/contexts/ToastContext';
 
 interface Day {
   id: string;
@@ -71,6 +72,7 @@ export default function AddItemModal({
   days,
 }: AddItemModalProps) {
   const { openModal, closeModal } = useModal();
+  const toast = useToast();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [quantityAmount, setQuantityAmount] = useState('');
@@ -109,12 +111,12 @@ export default function AddItemModal({
     e.preventDefault();
 
     if (!name.trim()) {
-      alert('Please enter item name');
+      toast.warning('Please enter item name');
       return;
     }
 
     if (teams && !selectedTeamId) {
-      alert('Please select a team');
+      toast.warning('Please select a team');
       return;
     }
 
@@ -163,7 +165,7 @@ export default function AddItemModal({
       onClose();
     } catch (error) {
       console.error('Error adding item:', error);
-      alert('Failed to add item. Please try again.');
+      toast.error('Failed to add item. Please try again.');
     } finally {
       setAdding(false);
     }

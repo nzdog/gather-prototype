@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useToast } from '@/contexts/ToastContext';
 import { Maximize2 } from 'lucide-react';
 
 interface UnfreezeSectionProps {
@@ -14,6 +15,7 @@ export default function UnfreezeSection({
   onUnfreezeComplete,
   onExpand,
 }: UnfreezeSectionProps) {
+  const toast = useToast();
   const [unfreezing, setUnfreezing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,7 +29,7 @@ export default function UnfreezeSection({
 
     // Empty reason
     if (reason.trim() === '') {
-      alert('A reason is required to unfreeze the event.');
+      toast.warning('A reason is required to unfreeze the event.');
       return;
     }
 

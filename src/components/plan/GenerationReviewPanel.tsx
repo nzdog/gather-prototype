@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useToast } from '@/contexts/ToastContext';
 import ItemReviewCard, { ItemDecision, ReviewItem } from './ItemReviewCard';
 
 interface TeamGroup {
@@ -21,6 +22,7 @@ export default function GenerationReviewPanel({
   onConfirmAndContinue,
   onRegenerateSelected,
 }: GenerationReviewPanelProps) {
+  const toast = useToast();
   const [decisions, setDecisions] = useState<Record<string, ItemDecision>>(() => {
     const initial: Record<string, ItemDecision> = {};
     teamGroups.forEach((group) => {
@@ -77,7 +79,7 @@ export default function GenerationReviewPanel({
       .map(([id]) => id);
 
     if (regenerateIds.length === 0) {
-      alert('Please select at least one item to regenerate');
+      toast.warning('Please select at least one item to regenerate');
       return;
     }
 
@@ -86,7 +88,7 @@ export default function GenerationReviewPanel({
       await onRegenerateSelected(keepIds, regenerateIds);
     } catch (error) {
       console.error('Error regenerating items:', error);
-      alert('Failed to regenerate items. Please try again.');
+      toast.error('Failed to regenerate items. Please try again.');
     } finally {
       setIsRegenerating(false);
     }

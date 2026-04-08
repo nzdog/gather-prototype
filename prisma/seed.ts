@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { makeNzdtChristmas2025Date } from '../src/lib/timezone';
+import { makeNzdtChristmasDate } from '../src/lib/timezone';
 import { randomBytes } from 'crypto';
 
 const prisma = new PrismaClient();
@@ -279,9 +279,9 @@ async function main() {
   console.log('Creating event...');
   const event = await prisma.event.create({
     data: {
-      name: 'Henderson Family Christmas 2025',
-      startDate: makeNzdtChristmas2025Date('2025-12-24', '00:00'),
-      endDate: makeNzdtChristmas2025Date('2025-12-26', '23:59'),
+      name: 'Henderson Family Christmas 2026',
+      startDate: makeNzdtChristmasDate('2026-12-24', '00:00'),
+      endDate: makeNzdtChristmasDate('2026-12-26', '23:59'),
       status: 'CONFIRMING',
       isDemo: true,
       occasionType: 'CHRISTMAS',
@@ -307,9 +307,9 @@ async function main() {
   console.log('Creating days...');
 
   const daysData = [
-    { name: 'Christmas Eve', date: makeNzdtChristmas2025Date('2025-12-24', '00:00') },
-    { name: 'Christmas Day', date: makeNzdtChristmas2025Date('2025-12-25', '00:00') },
-    { name: 'Boxing Day', date: makeNzdtChristmas2025Date('2025-12-26', '00:00') },
+    { name: 'Christmas Eve', date: makeNzdtChristmasDate('2026-12-24', '00:00') },
+    { name: 'Christmas Day', date: makeNzdtChristmasDate('2026-12-25', '00:00') },
+    { name: 'Boxing Day', date: makeNzdtChristmasDate('2026-12-26', '00:00') },
   ];
 
   const dayByName = new Map();
@@ -404,27 +404,27 @@ async function main() {
   // ============================================
   const dropOff = {
     eve: {
-      at: makeNzdtChristmas2025Date('2025-12-24', '17:00'),
+      at: makeNzdtChristmasDate('2026-12-24', '17:00'),
       location: "Rob's Kitchen",
       note: '5pm Christmas Eve',
     },
     day: {
-      at: makeNzdtChristmas2025Date('2025-12-25', '12:00'),
+      at: makeNzdtChristmasDate('2026-12-25', '12:00'),
       location: 'Main BBQ Area',
       note: '12 noon Christmas Day',
     },
     morning: {
-      at: makeNzdtChristmas2025Date('2025-12-25', '09:00'),
+      at: makeNzdtChristmasDate('2026-12-25', '09:00'),
       location: 'Kitchen',
       note: '9am Christmas Day',
     },
     box: {
-      at: makeNzdtChristmas2025Date('2025-12-26', '12:00'),
+      at: makeNzdtChristmasDate('2026-12-26', '12:00'),
       location: 'BBQ Area',
       note: '12 noon Boxing Day',
     },
     setup: {
-      at: makeNzdtChristmas2025Date('2025-12-25', '10:00'),
+      at: makeNzdtChristmasDate('2026-12-25', '10:00'),
       location: 'Backyard',
       note: '10am Christmas Day',
     },

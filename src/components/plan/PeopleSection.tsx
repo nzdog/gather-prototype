@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useToast } from '@/contexts/ToastContext';
 import { Plus, Edit2, Users, Loader2, Upload, Maximize2, UserCog } from 'lucide-react';
 import AddPersonModal, { AddPersonFormData } from './AddPersonModal';
 import EditPersonModal from './EditPersonModal';
@@ -47,6 +48,7 @@ export default function PeopleSection({
   onGeneratePlan,
   stepLabel,
 }: PeopleSectionProps) {
+  const toast = useToast();
   const [view, setView] = useState<'table' | 'board'>('table');
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -96,10 +98,8 @@ export default function PeopleSection({
       // Show notification if someone was demoted from coordinator
       if (result.demotedCoordinator) {
         const { name, teamName } = result.demotedCoordinator;
-        alert(
-          `✓ Coordinator Updated\n\n` +
-            `${name} was automatically demoted from Coordinator to Participant on the ${teamName} team.\n\n` +
-            `Only one person can be coordinator per team.`
+        toast.info(
+          `${name} was automatically demoted from Coordinator to Participant on the ${teamName} team. Only one person can be coordinator per team.`
         );
       }
 
@@ -151,11 +151,10 @@ export default function PeopleSection({
 
       // Show summary
       const { imported, skipped, errors } = result;
-      alert(
-        `Import complete!\n\n` +
-          `✓ Imported: ${imported}\n` +
-          (skipped > 0 ? `⊘ Skipped: ${skipped} (duplicates)\n` : '') +
-          (errors?.length > 0 ? `✗ Errors: ${errors.length}` : '')
+      toast.success(
+        `Import complete! Imported: ${imported}` +
+          (skipped > 0 ? `, Skipped: ${skipped} (duplicates)` : '') +
+          (errors?.length > 0 ? `, Errors: ${errors.length}` : '')
       );
 
       onPeopleChanged?.();
@@ -192,13 +191,13 @@ export default function PeopleSection({
       }
 
       // Success feedback
-      alert(`Successfully assigned ${data.assigned} people to teams!`);
+      toast.success(`Successfully assigned ${data.assigned} people to teams!`);
 
       // Refresh data
       onPeopleChanged?.();
     } catch (error: any) {
       console.error('Auto-assign error:', error);
-      alert(error.message || 'Failed to auto-assign people');
+      toast.error(error.message || 'Failed to auto-assign people');
     } finally {
       setIsAutoAssigning(false);
     }

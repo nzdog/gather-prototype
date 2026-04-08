@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useModal } from '@/contexts/ModalContext';
+import { useToast } from '@/contexts/ToastContext';
 
 interface AddTeamModalProps {
   isOpen: boolean;
@@ -32,6 +33,7 @@ const DOMAINS = [
 
 export default function AddTeamModal({ isOpen, onClose, onAdd }: AddTeamModalProps) {
   const { openModal, closeModal } = useModal();
+  const toast = useToast();
   const [name, setName] = useState('');
   const [scope, setScope] = useState('');
   const [domain, setDomain] = useState('');
@@ -54,7 +56,7 @@ export default function AddTeamModal({ isOpen, onClose, onAdd }: AddTeamModalPro
     e.preventDefault();
 
     if (!name.trim() || !scope.trim()) {
-      alert('Please enter team name and scope');
+      toast.warning('Please enter team name and scope');
       return;
     }
 
@@ -73,7 +75,7 @@ export default function AddTeamModal({ isOpen, onClose, onAdd }: AddTeamModalPro
       onClose();
     } catch (error) {
       console.error('Error adding team:', error);
-      alert('Failed to add team. Please try again.');
+      toast.error('Failed to add team. Please try again.');
     } finally {
       setAdding(false);
     }

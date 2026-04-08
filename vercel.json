@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/nudges?secret=${CRON_SECRET}",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/wrap-up-dispatch?secret=${CRON_SECRET}",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

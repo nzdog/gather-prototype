@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import ItemStatusBadges from '@/components/plan/ItemStatusBadges';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
+import { useToast } from '@/contexts/ToastContext';
 
 interface Assignment {
   id: string;
@@ -117,6 +118,7 @@ function getFriendlyErrorMessage(error: string | null): string {
 export default function CoordinatorView() {
   const params = useParams();
   const token = params.token as string;
+  const toast = useToast();
   const [data, setData] = useState<CoordinatorData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -169,7 +171,7 @@ export default function CoordinatorView() {
 
   const handleAssign = async (itemId: string, personId: string) => {
     if (data?.event.status === 'FROZEN') {
-      alert(`Event is frozen. Contact ${data.host?.name || 'the host'} to make changes.`);
+      toast.warning(`Event is frozen. Contact ${data.host?.name || 'the host'} to make changes.`);
       return;
     }
     try {
@@ -185,13 +187,13 @@ export default function CoordinatorView() {
       await fetchData();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to assign';
-      alert(message);
+      toast.error(message);
     }
   };
 
   const handleUnassign = async (itemId: string) => {
     if (data?.event.status === 'FROZEN') {
-      alert(`Event is frozen. Contact ${data.host?.name || 'the host'} to make changes.`);
+      toast.warning(`Event is frozen. Contact ${data.host?.name || 'the host'} to make changes.`);
       return;
     }
     try {
@@ -205,7 +207,7 @@ export default function CoordinatorView() {
       await fetchData();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to unassign';
-      alert(message);
+      toast.error(message);
     }
   };
 
@@ -244,7 +246,7 @@ export default function CoordinatorView() {
 
   const handleCreateItem = async () => {
     if (!newItem.name.trim()) {
-      alert('Item name is required');
+      toast.warning('Item name is required');
       return;
     }
 
@@ -289,7 +291,7 @@ export default function CoordinatorView() {
       // Refresh data
       await fetchData();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to create item');
+      toast.error(err instanceof Error ? err.message : 'Failed to create item');
     }
   };
 
@@ -311,7 +313,7 @@ export default function CoordinatorView() {
       // Refresh data
       await fetchData();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete item');
+      toast.error(err instanceof Error ? err.message : 'Failed to delete item');
     }
   };
 

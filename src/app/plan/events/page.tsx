@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Calendar, Users, ListTodo, ChevronRight, Archive, Trash2 } from 'lucide-react';
+import { useToast } from '@/contexts/ToastContext';
 
 interface Event {
   id: string;
@@ -22,6 +23,7 @@ interface Event {
 
 export default function EventsPage() {
   const router = useRouter();
+  const toast = useToast();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [showArchived, setShowArchived] = useState(false);
@@ -93,7 +95,7 @@ export default function EventsPage() {
       loadEvents();
     } catch (error) {
       console.error('Error archiving event:', error);
-      alert('Failed to archive event. Please try again.');
+      toast.error('Failed to archive event. Please try again.');
     }
   };
 
@@ -115,11 +117,11 @@ export default function EventsPage() {
 
       // Reload events
       loadEvents();
-      alert(`"${eventToDelete.name}" has been permanently deleted.`);
+      toast.success(`"${eventToDelete.name}" has been permanently deleted.`);
       closeDeleteModal();
     } catch (error) {
       console.error('Error deleting event:', error);
-      alert('Failed to delete event. Please try again.');
+      toast.error('Failed to delete event. Please try again.');
     }
   };
 
@@ -144,7 +146,7 @@ export default function EventsPage() {
       loadEvents();
     } catch (error) {
       console.error('Error restoring event:', error);
-      alert('Failed to restore event. Please try again.');
+      toast.error('Failed to restore event. Please try again.');
     }
   };
 
