@@ -218,6 +218,7 @@ export default function PlanEditorPage() {
   const [transitionLoading, setTransitionLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [isCheckingPlan, setIsCheckingPlan] = useState(false);
   const [regenerateModalOpen, setRegenerateModalOpen] = useState(false);
   const [hostDescriptionModalOpen, setHostDescriptionModalOpen] = useState(false);
   const [manualTeamCount, _setManualTeamCount] = useState(0);
@@ -570,6 +571,7 @@ export default function PlanEditorPage() {
   };
 
   const handleCheckPlan = async () => {
+    setIsCheckingPlan(true);
     try {
       const response = await fetch(`/api/events/${eventId}/check`, {
         method: 'POST',
@@ -592,6 +594,8 @@ export default function PlanEditorPage() {
     } catch (err: any) {
       console.error('Error checking plan:', err);
       toast.error(`Failed to check plan: ${err.message}`);
+    } finally {
+      setIsCheckingPlan(false);
     }
   };
 
@@ -1921,6 +1925,8 @@ export default function PlanEditorPage() {
                 conflicts={conflicts}
                 onConflictsChanged={loadConflicts}
                 hasRunCheck={!!event.lastCheckPlanAt}
+                onCheckPlan={handleCheckPlan}
+                isCheckingPlan={isCheckingPlan}
               />
             )}
           </div>
