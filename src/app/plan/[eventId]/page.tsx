@@ -259,6 +259,7 @@ export default function PlanEditorPage() {
     }>;
   } | null>(null);
   const [wrapUpRetrying, setWrapUpRetrying] = useState(false);
+  const [wrapUpStatusLoading, setWrapUpStatusLoading] = useState(false);
   const [modalBreadcrumbTrail, setModalBreadcrumbTrail] = useState<ModalTabId[]>([]);
   const pendingModalAction = useRef<'generate' | null>(null);
 
@@ -882,14 +883,19 @@ export default function PlanEditorPage() {
   };
 
   const loadWrapUpStatus = async () => {
+    setWrapUpStatusLoading(true);
     try {
-      const res = await fetch(`/api/events/${eventId}/wrap-up/status`);
+      const res = await fetch(`/api/events/${eventId}/wrap-up/status`, {
+        cache: 'no-store',
+      });
       const data = await res.json();
       if (data.success) {
         setWrapUpDispatch(data);
       }
     } catch {
       // silent — status is informational
+    } finally {
+      setWrapUpStatusLoading(false);
     }
   };
 
@@ -2779,9 +2785,10 @@ export default function PlanEditorPage() {
                     <h3 className="text-lg font-semibold text-gray-900">Dispatch Status</h3>
                     <button
                       onClick={loadWrapUpStatus}
-                      className="text-sm text-accent hover:text-accent-dark"
+                      disabled={wrapUpStatusLoading}
+                      className="text-sm text-accent hover:text-accent-dark disabled:opacity-50"
                     >
-                      Refresh
+                      {wrapUpStatusLoading ? 'Refreshing…' : 'Refresh'}
                     </button>
                   </div>
 
@@ -2862,9 +2869,10 @@ export default function PlanEditorPage() {
                   ) : (
                     <button
                       onClick={loadWrapUpStatus}
-                      className="px-4 py-2 bg-accent text-white text-sm rounded-md hover:bg-accent-dark"
+                      disabled={wrapUpStatusLoading}
+                      className="px-4 py-2 bg-accent text-white text-sm rounded-md hover:bg-accent-dark disabled:opacity-50"
                     >
-                      Load dispatch status
+                      {wrapUpStatusLoading ? 'Loading…' : 'Load dispatch status'}
                     </button>
                   )}
                 </div>
