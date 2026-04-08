@@ -2046,6 +2046,7 @@ export default function PlanEditorPage() {
                         th { font-weight: 600; color: #555; font-size: 11px; text-transform: uppercase; }
                         .qty { color: #555; }
                         .status-confirmed { color: #16a34a; }
+                        .status-declined { color: #dc2626; }
                         .status-pending { color: #d97706; }
                         .status-unassigned { color: #999; font-style: italic; }
                         @media print { body { padding: 0; } .logo svg text { fill: #333; } }
@@ -2066,7 +2067,7 @@ export default function PlanEditorPage() {
                           item.assignment?.person?.name ||
                           '<span class="status-unassigned">Unassigned</span>';
                         const status = item.assignment
-                          ? `<span class="status-${item.assignment.response === 'ACCEPTED' ? 'confirmed' : 'pending'}">${item.assignment.response === 'ACCEPTED' ? 'Confirmed' : 'Pending'}</span>`
+                          ? `<span class="status-${item.assignment.response === 'ACCEPTED' ? 'confirmed' : item.assignment.response === 'DECLINED' ? 'declined' : 'pending'}">${item.assignment.response === 'ACCEPTED' ? 'Confirmed' : item.assignment.response === 'DECLINED' ? 'Declined' : 'Pending'}</span>`
                           : '';
                         html += `<tr><td>${item.name}</td><td class="qty">${qty}</td><td>${assignee}</td><td>${status}</td></tr>`;
                       }
@@ -2205,6 +2206,7 @@ export default function PlanEditorPage() {
                                 <tr className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wider">
                                   <th className="px-4 py-2 font-medium">Item</th>
                                   <th className="px-4 py-2 font-medium">Category</th>
+                                  <th className="px-4 py-2 font-medium">Status</th>
                                   <th className="px-4 py-2 font-medium text-right">Action</th>
                                 </tr>
                               </thead>
@@ -2246,6 +2248,32 @@ export default function PlanEditorPage() {
                                         </div>
                                       </td>
                                       <td className="px-4 py-3 text-gray-400">{item.team.name}</td>
+                                      <td className="px-4 py-3">
+                                        {item.assignment ? (
+                                          <span
+                                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
+                                              item.assignment.response === 'ACCEPTED'
+                                                ? 'bg-green-100 text-green-800'
+                                                : item.assignment.response === 'DECLINED'
+                                                  ? 'bg-red-100 text-red-800'
+                                                  : 'bg-amber-100 text-amber-800'
+                                            }`}
+                                          >
+                                            {item.assignment.response === 'ACCEPTED'
+                                              ? 'Confirmed'
+                                              : item.assignment.response === 'DECLINED'
+                                                ? 'Declined'
+                                                : 'Pending'}
+                                            <span className="text-xs text-inherit opacity-70">
+                                              — {item.assignment.person.name}
+                                            </span>
+                                          </span>
+                                        ) : (
+                                          <span className="text-xs text-gray-400 italic">
+                                            Unassigned
+                                          </span>
+                                        )}
+                                      </td>
                                       <td className="px-4 py-3 text-right">
                                         <button
                                           onClick={() => setEditingItem(item)}
