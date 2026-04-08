@@ -1488,21 +1488,25 @@ export default function PlanEditorPage() {
                   {event.status === 'FROZEN' && (
                     <div
                       onClick={() => handleExpandSection('unfreeze')}
-                      className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group border-2 border-yellow-300"
+                      className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group border-2 border-yellow-300"
                     >
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center group-hover:bg-yellow-200 transition-colors">
-                          <Lock className="w-6 h-6 text-yellow-600" />
+                      <div className="flex items-center gap-4 mb-4">
+                        <div className="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center ring-4 ring-amber-200/50">
+                          <CheckCircle className="w-8 h-8 text-amber-600" />
                         </div>
-                        <h2 className="text-xl font-semibold text-gray-900">Plan Frozen</h2>
+                        <h2 className="text-xl font-semibold text-gray-900">
+                          Everything&apos;s in place
+                        </h2>
                       </div>
                       <div className="flex-1">
-                        <p className="text-sm text-gray-600 mb-2">The plan is locked</p>
-                        <p className="text-sm font-medium text-yellow-700">
-                          Click to unfreeze and make changes
+                        <p className="text-sm text-gray-700 leading-relaxed">
+                          Your guests know what they&apos;re bringing. Nothing left to do but show
+                          up.
                         </p>
                       </div>
-                      <div className="text-sm text-yellow-600 font-medium">Click to unfreeze →</div>
+                      <div className="text-xs text-amber-500/70 group-hover:text-amber-600 transition-colors">
+                        Click to unfreeze →
+                      </div>
                     </div>
                   )}
 
