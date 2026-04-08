@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useToast } from '@/contexts/ToastContext';
 import { Plus, Edit2, Users, Loader2, Upload, Maximize2, UserCog } from 'lucide-react';
 import AddPersonModal, { AddPersonFormData } from './AddPersonModal';
@@ -130,6 +130,17 @@ export default function PeopleSection({
     setSelectedPerson(person);
     setEditModalOpen(true);
   };
+
+  const handleRoleChange = useCallback(
+    async (personId: string, newRole: string) => {
+      try {
+        await handleUpdatePerson(personId, { role: newRole });
+      } catch (error: any) {
+        toast.error(error.message || 'Failed to update role');
+      }
+    },
+    [eventId]
+  );
 
   const handleBatchImport = async (people: PersonRow[]) => {
     try {
@@ -311,6 +322,12 @@ export default function PeopleSection({
           </div>
         </div>
 
+        {/* Explanatory message for host */}
+        <p className="text-sm text-gray-600 mb-4">
+          Review your guests and assign coordinators to lead each team. Coordinators will receive
+          their team&apos;s details and can manage item confirmations.
+        </p>
+
         {noPlanError && (
           <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-md flex items-start justify-between gap-3">
             <p className="text-sm text-amber-800">
@@ -360,11 +377,33 @@ export default function PeopleSection({
                       </div>
                     </td>
                     <td className="py-3 px-4">
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-medium ${getRoleBadgeColor(person.role)}`}
-                      >
-                        {person.role}
-                      </span>
+                      {person.personId === hostId ? (
+                        <select
+                          value="HOST"
+                          disabled
+                          className={`px-2 py-1 rounded text-xs font-medium border border-gray-200 cursor-not-allowed opacity-75 ${getRoleBadgeColor('HOST')}`}
+                        >
+                          <option value="HOST">Host</option>
+                          <option value="COORDINATOR" disabled>
+                            Coordinator
+                          </option>
+                          <option value="PARTICIPANT" disabled>
+                            Participant
+                          </option>
+                        </select>
+                      ) : (
+                        <select
+                          value={person.role}
+                          onChange={(e) => handleRoleChange(person.personId, e.target.value)}
+                          className={`px-2 py-1 rounded text-xs font-medium border border-gray-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent ${getRoleBadgeColor(person.role)}`}
+                        >
+                          <option value="HOST" disabled>
+                            Host
+                          </option>
+                          <option value="COORDINATOR">Coordinator</option>
+                          <option value="PARTICIPANT">Participant</option>
+                        </select>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-900">{person.team.name}</td>
                     <td className="py-3 px-4">
