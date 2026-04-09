@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import TemplateList from '@/components/templates/TemplateList';
-import CloneTemplateModal from '@/components/templates/CloneTemplateModal';
 import { ModalProvider } from '@/contexts/ModalContext';
 import { useToast } from '@/contexts/ToastContext';
 
@@ -11,8 +10,6 @@ export default function TemplatesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const toast = useToast();
-  const [cloneModalOpen, setCloneModalOpen] = useState(false);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [hostId, setHostId] = useState<string>('');
   const [reusingTemplateId, setReusingTemplateId] = useState<string | null>(null);
 
@@ -33,12 +30,10 @@ export default function TemplatesPage() {
   const handleUseAgain = async (templateId: string) => {
     setReusingTemplateId(templateId);
     try {
-      // Fetch template name for the new event
       const templateRes = await fetch(`/api/templates/${templateId}?hostId=${hostId}`);
       const templateData = await templateRes.json();
       const templateName = templateData.template?.name || 'My Event';
 
-      // Use placeholder dates (30 days from now, +1 day end)
       const start = new Date();
       start.setDate(start.getDate() + 30);
       const end = new Date(start);
@@ -71,18 +66,8 @@ export default function TemplatesPage() {
     }
   };
 
-  // "Use Template" for Gather curated templates — opens modal
-  const handleClone = (templateId: string) => {
-    setSelectedTemplateId(templateId);
-    setCloneModalOpen(true);
-  };
-
   const handleDelete = (_templateId: string) => {
     // Template already deleted by TemplateList component
-  };
-
-  const handleCloneComplete = (eventId: string) => {
-    router.push(`/plan/${eventId}`);
   };
 
   if (!hostId) {
@@ -125,27 +110,13 @@ export default function TemplatesPage() {
           <div className="bg-white rounded-lg shadow-md p-6">
             <TemplateList
               hostId={hostId}
-              onClone={handleClone}
+              onClone={handleUseAgain}
               onUseAgain={handleUseAgain}
               onDelete={handleDelete}
               reusingTemplateId={reusingTemplateId}
             />
           </div>
         </div>
-
-        {/* Clone Modal (Gather templates only) */}
-        {selectedTemplateId && (
-          <CloneTemplateModal
-            isOpen={cloneModalOpen}
-            onClose={() => {
-              setCloneModalOpen(false);
-              setSelectedTemplateId(null);
-            }}
-            onClone={handleCloneComplete}
-            templateId={selectedTemplateId}
-            hostId={hostId}
-          />
-        )}
       </div>
     </ModalProvider>
   );
