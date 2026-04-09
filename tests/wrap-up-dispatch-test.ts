@@ -31,35 +31,59 @@ const baseParams: WrapUpTemplateParams = {
   eventName: 'Richardson Christmas BBQ',
   hostFirstName: 'Sarah',
   guestTaskItem: 'the pavlova',
-  newEventLink: 'https://gather.app/start/abc123',
+  newEventLink: 'https://gather.app/?token=abc123',
+};
+
+const fallbackParams: WrapUpTemplateParams = {
+  ...baseParams,
+  guestTaskItem: 'what you brought',
 };
 
 console.log('\x1b[33m=== GTC-FM2: Wrap-Up Dispatch Tests ===\x1b[0m\n');
 
 // ── Suite 1: SMS template ────────────────────────────────────────────
 
-console.log('\x1b[33mSuite 1: SMS template interpolation\x1b[0m');
+console.log('\x1b[33mSuite 1: SMS/WhatsApp template — with item\x1b[0m');
 
 const sms = buildSmsWrapUpMessage(baseParams);
-assert('SMS contains event name', sms.includes('Richardson Christmas BBQ'));
-assert('SMS contains host first name', sms.includes('Sarah'));
-assert('SMS contains guest task item', sms.includes('the pavlova'));
-assert('SMS contains new event link', sms.includes('https://gather.app/start/abc123'));
-assert('SMS does NOT contain guest first name (per spec — SMS is short)', !sms.includes('Emma'));
+assert(
+  'SMS with-item matches approved copy exactly',
+  sms ===
+    'Hi Emma, Sarah asked me (Gather \u2014 the app they used to organise Richardson Christmas BBQ) to pass on a thanks for bringing the pavlova. Much appreciated.'
+);
+
+console.log('\n\x1b[33mSuite 1b: SMS/WhatsApp template — fallback\x1b[0m');
+
+const smsFallback = buildSmsWrapUpMessage(fallbackParams);
+assert(
+  'SMS fallback matches approved copy exactly',
+  smsFallback ===
+    'Hi Emma, Sarah asked me (Gather \u2014 the app they used to organise Richardson Christmas BBQ) to pass on a thanks for being part of it. Much appreciated.'
+);
 
 // ── Suite 2: Email template ──────────────────────────────────────────
 
-console.log('\n\x1b[33mSuite 2: Email template interpolation\x1b[0m');
+console.log('\n\x1b[33mSuite 2: Email template — with item\x1b[0m');
 
 const email = buildEmailWrapUpMessage(baseParams);
-assert('Email subject contains event name', email.subject.includes('Richardson Christmas BBQ'));
-assert('Email body contains guest first name', email.body.includes('Emma'));
-assert('Email body contains event name', email.body.includes('Richardson Christmas BBQ'));
-assert('Email body contains host first name', email.body.includes('Sarah'));
-assert('Email body contains guest task item', email.body.includes('the pavlova'));
+assert('Email subject reads "Thanks from {hostFirstName}"', email.subject === 'Thanks from Sarah');
 assert(
-  'Email body contains new event link',
-  email.body.includes('https://gather.app/start/abc123')
+  'Email body with-item matches approved copy exactly',
+  email.body ===
+    'Hi Emma, Sarah asked me (Gather \u2014 the app they used to organise Richardson Christmas BBQ) to pass on a thanks for bringing the pavlova. Much appreciated.'
+);
+
+console.log('\n\x1b[33mSuite 2b: Email template — fallback\x1b[0m');
+
+const emailFallback = buildEmailWrapUpMessage(fallbackParams);
+assert(
+  'Email subject fallback reads "Thanks from {hostFirstName}"',
+  emailFallback.subject === 'Thanks from Sarah'
+);
+assert(
+  'Email body fallback matches approved copy exactly',
+  emailFallback.body ===
+    'Hi Emma, Sarah asked me (Gather \u2014 the app they used to organise Richardson Christmas BBQ) to pass on a thanks for being part of it. Much appreciated.'
 );
 
 // ── Suite 3: resolveGuestTaskItem ────────────────────────────────────
@@ -122,7 +146,8 @@ assert('Token length is 32 chars (24 bytes base64url)', token1.length === 32);
 console.log('\n\x1b[33mSuite 6: Start link construction\x1b[0m');
 
 const link = buildStartLink('test-token-abc');
-assert('Link contains /start/ path', link.includes('/start/test-token-abc'));
+assert('Link points to home page with token query param', link.includes('/?token=test-token-abc'));
+assert('Link does NOT contain /start/', !link.includes('/start/'));
 assert('Link starts with http', link.startsWith('http'));
 
 // ── Suite 7: Pre-event wrap-up warning condition ─────────────────────
