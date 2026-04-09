@@ -5,6 +5,7 @@ import { X, Upload, CheckCircle, AlertTriangle, ChevronRight, Download } from 'l
 import { useModal } from '@/contexts/ModalContext';
 import { useToast } from '@/contexts/ToastContext';
 import { normalizePhoneNumber, isInternationalNumber } from '@/lib/phone';
+import { parseVCF } from '@/lib/vcard';
 
 interface ImportCSVModalProps {
   isOpen: boolean;
@@ -60,6 +61,8 @@ export default function ImportCSVModal({
   const [importing, setImporting] = useState(false);
   const [_splitFullName, __setSplitFullName] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [sourceFormat, setSourceFormat] = useState<'csv' | 'vcf'>('csv');
+  const [vcfSkippedCount, setVcfSkippedCount] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // SECURITY: File validation constants
@@ -85,6 +88,8 @@ export default function ImportCSVModal({
     setParsedPeople([]);
     setImporting(false);
     setFileError(null);
+    setSourceFormat('csv');
+    setVcfSkippedCount(0);
     // _setSplitFullName(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -113,9 +118,14 @@ export default function ImportCSVModal({
       return;
     }
 
-    // SECURITY: Validate file type
-    if (!file.name.endsWith('.csv') && file.type !== 'text/csv') {
-      setFileError('Please select a CSV file.');
+    // SECURITY: Validate file type (CSV or VCF)
+    const lowerName = file.name.toLowerCase();
+    const isCsv = lowerName.endsWith('.csv') || file.type === 'text/csv';
+    const isVcf =
+      lowerName.endsWith('.vcf') || file.type === 'text/vcard' || file.type === 'text/x-vcard';
+
+    if (!isCsv && !isVcf) {
+      setFileError('Please select a CSV or VCF file.');
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -123,13 +133,129 @@ export default function ImportCSVModal({
     }
 
     setCsvFile(file);
+    setSourceFormat(isVcf ? 'vcf' : 'csv');
 
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
-      parseCSV(text);
+      if (isVcf) {
+        parseVcfFile(text);
+      } else {
+        parseCSV(text);
+      }
     };
     reader.readAsText(file);
+  };
+
+  // Parse VCF directly into parsedPeople and jump to review step.
+  // VCF has unambiguous field mappings so the column-mapping step is skipped.
+  const parseVcfFile = (text: string) => {
+    let result;
+    try {
+      result = parseVCF(text);
+    } catch (err: any) {
+      setFileError(`Failed to parse VCF file: ${err?.message || 'unknown error'}`);
+      return;
+    }
+
+    if (result.totalFound === 0) {
+      setFileError('No vCards found in file.');
+      return;
+    }
+
+    setVcfSkippedCount(result.skippedCount);
+
+    const people: ParsedRow[] = result.contacts.map((contact, index) => {
+      const person: ParsedRow = {
+        _rowIndex: index + 1,
+        _selected: true,
+        _validationErrors: [],
+        _validationWarnings: [],
+        name: contact.name,
+        email: contact.email,
+        phone: contact.phone,
+      };
+
+      // Normalise email
+      if (person.email) {
+        person.email = person.email.toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(person.email)) {
+          person._validationWarnings.push('Invalid email format');
+        }
+      }
+
+      // Normalise phone using the same pipeline as CSV import
+      if (person.phone) {
+        const rawPhone = person.phone;
+        if (isInternationalNumber(rawPhone)) {
+          person._validationWarnings.push('International number (will be skipped)');
+          person.phone = null;
+        } else {
+          const normalized = normalizePhoneNumber(rawPhone);
+          if (normalized) {
+            person.phone = normalized;
+          } else {
+            person._validationWarnings.push('Invalid phone number (will be skipped)');
+            person.phone = null;
+          }
+        }
+      }
+
+      if (!person.name) {
+        person._validationErrors.push('Missing name');
+        person._selected = false;
+      }
+
+      return person;
+    });
+
+    // Duplicate detection (same logic as CSV)
+    const emailMap = new Map<string, number[]>();
+    const namePhoneMap = new Map<string, number[]>();
+    people.forEach((person, index) => {
+      if (person.email) {
+        const existing = emailMap.get(person.email) || [];
+        existing.push(index);
+        emailMap.set(person.email, existing);
+      }
+      if (person.name && person.phone) {
+        const key = `${person.name.toLowerCase()}:${person.phone}`;
+        const existing = namePhoneMap.get(key) || [];
+        existing.push(index);
+        namePhoneMap.set(key, existing);
+      }
+    });
+    emailMap.forEach((indices) => {
+      if (indices.length > 1) {
+        indices.forEach((i) => {
+          people[i]._isDuplicate = true;
+          people[i]._validationWarnings.push(
+            `Duplicate email (rows: ${indices.map((idx) => people[idx]._rowIndex).join(', ')})`
+          );
+        });
+      }
+    });
+    namePhoneMap.forEach((indices) => {
+      if (indices.length > 1) {
+        indices.forEach((i) => {
+          if (!people[i]._isDuplicate) {
+            people[i]._isDuplicate = true;
+            people[i]._validationWarnings.push(
+              `Duplicate name+phone (rows: ${indices.map((idx) => people[idx]._rowIndex).join(', ')})`
+            );
+          }
+        });
+      }
+    });
+
+    setParsedPeople(people);
+    setStep(3);
+
+    if (result.skippedCount > 0) {
+      toast.warning(
+        `${result.skippedCount} contact${result.skippedCount === 1 ? '' : 's'} skipped — no name, email, or phone found`
+      );
+    }
   };
 
   const parseCSV = (text: string) => {
@@ -438,10 +564,11 @@ export default function ImportCSVModal({
         {/* Header */}
         <div className="px-6 py-4 border-b flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Import People from CSV</h2>
+            <h2 className="text-xl font-semibold text-gray-900">Import People</h2>
             <p className="text-sm text-gray-600 mt-1">
-              Step {step} of 3:{' '}
-              {step === 1 ? 'Upload' : step === 2 ? 'Map Columns' : 'Review & Select'}
+              {sourceFormat === 'vcf'
+                ? `Step ${step === 3 ? 2 : 1} of 2: ${step === 3 ? 'Review & Select' : 'Upload'}`
+                : `Step ${step} of 3: ${step === 1 ? 'Upload' : step === 2 ? 'Map Columns' : 'Review & Select'}`}
             </p>
           </div>
           <button
@@ -459,11 +586,12 @@ export default function ImportCSVModal({
             <div className="space-y-4">
               <div className="bg-sage-50 border border-sage-200 rounded-lg p-4">
                 <p className="text-sm text-sage-900">
-                  <strong>CSV Format:</strong> Your CSV should include a header row with column
-                  names. At minimum, include names. Email and phone are optional.
+                  <strong>CSV:</strong> include a header row — at minimum a name column. Email and
+                  phone optional.
                 </p>
                 <p className="text-sm text-sage-900 mt-2">
-                  <strong>Example:</strong> Name, Email, Phone
+                  <strong>VCF (vCard):</strong> export contacts from your phone, Gmail, or Outlook.
+                  No mapping needed — fields are detected automatically.
                 </p>
               </div>
 
@@ -472,7 +600,7 @@ export default function ImportCSVModal({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".csv"
+                  accept=".csv,.vcf,text/csv,text/vcard,text/x-vcard"
                   onChange={handleFileChange}
                   className="hidden"
                   id="csv-upload"
@@ -481,7 +609,7 @@ export default function ImportCSVModal({
                   htmlFor="csv-upload"
                   className="cursor-pointer px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark inline-block"
                 >
-                  Choose CSV File
+                  Choose CSV or VCF File
                 </label>
                 {fileError && (
                   <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
@@ -551,6 +679,22 @@ export default function ImportCSVModal({
           {/* Step 3: Review & Select */}
           {step === 3 && (
             <div className="space-y-4">
+              {sourceFormat === 'vcf' && (
+                <div className="bg-sage-50 border border-sage-200 rounded-lg p-3">
+                  <p className="text-sm text-sage-900">
+                    <strong>{parsedPeople.length}</strong> contact
+                    {parsedPeople.length === 1 ? '' : 's'} found — select to add.
+                    {vcfSkippedCount > 0 && (
+                      <>
+                        {' '}
+                        <span className="text-yellow-700">
+                          {vcfSkippedCount} skipped — no email or phone found.
+                        </span>
+                      </>
+                    )}
+                  </p>
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="text-sm">
@@ -670,7 +814,14 @@ export default function ImportCSVModal({
           <div>
             {step > 1 && (
               <button
-                onClick={() => setStep((prev) => (prev - 1) as 1 | 2)}
+                onClick={() => {
+                  // VCF skips the mapping step, so step 3 → step 1 directly
+                  if (sourceFormat === 'vcf' && step === 3) {
+                    resetModal();
+                  } else {
+                    setStep((prev) => (prev - 1) as 1 | 2);
+                  }
+                }}
                 className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
               >
                 Back

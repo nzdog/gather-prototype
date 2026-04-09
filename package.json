@@ -33,6 +33,8 @@
     "test:view-as-host-alert": "tsx tests/view-as-host-alert-test.ts",
     "test:initial-plan-mismatch": "tsx tests/initial-plan-mismatch-test.ts",
     "test:auto-assign": "tsx tests/auto-assign-items-host-test.ts",
+    "test:vcf-import": "tsx tests/vcf-import-test.ts",
+    "test:wrapup-email": "tsx scripts/test-wrapup-email.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
@@ -63,7 +65,8 @@
     "resend": "^6.7.0",
     "stripe": "^20.2.0",
     "tsx": "^4.21.0",
-    "twilio": "^5.12.0"
+    "twilio": "^5.12.0",
+    "vcard-parser": "^1.0.0"
   },
   "devDependencies": {
     "@types/node": "^25.0.3",
