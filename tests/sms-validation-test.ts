@@ -63,26 +63,57 @@ async function runValidationTests() {
   }
 
   // ============================================
-  // TEST 2: INVALID_NUMBER
+  // TEST 2: Non-TNZ number routes to Twilio (SMS_DISABLED when Twilio unconfigured)
   // ============================================
-  console.log('\n📋 Test 2: INVALID_NUMBER\n');
+  // Under GTC-079 routing, +1 (US) is a valid E.164 number and routes to
+  // Twilio. When Twilio is not configured, sendSms returns SMS_DISABLED
+  // rather than INVALID_NUMBER. INVALID_NUMBER is now reserved for numbers
+  // that fail E.164 format parsing entirely.
+  console.log('\n📋 Test 2: Non-TNZ number routed to Twilio\n');
 
   const result2 = await sendSms({
-    to: '+1234567890', // US number, not NZ
+    to: '+1234567890', // US number → routed to Twilio
+    message: 'Test message',
+    eventId: eventId,
+    personId: personId,
+    metadata: { test: 'NON_TNZ_TWILIO_DISABLED' },
+  });
+
+  console.log('Result:', result2);
+  // Under GTC-079 routing, a valid-E.164 non-TNZ number is handed to
+  // Twilio. Expected outcomes depend on env:
+  //   - Twilio not configured  → SMS_DISABLED (caller falls back to email)
+  //   - Twilio configured      → SEND_FAILED (test credentials reject bogus +1)
+  //   - Real Twilio + real num → success (not exercised in this test)
+  // INVALID_NUMBER is no longer correct for valid-E.164 non-NZ inputs.
+  if (
+    result2.success === false &&
+    (result2.blocked === 'SMS_DISABLED' || result2.blocked === 'SEND_FAILED')
+  ) {
+    console.log(`✅ Correctly routed to Twilio (blocked: ${result2.blocked})`);
+  } else {
+    console.log('❌ Expected SMS_DISABLED or SEND_FAILED for +1 number routed to Twilio');
+  }
+
+  // TEST 2b: Truly malformed number still returns INVALID_NUMBER
+  console.log('\n📋 Test 2b: Malformed number → INVALID_NUMBER\n');
+
+  const result2b = await sendSms({
+    to: 'not-a-number',
     message: 'Test message',
     eventId: eventId,
     personId: personId,
     metadata: { test: 'INVALID_NUMBER' },
   });
 
-  console.log('Result:', result2);
-  if (result2.success === false && result2.blocked === 'INVALID_NUMBER') {
-    console.log('✅ Correctly blocked: Invalid/non-NZ phone number');
+  console.log('Result:', result2b);
+  if (result2b.success === false && result2b.blocked === 'INVALID_NUMBER') {
+    console.log('✅ Correctly blocked: Invalid phone number format');
   } else {
-    console.log('❌ Expected INVALID_NUMBER block');
+    console.log('❌ Expected INVALID_NUMBER block for malformed input');
   }
 
-  // Check that an InviteEvent was logged
+  // Check that an InviteEvent was logged for the malformed input
   const invalidEvent = await prisma.inviteEvent.findFirst({
     where: {
       eventId: eventId,

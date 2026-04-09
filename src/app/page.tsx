@@ -32,14 +32,12 @@ export default async function LandingPage() {
             >
               {user ? 'Your Events' : 'Get Started'}
             </Link>
-            {!user && (
-              <Link
-                href="/demo"
-                className="inline-flex items-center gap-2 px-10 py-5 border-2 border-accent text-accent text-xl font-semibold rounded-xl hover:bg-accent-light/10 transition-all"
-              >
-                See it in action →
-              </Link>
-            )}
+            <Link
+              href="/demo"
+              className="inline-flex items-center gap-2 px-10 py-5 border-2 border-accent text-accent text-xl font-semibold rounded-xl hover:bg-accent-light/10 transition-all"
+            >
+              See it in action →
+            </Link>
           </div>
         </div>
 
