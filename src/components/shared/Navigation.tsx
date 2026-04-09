@@ -48,7 +48,7 @@ export default function Navigation({ user }: NavigationProps) {
   const navItems = [
     { href: homeHref, label: 'Home', icon: Home },
     { href: '/plan/events', label: 'Your Events', icon: Calendar },
-    { href: '/plan/templates', label: 'Templates', icon: FileText },
+    { href: '/plan/templates', label: 'Past Events', icon: FileText },
     { href: '/plan/new', label: 'New Event', icon: Plus },
     { href: '/billing', label: 'Billing', icon: CreditCard },
   ];

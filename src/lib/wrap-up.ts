@@ -37,11 +37,6 @@ export function generateLinkToken(): string {
   return randomBytes(24).toString('base64url');
 }
 
-export function buildStartLink(token: string): string {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  return `${baseUrl}/start/${token}`;
-}
-
 interface GuestForWrapUp {
   person: {
     id: string;
@@ -147,14 +142,11 @@ export async function dispatchPendingWrapUpMessages(): Promise<{
       assignments.map((a) => ({ item: { name: a.item.name }, response: a.response }))
     );
 
-    const newEventLink = buildStartLink(link.token);
-
     const templateParams: WrapUpTemplateParams = {
       guestFirstName,
       eventName: link.event.name,
       hostFirstName,
       guestTaskItem,
-      newEventLink,
     };
 
     let success = false;
