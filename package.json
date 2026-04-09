@@ -12,6 +12,7 @@
     "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx}\"",
     "typecheck": "tsc --noEmit",
     "test:security": "tsx tests/security-validation.ts",
+    "test:tnz-sms": "tsx scripts/test-tnz-sms.ts",
     "test:demo-ui": "tsx tests/demo-ui-isolation.ts",
     "test:conflict-labels": "tsx tests/conflict-action-labels.ts",
     "test:setup-progress-banner": "tsx tests/setup-progress-banner-test.ts",
