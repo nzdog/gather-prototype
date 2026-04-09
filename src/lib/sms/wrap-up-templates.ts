@@ -6,7 +6,6 @@ export interface WrapUpTemplateParams {
   eventName: string;
   hostFirstName: string;
   guestTaskItem: string;
-  newEventLink: string;
 }
 
 export function buildSmsWrapUpMessage(params: WrapUpTemplateParams): string {
