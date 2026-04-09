@@ -38,7 +38,8 @@ export function generateLinkToken(): string {
 }
 
 export function buildStartLink(token: string): string {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (!baseUrl) throw new Error('NEXT_PUBLIC_APP_URL is not set');
   return `${baseUrl}/?token=${encodeURIComponent(token)}`;
 }
 
