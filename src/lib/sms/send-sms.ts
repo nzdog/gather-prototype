@@ -1,7 +1,22 @@
 import { getTwilioClient, isSmsEnabled, getSendingNumber } from './twilio-client';
+import { sendViaTnz, isTnzEnabled } from './tnz-client';
 import { prisma } from '@/lib/prisma';
 import { logInviteEvent } from '@/lib/invite-events';
-import { isValidNZNumber } from '@/lib/phone';
+
+/**
+ * Country codes routed to TNZ. Twilio does not deliver to NZ (+64); AU (+61)
+ * is also routed to TNZ so a single regional provider handles both markets.
+ * All other country codes fall through to Twilio.
+ */
+const TNZ_COUNTRY_CODES = ['+64', '+61'] as const;
+
+function isE164(phone: string): boolean {
+  return /^\+\d{8,15}$/.test(phone);
+}
+
+function shouldUseTnz(phone: string): boolean {
+  return TNZ_COUNTRY_CODES.some((code) => phone.startsWith(code));
+}
 
 export interface SendSmsParams {
   to: string; // Phone number in E.164 format
@@ -30,24 +45,16 @@ export interface SendSmsResult {
 export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
   const { to, message, eventId, personId, metadata = {} } = params;
 
-  // Check if SMS is configured
-  if (!isSmsEnabled()) {
-    return {
-      success: false,
-      blocked: 'SMS_DISABLED',
-      error: 'SMS not configured',
-    };
-  }
-
-  // Validate NZ number
-  if (!isValidNZNumber(to)) {
+  // Validate E.164 format up-front. Country-code routing relies on the '+'
+  // prefix, so any other format is rejected before touching a provider.
+  if (!isE164(to)) {
     await logInviteEvent({
       eventId,
       personId,
       type: 'SMS_BLOCKED_INVALID',
       metadata: {
         phoneNumber: to,
-        reason: 'Invalid or non-NZ number',
+        reason: 'Not in E.164 format',
         ...metadata,
       },
     });
@@ -55,11 +62,16 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
     return {
       success: false,
       blocked: 'INVALID_NUMBER',
-      error: 'Invalid or non-NZ phone number',
+      error: 'Invalid phone number format',
     };
   }
 
-  // Check for opt-out
+  const useTnz = shouldUseTnz(to);
+
+  // Check for opt-out FIRST — opt-out is a hard user-level promise and
+  // must apply regardless of which provider is configured. Running this
+  // before the provider-config check means a missing TNZ_AUTH_TOKEN never
+  // masks an OPTED_OUT signal the caller needs for audit/UX.
   const isOptedOut = await checkOptOut(to, eventId);
 
   if (isOptedOut) {
@@ -80,20 +92,58 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
     };
   }
 
-  // Send via Twilio
-  try {
-    const client = getTwilioClient();
-    const from = getSendingNumber();
-
-    if (!client || !from) {
-      throw new Error('Twilio client not available');
+  // Check configuration for the selected provider. If the destination is
+  // routed to Twilio but Twilio is not configured, log a warning so the
+  // caller's email fallback path can take over.
+  if (useTnz) {
+    if (!isTnzEnabled()) {
+      return {
+        success: false,
+        blocked: 'SMS_DISABLED',
+        error: 'TNZ not configured (TNZ_AUTH_TOKEN missing)',
+      };
     }
+  } else {
+    if (!isSmsEnabled()) {
+      console.warn(
+        `[SMS] Twilio not configured; cannot deliver to ${to}. Caller should fall back to email.`
+      );
+      return {
+        success: false,
+        blocked: 'SMS_DISABLED',
+        error: 'Twilio not configured for non-NZ/AU destination',
+      };
+    }
+  }
 
-    const result = await client.messages.create({
-      body: message,
-      from: from,
-      to: to,
-    });
+  // Dispatch to the selected provider
+  try {
+    let messageId: string | undefined;
+    let provider: 'tnz' | 'twilio';
+
+    if (useTnz) {
+      provider = 'tnz';
+      const result = await sendViaTnz({ to, message });
+      if (!result.success) {
+        throw new Error(result.error || 'TNZ send failed');
+      }
+      messageId = result.messageId;
+    } else {
+      provider = 'twilio';
+      const client = getTwilioClient();
+      const from = getSendingNumber();
+
+      if (!client || !from) {
+        throw new Error('Twilio client not available');
+      }
+
+      const result = await client.messages.create({
+        body: message,
+        from: from,
+        to: to,
+      });
+      messageId = result.sid;
+    }
 
     // Log success
     await logInviteEvent({
@@ -101,7 +151,8 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
       personId,
       type: 'NUDGE_SENT_AUTO',
       metadata: {
-        messageId: result.sid,
+        messageId,
+        provider,
         phoneNumber: to,
         messageLength: message.length,
         ...metadata,
@@ -110,7 +161,7 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
 
     return {
       success: true,
-      messageId: result.sid,
+      messageId,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -122,12 +173,13 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
       type: 'SMS_SEND_FAILED',
       metadata: {
         phoneNumber: to,
+        provider: useTnz ? 'tnz' : 'twilio',
         error: errorMessage,
         ...metadata,
       },
     });
 
-    console.error(`[SMS] Failed to send to ${to}:`, errorMessage);
+    console.error(`[SMS] Failed to send to ${to} via ${useTnz ? 'TNZ' : 'Twilio'}:`, errorMessage);
 
     return {
       success: false,

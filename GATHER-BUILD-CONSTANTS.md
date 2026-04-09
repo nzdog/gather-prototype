@@ -205,8 +205,9 @@ Actual values are redacted. Copy `.env.example` to `.env` and fill in real value
 | `STRIPE_SECRET_KEY` | Stripe API access | `.env` / deployment env |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signature verification | `.env` / deployment env |
 | `STRIPE_PRICE_ID` | Stripe subscription price ID | `.env` / deployment env |
-| `TWILIO_ACCOUNT_SID` | SMS via Twilio (OPTIONAL) | `.env` / deployment env |
-| `TWILIO_AUTH_TOKEN` | SMS via Twilio (OPTIONAL) | `.env` / deployment env |
+| `TNZ_AUTH_TOKEN` | SMS via TNZ for NZ (+64) and AU (+61) — obtain from TNZ Dashboard → Users → API tab → Auth Token. Required for production NZ delivery (Twilio does not deliver to NZ). | `.env` / deployment env |
+| `TWILIO_ACCOUNT_SID` | SMS via Twilio for non-NZ/AU destinations (OPTIONAL) | `.env` / deployment env |
+| `TWILIO_AUTH_TOKEN` | SMS via Twilio for non-NZ/AU destinations (OPTIONAL) | `.env` / deployment env |
 | `TWILIO_PHONE_NUMBER` | Twilio sender number (OPTIONAL) | `.env` / deployment env |
 | `CRON_SECRET` | Authenticates cron-job HTTP requests | `.env` / deployment env |
 
