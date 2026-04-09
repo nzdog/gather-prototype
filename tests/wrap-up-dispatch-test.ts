@@ -11,7 +11,7 @@ import {
   resolveGuestTaskItem,
   type WrapUpTemplateParams,
 } from '../src/lib/sms/wrap-up-templates';
-import { sanitiseQueryParam, generateLinkToken, buildStartLink } from '../src/lib/wrap-up';
+import { sanitiseQueryParam, generateLinkToken } from '../src/lib/wrap-up';
 
 let passed = 0;
 let failed = 0;
@@ -31,7 +31,6 @@ const baseParams: WrapUpTemplateParams = {
   eventName: 'Richardson Christmas BBQ',
   hostFirstName: 'Sarah',
   guestTaskItem: 'the pavlova',
-  newEventLink: 'https://gather.app/?token=abc123',
 };
 
 const fallbackParams: WrapUpTemplateParams = {
@@ -141,27 +140,18 @@ assert('Token is base64url (no +/= chars)', !/[+/=]/.test(token1));
 assert('Two tokens are unique', token1 !== token2);
 assert('Token length is 32 chars (24 bytes base64url)', token1.length === 32);
 
-// ── Suite 6: buildStartLink ──────────────────────────────────────────
+// ── Suite 6: Pre-event wrap-up warning condition ─────────────────────
 
-console.log('\n\x1b[33mSuite 6: Start link construction\x1b[0m');
-
-const link = buildStartLink('test-token-abc');
-assert('Link points to home page with token query param', link.includes('/?token=test-token-abc'));
-assert('Link does NOT contain /start/', !link.includes('/start/'));
-assert('Link starts with http', link.startsWith('http'));
-
-// ── Suite 7: Pre-event wrap-up warning condition ─────────────────────
-
-console.log('\n\x1b[33mSuite 7: Pre-event date check logic\x1b[0m');
+console.log('\n\x1b[33mSuite 6: Pre-event date check logic\x1b[0m');
 
 const futureDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 const pastDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 assert('Future endDate should trigger warning (endDate > now)', futureDate > new Date());
 assert('Past endDate should NOT trigger warning (endDate < now)', pastDate < new Date());
 
-// ── Suite 8: Expiry logic ────────────────────────────────────────────
+// ── Suite 7: Expiry logic ────────────────────────────────────────────
 
-console.log('\n\x1b[33mSuite 8: Link expiry logic\x1b[0m');
+console.log('\n\x1b[33mSuite 7: Link expiry logic\x1b[0m');
 
 const expiredDate = new Date(Date.now() - 1000);
 const validDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
