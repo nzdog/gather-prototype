@@ -3,18 +3,23 @@
  *
  * Sends a single SMS via the TNZ transport to verify that
  * TNZ_AUTH_TOKEN is valid and the endpoint is reachable. This is a
- * LIVE send — running it will deliver a real message to the number
- * below. Replace the placeholder recipient before running.
+ * LIVE send — set TEST_SMS_RECIPIENT to a real NZ mobile in E.164
+ * format before running, or the script will refuse to proceed.
  *
- * Run with: npm run test:tnz-sms
+ * Run with: TEST_SMS_RECIPIENT=+64XXXXXXXXX npm run test:tnz-sms
  */
 
 import { sendViaTnz, isTnzEnabled } from '../src/lib/sms/tnz-client';
 
-const RECIPIENT = '+64226667629';
+const RECIPIENT = process.env.TEST_SMS_RECIPIENT ?? '+64XXXXXXXXXX';
 const MESSAGE = "Gather TNZ SMS test — if you received this it's working.";
 
 async function main() {
+  if (RECIPIENT === '+64XXXXXXXXXX') {
+    console.error('Set TEST_SMS_RECIPIENT env var before running');
+    process.exit(1);
+  }
+
   if (!isTnzEnabled()) {
     console.error('TNZ_AUTH_TOKEN not set');
     process.exit(1);
