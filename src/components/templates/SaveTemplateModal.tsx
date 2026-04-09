@@ -83,7 +83,7 @@ export default function SaveTemplateModal({
           <div className="bg-gray-50 border border-gray-200 rounded p-3 mb-4 text-sm">
             <p className="font-medium mb-2">What's NOT included:</p>
             <ul className="list-disc list-inside space-y-1 text-gray-700">
-              <li>Specific dates (you'll set these when cloning)</li>
+              <li>Specific dates (you'll set these when reusing)</li>
               <li>Assignments to people</li>
               <li>Actual quantities (saved separately if available)</li>
               <li>Acknowledgements</li>

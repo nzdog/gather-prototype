@@ -6,10 +6,18 @@ import { StructureTemplate } from '@prisma/client';
 interface TemplateListProps {
   hostId: string;
   onClone: (templateId: string) => void;
+  onUseAgain?: (templateId: string) => void;
   onDelete: (templateId: string) => void;
+  reusingTemplateId?: string | null;
 }
 
-export default function TemplateList({ hostId, onClone, onDelete }: TemplateListProps) {
+export default function TemplateList({
+  hostId,
+  onClone,
+  onUseAgain,
+  onDelete,
+  reusingTemplateId,
+}: TemplateListProps) {
   const [templates, setTemplates] = useState<StructureTemplate[]>([]);
   const [gatherTemplates, setGatherTemplates] = useState<StructureTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,7 +72,7 @@ export default function TemplateList({ hostId, onClone, onDelete }: TemplateList
   const displayTemplates = activeTab === 'my' ? templates : gatherTemplates;
 
   if (loading) {
-    return <div className="p-4 text-center text-gray-600">Loading templates...</div>;
+    return <div className="p-4 text-center text-gray-600">Loading...</div>;
   }
 
   return (
@@ -79,7 +87,7 @@ export default function TemplateList({ hostId, onClone, onDelete }: TemplateList
               : 'text-gray-600 hover:text-gray-800'
           }`}
         >
-          My Templates ({templates.length})
+          My Past Events ({templates.length})
         </button>
         <button
           onClick={() => setActiveTab('gather')}
@@ -93,13 +101,57 @@ export default function TemplateList({ hostId, onClone, onDelete }: TemplateList
         </button>
       </div>
 
-      {/* Template List */}
-      {displayTemplates.length === 0 ? (
-        <div className="text-center p-8 text-gray-500">
-          {activeTab === 'my'
-            ? 'No templates saved yet. Create a template from a completed event.'
-            : 'No Gather templates available yet.'}
+      {/* Empty state for My Past Events — show message + Gather templates below */}
+      {activeTab === 'my' && templates.length === 0 && (
+        <div className="text-center p-8 text-gray-500 mb-6">
+          Your past events will appear here once your first event completes. In the meantime, try
+          one of our ready-made starting points below.
         </div>
+      )}
+
+      {/* Template List */}
+      {displayTemplates.length === 0 && activeTab !== 'my' ? (
+        <div className="text-center p-8 text-gray-500">No Gather templates available yet.</div>
+      ) : displayTemplates.length === 0 && activeTab === 'my' ? (
+        // When my tab is empty, show Gather templates inline
+        gatherTemplates.length > 0 ? (
+          <div className="grid gap-4">
+            {gatherTemplates.map((template) => {
+              const teams = template.teams as any[];
+              const totalItems = teams.reduce((sum, team) => sum + (team.items?.length || 0), 0);
+              return (
+                <div key={template.id} className="border rounded-lg p-4 hover:shadow-md transition">
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="font-semibold text-lg">{template.name}</h3>
+                      </div>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600 mb-2">
+                        <span>
+                          <span className="font-medium">Occasion:</span> {template.occasionType}
+                        </span>
+                        <span>
+                          <span className="font-medium">Teams:</span> {teams.length}
+                        </span>
+                        <span>
+                          <span className="font-medium">Items:</span> {totalItems}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      onClick={() => onClone(template.id)}
+                      className="px-4 py-2 text-sm bg-accent text-white rounded hover:bg-accent-dark transition"
+                    >
+                      Use Template
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : null
       ) : (
         <div className="grid gap-4">
           {displayTemplates.map((template) => {
@@ -110,6 +162,7 @@ export default function TemplateList({ hostId, onClone, onDelete }: TemplateList
               month: 'short',
               day: 'numeric',
             });
+            const isReusing = reusingTemplateId === template.id;
 
             return (
               <div key={template.id} className="border rounded-lg p-4 hover:shadow-md transition">
@@ -146,12 +199,22 @@ export default function TemplateList({ hostId, onClone, onDelete }: TemplateList
                 </div>
 
                 <div className="flex gap-2 mt-3">
-                  <button
-                    onClick={() => onClone(template.id)}
-                    className="px-4 py-2 text-sm bg-accent text-white rounded hover:bg-accent-dark transition"
-                  >
-                    Use Template
-                  </button>
+                  {activeTab === 'my' && onUseAgain ? (
+                    <button
+                      onClick={() => onUseAgain(template.id)}
+                      disabled={isReusing}
+                      className="px-4 py-2 text-sm bg-accent text-white rounded hover:bg-accent-dark transition disabled:opacity-50"
+                    >
+                      {isReusing ? 'Creating...' : 'Use this again'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => onClone(template.id)}
+                      className="px-4 py-2 text-sm bg-accent text-white rounded hover:bg-accent-dark transition"
+                    >
+                      Use Template
+                    </button>
+                  )}
                   {activeTab === 'my' && (
                     <button
                       onClick={() => handleDelete(template.id)}

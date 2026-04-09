@@ -110,11 +110,11 @@ export default function CloneTemplateModal({
         onClose();
       } else {
         const error = await response.json();
-        toast.error(`Error cloning template: ${error.error || 'Unknown error'}`);
+        toast.error(`Error creating event: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error cloning template:', error);
-      toast.error('Error cloning template. Please try again.');
+      toast.error('Error creating event. Please try again.');
     } finally {
       setCloning(false);
     }
@@ -150,7 +150,7 @@ export default function CloneTemplateModal({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
       <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 my-8">
-        <h2 className="text-xl font-bold mb-4">Clone Template: {template.name}</h2>
+        <h2 className="text-xl font-bold mb-4">Use Template: {template.name}</h2>
 
         {/* Template Summary */}
         <div className="bg-gray-50 border border-gray-200 rounded p-4 mb-4">

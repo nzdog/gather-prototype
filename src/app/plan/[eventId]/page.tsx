@@ -47,6 +47,7 @@ import { WhosMissing } from '@/components/plan/WhosMissing';
 import NextStepBanner from '@/components/plan/NextStepBanner';
 import { CopyPlanAsText } from '@/components/plan/CopyPlanAsText';
 import { PersonInviteDetailModal } from '@/components/plan/PersonInviteDetailModal';
+import PastEventOverlay from '@/components/plan/PastEventOverlay';
 import { ModalProvider } from '@/contexts/ModalContext';
 import { useToast } from '@/contexts/ToastContext';
 import { Conflict } from '@prisma/client';
@@ -84,6 +85,7 @@ interface Event {
   lastCheckPlanAt: string | null;
   hostId: string;
   isDemo: boolean;
+  clonedFromId: string | null;
 }
 
 interface Team {
@@ -267,6 +269,16 @@ export default function PlanEditorPage() {
   const [wrapUpStatusLoading, setWrapUpStatusLoading] = useState(false);
   const [countdownMinutes, setCountdownMinutes] = useState<number | null>(null);
   const [modalBreadcrumbTrail, setModalBreadcrumbTrail] = useState<ModalTabId[]>([]);
+  const [savingForNextYear, setSavingForNextYear] = useState(false);
+  const [savedForNextYear, setSavedForNextYear] = useState(false);
+  const [showReuseOverlay, setShowReuseOverlay] = useState(false);
+  const [reuseOverlaySummary, setReuseOverlaySummary] = useState<{
+    eventName: string;
+    guestCount: number | null;
+    guestNames: string[];
+    teamCount: number;
+    itemCount: number;
+  } | null>(null);
   const pendingModalAction = useRef<'generate' | null>(null);
 
   // Batch assignment state for Teams modal
@@ -340,6 +352,50 @@ export default function PlanEditorPage() {
       setHostDescriptionModalOpen(true);
     }
   }, [expandedSection]);
+
+  // Show reuse overlay when redirected from "Use this again"
+  useEffect(() => {
+    if (searchParams.get('fromReuse') === 'true' && event?.clonedFromId) {
+      // Fetch source event data for overlay summary
+      const fetchSourceData = async () => {
+        try {
+          const [eventRes, peopleRes] = await Promise.all([
+            fetch(`/api/events/${event.clonedFromId}`),
+            fetch(`/api/events/${event.clonedFromId}/people`),
+          ]);
+          const eventData = await eventRes.json();
+          const peopleData = await peopleRes.json();
+          const sourceEvent = eventData.event;
+          const sourcePeople = (peopleData.people || []).filter(
+            (p: any) => p.role === 'PARTICIPANT' || p.role === 'COORDINATOR'
+          );
+
+          // Get team/item counts from the NEW event (already loaded)
+          setReuseOverlaySummary({
+            eventName: sourceEvent?.name || event.name,
+            guestCount: sourceEvent?.guestCount || null,
+            guestNames: sourcePeople.map((p: any) => p.name?.split(' ')[0] || ''),
+            teamCount: teams.length,
+            itemCount: items.length,
+          });
+          setShowReuseOverlay(true);
+        } catch {
+          // If source event fetch fails, still show overlay with available data
+          setReuseOverlaySummary({
+            eventName: event.name,
+            guestCount: null,
+            guestNames: [],
+            teamCount: teams.length,
+            itemCount: items.length,
+          });
+          setShowReuseOverlay(true);
+        }
+      };
+      fetchSourceData();
+      // Remove fromReuse param from URL
+      router.replace(`/plan/${eventId}`, { scroll: false });
+    }
+  }, [event?.clonedFromId, searchParams, teams.length, items.length]);
 
   // Auto-open Edit Event wizard after post-payment redirect
   useEffect(() => {
@@ -817,6 +873,31 @@ export default function PlanEditorPage() {
     } catch (error: any) {
       console.error('Error saving template:', error);
       throw error;
+    }
+  };
+
+  const handleSaveForNextYear = async () => {
+    if (!event) return;
+    setSavingForNextYear(true);
+    try {
+      const response = await fetch('/api/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hostId: event.hostId,
+          eventId: event.id,
+          name: event.name,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to save');
+      setSavedForNextYear(true);
+      toast.success("Saved — find it in Past Events when you're ready.");
+    } catch (error: any) {
+      console.error('Error saving for next year:', error);
+      toast.error('Failed to save. Please try again.');
+    } finally {
+      setSavingForNextYear(false);
     }
   };
 
@@ -3028,6 +3109,27 @@ export default function PlanEditorPage() {
                     </button>
                   )}
                 </div>
+
+                {/* Save for next year CTA */}
+                <div className="bg-sage-50 border border-sage-200 rounded-lg p-4 mt-6">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-1">
+                    Planning again next year?
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-3">
+                    Save this event's structure so you can pick up where you left off.
+                  </p>
+                  <button
+                    onClick={handleSaveForNextYear}
+                    disabled={savingForNextYear || savedForNextYear}
+                    className="px-4 py-2 text-sm bg-accent text-white rounded-md hover:bg-accent-dark disabled:opacity-50 transition-colors"
+                  >
+                    {savedForNextYear
+                      ? 'Saved for next year'
+                      : savingForNextYear
+                        ? 'Saving...'
+                        : 'Save for next year'}
+                  </button>
+                </div>
               </div>
             )}
           </SectionExpandModal>
@@ -3065,6 +3167,30 @@ export default function PlanEditorPage() {
           </p>
         </div>
       </div>
+
+      {/* Past Event Reuse Overlay */}
+      {showReuseOverlay && reuseOverlaySummary && (
+        <PastEventOverlay
+          summary={reuseOverlaySummary}
+          onOpenDates={() => {
+            setShowReuseOverlay(false);
+            setEditEventModalOpen(true);
+          }}
+          onOpenPeople={() => {
+            setShowReuseOverlay(false);
+            handleExpandSection('people');
+          }}
+          onOpenItems={() => {
+            setShowReuseOverlay(false);
+            handleExpandSection('items');
+          }}
+          onOpenDetails={() => {
+            setShowReuseOverlay(false);
+            setEditEventModalOpen(true);
+          }}
+          onDismiss={() => setShowReuseOverlay(false)}
+        />
+      )}
     </ModalProvider>
   );
 }
