@@ -755,6 +755,25 @@ export default function PlanEditorPage() {
     }
   };
 
+  // Auto-recheck conflicts after data-changing actions.
+  // Only runs if the host has previously run a manual check.
+  // Silent failure — never blocks or toasts on error.
+  const autoRecheck = async () => {
+    if (!event?.lastCheckPlanAt) return;
+    try {
+      const checkResponse = await fetch(`/api/events/${eventId}/check`, {
+        method: 'POST',
+      });
+      if (checkResponse.ok) {
+        await loadEvent();
+        await loadConflicts();
+        setGateCheckRefresh((prev) => prev + 1);
+      }
+    } catch {
+      // Silent failure — auto-recheck is best-effort
+    }
+  };
+
   const handleRegeneratePlan = async () => {
     // Load all current AI-generated items for selective regeneration
     try {
@@ -862,22 +881,7 @@ export default function PlanEditorPage() {
       await loadConflicts();
       setGateCheckRefresh((prev) => prev + 1);
 
-      // Automatically run check plan if it was run before
-      if (event?.lastCheckPlanAt) {
-        try {
-          const checkResponse = await fetch(`/api/events/${eventId}/check`, {
-            method: 'POST',
-          });
-
-          if (checkResponse.ok) {
-            await loadEvent();
-            await loadConflicts();
-          }
-        } catch (checkError) {
-          console.error('Error auto-running check plan:', checkError);
-          // Don't fail the regeneration if check fails
-        }
-      }
+      await autoRecheck();
 
       toast.success('Plan regenerated successfully!');
     } catch (err: any) {
@@ -1059,6 +1063,7 @@ export default function PlanEditorPage() {
       // Reload teams and refresh gate check
       await loadTeams();
       setGateCheckRefresh((prev) => prev + 1);
+      autoRecheck();
     } catch (error: any) {
       console.error('Error adding team:', error);
       toast.error('Failed to add team');
@@ -1086,6 +1091,7 @@ export default function PlanEditorPage() {
       await loadTeamItems(team.id);
       await loadItems();
       setGateCheckRefresh((prev) => prev + 1);
+      autoRecheck();
     } catch (error: any) {
       console.error('Error adding item:', error);
       toast.error('Failed to add item');
@@ -1220,6 +1226,7 @@ export default function PlanEditorPage() {
 
       // Refresh gate check to update coverage indicator
       setGateCheckRefresh((prev) => prev + 1);
+      autoRecheck();
     } catch (error: any) {
       console.error('Error updating item:', error);
       toast.error('Failed to update item');
@@ -1241,6 +1248,7 @@ export default function PlanEditorPage() {
       await loadTeamItems(item.team.id);
       await loadTeams();
       setGateCheckRefresh((prev) => prev + 1);
+      autoRecheck();
     } catch (error: any) {
       console.error('Error deleting item:', error);
       toast.error('Failed to delete item');
@@ -1276,6 +1284,7 @@ export default function PlanEditorPage() {
       // Reload teams and refresh gate check
       await loadTeams();
       setGateCheckRefresh((prev) => prev + 1);
+      autoRecheck();
     } catch (error: any) {
       console.error('Error deleting team:', error);
       toast.error('Failed to delete team');
@@ -1323,6 +1332,7 @@ export default function PlanEditorPage() {
       if (event && ['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status)) {
         loadInviteLinks();
       }
+      autoRecheck();
     } catch (error: any) {
       console.error('Error moving person:', error);
       // Revert optimistic update
@@ -1907,6 +1917,7 @@ export default function PlanEditorPage() {
               if (event && ['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status)) {
                 loadInviteLinks();
               }
+              autoRecheck();
             }}
             onMovePerson={handleMovePerson}
             onExpand={() => handleExpandSection('people')}
@@ -2472,6 +2483,7 @@ export default function PlanEditorPage() {
                 loadInviteLinks();
               }
               setChecklistStepContext(null);
+              autoRecheck();
             }}
             onMovePerson={handleMovePerson}
             onGeneratePlan={() => setHostDescriptionModalOpen(true)}
