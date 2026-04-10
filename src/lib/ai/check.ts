@@ -34,6 +34,7 @@ interface ConflictData {
   currentCoverage?: number;
   minimumNeeded?: number;
   affectedParties?: string[];
+  canDelegate?: boolean;
 }
 
 /**
@@ -52,6 +53,7 @@ export async function detectConflicts(eventId: string): Promise<ConflictData[]> 
           items: {
             include: {
               day: true,
+              assignment: true,
             },
           },
         },
@@ -83,6 +85,10 @@ export async function detectConflicts(eventId: string): Promise<ConflictData[]> 
   // 5. Detect teams without coordinators
   const coordinatorConflicts = await detectMissingCoordinators(event);
   conflicts.push(...coordinatorConflicts);
+
+  // 6. Detect critical items with no assignee
+  const unassignedCriticalConflicts = await detectUnassignedCriticalItems(event);
+  conflicts.push(...unassignedCriticalConflicts);
 
   return conflicts;
 }
@@ -298,6 +304,33 @@ async function detectMissingCoordinators(event: any): Promise<ConflictData[]> {
       description: `The "${team.name}" team doesn't have a coordinator assigned. Each team should have a coordinator to manage responsibilities and track progress.`,
       affectedParties: [team.name],
     });
+  }
+
+  return conflicts;
+}
+
+/**
+ * Detect critical items with no assignee
+ */
+async function detectUnassignedCriticalItems(event: any): Promise<ConflictData[]> {
+  const conflicts: ConflictData[] = [];
+
+  for (const team of event.teams) {
+    for (const item of team.items) {
+      if (item.critical && !item.assignment) {
+        conflicts.push({
+          fingerprint: `unassigned-critical-item-${event.id}-${item.id}`,
+          type: 'QUANTITY_MISSING',
+          severity: 'CRITICAL',
+          claimType: 'RISK',
+          resolutionClass: 'FIX_IN_PLAN',
+          title: `"${item.name}" is critical but has no assignee`,
+          description: `This item is marked critical but hasn't been assigned to anyone. It may not get brought to the event.`,
+          affectedParties: [team.name],
+          canDelegate: false,
+        });
+      }
+    }
   }
 
   return conflicts;

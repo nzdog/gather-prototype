@@ -34,6 +34,7 @@
     "test:initial-plan-mismatch": "tsx tests/initial-plan-mismatch-test.ts",
     "test:auto-assign": "tsx tests/auto-assign-items-host-test.ts",
     "test:vcf-import": "tsx tests/vcf-import-test.ts",
+    "test:unassigned-critical-items": "tsx tests/unassigned-critical-items-test.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
