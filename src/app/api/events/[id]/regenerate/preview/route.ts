@@ -32,6 +32,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
+    // AI call cap check (preview does not increment, but blocks when cap reached)
+    const AI_CALL_LIMIT = 10;
+    if ((event.aiCallsUsed ?? 0) >= AI_CALL_LIMIT) {
+      return NextResponse.json({ error: 'AI call limit reached for this event' }, { status: 429 });
+    }
+
     // Capture current plan (what would be replaced)
     const currentPlanTeams = await prisma.team.findMany({
       where: {

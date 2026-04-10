@@ -10,6 +10,7 @@ interface ConflictCardProps {
   onDelegate: (conflictId: string) => void;
   onAcknowledge: (conflictId: string) => void;
   onResolveWithAI: (conflictId: string) => void;
+  aiCallsDisabled?: boolean;
 }
 
 const severityStyles = {
@@ -37,6 +38,7 @@ export default function ConflictCard({
   onDelegate,
   onAcknowledge,
   onResolveWithAI,
+  aiCallsDisabled = false,
 }: ConflictCardProps) {
   const isCritical = conflict.severity === 'CRITICAL';
   const canDelegate = conflict.canDelegate;
@@ -101,7 +103,12 @@ export default function ConflictCard({
       <div className="flex gap-2 mt-4">
         <button
           onClick={() => onResolveWithAI(conflict.id)}
-          className="px-3 py-1.5 text-sm bg-sage-600 text-white rounded hover:bg-sage-700 transition flex items-center gap-1"
+          disabled={aiCallsDisabled}
+          className={`px-3 py-1.5 text-sm bg-sage-600 text-white rounded hover:bg-sage-700 transition flex items-center gap-1 ${
+            aiCallsDisabled
+              ? 'disabled:opacity-50 disabled:cursor-not-allowed opacity-50 cursor-not-allowed'
+              : ''
+          }`}
         >
           <span>✨</span>
           Resolve with AI

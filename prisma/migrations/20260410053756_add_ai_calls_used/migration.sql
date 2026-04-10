@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Event" ADD COLUMN     "aiCallsUsed" INTEGER NOT NULL DEFAULT 0;

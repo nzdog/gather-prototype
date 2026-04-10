@@ -39,6 +39,12 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
+    // AI call cap check
+    const AI_CALL_LIMIT = 10;
+    if ((event.aiCallsUsed ?? 0) >= AI_CALL_LIMIT) {
+      return NextResponse.json({ error: 'AI call limit reached for this event' }, { status: 429 });
+    }
+
     // Handle selective regeneration
     if (keepItemIds && regenerateItemIds) {
       // Generate new items for the selected items
@@ -141,6 +147,12 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
 
         itemsCreated++;
       }
+
+      // Increment AI call counter on success
+      await prisma.event.update({
+        where: { id: eventId },
+        data: { aiCallsUsed: { increment: 1 } },
+      });
 
       return NextResponse.json({
         success: true,
@@ -266,6 +278,12 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
         { status: 422 }
       );
     }
+
+    // Increment AI call counter on success
+    await prisma.event.update({
+      where: { id: eventId },
+      data: { aiCallsUsed: { increment: 1 } },
+    });
 
     return NextResponse.json({
       success: true,

@@ -79,6 +79,12 @@ export async function POST(
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
+    // AI call cap check
+    const AI_CALL_LIMIT = 10;
+    if ((event.aiCallsUsed ?? 0) >= AI_CALL_LIMIT) {
+      return NextResponse.json({ error: 'AI call limit reached for this event' }, { status: 429 });
+    }
+
     // Check if Claude is available
     if (!isClaudeAvailable()) {
       console.warn('[AI Resolution] Claude API not available');
@@ -96,6 +102,12 @@ export async function POST(
     const suggestion = await callClaudeForJSON<AISuggestion>(systemPrompt, userPrompt, {
       maxTokens: 2000,
       temperature: 0.7,
+    });
+
+    // Increment AI call counter on success
+    await prisma.event.update({
+      where: { id: eventId },
+      data: { aiCallsUsed: { increment: 1 } },
     });
 
     return NextResponse.json({

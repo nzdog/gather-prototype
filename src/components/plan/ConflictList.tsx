@@ -15,6 +15,7 @@ interface ConflictListProps {
   hasRunCheck?: boolean;
   onCheckPlan?: () => void;
   isCheckingPlan?: boolean;
+  aiCallsDisabled?: boolean;
 }
 
 export default function ConflictList({
@@ -25,6 +26,7 @@ export default function ConflictList({
   hasRunCheck = false,
   onCheckPlan,
   isCheckingPlan = false,
+  aiCallsDisabled = false,
 }: ConflictListProps) {
   const toast = useToast();
   const [acknowledgeModalOpen, setAcknowledgeModalOpen] = useState(false);
@@ -252,6 +254,7 @@ export default function ConflictList({
               onDelegate={handleDelegate}
               onAcknowledge={handleAcknowledge}
               onResolveWithAI={handleResolveWithAI}
+              aiCallsDisabled={aiCallsDisabled}
             />
           ))}
         </div>
@@ -272,6 +275,7 @@ export default function ConflictList({
               onDelegate={handleDelegate}
               onAcknowledge={handleAcknowledge}
               onResolveWithAI={handleResolveWithAI}
+              aiCallsDisabled={aiCallsDisabled}
             />
           ))}
         </div>
@@ -290,6 +294,7 @@ export default function ConflictList({
               onDelegate={handleDelegate}
               onAcknowledge={handleAcknowledge}
               onResolveWithAI={handleResolveWithAI}
+              aiCallsDisabled={aiCallsDisabled}
             />
           ))}
         </div>

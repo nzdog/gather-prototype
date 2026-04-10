@@ -86,6 +86,7 @@ interface Event {
   hostId: string;
   isDemo: boolean;
   clonedFromId: string | null;
+  aiCallsUsed: number;
 }
 
 interface Team {
@@ -670,7 +671,14 @@ export default function PlanEditorPage() {
           hostDescription: hostDescription || undefined,
         }),
       });
-      if (!response.ok) throw new Error('Failed to generate plan');
+      if (!response.ok) {
+        if (response.status === 429) {
+          await loadEvent();
+          toast.error("You've used all 10 AI calls for this event.");
+          return;
+        }
+        throw new Error('Failed to generate plan');
+      }
 
       // After success, refresh all data
       await loadEvent();
@@ -773,7 +781,14 @@ export default function PlanEditorPage() {
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to regenerate items');
+      if (!response.ok) {
+        if (response.status === 429) {
+          await loadEvent();
+          toast.error("You've used all 10 AI calls for this event.");
+          return;
+        }
+        throw new Error('Failed to regenerate items');
+      }
 
       await response.json();
 
@@ -807,7 +822,14 @@ export default function PlanEditorPage() {
           preGeneratedPlan: options.preGeneratedPlan || undefined,
         }),
       });
-      if (!response.ok) throw new Error('Failed to regenerate plan');
+      if (!response.ok) {
+        if (response.status === 429) {
+          await loadEvent();
+          toast.error("You've used all 10 AI calls for this event.");
+          return;
+        }
+        throw new Error('Failed to regenerate plan');
+      }
 
       // After success, refresh all data
       await loadEvent();
@@ -1454,9 +1476,11 @@ export default function PlanEditorPage() {
                 {event.status === 'DRAFT' && teams.length === 0 && (
                   <button
                     onClick={() => setHostDescriptionModalOpen(true)}
-                    disabled={isGenerating}
+                    disabled={isGenerating || event.aiCallsUsed >= 10}
                     className={`px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark flex items-center gap-2 ${
-                      isGenerating ? 'opacity-75 cursor-not-allowed' : ''
+                      isGenerating || event.aiCallsUsed >= 10
+                        ? 'disabled:opacity-50 disabled:cursor-not-allowed opacity-50 cursor-not-allowed'
+                        : ''
                     }`}
                   >
                     {isGenerating ? (
@@ -1474,9 +1498,11 @@ export default function PlanEditorPage() {
                   teams.length > 0 && (
                     <button
                       onClick={handleRegeneratePlan}
-                      disabled={isRegenerating}
+                      disabled={isRegenerating || event.aiCallsUsed >= 10}
                       className={`px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark flex items-center gap-2 ${
-                        isRegenerating ? 'opacity-75 cursor-not-allowed' : ''
+                        isRegenerating || event.aiCallsUsed >= 10
+                          ? 'disabled:opacity-50 disabled:cursor-not-allowed opacity-50 cursor-not-allowed'
+                          : ''
                       }`}
                     >
                       {isRegenerating ? (
@@ -1489,6 +1515,17 @@ export default function PlanEditorPage() {
                       )}
                     </button>
                   )}
+                {/* AI call cap warning / exhausted message */}
+                {event.aiCallsUsed >= 10 && (
+                  <span className="self-center text-sm text-red-600 font-medium">
+                    You've used all 10 AI calls for this event.
+                  </span>
+                )}
+                {event.aiCallsUsed >= 7 && event.aiCallsUsed < 10 && (
+                  <span className="self-center text-sm text-amber-600">
+                    Your event includes 10 AI calls. You have {10 - event.aiCallsUsed} remaining.
+                  </span>
+                )}
                 {(event.status === 'CONFIRMING' ||
                   event.status === 'FROZEN' ||
                   event.status === 'COMPLETE') && (
@@ -1827,6 +1864,7 @@ export default function PlanEditorPage() {
             conflicts={conflicts}
             onConflictsChanged={loadConflicts}
             hasRunCheck={!!event.lastCheckPlanAt}
+            aiCallsDisabled={(event?.aiCallsUsed ?? 0) >= 10}
           />
           <PeopleSection
             eventId={eventId}
@@ -2045,6 +2083,7 @@ export default function PlanEditorPage() {
                 hasRunCheck={!!event.lastCheckPlanAt}
                 onCheckPlan={handleCheckPlan}
                 isCheckingPlan={isCheckingPlan}
+                aiCallsDisabled={(event?.aiCallsUsed ?? 0) >= 10}
               />
             )}
           </div>

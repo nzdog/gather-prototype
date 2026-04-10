@@ -86,6 +86,7 @@ model Event {
   snapshots                  PlanSnapshot[]
   structureChanges           StructureChangeRequest[]
   teams                      Team[]
+  aiCallsUsed                Int                      @default(0)
   wrapUpLinks                WrapUpLink[]
 }
 

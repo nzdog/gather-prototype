@@ -35,6 +35,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
+    // AI call cap check
+    const AI_CALL_LIMIT = 10;
+    if ((event.aiCallsUsed ?? 0) >= AI_CALL_LIMIT) {
+      return NextResponse.json({ error: 'AI call limit reached for this event' }, { status: 429 });
+    }
+
     // PHASE 6: Create revision before regeneration to preserve pre-regenerate state
     let revisionId: string | null = null;
     if (actorId) {
@@ -192,6 +198,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         itemsCreated++;
       }
     }
+
+    // Increment AI call counter on success
+    await prisma.event.update({
+      where: { id: eventId },
+      data: { aiCallsUsed: { increment: 1 } },
+    });
 
     return NextResponse.json({
       success: true,
