@@ -71,7 +71,10 @@ export default function ImportCSVModal({
   const [fileError, setFileError] = useState<string | null>(null);
   const [sourceFormat, setSourceFormat] = useState<'csv' | 'vcf'>('csv');
   const [vcfSkippedCount, setVcfSkippedCount] = useState(0);
-  const [helpOpen, setHelpOpen] = useState(false);
+  const [iPhoneHelpOpen, setIPhoneHelpOpen] = useState(false);
+  const [androidHelpOpen, setAndroidHelpOpen] = useState(false);
+  const [gmailHelpOpen, setGmailHelpOpen] = useState(false);
+  const [outlookHelpOpen, setOutlookHelpOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // SECURITY: File validation constants
@@ -99,7 +102,10 @@ export default function ImportCSVModal({
     setFileError(null);
     setSourceFormat('csv');
     setVcfSkippedCount(0);
-    setHelpOpen(false);
+    setIPhoneHelpOpen(false);
+    setAndroidHelpOpen(false);
+    setGmailHelpOpen(false);
+    setOutlookHelpOpen(false);
     // _setSplitFullName(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -636,89 +642,151 @@ export default function ImportCSVModal({
                 )}
               </div>
 
-              {/* Need help? section — collapsible accordion with per-platform export guidance */}
+              {/* How to Import your Contacts — per-platform accordions */}
               <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => setHelpOpen((prev) => !prev)}
-                  aria-expanded={helpOpen}
-                  aria-controls="import-help-content"
-                  className="w-full flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide hover:text-gray-700"
-                >
-                  {helpOpen ? (
-                    <ChevronDown className="w-4 h-4" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4" />
-                  )}
-                  Need help exporting your contacts?
-                </button>
-                {helpOpen && (
-                  <ul id="import-help-content" className="mt-3 space-y-3 text-xs text-gray-500">
-                    <li>
-                      <p className="font-medium text-gray-600">iPhone</p>
-                      <p>
-                        Export from your iPhone Contacts app: Open the Contacts app → tap Lists (top
-                        left) → long-press &ldquo;All Contacts&rdquo; → tap Export → tap
-                        &ldquo;Select All Fields&rdquo; → save or share the file.
-                      </p>
-                      <a
-                        href="https://dumbph.com/export-ios-contacts/"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-block mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
-                      >
-                        Step-by-step guide →
-                      </a>
-                    </li>
-                    <li>
-                      <p className="font-medium text-gray-600">Android</p>
-                      <p>
-                        Export from your Android Contacts app: Open Contacts → tap the menu (⋮ or
-                        ☰) → Manage contacts → Export → Export to .vcf file → save to Downloads.
-                      </p>
-                      <a
-                        href="https://univik.com/blog/export-android-contacts-to-vcf/"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-block mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
-                      >
-                        Step-by-step guide →
-                      </a>
-                    </li>
-                    <li>
-                      <p className="font-medium text-gray-600">Gmail / Google Contacts</p>
-                      <p>
-                        Export from Google Contacts on desktop: Go to contacts.google.com → select
-                        contacts → click Export → choose &ldquo;vCard (for iOS Contacts)&rdquo; →
-                        download the .vcf file.
-                      </p>
-                      <a
-                        href="https://mailmeteor.com/blog/export-gmail-contacts"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-block mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
-                      >
-                        Step-by-step guide →
-                      </a>
-                    </li>
-                    <li>
-                      <p className="font-medium text-gray-600">Outlook</p>
-                      <p>
-                        Outlook exports contacts as a CSV file (not VCF). Go to
-                        outlook.live.com/people → Manage → Export contacts → download the CSV → then
-                        upload it here.
-                      </p>
-                      <a
-                        href="https://support.microsoft.com/en-us/office/import-or-export-contacts-in-outlook-bb796340-b58a-46c1-90c7-b549b8f3c5f8"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-block mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
-                      >
-                        Step-by-step guide →
-                      </a>
-                    </li>
-                  </ul>
-                )}
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  How to Import your Contacts
+                </p>
+                <div className="mt-3 space-y-2">
+                  {/* iPhone */}
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setIPhoneHelpOpen((prev) => !prev)}
+                      aria-expanded={iPhoneHelpOpen}
+                      aria-controls="import-help-iphone"
+                      className="w-full flex items-center gap-2 text-xs font-medium text-gray-600 hover:text-gray-800"
+                    >
+                      {iPhoneHelpOpen ? (
+                        <ChevronDown className="w-4 h-4" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4" />
+                      )}
+                      iPhone
+                    </button>
+                    {iPhoneHelpOpen && (
+                      <div id="import-help-iphone" className="mt-2 ml-6 text-xs text-gray-500">
+                        <p>
+                          Export from your iPhone Contacts app: Open the Contacts app → tap Lists
+                          (top left) → long-press &ldquo;All Contacts&rdquo; → tap Export → tap
+                          &ldquo;Select All Fields&rdquo; → save or share the file.
+                        </p>
+                        <a
+                          href="https://dumbph.com/export-ios-contacts/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-block mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                        >
+                          Step-by-step guide →
+                        </a>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Android */}
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setAndroidHelpOpen((prev) => !prev)}
+                      aria-expanded={androidHelpOpen}
+                      aria-controls="import-help-android"
+                      className="w-full flex items-center gap-2 text-xs font-medium text-gray-600 hover:text-gray-800"
+                    >
+                      {androidHelpOpen ? (
+                        <ChevronDown className="w-4 h-4" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4" />
+                      )}
+                      Android
+                    </button>
+                    {androidHelpOpen && (
+                      <div id="import-help-android" className="mt-2 ml-6 text-xs text-gray-500">
+                        <p>
+                          Export from your Android Contacts app: Open Contacts → tap the menu (⋮ or
+                          ☰) → Manage contacts → Export → Export to .vcf file → save to Downloads.
+                        </p>
+                        <a
+                          href="https://univik.com/blog/export-android-contacts-to-vcf/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-block mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                        >
+                          Step-by-step guide →
+                        </a>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Gmail / Google Contacts */}
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setGmailHelpOpen((prev) => !prev)}
+                      aria-expanded={gmailHelpOpen}
+                      aria-controls="import-help-gmail"
+                      className="w-full flex items-center gap-2 text-xs font-medium text-gray-600 hover:text-gray-800"
+                    >
+                      {gmailHelpOpen ? (
+                        <ChevronDown className="w-4 h-4" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4" />
+                      )}
+                      Gmail / Google Contacts
+                    </button>
+                    {gmailHelpOpen && (
+                      <div id="import-help-gmail" className="mt-2 ml-6 text-xs text-gray-500">
+                        <p>
+                          Export from Google Contacts on desktop: Go to contacts.google.com → select
+                          contacts → click Export → choose &ldquo;vCard (for iOS Contacts)&rdquo; →
+                          download the .vcf file.
+                        </p>
+                        <a
+                          href="https://mailmeteor.com/blog/export-gmail-contacts"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-block mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                        >
+                          Step-by-step guide →
+                        </a>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Outlook */}
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setOutlookHelpOpen((prev) => !prev)}
+                      aria-expanded={outlookHelpOpen}
+                      aria-controls="import-help-outlook"
+                      className="w-full flex items-center gap-2 text-xs font-medium text-gray-600 hover:text-gray-800"
+                    >
+                      {outlookHelpOpen ? (
+                        <ChevronDown className="w-4 h-4" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4" />
+                      )}
+                      Outlook
+                    </button>
+                    {outlookHelpOpen && (
+                      <div id="import-help-outlook" className="mt-2 ml-6 text-xs text-gray-500">
+                        <p>
+                          Outlook exports contacts as a CSV file (not VCF). Go to
+                          outlook.live.com/people → Manage → Export contacts → download the CSV →
+                          then upload it here.
+                        </p>
+                        <a
+                          href="https://support.microsoft.com/en-us/office/import-or-export-contacts-in-outlook-bb796340-b58a-46c1-90c7-b549b8f3c5f8"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-block mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                        >
+                          Step-by-step guide →
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )}
