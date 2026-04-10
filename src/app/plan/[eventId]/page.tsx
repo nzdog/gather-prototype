@@ -234,6 +234,7 @@ export default function PlanEditorPage() {
   const [resettingClaim, setResettingClaim] = useState<string | null>(null);
   const [copiedDirectory, setCopiedDirectory] = useState(false);
   const [expandedSection, setExpandedSection] = useState<SectionId | null>(null);
+  const [initialExpandedTeam, setInitialExpandedTeam] = useState<string | null>(null);
   const [peopleInitialView, setPeopleInitialView] = useState<'table' | 'board'>('table');
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
   const [inviteStatusData, setInviteStatusData] = useState<any | null>(null);
@@ -280,7 +281,7 @@ export default function PlanEditorPage() {
     teamCount: number;
     itemCount: number;
   } | null>(null);
-  const pendingModalAction = useRef<'generate' | null>(null);
+  const pendingModalAction = useRef<'generate' | 'reassign-items' | null>(null);
 
   // Batch assignment state for Teams modal
   const [pendingAssignments, setPendingAssignments] = useState<
@@ -346,11 +347,26 @@ export default function PlanEditorPage() {
     }
   }, [expandedSection]);
 
+  // Pre-expand a team accordion when navigating from Reassign Items
+  useEffect(() => {
+    if (expandedSection === 'teams' && initialExpandedTeam) {
+      setExpandedTeams(new Set([initialExpandedTeam]));
+      // Load items for the pre-expanded team
+      if (!teamItems[initialExpandedTeam]) {
+        loadTeamItems(initialExpandedTeam);
+      }
+    }
+  }, [expandedSection, initialExpandedTeam]);
+
   // Execute pending action after expansion modal fully closes
   useEffect(() => {
     if (expandedSection === null && pendingModalAction.current === 'generate') {
       pendingModalAction.current = null;
       setHostDescriptionModalOpen(true);
+    }
+    if (expandedSection === null && pendingModalAction.current === 'reassign-items') {
+      pendingModalAction.current = null;
+      handleExpandSection('teams');
     }
   }, [expandedSection]);
 
@@ -575,6 +591,7 @@ export default function PlanEditorPage() {
     });
     setModalBreadcrumbTrail([]);
     setPeopleInitialView('table');
+    setInitialExpandedTeam(null);
     // Refresh dashboard card data after any expansion modal close
     loadItems();
     loadTeams();
@@ -2415,6 +2432,11 @@ export default function PlanEditorPage() {
             onGeneratePlan={() => setHostDescriptionModalOpen(true)}
             stepLabel={checklistStepContext || undefined}
             initialView={peopleInitialView}
+            onReassignItems={(teamId) => {
+              setInitialExpandedTeam(teamId);
+              pendingModalAction.current = 'reassign-items';
+              handleCloseExpansion();
+            }}
           />
         </SectionExpandModal>
 

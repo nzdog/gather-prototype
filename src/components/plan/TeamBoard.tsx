@@ -52,6 +52,17 @@ function getRoleBadgeColor(role: string): string {
   }
 }
 
+function getCardTint(role: string): string {
+  switch (role) {
+    case 'HOST':
+      return 'bg-amber-50';
+    case 'COORDINATOR':
+      return 'bg-blue-50';
+    default:
+      return 'bg-white';
+  }
+}
+
 function getRoleLabel(role: string): string {
   switch (role) {
     case 'HOST':
@@ -94,7 +105,7 @@ function DraggablePersonChip({
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
       <div
-        className={`flex items-center justify-between gap-2 px-3 py-2 bg-white border border-gray-200 rounded-md shadow-sm hover:shadow-md transition-shadow ${
+        className={`flex items-center justify-between gap-2 px-3 py-2 ${getCardTint(person.role)} border border-gray-200 rounded-md shadow-sm hover:shadow-md transition-shadow ${
           isDragging ? 'opacity-50' : ''
         }`}
       >
@@ -124,9 +135,15 @@ function DraggablePersonChip({
             {person.email && <p className="text-xs text-gray-500 truncate">{person.email}</p>}
           </button>
           {person.itemCount > 0 && (
-            <span className="px-2 py-0.5 bg-sage-100 text-sage-800 text-xs rounded flex-shrink-0">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEditPerson?.(person);
+              }}
+              className="px-2 py-0.5 bg-sage-100 text-sage-800 text-xs rounded flex-shrink-0 cursor-pointer hover:bg-sage-200 transition-colors"
+            >
               {person.itemCount} {person.itemCount === 1 ? 'item' : 'items'}
-            </span>
+            </button>
           )}
         </div>
         <div className="relative flex-shrink-0">

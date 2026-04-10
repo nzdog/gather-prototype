@@ -36,6 +36,7 @@ interface PeopleSectionProps {
   onGeneratePlan?: () => void;
   stepLabel?: string;
   initialView?: 'table' | 'board';
+  onReassignItems?: (teamId: string | null) => void;
 }
 
 export default function PeopleSection({
@@ -49,6 +50,7 @@ export default function PeopleSection({
   onGeneratePlan,
   stepLabel,
   initialView,
+  onReassignItems,
 }: PeopleSectionProps) {
   const toast = useToast();
   const [view, setView] = useState<'table' | 'board'>(initialView ?? 'table');
@@ -457,6 +459,15 @@ export default function PeopleSection({
         person={selectedPerson}
         teams={teams}
         eventId={eventId}
+        onReassignItems={
+          onReassignItems
+            ? (teamId) => {
+                setEditModalOpen(false);
+                setSelectedPerson(null);
+                onReassignItems(teamId);
+              }
+            : undefined
+        }
       />
 
       {/* Import CSV Modal */}

@@ -38,6 +38,7 @@ interface EditPersonModalProps {
   person: Person | null;
   teams: Team[];
   eventId: string;
+  onReassignItems?: (teamId: string | null) => void;
 }
 
 export default function EditPersonModal({
@@ -48,6 +49,7 @@ export default function EditPersonModal({
   person,
   teams,
   eventId,
+  onReassignItems,
 }: EditPersonModalProps) {
   const { openModal, closeModal } = useModal();
   const toast = useToast();
@@ -247,6 +249,22 @@ export default function EditPersonModal({
               <p className="text-sm text-gray-500">No items assigned yet</p>
             )}
           </div>
+
+          {/* Reassign Items */}
+          {onReassignItems && person.itemCount > 0 && (
+            <div>
+              <button
+                type="button"
+                onClick={() => {
+                  const teamId = person.team.id || null;
+                  onReassignItems(teamId);
+                }}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+              >
+                Reassign items →
+              </button>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex gap-2 pt-4 border-t">
