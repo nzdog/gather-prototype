@@ -789,32 +789,6 @@ export default function PlanEditorPage() {
     }
   };
 
-  const handleReviewConfirmAndContinue = async () => {
-    try {
-      const response = await fetch(`/api/events/${eventId}/review-items`, {
-        method: 'POST',
-      });
-
-      if (!response.ok) throw new Error('Failed to confirm items');
-
-      await response.json();
-
-      // Exit review mode and reload plan
-      setReviewMode(false);
-      setReviewTeamGroups([]);
-
-      // Refresh all data
-      await loadEvent();
-      await loadTeams();
-      await loadItems();
-      await loadConflicts();
-      setGateCheckRefresh((prev) => prev + 1);
-    } catch (err: any) {
-      console.error('Error confirming items:', err);
-      toast.error('Failed to confirm items');
-    }
-  };
-
   const executeRegenerate = async (options: {
     preserveProtected: boolean;
     modifier: string;
@@ -1597,7 +1571,6 @@ export default function PlanEditorPage() {
               <GenerationReviewPanel
                 teamGroups={reviewTeamGroups}
                 eventId={eventId}
-                onConfirmAndContinue={handleReviewConfirmAndContinue}
                 onRegenerateSelected={handleReviewRegenerateSelected}
               />
             </div>

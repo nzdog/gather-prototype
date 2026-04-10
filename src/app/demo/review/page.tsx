@@ -85,26 +85,6 @@ export default function ReviewDemoPage() {
     }
   };
 
-  const handleConfirmAndContinue = async () => {
-    try {
-      const response = await fetch(`/api/events/${eventId}/review-items`, {
-        method: 'POST',
-      });
-
-      if (!response.ok) throw new Error('Failed to confirm items');
-
-      const data = await response.json();
-
-      toast.success(`Confirmed ${data.confirmedCount} items!`);
-
-      // Navigate to the plan page
-      router.push(`/plan/${eventId}`);
-    } catch (err: any) {
-      console.error('Error confirming items:', err);
-      toast.error('Failed to confirm items');
-    }
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -160,7 +140,6 @@ export default function ReviewDemoPage() {
         <GenerationReviewPanel
           teamGroups={teamGroups}
           eventId={eventId || ''}
-          onConfirmAndContinue={handleConfirmAndContinue}
           onRegenerateSelected={handleRegenerateSelected}
         />
 

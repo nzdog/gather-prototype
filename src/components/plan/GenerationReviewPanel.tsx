@@ -12,14 +12,12 @@ interface TeamGroup {
 interface GenerationReviewPanelProps {
   teamGroups: TeamGroup[];
   eventId: string;
-  onConfirmAndContinue: () => void;
   onRegenerateSelected: (keepIds: string[], regenerateIds: string[]) => Promise<void>;
 }
 
 export default function GenerationReviewPanel({
   teamGroups,
   eventId: _eventId,
-  onConfirmAndContinue,
   onRegenerateSelected,
 }: GenerationReviewPanelProps) {
   const toast = useToast();
@@ -94,10 +92,6 @@ export default function GenerationReviewPanel({
     }
   };
 
-  const handleConfirmAndContinue = () => {
-    onConfirmAndContinue();
-  };
-
   const getStats = () => {
     const keep = Object.values(decisions).filter((d) => d === 'keep').length;
     const regenerate = Object.values(decisions).filter((d) => d === 'regenerate').length;
@@ -168,12 +162,6 @@ export default function GenerationReviewPanel({
             className="px-6 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 disabled:bg-sage-300 disabled:cursor-not-allowed transition-colors font-medium"
           >
             {isRegenerating ? 'Regenerating...' : 'Regenerate Selected'}
-          </button>
-          <button
-            onClick={handleConfirmAndContinue}
-            className="px-6 py-2 bg-sage-600 text-white rounded-md hover:bg-sage-700 transition-colors font-medium"
-          >
-            Confirm & Continue
           </button>
         </div>
       </div>
