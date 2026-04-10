@@ -50,7 +50,7 @@ import { PersonInviteDetailModal } from '@/components/plan/PersonInviteDetailMod
 import PastEventOverlay from '@/components/plan/PastEventOverlay';
 import { ModalProvider } from '@/contexts/ModalContext';
 import { useToast } from '@/contexts/ToastContext';
-import { Conflict } from '@prisma/client';
+import { Conflict, ConflictType } from '@prisma/client';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 import SetupChecklistBanner from '@/components/plan/SetupChecklistBanner';
 import { useEventSetupProgress } from '@/hooks/useEventSetupProgress';
@@ -597,6 +597,22 @@ export default function PlanEditorPage() {
     loadItems();
     loadTeams();
     loadPeople();
+  };
+
+  // Navigate from a conflict card to the relevant section
+  const CONFLICT_TYPE_TO_SECTION: Record<ConflictType, SectionId> = {
+    QUANTITY_MISSING: 'items',
+    DIETARY_GAP: 'items',
+    TIMING: 'items',
+    EQUIPMENT_MISMATCH: 'items',
+    STRUCTURAL_IMBALANCE: 'people',
+    COVERAGE_GAP: 'teams',
+    CONSTRAINT_VIOLATION: 'planstatus',
+  };
+
+  const handleGoFixIt = (_conflictId: string, conflictType: ConflictType) => {
+    const section = CONFLICT_TYPE_TO_SECTION[conflictType];
+    handleExpandSection(section);
   };
 
   // Inter-modal tab navigation handler
@@ -1865,6 +1881,7 @@ export default function PlanEditorPage() {
             onConflictsChanged={loadConflicts}
             hasRunCheck={!!event.lastCheckPlanAt}
             aiCallsDisabled={(event?.aiCallsUsed ?? 0) >= 10}
+            onGoFixIt={handleGoFixIt}
           />
           <PeopleSection
             eventId={eventId}
@@ -2084,6 +2101,7 @@ export default function PlanEditorPage() {
                 onCheckPlan={handleCheckPlan}
                 isCheckingPlan={isCheckingPlan}
                 aiCallsDisabled={(event?.aiCallsUsed ?? 0) >= 10}
+                onGoFixIt={handleGoFixIt}
               />
             )}
           </div>

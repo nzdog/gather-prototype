@@ -1,15 +1,16 @@
 'use client';
 
-import { Conflict } from '@prisma/client';
+import { Conflict, ConflictType } from '@prisma/client';
 import { getActionLabel } from '@/lib/conflicts/action-labels';
 
 interface ConflictCardProps {
   conflict: Conflict;
   onResolve: (conflictId: string) => void;
-  onDismiss: (conflictId: string) => void;
   onDelegate: (conflictId: string) => void;
   onAcknowledge: (conflictId: string) => void;
   onResolveWithAI: (conflictId: string) => void;
+  onIgnore: (conflictId: string) => void;
+  onGoFixIt: (conflictId: string, conflictType: ConflictType) => void;
   aiCallsDisabled?: boolean;
 }
 
@@ -34,10 +35,11 @@ const severityIcons = {
 export default function ConflictCard({
   conflict,
   onResolve,
-  onDismiss,
   onDelegate,
   onAcknowledge,
   onResolveWithAI,
+  onIgnore,
+  onGoFixIt,
   aiCallsDisabled = false,
 }: ConflictCardProps) {
   const isCritical = conflict.severity === 'CRITICAL';
@@ -100,7 +102,7 @@ export default function ConflictCard({
       )}
 
       {/* Actions */}
-      <div className="flex gap-2 mt-4">
+      <div className="flex flex-wrap gap-2 mt-4">
         <button
           onClick={() => onResolveWithAI(conflict.id)}
           disabled={aiCallsDisabled}
@@ -119,23 +121,28 @@ export default function ConflictCard({
         >
           Mark Resolved
         </button>
+        <button
+          onClick={() => onGoFixIt(conflict.id, conflict.type)}
+          className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-sm transition"
+        >
+          Go fix it &rarr;
+        </button>
+        <button
+          onClick={() => onIgnore(conflict.id)}
+          className="px-3 py-1.5 text-sm bg-gray-500 text-white rounded hover:bg-gray-600 transition"
+        >
+          Ignore
+        </button>
 
         {/* Only show action buttons if not already acknowledged or delegated */}
         {!isAcknowledged && !isDelegated && (
           <>
-            {isCritical ? (
+            {isCritical && (
               <button
                 onClick={() => onAcknowledge(conflict.id)}
                 className="px-3 py-1.5 text-sm bg-yellow-600 text-white rounded hover:bg-yellow-700 transition"
               >
                 Acknowledge
-              </button>
-            ) : (
-              <button
-                onClick={() => onDismiss(conflict.id)}
-                className="px-3 py-1.5 text-sm bg-gray-500 text-white rounded hover:bg-gray-600 transition"
-              >
-                Dismiss
               </button>
             )}
 

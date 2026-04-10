@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useToast } from '@/contexts/ToastContext';
-import { Conflict } from '@prisma/client';
+import { Conflict, ConflictType } from '@prisma/client';
 import ConflictCard from './ConflictCard';
 import AcknowledgeModal from './AcknowledgeModal';
 import ResolveWithAIModal from './ResolveWithAIModal';
@@ -16,6 +16,7 @@ interface ConflictListProps {
   onCheckPlan?: () => void;
   isCheckingPlan?: boolean;
   aiCallsDisabled?: boolean;
+  onGoFixIt?: (conflictId: string, conflictType: ConflictType) => void;
 }
 
 export default function ConflictList({
@@ -27,6 +28,7 @@ export default function ConflictList({
   onCheckPlan,
   isCheckingPlan = false,
   aiCallsDisabled = false,
+  onGoFixIt,
 }: ConflictListProps) {
   const toast = useToast();
   const [acknowledgeModalOpen, setAcknowledgeModalOpen] = useState(false);
@@ -250,10 +252,11 @@ export default function ConflictList({
               key={conflict.id}
               conflict={conflict}
               onResolve={handleResolve}
-              onDismiss={handleDismiss}
               onDelegate={handleDelegate}
               onAcknowledge={handleAcknowledge}
               onResolveWithAI={handleResolveWithAI}
+              onIgnore={handleDismiss}
+              onGoFixIt={onGoFixIt ?? (() => {})}
               aiCallsDisabled={aiCallsDisabled}
             />
           ))}
@@ -271,10 +274,11 @@ export default function ConflictList({
               key={conflict.id}
               conflict={conflict}
               onResolve={handleResolve}
-              onDismiss={handleDismiss}
               onDelegate={handleDelegate}
               onAcknowledge={handleAcknowledge}
               onResolveWithAI={handleResolveWithAI}
+              onIgnore={handleDismiss}
+              onGoFixIt={onGoFixIt ?? (() => {})}
               aiCallsDisabled={aiCallsDisabled}
             />
           ))}
@@ -290,10 +294,11 @@ export default function ConflictList({
               key={conflict.id}
               conflict={conflict}
               onResolve={handleResolve}
-              onDismiss={handleDismiss}
               onDelegate={handleDelegate}
               onAcknowledge={handleAcknowledge}
               onResolveWithAI={handleResolveWithAI}
+              onIgnore={handleDismiss}
+              onGoFixIt={onGoFixIt ?? (() => {})}
               aiCallsDisabled={aiCallsDisabled}
             />
           ))}

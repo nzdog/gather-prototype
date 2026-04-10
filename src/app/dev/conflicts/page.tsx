@@ -2,7 +2,7 @@
 
 import { notFound } from 'next/navigation';
 import { useState, useCallback } from 'react';
-import type { Conflict } from '@prisma/client';
+import type { Conflict, ConflictType } from '@prisma/client';
 import ConflictCard from '@/components/plan/ConflictCard';
 
 // ── Fixture data ──────────────────────────────────────────────────────────────
@@ -370,10 +370,6 @@ export default function ConflictHarnessPage() {
     setConflicts((prev) => prev.filter((c) => c.id !== conflictId));
   }, []);
 
-  const handleDismiss = useCallback((conflictId: string) => {
-    setConflicts((prev) => prev.filter((c) => c.id !== conflictId));
-  }, []);
-
   const handleAcknowledge = useCallback((conflictId: string) => {
     setConflicts((prev) =>
       prev.map((c) => (c.id === conflictId ? { ...c, status: 'ACKNOWLEDGED' as const } : c))
@@ -426,6 +422,25 @@ export default function ConflictHarnessPage() {
     [aiCallsDisabled]
   );
 
+  const handleIgnore = useCallback((conflictId: string) => {
+    setConflicts((prev) => prev.filter((c) => c.id !== conflictId));
+  }, []);
+
+  const CONFLICT_TYPE_DESTINATIONS: Record<string, string> = {
+    QUANTITY_MISSING: 'Items modal',
+    DIETARY_GAP: 'Items modal',
+    TIMING: 'Items modal',
+    EQUIPMENT_MISMATCH: 'Items modal',
+    STRUCTURAL_IMBALANCE: 'People modal',
+    COVERAGE_GAP: 'Teams modal',
+    CONSTRAINT_VIOLATION: 'Plan Status modal',
+  };
+
+  const handleGoFixIt = useCallback((_conflictId: string, conflictType: ConflictType) => {
+    const destination = CONFLICT_TYPE_DESTINATIONS[conflictType] ?? conflictType;
+    window.alert(`Go fix it → Would navigate to: ${destination}`);
+  }, []);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-8">
@@ -475,10 +490,11 @@ export default function ConflictHarnessPage() {
                 key={conflict.id}
                 conflict={conflict}
                 onResolve={handleResolve}
-                onDismiss={handleDismiss}
                 onDelegate={handleDelegate}
                 onAcknowledge={handleAcknowledge}
                 onResolveWithAI={handleResolveWithAI}
+                onIgnore={handleIgnore}
+                onGoFixIt={handleGoFixIt}
                 aiCallsDisabled={aiCallsDisabled}
               />
             ))}
