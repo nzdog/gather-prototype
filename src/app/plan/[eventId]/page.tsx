@@ -593,6 +593,7 @@ export default function PlanEditorPage() {
     setModalBreadcrumbTrail([]);
     setPeopleInitialView('table');
     setInitialExpandedTeam(null);
+    setExpandedItemCategories(new Set());
     // Refresh dashboard card data after any expansion modal close
     loadItems();
     loadTeams();
@@ -610,8 +611,15 @@ export default function PlanEditorPage() {
     CONSTRAINT_VIOLATION: 'planstatus',
   };
 
-  const handleGoFixIt = (_conflictId: string, conflictType: ConflictType) => {
+  const handleGoFixIt = (
+    _conflictId: string,
+    conflictType: ConflictType,
+    affectedTeamName?: string
+  ) => {
     const section = CONFLICT_TYPE_TO_SECTION[conflictType];
+    if (section === 'items' && affectedTeamName) {
+      setExpandedItemCategories(new Set([affectedTeamName]));
+    }
     handleExpandSection(section);
   };
 

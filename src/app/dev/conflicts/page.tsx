@@ -436,10 +436,16 @@ export default function ConflictHarnessPage() {
     CONSTRAINT_VIOLATION: 'Plan Status modal',
   };
 
-  const handleGoFixIt = useCallback((_conflictId: string, conflictType: ConflictType) => {
-    const destination = CONFLICT_TYPE_DESTINATIONS[conflictType] ?? conflictType;
-    window.alert(`Go fix it → Would navigate to: ${destination}`);
-  }, []);
+  const handleGoFixIt = useCallback(
+    (_conflictId: string, conflictType: ConflictType, affectedTeamName?: string) => {
+      const destination = CONFLICT_TYPE_DESTINATIONS[conflictType] ?? conflictType;
+      const teamInfo = affectedTeamName
+        ? ` (pre-expand: "${affectedTeamName}")`
+        : ' (no team to pre-expand)';
+      window.alert(`Go fix it → Would navigate to: ${destination}${teamInfo}`);
+    },
+    []
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">

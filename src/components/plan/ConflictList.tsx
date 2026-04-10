@@ -16,7 +16,7 @@ interface ConflictListProps {
   onCheckPlan?: () => void;
   isCheckingPlan?: boolean;
   aiCallsDisabled?: boolean;
-  onGoFixIt?: (conflictId: string, conflictType: ConflictType) => void;
+  onGoFixIt?: (conflictId: string, conflictType: ConflictType, affectedTeamName?: string) => void;
 }
 
 export default function ConflictList({

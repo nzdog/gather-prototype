@@ -10,7 +10,7 @@ interface ConflictCardProps {
   onAcknowledge: (conflictId: string) => void;
   onResolveWithAI: (conflictId: string) => void;
   onIgnore: (conflictId: string) => void;
-  onGoFixIt: (conflictId: string, conflictType: ConflictType) => void;
+  onGoFixIt: (conflictId: string, conflictType: ConflictType, affectedTeamName?: string) => void;
   aiCallsDisabled?: boolean;
 }
 
@@ -122,7 +122,11 @@ export default function ConflictCard({
           Mark Resolved
         </button>
         <button
-          onClick={() => onGoFixIt(conflict.id, conflict.type)}
+          onClick={() => {
+            const parties = conflict.affectedParties as string[] | null;
+            const teamName = parties?.[0] ?? undefined;
+            onGoFixIt(conflict.id, conflict.type, teamName);
+          }}
           className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-sm transition"
         >
           Go fix it &rarr;
