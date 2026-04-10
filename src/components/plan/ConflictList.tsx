@@ -250,6 +250,19 @@ export default function ConflictList({
 
   return (
     <div className="space-y-6">
+      {/* Run check again button */}
+      {hasRunCheck && onCheckPlan && (
+        <div className="flex justify-end">
+          <button
+            onClick={onCheckPlan}
+            disabled={isCheckingPlan}
+            className={`px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-sm font-medium transition-colors ${isCheckingPlan ? 'opacity-75 cursor-not-allowed' : ''}`}
+          >
+            {isCheckingPlan ? 'Checking…' : 'Run check again'}
+          </button>
+        </div>
+      )}
+
       {/* Critical Conflicts */}
       {criticalConflicts.length > 0 && (
         <div>
