@@ -234,6 +234,7 @@ export default function PlanEditorPage() {
   const [resettingClaim, setResettingClaim] = useState<string | null>(null);
   const [copiedDirectory, setCopiedDirectory] = useState(false);
   const [expandedSection, setExpandedSection] = useState<SectionId | null>(null);
+  const [peopleInitialView, setPeopleInitialView] = useState<'table' | 'board'>('table');
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
   const [inviteStatusData, setInviteStatusData] = useState<any | null>(null);
   const [checklistDismissed, setChecklistDismissed] = useState(false);
@@ -573,6 +574,7 @@ export default function PlanEditorPage() {
       scroll: false,
     });
     setModalBreadcrumbTrail([]);
+    setPeopleInitialView('table');
     // Refresh dashboard card data after any expansion modal close
     loadItems();
     loadTeams();
@@ -1556,7 +1558,10 @@ export default function PlanEditorPage() {
             items.length > 0 &&
             items.some((i) => !i.assignment) && (
               <NextStepBanner
-                onStartAssigning={() => handleExpandSection('teams')}
+                onStartAssigning={() => {
+                  setPeopleInitialView('board');
+                  handleExpandSection('people');
+                }}
                 onDismiss={handleNextStepDismiss}
               />
             )}
@@ -2409,6 +2414,7 @@ export default function PlanEditorPage() {
             onMovePerson={handleMovePerson}
             onGeneratePlan={() => setHostDescriptionModalOpen(true)}
             stepLabel={checklistStepContext || undefined}
+            initialView={peopleInitialView}
           />
         </SectionExpandModal>
 

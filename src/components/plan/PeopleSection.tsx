@@ -35,6 +35,7 @@ interface PeopleSectionProps {
   onExpand?: () => void;
   onGeneratePlan?: () => void;
   stepLabel?: string;
+  initialView?: 'table' | 'board';
 }
 
 export default function PeopleSection({
@@ -47,9 +48,10 @@ export default function PeopleSection({
   onExpand,
   onGeneratePlan,
   stepLabel,
+  initialView,
 }: PeopleSectionProps) {
   const toast = useToast();
-  const [view, setView] = useState<'table' | 'board'>('table');
+  const [view, setView] = useState<'table' | 'board'>(initialView ?? 'table');
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
