@@ -158,6 +158,13 @@ export default function ConflictList({
   };
 
   if (conflicts.length === 0) {
+    // While a check is in progress, don't flash any empty state — the check
+    // button already shows a spinner, so returning null avoids a misleading
+    // "No conflicts found" flash before results arrive.
+    if (isCheckingPlan) {
+      return null;
+    }
+
     if (!hasRunCheck) {
       return (
         <div className="bg-sage-50 border border-sage-200 rounded-lg p-8 max-w-md mx-auto">

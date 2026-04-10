@@ -1886,8 +1886,12 @@ export default function PlanEditorPage() {
             eventId={eventId}
             hostId={event?.hostId ?? ''}
             conflicts={conflicts}
-            onConflictsChanged={loadConflicts}
+            onConflictsChanged={() => {
+              loadConflicts();
+              setGateCheckRefresh((prev) => prev + 1);
+            }}
             hasRunCheck={!!event.lastCheckPlanAt}
+            isCheckingPlan={isCheckingPlan}
             aiCallsDisabled={(event?.aiCallsUsed ?? 0) >= 10}
             onGoFixIt={handleGoFixIt}
           />
@@ -2104,7 +2108,10 @@ export default function PlanEditorPage() {
                 eventId={eventId}
                 hostId={event?.hostId ?? ''}
                 conflicts={conflicts}
-                onConflictsChanged={loadConflicts}
+                onConflictsChanged={() => {
+                  loadConflicts();
+                  setGateCheckRefresh((prev) => prev + 1);
+                }}
                 hasRunCheck={!!event.lastCheckPlanAt}
                 onCheckPlan={handleCheckPlan}
                 isCheckingPlan={isCheckingPlan}
