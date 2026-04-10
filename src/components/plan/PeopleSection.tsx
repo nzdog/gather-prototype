@@ -299,7 +299,7 @@ export default function PeopleSection({
               className="px-3 py-1 bg-accent text-white rounded-md hover:bg-accent-dark flex items-center gap-2"
             >
               <Upload className="w-4 h-4" />
-              Import CSV
+              Import Contacts
             </button>
             {/* Add Person Button */}
             <button
