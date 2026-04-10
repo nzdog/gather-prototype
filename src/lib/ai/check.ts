@@ -86,9 +86,9 @@ export async function detectConflicts(eventId: string): Promise<ConflictData[]> 
   const coordinatorConflicts = await detectMissingCoordinators(event);
   conflicts.push(...coordinatorConflicts);
 
-  // 6. Detect critical items with no assignee
-  const unassignedCriticalConflicts = await detectUnassignedCriticalItems(event);
-  conflicts.push(...unassignedCriticalConflicts);
+  // 6. Detect items with no assignee
+  const unassignedConflicts = await detectUnassignedItems(event);
+  conflicts.push(...unassignedConflicts);
 
   return conflicts;
 }
@@ -310,22 +310,25 @@ async function detectMissingCoordinators(event: any): Promise<ConflictData[]> {
 }
 
 /**
- * Detect critical items with no assignee
+ * Detect all items with no assignee
  */
-async function detectUnassignedCriticalItems(event: any): Promise<ConflictData[]> {
+async function detectUnassignedItems(event: any): Promise<ConflictData[]> {
   const conflicts: ConflictData[] = [];
 
   for (const team of event.teams) {
     for (const item of team.items) {
-      if (item.critical && !item.assignment) {
+      if (!item.assignment) {
+        const isCritical = item.critical === true;
         conflicts.push({
-          fingerprint: `unassigned-critical-item-${event.id}-${item.id}`,
+          fingerprint: `unassigned-item-${event.id}-${item.id}`,
           type: 'QUANTITY_MISSING',
-          severity: 'CRITICAL',
+          severity: isCritical ? 'CRITICAL' : 'ADVISORY',
           claimType: 'RISK',
           resolutionClass: 'FIX_IN_PLAN',
-          title: `"${item.name}" is critical but has no assignee`,
-          description: `This item is marked critical but hasn't been assigned to anyone. It may not get brought to the event.`,
+          title: `"${item.name}" has no assignee`,
+          description: isCritical
+            ? `This item is marked critical but hasn't been assigned to anyone. It may not get brought to the event.`
+            : `This item hasn't been assigned to anyone.`,
           affectedParties: [team.name],
           canDelegate: false,
         });
@@ -340,6 +343,20 @@ async function detectUnassignedCriticalItems(event: any): Promise<ConflictData[]
  * Save or update conflicts in database
  */
 export async function saveConflicts(eventId: string, conflicts: ConflictData[]): Promise<void> {
+  // Clean up legacy unassigned-critical-item fingerprints
+  await prisma.conflict.updateMany({
+    where: {
+      eventId,
+      fingerprint: { startsWith: 'unassigned-critical-item-' },
+      status: { in: ['OPEN', 'ACKNOWLEDGED', 'DELEGATED'] },
+    },
+    data: {
+      status: 'RESOLVED',
+      resolvedAt: new Date(),
+      resolvedBy: 'system',
+    },
+  });
+
   for (const conflict of conflicts) {
     const existing = await prisma.conflict.findFirst({
       where: {

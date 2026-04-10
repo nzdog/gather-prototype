@@ -335,12 +335,8 @@ export default function ConflictHarnessPage() {
   const [conflicts, setConflicts] = useState<Conflict[]>(() =>
     INITIAL_FIXTURES.map((c) => ({ ...c }))
   );
-  const [aiCallsDisabled, setAiCallsDisabled] = useState(false);
-  const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set());
-
   const resetAll = useCallback(() => {
     setConflicts(INITIAL_FIXTURES.map((c) => ({ ...c })));
-    setResolvingIds(new Set());
   }, []);
 
   const handleResolve = useCallback((conflictId: string) => {
@@ -367,36 +363,6 @@ export default function ConflictHarnessPage() {
       )
     );
   }, []);
-
-  const handleResolveWithAI = useCallback(
-    (conflictId: string) => {
-      if (aiCallsDisabled) return;
-
-      setResolvingIds((prev) => new Set(prev).add(conflictId));
-
-      setTimeout(() => {
-        setConflicts((prev) =>
-          prev.map((c) =>
-            c.id === conflictId
-              ? {
-                  ...c,
-                  description: `${c.description} [AI resolved: redistribute items across teams to balance workload]`,
-                  status: 'RESOLVED' as const,
-                  resolvedBy: 'ai',
-                  resolvedAt: new Date(),
-                }
-              : c
-          )
-        );
-        setResolvingIds((prev) => {
-          const next = new Set(prev);
-          next.delete(conflictId);
-          return next;
-        });
-      }, 1500);
-    },
-    [aiCallsDisabled]
-  );
 
   const handleIgnore = useCallback((conflictId: string) => {
     setConflicts((prev) => prev.filter((c) => c.id !== conflictId));
@@ -433,15 +399,6 @@ export default function ConflictHarnessPage() {
 
         {/* Toolbar */}
         <div className="flex items-center gap-4 mb-6 p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-          <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={aiCallsDisabled}
-              onChange={(e) => setAiCallsDisabled(e.target.checked)}
-              className="rounded border-gray-300"
-            />
-            AI calls disabled
-          </label>
           <button
             onClick={resetAll}
             className="px-3 py-1.5 text-sm bg-gray-600 text-white rounded hover:bg-gray-700 transition"
@@ -452,13 +409,6 @@ export default function ConflictHarnessPage() {
             {conflicts.length} / {INITIAL_FIXTURES.length} cards visible
           </span>
         </div>
-
-        {/* Resolving overlay indicators */}
-        {resolvingIds.size > 0 && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-            AI resolving {resolvingIds.size} conflict{resolvingIds.size > 1 ? 's' : ''}...
-          </div>
-        )}
 
         {/* Conflict cards */}
         {conflicts.length === 0 ? (
@@ -474,10 +424,8 @@ export default function ConflictHarnessPage() {
                 onResolve={handleResolve}
                 onDelegate={handleDelegate}
                 onAcknowledge={handleAcknowledge}
-                onResolveWithAI={handleResolveWithAI}
                 onIgnore={handleIgnore}
                 onGoFixIt={handleGoFixIt}
-                aiCallsDisabled={aiCallsDisabled}
               />
             ))}
           </div>

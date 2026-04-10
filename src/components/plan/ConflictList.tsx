@@ -5,7 +5,6 @@ import { useToast } from '@/contexts/ToastContext';
 import { Conflict, ConflictType } from '@prisma/client';
 import ConflictCard from './ConflictCard';
 import AcknowledgeModal from './AcknowledgeModal';
-import ResolveWithAIModal from './ResolveWithAIModal';
 
 interface ConflictListProps {
   eventId: string;
@@ -15,7 +14,6 @@ interface ConflictListProps {
   hasRunCheck?: boolean;
   onCheckPlan?: () => void;
   isCheckingPlan?: boolean;
-  aiCallsDisabled?: boolean;
   onGoFixIt?: (conflictId: string, conflictType: ConflictType, affectedTeamName?: string) => void;
 }
 
@@ -27,14 +25,11 @@ export default function ConflictList({
   hasRunCheck = false,
   onCheckPlan,
   isCheckingPlan = false,
-  aiCallsDisabled = false,
   onGoFixIt,
 }: ConflictListProps) {
   const toast = useToast();
   const [acknowledgeModalOpen, setAcknowledgeModalOpen] = useState(false);
   const [selectedConflict, setSelectedConflict] = useState<Conflict | null>(null);
-  const [resolveWithAIModalOpen, setResolveWithAIModalOpen] = useState(false);
-  const [aiResolveConflict, setAiResolveConflict] = useState<Conflict | null>(null);
 
   // Group conflicts by severity (critical first)
   const criticalConflicts = conflicts.filter((c) => c.severity === 'CRITICAL');
@@ -104,22 +99,6 @@ export default function ConflictList({
       setSelectedConflict(conflict);
       setAcknowledgeModalOpen(true);
     }
-  };
-
-  const handleResolveWithAI = (conflictId: string) => {
-    const conflict = conflicts.find((c) => c.id === conflictId);
-    if (conflict) {
-      setAiResolveConflict(conflict);
-      setResolveWithAIModalOpen(true);
-    }
-  };
-
-  const handleAcceptAISuggestion = async (_conflictId: string) => {
-    // The modal handles execution and resolution
-    // Just refresh the conflict list
-    setResolveWithAIModalOpen(false);
-    setAiResolveConflict(null);
-    onConflictsChanged?.();
   };
 
   const handleAcknowledgeSubmit = async (acknowledgement: {
@@ -274,10 +253,8 @@ export default function ConflictList({
               onResolve={handleResolve}
               onDelegate={handleDelegate}
               onAcknowledge={handleAcknowledge}
-              onResolveWithAI={handleResolveWithAI}
               onIgnore={handleDismiss}
               onGoFixIt={onGoFixIt ?? (() => {})}
-              aiCallsDisabled={aiCallsDisabled}
             />
           ))}
         </div>
@@ -296,10 +273,8 @@ export default function ConflictList({
               onResolve={handleResolve}
               onDelegate={handleDelegate}
               onAcknowledge={handleAcknowledge}
-              onResolveWithAI={handleResolveWithAI}
               onIgnore={handleDismiss}
               onGoFixIt={onGoFixIt ?? (() => {})}
-              aiCallsDisabled={aiCallsDisabled}
             />
           ))}
         </div>
@@ -316,10 +291,8 @@ export default function ConflictList({
               onResolve={handleResolve}
               onDelegate={handleDelegate}
               onAcknowledge={handleAcknowledge}
-              onResolveWithAI={handleResolveWithAI}
               onIgnore={handleDismiss}
               onGoFixIt={onGoFixIt ?? (() => {})}
-              aiCallsDisabled={aiCallsDisabled}
             />
           ))}
         </div>
@@ -335,20 +308,6 @@ export default function ConflictList({
             setSelectedConflict(null);
           }}
           onSubmit={handleAcknowledgeSubmit}
-        />
-      )}
-
-      {/* Resolve with AI Modal */}
-      {aiResolveConflict && (
-        <ResolveWithAIModal
-          isOpen={resolveWithAIModalOpen}
-          conflict={aiResolveConflict}
-          eventId={eventId}
-          onClose={() => {
-            setResolveWithAIModalOpen(false);
-            setAiResolveConflict(null);
-          }}
-          onAccept={handleAcceptAISuggestion}
         />
       )}
     </div>

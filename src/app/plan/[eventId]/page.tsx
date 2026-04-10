@@ -1902,7 +1902,6 @@ export default function PlanEditorPage() {
             }}
             hasRunCheck={!!event.lastCheckPlanAt}
             isCheckingPlan={isCheckingPlan}
-            aiCallsDisabled={(event?.aiCallsUsed ?? 0) >= 10}
             onGoFixIt={handleGoFixIt}
           />
           <PeopleSection
@@ -2126,7 +2125,6 @@ export default function PlanEditorPage() {
                 hasRunCheck={!!event.lastCheckPlanAt}
                 onCheckPlan={handleCheckPlan}
                 isCheckingPlan={isCheckingPlan}
-                aiCallsDisabled={(event?.aiCallsUsed ?? 0) >= 10}
                 onGoFixIt={handleGoFixIt}
               />
             )}
