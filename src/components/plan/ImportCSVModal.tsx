@@ -645,7 +645,7 @@ export default function ImportCSVModal({
               {/* How to Import your Contacts — per-platform accordions */}
               <div className="pt-2">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  How to Import your Contacts
+                  How to create your import file
                 </p>
                 <div className="mt-3 space-y-2">
                   {/* iPhone */}
