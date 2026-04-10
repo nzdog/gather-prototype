@@ -34,7 +34,6 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
       severity: conflict.severity,
       title: conflict.title,
       description: conflict.description,
-      suggestion: conflict.suggestion,
       affectedItems: conflict.affectedItems,
       canAccept: conflict.resolutionClass === 'FIX_IN_PLAN',
       canDismiss: true,

@@ -33,7 +33,7 @@ interface ConflictData {
   category?: string;
   currentCoverage?: number;
   minimumNeeded?: number;
-  suggestion?: any;
+  affectedParties?: string[];
 }
 
 /**
@@ -112,14 +112,6 @@ async function detectPlaceholderConflicts(event: any): Promise<ConflictData[]> {
       title: 'Critical Items Have Placeholder Quantities',
       description: `${criticalPlaceholders.length} critical item(s) have placeholder quantities that need to be specified or acknowledged before transitioning.`,
       affectedItems: criticalPlaceholders.map((i) => i.id),
-      suggestion: {
-        action: 'specify_quantities',
-        items: criticalPlaceholders.map((i) => ({
-          id: i.id,
-          name: i.name,
-          currentQuantity: i.quantityText,
-        })),
-      },
     });
   }
 
@@ -173,14 +165,6 @@ async function detectTimingConflicts(event: any): Promise<ConflictData[]> {
         timeSlot,
         capacityAvailable: ovenCapacity,
         capacityRequired: items.length,
-        suggestion: {
-          action: 'adjust_timing',
-          options: [
-            'Stagger cooking times',
-            'Use alternative cooking methods (BBQ, stovetop)',
-            'Prepare some items in advance',
-          ],
-        },
       });
     }
   }
@@ -216,16 +200,6 @@ async function detectDietaryGaps(event: any): Promise<ConflictData[]> {
         guestCount: event.dietaryVegetarian,
         currentCoverage: 0,
         minimumNeeded: 1,
-        suggestion: {
-          action: 'add_items',
-          dietaryType: 'vegetarian',
-          suggestions: [
-            'Vegetable lasagna',
-            'Mushroom wellington',
-            'Vegetarian curry',
-            'Grilled vegetable platter',
-          ],
-        },
       });
     }
   }
@@ -252,16 +226,6 @@ async function detectDietaryGaps(event: any): Promise<ConflictData[]> {
         guestCount: event.dietaryGlutenFree,
         currentCoverage: 0,
         minimumNeeded: 1,
-        suggestion: {
-          action: 'add_items',
-          dietaryType: 'gluten-free',
-          suggestions: [
-            'GF bread/buns',
-            'Rice-based dishes',
-            'Naturally GF proteins',
-            'GF dessert options',
-          ],
-        },
       });
     }
   }
@@ -304,14 +268,6 @@ async function detectCoverageGaps(event: any): Promise<ConflictData[]> {
         title: 'Missing Expected Food Categories',
         description: `For a ${event.occasionType} event, typically you'd have: ${missing.join(', ')}. Currently missing from the plan.`,
         category: event.occasionType,
-        suggestion: {
-          action: 'add_teams',
-          missingDomains: missing,
-          recommendations: missing.map((domain) => ({
-            domain,
-            teamName: `${domain.charAt(0) + domain.slice(1).toLowerCase()}`,
-          })),
-        },
       });
     }
   }
@@ -340,13 +296,7 @@ async function detectMissingCoordinators(event: any): Promise<ConflictData[]> {
       resolutionClass: 'FIX_IN_PLAN',
       title: `Team "${team.name}" Needs a Coordinator`,
       description: `The "${team.name}" team doesn't have a coordinator assigned. Each team should have a coordinator to manage responsibilities and track progress.`,
-      suggestion: {
-        action: 'assign_coordinator',
-        teamId: team.id,
-        teamName: team.name,
-        recommendation:
-          'Use the "Assign Coordinators" button in the People section to designate someone as the coordinator for this team.',
-      },
+      affectedParties: [team.name],
     });
   }
 
@@ -372,7 +322,7 @@ export async function saveConflicts(eventId: string, conflicts: ConflictData[]):
           ...conflict,
           affectedItems: conflict.affectedItems as any,
           affectedDays: conflict.affectedDays as any,
-          suggestion: conflict.suggestion as any,
+          affectedParties: conflict.affectedParties as any,
         },
       });
     } else if (
@@ -387,7 +337,7 @@ export async function saveConflicts(eventId: string, conflicts: ConflictData[]):
           description: conflict.description,
           affectedItems: conflict.affectedItems as any,
           affectedDays: conflict.affectedDays as any,
-          suggestion: conflict.suggestion as any,
+          affectedParties: conflict.affectedParties as any,
         },
       });
     } else if (existing.status === 'RESOLVED' || existing.status === 'DISMISSED') {
@@ -399,7 +349,7 @@ export async function saveConflicts(eventId: string, conflicts: ConflictData[]):
           description: conflict.description,
           affectedItems: conflict.affectedItems as any,
           affectedDays: conflict.affectedDays as any,
-          suggestion: conflict.suggestion as any,
+          affectedParties: conflict.affectedParties as any,
           resolvedBy: null,
           resolvedAt: null,
           dismissedAt: null,

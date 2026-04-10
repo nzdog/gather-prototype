@@ -67,18 +67,6 @@ async function seedTestConflicts(eventId: string) {
             valueAtDetection: 6,
           },
         ],
-        suggestion: {
-          action: 'add_item',
-          reasoning: 'Add a vegetarian main dish to accommodate these guests',
-          proposedChanges: [
-            {
-              type: 'create_item',
-              teamName: 'Mains - Vegetarian',
-              itemName: 'Vegetarian lasagna',
-              dietaryTags: ['vegetarian'],
-            },
-          ],
-        },
         status: 'OPEN',
         canDelegate: false,
         delegateToRoles: [],
@@ -110,11 +98,6 @@ async function seedTestConflicts(eventId: string) {
             valueAtDetection: 2,
           },
         ],
-        suggestion: {
-          action: 'add_item',
-          reasoning: 'Add a vegan dessert option',
-          proposedChanges: [],
-        },
         status: 'OPEN',
         canDelegate: false,
         delegateToRoles: [],
@@ -140,10 +123,6 @@ async function seedTestConflicts(eventId: string) {
         affectedItems: [],
         affectedParties: ['Team coordinators'],
         inputsReferenced: [],
-        suggestion: {
-          action: 'delegate_to_coordinator',
-          reasoning: 'Coordinators know their items best and can specify quantities',
-        },
         status: 'OPEN',
         canDelegate: true,
         delegateToRoles: ['coordinator'],
@@ -175,11 +154,6 @@ async function seedTestConflicts(eventId: string) {
             valueAtDetection: 1,
           },
         ],
-        suggestion: {
-          action: 'stagger_times',
-          reasoning: 'Adjust serving times to avoid oven conflicts',
-          proposedChanges: [],
-        },
         status: 'OPEN',
         canDelegate: false,
         delegateToRoles: [],

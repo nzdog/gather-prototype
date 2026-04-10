@@ -416,7 +416,6 @@ model Conflict {
   category                String?
   currentCoverage         Int?
   minimumNeeded           Int?
-  suggestion              Json?
   inputsReferenced        Json?
   status                  ConflictStatus    @default(OPEN)
   viewed                  Boolean           @default(false)

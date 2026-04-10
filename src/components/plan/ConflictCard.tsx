@@ -1,7 +1,6 @@
 'use client';
 
 import { Conflict, ConflictType } from '@prisma/client';
-import { getActionLabel } from '@/lib/conflicts/action-labels';
 
 interface ConflictCardProps {
   conflict: Conflict;
@@ -87,17 +86,6 @@ export default function ConflictCard({
         <div className="mt-3 text-sm">
           <span className="font-medium">Affected: </span>
           <span>{(conflict.affectedParties as string[]).join(', ')}</span>
-        </div>
-      )}
-
-      {/* Suggestion */}
-      {conflict.suggestion && typeof conflict.suggestion === 'object' && (
-        <div className="mt-3 p-3 bg-white bg-opacity-60 rounded border border-gray-300">
-          <p className="text-sm font-medium mb-1">Suggestion:</p>
-          <p className="text-sm">{getActionLabel((conflict.suggestion as any).action)}</p>
-          {(conflict.suggestion as any).reasoning && (
-            <p className="text-xs text-gray-600 mt-1">{(conflict.suggestion as any).reasoning}</p>
-          )}
         </div>
       )}
 

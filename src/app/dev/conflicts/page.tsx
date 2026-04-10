@@ -10,7 +10,7 @@ import ConflictCard from '@/components/plan/ConflictCard';
 const now = new Date();
 
 const INITIAL_FIXTURES: Conflict[] = [
-  // 1. CRITICAL + OPEN + canDelegate + suggestion + affectedParties
+  // 1. CRITICAL + OPEN + canDelegate + affectedParties
   {
     id: 'fix-1',
     eventId: 'dev-event',
@@ -33,10 +33,6 @@ const INITIAL_FIXTURES: Conflict[] = [
     category: null,
     currentCoverage: null,
     minimumNeeded: null,
-    suggestion: {
-      action: 'STAGGER_TIMING',
-      reasoning: 'Stagger 2 items to 17:30 to stay within capacity.',
-    },
     inputsReferenced: null,
     status: 'OPEN',
     viewed: false,
@@ -76,10 +72,6 @@ const INITIAL_FIXTURES: Conflict[] = [
     category: null,
     currentCoverage: null,
     minimumNeeded: null,
-    suggestion: {
-      action: 'SUBSTITUTE',
-      reasoning: 'Switch grilled items to oven-based alternatives.',
-    },
     inputsReferenced: null,
     status: 'ACKNOWLEDGED',
     viewed: true,
@@ -96,7 +88,7 @@ const INITIAL_FIXTURES: Conflict[] = [
     createdAt: now,
     updatedAt: now,
   },
-  // 3. SIGNIFICANT + OPEN + canDelegate + suggestion
+  // 3. SIGNIFICANT + OPEN + canDelegate
   {
     id: 'fix-3',
     eventId: 'dev-event',
@@ -119,10 +111,6 @@ const INITIAL_FIXTURES: Conflict[] = [
     category: null,
     currentCoverage: 0,
     minimumNeeded: 2,
-    suggestion: {
-      action: 'ADD_ITEMS',
-      reasoning: 'Add 2 gluten-free main dishes to cover the gap.',
-    },
     inputsReferenced: null,
     status: 'OPEN',
     viewed: false,
@@ -162,10 +150,6 @@ const INITIAL_FIXTURES: Conflict[] = [
     category: 'DESSERTS',
     currentCoverage: 1,
     minimumNeeded: 3,
-    suggestion: {
-      action: 'ADD_ITEMS',
-      reasoning: 'Add 2 more dessert items for adequate variety.',
-    },
     inputsReferenced: null,
     status: 'DELEGATED',
     viewed: true,
@@ -182,7 +166,7 @@ const INITIAL_FIXTURES: Conflict[] = [
     createdAt: now,
     updatedAt: now,
   },
-  // 5. ADVISORY + OPEN + canDelegate:false + suggestion
+  // 5. ADVISORY + OPEN + canDelegate:false
   {
     id: 'fix-5',
     eventId: 'dev-event',
@@ -205,10 +189,6 @@ const INITIAL_FIXTURES: Conflict[] = [
     category: null,
     currentCoverage: null,
     minimumNeeded: null,
-    suggestion: {
-      action: 'CONFIRM_QUANTITY',
-      reasoning: 'Ask the coordinator to confirm quantity for bread rolls.',
-    },
     inputsReferenced: null,
     status: 'OPEN',
     viewed: false,
@@ -225,7 +205,7 @@ const INITIAL_FIXTURES: Conflict[] = [
     createdAt: now,
     updatedAt: now,
   },
-  // 6. ADVISORY + OPEN + canDelegate:false + no suggestion + no affectedParties
+  // 6. ADVISORY + OPEN + canDelegate:false + no affectedParties
   {
     id: 'fix-6',
     eventId: 'dev-event',
@@ -248,7 +228,6 @@ const INITIAL_FIXTURES: Conflict[] = [
     category: null,
     currentCoverage: null,
     minimumNeeded: null,
-    suggestion: null,
     inputsReferenced: null,
     status: 'OPEN',
     viewed: false,
@@ -288,7 +267,6 @@ const INITIAL_FIXTURES: Conflict[] = [
     category: 'MAINS',
     currentCoverage: 0,
     minimumNeeded: 3,
-    suggestion: null,
     inputsReferenced: null,
     status: 'OPEN',
     viewed: false,
@@ -329,7 +307,6 @@ const INITIAL_FIXTURES: Conflict[] = [
     category: null,
     currentCoverage: 1,
     minimumNeeded: 2,
-    suggestion: { action: 'ADD_ITEMS', reasoning: 'Add 1 dairy-free option to close the gap.' },
     inputsReferenced: null,
     status: 'OPEN',
     viewed: false,
@@ -403,11 +380,10 @@ export default function ConflictHarnessPage() {
             c.id === conflictId
               ? {
                   ...c,
-                  suggestion: {
-                    action: 'AI_GENERATED_FIX',
-                    reasoning:
-                      'AI suggests redistributing items across teams to balance workload and resolve this conflict.',
-                  },
+                  description: `${c.description} [AI resolved: redistribute items across teams to balance workload]`,
+                  status: 'RESOLVED' as const,
+                  resolvedBy: 'ai',
+                  resolvedAt: new Date(),
                 }
               : c
           )
