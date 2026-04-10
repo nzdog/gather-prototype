@@ -185,6 +185,9 @@ export default function DemoLandingPage() {
               isOpen={openStep === 3}
               onToggle={() => toggleStep(3)}
             >
+              <p className="text-gray-600 mb-2">
+                She imported her contacts directly from her phone.
+              </p>
               <p className="text-gray-600 mb-2">She added 43 family members with their:</p>
               <ul className="text-gray-600 space-y-1 pl-4 mb-3">
                 <li className="before:content-['•'] before:mr-2">Names and contact details</li>
