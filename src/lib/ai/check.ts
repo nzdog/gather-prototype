@@ -409,4 +409,20 @@ export async function saveConflicts(eventId: string, conflicts: ConflictData[]):
       });
     }
   }
+
+  // Auto-resolve active conflicts that were not detected in this check run
+  const detectedFingerprints = conflicts.map((c) => c.fingerprint);
+
+  await prisma.conflict.updateMany({
+    where: {
+      eventId,
+      status: { in: ['OPEN', 'ACKNOWLEDGED', 'DELEGATED'] },
+      fingerprint: { notIn: detectedFingerprints },
+    },
+    data: {
+      status: 'RESOLVED',
+      resolvedAt: new Date(),
+      resolvedBy: 'system',
+    },
+  });
 }
