@@ -1572,6 +1572,17 @@ export default function PlanEditorPage() {
       setEditingHousehold(null);
     };
 
+    const handleDeleteHousehold = async (householdId: string) => {
+      const res = await fetch(`/api/events/${event.id}/households/${householdId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to delete household');
+      }
+      setHouseholds((prev) => prev.filter((h) => h.id !== householdId));
+    };
+
     const handleEdit = (householdId: string) => {
       const household = households.find((h) => h.id === householdId);
       if (household) {
@@ -1595,7 +1606,12 @@ export default function PlanEditorPage() {
           <div className="flex flex-col md:flex-row md:gap-8">
             {/* Mobile: cards above form */}
             <div className="md:hidden mb-6">
-              <HouseholdCardList households={households} onEdit={handleEdit} />
+              <HouseholdCardList
+                households={households}
+                onEdit={handleEdit}
+                onDelete={handleDeleteHousehold}
+                editingHouseholdId={editingHousehold?.id}
+              />
             </div>
 
             {/* Left column: input form */}
@@ -1618,7 +1634,12 @@ export default function PlanEditorPage() {
             {/* Right column: card list (desktop only) */}
             <div className="hidden md:block w-80 flex-shrink-0">
               <div className="sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto">
-                <HouseholdCardList households={households} onEdit={handleEdit} />
+                <HouseholdCardList
+                  households={households}
+                  onEdit={handleEdit}
+                  onDelete={handleDeleteHousehold}
+                  editingHouseholdId={editingHousehold?.id}
+                />
               </div>
             </div>
           </div>

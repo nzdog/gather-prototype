@@ -20,6 +20,43 @@ interface HouseholdRequestBody {
   guests?: HouseholdMemberInput[];
 }
 
+// DELETE /api/events/[id]/households/[householdId] - Delete a household
+export async function DELETE(
+  _request: NextRequest,
+  context: { params: Promise<{ id: string; householdId: string }> }
+) {
+  try {
+    const { id, householdId } = await context.params;
+    const eventId = id;
+
+    const auth = await requireEventRole(eventId, ['HOST', 'COHOST']);
+    if (auth instanceof NextResponse) return auth;
+
+    const household = await prisma.household.findUnique({
+      where: { id: householdId },
+    });
+
+    if (!household || household.eventId !== eventId) {
+      return NextResponse.json({ error: 'Household not found' }, { status: 404 });
+    }
+
+    // Delete PersonEvent records for this household first (no cascade on this relation)
+    await prisma.personEvent.deleteMany({
+      where: { householdId },
+    });
+
+    // Delete the Household record
+    await prisma.household.delete({
+      where: { id: householdId },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting household:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 // PUT /api/events/[id]/households/[householdId] - Update a household
 export async function PUT(
   request: NextRequest,
