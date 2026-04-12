@@ -20,6 +20,7 @@ export default function HouseholdCardList({ households, onEdit }: HouseholdCardL
 
   return (
     <div className="space-y-3">
+      <p className="text-sm font-medium text-gray-500 mb-3">Ducks in row so far</p>
       {households.map((household) => (
         <HouseholdCard key={household.id} household={household} onEdit={onEdit} />
       ))}

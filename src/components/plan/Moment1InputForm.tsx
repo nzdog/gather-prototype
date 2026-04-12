@@ -361,320 +361,326 @@ export default function Moment1InputForm({
 
         {totalPeopleAdded === 0 && <div className="mb-6" />}
 
-        {/* Primary contact form */}
-        <div className="space-y-4 mb-6">
-          <div>
-            <label htmlFor="m1-name" className="block text-sm font-medium text-gray-700 mb-1">
-              Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              ref={nameInputRef}
-              id="m1-name"
-              type="text"
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                if (nameError) setNameError('');
-              }}
-              placeholder="e.g. Sarah Mitchell"
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
-                nameError ? 'border-red-400' : 'border-gray-300'
-              }`}
-            />
-            {nameError && <p className="text-sm text-red-500 mt-1">{nameError}</p>}
-          </div>
-
-          <SkipForNowField
-            id="m1-email"
-            label="Email"
-            type="email"
-            value={email}
-            onChange={(v) => {
-              setEmail(v);
-              if (emailError) setEmailError('');
-            }}
-            onBlur={() => setEmailError(validateEmail(email))}
-            error={emailError}
-            placeholder="email@example.com"
-          />
-
-          <SkipForNowField
-            id="m1-phone"
-            label="Phone"
-            type="tel"
-            value={phone}
-            onChange={(v) => {
-              setPhone(v);
-              if (phoneError) setPhoneError('');
-            }}
-            onBlur={() => setPhoneError(validatePhone(phone))}
-            error={phoneError}
-            placeholder="021 123 4567"
-          />
-        </div>
-
-        {/* Household members section */}
-        <div className="border-t border-gray-200 pt-6 mb-6">
-          <p className="text-sm text-gray-500 mb-4">Anyone else in this group?</p>
-
-          <div className="flex flex-wrap gap-3 mb-4">
-            {!showPartner && (
-              <button
-                type="button"
-                onClick={() => setShowPartner(true)}
-                className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                👫 Add Partner
-              </button>
-            )}
-            {!showChildren && !childCountConfirmed && (
-              <button
-                type="button"
-                onClick={() => setShowChildren(true)}
-                className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                😊 Add Children
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={addGuest}
-              className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              👤 Add Guest
-            </button>
-          </div>
-
-          {/* Partner sub-form */}
-          {showPartner && (
-            <SubForm
-              title="Partner"
-              onRemove={() => {
-                setShowPartner(false);
-                setPartnerName('');
-                setPartnerEmail('');
-                setPartnerPhone('');
-                setPartnerEmailError('');
-                setPartnerPhoneError('');
-              }}
-            >
+        {/* Form container */}
+        <div className="border border-gray-200 bg-white rounded-xl p-6">
+          {/* Primary contact form */}
+          <div className="space-y-4 mb-6">
+            <div>
+              <label htmlFor="m1-name" className="block text-sm font-medium text-gray-700 mb-1">
+                Name <span className="text-red-500">*</span>
+              </label>
               <input
+                ref={nameInputRef}
+                id="m1-name"
                 type="text"
-                value={partnerName}
-                onChange={(e) => setPartnerName(e.target.value)}
-                placeholder="Partner's name"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (nameError) setNameError('');
+                }}
+                placeholder="e.g. Sarah Mitchell"
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
+                  nameError ? 'border-red-400' : 'border-gray-300'
+                }`}
               />
-              <div>
-                <input
-                  type="email"
-                  value={partnerEmail}
-                  onChange={(e) => {
-                    setPartnerEmail(e.target.value);
-                    if (partnerEmailError) setPartnerEmailError('');
-                  }}
-                  onBlur={() => setPartnerEmailError(validateEmail(partnerEmail))}
-                  placeholder="Email"
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
-                    partnerEmailError ? 'border-red-400' : 'border-gray-300'
-                  }`}
-                />
-                {partnerEmailError && (
-                  <p className="text-sm text-red-500 mt-1">{partnerEmailError}</p>
-                )}
-              </div>
-              <div>
-                <input
-                  type="tel"
-                  value={partnerPhone}
-                  onChange={(e) => {
-                    setPartnerPhone(e.target.value);
-                    if (partnerPhoneError) setPartnerPhoneError('');
-                  }}
-                  onBlur={() => setPartnerPhoneError(validatePhone(partnerPhone))}
-                  placeholder="Phone"
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
-                    partnerPhoneError ? 'border-red-400' : 'border-gray-300'
-                  }`}
-                />
-                {partnerPhoneError && (
-                  <p className="text-sm text-red-500 mt-1">{partnerPhoneError}</p>
-                )}
-              </div>
-            </SubForm>
-          )}
+              {nameError && <p className="text-sm text-red-500 mt-1">{nameError}</p>}
+            </div>
 
-          {/* Children input */}
-          {showChildren && !childCountConfirmed && (
-            <div className="border-l-4 border-blue-300 pl-4 py-3 mb-4 bg-gray-50 rounded-r-md">
-              <p className="text-sm text-gray-600 mb-2">How many children?</p>
-              <div className="flex items-center gap-3">
-                <input
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={childCount}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value, 10);
-                    if (!isNaN(val) && val >= 1 && val <= 20) setChildCount(val);
-                  }}
-                  className="w-20 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
-                />
+            <SkipForNowField
+              id="m1-email"
+              label="Email"
+              type="email"
+              value={email}
+              onChange={(v) => {
+                setEmail(v);
+                if (emailError) setEmailError('');
+              }}
+              onBlur={() => setEmailError(validateEmail(email))}
+              error={emailError}
+              placeholder="email@example.com"
+            />
+
+            <SkipForNowField
+              id="m1-phone"
+              label="Phone"
+              type="tel"
+              value={phone}
+              onChange={(v) => {
+                setPhone(v);
+                if (phoneError) setPhoneError('');
+              }}
+              onBlur={() => setPhoneError(validatePhone(phone))}
+              error={phoneError}
+              placeholder="021 123 4567"
+            />
+          </div>
+
+          {/* Household members section */}
+          <div className="border-t border-gray-200 pt-6 mb-6">
+            <p className="text-sm text-gray-500 mb-4">Anyone else in this group?</p>
+
+            <div className="flex flex-wrap gap-3 mb-4">
+              {!showPartner && (
                 <button
                   type="button"
-                  onClick={() => setChildCountConfirmed(true)}
-                  className="px-3 py-2 text-sm bg-accent text-white rounded-md hover:bg-accent-dark transition-colors"
+                  onClick={() => setShowPartner(true)}
+                  className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 >
-                  Add
+                  👫 Add Partner
                 </button>
+              )}
+              {!showChildren && !childCountConfirmed && (
+                <button
+                  type="button"
+                  onClick={() => setShowChildren(true)}
+                  className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  😊 Add Children
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={addGuest}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                👤 Add Guest
+              </button>
+            </div>
+
+            {/* Partner sub-form */}
+            {showPartner && (
+              <SubForm
+                title="Partner"
+                onRemove={() => {
+                  setShowPartner(false);
+                  setPartnerName('');
+                  setPartnerEmail('');
+                  setPartnerPhone('');
+                  setPartnerEmailError('');
+                  setPartnerPhoneError('');
+                }}
+              >
+                <input
+                  type="text"
+                  value={partnerName}
+                  onChange={(e) => setPartnerName(e.target.value)}
+                  placeholder="Partner's name"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                />
+                <div>
+                  <input
+                    type="email"
+                    value={partnerEmail}
+                    onChange={(e) => {
+                      setPartnerEmail(e.target.value);
+                      if (partnerEmailError) setPartnerEmailError('');
+                    }}
+                    onBlur={() => setPartnerEmailError(validateEmail(partnerEmail))}
+                    placeholder="Email"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
+                      partnerEmailError ? 'border-red-400' : 'border-gray-300'
+                    }`}
+                  />
+                  {partnerEmailError && (
+                    <p className="text-sm text-red-500 mt-1">{partnerEmailError}</p>
+                  )}
+                </div>
+                <div>
+                  <input
+                    type="tel"
+                    value={partnerPhone}
+                    onChange={(e) => {
+                      setPartnerPhone(e.target.value);
+                      if (partnerPhoneError) setPartnerPhoneError('');
+                    }}
+                    onBlur={() => setPartnerPhoneError(validatePhone(partnerPhone))}
+                    placeholder="Phone"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
+                      partnerPhoneError ? 'border-red-400' : 'border-gray-300'
+                    }`}
+                  />
+                  {partnerPhoneError && (
+                    <p className="text-sm text-red-500 mt-1">{partnerPhoneError}</p>
+                  )}
+                </div>
+              </SubForm>
+            )}
+
+            {/* Children input */}
+            {showChildren && !childCountConfirmed && (
+              <div className="border-l-4 border-blue-300 pl-4 py-3 mb-4 bg-gray-50 rounded-r-md">
+                <p className="text-sm text-gray-600 mb-2">How many children?</p>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={childCount}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      if (!isNaN(val) && val >= 1 && val <= 20) setChildCount(val);
+                    }}
+                    className="w-20 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setChildCountConfirmed(true)}
+                    className="px-3 py-2 text-sm bg-accent text-white rounded-md hover:bg-accent-dark transition-colors"
+                  >
+                    Add
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowChildren(false);
+                      setChildCount(1);
+                    }}
+                    className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {childCountConfirmed && (
+              <div className="border-l-4 border-blue-300 pl-4 py-3 mb-4 bg-gray-50 rounded-r-md flex items-center justify-between">
+                <p className="text-sm text-gray-600">
+                  {childCount} {childCount === 1 ? 'child' : 'children'}
+                </p>
                 <button
                   type="button"
                   onClick={() => {
+                    setChildCountConfirmed(false);
                     setShowChildren(false);
                     setChildCount(1);
                   }}
-                  className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                  className="text-sm text-red-500 hover:text-red-700"
+                >
+                  × remove
+                </button>
+              </div>
+            )}
+
+            {/* Guest sub-forms */}
+            {guests.map((guest, i) => (
+              <SubForm key={i} title={`Guest ${i + 1}`} onRemove={() => removeGuest(i)}>
+                <input
+                  type="text"
+                  value={guest.name}
+                  onChange={(e) => updateGuest(i, 'name', e.target.value)}
+                  placeholder="Guest's name"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                />
+                <div>
+                  <input
+                    type="email"
+                    value={guest.email}
+                    onChange={(e) => {
+                      updateGuest(i, 'email', e.target.value);
+                      if (guestErrors[i]?.email) {
+                        setGuestErrors((prev) =>
+                          prev.map((err, j) => (j === i ? { ...err, email: undefined } : err))
+                        );
+                      }
+                    }}
+                    onBlur={() => {
+                      const err = validateEmail(guest.email);
+                      setGuestErrors((prev) =>
+                        prev.map((e, j) => (j === i ? { ...e, email: err || undefined } : e))
+                      );
+                    }}
+                    placeholder="Email"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
+                      guestErrors[i]?.email ? 'border-red-400' : 'border-gray-300'
+                    }`}
+                  />
+                  {guestErrors[i]?.email && (
+                    <p className="text-sm text-red-500 mt-1">{guestErrors[i].email}</p>
+                  )}
+                </div>
+                <div>
+                  <input
+                    type="tel"
+                    value={guest.phone}
+                    onChange={(e) => {
+                      updateGuest(i, 'phone', e.target.value);
+                      if (guestErrors[i]?.phone) {
+                        setGuestErrors((prev) =>
+                          prev.map((err, j) => (j === i ? { ...err, phone: undefined } : err))
+                        );
+                      }
+                    }}
+                    onBlur={() => {
+                      const err = validatePhone(guest.phone);
+                      setGuestErrors((prev) =>
+                        prev.map((e, j) => (j === i ? { ...e, phone: err || undefined } : e))
+                      );
+                    }}
+                    placeholder="Phone"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
+                      guestErrors[i]?.phone ? 'border-red-400' : 'border-gray-300'
+                    }`}
+                  />
+                  {guestErrors[i]?.phone && (
+                    <p className="text-sm text-red-500 mt-1">{guestErrors[i].phone}</p>
+                  )}
+                </div>
+              </SubForm>
+            ))}
+          </div>
+        </div>
+        {/* end form container */}
+
+        {/* Add another person / Save changes */}
+        <div className="mt-6">
+          {isEditing ? (
+            <>
+              <button
+                type="button"
+                onClick={handleEditSave}
+                disabled={saving}
+                className="w-full py-3 text-white font-medium bg-accent rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-50 mb-4"
+              >
+                {saving ? 'Saving…' : 'Save changes'}
+              </button>
+              {onCancelEdit && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetForm();
+                    onCancelEdit();
+                  }}
+                  disabled={saving}
+                  className="w-full py-3 text-gray-600 font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
                 >
                   Cancel
                 </button>
-              </div>
-            </div>
-          )}
-
-          {childCountConfirmed && (
-            <div className="border-l-4 border-blue-300 pl-4 py-3 mb-4 bg-gray-50 rounded-r-md flex items-center justify-between">
-              <p className="text-sm text-gray-600">
-                {childCount} {childCount === 1 ? 'child' : 'children'}
-              </p>
+              )}
+            </>
+          ) : (
+            <>
               <button
                 type="button"
-                onClick={() => {
-                  setChildCountConfirmed(false);
-                  setShowChildren(false);
-                  setChildCount(1);
-                }}
-                className="text-sm text-red-500 hover:text-red-700"
+                onClick={handleAddAnother}
+                disabled={saving}
+                className="w-full py-3 text-accent font-medium border-2 border-dashed border-accent/30 rounded-lg hover:bg-accent/5 transition-colors disabled:opacity-50 mb-4"
               >
-                × remove
+                {saving ? 'Saving…' : '+ Add another person'}
               </button>
-            </div>
-          )}
 
-          {/* Guest sub-forms */}
-          {guests.map((guest, i) => (
-            <SubForm key={i} title={`Guest ${i + 1}`} onRemove={() => removeGuest(i)}>
-              <input
-                type="text"
-                value={guest.name}
-                onChange={(e) => updateGuest(i, 'name', e.target.value)}
-                placeholder="Guest's name"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
-              />
-              <div>
-                <input
-                  type="email"
-                  value={guest.email}
-                  onChange={(e) => {
-                    updateGuest(i, 'email', e.target.value);
-                    if (guestErrors[i]?.email) {
-                      setGuestErrors((prev) =>
-                        prev.map((err, j) => (j === i ? { ...err, email: undefined } : err))
-                      );
-                    }
-                  }}
-                  onBlur={() => {
-                    const err = validateEmail(guest.email);
-                    setGuestErrors((prev) =>
-                      prev.map((e, j) => (j === i ? { ...e, email: err || undefined } : e))
-                    );
-                  }}
-                  placeholder="Email"
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
-                    guestErrors[i]?.email ? 'border-red-400' : 'border-gray-300'
-                  }`}
-                />
-                {guestErrors[i]?.email && (
-                  <p className="text-sm text-red-500 mt-1">{guestErrors[i].email}</p>
-                )}
-              </div>
-              <div>
-                <input
-                  type="tel"
-                  value={guest.phone}
-                  onChange={(e) => {
-                    updateGuest(i, 'phone', e.target.value);
-                    if (guestErrors[i]?.phone) {
-                      setGuestErrors((prev) =>
-                        prev.map((err, j) => (j === i ? { ...err, phone: undefined } : err))
-                      );
-                    }
-                  }}
-                  onBlur={() => {
-                    const err = validatePhone(guest.phone);
-                    setGuestErrors((prev) =>
-                      prev.map((e, j) => (j === i ? { ...e, phone: err || undefined } : e))
-                    );
-                  }}
-                  placeholder="Phone"
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
-                    guestErrors[i]?.phone ? 'border-red-400' : 'border-gray-300'
-                  }`}
-                />
-                {guestErrors[i]?.phone && (
-                  <p className="text-sm text-red-500 mt-1">{guestErrors[i].phone}</p>
-                )}
-              </div>
-            </SubForm>
-          ))}
-        </div>
-
-        {/* Add another person / Save changes */}
-        {isEditing ? (
-          <>
-            <button
-              type="button"
-              onClick={handleEditSave}
-              disabled={saving}
-              className="w-full py-3 text-white font-medium bg-accent rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-50 mb-4"
-            >
-              {saving ? 'Saving…' : 'Save changes'}
-            </button>
-            {onCancelEdit && (
+              {/* Done adding people */}
               <button
                 type="button"
-                onClick={() => {
-                  resetForm();
-                  onCancelEdit();
-                }}
+                onClick={handleDone}
                 disabled={saving}
                 className="w-full py-3 text-gray-600 font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
               >
-                Cancel
+                Done adding people →
               </button>
-            )}
-          </>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={handleAddAnother}
-              disabled={saving}
-              className="w-full py-3 text-accent font-medium border-2 border-dashed border-accent/30 rounded-lg hover:bg-accent/5 transition-colors disabled:opacity-50 mb-4"
-            >
-              {saving ? 'Saving…' : '+ Add another person'}
-            </button>
-
-            {/* Done adding people */}
-            <button
-              type="button"
-              onClick={handleDone}
-              disabled={saving}
-              className="w-full py-3 text-gray-600 font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-            >
-              Done adding people →
-            </button>
-          </>
-        )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
