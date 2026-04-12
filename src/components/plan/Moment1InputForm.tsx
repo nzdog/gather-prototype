@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import MomentArc from './MomentArc';
 import { normalizePhoneNumber, isInternationalNumber } from '@/lib/phone';
+import { SavedHousehold } from './HouseholdCardList';
 
 export interface Moment1PersonInput {
   primaryContact: {
@@ -28,6 +29,10 @@ interface Moment1InputFormProps {
   eventName: string;
   onComplete: () => void;
   onAddPerson: (person: Moment1PersonInput) => Promise<void>;
+  editingHousehold?: SavedHousehold | null;
+  onEditSave?: (householdId: string, person: Moment1PersonInput) => Promise<void>;
+  onCancelEdit?: () => void;
+  totalPeopleCount?: number;
 }
 
 interface GuestForm {
@@ -42,6 +47,10 @@ export default function Moment1InputForm({
   eventName,
   onComplete,
   onAddPerson,
+  editingHousehold,
+  onEditSave,
+  onCancelEdit,
+  totalPeopleCount,
 }: Moment1InputFormProps) {
   // Primary contact
   const [name, setName] = useState('');
@@ -66,9 +75,13 @@ export default function Moment1InputForm({
   const [guests, setGuests] = useState<GuestForm[]>([]);
   const [guestErrors, setGuestErrors] = useState<{ email?: string; phone?: string }[]>([]);
 
-  // Progress
-  const [totalPeopleAdded, setTotalPeopleAdded] = useState(0);
+  // Progress — use external count if provided, fallback to internal
+  const [internalPeopleAdded, setInternalPeopleAdded] = useState(0);
+  const totalPeopleAdded = totalPeopleCount ?? internalPeopleAdded;
   const [saving, setSaving] = useState(false);
+
+  // Edit mode
+  const isEditing = !!editingHousehold;
 
   // Track unsaved input for beforeunload
   const hasUnsavedInput = name.trim().length > 0;
@@ -78,6 +91,57 @@ export default function Moment1InputForm({
   useEffect(() => {
     nameInputRef.current?.focus();
   }, []);
+
+  // Populate form when editingHousehold changes
+  useEffect(() => {
+    if (!editingHousehold) return;
+    setName(editingHousehold.primaryContact.name);
+    setEmail(editingHousehold.primaryContact.email || '');
+    setPhone(editingHousehold.primaryContact.phone || '');
+    setNameError('');
+    setEmailError('');
+    setPhoneError('');
+
+    if (editingHousehold.partner) {
+      setShowPartner(true);
+      setPartnerName(editingHousehold.partner.name);
+      setPartnerEmail(editingHousehold.partner.email || '');
+      setPartnerPhone(editingHousehold.partner.phone || '');
+    } else {
+      setShowPartner(false);
+      setPartnerName('');
+      setPartnerEmail('');
+      setPartnerPhone('');
+    }
+    setPartnerEmailError('');
+    setPartnerPhoneError('');
+
+    if (editingHousehold.childCount > 0) {
+      setShowChildren(true);
+      setChildCount(editingHousehold.childCount);
+      setChildCountConfirmed(true);
+    } else {
+      setShowChildren(false);
+      setChildCount(1);
+      setChildCountConfirmed(false);
+    }
+
+    if (editingHousehold.guests.length > 0) {
+      setGuests(
+        editingHousehold.guests.map((g) => ({
+          name: g.name,
+          email: g.email || '',
+          phone: g.phone || '',
+        }))
+      );
+      setGuestErrors(editingHousehold.guests.map(() => ({})));
+    } else {
+      setGuests([]);
+      setGuestErrors([]);
+    }
+
+    nameInputRef.current?.focus();
+  }, [editingHousehold]);
 
   // Warn on navigate away with unsaved input
   useEffect(() => {
@@ -218,7 +282,23 @@ export default function Moment1InputForm({
     try {
       const payload = buildPayload();
       await onAddPerson(payload);
-      setTotalPeopleAdded((prev) => prev + countMembers(payload));
+      if (totalPeopleCount === undefined) {
+        setInternalPeopleAdded((prev) => prev + countMembers(payload));
+      }
+      resetForm();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEditSave = async () => {
+    if (!editingHousehold || !onEditSave) return;
+    if (hasValidationErrors()) return;
+
+    setSaving(true);
+    try {
+      const payload = buildPayload();
+      await onEditSave(editingHousehold.id, payload);
       resetForm();
     } finally {
       setSaving(false);
@@ -234,7 +314,9 @@ export default function Moment1InputForm({
       try {
         const payload = buildPayload();
         await onAddPerson(payload);
-        setTotalPeopleAdded((prev) => prev + countMembers(payload));
+        if (totalPeopleCount === undefined) {
+          setInternalPeopleAdded((prev) => prev + countMembers(payload));
+        }
       } finally {
         setSaving(false);
       }
@@ -257,8 +339,8 @@ export default function Moment1InputForm({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
-      <div className="max-w-[640px] mx-auto px-6 py-8">
+    <div>
+      <div className="max-w-[640px]">
         {/* MomentArc */}
         <div className="mb-8">
           <MomentArc currentMoment={1} />
@@ -546,25 +628,53 @@ export default function Moment1InputForm({
           ))}
         </div>
 
-        {/* Add another person */}
-        <button
-          type="button"
-          onClick={handleAddAnother}
-          disabled={saving}
-          className="w-full py-3 text-accent font-medium border-2 border-dashed border-accent/30 rounded-lg hover:bg-accent/5 transition-colors disabled:opacity-50 mb-4"
-        >
-          {saving ? 'Saving…' : '+ Add another person'}
-        </button>
+        {/* Add another person / Save changes */}
+        {isEditing ? (
+          <>
+            <button
+              type="button"
+              onClick={handleEditSave}
+              disabled={saving}
+              className="w-full py-3 text-white font-medium bg-accent rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-50 mb-4"
+            >
+              {saving ? 'Saving…' : 'Save changes'}
+            </button>
+            {onCancelEdit && (
+              <button
+                type="button"
+                onClick={() => {
+                  resetForm();
+                  onCancelEdit();
+                }}
+                disabled={saving}
+                className="w-full py-3 text-gray-600 font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            )}
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={handleAddAnother}
+              disabled={saving}
+              className="w-full py-3 text-accent font-medium border-2 border-dashed border-accent/30 rounded-lg hover:bg-accent/5 transition-colors disabled:opacity-50 mb-4"
+            >
+              {saving ? 'Saving…' : '+ Add another person'}
+            </button>
 
-        {/* Done adding people */}
-        <button
-          type="button"
-          onClick={handleDone}
-          disabled={saving}
-          className="w-full py-3 text-gray-600 font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-        >
-          Done adding people →
-        </button>
+            {/* Done adding people */}
+            <button
+              type="button"
+              onClick={handleDone}
+              disabled={saving}
+              className="w-full py-3 text-gray-600 font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              Done adding people →
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

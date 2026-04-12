@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams, usePathname } from 'next/navigation';
 import {
   ChevronDown,
@@ -55,6 +55,7 @@ import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 import SetupChecklistBanner from '@/components/plan/SetupChecklistBanner';
 import SetupOpeningScreen from '@/components/plan/SetupOpeningScreen';
 import Moment1InputForm, { Moment1PersonInput } from '@/components/plan/Moment1InputForm';
+import HouseholdCardList, { SavedHousehold } from '@/components/plan/HouseholdCardList';
 import { useEventSetupProgress } from '@/hooks/useEventSetupProgress';
 
 interface Event {
@@ -248,6 +249,9 @@ export default function PlanEditorPage() {
   const [isPostPayment, setIsPostPayment] = useState(false);
   const [showSetup, setShowSetup] = useState(searchParams.get('setup') === 'true');
   const [showMoment1, setShowMoment1] = useState(false);
+  const [households, setHouseholds] = useState<SavedHousehold[]>([]);
+  const [editingHousehold, setEditingHousehold] = useState<SavedHousehold | null>(null);
+  const moment1FormRef = useRef<HTMLDivElement>(null);
   const [wrapUpLoading, setWrapUpLoading] = useState(false);
   const [wrapUpResult, setWrapUpResult] = useState<{
     success: boolean;
@@ -461,6 +465,46 @@ export default function PlanEditorPage() {
     const interval = setInterval(computeMinutes, 30000);
     return () => clearInterval(interval);
   }, [wrapUpDispatch?.pending, wrapUpDispatch?.earliestCreatedAt]);
+
+  const apiHouseholdToSaved = useCallback((h: any): SavedHousehold => {
+    const primary = h.members?.find((m: any) => m.householdRole === 'PRIMARY_CONTACT');
+    const partnerMember = h.members?.find((m: any) => m.householdRole === 'PARTNER');
+    const guestMembers = h.members?.filter((m: any) => m.householdRole === 'GUEST') || [];
+    return {
+      id: h.id,
+      primaryContact: {
+        name: primary?.person?.name || 'Unknown',
+        email: primary?.person?.email || undefined,
+        phone: primary?.person?.phoneNumber || undefined,
+      },
+      partner: partnerMember
+        ? {
+            name: partnerMember.person?.name || '',
+            email: partnerMember.person?.email || undefined,
+            phone: partnerMember.person?.phoneNumber || undefined,
+          }
+        : undefined,
+      childCount: h.childCount || 0,
+      guests: guestMembers.map((g: any) => ({
+        name: g.person?.name || '',
+        email: g.person?.email || undefined,
+        phone: g.person?.phoneNumber || undefined,
+      })),
+    };
+  }, []);
+
+  // Fetch households when Moment 1 view opens
+  useEffect(() => {
+    if (!showMoment1 || !event) return;
+    const fetchHouseholds = async () => {
+      const res = await fetch(`/api/events/${event.id}/households`);
+      if (res.ok) {
+        const data = await res.json();
+        setHouseholds(data.households.map(apiHouseholdToSaved));
+      }
+    };
+    fetchHouseholds();
+  }, [showMoment1, event, apiHouseholdToSaved]);
 
   const loadEvent = async () => {
     try {
@@ -1479,14 +1523,86 @@ export default function PlanEditorPage() {
         const data = await res.json();
         throw new Error(data.error || 'Failed to add household');
       }
+      const data = await res.json();
+      const saved = apiHouseholdToSaved(data.household);
+      setHouseholds((prev) => [...prev, saved]);
+
+      // On mobile, scroll form back into view
+      if (window.innerWidth < 768) {
+        setTimeout(() => {
+          moment1FormRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+      }
     };
+
+    const handleEditSave = async (householdId: string, person: Moment1PersonInput) => {
+      const res = await fetch(`/api/events/${event.id}/households/${householdId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(person),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to update household');
+      }
+      const data = await res.json();
+      const saved = apiHouseholdToSaved(data.household);
+      setHouseholds((prev) => prev.map((h) => (h.id === householdId ? saved : h)));
+      setEditingHousehold(null);
+    };
+
+    const handleEdit = (householdId: string) => {
+      const household = households.find((h) => h.id === householdId);
+      if (household) {
+        setEditingHousehold(household);
+        // On mobile, scroll to form
+        if (window.innerWidth < 768) {
+          setTimeout(() => {
+            moment1FormRef.current?.scrollIntoView({ behavior: 'smooth' });
+          }, 100);
+        }
+      }
+    };
+
+    const totalPeopleCount = households.reduce((sum, h) => {
+      return sum + 1 + (h.partner ? 1 : 0) + h.childCount + h.guests.length;
+    }, 0);
+
     return (
-      <Moment1InputForm
-        eventId={event.id}
-        eventName={event.name}
-        onComplete={() => setShowMoment1(false)}
-        onAddPerson={handleAddHousehold}
-      />
+      <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
+        <div className="max-w-5xl mx-auto px-6 py-8">
+          <div className="flex flex-col md:flex-row md:gap-8">
+            {/* Mobile: cards above form */}
+            <div className="md:hidden mb-6">
+              <HouseholdCardList households={households} onEdit={handleEdit} />
+            </div>
+
+            {/* Left column: input form */}
+            <div ref={moment1FormRef} className="flex-1 min-w-0">
+              <Moment1InputForm
+                eventId={event.id}
+                eventName={event.name}
+                onComplete={() => {
+                  setShowMoment1(false);
+                  setEditingHousehold(null);
+                }}
+                onAddPerson={handleAddHousehold}
+                editingHousehold={editingHousehold}
+                onEditSave={handleEditSave}
+                onCancelEdit={() => setEditingHousehold(null)}
+                totalPeopleCount={totalPeopleCount}
+              />
+            </div>
+
+            {/* Right column: card list (desktop only) */}
+            <div className="hidden md:block w-80 flex-shrink-0">
+              <div className="sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto">
+                <HouseholdCardList households={households} onEdit={handleEdit} />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     );
   }
 
