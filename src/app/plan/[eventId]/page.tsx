@@ -54,6 +54,7 @@ import { Conflict, ConflictType } from '@prisma/client';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 import SetupChecklistBanner from '@/components/plan/SetupChecklistBanner';
 import SetupOpeningScreen from '@/components/plan/SetupOpeningScreen';
+import Moment1InputForm, { Moment1PersonInput } from '@/components/plan/Moment1InputForm';
 import { useEventSetupProgress } from '@/hooks/useEventSetupProgress';
 
 interface Event {
@@ -246,6 +247,7 @@ export default function PlanEditorPage() {
   const [checklistStepContext, setChecklistStepContext] = useState<string | null>(null);
   const [isPostPayment, setIsPostPayment] = useState(false);
   const [showSetup, setShowSetup] = useState(searchParams.get('setup') === 'true');
+  const [showMoment1, setShowMoment1] = useState(false);
   const [wrapUpLoading, setWrapUpLoading] = useState(false);
   const [wrapUpResult, setWrapUpResult] = useState<{
     success: boolean;
@@ -1456,7 +1458,36 @@ export default function PlanEditorPage() {
   }
 
   if (showSetup) {
-    return <SetupOpeningScreen onStart={() => setShowSetup(false)} />;
+    return (
+      <SetupOpeningScreen
+        onStart={() => {
+          setShowSetup(false);
+          setShowMoment1(true);
+        }}
+      />
+    );
+  }
+
+  if (showMoment1 && event) {
+    const handleAddHousehold = async (person: Moment1PersonInput) => {
+      const res = await fetch(`/api/events/${event.id}/households`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(person),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to add household');
+      }
+    };
+    return (
+      <Moment1InputForm
+        eventId={event.id}
+        eventName={event.name}
+        onComplete={() => setShowMoment1(false)}
+        onAddPerson={handleAddHousehold}
+      />
+    );
   }
 
   return (
