@@ -79,6 +79,7 @@ export default function Moment1InputForm({
   const [internalPeopleAdded, setInternalPeopleAdded] = useState(0);
   const totalPeopleAdded = totalPeopleCount ?? internalPeopleAdded;
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
 
   // Edit mode
   const isEditing = !!editingHousehold;
@@ -279,6 +280,7 @@ export default function Moment1InputForm({
     if (hasValidationErrors()) return;
 
     setSaving(true);
+    setSaveError(false);
     try {
       const payload = buildPayload();
       await onAddPerson(payload);
@@ -286,6 +288,8 @@ export default function Moment1InputForm({
         setInternalPeopleAdded((prev) => prev + countMembers(payload));
       }
       resetForm();
+    } catch {
+      setSaveError(true);
     } finally {
       setSaving(false);
     }
@@ -311,12 +315,17 @@ export default function Moment1InputForm({
       if (hasValidationErrors()) return;
 
       setSaving(true);
+      setSaveError(false);
       try {
         const payload = buildPayload();
         await onAddPerson(payload);
         if (totalPeopleCount === undefined) {
           setInternalPeopleAdded((prev) => prev + countMembers(payload));
         }
+      } catch {
+        setSaveError(true);
+        setSaving(false);
+        return;
       } finally {
         setSaving(false);
       }
@@ -377,6 +386,7 @@ export default function Moment1InputForm({
                 onChange={(e) => {
                   setName(e.target.value);
                   if (nameError) setNameError('');
+                  if (saveError) setSaveError(false);
                 }}
                 placeholder="e.g. Sarah Mitchell"
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
@@ -632,8 +642,11 @@ export default function Moment1InputForm({
         </div>
         {/* end form container */}
 
-        {/* Add another person / Save changes */}
+        {/* Save actions */}
         <div className="mt-6">
+          {saveError && (
+            <p className="text-red-600 text-sm mb-3">That didn&rsquo;t save — please try again.</p>
+          )}
           {isEditing ? (
             <>
               <button
@@ -666,17 +679,16 @@ export default function Moment1InputForm({
                 disabled={saving}
                 className="w-full py-3 text-accent font-medium border-2 border-dashed border-accent/30 rounded-lg hover:bg-accent/5 transition-colors disabled:opacity-50 mb-4"
               >
-                {saving ? 'Saving…' : '+ Add another person'}
+                {saving ? 'Saving…' : 'Save & add another'}
               </button>
 
-              {/* Done adding people */}
               <button
                 type="button"
                 onClick={handleDone}
                 disabled={saving}
                 className="w-full py-3 text-gray-600 font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
               >
-                Done adding people →
+                Save & move on →
               </button>
             </>
           )}
