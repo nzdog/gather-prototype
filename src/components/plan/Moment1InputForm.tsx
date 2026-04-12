@@ -471,6 +471,7 @@ export default function Moment1InputForm({
                   value={partnerName}
                   onChange={(e) => setPartnerName(e.target.value)}
                   placeholder="Partner's name"
+                  autoFocus
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                 />
                 <div>
@@ -539,6 +540,7 @@ export default function Moment1InputForm({
                       const val = parseInt(e.target.value, 10);
                       if (!isNaN(val) && val >= 1 && val <= 20) setChildCount(val);
                     }}
+                    autoFocus
                     className="w-20 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                   />
                 </div>
@@ -553,6 +555,7 @@ export default function Moment1InputForm({
                   value={guest.name}
                   onChange={(e) => updateGuest(i, 'name', e.target.value)}
                   placeholder="Guest's name"
+                  autoFocus={i === guests.length - 1}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                 />
                 <div>
