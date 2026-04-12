@@ -70,7 +70,6 @@ export default function Moment1InputForm({
 
   const [showChildren, setShowChildren] = useState(false);
   const [childCount, setChildCount] = useState(1);
-  const [childCountConfirmed, setChildCountConfirmed] = useState(false);
 
   const [guests, setGuests] = useState<GuestForm[]>([]);
   const [guestErrors, setGuestErrors] = useState<{ email?: string; phone?: string }[]>([]);
@@ -120,11 +119,9 @@ export default function Moment1InputForm({
     if (editingHousehold.childCount > 0) {
       setShowChildren(true);
       setChildCount(editingHousehold.childCount);
-      setChildCountConfirmed(true);
     } else {
       setShowChildren(false);
       setChildCount(1);
-      setChildCountConfirmed(false);
     }
 
     if (editingHousehold.guests.length > 0) {
@@ -187,7 +184,6 @@ export default function Moment1InputForm({
     setPartnerPhoneError('');
     setShowChildren(false);
     setChildCount(1);
-    setChildCountConfirmed(false);
     setGuests([]);
     setGuestErrors([]);
     nameInputRef.current?.focus();
@@ -252,7 +248,7 @@ export default function Moment1InputForm({
       };
     }
 
-    if (childCountConfirmed && childCount > 0) {
+    if (showChildren && childCount > 0) {
       payload.childCount = childCount;
     }
 
@@ -439,7 +435,7 @@ export default function Moment1InputForm({
                   👫 Add Partner
                 </button>
               )}
-              {!showChildren && !childCountConfirmed && (
+              {!showChildren && (
                 <button
                   type="button"
                   onClick={() => setShowChildren(true)}
@@ -517,10 +513,23 @@ export default function Moment1InputForm({
             )}
 
             {/* Children input */}
-            {showChildren && !childCountConfirmed && (
+            {showChildren && (
               <div className="border-l-4 border-blue-300 pl-4 py-3 mb-4 bg-gray-50 rounded-r-md">
-                <p className="text-sm text-gray-600 mb-2">How many children?</p>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium text-gray-600">Children</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowChildren(false);
+                      setChildCount(1);
+                    }}
+                    className="text-sm text-red-500 hover:text-red-700"
+                  >
+                    × remove
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600">How many?</label>
                   <input
                     type="number"
                     min={1}
@@ -532,43 +541,7 @@ export default function Moment1InputForm({
                     }}
                     className="w-20 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setChildCountConfirmed(true)}
-                    className="px-3 py-2 text-sm bg-accent text-white rounded-md hover:bg-accent-dark transition-colors"
-                  >
-                    Add
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowChildren(false);
-                      setChildCount(1);
-                    }}
-                    className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
-                  >
-                    Cancel
-                  </button>
                 </div>
-              </div>
-            )}
-
-            {childCountConfirmed && (
-              <div className="border-l-4 border-blue-300 pl-4 py-3 mb-4 bg-gray-50 rounded-r-md flex items-center justify-between">
-                <p className="text-sm text-gray-600">
-                  {childCount} {childCount === 1 ? 'child' : 'children'}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setChildCountConfirmed(false);
-                    setShowChildren(false);
-                    setChildCount(1);
-                  }}
-                  className="text-sm text-red-500 hover:text-red-700"
-                >
-                  × remove
-                </button>
               </div>
             )}
 
