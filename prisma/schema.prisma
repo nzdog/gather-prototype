@@ -135,7 +135,6 @@ model Person {
   cohostedEvents   Event[]       @relation("EventCoHost")
   hostedEvents     Event[]       @relation("EventHost")
   hostMemory       HostMemory?
-  households       Household[]
   inviteEvents     InviteEvent[]
   user             User?         @relation(fields: [userId], references: [id])
   eventMemberships PersonEvent[]
@@ -160,8 +159,10 @@ model PersonEvent {
   rsvpStatus           RsvpStatus       @default(PENDING)
   rsvpRespondedAt      DateTime?
   rsvpFollowupSentAt   DateTime?
-  householdMember      HouseholdMember?
-  event                Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  householdId           String?
+  household             Household?       @relation(fields: [householdId], references: [id])
+  householdRole         HouseholdRole?
+  event                 Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
   person               Person           @relation(fields: [personId], references: [id], onDelete: Cascade)
   proxy                PersonEvent?     @relation("ProxyRelation", fields: [proxyPersonEventId], references: [id])
   householdMembers     PersonEvent[]    @relation("ProxyRelation")
@@ -173,29 +174,13 @@ model PersonEvent {
 }
 
 model Household {
-  id            String            @id @default(cuid())
-  eventId       String
-  proxyPersonId String
-  name          String?
-  createdAt     DateTime          @default(now())
-  event         Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  proxyPerson   Person            @relation(fields: [proxyPersonId], references: [id])
-  members       HouseholdMember[]
-
-  @@unique([eventId, proxyPersonId])
-}
-
-model HouseholdMember {
-  id               String       @id @default(cuid())
-  householdId      String
-  name             String
-  claimedAt        DateTime?
-  personEventId    String?      @unique
-  proxyNudgeCount  Int          @default(0)
-  lastProxyNudgeAt DateTime?
-  escalatedAt      DateTime?
-  household        Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
-  personEvent      PersonEvent? @relation(fields: [personEventId], references: [id])
+  id         String        @id @default(cuid())
+  eventId    String
+  event      Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  members    PersonEvent[]
+  childCount Int           @default(0)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
 }
 
 model Item {
@@ -613,6 +598,12 @@ enum PersonRole {
   HOST
   COORDINATOR
   PARTICIPANT
+}
+
+enum HouseholdRole {
+  PRIMARY_CONTACT
+  PARTNER
+  GUEST
 }
 
 enum ReachabilityTier {

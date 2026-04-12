@@ -8,38 +8,22 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     const { id } = await context.params;
     const eventId = id;
 
-    // Require HOST, COHOST, or COORDINATOR role
     const auth = await requireEventRole(eventId, ['HOST', 'COHOST', 'COORDINATOR']);
     if (auth instanceof NextResponse) return auth;
 
     const households = await prisma.household.findMany({
       where: { eventId },
       include: {
-        proxyPerson: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phoneNumber: true,
-          },
-        },
         members: {
           include: {
-            personEvent: {
-              include: {
-                person: {
-                  select: {
-                    id: true,
-                    name: true,
-                    email: true,
-                    phoneNumber: true,
-                  },
-                },
+            person: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phoneNumber: true,
               },
             },
-          },
-          orderBy: {
-            name: 'asc',
           },
         },
       },
@@ -55,82 +39,24 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
   }
 }
 
-// POST /api/events/[id]/households - Host creates household with proxy
+// POST /api/events/[id]/households - Create a household for this event
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     const eventId = id;
 
-    // Only HOST and COHOST can create households
     const auth = await requireEventRole(eventId, ['HOST', 'COHOST']);
     if (auth instanceof NextResponse) return auth;
 
     const body = await request.json();
-    const { proxyPersonId, name } = body;
+    const { childCount } = body;
 
-    if (!proxyPersonId) {
-      return NextResponse.json({ error: 'proxyPersonId is required' }, { status: 400 });
-    }
-
-    // Verify the proxy person exists
-    const proxyPerson = await prisma.person.findUnique({
-      where: { id: proxyPersonId },
-    });
-
-    if (!proxyPerson) {
-      return NextResponse.json({ error: 'Proxy person not found' }, { status: 404 });
-    }
-
-    // Verify the proxy person is part of this event
-    const proxyPersonEvent = await prisma.personEvent.findUnique({
-      where: {
-        personId_eventId: {
-          personId: proxyPersonId,
-          eventId,
-        },
-      },
-    });
-
-    if (!proxyPersonEvent) {
-      return NextResponse.json(
-        { error: 'Proxy person is not part of this event' },
-        { status: 400 }
-      );
-    }
-
-    // Check if a household already exists for this proxy person
-    const existingHousehold = await prisma.household.findUnique({
-      where: {
-        eventId_proxyPersonId: {
-          eventId,
-          proxyPersonId,
-        },
-      },
-    });
-
-    if (existingHousehold) {
-      return NextResponse.json(
-        { error: 'Household already exists for this proxy person' },
-        { status: 400 }
-      );
-    }
-
-    // Create household
     const household = await prisma.household.create({
       data: {
         eventId,
-        proxyPersonId,
-        name: name || null,
+        childCount: childCount ?? 0,
       },
       include: {
-        proxyPerson: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phoneNumber: true,
-          },
-        },
         members: true,
       },
     });

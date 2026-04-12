@@ -14,9 +14,7 @@ export interface NudgeRunResult {
     skipped: { reason: string; count: number }[];
   };
   proxyCandidates?: {
-    eligible24h: number;
-    eligible48h: number;
-    eligibleEscalation: number;
+    eligible: number;
     skipped: { reason: string; count: number }[];
   };
   results: {
@@ -35,7 +33,6 @@ export interface NudgeRunResult {
     sent: number;
     succeeded: number;
     failed: number;
-    escalated: number;
     deferred: number;
   };
   errors: string[];
@@ -97,16 +94,11 @@ export async function runNudgeScheduler(): Promise<NudgeRunResult> {
 
     const proxySucceeded = proxyProcessResult.sent.filter((r) => r.success).length;
     const proxyFailed = proxyProcessResult.sent.filter((r) => !r.success).length;
-    const escalated = proxyProcessResult.escalated.filter((r) => r.success).length;
 
     // Collect proxy errors
     proxyProcessResult.sent
       .filter((r) => !r.success)
-      .forEach((r) => errors.push(`Proxy ${r.proxyName}: ${r.error}`));
-
-    proxyProcessResult.escalated
-      .filter((r) => !r.success)
-      .forEach((r) => errors.push(`Escalation ${r.proxyName}: ${r.error}`));
+      .forEach((r) => errors.push(`Proxy ${r.primaryContactName}: ${r.error}`));
 
     return {
       timestamp,
@@ -118,9 +110,7 @@ export async function runNudgeScheduler(): Promise<NudgeRunResult> {
         skipped: candidates.skipped,
       },
       proxyCandidates: {
-        eligible24h: proxyCandidates.eligible24h.length,
-        eligible48h: proxyCandidates.eligible48h.length,
-        eligibleEscalation: proxyCandidates.eligibleEscalation.length,
+        eligible: proxyCandidates.eligible.length,
         skipped: proxyCandidates.skipped,
       },
       results: {
@@ -139,7 +129,6 @@ export async function runNudgeScheduler(): Promise<NudgeRunResult> {
         sent: proxyProcessResult.sent.length,
         succeeded: proxySucceeded,
         failed: proxyFailed,
-        escalated,
         deferred: proxyProcessResult.deferred,
       },
       errors,

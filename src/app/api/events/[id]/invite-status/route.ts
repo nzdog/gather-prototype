@@ -239,7 +239,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
       }
     });
 
-    // Household proxy nudge summary
+    // Household summary
     const households = await prisma.household.findMany({
       where: { eventId },
       include: {
@@ -249,12 +249,8 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 
     const proxyNudgeSummary = {
       totalHouseholds: households.length,
-      householdsWithUnclaimed: households.filter((h) => h.members.some((m) => !m.claimedAt)).length,
-      householdsEscalated: households.filter((h) => h.members.some((m) => m.escalatedAt)).length,
-      nudgesSent: households.reduce((sum, h) => {
-        const maxCount = Math.max(...h.members.map((m) => m.proxyNudgeCount), 0);
-        return sum + maxCount;
-      }, 0),
+      totalMembers: households.reduce((sum, h) => sum + h.members.length, 0),
+      totalChildren: households.reduce((sum, h) => sum + h.childCount, 0),
     };
 
     // RSVP breakdown

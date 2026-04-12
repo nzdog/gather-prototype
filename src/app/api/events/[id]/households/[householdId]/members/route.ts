@@ -1,58 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireEventRole } from '@/lib/auth/guards';
 
-// POST /api/events/[id]/households/[householdId]/members - Proxy adds member names
+// POST /api/events/[id]/households/[householdId]/members
+// This route was built for the old HouseholdMember model.
+// The Moment 1 redesign replaced HouseholdMember with direct PersonEvent
+// membership via householdId + householdRole. This endpoint needs redesign
+// for the new schema in a future ticket.
 export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ id: string; householdId: string }> }
+  _request: NextRequest,
+  _context: { params: Promise<{ id: string; householdId: string }> }
 ) {
-  try {
-    const { id, householdId } = await context.params;
-    const eventId = id;
-
-    // Require HOST, COHOST, or COORDINATOR role
-    // In production, you might want to verify the user is the proxy person
-    const auth = await requireEventRole(eventId, ['HOST', 'COHOST', 'COORDINATOR']);
-    if (auth instanceof NextResponse) return auth;
-
-    const body = await request.json();
-    const { name } = body;
-
-    if (!name) {
-      return NextResponse.json({ error: 'name is required' }, { status: 400 });
-    }
-
-    // Verify household exists and belongs to this event
-    const household = await prisma.household.findUnique({
-      where: { id: householdId },
-      include: {
-        members: true,
-      },
-    });
-
-    if (!household) {
-      return NextResponse.json({ error: 'Household not found' }, { status: 404 });
-    }
-
-    if (household.eventId !== eventId) {
-      return NextResponse.json(
-        { error: 'Household does not belong to this event' },
-        { status: 400 }
-      );
-    }
-
-    // Create household member
-    const member = await prisma.householdMember.create({
-      data: {
-        householdId,
-        name,
-      },
-    });
-
-    return NextResponse.json({ member }, { status: 201 });
-  } catch (error: any) {
-    console.error('Error adding household member:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  return NextResponse.json(
+    { error: 'Household members endpoint is being redesigned for the new household model' },
+    { status: 501 }
+  );
 }
