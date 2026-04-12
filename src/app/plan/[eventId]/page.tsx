@@ -56,6 +56,7 @@ import SetupChecklistBanner from '@/components/plan/SetupChecklistBanner';
 import SetupOpeningScreen from '@/components/plan/SetupOpeningScreen';
 import Moment1InputForm, { Moment1PersonInput } from '@/components/plan/Moment1InputForm';
 import HouseholdCardList, { SavedHousehold } from '@/components/plan/HouseholdCardList';
+import Moment1Summary from '@/components/plan/Moment1Summary';
 import { useEventSetupProgress } from '@/hooks/useEventSetupProgress';
 
 interface Event {
@@ -249,6 +250,7 @@ export default function PlanEditorPage() {
   const [isPostPayment, setIsPostPayment] = useState(false);
   const [showSetup, setShowSetup] = useState(searchParams.get('setup') === 'true');
   const [showMoment1, setShowMoment1] = useState(false);
+  const [moment1Phase, setMoment1Phase] = useState<'input' | 'summary'>('input');
   const [households, setHouseholds] = useState<SavedHousehold[]>([]);
   const [editingHousehold, setEditingHousehold] = useState<SavedHousehold | null>(null);
   const moment1FormRef = useRef<HTMLDivElement>(null);
@@ -1513,6 +1515,25 @@ export default function PlanEditorPage() {
   }
 
   if (showMoment1 && event) {
+    // Summary phase
+    if (moment1Phase === 'summary') {
+      return (
+        <Moment1Summary
+          eventId={event.id}
+          eventName={event.name}
+          households={households}
+          onContinue={() => {
+            setShowMoment1(false);
+            setMoment1Phase('input');
+          }}
+          onBackToEditing={() => {
+            setMoment1Phase('input');
+          }}
+        />
+      );
+    }
+
+    // Input phase
     const handleAddHousehold = async (person: Moment1PersonInput) => {
       const res = await fetch(`/api/events/${event.id}/households`, {
         method: 'POST',
@@ -1583,7 +1604,7 @@ export default function PlanEditorPage() {
                 eventId={event.id}
                 eventName={event.name}
                 onComplete={() => {
-                  setShowMoment1(false);
+                  setMoment1Phase('summary');
                   setEditingHousehold(null);
                 }}
                 onAddPerson={handleAddHousehold}
