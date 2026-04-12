@@ -53,6 +53,7 @@ import { useToast } from '@/contexts/ToastContext';
 import { Conflict, ConflictType } from '@prisma/client';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 import SetupChecklistBanner from '@/components/plan/SetupChecklistBanner';
+import SetupOpeningScreen from '@/components/plan/SetupOpeningScreen';
 import { useEventSetupProgress } from '@/hooks/useEventSetupProgress';
 
 interface Event {
@@ -244,6 +245,7 @@ export default function PlanEditorPage() {
   const [inviteHighlightSeen, setInviteHighlightSeen] = useState(false);
   const [checklistStepContext, setChecklistStepContext] = useState<string | null>(null);
   const [isPostPayment, setIsPostPayment] = useState(false);
+  const [showSetup, setShowSetup] = useState(searchParams.get('setup') === 'true');
   const [wrapUpLoading, setWrapUpLoading] = useState(false);
   const [wrapUpResult, setWrapUpResult] = useState<{
     success: boolean;
@@ -415,15 +417,12 @@ export default function PlanEditorPage() {
     }
   }, [event?.clonedFromId, searchParams, teams.length, items.length]);
 
-  // Auto-open Edit Event wizard after post-payment redirect
+  // Clean ?setup=true from URL on mount (opening screen state is already captured)
   useEffect(() => {
     if (searchParams.get('setup') === 'true') {
-      setChecklistStepContext('Step 1 of 3: Event Basics');
-      setIsPostPayment(true);
-      setEditEventModalOpen(true);
       router.replace(`/plan/${eventId}`, { scroll: false });
     }
-  }, [searchParams, eventId]);
+  }, [searchParams, eventId, router]);
 
   // Load checklist dismissed state from localStorage
   useEffect(() => {
@@ -1454,6 +1453,10 @@ export default function PlanEditorPage() {
         </div>
       </div>
     );
+  }
+
+  if (showSetup) {
+    return <SetupOpeningScreen onStart={() => setShowSetup(false)} />;
   }
 
   return (
