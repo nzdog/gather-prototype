@@ -23,7 +23,7 @@ export default function MomentArc({ currentMoment, completedMoments = [] }: Mome
           <div
             key={moment.number}
             className={`flex items-center gap-2 transition-opacity ${
-              isCurrent || isCompleted ? 'opacity-100' : 'opacity-40'
+              isCurrent || isCompleted ? 'opacity-100' : 'opacity-70'
             }`}
           >
             <span
@@ -43,7 +43,7 @@ export default function MomentArc({ currentMoment, completedMoments = [] }: Mome
                   ? 'text-green-700 font-medium'
                   : isCurrent
                     ? 'text-gray-900 font-medium'
-                    : 'text-gray-400'
+                    : 'text-gray-500'
               }`}
             >
               {moment.label}
