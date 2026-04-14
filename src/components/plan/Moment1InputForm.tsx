@@ -375,8 +375,8 @@ export default function Moment1InputForm({
   };
 
   const addGuest = () => {
-    setGuests((prev) => [...prev, emptyGuest()]);
-    setGuestErrors((prev) => [...prev, {}]);
+    setGuests((prev) => [emptyGuest(), ...prev]);
+    setGuestErrors((prev) => [{}, ...prev]);
   };
 
   const removeGuest = (index: number) => {
@@ -483,8 +483,8 @@ export default function Moment1InputForm({
               <button
                 type="button"
                 onClick={() => {
-                  setHelpers((prev) => [...prev, emptyGuest()]);
-                  setHelperErrors((prev) => [...prev, {}]);
+                  setHelpers((prev) => [emptyGuest(), ...prev]);
+                  setHelperErrors((prev) => [{}, ...prev]);
                 }}
                 className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
@@ -593,7 +593,7 @@ export default function Moment1InputForm({
                       }
                     }}
                     placeholder="Kid's name"
-                    autoFocus={i === helpers.length - 1}
+                    autoFocus={i === 0}
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
                       helperErrors[i]?.name ? 'border-red-400' : 'border-gray-300'
                     }`}
@@ -705,7 +705,7 @@ export default function Moment1InputForm({
                   value={guest.name}
                   onChange={(e) => updateGuest(i, 'name', e.target.value)}
                   placeholder="Guest's name"
-                  autoFocus={i === guests.length - 1}
+                  autoFocus={i === 0}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                 />
                 <div>
