@@ -91,6 +91,11 @@ export default function Moment1InputForm({
   const [guests, setGuests] = useState<GuestForm[]>([]);
   const [guestErrors, setGuestErrors] = useState<{ email?: string; phone?: string }[]>([]);
 
+  // Unified ordering: newest-first across all named member types
+  const [memberOrder, setMemberOrder] = useState<
+    Array<{ type: 'partner' | 'helper' | 'guest'; id: string }>
+  >([]);
+
   // Progress — use external count if provided, fallback to internal
   const [internalPeopleAdded, setInternalPeopleAdded] = useState(0);
   const totalPeopleAdded = totalPeopleCount ?? internalPeopleAdded;
@@ -119,11 +124,14 @@ export default function Moment1InputForm({
     setEmailError('');
     setPhoneError('');
 
+    const editOrder: Array<{ type: 'partner' | 'helper' | 'guest'; id: string }> = [];
+
     if (editingHousehold.partner) {
       setShowPartner(true);
       setPartnerName(editingHousehold.partner.name);
       setPartnerEmail(editingHousehold.partner.email || '');
       setPartnerPhone(editingHousehold.partner.phone || '');
+      editOrder.push({ type: 'partner', id: 'partner' });
     } else {
       setShowPartner(false);
       setPartnerName('');
@@ -134,15 +142,15 @@ export default function Moment1InputForm({
     setPartnerPhoneError('');
 
     if (editingHousehold.helpers.length > 0) {
-      setHelpers(
-        editingHousehold.helpers.map((h) => ({
-          id: `f-${++formIdCounter}`,
-          name: h.name,
-          email: h.email || '',
-          phone: h.phone || '',
-        }))
-      );
+      const loadedHelpers = editingHousehold.helpers.map((h) => ({
+        id: `f-${++formIdCounter}`,
+        name: h.name,
+        email: h.email || '',
+        phone: h.phone || '',
+      }));
+      setHelpers(loadedHelpers);
       setHelperErrors(editingHousehold.helpers.map(() => ({})));
+      loadedHelpers.forEach((h) => editOrder.push({ type: 'helper', id: h.id }));
     } else {
       setHelpers([]);
       setHelperErrors([]);
@@ -157,19 +165,21 @@ export default function Moment1InputForm({
     }
 
     if (editingHousehold.guests.length > 0) {
-      setGuests(
-        editingHousehold.guests.map((g) => ({
-          id: `f-${++formIdCounter}`,
-          name: g.name,
-          email: g.email || '',
-          phone: g.phone || '',
-        }))
-      );
+      const loadedGuests = editingHousehold.guests.map((g) => ({
+        id: `f-${++formIdCounter}`,
+        name: g.name,
+        email: g.email || '',
+        phone: g.phone || '',
+      }));
+      setGuests(loadedGuests);
       setGuestErrors(editingHousehold.guests.map(() => ({})));
+      loadedGuests.forEach((g) => editOrder.push({ type: 'guest', id: g.id }));
     } else {
       setGuests([]);
       setGuestErrors([]);
     }
+
+    setMemberOrder(editOrder);
 
     nameInputRef.current?.focus();
   }, [editingHousehold]);
@@ -221,6 +231,7 @@ export default function Moment1InputForm({
     setLittleCount(1);
     setGuests([]);
     setGuestErrors([]);
+    setMemberOrder([]);
     nameInputRef.current?.focus();
   }, []);
 
@@ -384,13 +395,17 @@ export default function Moment1InputForm({
   };
 
   const addGuest = () => {
-    setGuests((prev) => [emptyGuest(), ...prev]);
+    const g = emptyGuest();
+    setGuests((prev) => [g, ...prev]);
     setGuestErrors((prev) => [{}, ...prev]);
+    setMemberOrder((prev) => [{ type: 'guest' as const, id: g.id }, ...prev]);
   };
 
   const removeGuest = (index: number) => {
+    const removed = guests[index];
     setGuests((prev) => prev.filter((_, i) => i !== index));
     setGuestErrors((prev) => prev.filter((_, i) => i !== index));
+    if (removed) setMemberOrder((prev) => prev.filter((m) => m.id !== removed.id));
   };
 
   const updateGuest = (index: number, field: keyof GuestForm, value: string) => {
@@ -483,7 +498,13 @@ export default function Moment1InputForm({
               {!showPartner && (
                 <button
                   type="button"
-                  onClick={() => setShowPartner(true)}
+                  onClick={() => {
+                    setShowPartner(true);
+                    setMemberOrder((prev) => [
+                      { type: 'partner' as const, id: 'partner' },
+                      ...prev,
+                    ]);
+                  }}
                   className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   👫 Add Partner
@@ -492,8 +513,10 @@ export default function Moment1InputForm({
               <button
                 type="button"
                 onClick={() => {
-                  setHelpers((prev) => [emptyGuest(), ...prev]);
+                  const h = emptyGuest();
+                  setHelpers((prev) => [h, ...prev]);
                   setHelperErrors((prev) => [{}, ...prev]);
+                  setMemberOrder((prev) => [{ type: 'helper' as const, id: h.id }, ...prev]);
                 }}
                 className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
@@ -517,162 +540,247 @@ export default function Moment1InputForm({
               </button>
             </div>
 
-            {/* Partner sub-form */}
-            {showPartner && (
-              <SubForm
-                title="Partner"
-                onRemove={() => {
-                  setShowPartner(false);
-                  setPartnerName('');
-                  setPartnerEmail('');
-                  setPartnerPhone('');
-                  setPartnerEmailError('');
-                  setPartnerPhoneError('');
-                }}
-              >
-                <input
-                  type="text"
-                  value={partnerName}
-                  onChange={(e) => setPartnerName(e.target.value)}
-                  placeholder="Partner's name"
-                  autoFocus
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
-                />
-                <div>
-                  <input
-                    type="email"
-                    value={partnerEmail}
-                    onChange={(e) => {
-                      setPartnerEmail(e.target.value);
-                      if (partnerEmailError) setPartnerEmailError('');
+            {/* Members list — ordered by memberOrder (newest first) */}
+            {memberOrder.map((entry, orderIdx) => {
+              if (entry.type === 'partner' && showPartner) {
+                return (
+                  <SubForm
+                    key="partner"
+                    title="Partner"
+                    onRemove={() => {
+                      setShowPartner(false);
+                      setPartnerName('');
+                      setPartnerEmail('');
+                      setPartnerPhone('');
+                      setPartnerEmailError('');
+                      setPartnerPhoneError('');
+                      setMemberOrder((prev) => prev.filter((m) => m.id !== 'partner'));
                     }}
-                    onBlur={() => setPartnerEmailError(validateEmail(partnerEmail))}
-                    placeholder="Email"
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
-                      partnerEmailError ? 'border-red-400' : 'border-gray-300'
-                    }`}
-                  />
-                  {partnerEmailError && (
-                    <p className="text-sm text-red-500 mt-1">{partnerEmailError}</p>
-                  )}
-                </div>
-                <div>
-                  <input
-                    type="tel"
-                    value={partnerPhone}
-                    onChange={(e) => {
-                      setPartnerPhone(e.target.value);
-                      if (partnerPhoneError) setPartnerPhoneError('');
-                    }}
-                    onBlur={() => setPartnerPhoneError(validatePhone(partnerPhone))}
-                    placeholder="Phone"
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
-                      partnerPhoneError ? 'border-red-400' : 'border-gray-300'
-                    }`}
-                  />
-                  {partnerPhoneError && (
-                    <p className="text-sm text-red-500 mt-1">{partnerPhoneError}</p>
-                  )}
-                </div>
-              </SubForm>
-            )}
+                  >
+                    <input
+                      type="text"
+                      value={partnerName}
+                      onChange={(e) => setPartnerName(e.target.value)}
+                      placeholder="Partner's name"
+                      autoFocus={orderIdx === 0}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                    />
+                    <div>
+                      <input
+                        type="email"
+                        value={partnerEmail}
+                        onChange={(e) => {
+                          setPartnerEmail(e.target.value);
+                          if (partnerEmailError) setPartnerEmailError('');
+                        }}
+                        onBlur={() => setPartnerEmailError(validateEmail(partnerEmail))}
+                        placeholder="Email"
+                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
+                          partnerEmailError ? 'border-red-400' : 'border-gray-300'
+                        }`}
+                      />
+                      {partnerEmailError && (
+                        <p className="text-sm text-red-500 mt-1">{partnerEmailError}</p>
+                      )}
+                    </div>
+                    <div>
+                      <input
+                        type="tel"
+                        value={partnerPhone}
+                        onChange={(e) => {
+                          setPartnerPhone(e.target.value);
+                          if (partnerPhoneError) setPartnerPhoneError('');
+                        }}
+                        onBlur={() => setPartnerPhoneError(validatePhone(partnerPhone))}
+                        placeholder="Phone"
+                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
+                          partnerPhoneError ? 'border-red-400' : 'border-gray-300'
+                        }`}
+                      />
+                      {partnerPhoneError && (
+                        <p className="text-sm text-red-500 mt-1">{partnerPhoneError}</p>
+                      )}
+                    </div>
+                  </SubForm>
+                );
+              }
 
-            {/* Helper sub-forms (kids with jobs) */}
-            {helpers.map((helper, i) => (
-              <SubForm
-                key={helper.id}
-                title={`Kid with a job ${helpers.length > 1 ? i + 1 : ''}`}
-                onRemove={() => {
-                  setHelpers((prev) => prev.filter((_, j) => j !== i));
-                  setHelperErrors((prev) => prev.filter((_, j) => j !== i));
-                }}
-              >
-                <div>
-                  <input
-                    type="text"
-                    value={helper.name}
-                    onChange={(e) => {
-                      setHelpers((prev) =>
-                        prev.map((h, j) => (j === i ? { ...h, name: e.target.value } : h))
-                      );
-                      if (helperErrors[i]?.name) {
-                        setHelperErrors((prev) =>
-                          prev.map((err, j) => (j === i ? { ...err, name: undefined } : err))
-                        );
-                      }
+              if (entry.type === 'helper') {
+                const i = helpers.findIndex((h) => h.id === entry.id);
+                if (i === -1) return null;
+                const helper = helpers[i];
+                return (
+                  <SubForm
+                    key={helper.id}
+                    title={`Kid with a job${helpers.length > 1 ? ` ${i + 1}` : ''}`}
+                    onRemove={() => {
+                      setHelpers((prev) => prev.filter((_, j) => j !== i));
+                      setHelperErrors((prev) => prev.filter((_, j) => j !== i));
+                      setMemberOrder((prev) => prev.filter((m) => m.id !== helper.id));
                     }}
-                    placeholder="Kid's name"
-                    autoFocus={i === 0}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
-                      helperErrors[i]?.name ? 'border-red-400' : 'border-gray-300'
-                    }`}
-                  />
-                  {helperErrors[i]?.name && (
-                    <p className="text-sm text-red-500 mt-1">{helperErrors[i].name}</p>
-                  )}
-                </div>
-                <div>
-                  <input
-                    type="email"
-                    value={helper.email}
-                    onChange={(e) => {
-                      setHelpers((prev) =>
-                        prev.map((h, j) => (j === i ? { ...h, email: e.target.value } : h))
-                      );
-                      if (helperErrors[i]?.email) {
-                        setHelperErrors((prev) =>
-                          prev.map((err, j) => (j === i ? { ...err, email: undefined } : err))
-                        );
-                      }
-                    }}
-                    onBlur={() => {
-                      const err = validateEmail(helper.email);
-                      setHelperErrors((prev) =>
-                        prev.map((e, j) => (j === i ? { ...e, email: err || undefined } : e))
-                      );
-                    }}
-                    placeholder="Email"
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
-                      helperErrors[i]?.email ? 'border-red-400' : 'border-gray-300'
-                    }`}
-                  />
-                  {helperErrors[i]?.email && (
-                    <p className="text-sm text-red-500 mt-1">{helperErrors[i].email}</p>
-                  )}
-                </div>
-                <div>
-                  <input
-                    type="tel"
-                    value={helper.phone}
-                    onChange={(e) => {
-                      setHelpers((prev) =>
-                        prev.map((h, j) => (j === i ? { ...h, phone: e.target.value } : h))
-                      );
-                      if (helperErrors[i]?.phone) {
-                        setHelperErrors((prev) =>
-                          prev.map((err, j) => (j === i ? { ...err, phone: undefined } : err))
-                        );
-                      }
-                    }}
-                    onBlur={() => {
-                      const err = validatePhone(helper.phone);
-                      setHelperErrors((prev) =>
-                        prev.map((e, j) => (j === i ? { ...e, phone: err || undefined } : e))
-                      );
-                    }}
-                    placeholder="Phone"
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
-                      helperErrors[i]?.phone ? 'border-red-400' : 'border-gray-300'
-                    }`}
-                  />
-                  {helperErrors[i]?.phone && (
-                    <p className="text-sm text-red-500 mt-1">{helperErrors[i].phone}</p>
-                  )}
-                </div>
-              </SubForm>
-            ))}
+                  >
+                    <div>
+                      <input
+                        type="text"
+                        value={helper.name}
+                        onChange={(e) => {
+                          setHelpers((prev) =>
+                            prev.map((h, j) => (j === i ? { ...h, name: e.target.value } : h))
+                          );
+                          if (helperErrors[i]?.name) {
+                            setHelperErrors((prev) =>
+                              prev.map((err, j) => (j === i ? { ...err, name: undefined } : err))
+                            );
+                          }
+                        }}
+                        placeholder="Kid's name"
+                        autoFocus={orderIdx === 0}
+                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
+                          helperErrors[i]?.name ? 'border-red-400' : 'border-gray-300'
+                        }`}
+                      />
+                      {helperErrors[i]?.name && (
+                        <p className="text-sm text-red-500 mt-1">{helperErrors[i].name}</p>
+                      )}
+                    </div>
+                    <div>
+                      <input
+                        type="email"
+                        value={helper.email}
+                        onChange={(e) => {
+                          setHelpers((prev) =>
+                            prev.map((h, j) => (j === i ? { ...h, email: e.target.value } : h))
+                          );
+                          if (helperErrors[i]?.email) {
+                            setHelperErrors((prev) =>
+                              prev.map((err, j) => (j === i ? { ...err, email: undefined } : err))
+                            );
+                          }
+                        }}
+                        onBlur={() => {
+                          const err = validateEmail(helper.email);
+                          setHelperErrors((prev) =>
+                            prev.map((e, j) => (j === i ? { ...e, email: err || undefined } : e))
+                          );
+                        }}
+                        placeholder="Email"
+                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
+                          helperErrors[i]?.email ? 'border-red-400' : 'border-gray-300'
+                        }`}
+                      />
+                      {helperErrors[i]?.email && (
+                        <p className="text-sm text-red-500 mt-1">{helperErrors[i].email}</p>
+                      )}
+                    </div>
+                    <div>
+                      <input
+                        type="tel"
+                        value={helper.phone}
+                        onChange={(e) => {
+                          setHelpers((prev) =>
+                            prev.map((h, j) => (j === i ? { ...h, phone: e.target.value } : h))
+                          );
+                          if (helperErrors[i]?.phone) {
+                            setHelperErrors((prev) =>
+                              prev.map((err, j) => (j === i ? { ...err, phone: undefined } : err))
+                            );
+                          }
+                        }}
+                        onBlur={() => {
+                          const err = validatePhone(helper.phone);
+                          setHelperErrors((prev) =>
+                            prev.map((e, j) => (j === i ? { ...e, phone: err || undefined } : e))
+                          );
+                        }}
+                        placeholder="Phone"
+                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
+                          helperErrors[i]?.phone ? 'border-red-400' : 'border-gray-300'
+                        }`}
+                      />
+                      {helperErrors[i]?.phone && (
+                        <p className="text-sm text-red-500 mt-1">{helperErrors[i].phone}</p>
+                      )}
+                    </div>
+                  </SubForm>
+                );
+              }
 
-            {/* Kids without jobs input */}
+              if (entry.type === 'guest') {
+                const i = guests.findIndex((g) => g.id === entry.id);
+                if (i === -1) return null;
+                const guest = guests[i];
+                return (
+                  <SubForm key={guest.id} title={`Guest ${i + 1}`} onRemove={() => removeGuest(i)}>
+                    <input
+                      type="text"
+                      value={guest.name}
+                      onChange={(e) => updateGuest(i, 'name', e.target.value)}
+                      placeholder="Guest's name"
+                      autoFocus={orderIdx === 0}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                    />
+                    <div>
+                      <input
+                        type="email"
+                        value={guest.email}
+                        onChange={(e) => {
+                          updateGuest(i, 'email', e.target.value);
+                          if (guestErrors[i]?.email) {
+                            setGuestErrors((prev) =>
+                              prev.map((err, j) => (j === i ? { ...err, email: undefined } : err))
+                            );
+                          }
+                        }}
+                        onBlur={() => {
+                          const err = validateEmail(guest.email);
+                          setGuestErrors((prev) =>
+                            prev.map((e, j) => (j === i ? { ...e, email: err || undefined } : e))
+                          );
+                        }}
+                        placeholder="Email"
+                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
+                          guestErrors[i]?.email ? 'border-red-400' : 'border-gray-300'
+                        }`}
+                      />
+                      {guestErrors[i]?.email && (
+                        <p className="text-sm text-red-500 mt-1">{guestErrors[i].email}</p>
+                      )}
+                    </div>
+                    <div>
+                      <input
+                        type="tel"
+                        value={guest.phone}
+                        onChange={(e) => {
+                          updateGuest(i, 'phone', e.target.value);
+                          if (guestErrors[i]?.phone) {
+                            setGuestErrors((prev) =>
+                              prev.map((err, j) => (j === i ? { ...err, phone: undefined } : err))
+                            );
+                          }
+                        }}
+                        onBlur={() => {
+                          const err = validatePhone(guest.phone);
+                          setGuestErrors((prev) =>
+                            prev.map((e, j) => (j === i ? { ...e, phone: err || undefined } : e))
+                          );
+                        }}
+                        placeholder="Phone"
+                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
+                          guestErrors[i]?.phone ? 'border-red-400' : 'border-gray-300'
+                        }`}
+                      />
+                      {guestErrors[i]?.phone && (
+                        <p className="text-sm text-red-500 mt-1">{guestErrors[i].phone}</p>
+                      )}
+                    </div>
+                  </SubForm>
+                );
+              }
+
+              return null;
+            })}
+
+            {/* Kids without jobs input — always at bottom */}
             {showLittles && (
               <div className="border-l-4 border-blue-300 pl-4 py-3 mb-4 bg-gray-50 rounded-r-md">
                 <div className="flex items-center justify-between mb-2">
@@ -705,74 +813,6 @@ export default function Moment1InputForm({
                 </div>
               </div>
             )}
-
-            {/* Guest sub-forms */}
-            {guests.map((guest, i) => (
-              <SubForm key={guest.id} title={`Guest ${i + 1}`} onRemove={() => removeGuest(i)}>
-                <input
-                  type="text"
-                  value={guest.name}
-                  onChange={(e) => updateGuest(i, 'name', e.target.value)}
-                  placeholder="Guest's name"
-                  autoFocus={i === 0}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
-                />
-                <div>
-                  <input
-                    type="email"
-                    value={guest.email}
-                    onChange={(e) => {
-                      updateGuest(i, 'email', e.target.value);
-                      if (guestErrors[i]?.email) {
-                        setGuestErrors((prev) =>
-                          prev.map((err, j) => (j === i ? { ...err, email: undefined } : err))
-                        );
-                      }
-                    }}
-                    onBlur={() => {
-                      const err = validateEmail(guest.email);
-                      setGuestErrors((prev) =>
-                        prev.map((e, j) => (j === i ? { ...e, email: err || undefined } : e))
-                      );
-                    }}
-                    placeholder="Email"
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
-                      guestErrors[i]?.email ? 'border-red-400' : 'border-gray-300'
-                    }`}
-                  />
-                  {guestErrors[i]?.email && (
-                    <p className="text-sm text-red-500 mt-1">{guestErrors[i].email}</p>
-                  )}
-                </div>
-                <div>
-                  <input
-                    type="tel"
-                    value={guest.phone}
-                    onChange={(e) => {
-                      updateGuest(i, 'phone', e.target.value);
-                      if (guestErrors[i]?.phone) {
-                        setGuestErrors((prev) =>
-                          prev.map((err, j) => (j === i ? { ...err, phone: undefined } : err))
-                        );
-                      }
-                    }}
-                    onBlur={() => {
-                      const err = validatePhone(guest.phone);
-                      setGuestErrors((prev) =>
-                        prev.map((e, j) => (j === i ? { ...e, phone: err || undefined } : e))
-                      );
-                    }}
-                    placeholder="Phone"
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
-                      guestErrors[i]?.phone ? 'border-red-400' : 'border-gray-300'
-                    }`}
-                  />
-                  {guestErrors[i]?.phone && (
-                    <p className="text-sm text-red-500 mt-1">{guestErrors[i].phone}</p>
-                  )}
-                </div>
-              </SubForm>
-            ))}
           </div>
         </div>
         {/* end form container */}
