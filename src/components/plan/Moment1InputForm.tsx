@@ -16,7 +16,12 @@ export interface Moment1PersonInput {
     email?: string;
     phone?: string;
   };
-  childCount?: number;
+  helpers?: Array<{
+    name: string;
+    email?: string;
+    phone?: string;
+  }>;
+  littleCount?: number;
   guests?: Array<{
     name?: string;
     email?: string;
@@ -68,8 +73,13 @@ export default function Moment1InputForm({
   const [partnerEmailError, setPartnerEmailError] = useState('');
   const [partnerPhoneError, setPartnerPhoneError] = useState('');
 
-  const [showChildren, setShowChildren] = useState(false);
-  const [childCount, setChildCount] = useState(1);
+  const [helpers, setHelpers] = useState<GuestForm[]>([]);
+  const [helperErrors, setHelperErrors] = useState<
+    { name?: string; email?: string; phone?: string }[]
+  >([]);
+
+  const [showLittles, setShowLittles] = useState(false);
+  const [littleCount, setLittleCount] = useState(1);
 
   const [guests, setGuests] = useState<GuestForm[]>([]);
   const [guestErrors, setGuestErrors] = useState<{ email?: string; phone?: string }[]>([]);
@@ -116,12 +126,26 @@ export default function Moment1InputForm({
     setPartnerEmailError('');
     setPartnerPhoneError('');
 
-    if (editingHousehold.childCount > 0) {
-      setShowChildren(true);
-      setChildCount(editingHousehold.childCount);
+    if (editingHousehold.helpers.length > 0) {
+      setHelpers(
+        editingHousehold.helpers.map((h) => ({
+          name: h.name,
+          email: h.email || '',
+          phone: h.phone || '',
+        }))
+      );
+      setHelperErrors(editingHousehold.helpers.map(() => ({})));
     } else {
-      setShowChildren(false);
-      setChildCount(1);
+      setHelpers([]);
+      setHelperErrors([]);
+    }
+
+    if (editingHousehold.littleCount > 0) {
+      setShowLittles(true);
+      setLittleCount(editingHousehold.littleCount);
+    } else {
+      setShowLittles(false);
+      setLittleCount(1);
     }
 
     if (editingHousehold.guests.length > 0) {
@@ -182,8 +206,10 @@ export default function Moment1InputForm({
     setPartnerPhone('');
     setPartnerEmailError('');
     setPartnerPhoneError('');
-    setShowChildren(false);
-    setChildCount(1);
+    setHelpers([]);
+    setHelperErrors([]);
+    setShowLittles(false);
+    setLittleCount(1);
     setGuests([]);
     setGuestErrors([]);
     nameInputRef.current?.focus();
@@ -220,6 +246,15 @@ export default function Moment1InputForm({
       if (ppErr) hasErrors = true;
     }
 
+    // Validate helper names and emails/phones
+    const newHelperErrors = helpers.map((h) => ({
+      name: !h.name.trim() ? 'Name is required' : undefined,
+      email: validateEmail(h.email) || undefined,
+      phone: validatePhone(h.phone) || undefined,
+    }));
+    setHelperErrors(newHelperErrors);
+    if (newHelperErrors.some((e) => e.name || e.email || e.phone)) hasErrors = true;
+
     // Validate guest emails/phones
     const newGuestErrors = guests.map((g) => ({
       email: validateEmail(g.email) || undefined,
@@ -248,8 +283,17 @@ export default function Moment1InputForm({
       };
     }
 
-    if (showChildren && childCount > 0) {
-      payload.childCount = childCount;
+    const namedHelpers = helpers.filter((h) => h.name.trim());
+    if (namedHelpers.length > 0) {
+      payload.helpers = namedHelpers.map((h) => ({
+        name: h.name.trim(),
+        email: h.email.trim() || undefined,
+        phone: h.phone.trim() || undefined,
+      }));
+    }
+
+    if (showLittles && littleCount > 0) {
+      payload.littleCount = littleCount;
     }
 
     const namedGuests = guests.filter((g) => g.name.trim());
@@ -267,7 +311,8 @@ export default function Moment1InputForm({
   const countMembers = (payload: Moment1PersonInput): number => {
     let count = 1; // primary contact
     if (payload.partner?.name) count++;
-    if (payload.childCount) count += payload.childCount;
+    if (payload.helpers) count += payload.helpers.length;
+    if (payload.littleCount) count += payload.littleCount;
     if (payload.guests) count += payload.guests.length;
     return count;
   };
@@ -435,13 +480,23 @@ export default function Moment1InputForm({
                   👫 Add Partner
                 </button>
               )}
-              {!showChildren && (
+              <button
+                type="button"
+                onClick={() => {
+                  setHelpers((prev) => [...prev, emptyGuest()]);
+                  setHelperErrors((prev) => [...prev, {}]);
+                }}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                👦 Kid with a job
+              </button>
+              {!showLittles && (
                 <button
                   type="button"
-                  onClick={() => setShowChildren(true)}
+                  onClick={() => setShowLittles(true)}
                   className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 >
-                  😊 Add Children
+                  🧒 Kid without a job
                 </button>
               )}
               <button
@@ -513,16 +568,111 @@ export default function Moment1InputForm({
               </SubForm>
             )}
 
-            {/* Children input */}
-            {showChildren && (
+            {/* Helper sub-forms (kids with jobs) */}
+            {helpers.map((helper, i) => (
+              <SubForm
+                key={`helper-${i}`}
+                title={`Kid with a job ${helpers.length > 1 ? i + 1 : ''}`}
+                onRemove={() => {
+                  setHelpers((prev) => prev.filter((_, j) => j !== i));
+                  setHelperErrors((prev) => prev.filter((_, j) => j !== i));
+                }}
+              >
+                <div>
+                  <input
+                    type="text"
+                    value={helper.name}
+                    onChange={(e) => {
+                      setHelpers((prev) =>
+                        prev.map((h, j) => (j === i ? { ...h, name: e.target.value } : h))
+                      );
+                      if (helperErrors[i]?.name) {
+                        setHelperErrors((prev) =>
+                          prev.map((err, j) => (j === i ? { ...err, name: undefined } : err))
+                        );
+                      }
+                    }}
+                    placeholder="Kid's name"
+                    autoFocus={i === helpers.length - 1}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
+                      helperErrors[i]?.name ? 'border-red-400' : 'border-gray-300'
+                    }`}
+                  />
+                  {helperErrors[i]?.name && (
+                    <p className="text-sm text-red-500 mt-1">{helperErrors[i].name}</p>
+                  )}
+                </div>
+                <div>
+                  <input
+                    type="email"
+                    value={helper.email}
+                    onChange={(e) => {
+                      setHelpers((prev) =>
+                        prev.map((h, j) => (j === i ? { ...h, email: e.target.value } : h))
+                      );
+                      if (helperErrors[i]?.email) {
+                        setHelperErrors((prev) =>
+                          prev.map((err, j) => (j === i ? { ...err, email: undefined } : err))
+                        );
+                      }
+                    }}
+                    onBlur={() => {
+                      const err = validateEmail(helper.email);
+                      setHelperErrors((prev) =>
+                        prev.map((e, j) => (j === i ? { ...e, email: err || undefined } : e))
+                      );
+                    }}
+                    placeholder="Email"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
+                      helperErrors[i]?.email ? 'border-red-400' : 'border-gray-300'
+                    }`}
+                  />
+                  {helperErrors[i]?.email && (
+                    <p className="text-sm text-red-500 mt-1">{helperErrors[i].email}</p>
+                  )}
+                </div>
+                <div>
+                  <input
+                    type="tel"
+                    value={helper.phone}
+                    onChange={(e) => {
+                      setHelpers((prev) =>
+                        prev.map((h, j) => (j === i ? { ...h, phone: e.target.value } : h))
+                      );
+                      if (helperErrors[i]?.phone) {
+                        setHelperErrors((prev) =>
+                          prev.map((err, j) => (j === i ? { ...err, phone: undefined } : err))
+                        );
+                      }
+                    }}
+                    onBlur={() => {
+                      const err = validatePhone(helper.phone);
+                      setHelperErrors((prev) =>
+                        prev.map((e, j) => (j === i ? { ...e, phone: err || undefined } : e))
+                      );
+                    }}
+                    placeholder="Phone"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
+                      helperErrors[i]?.phone ? 'border-red-400' : 'border-gray-300'
+                    }`}
+                  />
+                  {helperErrors[i]?.phone && (
+                    <p className="text-sm text-red-500 mt-1">{helperErrors[i].phone}</p>
+                  )}
+                </div>
+              </SubForm>
+            ))}
+
+            {/* Kids without jobs input */}
+            {showLittles && (
               <div className="border-l-4 border-blue-300 pl-4 py-3 mb-4 bg-gray-50 rounded-r-md">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-medium text-gray-600">Children</p>
+                  <p className="text-sm font-medium text-gray-600">Kids without jobs</p>
                   <button
                     type="button"
                     onClick={() => {
-                      setShowChildren(false);
-                      setChildCount(1);
+                      setShowLittles(false);
+                      setLittleCount(1);
                     }}
                     className="text-sm text-red-500 hover:text-red-700"
                   >
@@ -530,15 +680,15 @@ export default function Moment1InputForm({
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className="text-sm text-gray-600">How many?</label>
+                  <label className="text-sm text-gray-600">How many kids without jobs?</label>
                   <input
                     type="number"
                     min={1}
                     max={20}
-                    value={childCount}
+                    value={littleCount}
                     onChange={(e) => {
                       const val = parseInt(e.target.value, 10);
-                      if (!isNaN(val) && val >= 1 && val <= 20) setChildCount(val);
+                      if (!isNaN(val) && val >= 1 && val <= 20) setLittleCount(val);
                     }}
                     autoFocus
                     className="w-20 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"

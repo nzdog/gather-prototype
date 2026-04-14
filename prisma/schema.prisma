@@ -178,7 +178,7 @@ model Household {
   eventId    String
   event      Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
   members    PersonEvent[]
-  childCount Int           @default(0)
+  littleCount Int           @default(0)
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
 }
@@ -604,6 +604,7 @@ enum HouseholdRole {
   PRIMARY_CONTACT
   PARTNER
   GUEST
+  CHILD
 }
 
 enum ReachabilityTier {

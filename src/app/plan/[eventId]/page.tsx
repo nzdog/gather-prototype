@@ -471,6 +471,7 @@ export default function PlanEditorPage() {
   const apiHouseholdToSaved = useCallback((h: any): SavedHousehold => {
     const primary = h.members?.find((m: any) => m.householdRole === 'PRIMARY_CONTACT');
     const partnerMember = h.members?.find((m: any) => m.householdRole === 'PARTNER');
+    const helperMembers = h.members?.filter((m: any) => m.householdRole === 'CHILD') || [];
     const guestMembers = h.members?.filter((m: any) => m.householdRole === 'GUEST') || [];
     return {
       id: h.id,
@@ -486,7 +487,12 @@ export default function PlanEditorPage() {
             phone: partnerMember.person?.phoneNumber || undefined,
           }
         : undefined,
-      childCount: h.childCount || 0,
+      helpers: helperMembers.map((m: any) => ({
+        name: m.person?.name || '',
+        email: m.person?.email || undefined,
+        phone: m.person?.phoneNumber || undefined,
+      })),
+      littleCount: h.littleCount || 0,
       guests: guestMembers.map((g: any) => ({
         name: g.person?.name || '',
         email: g.person?.email || undefined,
@@ -1597,7 +1603,7 @@ export default function PlanEditorPage() {
     };
 
     const totalPeopleCount = households.reduce((sum, h) => {
-      return sum + 1 + (h.partner ? 1 : 0) + h.childCount + h.guests.length;
+      return sum + 1 + (h.partner ? 1 : 0) + h.helpers.length + h.littleCount + h.guests.length;
     }, 0);
 
     return (

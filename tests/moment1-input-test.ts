@@ -1,7 +1,8 @@
 /**
- * GTC-103 — Moment 1: "Who's coming?" input flow
+ * GTC-103 / GTC-112 — Moment 1: "Who's coming?" input flow
  *
  * Tests validation logic and member counting for the household input form.
+ * Updated for GTC-112: kids with jobs (helpers) and kids without jobs (littleCount).
  * Pure-logic tests — no React runtime required.
  */
 
@@ -27,21 +28,23 @@ function validateEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-function validateChildCount(count: number): boolean {
+function validateLittleCount(count: number): boolean {
   return count >= 0 && count <= 20;
 }
 
 interface HouseholdInput {
   primaryContact: { name: string; email?: string; phone?: string };
   partner?: { name?: string; email?: string; phone?: string };
-  childCount?: number;
+  helpers?: Array<{ name: string; email?: string; phone?: string }>;
+  littleCount?: number;
   guests?: Array<{ name?: string; email?: string; phone?: string }>;
 }
 
 function countMembers(input: HouseholdInput): number {
   let count = 1; // primary contact
   if (input.partner?.name) count++;
-  if (input.childCount) count += input.childCount;
+  if (input.helpers) count += input.helpers.length;
+  if (input.littleCount) count += input.littleCount;
   if (input.guests) count += input.guests.filter((g) => g.name).length;
   return count;
 }
@@ -53,6 +56,7 @@ function validateHousehold(input: HouseholdInput): string | null {
   const allMembers = [
     input.primaryContact,
     ...(input.partner ? [input.partner] : []),
+    ...(input.helpers || []),
     ...(input.guests || []),
   ];
   for (const member of allMembers) {
@@ -61,14 +65,21 @@ function validateHousehold(input: HouseholdInput): string | null {
     }
   }
 
-  if (input.childCount !== undefined && (input.childCount < 0 || input.childCount > 20)) {
-    return 'Child count must be between 0 and 20';
+  // Validate helper names (required for kids with jobs)
+  if (input.helpers) {
+    for (const helper of input.helpers) {
+      if (!helper.name?.trim()) return 'Kid with a job must have a name';
+    }
+  }
+
+  if (input.littleCount !== undefined && (input.littleCount < 0 || input.littleCount > 20)) {
+    return 'Kids without jobs count must be between 0 and 20';
   }
 
   return null;
 }
 
-console.log('\x1b[33m=== GTC-103: Moment 1 Input Flow Tests ===\x1b[0m\n');
+console.log('\x1b[33m=== GTC-103/112: Moment 1 Input Flow Tests ===\x1b[0m\n');
 
 // --- Suite 1: Primary contact validation ---
 console.log('\x1b[33mSuite 1: Primary contact validation\x1b[0m');
@@ -125,14 +136,14 @@ assert('3.2 Standard email is valid', validateEmail('kate@example.com') === true
 assert('3.3 No-domain email is invalid', validateEmail('kate@') === false);
 assert('3.4 No-at email is invalid', validateEmail('kate') === false);
 
-// --- Suite 4: Child count validation ---
-console.log('\n\x1b[33mSuite 4: Child count bounds\x1b[0m');
+// --- Suite 4: littleCount validation ---
+console.log('\n\x1b[33mSuite 4: Kids without jobs count bounds\x1b[0m');
 
-assert('4.1 childCount 0 is valid', validateChildCount(0) === true);
-assert('4.2 childCount 20 is valid', validateChildCount(20) === true);
-assert('4.3 childCount -1 is invalid', validateChildCount(-1) === false);
-assert('4.4 childCount 21 is invalid', validateChildCount(21) === false);
-assert('4.5 childCount 3 is valid', validateChildCount(3) === true);
+assert('4.1 littleCount 0 is valid', validateLittleCount(0) === true);
+assert('4.2 littleCount 20 is valid', validateLittleCount(20) === true);
+assert('4.3 littleCount -1 is invalid', validateLittleCount(-1) === false);
+assert('4.4 littleCount 21 is invalid', validateLittleCount(21) === false);
+assert('4.5 littleCount 3 is valid', validateLittleCount(3) === true);
 
 // --- Suite 5: Member counting ---
 console.log('\n\x1b[33mSuite 5: Member counting\x1b[0m');
@@ -156,21 +167,22 @@ assert(
 );
 
 assert(
-  '5.4 Primary + 3 children = 4',
+  '5.4 Primary + 3 littles = 4',
   countMembers({
     primaryContact: { name: 'Kate' },
-    childCount: 3,
+    littleCount: 3,
   }) === 4
 );
 
 assert(
-  '5.5 Primary + partner + 2 children + 1 guest = 5',
+  '5.5 Primary + partner + 2 helpers + 1 little + 1 guest = 6',
   countMembers({
     primaryContact: { name: 'Kate' },
     partner: { name: 'Rob' },
-    childCount: 2,
+    helpers: [{ name: 'Sam' }, { name: 'Lily' }],
+    littleCount: 1,
     guests: [{ name: 'Alex' }],
-  }) === 5
+  }) === 6
 );
 
 assert(
@@ -181,6 +193,14 @@ assert(
   }) === 3
 );
 
+assert(
+  '5.7 Helpers count individually (kids with jobs)',
+  countMembers({
+    primaryContact: { name: 'Kate' },
+    helpers: [{ name: 'Sam' }, { name: 'Lily' }, { name: 'Max' }],
+  }) === 4
+);
+
 // --- Suite 6: Full household validation ---
 console.log('\n\x1b[33mSuite 6: Full household validation\x1b[0m');
 
@@ -189,7 +209,8 @@ assert(
   validateHousehold({
     primaryContact: { name: 'Kate', email: 'kate@test.com', phone: '0211234567' },
     partner: { name: 'Rob', email: 'rob@test.com' },
-    childCount: 2,
+    helpers: [{ name: 'Sam' }],
+    littleCount: 2,
     guests: [{ name: 'Alex', email: 'alex@test.com' }],
   }) === null
 );
@@ -211,11 +232,36 @@ assert(
 );
 
 assert(
-  '6.4 childCount 21 fails validation',
+  '6.4 littleCount 21 fails validation',
   validateHousehold({
     primaryContact: { name: 'Kate' },
-    childCount: 21,
-  })?.includes('Child count') ?? false
+    littleCount: 21,
+  })?.includes('Kids without jobs') ?? false
+);
+
+assert(
+  '6.5 Helper without name fails validation',
+  validateHousehold({
+    primaryContact: { name: 'Kate' },
+    helpers: [{ name: '' }],
+  })?.includes('Kid with a job must have a name') ?? false
+);
+
+assert(
+  '6.6 Helper with invalid email fails validation',
+  validateHousehold({
+    primaryContact: { name: 'Kate' },
+    helpers: [{ name: 'Sam', email: 'bademail' }],
+  })?.includes('Invalid email') ?? false
+);
+
+assert(
+  '6.7 Both helpers and littles coexist',
+  validateHousehold({
+    primaryContact: { name: 'Kate' },
+    helpers: [{ name: 'Sam' }, { name: 'Lily' }],
+    littleCount: 3,
+  }) === null
 );
 
 // --- Summary ---

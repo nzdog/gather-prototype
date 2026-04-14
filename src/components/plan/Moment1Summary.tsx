@@ -15,8 +15,8 @@ interface Moment1SummaryProps {
 interface MissingPerson {
   name: string;
   householdId: string;
-  role: 'primaryContact' | 'partner' | 'guest';
-  guestIndex?: number;
+  role: 'primaryContact' | 'partner' | 'helper' | 'guest';
+  memberIndex?: number;
 }
 
 export default function Moment1Summary({
@@ -37,12 +37,13 @@ export default function Moment1Summary({
 
   // --- Stats ---
   const totalPeople = localHouseholds.reduce((sum, h) => {
-    return sum + 1 + (h.partner ? 1 : 0) + h.childCount + h.guests.length;
+    return sum + 1 + (h.partner ? 1 : 0) + h.helpers.length + h.littleCount + h.guests.length;
   }, 0);
 
   const householdCount = localHouseholds.length;
 
-  const childrenCount = localHouseholds.reduce((sum, h) => sum + h.childCount, 0);
+  const helpersCount = localHouseholds.reduce((sum, h) => sum + h.helpers.length, 0);
+  const littlesCount = localHouseholds.reduce((sum, h) => sum + h.littleCount, 0);
 
   // Named people missing both email and phone
   const missingContacts: MissingPerson[] = [];
@@ -61,6 +62,17 @@ export default function Moment1Summary({
         role: 'partner',
       });
     }
+    for (let i = 0; i < h.helpers.length; i++) {
+      const helper = h.helpers[i];
+      if (!helper.email && !helper.phone) {
+        missingContacts.push({
+          name: helper.name,
+          householdId: h.id,
+          role: 'helper',
+          memberIndex: i,
+        });
+      }
+    }
     for (let i = 0; i < h.guests.length; i++) {
       const guest = h.guests[i];
       if (!guest.email && !guest.phone) {
@@ -68,7 +80,7 @@ export default function Moment1Summary({
           name: guest.name,
           householdId: h.id,
           role: 'guest',
-          guestIndex: i,
+          memberIndex: i,
         });
       }
     }
@@ -76,13 +88,16 @@ export default function Moment1Summary({
 
   const missingCount = missingContacts.length;
   const visibleMissing = missingContacts.filter(
-    (p) => !skippedNames.has(`${p.householdId}-${p.role}-${p.guestIndex ?? ''}`)
+    (p) => !skippedNames.has(`${p.householdId}-${p.role}-${p.memberIndex ?? ''}`)
   );
 
   // --- Stats line segments ---
   const statsSegments: string[] = [`${householdCount} household${householdCount !== 1 ? 's' : ''}`];
-  if (childrenCount > 0) {
-    statsSegments.push(`${childrenCount} ${childrenCount === 1 ? 'child' : 'children'}`);
+  if (helpersCount > 0) {
+    statsSegments.push(`${helpersCount} kid${helpersCount !== 1 ? 's' : ''} with jobs`);
+  }
+  if (littlesCount > 0) {
+    statsSegments.push(`${littlesCount} kid${littlesCount !== 1 ? 's' : ''} without jobs`);
   }
   if (missingCount > 0) {
     statsSegments.push(
@@ -90,7 +105,7 @@ export default function Moment1Summary({
     );
   }
 
-  const personKey = (p: MissingPerson) => `${p.householdId}-${p.role}-${p.guestIndex ?? ''}`;
+  const personKey = (p: MissingPerson) => `${p.householdId}-${p.role}-${p.memberIndex ?? ''}`;
 
   const handleAddNow = (person: MissingPerson) => {
     const key = personKey(person);
@@ -133,12 +148,20 @@ export default function Moment1Summary({
           email: contactForm.email || updatedHousehold.partner.email,
           phone: contactForm.phone || updatedHousehold.partner.phone,
         };
-      } else if (person.role === 'guest' && person.guestIndex !== undefined) {
+      } else if (person.role === 'helper' && person.memberIndex !== undefined) {
+        const updatedHelpers = [...updatedHousehold.helpers];
+        updatedHelpers[person.memberIndex] = {
+          ...updatedHelpers[person.memberIndex],
+          email: contactForm.email || updatedHelpers[person.memberIndex].email,
+          phone: contactForm.phone || updatedHelpers[person.memberIndex].phone,
+        };
+        updatedHousehold.helpers = updatedHelpers;
+      } else if (person.role === 'guest' && person.memberIndex !== undefined) {
         const updatedGuests = [...updatedHousehold.guests];
-        updatedGuests[person.guestIndex] = {
-          ...updatedGuests[person.guestIndex],
-          email: contactForm.email || updatedGuests[person.guestIndex].email,
-          phone: contactForm.phone || updatedGuests[person.guestIndex].phone,
+        updatedGuests[person.memberIndex] = {
+          ...updatedGuests[person.memberIndex],
+          email: contactForm.email || updatedGuests[person.memberIndex].email,
+          phone: contactForm.phone || updatedGuests[person.memberIndex].phone,
         };
         updatedHousehold.guests = updatedGuests;
       }
@@ -149,7 +172,8 @@ export default function Moment1Summary({
         body: JSON.stringify({
           primaryContact: updatedHousehold.primaryContact,
           partner: updatedHousehold.partner,
-          childCount: updatedHousehold.childCount,
+          helpers: updatedHousehold.helpers,
+          littleCount: updatedHousehold.littleCount,
           guests: updatedHousehold.guests,
         }),
       });

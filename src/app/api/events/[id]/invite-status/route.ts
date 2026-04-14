@@ -250,7 +250,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     const proxyNudgeSummary = {
       totalHouseholds: households.length,
       totalMembers: households.reduce((sum, h) => sum + h.members.length, 0),
-      totalChildren: households.reduce((sum, h) => sum + h.childCount, 0),
+      totalChildren: households.reduce((sum, h) => sum + h.littleCount, 0),
     };
 
     // RSVP breakdown

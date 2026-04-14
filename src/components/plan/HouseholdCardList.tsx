@@ -6,7 +6,8 @@ export interface SavedHousehold {
   id: string;
   primaryContact: { name: string; email?: string; phone?: string };
   partner?: { name: string; email?: string; phone?: string };
-  childCount: number;
+  helpers: Array<{ name: string; email?: string; phone?: string }>;
+  littleCount: number;
   guests: Array<{ name: string; email?: string; phone?: string }>;
 }
 
@@ -96,10 +97,16 @@ function HouseholdCard({
   };
 
   const additionalCount =
-    (household.partner ? 1 : 0) + household.childCount + household.guests.length;
+    (household.partner ? 1 : 0) +
+    household.helpers.length +
+    household.littleCount +
+    household.guests.length;
 
   const hasMemberSummary =
-    household.partner || household.childCount > 0 || household.guests.length > 0;
+    household.partner ||
+    household.helpers.length > 0 ||
+    household.littleCount > 0 ||
+    household.guests.length > 0;
 
   // Confirmation state
   if (confirmingDelete) {
@@ -158,7 +165,10 @@ function HouseholdCard({
       {hasMemberSummary && (
         <div className="flex flex-wrap items-center gap-2 mt-1 text-sm text-gray-500">
           {household.partner && <span>👫 {household.partner.name}</span>}
-          {household.childCount > 0 && <span>🧒 {household.childCount}</span>}
+          {household.helpers.map((helper, i) => (
+            <span key={`helper-${i}`}>👦 {helper.name}</span>
+          ))}
+          {household.littleCount > 0 && <span>🧒 {household.littleCount}</span>}
           {household.guests.map((guest, i) => (
             <span key={i}>👤 {guest.name}</span>
           ))}

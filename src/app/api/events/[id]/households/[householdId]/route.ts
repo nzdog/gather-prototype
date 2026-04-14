@@ -16,7 +16,8 @@ interface HouseholdRequestBody {
     phone?: string;
   };
   partner?: HouseholdMemberInput;
-  childCount?: number;
+  helpers?: Array<{ name: string; email?: string; phone?: string }>;
+  littleCount?: number;
   guests?: HouseholdMemberInput[];
 }
 
@@ -70,7 +71,7 @@ export async function PUT(
     if (auth instanceof NextResponse) return auth;
 
     const body: HouseholdRequestBody = await request.json();
-    const { primaryContact, partner, childCount, guests } = body;
+    const { primaryContact, partner, helpers, littleCount, guests } = body;
 
     // Validate primary contact name
     if (!primaryContact?.name?.trim()) {
@@ -79,7 +80,12 @@ export async function PUT(
 
     // Validate email format if provided
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const allMembers = [primaryContact, ...(partner ? [partner] : []), ...(guests || [])];
+    const allMembers = [
+      primaryContact,
+      ...(partner ? [partner] : []),
+      ...(helpers || []),
+      ...(guests || []),
+    ];
     for (const member of allMembers) {
       if (member.email && !emailRegex.test(member.email)) {
         return NextResponse.json(
@@ -89,9 +95,21 @@ export async function PUT(
       }
     }
 
-    // Validate childCount
-    if (childCount !== undefined && (childCount < 0 || childCount > 20)) {
-      return NextResponse.json({ error: 'Child count must be between 0 and 20' }, { status: 400 });
+    // Validate helper names (required for kids with jobs)
+    if (helpers) {
+      for (const helper of helpers) {
+        if (!helper.name?.trim()) {
+          return NextResponse.json({ error: 'Kid with a job must have a name' }, { status: 400 });
+        }
+      }
+    }
+
+    // Validate littleCount
+    if (littleCount !== undefined && (littleCount < 0 || littleCount > 20)) {
+      return NextResponse.json(
+        { error: 'Kids without jobs count must be between 0 and 20' },
+        { status: 400 }
+      );
     }
 
     // Find existing household
@@ -177,7 +195,7 @@ export async function PUT(
     async function createMember(
       input: HouseholdMemberInput,
       hhId: string,
-      householdRole: 'PARTNER' | 'GUEST'
+      householdRole: 'PARTNER' | 'GUEST' | 'CHILD'
     ) {
       if (!input.name?.trim()) return null;
 
@@ -242,15 +260,24 @@ export async function PUT(
       });
     }
 
-    // Update childCount
+    // Update littleCount
     await prisma.household.update({
       where: { id: householdId },
-      data: { childCount: childCount ?? 0 },
+      data: { littleCount: littleCount ?? 0 },
     });
 
     // Re-create partner if provided
     if (partner?.name?.trim()) {
       await createMember(partner, householdId, 'PARTNER');
+    }
+
+    // Re-create helpers (kids with jobs) if provided
+    if (helpers) {
+      for (const helper of helpers) {
+        if (helper.name?.trim()) {
+          await createMember(helper, householdId, 'CHILD');
+        }
+      }
     }
 
     // Re-create guests if provided
