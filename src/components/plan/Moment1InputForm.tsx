@@ -41,12 +41,19 @@ interface Moment1InputFormProps {
 }
 
 interface GuestForm {
+  id: string;
   name: string;
   email: string;
   phone: string;
 }
 
-const emptyGuest = (): GuestForm => ({ name: '', email: '', phone: '' });
+let formIdCounter = 0;
+const emptyGuest = (): GuestForm => ({
+  id: `f-${++formIdCounter}`,
+  name: '',
+  email: '',
+  phone: '',
+});
 
 export default function Moment1InputForm({
   eventName,
@@ -129,6 +136,7 @@ export default function Moment1InputForm({
     if (editingHousehold.helpers.length > 0) {
       setHelpers(
         editingHousehold.helpers.map((h) => ({
+          id: `f-${++formIdCounter}`,
           name: h.name,
           email: h.email || '',
           phone: h.phone || '',
@@ -151,6 +159,7 @@ export default function Moment1InputForm({
     if (editingHousehold.guests.length > 0) {
       setGuests(
         editingHousehold.guests.map((g) => ({
+          id: `f-${++formIdCounter}`,
           name: g.name,
           email: g.email || '',
           phone: g.phone || '',
@@ -571,7 +580,7 @@ export default function Moment1InputForm({
             {/* Helper sub-forms (kids with jobs) */}
             {helpers.map((helper, i) => (
               <SubForm
-                key={`helper-${i}`}
+                key={helper.id}
                 title={`Kid with a job ${helpers.length > 1 ? i + 1 : ''}`}
                 onRemove={() => {
                   setHelpers((prev) => prev.filter((_, j) => j !== i));
@@ -699,7 +708,7 @@ export default function Moment1InputForm({
 
             {/* Guest sub-forms */}
             {guests.map((guest, i) => (
-              <SubForm key={i} title={`Guest ${i + 1}`} onRemove={() => removeGuest(i)}>
+              <SubForm key={guest.id} title={`Guest ${i + 1}`} onRemove={() => removeGuest(i)}>
                 <input
                   type="text"
                   value={guest.name}
