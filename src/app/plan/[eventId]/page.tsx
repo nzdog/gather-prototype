@@ -57,6 +57,7 @@ import SetupOpeningScreen from '@/components/plan/SetupOpeningScreen';
 import Moment1InputForm, { Moment1PersonInput } from '@/components/plan/Moment1InputForm';
 import HouseholdCardList, { SavedHousehold } from '@/components/plan/HouseholdCardList';
 import Moment1Summary from '@/components/plan/Moment1Summary';
+import Moment2Opening from '@/components/plan/Moment2Opening';
 import { useEventSetupProgress } from '@/hooks/useEventSetupProgress';
 
 interface Event {
@@ -251,6 +252,7 @@ export default function PlanEditorPage() {
   const [showSetup, setShowSetup] = useState(searchParams.get('setup') === 'true');
   const [showMoment1, setShowMoment1] = useState(false);
   const [moment1Phase, setMoment1Phase] = useState<'input' | 'summary'>('input');
+  const [showMoment2Opening, setShowMoment2Opening] = useState(false);
   const [households, setHouseholds] = useState<SavedHousehold[]>([]);
   const [editingHousehold, setEditingHousehold] = useState<SavedHousehold | null>(null);
   const moment1FormRef = useRef<HTMLDivElement>(null);
@@ -1531,6 +1533,7 @@ export default function PlanEditorPage() {
           onContinue={() => {
             setShowMoment1(false);
             setMoment1Phase('input');
+            setShowMoment2Opening(true);
           }}
           onBackToEditing={() => {
             setMoment1Phase('input');
@@ -1651,6 +1654,17 @@ export default function PlanEditorPage() {
           </div>
         </div>
       </div>
+    );
+  }
+
+  if (showMoment2Opening && event) {
+    return (
+      <Moment2Opening
+        eventName={event.name}
+        onStart={() => {
+          setShowMoment2Opening(false);
+        }}
+      />
     );
   }
 
