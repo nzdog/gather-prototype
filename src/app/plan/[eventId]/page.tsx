@@ -59,6 +59,7 @@ import HouseholdCardList, { SavedHousehold } from '@/components/plan/HouseholdCa
 import Moment1Summary from '@/components/plan/Moment1Summary';
 import Moment2Opening from '@/components/plan/Moment2Opening';
 import Moment2Step1Modal from '@/components/plan/Moment2Step1Modal';
+import Moment2Step2Skeleton, { Moment2Plan } from '@/components/plan/Moment2Step2Skeleton';
 import { useEventSetupProgress } from '@/hooks/useEventSetupProgress';
 
 interface Event {
@@ -255,6 +256,8 @@ export default function PlanEditorPage() {
   const [moment1Phase, setMoment1Phase] = useState<'input' | 'summary'>('input');
   const [showMoment2Opening, setShowMoment2Opening] = useState(false);
   const [showMoment2Step1, setShowMoment2Step1] = useState(false);
+  const [showMoment2Step2Skeleton, setShowMoment2Step2Skeleton] = useState(false);
+  const [moment2Plan, setMoment2Plan] = useState<Moment2Plan | null>(null);
   const [households, setHouseholds] = useState<SavedHousehold[]>([]);
   const [editingHousehold, setEditingHousehold] = useState<SavedHousehold | null>(null);
   const moment1FormRef = useRef<HTMLDivElement>(null);
@@ -1659,15 +1662,57 @@ export default function PlanEditorPage() {
     );
   }
 
+  if (showMoment2Step2Skeleton && event) {
+    return (
+      <Moment2Step2Skeleton
+        eventName={event.name}
+        plan={moment2Plan}
+        onApprove={async () => {
+          // Refresh all data after approval
+          await loadEvent();
+          await loadTeams();
+          await loadItems();
+          await loadConflicts();
+          setGateCheckRefresh((prev) => prev + 1);
+          setShowMoment2Step2Skeleton(false);
+          setMoment2Plan(null);
+          setNextStepDismissed(false);
+          toast.success('Plan approved.');
+        }}
+      />
+    );
+  }
+
   if (showMoment2Step1 && event) {
     return (
       <Moment2Step1Modal
         eventId={event.id}
         eventName={event.name}
-        onGenerate={() => {
+        onGenerate={async () => {
           setShowMoment2Step1(false);
-          // Navigate to existing plan generation flow
-          handleGeneratePlan();
+          setShowMoment2Step2Skeleton(true);
+          setMoment2Plan(null);
+
+          // Call finalize-plan endpoint
+          try {
+            const res = await fetch(`/api/events/${eventId}/finalize-plan`, {
+              method: 'POST',
+            });
+            if (res.status === 429) {
+              await loadEvent();
+              toast.error("You've used all 10 AI calls for this event.");
+              setShowMoment2Step2Skeleton(false);
+              return;
+            }
+            if (!res.ok) {
+              throw new Error('Failed to finalize plan');
+            }
+            const data = await res.json();
+            setMoment2Plan(data.plan);
+          } catch {
+            toast.error('Failed to generate plan. Please try again.');
+            setShowMoment2Step2Skeleton(false);
+          }
         }}
         onCancel={() => {
           setShowMoment2Step1(false);

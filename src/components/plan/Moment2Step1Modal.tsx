@@ -5,11 +5,14 @@ import { X } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+type SectionGenerationStatus = 'idle' | 'generating' | 'generated' | 'failed';
+
 interface Moment2Step1ModalProps {
   eventId: string;
   eventName: string;
   onGenerate: () => void;
   onCancel: () => void;
+  onSectionGenerated?: (section: string, status: SectionGenerationStatus) => void;
 }
 
 interface FoodItem {
@@ -154,15 +157,31 @@ export default function Moment2Step1Modal({
   eventId,
   onGenerate,
   onCancel,
+  onSectionGenerated,
 }: Moment2Step1ModalProps) {
   const [state, setState] = useState<Step1State>(INITIAL_STATE);
   const [openAccordion, setOpenAccordion] = useState<string | null>(null);
   const [peopleCount, setPeopleCount] = useState<number>(0);
+  const [totalAdults, setTotalAdults] = useState<number>(0);
+  const [totalKids, setTotalKids] = useState<number>(0);
   const [kidsWithJobs, setKidsWithJobs] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRef = useRef<Step1State | null>(null);
+
+  // Progressive generation state
+  const [sectionStatus, setSectionStatus] = useState<Record<string, SectionGenerationStatus>>({
+    mains: 'idle',
+    sides: 'idle',
+    desserts: 'idle',
+    drinks: 'idle',
+    setup: 'idle',
+    dietary: 'idle',
+    other: 'idle',
+  });
+  // Track what data was last generated for each section to avoid re-generating unchanged sections
+  const lastGeneratedRef = useRef<Record<string, string>>({});
 
   // Fetch household data for people count and kids-with-jobs
   useEffect(() => {
@@ -174,19 +193,27 @@ export default function Moment2Step1Modal({
         const households: Household[] = data.households ?? [];
 
         let count = 0;
+        let adults = 0;
+        let kids = 0;
         const kidNames: string[] = [];
         for (const h of households) {
           for (const m of h.members) {
             count++;
             if (m.householdRole === 'CHILD') {
+              kids++;
               kidNames.push(m.person.name);
+            } else {
+              adults++;
             }
           }
           if (typeof h.littleCount === 'number') {
             count += h.littleCount;
+            kids += h.littleCount;
           }
         }
         setPeopleCount(count);
+        setTotalAdults(adults);
+        setTotalKids(kids);
         setKidsWithJobs(kidNames);
       } catch {
         // silent — non-critical
@@ -300,6 +327,104 @@ export default function Moment2Step1Modal({
       });
     },
     [scheduleSave]
+  );
+
+  // Progressive generation — fire when an accordion closes with real data
+  const generateSection = useCallback(
+    async (sectionId: string, currentState: Step1State) => {
+      // Map section ID to state data
+      const sectionDataMap: Record<string, unknown> = {
+        mains: currentState.mainsData,
+        sides: currentState.sidesData,
+        desserts: currentState.dessertsData,
+        drinks: currentState.drinksData,
+        setup: currentState.setupCleanupData,
+        dietary: currentState.dietaryData,
+        other: {
+          items: currentState.otherNotes ? [{ name: currentState.otherNotes, included: true }] : [],
+          stillDeciding: false,
+        },
+      };
+
+      const sectionData = sectionDataMap[sectionId] as { stillDeciding?: boolean } | undefined;
+      if (!sectionData) return;
+
+      // Skip if still deciding
+      if (sectionData.stillDeciding) return;
+
+      // Check if data has changed since last generation
+      const dataHash = JSON.stringify(sectionData);
+      if (lastGeneratedRef.current[sectionId] === dataHash) return;
+
+      setSectionStatus((prev) => ({ ...prev, [sectionId]: 'generating' }));
+      onSectionGenerated?.(sectionId, 'generating');
+
+      try {
+        const res = await fetch(`/api/events/${eventId}/generate-section`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            section: sectionId,
+            eventType: currentState.eventType,
+            eventTypeOther: currentState.eventTypeOther,
+            sectionData,
+            householdData: {
+              totalAdults,
+              totalKids,
+              dietaryRequirements: currentState.dietaryData.requirements,
+              kidsWithJobs,
+            },
+          }),
+        });
+
+        if (res.status === 429) {
+          // AI cap reached — stop progressive generation silently
+          setSectionStatus((prev) => ({ ...prev, [sectionId]: 'idle' }));
+          return;
+        }
+
+        if (!res.ok) {
+          setSectionStatus((prev) => ({ ...prev, [sectionId]: 'failed' }));
+          onSectionGenerated?.(sectionId, 'failed');
+          return;
+        }
+
+        lastGeneratedRef.current[sectionId] = dataHash;
+        setSectionStatus((prev) => ({ ...prev, [sectionId]: 'generated' }));
+        onSectionGenerated?.(sectionId, 'generated');
+      } catch {
+        setSectionStatus((prev) => ({ ...prev, [sectionId]: 'failed' }));
+        onSectionGenerated?.(sectionId, 'failed');
+      }
+    },
+    [eventId, totalAdults, totalKids, kidsWithJobs, onSectionGenerated]
+  );
+
+  // Handle accordion toggle — fire generation when closing a section with data
+  const handleAccordionToggle = useCallback(
+    (id: string | null) => {
+      const previouslyOpen = openAccordion;
+      setOpenAccordion(id);
+
+      // If we're closing a section (previouslyOpen was set, now changing away from it)
+      if (previouslyOpen && previouslyOpen !== id && state.eventType) {
+        // Flush pending save first, then generate
+        if (pendingRef.current) {
+          const pending = pendingRef.current;
+          if (debounceRef.current) {
+            clearTimeout(debounceRef.current);
+            debounceRef.current = null;
+          }
+          pendingRef.current = null;
+          saveToApi(pending).then(() => {
+            generateSection(previouslyOpen, pending);
+          });
+        } else {
+          generateSection(previouslyOpen, state);
+        }
+      }
+    },
+    [openAccordion, state, saveToApi, generateSection]
   );
 
   // Select event type — also populate food defaults if switching types
@@ -420,8 +545,9 @@ export default function Moment2Step1Modal({
               label="🍖 Mains"
               data={state.mainsData}
               openAccordion={openAccordion}
-              onToggle={setOpenAccordion}
+              onToggle={handleAccordionToggle}
               onChange={(d) => updateState((prev) => ({ ...prev, mainsData: d }))}
+              generationStatus={sectionStatus.mains}
             />
             {/* Sides */}
             <FoodAccordion
@@ -429,8 +555,9 @@ export default function Moment2Step1Modal({
               label="🥗 Sides"
               data={state.sidesData}
               openAccordion={openAccordion}
-              onToggle={setOpenAccordion}
+              onToggle={handleAccordionToggle}
               onChange={(d) => updateState((prev) => ({ ...prev, sidesData: d }))}
+              generationStatus={sectionStatus.sides}
             />
             {/* Dessert */}
             <FoodAccordion
@@ -438,8 +565,9 @@ export default function Moment2Step1Modal({
               label="🍰 Dessert"
               data={state.dessertsData}
               openAccordion={openAccordion}
-              onToggle={setOpenAccordion}
+              onToggle={handleAccordionToggle}
               onChange={(d) => updateState((prev) => ({ ...prev, dessertsData: d }))}
+              generationStatus={sectionStatus.desserts}
             />
             {/* Drinks */}
             <FoodAccordion
@@ -447,33 +575,37 @@ export default function Moment2Step1Modal({
               label="🍺 Drinks"
               data={state.drinksData}
               openAccordion={openAccordion}
-              onToggle={setOpenAccordion}
+              onToggle={handleAccordionToggle}
               onChange={(d) => updateState((prev) => ({ ...prev, drinksData: d }))}
+              generationStatus={sectionStatus.drinks}
             />
             {/* Setup & Cleanup */}
             <SetupCleanupAccordion
               id="setup"
               openAccordion={openAccordion}
-              onToggle={setOpenAccordion}
+              onToggle={handleAccordionToggle}
               data={state.setupCleanupData}
               kidsWithJobs={kidsWithJobs}
               onChange={(d) => updateState((prev) => ({ ...prev, setupCleanupData: d }))}
+              generationStatus={sectionStatus.setup}
             />
             {/* Dietary requirements */}
             <DietaryAccordion
               id="dietary"
               openAccordion={openAccordion}
-              onToggle={setOpenAccordion}
+              onToggle={handleAccordionToggle}
               data={state.dietaryData}
               onChange={(d) => updateState((prev) => ({ ...prev, dietaryData: d }))}
+              generationStatus={sectionStatus.dietary}
             />
             {/* Other */}
             <OtherAccordion
               id="other"
               openAccordion={openAccordion}
-              onToggle={setOpenAccordion}
+              onToggle={handleAccordionToggle}
               value={state.otherNotes}
               onChange={(v) => updateState((prev) => ({ ...prev, otherNotes: v }))}
+              generationStatus={sectionStatus.other}
             />
           </div>
         )}
@@ -505,6 +637,7 @@ function AccordionShell({
   onToggle,
   stillDeciding,
   onStillDecidingToggle,
+  generationStatus,
   children,
 }: {
   id: string;
@@ -513,6 +646,7 @@ function AccordionShell({
   onToggle: (id: string | null) => void;
   stillDeciding: boolean;
   onStillDecidingToggle: () => void;
+  generationStatus?: SectionGenerationStatus;
   children: React.ReactNode;
 }) {
   const isOpen = openAccordion === id;
@@ -529,8 +663,14 @@ function AccordionShell({
         onClick={() => onToggle(isOpen ? null : id)}
         className="w-full flex items-center justify-between px-4 py-3 text-left"
       >
-        <span className={`font-medium ${stillDeciding ? 'text-gray-400' : 'text-gray-900'}`}>
-          {label}
+        <span className="flex items-center gap-2">
+          <span className={`font-medium ${stillDeciding ? 'text-gray-400' : 'text-gray-900'}`}>
+            {label}
+          </span>
+          {generationStatus === 'generating' && (
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+          )}
+          {generationStatus === 'generated' && <span className="text-xs text-green-500">✓</span>}
         </span>
         <span
           className={`text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
@@ -576,6 +716,7 @@ function FoodAccordion({
   openAccordion,
   onToggle,
   onChange,
+  generationStatus,
 }: {
   id: string;
   label: string;
@@ -583,6 +724,7 @@ function FoodAccordion({
   openAccordion: string | null;
   onToggle: (id: string | null) => void;
   onChange: (d: SectionData) => void;
+  generationStatus?: SectionGenerationStatus;
 }) {
   const [newItem, setNewItem] = useState('');
 
@@ -612,6 +754,7 @@ function FoodAccordion({
       onToggle={onToggle}
       stillDeciding={data.stillDeciding}
       onStillDecidingToggle={() => onChange({ ...data, stillDeciding: !data.stillDeciding })}
+      generationStatus={generationStatus}
     >
       <div className="space-y-2">
         {data.items.map((item) => (
@@ -666,6 +809,7 @@ function SetupCleanupAccordion({
   data,
   kidsWithJobs,
   onChange,
+  generationStatus,
 }: {
   id: string;
   openAccordion: string | null;
@@ -673,6 +817,7 @@ function SetupCleanupAccordion({
   data: SetupCleanupData;
   kidsWithJobs: string[];
   onChange: (d: SetupCleanupData) => void;
+  generationStatus?: SectionGenerationStatus;
 }) {
   const hasKids = kidsWithJobs.length > 0;
 
@@ -684,6 +829,7 @@ function SetupCleanupAccordion({
       onToggle={onToggle}
       stillDeciding={data.stillDeciding}
       onStillDecidingToggle={() => onChange({ ...data, stillDeciding: !data.stillDeciding })}
+      generationStatus={generationStatus}
     >
       <div className="space-y-3">
         <ToggleRow
@@ -722,12 +868,14 @@ function DietaryAccordion({
   onToggle,
   data,
   onChange,
+  generationStatus,
 }: {
   id: string;
   openAccordion: string | null;
   onToggle: (id: string | null) => void;
   data: DietaryData;
   onChange: (d: DietaryData) => void;
+  generationStatus?: SectionGenerationStatus;
 }) {
   const toggleReq = (req: string) => {
     const reqs = data.requirements.includes(req)
@@ -744,6 +892,7 @@ function DietaryAccordion({
       onToggle={onToggle}
       stillDeciding={false}
       onStillDecidingToggle={() => {}}
+      generationStatus={generationStatus}
     >
       <div className="space-y-2">
         {DIETARY_OPTIONS.map((opt) => (
@@ -779,12 +928,14 @@ function OtherAccordion({
   onToggle,
   value,
   onChange,
+  generationStatus,
 }: {
   id: string;
   openAccordion: string | null;
   onToggle: (id: string | null) => void;
   value: string;
   onChange: (v: string) => void;
+  generationStatus?: SectionGenerationStatus;
 }) {
   return (
     <AccordionShell
@@ -794,6 +945,7 @@ function OtherAccordion({
       onToggle={onToggle}
       stillDeciding={false}
       onStillDecidingToggle={() => {}}
+      generationStatus={generationStatus}
     >
       <textarea
         placeholder="Anything else Gather should know about? Music, decorations, specific equipment, venue notes..."

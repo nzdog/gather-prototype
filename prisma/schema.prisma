@@ -983,6 +983,7 @@ model EventSetup {
   setupCleanupData Json?
   dietaryData      Json?
   otherNotes       String?
+  generatedData    Json?    // { mains: [...], sides: [...], ... } — caches per-section AI output
 
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
