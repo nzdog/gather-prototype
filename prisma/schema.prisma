@@ -88,6 +88,7 @@ model Event {
   teams                      Team[]
   aiCallsUsed                Int                      @default(0)
   wrapUpLinks                WrapUpLink[]
+  setup                      EventSetup?
 }
 
 model Day {
@@ -965,4 +966,24 @@ model NudgeLog {
   errorMessage  String?
   createdAt     DateTime    @default(now())
   personEvent   PersonEvent @relation(fields: [personEventId], references: [id], onDelete: Cascade)
+}
+
+model EventSetup {
+  id               String   @id @default(cuid())
+  eventId          String   @unique
+  event            Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  eventType        String?
+  eventTypeOther   String?
+
+  mainsData        Json?
+  sidesData        Json?
+  dessertsData     Json?
+  drinksData       Json?
+  setupCleanupData Json?
+  dietaryData      Json?
+  otherNotes       String?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
