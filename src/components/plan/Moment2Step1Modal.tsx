@@ -539,6 +539,15 @@ export default function Moment2Step1Modal({
         {/* Accordions — only show after event type selected */}
         {state.eventType && (
           <div className="space-y-2">
+            {/* Dietary requirements — first so food sections have context */}
+            <DietaryAccordion
+              id="dietary"
+              openAccordion={openAccordion}
+              onToggle={handleAccordionToggle}
+              data={state.dietaryData}
+              onChange={(d) => updateState((prev) => ({ ...prev, dietaryData: d }))}
+              generationStatus={sectionStatus.dietary}
+            />
             {/* Mains */}
             <FoodAccordion
               id="mains"
@@ -588,15 +597,6 @@ export default function Moment2Step1Modal({
               kidsWithJobs={kidsWithJobs}
               onChange={(d) => updateState((prev) => ({ ...prev, setupCleanupData: d }))}
               generationStatus={sectionStatus.setup}
-            />
-            {/* Dietary requirements */}
-            <DietaryAccordion
-              id="dietary"
-              openAccordion={openAccordion}
-              onToggle={handleAccordionToggle}
-              data={state.dietaryData}
-              onChange={(d) => updateState((prev) => ({ ...prev, dietaryData: d }))}
-              generationStatus={sectionStatus.dietary}
             />
             {/* Other */}
             <OtherAccordion
