@@ -12,8 +12,13 @@ interface Moment2Step1ModalProps {
   onCancel: () => void;
 }
 
+interface FoodItem {
+  name: string;
+  included: boolean;
+}
+
 interface SectionData {
-  items: string[];
+  items: FoodItem[];
   stillDeciding: boolean;
 }
 
@@ -64,51 +69,53 @@ const EVENT_TYPES = [
   'Other',
 ] as const;
 
+const toItems = (names: string[]): FoodItem[] => names.map((name) => ({ name, included: true }));
+
 const FOOD_DEFAULTS: Record<
   string,
-  { mains: string[]; sides: string[]; desserts: string[]; drinks: string[] }
+  { mains: FoodItem[]; sides: FoodItem[]; desserts: FoodItem[]; drinks: FoodItem[] }
 > = {
   BBQ: {
-    mains: ['Sausages', 'Burgers', 'Chicken', 'Steak'],
-    sides: ['Salad', 'Bread rolls', 'Coleslaw', 'Corn on the cob'],
-    desserts: ['Ice cream', 'Fruit platter', 'Pavlova'],
-    drinks: ['Beer', 'Wine', 'Soft drinks', 'Water', 'Juice'],
+    mains: toItems(['Sausages', 'Burgers', 'Chicken', 'Steak']),
+    sides: toItems(['Salad', 'Bread rolls', 'Coleslaw', 'Corn on the cob']),
+    desserts: toItems(['Ice cream', 'Fruit platter', 'Pavlova']),
+    drinks: toItems(['Beer', 'Wine', 'Soft drinks', 'Water', 'Juice']),
   },
   'Roast dinner': {
-    mains: ['Roast lamb', 'Roast chicken', 'Roast beef'],
-    sides: ['Roast potatoes', 'Steamed vegetables', 'Gravy', 'Yorkshire puddings'],
-    desserts: ['Sticky date pudding', 'Trifle', 'Apple crumble'],
-    drinks: ['Wine', 'Sparkling water', 'Soft drinks', 'Water'],
+    mains: toItems(['Roast lamb', 'Roast chicken', 'Roast beef']),
+    sides: toItems(['Roast potatoes', 'Steamed vegetables', 'Gravy', 'Yorkshire puddings']),
+    desserts: toItems(['Sticky date pudding', 'Trifle', 'Apple crumble']),
+    drinks: toItems(['Wine', 'Sparkling water', 'Soft drinks', 'Water']),
   },
   Potluck: {
-    mains: ['Lasagne', 'Curry', 'Fried rice'],
-    sides: ['Salad', 'Bread', 'Dips and crackers'],
-    desserts: ['Cake', 'Brownies', 'Fruit salad'],
-    drinks: ['Juice', 'Soft drinks', 'Water'],
+    mains: toItems(['Lasagne', 'Curry', 'Fried rice']),
+    sides: toItems(['Salad', 'Bread', 'Dips and crackers']),
+    desserts: toItems(['Cake', 'Brownies', 'Fruit salad']),
+    drinks: toItems(['Juice', 'Soft drinks', 'Water']),
   },
   Picnic: {
-    mains: ['Sandwiches', 'Wraps', 'Quiche'],
-    sides: ['Hummus and veggies', 'Chips', 'Fruit'],
-    desserts: ['Muffins', 'Cookies', 'Sliced watermelon'],
-    drinks: ['Lemonade', 'Sparkling water', 'Juice', 'Water'],
+    mains: toItems(['Sandwiches', 'Wraps', 'Quiche']),
+    sides: toItems(['Hummus and veggies', 'Chips', 'Fruit']),
+    desserts: toItems(['Muffins', 'Cookies', 'Sliced watermelon']),
+    drinks: toItems(['Lemonade', 'Sparkling water', 'Juice', 'Water']),
   },
   'Kids party': {
-    mains: ['Party pies', 'Mini sausage rolls', 'Nuggets', 'Pizza'],
-    sides: ['Chips', 'Fairy bread', 'Veggie sticks'],
-    desserts: ['Birthday cake', 'Lollies', 'Jelly cups'],
-    drinks: ['Juice boxes', 'Soft drinks', 'Water'],
+    mains: toItems(['Party pies', 'Mini sausage rolls', 'Nuggets', 'Pizza']),
+    sides: toItems(['Chips', 'Fairy bread', 'Veggie sticks']),
+    desserts: toItems(['Birthday cake', 'Lollies', 'Jelly cups']),
+    drinks: toItems(['Juice boxes', 'Soft drinks', 'Water']),
   },
   Christmas: {
-    mains: ['Ham', 'Turkey', 'Roast lamb'],
-    sides: ['Roast potatoes', 'Salad', 'Bread rolls', 'Cranberry sauce'],
-    desserts: ['Christmas pudding', 'Pavlova', 'Trifle', 'Mince pies'],
-    drinks: ['Champagne', 'Wine', 'Beer', 'Soft drinks', 'Water'],
+    mains: toItems(['Ham', 'Turkey', 'Roast lamb']),
+    sides: toItems(['Roast potatoes', 'Salad', 'Bread rolls', 'Cranberry sauce']),
+    desserts: toItems(['Christmas pudding', 'Pavlova', 'Trifle', 'Mince pies']),
+    drinks: toItems(['Champagne', 'Wine', 'Beer', 'Soft drinks', 'Water']),
   },
   Other: {
-    mains: ['Main dish 1', 'Main dish 2'],
-    sides: ['Side 1', 'Side 2'],
-    desserts: ['Dessert 1', 'Dessert 2'],
-    drinks: ['Soft drinks', 'Water'],
+    mains: toItems(['Main dish 1', 'Main dish 2']),
+    sides: toItems(['Side 1', 'Side 2']),
+    desserts: toItems(['Dessert 1', 'Dessert 2']),
+    drinks: toItems(['Soft drinks', 'Water']),
   },
 };
 
@@ -197,14 +204,27 @@ export default function Moment2Step1Modal({
         const data = await res.json();
         if (data.setup) {
           const s = data.setup;
+          // Migrate old string[] items to FoodItem[] if needed
+          const migrateSectionData = (
+            raw: SectionData | null,
+            fallback: SectionData
+          ): SectionData => {
+            if (!raw) return fallback;
+            const items = Array.isArray(raw.items)
+              ? raw.items.map((item: FoodItem | string) =>
+                  typeof item === 'string' ? { name: item, included: true } : item
+                )
+              : fallback.items;
+            return { items, stillDeciding: raw.stillDeciding ?? fallback.stillDeciding };
+          };
           setState((prev) => ({
             ...prev,
             eventType: s.eventType ?? prev.eventType,
             eventTypeOther: s.eventTypeOther ?? prev.eventTypeOther,
-            mainsData: s.mainsData ?? prev.mainsData,
-            sidesData: s.sidesData ?? prev.sidesData,
-            dessertsData: s.dessertsData ?? prev.dessertsData,
-            drinksData: s.drinksData ?? prev.drinksData,
+            mainsData: migrateSectionData(s.mainsData, prev.mainsData),
+            sidesData: migrateSectionData(s.sidesData, prev.sidesData),
+            dessertsData: migrateSectionData(s.dessertsData, prev.dessertsData),
+            drinksData: migrateSectionData(s.drinksData, prev.drinksData),
             setupCleanupData: s.setupCleanupData ?? prev.setupCleanupData,
             dietaryData: s.dietaryData
               ? { requirements: s.dietaryData.requirements ?? [], other: s.dietaryData.other ?? '' }
@@ -568,13 +588,20 @@ function FoodAccordion({
 
   const handleAddItem = () => {
     const trimmed = newItem.trim();
-    if (!trimmed || data.items.includes(trimmed)) return;
-    onChange({ ...data, items: [...data.items, trimmed] });
+    if (!trimmed || data.items.some((i) => i.name === trimmed)) return;
+    onChange({ ...data, items: [...data.items, { name: trimmed, included: true }] });
     setNewItem('');
   };
 
-  const handleRemoveItem = (item: string) => {
-    onChange({ ...data, items: data.items.filter((i) => i !== item) });
+  const handleRemoveItem = (name: string) => {
+    onChange({ ...data, items: data.items.filter((i) => i.name !== name) });
+  };
+
+  const handleToggleIncluded = (name: string) => {
+    onChange({
+      ...data,
+      items: data.items.map((i) => (i.name === name ? { ...i, included: !i.included } : i)),
+    });
   };
 
   return (
@@ -588,13 +615,23 @@ function FoodAccordion({
     >
       <div className="space-y-2">
         {data.items.map((item) => (
-          <div key={item} className="flex items-center gap-2">
-            <span className="text-sm text-gray-700 flex-1">{item}</span>
+          <div key={item.name} className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={item.included}
+              onChange={() => handleToggleIncluded(item.name)}
+              className="rounded border-gray-300 text-accent focus:ring-accent/40"
+            />
+            <span
+              className={`text-sm flex-1 ${item.included ? 'text-gray-700' : 'text-gray-400 line-through'}`}
+            >
+              {item.name}
+            </span>
             <button
               type="button"
-              onClick={() => handleRemoveItem(item)}
+              onClick={() => handleRemoveItem(item.name)}
               className="text-gray-300 hover:text-red-400 text-sm transition-colors"
-              aria-label={`Remove ${item}`}
+              aria-label={`Remove ${item.name}`}
             >
               &times;
             </button>
