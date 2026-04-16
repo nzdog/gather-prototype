@@ -58,6 +58,7 @@ import Moment1InputForm, { Moment1PersonInput } from '@/components/plan/Moment1I
 import HouseholdCardList, { SavedHousehold } from '@/components/plan/HouseholdCardList';
 import Moment1Summary from '@/components/plan/Moment1Summary';
 import Moment2Opening from '@/components/plan/Moment2Opening';
+import Moment2Step1Modal from '@/components/plan/Moment2Step1Modal';
 import { useEventSetupProgress } from '@/hooks/useEventSetupProgress';
 
 interface Event {
@@ -253,6 +254,7 @@ export default function PlanEditorPage() {
   const [showMoment1, setShowMoment1] = useState(false);
   const [moment1Phase, setMoment1Phase] = useState<'input' | 'summary'>('input');
   const [showMoment2Opening, setShowMoment2Opening] = useState(false);
+  const [showMoment2Step1, setShowMoment2Step1] = useState(false);
   const [households, setHouseholds] = useState<SavedHousehold[]>([]);
   const [editingHousehold, setEditingHousehold] = useState<SavedHousehold | null>(null);
   const moment1FormRef = useRef<HTMLDivElement>(null);
@@ -1657,12 +1659,31 @@ export default function PlanEditorPage() {
     );
   }
 
+  if (showMoment2Step1 && event) {
+    return (
+      <Moment2Step1Modal
+        eventId={event.id}
+        eventName={event.name}
+        onGenerate={() => {
+          setShowMoment2Step1(false);
+          // Navigate to existing plan generation flow
+          handleGeneratePlan();
+        }}
+        onCancel={() => {
+          setShowMoment2Step1(false);
+          setShowMoment2Opening(true);
+        }}
+      />
+    );
+  }
+
   if (showMoment2Opening && event) {
     return (
       <Moment2Opening
         eventName={event.name}
         onStart={() => {
           setShowMoment2Opening(false);
+          setShowMoment2Step1(true);
         }}
       />
     );
