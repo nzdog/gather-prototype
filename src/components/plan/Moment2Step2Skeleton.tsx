@@ -40,6 +40,7 @@ interface Moment2Step2SkeletonProps {
   eventName: string;
   plan: Moment2Plan | null;
   onApprove: () => void;
+  onReady?: () => void;
 }
 
 // ─── Skeleton placeholders ──────────────────────────────────────────────────
@@ -58,11 +59,22 @@ export default function Moment2Step2Skeleton({
   eventName,
   plan,
   onApprove,
+  onReady,
 }: Moment2Step2SkeletonProps) {
   // Track which categories have been revealed (staggered animation)
   const [revealedCategories, setRevealedCategories] = useState<number>(0);
   const [showConsider, setShowConsider] = useState(false);
   const [fullyRendered, setFullyRendered] = useState(false);
+
+  // Notify parent once streaming animation completes so it can transition to
+  // the editable plan view. Skeleton handles loading/streaming; plan view
+  // handles editing. Guarded against double-fire via onReady presence.
+  useEffect(() => {
+    if (fullyRendered && onReady) {
+      onReady();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullyRendered]);
 
   // Stagger category reveal when plan arrives
   useEffect(() => {

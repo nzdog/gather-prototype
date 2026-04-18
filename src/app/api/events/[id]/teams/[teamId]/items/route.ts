@@ -73,7 +73,16 @@ export async function POST(
     if (auth instanceof NextResponse) return auth;
     const body = await request.json();
 
-    const { name, description, quantityAmount, quantityUnit, critical, dietaryTags } = body;
+    const {
+      name,
+      description,
+      quantityAmount,
+      quantityUnit,
+      quantityUnitCustom,
+      quantityText,
+      critical,
+      dietaryTags,
+    } = body;
 
     if (!name) {
       return NextResponse.json({ error: 'name is required' }, { status: 400 });
@@ -109,6 +118,12 @@ export async function POST(
       itemData.quantityAmount = quantityAmount;
       itemData.quantityUnit = quantityUnit;
       itemData.quantityState = 'SPECIFIED';
+    }
+    if (quantityUnitCustom !== undefined) {
+      itemData.quantityUnitCustom = quantityUnitCustom;
+    }
+    if (quantityText !== undefined) {
+      itemData.quantityText = quantityText;
     }
 
     // Add dietary tags if provided

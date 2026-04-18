@@ -60,7 +60,117 @@ import Moment1Summary from '@/components/plan/Moment1Summary';
 import Moment2Opening from '@/components/plan/Moment2Opening';
 import Moment2Step1Modal from '@/components/plan/Moment2Step1Modal';
 import Moment2Step2Skeleton, { Moment2Plan } from '@/components/plan/Moment2Step2Skeleton';
+import Moment2PlanView, {
+  PlanCategory as Moment2PlanCategory,
+  PlanItem as Moment2PlanItem,
+  NewPlanItem as Moment2NewPlanItem,
+} from '@/components/plan/Moment2PlanView';
 import { useEventSetupProgress } from '@/hooks/useEventSetupProgress';
+
+// Moment 2 plan view mappers ────────────────────────────────────────────────
+const MOMENT2_CATEGORY_EMOJIS: Record<string, string> = {
+  mains: '🍖',
+  sides: '🥗',
+  salads: '🥗',
+  starters: '🥟',
+  dessert: '🍰',
+  desserts: '🍰',
+  drinks: '🍺',
+  'setup & cleanup': '🧹',
+  setup: '🧹',
+  cleanup: '🧹',
+  dietary: '⚠️',
+};
+
+function emojiForCategoryName(name: string): string {
+  return MOMENT2_CATEGORY_EMOJIS[name.toLowerCase()] ?? '📋';
+}
+
+type PlanApiItem = {
+  id: string;
+  name: string;
+  quantityAmount: number | null;
+  quantityUnit: string | null;
+  quantityUnitCustom: string | null;
+  quantityText: string | null;
+  notes: string | null;
+  dietaryTags: unknown;
+  team: { id: string; name: string; displayOrder?: number };
+};
+
+type PlanApiTeam = {
+  id: string;
+  name: string;
+  displayOrder?: number;
+};
+
+function mapItemUnitToDisplay(item: PlanApiItem): string {
+  if (item.quantityUnitCustom) return item.quantityUnitCustom;
+  if (!item.quantityUnit || item.quantityUnit === 'CUSTOM') return '';
+  const unitMap: Record<string, string> = {
+    KG: 'kg',
+    G: 'g',
+    L: 'litres',
+    ML: 'ml',
+    COUNT: 'pieces',
+    PACKS: 'packs',
+    TRAYS: 'trays',
+    SERVINGS: 'servings',
+  };
+  return unitMap[item.quantityUnit] ?? item.quantityUnit.toLowerCase();
+}
+
+function mapTeamsAndItemsToPlanCategories(
+  teams: PlanApiTeam[],
+  items: PlanApiItem[]
+): Array<{
+  id: string;
+  name: string;
+  emoji: string;
+  items: Array<{
+    id: string;
+    name: string;
+    quantity: number;
+    unit: string;
+    servingSize: string;
+    notes?: string;
+    dietaryFlags?: string[];
+  }>;
+}> {
+  const itemsByTeamId = new Map<string, PlanApiItem[]>();
+  for (const item of items) {
+    const list = itemsByTeamId.get(item.team.id) ?? [];
+    list.push(item);
+    itemsByTeamId.set(item.team.id, list);
+  }
+
+  const sortedTeams = [...teams].sort((a, b) => {
+    const aOrder = a.displayOrder ?? 0;
+    const bOrder = b.displayOrder ?? 0;
+    if (aOrder !== bOrder) return aOrder - bOrder;
+    return a.name.localeCompare(b.name);
+  });
+
+  return sortedTeams.map((team) => ({
+    id: team.id,
+    name: team.name,
+    emoji: emojiForCategoryName(team.name),
+    items: (itemsByTeamId.get(team.id) ?? []).map((item) => {
+      const dietaryFlags = Array.isArray(item.dietaryTags)
+        ? (item.dietaryTags as string[])
+        : undefined;
+      return {
+        id: item.id,
+        name: item.name,
+        quantity: item.quantityAmount ?? 0,
+        unit: mapItemUnitToDisplay(item),
+        servingSize: item.quantityText ?? '',
+        notes: item.notes ?? undefined,
+        dietaryFlags,
+      };
+    }),
+  }));
+}
 
 interface Event {
   id: string;
@@ -258,6 +368,8 @@ export default function PlanEditorPage() {
   const [showMoment2Step1, setShowMoment2Step1] = useState(false);
   const [showMoment2Step2Skeleton, setShowMoment2Step2Skeleton] = useState(false);
   const [moment2Plan, setMoment2Plan] = useState<Moment2Plan | null>(null);
+  const [showMoment2PlanView, setShowMoment2PlanView] = useState(false);
+  const [moment2PlanCategories, setMoment2PlanCategories] = useState<Moment2PlanCategory[]>([]);
   const [households, setHouseholds] = useState<SavedHousehold[]>([]);
   const [editingHousehold, setEditingHousehold] = useState<SavedHousehold | null>(null);
   const moment1FormRef = useRef<HTMLDivElement>(null);
@@ -582,6 +694,19 @@ export default function PlanEditorPage() {
     } catch (err: any) {
       console.error('Error loading items:', err);
     }
+  };
+
+  const loadMoment2PlanCategories = async (): Promise<Moment2PlanCategory[]> => {
+    const [teamsRes, itemsRes] = await Promise.all([
+      fetch(`/api/events/${eventId}/teams`),
+      fetch(`/api/events/${eventId}/items`),
+    ]);
+    if (!teamsRes.ok || !itemsRes.ok) {
+      throw new Error('Failed to load plan data');
+    }
+    const teamsData = await teamsRes.json();
+    const itemsData = await itemsRes.json();
+    return mapTeamsAndItemsToPlanCategories(teamsData.teams ?? [], itemsData.items ?? []);
   };
 
   const loadPeople = async () => {
@@ -1662,13 +1787,175 @@ export default function PlanEditorPage() {
     );
   }
 
+  if (showMoment2PlanView && event) {
+    return (
+      <Moment2PlanView
+        eventId={event.id}
+        eventName={event.name}
+        guestCount={event.guestCount ?? 0}
+        categories={moment2PlanCategories}
+        onUpdateItem={async (itemId, updates) => {
+          const body: Record<string, unknown> = {};
+          if (updates.name !== undefined) body.name = updates.name;
+          if (updates.quantity !== undefined) body.quantityAmount = updates.quantity;
+          if (updates.unit !== undefined) {
+            body.quantityUnit = 'CUSTOM';
+            body.quantityUnitCustom = updates.unit;
+          }
+          if (updates.servingSize !== undefined) body.quantityText = updates.servingSize;
+          if (updates.notes !== undefined) body.notes = updates.notes;
+          const res = await fetch(`/api/events/${eventId}/items/${itemId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) throw new Error('Failed to update item');
+          // Patch local state instead of full reload for snappy UX.
+          setMoment2PlanCategories((prev) =>
+            prev.map((cat) => ({
+              ...cat,
+              items: cat.items.map((it) =>
+                it.id === itemId
+                  ? {
+                      ...it,
+                      ...(updates.name !== undefined ? { name: updates.name } : {}),
+                      ...(updates.quantity !== undefined ? { quantity: updates.quantity } : {}),
+                      ...(updates.unit !== undefined ? { unit: updates.unit } : {}),
+                      ...(updates.servingSize !== undefined
+                        ? { servingSize: updates.servingSize }
+                        : {}),
+                      ...(updates.notes !== undefined ? { notes: updates.notes } : {}),
+                    }
+                  : it
+              ),
+            }))
+          );
+        }}
+        onRemoveItem={async (itemId) => {
+          const res = await fetch(`/api/events/${eventId}/items/${itemId}`, {
+            method: 'DELETE',
+          });
+          if (!res.ok) throw new Error('Failed to remove item');
+          setMoment2PlanCategories((prev) =>
+            prev.map((cat) => ({
+              ...cat,
+              items: cat.items.filter((it) => it.id !== itemId),
+            }))
+          );
+        }}
+        onAddItem={async (categoryId, newItem) => {
+          const res = await fetch(`/api/events/${eventId}/teams/${categoryId}/items`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: newItem.name,
+              quantityAmount: newItem.quantity,
+              quantityUnit: 'CUSTOM',
+              quantityUnitCustom: newItem.unit,
+              quantityText: newItem.servingSize || undefined,
+              description: newItem.notes,
+            }),
+          });
+          if (!res.ok) throw new Error('Failed to add item');
+          const data = await res.json();
+          const createdItem = data.item as {
+            id: string;
+            name: string;
+            quantityAmount: number | null;
+            quantityUnitCustom: string | null;
+            quantityText: string | null;
+            notes: string | null;
+          };
+          const appended: Moment2PlanItem = {
+            id: createdItem.id,
+            name: createdItem.name,
+            quantity: createdItem.quantityAmount ?? newItem.quantity,
+            unit: createdItem.quantityUnitCustom ?? newItem.unit,
+            servingSize: createdItem.quantityText ?? newItem.servingSize,
+            notes: createdItem.notes ?? newItem.notes,
+          };
+          setMoment2PlanCategories((prev) =>
+            prev.map((cat) =>
+              cat.id === categoryId ? { ...cat, items: [...cat.items, appended] } : cat
+            )
+          );
+        }}
+        onAddCategory={async (name) => {
+          const res = await fetch(`/api/events/${eventId}/teams`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name,
+              coordinatorId: event.hostId,
+            }),
+          });
+          if (!res.ok) throw new Error('Failed to add category');
+          const data = await res.json();
+          const createdTeam = data.team as { id: string; name: string };
+          setMoment2PlanCategories((prev) => [
+            ...prev,
+            {
+              id: createdTeam.id,
+              name: createdTeam.name,
+              emoji: emojiForCategoryName(createdTeam.name),
+              items: [],
+            },
+          ]);
+        }}
+        onReorderItem={async (itemId, newIndex) => {
+          // UI-only reorder: Item model has no displayOrder column, so this
+          // is not persisted. Resets on reload. Documented as known limitation.
+          setMoment2PlanCategories((prev) =>
+            prev.map((cat) => {
+              const idx = cat.items.findIndex((it) => it.id === itemId);
+              if (idx < 0) return cat;
+              const items = [...cat.items];
+              const [moved] = items.splice(idx, 1);
+              const clampedIndex = Math.max(0, Math.min(newIndex, items.length));
+              items.splice(clampedIndex, 0, moved);
+              return { ...cat, items };
+            })
+          );
+        }}
+        onApprove={async () => {
+          await loadEvent();
+          await loadTeams();
+          await loadItems();
+          await loadConflicts();
+          setGateCheckRefresh((prev) => prev + 1);
+          setShowMoment2PlanView(false);
+          setMoment2PlanCategories([]);
+          setMoment2Plan(null);
+          setNextStepDismissed(false);
+          toast.success('Plan approved.');
+        }}
+        onBack={() => {
+          setShowMoment2PlanView(false);
+          setMoment2PlanCategories([]);
+          setShowMoment2Step1(true);
+        }}
+      />
+    );
+  }
+
   if (showMoment2Step2Skeleton && event) {
     return (
       <Moment2Step2Skeleton
         eventName={event.name}
         plan={moment2Plan}
+        onReady={async () => {
+          try {
+            const categories = await loadMoment2PlanCategories();
+            setMoment2PlanCategories(categories);
+            setShowMoment2Step2Skeleton(false);
+            setShowMoment2PlanView(true);
+          } catch (err) {
+            console.error('Failed to load plan for editing:', err);
+            toast.error('Failed to load plan. Please try again.');
+          }
+        }}
         onApprove={async () => {
-          // Refresh all data after approval
+          // Fallback path (unused when onReady auto-transitions): refresh and exit.
           await loadEvent();
           await loadTeams();
           await loadItems();

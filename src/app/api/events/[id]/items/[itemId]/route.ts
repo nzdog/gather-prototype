@@ -33,6 +33,8 @@ export async function PATCH(
     // Quantity fields
     if (body.quantityAmount !== undefined) updateData.quantityAmount = body.quantityAmount;
     if (body.quantityUnit !== undefined) updateData.quantityUnit = body.quantityUnit;
+    if (body.quantityUnitCustom !== undefined)
+      updateData.quantityUnitCustom = body.quantityUnitCustom;
     if (body.quantityState !== undefined) updateData.quantityState = body.quantityState;
     if (body.quantityText !== undefined) updateData.quantityText = body.quantityText;
 
@@ -70,6 +72,7 @@ export async function PATCH(
       body.description !== undefined ||
       body.quantityAmount !== undefined ||
       body.quantityUnit !== undefined ||
+      body.quantityUnitCustom !== undefined ||
       body.quantityState !== undefined ||
       body.quantityText !== undefined ||
       body.critical !== undefined ||
