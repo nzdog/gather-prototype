@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
 import { callClaudeForJSON } from '@/lib/ai/claude';
+import { getNzNotes, getSectionReferenceItems } from '@/lib/ai/config-loader';
 
 const AI_CALL_LIMIT = 10;
 
@@ -57,7 +58,15 @@ function buildSectionPrompt(
   const totalPeople = householdData.totalAdults + householdData.totalKids;
   const eventLabel = eventType === 'Other' ? 'event' : eventType.toLowerCase();
 
-  const systemPrompt = `You are a meal planning assistant for a ${eventLabel}. Return only valid JSON matching the required shape. No prose, no markdown, no explanation.`;
+  const nzNotes = getNzNotes(eventType);
+  const systemPrompt = `You are a meal planning assistant for a ${eventLabel} in New Zealand.${nzNotes ? ' ' + nzNotes : ''} Return only valid JSON matching the required shape. No prose, no markdown, no explanation.`;
+
+  // Build reference items block from config
+  const references = getSectionReferenceItems(eventType, section);
+  const referenceBlock =
+    references.length > 0
+      ? `\nReference items (NZ ${eventLabel}):\n${references.map((r) => `${r.categoryLabel}: ${r.items.join(', ')}`).join('\n')}\nUse these as a starting point — adapt based on Kate's input.\n`
+      : '';
 
   if (section === 'setup') {
     const setupData = sectionData as SectionInput;
@@ -67,7 +76,7 @@ Setup crew needed: ${setupData.setupCrew ? 'yes' : 'no'}
 Cleanup crew needed: ${setupData.cleanupCrew ? 'yes' : 'no'}
 Kids on dishes: ${setupData.kidsOnDishes ? 'yes' : 'no'}
 ${householdData.kidsWithJobs.length > 0 ? `Kids with jobs: ${householdData.kidsWithJobs.join(', ')}` : ''}
-
+${referenceBlock}
 Generate practical setup/cleanup items with quantities.
 
 Return JSON: { "items": [{ "name": string, "quantity": number, "unit": string, "servingSize": string, "notes": string (optional) }] }`;
@@ -101,7 +110,7 @@ Return JSON: { "items": [{ "name": string, "quantity": number, "unit": string, "
   const userPrompt = `Generate the ${sectionLabel} section of a ${eventLabel} plan for ${householdData.totalAdults} adults and ${householdData.totalKids} children.
 
 ${householdData.dietaryRequirements.length > 0 ? `Dietary requirements to accommodate: ${householdData.dietaryRequirements.join(', ')}` : ''}
-
+${referenceBlock}
 Kate's input:
 - Items she wants: ${includedItems.length > 0 ? includedItems.join(', ') : 'none specified'}
 - Items she has excluded: ${excludedItems.length > 0 ? excludedItems.join(', ') : 'none'}

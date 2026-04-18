@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
+import {
+  getAccordionDefaults,
+  CONFIG_EVENT_TYPES,
+  LEGACY_EVENT_TYPE_MAP,
+} from '@/lib/ai/config-loader';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -62,73 +67,17 @@ interface Household {
 
 // ─── Event type defaults ─────────────────────────────────────────────────────
 
-const EVENT_TYPES = [
-  'BBQ',
-  'Roast dinner',
-  'Potluck',
-  'Picnic',
-  'Kids party',
-  'Christmas',
-  'Other',
-] as const;
-
-const toItems = (names: string[]): FoodItem[] => names.map((name) => ({ name, included: true }));
-
-const FOOD_DEFAULTS: Record<
-  string,
-  { mains: FoodItem[]; sides: FoodItem[]; desserts: FoodItem[]; drinks: FoodItem[] }
-> = {
-  BBQ: {
-    mains: toItems(['Sausages', 'Burgers', 'Chicken', 'Steak']),
-    sides: toItems(['Salad', 'Bread rolls', 'Coleslaw', 'Corn on the cob']),
-    desserts: toItems(['Ice cream', 'Fruit platter', 'Pavlova']),
-    drinks: toItems(['Beer', 'Wine', 'Soft drinks', 'Water', 'Juice']),
-  },
-  'Roast dinner': {
-    mains: toItems(['Roast lamb', 'Roast chicken', 'Roast beef']),
-    sides: toItems(['Roast potatoes', 'Steamed vegetables', 'Gravy', 'Yorkshire puddings']),
-    desserts: toItems(['Sticky date pudding', 'Trifle', 'Apple crumble']),
-    drinks: toItems(['Wine', 'Sparkling water', 'Soft drinks', 'Water']),
-  },
-  Potluck: {
-    mains: toItems(['Lasagne', 'Curry', 'Fried rice']),
-    sides: toItems(['Salad', 'Bread', 'Dips and crackers']),
-    desserts: toItems(['Cake', 'Brownies', 'Fruit salad']),
-    drinks: toItems(['Juice', 'Soft drinks', 'Water']),
-  },
-  Picnic: {
-    mains: toItems(['Sandwiches', 'Wraps', 'Quiche']),
-    sides: toItems(['Hummus and veggies', 'Chips', 'Fruit']),
-    desserts: toItems(['Muffins', 'Cookies', 'Sliced watermelon']),
-    drinks: toItems(['Lemonade', 'Sparkling water', 'Juice', 'Water']),
-  },
-  'Kids party': {
-    mains: toItems(['Party pies', 'Mini sausage rolls', 'Nuggets', 'Pizza']),
-    sides: toItems(['Chips', 'Fairy bread', 'Veggie sticks']),
-    desserts: toItems(['Birthday cake', 'Lollies', 'Jelly cups']),
-    drinks: toItems(['Juice boxes', 'Soft drinks', 'Water']),
-  },
-  Christmas: {
-    mains: toItems(['Ham', 'Turkey', 'Roast lamb']),
-    sides: toItems(['Roast potatoes', 'Salad', 'Bread rolls', 'Cranberry sauce']),
-    desserts: toItems(['Christmas pudding', 'Pavlova', 'Trifle', 'Mince pies']),
-    drinks: toItems(['Champagne', 'Wine', 'Beer', 'Soft drinks', 'Water']),
-  },
-  Other: {
-    mains: toItems(['Main dish 1', 'Main dish 2']),
-    sides: toItems(['Side 1', 'Side 2']),
-    desserts: toItems(['Dessert 1', 'Dessert 2']),
-    drinks: toItems(['Soft drinks', 'Water']),
-  },
-};
-
 const FEEDBACK_LINES: Record<string, string> = {
-  BBQ: "A BBQ for [X] people. Let's sort out what you need.",
-  'Roast dinner': "A roast for [X]. I'll help you get it all covered.",
-  Potluck: "A potluck for [X]. Let's figure out who brings what.",
-  Picnic: "A picnic for [X]. Let's pack the basket.",
-  'Kids party': "A kids party for [X]. Let's keep it simple.",
+  'Casual BBQ': "A BBQ for [X] people. Let's sort out what you need.",
+  'Birthday (Kids)': "A kids party for [X]. Let's keep it simple.",
+  'Birthday (Adult)': "A birthday for [X]. Let's make it one to remember.",
   Christmas: "Christmas for [X]. Big one. Let's get it sorted.",
+  Easter: "Easter for [X]. Let's get the menu sorted.",
+  'Wedding Reception': "A wedding reception for [X]. Let's make it special.",
+  'Baby Shower': "A baby shower for [X]. Let's plan something lovely.",
+  'Engagement Party': "An engagement party for [X]. Let's celebrate.",
+  Anniversary: "An anniversary for [X]. Let's make it memorable.",
+  Farewell: "A farewell for [X]. Let's send them off right.",
   Other: "Got it. Let's figure out what this needs.",
 };
 
@@ -246,7 +195,7 @@ export default function Moment2Step1Modal({
           };
           setState((prev) => ({
             ...prev,
-            eventType: s.eventType ?? prev.eventType,
+            eventType: LEGACY_EVENT_TYPE_MAP[s.eventType] ?? s.eventType ?? prev.eventType,
             eventTypeOther: s.eventTypeOther ?? prev.eventTypeOther,
             mainsData: migrateSectionData(s.mainsData, prev.mainsData),
             sidesData: migrateSectionData(s.sidesData, prev.sidesData),
@@ -431,8 +380,7 @@ export default function Moment2Step1Modal({
   const handleEventTypeSelect = useCallback(
     (type: string) => {
       updateState((prev) => {
-        const defaults = FOOD_DEFAULTS[type] ?? FOOD_DEFAULTS.Other;
-        // Only populate defaults if the current items are empty or we're switching from a different type
+        const defaults = getAccordionDefaults(type);
         const shouldPopulate = prev.eventType !== type;
         return {
           ...prev,
@@ -501,7 +449,7 @@ export default function Moment2Step1Modal({
             What kind of event are you planning?
           </p>
           <div className="flex flex-wrap gap-2">
-            {EVENT_TYPES.map((type) => (
+            {CONFIG_EVENT_TYPES.map((type) => (
               <button
                 key={type}
                 type="button"
