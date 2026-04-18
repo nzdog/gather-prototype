@@ -14,6 +14,7 @@ export interface PlanItem {
   servingSize: string;
   notes?: string;
   dietaryFlags?: string[];
+  displayOrder?: number;
 }
 
 export interface PlanCategory {

@@ -45,7 +45,7 @@ export async function GET(
         },
         day: true,
       },
-      orderBy: [{ critical: 'desc' }, { name: 'asc' }],
+      orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
     });
 
     return NextResponse.json({ items });
@@ -135,6 +135,13 @@ export async function POST(
       if (dietaryTags.includes('glutenFree')) itemData.glutenFree = true;
       if (dietaryTags.includes('dairyFree')) itemData.dairyFree = true;
     }
+
+    // Append to end of category: displayOrder = max(displayOrder) + 1.
+    const maxOrder = await prisma.item.aggregate({
+      where: { teamId },
+      _max: { displayOrder: true },
+    });
+    itemData.displayOrder = (maxOrder._max.displayOrder ?? 0) + 1;
 
     const item = await prisma.item.create({
       data: itemData,

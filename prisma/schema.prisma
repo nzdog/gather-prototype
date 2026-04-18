@@ -227,11 +227,14 @@ model Item {
   userConfirmed               Boolean             @default(false)
   teamId                      String
   dayId                       String?
+  displayOrder                Int?
   createdAt                   DateTime            @default(now())
   updatedAt                   DateTime            @updatedAt
   assignment                  Assignment?
   day                         Day?                @relation(fields: [dayId], references: [id])
   team                        Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, displayOrder])
 }
 
 model Assignment {

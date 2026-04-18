@@ -53,6 +53,9 @@ export async function PATCH(
     if (body.description !== undefined) updateData.description = body.description;
     if (body.critical !== undefined) updateData.critical = body.critical;
 
+    // Display order — pure reorder, not substantive (does not flip GENERATED → HOST_EDITED).
+    if (body.displayOrder !== undefined) updateData.displayOrder = body.displayOrder;
+
     // Dietary tags
     if (body.dietaryTags !== undefined) updateData.dietaryTags = body.dietaryTags;
 

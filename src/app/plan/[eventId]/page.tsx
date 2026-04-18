@@ -63,7 +63,6 @@ import Moment2Step2Skeleton, { Moment2Plan } from '@/components/plan/Moment2Step
 import Moment2PlanView, {
   PlanCategory as Moment2PlanCategory,
   PlanItem as Moment2PlanItem,
-  NewPlanItem as Moment2NewPlanItem,
 } from '@/components/plan/Moment2PlanView';
 import { useEventSetupProgress } from '@/hooks/useEventSetupProgress';
 
@@ -95,6 +94,7 @@ type PlanApiItem = {
   quantityText: string | null;
   notes: string | null;
   dietaryTags: unknown;
+  displayOrder: number | null;
   team: { id: string; name: string; displayOrder?: number };
 };
 
@@ -135,6 +135,7 @@ function mapTeamsAndItemsToPlanCategories(
     servingSize: string;
     notes?: string;
     dietaryFlags?: string[];
+    displayOrder?: number;
   }>;
 }> {
   const itemsByTeamId = new Map<string, PlanApiItem[]>();
@@ -155,20 +156,28 @@ function mapTeamsAndItemsToPlanCategories(
     id: team.id,
     name: team.name,
     emoji: emojiForCategoryName(team.name),
-    items: (itemsByTeamId.get(team.id) ?? []).map((item) => {
-      const dietaryFlags = Array.isArray(item.dietaryTags)
-        ? (item.dietaryTags as string[])
-        : undefined;
-      return {
-        id: item.id,
-        name: item.name,
-        quantity: item.quantityAmount ?? 0,
-        unit: mapItemUnitToDisplay(item),
-        servingSize: item.quantityText ?? '',
-        notes: item.notes ?? undefined,
-        dietaryFlags,
-      };
-    }),
+    items: (itemsByTeamId.get(team.id) ?? [])
+      .slice()
+      .sort((a, b) => {
+        const ao = a.displayOrder ?? Number.MAX_SAFE_INTEGER;
+        const bo = b.displayOrder ?? Number.MAX_SAFE_INTEGER;
+        return ao - bo;
+      })
+      .map((item) => {
+        const dietaryFlags = Array.isArray(item.dietaryTags)
+          ? (item.dietaryTags as string[])
+          : undefined;
+        return {
+          id: item.id,
+          name: item.name,
+          quantity: item.quantityAmount ?? 0,
+          unit: mapItemUnitToDisplay(item),
+          servingSize: item.quantityText ?? '',
+          notes: item.notes ?? undefined,
+          dietaryFlags,
+          displayOrder: item.displayOrder ?? undefined,
+        };
+      }),
   }));
 }
 
@@ -1865,6 +1874,7 @@ export default function PlanEditorPage() {
             quantityUnitCustom: string | null;
             quantityText: string | null;
             notes: string | null;
+            displayOrder: number | null;
           };
           const appended: Moment2PlanItem = {
             id: createdItem.id,
@@ -1872,6 +1882,7 @@ export default function PlanEditorPage() {
             quantity: createdItem.quantityAmount ?? newItem.quantity,
             unit: createdItem.quantityUnitCustom ?? newItem.unit,
             servingSize: createdItem.quantityText ?? newItem.servingSize,
+            displayOrder: createdItem.displayOrder ?? undefined,
             notes: createdItem.notes ?? newItem.notes,
           };
           setMoment2PlanCategories((prev) =>
@@ -1903,19 +1914,75 @@ export default function PlanEditorPage() {
           ]);
         }}
         onReorderItem={async (itemId, newIndex) => {
-          // UI-only reorder: Item model has no displayOrder column, so this
-          // is not persisted. Resets on reload. Documented as known limitation.
+          // Locate the category + moved item + swap target, then swap their
+          // displayOrder values on the server. Up/down arrows only move by 1,
+          // so this is always an adjacent swap.
+          const category = moment2PlanCategories.find((c) =>
+            c.items.some((it) => it.id === itemId)
+          );
+          if (!category) return;
+          const currentIndex = category.items.findIndex((it) => it.id === itemId);
+          const clampedIndex = Math.max(0, Math.min(newIndex, category.items.length - 1));
+          if (currentIndex < 0 || currentIndex === clampedIndex) return;
+
+          const movedItem = category.items[currentIndex];
+          const otherItem = category.items[clampedIndex];
+
+          // Optimistic local reorder + swap displayOrder values.
+          const movedDO = movedItem.displayOrder;
+          const otherDO = otherItem.displayOrder;
           setMoment2PlanCategories((prev) =>
             prev.map((cat) => {
-              const idx = cat.items.findIndex((it) => it.id === itemId);
-              if (idx < 0) return cat;
+              if (cat.id !== category.id) return cat;
               const items = [...cat.items];
-              const [moved] = items.splice(idx, 1);
-              const clampedIndex = Math.max(0, Math.min(newIndex, items.length));
-              items.splice(clampedIndex, 0, moved);
+              const [moved] = items.splice(currentIndex, 1);
+              items.splice(clampedIndex, 0, {
+                ...moved,
+                displayOrder: otherDO,
+              });
+              // Update the swapped-with item's displayOrder in the new array.
+              const swapPos = items.findIndex((it) => it.id === otherItem.id);
+              if (swapPos >= 0) {
+                items[swapPos] = { ...items[swapPos], displayOrder: movedDO };
+              }
               return { ...cat, items };
             })
           );
+
+          // Persist. If either side lacks a displayOrder (pre-backfill edge case),
+          // fall back to sequential re-numbering of the whole category.
+          if (movedDO !== undefined && otherDO !== undefined) {
+            await Promise.all([
+              fetch(`/api/events/${eventId}/items/${movedItem.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ displayOrder: otherDO }),
+              }),
+              fetch(`/api/events/${eventId}/items/${otherItem.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ displayOrder: movedDO }),
+              }),
+            ]);
+          } else {
+            // Fallback: renumber the whole category by new positions.
+            const renumberedItems =
+              moment2PlanCategories
+                .find((c) => c.id === category.id)
+                ?.items.map((it) => (it.id === itemId ? movedItem : it)) ?? [];
+            const reordered = [...renumberedItems];
+            const [moved] = reordered.splice(currentIndex, 1);
+            reordered.splice(clampedIndex, 0, moved);
+            await Promise.all(
+              reordered.map((it, idx) =>
+                fetch(`/api/events/${eventId}/items/${it.id}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ displayOrder: idx + 1 }),
+                })
+              )
+            );
+          }
         }}
         onApprove={async () => {
           await loadEvent();

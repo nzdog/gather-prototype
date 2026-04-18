@@ -292,6 +292,14 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
         });
       }
 
+      // Seed sequential displayOrder starting after any existing items in the team,
+      // so re-running finalize-plan appends without colliding with prior batches.
+      const existingMaxOrder = await prisma.item.aggregate({
+        where: { teamId: team.id },
+        _max: { displayOrder: true },
+      });
+      let nextDisplayOrder = (existingMaxOrder._max.displayOrder ?? 0) + 1;
+
       // Create items
       for (const item of category.items) {
         await prisma.item.create({
@@ -307,10 +315,12 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
             aiGenerated: true,
             userConfirmed: false,
             generatedBatchId: batchId,
+            displayOrder: nextDisplayOrder,
             dietaryTags:
               item.dietaryTags && item.dietaryTags.length > 0 ? item.dietaryTags : undefined,
           },
         });
+        nextDisplayOrder++;
       }
     }
 

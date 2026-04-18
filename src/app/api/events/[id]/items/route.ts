@@ -35,7 +35,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
           },
         },
       },
-      orderBy: [{ critical: 'desc' }, { team: { name: 'asc' } }, { name: 'asc' }],
+      orderBy: [{ team: { name: 'asc' } }, { displayOrder: 'asc' }, { createdAt: 'asc' }],
     });
 
     return NextResponse.json({
