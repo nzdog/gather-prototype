@@ -105,31 +105,31 @@ export default function Moment2PlanView({
   const handleSaveEdit = async (itemId: string, updates: Partial<PlanItem>) => {
     await onUpdateItem(itemId, updates);
     setEditingItemId(null);
-    toast.success('Updated.');
+    toast.success('Updated.', { duration: 2000 });
   };
 
   const handleRemove = async (itemId: string) => {
     await onRemoveItem(itemId);
     setEditingItemId(null);
-    toast.success('Removed.');
+    toast.success('Removed.', { duration: 2000 });
   };
 
   const handleQuantitySave = async (itemId: string, newQuantity: number) => {
     await onUpdateItem(itemId, { quantity: newQuantity });
     setQuantityEditId(null);
-    toast.success('Updated.');
+    toast.success('Updated.', { duration: 2000 });
   };
 
   const handleAdd = async (categoryId: string, item: NewPlanItem) => {
     await onAddItem(categoryId, item);
     setAddingToCategory(null);
-    toast.success('Added.');
+    toast.success('Added.', { duration: 2000 });
   };
 
   const handleAddCategory = async (name: string) => {
     await onAddCategory(name);
     setShowAddCategory(false);
-    toast.success('Added.');
+    toast.success('Added.', { duration: 2000 });
   };
 
   const handleMoveItem = async (categoryId: string, itemId: string, direction: 'up' | 'down') => {

@@ -162,10 +162,13 @@ export function getAccordionDefaults(eventType: string): {
   }
 
   return {
-    mains: [...new Set(result.mains)].map((name) => ({ name, included: true })),
-    sides: [...new Set(result.sides)].map((name) => ({ name, included: true })),
-    desserts: [...new Set(result.desserts)].map((name) => ({ name, included: true })),
-    drinks: [...new Set(result.drinks)].map((name) => ({ name, included: true })),
+    // GTC-126: food accordions default to unchecked — user opts in to what they want.
+    // Note: items the user types via "+ Add your own" still default to included: true
+    // (if they typed it, they want it); this only affects the pre-populated defaults.
+    mains: [...new Set(result.mains)].map((name) => ({ name, included: false })),
+    sides: [...new Set(result.sides)].map((name) => ({ name, included: false })),
+    desserts: [...new Set(result.desserts)].map((name) => ({ name, included: false })),
+    drinks: [...new Set(result.drinks)].map((name) => ({ name, included: false })),
   };
 }
 
