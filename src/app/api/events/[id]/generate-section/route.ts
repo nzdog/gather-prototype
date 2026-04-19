@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
 import { callClaudeForJSON } from '@/lib/ai/claude';
 import { getNzNotes, getSectionReferenceItems } from '@/lib/ai/config-loader';
+import { MAX_TOKENS_SECTION_GENERATION } from '@/lib/ai/token-limits';
 
 const AI_CALL_LIMIT = 10;
 
@@ -49,7 +50,7 @@ interface RequestBody {
   };
 }
 
-function buildSectionPrompt(
+export function buildSectionPrompt(
   section: Section,
   eventType: string,
   sectionData: SectionInput,
@@ -171,7 +172,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     );
 
     const result = await callClaudeForJSON<{ items: GeneratedItem[] }>(system, user, {
-      maxTokens: 1024,
+      maxTokens: MAX_TOKENS_SECTION_GENERATION,
       temperature: 0.8,
     });
 

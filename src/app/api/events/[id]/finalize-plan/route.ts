@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
 import { callClaudeForJSON } from '@/lib/ai/claude';
+import {
+  MAX_TOKENS_GAP_FILL,
+  MAX_TOKENS_DIETARY_COVERAGE,
+  MAX_TOKENS_CONSIDERATIONS,
+} from '@/lib/ai/token-limits';
 
 const AI_CALL_LIMIT = 10;
 
@@ -42,7 +47,7 @@ interface HouseholdData {
   dietaryRequirements: string[];
 }
 
-function buildGapPrompt(
+export function buildGapPrompt(
   section: string,
   eventType: string,
   householdData: HouseholdData
@@ -63,7 +68,7 @@ Return JSON: { "items": [{ "name": string, "quantity": number, "unit": string, "
   };
 }
 
-function buildDietaryCoveragePrompt(
+export function buildDietaryCoveragePrompt(
   allItems: Array<{ category: string; items: GeneratedItem[] }>,
   dietaryRequirements: string[]
 ): { system: string; user: string } {
@@ -86,7 +91,7 @@ Return JSON: { "coverage": [{ "requirement": string, "covered": boolean, "flagge
   };
 }
 
-function buildThingsToConsiderPrompt(
+export function buildThingsToConsiderPrompt(
   eventType: string,
   totalPeople: number
 ): { system: string; user: string } {
@@ -202,7 +207,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
 
       const { system, user } = buildGapPrompt(section, eventType, householdData);
       const result = await callClaudeForJSON<{ items: GeneratedItem[] }>(system, user, {
-        maxTokens: 1024,
+        maxTokens: MAX_TOKENS_GAP_FILL,
         temperature: 0.8,
       });
       generatedData[section] = result.items ?? [];
@@ -236,7 +241,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       const { system, user } = buildDietaryCoveragePrompt(allItems, dietaryRequirements);
       const coverageResult = await callClaudeForJSON<{
         coverage: Array<{ requirement: string; covered: boolean; flaggedItems: string[] }>;
-      }>(system, user, { maxTokens: 512, temperature: 0.3 });
+      }>(system, user, { maxTokens: MAX_TOKENS_DIETARY_COVERAGE, temperature: 0.3 });
       dietaryCoverage = coverageResult.coverage ?? [];
       aiCallsUsedInFinalize++;
     }
@@ -249,7 +254,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       const { system, user } = buildThingsToConsiderPrompt(eventType, totalPeople);
       const considerResult = await callClaudeForJSON<{
         items: Array<{ name: string; category: string }>;
-      }>(system, user, { maxTokens: 512, temperature: 0.8 });
+      }>(system, user, { maxTokens: MAX_TOKENS_CONSIDERATIONS, temperature: 0.8 });
       thingsToConsider = considerResult.items ?? [];
       aiCallsUsedInFinalize++;
     }
