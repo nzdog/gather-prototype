@@ -3,6 +3,8 @@
  * Based on Plan AI Protocol v2
  */
 
+import { getNzNotes, getSectionReferenceItems } from './config-loader';
+
 export const PLAN_GENERATION_SYSTEM_PROMPT = `You are a planning assistant for Gather, helping hosts plan multi-day gatherings.
 
 NZ CULTURAL OVERRIDE (HIGHEST PRIORITY):
@@ -529,6 +531,200 @@ Provide a clear, helpful explanation of:
 2. How confident we are (high/medium/low)
 3. Why it matters and what the host should consider
 4. Specific actionable suggestions if applicable`;
+}
+
+/* ---------------------------------------------------------------------------
+ * Moment 2 prompt builders
+ *
+ * These previously lived inside the Next.js route files (generate-section and
+ * finalize-plan). Next.js App Router only allows a fixed allowlist of exports
+ * from `route.ts` files, so they were moved here in GTC-128.
+ * ------------------------------------------------------------------------- */
+
+const MOMENT2_SECTION_LABELS: Record<string, string> = {
+  mains: 'Mains',
+  sides: 'Sides',
+  desserts: 'Dessert',
+  drinks: 'Drinks',
+  setup: 'Setup & Cleanup',
+  dietary: 'Dietary',
+  other: 'Other',
+};
+
+export type Moment2Section =
+  | 'mains'
+  | 'sides'
+  | 'desserts'
+  | 'drinks'
+  | 'setup'
+  | 'dietary'
+  | 'other';
+
+export interface Moment2GeneratedItem {
+  name: string;
+  quantity: number;
+  unit: string;
+  servingSize: string;
+  notes?: string;
+  dietaryTags?: string[];
+}
+
+export interface Moment2HouseholdData {
+  totalAdults: number;
+  totalKids: number;
+  dietaryRequirements: string[];
+}
+
+export interface Moment2SectionHouseholdData extends Moment2HouseholdData {
+  kidsWithJobs: string[];
+}
+
+export interface Moment2SectionInput {
+  items?: Array<{ name: string; included: boolean }>;
+  stillDeciding?: boolean;
+  setupCrew?: boolean;
+  cleanupCrew?: boolean;
+  kidsOnDishes?: boolean;
+  requirements?: string[];
+  other?: string;
+}
+
+export function buildSectionPrompt(
+  section: Moment2Section,
+  eventType: string,
+  sectionData: Moment2SectionInput,
+  householdData: Moment2SectionHouseholdData
+): { system: string; user: string } {
+  const totalPeople = householdData.totalAdults + householdData.totalKids;
+  const eventLabel = eventType === 'Other' ? 'event' : eventType.toLowerCase();
+
+  const nzNotes = getNzNotes(eventType);
+  const systemPrompt = `You are a meal planning assistant for a ${eventLabel} in New Zealand.${nzNotes ? ' ' + nzNotes : ''} Return only valid JSON matching the required shape. No prose, no markdown, no explanation.`;
+
+  // Build reference items block from config
+  const references = getSectionReferenceItems(eventType, section);
+  const referenceBlock =
+    references.length > 0
+      ? `\nReference items (NZ ${eventLabel}):\n${references.map((r) => `${r.categoryLabel}: ${r.items.join(', ')}`).join('\n')}\nUse these as a starting point — adapt based on Kate's input.\n`
+      : '';
+
+  if (section === 'setup') {
+    const setupData = sectionData;
+    const userPrompt = `Generate setup and cleanup items for a ${eventLabel} for ${totalPeople} people (${householdData.totalAdults} adults, ${householdData.totalKids} children).
+
+Setup crew needed: ${setupData.setupCrew ? 'yes' : 'no'}
+Cleanup crew needed: ${setupData.cleanupCrew ? 'yes' : 'no'}
+Kids on dishes: ${setupData.kidsOnDishes ? 'yes' : 'no'}
+${householdData.kidsWithJobs.length > 0 ? `Kids with jobs: ${householdData.kidsWithJobs.join(', ')}` : ''}
+${referenceBlock}
+Generate practical setup/cleanup items with quantities.
+
+Return JSON: { "items": [{ "name": string, "quantity": number, "unit": string, "servingSize": string, "notes": string (optional) }] }`;
+
+    return { system: systemPrompt, user: userPrompt };
+  }
+
+  if (section === 'dietary') {
+    const dietaryData = sectionData;
+    const userPrompt = `Generate dietary accommodation items for a ${eventLabel} for ${totalPeople} people.
+
+Dietary requirements to accommodate: ${(dietaryData.requirements ?? []).join(', ') || 'none specified'}
+${dietaryData.other ? `Other dietary needs: ${dietaryData.other}` : ''}
+
+Generate specific food items that accommodate these dietary requirements. Each item should clearly serve a dietary need.
+
+Return JSON: { "items": [{ "name": string, "quantity": number, "unit": string, "servingSize": string, "notes": string (optional) }] }`;
+
+    return { system: systemPrompt, user: userPrompt };
+  }
+
+  // Food sections: mains, sides, desserts, drinks, other
+  const sectionLabel =
+    section === 'other'
+      ? 'miscellaneous/extras'
+      : section.charAt(0).toUpperCase() + section.slice(1);
+
+  const includedItems = (sectionData.items ?? []).filter((i) => i.included).map((i) => i.name);
+  const excludedItems = (sectionData.items ?? []).filter((i) => !i.included).map((i) => i.name);
+
+  const userPrompt = `Generate the ${sectionLabel} section of a ${eventLabel} plan for ${householdData.totalAdults} adults and ${householdData.totalKids} children.
+
+${householdData.dietaryRequirements.length > 0 ? `Dietary requirements to accommodate: ${householdData.dietaryRequirements.join(', ')}` : ''}
+${referenceBlock}
+Kate's input:
+- Items she wants: ${includedItems.length > 0 ? includedItems.join(', ') : 'none specified'}
+- Items she has excluded: ${excludedItems.length > 0 ? excludedItems.join(', ') : 'none'}
+
+Generate a list of ${section === 'other' ? 'miscellaneous' : section} appropriate for this event. Include Kate's wanted items first (with quantities), then fill in any gaps with sensible defaults.
+
+For each item:
+- Calculate quantities based on adult/kid counts
+- Use real units (kg, pieces, trays, litres, bottles, bowls)
+- Note any dietary accommodations
+
+Return JSON: { "items": [{ "name": string, "quantity": number, "unit": string, "servingSize": string, "notes": string (optional) }] }`;
+
+  return { system: systemPrompt, user: userPrompt };
+}
+
+export function buildGapPrompt(
+  section: string,
+  eventType: string,
+  householdData: Moment2HouseholdData
+): { system: string; user: string } {
+  const totalPeople = householdData.totalAdults + householdData.totalKids;
+  const eventLabel = eventType === 'Other' ? 'event' : eventType.toLowerCase();
+  const sectionLabel = MOMENT2_SECTION_LABELS[section] ?? section;
+
+  return {
+    system: `You are a meal planning assistant for a ${eventLabel}. Return only valid JSON. No prose.`,
+    user: `Generate the ${sectionLabel} section for a ${eventLabel} for ${householdData.totalAdults} adults and ${householdData.totalKids} children (${totalPeople} total).
+
+${householdData.dietaryRequirements.length > 0 ? `Dietary requirements: ${householdData.dietaryRequirements.join(', ')}` : ''}
+
+Generate sensible defaults for this event type. Use real units (kg, pieces, trays, litres, bottles).
+
+Return JSON: { "items": [{ "name": string, "quantity": number, "unit": string, "servingSize": string, "notes": string (optional) }] }`,
+  };
+}
+
+export function buildDietaryCoveragePrompt(
+  allItems: Array<{ category: string; items: Moment2GeneratedItem[] }>,
+  dietaryRequirements: string[]
+): { system: string; user: string } {
+  const itemList = allItems
+    .flatMap((c) => c.items.map((i) => `${c.category}: ${i.name}${i.notes ? ` (${i.notes})` : ''}`))
+    .join('\n');
+
+  return {
+    system: 'You are a dietary requirement checker. Return only valid JSON. No prose.',
+    user: `Check whether these dietary requirements are covered by the plan items.
+
+Dietary requirements: ${dietaryRequirements.join(', ')}
+
+Plan items:
+${itemList}
+
+For each requirement, determine if it's adequately covered.
+
+Return JSON: { "coverage": [{ "requirement": string, "covered": boolean, "flaggedItems": string[] (items that help cover it, or empty if not covered) }] }`,
+  };
+}
+
+export function buildThingsToConsiderPrompt(
+  eventType: string,
+  totalPeople: number
+): { system: string; user: string } {
+  const eventLabel = eventType === 'Other' ? 'event' : eventType.toLowerCase();
+
+  return {
+    system: 'You are an event planning assistant. Return only valid JSON. No prose.',
+    user: `Suggest 6-10 "things to consider" items for a ${eventLabel} for ${totalPeople} people. These are items the host might forget — napkins, ice, serving spoons, rubbish bags, etc.
+
+Each item should include a suggested category (where it would go if added to the plan).
+
+Return JSON: { "items": [{ "name": string, "category": string }] }`,
+  };
 }
 
 /**

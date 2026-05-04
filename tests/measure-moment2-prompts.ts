@@ -10,12 +10,12 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { buildSectionPrompt } from '../src/app/api/events/[id]/generate-section/route';
 import {
+  buildSectionPrompt,
   buildGapPrompt,
   buildDietaryCoveragePrompt,
   buildThingsToConsiderPrompt,
-} from '../src/app/api/events/[id]/finalize-plan/route';
+} from '../src/lib/ai/prompts';
 import {
   MAX_TOKENS_SECTION_GENERATION,
   MAX_TOKENS_GAP_FILL,

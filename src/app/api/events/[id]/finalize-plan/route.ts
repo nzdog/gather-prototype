@@ -7,6 +7,11 @@ import {
   MAX_TOKENS_DIETARY_COVERAGE,
   MAX_TOKENS_CONSIDERATIONS,
 } from '@/lib/ai/token-limits';
+import {
+  buildGapPrompt,
+  buildDietaryCoveragePrompt,
+  buildThingsToConsiderPrompt,
+} from '@/lib/ai/prompts';
 
 const AI_CALL_LIMIT = 10;
 
@@ -45,66 +50,6 @@ interface HouseholdData {
   totalAdults: number;
   totalKids: number;
   dietaryRequirements: string[];
-}
-
-export function buildGapPrompt(
-  section: string,
-  eventType: string,
-  householdData: HouseholdData
-): { system: string; user: string } {
-  const totalPeople = householdData.totalAdults + householdData.totalKids;
-  const eventLabel = eventType === 'Other' ? 'event' : eventType.toLowerCase();
-  const sectionLabel = CATEGORY_LABELS[section] ?? section;
-
-  return {
-    system: `You are a meal planning assistant for a ${eventLabel}. Return only valid JSON. No prose.`,
-    user: `Generate the ${sectionLabel} section for a ${eventLabel} for ${householdData.totalAdults} adults and ${householdData.totalKids} children (${totalPeople} total).
-
-${householdData.dietaryRequirements.length > 0 ? `Dietary requirements: ${householdData.dietaryRequirements.join(', ')}` : ''}
-
-Generate sensible defaults for this event type. Use real units (kg, pieces, trays, litres, bottles).
-
-Return JSON: { "items": [{ "name": string, "quantity": number, "unit": string, "servingSize": string, "notes": string (optional) }] }`,
-  };
-}
-
-export function buildDietaryCoveragePrompt(
-  allItems: Array<{ category: string; items: GeneratedItem[] }>,
-  dietaryRequirements: string[]
-): { system: string; user: string } {
-  const itemList = allItems
-    .flatMap((c) => c.items.map((i) => `${c.category}: ${i.name}${i.notes ? ` (${i.notes})` : ''}`))
-    .join('\n');
-
-  return {
-    system: 'You are a dietary requirement checker. Return only valid JSON. No prose.',
-    user: `Check whether these dietary requirements are covered by the plan items.
-
-Dietary requirements: ${dietaryRequirements.join(', ')}
-
-Plan items:
-${itemList}
-
-For each requirement, determine if it's adequately covered.
-
-Return JSON: { "coverage": [{ "requirement": string, "covered": boolean, "flaggedItems": string[] (items that help cover it, or empty if not covered) }] }`,
-  };
-}
-
-export function buildThingsToConsiderPrompt(
-  eventType: string,
-  totalPeople: number
-): { system: string; user: string } {
-  const eventLabel = eventType === 'Other' ? 'event' : eventType.toLowerCase();
-
-  return {
-    system: 'You are an event planning assistant. Return only valid JSON. No prose.',
-    user: `Suggest 6-10 "things to consider" items for a ${eventLabel} for ${totalPeople} people. These are items the host might forget — napkins, ice, serving spoons, rubbish bags, etc.
-
-Each item should include a suggested category (where it would go if added to the plan).
-
-Return JSON: { "items": [{ "name": string, "category": string }] }`,
-  };
 }
 
 export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
