@@ -979,14 +979,17 @@ model EventSetup {
   eventType        String?
   eventTypeOther   String?
 
-  mainsData        Json?
-  sidesData        Json?
-  dessertsData     Json?
-  drinksData       Json?
-  setupCleanupData Json?
-  dietaryData      Json?
-  otherNotes       String?
-  generatedData    Json?    // { mains: [...], sides: [...], ... } — caches per-section AI output
+  mainsData              Json?
+  sidesData              Json?
+  dessertsData           Json?
+  drinksData             Json?
+  setupCleanupData       Json?
+  dietaryData            Json?
+  otherNotes             String?
+  // GTC-133: keyed by config category (entree_starters, drinks_alcoholic, etc.) for the 9 categories
+  // without dedicated columns. Shape: { [categoryKey]: { selections: OptionTreeSelections, stillDeciding?: boolean } }
+  extendedCategoriesData Json?
+  generatedData          Json?    // { mains: [...], sides: [...], ... } — caches per-section AI output
 
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
