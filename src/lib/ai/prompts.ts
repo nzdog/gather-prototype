@@ -549,16 +549,80 @@ const MOMENT2_SECTION_LABELS: Record<string, string> = {
   setup: 'Setup & Cleanup',
   dietary: 'Dietary',
   other: 'Other',
+  // GTC-133 canonical category keys
+  sides_salads: 'Sides & Salads',
+  entree_starters: 'Entrée & Starters',
+  dessert: 'Dessert',
+  drinks_alcoholic: 'Alcoholic Drinks',
+  drinks_non_alcoholic: 'Non-Alcoholic Drinks',
+  table_snacks: 'Table Snacks',
+  breakfast_brunch: 'Breakfast & Brunch',
+  cake: 'Cake',
 };
 
 export type Moment2Section =
+  // Legacy short-form section keys (current modal)
   | 'mains'
   | 'sides'
   | 'desserts'
   | 'drinks'
   | 'setup'
   | 'dietary'
-  | 'other';
+  | 'other'
+  // GTC-133 canonical category keys (new modal — food only in this commit; non-food
+  // keys join in sub-commit d when their prompts land)
+  | 'sides_salads'
+  | 'entree_starters'
+  | 'dessert'
+  | 'drinks_alcoholic'
+  | 'drinks_non_alcoholic'
+  | 'table_snacks'
+  | 'breakfast_brunch'
+  | 'cake';
+
+export const VALID_MOMENT2_SECTIONS: readonly Moment2Section[] = [
+  'mains',
+  'sides',
+  'desserts',
+  'drinks',
+  'setup',
+  'dietary',
+  'other',
+  'sides_salads',
+  'entree_starters',
+  'dessert',
+  'drinks_alcoholic',
+  'drinks_non_alcoholic',
+  'table_snacks',
+  'breakfast_brunch',
+  'cake',
+] as const;
+
+/**
+ * Maps a canonical category key to its existing section family — used to pick the
+ * right reference-items lookup and prompt scaffolding. Legacy short-form keys map
+ * to themselves.
+ */
+const SECTION_KEY_TO_FAMILY: Record<
+  string,
+  'mains' | 'sides' | 'desserts' | 'drinks' | 'setup' | 'dietary' | 'other'
+> = {
+  mains: 'mains',
+  sides: 'sides',
+  desserts: 'desserts',
+  drinks: 'drinks',
+  setup: 'setup',
+  dietary: 'dietary',
+  other: 'other',
+  sides_salads: 'sides',
+  entree_starters: 'sides',
+  table_snacks: 'sides',
+  dessert: 'desserts',
+  cake: 'desserts',
+  drinks_alcoholic: 'drinks',
+  drinks_non_alcoholic: 'drinks',
+  breakfast_brunch: 'mains',
+};
 
 export interface Moment2GeneratedItem {
   name: string;
@@ -579,6 +643,14 @@ export interface Moment2SectionHouseholdData extends Moment2HouseholdData {
   kidsWithJobs: string[];
 }
 
+export interface OptionTreeLevelSelection {
+  options: string[];
+  freeText: string;
+}
+
+/** Mirrors GTC-131's OptionTreeSelections — keys are level indices, often serialized as strings. */
+export type OptionTreeSelections = Record<string | number, OptionTreeLevelSelection>;
+
 export interface Moment2SectionInput {
   items?: Array<{ name: string; included: boolean }>;
   stillDeciding?: boolean;
@@ -587,6 +659,33 @@ export interface Moment2SectionInput {
   kidsOnDishes?: boolean;
   requirements?: string[];
   other?: string;
+  // GTC-133: option-tree selections for the new modal path. When present, takes
+  // precedence over `items` for prompt construction.
+  selections?: OptionTreeSelections;
+}
+
+/**
+ * Flatten OptionTreeSelections to a deduped list of selected options across all
+ * levels, with any free-text values appended. Used to feed the food prompt path
+ * without restructuring its "Kate's input" block.
+ */
+function flattenSelections(selections: OptionTreeSelections): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const lvl of Object.values(selections)) {
+    for (const opt of lvl.options ?? []) {
+      if (opt && !seen.has(opt)) {
+        seen.add(opt);
+        out.push(opt);
+      }
+    }
+    const ft = (lvl.freeText ?? '').trim();
+    if (ft && !seen.has(ft)) {
+      seen.add(ft);
+      out.push(ft);
+    }
+  }
+  return out;
 }
 
 export function buildSectionPrompt(
@@ -598,17 +697,21 @@ export function buildSectionPrompt(
   const totalPeople = householdData.totalAdults + householdData.totalKids;
   const eventLabel = eventType === 'Other' ? 'event' : eventType.toLowerCase();
 
+  // GTC-133: resolve canonical category keys to their existing section family for
+  // reference-items lookup and prompt scaffolding. Legacy keys map to themselves.
+  const family = SECTION_KEY_TO_FAMILY[section] ?? section;
+
   const nzNotes = getNzNotes(eventType);
   const systemPrompt = `You are a meal planning assistant for a ${eventLabel} in New Zealand.${nzNotes ? ' ' + nzNotes : ''} Return only valid JSON matching the required shape. No prose, no markdown, no explanation.`;
 
-  // Build reference items block from config
-  const references = getSectionReferenceItems(eventType, section);
+  // Build reference items block from config — keyed by the section family
+  const references = getSectionReferenceItems(eventType, family);
   const referenceBlock =
     references.length > 0
       ? `\nReference items (NZ ${eventLabel}):\n${references.map((r) => `${r.categoryLabel}: ${r.items.join(', ')}`).join('\n')}\nUse these as a starting point — adapt based on Kate's input.\n`
       : '';
 
-  if (section === 'setup') {
+  if (family === 'setup') {
     const setupData = sectionData;
     const userPrompt = `Generate setup and cleanup items for a ${eventLabel} for ${totalPeople} people (${householdData.totalAdults} adults, ${householdData.totalKids} children).
 
@@ -624,7 +727,7 @@ Return JSON: { "items": [{ "name": string, "quantity": number, "unit": string, "
     return { system: systemPrompt, user: userPrompt };
   }
 
-  if (section === 'dietary') {
+  if (family === 'dietary') {
     const dietaryData = sectionData;
     const userPrompt = `Generate dietary accommodation items for a ${eventLabel} for ${totalPeople} people.
 
@@ -638,14 +741,27 @@ Return JSON: { "items": [{ "name": string, "quantity": number, "unit": string, "
     return { system: systemPrompt, user: userPrompt };
   }
 
-  // Food sections: mains, sides, desserts, drinks, other
+  // Food sections: mains, sides, desserts, drinks, other (and canonical food keys
+  // like sides_salads, entree_starters, dessert, drinks_alcoholic, etc., resolved
+  // via SECTION_KEY_TO_FAMILY above).
   const sectionLabel =
-    section === 'other'
+    family === 'other'
       ? 'miscellaneous/extras'
-      : section.charAt(0).toUpperCase() + section.slice(1);
+      : (MOMENT2_SECTION_LABELS[section] ?? family.charAt(0).toUpperCase() + family.slice(1));
 
-  const includedItems = (sectionData.items ?? []).filter((i) => i.included).map((i) => i.name);
-  const excludedItems = (sectionData.items ?? []).filter((i) => !i.included).map((i) => i.name);
+  // GTC-133: prefer option-tree selections when present (new modal); fall back to
+  // the legacy items/included shape (current modal). Selections are flattened to
+  // a single "wanted items" list so the existing prompt scaffolding works
+  // unchanged. Excluded items don't exist in the option-tree shape.
+  let includedItems: string[];
+  let excludedItems: string[];
+  if (sectionData.selections) {
+    includedItems = flattenSelections(sectionData.selections);
+    excludedItems = [];
+  } else {
+    includedItems = (sectionData.items ?? []).filter((i) => i.included).map((i) => i.name);
+    excludedItems = (sectionData.items ?? []).filter((i) => !i.included).map((i) => i.name);
+  }
 
   const userPrompt = `Generate the ${sectionLabel} section of a ${eventLabel} plan for ${householdData.totalAdults} adults and ${householdData.totalKids} children.
 
@@ -655,7 +771,7 @@ Kate's input:
 - Items she wants: ${includedItems.length > 0 ? includedItems.join(', ') : 'none specified'}
 - Items she has excluded: ${excludedItems.length > 0 ? excludedItems.join(', ') : 'none'}
 
-Generate a list of ${section === 'other' ? 'miscellaneous' : section} appropriate for this event. Include Kate's wanted items first (with quantities), then fill in any gaps with sensible defaults.
+Generate a list of ${family === 'other' ? 'miscellaneous' : sectionLabel.toLowerCase()} appropriate for this event. Include Kate's wanted items first (with quantities), then fill in any gaps with sensible defaults.
 
 For each item:
 - Calculate quantities based on adult/kid counts

@@ -3,21 +3,14 @@ import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
 import { callClaudeForJSON } from '@/lib/ai/claude';
 import { MAX_TOKENS_SECTION_GENERATION } from '@/lib/ai/token-limits';
-import { buildSectionPrompt } from '@/lib/ai/prompts';
+import {
+  buildSectionPrompt,
+  VALID_MOMENT2_SECTIONS,
+  type Moment2Section,
+  type OptionTreeSelections,
+} from '@/lib/ai/prompts';
 
 const AI_CALL_LIMIT = 10;
-
-const VALID_SECTIONS = [
-  'mains',
-  'sides',
-  'desserts',
-  'drinks',
-  'setup',
-  'dietary',
-  'other',
-] as const;
-
-type Section = (typeof VALID_SECTIONS)[number];
 
 interface GeneratedItem {
   name: string;
@@ -35,10 +28,12 @@ interface SectionInput {
   kidsOnDishes?: boolean;
   requirements?: string[];
   other?: string;
+  // GTC-133: option-tree selections from the new modal path
+  selections?: OptionTreeSelections;
 }
 
 interface RequestBody {
-  section: Section;
+  section: Moment2Section;
   eventType: string;
   eventTypeOther?: string;
   sectionData: SectionInput;
@@ -73,9 +68,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const body: RequestBody = await request.json();
 
     // Validate section
-    if (!VALID_SECTIONS.includes(body.section)) {
+    if (!VALID_MOMENT2_SECTIONS.includes(body.section)) {
       return NextResponse.json(
-        { error: 'Invalid section', allowed: VALID_SECTIONS },
+        { error: 'Invalid section', allowed: VALID_MOMENT2_SECTIONS },
         { status: 400 }
       );
     }
