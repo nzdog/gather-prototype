@@ -29,6 +29,20 @@ interface DietaryData {
   other?: string;
 }
 
+interface OptionTreeLevelSelection {
+  options: string[];
+  freeText: string;
+}
+
+type OptionTreeSelections = Record<string, OptionTreeLevelSelection>;
+
+interface ExtendedCategoryEntry {
+  selections?: OptionTreeSelections;
+  stillDeciding?: boolean;
+}
+
+type ExtendedCategoriesData = Record<string, ExtendedCategoryEntry>;
+
 interface EventSetupBody {
   eventType?: string;
   eventTypeOther?: string;
@@ -39,6 +53,11 @@ interface EventSetupBody {
   setupCleanupData?: SetupCleanupData;
   dietaryData?: DietaryData;
   otherNotes?: string;
+  extendedCategoriesData?: ExtendedCategoriesData;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -108,6 +127,26 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       }
     }
 
+    // Validate extendedCategoriesData shape if provided. Lightweight gate: must be a
+    // plain object whose values are plain objects. Per-level selection shape is trusted
+    // to the modal — mismatched data round-trips harmlessly through Prisma's Json column.
+    if (body.extendedCategoriesData !== undefined) {
+      if (!isPlainObject(body.extendedCategoriesData)) {
+        return NextResponse.json(
+          { error: 'extendedCategoriesData must be an object keyed by category' },
+          { status: 400 }
+        );
+      }
+      for (const [key, entry] of Object.entries(body.extendedCategoriesData)) {
+        if (!isPlainObject(entry)) {
+          return NextResponse.json(
+            { error: `extendedCategoriesData.${key} must be an object` },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     // Build update data — only include fields present in the request body
     const data: Record<string, unknown> = {};
     if ('eventType' in body) data.eventType = body.eventType;
@@ -119,6 +158,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     if ('setupCleanupData' in body) data.setupCleanupData = body.setupCleanupData;
     if ('dietaryData' in body) data.dietaryData = body.dietaryData;
     if ('otherNotes' in body) data.otherNotes = body.otherNotes;
+    if ('extendedCategoriesData' in body) data.extendedCategoriesData = body.extendedCategoriesData;
 
     const setup = await prisma.eventSetup.upsert({
       where: { eventId },
