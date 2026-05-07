@@ -10,7 +10,7 @@ import {
   type OptionTreeSelections,
 } from '@/lib/ai/prompts';
 
-const AI_CALL_LIMIT = 10;
+const AI_CALL_LIMIT = 20;
 
 interface GeneratedItem {
   name: string;

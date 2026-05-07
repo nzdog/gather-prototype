@@ -13,7 +13,7 @@ import {
   buildThingsToConsiderPrompt,
 } from '@/lib/ai/prompts';
 
-const AI_CALL_LIMIT = 10;
+const AI_CALL_LIMIT = 20;
 
 const CATEGORY_EMOJIS: Record<string, string> = {
   mains: '🍖',
