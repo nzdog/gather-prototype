@@ -30,16 +30,14 @@ interface SectionData {
   stillDeciding: boolean;
 }
 
-interface SetupCleanupData {
-  setupCrew: boolean;
-  cleanupCrew: boolean;
-  kidsOnDishes: boolean;
-  stillDeciding: boolean;
-}
-
 interface DietaryData {
   requirements: string[];
   other: string;
+}
+
+interface OtherJobsAccordionData {
+  freeText: string;
+  stillDeciding: boolean;
 }
 
 interface Step1State {
@@ -49,9 +47,11 @@ interface Step1State {
   sidesData: SectionData;
   dessertsData: SectionData;
   drinksData: SectionData;
-  setupCleanupData: SetupCleanupData;
   dietaryData: DietaryData;
   otherNotes: string;
+  setUpData: OtherJobsAccordionData;
+  cleanUpData: OtherJobsAccordionData;
+  otherJobsOtherData: OtherJobsAccordionData;
 }
 
 interface HouseholdMember {
@@ -83,6 +83,8 @@ const FEEDBACK_LINES: Record<string, string> = {
 
 const DIETARY_OPTIONS = ['Vegetarian', 'Vegan', 'Gluten-free', 'Dairy-free', 'Nut allergy'];
 
+const EMPTY_OTHER_JOBS: OtherJobsAccordionData = { freeText: '', stillDeciding: false };
+
 const INITIAL_STATE: Step1State = {
   eventType: null,
   eventTypeOther: '',
@@ -90,15 +92,23 @@ const INITIAL_STATE: Step1State = {
   sidesData: { items: [], stillDeciding: false },
   dessertsData: { items: [], stillDeciding: false },
   drinksData: { items: [], stillDeciding: false },
-  setupCleanupData: {
-    setupCrew: false,
-    cleanupCrew: false,
-    kidsOnDishes: false,
-    stillDeciding: false,
-  },
   dietaryData: { requirements: [], other: '' },
   otherNotes: '',
+  setUpData: { ...EMPTY_OTHER_JOBS },
+  cleanUpData: { ...EMPTY_OTHER_JOBS },
+  otherJobsOtherData: { ...EMPTY_OTHER_JOBS },
 };
+
+function readOtherJobs(raw: unknown): OtherJobsAccordionData {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const r = raw as { freeText?: unknown; stillDeciding?: unknown };
+    return {
+      freeText: typeof r.freeText === 'string' ? r.freeText : '',
+      stillDeciding: typeof r.stillDeciding === 'boolean' ? r.stillDeciding : false,
+    };
+  }
+  return { ...EMPTY_OTHER_JOBS };
+}
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -125,7 +135,6 @@ export default function Moment2Step1Modal({
     sides: 'idle',
     desserts: 'idle',
     drinks: 'idle',
-    setup: 'idle',
     dietary: 'idle',
     other: 'idle',
   });
@@ -201,11 +210,13 @@ export default function Moment2Step1Modal({
             sidesData: migrateSectionData(s.sidesData, prev.sidesData),
             dessertsData: migrateSectionData(s.dessertsData, prev.dessertsData),
             drinksData: migrateSectionData(s.drinksData, prev.drinksData),
-            setupCleanupData: s.setupCleanupData ?? prev.setupCleanupData,
             dietaryData: s.dietaryData
               ? { requirements: s.dietaryData.requirements ?? [], other: s.dietaryData.other ?? '' }
               : prev.dietaryData,
             otherNotes: s.otherNotes ?? prev.otherNotes,
+            setUpData: readOtherJobs(s.setUpData),
+            cleanUpData: readOtherJobs(s.cleanUpData),
+            otherJobsOtherData: readOtherJobs(s.otherJobsOtherData),
           }));
         }
         setLoaded(true);
@@ -233,9 +244,11 @@ export default function Moment2Step1Modal({
       payload.sidesData = data.sidesData;
       payload.dessertsData = data.dessertsData;
       payload.drinksData = data.drinksData;
-      payload.setupCleanupData = data.setupCleanupData;
       payload.dietaryData = data.dietaryData;
       payload.otherNotes = data.otherNotes;
+      payload.setUpData = data.setUpData;
+      payload.cleanUpData = data.cleanUpData;
+      payload.otherJobsOtherData = data.otherJobsOtherData;
 
       try {
         setSaving(true);
@@ -287,7 +300,6 @@ export default function Moment2Step1Modal({
         sides: currentState.sidesData,
         desserts: currentState.dessertsData,
         drinks: currentState.drinksData,
-        setup: currentState.setupCleanupData,
         dietary: currentState.dietaryData,
         other: {
           items: currentState.otherNotes ? [{ name: currentState.otherNotes, included: true }] : [],
@@ -487,6 +499,10 @@ export default function Moment2Step1Modal({
         {/* Accordions — only show after event type selected */}
         {state.eventType && (
           <div className="space-y-2">
+            {/* FOOD section */}
+            <div className="text-xs uppercase tracking-wider text-gray-500 mt-4 mb-2 border-t border-gray-200 pt-4">
+              Food
+            </div>
             {/* Dietary requirements — first so food sections have context */}
             <DietaryAccordion
               id="dietary"
@@ -536,17 +552,7 @@ export default function Moment2Step1Modal({
               onChange={(d) => updateState((prev) => ({ ...prev, drinksData: d }))}
               generationStatus={sectionStatus.drinks}
             />
-            {/* Setup & Cleanup */}
-            <SetupCleanupAccordion
-              id="setup"
-              openAccordion={openAccordion}
-              onToggle={handleAccordionToggle}
-              data={state.setupCleanupData}
-              kidsWithJobs={kidsWithJobs}
-              onChange={(d) => updateState((prev) => ({ ...prev, setupCleanupData: d }))}
-              generationStatus={sectionStatus.setup}
-            />
-            {/* Other */}
+            {/* Other (food) */}
             <OtherAccordion
               id="other"
               openAccordion={openAccordion}
@@ -554,6 +560,38 @@ export default function Moment2Step1Modal({
               value={state.otherNotes}
               onChange={(v) => updateState((prev) => ({ ...prev, otherNotes: v }))}
               generationStatus={sectionStatus.other}
+            />
+
+            {/* OTHER JOBS section */}
+            <div className="text-xs uppercase tracking-wider text-gray-500 mt-6 mb-2 border-t border-gray-200 pt-4">
+              Other jobs
+            </div>
+            <FreeTextAccordion
+              id="setUp"
+              label="🛠️ Set up"
+              placeholder="What needs setting up before guests arrive? E.g. tables, chairs, decorations..."
+              data={state.setUpData}
+              openAccordion={openAccordion}
+              onToggle={handleAccordionToggle}
+              onChange={(d) => updateState((prev) => ({ ...prev, setUpData: d }))}
+            />
+            <FreeTextAccordion
+              id="cleanUp"
+              label="🧹 Clean up"
+              placeholder="What needs cleaning up afterwards? E.g. dishes, rubbish, areas to tidy..."
+              data={state.cleanUpData}
+              openAccordion={openAccordion}
+              onToggle={handleAccordionToggle}
+              onChange={(d) => updateState((prev) => ({ ...prev, cleanUpData: d }))}
+            />
+            <FreeTextAccordion
+              id="otherJobsOther"
+              label="📋 Other"
+              placeholder="Anything else that needs organising? E.g. transport, gifts, music..."
+              data={state.otherJobsOtherData}
+              openAccordion={openAccordion}
+              onToggle={handleAccordionToggle}
+              onChange={(d) => updateState((prev) => ({ ...prev, otherJobsOtherData: d }))}
             />
           </div>
         )}
@@ -748,62 +786,41 @@ function FoodAccordion({
   );
 }
 
-// ─── Setup & Cleanup accordion ───────────────────────────────────────────────
+// ─── Free-text accordion (Other-jobs: Set up, Clean up, Other) ───────────────
 
-function SetupCleanupAccordion({
+function FreeTextAccordion({
   id,
+  label,
+  placeholder,
+  data,
   openAccordion,
   onToggle,
-  data,
-  kidsWithJobs,
   onChange,
-  generationStatus,
 }: {
   id: string;
+  label: string;
+  placeholder: string;
+  data: OtherJobsAccordionData;
   openAccordion: string | null;
   onToggle: (id: string | null) => void;
-  data: SetupCleanupData;
-  kidsWithJobs: string[];
-  onChange: (d: SetupCleanupData) => void;
-  generationStatus?: SectionGenerationStatus;
+  onChange: (d: OtherJobsAccordionData) => void;
 }) {
-  const hasKids = kidsWithJobs.length > 0;
-
   return (
     <AccordionShell
       id={id}
-      label="🧹 Setup & Cleanup"
+      label={label}
       openAccordion={openAccordion}
       onToggle={onToggle}
       stillDeciding={data.stillDeciding}
       onStillDecidingToggle={() => onChange({ ...data, stillDeciding: !data.stillDeciding })}
-      generationStatus={generationStatus}
     >
-      <div className="space-y-3">
-        <ToggleRow
-          label="Setup crew needed"
-          checked={data.setupCrew}
-          onChange={(v) => onChange({ ...data, setupCrew: v })}
-        />
-        <ToggleRow
-          label="Cleanup crew needed"
-          checked={data.cleanupCrew}
-          onChange={(v) => onChange({ ...data, cleanupCrew: v })}
-        />
-        {hasKids && (
-          <ToggleRow
-            label="Kids on dishes"
-            checked={data.kidsOnDishes}
-            onChange={(v) => onChange({ ...data, kidsOnDishes: v })}
-          />
-        )}
-        {hasKids && (
-          <p className="text-sm text-gray-500 mt-2">
-            You&rsquo;ve got {kidsWithJobs.length} kid{kidsWithJobs.length !== 1 ? 's' : ''} with
-            jobs &mdash; {kidsWithJobs.join(', ')}. I&rsquo;ll include tasks they can handle.
-          </p>
-        )}
-      </div>
+      <textarea
+        placeholder={placeholder}
+        value={data.freeText}
+        onChange={(e) => onChange({ ...data, freeText: e.target.value })}
+        rows={5}
+        className="w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 resize-y"
+      />
     </AccordionShell>
   );
 }
@@ -903,38 +920,5 @@ function OtherAccordion({
         className="w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 resize-none"
       />
     </AccordionShell>
-  );
-}
-
-// ─── Toggle row ──────────────────────────────────────────────────────────────
-
-function ToggleRow({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <label className="flex items-center justify-between cursor-pointer">
-      <span className="text-sm text-gray-700">{label}</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-          checked ? 'bg-accent' : 'bg-gray-300'
-        }`}
-      >
-        <span
-          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-            checked ? 'translate-x-[18px]' : 'translate-x-[2px]'
-          }`}
-        />
-      </button>
-    </label>
   );
 }

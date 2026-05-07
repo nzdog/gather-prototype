@@ -43,6 +43,11 @@ interface ExtendedCategoryEntry {
 
 type ExtendedCategoriesData = Record<string, ExtendedCategoryEntry>;
 
+interface OtherJobsAccordionData {
+  freeText: string;
+  stillDeciding: boolean;
+}
+
 interface EventSetupBody {
   eventType?: string;
   eventTypeOther?: string;
@@ -54,6 +59,43 @@ interface EventSetupBody {
   dietaryData?: DietaryData;
   otherNotes?: string;
   extendedCategoriesData?: ExtendedCategoriesData;
+  setUpData?: OtherJobsAccordionData;
+  cleanUpData?: OtherJobsAccordionData;
+  otherJobsOtherData?: OtherJobsAccordionData;
+}
+
+const OTHER_JOBS_FIELDS = ['setUpData', 'cleanUpData', 'otherJobsOtherData'] as const;
+type OtherJobsField = (typeof OTHER_JOBS_FIELDS)[number];
+
+function validateOtherJobsField(field: OtherJobsField, value: unknown): NextResponse | null {
+  if (value === null) return null;
+  if (!isPlainObject(value)) {
+    return NextResponse.json(
+      {
+        error: `${field} must be an object with shape { freeText: string, stillDeciding: boolean }`,
+      },
+      { status: 400 }
+    );
+  }
+  const allowedKeys = new Set(['freeText', 'stillDeciding']);
+  for (const key of Object.keys(value)) {
+    if (!allowedKeys.has(key)) {
+      return NextResponse.json(
+        { error: `${field} contains unexpected key "${key}". Allowed: freeText, stillDeciding` },
+        { status: 400 }
+      );
+    }
+  }
+  if ('freeText' in value && typeof value.freeText !== 'string') {
+    return NextResponse.json({ error: `${field}.freeText must be a string` }, { status: 400 });
+  }
+  if ('stillDeciding' in value && typeof value.stillDeciding !== 'boolean') {
+    return NextResponse.json(
+      { error: `${field}.stillDeciding must be a boolean` },
+      { status: 400 }
+    );
+  }
+  return null;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -147,6 +189,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       }
     }
 
+    // Validate the three Other-jobs free-text fields if present
+    for (const field of OTHER_JOBS_FIELDS) {
+      if (field in body) {
+        const err = validateOtherJobsField(field, body[field] as unknown);
+        if (err) return err;
+      }
+    }
+
     // Build update data — only include fields present in the request body
     const data: Record<string, unknown> = {};
     if ('eventType' in body) data.eventType = body.eventType;
@@ -159,6 +209,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     if ('dietaryData' in body) data.dietaryData = body.dietaryData;
     if ('otherNotes' in body) data.otherNotes = body.otherNotes;
     if ('extendedCategoriesData' in body) data.extendedCategoriesData = body.extendedCategoriesData;
+    if ('setUpData' in body) data.setUpData = body.setUpData;
+    if ('cleanUpData' in body) data.cleanUpData = body.cleanUpData;
+    if ('otherJobsOtherData' in body) data.otherJobsOtherData = body.otherJobsOtherData;
 
     const setup = await prisma.eventSetup.upsert({
       where: { eventId },

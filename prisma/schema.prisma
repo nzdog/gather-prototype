@@ -986,6 +986,11 @@ model EventSetup {
   setupCleanupData       Json?
   dietaryData            Json?
   otherNotes             String?
+  // GTC-133 sub-commit (d): Other-jobs section accordions. Each is a free-text + stillDeciding shape.
+  // Shape: { freeText: string, stillDeciding: boolean }
+  setUpData              Json?
+  cleanUpData            Json?
+  otherJobsOtherData     Json?
   // GTC-133: keyed by config category (entree_starters, drinks_alcoholic, etc.) for the 9 categories
   // without dedicated columns. Shape: { [categoryKey]: { selections: OptionTreeSelections, stillDeciding?: boolean } }
   extendedCategoriesData Json?
