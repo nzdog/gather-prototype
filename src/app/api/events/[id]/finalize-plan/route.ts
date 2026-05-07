@@ -17,25 +17,44 @@ const AI_CALL_LIMIT = 10;
 
 const CATEGORY_EMOJIS: Record<string, string> = {
   mains: '🍖',
-  sides: '🥗',
-  desserts: '🍰',
-  drinks: '🍺',
-  setup: '🧹',
+  sides_salads: '🥗',
+  entree_starters: '🥟',
+  dessert: '🍰',
+  drinks_alcoholic: '🍷',
+  drinks_non_alcoholic: '🥤',
+  table_snacks: '🥨',
+  breakfast_brunch: '🍳',
+  cake: '🎂',
   dietary: '⚠️',
   other: '📝',
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
   mains: 'Mains',
-  sides: 'Sides',
-  desserts: 'Dessert',
-  drinks: 'Drinks',
-  setup: 'Setup & Cleanup',
+  sides_salads: 'Sides & Salads',
+  entree_starters: 'Entrée & Starters',
+  dessert: 'Dessert',
+  drinks_alcoholic: 'Alcoholic Drinks',
+  drinks_non_alcoholic: 'Non-Alcoholic Drinks',
+  table_snacks: 'Table Snacks',
+  breakfast_brunch: 'Breakfast & Brunch',
+  cake: 'Cake',
   dietary: 'Dietary',
   other: 'Other',
 };
 
-const FOOD_SECTIONS = ['mains', 'sides', 'desserts', 'drinks', 'setup', 'dietary'] as const;
+const FOOD_SECTIONS = [
+  'dietary',
+  'mains',
+  'sides_salads',
+  'entree_starters',
+  'dessert',
+  'drinks_alcoholic',
+  'drinks_non_alcoholic',
+  'table_snacks',
+  'breakfast_brunch',
+  'cake',
+] as const;
 
 interface GeneratedItem {
   name: string;
@@ -135,17 +154,26 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
     for (const section of FOOD_SECTIONS) {
       if (generatedData[section]) continue;
 
-      // Check if this section is "still deciding"
-      const sectionKey =
-        section === 'setup'
-          ? 'setupCleanupData'
-          : section === 'dietary'
-            ? 'dietaryData'
-            : `${section}Data`;
-      const sectionSetup = (setup as Record<string, unknown>)[sectionKey] as {
-        stillDeciding?: boolean;
-      } | null;
-      if (sectionSetup?.stillDeciding) continue;
+      // Resolve still-deciding flag from the column shape that backs this section.
+      // mains/dietary still have dedicated columns; canonical food keys without a
+      // dedicated column live under extendedCategoriesData[key] (GTC-133).
+      let stillDeciding = false;
+      if (section === 'mains') {
+        stillDeciding = Boolean(
+          (setup.mainsData as { stillDeciding?: boolean } | null)?.stillDeciding
+        );
+      } else if (section === 'dietary') {
+        stillDeciding = Boolean(
+          (setup.dietaryData as { stillDeciding?: boolean } | null)?.stillDeciding
+        );
+      } else {
+        const ext = setup.extendedCategoriesData as Record<
+          string,
+          { stillDeciding?: boolean }
+        > | null;
+        stillDeciding = Boolean(ext?.[section]?.stillDeciding);
+      }
+      if (stillDeciding) continue;
 
       // Check cap before each call
       if (currentAiCalls + aiCallsUsedInFinalize >= AI_CALL_LIMIT) break;
