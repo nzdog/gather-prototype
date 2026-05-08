@@ -373,13 +373,16 @@ export default function Moment2Step1Modal({
   // Progressive generation — fire when an accordion closes with real data
   const generateSection = useCallback(
     async (sectionId: string, currentState: Step1State) => {
+      // GTC-137: dietary is a pure input — closing the accordion must NOT
+      // generate items. Dietary requirements are passed as input to food
+      // section prompts instead.
+      if (sectionId === 'dietary') return;
+
       // Map section ID to state data. Canonical food keys read from
       // mainsData (special) or extendedCategoriesData[key].
       let sectionData: { stillDeciding?: boolean } | undefined;
       if (sectionId === 'mains') {
         sectionData = currentState.mainsData;
-      } else if (sectionId === 'dietary') {
-        sectionData = currentState.dietaryData as unknown as { stillDeciding?: boolean };
       } else if (sectionId === 'other') {
         sectionData = {
           items: currentState.otherNotes ? [{ name: currentState.otherNotes, included: true }] : [],
@@ -412,7 +415,15 @@ export default function Moment2Step1Modal({
             householdData: {
               totalAdults,
               totalKids,
-              dietaryRequirements: currentState.dietaryData.requirements,
+              // GTC-137: include free-text "Other dietary needs" in the
+              // requirements list passed to food prompts so it's treated as
+              // a generation constraint alongside the structured selections.
+              dietaryRequirements: [
+                ...currentState.dietaryData.requirements,
+                ...(currentState.dietaryData.other.trim()
+                  ? [`Other: ${currentState.dietaryData.other.trim()}`]
+                  : []),
+              ],
               kidsWithJobs,
             },
           }),

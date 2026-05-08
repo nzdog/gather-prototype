@@ -75,6 +75,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       );
     }
 
+    // GTC-137: dietary is a pure input — refuse generation requests for it.
+    // Dietary requirements are now threaded into food section prompts as a
+    // generation constraint instead.
+    if (body.section === 'dietary') {
+      return NextResponse.json(
+        { error: 'Dietary is an input-only section; no items are generated for it (GTC-137)' },
+        { status: 400 }
+      );
+    }
+
     // Skip if still deciding
     if (body.sectionData?.stillDeciding) {
       return NextResponse.json({ items: [], stored: false });

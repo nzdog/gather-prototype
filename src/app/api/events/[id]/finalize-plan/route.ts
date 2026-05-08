@@ -43,8 +43,9 @@ const CATEGORY_LABELS: Record<string, string> = {
   other: 'Other',
 };
 
+// GTC-137: 'dietary' removed — dietary is a pure input. Food sections receive
+// dietary requirements as a generation constraint; no standalone dietary items.
 const FOOD_SECTIONS = [
-  'dietary',
   'mains',
   'sides_salads',
   'entree_starters',
@@ -106,11 +107,25 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
         ? JSON.parse(JSON.stringify(setup.generatedData))
         : {};
 
+    // GTC-137: drop any legacy dietary-section items written by pre-GTC-137
+    // generate-section calls. Dietary is now a pure input — items previously
+    // produced for it are deprecated.
+    if ('dietary' in generatedData) {
+      delete generatedData.dietary;
+    }
+
     const eventType = setup.eventType ?? 'Other';
 
     // Gather household data from setup
     const dietaryData = setup.dietaryData as { requirements?: string[]; other?: string } | null;
-    const dietaryRequirements = dietaryData?.requirements ?? [];
+    // GTC-137: combine structured requirements with the free-text "Other dietary
+    // needs" so finalize-plan's gap-fill and coverage check both see the full
+    // requirements set.
+    const dietaryOther = (dietaryData?.other ?? '').trim();
+    const dietaryRequirements = [
+      ...(dietaryData?.requirements ?? []),
+      ...(dietaryOther ? [`Other: ${dietaryOther}`] : []),
+    ];
 
     // Count people from households
     let totalAdults = 0;
@@ -155,16 +170,13 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       if (generatedData[section]) continue;
 
       // Resolve still-deciding flag from the column shape that backs this section.
-      // mains/dietary still have dedicated columns; canonical food keys without a
-      // dedicated column live under extendedCategoriesData[key] (GTC-133).
+      // mains has a dedicated column; canonical food keys without a dedicated
+      // column live under extendedCategoriesData[key] (GTC-133). GTC-137 removed
+      // dietary from FOOD_SECTIONS so its branch is no longer reachable here.
       let stillDeciding = false;
       if (section === 'mains') {
         stillDeciding = Boolean(
           (setup.mainsData as { stillDeciding?: boolean } | null)?.stillDeciding
-        );
-      } else if (section === 'dietary') {
-        stillDeciding = Boolean(
-          (setup.dietaryData as { stillDeciding?: boolean } | null)?.stillDeciding
         );
       } else {
         const ext = setup.extendedCategoriesData as Record<
@@ -254,6 +266,13 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
         data: { aiCallsUsed: { increment: aiCallsUsedInFinalize } },
       });
     }
+
+    // GTC-137: drop any pre-existing "Dietary" team carried over from
+    // pre-GTC-137 finalize runs. Dietary is no longer a generated category;
+    // leftover rows would muddy the plan view. Items cascade-delete via FK.
+    await prisma.team.deleteMany({
+      where: { eventId, name: 'Dietary' },
+    });
 
     // Persist generated items to Team/Item models for downstream use
     const batchId = `m2-finalize-${Date.now()}`;

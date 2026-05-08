@@ -727,6 +727,12 @@ Return JSON: { "items": [{ "name": string, "quantity": number, "unit": string, "
     return { system: systemPrompt, user: userPrompt };
   }
 
+  // GTC-137: DEPRECATED. Dietary is now a pure input — its requirements are
+  // threaded into food section prompts as a generation constraint, and a
+  // standalone "Dietary" category is no longer produced. Both call sites
+  // (generate-section route, finalize-plan gap-fill) refuse `section: 'dietary'`
+  // before reaching this branch. Kept for back-compat reads of `Moment2Section`
+  // typing; safe to delete in the follow-up enum-cleanup ticket.
   if (family === 'dietary') {
     const dietaryData = sectionData;
     const userPrompt = `Generate dietary accommodation items for a ${eventLabel} for ${totalPeople} people.
@@ -763,9 +769,19 @@ Return JSON: { "items": [{ "name": string, "quantity": number, "unit": string, "
     excludedItems = (sectionData.items ?? []).filter((i) => !i.included).map((i) => i.name);
   }
 
+  // GTC-137: dietary requirements (structured + free-text) become a generation
+  // constraint on every food section, not a standalone section. Aim for
+  // integration ("a roasted vegetable side that's already vegetarian") rather
+  // than parallel alternatives ("Mains: turkey + Vegetarian Mains: nut roast").
+  const dietaryBlock =
+    householdData.dietaryRequirements.length > 0
+      ? `Dietary requirements present at this gathering: ${householdData.dietaryRequirements.join(', ')}.
+Where this section can include items that are naturally suitable for these requirements (e.g. a roasted vegetable side that is already vegetarian, a fruit salad that is already vegan and gluten-free), prefer integrated items over parallel "alternatives". Tag items with the appropriate dietary tags. Only add a clearly separate dietary alternative if no naturally-suitable option fits the section.`
+      : '';
+
   const userPrompt = `Generate the ${sectionLabel} section of a ${eventLabel} plan for ${householdData.totalAdults} adults and ${householdData.totalKids} children.
 
-${householdData.dietaryRequirements.length > 0 ? `Dietary requirements to accommodate: ${householdData.dietaryRequirements.join(', ')}` : ''}
+${dietaryBlock}
 ${referenceBlock}
 Kate's input:
 - Items she wants: ${includedItems.length > 0 ? includedItems.join(', ') : 'none specified'}
@@ -776,9 +792,9 @@ Generate a list of ${family === 'other' ? 'miscellaneous' : sectionLabel.toLower
 For each item:
 - Calculate quantities based on adult/kid counts
 - Use real units (kg, pieces, trays, litres, bottles, bowls)
-- Note any dietary accommodations
+- Tag items with dietary tags (VEGETARIAN, VEGAN, GLUTEN_FREE, DAIRY_FREE, NUT_FREE) where they naturally apply
 
-Return JSON: { "items": [{ "name": string, "quantity": number, "unit": string, "servingSize": string, "notes": string (optional) }] }`;
+Return JSON: { "items": [{ "name": string, "quantity": number, "unit": string, "servingSize": string, "notes": string (optional), "dietaryTags": string[] (optional) }] }`;
 
   return { system: systemPrompt, user: userPrompt };
 }
@@ -792,15 +808,23 @@ export function buildGapPrompt(
   const eventLabel = eventType === 'Other' ? 'event' : eventType.toLowerCase();
   const sectionLabel = MOMENT2_SECTION_LABELS[section] ?? section;
 
+  // GTC-137: same integration guidance as buildSectionPrompt — dietary is an
+  // input, not a standalone section.
+  const dietaryBlock =
+    householdData.dietaryRequirements.length > 0
+      ? `Dietary requirements present at this gathering: ${householdData.dietaryRequirements.join(', ')}.
+Prefer items that are naturally suitable for these requirements (e.g. a roasted vegetable side that is already vegetarian) over parallel "alternatives". Tag items with the appropriate dietary tags.`
+      : '';
+
   return {
     system: `You are a meal planning assistant for a ${eventLabel}. Return only valid JSON. No prose.`,
     user: `Generate the ${sectionLabel} section for a ${eventLabel} for ${householdData.totalAdults} adults and ${householdData.totalKids} children (${totalPeople} total).
 
-${householdData.dietaryRequirements.length > 0 ? `Dietary requirements: ${householdData.dietaryRequirements.join(', ')}` : ''}
+${dietaryBlock}
 
 Generate sensible defaults for this event type. Use real units (kg, pieces, trays, litres, bottles).
 
-Return JSON: { "items": [{ "name": string, "quantity": number, "unit": string, "servingSize": string, "notes": string (optional) }] }`,
+Return JSON: { "items": [{ "name": string, "quantity": number, "unit": string, "servingSize": string, "notes": string (optional), "dietaryTags": string[] (optional) }] }`,
   };
 }
 
@@ -823,7 +847,9 @@ ${itemList}
 
 For each requirement, determine if it's adequately covered.
 
-Return JSON: { "coverage": [{ "requirement": string, "covered": boolean, "flaggedItems": string[] (items that help cover it, or empty if not covered) }] }`,
+An item that is naturally suitable for a dietary requirement (e.g. a roasted vegetable side is naturally vegetarian, a fresh fruit salad is naturally vegan and gluten-free, plain rice is naturally gluten-free and dairy-free) should be considered covered for that requirement, regardless of whether the item name or notes explicitly mention the dietary tag. Use common-sense culinary knowledge of typical preparation. Only mark a requirement as not covered when no naturally-suitable item exists across the whole plan.
+
+Return JSON: { "coverage": [{ "requirement": string, "covered": boolean, "flaggedItems": string[] (items that cover it when covered, or items that conflict / a brief reason when not) }] }`,
   };
 }
 
