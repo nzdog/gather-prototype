@@ -2,18 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
 import { callClaudeForJSON } from '@/lib/ai/claude';
+import { MAX_TOKENS_FULL_PLAN } from '@/lib/ai/token-limits';
 import {
-  MAX_TOKENS_GAP_FILL,
-  MAX_TOKENS_DIETARY_COVERAGE,
-  MAX_TOKENS_CONSIDERATIONS,
-} from '@/lib/ai/token-limits';
-import {
-  buildGapPrompt,
-  buildDietaryCoveragePrompt,
-  buildThingsToConsiderPrompt,
+  buildPlanGenerationPrompt,
+  type PlanGenerationCategoryInput,
+  type OptionTreeSelections,
 } from '@/lib/ai/prompts';
+import {
+  getCategoryLevels,
+  getDefaultCategories,
+  getSectionReferenceItems,
+} from '@/lib/ai/config-loader';
 
-const AI_CALL_LIMIT = 20;
+// GTC-145: lowered from 20 → 10. The single-call architecture fires exactly
+// one Claude call per finalize-plan invocation, so 10 gives ample headroom
+// for retries and any future small auxiliary calls without crowding the cap.
+const AI_CALL_LIMIT = 10;
 
 const CATEGORY_EMOJIS: Record<string, string> = {
   mains: '🍖',
@@ -25,7 +29,6 @@ const CATEGORY_EMOJIS: Record<string, string> = {
   table_snacks: '🥨',
   breakfast_brunch: '🍳',
   cake: '🎂',
-  dietary: '⚠️',
   other: '📝',
 };
 
@@ -39,37 +42,64 @@ const CATEGORY_LABELS: Record<string, string> = {
   table_snacks: 'Table Snacks',
   breakfast_brunch: 'Breakfast & Brunch',
   cake: 'Cake',
-  dietary: 'Dietary',
   other: 'Other',
 };
 
-// GTC-137: 'dietary' removed — dietary is a pure input. Food sections receive
-// dietary requirements as a generation constraint; no standalone dietary items.
-const FOOD_SECTIONS = [
+// Order in which food categories appear in the modal (and so in the plan).
+const FOOD_CATEGORY_ORDER = [
   'mains',
-  'sides_salads',
   'entree_starters',
+  'sides_salads',
   'dessert',
+  'cake',
   'drinks_alcoholic',
   'drinks_non_alcoholic',
   'table_snacks',
   'breakfast_brunch',
-  'cake',
 ] as const;
 
-interface GeneratedItem {
-  name: string;
-  quantity: number;
-  unit: string;
-  servingSize: string;
-  notes?: string;
-  dietaryTags?: string[];
+interface SectionResponse {
+  category: string;
+  key?: string;
+  emoji?: string;
+  items: Array<{
+    name: string;
+    quantity: number;
+    unit: string;
+    servingSize: string;
+    notes?: string;
+    dietaryTags?: string[];
+  }>;
 }
 
-interface HouseholdData {
-  totalAdults: number;
-  totalKids: number;
-  dietaryRequirements: string[];
+interface FullPlanResponse {
+  sections: SectionResponse[];
+  dietaryCoverage: Array<{ requirement: string; covered: boolean; flaggedItems?: string[] }>;
+  thingsToConsider: Array<{ name: string; category: string }>;
+}
+
+function flattenSelections(selections: OptionTreeSelections | undefined | null): string[] {
+  if (!selections) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const lvl of Object.values(selections)) {
+    for (const opt of lvl?.options ?? []) {
+      if (opt && !seen.has(opt)) {
+        seen.add(opt);
+        out.push(opt);
+      }
+    }
+    const ft = (lvl?.freeText ?? '').trim();
+    if (ft && !seen.has(ft)) {
+      seen.add(ft);
+      out.push(ft);
+    }
+  }
+  return out;
+}
+
+function hasAnySelection(selections: OptionTreeSelections | undefined | null): boolean {
+  return flattenSelections(selections).length > 0;
 }
 
 export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -79,55 +109,31 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
     const auth = await requireEventRole(eventId, ['HOST', 'COHOST']);
     if (auth instanceof NextResponse) return auth;
 
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
-    });
-
+    const event = await prisma.event.findUnique({ where: { id: eventId } });
     if (!event) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
-    // AI call cap — ensure at least 1 call remaining for finalize
     if ((event.aiCallsUsed ?? 0) >= AI_CALL_LIMIT) {
       return NextResponse.json({ error: 'AI call limit reached for this event' }, { status: 429 });
     }
 
-    const setup = await prisma.eventSetup.findUnique({
-      where: { eventId },
-    });
-
+    const setup = await prisma.eventSetup.findUnique({ where: { eventId } });
     if (!setup) {
       return NextResponse.json({ error: 'No event setup found' }, { status: 404 });
     }
 
-    const generatedData: Record<string, GeneratedItem[]> =
-      setup.generatedData &&
-      typeof setup.generatedData === 'object' &&
-      !Array.isArray(setup.generatedData)
-        ? JSON.parse(JSON.stringify(setup.generatedData))
-        : {};
-
-    // GTC-137: drop any legacy dietary-section items written by pre-GTC-137
-    // generate-section calls. Dietary is now a pure input — items previously
-    // produced for it are deprecated.
-    if ('dietary' in generatedData) {
-      delete generatedData.dietary;
-    }
-
     const eventType = setup.eventType ?? 'Other';
 
-    // Gather household data from setup
+    // Dietary requirements: structured + free-text "Other: ..."
     const dietaryData = setup.dietaryData as { requirements?: string[]; other?: string } | null;
-    // GTC-137: combine structured requirements with the free-text "Other dietary
-    // needs" so finalize-plan's gap-fill and coverage check both see the full
-    // requirements set.
     const dietaryOther = (dietaryData?.other ?? '').trim();
     const dietaryRequirements = [
       ...(dietaryData?.requirements ?? []),
       ...(dietaryOther ? [`Other: ${dietaryOther}`] : []),
     ];
 
-    // Count people from households
+    // Headcount from households
     let totalAdults = 0;
     let totalKids = 0;
     try {
@@ -143,170 +149,147 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
             totalAdults++;
           }
         }
-        if (typeof (h as Record<string, unknown>).littleCount === 'number') {
-          totalKids += (h as Record<string, unknown>).littleCount as number;
-        }
+        const little = (h as Record<string, unknown>).littleCount;
+        if (typeof little === 'number') totalKids += little;
       }
     } catch {
-      // Fallback — use event guestCount
       totalAdults = event.guestCount ?? 10;
     }
-
     if (totalAdults === 0 && totalKids === 0) {
       totalAdults = event.guestCount ?? 10;
     }
 
-    const householdData: HouseholdData = {
+    // Resolve engaged categories: defaults are always engaged; non-defaults
+    // only when Kate selected something via "Show more".
+    const defaults = new Set(getDefaultCategories(eventType));
+    const mainsData = setup.mainsData as {
+      selections?: OptionTreeSelections;
+      stillDeciding?: boolean;
+    } | null;
+    const extended =
+      (setup.extendedCategoriesData as Record<
+        string,
+        { selections?: OptionTreeSelections; stillDeciding?: boolean }
+      > | null) ?? {};
+
+    const engagedCategories: PlanGenerationCategoryInput[] = [];
+    for (const key of FOOD_CATEGORY_ORDER) {
+      const isDefault = defaults.has(key);
+      const entry = key === 'mains' ? mainsData : extended[key];
+      const stillDeciding = Boolean(entry?.stillDeciding);
+      const selections = flattenSelections(entry?.selections);
+
+      // Skip entirely if not a default and Kate didn't engage it.
+      if (!isDefault && !hasAnySelection(entry?.selections) && !stillDeciding) continue;
+
+      // Skip if config has no levels for this event type / category combo.
+      const levels = getCategoryLevels(eventType, key);
+      if (!levels || levels.length === 0) continue;
+
+      // Reference items pulled from the section family (mains/sides/desserts/drinks).
+      // getSectionReferenceItems takes a section family — map canonical key to family.
+      const family =
+        key === 'mains' || key === 'breakfast_brunch'
+          ? 'mains'
+          : key === 'sides_salads' || key === 'entree_starters' || key === 'table_snacks'
+            ? 'sides'
+            : key === 'dessert' || key === 'cake'
+              ? 'desserts'
+              : 'drinks';
+      const referencesByCat = getSectionReferenceItems(eventType, family);
+      const referenceItems = referencesByCat.flatMap((r) => r.items);
+
+      engagedCategories.push({
+        key,
+        label: CATEGORY_LABELS[key] ?? key,
+        emoji: CATEGORY_EMOJIS[key] ?? '📋',
+        selections,
+        stillDeciding,
+        referenceItems,
+      });
+    }
+
+    // Free-text "Other" notes
+    const otherNotes = (setup.otherNotes ?? '').trim();
+    const setUpData = setup.setUpData as { freeText?: string } | null;
+    const cleanUpData = setup.cleanUpData as { freeText?: string } | null;
+    const otherJobsData = setup.otherJobsOtherData as { freeText?: string } | null;
+
+    const { system, user } = buildPlanGenerationPrompt({
+      eventType,
       totalAdults,
       totalKids,
       dietaryRequirements,
-    };
-
-    // Fill gaps — generate any missing sections
-    let aiCallsUsedInFinalize = 0;
-    const currentAiCalls = event.aiCallsUsed ?? 0;
-
-    for (const section of FOOD_SECTIONS) {
-      if (generatedData[section]) continue;
-
-      // Resolve still-deciding flag from the column shape that backs this section.
-      // mains has a dedicated column; canonical food keys without a dedicated
-      // column live under extendedCategoriesData[key] (GTC-133). GTC-137 removed
-      // dietary from FOOD_SECTIONS so its branch is no longer reachable here.
-      let stillDeciding = false;
-      if (section === 'mains') {
-        stillDeciding = Boolean(
-          (setup.mainsData as { stillDeciding?: boolean } | null)?.stillDeciding
-        );
-      } else {
-        const ext = setup.extendedCategoriesData as Record<
-          string,
-          { stillDeciding?: boolean }
-        > | null;
-        stillDeciding = Boolean(ext?.[section]?.stillDeciding);
-      }
-      if (stillDeciding) continue;
-
-      // Check cap before each call
-      if (currentAiCalls + aiCallsUsedInFinalize >= AI_CALL_LIMIT) break;
-
-      const { system, user } = buildGapPrompt(section, eventType, householdData);
-      const result = await callClaudeForJSON<{ items: GeneratedItem[] }>(system, user, {
-        maxTokens: MAX_TOKENS_GAP_FILL,
-        temperature: 0.8,
-        callSiteLabel: `gap-fill:${section}`,
-      });
-      generatedData[section] = result.items ?? [];
-      aiCallsUsedInFinalize++;
-    }
-
-    // Build categories from generated data
-    const categories = Object.entries(generatedData)
-      .filter(([, items]) => items && items.length > 0)
-      .map(([section, items]) => ({
-        name: CATEGORY_LABELS[section] ?? section,
-        emoji: CATEGORY_EMOJIS[section] ?? '📋',
-        items: items.map((item) => ({
-          ...item,
-          dietaryTags: item.dietaryTags ?? [],
-        })),
-      }));
-
-    // Dietary coverage check (only if requirements exist, and we have cap room)
-    let dietaryCoverage: Array<{
-      requirement: string;
-      covered: boolean;
-      flaggedItems?: string[];
-    }> = [];
-
-    if (dietaryRequirements.length > 0 && currentAiCalls + aiCallsUsedInFinalize < AI_CALL_LIMIT) {
-      const allItems = Object.entries(generatedData).map(([cat, items]) => ({
-        category: cat,
-        items,
-      }));
-      const { system, user } = buildDietaryCoveragePrompt(allItems, dietaryRequirements);
-      const coverageResult = await callClaudeForJSON<{
-        coverage: Array<{ requirement: string; covered: boolean; flaggedItems: string[] }>;
-      }>(system, user, {
-        maxTokens: MAX_TOKENS_DIETARY_COVERAGE,
-        temperature: 0.3,
-        callSiteLabel: 'dietary-coverage',
-      });
-      dietaryCoverage = coverageResult.coverage ?? [];
-      aiCallsUsedInFinalize++;
-    }
-
-    // Things to consider (if we have cap room)
-    let thingsToConsider: Array<{ name: string; category: string }> = [];
-
-    if (currentAiCalls + aiCallsUsedInFinalize < AI_CALL_LIMIT) {
-      const totalPeople = totalAdults + totalKids;
-      const { system, user } = buildThingsToConsiderPrompt(eventType, totalPeople);
-      const considerResult = await callClaudeForJSON<{
-        items: Array<{ name: string; category: string }>;
-      }>(system, user, {
-        maxTokens: MAX_TOKENS_CONSIDERATIONS,
-        temperature: 0.8,
-        callSiteLabel: 'things-to-consider',
-      });
-      thingsToConsider = considerResult.items ?? [];
-      aiCallsUsedInFinalize++;
-    }
-
-    // Persist generatedData back to EventSetup
-    await prisma.eventSetup.update({
-      where: { eventId },
-      data: { generatedData: JSON.parse(JSON.stringify(generatedData)) },
+      engagedCategories,
+      otherNotes,
+      setUpNotes: (setUpData?.freeText ?? '').trim(),
+      cleanUpNotes: (cleanUpData?.freeText ?? '').trim(),
+      otherJobsNotes: (otherJobsData?.freeText ?? '').trim(),
     });
 
-    // Increment AI call counter for all calls made during finalize
-    if (aiCallsUsedInFinalize > 0) {
-      await prisma.event.update({
-        where: { id: eventId },
-        data: { aiCallsUsed: { increment: aiCallsUsedInFinalize } },
-      });
-    }
+    const result = await callClaudeForJSON<FullPlanResponse>(system, user, {
+      maxTokens: MAX_TOKENS_FULL_PLAN,
+      temperature: 0.8,
+      callSiteLabel: 'finalize-plan:full',
+    });
 
-    // GTC-137: drop any pre-existing "Dietary" team carried over from
-    // pre-GTC-137 finalize runs. Dietary is no longer a generated category;
-    // leftover rows would muddy the plan view. Items cascade-delete via FK.
+    // Increment AI call counter once for the single call.
+    await prisma.event.update({
+      where: { id: eventId },
+      data: { aiCallsUsed: { increment: 1 } },
+    });
+
+    const sections = Array.isArray(result.sections) ? result.sections : [];
+    const dietaryCoverage = Array.isArray(result.dietaryCoverage) ? result.dietaryCoverage : [];
+    const thingsToConsider = Array.isArray(result.thingsToConsider) ? result.thingsToConsider : [];
+
+    // Map model response → response shape consumed by Moment2Step2Skeleton.
+    // Use the model-supplied label/emoji when present; fall back to canonical
+    // mapping by key so a typo'd label doesn't break the UI.
+    const categories = sections
+      .filter((s) => s && Array.isArray(s.items) && s.items.length > 0)
+      .map((s) => {
+        const key = s.key ?? '';
+        const emoji = s.emoji || CATEGORY_EMOJIS[key] || '📋';
+        const name = s.category || CATEGORY_LABELS[key] || key || 'Items';
+        return {
+          name,
+          emoji,
+          items: s.items.map((item) => ({
+            name: item.name,
+            quantity: item.quantity,
+            unit: item.unit,
+            servingSize: item.servingSize,
+            notes: item.notes,
+            dietaryTags: item.dietaryTags ?? [],
+          })),
+        };
+      });
+
+    // GTC-145: drop any pre-existing AI-generated teams from prior runs so the
+    // single-call output replaces them rather than stacking. We only delete
+    // teams whose source is GENERATED to preserve any teams Kate added by hand.
     await prisma.team.deleteMany({
-      where: { eventId, name: 'Dietary' },
+      where: { eventId, source: 'GENERATED' },
     });
 
-    // Persist generated items to Team/Item models for downstream use
     const batchId = `m2-finalize-${Date.now()}`;
 
     for (const category of categories) {
-      // Find or create team for this category
-      let team = await prisma.team.findFirst({
-        where: { eventId, name: category.name },
-      });
-
-      if (!team) {
-        const maxOrder = await prisma.team.aggregate({
-          where: { eventId },
-          _max: { displayOrder: true },
-        });
-        team = await prisma.team.create({
-          data: {
-            name: category.name,
-            eventId,
-            source: 'GENERATED',
-            displayOrder: (maxOrder._max.displayOrder ?? 0) + 1,
-          },
-        });
-      }
-
-      // Seed sequential displayOrder starting after any existing items in the team,
-      // so re-running finalize-plan appends without colliding with prior batches.
-      const existingMaxOrder = await prisma.item.aggregate({
-        where: { teamId: team.id },
+      const maxOrder = await prisma.team.aggregate({
+        where: { eventId },
         _max: { displayOrder: true },
       });
-      let nextDisplayOrder = (existingMaxOrder._max.displayOrder ?? 0) + 1;
+      const team = await prisma.team.create({
+        data: {
+          name: category.name,
+          eventId,
+          source: 'GENERATED',
+          displayOrder: (maxOrder._max.displayOrder ?? 0) + 1,
+        },
+      });
 
-      // Create items
+      let nextDisplayOrder = 1;
       for (const item of category.items) {
         await prisma.item.create({
           data: {
