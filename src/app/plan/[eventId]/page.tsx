@@ -629,9 +629,11 @@ export default function PlanEditorPage() {
     };
   }, []);
 
-  // Fetch households when Moment 1 view opens
+  // Fetch households when Moment 1 view opens, or when the Moment 2 plan view
+  // needs a canonical headcount for its summary header (GTC-136).
   useEffect(() => {
-    if (!showMoment1 || !event) return;
+    if (!event) return;
+    if (!showMoment1 && !showMoment2PlanView) return;
     const fetchHouseholds = async () => {
       const res = await fetch(`/api/events/${event.id}/households`);
       if (res.ok) {
@@ -640,7 +642,7 @@ export default function PlanEditorPage() {
       }
     };
     fetchHouseholds();
-  }, [showMoment1, event, apiHouseholdToSaved]);
+  }, [showMoment1, showMoment2PlanView, event, apiHouseholdToSaved]);
 
   const loadEvent = async () => {
     try {
@@ -1797,11 +1799,20 @@ export default function PlanEditorPage() {
   }
 
   if (showMoment2PlanView && event) {
+    // Canonical headcount: aggregate from households using the same formula as
+    // Moment1Summary ("X people coming"). Fall back to event.guestCount only if
+    // households aren't loaded yet. (GTC-136)
+    const householdsHeadcount = households.reduce(
+      (sum, h) =>
+        sum + 1 + (h.partner ? 1 : 0) + h.helpers.length + h.littleCount + h.guests.length,
+      0
+    );
+    const planGuestCount = householdsHeadcount > 0 ? householdsHeadcount : (event.guestCount ?? 0);
     return (
       <Moment2PlanView
         eventId={event.id}
         eventName={event.name}
-        guestCount={event.guestCount ?? 0}
+        guestCount={planGuestCount}
         categories={moment2PlanCategories}
         onUpdateItem={async (itemId, updates) => {
           const body: Record<string, unknown> = {};
