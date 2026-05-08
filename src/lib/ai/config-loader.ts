@@ -1,4 +1,5 @@
 import planConfig from './plan-option-tree-config.json';
+import type { OptionTreeLevel } from '@/components/shared/OptionTree';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -9,9 +10,13 @@ interface FoodItem {
 
 interface ConfigLevel {
   level: number;
+  question?: string;
+  breadcrumbLabel?: string;
   options?: string[];
   dependsOn?: Record<string, string[]>;
   multiSelect?: boolean;
+  freeText?: boolean;
+  freeTextPlaceholder?: string;
 }
 
 interface ConfigCategory {
@@ -177,6 +182,33 @@ export function getNzNotes(eventType: string): string | null {
   const configKey = getConfigKey(eventType);
   if (!configKey || !(configKey in config)) return null;
   return config[configKey].nzNotes;
+}
+
+/** Default category keys (in render order) for the chosen event type. */
+export function getDefaultCategories(eventType: string): string[] {
+  const configKey = getConfigKey(eventType);
+  if (!configKey || !(configKey in config)) return [];
+  return config[configKey].defaultCategories ?? [];
+}
+
+/** Resolve OptionTree-shaped levels for one category of an event type. */
+export function getCategoryLevels(
+  eventType: string,
+  categoryKey: string
+): OptionTreeLevel[] | null {
+  const configKey = getConfigKey(eventType);
+  if (!configKey || !(configKey in config)) return null;
+  const cat = config[configKey].categories[categoryKey];
+  if (!cat) return null;
+  return cat.levels.map((l) => ({
+    question: l.question ?? '',
+    breadcrumbLabel: l.breadcrumbLabel,
+    options: l.options,
+    multiSelect: l.multiSelect,
+    dependsOn: l.dependsOn,
+    freeText: l.freeText ?? false,
+    freeTextPlaceholder: l.freeTextPlaceholder,
+  }));
 }
 
 /** Get categorized reference items for a section and event type (for AI prompt) */

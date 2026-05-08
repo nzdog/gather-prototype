@@ -73,22 +73,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify dishes...",
             "breadcrumbLabel": "Dishes"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -152,22 +136,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify desserts...",
             "breadcrumbLabel": "Desserts"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -231,22 +199,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify sides...",
             "breadcrumbLabel": "Sides"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -281,7 +233,7 @@
               "Wine": [
                 "NZ Sauvignon Blanc (Marlborough)",
                 "Red wine (Central Otago Pinot Noir)",
-                "Ros\u00e9",
+                "Rosé",
                 "Sparkling / Champagne",
                 "Mixed wine selection"
               ],
@@ -353,7 +305,7 @@
               ],
               "Mocktails": [
                 "Fruit-based mocktails",
-                "Virgin mojito / pi\u00f1a colada",
+                "Virgin mojito / piña colada",
                 "Sparkling mocktails",
                 "Iced teas and lemonades",
                 "Shrubs and sodas"
@@ -444,22 +396,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify snacks...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -479,22 +415,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Describe your cake...",
             "breadcrumbLabel": "Type"
-          },
-          {
-            "level": 2,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -640,22 +560,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify starters...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -719,22 +623,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify brunch items...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -857,7 +745,7 @@
             "options": [
               "Shared plates / mezze",
               "Sit-down dinner",
-              "Finger food and canap\u00e9s",
+              "Finger food and canapés",
               "BBQ",
               "Themed cuisine"
             ],
@@ -883,12 +771,12 @@
                 "Pasta main",
                 "Fish and chips (elevated)"
               ],
-              "Finger food and canap\u00e9s": [
+              "Finger food and canapés": [
                 "Mini pies and sausage rolls",
                 "Bruschetta and crostini",
                 "Sliders and mini burgers",
                 "Stuffed mushrooms and arancini",
-                "Mixed canap\u00e9s"
+                "Mixed canapés"
               ],
               "BBQ": [
                 "Classic sausage sizzle",
@@ -908,27 +796,11 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify dishes...",
             "breadcrumbLabel": "Dishes"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
       "entree_starters": {
-        "label": "Entr\u00e9e & Starters",
+        "label": "Entrée & Starters",
         "levels": [
           {
             "level": 1,
@@ -936,9 +808,9 @@
             "options": [
               "Antipasto / grazing platter",
               "Soup",
-              "Finger food canap\u00e9s",
+              "Finger food canapés",
               "Dips and breads",
-              "Salad entr\u00e9e"
+              "Salad entrée"
             ],
             "freeText": true,
             "freeTextPlaceholder": "Describe your starters...",
@@ -962,21 +834,21 @@
                 "French onion",
                 "Chilled gazpacho (summer)"
               ],
-              "Finger food canap\u00e9s": [
+              "Finger food canapés": [
                 "Bruschetta",
                 "Blini with smoked salmon",
                 "Mini arancini",
                 "Stuffed mushrooms",
-                "Mixed canap\u00e9s"
+                "Mixed canapés"
               ],
               "Dips and breads": [
                 "Hummus and pita",
-                "Tzatziki and crudit\u00e9s",
+                "Tzatziki and crudités",
                 "Baba ganoush",
                 "Rewena bread and dips",
                 "Mixed dip platter"
               ],
-              "Salad entr\u00e9e": [
+              "Salad entrée": [
                 "Caprese",
                 "Caesar",
                 "Garden salad",
@@ -987,22 +859,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify starters...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -1066,22 +922,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify desserts...",
             "breadcrumbLabel": "Desserts"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -1116,7 +956,7 @@
               "Wine": [
                 "NZ Sauvignon Blanc (Marlborough)",
                 "Red wine (Central Otago Pinot Noir)",
-                "Ros\u00e9",
+                "Rosé",
                 "Sparkling / Champagne",
                 "Mixed wine selection"
               ],
@@ -1188,7 +1028,7 @@
               ],
               "Mocktails": [
                 "Fruit-based mocktails",
-                "Virgin mojito / pi\u00f1a colada",
+                "Virgin mojito / piña colada",
                 "Sparkling mocktails",
                 "Iced teas and lemonades",
                 "Shrubs and sodas"
@@ -1279,22 +1119,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify snacks...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -1314,22 +1138,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Describe your cake...",
             "breadcrumbLabel": "Type"
-          },
-          {
-            "level": 2,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -1412,22 +1220,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify sides...",
             "breadcrumbLabel": "Sides"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -1491,22 +1283,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify brunch items...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -1741,22 +1517,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify dishes...",
             "breadcrumbLabel": "Dishes"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -1820,22 +1580,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify snacks...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -1855,22 +1599,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Describe your cake...",
             "breadcrumbLabel": "Type"
-          },
-          {
-            "level": 2,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -1904,7 +1632,7 @@
               ],
               "Mocktails": [
                 "Fruit-based mocktails",
-                "Virgin mojito / pi\u00f1a colada",
+                "Virgin mojito / piña colada",
                 "Sparkling mocktails",
                 "Iced teas and lemonades",
                 "Shrubs and sodas"
@@ -1995,22 +1723,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify desserts...",
             "breadcrumbLabel": "Desserts"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -2219,22 +1931,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify starters...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -2298,22 +1994,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify sides...",
             "breadcrumbLabel": "Sides"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -2450,22 +2130,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify brunch items...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -2548,7 +2212,7 @@
   },
   "bbq_casual": {
     "label": "Casual BBQ",
-    "nzNotes": "The BBQ is central to NZ social life. Sausage sizzle is iconic. Lamb chops, marinated chicken, and seafood on the grill are common. Expect BYO drinks culture. Classic sides are coleslaw, potato salad, and bread rolls. Outdoor setting assumed \u2014 consider shade and seating.",
+    "nzNotes": "The BBQ is central to NZ social life. Sausage sizzle is iconic. Lamb chops, marinated chicken, and seafood on the grill are common. Expect BYO drinks culture. Classic sides are coleslaw, potato salad, and bread rolls. Outdoor setting assumed — consider shade and seating.",
     "defaultCategories": [
       "mains",
       "sides_salads",
@@ -2619,22 +2283,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify items...",
             "breadcrumbLabel": "Dishes"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -2698,22 +2346,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify sides...",
             "breadcrumbLabel": "Sides"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -2748,7 +2380,7 @@
               "Wine": [
                 "NZ Sauvignon Blanc (Marlborough)",
                 "Red wine (Central Otago Pinot Noir)",
-                "Ros\u00e9",
+                "Rosé",
                 "Sparkling / Champagne",
                 "Mixed wine selection"
               ],
@@ -2820,7 +2452,7 @@
               ],
               "Mocktails": [
                 "Fruit-based mocktails",
-                "Virgin mojito / pi\u00f1a colada",
+                "Virgin mojito / piña colada",
                 "Sparkling mocktails",
                 "Iced teas and lemonades",
                 "Shrubs and sodas"
@@ -2911,22 +2543,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify snacks...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -2984,22 +2600,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify desserts...",
             "breadcrumbLabel": "Desserts"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -3013,22 +2613,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Describe your cake...",
             "breadcrumbLabel": "Type"
-          },
-          {
-            "level": 2,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -3174,22 +2758,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify starters...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -3253,22 +2821,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify brunch items...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -3370,7 +2922,7 @@
   },
   "wedding_reception": {
     "label": "Wedding Reception",
-    "nzNotes": "NZ weddings often blend formal and relaxed styles. Outdoor and vineyard weddings are very popular. Pavlova is a common wedding dessert alongside the cake. NZ wines (Marlborough Sauvignon Blanc, Central Otago Pinot Noir) feature prominently. Speeches are a big tradition. Many weddings include M\u0101ori cultural elements (karakia, waiata, haka).",
+    "nzNotes": "NZ weddings often blend formal and relaxed styles. Outdoor and vineyard weddings are very popular. Pavlova is a common wedding dessert alongside the cake. NZ wines (Marlborough Sauvignon Blanc, Central Otago Pinot Noir) feature prominently. Speeches are a big tradition. Many weddings include Māori cultural elements (karakia, waiata, haka).",
     "defaultCategories": [
       "mains",
       "entree_starters",
@@ -3391,7 +2943,7 @@
             "level": 1,
             "question": "What style of mains?",
             "options": [
-              "Canap\u00e9s / cocktail style",
+              "Canapés / cocktail style",
               "Plated sit-down",
               "Shared / family style",
               "Food stations",
@@ -3405,12 +2957,12 @@
             "level": 2,
             "question": "Which dishes?",
             "dependsOn": {
-              "Canap\u00e9s / cocktail style": [
-                "Seafood canap\u00e9s",
+              "Canapés / cocktail style": [
+                "Seafood canapés",
                 "Mini sliders and bites",
                 "Asian-inspired bites",
                 "Classic NZ finger food",
-                "Mixed canap\u00e9 selection"
+                "Mixed canapé selection"
               ],
               "Plated sit-down": [
                 "Eye fillet steak",
@@ -3444,27 +2996,11 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify dishes...",
             "breadcrumbLabel": "Dishes"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
       "entree_starters": {
-        "label": "Entr\u00e9e & Starters",
+        "label": "Entrée & Starters",
         "levels": [
           {
             "level": 1,
@@ -3472,9 +3008,9 @@
             "options": [
               "Antipasto / grazing platter",
               "Soup",
-              "Finger food canap\u00e9s",
+              "Finger food canapés",
               "Dips and breads",
-              "Salad entr\u00e9e"
+              "Salad entrée"
             ],
             "freeText": true,
             "freeTextPlaceholder": "Describe your starters...",
@@ -3498,21 +3034,21 @@
                 "French onion",
                 "Chilled gazpacho (summer)"
               ],
-              "Finger food canap\u00e9s": [
+              "Finger food canapés": [
                 "Bruschetta",
                 "Blini with smoked salmon",
                 "Mini arancini",
                 "Stuffed mushrooms",
-                "Mixed canap\u00e9s"
+                "Mixed canapés"
               ],
               "Dips and breads": [
                 "Hummus and pita",
-                "Tzatziki and crudit\u00e9s",
+                "Tzatziki and crudités",
                 "Baba ganoush",
                 "Rewena bread and dips",
                 "Mixed dip platter"
               ],
-              "Salad entr\u00e9e": [
+              "Salad entrée": [
                 "Caprese",
                 "Caesar",
                 "Garden salad",
@@ -3523,22 +3059,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify starters...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -3586,7 +3106,7 @@
               ],
               "Individual plated desserts": [
                 "Panna cotta",
-                "Cr\u00e8me br\u00fbl\u00e9e",
+                "Crème brûlée",
                 "Chocolate fondant",
                 "Pavlova individual",
                 "Seasonal fruit dessert"
@@ -3602,22 +3122,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify desserts...",
             "breadcrumbLabel": "Desserts"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -3681,22 +3185,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify sides...",
             "breadcrumbLabel": "Sides"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -3731,7 +3219,7 @@
               "Wine": [
                 "NZ Sauvignon Blanc (Marlborough)",
                 "Red wine (Central Otago Pinot Noir)",
-                "Ros\u00e9",
+                "Rosé",
                 "Sparkling / Champagne",
                 "Mixed wine selection"
               ],
@@ -3803,7 +3291,7 @@
               ],
               "Mocktails": [
                 "Fruit-based mocktails",
-                "Virgin mojito / pi\u00f1a colada",
+                "Virgin mojito / piña colada",
                 "Sparkling mocktails",
                 "Iced teas and lemonades",
                 "Shrubs and sodas"
@@ -3850,22 +3338,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Describe your cake...",
             "breadcrumbLabel": "Type"
-          },
-          {
-            "level": 2,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -4074,22 +3546,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify snacks...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -4153,22 +3609,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify brunch items...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -4278,27 +3718,11 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify dishes...",
             "breadcrumbLabel": "Dishes"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
       "entree_starters": {
-        "label": "Entr\u00e9e & Starters",
+        "label": "Entrée & Starters",
         "levels": [
           {
             "level": 1,
@@ -4306,9 +3730,9 @@
             "options": [
               "Antipasto / grazing platter",
               "Soup",
-              "Finger food canap\u00e9s",
+              "Finger food canapés",
               "Dips and breads",
-              "Salad entr\u00e9e"
+              "Salad entrée"
             ],
             "freeText": true,
             "freeTextPlaceholder": "Describe your starters...",
@@ -4332,21 +3756,21 @@
                 "French onion",
                 "Chilled gazpacho (summer)"
               ],
-              "Finger food canap\u00e9s": [
+              "Finger food canapés": [
                 "Bruschetta",
                 "Blini with smoked salmon",
                 "Mini arancini",
                 "Stuffed mushrooms",
-                "Mixed canap\u00e9s"
+                "Mixed canapés"
               ],
               "Dips and breads": [
                 "Hummus and pita",
-                "Tzatziki and crudit\u00e9s",
+                "Tzatziki and crudités",
                 "Baba ganoush",
                 "Rewena bread and dips",
                 "Mixed dip platter"
               ],
-              "Salad entr\u00e9e": [
+              "Salad entrée": [
                 "Caprese",
                 "Caesar",
                 "Garden salad",
@@ -4357,22 +3781,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify starters...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -4436,22 +3844,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify snacks...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -4515,22 +3907,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify desserts...",
             "breadcrumbLabel": "Desserts"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -4550,22 +3926,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Describe your cake...",
             "breadcrumbLabel": "Type"
-          },
-          {
-            "level": 2,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -4599,7 +3959,7 @@
               ],
               "Mocktails": [
                 "Fruit-based mocktails",
-                "Virgin mojito / pi\u00f1a colada",
+                "Virgin mojito / piña colada",
                 "Sparkling mocktails",
                 "Iced teas and lemonades",
                 "Shrubs and sodas"
@@ -4816,22 +4176,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify brunch items...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -4895,22 +4239,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify sides...",
             "breadcrumbLabel": "Sides"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -5098,7 +4426,7 @@
     ],
     "categories": {
       "entree_starters": {
-        "label": "Entr\u00e9e & Starters",
+        "label": "Entrée & Starters",
         "levels": [
           {
             "level": 1,
@@ -5106,9 +4434,9 @@
             "options": [
               "Antipasto / grazing platter",
               "Soup",
-              "Finger food canap\u00e9s",
+              "Finger food canapés",
               "Dips and breads",
-              "Salad entr\u00e9e"
+              "Salad entrée"
             ],
             "freeText": true,
             "freeTextPlaceholder": "Describe your starters...",
@@ -5132,21 +4460,21 @@
                 "French onion",
                 "Chilled gazpacho (summer)"
               ],
-              "Finger food canap\u00e9s": [
+              "Finger food canapés": [
                 "Bruschetta",
                 "Blini with smoked salmon",
                 "Mini arancini",
                 "Stuffed mushrooms",
-                "Mixed canap\u00e9s"
+                "Mixed canapés"
               ],
               "Dips and breads": [
                 "Hummus and pita",
-                "Tzatziki and crudit\u00e9s",
+                "Tzatziki and crudités",
                 "Baba ganoush",
                 "Rewena bread and dips",
                 "Mixed dip platter"
               ],
-              "Salad entr\u00e9e": [
+              "Salad entrée": [
                 "Caprese",
                 "Caesar",
                 "Garden salad",
@@ -5157,22 +4485,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify starters...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -5183,7 +4495,7 @@
             "level": 1,
             "question": "What style of mains?",
             "options": [
-              "Canap\u00e9s and finger food",
+              "Canapés and finger food",
               "Shared plates",
               "Grazing tables",
               "Sit-down dinner",
@@ -5197,12 +4509,12 @@
             "level": 2,
             "question": "Which dishes?",
             "dependsOn": {
-              "Canap\u00e9s and finger food": [
+              "Canapés and finger food": [
                 "Mini pies and sausage rolls",
                 "Sliders and mini burgers",
                 "Bruschetta and crostini",
                 "Asian-inspired bites",
-                "Mixed canap\u00e9 selection"
+                "Mixed canapé selection"
               ],
               "Shared plates": [
                 "Mediterranean sharing",
@@ -5236,22 +4548,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify dishes...",
             "breadcrumbLabel": "Dishes"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -5306,7 +4602,7 @@
               ],
               "Individual desserts": [
                 "Panna cotta",
-                "Cr\u00e8me br\u00fbl\u00e9e",
+                "Crème brûlée",
                 "Chocolate mousse",
                 "Mini tarts",
                 "Seasonal fruit dessert"
@@ -5315,22 +4611,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify desserts...",
             "breadcrumbLabel": "Desserts"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -5365,7 +4645,7 @@
               "Wine": [
                 "NZ Sauvignon Blanc (Marlborough)",
                 "Red wine (Central Otago Pinot Noir)",
-                "Ros\u00e9",
+                "Rosé",
                 "Sparkling / Champagne",
                 "Mixed wine selection"
               ],
@@ -5437,7 +4717,7 @@
               ],
               "Mocktails": [
                 "Fruit-based mocktails",
-                "Virgin mojito / pi\u00f1a colada",
+                "Virgin mojito / piña colada",
                 "Sparkling mocktails",
                 "Iced teas and lemonades",
                 "Shrubs and sodas"
@@ -5528,22 +4808,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify snacks...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -5563,22 +4827,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Describe your cake...",
             "breadcrumbLabel": "Type"
-          },
-          {
-            "level": 2,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -5768,22 +5016,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify sides...",
             "breadcrumbLabel": "Sides"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -5847,22 +5079,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify brunch items...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -5964,7 +5180,7 @@
   },
   "easter": {
     "label": "Easter",
-    "nzNotes": "Easter in NZ is in autumn (March/April). Cooler weather means roasts and warm dishes are popular. Roast lamb is the traditional NZ Easter centrepiece. Hot cross buns are central \u2014 often homemade. Feijoas are in season. ANZAC biscuits are a staple. Easter egg hunts for kids. It's a long weekend (Friday-Monday) so expect larger gatherings.",
+    "nzNotes": "Easter in NZ is in autumn (March/April). Cooler weather means roasts and warm dishes are popular. Roast lamb is the traditional NZ Easter centrepiece. Hot cross buns are central — often homemade. Feijoas are in season. ANZAC biscuits are a staple. Easter egg hunts for kids. It's a long weekend (Friday-Monday) so expect larger gatherings.",
     "defaultCategories": [
       "mains",
       "dessert",
@@ -6034,22 +5250,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify dishes...",
             "breadcrumbLabel": "Dishes"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -6113,22 +5313,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify desserts...",
             "breadcrumbLabel": "Desserts"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -6186,22 +5370,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify sides...",
             "breadcrumbLabel": "Sides"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -6235,7 +5403,7 @@
               ],
               "Mocktails": [
                 "Fruit-based mocktails",
-                "Virgin mojito / pi\u00f1a colada",
+                "Virgin mojito / piña colada",
                 "Sparkling mocktails",
                 "Iced teas and lemonades",
                 "Shrubs and sodas"
@@ -6297,7 +5465,7 @@
               "Wine": [
                 "NZ Sauvignon Blanc (Marlborough)",
                 "Red wine (Central Otago Pinot Noir)",
-                "Ros\u00e9",
+                "Rosé",
                 "Sparkling / Champagne",
                 "Mixed wine selection"
               ],
@@ -6399,22 +5567,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify snacks...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -6434,22 +5586,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Describe your cake...",
             "breadcrumbLabel": "Type"
-          },
-          {
-            "level": 2,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -6532,22 +5668,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify starters...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -6611,22 +5731,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify brunch items...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -6811,7 +5915,7 @@
             "options": [
               "Intimate dinner",
               "Shared plates",
-              "Canap\u00e9s / cocktail style",
+              "Canapés / cocktail style",
               "Buffet",
               "Themed cuisine"
             ],
@@ -6837,12 +5941,12 @@
                 "Tapas selection",
                 "Mixed sharing plates"
               ],
-              "Canap\u00e9s / cocktail style": [
-                "Seafood canap\u00e9s",
+              "Canapés / cocktail style": [
+                "Seafood canapés",
                 "Mini sliders",
                 "Bruschetta and crostini",
                 "Asian-inspired bites",
-                "Mixed canap\u00e9 selection"
+                "Mixed canapé selection"
               ],
               "Buffet": [
                 "Classic NZ buffet",
@@ -6862,27 +5966,11 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify dishes...",
             "breadcrumbLabel": "Dishes"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
       "entree_starters": {
-        "label": "Entr\u00e9e & Starters",
+        "label": "Entrée & Starters",
         "levels": [
           {
             "level": 1,
@@ -6890,9 +5978,9 @@
             "options": [
               "Antipasto / grazing platter",
               "Soup",
-              "Finger food canap\u00e9s",
+              "Finger food canapés",
               "Dips and breads",
-              "Salad entr\u00e9e"
+              "Salad entrée"
             ],
             "freeText": true,
             "freeTextPlaceholder": "Describe your starters...",
@@ -6916,21 +6004,21 @@
                 "French onion",
                 "Chilled gazpacho (summer)"
               ],
-              "Finger food canap\u00e9s": [
+              "Finger food canapés": [
                 "Bruschetta",
                 "Blini with smoked salmon",
                 "Mini arancini",
                 "Stuffed mushrooms",
-                "Mixed canap\u00e9s"
+                "Mixed canapés"
               ],
               "Dips and breads": [
                 "Hummus and pita",
-                "Tzatziki and crudit\u00e9s",
+                "Tzatziki and crudités",
                 "Baba ganoush",
                 "Rewena bread and dips",
                 "Mixed dip platter"
               ],
-              "Salad entr\u00e9e": [
+              "Salad entrée": [
                 "Caprese",
                 "Caesar",
                 "Garden salad",
@@ -6941,22 +6029,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify starters...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -6983,7 +6055,7 @@
             "dependsOn": {
               "Plated individual desserts": [
                 "Panna cotta",
-                "Cr\u00e8me br\u00fbl\u00e9e",
+                "Crème brûlée",
                 "Chocolate fondant",
                 "Tiramisu",
                 "Seasonal fruit dessert"
@@ -7020,22 +6092,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify desserts...",
             "breadcrumbLabel": "Desserts"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -7070,7 +6126,7 @@
               "Wine": [
                 "NZ Sauvignon Blanc (Marlborough)",
                 "Red wine (Central Otago Pinot Noir)",
-                "Ros\u00e9",
+                "Rosé",
                 "Sparkling / Champagne",
                 "Mixed wine selection"
               ],
@@ -7142,7 +6198,7 @@
               ],
               "Mocktails": [
                 "Fruit-based mocktails",
-                "Virgin mojito / pi\u00f1a colada",
+                "Virgin mojito / piña colada",
                 "Sparkling mocktails",
                 "Iced teas and lemonades",
                 "Shrubs and sodas"
@@ -7189,22 +6245,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Describe your cake...",
             "breadcrumbLabel": "Type"
-          },
-          {
-            "level": 2,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -7394,22 +6434,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify sides...",
             "breadcrumbLabel": "Sides"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -7473,22 +6497,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify snacks...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -7552,22 +6560,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify brunch items...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -7669,7 +6661,7 @@
   },
   "farewell": {
     "label": "Farewell",
-    "nzNotes": "NZ farewells are warm, communal events \u2014 whether someone is heading overseas (OE is a kiwi tradition), changing jobs, or moving towns. Food is often casual and shared. 'Bring a plate' culture is strong. Speeches and tributes are common. Destination-themed food is a fun touch if someone is moving overseas. Lamingtons and classic NZ baking often feature.",
+    "nzNotes": "NZ farewells are warm, communal events — whether someone is heading overseas (OE is a kiwi tradition), changing jobs, or moving towns. Food is often casual and shared. 'Bring a plate' culture is strong. Speeches and tributes are common. Destination-themed food is a fun touch if someone is moving overseas. Lamingtons and classic NZ baking often feature.",
     "defaultCategories": [
       "table_snacks",
       "mains",
@@ -7739,22 +6731,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify snacks...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -7812,22 +6788,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify dishes...",
             "breadcrumbLabel": "Dishes"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -7891,22 +6851,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify desserts...",
             "breadcrumbLabel": "Desserts"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -7941,7 +6885,7 @@
               "Wine": [
                 "NZ Sauvignon Blanc (Marlborough)",
                 "Red wine (Central Otago Pinot Noir)",
-                "Ros\u00e9",
+                "Rosé",
                 "Sparkling / Champagne",
                 "Mixed wine selection"
               ],
@@ -8013,7 +6957,7 @@
               ],
               "Mocktails": [
                 "Fruit-based mocktails",
-                "Virgin mojito / pi\u00f1a colada",
+                "Virgin mojito / piña colada",
                 "Sparkling mocktails",
                 "Iced teas and lemonades",
                 "Shrubs and sodas"
@@ -8060,22 +7004,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Describe your cake...",
             "breadcrumbLabel": "Type"
-          },
-          {
-            "level": 2,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -8158,22 +7086,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify starters...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -8237,22 +7149,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify sides...",
             "breadcrumbLabel": "Sides"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },
@@ -8316,22 +7212,6 @@
             "freeText": true,
             "freeTextPlaceholder": "Specify brunch items...",
             "breadcrumbLabel": "Preferences"
-          },
-          {
-            "level": 3,
-            "question": "Any dietary requirements to accommodate?",
-            "options": [
-              "Vegetarian option needed",
-              "Vegan option needed",
-              "Gluten-free needed",
-              "Dairy-free needed",
-              "Nut-free needed",
-              "Halal needed"
-            ],
-            "multiSelect": true,
-            "freeText": true,
-            "freeTextPlaceholder": "Other dietary needs...",
-            "breadcrumbLabel": "Dietary"
           }
         ]
       },

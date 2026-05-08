@@ -134,7 +134,7 @@ export default function OptionTree({
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-0">
       {levels.map((level, levelIndex) => {
         const lvlSel = readLevel(selections, levelIndex);
         const groups = resolveOptionGroups(level, selections);
@@ -145,7 +145,14 @@ export default function OptionTree({
         const radioName = `option-tree-level-${levelIndex}`;
 
         return (
-          <div key={levelIndex}>
+          <div
+            key={levelIndex}
+            className={
+              levelIndex === 0
+                ? ''
+                : 'mt-4 pt-4 pl-4 border-t border-gray-100 border-l-2 border-l-gray-100'
+            }
+          >
             <p className="text-sm text-gray-700 font-medium mb-2">{level.question}</p>
 
             {hasAnyOptions && (

@@ -1,12 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import {
   getAccordionDefaults,
+  getCategoryLevels,
+  getDefaultCategories,
   CONFIG_EVENT_TYPES,
   LEGACY_EVENT_TYPE_MAP,
 } from '@/lib/ai/config-loader';
+import OptionTree, {
+  type OptionTreeLevel,
+  type OptionTreeSelections,
+} from '@/components/shared/OptionTree';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -28,6 +34,7 @@ interface FoodItem {
 interface SectionData {
   items: FoodItem[];
   stillDeciding: boolean;
+  selections?: OptionTreeSelections;
 }
 
 interface DietaryData {
@@ -40,6 +47,11 @@ interface OtherJobsAccordionData {
   stillDeciding: boolean;
 }
 
+interface ExtendedCategoryEntry {
+  selections: OptionTreeSelections;
+  stillDeciding: boolean;
+}
+
 interface Step1State {
   eventType: string | null;
   eventTypeOther: string;
@@ -49,9 +61,53 @@ interface Step1State {
   drinksData: SectionData;
   dietaryData: DietaryData;
   otherNotes: string;
+  extendedCategoriesData: Record<string, ExtendedCategoryEntry>;
   setUpData: OtherJobsAccordionData;
   cleanUpData: OtherJobsAccordionData;
   otherJobsOtherData: OtherJobsAccordionData;
+}
+
+// Canonical food categories rendered as OptionTree accordions, in render order
+// when present in the occasion's defaultCategories.
+const OPTION_TREE_FOOD_CATEGORIES = [
+  'mains',
+  'entree_starters',
+  'sides_salads',
+  'dessert',
+  'cake',
+  'drinks_alcoholic',
+  'drinks_non_alcoholic',
+  'table_snacks',
+  'breakfast_brunch',
+] as const;
+
+type OptionTreeFoodKey = (typeof OPTION_TREE_FOOD_CATEGORIES)[number];
+
+const OPTION_TREE_CATEGORY_META: Record<OptionTreeFoodKey, { label: string; emoji: string }> = {
+  mains: { label: 'Mains', emoji: '🍖' },
+  entree_starters: { label: 'Entrée & Starters', emoji: '🥟' },
+  sides_salads: { label: 'Sides & Salads', emoji: '🥗' },
+  dessert: { label: 'Dessert', emoji: '🍰' },
+  cake: { label: 'Cake', emoji: '🎂' },
+  drinks_alcoholic: { label: 'Alcoholic Drinks', emoji: '🍷' },
+  drinks_non_alcoholic: { label: 'Non-Alcoholic Drinks', emoji: '🥤' },
+  table_snacks: { label: 'Table Snacks', emoji: '🍿' },
+  breakfast_brunch: { label: 'Breakfast & Brunch', emoji: '🍳' },
+};
+
+function readExtendedEntry(raw: unknown): ExtendedCategoryEntry {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const r = raw as { selections?: unknown; stillDeciding?: unknown };
+    const selections =
+      r.selections && typeof r.selections === 'object' && !Array.isArray(r.selections)
+        ? (r.selections as OptionTreeSelections)
+        : {};
+    return {
+      selections,
+      stillDeciding: typeof r.stillDeciding === 'boolean' ? r.stillDeciding : false,
+    };
+  }
+  return { selections: {}, stillDeciding: false };
 }
 
 interface HouseholdMember {
@@ -94,6 +150,7 @@ const INITIAL_STATE: Step1State = {
   drinksData: { items: [], stillDeciding: false },
   dietaryData: { requirements: [], other: '' },
   otherNotes: '',
+  extendedCategoriesData: {},
   setUpData: { ...EMPTY_OTHER_JOBS },
   cleanUpData: { ...EMPTY_OTHER_JOBS },
   otherJobsOtherData: { ...EMPTY_OTHER_JOBS },
@@ -189,7 +246,8 @@ export default function Moment2Step1Modal({
         const data = await res.json();
         if (data.setup) {
           const s = data.setup;
-          // Migrate old string[] items to FoodItem[] if needed
+          // Migrate old string[] items to FoodItem[] if needed; preserve OptionTree
+          // selections when present (legacy rows have items only, no selections).
           const migrateSectionData = (
             raw: SectionData | null,
             fallback: SectionData
@@ -200,8 +258,26 @@ export default function Moment2Step1Modal({
                   typeof item === 'string' ? { name: item, included: true } : item
                 )
               : fallback.items;
-            return { items, stillDeciding: raw.stillDeciding ?? fallback.stillDeciding };
+            const selections =
+              raw.selections && typeof raw.selections === 'object' && !Array.isArray(raw.selections)
+                ? (raw.selections as OptionTreeSelections)
+                : undefined;
+            return {
+              items,
+              stillDeciding: raw.stillDeciding ?? fallback.stillDeciding,
+              ...(selections ? { selections } : {}),
+            };
           };
+          const rawExtended =
+            s.extendedCategoriesData &&
+            typeof s.extendedCategoriesData === 'object' &&
+            !Array.isArray(s.extendedCategoriesData)
+              ? (s.extendedCategoriesData as Record<string, unknown>)
+              : {};
+          const hydratedExtended: Record<string, ExtendedCategoryEntry> = {};
+          for (const [k, v] of Object.entries(rawExtended)) {
+            hydratedExtended[k] = readExtendedEntry(v);
+          }
           setState((prev) => ({
             ...prev,
             eventType: LEGACY_EVENT_TYPE_MAP[s.eventType] ?? s.eventType ?? prev.eventType,
@@ -214,6 +290,7 @@ export default function Moment2Step1Modal({
               ? { requirements: s.dietaryData.requirements ?? [], other: s.dietaryData.other ?? '' }
               : prev.dietaryData,
             otherNotes: s.otherNotes ?? prev.otherNotes,
+            extendedCategoriesData: hydratedExtended,
             setUpData: readOtherJobs(s.setUpData),
             cleanUpData: readOtherJobs(s.cleanUpData),
             otherJobsOtherData: readOtherJobs(s.otherJobsOtherData),
@@ -246,6 +323,7 @@ export default function Moment2Step1Modal({
       payload.drinksData = data.drinksData;
       payload.dietaryData = data.dietaryData;
       payload.otherNotes = data.otherNotes;
+      payload.extendedCategoriesData = data.extendedCategoriesData;
       payload.setUpData = data.setUpData;
       payload.cleanUpData = data.cleanUpData;
       payload.otherJobsOtherData = data.otherJobsOtherData;
@@ -294,20 +372,21 @@ export default function Moment2Step1Modal({
   // Progressive generation — fire when an accordion closes with real data
   const generateSection = useCallback(
     async (sectionId: string, currentState: Step1State) => {
-      // Map section ID to state data
-      const sectionDataMap: Record<string, unknown> = {
-        mains: currentState.mainsData,
-        sides: currentState.sidesData,
-        desserts: currentState.dessertsData,
-        drinks: currentState.drinksData,
-        dietary: currentState.dietaryData,
-        other: {
+      // Map section ID to state data. Canonical food keys read from
+      // mainsData (special) or extendedCategoriesData[key].
+      let sectionData: { stillDeciding?: boolean } | undefined;
+      if (sectionId === 'mains') {
+        sectionData = currentState.mainsData;
+      } else if (sectionId === 'dietary') {
+        sectionData = currentState.dietaryData as unknown as { stillDeciding?: boolean };
+      } else if (sectionId === 'other') {
+        sectionData = {
           items: currentState.otherNotes ? [{ name: currentState.otherNotes, included: true }] : [],
           stillDeciding: false,
-        },
-      };
-
-      const sectionData = sectionDataMap[sectionId] as { stillDeciding?: boolean } | undefined;
+        } as unknown as { stillDeciding?: boolean };
+      } else if ((OPTION_TREE_FOOD_CATEGORIES as readonly string[]).includes(sectionId)) {
+        sectionData = currentState.extendedCategoriesData[sectionId];
+      }
       if (!sectionData) return;
 
       // Skip if still deciding
@@ -388,28 +467,35 @@ export default function Moment2Step1Modal({
     [openAccordion, state, saveToApi, generateSection]
   );
 
-  // Select event type — also populate food defaults if switching types
+  // Select event type — when switching, reset OptionTree-driven state since the
+  // available options/levels differ per occasion. Legacy item arrays still get
+  // pre-populated from the config so legacy back-compat readers see values.
   const handleEventTypeSelect = useCallback(
     (type: string) => {
       updateState((prev) => {
+        const switching = prev.eventType !== type;
+        if (!switching) {
+          return { ...prev, eventType: type };
+        }
         const defaults = getAccordionDefaults(type);
-        const shouldPopulate = prev.eventType !== type;
         return {
           ...prev,
           eventType: type,
           eventTypeOther: type === 'Other' ? prev.eventTypeOther : '',
-          mainsData: shouldPopulate
-            ? { items: defaults.mains, stillDeciding: prev.mainsData.stillDeciding }
-            : prev.mainsData,
-          sidesData: shouldPopulate
-            ? { items: defaults.sides, stillDeciding: prev.sidesData.stillDeciding }
-            : prev.sidesData,
-          dessertsData: shouldPopulate
-            ? { items: defaults.desserts, stillDeciding: prev.dessertsData.stillDeciding }
-            : prev.dessertsData,
-          drinksData: shouldPopulate
-            ? { items: defaults.drinks, stillDeciding: prev.drinksData.stillDeciding }
-            : prev.drinksData,
+          // Mains keeps the legacy items field for back-compat reads, but
+          // selections reset so the new OptionTree starts clean.
+          mainsData: {
+            items: defaults.mains,
+            stillDeciding: prev.mainsData.stillDeciding,
+            selections: {},
+          },
+          sidesData: { items: defaults.sides, stillDeciding: prev.sidesData.stillDeciding },
+          dessertsData: {
+            items: defaults.desserts,
+            stillDeciding: prev.dessertsData.stillDeciding,
+          },
+          drinksData: { items: defaults.drinks, stillDeciding: prev.drinksData.stillDeciding },
+          extendedCategoriesData: {},
         };
       });
     },
@@ -428,6 +514,15 @@ export default function Moment2Step1Modal({
     }
     onGenerate();
   }, [onGenerate, saveToApi]);
+
+  // Canonical food categories to render: intersection of OPTION_TREE_FOOD_CATEGORIES
+  // and the occasion's defaultCategories. Non-default categories are deferred to
+  // sub-commit (h)'s "Show more" mechanic.
+  const renderableFoodCategories = useMemo<OptionTreeFoodKey[]>(() => {
+    if (!state.eventType) return [];
+    const defaults = new Set(getDefaultCategories(state.eventType));
+    return OPTION_TREE_FOOD_CATEGORIES.filter((k) => defaults.has(k));
+  }, [state.eventType]);
 
   // Feedback line
   const feedbackLine = state.eventType
@@ -512,46 +607,90 @@ export default function Moment2Step1Modal({
               onChange={(d) => updateState((prev) => ({ ...prev, dietaryData: d }))}
               generationStatus={sectionStatus.dietary}
             />
-            {/* Mains */}
-            <FoodAccordion
-              id="mains"
-              label="🍖 Mains"
-              data={state.mainsData}
-              openAccordion={openAccordion}
-              onToggle={handleAccordionToggle}
-              onChange={(d) => updateState((prev) => ({ ...prev, mainsData: d }))}
-              generationStatus={sectionStatus.mains}
-            />
-            {/* Sides */}
-            <FoodAccordion
-              id="sides"
-              label="🥗 Sides"
-              data={state.sidesData}
-              openAccordion={openAccordion}
-              onToggle={handleAccordionToggle}
-              onChange={(d) => updateState((prev) => ({ ...prev, sidesData: d }))}
-              generationStatus={sectionStatus.sides}
-            />
-            {/* Dessert */}
-            <FoodAccordion
-              id="desserts"
-              label="🍰 Dessert"
-              data={state.dessertsData}
-              openAccordion={openAccordion}
-              onToggle={handleAccordionToggle}
-              onChange={(d) => updateState((prev) => ({ ...prev, dessertsData: d }))}
-              generationStatus={sectionStatus.desserts}
-            />
-            {/* Drinks */}
-            <FoodAccordion
-              id="drinks"
-              label="🍺 Drinks"
-              data={state.drinksData}
-              openAccordion={openAccordion}
-              onToggle={handleAccordionToggle}
-              onChange={(d) => updateState((prev) => ({ ...prev, drinksData: d }))}
-              generationStatus={sectionStatus.drinks}
-            />
+            {/* Canonical OptionTree food categories from defaultCategories.
+                Non-default categories are deferred to sub-commit (h)'s "Show more". */}
+            {state.eventType &&
+              renderableFoodCategories.map((catKey) => {
+                const meta = OPTION_TREE_CATEGORY_META[catKey];
+                const levels = getCategoryLevels(state.eventType!, catKey);
+                if (!levels || levels.length === 0) return null;
+                if (catKey === 'mains') {
+                  const data = state.mainsData;
+                  return (
+                    <FoodOptionTreeAccordion
+                      key="mains"
+                      id="mains"
+                      label={`${meta.emoji} ${meta.label}`}
+                      levels={levels}
+                      selections={data.selections ?? {}}
+                      stillDeciding={data.stillDeciding}
+                      openAccordion={openAccordion}
+                      onToggle={handleAccordionToggle}
+                      onSelectionsChange={(next) =>
+                        updateState((prev) => ({
+                          ...prev,
+                          mainsData: { ...prev.mainsData, selections: next },
+                        }))
+                      }
+                      onStillDecidingToggle={() =>
+                        updateState((prev) => ({
+                          ...prev,
+                          mainsData: {
+                            ...prev.mainsData,
+                            stillDeciding: !prev.mainsData.stillDeciding,
+                          },
+                        }))
+                      }
+                      generationStatus={sectionStatus[catKey]}
+                    />
+                  );
+                }
+                const entry = state.extendedCategoriesData[catKey] ?? {
+                  selections: {},
+                  stillDeciding: false,
+                };
+                return (
+                  <FoodOptionTreeAccordion
+                    key={catKey}
+                    id={catKey}
+                    label={`${meta.emoji} ${meta.label}`}
+                    levels={levels}
+                    selections={entry.selections}
+                    stillDeciding={entry.stillDeciding}
+                    openAccordion={openAccordion}
+                    onToggle={handleAccordionToggle}
+                    onSelectionsChange={(next) =>
+                      updateState((prev) => ({
+                        ...prev,
+                        extendedCategoriesData: {
+                          ...prev.extendedCategoriesData,
+                          [catKey]: {
+                            selections: next,
+                            stillDeciding:
+                              prev.extendedCategoriesData[catKey]?.stillDeciding ?? false,
+                          },
+                        },
+                      }))
+                    }
+                    onStillDecidingToggle={() =>
+                      updateState((prev) => {
+                        const cur = prev.extendedCategoriesData[catKey] ?? {
+                          selections: {},
+                          stillDeciding: false,
+                        };
+                        return {
+                          ...prev,
+                          extendedCategoriesData: {
+                            ...prev.extendedCategoriesData,
+                            [catKey]: { ...cur, stillDeciding: !cur.stillDeciding },
+                          },
+                        };
+                      })
+                    }
+                    generationStatus={sectionStatus[catKey]}
+                  />
+                );
+              })}
             {/* Other (food) */}
             <OtherAccordion
               id="other"
@@ -693,95 +832,47 @@ function AccordionShell({
   );
 }
 
-// ─── Food accordion ──────────────────────────────────────────────────────────
+// ─── Food OptionTree accordion ───────────────────────────────────────────────
 
-function FoodAccordion({
+function FoodOptionTreeAccordion({
   id,
   label,
-  data,
+  levels,
+  selections,
+  stillDeciding,
   openAccordion,
   onToggle,
-  onChange,
+  onSelectionsChange,
+  onStillDecidingToggle,
   generationStatus,
 }: {
   id: string;
   label: string;
-  data: SectionData;
+  levels: OptionTreeLevel[];
+  selections: OptionTreeSelections;
+  stillDeciding: boolean;
   openAccordion: string | null;
   onToggle: (id: string | null) => void;
-  onChange: (d: SectionData) => void;
+  onSelectionsChange: (next: OptionTreeSelections) => void;
+  onStillDecidingToggle: () => void;
   generationStatus?: SectionGenerationStatus;
 }) {
-  const [newItem, setNewItem] = useState('');
-
-  const handleAddItem = () => {
-    const trimmed = newItem.trim();
-    if (!trimmed || data.items.some((i) => i.name === trimmed)) return;
-    onChange({ ...data, items: [...data.items, { name: trimmed, included: true }] });
-    setNewItem('');
-  };
-
-  const handleRemoveItem = (name: string) => {
-    onChange({ ...data, items: data.items.filter((i) => i.name !== name) });
-  };
-
-  const handleToggleIncluded = (name: string) => {
-    onChange({
-      ...data,
-      items: data.items.map((i) => (i.name === name ? { ...i, included: !i.included } : i)),
-    });
-  };
-
   return (
     <AccordionShell
       id={id}
       label={label}
       openAccordion={openAccordion}
       onToggle={onToggle}
-      stillDeciding={data.stillDeciding}
-      onStillDecidingToggle={() => onChange({ ...data, stillDeciding: !data.stillDeciding })}
+      stillDeciding={stillDeciding}
+      onStillDecidingToggle={onStillDecidingToggle}
       generationStatus={generationStatus}
     >
-      <div className="space-y-2">
-        {data.items.map((item) => (
-          <div key={item.name} className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={item.included}
-              onChange={() => handleToggleIncluded(item.name)}
-              className="rounded border-gray-300 text-accent focus:ring-accent/40"
-            />
-            <span
-              className={`text-sm flex-1 ${item.included ? 'text-gray-700' : 'text-gray-400 line-through'}`}
-            >
-              {item.name}
-            </span>
-            <button
-              type="button"
-              onClick={() => handleRemoveItem(item.name)}
-              className="text-gray-300 hover:text-red-400 text-sm transition-colors"
-              aria-label={`Remove ${item.name}`}
-            >
-              &times;
-            </button>
-          </div>
-        ))}
-        <div className="flex items-center gap-2 mt-2">
-          <input
-            type="text"
-            placeholder="+ Add your own"
-            value={newItem}
-            onChange={(e) => setNewItem(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                handleAddItem();
-              }
-            }}
-            className="flex-1 px-3 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-accent/40"
-          />
-        </div>
-      </div>
+      <OptionTree
+        levels={levels}
+        selections={selections}
+        onChange={onSelectionsChange}
+        disabled={stillDeciding}
+      />
     </AccordionShell>
   );
 }
