@@ -177,6 +177,7 @@ export default function Moment2Step1Modal({
 }: Moment2Step1ModalProps) {
   const [state, setState] = useState<Step1State>(INITIAL_STATE);
   const [openAccordion, setOpenAccordion] = useState<string | null>(null);
+  const [showAdditionalCategories, setShowAdditionalCategories] = useState(false);
   const [peopleCount, setPeopleCount] = useState<number>(0);
   const [totalAdults, setTotalAdults] = useState<number>(0);
   const [totalKids, setTotalKids] = useState<number>(0);
@@ -477,6 +478,7 @@ export default function Moment2Step1Modal({
         if (!switching) {
           return { ...prev, eventType: type };
         }
+        setShowAdditionalCategories(false);
         const defaults = getAccordionDefaults(type);
         return {
           ...prev,
@@ -522,6 +524,19 @@ export default function Moment2Step1Modal({
     if (!state.eventType) return [];
     const defaults = new Set(getDefaultCategories(state.eventType));
     return OPTION_TREE_FOOD_CATEGORIES.filter((k) => defaults.has(k));
+  }, [state.eventType]);
+
+  // Non-default OptionTree food categories that exist in the config for the
+  // current occasion but aren't surfaced by default. Revealed via the
+  // "Show more categories" toggle.
+  const additionalFoodCategories = useMemo<OptionTreeFoodKey[]>(() => {
+    if (!state.eventType) return [];
+    const defaults = new Set(getDefaultCategories(state.eventType));
+    return OPTION_TREE_FOOD_CATEGORIES.filter((k) => {
+      if (defaults.has(k)) return false;
+      const levels = getCategoryLevels(state.eventType!, k);
+      return !!levels && levels.length > 0;
+    });
   }, [state.eventType]);
 
   // Feedback line
@@ -700,6 +715,72 @@ export default function Moment2Step1Modal({
               onChange={(v) => updateState((prev) => ({ ...prev, otherNotes: v }))}
               generationStatus={sectionStatus.other}
             />
+
+            {/* Show more food categories toggle (sub-commit h) */}
+            {additionalFoodCategories.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowAdditionalCategories((v) => !v)}
+                className="w-full text-sm text-accent hover:text-accent-dark font-medium py-2 mt-1 transition-colors"
+              >
+                {showAdditionalCategories
+                  ? 'Hide additional categories'
+                  : `Show ${additionalFoodCategories.length} more food ${additionalFoodCategories.length === 1 ? 'category' : 'categories'}`}
+              </button>
+            )}
+
+            {/* Additional (non-default) food OptionTree accordions */}
+            {showAdditionalCategories &&
+              additionalFoodCategories.map((catKey) => {
+                const meta = OPTION_TREE_CATEGORY_META[catKey];
+                const levels = getCategoryLevels(state.eventType!, catKey);
+                if (!levels || levels.length === 0) return null;
+                const entry = state.extendedCategoriesData[catKey] ?? {
+                  selections: {},
+                  stillDeciding: false,
+                };
+                return (
+                  <FoodOptionTreeAccordion
+                    key={catKey}
+                    id={catKey}
+                    label={`${meta.emoji} ${meta.label}`}
+                    levels={levels}
+                    selections={entry.selections}
+                    stillDeciding={entry.stillDeciding}
+                    openAccordion={openAccordion}
+                    onToggle={handleAccordionToggle}
+                    onSelectionsChange={(next) =>
+                      updateState((prev) => ({
+                        ...prev,
+                        extendedCategoriesData: {
+                          ...prev.extendedCategoriesData,
+                          [catKey]: {
+                            selections: next,
+                            stillDeciding:
+                              prev.extendedCategoriesData[catKey]?.stillDeciding ?? false,
+                          },
+                        },
+                      }))
+                    }
+                    onStillDecidingToggle={() =>
+                      updateState((prev) => {
+                        const cur = prev.extendedCategoriesData[catKey] ?? {
+                          selections: {},
+                          stillDeciding: false,
+                        };
+                        return {
+                          ...prev,
+                          extendedCategoriesData: {
+                            ...prev.extendedCategoriesData,
+                            [catKey]: { ...cur, stillDeciding: !cur.stillDeciding },
+                          },
+                        };
+                      })
+                    }
+                    generationStatus={sectionStatus[catKey]}
+                  />
+                );
+              })}
 
             {/* OTHER JOBS section */}
             <div className="text-xs uppercase tracking-wider text-gray-500 mt-6 mb-2 border-t border-gray-200 pt-4">
