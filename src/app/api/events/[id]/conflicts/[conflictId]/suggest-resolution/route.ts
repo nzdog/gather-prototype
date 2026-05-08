@@ -102,6 +102,7 @@ export async function POST(
     const suggestion = await callClaudeForJSON<AISuggestion>(systemPrompt, userPrompt, {
       maxTokens: 2000,
       temperature: 0.7,
+      callSiteLabel: 'conflict-resolution',
     });
 
     // Increment AI call counter on success

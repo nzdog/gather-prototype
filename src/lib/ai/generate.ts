@@ -117,6 +117,7 @@ export async function generatePlan(
     const response = await callClaudeForJSON<AIPlanResponse>(systemPrompt, userPrompt, {
       maxTokens: 16384,
       temperature: 1.0,
+      callSiteLabel: 'plan-generation',
     });
 
     // Validate response structure
@@ -148,6 +149,7 @@ export async function regeneratePlan(params: RegenerationParams): Promise<AIPlan
     const response = await callClaudeForJSON<AIPlanResponse>(systemPrompt, userPrompt, {
       maxTokens: 16384,
       temperature: 1.0,
+      callSiteLabel: 'plan-regeneration',
     });
 
     // Validate response structure
@@ -186,6 +188,7 @@ export async function generateExplanation(conflict: {
     const response = await callClaudeForJSON<AIExplanationResponse>(systemPrompt, userPrompt, {
       maxTokens: 1024,
       temperature: 0.7, // Lower temperature for more consistent explanations
+      callSiteLabel: 'conflict-explanation',
     });
 
     return response;
@@ -282,6 +285,7 @@ export async function generateSelectiveItems(
       {
         maxTokens: 2048,
         temperature: 1.0,
+        callSiteLabel: 'selective-regeneration',
       }
     );
 

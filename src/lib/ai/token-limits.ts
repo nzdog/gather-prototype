@@ -42,16 +42,25 @@ export const MAX_TOKENS_GAP_FILL = 2048;
 /**
  * Dietary coverage check inside finalize-plan. Response is one structured
  * row per dietary requirement — `{ requirement, covered, flaggedItems }`.
- * For the Kate event with ~6 dietary requirements the payload is well under
- * 500 chars, but the old 512 cap sits right on the boundary for events with
- * longer flaggedItems lists. 1024 gives 2× headroom.
+ *
+ * GTC-142: bumped from 1024 → 4096. Post-GTC-133 universal-opt-in scale
+ * surfaced 1024 truncation on a 17-person / 117-item Christmas event where
+ * the dietary coverage payload reached ~3083 chars (≈1024 tokens of dense
+ * JSON). flaggedItems arrays scale with item count × requirement count, so
+ * the old 1024 cap is too tight for plans of realistic size. 4096 matches
+ * the SECTION_GENERATION precedent and gives ~4× headroom over observed
+ * peak. `max_tokens` is an upper bound — no API cost penalty.
  */
-export const MAX_TOKENS_DIETARY_COVERAGE = 1024;
+export const MAX_TOKENS_DIETARY_COVERAGE = 4096;
 
 /**
  * "Things to consider" suggestions inside finalize-plan. Response is a flat
  * list of 6–10 short items (`{ name, category }`), empirical output ~600–
- * 900 chars. Old 512 cap truncated roughly half the time; 1024 comfortably
- * absorbs the high end.
+ * 900 chars.
+ *
+ * GTC-142: bumped from 1024 → 2048 prophylactically. Same root cause class
+ * as the dietary-coverage truncation (1024 cap on outputs that scale with
+ * event size). Current empirical peak is ~900 chars so this is headroom,
+ * not a fix for an observed truncation.
  */
-export const MAX_TOKENS_CONSIDERATIONS = 1024;
+export const MAX_TOKENS_CONSIDERATIONS = 2048;

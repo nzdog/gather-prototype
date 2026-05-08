@@ -91,6 +91,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const result = await callClaudeForJSON<{ items: GeneratedItem[] }>(system, user, {
       maxTokens: MAX_TOKENS_SECTION_GENERATION,
       temperature: 0.8,
+      callSiteLabel: `generate-section:${body.section}`,
     });
 
     const items = result.items ?? [];

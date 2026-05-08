@@ -182,6 +182,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       const result = await callClaudeForJSON<{ items: GeneratedItem[] }>(system, user, {
         maxTokens: MAX_TOKENS_GAP_FILL,
         temperature: 0.8,
+        callSiteLabel: `gap-fill:${section}`,
       });
       generatedData[section] = result.items ?? [];
       aiCallsUsedInFinalize++;
@@ -214,7 +215,11 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       const { system, user } = buildDietaryCoveragePrompt(allItems, dietaryRequirements);
       const coverageResult = await callClaudeForJSON<{
         coverage: Array<{ requirement: string; covered: boolean; flaggedItems: string[] }>;
-      }>(system, user, { maxTokens: MAX_TOKENS_DIETARY_COVERAGE, temperature: 0.3 });
+      }>(system, user, {
+        maxTokens: MAX_TOKENS_DIETARY_COVERAGE,
+        temperature: 0.3,
+        callSiteLabel: 'dietary-coverage',
+      });
       dietaryCoverage = coverageResult.coverage ?? [];
       aiCallsUsedInFinalize++;
     }
@@ -227,7 +232,11 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       const { system, user } = buildThingsToConsiderPrompt(eventType, totalPeople);
       const considerResult = await callClaudeForJSON<{
         items: Array<{ name: string; category: string }>;
-      }>(system, user, { maxTokens: MAX_TOKENS_CONSIDERATIONS, temperature: 0.8 });
+      }>(system, user, {
+        maxTokens: MAX_TOKENS_CONSIDERATIONS,
+        temperature: 0.8,
+        callSiteLabel: 'things-to-consider',
+      });
       thingsToConsider = considerResult.items ?? [];
       aiCallsUsedInFinalize++;
     }
