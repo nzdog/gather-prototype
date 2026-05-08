@@ -3,7 +3,7 @@
  * Based on Plan AI Protocol v2
  */
 
-import { getNzNotes, getSectionReferenceItems } from './config-loader';
+import { getNzNotes } from './config-loader';
 
 export const PLAN_GENERATION_SYSTEM_PROMPT = `You are a planning assistant for Gather, helping hosts plan multi-day gatherings.
 
@@ -534,114 +534,12 @@ Provide a clear, helpful explanation of:
 }
 
 /* ---------------------------------------------------------------------------
- * Moment 2 prompt builders
+ * Moment 2 shared types
  *
- * These previously lived inside the Next.js route files (generate-section and
- * finalize-plan). Next.js App Router only allows a fixed allowlist of exports
- * from `route.ts` files, so they were moved here in GTC-128.
+ * Used by the modal (Moment2Step1Modal) and the single-call finalize-plan
+ * route. The per-section prompt builders that used to live here were
+ * removed in GTC-146 alongside the per-section route.
  * ------------------------------------------------------------------------- */
-
-const MOMENT2_SECTION_LABELS: Record<string, string> = {
-  mains: 'Mains',
-  sides: 'Sides',
-  desserts: 'Dessert',
-  drinks: 'Drinks',
-  setup: 'Setup & Cleanup',
-  dietary: 'Dietary',
-  other: 'Other',
-  // GTC-133 canonical category keys
-  sides_salads: 'Sides & Salads',
-  entree_starters: 'Entrée & Starters',
-  dessert: 'Dessert',
-  drinks_alcoholic: 'Alcoholic Drinks',
-  drinks_non_alcoholic: 'Non-Alcoholic Drinks',
-  table_snacks: 'Table Snacks',
-  breakfast_brunch: 'Breakfast & Brunch',
-  cake: 'Cake',
-};
-
-export type Moment2Section =
-  // Legacy short-form section keys (current modal)
-  | 'mains'
-  | 'sides'
-  | 'desserts'
-  | 'drinks'
-  | 'setup'
-  | 'dietary'
-  | 'other'
-  // GTC-133 canonical category keys (new modal — food only in this commit; non-food
-  // keys join in sub-commit d when their prompts land)
-  | 'sides_salads'
-  | 'entree_starters'
-  | 'dessert'
-  | 'drinks_alcoholic'
-  | 'drinks_non_alcoholic'
-  | 'table_snacks'
-  | 'breakfast_brunch'
-  | 'cake';
-
-export const VALID_MOMENT2_SECTIONS: readonly Moment2Section[] = [
-  'mains',
-  'sides',
-  'desserts',
-  'drinks',
-  'setup',
-  'dietary',
-  'other',
-  'sides_salads',
-  'entree_starters',
-  'dessert',
-  'drinks_alcoholic',
-  'drinks_non_alcoholic',
-  'table_snacks',
-  'breakfast_brunch',
-  'cake',
-] as const;
-
-/**
- * Maps a canonical category key to its existing section family — used to pick the
- * right reference-items lookup and prompt scaffolding. Legacy short-form keys map
- * to themselves.
- */
-const SECTION_KEY_TO_FAMILY: Record<
-  string,
-  'mains' | 'sides' | 'desserts' | 'drinks' | 'setup' | 'dietary' | 'other'
-> = {
-  mains: 'mains',
-  sides: 'sides',
-  desserts: 'desserts',
-  drinks: 'drinks',
-  setup: 'setup',
-  dietary: 'dietary',
-  other: 'other',
-  sides_salads: 'sides',
-  entree_starters: 'sides',
-  table_snacks: 'sides',
-  dessert: 'desserts',
-  cake: 'desserts',
-  drinks_alcoholic: 'drinks',
-  drinks_non_alcoholic: 'drinks',
-  breakfast_brunch: 'mains',
-};
-
-export interface Moment2GeneratedItem {
-  name: string;
-  quantity: number;
-  unit: string;
-  servingSize: string;
-  notes?: string;
-  dietaryTags?: string[];
-}
-
-export interface Moment2HouseholdData {
-  totalAdults: number;
-  totalKids: number;
-  dietaryRequirements: string[];
-}
-
-export interface Moment2SectionHouseholdData extends Moment2HouseholdData {
-  kidsWithJobs: string[];
-}
 
 export interface OptionTreeLevelSelection {
   options: string[];
@@ -650,238 +548,6 @@ export interface OptionTreeLevelSelection {
 
 /** Mirrors GTC-131's OptionTreeSelections — keys are level indices, often serialized as strings. */
 export type OptionTreeSelections = Record<string | number, OptionTreeLevelSelection>;
-
-export interface Moment2SectionInput {
-  items?: Array<{ name: string; included: boolean }>;
-  stillDeciding?: boolean;
-  setupCrew?: boolean;
-  cleanupCrew?: boolean;
-  kidsOnDishes?: boolean;
-  requirements?: string[];
-  other?: string;
-  // GTC-133: option-tree selections for the new modal path. When present, takes
-  // precedence over `items` for prompt construction.
-  selections?: OptionTreeSelections;
-}
-
-/**
- * Flatten OptionTreeSelections to a deduped list of selected options across all
- * levels, with any free-text values appended. Used to feed the food prompt path
- * without restructuring its "Kate's input" block.
- */
-function flattenSelections(selections: OptionTreeSelections): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const lvl of Object.values(selections)) {
-    for (const opt of lvl.options ?? []) {
-      if (opt && !seen.has(opt)) {
-        seen.add(opt);
-        out.push(opt);
-      }
-    }
-    const ft = (lvl.freeText ?? '').trim();
-    if (ft && !seen.has(ft)) {
-      seen.add(ft);
-      out.push(ft);
-    }
-  }
-  return out;
-}
-
-/**
- * GTC-145 DEPRECATED. The per-section generation pattern has been replaced by
- * `buildPlanGenerationPrompt` (single-call coordinated generation). This
- * builder is retained because the deprecated `/api/events/[id]/generate-section`
- * route still imports it and the legacy v1 path on master may reference it.
- * Do not call from new code.
- */
-export function buildSectionPrompt(
-  section: Moment2Section,
-  eventType: string,
-  sectionData: Moment2SectionInput,
-  householdData: Moment2SectionHouseholdData
-): { system: string; user: string } {
-  const totalPeople = householdData.totalAdults + householdData.totalKids;
-  const eventLabel = eventType === 'Other' ? 'event' : eventType.toLowerCase();
-
-  // GTC-133: resolve canonical category keys to their existing section family for
-  // reference-items lookup and prompt scaffolding. Legacy keys map to themselves.
-  const family = SECTION_KEY_TO_FAMILY[section] ?? section;
-
-  const nzNotes = getNzNotes(eventType);
-  const systemPrompt = `You are a meal planning assistant for a ${eventLabel} in New Zealand.${nzNotes ? ' ' + nzNotes : ''} Return only valid JSON matching the required shape. No prose, no markdown, no explanation.`;
-
-  // Build reference items block from config — keyed by the section family
-  const references = getSectionReferenceItems(eventType, family);
-  const referenceBlock =
-    references.length > 0
-      ? `\nReference items (NZ ${eventLabel}):\n${references.map((r) => `${r.categoryLabel}: ${r.items.join(', ')}`).join('\n')}\nUse these as a starting point — adapt based on Kate's input.\n`
-      : '';
-
-  if (family === 'setup') {
-    const setupData = sectionData;
-    const userPrompt = `Generate setup and cleanup items for a ${eventLabel} for ${totalPeople} people (${householdData.totalAdults} adults, ${householdData.totalKids} children).
-
-Setup crew needed: ${setupData.setupCrew ? 'yes' : 'no'}
-Cleanup crew needed: ${setupData.cleanupCrew ? 'yes' : 'no'}
-Kids on dishes: ${setupData.kidsOnDishes ? 'yes' : 'no'}
-${householdData.kidsWithJobs.length > 0 ? `Kids with jobs: ${householdData.kidsWithJobs.join(', ')}` : ''}
-${referenceBlock}
-Generate practical setup/cleanup items with quantities.
-
-Return JSON: { "items": [{ "name": string, "quantity": number, "unit": string, "servingSize": string, "notes": string (optional) }] }`;
-
-    return { system: systemPrompt, user: userPrompt };
-  }
-
-  // GTC-137: DEPRECATED. Dietary is now a pure input — its requirements are
-  // threaded into food section prompts as a generation constraint, and a
-  // standalone "Dietary" category is no longer produced. Both call sites
-  // (generate-section route, finalize-plan gap-fill) refuse `section: 'dietary'`
-  // before reaching this branch. Kept for back-compat reads of `Moment2Section`
-  // typing; safe to delete in the follow-up enum-cleanup ticket.
-  if (family === 'dietary') {
-    const dietaryData = sectionData;
-    const userPrompt = `Generate dietary accommodation items for a ${eventLabel} for ${totalPeople} people.
-
-Dietary requirements to accommodate: ${(dietaryData.requirements ?? []).join(', ') || 'none specified'}
-${dietaryData.other ? `Other dietary needs: ${dietaryData.other}` : ''}
-
-Generate specific food items that accommodate these dietary requirements. Each item should clearly serve a dietary need.
-
-Return JSON: { "items": [{ "name": string, "quantity": number, "unit": string, "servingSize": string, "notes": string (optional) }] }`;
-
-    return { system: systemPrompt, user: userPrompt };
-  }
-
-  // Food sections: mains, sides, desserts, drinks, other (and canonical food keys
-  // like sides_salads, entree_starters, dessert, drinks_alcoholic, etc., resolved
-  // via SECTION_KEY_TO_FAMILY above).
-  const sectionLabel =
-    family === 'other'
-      ? 'miscellaneous/extras'
-      : (MOMENT2_SECTION_LABELS[section] ?? family.charAt(0).toUpperCase() + family.slice(1));
-
-  // GTC-133: prefer option-tree selections when present (new modal); fall back to
-  // the legacy items/included shape (current modal). Selections are flattened to
-  // a single "wanted items" list so the existing prompt scaffolding works
-  // unchanged. Excluded items don't exist in the option-tree shape.
-  let includedItems: string[];
-  let excludedItems: string[];
-  if (sectionData.selections) {
-    includedItems = flattenSelections(sectionData.selections);
-    excludedItems = [];
-  } else {
-    includedItems = (sectionData.items ?? []).filter((i) => i.included).map((i) => i.name);
-    excludedItems = (sectionData.items ?? []).filter((i) => !i.included).map((i) => i.name);
-  }
-
-  // GTC-137: dietary requirements (structured + free-text) become a generation
-  // constraint on every food section, not a standalone section. Aim for
-  // integration ("a roasted vegetable side that's already vegetarian") rather
-  // than parallel alternatives ("Mains: turkey + Vegetarian Mains: nut roast").
-  const dietaryBlock =
-    householdData.dietaryRequirements.length > 0
-      ? `Dietary requirements present at this gathering: ${householdData.dietaryRequirements.join(', ')}.
-Where this section can include items that are naturally suitable for these requirements (e.g. a roasted vegetable side that is already vegetarian, a fruit salad that is already vegan and gluten-free), prefer integrated items over parallel "alternatives". Tag items with the appropriate dietary tags. Only add a clearly separate dietary alternative if no naturally-suitable option fits the section.`
-      : '';
-
-  const userPrompt = `Generate the ${sectionLabel} section of a ${eventLabel} plan for ${householdData.totalAdults} adults and ${householdData.totalKids} children.
-
-${dietaryBlock}
-${referenceBlock}
-Kate's input:
-- Items she wants: ${includedItems.length > 0 ? includedItems.join(', ') : 'none specified'}
-- Items she has excluded: ${excludedItems.length > 0 ? excludedItems.join(', ') : 'none'}
-
-Generate a list of ${family === 'other' ? 'miscellaneous' : sectionLabel.toLowerCase()} appropriate for this event. Include Kate's wanted items first (with quantities), then fill in any gaps with sensible defaults.
-
-For each item:
-- Calculate quantities based on adult/kid counts
-- Use real units (kg, pieces, trays, litres, bottles, bowls)
-- Tag items with dietary tags (VEGETARIAN, VEGAN, GLUTEN_FREE, DAIRY_FREE, NUT_FREE) where they naturally apply
-
-Return JSON: { "items": [{ "name": string, "quantity": number, "unit": string, "servingSize": string, "notes": string (optional), "dietaryTags": string[] (optional) }] }`;
-
-  return { system: systemPrompt, user: userPrompt };
-}
-
-/**
- * GTC-145 DEPRECATED. Gap-fill was used by the per-section finalize-plan path
- * to fill in any sections Kate hadn't triggered individually. The new
- * single-call architecture generates everything in one pass via
- * `buildPlanGenerationPrompt`, so gap-fill is no longer reachable from
- * production code paths on this branch.
- */
-export function buildGapPrompt(
-  section: string,
-  eventType: string,
-  householdData: Moment2HouseholdData
-): { system: string; user: string } {
-  const totalPeople = householdData.totalAdults + householdData.totalKids;
-  const eventLabel = eventType === 'Other' ? 'event' : eventType.toLowerCase();
-  const sectionLabel = MOMENT2_SECTION_LABELS[section] ?? section;
-
-  // GTC-137: same integration guidance as buildSectionPrompt — dietary is an
-  // input, not a standalone section.
-  const dietaryBlock =
-    householdData.dietaryRequirements.length > 0
-      ? `Dietary requirements present at this gathering: ${householdData.dietaryRequirements.join(', ')}.
-Prefer items that are naturally suitable for these requirements (e.g. a roasted vegetable side that is already vegetarian) over parallel "alternatives". Tag items with the appropriate dietary tags.`
-      : '';
-
-  return {
-    system: `You are a meal planning assistant for a ${eventLabel}. Return only valid JSON. No prose.`,
-    user: `Generate the ${sectionLabel} section for a ${eventLabel} for ${householdData.totalAdults} adults and ${householdData.totalKids} children (${totalPeople} total).
-
-${dietaryBlock}
-
-Generate sensible defaults for this event type. Use real units (kg, pieces, trays, litres, bottles).
-
-Return JSON: { "items": [{ "name": string, "quantity": number, "unit": string, "servingSize": string, "notes": string (optional), "dietaryTags": string[] (optional) }] }`,
-  };
-}
-
-export function buildDietaryCoveragePrompt(
-  allItems: Array<{ category: string; items: Moment2GeneratedItem[] }>,
-  dietaryRequirements: string[]
-): { system: string; user: string } {
-  const itemList = allItems
-    .flatMap((c) => c.items.map((i) => `${c.category}: ${i.name}${i.notes ? ` (${i.notes})` : ''}`))
-    .join('\n');
-
-  return {
-    system: 'You are a dietary requirement checker. Return only valid JSON. No prose.',
-    user: `Check whether these dietary requirements are covered by the plan items.
-
-Dietary requirements: ${dietaryRequirements.join(', ')}
-
-Plan items:
-${itemList}
-
-For each requirement, determine if it's adequately covered.
-
-An item that is naturally suitable for a dietary requirement (e.g. a roasted vegetable side is naturally vegetarian, a fresh fruit salad is naturally vegan and gluten-free, plain rice is naturally gluten-free and dairy-free) should be considered covered for that requirement, regardless of whether the item name or notes explicitly mention the dietary tag. Use common-sense culinary knowledge of typical preparation. Only mark a requirement as not covered when no naturally-suitable item exists across the whole plan.
-
-Return JSON: { "coverage": [{ "requirement": string, "covered": boolean, "flaggedItems": string[] (items that cover it when covered, or items that conflict / a brief reason when not) }] }`,
-  };
-}
-
-export function buildThingsToConsiderPrompt(
-  eventType: string,
-  totalPeople: number
-): { system: string; user: string } {
-  const eventLabel = eventType === 'Other' ? 'event' : eventType.toLowerCase();
-
-  return {
-    system: 'You are an event planning assistant. Return only valid JSON. No prose.',
-    user: `Suggest 6-10 "things to consider" items for a ${eventLabel} for ${totalPeople} people. These are items the host might forget — napkins, ice, serving spoons, rubbish bags, etc.
-
-Each item should include a suggested category (where it would go if added to the plan).
-
-Return JSON: { "items": [{ "name": string, "category": string }] }`,
-  };
-}
 
 /**
  * Build user prompt for selective item regeneration
@@ -918,11 +584,11 @@ Do not include any confirmed items in your response.`;
  * GTC-145 single-call plan generation
  *
  * One prompt that receives all of Kate's Step 1 context and returns a fully
- * coordinated plan in a single Claude response. Replaces the per-section
- * pattern (buildSectionPrompt + buildGapPrompt) with a single coordinated
- * call so the model can avoid cross-section duplication, balance item counts
- * across categories, and treat dietary requirements as an input rather than
- * generating parallel alternatives.
+ * coordinated plan in a single Claude response. Replaced the per-section
+ * pattern (per-category prompts + gap-fill loop) so the model can avoid
+ * cross-section duplication, balance item counts across categories, and
+ * treat dietary requirements as an input rather than generating parallel
+ * alternatives.
  * ------------------------------------------------------------------------- */
 
 export interface PlanGenerationCategoryInput {
