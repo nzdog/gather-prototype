@@ -16,14 +16,16 @@ import OptionTree, {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type SectionGenerationStatus = 'idle' | 'generating' | 'generated' | 'failed';
+// GTC-145: per-section incremental generation removed. The modal no longer
+// fires AI calls on accordion close — a single finalize-plan call generates
+// the whole plan when Kate clicks Generate. Status indicators and the
+// per-section state machine are gone.
 
 interface Moment2Step1ModalProps {
   eventId: string;
   eventName: string;
   onGenerate: () => void;
   onCancel: () => void;
-  onSectionGenerated?: (section: string, status: SectionGenerationStatus) => void;
 }
 
 interface FoodItem {
@@ -173,33 +175,17 @@ export default function Moment2Step1Modal({
   eventId,
   onGenerate,
   onCancel,
-  onSectionGenerated,
 }: Moment2Step1ModalProps) {
   const [state, setState] = useState<Step1State>(INITIAL_STATE);
   const [openAccordion, setOpenAccordion] = useState<string | null>(null);
   const [showAdditionalCategories, setShowAdditionalCategories] = useState(false);
   const [peopleCount, setPeopleCount] = useState<number>(0);
-  const [totalAdults, setTotalAdults] = useState<number>(0);
-  const [totalKids, setTotalKids] = useState<number>(0);
-  const [kidsWithJobs, setKidsWithJobs] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRef = useRef<Step1State | null>(null);
 
-  // Progressive generation state
-  const [sectionStatus, setSectionStatus] = useState<Record<string, SectionGenerationStatus>>({
-    mains: 'idle',
-    sides: 'idle',
-    desserts: 'idle',
-    drinks: 'idle',
-    dietary: 'idle',
-    other: 'idle',
-  });
-  // Track what data was last generated for each section to avoid re-generating unchanged sections
-  const lastGeneratedRef = useRef<Record<string, string>>({});
-
-  // Fetch household data for people count and kids-with-jobs
+  // Fetch household data for the feedback line headcount.
   useEffect(() => {
     const fetchHouseholds = async () => {
       try {
@@ -209,28 +195,11 @@ export default function Moment2Step1Modal({
         const households: Household[] = data.households ?? [];
 
         let count = 0;
-        let adults = 0;
-        let kids = 0;
-        const kidNames: string[] = [];
         for (const h of households) {
-          for (const m of h.members) {
-            count++;
-            if (m.householdRole === 'CHILD') {
-              kids++;
-              kidNames.push(m.person.name);
-            } else {
-              adults++;
-            }
-          }
-          if (typeof h.littleCount === 'number') {
-            count += h.littleCount;
-            kids += h.littleCount;
-          }
+          count += h.members.length;
+          if (typeof h.littleCount === 'number') count += h.littleCount;
         }
         setPeopleCount(count);
-        setTotalAdults(adults);
-        setTotalKids(kids);
-        setKidsWithJobs(kidNames);
       } catch {
         // silent — non-critical
       }
@@ -370,113 +339,26 @@ export default function Moment2Step1Modal({
     [scheduleSave]
   );
 
-  // Progressive generation — fire when an accordion closes with real data
-  const generateSection = useCallback(
-    async (sectionId: string, currentState: Step1State) => {
-      // GTC-137: dietary is a pure input — closing the accordion must NOT
-      // generate items. Dietary requirements are passed as input to food
-      // section prompts instead.
-      if (sectionId === 'dietary') return;
-
-      // Map section ID to state data. Canonical food keys read from
-      // mainsData (special) or extendedCategoriesData[key].
-      let sectionData: { stillDeciding?: boolean } | undefined;
-      if (sectionId === 'mains') {
-        sectionData = currentState.mainsData;
-      } else if (sectionId === 'other') {
-        sectionData = {
-          items: currentState.otherNotes ? [{ name: currentState.otherNotes, included: true }] : [],
-          stillDeciding: false,
-        } as unknown as { stillDeciding?: boolean };
-      } else if ((OPTION_TREE_FOOD_CATEGORIES as readonly string[]).includes(sectionId)) {
-        sectionData = currentState.extendedCategoriesData[sectionId];
-      }
-      if (!sectionData) return;
-
-      // Skip if still deciding
-      if (sectionData.stillDeciding) return;
-
-      // Check if data has changed since last generation
-      const dataHash = JSON.stringify(sectionData);
-      if (lastGeneratedRef.current[sectionId] === dataHash) return;
-
-      setSectionStatus((prev) => ({ ...prev, [sectionId]: 'generating' }));
-      onSectionGenerated?.(sectionId, 'generating');
-
-      try {
-        const res = await fetch(`/api/events/${eventId}/generate-section`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            section: sectionId,
-            eventType: currentState.eventType,
-            eventTypeOther: currentState.eventTypeOther,
-            sectionData,
-            householdData: {
-              totalAdults,
-              totalKids,
-              // GTC-137: include free-text "Other dietary needs" in the
-              // requirements list passed to food prompts so it's treated as
-              // a generation constraint alongside the structured selections.
-              dietaryRequirements: [
-                ...currentState.dietaryData.requirements,
-                ...(currentState.dietaryData.other.trim()
-                  ? [`Other: ${currentState.dietaryData.other.trim()}`]
-                  : []),
-              ],
-              kidsWithJobs,
-            },
-          }),
-        });
-
-        if (res.status === 429) {
-          // AI cap reached — stop progressive generation silently
-          setSectionStatus((prev) => ({ ...prev, [sectionId]: 'idle' }));
-          return;
-        }
-
-        if (!res.ok) {
-          setSectionStatus((prev) => ({ ...prev, [sectionId]: 'failed' }));
-          onSectionGenerated?.(sectionId, 'failed');
-          return;
-        }
-
-        lastGeneratedRef.current[sectionId] = dataHash;
-        setSectionStatus((prev) => ({ ...prev, [sectionId]: 'generated' }));
-        onSectionGenerated?.(sectionId, 'generated');
-      } catch {
-        setSectionStatus((prev) => ({ ...prev, [sectionId]: 'failed' }));
-        onSectionGenerated?.(sectionId, 'failed');
-      }
-    },
-    [eventId, totalAdults, totalKids, kidsWithJobs, onSectionGenerated]
-  );
-
-  // Handle accordion toggle — fire generation when closing a section with data
+  // Handle accordion toggle — flush any pending save when closing a section.
+  // GTC-145: closing an accordion no longer fires AI generation. Selections
+  // are persisted via the debounced save flow only; the single finalize-plan
+  // call (on Generate) reads the persisted state.
   const handleAccordionToggle = useCallback(
     (id: string | null) => {
       const previouslyOpen = openAccordion;
       setOpenAccordion(id);
 
-      // If we're closing a section (previouslyOpen was set, now changing away from it)
-      if (previouslyOpen && previouslyOpen !== id && state.eventType) {
-        // Flush pending save first, then generate
-        if (pendingRef.current) {
-          const pending = pendingRef.current;
-          if (debounceRef.current) {
-            clearTimeout(debounceRef.current);
-            debounceRef.current = null;
-          }
-          pendingRef.current = null;
-          saveToApi(pending).then(() => {
-            generateSection(previouslyOpen, pending);
-          });
-        } else {
-          generateSection(previouslyOpen, state);
+      if (previouslyOpen && previouslyOpen !== id && pendingRef.current) {
+        const pending = pendingRef.current;
+        if (debounceRef.current) {
+          clearTimeout(debounceRef.current);
+          debounceRef.current = null;
         }
+        pendingRef.current = null;
+        saveToApi(pending);
       }
     },
-    [openAccordion, state, saveToApi, generateSection]
+    [openAccordion, saveToApi]
   );
 
   // Select event type — when switching, reset OptionTree-driven state since the
@@ -631,7 +513,6 @@ export default function Moment2Step1Modal({
               onToggle={handleAccordionToggle}
               data={state.dietaryData}
               onChange={(d) => updateState((prev) => ({ ...prev, dietaryData: d }))}
-              generationStatus={sectionStatus.dietary}
             />
             {/* Canonical OptionTree food categories from defaultCategories.
                 Non-default categories are deferred to sub-commit (h)'s "Show more". */}
@@ -667,7 +548,6 @@ export default function Moment2Step1Modal({
                           },
                         }))
                       }
-                      generationStatus={sectionStatus[catKey]}
                     />
                   );
                 }
@@ -713,7 +593,6 @@ export default function Moment2Step1Modal({
                         };
                       })
                     }
-                    generationStatus={sectionStatus[catKey]}
                   />
                 );
               })}
@@ -724,7 +603,6 @@ export default function Moment2Step1Modal({
               onToggle={handleAccordionToggle}
               value={state.otherNotes}
               onChange={(v) => updateState((prev) => ({ ...prev, otherNotes: v }))}
-              generationStatus={sectionStatus.other}
             />
 
             {/* Show more food categories toggle (sub-commit h) */}
@@ -788,7 +666,6 @@ export default function Moment2Step1Modal({
                         };
                       })
                     }
-                    generationStatus={sectionStatus[catKey]}
                   />
                 );
               })}
@@ -854,7 +731,6 @@ function AccordionShell({
   onToggle,
   stillDeciding,
   onStillDecidingToggle,
-  generationStatus,
   children,
 }: {
   id: string;
@@ -863,7 +739,6 @@ function AccordionShell({
   onToggle: (id: string | null) => void;
   stillDeciding: boolean;
   onStillDecidingToggle: () => void;
-  generationStatus?: SectionGenerationStatus;
   children: React.ReactNode;
 }) {
   const isOpen = openAccordion === id;
@@ -884,10 +759,6 @@ function AccordionShell({
           <span className={`font-medium ${stillDeciding ? 'text-gray-400' : 'text-gray-900'}`}>
             {label}
           </span>
-          {generationStatus === 'generating' && (
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
-          )}
-          {generationStatus === 'generated' && <span className="text-xs text-green-500">✓</span>}
         </span>
         <span
           className={`text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
@@ -936,7 +807,6 @@ function FoodOptionTreeAccordion({
   onToggle,
   onSelectionsChange,
   onStillDecidingToggle,
-  generationStatus,
 }: {
   id: string;
   label: string;
@@ -947,7 +817,6 @@ function FoodOptionTreeAccordion({
   onToggle: (id: string | null) => void;
   onSelectionsChange: (next: OptionTreeSelections) => void;
   onStillDecidingToggle: () => void;
-  generationStatus?: SectionGenerationStatus;
 }) {
   return (
     <AccordionShell
@@ -957,7 +826,6 @@ function FoodOptionTreeAccordion({
       onToggle={onToggle}
       stillDeciding={stillDeciding}
       onStillDecidingToggle={onStillDecidingToggle}
-      generationStatus={generationStatus}
     >
       <OptionTree
         levels={levels}
@@ -1016,14 +884,12 @@ function DietaryAccordion({
   onToggle,
   data,
   onChange,
-  generationStatus,
 }: {
   id: string;
   openAccordion: string | null;
   onToggle: (id: string | null) => void;
   data: DietaryData;
   onChange: (d: DietaryData) => void;
-  generationStatus?: SectionGenerationStatus;
 }) {
   const toggleReq = (req: string) => {
     const reqs = data.requirements.includes(req)
@@ -1040,7 +906,6 @@ function DietaryAccordion({
       onToggle={onToggle}
       stillDeciding={false}
       onStillDecidingToggle={() => {}}
-      generationStatus={generationStatus}
     >
       <div className="space-y-2">
         {DIETARY_OPTIONS.map((opt) => (
@@ -1076,14 +941,12 @@ function OtherAccordion({
   onToggle,
   value,
   onChange,
-  generationStatus,
 }: {
   id: string;
   openAccordion: string | null;
   onToggle: (id: string | null) => void;
   value: string;
   onChange: (v: string) => void;
-  generationStatus?: SectionGenerationStatus;
 }) {
   return (
     <AccordionShell
@@ -1093,7 +956,6 @@ function OtherAccordion({
       onToggle={onToggle}
       stillDeciding={false}
       onStillDecidingToggle={() => {}}
-      generationStatus={generationStatus}
     >
       <textarea
         placeholder="Anything else Gather should know about? Music, decorations, specific equipment, venue notes..."

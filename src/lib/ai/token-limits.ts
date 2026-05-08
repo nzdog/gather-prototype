@@ -21,7 +21,25 @@
  */
 
 /**
- * Per-section food generation (POST /api/events/[id]/generate-section).
+ * GTC-145 single-call full-plan generation (POST /api/events/[id]/finalize-plan).
+ *
+ * One Claude call produces the entire Moment 2 plan: every engaged section's
+ * items, dietary coverage rows, and things-to-consider. Response size scales
+ * with the number of engaged categories × items × per-item JSON overhead. For
+ * a 17-person Christmas with 9 default categories engaged, an experimentally
+ * coordinated plan emits roughly 25–35 items at ~200 chars each, plus
+ * coverage and considerations payloads — together comfortably under 16K
+ * tokens. Claude Sonnet 4.6 supports up to 64K output tokens, so this gives
+ * generous headroom.
+ *
+ * `max_tokens` is an upper bound, not a target — raising this has no API cost
+ * impact beyond what the model actually emits.
+ */
+export const MAX_TOKENS_FULL_PLAN = 16384;
+
+/**
+ * GTC-145 DEPRECATED. Per-section food generation
+ * (POST /api/events/[id]/generate-section).
  *
  * Kate event empirical output: 2900–3250 chars ≈ 950–1080 tokens, hitting the
  * old 1024 cap on ~60% of sections. Food sections for large guest counts with
@@ -31,8 +49,8 @@
 export const MAX_TOKENS_SECTION_GENERATION = 4096;
 
 /**
- * Per-section gap-fill inside finalize-plan (only fires when a section was
- * never generated individually). Same prompt shape as SECTION_GENERATION but
+ * GTC-145 DEPRECATED. Per-section gap-fill inside finalize-plan (only fires
+ * when a section was never generated individually). Same prompt shape as SECTION_GENERATION but
  * without reference items, so response is expected slightly smaller. Old cap
  * was 1024; bumped to 2048 to keep clear of the truncation boundary under the
  * same conditions that make SECTION_GENERATION need 4096.
