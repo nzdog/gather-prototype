@@ -41,7 +41,6 @@ interface Moment2PlanViewProps {
   onRemoveItem: (itemId: string) => Promise<void>;
   onAddItem: (categoryId: string, item: NewPlanItem) => Promise<void>;
   onAddCategory: (name: string) => Promise<void>;
-  onReorderItem: (itemId: string, newIndex: number) => Promise<void>;
   onApprove: () => void;
   onBack: () => void;
 }
@@ -79,7 +78,6 @@ export default function Moment2PlanView({
   onRemoveItem,
   onAddItem,
   onAddCategory,
-  onReorderItem,
   onApprove,
   onBack,
 }: Moment2PlanViewProps) {
@@ -90,6 +88,8 @@ export default function Moment2PlanView({
   const [quantityEditId, setQuantityEditId] = useState<string | null>(null);
   const [addingToCategory, setAddingToCategory] = useState<string | null>(null);
   const [showAddCategory, setShowAddCategory] = useState(false);
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+  const [bulkRemoving, setBulkRemoving] = useState(false);
 
   const totalItems = categories.reduce((sum, c) => sum + c.items.length, 0);
 
@@ -111,7 +111,40 @@ export default function Moment2PlanView({
   const handleRemove = async (itemId: string) => {
     await onRemoveItem(itemId);
     setEditingItemId(null);
+    setSelectedItemIds((prev) => {
+      if (!prev.has(itemId)) return prev;
+      const next = new Set(prev);
+      next.delete(itemId);
+      return next;
+    });
     toast.success('Removed.', { duration: 2000 });
+  };
+
+  const toggleSelection = (itemId: string) => {
+    setSelectedItemIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  };
+
+  const handleBulkRemove = async () => {
+    const ids = Array.from(selectedItemIds);
+    if (ids.length === 0 || bulkRemoving) return;
+    setBulkRemoving(true);
+    try {
+      for (const id of ids) {
+        await onRemoveItem(id);
+      }
+      setSelectedItemIds(new Set());
+      setEditingItemId(null);
+      toast.success(`Removed ${ids.length} ${ids.length === 1 ? 'item' : 'items'}.`, {
+        duration: 2000,
+      });
+    } finally {
+      setBulkRemoving(false);
+    }
   };
 
   const handleQuantitySave = async (itemId: string, newQuantity: number) => {
@@ -130,16 +163,6 @@ export default function Moment2PlanView({
     await onAddCategory(name);
     setShowAddCategory(false);
     toast.success('Added.', { duration: 2000 });
-  };
-
-  const handleMoveItem = async (categoryId: string, itemId: string, direction: 'up' | 'down') => {
-    const category = categories.find((c) => c.id === categoryId);
-    if (!category) return;
-    const currentIndex = category.items.findIndex((i) => i.id === itemId);
-    if (currentIndex < 0) return;
-    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-    if (newIndex < 0 || newIndex >= category.items.length) return;
-    await onReorderItem(itemId, newIndex);
   };
 
   return (
@@ -190,7 +213,8 @@ export default function Moment2PlanView({
               }}
               onCancelAddItem={() => setAddingToCategory(null)}
               onAddItem={handleAdd}
-              onMoveItem={handleMoveItem}
+              selectedItemIds={selectedItemIds}
+              onToggleSelection={toggleSelection}
             />
           ))}
         </div>
@@ -210,6 +234,26 @@ export default function Moment2PlanView({
           )}
         </div>
       </div>
+
+      {/* Floating bulk-action button */}
+      {selectedItemIds.size > 0 && (
+        <button
+          type="button"
+          onClick={handleBulkRemove}
+          disabled={bulkRemoving}
+          aria-label={`Remove ${selectedItemIds.size} selected ${selectedItemIds.size === 1 ? 'item' : 'items'}`}
+          className="fixed right-4 top-1/2 -translate-y-1/2 z-40 flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-full pl-4 pr-5 py-2.5 shadow-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path
+              fillRule="evenodd"
+              d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+              clipRule="evenodd"
+            />
+          </svg>
+          Delete {selectedItemIds.size} {selectedItemIds.size === 1 ? 'item' : 'items'} now
+        </button>
+      )}
 
       {/* Sticky footer */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4">
@@ -253,7 +297,8 @@ interface CategorySectionProps {
   onStartAddItem: () => void;
   onCancelAddItem: () => void;
   onAddItem: (categoryId: string, item: NewPlanItem) => Promise<void>;
-  onMoveItem: (categoryId: string, itemId: string, direction: 'up' | 'down') => Promise<void>;
+  selectedItemIds: Set<string>;
+  onToggleSelection: (itemId: string) => void;
 }
 
 function CategorySection({
@@ -273,7 +318,8 @@ function CategorySection({
   onStartAddItem,
   onCancelAddItem,
   onAddItem,
-  onMoveItem,
+  selectedItemIds,
+  onToggleSelection,
 }: CategorySectionProps) {
   const itemCount = category.items.length;
 
@@ -302,20 +348,19 @@ function CategorySection({
             <p className="text-sm text-gray-400 italic py-2">No items yet.</p>
           )}
 
-          {category.items.map((item, index) => (
+          {category.items.map((item) => (
             <div key={item.id}>
               <ItemRow
                 item={item}
-                isFirst={index === 0}
-                isLast={index === category.items.length - 1}
                 isEditing={editingItemId === item.id}
                 isEditingQuantity={quantityEditId === item.id}
+                isSelected={selectedItemIds.has(item.id)}
+                onToggleSelection={() => onToggleSelection(item.id)}
                 onOpenEdit={() => onStartEdit(item.id)}
                 onOpenQuantityEdit={() => onStartQuantityEdit(item.id)}
                 onCancelQuantityEdit={onCancelQuantityEdit}
                 onSaveQuantity={(q) => onSaveQuantity(item.id, q)}
-                onMoveUp={() => onMoveItem(category.id, item.id, 'up')}
-                onMoveDown={() => onMoveItem(category.id, item.id, 'down')}
+                onRemove={() => onRemoveItem(item.id)}
               />
               {editingItemId === item.id && (
                 <ItemEditForm
@@ -354,78 +399,49 @@ function CategorySection({
 
 interface ItemRowProps {
   item: PlanItem;
-  isFirst: boolean;
-  isLast: boolean;
   isEditing: boolean;
   isEditingQuantity: boolean;
+  isSelected: boolean;
+  onToggleSelection: () => void;
   onOpenEdit: () => void;
   onOpenQuantityEdit: () => void;
   onCancelQuantityEdit: () => void;
   onSaveQuantity: (quantity: number) => Promise<void>;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
+  onRemove: () => Promise<void>;
 }
 
 function ItemRow({
   item,
-  isFirst,
-  isLast,
   isEditing,
   isEditingQuantity,
+  isSelected,
+  onToggleSelection,
   onOpenEdit,
   onOpenQuantityEdit,
   onCancelQuantityEdit,
   onSaveQuantity,
-  onMoveUp,
-  onMoveDown,
+  onRemove,
 }: ItemRowProps) {
+  const rowBg = isEditing ? 'bg-gray-100' : 'hover:bg-gray-50';
+  const markedStrike = isSelected ? 'line-through text-gray-400' : '';
+
   return (
-    <div
-      className={`flex items-center gap-2 py-2 px-2 rounded group ${
-        isEditing ? 'bg-gray-100' : 'hover:bg-gray-50'
-      }`}
-    >
-      {/* Reorder arrows */}
-      <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+    <div className={`flex items-center gap-2 py-2 px-2 rounded ${rowBg}`}>
+      {/* Name + serving size (stacked) */}
+      <div className="flex-1 min-w-0 flex flex-col">
         <button
           type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onMoveUp();
-          }}
-          disabled={isFirst}
-          aria-label="Move item up"
-          className="text-xs text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed leading-none"
+          onClick={onOpenEdit}
+          className={`text-left text-sm text-gray-800 hover:text-gray-900 break-words ${markedStrike}`}
         >
-          ▲
+          {item.name}
         </button>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onMoveDown();
-          }}
-          disabled={isLast}
-          aria-label="Move item down"
-          className="text-xs text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed leading-none"
-        >
-          ▼
-        </button>
+        {item.servingSize && (
+          <span className={`text-xs text-gray-500 break-words ${markedStrike}`}>
+            {item.servingSize}
+          </span>
+        )}
       </div>
-
-      {/* Clickable name (opens full edit) */}
-      <button
-        type="button"
-        onClick={onOpenEdit}
-        className="flex-1 text-left text-sm text-gray-800 hover:text-gray-900"
-      >
-        {item.name}
-      </button>
-
-      {/* Serving size */}
-      <span className="text-sm text-gray-500 whitespace-nowrap hidden sm:inline">
-        {item.servingSize}
-      </span>
 
       {/* Quantity (tap-to-edit) */}
       {isEditingQuantity ? (
@@ -442,12 +458,40 @@ function ItemRow({
             e.stopPropagation();
             onOpenQuantityEdit();
           }}
-          className="text-sm text-gray-600 whitespace-nowrap px-2 py-1 rounded hover:bg-gray-200 transition-colors"
+          className={`text-sm text-gray-600 whitespace-nowrap px-2 py-1 rounded hover:bg-gray-200 transition-colors ${markedStrike}`}
           aria-label="Edit quantity"
         >
           {item.quantity} {item.unit}
         </button>
       )}
+
+      {/* Per-row Edit */}
+      <button
+        type="button"
+        onClick={onOpenEdit}
+        className="text-xs text-gray-600 hover:text-gray-900 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+      >
+        Edit
+      </button>
+
+      {/* Per-row Quick delete */}
+      <button
+        type="button"
+        onClick={onRemove}
+        className={`text-xs text-red-600 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50 transition-colors ${markedStrike}`}
+      >
+        Quick delete
+      </button>
+
+      {/* Per-row Mark for delete (toggles strikethrough + bulk selection) */}
+      <button
+        type="button"
+        onClick={onToggleSelection}
+        aria-pressed={isSelected}
+        className={`text-xs text-gray-600 hover:text-gray-900 px-2 py-1 rounded hover:bg-gray-100 transition-colors ${markedStrike}`}
+      >
+        Mark for delete
+      </button>
     </div>
   );
 }
