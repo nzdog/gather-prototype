@@ -47,7 +47,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "overrides": {
-    "axios": "^1.15.0"
+    "axios": "^1.17.0"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,json,css,md}": "prettier --write"
