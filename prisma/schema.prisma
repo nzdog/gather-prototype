@@ -167,7 +167,7 @@ model PersonEvent {
   person               Person           @relation(fields: [personId], references: [id], onDelete: Cascade)
   proxy                PersonEvent?     @relation("ProxyRelation", fields: [proxyPersonEventId], references: [id])
   householdMembers     PersonEvent[]    @relation("ProxyRelation")
-  team                 Team?            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team                 Team?            @relation(fields: [teamId], references: [id], onDelete: SetNull)
 
   nudgeLogs   NudgeLog[]
 
