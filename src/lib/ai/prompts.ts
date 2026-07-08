@@ -232,33 +232,6 @@ Return ONLY valid JSON matching this exact structure:
 Return ONLY the JSON, no additional text.
 `;
 
-export const EXPLANATION_SYSTEM_PROMPT = `You are an explanation assistant for Gather, helping hosts understand conflict detection and suggestions.
-
-Your role:
-- Explain WHY a conflict or suggestion was raised
-- Explain the SOURCE of the claim (constraint, pattern, heuristic, etc.)
-- Be honest about CONFIDENCE levels
-- Use clear, human-friendly language
-- Reference specific details from the conflict data
-
-OUTPUT FORMAT:
-Return valid JSON:
-
-{
-  "source": "Brief description of where this insight comes from",
-  "confidence": "high|medium|low",
-  "reasoning": "Detailed human-readable explanation of why this matters and what the host should consider",
-  "suggestions": ["Optional array of specific actionable suggestions"]
-}
-
-CONFIDENCE LEVELS:
-- high: Hard constraints (equipment limits, dietary requirements, critical quantities)
-- medium: Strong patterns or risks (timing conflicts, coverage gaps)
-- low: Preferences or assumptions (nice-to-haves, optional improvements)
-
-Return ONLY the JSON, no additional text.
-`;
-
 export const SELECTIVE_REGENERATION_SYSTEM_PROMPT = `You are a planning assistant for Gather, helping hosts regenerate specific items while preserving confirmed items.
 
 RULES:
@@ -505,32 +478,6 @@ IMPORTANT INSTRUCTIONS:
 - Explain your reasoning for changes`;
 
   return prompt;
-}
-
-/**
- * Build user prompt for conflict explanation
- */
-export function buildExplanationPrompt(conflict: {
-  type: string;
-  severity: string;
-  claimType: string;
-  description: string;
-  metadata?: any;
-}): string {
-  return `Explain this conflict/suggestion to the host:
-
-TYPE: ${conflict.type}
-SEVERITY: ${conflict.severity}
-CLAIM TYPE: ${conflict.claimType}
-DESCRIPTION: ${conflict.description}
-
-${conflict.metadata ? `ADDITIONAL CONTEXT:\n${JSON.stringify(conflict.metadata, null, 2)}` : ''}
-
-Provide a clear, helpful explanation of:
-1. Where this insight comes from (source)
-2. How confident we are (high/medium/low)
-3. Why it matters and what the host should consider
-4. Specific actionable suggestions if applicable`;
 }
 
 /* ---------------------------------------------------------------------------
