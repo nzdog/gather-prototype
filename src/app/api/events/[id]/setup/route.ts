@@ -2,16 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
 import { validateDietaryData, type DietaryData } from '@/lib/dietary';
-
-const ALLOWED_EVENT_TYPES = [
-  'BBQ',
-  'Roast dinner',
-  'Potluck',
-  'Picnic',
-  'Kids party',
-  'Christmas',
-  'Other',
-];
+import { CONFIG_EVENT_TYPES } from '@/lib/ai/config-loader';
 
 interface SectionData {
   items: string[];
@@ -140,9 +131,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     // Validate eventType
     if (body.eventType !== undefined) {
-      if (!ALLOWED_EVENT_TYPES.includes(body.eventType)) {
+      // GTC-151: validate against CONFIG_EVENT_TYPES — the same source the
+      // modal's chips render from — so client and server can never diverge.
+      // (The old hardcoded legacy list rejected 9 of the 11 pickable types.)
+      if (!(CONFIG_EVENT_TYPES as readonly string[]).includes(body.eventType)) {
         return NextResponse.json(
-          { error: 'Invalid eventType', allowed: ALLOWED_EVENT_TYPES },
+          { error: 'Invalid eventType', allowed: CONFIG_EVENT_TYPES },
           { status: 400 }
         );
       }
