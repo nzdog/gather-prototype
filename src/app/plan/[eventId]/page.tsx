@@ -863,6 +863,7 @@ export default function PlanEditorPage() {
       <ModalTabBar
         activeTab={currentTab}
         eventStatus={event.status}
+        hiddenTabs={event.setup ? ['history'] : undefined}
         onNavigate={(tabId) => handleModalTabNavigate(tabId, currentTab)}
         onCloseToDashboard={() => {
           if (currentTab === 'details') {
@@ -1560,7 +1561,9 @@ export default function PlanEditorPage() {
 
   const handleChecklistOpenCreatePlan = () => {
     setChecklistStepContext(null);
-    if (teams.length === 0) {
+    // V2 events never enter the V1 generate pipeline — offer manual team
+    // creation instead (GTC-149).
+    if (teams.length === 0 && !event?.setup) {
       setHostDescriptionModalOpen(true);
     } else {
       setAddTeamModalOpen(true);
@@ -2082,7 +2085,8 @@ export default function PlanEditorPage() {
                     Failed to load host link — try refreshing.
                   </span>
                 )}
-                {event.status === 'DRAFT' && teams.length === 0 && (
+                {/* V1 generate entry — hidden on V2 events (GTC-149) */}
+                {!event.setup && event.status === 'DRAFT' && teams.length === 0 && (
                   <button
                     onClick={() => setHostDescriptionModalOpen(true)}
                     disabled={isGenerating || event.aiCallsUsed >= 10}
@@ -2447,22 +2451,25 @@ export default function PlanEditorPage() {
                       </div>
                     )}
 
-                  {/* Revision History Card */}
-                  <div
-                    onClick={() => handleExpandSection('history')}
-                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
-                  >
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
-                        <Clock className="w-6 h-6 text-accent" />
+                  {/* Revision History Card — V1-shape snapshot/restore system,
+                      hidden on V2 events (GTC-149) */}
+                  {!event.setup && (
+                    <div
+                      onClick={() => handleExpandSection('history')}
+                      className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
+                    >
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
+                          <Clock className="w-6 h-6 text-accent" />
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-900">Revision History</h2>
                       </div>
-                      <h2 className="text-xl font-semibold text-gray-900">Revision History</h2>
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-600">View all changes and updates</p>
+                      </div>
+                      <div className="text-sm text-accent font-medium">Click to expand →</div>
                     </div>
-                    <div className="flex-1">
-                      <p className="text-sm text-gray-600">View all changes and updates</p>
-                    </div>
-                    <div className="text-sm text-accent font-medium">Click to expand →</div>
-                  </div>
+                  )}
                 </div>
               </div>
             </>
@@ -2499,7 +2506,7 @@ export default function PlanEditorPage() {
             }}
             onMovePerson={handleMovePerson}
             onExpand={() => handleExpandSection('people')}
-            onGeneratePlan={() => setHostDescriptionModalOpen(true)}
+            onGeneratePlan={event?.setup ? undefined : () => setHostDescriptionModalOpen(true)}
             stepLabel={undefined}
           />
           <GateCheck
@@ -2532,11 +2539,14 @@ export default function PlanEditorPage() {
               onExpand={() => handleExpandSection('unfreeze')}
             />
           )}
-          <RevisionHistory
-            eventId={eventId}
-            actorId={event?.hostId ?? ''}
-            onExpand={() => handleExpandSection('history')}
-          />
+          {/* V1-shape snapshot/restore system — hidden on V2 events (GTC-149) */}
+          {!event?.setup && (
+            <RevisionHistory
+              eventId={eventId}
+              actorId={event?.hostId ?? ''}
+              onExpand={() => handleExpandSection('history')}
+            />
+          )}
         </div>
 
         {/* Save Template Modal */}
@@ -2594,9 +2604,10 @@ export default function PlanEditorPage() {
           eventId={eventId}
         />
 
-        {/* Host Description Modal */}
+        {/* Host Description Modal — choke point for every V1 generate entry;
+            never opens on V2 events regardless of caller (GTC-149) */}
         <HostDescriptionModal
-          isOpen={hostDescriptionModalOpen}
+          isOpen={hostDescriptionModalOpen && !event?.setup}
           onClose={() => setHostDescriptionModalOpen(false)}
           onGenerate={handleGeneratePlan}
           onSkip={() => handleGeneratePlan()}
@@ -2678,7 +2689,7 @@ export default function PlanEditorPage() {
                   <p className="text-sm text-gray-500 mb-4">
                     Generate a plan to check for conflicts
                   </p>
-                  {event?.status === 'DRAFT' && (
+                  {event?.status === 'DRAFT' && !event?.setup && (
                     <button
                       onClick={() => {
                         pendingModalAction.current = 'generate';
@@ -2843,7 +2854,7 @@ export default function PlanEditorPage() {
                 No items yet. Generate a plan or add items manually.
               </p>
               <div className="flex items-center justify-center gap-3">
-                {event?.status === 'DRAFT' && (
+                {event?.status === 'DRAFT' && !event?.setup && (
                   <button
                     onClick={() => {
                       pendingModalAction.current = 'generate';
@@ -3063,7 +3074,7 @@ export default function PlanEditorPage() {
               autoRecheck();
             }}
             onMovePerson={handleMovePerson}
-            onGeneratePlan={() => setHostDescriptionModalOpen(true)}
+            onGeneratePlan={event?.setup ? undefined : () => setHostDescriptionModalOpen(true)}
             stepLabel={checklistStepContext || undefined}
             initialView={peopleInitialView}
             onReassignItems={(teamId) => {
@@ -3089,7 +3100,7 @@ export default function PlanEditorPage() {
                 No teams yet. Generate a plan to create teams automatically.
               </p>
               <div className="flex items-center justify-center gap-3">
-                {event?.status === 'DRAFT' && (
+                {event?.status === 'DRAFT' && !event?.setup && (
                   <button
                     onClick={() => {
                       pendingModalAction.current = 'generate';
@@ -3797,9 +3808,10 @@ export default function PlanEditorPage() {
           </SectionExpandModal>
         )}
 
-        {/* Revision History Expansion */}
+        {/* Revision History Expansion — gated so even a ?expand=history
+            deep link shows nothing on V2 events (GTC-149) */}
         <SectionExpandModal
-          isOpen={expandedSection === 'history'}
+          isOpen={expandedSection === 'history' && !event?.setup}
           onClose={handleCloseExpansion}
           title="Revision History"
           icon={<Clock className="w-6 h-6" />}
