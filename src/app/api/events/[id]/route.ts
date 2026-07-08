@@ -25,6 +25,13 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
             email: true,
           },
         },
+        // V2 signal: events that entered the Moment flow have an EventSetup row.
+        // The dashboard uses its presence to suppress V1-pipeline actions (GTC-148).
+        setup: {
+          select: {
+            id: true,
+          },
+        },
       },
     });
 
@@ -124,6 +131,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
             id: true,
             name: true,
             email: true,
+          },
+        },
+        // V2 signal: events that entered the Moment flow have an EventSetup row.
+        // The dashboard uses its presence to suppress V1-pipeline actions (GTC-148).
+        setup: {
+          select: {
+            id: true,
           },
         },
       },

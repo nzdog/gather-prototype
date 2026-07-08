@@ -213,6 +213,9 @@ interface Event {
   isDemo: boolean;
   clonedFromId: string | null;
   aiCallsUsed: number;
+  // Present when the event entered the V2 Moment flow (EventSetup row exists).
+  // V1-pipeline actions (e.g. Regenerate) are hidden when set (GTC-148).
+  setup: { id: string } | null;
 }
 
 interface Team {
@@ -2099,7 +2102,11 @@ export default function PlanEditorPage() {
                     )}
                   </button>
                 )}
+                {/* V2 events (EventSetup present) must not expose the V1 regenerate
+                    pipeline — it reads different persistence and different prompts
+                    than the plan was generated with (GTC-148). */}
                 {!event.isDemo &&
+                  !event.setup &&
                   (event.status === 'DRAFT' || event.status === 'CONFIRMING') &&
                   teams.length > 0 && (
                     <button
