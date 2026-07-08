@@ -13,6 +13,7 @@ import OptionTree, {
   type OptionTreeLevel,
   type OptionTreeSelections,
 } from '@/components/shared/OptionTree';
+import { readDietaryData, type DietaryStatus } from '@/lib/dietary';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -39,7 +40,12 @@ interface SectionData {
   selections?: OptionTreeSelections;
 }
 
+// GTC-150: three-state dietary model. `status` is derived from interaction —
+// ticking "No dietary needs" → confirmed_none; any requirement or other-text
+// → confirmed_needs; nothing → unanswered. Skipping the accordion never
+// confirms anything.
 interface DietaryData {
+  status: DietaryStatus;
   requirements: string[];
   other: string;
 }
@@ -150,7 +156,7 @@ const INITIAL_STATE: Step1State = {
   sidesData: { items: [], stillDeciding: false },
   dessertsData: { items: [], stillDeciding: false },
   drinksData: { items: [], stillDeciding: false },
-  dietaryData: { requirements: [], other: '' },
+  dietaryData: { status: 'unanswered', requirements: [], other: '' },
   otherNotes: '',
   extendedCategoriesData: {},
   setUpData: { ...EMPTY_OTHER_JOBS },
@@ -257,7 +263,11 @@ export default function Moment2Step1Modal({
             dessertsData: migrateSectionData(s.dessertsData, prev.dessertsData),
             drinksData: migrateSectionData(s.drinksData, prev.drinksData),
             dietaryData: s.dietaryData
-              ? { requirements: s.dietaryData.requirements ?? [], other: s.dietaryData.other ?? '' }
+              ? (() => {
+                  // Normalizes legacy rows (no status) via content inference.
+                  const d = readDietaryData(s.dietaryData);
+                  return { status: d.status, requirements: d.requirements, other: d.other ?? '' };
+                })()
               : prev.dietaryData,
             otherNotes: s.otherNotes ?? prev.otherNotes,
             extendedCategoriesData: hydratedExtended,
@@ -729,16 +739,20 @@ function AccordionShell({
   label,
   openAccordion,
   onToggle,
-  stillDeciding,
+  stillDeciding = false,
   onStillDecidingToggle,
+  headerHint,
   children,
 }: {
   id: string;
   label: string;
   openAccordion: string | null;
   onToggle: (id: string | null) => void;
-  stillDeciding: boolean;
-  onStillDecidingToggle: () => void;
+  stillDeciding?: boolean;
+  /** Omit to hide the "Still deciding?" affordance (e.g. dietary, GTC-150) */
+  onStillDecidingToggle?: () => void;
+  /** Optional indicator rendered beside the label (e.g. "Needs confirmation") */
+  headerHint?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const isOpen = openAccordion === id;
@@ -759,6 +773,7 @@ function AccordionShell({
           <span className={`font-medium ${stillDeciding ? 'text-gray-400' : 'text-gray-900'}`}>
             {label}
           </span>
+          {headerHint}
         </span>
         <span
           className={`text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
@@ -779,15 +794,17 @@ function AccordionShell({
         }}
       >
         <div className="px-4 pb-4">
-          <button
-            type="button"
-            onClick={onStillDecidingToggle}
-            className={`text-xs mb-3 transition-colors ${
-              stillDeciding ? 'text-accent font-medium' : 'text-gray-400 hover:text-gray-600'
-            }`}
-          >
-            {stillDeciding ? '✓ Still deciding — click to edit' : 'Still deciding?'}
-          </button>
+          {onStillDecidingToggle && (
+            <button
+              type="button"
+              onClick={onStillDecidingToggle}
+              className={`text-xs mb-3 transition-colors ${
+                stillDeciding ? 'text-accent font-medium' : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              {stillDeciding ? '✓ Still deciding — click to edit' : 'Still deciding?'}
+            </button>
+          )}
           <div className={stillDeciding ? 'opacity-50 pointer-events-none' : ''}>{children}</div>
         </div>
       </div>
@@ -891,12 +908,40 @@ function DietaryAccordion({
   data: DietaryData;
   onChange: (d: DietaryData) => void;
 }) {
+  // Status is derived, never stored independently: invalid combinations are
+  // unrepresentable. Removing the last requirement returns to 'unanswered'
+  // rather than silently becoming "no needs" (GTC-150).
+  const deriveNeedsStatus = (requirements: string[], other: string): DietaryStatus =>
+    requirements.length > 0 || other.trim() !== '' ? 'confirmed_needs' : 'unanswered';
+
   const toggleReq = (req: string) => {
     const reqs = data.requirements.includes(req)
       ? data.requirements.filter((r) => r !== req)
       : [...data.requirements, req];
-    onChange({ ...data, requirements: reqs });
+    onChange({
+      status: deriveNeedsStatus(reqs, data.other),
+      requirements: reqs,
+      other: data.other,
+    });
   };
+
+  const handleOtherChange = (other: string) => {
+    onChange({
+      status: deriveNeedsStatus(data.requirements, other),
+      requirements: data.requirements,
+      other,
+    });
+  };
+
+  const toggleNone = () => {
+    if (data.status === 'confirmed_none') {
+      onChange({ status: 'unanswered', requirements: [], other: '' });
+    } else {
+      onChange({ status: 'confirmed_none', requirements: [], other: '' });
+    }
+  };
+
+  const isNone = data.status === 'confirmed_none';
 
   return (
     <AccordionShell
@@ -904,16 +949,36 @@ function DietaryAccordion({
       label="⚠️ Dietary requirements"
       openAccordion={openAccordion}
       onToggle={onToggle}
-      stillDeciding={false}
-      onStillDecidingToggle={() => {}}
+      headerHint={
+        data.status === 'unanswered' ? (
+          <span className="flex items-center gap-1.5 text-xs text-amber-600">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" aria-hidden="true" />
+            Needs confirmation
+          </span>
+        ) : undefined
+      }
     >
       <div className="space-y-2">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={isNone}
+            onChange={toggleNone}
+            className="rounded border-gray-300 text-accent focus:ring-accent/40"
+          />
+          <span className="text-sm font-medium text-gray-900">No dietary needs at this event</span>
+        </label>
+        <div className="border-t border-gray-200 my-2" aria-hidden="true" />
         {DIETARY_OPTIONS.map((opt) => (
-          <label key={opt} className="flex items-center gap-2 cursor-pointer">
+          <label
+            key={opt}
+            className={`flex items-center gap-2 ${isNone ? 'opacity-50' : 'cursor-pointer'}`}
+          >
             <input
               type="checkbox"
               checked={data.requirements.includes(opt)}
               onChange={() => toggleReq(opt)}
+              disabled={isNone}
               className="rounded border-gray-300 text-accent focus:ring-accent/40"
             />
             <span className="text-sm text-gray-700">{opt}</span>
@@ -924,8 +989,9 @@ function DietaryAccordion({
             type="text"
             placeholder="Other dietary needs"
             value={data.other}
-            onChange={(e) => onChange({ ...data, other: e.target.value })}
-            className="w-full px-3 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-accent/40"
+            onChange={(e) => handleOtherChange(e.target.value)}
+            disabled={isNone}
+            className="w-full px-3 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-50"
           />
         </div>
       </div>

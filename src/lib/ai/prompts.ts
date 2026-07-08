@@ -610,7 +610,13 @@ export interface PlanGenerationInput {
   eventType: string;
   totalAdults: number;
   totalKids: number;
-  /** Structured dietary requirements + free-text "Other: ..." entries */
+  /**
+   * GTC-150 three-state dietary model: 'confirmed_needs' → the requirements
+   * list drives generation; 'confirmed_none' → host affirmatively confirmed
+   * none; 'unanswered' → host never confirmed — do not assume none.
+   */
+  dietaryStatus: 'unanswered' | 'confirmed_none' | 'confirmed_needs';
+  /** Structured dietary requirements + free-text "Other: ..." entries (confirmed_needs only) */
   dietaryRequirements: string[];
   /** Categories Kate engaged with, in the order they should appear */
   engagedCategories: PlanGenerationCategoryInput[];
@@ -685,10 +691,21 @@ Return ONLY valid JSON in the exact shape specified. No prose, no markdown, no c
     .filter((c) => c.stillDeciding)
     .map((c) => c.label);
 
+  // GTC-150: three-state dietary language. "Skipped" is never presented to
+  // the model as "none" — unanswered gets explicit uncertainty + safe defaults.
   const dietaryBlock =
-    input.dietaryRequirements.length > 0
+    input.dietaryStatus === 'confirmed_needs'
       ? `Dietary requirements present: ${input.dietaryRequirements.join(', ')}`
-      : 'Dietary requirements present: none';
+      : input.dietaryStatus === 'confirmed_none'
+        ? 'The host has confirmed there are no dietary requirements at this event. Generate items normally without dietary constraints.'
+        : 'The host has not yet confirmed dietary requirements. Do not assume there are none. Include at least one vegetarian option in the mains category as a reasonable default, and prefer naturally-suitable items (e.g. plain vegetable sides) that accommodate common dietary restrictions.';
+
+  const dietaryCoverageInstruction =
+    input.dietaryStatus === 'confirmed_needs'
+      ? `- dietaryCoverage: one entry per dietary requirement above stating whether the plan covers it (covered: true/false). When covered, list the items that cover it. When not covered, briefly state what's missing.`
+      : input.dietaryStatus === 'confirmed_none'
+        ? `- dietaryCoverage: return an empty array — the host has confirmed there are no dietary requirements.`
+        : `- dietaryCoverage: return exactly one entry: { "requirement": "Dietary requirements not yet confirmed", "covered": false, "flaggedItems": [] } — so the host is reminded to confirm dietary needs.`;
 
   const otherFoodBlock = input.otherNotes.trim()
     ? `Other food notes from Kate: ${input.otherNotes.trim()}`
@@ -712,7 +729,7 @@ ${otherFoodBlock ? '\n' + otherFoodBlock : ''}
 ${otherJobsBlock ? '\n' + otherJobsBlock : ''}
 
 Then produce two short auxiliary outputs in the same response:
-- dietaryCoverage: one entry per dietary requirement above stating whether the plan covers it (covered: true/false). When covered, list the items that cover it. When not covered, briefly state what's missing.
+${dietaryCoverageInstruction}
 - thingsToConsider: 6–10 short reminders of practical items the host might forget for a ${eventLabel} of this size (napkins, ice, serving spoons, rubbish bags, etc.). Each has a name and a suggested category.
 
 Return JSON in EXACTLY this shape:

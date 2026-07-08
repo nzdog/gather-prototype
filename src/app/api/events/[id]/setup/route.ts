@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
+import { validateDietaryData, type DietaryData } from '@/lib/dietary';
 
 const ALLOWED_EVENT_TYPES = [
   'BBQ',
@@ -22,11 +23,6 @@ interface SetupCleanupData {
   cleanupCrew: boolean;
   kidsOnDishes: boolean;
   stillDeciding: boolean;
-}
-
-interface DietaryData {
-  requirements: string[];
-  other?: string;
 }
 
 interface OptionTreeLevelSelection {
@@ -159,13 +155,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       }
     }
 
-    // Validate dietaryData if provided
+    // Validate dietaryData if provided — three-state shape with coherence
+    // rules (GTC-150): status must match content; legacy statusless writes
+    // are still accepted and inferred on read.
     if (body.dietaryData !== undefined) {
-      if (!Array.isArray(body.dietaryData.requirements)) {
-        return NextResponse.json(
-          { error: 'dietaryData.requirements must be an array of strings' },
-          { status: 400 }
-        );
+      const dietaryError = validateDietaryData(body.dietaryData);
+      if (dietaryError) {
+        return NextResponse.json({ error: dietaryError }, { status: 400 });
       }
     }
 

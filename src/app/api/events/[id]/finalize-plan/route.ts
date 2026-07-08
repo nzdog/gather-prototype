@@ -13,6 +13,7 @@ import {
   getDefaultCategories,
   getSectionReferenceItems,
 } from '@/lib/ai/config-loader';
+import { readDietaryData } from '@/lib/dietary';
 
 // GTC-145: lowered from 20 → 10. The single-call architecture fires exactly
 // one Claude call per finalize-plan invocation, so 10 gives ample headroom
@@ -125,12 +126,13 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
 
     const eventType = setup.eventType ?? 'Other';
 
-    // Dietary requirements: structured + free-text "Other: ..."
-    const dietaryData = setup.dietaryData as { requirements?: string[]; other?: string } | null;
-    const dietaryOther = (dietaryData?.other ?? '').trim();
+    // GTC-150: three-state dietary read. readDietaryData normalizes legacy
+    // rows (statusless {requirements, other}) and coerces incoherent stored
+    // combinations safety-first, so 'unanswered' is never presented as "none".
+    const dietary = readDietaryData(setup.dietaryData);
     const dietaryRequirements = [
-      ...(dietaryData?.requirements ?? []),
-      ...(dietaryOther ? [`Other: ${dietaryOther}`] : []),
+      ...dietary.requirements,
+      ...(dietary.other ? [`Other: ${dietary.other}`] : []),
     ];
 
     // Headcount from households
@@ -219,6 +221,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       eventType,
       totalAdults,
       totalKids,
+      dietaryStatus: dietary.status,
       dietaryRequirements,
       engagedCategories,
       otherNotes,
