@@ -174,7 +174,7 @@ Guard inventory (`src/lib/auth/guards.ts`, as of 2026-07-09): `requireEventRole`
 Source of truth: `src/lib/workflow.ts` (1,037 lines). Enum `EventStatus`:
 DRAFT, CONFIRMING, FROZEN, COMPLETE.
 
-**Transitions** (`canTransition`, workflow.ts:243):
+**Transitions** (`canTransition`, workflow.ts:226):
 
 | From \ To | DRAFT | CONFIRMING | FROZEN | COMPLETE |
 |---|---|---|---|---|
@@ -185,7 +185,7 @@ DRAFT, CONFIRMING, FROZEN, COMPLETE.
 
 COMPLETE is terminal. `fromStatus === toStatus` always returns true.
 
-**Mutation gating** (`canMutate`, workflow.ts:265; actions: createItem, editItem,
+**Mutation gating** (`canMutate`, workflow.ts:248; actions: createItem, editItem,
 deleteItem, assignItem, addPerson, removePerson):
 
 | Status | Allowed |
@@ -197,7 +197,7 @@ deleteItem, assignItem, addPerson, removePerson):
 
 Gate details you will otherwise rediscover the hard way:
 - DRAFT→CONFIRMING does NOT require all items assigned (`runGateCheck`,
-  workflow.ts:440).
+  workflow.ts:423).
 - **DESIGN DECISION (2026-07-09): CONFIRMING→FROZEN never hard-blocks on
   unassigned items.** This is deliberate and final — hosts may freeze a plan
   with gaps. The transition route
@@ -257,7 +257,7 @@ A partial write leaves the state machine and its evidence out of sync.
 **Where enforced:** `src/lib/workflow.ts` transactions at lines 354
 (`removePerson`), 710 (`transitionToConfirming`), 798 (`createRevision`), 890
 (`restoreFromRevision`); ~16 API routes use `$transaction` (grep below).
-`logAudit` (workflow.ts:289) REQUIRES a `tx` — "All audit logging must happen
+`logAudit` (workflow.ts:272) REQUIRES a `tx` — "All audit logging must happen
 inside transactions."
 
 **What breaks if violated:** orphaned assignments, events in CONFIRMING with no

@@ -215,23 +215,6 @@ export async function checkFreezeReadiness(eventId: string): Promise<FreezeCheck
 }
 
 /**
- * Returns the count of unassigned items in an event.
- * CONFIRMING → FROZEN never hard-blocks on unassigned items (decided
- * 2026-07-09); this count feeds warnings-only freeze-readiness messaging,
- * not a freeze block. Currently has no callers.
- *
- * CRITICAL: Queries assignment: null, NOT Item.status.
- */
-export async function getCriticalGapCount(eventId: string): Promise<number> {
-  return prisma.item.count({
-    where: {
-      team: { eventId },
-      assignment: null,
-    },
-  });
-}
-
-/**
  * Validates event status transitions.
  * State machine from spec Section 6:
  *   DRAFT → CONFIRMING : Always allowed
