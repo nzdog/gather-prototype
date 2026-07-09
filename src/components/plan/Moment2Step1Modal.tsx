@@ -188,6 +188,7 @@ export default function Moment2Step1Modal({
   const [peopleCount, setPeopleCount] = useState<number>(0);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRef = useRef<Step1State | null>(null);
 
@@ -310,13 +311,30 @@ export default function Moment2Step1Modal({
 
       try {
         setSaving(true);
-        await fetch(`/api/events/${eventId}/setup`, {
+        const res = await fetch(`/api/events/${eventId}/setup`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
+        // fetch only rejects on network failure, not on HTTP 4xx/5xx — a
+        // swallowed non-ok response is how Step 1 edits silently failed to
+        // persist (the "no error surfaced" half of the GTC-151 class of bug).
+        if (!res.ok) {
+          let message = 'Your changes could not be saved. Please try again.';
+          try {
+            const body = await res.json();
+            if (typeof body?.error === 'string') message = body.error;
+          } catch {
+            // response had no JSON body — keep the generic message
+          }
+          setSaveError(message);
+          return false;
+        }
+        setSaveError(null);
+        return true;
       } catch {
-        // silent — will retry on next change
+        setSaveError('Your changes could not be saved. Check your connection and try again.');
+        return false;
       } finally {
         setSaving(false);
       }
@@ -414,8 +432,11 @@ export default function Moment2Step1Modal({
       debounceRef.current = null;
     }
     if (pendingRef.current) {
-      await saveToApi(pendingRef.current);
+      const saved = await saveToApi(pendingRef.current);
       pendingRef.current = null;
+      // Don't generate off unpersisted edits — finalize-plan reads the saved
+      // setup. The failure is already surfaced via saveError.
+      if (!saved) return;
     }
     onGenerate();
   }, [onGenerate, saveToApi]);
@@ -718,6 +739,11 @@ export default function Moment2Step1Modal({
       {/* Sticky generate button */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4">
         <div className="max-w-2xl mx-auto">
+          {saveError && (
+            <p role="alert" className="mb-2 text-sm text-red-600">
+              {saveError}
+            </p>
+          )}
           <button
             type="button"
             disabled={!state.eventType || saving}
