@@ -215,8 +215,10 @@ export async function checkFreezeReadiness(eventId: string): Promise<FreezeCheck
 }
 
 /**
- * Returns the count of unassigned items blocking freeze (T6).
- * Used for UI messaging ("Cannot freeze: N items unassigned").
+ * Returns the count of unassigned items in an event.
+ * CONFIRMING → FROZEN never hard-blocks on unassigned items (decided
+ * 2026-07-09); this count feeds warnings-only freeze-readiness messaging,
+ * not a freeze block. Currently has no callers.
  *
  * CRITICAL: Queries assignment: null, NOT Item.status.
  */
@@ -431,7 +433,6 @@ export interface GateCheckResult {
  * - UNSAVED_DRAFT_CHANGES
  *
  * Note: ALL_ITEMS_ASSIGNED is NOT required for DRAFT → CONFIRMING.
- * Assignment coverage is enforced at CONFIRMING → FROZEN transition.
  *
  * @param eventId - Event to check
  * @returns GateCheckResult with passed boolean and array of blocks
