@@ -179,6 +179,15 @@ House pattern (23 `backfill` commits in history as of 2026-07-09):
   (untracked as of 2026-07-09).
 - **Date-stamp volatile facts**: any count, status, "currently", or "latest" claim gets
   "(as of YYYY-MM-DD)".
+- **Cite code by symbol name, never by line number.** Anchor to the function, export,
+  const, type, or enum — `workflow.ts — canTransition()`, not `workflow.ts:243`. Line
+  numbers are a snapshot pretending to be a rule: any edit above the reference silently
+  invalidates it (GTC-154/156 shifted these twice in two days; GTC-158 re-anchored the
+  library). When a symbol appears more than once in a file, add a disambiguating cue
+  (which function/section). For a line with no stable symbol (a migration `.sql` DDL line,
+  a top-level `.create()` in `seed.ts`, an inline literal), anchor to the nearest named
+  thing plus a relative cue ("inside `runGateCheck()`"), or — only as a last resort — keep
+  the line number WITH an as-of commit hash: `file.ts:NNN (as of <short-hash>)`.
 - Commit messages: `{type}(GTC-NNN): summary` (types observed: feat, fix, chore, refactor,
   docs); `[EXPERIMENTAL]` tag in the subject for experiment-branch commits (GTC-145).
 - KB entries follow a fixed format: Symptom / Cause / Fix pattern / Do not / First seen.

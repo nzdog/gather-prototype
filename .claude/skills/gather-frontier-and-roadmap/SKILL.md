@@ -37,7 +37,7 @@ docs drift (see Section 2, which is itself a worked example of that drift).
 | Moment | A stage of the V2 host journey: M1 "Who's coming?" (households), M2 "What's the plan?" (AI plan), M3 "Who's bringing what?", M4 "Is everyone sorted?" |
 | Epic | A numbered workstream in docs/BUILD_STATUS.md (Epics 1-6, Jan 2026 era) |
 | GTC ticket | A change ticket at docs/tickets/GTC-NNN.md; every change needs one (see `gather-change-control`) |
-| Reachability tier | PersonEvent.reachabilityTier enum: DIRECT / PROXY / SHARED / UNTRACKABLE (prisma/schema.prisma:594) — how the app can reach a guest |
+| Reachability tier | PersonEvent.reachabilityTier enum: DIRECT / PROXY / SHARED / UNTRACKABLE (`enum ReachabilityTier` in prisma/schema.prisma) — how the app can reach a guest |
 | Nudge | Automated SMS reminder, run by cron GET /api/cron/nudges every 15 min (vercel.json) |
 | Proxy nudge | Nudge sent to a household's PRIMARY_CONTACT on behalf of unreachable members |
 | Freeze | Event lifecycle transition CONFIRMING → FROZEN (src/lib/workflow.ts) |
@@ -69,16 +69,16 @@ plan work off the checkboxes. Verified state:
 
 | Item | Ledger says | Code says (verified 2026-07-09) |
 |---|---|---|
-| 1.1 Reachability fields | done | Done. PersonEvent.reachabilityTier at schema.prisma:155, contactMethod:156 |
-| 1.2 Proxy household model | open | Built, then RESHAPED by Moment 1 redesign: households are now PersonEvent.householdId + householdRole (PRIMARY_CONTACT/PARTNER/GUEST/CHILD); proxyPersonEventId self-relation still in schema (:158) |
-| 1.3 Shared link fallback | open | Built: /api/join/[token]/claim sets claimedViaSharedLink (route.ts:140) |
-| 1.4 Dashboard reachability bar | open | Built: src/components/plan/ReachabilityBar.tsx, rendered by InviteStatusSection.tsx:499, which the god file imports |
+| 1.1 Reachability fields | done | Done. PersonEvent.reachabilityTier and contactMethod fields on `model PersonEvent` (prisma/schema.prisma) |
+| 1.2 Proxy household model | open | Built, then RESHAPED by Moment 1 redesign: households are now PersonEvent.householdId + householdRole (PRIMARY_CONTACT/PARTNER/GUEST/CHILD); proxyPersonEventId self-relation still on `model PersonEvent` in schema |
+| 1.3 Shared link fallback | open | Built: /api/join/[token]/claim sets claimedViaSharedLink (in the `POST()` handler of src/app/api/join/[token]/claim/route.ts) |
+| 1.4 Dashboard reachability bar | open | Built: src/components/plan/ReachabilityBar.tsx, rendered inside the `InviteStatusSection()` component (src/components/plan/InviteStatusSection.tsx), which the god file imports |
 | 1.5 Proxy nudge logic | open | Built then BROKEN: sender/eligibility exist but frequency-limiting fields were removed by the Moment 1 redesign — see work item A |
-| 2.1-2.3 RSVP layer | open | Largely built: RsvpStatus enum (schema:875, PENDING/YES/NO/NOT_SURE), PATCH /api/p/[token] validates YES/NO/NOT_SURE (route.ts:227), NOT_SURE 48h forced-conversion candidates in src/lib/sms/nudge-eligibility.ts:218+ |
+| 2.1-2.3 RSVP layer | open | Largely built: `enum RsvpStatus` in prisma/schema.prisma (PENDING/YES/NO/NOT_SURE), PATCH /api/p/[token] validates YES/NO/NOT_SURE (`PATCH()` handler in src/app/api/p/[token]/route.ts), NOT_SURE 48h forced-conversion candidates in `findRsvpFollowupCandidates()` (src/lib/sms/nudge-eligibility.ts) |
 | 3.x Nudge infra | open | Built and LIVE: src/lib/sms/{nudge-scheduler,nudge-eligibility,nudge-sender,nudge-templates}.ts, cron route src/app/api/cron/nudges/route.ts, vercel.json cron */15 |
-| 4.x Freeze enhancements | open | Built: "EPIC 4: FREEZE WARNINGS" block in src/lib/workflow.ts:73+ (warnings never block; the dead hard gate canFreeze() was removed in GTC-154, 2026-07-09); /api/events/[id]/frozen-edit route exists |
-| 5.1 80% threshold | open | Built: invite-status route computes `thresholdReached = complianceRate >= 0.8` (src/app/api/events/[id]/invite-status/route.ts:371) |
-| 6.x Metric instrumentation | open | GENUINELY OPEN. No frozen-rate or repeat-host-rate code exists (grep comes up empty). Substrate exists: InviteEvent table + logInviteEvent (src/lib/invite-events.ts:13), InviteEventType enum with 18 values (schema:882-901) |
+| 4.x Freeze enhancements | open | Built: src/lib/workflow.ts — the "EPIC 4: FREEZE WARNINGS" comment block (above `checkFreezeReadiness()`) (warnings never block; the dead hard gate canFreeze() was removed in GTC-154, 2026-07-09); /api/events/[id]/frozen-edit route exists |
+| 5.1 80% threshold | open | Built: invite-status route computes `thresholdReached = complianceRate >= 0.8` (in the `GET()` handler of src/app/api/events/[id]/invite-status/route.ts) |
+| 6.x Metric instrumentation | open | GENUINELY OPEN. No frozen-rate or repeat-host-rate code exists (grep comes up empty). Substrate exists: InviteEvent table + `logInviteEvent()` (src/lib/invite-events.ts), `enum InviteEventType` with 18 values (prisma/schema.prisma) |
 
 ## 3. Top nearest work items
 
@@ -89,25 +89,28 @@ output + `npm run test:security` exit 0). See `gather-change-control`.
 
 ### A. Proxy-nudge frequency limiting (Epic 1.5 rebuild) — highest urgency
 
-**Current state:** `runNudgeScheduler` (src/lib/sms/nudge-scheduler.ts:90-93) calls
+**Current state:** `runNudgeScheduler` (src/lib/sms/nudge-scheduler.ts) calls
 `findProxyNudgeCandidates` + `processProxyNudges` on every 15-minute cron run. Both
-src/lib/sms/proxy-nudge-eligibility.ts (~line 28-33) and proxy-nudge-sender.ts (lines 21-23)
+src/lib/sms/proxy-nudge-eligibility.ts (the doc-comment above `findProxyNudgeCandidates()`) and
+proxy-nudge-sender.ts (the doc-comment above `sendProxyNudge()`)
 carry the same comment: the Moment 1 redesign removed the tracking fields
 (proxyNudgeCount, lastProxyNudgeAt, claimedAt, escalatedAt) and "nudge scheduling logic
 needs redesign in a future ticket." There is NO frequency check in the current path — a
 household whose primary contact is SMS-reachable on a CONFIRMING event is re-eligible
-every run. Direct nudges are safe (they check Person.nudge24hSentAt/nudge48hSentAt,
-nudge-eligibility.ts:168-183); only the proxy path lost its brake.
+every run. Direct nudges are safe (they check Person.nudge24hSentAt/nudge48hSentAt in the 24h/48h
+eligibility checks inside `findNudgeCandidates()`, src/lib/sms/nudge-eligibility.ts); only
+the proxy path lost its brake.
 
 **Mitigating conditions (why prod hasn't burned yet):** requires TWILIO_* env vars set
-(isSmsEnabled, src/lib/sms/twilio-client.ts:23), event status CONFIRMING, primary contact
+(isSmsEnabled, src/lib/sms/twilio-client.ts), event status CONFIRMING, primary contact
 with valid NZ phone, contactMethod SMS, not opted out. UNVERIFIED whether production
 currently has SMS enabled — check before declaring severity.
 
 **Why it's hard:** the old per-HouseholdMember tracking table is gone; you must decide where
-frequency state now lives. Candidates already in the codebase: `NudgeLog` (schema:926, keyed
+frequency state now lives. Candidates already in the codebase: `model NudgeLog` (prisma/schema.prisma, keyed
 by personEventId with nudgeType/sentAt) or querying `InviteEvent` rows of type
-PROXY_NUDGE_SENT (already written on success, proxy-nudge-sender.ts:54-62). SMS opt-out
+PROXY_NUDGE_SENT (already written on success by the `logInviteEvent()` call in
+`sendProxyNudge()`, src/lib/sms/proxy-nudge-sender.ts). SMS opt-out
 logic is a do-not-touch zone — gate around it, never through it.
 
 **First three steps:**
@@ -150,7 +153,7 @@ hash, or GTC reference that a fresh session can verify in under a minute, and th
 
 **Current state:** nothing computes frozen rate, repeat-host rate, or reachability
 breakdown. Substrate exists: `InviteEvent` rows are already logged fail-soft via
-`logInviteEvent` (src/lib/invite-events.ts:13 — catches and console.errors, never throws);
+`logInviteEvent` (src/lib/invite-events.ts — catches and console.errors, never throws);
 Event.status and PersonEvent.reachabilityTier are queryable directly.
 
 **Why it's hard:** definitional, not technical. "Frozen rate" needs a denominator decision
@@ -202,7 +205,7 @@ unseeded matters first.
 | Plan-quality metrics (item count, category count, duplication rate per generation) | candidate — nothing built | GTC-145 measured 86→25 items (-71%) BY HAND (docs/tickets/GTC-145.md:87-93). No automated capture exists. Nearest ancestor: scripts/list-recent-events-for-gtc125.ts. Value: makes every future prompt change measurable (see `gather-experiment-methodology`). |
 | Magic-string extraction | candidate | Demo event name in 6 places (item D; table in `gather-config-and-flags` §7). Audit for siblings before a bulk ticket; GTC-151 is the incident precedent. |
 | E2E lifecycle test | open gap — verified | No test walks DRAFT→CONFIRMING→FROZEN→COMPLETE end-to-end (inspected all of tests/, 33 top-level files, 35 including tests/phase-5/ — matching `gather-validation-and-evidence`'s inventory; closest is edit-item-frozen-block-test.ts, one frozen slice). Transitions live in src/lib/workflow.ts (1,037 lines). |
-| Stripe webhook integration test | open gap — verified | src/app/api/webhooks/stripe/route.ts has zero test coverage (only "webhook" hit in tests/ is the SMS inbound route, sms-infrastructure-test.ts:275). CAUTION: Stripe is a do-not-touch zone — a test may READ/exercise it with Stripe CLI fixtures but must not weaken signature verification. Ticket + founder sign-off first. |
+| Stripe webhook integration test | open gap — verified | src/app/api/webhooks/stripe/route.ts has zero test coverage (only "webhook" hit in tests/ is the SMS inbound route, the "Inbound webhook route.ts exists" assertion in Test 5 of tests/sms-infrastructure-test.ts). CAUTION: Stripe is a do-not-touch zone — a test may READ/exercise it with Stripe CLI fixtures but must not weaken signature verification. Ticket + founder sign-off first. |
 | Proxy-nudge test coverage | open gap — verified | `grep -rl proxy tests/` returns nothing. Falls out of work item A. |
 | God-file decomposition (page.tsx, 3,870 lines) | campaign-owned | Do NOT start from this skill. Load `gather-v1-v2-reconciliation-campaign` — it sequences this behind decision gates. |
 | GTC-130 (align eslint-config-next with Next major) | open ticket | Genuinely open (docs/tickets/GTC-130.md, status: open). Non-fatal build warning. |

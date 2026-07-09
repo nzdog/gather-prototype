@@ -62,7 +62,7 @@ Jargon, defined once:
 | Session | Cookie-backed session | token unique; user (Cascade) |
 | MagicLink | Email login token | token unique |
 | EventRole | User's session-level role per event (HOST/COHOST/COORDINATOR) | `@@unique([userId, eventId])` |
-| AccessToken | URL-token access for /h/ /c/ /p/ routes; scope HOST/COORDINATOR/PARTICIPANT | **`@@unique([eventId, personId, scope, teamId])`** (schema.prisma:294); event+person Cascade, team no action |
+| AccessToken | URL-token access for /h/ /c/ /p/ routes; scope HOST/COORDINATOR/PARTICIPANT | **`@@unique([eventId, personId, scope, teamId])`** (`prisma/schema.prisma — AccessToken.@@unique`); event+person Cascade, team no action |
 
 Caveat on that unique: Postgres unique indexes treat NULLs as distinct, so rows with `teamId = NULL` (host/participant tokens) are not deduplicated by the constraint itself — token-issuing code must find-before-create. (Standard Postgres semantics; stated as a caveat, not an observed bug.)
 
@@ -134,7 +134,7 @@ Fix: one-line schema change to `onDelete: SetNull` + migration `20260708005434_c
 
 ### Scar 2 — Household edit is delete-and-recreate (live, known, campaign target)
 
-`PUT /api/events/[id]/households/[householdId]` (`src/app/api/events/[id]/households/[householdId]/route.ts`) **deletes all non-primary PersonEvent rows** (line ~156) and recreates members via find-or-create. Deliberate ("simpler than diffing"), but every household edit:
+`PUT /api/events/[id]/households/[householdId]` (`src/app/api/events/[id]/households/[householdId]/route.ts`) **deletes all non-primary PersonEvent rows** (the "Delete all non-primary PersonEvent records" `personEvent.deleteMany` in the `PUT` handler) and recreates members via find-or-create. Deliberate ("simpler than diffing"), but every household edit:
 
 - wipes each member's `teamId` and role (recreated as PARTICIPANT, no team),
 - **cascades their NudgeLog history away**,
@@ -145,12 +145,12 @@ Do NOT extend or copy this pattern. Do NOT "fix" it ad hoc — it is a flagged p
 
 ### Scar 3 — latent Restrict traps (verified in schema/migration SQL, not yet observed live)
 
-- **WrapUpLink.eventId is ON DELETE RESTRICT** (`prisma/migrations/20260407010613_add_wrapup_link_model/migration.sql:48`) and the event-deletion transaction (`src/app/api/events/[id]/route.ts:195-255`) does **not** delete WrapUpLink rows. Deleting an event that has dispatched wrap-up links should fail with a FK error. UNVERIFIED at runtime — if you hit P2003 deleting an event, this is why.
+- **WrapUpLink.eventId is ON DELETE RESTRICT** (`prisma/migrations/20260407010613_add_wrapup_link_model/migration.sql — the WrapUpLink_eventId_fkey FK constraint`) and the event-deletion transaction (`src/app/api/events/[id]/route.ts` — the DELETE handler's `$transaction` ending in `tx.event.delete()`) does **not** delete WrapUpLink rows. Deleting an event that has dispatched wrap-up links should fail with a FK error. UNVERIFIED at runtime — if you hit P2003 deleting an event, this is why.
 - **Assignment.person is Restrict** — you cannot delete a Person who holds assignments without clearing them first.
 
 ## EventSetup JSONB columns (V2 Step 1 brief)
 
-One row per event (`eventId` unique). Columns (schema.prisma:938-964): `eventType`/`eventTypeOther` (strings), then JSONB per accordion section: `mainsData`, `sidesData`, `dessertsData`, `drinksData`, `setupCleanupData`, `dietaryData`, `otherNotes` (string), GTC-133's `setUpData`/`cleanUpData`/`otherJobsOtherData` (shape `{ freeText, stillDeciding }`), and `extendedCategoriesData` (keyed by config category, e.g. `entree_starters`, for the 9 categories without dedicated columns).
+One row per event (`eventId` unique). Columns (`prisma/schema.prisma — EventSetup model`): `eventType`/`eventTypeOther` (strings), then JSONB per accordion section: `mainsData`, `sidesData`, `dessertsData`, `drinksData`, `setupCleanupData`, `dietaryData`, `otherNotes` (string), GTC-133's `setUpData`/`cleanUpData`/`otherJobsOtherData` (shape `{ freeText, stillDeciding }`), and `extendedCategoriesData` (keyed by config category, e.g. `entree_starters`, for the 9 categories without dedicated columns).
 
 **GTC-152 (2026-07-08) dropped** `EventSetup.generatedData` and the entire `StructureChangeRequest` model plus its two enums — migration `20260708081323_drop_generated_data_and_structure_change_request` (5 statements, both objects empty). Older docs (`docs/moment-1-and-2-build-report.md`, `docs/moment-2-flow-document.md`) still describe generatedData and the per-section architecture — they are stale; trust `docs/tickets/GTC-146.md` and `gather-v1-v2-brief.md` instead.
 
@@ -217,7 +217,7 @@ Destructive verification scripts (e.g. `tests/verify-personevent-team-setnull.ts
 
 ### Seed drift trap (live bug, as of 2026-07-09)
 
-`prisma/seed.ts:282` creates event **"Henderson Family Christmas 2026"** but the demo routes/tests still look up **"…2025"** — demo session/token endpoints fail against a fresh seed. Known name-drift bug; the canonical six-location table and fix shape live in `gather-config-and-flags` section 7. If you touch it, fix all sites under one ticket. Also KB-004: the default seed creates a CONFIRMING (not DRAFT) event.
+`prisma/seed.ts` — the `event.create()` for **"Henderson Family Christmas 2026"** creates it, but the demo routes/tests still look up **"…2025"** — demo session/token endpoints fail against a fresh seed. Known name-drift bug; the canonical six-location table and fix shape live in `gather-config-and-flags` section 7. If you touch it, fix all sites under one ticket. Also KB-004: the default seed creates a CONFIRMING (not DRAFT) event.
 
 ## Provenance and maintenance
 

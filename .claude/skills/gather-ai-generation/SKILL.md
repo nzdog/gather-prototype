@@ -60,12 +60,12 @@ GTC-145/146 (per-section era). If a doc references it, the doc is stale
 
 ## claude.ts anatomy (as of 2026-07-09)
 
-- `DEFAULT_MODEL = 'claude-sonnet-4-6'` — `src/lib/ai/claude.ts:14`
+- `DEFAULT_MODEL = 'claude-sonnet-4-6'` — `src/lib/ai/claude.ts — DEFAULT_MODEL`
 - `DEFAULT_MAX_TOKENS = 4096`, `DEFAULT_TIMEOUT = 30000` (timeout is declared but only surfaced via `getAPIInfo`; it is NOT passed to the SDK call)
-- Default temperature is **1.0** (`config.temperature ?? 1.0`, claude.ts:51) — any call site that omits `temperature` gets maximum run-to-run variance. All five current call sites set it explicitly (see the call-site table); the 1.0 default only bites NEW call sites that omit it.
+- Default temperature is **1.0** (`config.temperature ?? 1.0`, `claude.ts — inside callClaude()`) — any call site that omits `temperature` gets maximum run-to-run variance. All five current call sites set it explicitly (see the call-site table); the 1.0 default only bites NEW call sites that omit it.
 - Missing `ANTHROPIC_API_KEY` → `callClaude` throws immediately ("ANTHROPIC_API_KEY is not configured...").
 
-**Error taxonomy** (claude.ts:85–101, `Anthropic.APIError` mapped to friendlier messages):
+**Error taxonomy** (`claude.ts — inside callClaude()`, the `Anthropic.APIError` catch branch mapped to friendlier messages):
 
 | API status | Rethrown as |
 |---|---|
@@ -74,7 +74,7 @@ GTC-145/146 (per-section era). If a doc references it, the doc is stale
 | 500 | "Anthropic API server error. Please try again later." |
 | anything else | original error rethrown |
 
-**`parseClaudeJSON<T>(response, callSiteLabel?)`** (claude.ts:111):
+**`parseClaudeJSON<T>(response, callSiteLabel?)`** (`claude.ts — parseClaudeJSON()`):
 1. If `response.stopReason === 'max_tokens'` → throws
    `AI response truncated at token limit (label) - increase maxTokens or reduce prompt complexity`.
    The `(label)` attribution exists because of GTC-142: a 17-person event 500'd when a
@@ -90,18 +90,18 @@ GTC-145/146 (per-section era). If a doc references it, the doc is stale
 
 | Call site | callSiteLabel | maxTokens | temperature | Invoked from |
 |---|---|---|---|---|
-| finalize-plan route (route.ts:233) | `finalize-plan:full` | `MAX_TOKENS_FULL_PLAN` (16384) | 0.8 | V2 Moment 2 "Generate plan" |
-| `generatePlan` (generate.ts:108) | `plan-generation` | 16384 (inline literal) | 1.0 | V1 generate route |
-| `regeneratePlan` (generate.ts:140) | `plan-regeneration` | 16384 (inline literal) | 1.0 | V1 regenerate + preview routes |
-| `generateSelectiveItems` (generate.ts:237) | `selective-regeneration` | 2048 | 1.0 | V1 generate route (keep/regenerate item IDs) |
-| suggest-resolution route (route.ts:102) | `conflict-resolution` | 2000 | 0.7 | Conflict UI |
+| `finalize-plan/route.ts` — the `callClaudeForJSON<FullPlanResponse>` call in `POST()` | `finalize-plan:full` | `MAX_TOKENS_FULL_PLAN` (16384) | 0.8 | V2 Moment 2 "Generate plan" |
+| `generate.ts` — `callClaudeForJSON` inside `generatePlan()` | `plan-generation` | 16384 (inline literal) | 1.0 | V1 generate route |
+| `generate.ts` — `callClaudeForJSON` inside `regeneratePlan()` | `plan-regeneration` | 16384 (inline literal) | 1.0 | V1 regenerate + preview routes |
+| `generate.ts` — `callClaudeForJSON` inside `generateSelectiveItems()` | `selective-regeneration` | 2048 | 1.0 | V1 generate route (keep/regenerate item IDs) |
+| `suggest-resolution/route.ts` — the `callClaudeForJSON<AISuggestion>` call in `POST()` | `conflict-resolution` | 2000 | 0.7 | Conflict UI |
 
 Note the drift: `token-limits.ts` says "do not inline literal maxTokens values" but
 generate.ts inlines 16384 twice. If you consolidate, that is a ticket, not a drive-by.
 
 ## AI call caps per event (verified in routes, 2026-07-09)
 
-`Event.aiCallsUsed` (schema.prisma:88, default 0) increments **only on success**, after
+`Event.aiCallsUsed` (`prisma/schema.prisma — Event.aiCallsUsed`, default 0) increments **only on success**, after
 parse. Cap check happens before the call. Caps are **hardcoded per route** — a known
 drift hazard (GTC-133 found 6 divergent sites when it bumped them; GTC-145 later lowered
 finalize-plan 20→10, and `regenerate/preview` checks the cap without incrementing). The
@@ -129,7 +129,7 @@ POST `/api/events/[id]/finalize-plan` (src/app/api/events/[id]/finalize-plan/rou
    `Event.guestCount` as primary headcount.)
 6. Builds `engagedCategories` in `FOOD_CATEGORY_ORDER` (defaults always engaged;
    non-defaults only if the host selected something), attaching reference items from config.
-7. `buildPlanGenerationPrompt(...)` (prompts.ts:578) → `{ system, user }`; system prompt
+7. `buildPlanGenerationPrompt(...)` (`prompts.ts`) → `{ system, user }`; system prompt
    injects `getNzNotes(eventType)` from `plan-option-tree-config.json`.
 8. ONE `callClaudeForJSON<FullPlanResponse>` — 16384 tokens, temp 0.8, label `finalize-plan:full`.
 9. Increments `aiCallsUsed`.
@@ -153,7 +153,7 @@ contains the callSiteLabel on truncation — read it.
 target 15-25/25-35/35-50/45-60 and team target 3-5..5-8) → `callClaudeForJSON` →
 `validatePlanResponse` (teams/items arrays, required fields, backfills missing
 `criticalReason` with a default + warning). Called by the V1 generate route, which the
-god file invokes (`src/app/plan/[eventId]/page.tsx:889` and `:1018`).
+god file invokes (`src/app/plan/[eventId]/page.tsx — handleGeneratePlan()` and `handleReviewRegenerateSelected()`).
 
 **Mock fallback matrix** (trap-dense — memorize this):
 
@@ -178,12 +178,12 @@ V1 items attach to teams by **exact string equality** on `teamName`. Claude retu
 `{ success: true, items: 0 }`. The fix has three legs — keep all three intact:
 
 1. **Prompt leg** — `PLAN_GENERATION_SYSTEM_PROMPT` "CRITICAL CONSISTENCY RULE — TEAM
-   NAMES" (prompts.ts:156-160) and the same rule in `SELECTIVE_REGENERATION_SYSTEM_PROMPT`.
-2. **Detection leg** — `findMissingTeamNames(items, existingTeamNames)` (generate.ts:588).
+   NAMES" (`prompts.ts` — the `CRITICAL CONSISTENCY RULE — TEAM NAMES` block) and the same rule in `SELECTIVE_REGENERATION_SYSTEM_PROMPT`.
+2. **Detection leg** — `findMissingTeamNames(items, existingTeamNames)` (`generate.ts — findMissingTeamNames()`).
 3. **Route leg** — generate route returns **422 with `missingTeamNames`** instead of
-   silent success: selective path validates BEFORE any DB write (generate/route.ts:63-75);
+   silent success: selective path validates BEFORE any DB write (`generate/route.ts` — the `missingTeamNames.length > 0` 422 guard in `POST()`);
    initial path returns 422 if `itemsCreated === 0 && aiResponse.items.length > 0`
-   (generate/route.ts:266-280).
+   (`generate/route.ts` — the `itemsCreated === 0` 422 guard in `POST()`).
 
 Regression tests (pure-function, no DB, no server):
 ```bash
@@ -196,10 +196,10 @@ them; they are designed to fail on weakened wording.
 **TEAM NAMES INSTRUCTION contract** (guided builder): when the host picks categories, the
 user prompt appends `TEAM NAMES INSTRUCTION: Use exactly these team names, in this order:
 [...]` plus a `CATEGORY RESTRICTION` block, and the system prompt has a matching
-"HOST-PROVIDED TEAM NAMES" section (prompts.ts:162-163). TRAP: this instruction text
-exists in **two copies** — `compileGuidedPrompt` in `src/lib/ai/generate.ts:495` (currently
+"HOST-PROVIDED TEAM NAMES" section (`prompts.ts` — the `HOST-PROVIDED TEAM NAMES` block). TRAP: this instruction text
+exists in **two copies** — `compileGuidedPrompt` in `src/lib/ai/generate.ts` (currently
 has zero importers) and `compilePromptInline` in
-`src/components/plan/GuidedPlanBuilder.tsx:182` (the one the UI actually runs, duplicated
+`src/components/plan/GuidedPlanBuilder.tsx` (the one the UI actually runs, duplicated
 client-side to avoid importing the server SDK chain). Editing only generate.ts changes
 nothing the user sees. Keep both in sync or ticket the consolidation.
 
@@ -207,11 +207,11 @@ nothing the user sees. Keep both in sync or ticket the consolidation.
 
 | Symbol in `src/lib/ai/prompts.ts` | Era | Used by | NZ rules source |
 |---|---|---|---|
-| `PLAN_GENERATION_SYSTEM_PROMPT` (line 8) | V1 (live) | `generatePlan` → V1 generate route | Hardcoded in prompt text ("NZ CULTURAL OVERRIDE", ham/lamb, L&P, no winter drinks Nov–Mar) |
-| `PLAN_REGENERATION_SYSTEM_PROMPT` (line 173) | V1 (live) | `regeneratePlan` | **None — no NZ rules in this prompt** |
-| `SELECTIVE_REGENERATION_SYSTEM_PROMPT` (line 235) | V1 (live) | `generateSelectiveItems` | None |
+| `PLAN_GENERATION_SYSTEM_PROMPT` | V1 (live) | `generatePlan` → V1 generate route | Hardcoded in prompt text ("NZ CULTURAL OVERRIDE", ham/lamb, L&P, no winter drinks Nov–Mar) |
+| `PLAN_REGENERATION_SYSTEM_PROMPT` | V1 (live) | `regeneratePlan` | **None — no NZ rules in this prompt** |
+| `SELECTIVE_REGENERATION_SYSTEM_PROMPT` | V1 (live) | `generateSelectiveItems` | None |
 | `buildGenerationPrompt` / `buildRegenerationPrompt` / `buildSelectiveRegenerationPrompt` | V1 (live) | as above | — |
-| `buildPlanGenerationPrompt` (line 578) | **V2 — the current main path** | finalize-plan route | Injected per event type via `getNzNotes()` from `plan-option-tree-config.json` |
+| `buildPlanGenerationPrompt` | **V2 — the current main path** | finalize-plan route | Injected per event type via `getNzNotes()` from `plan-option-tree-config.json` |
 | `RESOLUTION_SYSTEM_PROMPT` | V1-era (live) | inline in suggest-resolution route | None |
 
 **Trap:** the V1 prompts read like the "main" prompts (they are first in the file, long,
@@ -282,7 +282,7 @@ FIRST → measure before/after on the same fixture → ship/revert decision in t
 - [ ] **Silent item drop** — any new code path that skips items on `teamName` mismatch must surface 422 + `missingTeamNames`, never `success: true` with 0 items (pre-GTC-030 behavior).
 - [ ] **Truncation without labels** — every new `callClaudeForJSON` gets a `callSiteLabel` (GTC-142).
 - [ ] **Editing V1 prompts thinking they're V2** — Moment 2 uses `buildPlanGenerationPrompt` only.
-- [ ] **Temperature** — default is 1.0 if omitted (claude.ts:51); V1 calls run 1.0, finalize-plan 0.8, suggest-resolution 0.7. One good/bad run proves nothing.
+- [ ] **Temperature** — default is 1.0 if omitted (`claude.ts — inside callClaude()`); V1 calls run 1.0, finalize-plan 0.8, suggest-resolution 0.7. One good/bad run proves nothing.
 - [ ] **Silent mock data** — `regeneratePlan`/`generateSelectiveItems` return mock on API errors; check the `reasoning` string before trusting output.
 - [ ] **Two copies of the guided prompt** — generate.ts `compileGuidedPrompt` vs GuidedPlanBuilder.tsx `compilePromptInline`; the UI uses the inline one.
 - [ ] **Hardcoded per-route caps** — changing `AI_CALL_LIMIT` means grepping all sites, not editing one.

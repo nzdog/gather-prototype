@@ -78,7 +78,7 @@ re-count from `prisma/seed.ts` before citing them in a ticket):
 | Entity | Count | Detail |
 |---|---|---|
 | Person | 43 | 5 families: Hendersons 12, Nguyens 8, Turners 8, Patel-Hendersons 8, O'Briens 7. Host = Sarah Henderson (phone only, no email). 4 people have neither email nor phone (UNTRACKABLE tier). |
-| Event | 1 | `Henderson Family Christmas 2026` (seed.ts:282), **status CONFIRMING not DRAFT** (seed.ts:285, this is KB-004 — do not "fix" it), `isDemo: true`, 24–26 Dec 2026 NZDT via `makeNzdtChristmasDate` from `src/lib/timezone.ts`. |
+| Event | 1 | `Henderson Family Christmas 2026` (`prisma/seed.ts` — the `name` field of the demo `prisma.event.create()`), **status CONFIRMING not DRAFT** (`prisma/seed.ts` — the `status` field of that same event `.create()`, this is KB-004 — do not "fix" it), `isDemo: true`, 24–26 Dec 2026 NZDT via `makeNzdtChristmasDate` from `src/lib/timezone.ts`. |
 | Day | 3 | Christmas Eve / Christmas Day / Boxing Day. |
 | Team | 8 | Starters & Nibbles, Mains, Salads & Sides, Desserts, Drinks, Kids Zone, Setup & Equipment, Cleanup — each with a coordinator. |
 | PersonEvent | 43 | One per person, with role + reachabilityTier + contactMethod derived from phone/email presence. |
@@ -149,7 +149,7 @@ Anatomy of the exemplar (verify before copying — it's the template):
   safe but accumulates duplicate events (clean up with `list-events` + manual delete).
 - Creates a DRAFT event (Moment 2 Step 1 is the active flow for DRAFT), 6 households
   with realistic member mixes (PRIMARY_CONTACT / PARTNER / CHILD, `littleCount`).
-- **Host-user resolution order** (seed-gtc-133-test-event.ts:84-101):
+- **Host-user resolution order** (`scripts/seed-gtc-133-test-event.ts` — the host-user resolution block at the top of `main()`):
   1. `SEED_HOST_EMAIL` env var — creates the User if it doesn't exist;
   2. `nigel@mckorbett.co.nz` (the founder's dev login);
   3. first existing User by `createdAt`;
@@ -182,7 +182,7 @@ Postgres directly via Prisma (needs `DATABASE_URL` only).
 | `scripts/seed-rsvp-test.ts` | RSVP-flow test data (Ticket 2.2 era). | no | DB |
 | `scripts/check-rsvp-eligibility.ts` | Read-only RSVP eligibility diagnostic (48h window logic). | no | DB |
 | `scripts/test-generate-plan.ts` | Creates an event and runs `generatePlan` end-to-end through `src/lib/ai/generate.ts`. | no | DB + `ANTHROPIC_API_KEY` (mock fallback without it) |
-| `scripts/triage-unknown-routes.ts` | Categorises UNKNOWN-auth routes by risk from `SECURITY_ROUTE_INVENTORY.md`. **Currently broken from a clean run:** it expects the file at repo root (triage-unknown-routes.ts:193) but the doc now lives at `docs/05_ops/security/SECURITY_ROUTE_INVENTORY.md`, so it exits "not found". Fixing the path is a (small) GTC ticket. | no | the inventory file |
+| `scripts/triage-unknown-routes.ts` | Categorises UNKNOWN-auth routes by risk from `SECURITY_ROUTE_INVENTORY.md`. **Currently broken from a clean run:** it expects the file at repo root (`scripts/triage-unknown-routes.ts` — `main()` joins `SECURITY_ROUTE_INVENTORY.md` onto `projectRoot`) but the doc now lives at `docs/05_ops/security/SECURITY_ROUTE_INVENTORY.md`, so it exits "not found". Fixing the path is a (small) GTC ticket. | no | the inventory file |
 | `scripts/update-demo-dates.sql` | GTC-050 one-off SQL: bump prod demo event 2025→2026. Kept as the provenance of the section-3 drift; do not re-run blindly. | no | psql |
 | `scripts/test-phase-*.ts`, `test-magic-link-*.ts`, `test-host-claim.ts`, `test-auth-fix.ts` | Older HTTP-level flow checks. | **yes** (fetch localhost:3000) | DB + server |
 | `scripts/test-tnz-sms.ts` | Live TNZ SMS send (also `npm run test:tnz-sms`). Sends a REAL SMS — needs `TNZ_AUTH_TOKEN`; don't run casually. | no | TNZ creds |

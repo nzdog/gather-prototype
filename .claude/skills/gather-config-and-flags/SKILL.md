@@ -58,19 +58,19 @@ table in `GATHER-BUILD-CONSTANTS.md` (~line 200) — with one drift, noted below
 
 | Axis | Guard | When SET / true | When UNSET / false | Prod vs dev notes |
 |---|---|---|---|---|
-| AI availability | `ANTHROPIC_API_KEY` via `isClaudeAvailable()` (`src/lib/ai/claude.ts:157`) | Real Claude calls (`DEFAULT_MODEL = 'claude-sonnet-4-6'`, `claude.ts:14`) | **Silent mock fallback**: `generate.ts` logs `[AI Generate] Claude API not available` and returns `generateMockPlan()` — plausible-looking fake items whose `reasoning` says "fallback data because Claude API is not available" | Same in both. If plans look generic/wrong, check the reasoning string and server log FIRST before debugging prompts |
-| SMS to NZ/AU | `TNZ_AUTH_TOKEN` via `isTnzEnabled()` (`src/lib/sms/tnz-client.ts:23`) | Numbers starting `+64`/`+61` sent via TNZ | `sendSms` returns `blocked: 'SMS_DISABLED'`, error "TNZ not configured" | Required in prod — **Twilio does not deliver to NZ**. NOT listed in `.env.example` (drift; it IS in the constants-file env table) |
-| SMS elsewhere | `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` + `TWILIO_PHONE_NUMBER` via `isSmsEnabled()` (`src/lib/sms/twilio-client.ts:23`) | Non-+64/+61 numbers sent via Twilio | `blocked: 'SMS_DISABLED'`, console warn suggests email fallback | Optional; NZ-focused product rarely needs it |
-| Email | `RESEND_API_KEY` (`src/lib/email.ts:12`, lazy client) | Magic links, nudge emails, welcome emails send | Resend client constructed with `undefined` key → sends fail at call time (no up-front guard) | `EMAIL_FROM` falls back to `'Gather <noreply@gather.app>'` |
-| Stripe | `STRIPE_SECRET_KEY` (`src/lib/stripe.ts:4-5`) | Payments work | **Module throws at import time** — any route importing `@/lib/stripe` 500s | Event creation (`POST /api/events`) returns **402** without a paid `stripeSessionId` (`src/app/api/events/route.ts:63-83`). Webhook additionally needs `STRIPE_WEBHOOK_SECRET`; price set by `STRIPE_PRICE_ID` |
-| Cron auth | `CRON_SECRET` (`src/app/api/cron/nudges/route.ts:21`, `wrap-up-dispatch/route.ts:15`) | Requests need `?secret=` or `Authorization: Bearer` | **Check is `if (CRON_SECRET && ...)` — unset secret leaves both cron endpoints OPEN to anyone** | Always set in prod. Vercel calls them per `vercel.json`: nudges `*/15 * * * *`, wrap-up-dispatch `*/10 * * * *` |
-| Demo mode | `Event.isDemo` (data flag, `prisma/schema.prisma:19`, default false) | Token APIs (`/api/h|c|p/[token]`) include `isDemo` in responses; UI shows demo affordances | Normal event | Set only by `prisma/seed.ts:286`. NOT an env var |
-| Demo DB reset | `NODE_ENV` (`src/app/api/demo/reset/route.ts:15`) | dev: `POST /api/demo/reset` force-resets DB (`prisma db push --force-reset` + seed), **no auth** | prod: returns 404 | Dev-only escape hatch |
-| Host claim bypass | `NODE_ENV` (`src/app/api/h/[token]/route.ts:28`) | Non-dev: host token route computes `authStatus` unclaimed/requires_signin | Dev: always `'authenticated'` (demo convenience) | Explains "why doesn't sign-in gate fire locally" |
-| Link generation | `NEXT_PUBLIC_APP_URL` | Base URL in magic links, share links, nudge SMS/email links, billing return URLs | Falls back to `http://localhost:3000` (e.g. `src/lib/email.ts:18`) | Wrong value in prod = links point at localhost. Consumers: `src/lib/email.ts`, `src/lib/tokens.ts`, `src/lib/sms/nudge-sender.ts`, `src/lib/sms/proxy-nudge-sender.ts`, `src/app/start/[token]/route.ts`, `src/app/api/auth/claim/route.ts`, `src/app/api/events/[id]/shared-link/route.ts`, `src/app/api/billing/{checkout,portal}/route.ts` |
-| Dev conflicts page | `NODE_ENV` (`src/app/dev/conflicts/page.tsx:331`) | Dev-only debug page | Hidden outside development | — |
+| AI availability | `ANTHROPIC_API_KEY` via `isClaudeAvailable()` (`src/lib/ai/claude.ts`) | Real Claude calls (`DEFAULT_MODEL = 'claude-sonnet-4-6'`, `claude.ts — DEFAULT_MODEL`) | **Silent mock fallback**: `generate.ts` logs `[AI Generate] Claude API not available` and returns `generateMockPlan()` — plausible-looking fake items whose `reasoning` says "fallback data because Claude API is not available" | Same in both. If plans look generic/wrong, check the reasoning string and server log FIRST before debugging prompts |
+| SMS to NZ/AU | `TNZ_AUTH_TOKEN` via `isTnzEnabled()` (`src/lib/sms/tnz-client.ts`) | Numbers starting `+64`/`+61` sent via TNZ | `sendSms` returns `blocked: 'SMS_DISABLED'`, error "TNZ not configured" | Required in prod — **Twilio does not deliver to NZ**. NOT listed in `.env.example` (drift; it IS in the constants-file env table) |
+| SMS elsewhere | `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` + `TWILIO_PHONE_NUMBER` via `isSmsEnabled()` (`src/lib/sms/twilio-client.ts`) | Non-+64/+61 numbers sent via Twilio | `blocked: 'SMS_DISABLED'`, console warn suggests email fallback | Optional; NZ-focused product rarely needs it |
+| Email | `RESEND_API_KEY` (`src/lib/email.ts — getResendClient()`, lazy client) | Magic links, nudge emails, welcome emails send | Resend client constructed with `undefined` key → sends fail at call time (no up-front guard) | `EMAIL_FROM` falls back to `'Gather <noreply@gather.app>'` |
+| Stripe | `STRIPE_SECRET_KEY` (`src/lib/stripe.ts` — the module-level guard before the `stripe` export) | Payments work | **Module throws at import time** — any route importing `@/lib/stripe` 500s | Event creation (`POST /api/events`) returns **402** without a paid `stripeSessionId` (`src/app/api/events/route.ts — inside POST(), the missing-stripeSessionId and non-paid guards`). Webhook additionally needs `STRIPE_WEBHOOK_SECRET`; price set by `STRIPE_PRICE_ID` |
+| Cron auth | `CRON_SECRET` (`src/app/api/cron/nudges/route.ts` — the `CRON_SECRET && …` check in `GET()`, same check in `wrap-up-dispatch/route.ts`) | Requests need `?secret=` or `Authorization: Bearer` | **Check is `if (CRON_SECRET && ...)` — unset secret leaves both cron endpoints OPEN to anyone** | Always set in prod. Vercel calls them per `vercel.json`: nudges `*/15 * * * *`, wrap-up-dispatch `*/10 * * * *` |
+| Demo mode | `Event.isDemo` (data flag, `prisma/schema.prisma — Event.isDemo field`, default false) | Token APIs (`/api/h|c|p/[token]`) include `isDemo` in responses; UI shows demo affordances | Normal event | Set only by `prisma/seed.ts` — the `isDemo: true` line in the demo `event.create()`. NOT an env var |
+| Demo DB reset | `NODE_ENV` (`src/app/api/demo/reset/route.ts` — the `NODE_ENV === 'production'` guard in `POST()`) | dev: `POST /api/demo/reset` force-resets DB (`prisma db push --force-reset` + seed), **no auth** | prod: returns 404 | Dev-only escape hatch |
+| Host claim bypass | `NODE_ENV` (`src/app/api/h/[token]/route.ts` — the `authStatus` / `NODE_ENV !== 'development'` block in `GET()`) | Non-dev: host token route computes `authStatus` unclaimed/requires_signin | Dev: always `'authenticated'` (demo convenience) | Explains "why doesn't sign-in gate fire locally" |
+| Link generation | `NEXT_PUBLIC_APP_URL` | Base URL in magic links, share links, nudge SMS/email links, billing return URLs | Falls back to `http://localhost:3000` (e.g. `src/lib/email.ts — inside sendMagicLinkEmail()`) | Wrong value in prod = links point at localhost. Consumers: `src/lib/email.ts`, `src/lib/tokens.ts`, `src/lib/sms/nudge-sender.ts`, `src/lib/sms/proxy-nudge-sender.ts`, `src/app/start/[token]/route.ts`, `src/app/api/auth/claim/route.ts`, `src/app/api/events/[id]/shared-link/route.ts`, `src/app/api/billing/{checkout,portal}/route.ts` |
+| Dev conflicts page | `NODE_ENV` (`src/app/dev/conflicts/page.tsx` — the `NODE_ENV !== 'development'` guard in `ConflictHarnessPage()`) | Dev-only debug page | Hidden outside development | — |
 
-**SMS provider routing is by prefix, not env:** `src/lib/sms/send-sms.ts:11` —
+**SMS provider routing is by prefix, not env:** `src/lib/sms/send-sms.ts — TNZ_COUNTRY_CODES` —
 `TNZ_COUNTRY_CODES = ['+64', '+61']`; anything else goes to Twilio. Order of gates in
 `sendSms`: E.164 format check → **opt-out check (hard legal gate, runs before provider
 config so a missing token never masks OPTED_OUT)** → provider-config check → send.
@@ -86,10 +86,10 @@ NZ cultural notes) is **data**, not code:
 | Piece | Location | Role |
 |---|---|---|
 | `plan-option-tree-config.json` | `src/lib/ai/plan-option-tree-config.json` | 10 occasion keys: `christmas, birthday_adult, birthday_kids, bbq_casual, wedding_reception, baby_shower, engagement_party, easter, anniversary, farewell`. Each has `label`, `nzNotes`, `defaultCategories`, `categories` (levels with `options`/`dependsOn`/`multiSelect`/`freeText`) |
-| `config-loader.ts` | `src/lib/ai/config-loader.ts` | The ONLY module that reads the JSON. Exports (verified): `CONFIG_EVENT_TYPES` (line 86), `LEGACY_EVENT_TYPE_MAP` (line 58), `getConfigKey`, `getAccordionDefaults`, `getNzNotes`, `getDefaultCategories`, `getCategoryLevels`, `getSectionReferenceItems` |
+| `config-loader.ts` | `src/lib/ai/config-loader.ts` | The ONLY module that reads the JSON. Exports (verified): `CONFIG_EVENT_TYPES`, `LEGACY_EVENT_TYPE_MAP`, `getConfigKey`, `getAccordionDefaults`, `getNzNotes`, `getDefaultCategories`, `getCategoryLevels`, `getSectionReferenceItems` |
 | `OptionTree` component | `src/components/shared/OptionTree.tsx` | Renders `OptionTreeLevel[]` produced by `getCategoryLevels` |
-| UI consumer | `src/components/plan/Moment2Step1Modal.tsx:477` | Event-type chips render from `CONFIG_EVENT_TYPES.map(...)` |
-| API validator | `src/app/api/events/[id]/setup/route.ts:137` | Autosave validates `body.eventType` against the imported `CONFIG_EVENT_TYPES` (the GTC-151 fix) and returns it in the 400 payload |
+| UI consumer | `src/components/plan/Moment2Step1Modal.tsx` — the `CONFIG_EVENT_TYPES.map(...)` chip render | Event-type chips render from `CONFIG_EVENT_TYPES.map(...)` |
+| API validator | `src/app/api/events/[id]/setup/route.ts` — the `body.eventType` / `CONFIG_EVENT_TYPES.includes` check | Autosave validates `body.eventType` against the imported `CONFIG_EVENT_TYPES` (the GTC-151 fix) and returns it in the 400 payload |
 | AI prompts | `getNzNotes` / `getSectionReferenceItems` feed the plan-generation prompt | NZ correctness (ham/lamb, L&P, summer Christmas) comes from `nzNotes` in this JSON |
 
 **`CONFIG_EVENT_TYPES` is the single source of truth for event types** — 11 labels
@@ -106,9 +106,9 @@ NZ cultural notes) is **data**, not code:
   rows exist (GTC-151 audit).
 - `extendedCategoriesData` (extra per-category selections beyond the four accordions)
   lives on EventSetup; the API validates only its *shape* (plain object of objects,
-  `setup/route.ts:162-176`), not its keys — keys come from the JSON's category names.
-- Accordion food defaults are **unchecked** by default (GTC-126, comment at
-  `config-loader.ts:172-176`); user-typed "+ Add your own" items default checked.
+  the `extendedCategoriesData` shape gate in `setup/route.ts`), not its keys — keys come from the JSON's category names.
+- Accordion food defaults are **unchecked** by default (GTC-126, the `included: false`
+  block with its GTC-126 comment in `config-loader.ts`); user-typed "+ Add your own" items default checked.
 
 ### To add a new event type
 
@@ -143,7 +143,7 @@ the UI renders from. Never copy the values. Silent 4xx on autosave = data loss.
       second copy anywhere — not in a route, not in a test fixture.
 - [ ] **UI reads it.** Render options/choices from the import, never a literal list.
 - [ ] **API validates against it.** Import the same symbol in the route; include the
-      allowed values in the 400 payload (pattern: `setup/route.ts:137-140`).
+      allowed values in the 400 payload (pattern: the `CONFIG_EVENT_TYPES.includes` check in `setup/route.ts`).
 - [ ] **Test asserts parity.** Add a tsx test (see `gather-validation-and-evidence`)
       that greps/imports both sides and fails if they diverge — or better, asserts
       the route module literally imports the constant.
@@ -163,7 +163,7 @@ the UI renders from. Never copy the values. Silent 4xx on autosave = data loss.
 restating the numbers; when a cap changes, update it HERE (and re-run the grep in
 Provenance).
 
-`Event.aiCallsUsed` (`prisma/schema.prisma:88`, default 0) increments per real AI call;
+`Event.aiCallsUsed` (`prisma/schema.prisma — Event.aiCallsUsed field`, default 0) increments per real AI call;
 each route checks a **locally-defined** `AI_CALL_LIMIT` and returns **429** ("AI call
 limit reached for this event") at the cap. History: GTC-090 introduced cap 10;
 GTC-133 raised four Moment 2 sites to 20; the GTC-145/146 single-call rewrite brought
@@ -171,20 +171,20 @@ some back to 10. Current sites:
 
 | Route | `AI_CALL_LIMIT` | Location |
 |---|---|---|
-| `POST /api/events/[id]/generate` | 10 | `src/app/api/events/[id]/generate/route.ts:43` |
-| `POST /api/events/[id]/finalize-plan` (Moment 2 single call) | 10 | `src/app/api/events/[id]/finalize-plan/route.ts:21` |
-| `.../conflicts/[conflictId]/suggest-resolution` | 10 | `.../suggest-resolution/route.ts:83` |
-| `POST /api/events/[id]/regenerate` | 20 | `src/app/api/events/[id]/regenerate/route.ts:39` |
-| `POST /api/events/[id]/regenerate/preview` | 20 (blocks, does **not** increment) | `.../regenerate/preview/route.ts:36` |
+| `POST /api/events/[id]/generate` | 10 | `src/app/api/events/[id]/generate/route.ts — AI_CALL_LIMIT` |
+| `POST /api/events/[id]/finalize-plan` (Moment 2 single call) | 10 | `src/app/api/events/[id]/finalize-plan/route.ts — AI_CALL_LIMIT` (module-level) |
+| `.../conflicts/[conflictId]/suggest-resolution` | 10 | `.../suggest-resolution/route.ts — AI_CALL_LIMIT` |
+| `POST /api/events/[id]/regenerate` | 20 | `src/app/api/events/[id]/regenerate/route.ts — AI_CALL_LIMIT` |
+| `POST /api/events/[id]/regenerate/preview` | 20 (blocks, does **not** increment) | `.../regenerate/preview/route.ts — AI_CALL_LIMIT` |
 
 The limit is duplicated per route (5 copies) — a known magic-number smell of exactly
 the class Section 3 bans. If you touch a cap, consider centralizing, but that is a
 ticket of its own, not a drive-by.
 
 Token caps (different axis — response size, not call count): `MAX_TOKENS_FULL_PLAN =
-16384` in `src/lib/ai/token-limits.ts:30` (sole export; the file's doc-comment says
+16384` in `src/lib/ai/token-limits.ts — MAX_TOKENS_FULL_PLAN` (sole export; the file's doc-comment says
 do NOT inline literal maxTokens at Moment 2 call sites). V1 paths in
-`src/lib/ai/generate.ts` still inline `16384`/`2048`; `claude.ts:15` default 4096.
+`src/lib/ai/generate.ts` still inline `16384`/`2048`; `claude.ts — DEFAULT_MAX_TOKENS` default 4096.
 Cap-hit symptom: `stopReason === 'max_tokens'` → `parseClaudeJSON` throws with a
 `callSiteLabel` (GTC-142). Prompt/parsing details: load `gather-ai-generation`.
 
@@ -197,13 +197,13 @@ with a ticket.
 
 | Constant | Value | Where |
 |---|---|---|
-| Quiet hours | 21:00–08:00 Pacific/Auckland; deferred sends go out 08:05 | `quiet-hours.ts:6-8` (`QUIET_START_HOUR = 21`, `QUIET_END_HOUR = 8`, `DEFER_TO_MINUTE = 5`) |
-| Nudge ladder | 24h then 48h after anchor, one send each, tracked via `nudge24hSentAt`/`nudge48hSentAt` | `nudge-eligibility.ts:51-52` (inline `24 * 60 * 60 * 1000` etc., no named constants) |
-| NOT_SURE forced conversion | RSVP `NOT_SURE` older than 48h gets a follow-up | `nudge-eligibility.ts:218-233` |
+| Quiet hours | 21:00–08:00 Pacific/Auckland; deferred sends go out 08:05 | `quiet-hours.ts` (`QUIET_START_HOUR = 21`, `QUIET_END_HOUR = 8`, `DEFER_TO_MINUTE = 5`) |
+| Nudge ladder | 24h then 48h after anchor, one send each, tracked via `nudge24hSentAt`/`nudge48hSentAt` | `nudge-eligibility.ts — inside findNudgeCandidates()` (inline `24 * 60 * 60 * 1000` etc., no named constants) |
+| NOT_SURE forced conversion | RSVP `NOT_SURE` older than 48h gets a follow-up | `nudge-eligibility.ts — findRsvpFollowupCandidates()` |
 | Cron cadence | nudges every 15 min, wrap-up dispatch every 10 min | `vercel.json` |
 
-Quiet hours are enforced in the senders (`nudge-sender.ts:115,235`,
-`proxy-nudge-sender.ts:90`), not in the cron route — the cron fires 24/7 and the
+Quiet hours are enforced in the senders (the `isQuietHours()` checks in `nudge-sender.ts — processNudges()` and `processRsvpFollowupNudges()`,
+and in `proxy-nudge-sender.ts — processProxyNudges()`), not in the cron route — the cron fires 24/7 and the
 sender defers.
 
 ---
@@ -219,7 +219,7 @@ auto-generates it.
 - Consumer: `tests/security-inventory-gate.ts` (reads it from cwd; **not wired** into
   `package.json` scripts — run manually with `npx tsx tests/security-inventory-gate.ts`).
 - `scripts/triage-unknown-routes.ts` parses `SECURITY_ROUTE_INVENTORY.md` and expects
-  it at the **repo root** (`triage-unknown-routes.ts:193`), but the file actually
+  it at the **repo root** (the `SECURITY_ROUTE_INVENTORY.md` path built in `triage-unknown-routes.ts — main()`), but the file actually
   lives at `docs/05_ops/security/SECURITY_ROUTE_INVENTORY.md` — the script errors
   as-is. Fix the path or copy the file before trusting its output.
 - If you add an API route, add its classification entry in the same change. Do not
@@ -238,15 +238,16 @@ The demo event is found **by name string**, and the string has drifted:
 
 | Location | Value |
 |---|---|
-| `prisma/seed.ts:282` (creates it; sets `isDemo: true` at :286) | `Henderson Family Christmas **2026**` |
-| `src/app/api/demo/tokens/route.ts:6` | `Henderson Family Christmas **2025**` |
-| `src/app/api/demo/session/route.ts:6` | `Henderson Family Christmas **2025**` |
-| `tests/demo-endpoints-test.ts:44` | `2025` |
-| `src/app/demo/page.tsx:143` (display copy) | `2025` |
+| `prisma/seed.ts` — the `name:` field in the demo `event.create()` (same call sets `isDemo: true`) | `Henderson Family Christmas **2026**` |
+| `src/app/api/demo/tokens/route.ts — DEMO_EVENT_NAME` | `Henderson Family Christmas **2025**` |
+| `src/app/api/demo/session/route.ts — DEMO_EVENT_NAME` | `Henderson Family Christmas **2025**` |
+| `tests/demo-endpoints-test.ts — DEMO_EVENT_NAME` | `2025` |
+| `src/app/demo/page.tsx` — the Step 1 accordion display copy (`&ldquo;Henderson Family Christmas 2025&rdquo;` list item) | `2025` |
 | `scripts/update-demo-dates.sql` | renames 2025 → 2026 in-place |
 
 Consequences against a fresh seed: `POST /api/demo/session` and `/api/demo/tokens`
-404 ("Demo event not found"). Additionally `tests/demo-ui-isolation.ts:70-71` asserts
+404 ("Demo event not found"). Additionally the "Participant API identifies demo event
+by known event name" assertion in `tests/demo-ui-isolation.ts` asserts
 the *participant API source code* contains the 2025 string, but
 `src/app/api/p/[token]/route.ts` now derives `isDemo` from `event.isDemo` and contains
 no Henderson string at all — so `npm run test:demo-ui` has a failing assertion

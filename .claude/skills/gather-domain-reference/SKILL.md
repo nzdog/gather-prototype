@@ -39,7 +39,7 @@ This skill defines vocabulary and product requirements. It changes nothing.
   holding the plan in her head. Gather turns the plan into an external, confirmable state that can
   **freeze** into shared reality.
 - **Consequence for all generated output**: proportionality and realism are product requirements,
-  not style. The V1 system prompt (`src/lib/ai/prompts.ts` line 26) codifies: *"only say 'must' for
+  not style. The V1 system prompt (`PLAN_GENERATION_SYSTEM_PROMPT` in `src/lib/ai/prompts.ts`) codifies: *"only say 'must' for
   calculated requirements, use 'suggest' for heuristics"*. The V2 prompt codifies: *"Realism beats
   completeness"* — the plan must look like something a real host would actually shop for.
 - **Payment model**: per-event one-time **$12.00 NZD** Stripe checkout —
@@ -92,7 +92,7 @@ Traps and obligations:
   they can never receive assignments, nudges, or links. They DO count for quantities.
 - **Canonical headcount** (GTC-136 lesson — never read `Event.guestCount` first): aggregate over
   households as `1 + (partner?1:0) + helpers.length + littleCount + guests.length` — see the
-  comment-marked block in `src/app/plan/[eventId]/page.tsx` ("Canonical headcount", ~line 1808).
+  comment-marked block in `src/app/plan/[eventId]/page.tsx` ("Canonical headcount").
   `Event.guestCount` is only a fallback when households aren't loaded.
 - **Person dedupe is email-only**: household create finds existing `Person` by email; members
   without email become new `Person` rows. Combined with the household PUT's delete-and-recreate
@@ -175,7 +175,8 @@ What conflicts gate (`src/lib/workflow.ts`):
   acknowledgements (`CRITICAL_CONFLICT_UNACKNOWLEDGED`), or any critical item has an
   unacknowledged PLACEHOLDER quantity, or the event has <1 team or <1 item.
 - **CONFIRMING → FROZEN is NEVER blocked by unassigned items** (verified 2026-07-09). The
-  transition route (`src/app/api/events/[id]/transition/route.ts:90`) calls
+  transition route (`src/app/api/events/[id]/transition/route.ts` — `POST()`, the
+  CONFIRMING → FROZEN branch) calls
   `checkFreezeReadiness()`, which returns **warnings only**: `UNASSIGNED_ITEMS`,
   `LOW_COMPLIANCE` (<80%), `CRITICAL_GAPS` (critical item without an ACCEPTED assignment).
   The only hard requirement is a `freezeReason` string when compliance is below 80%.

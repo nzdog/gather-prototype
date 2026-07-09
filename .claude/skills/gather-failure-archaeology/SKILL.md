@@ -215,7 +215,7 @@ cause: the AI never saw the whole plan at once, so it could not coordinate.
 - **STATUS: SETTLED — with a twist.** The bumped constants were later DELETED with the per-section
   infrastructure; as of 2026-07-09 `src/lib/ai/token-limits.ts` exports only
   `MAX_TOKENS_FULL_PLAN = 16384`. What survives is the diagnostic pattern: `callSiteLabel` in
-  `src/lib/ai/claude.ts` (lines 23, 111–113, 151).
+  `src/lib/ai/claude.ts`.
 - **If you are tempted to** add a new Claude call without a `callSiteLabel`, or to debug a 500 whose
   log says "AI response truncated": label first, then check `stopReason`/token budget before blaming
   the prompt. Budget-sizing guidance: `gather-ai-generation`.
@@ -226,7 +226,7 @@ cause: the AI never saw the whole plan at once, so it could not coordinate.
   GTC-141 (`d8fb530`) redesigned plan-view row interactions and **removed reorder entirely** — the
   hover-only arrows were useless on touch, and the use case wasn't strong enough to justify another
   mechanism (ticket: "Reorder removed entirely — user is on laptop, doesn't need reorder").
-- **Vestige:** `Item.displayOrder Int?` remains in `prisma/schema.prisma` (line 229, indexed with
+- **Vestige:** `Item.displayOrder Int?` remains in `prisma/schema.prisma` (indexed with
   `[teamId, displayOrder]`) and is still written/read for stable sort order in several routes and
   `Moment2PlanView.tsx`. Only the host-facing reorder UI is gone.
 - **STATUS: KNOWN-TRADEOFF.** The column is not dead — do not drop it in a prune without checking
@@ -244,7 +244,7 @@ cause: the AI never saw the whole plan at once, so it could not coordinate.
   finalize-plan's `deleteMany` of GENERATED teams on every re-run, regenerate's team deletes).
   RED demo: deleting the seeded 7-member "Starters & Nibbles" team dropped the event's PersonEvents
   43 → 36.
-- **Fix:** `da6c007` — one relation change to `onDelete: SetNull` (`schema.prisma:169`), migration
+- **Fix:** `da6c007` — one relation change to `onDelete: SetNull` (`schema.prisma` — `PersonEvent.team` relation), migration
   `20260708005434_change_person_event_team_set_null`. `teamId` was already nullable.
 - **STATUS: SETTLED.**
 - **If you are tempted to** add a new relation with `onDelete: Cascade`: enumerate every delete call
@@ -257,7 +257,7 @@ cause: the AI never saw the whole plan at once, so it could not coordinate.
   400 silently; the UI showed no error.
 - **Root cause:** `setup/route.ts` validated `eventType` against a hardcoded 7-value legacy list
   (`BBQ, Roast dinner, Potluck, Picnic, Kids party, Christmas, Other`) while the modal offered the
-  11 values of `CONFIG_EVENT_TYPES` (`src/lib/ai/config-loader.ts:86`). Overlap: exactly `Christmas`
+  11 values of `CONFIG_EVENT_TYPES` (`src/lib/ai/config-loader.ts`). Overlap: exactly `Christmas`
   and `Other` — 9 of 11 pickable types silently failed to persist.
 - **Fix:** `ab8678e` — route imports `CONFIG_EVENT_TYPES` as its allowlist; client chips and server
   validation share one source of truth.

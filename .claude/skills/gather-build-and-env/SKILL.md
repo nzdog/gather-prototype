@@ -65,11 +65,11 @@ Table verified against `.env.example` and code consumers (as of 2026-07-09):
 | `RESEND_API_KEY` | Magic-link login emails (`src/lib/email.ts`) | Required for the login-by-email flow; app boots without it | resend.com/api-keys |
 | `EMAIL_FROM` | Sender for transactional email, format `Name <email@domain>` | Required for email flows | Your own domain, or leave the example value in dev |
 | `NEXT_PUBLIC_APP_URL` | Base URL used in magic-link emails | REQUIRED | `http://localhost:3000` in dev |
-| `STRIPE_SECRET_KEY` | Stripe API access | **Effectively REQUIRED to boot routes that import Stripe**: `src/lib/stripe.ts:4-5` throws at module load if unset. A dummy `sk_test_...` value is enough to boot (CI does exactly this); a real test key is needed for payment flows. | dashboard.stripe.com/test/apikeys |
+| `STRIPE_SECRET_KEY` | Stripe API access | **Effectively REQUIRED to boot routes that import Stripe**: `src/lib/stripe.ts` — the module-load env guard throws at module load if unset. A dummy `sk_test_...` value is enough to boot (CI does exactly this); a real test key is needed for payment flows. | dashboard.stripe.com/test/apikeys |
 | `STRIPE_WEBHOOK_SECRET` | Webhook signature verification | Required only for webhook testing | `stripe listen --forward-to localhost:3000/api/webhooks/stripe` prints it |
 | `STRIPE_PRICE_ID` | Price for the per-event checkout | Required for the pay-to-create-event flow | Stripe Dashboard → Products (create a price) |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_PHONE_NUMBER` | SMS to non-NZ/AU numbers | OPTIONAL — SMS nudges are skipped with a logged warning if unset | twilio.com/console |
-| `TNZ_AUTH_TOKEN` | SMS to NZ (+64) / AU (+61) via TNZ (`src/lib/sms/tnz-client.ts:14`) | Optional in dev; required for production NZ delivery (Twilio does not deliver to NZ) | TNZ Dashboard → Users → API tab → Auth Token (per `GATHER-BUILD-CONSTANTS.md`) |
+| `TNZ_AUTH_TOKEN` | SMS to NZ (+64) / AU (+61) via TNZ (`src/lib/sms/tnz-client.ts` — the module-level `TNZ_AUTH_TOKEN` read / `isTnzEnabled()`) | Optional in dev; required for production NZ delivery (Twilio does not deliver to NZ) | TNZ Dashboard → Users → API tab → Auth Token (per `GATHER-BUILD-CONSTANTS.md`) |
 | `CRON_SECRET` | Authenticates `/api/cron/*` requests (nudges, wrap-up dispatch) | Optional in dev — cron routes only enforce it when it is set | `openssl rand -base64 32` |
 
 **Known drift (as of 2026-07-09):** `TNZ_AUTH_TOKEN` is documented in `GATHER-BUILD-CONSTANTS.md`
@@ -202,7 +202,7 @@ If regeneration alone doesn't fix it, restart the dev server (it caches the old 
 | Tailwind config as `.ts` | Dev compile took 267s | Config must remain `tailwind.config.js` — do not "TypeScript-ify" it | `fae0a9d` (2026-02-28) |
 | `npm run build` locally | Unexpectedly migrates your `DATABASE_URL` target | Use `npx next build` if you only want a build | package.json `build` script |
 | eslint-config-next mismatch | Circular-structure warning in lint/build | Ignore; tracked as GTC-130 (open) | docs/tickets/GTC-130.md |
-| Seed/demo name drift | Demo endpoints + `test:demo-endpoints` fail on fresh seed | Known live bug; needs a ticket; see `gather-config-and-flags` §7 | seed.ts:282 vs demo routes |
+| Seed/demo name drift | Demo endpoints + `test:demo-endpoints` fail on fresh seed | Known live bug; needs a ticket; see `gather-config-and-flags` §7 | `prisma/seed.ts` — the "Henderson Family Christmas 2026" event `.create()` vs demo routes |
 
 `next.config.js` is intentionally empty (`const nextConfig = {}`). If a build problem tempts you
 to add config there, that is a change-control question first (`gather-change-control`).

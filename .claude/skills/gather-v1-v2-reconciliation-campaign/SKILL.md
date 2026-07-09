@@ -87,7 +87,7 @@ grep -rn "AI_CALL_LIMIT" "src/app/api/events/[id]/generate/route.ts" \
 
 # 0.6 Frontend callers of the V1 pipeline
 grep -rn "events/\${eventId}/generate\|/regenerate" "src/app/plan/[eventId]/page.tsx" | grep fetch
-# EXPECTED: page.tsx:889 and :1018 (/generate), :1059 (/regenerate) — all gated behind !event.setup by GTC-148/149
+# EXPECTED: handleGeneratePlan + handleReviewRegenerateSelected (/generate), executeRegenerate (/regenerate) — all gated behind !event.setup by GTC-148/149
 grep -rn "/generate" src/app/demo/review/page.tsx
 # EXPECTED: one caller ~line 62 (deliberately unguarded; dies with Tier 2 prune per GTC-149)
 
@@ -111,16 +111,15 @@ Record all seven numbers in your ticket as the baseline.
 
 **The defect (verified 2026-07-09):** `PUT /api/events/[id]/households/[householdId]`
 (`src/app/api/events/[id]/households/[householdId]/route.ts`) deletes every non-primary
-`PersonEvent` in the household (lines 150–159) and recreates them via `createMember`
-(lines 194–261). Consequences, each traceable in the schema:
+`PersonEvent` in the household (the `personEvent.deleteMany` block) and recreates them via `createMember`. Consequences, each traceable in the schema:
 
 | Loss | Mechanism | Evidence |
 |---|---|---|
-| Team membership wiped | Recreated PersonEvent never sets `teamId` (create at route.ts:250–260) | `prisma/schema.prisma:153` |
-| Nudge history destroyed | `NudgeLog.personEvent` has `onDelete: Cascade` | `prisma/schema.prisma:935` |
-| RSVP state reset | `rsvpStatus` defaults back to `PENDING`; `rsvpRespondedAt` etc. lost | `prisma/schema.prisma:159–161` |
-| Assignments invalidated | `Assignment.personId` points at Person (survives), but the assign guard requires `personEvent.teamId === item.teamId` — now null | `src/app/api/events/[id]/items/[itemId]/assign/route.ts:65` |
-| Duplicate Person rows | `createMember` looks Person up ONLY by email (route.ts:205–207); no-email members (the common case: kids, partners) get a brand-new Person every edit (route.ts:210) | route.ts:204–217 |
+| Team membership wiped | Recreated PersonEvent never sets `teamId` (the `personEvent.create()` call in `createMember()`, route.ts) | `prisma/schema.prisma — PersonEvent.teamId` |
+| Nudge history destroyed | `NudgeLog.personEvent` has `onDelete: Cascade` | `prisma/schema.prisma — NudgeLog.personEvent relation` |
+| RSVP state reset | `rsvpStatus` defaults back to `PENDING`; `rsvpRespondedAt` etc. lost | `prisma/schema.prisma — PersonEvent.rsvpStatus/rsvpRespondedAt/rsvpFollowupSentAt` |
+| Assignments invalidated | `Assignment.personId` points at Person (survives), but the assign guard requires `personEvent.teamId === item.teamId` — now null | `assign/route.ts — the teamId check in POST()` |
+| Duplicate Person rows | `createMember` looks Person up ONLY by email (the `person.findUnique({ where: { email } })` lookup in `createMember()`); no-email members (the common case: kids, partners) get a brand-new Person every edit (the `person.create()` fallback) | `route.ts — inside createMember()` |
 
 The build report calls this "simpler than diffing" — it was a deliberate pre-launch trade-off,
 now promoted to campaign target.
@@ -162,7 +161,7 @@ or add a team via the dashboard UI first.)
 
 Trigger: with `npm run dev` running, open the printed Event URL, enter Moment 1
 (`?setup=true`), edit that household (change ANYTHING, e.g. primary phone), save. The UI
-issues the PUT at `src/app/plan/[eventId]/page.tsx:1716`.
+issues the PUT inside `handleEditSave()` in `src/app/plan/[eventId]/page.tsx`.
 
 **EXPECTED observations (this is the bug):** re-run the BEFORE queries —
 - Non-primary members have NEW `PersonEvent.id`s; `teamId` is NULL; `rsvpStatus` back to `PENDING`.
@@ -215,11 +214,11 @@ team check; both are load-bearing elsewhere.
 **Entry criteria:** Phase 1 landed or explicitly deferred by the founder.
 
 **Current state (verified 2026-07-09):** two parallel NZ-rules implementations —
-- V1: NZ rules hardcoded inside `PLAN_GENERATION_SYSTEM_PROMPT` (`src/lib/ai/prompts.ts:8`,
-  ham/lamb rule ~line 14, L&P rule ~line 17), consumed by `src/lib/ai/generate.ts` via the
-  `/generate` and `/regenerate` routes.
-- V2: `buildPlanGenerationPrompt` (`src/lib/ai/prompts.ts:578`) pulls NZ notes from config via
-  `getNzNotes` (`src/lib/ai/config-loader.ts:181`, backed by `plan-option-tree-config.json`),
+- V1: NZ rules hardcoded inside `PLAN_GENERATION_SYSTEM_PROMPT` (`src/lib/ai/prompts.ts`,
+  ham/lamb in the "NZ CHRISTMAS RULES" block, L&P in the "NZ DRINKS" block), consumed by
+  `src/lib/ai/generate.ts` via the `/generate` and `/regenerate` routes.
+- V2: `buildPlanGenerationPrompt` (`src/lib/ai/prompts.ts`) pulls NZ notes from config via
+  `getNzNotes` (`src/lib/ai/config-loader.ts`, backed by `plan-option-tree-config.json`),
   consumed only by `finalize-plan`.
 
 **DECISION GATE (ask the founder first):** if Phase 4 will retire the V1 generate/regenerate
@@ -248,14 +247,17 @@ is still being changed under you). Phase 0 baseline recorded in the ticket.
 **Method:** ONE extraction per ticket per commit. Lowest-risk first:
 
 1. **Pure render/helpers** — e.g. the Moment 2 mapper block (`MOMENT2_CATEGORY_EMOJIS` +
-   plan-view mapping functions, top of page.tsx ~line 68) → a `src/lib/` or component-local
+   plan-view mapping functions, top of page.tsx) → a `src/lib/` or component-local
    module. No state, no fetch: mechanical move.
-2. **Self-contained V2 render branches** — the `if (showSetup)` block (page.tsx:1661) and the
-   `if (showMoment2PlanView && event)` block (page.tsx:1807) into container components,
-   passing state down. The V1 dashboard return (page.tsx:2037) moves LAST, if ever.
+2. **Self-contained V2 render branches** — the `if (showSetup)` block and the
+   `if (showMoment2PlanView && event)` block in page.tsx into container components,
+   passing state down. The bare `return (` V1 dashboard block (last top-level return in
+   page.tsx) moves LAST, if ever.
 3. **Modal open/close state clusters** — group per-modal useState into hooks.
-4. **API client hooks** — the fetch handlers (households at :1694/:1716/:1732, generate at
-   :889/:1018, regenerate at :1059) into `useXxx` hooks. Highest risk: these encode the
+4. **API client hooks** — the fetch handlers (households: `handleAddHousehold` /
+   `handleEditSave` / `handleDeleteHousehold`; generate: `handleGeneratePlan` /
+   `handleReviewRegenerateSelected`; regenerate: `executeRegenerate`) into `useXxx` hooks.
+   Highest risk: these encode the
    GTC-148/149 `!event.setup` gating — the gate count from Phase 0.4 must be unchanged or
    consciously relocated, never dropped.
 
@@ -294,7 +296,7 @@ anything:
    Moment 1 households (add/edit/delete) → Moment 2 Step 1 → finalize-plan generation →
    plan view edit/remove items → assignment path works. (The regenerate-equivalent for V2
    is re-running finalize-plan; NOTE its own delete-and-recreate: it drops
-   `source: 'GENERATED'` teams at `finalize-plan/route.ts:275`, cascading items and their
+   `source: 'GENERATED'` teams via the `team.deleteMany()` call in `finalize-plan/route.ts` `POST()`, cascading items and their
    assignments — founder must accept or fix that before V1 regenerate is deleted.)
 2. **No live events depend on V1-only state** — psql check for events with a V1-generated
    plan (GENERATED teams but no EventSetup row):
@@ -358,7 +360,7 @@ grep -n "const \[showSetup" "src/app/plan/[eventId]/page.tsx"            # was :
 grep -cE "event\??\.setup" "src/app/plan/[eventId]/page.tsx"             # was 13
 ls "src/app/api/events/[id]/generate" "src/app/api/events/[id]/regenerate" 2>/dev/null  # Tier 2 still live?
 grep -n "deleteMany" "src/app/api/events/[id]/households/[householdId]/route.ts"        # was :45,:156 (bug present?)
-grep -n -A10 "model NudgeLog" prisma/schema.prisma | grep Cascade        # NudgeLog cascade (was schema:935)
+grep -n -A10 "model NudgeLog" prisma/schema.prisma | grep Cascade        # NudgeLog.personEvent onDelete: Cascade
 grep -n "teamId !== item.teamId" "src/app/api/events/[id]/items/[itemId]/assign/route.ts"  # was :65
 grep -rn "AI_CALL_LIMIT" src/app/api --include="*.ts" | grep "= "        # values drift; canonical table: gather-config-and-flags §4
 python3 -c "import json;print(len(json.load(open('route-classifications.json'))))"      # was 74

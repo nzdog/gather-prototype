@@ -215,7 +215,7 @@ plus `authEvidence` and `securityIssues` arrays. Current state:
   constants file's matching stale reference was corrected in GTC-153,
   2026-07-09). `scripts/triage-unknown-routes.ts` exists and parses
   `SECURITY_ROUTE_INVENTORY.md`, but expects it at the **repo root**
-  (triage-unknown-routes.ts:193) while the doc actually lives at
+  (triage-unknown-routes.ts — `main()`, the `SECURITY_ROUTE_INVENTORY.md` path join) while the doc actually lives at
   `docs/05_ops/security/SECURITY_ROUTE_INVENTORY.md` — so the script errors
   from a clean run today; fix the path or copy the file before trusting its
   output. There is no `npm run test:security:inventory` script despite the
@@ -254,6 +254,12 @@ RED->GREEN means: write the test first, run it, paste the failure, apply the
 fix, run again, paste the pass. If you cannot produce a RED state for a
 Critical/High bug, that is Stop Condition 4 — document why and await
 instruction; do not skip silently.
+
+**Cite code by symbol, not line number** in every evidence field (root cause,
+files changed) — `workflow.ts — canTransition()`, not `workflow.ts:243`. Line
+numbers drift between the fix commit and the hash-backfill follow-up, so a line
+reference is often stale by the time the ticket closes. Full rule in
+`gather-docs-and-writing` House style (added by GTC-158).
 
 ## 7. Measure, don't eyeball — recipes with worked history
 
