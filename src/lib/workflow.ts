@@ -69,25 +69,6 @@ export async function repairItemStatusAfterMutation(tx: Tx, itemId: string): Pro
 }
 
 /**
- * Returns true if event can be frozen.
- * Freeze blocked if ANY item lacks assignment (T6 - all items assigned gate).
- * Queries Assignment directly, NOT Item.status.
- *
- * CRITICAL: This queries assignment: null, NOT Item.status.
- * The freeze gate is safety-critical and must not trust cached state.
- */
-export async function canFreeze(eventId: string): Promise<boolean> {
-  const unassignedCount = await prisma.item.count({
-    where: {
-      team: { eventId },
-      assignment: null,
-    },
-  });
-
-  return unassignedCount === 0;
-}
-
-/**
  * ============================================
  * EPIC 4: FREEZE WARNINGS
  * ============================================
