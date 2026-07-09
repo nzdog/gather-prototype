@@ -1,7 +1,7 @@
 # GATHER BUILD CONSTANTS
 
 Reference file for AI executors and developers. Keep this file accurate.
-Last updated: 2026-03-05.
+Last updated: 2026-07-09.
 CLAUDE.md reviewed: no conflicts or additions found.
 
 ---
@@ -12,10 +12,12 @@ regardless of ticket type:
 
 1. Read this file (GATHER-BUILD-CONSTANTS.md) in full
 2. Read the relevant ticket template in full:
-   - Bug tickets: BUG-TICKET-TEMPLATE.md
-   - Feature tickets: FEATURE-TICKET-TEMPLATE.md
-   - Chore tickets: CHORE-TICKET-TEMPLATE.md
-   - Spike tickets: SPIKE-TICKET-TEMPLATE.md
+   - Bug tickets: BUG-TICKET-TEMPLATE.md (complex/multi-actor bugs:
+     BUG-TICKET-TEMPLATE-FULL.md)
+   - UX tickets: UX-TICKET-TEMPLATE.md
+   - Feature, chore, and spike tickets: no dedicated template exists.
+     Follow the BUG-TICKET-TEMPLATE.md structure and recent precedents
+     in docs/tickets/ (e.g. GTC-152 for a chore).
    - If the ticket involves unexpected platform behaviour, stale UI
      state, auth anomalies, or DB irregularities, also read
      GATHER-KNOWN-BEHAVIOURS.md
@@ -221,7 +223,7 @@ The following areas must not be refactored without explicit instruction. They ar
 high-risk, tightly coupled to security invariants, or carry subtle correctness
 requirements verified by the security test suite.
 
-### 1. Session & Cookie Management (`src/lib/auth*`, `src/middleware*`)
+### 1. Session & Cookie Management (`src/lib/auth*`, `middleware.ts` at repo root)
 Role-scoped session cookies were a hard-won fix (GTC-001). The cookie naming and
 scoping logic that separates host sessions from participant sessions must not be
 changed. Breaking this re-introduces session collision bugs.
@@ -246,7 +248,7 @@ Never hand-edit migration SQL files. Never delete or reorder migrations. Always
 use `prisma migrate dev` to generate new migrations. The production deploy
 command (`prisma migrate deploy`) applies them in order.
 
-### 6. Security Test Suite (`tests/security-*.ts`, `scripts/classify-routes.ts`)
+### 6. Security Test Suite (`tests/security-*.ts`, `scripts/triage-unknown-routes.ts`)
 These tests define the security contract for the API surface. Do not weaken or
 skip assertions to make tests pass. If a test fails, fix the underlying issue.
 
