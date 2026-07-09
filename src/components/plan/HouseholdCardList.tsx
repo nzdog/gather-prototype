@@ -5,10 +5,10 @@ import { useEffect, useRef, useState } from 'react';
 export interface SavedHousehold {
   id: string;
   primaryContact: { name: string; email?: string; phone?: string };
-  partner?: { name: string; email?: string; phone?: string };
-  helpers: Array<{ name: string; email?: string; phone?: string }>;
+  partner?: { personEventId?: string; name: string; email?: string; phone?: string };
+  helpers: Array<{ personEventId?: string; name: string; email?: string; phone?: string }>;
   littleCount: number;
-  guests: Array<{ name: string; email?: string; phone?: string }>;
+  guests: Array<{ personEventId?: string; name: string; email?: string; phone?: string }>;
 }
 
 interface HouseholdCardListProps {

@@ -38,6 +38,7 @@
     "test:vcf-import": "tsx tests/vcf-import-test.ts",
     "test:unassigned-critical-items": "tsx tests/unassigned-critical-items-test.ts",
     "test:household-edit": "tsx tests/household-edit-preserves-membership-test.ts",
+    "test:household-edit-integration": "tsx tests/household-edit-client-payload-integration-test.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",

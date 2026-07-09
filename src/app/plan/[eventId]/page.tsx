@@ -613,18 +613,21 @@ export default function PlanEditorPage() {
       },
       partner: partnerMember
         ? {
+            personEventId: partnerMember.id,
             name: partnerMember.person?.name || '',
             email: partnerMember.person?.email || undefined,
             phone: partnerMember.person?.phoneNumber || undefined,
           }
         : undefined,
       helpers: helperMembers.map((m: any) => ({
+        personEventId: m.id,
         name: m.person?.name || '',
         email: m.person?.email || undefined,
         phone: m.person?.phoneNumber || undefined,
       })),
       littleCount: h.littleCount || 0,
       guests: guestMembers.map((g: any) => ({
+        personEventId: g.id,
         name: g.person?.name || '',
         email: g.person?.email || undefined,
         phone: g.person?.phoneNumber || undefined,

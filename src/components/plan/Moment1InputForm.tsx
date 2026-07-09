@@ -12,17 +12,20 @@ export interface Moment1PersonInput {
     phone?: string;
   };
   partner?: {
+    personEventId?: string;
     name?: string;
     email?: string;
     phone?: string;
   };
   helpers?: Array<{
+    personEventId?: string;
     name: string;
     email?: string;
     phone?: string;
   }>;
   littleCount?: number;
   guests?: Array<{
+    personEventId?: string;
     name?: string;
     email?: string;
     phone?: string;
@@ -42,6 +45,8 @@ interface Moment1InputFormProps {
 
 interface GuestForm {
   id: string;
+  /** Stable identity of an existing member's PersonEvent row (absent = new member, GTC-159/160). */
+  personEventId?: string;
   name: string;
   email: string;
   phone: string;
@@ -77,6 +82,7 @@ export default function Moment1InputForm({
   const [partnerName, setPartnerName] = useState('');
   const [partnerEmail, setPartnerEmail] = useState('');
   const [partnerPhone, setPartnerPhone] = useState('');
+  const [partnerPersonEventId, setPartnerPersonEventId] = useState<string | undefined>(undefined);
   const [partnerEmailError, setPartnerEmailError] = useState('');
   const [partnerPhoneError, setPartnerPhoneError] = useState('');
 
@@ -131,12 +137,14 @@ export default function Moment1InputForm({
       setPartnerName(editingHousehold.partner.name);
       setPartnerEmail(editingHousehold.partner.email || '');
       setPartnerPhone(editingHousehold.partner.phone || '');
+      setPartnerPersonEventId(editingHousehold.partner.personEventId);
       editOrder.push({ type: 'partner', id: 'partner' });
     } else {
       setShowPartner(false);
       setPartnerName('');
       setPartnerEmail('');
       setPartnerPhone('');
+      setPartnerPersonEventId(undefined);
     }
     setPartnerEmailError('');
     setPartnerPhoneError('');
@@ -144,6 +152,7 @@ export default function Moment1InputForm({
     if (editingHousehold.helpers.length > 0) {
       const loadedHelpers = editingHousehold.helpers.map((h) => ({
         id: `f-${++formIdCounter}`,
+        personEventId: h.personEventId,
         name: h.name,
         email: h.email || '',
         phone: h.phone || '',
@@ -167,6 +176,7 @@ export default function Moment1InputForm({
     if (editingHousehold.guests.length > 0) {
       const loadedGuests = editingHousehold.guests.map((g) => ({
         id: `f-${++formIdCounter}`,
+        personEventId: g.personEventId,
         name: g.name,
         email: g.email || '',
         phone: g.phone || '',
@@ -223,6 +233,7 @@ export default function Moment1InputForm({
     setPartnerName('');
     setPartnerEmail('');
     setPartnerPhone('');
+    setPartnerPersonEventId(undefined);
     setPartnerEmailError('');
     setPartnerPhoneError('');
     setHelpers([]);
@@ -297,6 +308,7 @@ export default function Moment1InputForm({
 
     if (showPartner && partnerName.trim()) {
       payload.partner = {
+        personEventId: partnerPersonEventId,
         name: partnerName.trim(),
         email: partnerEmail.trim() || undefined,
         phone: partnerPhone.trim() || undefined,
@@ -306,6 +318,7 @@ export default function Moment1InputForm({
     const namedHelpers = helpers.filter((h) => h.name.trim());
     if (namedHelpers.length > 0) {
       payload.helpers = namedHelpers.map((h) => ({
+        personEventId: h.personEventId,
         name: h.name.trim(),
         email: h.email.trim() || undefined,
         phone: h.phone.trim() || undefined,
@@ -319,6 +332,7 @@ export default function Moment1InputForm({
     const namedGuests = guests.filter((g) => g.name.trim());
     if (namedGuests.length > 0) {
       payload.guests = namedGuests.map((g) => ({
+        personEventId: g.personEventId,
         name: g.name.trim(),
         email: g.email.trim() || undefined,
         phone: g.phone.trim() || undefined,
@@ -552,6 +566,7 @@ export default function Moment1InputForm({
                       setPartnerName('');
                       setPartnerEmail('');
                       setPartnerPhone('');
+                      setPartnerPersonEventId(undefined);
                       setPartnerEmailError('');
                       setPartnerPhoneError('');
                       setMemberOrder((prev) => prev.filter((m) => m.id !== 'partner'));

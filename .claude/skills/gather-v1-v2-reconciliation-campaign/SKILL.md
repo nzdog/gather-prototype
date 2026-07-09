@@ -107,16 +107,39 @@ Record all seven numbers in your ticket as the baseline.
 
 ## Phase 1 — Household data-loss fix (highest-value independent win)
 
+**STATUS UPDATE (GTC-159, closed, commit `b73f140`; corrected 2026-07-09 per GTC-160's
+authoritative source read):** the fix below has LANDED on the server side. The blanket
+`personEvent.deleteMany` was removed; non-primary members now reconcile via a diff-based
+upsert in `src/lib/households/reconcileMembers.ts` (extracted from the route for
+testability), keyed on a client-supplied `personEventId`. RED→GREEN regression test:
+`tests/household-edit-preserves-membership-test.ts` (`npm run test:household-edit`).
+**Client wiring (the `personEventId` payload plumbing this section calls the "identity
+obligation") was completed separately in GTC-160** — see that ticket for the 6 wiring
+sites and its own integration test. If you are starting a fresh campaign session and see
+this section, do NOT redo Phase 1; jump to Phase 2 or later, confirming the "If you see
+instead" branch below.
+
 **Entry criteria:** Phase 0 recorded. No dependency on other phases — do this first.
 
-**The defect (verified 2026-07-09):** `PUT /api/events/[id]/households/[householdId]`
-(`src/app/api/events/[id]/households/[householdId]/route.ts`) deletes every non-primary
-`PersonEvent` in the household (the `personEvent.deleteMany` block) and recreates them via `createMember`. Consequences, each traceable in the schema:
+**The defect, as originally observed (verified 2026-07-09, pre-fix):** `PUT
+/api/events/[id]/households/[householdId]` deleted every non-primary `PersonEvent` in the
+household (the `personEvent.deleteMany` block) and recreated them via `createMember`.
+
+**Root cause, corrected (GTC-159/GTC-160 finding — the original text below understated
+this):** `createMember` ALREADY contained a `(personId,eventId)` upsert branch
+(`personEvent.findUnique` → update-in-place if found) — but the blanket `deleteMany` ran
+*before* `createMember`, on every edit, for every non-primary member. That ordering is
+what defeated the existing upsert branch: by the time `createMember` ran its
+`findUnique`, the row it would have matched was already gone, so every non-primary member
+fell through to the `create` path regardless of the upsert logic being present. **The fix
+was therefore to remove the blanket `deleteMany` and drive reconciliation off client-sent
+identity — not to "add" an upsert that didn't exist.** Consequences of the pre-fix
+ordering bug, each traceable in the schema:
 
 | Loss | Mechanism | Evidence |
 |---|---|---|
-| Team membership wiped | Recreated PersonEvent never sets `teamId` (the `personEvent.create()` call in `createMember()`, route.ts) | `prisma/schema.prisma — PersonEvent.teamId` |
-| Nudge history destroyed | `NudgeLog.personEvent` has `onDelete: Cascade` | `prisma/schema.prisma — NudgeLog.personEvent relation` |
+| Team membership wiped | The `deleteMany`-then-recreate ordering discarded the row `createMember`'s upsert branch would otherwise have matched, so the new row never inherits `teamId` | `prisma/schema.prisma — PersonEvent.teamId` |
+| Nudge history destroyed | `NudgeLog.personEvent` has `onDelete: Cascade`, fired by the `deleteMany` | `prisma/schema.prisma — NudgeLog.personEvent relation` |
 | RSVP state reset | `rsvpStatus` defaults back to `PENDING`; `rsvpRespondedAt` etc. lost | `prisma/schema.prisma — PersonEvent.rsvpStatus/rsvpRespondedAt/rsvpFollowupSentAt` |
 | Assignments invalidated | `Assignment.personId` points at Person (survives), but the assign guard requires `personEvent.teamId === item.teamId` — now null | `assign/route.ts — the teamId check in POST()` |
 | Duplicate Person rows | `createMember` looks Person up ONLY by email (the `person.findUnique({ where: { email } })` lookup in `createMember()`); no-email members (the common case: kids, partners) get a brand-new Person every edit (the `person.create()` fallback) | `route.ts — inside createMember()` |
@@ -124,7 +147,7 @@ Record all seven numbers in your ticket as the baseline.
 The build report calls this "simpler than diffing" — it was a deliberate pre-launch trade-off,
 now promoted to campaign target.
 
-### 1.1 Reproduce (before touching anything)
+### 1.1 Reproduce (before touching anything) — historical; the repro this section describes is now encoded as the RED phase of `tests/household-edit-preserves-membership-test.ts`. Kept for future analogous bugs, not because Phase 1 is still open.
 
 ```bash
 # Seed a realistic event: 6 households, 14 PersonEvent rows (11 adults + 3 kids w/ jobs), 3 littles
@@ -172,9 +195,9 @@ issues the PUT inside `handleEditSave()` in `src/app/plan/[eventId]/page.tsx`.
 **If you see instead:** memberships preserved and ids stable → the fix already landed; find
 the ticket, verify its regression test exists, close out.
 
-### 1.2 Solution menu (ranked) and gates
+### 1.2 Solution menu (ranked) and gates — historical; option (a) is what GTC-159/GTC-160 implemented. Kept as the worked rationale, not as an open decision.
 
-**(a) Diff-based upsert — RECOMMENDED.** Match incoming members to existing `PersonEvent`
+**(a) Diff-based upsert — IMPLEMENTED (GTC-159/GTC-160).** Match incoming members to existing `PersonEvent`
 rows and update in place; delete only members actually removed; create only genuinely new ones.
 - **Identity obligation:** email lookup cannot identify no-email members. The client must send
   each member's `personEventId` (extend the payload shape in
@@ -359,7 +382,7 @@ wc -l "src/app/plan/[eventId]/page.tsx"                                  # was 3
 grep -n "const \[showSetup" "src/app/plan/[eventId]/page.tsx"            # was :376; branches :1661/:1807/:2037
 grep -cE "event\??\.setup" "src/app/plan/[eventId]/page.tsx"             # was 13
 ls "src/app/api/events/[id]/generate" "src/app/api/events/[id]/regenerate" 2>/dev/null  # Tier 2 still live?
-grep -n "deleteMany" "src/app/api/events/[id]/households/[householdId]/route.ts"        # was :45,:156 (bug present?)
+grep -n "deleteMany" "src/app/api/events/[id]/households/[householdId]/route.ts"        # was :45 in DELETE() (correct/intended whole-household cascade — not the bug) and :156 in PUT() (was the bug; PUT no longer calls deleteMany post-GTC-159 — its member-write logic now lives in src/lib/households/reconcileMembers.ts)
 grep -n -A10 "model NudgeLog" prisma/schema.prisma | grep Cascade        # NudgeLog.personEvent onDelete: Cascade
 grep -n "teamId !== item.teamId" "src/app/api/events/[id]/items/[itemId]/assign/route.ts"  # was :65
 grep -rn "AI_CALL_LIMIT" src/app/api --include="*.ts" | grep "= "        # values drift; canonical table: gather-config-and-flags §4
