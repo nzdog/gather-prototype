@@ -24,7 +24,8 @@ Thumbs.db
 .idea/
 
 # Claude
-.claude/
+.claude/*
+!.claude/skills/
 docs/_inbox/
 
 # Debug/test scripts (one-off)
