@@ -15,13 +15,16 @@ type Tx = Prisma.TransactionClient;
  * UI Status Labels - Consistent status naming for UI display
  * Use these constants throughout the UI to ensure consistent terminology
  */
-// FROZEN/COMPLETE remain only for legacy rows and the UI surfaces GTC-197/198 have
-// yet to migrate. No server code writes either status after GTC-169.
+// GTC-197 (A3c): the enum values FROZEN/COMPLETE survive for legacy rows until
+// GTC-199 drops them, but nothing shows a host the word "FROZEN" any more — the key
+// is legacy, the label is not. COMPLETE is the calendar's word, not a state she moved
+// the plan into.
 export const STATUS_LABELS = {
   DRAFT: 'DRAFT',
   CONFIRMING: 'CONFIRMING',
-  FROZEN: 'FROZEN',
-  COMPLETE: 'COMPLETE',
+  /** Legacy key. Displayed as the send, because that is what it now means. */
+  FROZEN: 'SENT',
+  COMPLETE: 'PAST',
 } as const;
 
 /**

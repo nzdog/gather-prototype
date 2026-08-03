@@ -119,6 +119,42 @@ export function neededBy(item: { dropOffAt: Date | null }, event: LifecycleEvent
 }
 
 /**
+ * The same event as it arrives over the wire, with dates as ISO strings.
+ *
+ * GTC-197 (A3c): the host UI needs the identical predicates the server uses — a
+ * screen that disagrees with the server about whether a plan is sent is how the old
+ * FROZEN divergence started. These adapters exist so there is ONE definition of sent
+ * and complete, not a server one and a client one that drift.
+ *
+ * This module stays client-safe: its only import is a type, which erases at build.
+ */
+export interface SerialisedEvent {
+  status: string;
+  sentAt: string | null;
+  endDate: string;
+}
+
+function parse(event: SerialisedEvent): LifecycleEvent {
+  return {
+    status: event.status as EventStatus,
+    sentAt: event.sentAt ? new Date(event.sentAt) : null,
+    endDate: new Date(event.endDate),
+  };
+}
+
+export function isSentJson(event: SerialisedEvent): boolean {
+  return isSent(parse(event));
+}
+
+export function isCompleteJson(event: SerialisedEvent, now?: Date): boolean {
+  return isComplete(parse(event), now);
+}
+
+export function getEventPhaseJson(event: SerialisedEvent, now?: Date): EventPhase {
+  return getEventPhase(parse(event), now);
+}
+
+/**
  * Prisma `where` fragments, so cron and eligibility queries filter in SQL rather than
  * loading every row and filtering in JS.
  *

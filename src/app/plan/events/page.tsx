@@ -57,6 +57,7 @@ export default function EventsPage() {
     const styles = {
       DRAFT: 'bg-gray-100 text-gray-800',
       CONFIRMING: 'bg-sage-100 text-sage-800',
+      // Legacy enum key, shown as SENT (GTC-197). GTC-199 drops the value itself.
       FROZEN: 'bg-sage-100 text-sage-800',
       COMPLETE: 'bg-green-100 text-green-800',
     };

@@ -13,7 +13,6 @@ import {
   Ban,
 } from 'lucide-react';
 import { ReachabilityBar } from './ReachabilityBar';
-import { ReadyToFreezeIndicator } from './ReadyToFreezeIndicator';
 import TransitionModal from './TransitionModal';
 
 interface PersonStatus {
@@ -30,7 +29,7 @@ interface PersonStatus {
 
 interface InviteStatusData {
   eventStatus: string;
-  inviteSendConfirmedAt: string | null;
+  sentAt: string | null;
   hasUnsentPeople: boolean;
   counts: {
     total: number;
@@ -189,7 +188,7 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
 
   if (!data) return null;
 
-  const { counts, hasUnsentPeople, inviteSendConfirmedAt, attendance, items, itemDetails } = data;
+  const { counts, hasUnsentPeople, sentAt, attendance, items, itemDetails } = data;
 
   return (
     <div className="bg-white rounded-lg border p-4 space-y-4">
@@ -400,16 +399,11 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
       )}
 
       {/* Ready to Freeze Indicator */}
-      {data.threshold?.readyToFreeze && data.eventStatus === 'CONFIRMING' && items && (
-        <div className="mb-4">
-          <ReadyToFreezeIndicator
-            confirmed={items.confirmed}
-            total={items.total}
-            complianceRate={data.threshold.complianceRate}
-            onLockPlan={() => setShowTransitionModal(true)}
-          />
-        </div>
-      )}
+      {/* GTC-197 (A3c): ReadyToFreezeIndicator DELETED. It rendered only above 80%
+          compliance and told her she was "ready to freeze" — a readiness score and a
+          threshold, both refused outright by Moment 4 §2: "There is no readiness score,
+          no threshold, no completion nag, and nothing the system withholds pending
+          'enough' confirmation." The gap sweep at the pre-flight replaces it. */}
 
       {/* Legacy status breakdown - keep for backward compatibility */}
       <div className="grid grid-cols-4 gap-2 text-center text-sm">
@@ -627,9 +621,9 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
       )}
 
       {/* Last confirmed timestamp */}
-      {inviteSendConfirmedAt && (
+      {sentAt && (
         <p className="text-xs text-gray-500 pt-2 border-t">
-          Last confirmed: {new Date(inviteSendConfirmedAt).toLocaleString()}
+          Sent: {new Date(sentAt).toLocaleString()}
         </p>
       )}
 

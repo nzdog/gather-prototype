@@ -213,7 +213,7 @@ export default function RevisionHistory({ eventId, actorId, onExpand }: Revision
 
       {revisions.length > 0 && (
         <div className="mt-4 pt-4 border-t text-xs text-gray-500">
-          Showing last {revisions.length} revision{revisions.length !== 1 ? 's' : ''}
+          {revisions.length} revision{revisions.length !== 1 ? 's' : ''}
         </div>
       )}
     </div>
