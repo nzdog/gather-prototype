@@ -373,7 +373,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 
     return NextResponse.json({
       eventStatus: event.status,
-      inviteSendConfirmedAt: event.inviteSendConfirmedAt?.toISOString() || null,
+      inviteSendConfirmedAt: event.sentAt?.toISOString() || null,
       hasUnsentPeople: counts.notSent > 0,
       sharedLinkEnabled: event.sharedLinkEnabled,
       counts,

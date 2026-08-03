@@ -62,7 +62,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // Validate event exists
     const event = await prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, status: true, inviteSendConfirmedAt: true },
+      select: { id: true, status: true, sentAt: true },
     });
 
     if (!event) {
@@ -119,14 +119,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
               name: personData.name.trim(),
               email: personData.email || null,
               phone: personData.phone || null,
-              inviteAnchorAt: event.inviteSendConfirmedAt || null,
+              inviteAnchorAt: event.sentAt || null,
             },
           });
-        } else if (event.inviteSendConfirmedAt && !person.inviteAnchorAt) {
+        } else if (event.sentAt && !person.inviteAnchorAt) {
           // If person exists but doesn't have an anchor, set it
           person = await prisma.person.update({
             where: { id: person.id },
-            data: { inviteAnchorAt: event.inviteSendConfirmedAt },
+            data: { inviteAnchorAt: event.sentAt },
           });
         }
 

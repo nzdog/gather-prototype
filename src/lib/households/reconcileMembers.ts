@@ -56,8 +56,8 @@ export interface ReconcileContext {
   household: LoadedHousehold;
   /** The already-resolved primary-contact member (householdRole PRIMARY_CONTACT). */
   primaryMember: LoadedMember;
-  /** Event.inviteSendConfirmedAt — used to anchor invite timing on Person. */
-  inviteSendConfirmedAt: Date | null;
+  /** Event.sentAt — used to anchor invite timing on Person. */
+  sentAt: Date | null;
   input: ReconcileInput;
 }
 
@@ -71,7 +71,7 @@ export async function reconcileHouseholdMembers(
   prisma: PrismaClient,
   ctx: ReconcileContext
 ): Promise<void> {
-  const { eventId, household, primaryMember, inviteSendConfirmedAt, input } = ctx;
+  const { eventId, household, primaryMember, sentAt, input } = ctx;
   const { primaryContact, partner, helpers, littleCount, guests } = input;
 
   // --- Primary contact: update Person + PersonEvent in place (unchanged) ---
@@ -136,10 +136,10 @@ export async function reconcileHouseholdMembers(
         phoneNumber: normalizedPhone,
       },
     });
-    if (inviteSendConfirmedAt && !person.inviteAnchorAt) {
+    if (sentAt && !person.inviteAnchorAt) {
       person = await prisma.person.update({
         where: { id: person.id },
-        data: { inviteAnchorAt: inviteSendConfirmedAt },
+        data: { inviteAnchorAt: sentAt },
       });
     }
     const reach = reachabilityFor(person.phoneNumber, person.email);
@@ -167,13 +167,13 @@ export async function reconcileHouseholdMembers(
           name: member.name!.trim(),
           email: member.email || null,
           phoneNumber: normalizedPhone,
-          inviteAnchorAt: inviteSendConfirmedAt || null,
+          inviteAnchorAt: sentAt || null,
         },
       });
-    } else if (inviteSendConfirmedAt && !person.inviteAnchorAt) {
+    } else if (sentAt && !person.inviteAnchorAt) {
       person = await prisma.person.update({
         where: { id: person.id },
-        data: { inviteAnchorAt: inviteSendConfirmedAt },
+        data: { inviteAnchorAt: sentAt },
       });
     }
 

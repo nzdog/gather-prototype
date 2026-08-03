@@ -51,7 +51,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
     // Update event timestamp
     await prisma.event.update({
       where: { id: eventId },
-      data: { inviteSendConfirmedAt: now },
+      data: { sentAt: now },
     });
 
     // Set anchor for people who don't have one yet

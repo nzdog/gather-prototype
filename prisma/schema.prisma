@@ -422,8 +422,20 @@ model AuditEntry {
   /// NULLABLE by design: the calendar, the cron sweep, and the release-notification
   /// path have no Person to point at. The system is a first-class actor in the
   /// history (Hinge §7: "the system does what the system does").
+  ///
+  /// The FK is ON DELETE SET NULL, so deleting a Person no longer blocks — the
+  /// history survives them. That is right for a ledger and wrong for a memory:
+  /// without a name the entry degrades to "someone reassigned the beef".
   actorId   String?
   actorKind ActorKind @default(HOST)
+
+  /// NAME AT TIME OF ACTION — denormalised on purpose, populated at write time
+  /// (GTC-196 / A3b), never re-read from Person. Two reasons it must not be a join:
+  /// the actor may be deleted (SET NULL above), and a later rename would silently
+  /// rewrite history. The ledger is Kate's memory of what happened, and what
+  /// happened is that *Pete* was the one who couldn't do it. NULL for SYSTEM
+  /// actions and for pre-ledger rows.
+  actorName String?
 
   actionType String
   targetType String
