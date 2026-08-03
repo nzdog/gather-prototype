@@ -1,5 +1,5 @@
 // POST /api/events/[id]/revisions - Create manual revision snapshot
-// GET /api/events/[id]/revisions - List revisions (last 5)
+// GET /api/events/[id]/revisions - List revisions (uncapped, cursor-paginated)
 // SECURITY: POST requires HOST role, derives actorId from session
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -8,10 +8,25 @@ import { createRevision } from '@/lib/workflow';
 import { requireEventRole } from '@/lib/auth/guards';
 
 /**
- * GET /api/events/[id]/revisions
- * List revisions for an event (last 5)
+ * Page size when the caller does not ask for one. A DEFAULT, not a cap — `?limit=`
+ * raises it and `?cursor=` walks the rest.
  */
-export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+const DEFAULT_PAGE_SIZE = 25;
+const MAX_PAGE_SIZE = 200;
+
+/**
+ * GET /api/events/[id]/revisions
+ * List revisions for an event, newest first. Cursor-paginated, uncapped.
+ *
+ * GTC-168 (A2): the previous `take: 5` was a hard cap — the API could not return a
+ * sixth revision at all, so history older than five steps was unreachable by any
+ * caller. Hinge §2 requires "the complete history always reachable whatever the
+ * display defaults to". The UI may still show five; the API may not.
+ *
+ * Query params: `?limit=` (default 25, max 200) and `?cursor=` (a revision id;
+ * results continue after it). `nextCursor` is null on the last page.
+ */
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: eventId } = await context.params;
 
@@ -25,11 +40,19 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
-    // Get last 5 revisions
-    const revisions = await prisma.planRevision.findMany({
+    const { searchParams } = request.nextUrl;
+    const rawLimit = Number.parseInt(searchParams.get('limit') ?? '', 10);
+    const limit = Number.isFinite(rawLimit)
+      ? Math.min(Math.max(rawLimit, 1), MAX_PAGE_SIZE)
+      : DEFAULT_PAGE_SIZE;
+    const cursor = searchParams.get('cursor');
+
+    // Fetch one extra row to learn whether a next page exists without a second query.
+    const rows = await prisma.planRevision.findMany({
       where: { eventId },
       orderBy: { revisionNumber: 'desc' },
-      take: 5,
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       select: {
         id: true,
         revisionNumber: true,
@@ -39,8 +62,15 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
       },
     });
 
+    const hasMore = rows.length > limit;
+    const revisions = hasMore ? rows.slice(0, limit) : rows;
+
+    const total = await prisma.planRevision.count({ where: { eventId } });
+
     return NextResponse.json({
       revisions,
+      nextCursor: hasMore ? revisions[revisions.length - 1].id : null,
+      total,
     });
   } catch (error) {
     console.error('Error fetching revisions:', error);
