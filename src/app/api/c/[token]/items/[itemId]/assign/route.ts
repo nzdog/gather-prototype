@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { canMutate, logAudit, repairItemStatusAfterMutation } from '@/lib/workflow';
-import { requireNotFrozen } from '@/lib/auth/guards';
+import { logAudit, repairItemStatusAfterMutation } from '@/lib/workflow';
 
 /**
  * POST /api/c/[token]/items/[itemId]/assign
@@ -12,10 +11,8 @@ import { requireNotFrozen } from '@/lib/auth/guards';
  * CRITICAL:
  * - Verify item.teamId === token.teamId
  * - Verify assignee's PersonEvent.teamId === item.teamId (same team)
- * - Check canMutate() before assigning
  * - After assignment create: call repairItemStatusAfterMutation(tx, itemId)
  * - Log ASSIGN_ITEM or REASSIGN_ITEM
- * - Server-side frozen state validation
  */
 export async function POST(
   request: NextRequest,
@@ -28,10 +25,6 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
-  // SECURITY: Block mutations when FROZEN (server-side validation)
-  const frozenBlock = requireNotFrozen(resolvedContext.event, false);
-  if (frozenBlock) return frozenBlock;
-
   // Verify item ownership
   const item = await prisma.item.findUnique({
     where: { id: itemId },
@@ -40,16 +33,6 @@ export async function POST(
 
   if (!item || item.teamId !== resolvedContext.team.id) {
     return NextResponse.json({ error: 'Item not found' }, { status: 404 });
-  }
-
-  // Check if mutations are allowed
-  if (!canMutate(resolvedContext.event.status, 'assignItem')) {
-    return NextResponse.json(
-      {
-        error: `Cannot assign items while event is ${resolvedContext.event.status}`,
-      },
-      { status: 403 }
-    );
   }
 
   const body = await request.json();
@@ -133,7 +116,6 @@ export async function POST(
  * - Verify item.teamId === token.teamId
  * - After assignment delete: call repairItemStatusAfterMutation(tx, itemId)
  * - Log UNASSIGN_ITEM
- * - Server-side frozen state validation
  */
 export async function DELETE(
   _request: NextRequest,
@@ -145,10 +127,6 @@ export async function DELETE(
   if (!resolvedContext || resolvedContext.scope !== 'COORDINATOR' || !resolvedContext.team) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
-
-  // SECURITY: Block mutations when FROZEN (server-side validation)
-  const frozenBlock = requireNotFrozen(resolvedContext.event, false);
-  if (frozenBlock) return frozenBlock;
 
   // Verify item ownership
   const item = await prisma.item.findUnique({
@@ -168,16 +146,6 @@ export async function DELETE(
 
   if (!item.assignment) {
     return NextResponse.json({ error: 'Item has no assignment' }, { status: 400 });
-  }
-
-  // Check if mutations are allowed
-  if (!canMutate(resolvedContext.event.status, 'assignItem')) {
-    return NextResponse.json(
-      {
-        error: `Cannot unassign items while event is ${resolvedContext.event.status}`,
-      },
-      { status: 403 }
-    );
   }
 
   // Delete assignment in transaction

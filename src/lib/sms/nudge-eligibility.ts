@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { isValidNZNumber } from '@/lib/phone';
 import { isOptedOut } from '@/lib/sms/opt-out-service';
+import { SENT_AND_LIVE } from '@/lib/lifecycle';
 
 export interface NudgeCandidate {
   personId: string;
@@ -51,25 +52,31 @@ export async function findNudgeCandidates(): Promise<EligibilityResult> {
   const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
 
-  // Find all people in CONFIRMING events with anchor set
+  // Find all people in SENT, not-yet-past events with their anchor set.
+  //
+  // GTC-169 (A3a): this filter was `status: 'CONFIRMING'`, which meant FREEZING AN
+  // EVENT STOPPED ITS NUDGES — exactly backwards from the ruled model, where the send
+  // is when the chasing starts (Moment 4 §4; Hinge §6 "I'll tell you the moment
+  // anything comes back").
+  //
+  // The endDate half is load-bearing, not cosmetic: after A3a no event ever leaves
+  // CONFIRMING, so a status-only filter would keep matching events whose date had
+  // passed and fire nudges after the event — which Moment 4 §10.1 forbids outright
+  // ("Post-date: nudges dead"). The security suite asserts this directly.
   const candidates = await prisma.person.findMany({
     where: {
       inviteAnchorAt: { not: null },
       phoneNumber: { not: null },
       eventMemberships: {
         some: {
-          event: {
-            status: 'CONFIRMING',
-          },
+          event: SENT_AND_LIVE(now),
         },
       },
     },
     include: {
       eventMemberships: {
         where: {
-          event: {
-            status: 'CONFIRMING',
-          },
+          event: SENT_AND_LIVE(now),
         },
         include: {
           event: {
@@ -233,9 +240,10 @@ export async function findRsvpFollowupCandidates(): Promise<{
         lte: fortyEightHoursAgo,
       },
       rsvpFollowupSentAt: null,
-      event: {
-        status: 'CONFIRMING',
-      },
+      // Same inversion, same reason: a follow-up must never fire after the event.
+      // (GTC-178 / E1 deletes this function outright — the NOT_SURE forced conversion
+      // is obsoleted twice over, by the maybe ruling and by the one-tap model.)
+      event: SENT_AND_LIVE(new Date()),
     },
     include: {
       person: {

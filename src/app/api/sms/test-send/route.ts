@@ -14,7 +14,7 @@ export async function POST(request: Request) {
 
     // Get a test event and person
     const event = await prisma.event.findFirst({
-      where: { status: 'CONFIRMING' },
+      where: { sentAt: { not: null } },
       include: {
         people: {
           include: { person: true },
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           success: false,
-          error: 'No test event found. Create an event in CONFIRMING status first.',
+          error: 'No test event found. Create an event and send its invites first.',
         },
         { status: 404 }
       );

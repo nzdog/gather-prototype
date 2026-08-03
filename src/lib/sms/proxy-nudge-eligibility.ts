@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { isValidNZNumber } from '@/lib/phone';
 import { isOptedOut } from '@/lib/sms/opt-out-service';
+import { SENT_AND_LIVE } from '@/lib/lifecycle';
 
 export interface ProxyNudgeCandidate {
   householdId: string;
@@ -32,11 +33,11 @@ export interface ProxyEligibilityResult {
  * scheduling logic needs redesign in a future ticket.
  */
 export async function findProxyNudgeCandidates(): Promise<ProxyEligibilityResult> {
+  // GTC-169 (A3a): see nudge-eligibility.ts — the send starts the chasing, and the
+  // event date ends it (Moment 4 §10.1).
   const households = await prisma.household.findMany({
     where: {
-      event: {
-        status: 'CONFIRMING',
-      },
+      event: SENT_AND_LIVE(new Date()),
     },
     include: {
       event: true,

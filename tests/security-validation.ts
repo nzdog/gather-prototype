@@ -68,6 +68,19 @@ function readRoute(rel: string): string {
   return fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 }
 
+/**
+ * Source with comments removed.
+ *
+ * Residue assertions are about CODE, not prose. Deleted guards leave tombstone
+ * comments behind on purpose — explaining why requireNotFrozen is gone is exactly how
+ * it stays gone — and a naive substring scan would read those as the guard itself.
+ */
+function readCode(rel: string): string {
+  return readRoute(rel)
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // In-process route invocation
 //
@@ -365,7 +378,7 @@ async function testSuite5_SendLock(f: Fixtures) {
     'src/app/api/events/[id]/items/[itemId]/assign/route.ts',
     'src/app/api/p/[token]/ack/[assignmentId]/route.ts',
   ].filter((rel) => {
-    const src = readRoute(rel);
+    const src = readCode(rel);
     return src.includes('requireNotFrozen') || src.includes("=== 'FROZEN'");
   });
   logTest(
@@ -407,7 +420,7 @@ async function testSuite6_CoordinatorAuthority(f: Fixtures) {
 
   // The host surface cannot be driven in-process (requireEventRole reads a session
   // cookie), so this one is structural by necessity — and named as such.
-  const hostAssign = readRoute('src/app/api/events/[id]/items/[itemId]/assign/route.ts');
+  const hostAssign = readCode('src/app/api/events/[id]/items/[itemId]/assign/route.ts');
   logTest(
     'Host assign route keeps requireEventRole (auth) and has no lifecycle gate [structural]',
     hostAssign.includes('requireEventRole') && !hostAssign.includes('requireNotFrozen')
@@ -457,7 +470,7 @@ async function testSuite7_NoUndoPostSend(f: Fixtures) {
   }
   logTest('restoreFromRevision still works pre-send (the restriction is scoped)', preSendWorked);
 
-  const restoreSrc = readRoute('src/app/api/events/[id]/revisions/[revisionId]/restore/route.ts');
+  const restoreSrc = readCode('src/app/api/events/[id]/revisions/[revisionId]/restore/route.ts');
   logTest(
     'Restore route retains its auth guard [structural]',
     restoreSrc.includes('requireEventRole')
@@ -491,7 +504,7 @@ async function testSuite8_NudgePredicateAndOptOut(f: Fixtures) {
     'src/lib/sms/nudge-eligibility.ts',
     'src/lib/sms/proxy-nudge-eligibility.ts',
   ]) {
-    const src = readRoute(rel);
+    const src = readCode(rel);
     const hasOptOut = src.includes('isOptedOut');
     const hasPhoneValidation = src.includes('isValidNZNumber');
     logTest(

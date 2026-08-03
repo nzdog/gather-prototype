@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { isSent } from '@/lib/lifecycle';
 import { logInviteEvent } from '@/lib/invite-events';
 import { headers } from 'next/headers';
 
@@ -29,6 +30,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
     select: {
       id: true,
       status: true,
+      sentAt: true,
+      endDate: true,
       hostId: true,
     },
   });
@@ -37,7 +40,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
     return NextResponse.json({ error: 'Invalid or disabled invite link' }, { status: 404 });
   }
 
-  if (event.status !== 'CONFIRMING' && event.status !== 'FROZEN') {
+  // Responses are accepted once the plan is built, and stay open through the send.
+  // Someone claiming a name post-send becomes a mini-send (Hinge §2, gap #5).
+  if (event.status !== 'CONFIRMING' && !isSent(event)) {
     return NextResponse.json({ error: 'This event is not accepting responses' }, { status: 400 });
   }
 

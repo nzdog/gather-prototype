@@ -1,9 +1,10 @@
 // POST /api/events/[id]/freeze-check
-// Checks freeze readiness and returns warnings WITHOUT actually freezing
-// This allows the UI to show warnings before committing to the freeze
+// Sweeps the plan for gaps and returns warnings. Never blocks.
+// GTC-169: the path keeps its name until A3c migrates the UI; the concept is now
+// send-readiness (Hinge §1's pre-flight), not freeze-readiness.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { checkFreezeReadiness } from '@/lib/workflow';
+import { checkSendReadiness } from '@/lib/workflow';
 import { requireEventRole } from '@/lib/auth/guards';
 
 export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -14,11 +15,14 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
   if (auth instanceof NextResponse) return auth;
 
   try {
-    // Run freeze readiness check
-    const result = await checkFreezeReadiness(eventId);
+    // Sweep for gaps. Warnings only — nothing here blocks (Moment 4 §2/§7).
+    const result = await checkSendReadiness(eventId);
 
     return NextResponse.json({
-      canFreeze: result.canFreeze,
+      // Legacy wire key, always true. The internal canFreeze field is gone; this
+      // stays until GTC-197 (A3c) migrates TransitionModal off it — A3a does not
+      // change wire shapes.
+      canFreeze: true,
       warnings: result.warnings,
       complianceRate: result.complianceRate,
       criticalGaps: result.criticalGaps,

@@ -38,7 +38,20 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
-    // Only allow in CONFIRMING status
+    // GTC-169 (A3a): the press happens ONCE. "The send happens once, for her...
+    // experientially it is one act, one sentence, one handover" (Hinge §7).
+    //
+    // Freezing used to be what stopped a second press — after CONFIRMING → FROZEN
+    // this route 400'd. Removing FROZEN removes that protection, so the idempotency
+    // guard becomes explicit here rather than a side effect of a state machine.
+    // People added afterwards get their own mini-send, not a re-press of the whole
+    // event (Hinge §2, gap #5).
+    if (event.sentAt) {
+      return NextResponse.json({ error: 'This event has already been sent' }, { status: 400 });
+    }
+
+    // The plan must exist before it can be sent — a sequencing fact, not a gate on
+    // the host's judgement.
     if (event.status !== 'CONFIRMING') {
       return NextResponse.json(
         { error: 'Can only confirm invites when event is in CONFIRMING status' },

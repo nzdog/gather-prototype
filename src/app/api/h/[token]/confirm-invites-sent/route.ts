@@ -29,6 +29,12 @@ export async function POST(_req: NextRequest, context: { params: Promise<{ token
     return NextResponse.json({ error: 'Event not found' }, { status: 404 });
   }
 
+  // GTC-169 (A3a): the press happens once (Hinge §7). Freezing used to be what
+  // prevented a second press; with FROZEN gone the guard is explicit.
+  if (event.sentAt) {
+    return NextResponse.json({ error: 'This event has already been sent' }, { status: 400 });
+  }
+
   if (event.status !== 'CONFIRMING') {
     return NextResponse.json({ error: 'Event must be in CONFIRMING status' }, { status: 400 });
   }

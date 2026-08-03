@@ -1,11 +1,14 @@
 // POST /api/events/[id]/wrap-up
-// Host confirms wrap-up: transitions event to COMPLETE, generates WrapUpLinks for all guests
+// Host confirms wrap-up: generates WrapUpLinks for all guests once the event date has
+// passed. Does NOT transition status — COMPLETE is derived from the calendar
+// (Moment 4 §10.1). GTC-186 (H1) turns this into a once-only, reviewed offer.
 // SECURITY: Requires HOST role
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireEventRole } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
 import { logAudit } from '@/lib/workflow';
+import { isComplete } from '@/lib/lifecycle';
 import { generateWrapUpLinks } from '@/lib/wrap-up';
 
 export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -46,25 +49,19 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
-    // Must be FROZEN to wrap up
-    if (event.status !== 'FROZEN') {
+    // GTC-169 (A3a): the gate moved from a status the host DECLARED to a fact about
+    // the calendar. Moment 4 §10.1 — "the event date passing IS the state change. No
+    // button, no ceremony."
+    //
+    // The old `confirmEarly` bypass was DELETED with it: you cannot wrap up an event
+    // that has not happened, because COMPLETE is not a decision anyone gets to make
+    // early. This narrows what the host can do, and it is not a §7 hard-block — §7
+    // forbids the product contesting the host's JUDGEMENT, and the calendar is not a
+    // judgement.
+    if (!isComplete(event)) {
       return NextResponse.json(
-        { error: `Cannot complete event in ${event.status} status. Event must be FROZEN.` },
+        { error: 'Cannot wrap up before the event date has passed.' },
         { status: 400 }
-      );
-    }
-
-    // Warn if event date hasn't passed yet
-    const eventDatePassed = event.endDate < new Date();
-    const body = await _request.json().catch(() => ({}));
-    if (!eventDatePassed && !body.confirmEarly) {
-      return NextResponse.json(
-        {
-          warning: true,
-          message: "Your event date hasn't passed yet — are you sure?",
-          requiresConfirmation: true,
-        },
-        { status: 200 }
       );
     }
 
@@ -82,12 +79,13 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       });
     }
 
-    // Transition to COMPLETE
+    // Record the wrap-up. NOT a status transition: COMPLETE is derived from endDate,
+    // so nothing writes Event.status here. wrappedAt now means "the thank-you was
+    // actioned", not "the event completed".
     await prisma.$transaction(async (tx) => {
       await tx.event.update({
         where: { id: eventId },
         data: {
-          status: 'COMPLETE',
           wrappedAt: new Date(),
         },
       });
@@ -95,7 +93,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       await logAudit(tx, {
         eventId,
         actorId: person!.id,
-        actionType: 'TRANSITION_TO_COMPLETE',
+        actionType: 'WRAP_UP_SENT',
         targetType: 'Event',
         targetId: eventId,
         details: `Host wrapped up event. ${event.people.length} guests to notify.`,
@@ -127,7 +125,6 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       message: `Done — thank-you messages are on their way to your ${linkResult.created} guests.`,
       guestsToNotify: linkResult.created,
       guestsSkipped: linkResult.skipped,
-      eventStatus: 'COMPLETE',
     });
   } catch (error) {
     console.error('Error wrapping up event:', error);
