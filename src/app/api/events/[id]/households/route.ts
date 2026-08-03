@@ -188,6 +188,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           contactMethod,
           householdId,
           householdRole,
+          // GTC-196: the mini-send clock — see people/route.ts for the full note.
+          sentAt: event!.sentAt ?? null,
         },
       });
     }

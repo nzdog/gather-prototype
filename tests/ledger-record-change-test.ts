@@ -90,6 +90,35 @@ async function main() {
     all.every((e, i) => e.sequence === i + 1)
   );
 
+  // ── Regression: logAudit rows must not poison sequence allocation ─────────
+  //
+  // logAudit writes lifecycle rows with a NULL sequence into the same table. Postgres
+  // orders NULLS FIRST on DESC, so a naive max-sequence lookup returns one of those
+  // and hands out sequence 1 forever. Found by the GTC-196 security suite the moment
+  // both writers landed on one event.
+  console.log('\n\x1b[33mSuite 1b: logAudit rows do not poison sequence allocation\x1b[0m');
+  await prisma.auditEntry.create({
+    data: {
+      eventId: event.id,
+      actorId: host.id,
+      actionType: 'ASSIGN_ITEM',
+      targetType: 'Item',
+      targetId: 'i1',
+      details: 'a lifecycle row, written by logAudit — no sequence',
+    },
+  });
+  const afterNullRow = await prisma.$transaction((tx) =>
+    recordChange(tx, {
+      eventId: event.id,
+      actor,
+      changes: [{ action: 'CREATE_ITEM', targetType: 'Item', targetId: 'i3' }],
+    })
+  );
+  assert(
+    'a NULL-sequence lifecycle row does not reset the counter',
+    afterNullRow.sequences[0] === 5
+  );
+
   // ── Suite 2: changeSet grouping ───────────────────────────────────────────
   console.log('\n\x1b[33mSuite 2: changeSetId — one request, one step\x1b[0m');
   assert('a 2-change set shares one changeSetId', second.entryIds.length === 2);
@@ -114,7 +143,7 @@ async function main() {
     'an explicit changeSetId joins an existing set',
     joined.changeSetId === second.changeSetId
   );
-  assert('the joined row still gets its own sequence', joined.sequences[0] === 5);
+  assert('the joined row still gets its own sequence', joined.sequences[0] === 6);
 
   // ── Suite 3: the why, and its honest absence ──────────────────────────────
   console.log('\n\x1b[33mSuite 3: reasonRequired — required never means rejected\x1b[0m');

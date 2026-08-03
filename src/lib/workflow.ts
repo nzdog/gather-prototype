@@ -1,6 +1,7 @@
 import { prisma } from './prisma';
 import type { Item, Assignment, Person, EventStatus, Prisma } from '@prisma/client';
 import { isSent } from './lifecycle';
+import { recordChange, type ActorKind } from './ledger';
 
 // Type for items with assignment + person included
 type ItemWithAssignmentAndPerson = Item & {
@@ -270,16 +271,59 @@ export function canTransition(fromStatus: EventStatus, toStatus: EventStatus): b
  */
 
 /**
+ * Lifecycle and housekeeping audit lines — things that happen TO an event rather than
+ * changes to the plan inside it.
+ *
+ * GTC-196 (A3b) — WHY THIS IS A TS UNION AND NOT A POSTGRES ENUM.
+ *
+ * A2 deferred the `AuditActionType` enum to this ticket, on the grounds that the
+ * writer set would be known once the routes were wired. It now is, and it turns out to
+ * be TWO vocabularies, not one:
+ *
+ *   - `recordChange()` writes plan changes, typed by `ChangeAction` in ledger.ts.
+ *   - `logAudit()` writes lifecycle lines — this union.
+ *
+ * Freezing both into a single Postgres enum now would cement that conflation in the
+ * schema at exactly the moment logAudit is mid-retirement (its plan-change callers
+ * moved to recordChange in this ticket; what remains is lifecycle-only). It would also
+ * need a text→enum cast, which fails on any historical value outside the enum — a
+ * one-way migration risk taken for something already solved.
+ *
+ * Because the real prize was compile-time safety, and this union plus `ChangeAction`
+ * delivers it on both paths with zero migration risk: a typo is a type error today.
+ * The Postgres enum belongs with logAudit's retirement, not ahead of it.
+ */
+export type AuditLifecycleAction =
+  | 'TRANSITION_TO_CONFIRMING'
+  | 'CREATE_REVISION'
+  | 'RESTORE_REVISION'
+  | 'WRAP_UP_SENT'
+  | 'EDIT_EVENT'
+  | 'REMOVE_PERSON'
+  | 'UNASSIGN_ITEM'
+  | 'ACCEPT_ASSIGNMENT'
+  | 'DECLINE_ASSIGNMENT'
+  | 'CREATE_ITEM'
+  | 'EDIT_ITEM'
+  | 'DELETE_ITEM'
+  | 'ASSIGN_ITEM'
+  | 'REASSIGN_ITEM';
+
+/**
  * Audit helper: logs action to AuditEntry within transaction.
  *
  * CRITICAL: All audit logging must happen inside transactions.
+ *
+ * For PLAN CHANGES use recordChange() in src/lib/ledger.ts instead — it allocates a
+ * version, groups the changeSet, and applies the why-scope rule. This helper writes
+ * lifecycle lines that are not versions of the plan.
  */
 export async function logAudit(
   tx: Tx,
   params: {
     eventId: string;
     actorId: string;
-    actionType: string;
+    actionType: AuditLifecycleAction;
     targetType: string;
     targetId: string;
     details?: string;
@@ -320,7 +364,8 @@ export async function logAudit(
 export async function removePerson(
   personId: string,
   eventId: string,
-  actorId: string
+  actorId: string,
+  opts: { actorKind?: ActorKind; reason?: string | null } = {}
 ): Promise<void> {
   await prisma.$transaction(async (tx) => {
     const person = await tx.person.findUnique({
@@ -384,6 +429,26 @@ export async function removePerson(
 
     await tx.personEvent.deleteMany({
       where: { personId, eventId },
+    });
+
+    // T2 — removing someone who is HOLDING something touches them: their asks
+    // disappear and the system owes anyone released a loop-closing message.
+    // Removing a guest who holds nothing touches nobody, and the count is what
+    // decides it. Wired here rather than at the route so every caller inherits it.
+    await recordChange(tx, {
+      eventId,
+      actor: { id: actorId, kind: opts.actorKind ?? 'HOST', name: null },
+      reason: opts.reason ?? null,
+      changes: [
+        {
+          action: 'REMOVE_PERSON',
+          targetType: 'PersonEvent',
+          targetId: personId,
+          before: { personId, personName: person.name },
+          after: null,
+          context: { heldAssignmentCount: assignments.length },
+        },
+      ],
     });
   });
 }
@@ -855,42 +920,38 @@ export async function createRevision(
 export async function restoreFromRevision(
   eventId: string,
   revisionId: string,
-  actorId: string
+  actorId: string,
+  opts: { actorKind?: ActorKind; reason?: string | null } = {}
 ): Promise<void> {
-  // GTC-169 (A3a) — THE EPIC'S ONE ADDED RESTRICTION.
-  //
-  // Restoring a revision after the send is recall by another name: it would silently
-  // undo asks that people have already received and claimed against. Hinge §2 rules
-  // that out at the MECHANISM level — "there is no unsend for the disaster case" —
-  // and a wrong send is recovered forwards through the material-change machinery
-  // (Moment 4 §8.5 / GTC-183), never by pretending it did not happen.
-  //
-  // The guard lives here rather than in the route because no-undo is a domain
-  // invariant: it must hold for every caller, not just the one HTTP path.
-  //
-  // ⚠ THIS REFUSAL IS THE INTERIM CONTRACT, NOT THE END STATE (Nigel, 2026-08-03).
+  // GTC-196 (A3b) — THE CONVERSION. A3a refused this on a sent event; that refusal
+  // was interim scaffolding, not doctrine (recorded in GTC-196 and by founder ruling
+  // 2026-08-03).
   //
   // Post-send restore is the SAME SPECIES as post-send regeneration, which was ruled
   // allowed: a bulk change that carries a checkpoint, a ledger changeSet and a why —
-  // not a thing to forbid. Restore is refused here only because A3a removed the gate
-  // before A3b built the recording, and an unrecorded bulk rewrite of a sent plan is
-  // the one thing worse than either.
+  // not a thing to forbid. A3a refused it only because the gate came off before the
+  // recording went in, and an UNRECORDED bulk rewrite of a sent plan is the one thing
+  // worse than either. The recording now exists, so the refusal converts:
   //
-  // The moment recordChange() is wired (GTC-196 / A3b), this converts: refused →
-  // allowed-as-recorded-changeSet, with one PlanRevision checkpoint, one reason, and
-  // one entry per resulting change. The security-suite assertion flips with it.
+  //   refused  →  allowed-as-recorded-changeSet
   //
-  // DO NOT let this refusal silently harden into doctrine. If you are reading this
-  // comment after A3b has landed, the conversion was missed — see GTC-196.
+  // A checkpoint of the pre-restore state goes in FIRST — nothing is lost by moving
+  // forward, which is exactly what makes no-undo safe to live with (Hinge §2) — and
+  // the restore itself lands as one changeSet carrying the host's why.
+  //
+  // The UI consequence line ("this replaces the plan people have claimed against") is
+  // GTC-197 (A3c)'s and must merge with this.
   const event = await prisma.event.findUniqueOrThrow({
     where: { id: eventId },
     select: { status: true, sentAt: true, endDate: true },
   });
-  if (isSent(event)) {
-    throw new Error(
-      'Cannot restore a revision after the plan has been sent — nothing is undone by moving ' +
-        'forward. Change the plan instead; the history keeps the story.'
-    );
+  const wasSent = isSent(event);
+
+  // The pre-restore plan is worth keeping whole: a restore replaces every team and
+  // item, so a per-field ledger of it would be hundreds of entries describing a state
+  // no longer reachable any other way.
+  if (wasSent) {
+    await createRevision(eventId, actorId, 'Checkpoint before restore');
   }
 
   await prisma.$transaction(async (tx) => {
@@ -1038,6 +1099,24 @@ export async function restoreFromRevision(
       targetType: 'PlanRevision',
       targetId: revisionId,
       details: `Restored event to revision #${revision.revisionNumber}`,
+    });
+
+    // The restore itself, as one recorded step. It is a bulk change — the whole plan
+    // moved — so it lands as a single changeSet carrying the why, exactly like a
+    // post-send regenerate. Pre-send it is versioned and never interrogated.
+    await recordChange(tx, {
+      eventId,
+      actor: { id: actorId, kind: opts.actorKind ?? 'HOST', name: null },
+      reason: opts.reason ?? null,
+      changes: [
+        {
+          action: 'REGENERATE_PLAN',
+          targetType: 'Event',
+          targetId: eventId,
+          before: { restoredFrom: 'current plan' },
+          after: { revisionId, revisionNumber: revision.revisionNumber },
+        },
+      ],
     });
   });
 }

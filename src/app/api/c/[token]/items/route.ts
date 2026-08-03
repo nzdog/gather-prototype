@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logAudit } from '@/lib/workflow';
+import { recordChange, actorFromToken } from '@/lib/ledger';
 
 /**
  * POST /api/c/[token]/items
@@ -55,6 +56,21 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
       targetType: 'Item',
       targetId: newItem.id,
       details: `Created item: ${newItem.name}`,
+    });
+
+    // Versioned, never interrogated: nobody has been asked for this yet.
+    await recordChange(tx, {
+      eventId: resolvedContext.event.id,
+      actor: actorFromToken(resolvedContext),
+      changes: [
+        {
+          action: 'CREATE_ITEM',
+          targetType: 'Item',
+          targetId: newItem.id,
+          before: null,
+          after: { name: newItem.name, quantity: newItem.quantity, teamId: newItem.teamId },
+        },
+      ],
     });
 
     return newItem;

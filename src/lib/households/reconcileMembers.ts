@@ -205,6 +205,8 @@ export async function reconcileHouseholdMembers(
         contactMethod: reach.contactMethod,
         householdId: household.id,
         householdRole: role,
+        // GTC-196: the mini-send clock — see people/route.ts for the full note.
+        sentAt: sentAt ?? null,
       },
     });
   }

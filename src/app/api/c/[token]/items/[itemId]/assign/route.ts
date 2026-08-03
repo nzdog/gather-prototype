@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logAudit, repairItemStatusAfterMutation } from '@/lib/workflow';
+import { recordChange, actorFromToken, onAssignmentReleased } from '@/lib/ledger';
 
 /**
  * POST /api/c/[token]/items/[itemId]/assign
@@ -58,15 +59,18 @@ export async function POST(
     );
   }
 
+  const actor = actorFromToken(resolvedContext);
+  const released = item.assignment;
+
   // Assign/reassign in transaction
-  const result = await prisma.$transaction(async (tx) => {
-    const isReassignment = item.assignment !== null;
+  const { assignment: result, changeSetId } = await prisma.$transaction(async (tx) => {
+    const isReassignment = released !== null;
     const actionType = isReassignment ? 'REASSIGN_ITEM' : 'ASSIGN_ITEM';
 
     // Delete existing assignment if present
-    if (item.assignment) {
+    if (released) {
       await tx.assignment.delete({
-        where: { id: item.assignment.id },
+        where: { id: released.id },
       });
     }
 
@@ -101,8 +105,34 @@ export async function POST(
       details: `${isReassignment ? 'Reassigned' : 'Assigned'} ${item.name} to ${assignment.person.name}`,
     });
 
-    return assignment;
+    // T1 — the ask itself moves. A coordinator owes the same why a host does; the
+    // rule is a property of the change, not the changer (ruled 2026-08-03).
+    const ledger = await recordChange(tx, {
+      eventId: resolvedContext.event.id,
+      actor,
+      reason: body.reason ?? null,
+      changes: [
+        {
+          action: isReassignment ? 'MOVE_ASSIGNMENT' : 'CREATE_ASSIGNMENT',
+          targetType: 'Assignment',
+          targetId: assignment.id,
+          before: released ? { personId: released.personId, response: released.response } : null,
+          after: {
+            personId: assignment.personId,
+            personName: assignment.person.name,
+            response: assignment.response,
+          },
+          context: { assignmentResponse: released?.response ?? null },
+        },
+      ],
+    });
+
+    return { assignment, changeSetId: ledger.changeSetId };
   });
+
+  if (released) {
+    await onAssignmentReleased(released.personId, itemId, changeSetId);
+  }
 
   return NextResponse.json({ assignment: result });
 }
@@ -118,10 +148,11 @@ export async function POST(
  * - Log UNASSIGN_ITEM
  */
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ token: string; itemId: string }> }
 ) {
   const { token, itemId } = await context.params;
+  const delBody = await request.json().catch(() => ({}) as { reason?: string });
   const resolvedContext = await resolveToken(token);
 
   if (!resolvedContext || resolvedContext.scope !== 'COORDINATOR' || !resolvedContext.team) {
@@ -149,7 +180,7 @@ export async function DELETE(
   }
 
   // Delete assignment in transaction
-  await prisma.$transaction(async (tx) => {
+  const { changeSetId: delChangeSetId } = await prisma.$transaction(async (tx) => {
     await tx.assignment.delete({
       where: { id: item.assignment!.id },
     });
@@ -165,7 +196,30 @@ export async function DELETE(
       targetId: itemId,
       details: `Unassigned ${item.name} from ${item.assignment!.person.name}`,
     });
+
+    // T1 — withdrawing the ask touches whoever held it, at any response state.
+    return recordChange(tx, {
+      eventId: resolvedContext.event.id,
+      actor: actorFromToken(resolvedContext),
+      reason: delBody.reason ?? null,
+      changes: [
+        {
+          action: 'DELETE_ASSIGNMENT',
+          targetType: 'Assignment',
+          targetId: item.assignment!.id,
+          before: {
+            personId: item.assignment!.personId,
+            personName: item.assignment!.person.name,
+            response: item.assignment!.response,
+          },
+          after: null,
+          context: { assignmentResponse: item.assignment!.response },
+        },
+      ],
+    });
   });
+
+  await onAssignmentReleased(item.assignment.personId, itemId, delChangeSetId);
 
   return NextResponse.json({ success: true });
 }
