@@ -3,6 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordChange } from '@/lib/ledger';
 
 export async function GET(
   _request: NextRequest,
@@ -154,6 +156,24 @@ export async function POST(
         },
       },
     });
+
+    // Versioned, never interrogated: nobody has been asked for this yet.
+    const itemActor = await ledgerActorForUser(auth.user, auth.role);
+    await prisma.$transaction((tx) =>
+      recordChange(tx, {
+        eventId,
+        actor: itemActor,
+        changes: [
+          {
+            action: 'CREATE_ITEM',
+            targetType: 'Item',
+            targetId: item.id,
+            before: null,
+            after: { name: item.name, quantity: item.quantity, teamId: item.teamId },
+          },
+        ],
+      })
+    );
 
     return NextResponse.json({ item }, { status: 201 });
   } catch (error) {

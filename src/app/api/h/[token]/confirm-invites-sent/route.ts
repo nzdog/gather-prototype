@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { recordChange, actorFromToken } from '@/lib/ledger';
 import { logInviteEvent } from '@/lib/invite-events';
 
 export async function POST(_req: NextRequest, context: { params: Promise<{ token: string }> }) {
@@ -71,6 +72,23 @@ export async function POST(_req: NextRequest, context: { params: Promise<{ token
       newAnchorsSet: needAnchor.length,
     },
   });
+
+  // The press, as the ledger's first entry (Moment 4 §7).
+  await prisma.$transaction((tx) =>
+    recordChange(tx, {
+      eventId,
+      actor: actorFromToken(resolvedContext),
+      changes: [
+        {
+          action: 'SEND_PRESSED',
+          targetType: 'Event',
+          targetId: eventId,
+          before: { sentAt: null },
+          after: { sentAt: now.toISOString() },
+        },
+      ],
+    })
+  );
 
   return NextResponse.json({ success: true, confirmedAt: now.toISOString() });
 }

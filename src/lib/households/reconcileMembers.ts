@@ -1,4 +1,21 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
+
+/**
+ * GTC-201 (A3b-2): this takes a TRANSACTION CLIENT, not the bare PrismaClient.
+ *
+ * The function performs six-plus dependent writes — a Person update, a PersonEvent
+ * update, a Household update, then per-member updates, creates and deletes. It ran
+ * them as sequential awaits with no transaction, so a failure part-way left a
+ * household half-reconciled: some members renamed, others not, some deleted with
+ * their replacements never created.
+ *
+ * That was recorded as the residual risk when GTC-159 (commit b73f140) replaced the
+ * old delete-and-recreate with this diff — "the reconcile path still runs with no
+ * transaction" (discovery report §5, July 2026). Wiring the ledger forces the fix,
+ * because recordChange() requires a tx: an entry that survives a rolled-back write
+ * describes something that never happened (gather-architecture-contract §7).
+ */
+type Tx = Prisma.TransactionClient;
 import { normalizePhoneNumber } from '@/lib/phone';
 
 /**
@@ -67,10 +84,7 @@ function reachabilityFor(phone: string | null, email: string | null | undefined)
   return { contactMethod: 'NONE' as const, reachabilityTier: 'UNTRACKABLE' as const };
 }
 
-export async function reconcileHouseholdMembers(
-  prisma: PrismaClient,
-  ctx: ReconcileContext
-): Promise<void> {
+export async function reconcileHouseholdMembers(prisma: Tx, ctx: ReconcileContext): Promise<void> {
   const { eventId, household, primaryMember, sentAt, input } = ctx;
   const { primaryContact, partner, helpers, littleCount, guests } = input;
 

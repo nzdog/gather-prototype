@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordChange } from '@/lib/ledger';
 import { normalizePhoneNumber } from '@/lib/phone';
 
 // GET /api/events/[id]/people - List people on this event
@@ -205,6 +207,29 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         },
       },
     });
+
+    // Versioned, never interrogated: adding a person asks nothing of them yet. If an
+    // assignment follows, THAT is the T1 that touches them (Hinge §2, gap #5).
+    const addActor = await ledgerActorForUser(auth.user, auth.role);
+    await prisma.$transaction((tx) =>
+      recordChange(tx, {
+        eventId,
+        actor: addActor,
+        changes: [
+          {
+            action: 'ADD_PERSON',
+            targetType: 'PersonEvent',
+            targetId: personEvent.id,
+            before: null,
+            after: {
+              personId: personEvent.person.id,
+              personName: personEvent.person.name,
+              teamId: personEvent.team?.id ?? null,
+            },
+          },
+        ],
+      })
+    );
 
     return NextResponse.json({
       personEvent: {
