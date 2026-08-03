@@ -2497,6 +2497,7 @@ export default function PlanEditorPage() {
           <PeopleSection
             eventId={eventId}
             hostId={event?.hostId}
+            isSent={event ? isSentJson(event) : false}
             teams={teams}
             people={people}
             onPeopleChanged={() => {
@@ -3059,6 +3060,7 @@ export default function PlanEditorPage() {
           <PeopleSection
             eventId={eventId}
             hostId={event?.hostId}
+            isSent={event ? isSentJson(event) : false}
             teams={teams}
             people={people}
             onPeopleChanged={() => {

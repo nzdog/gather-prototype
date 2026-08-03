@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordChange } from '@/lib/ledger';
 
 interface TeamDistribution {
   teamId: string;
@@ -10,11 +12,12 @@ interface TeamDistribution {
 }
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   try {
     const { id: eventId } = await context.params;
+    const body = await request.json().catch(() => ({}) as { reason?: string });
 
     // SECURITY: Require HOST role for auto-assignment operations
     const auth = await requireEventRole(eventId, ['HOST']);
@@ -145,6 +148,8 @@ export async function POST(
       targetTeam.memberCount += 1;
     }
 
+    const autoAssignActor = await ledgerActorForUser(auth.user, auth.role);
+
     // 5. Execute all team assignments and item distribution in a single transaction
     const itemAssignments: Array<{
       itemId: string;
@@ -224,6 +229,37 @@ export async function POST(
             teamName: teams.find((t) => t.id === team.id)?.name || '',
           });
         }
+      }
+
+      // GTC-201 — ONE WHY FOR THE BATCH (ruled 2026-08-03, option (a)).
+      //
+      // Post-send, every assignment this creates is a T1: a person is now being asked
+      // for something they were not asked for before (Hinge §2 — "adding a person with
+      // an assignment post-send touches someone, so it carries its why"). There is no
+      // natural place for the host to give N separate whys, so the batch carries one,
+      // in the shape restoreFromRevision already uses: one changeSetId, one reason, N
+      // entries, each flagged reasonRequired by the rule.
+      //
+      // A SYSTEM-AUTHORED REASON WAS EXPLICITLY REJECTED. This route computes a
+      // per-assignment rationale ("Even distribution (3 members before assignment)")
+      // and it would have been easy to write that into `reason`. It is true, and it is
+      // the wrong thing: the ledger is Kate's memory (Hinge §2 — "the reason is not
+      // compliance — it's her own memory"), and a generated string that LOOKS like an
+      // answer makes the gap invisible. An honest null is better than a plausible lie.
+      if (itemAssignments.length > 0) {
+        await recordChange(tx, {
+          eventId,
+          actor: autoAssignActor,
+          reason: body.reason ?? null,
+          changes: itemAssignments.map((ia) => ({
+            action: 'CREATE_ASSIGNMENT' as const,
+            targetType: 'Assignment' as const,
+            targetId: ia.itemId,
+            before: null,
+            after: { personId: ia.personId, personName: ia.personName, itemName: ia.itemName },
+            context: { assignmentResponse: null },
+          })),
+        });
       }
     });
 

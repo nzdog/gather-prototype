@@ -37,11 +37,17 @@ interface PeopleSectionProps {
   stepLabel?: string;
   initialView?: 'table' | 'board';
   onReassignItems?: (teamId: string | null) => void;
+  /**
+   * True once the plan has been sent. Hides Auto-Assign — see the tombstone at the
+   * button. GTC-201, ruled 2026-08-03.
+   */
+  isSent?: boolean;
 }
 
 export default function PeopleSection({
   eventId,
   hostId,
+  isSent = false,
   teams,
   people,
   onPeopleChanged,
@@ -279,24 +285,42 @@ export default function PeopleSection({
               <UserCog className="w-4 h-4" />
               Assign Coordinators
             </button>
-            {/* Auto-Assign Button */}
-            <button
-              onClick={handleAutoAssign}
-              disabled={isAutoAssigning || people.length === 0}
-              className="px-3 py-1 bg-accent text-white rounded-md hover:bg-accent-dark disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {isAutoAssigning ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Assigning...
-                </>
-              ) : (
-                <>
-                  <Users className="w-4 h-4" />
-                  Auto-Assign
-                </>
-              )}
-            </button>
+            {/* ⚠ TOMBSTONE — REMOVE THIS CONDITION WHEN I2 + E1 LAND.
+                ────────────────────────────────────────────────────────────────────
+                Auto-Assign is hidden on a SENT event. This is a UI ABSENCE, not a
+                server block (ruled 2026-08-03): the route allows it and records it,
+                because Moment 4 §7 forbids hard-blocking the host. The screen simply
+                does not offer it yet.
+
+                WHY: post-send, auto-assign creates N asks at once — and until the
+                mini-send machinery exists, nobody it asks would ever be TOLD. Asking
+                someone silently is worse than not offering the button.
+
+                EXPIRES ON: GTC-189 (I2, the press — owns mini-sends) and GTC-178 (E1,
+                the nudge cadence those people's clocks run on). When a post-send
+                assignment reliably reaches the person assigned, delete `!isSent &&`
+                and this comment. The ledger side is already done: the batch carries
+                one why as one changeSet.
+                ──────────────────────────────────────────────────────────────────── */}
+            {!isSent && (
+              <button
+                onClick={handleAutoAssign}
+                disabled={isAutoAssigning || people.length === 0}
+                className="px-3 py-1 bg-accent text-white rounded-md hover:bg-accent-dark disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {isAutoAssigning ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Assigning...
+                  </>
+                ) : (
+                  <>
+                    <Users className="w-4 h-4" />
+                    Auto-Assign
+                  </>
+                )}
+              </button>
+            )}
             {/* Import CSV Button */}
             <button
               onClick={() => setImportModalOpen(true)}
