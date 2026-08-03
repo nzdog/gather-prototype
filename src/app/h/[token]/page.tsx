@@ -9,7 +9,6 @@ import {
   Send,
   Eye,
   CheckCircle,
-  Lock,
   Users,
   Home,
   Grid3x3,
@@ -19,7 +18,6 @@ import {
   Maximize2,
   Minimize2,
 } from 'lucide-react';
-import TransitionModal from '@/components/plan/TransitionModal';
 import { ModalProvider } from '@/contexts/ModalContext';
 import { HostPersonModal } from '@/components/h/HostPersonModal';
 import { useToast } from '@/contexts/ToastContext';
@@ -92,7 +90,7 @@ interface HostData {
     sent: number;
     opened: number;
     responded: number;
-    inviteSendConfirmedAt: string | null;
+    sentAt: string | null;
   } | null;
   people: PersonSummary[] | null;
 }
@@ -207,7 +205,6 @@ export default function HostView() {
   const [claimEmail, setClaimEmail] = useState('');
   const [claimSubmitted, setClaimSubmitted] = useState(false);
   const [claimSubmitting, setClaimSubmitting] = useState(false);
-  const [showFreezeModal, setShowFreezeModal] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<PersonSummary | null>(null);
   const [confirmingSent, setConfirmingSent] = useState(false);
   const [showAllPeople, setShowAllPeople] = useState(false);
@@ -261,72 +258,14 @@ export default function HostView() {
     }
   };
 
-  const handleStatusChange = async (newStatus: string) => {
-    if (!data) return;
-
-    // Use TransitionModal for freezing
-    if (data.event.status === 'CONFIRMING' && newStatus === 'FROZEN') {
-      setShowFreezeModal(true);
-      return;
-    }
-
-    let unfreezeReason: string | null = null;
-
-    // Confirmation for FROZEN → COMPLETE (final state)
-    if (data.event.status === 'FROZEN' && newStatus === 'COMPLETE') {
-      const confirmed = window.confirm(
-        'Mark event as COMPLETE?\n\n' +
-          'This is a final action and cannot be undone. ' +
-          'Once complete, no further changes can be made to the event.\n\n' +
-          'Are you sure you want to continue?'
-      );
-      if (!confirmed) {
-        return;
-      }
-    }
-
-    // Prompt for reason when unfreezing
-    if (data.event.status === 'FROZEN' && newStatus === 'CONFIRMING') {
-      unfreezeReason = window.prompt(
-        'Unfreezing Event\n\n' +
-          'Please provide a reason for unfreezing this event.\n' +
-          'This will be logged in the audit trail.'
-      );
-
-      if (unfreezeReason === null) {
-        return;
-      }
-
-      if (unfreezeReason.trim() === '') {
-        toast.warning('A reason is required to unfreeze the event.');
-        return;
-      }
-    }
-
-    setUpdating(true);
-    try {
-      const response = await fetch(`/api/h/${token}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: newStatus,
-          unfreezeReason: unfreezeReason || undefined,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to update status');
-      }
-
-      await fetchData();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update status');
-    } finally {
-      setUpdating(false);
-    }
-  };
+  // GTC-198 (A3d): the only authored transition left is DRAFT → CONFIRMING, and the
+  // host token view does not drive it — that is a plan-building act on the dashboard.
+  //
+  // Deleted with the rest: the CONFIRMING → FROZEN freeze, the FROZEN → COMPLETE
+  // "final action and cannot be undone" confirm (COMPLETE is the calendar's, not a
+  // declaration — Moment 4 §10.1), and the unfreeze prompt that demanded a reason
+  // (Hinge §2: no recall at the mechanism level). The route's status branch went in
+  // A3a; this removes the caller.
 
   const handleEditGuestCount = () => {
     setGuestCountValue(data?.event.guestCount?.toString() || '');
@@ -457,23 +396,6 @@ export default function HostView() {
     return `${formatter.format(start)}-${formatter.format(end).split(' ')[1]}`;
   };
 
-  const getNextStatus = (currentStatus: string): string | null => {
-    switch (currentStatus) {
-      case 'DRAFT':
-        return 'CONFIRMING';
-      case 'CONFIRMING':
-        return 'FROZEN';
-      case 'FROZEN':
-        return 'COMPLETE';
-      default:
-        return null;
-    }
-  };
-
-  const canUnfreeze = (currentStatus: string): boolean => {
-    return currentStatus === 'FROZEN';
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -554,7 +476,6 @@ export default function HostView() {
     );
   }
 
-  const nextStatus = getNextStatus(data.event.status);
   const totalGaps = data.teams.reduce((sum, t) => sum + t.unassignedCount, 0);
 
   // Sort teams alphabetically by name for stable ordering
@@ -660,15 +581,6 @@ export default function HostView() {
             <span className="text-xs uppercase tracking-wide text-gray-500 bg-gray-100 px-2 py-1 rounded">
               {data.event.status}
             </span>
-            {canUnfreeze(data.event.status) && (
-              <button
-                onClick={() => handleStatusChange('CONFIRMING')}
-                disabled={updating}
-                className="text-xs px-2 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:bg-gray-300"
-              >
-                Unfreeze
-              </button>
-            )}
           </div>
         </div>
 
@@ -992,7 +904,7 @@ export default function HostView() {
               )}
 
               {/* Confirm sent button */}
-              {!data.inviteStatus.inviteSendConfirmedAt && (
+              {!data.inviteStatus.sentAt && (
                 <button
                   onClick={handleConfirmSent}
                   disabled={confirmingSent}
@@ -1001,10 +913,10 @@ export default function HostView() {
                   {confirmingSent ? 'Confirming...' : "I've sent the invites"}
                 </button>
               )}
-              {data.inviteStatus.inviteSendConfirmedAt && (
+              {data.inviteStatus.sentAt && (
                 <p className="text-xs text-gray-400">
                   ✓ Invites confirmed sent{' '}
-                  {new Date(data.inviteStatus.inviteSendConfirmedAt).toLocaleDateString('en-NZ')}
+                  {new Date(data.inviteStatus.sentAt).toLocaleDateString('en-NZ')}
                 </p>
               )}
             </div>
@@ -1043,50 +955,11 @@ export default function HostView() {
           )}
         </div>
 
-        {/* Bottom Action Bar */}
-        {data.event.status !== 'COMPLETE' && nextStatus && (
-          <div className="bg-white border-t border-gray-200 px-6 py-4">
-            <button
-              onClick={() => handleStatusChange(nextStatus)}
-              disabled={updating || (nextStatus === 'FROZEN' && !data.freezeAllowed)}
-              className={`w-full h-14 rounded-lg font-semibold transition-all ${
-                updating || (nextStatus === 'FROZEN' && !data.freezeAllowed)
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-accent text-white hover:bg-accent-dark'
-              }`}
-            >
-              {updating ? (
-                'Updating...'
-              ) : nextStatus === 'FROZEN' ? (
-                <span className="flex items-center justify-center gap-2">
-                  <Lock className="size-5" />
-                  Freeze Event
-                </span>
-              ) : (
-                `${nextStatus === 'COMPLETE' ? 'Mark as ' : ''}${nextStatus}`
-              )}
-            </button>
-            {nextStatus === 'FROZEN' && !data.freezeAllowed && (
-              <p className="text-center text-sm text-red-600 mt-2">
-                Cannot freeze: {data.criticalGapCount} critical{' '}
-                {data.criticalGapCount === 1 ? 'gap' : 'gaps'}
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Freeze Modal */}
-        {showFreezeModal && data && (
-          <TransitionModal
-            eventId={data.event.id}
-            currentStatus="CONFIRMING"
-            onClose={() => setShowFreezeModal(false)}
-            onSuccess={() => {
-              setShowFreezeModal(false);
-              fetchData();
-            }}
-          />
-        )}
+        {/* GTC-198 (A3d): the bottom action bar is DELETED. It offered "Freeze Event",
+            disabled below a critical-gap threshold with the verdict "Cannot freeze: N
+            critical gaps" — a hard block AND a readiness judgement, refused by
+            Moment 4 §2 and §7. There is no freeze to offer, and the send is pressed
+            from the pre-flight (GTC-188 / I1), not from a status bar. */}
 
         {/* Person Detail Modal */}
         {selectedPerson && (

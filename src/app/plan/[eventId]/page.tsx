@@ -23,7 +23,7 @@ import {
 import ConflictList from '@/components/plan/ConflictList';
 import GateCheck from '@/components/plan/GateCheck';
 import FreezeCheck from '@/components/plan/FreezeCheck';
-import { isSentJson, isCompleteJson } from '@/lib/lifecycle';
+import { isSentJson, isCompleteJson, getEventPhaseJson } from '@/lib/lifecycle';
 import TransitionModal from '@/components/plan/TransitionModal';
 import EventStageProgress from '@/components/plan/EventStageProgress';
 import SaveTemplateModal from '@/components/templates/SaveTemplateModal';
@@ -2163,7 +2163,7 @@ export default function PlanEditorPage() {
           {/* Event Stage Progress - Hide when checklist is visible */}
           {!(event.status === 'DRAFT' && !checklistDismissed) && (
             <EventStageProgress
-              currentStatus={event.status as any}
+              phase={getEventPhaseJson(event)}
               onSendClick={() => handleExpandSection('planstatus')}
             />
           )}

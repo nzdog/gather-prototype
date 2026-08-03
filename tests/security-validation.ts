@@ -569,6 +569,75 @@ async function testSuite8_NudgePredicateAndOptOut(f: Fixtures) {
   logTest('Person.smsOptedOut column intact [zone 7]', typeof optOutRespected === 'number');
 }
 
+/**
+ * THE REPO-WIDE FROZEN RESIDUE GATE (GTC-198 / A3d).
+ *
+ * Epic A's completeness proof, enforced rather than eyeballed. FROZEN survives as an
+ * enum value until GTC-199 (A4) drops it, so a bare grep can never be zero — this
+ * asserts that every surviving reference is in one of the categories the epic
+ * deliberately left behind, and NOTHING else:
+ *
+ *   1. lifecycle.ts — the compat shim, the one place the legacy value is interpreted
+ *   2. legacy enum KEYS — status→label/style maps and type unions, whose keys must
+ *      match the Prisma enum until A4 changes it
+ *   3. comments — tombstones explaining why the ceremony is gone
+ *
+ * A new behavioural branch on FROZEN fails here. That is the point: it is how the
+ * ceremony stays gone.
+ */
+function frozenResidue(): string[] {
+  const roots = ['src/app', 'src/lib', 'src/components'];
+  const offenders: string[] = [];
+
+  const walk = (dir: string) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      if (!/\.tsx?$/.test(entry.name)) continue;
+
+      const rel = path.relative(path.join(__dirname, '..'), full);
+      if (rel.endsWith('src/lib/lifecycle.ts')) continue; // (1) the compat shim
+
+      const code = readCode(rel); // (3) comments stripped
+      code.split('\n').forEach((line, i) => {
+        if (!line.includes('FROZEN')) return;
+
+        // (2) legacy enum KEYS: a map key, a union member, or a cast — never a branch.
+        const isMapKey = /^\s*(\|\s*)?'?FROZEN'?\s*[:,]/.test(line);
+        const isUnionMember = /'FROZEN'\s*\|/.test(line) || /\|\s*'FROZEN'/.test(line);
+        const isStageKey = /status:\s*'FROZEN'/.test(line);
+        if (isMapKey || isUnionMember || isStageKey) return;
+
+        offenders.push(`${rel}:${i + 1}: ${line.trim().slice(0, 90)}`);
+      });
+    }
+  };
+
+  for (const root of roots) walk(path.join(__dirname, '..', root));
+  return offenders;
+}
+
+async function testSuite9_FrozenResidue() {
+  logSection('Test Suite 9: Repo-wide FROZEN residue gate');
+
+  const offenders = frozenResidue();
+  logTest(
+    'No behavioural FROZEN branch survives outside the compat shim',
+    offenders.length === 0,
+    offenders.length === 0 ? undefined : `\n    ${offenders.join('\n    ')}`
+  );
+
+  // The shim itself must still be there — removing it early would break legacy reads.
+  const shim = readCode('src/lib/lifecycle.ts');
+  logTest(
+    'lifecycle.ts still carries the compat shim (GTC-199 removes it, not before)',
+    shim.includes("status === 'FROZEN'")
+  );
+}
+
 async function main() {
   console.log(`${BOLD}${YELLOW}=== Security Validation Test Suite ===${RESET}\n`);
   console.log('Contract under test:');
@@ -589,6 +658,7 @@ async function main() {
     await testSuite6_CoordinatorAuthority(fixtures);
     await testSuite7_NoUndoPostSend(fixtures);
     await testSuite8_NudgePredicateAndOptOut(fixtures);
+    await testSuite9_FrozenResidue();
 
     console.log(`\n${BOLD}${YELLOW}=== Test Summary ===${RESET}`);
     console.log(`Total tests: ${testsRun}`);
