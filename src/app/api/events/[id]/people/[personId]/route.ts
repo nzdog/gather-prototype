@@ -256,7 +256,7 @@ export async function PATCH(
 
 // DELETE /api/events/[id]/people/[personId] - Remove person from event
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string; personId: string }> }
 ) {
   try {
@@ -265,6 +265,18 @@ export async function DELETE(
     // SECURITY: Require HOST or COORDINATOR role to remove people
     const auth = await requireEventRole(eventId, ['HOST', 'COORDINATOR']);
     if (auth instanceof NextResponse) return auth;
+
+    // GTC-202: the why, when there is one.
+    //
+    // This is the ONLY route that fires T2 — a trigger Hinge §2 names by name
+    // ("reassignment, removal, …") — and until now it was the only T-firing route with
+    // no way to carry a reason, which made T2 structurally unanswerable.
+    //
+    // Optional, and never a 400: plan §13.1, endorsed — "required" means the flow asks,
+    // never that the server rejects. A bodyless DELETE still works.
+    const body = await request.json().catch(() => ({}) as { reason?: string });
+    const reason =
+      typeof body.reason === 'string' && body.reason.trim() !== '' ? body.reason : null;
 
     const removalActor = await ledgerActorForUser(auth.user, auth.role);
 
@@ -322,12 +334,17 @@ export async function DELETE(
       });
 
       // T2 — removing someone who is HOLDING something touches them: their asks
-      // disappear. The count decides it, exactly as in removePerson(); this route
-      // does its own removal inline rather than calling that helper.
+      // disappear, and the count is what decides it. Removing a guest who holds
+      // nothing touches nobody and is never interrogated.
+      //
+      // This route removes people INLINE. GTC-196 wired the same T2 into a
+      // workflow.removePerson() helper "so every caller inherits it", but that helper
+      // had no callers and was deleted by GTC-202 — this is the implementation that
+      // actually runs, and the only one.
       await recordChange(tx, {
         eventId,
         actor: removalActor,
-        reason: null,
+        reason,
         changes: [
           {
             action: 'REMOVE_PERSON',

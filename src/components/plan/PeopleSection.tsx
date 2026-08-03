@@ -8,6 +8,8 @@ import EditPersonModal from './EditPersonModal';
 import TeamBoard from './TeamBoard';
 import ImportCSVModal, { PersonRow } from './ImportCSVModal';
 import AssignCoordinatorsModal from './AssignCoordinatorsModal';
+import { useReasonPrompt } from './ReasonPrompt';
+import { isSentJson, type SerialisedEvent } from '@/lib/lifecycle';
 
 interface Team {
   id: string;
@@ -38,16 +40,20 @@ interface PeopleSectionProps {
   initialView?: 'table' | 'board';
   onReassignItems?: (teamId: string | null) => void;
   /**
-   * True once the plan has been sent. Hides Auto-Assign — see the tombstone at the
-   * button. GTC-201, ruled 2026-08-03.
+   * The event, as it arrives over the wire.
+   *
+   * GTC-202 replaced GTC-201's `isSent: boolean` prop with this: sent-ness is still
+   * derived here (see `isSent` below, which the Auto-Assign tombstone still names), but
+   * the why-scope rule needs the whole lifecycle event, and passing both a boolean and
+   * an event would be two sources for one fact — the drift this epic exists to end.
    */
-  isSent?: boolean;
+  event?: SerialisedEvent | null;
 }
 
 export default function PeopleSection({
   eventId,
   hostId,
-  isSent = false,
+  event,
   teams,
   people,
   onPeopleChanged,
@@ -67,6 +73,10 @@ export default function PeopleSection({
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [isAutoAssigning, setIsAutoAssigning] = useState(false);
   const [noPlanError, setNoPlanError] = useState(false);
+  const { ask: askForReason, element: reasonPrompt } = useReasonPrompt();
+
+  /** Derived, not passed — one definition of sent (GTC-202). */
+  const isSent = event ? isSentJson(event) : false;
 
   const handleAddPerson = async (data: AddPersonFormData) => {
     try {
@@ -120,9 +130,26 @@ export default function PeopleSection({
   );
 
   const handleRemovePerson = async (personId: string) => {
+    // GTC-202: T2 — removing someone who is HOLDING something. `itemCount` is the
+    // held-assignment count the rule keys off; removing a guest who holds nothing
+    // touches nobody and is never interrogated.
+    const held = people.find((p) => p.personId === personId)?.itemCount ?? 0;
+    const answer = await askForReason(
+      {
+        action: 'REMOVE_PERSON',
+        targetType: 'PersonEvent',
+        targetId: personId,
+        context: { heldAssignmentCount: held },
+      },
+      event
+    );
+    if (!answer.proceed) return;
+
     try {
       const response = await fetch(`/api/events/${eventId}/people/${personId}`, {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: answer.reason }),
       });
 
       if (!response.ok) {
@@ -240,6 +267,7 @@ export default function PeopleSection({
 
   return (
     <>
+      {reasonPrompt}
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-4">

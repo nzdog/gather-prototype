@@ -172,7 +172,8 @@ export async function PUT(
 
       // Versioned, never interrogated: editing a household's composition is not an
       // ask moving. Where it removes someone who holds items, that person's
-      // assignments are untouched here — removal is removePerson()'s T2 path.
+      // assignments are untouched here — the T2 path is
+      // DELETE /api/events/[id]/people/[personId], which carries its own entry.
       await recordChange(tx, {
         eventId,
         actor,

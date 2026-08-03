@@ -536,16 +536,41 @@ async function testSuite8_NudgePredicateAndOptOut(f: Fixtures) {
 
   try {
     const candidates = await findNudgeCandidates();
-    const onPastEvent = [...candidates.eligible24h, ...candidates.eligible48h].filter(
-      (c) => c.eventId === f.eventPast.id
-    );
+    const all = [...candidates.eligible24h, ...candidates.eligible48h];
+    const onPastEvent = all.filter((c) => c.eventId === f.eventPast.id);
+    const onSentEvent = all.filter((c) => c.eventId === f.eventSent.id);
+
     logTest(
       'No nudge candidates on a past-dated event (§10.1: nudges must never fire after)',
       onPastEvent.length === 0,
       onPastEvent.length === 0 ? undefined : `${onPastEvent.length} candidate(s) would be nudged`
     );
+
+    // GTC-202 (A3c-2): THE OTHER HALF OF THE METRIC.
+    //
+    // Plan §10.2 requires the predicate verified in BOTH directions, and GTC-169's
+    // acceptance says so in as many words. Only the negative was asserted — and it
+    // would have passed against the OLD `status: 'CONFIRMING'` filter too, because no
+    // fixture person on a live sent event had a phone or an anchor.
+    //
+    // This is the inversion itself: under the old predicate a sent event stopped
+    // producing candidates the moment it was frozen; under the send-lock model the send
+    // is when the chasing STARTS (plan §0.2). The fixture person here is identical in
+    // every respect to the past-event one except which event they are in.
+    logTest(
+      'A sent, live event YIELDS nudge candidates (§0.2: the send starts the chasing)',
+      onSentEvent.length > 0,
+      onSentEvent.length > 0
+        ? undefined
+        : 'the sent+live event produced no candidates — the predicate is not inverted, or the fixture is not eligible'
+    );
+    logTest(
+      'and the two differ only in phase — same person shape, opposite outcome',
+      onSentEvent.some((c) => c.personId === f.liveNudgeCandidate.personId) &&
+        !onPastEvent.some((c) => c.personId === f.nudgeCandidate.personId)
+    );
   } catch (error: any) {
-    logTest('No nudge candidates on a past-dated event', false, error.message);
+    logTest('Nudge predicate verified in both directions', false, error.message);
   }
 
   // Structural on purpose: exercising the send path would send real messages.
@@ -585,6 +610,31 @@ async function testSuite8_NudgePredicateAndOptOut(f: Fixtures) {
  * A new behavioural branch on FROZEN fails here. That is the point: it is how the
  * ceremony stays gone.
  */
+/**
+ * Is this line one of the deliberate leftovers (category 2), rather than a behavioural
+ * dependency on FROZEN?
+ *
+ * GTC-202 (A3c-2) NARROWED THIS AND MADE IT TESTABLE. The old stage-key exemption was
+ * `/status:\s*'FROZEN'/`, which also matched `where: { status: 'FROZEN' }` — a real
+ * Prisma filter, and precisely the kind of behavioural dependency this gate exists to
+ * catch, waved through as if it were a display key. A gate with a hole shaped like the
+ * thing it guards against is worse than no gate: it reads as proof.
+ *
+ * A stage key is `status: 'FROZEN'` alone on its line — an object-literal property in a
+ * stages or labels array. A query has it embedded in a larger expression. Anything
+ * ambiguous is an OFFENDER: the gate's default must be to flag, not to excuse.
+ *
+ * Extracted so the classifier itself can be asserted against known-bad lines rather
+ * than only against the current repo, which is the only way a gate can be shown to
+ * still work after the code it guards has been cleaned.
+ */
+function isExemptFrozenLine(line: string): boolean {
+  const isMapKey = /^\s*(\|\s*)?'?FROZEN'?\s*[:,]/.test(line);
+  const isUnionMember = /'FROZEN'\s*\|/.test(line) || /\|\s*'FROZEN'/.test(line);
+  const isStageKey = /^\s*status:\s*'FROZEN',?\s*$/.test(line);
+  return isMapKey || isUnionMember || isStageKey;
+}
+
 function frozenResidue(): string[] {
   const roots = ['src/app', 'src/lib', 'src/components'];
   const offenders: string[] = [];
@@ -605,11 +655,7 @@ function frozenResidue(): string[] {
       code.split('\n').forEach((line, i) => {
         if (!line.includes('FROZEN')) return;
 
-        // (2) legacy enum KEYS: a map key, a union member, or a cast — never a branch.
-        const isMapKey = /^\s*(\|\s*)?'?FROZEN'?\s*[:,]/.test(line);
-        const isUnionMember = /'FROZEN'\s*\|/.test(line) || /\|\s*'FROZEN'/.test(line);
-        const isStageKey = /status:\s*'FROZEN'/.test(line);
-        if (isMapKey || isUnionMember || isStageKey) return;
+        if (isExemptFrozenLine(line)) return;
 
         offenders.push(`${rel}:${i + 1}: ${line.trim().slice(0, 90)}`);
       });
@@ -635,6 +681,44 @@ async function testSuite9_FrozenResidue() {
   logTest(
     'lifecycle.ts still carries the compat shim (GTC-199 removes it, not before)',
     shim.includes("status === 'FROZEN'")
+  );
+
+  // GTC-202 (A3c-2): THE GATE'S OWN GATE.
+  //
+  // The residue check passing tells you nothing about whether it still WORKS once the
+  // repo is clean — a broken classifier and a clean repo produce the same green. So the
+  // classifier is asserted directly, against lines it must catch and lines it must not.
+  //
+  // The first case is the hole this ticket closed: a literal Prisma filter on FROZEN
+  // used to be exempted as a "stage key".
+  const mustFlag = [
+    "    where: { status: 'FROZEN' },",
+    "  const frozen = await prisma.event.findMany({ where: { status: 'FROZEN' } });",
+    "  if (event.status === 'FROZEN') return true;",
+    "  return event.status !== 'FROZEN';",
+  ];
+  const mustAllow = [
+    "  FROZEN: 'SENT',",
+    '    FROZEN: [],',
+    "  currentStatus?: 'DRAFT' | 'CONFIRMING' | 'FROZEN' | 'COMPLETE';",
+    "    status: 'FROZEN',",
+  ];
+  const wronglyAllowed = mustFlag.filter((l) => isExemptFrozenLine(l));
+  const wronglyFlagged = mustAllow.filter((l) => !isExemptFrozenLine(l));
+
+  logTest(
+    'The residue gate flags a real FROZEN query (the exemption hole GTC-202 closed)',
+    wronglyAllowed.length === 0,
+    wronglyAllowed.length === 0
+      ? undefined
+      : `wrongly exempt:\n    ${wronglyAllowed.join('\n    ')}`
+  );
+  logTest(
+    'and still exempts the legacy enum keys the epic deliberately left behind',
+    wronglyFlagged.length === 0,
+    wronglyFlagged.length === 0
+      ? undefined
+      : `wrongly flagged:\n    ${wronglyFlagged.join('\n    ')}`
   );
 }
 

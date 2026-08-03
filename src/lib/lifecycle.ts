@@ -134,7 +134,12 @@ export interface SerialisedEvent {
   endDate: string;
 }
 
-function parse(event: SerialisedEvent): LifecycleEvent {
+/**
+ * Exported (GTC-202) so a client that needs a `LifecycleEvent` for something other than
+ * these three predicates — the why-scope rule, chiefly — parses through the SAME adapter
+ * rather than hand-rolling a second one. One parse, one definition.
+ */
+export function toLifecycleEvent(event: SerialisedEvent): LifecycleEvent {
   return {
     status: event.status as EventStatus,
     sentAt: event.sentAt ? new Date(event.sentAt) : null,
@@ -143,15 +148,15 @@ function parse(event: SerialisedEvent): LifecycleEvent {
 }
 
 export function isSentJson(event: SerialisedEvent): boolean {
-  return isSent(parse(event));
+  return isSent(toLifecycleEvent(event));
 }
 
 export function isCompleteJson(event: SerialisedEvent, now?: Date): boolean {
-  return isComplete(parse(event), now);
+  return isComplete(toLifecycleEvent(event), now);
 }
 
 export function getEventPhaseJson(event: SerialisedEvent, now?: Date): EventPhase {
-  return getEventPhase(parse(event), now);
+  return getEventPhase(toLifecycleEvent(event), now);
 }
 
 /**
@@ -162,9 +167,17 @@ export function getEventPhaseJson(event: SerialisedEvent, now?: Date): EventPhas
  * SENT_AND_LIVE. Today, freezing STOPS the nudges — exactly backwards from the ruled
  * model, where the send is when the chasing starts (plan §0.2).
  *
- * Note these read `sentAt` only, with no FROZEN shim: a legacy FROZEN event has its
- * `sentAt` backfilled by this same migration, so the column alone is sufficient at
- * the SQL layer.
+ * Note these read `sentAt` only, with no FROZEN shim. That is safe because a legacy
+ * FROZEN event has its `sentAt` backfilled — but ONLY since GTC-202 (A3c-2), whose
+ * migration `20260803230610_gtc202_backfill_send_clocks` runs plan §9.3's
+ * `?? frozenAt ?? updatedAt` clauses. A2 wrote this comment describing a backfill it
+ * had not performed: `Event.sentAt` inherited `inviteSendConfirmedAt`'s data through
+ * the `@map`, which covers §9.3's first clause and no other. Until GTC-202, a FROZEN
+ * row without a recorded invite-send read as sent through isSent()'s shim while being
+ * invisible to these fragments — a JS/SQL asymmetry resting on an assumption.
+ *
+ * If a future migration ever reintroduces rows in that state, these fragments are the
+ * things that break, silently.
  */
 export const SENT_AND_LIVE = (now: Date = new Date()) => ({
   sentAt: { not: null },
