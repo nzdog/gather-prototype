@@ -1,7 +1,7 @@
 # Moment 4 — Is Everyone Sorted?
 ## Specification v1
 
-**Status:** Record of decisions from the Moment 4 protocol walk (24 July 2026). All formerly open questions were ruled on 3 August 2026 (§8) — **no open questions remain.** The send is specified separately and fully in the Hinge spec (`gather-hinge-spec-v1.md`), which governs the threshold, the outgoing messages, the minutes after the press, and send failure.
+**Status:** Record of decisions from the Moment 4 protocol walk (24 July 2026). All formerly open questions were ruled on 3 August 2026 (§8), and all sixteen discovery-gap questions were ruled the same day (§10 here; send-territory rulings in the Hinge spec) — **no open questions remain anywhere.** The send is specified separately and fully in the Hinge spec (`gather-hinge-spec-v1.md`), which governs the threshold, the outgoing messages, the minutes after the press, and send failure.
 
 **Source of authority:** The walk. Where this spec and any earlier document disagree (including the four-moment synthesis, the reconciliation campaign skill, or prior flow documents), this spec wins. Where this spec is silent, the walk transcript is the tiebreaker before any inference.
 
@@ -126,3 +126,29 @@ Any future proposal for this Moment must pass all three:
 1. **The assistant test:** would a really good assistant do this?
 2. **The four-second test:** does it serve "is anything mine to do, and is it moving" — or is it in the way?
 3. **The refusal test:** the refusals have robust reasoning behind them and are a strength of the product. A proposal that re-introduces a refused thing (chat, progress bars, day-of mode, readiness judging, a freeze ceremony) must overturn the refusal's *reason*, not just re-request the feature.
+
+---
+
+## 10. DISCOVERY-GAP RULINGS (3 August 2026)
+
+*The discovery pass surfaced sixteen questions the specs were silent on. All were ruled the same day. Those touching the send live in the Hinge spec (§2, §3: release-absolute, why-scope, versioning granularity, mini-sends, the one-tap model). The rest are recorded here. These carry full spec authority.*
+
+**10.1 COMPLETE survives; the transition dissolves.** The event-past state remains — the thank-you keys off it, nudges must never fire after it, cloning starts from it — but no one declares it. **The calendar does the transition, silently**: the event date passing IS the state change. No button, no ceremony — consistent with freeze's dissolution. Post-date: nudges dead, thank-you offer available, event cloneable. (Wrap-up's current hard-requirement of FROZEN migrates to COMPLETE-gated.)
+
+**10.2 One derivation, two clocks.** The red-by-time line (§8.1) and the maybe's decide-by (Hinge §8) share one derivation: keyed to **needed-by** — the item's drop-off time where one exists, else the event date — landing far enough before needed-by for a nudge or a reassignment to realistically work. The exact constant is settled at ticket time with Nigel's sign-off; real-event data will correct it. Kate's overrides (per event, per person, per item) sit on top as already ruled.
+
+**10.3 Cadence controls live where the people-decisions live.** Per-event pace: at the pre-flight (*nudge pace: standard / relaxed / off*) — an event-level sending decision made where she reviews how everyone is contacted. Per-person: a mark alongside the recipient picker (*go gentle / don't chase*), set at Moment 1 or any time — a hosting judgement the system stores and obeys. **Don't-chase is the far end**: the per-person off-switch (the mother, the bereaved, the feuding cousin). Gentle means fewer/softer. Not a settings page.
+
+**10.4 The thank-you is offered, once.** A day or two after the date passes, the assistant offers in its standard register: *want me to send thank-yous? Here's the draft.* Kate-requested means she decides and reviews — never that she has to remember. One offer, declinable, never repeated; quietly available afterward. Same one-message discipline as the critical banner.
+
+**10.5 Per-person dietary is captured at Moment 1.** Dietary needs are facts about people, and Moment 1 is where Kate tells Gather about her people: an optional per-person note at household capture, costing seconds, only for those with needs. Moment 2 **consumes** rather than asks — generation reads per-person needs plus the event-level answer; the dietary three-state remains the safety gate. The pre-flight's by-name re-verify then shows her what she entered, against the plan: she supplies people-facts, Gather does completeness.
+
+**10.6 The child rule is a HARD CONSTRAINT — absolute, in those words.** A CHILD-role person **never receives system messages regardless of contact info on their record.** Their channel is always an adult via the picker. Teenagers with phones are still minors; the escalation register was designed for adults. If a sixteen-year-old should genuinely be messaged directly, Kate roles them as an adult at capture — an explicit hosting decision, never a system inference from the presence of a phone number. (Current code contradicts this — CHILD with contact info derives a direct reachability tier; fixing it is a hard requirement of the recipient-model ticket.) No future session may soften this.
+
+**10.7 The recipient control is a household contact picker.** Per household: *who should Gather talk to for this household?* — defaulting to the primary contact, any adult addable, **cross-household capable** (Grandma's channel may live in another household), which requires channel as a Person reference, not a boolean. Everyone is a potential owner; recipients are whoever's picked. The per-person go-gentle mark (10.3) sits beside the same picker. One decision per household, not a matrix — Moment 1 stays light.
+
+**10.8 The grid is person-primary.** People are the boxes; items live inside the person. Jake's box is yellow with the pavlova in it; a person holding items in different states shows the **worst colour**, with all items visible on tap. The wondering was always about people — who's responded, who's silent — and "who's coming and what they're bringing" puts the who first. Items-as-primary is the spreadsheet's view: the thing the product replaced. "Is the lamb covered?" is answered by the badge and the assistant's message, not by inverting the grid. A matrix fails the four-second test.
+
+**10.9 Bounce detection (build instruction, not a ruling).** The bounce-red-on-arrival behaviour (Hinge §7) stands as the target. Its ticket's first task: investigate TNZ delivery-receipt capability. If webhooks exist, wire them. **If the carrier cannot report delivery, the principle degrades gracefully**: an invisible bounce is indistinguishable from silence, travels the nudge path, and reaches Kate at exhaustion or her time line — later than specified, but nothing lost. The fallback is documented in the ticket, never silently substituted for the target.
+
+**10.10 The clone-review / ghost-guest guard (source supplied).** When an event is cloned forward, the guest list **never copies silently.** Time changes households — people die, couples separate, families fall out — and a cloned list silently carrying a dead relative into this year's event is the most painful default the product could ship. Cloning's **first act** is a deliberate people-review: the old list presented for explicit confirm/remove/edit per household before anything else proceeds. Not an optional check.
