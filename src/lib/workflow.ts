@@ -867,6 +867,21 @@ export async function restoreFromRevision(
   //
   // The guard lives here rather than in the route because no-undo is a domain
   // invariant: it must hold for every caller, not just the one HTTP path.
+  //
+  // ⚠ THIS REFUSAL IS THE INTERIM CONTRACT, NOT THE END STATE (Nigel, 2026-08-03).
+  //
+  // Post-send restore is the SAME SPECIES as post-send regeneration, which was ruled
+  // allowed: a bulk change that carries a checkpoint, a ledger changeSet and a why —
+  // not a thing to forbid. Restore is refused here only because A3a removed the gate
+  // before A3b built the recording, and an unrecorded bulk rewrite of a sent plan is
+  // the one thing worse than either.
+  //
+  // The moment recordChange() is wired (GTC-196 / A3b), this converts: refused →
+  // allowed-as-recorded-changeSet, with one PlanRevision checkpoint, one reason, and
+  // one entry per resulting change. The security-suite assertion flips with it.
+  //
+  // DO NOT let this refusal silently harden into doctrine. If you are reading this
+  // comment after A3b has landed, the conversion was missed — see GTC-196.
   const event = await prisma.event.findUniqueOrThrow({
     where: { id: eventId },
     select: { status: true, sentAt: true, endDate: true },
