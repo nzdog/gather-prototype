@@ -37,7 +37,7 @@ export async function POST(_req: NextRequest, context: { params: Promise<{ token
 
   await prisma.event.update({
     where: { id: eventId },
-    data: { inviteSendConfirmedAt: now },
+    data: { sentAt: now },
   });
 
   const needAnchor = event.people

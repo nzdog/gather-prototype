@@ -133,7 +133,7 @@ export async function PUT(
     // Get event for inviteAnchorAt
     const event = await prisma.event.findUnique({
       where: { id: eventId },
-      select: { inviteSendConfirmedAt: true },
+      select: { sentAt: true },
     });
 
     if (!event) {
@@ -157,7 +157,7 @@ export async function PUT(
       eventId,
       household,
       primaryMember,
-      inviteSendConfirmedAt: event.inviteSendConfirmedAt,
+      sentAt: event.sentAt,
       input: { primaryContact, partner, helpers, littleCount, guests },
     });
 

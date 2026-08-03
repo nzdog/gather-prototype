@@ -127,7 +127,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ to
     const eventWithPeople = await prisma.event.findUnique({
       where: { id: resolvedContext.event.id },
       select: {
-        inviteSendConfirmedAt: true,
+        sentAt: true,
         people: {
           select: {
             rsvpStatus: true,
@@ -185,7 +185,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ to
         sent: peopleStatus.filter((p) => p.status === 'SENT').length,
         opened: peopleStatus.filter((p) => p.status === 'OPENED').length,
         responded: peopleStatus.filter((p) => p.status === 'RESPONDED').length,
-        inviteSendConfirmedAt: eventWithPeople.inviteSendConfirmedAt?.toISOString() ?? null,
+        inviteSendConfirmedAt: eventWithPeople.sentAt?.toISOString() ?? null,
       };
       people = peopleStatus;
     }
