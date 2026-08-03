@@ -36,8 +36,9 @@ This skill defines vocabulary and product requirements. It changes nothing.
   undervalued for the invisible labor she performs." The V2 generation prompt personifies her as
   **Kate** (`src/lib/ai/prompts.ts`, `buildPlanGenerationPrompt`).
 - **Host pain removed**: being the "human sync engine" of group chats — chasing, reconciling,
-  holding the plan in her head. Gather turns the plan into an external, confirmable state that can
-  **freeze** into shared reality.
+  holding the plan in her head. Gather turns the plan into an external, confirmable state that
+  **locks at the send** into shared reality (`gather-hinge-spec-v1.md` §2 — the lock point is the
+  send, not a freeze ceremony; see the Moments table note below).
 - **Consequence for all generated output**: proportionality and realism are product requirements,
   not style. The V1 system prompt (`PLAN_GENERATION_SYSTEM_PROMPT` in `src/lib/ai/prompts.ts`) codifies: *"only say 'must' for
   calculated requirements, use 'suggest' for heuristics"*. The V2 prompt codifies: *"Realism beats
@@ -56,20 +57,30 @@ This skill defines vocabulary and product requirements. It changes nothing.
 |---|---|---|---|
 | 1 | "Who's coming?" | `Moment1InputForm` + `Moment1Summary` (rendered from the god file `src/app/plan/[eventId]/page.tsx`, entered via `?setup=true`) | `Household` rows + `PersonEvent` rows with `householdId`/`householdRole`; `Person` find-or-create by email |
 | 2 | "What's the plan?" | Step 1 = `Moment2Step1Modal` (accordion brief: event type, food categories via OptionTree, dietary, other jobs) → Step 2 = single finalize-plan AI call → `Moment2PlanView` (editable plan) | Step 1 answers persist to `EventSetup` (JSONB columns per section); generated plan lands as `Team`/`Item` rows |
-| 3 | "Who's bringing what?" | **No dedicated V2 component exists.** The label renders in `MomentArc` but assignment/confirmation UX today is the V1 dashboard + participant magic links | `Assignment` rows, `Assignment.response` |
-| 4 | "Is everyone sorted?" | **No dedicated V2 component exists.** Today: V1 invite-status/reachability views + freeze | `EventStatus` transitions, `PlanSnapshot`, freeze warnings |
+| 3 | "Who's bringing what?" | **No dedicated V2 component exists.** The label renders in `MomentArc` but assignment/confirmation UX today is the V1 dashboard + participant magic links. Product design is CLOSED — governed by `gather-hinge-spec-v1.md` (the send, §§1-8) and `gather-moment-4-spec-v1.md` §6 (task rows share the item assignment machinery) | `Assignment` rows, `Assignment.response` — target model is yes/no/maybe per item with attendance inferred from it (Hinge §3); current `PersonEvent.rsvpStatus`/`Assignment.response` pair is superseded, not yet migrated |
+| 4 | "Is everyone sorted?" | **No dedicated V2 component exists.** Today: V1 invite-status/reachability views + freeze. Product design is CLOSED — governed by `gather-moment-4-spec-v1.md` in full (no open questions remain) | Current: `EventStatus` transitions, `PlanSnapshot`, freeze warnings. Target: the send (not FROZEN) is the lock point; post-send changes are why-when-it-touches-someone + always-versioned, not frozen (`gather-moment-4-spec-v1.md` §7, `gather-hinge-spec-v1.md` §2) — reconciliation is Epic A, a pending architecture ticket |
 
 Key facts:
 
-- Moments 1 & 2 are built (GTC-101–131 era); Moments 3 & 4 as V2 experiences are **open roadmap**
-  (`docs/BUILD_STATUS.md` Epics 2–6 all unchecked except 1.1).
+- Moments 1 & 2 are built (GTC-101–131 era); Moments 3 & 4 as V2 experiences are **open roadmap in
+  the build sense only** (`docs/BUILD_STATUS.md` Epics 2–6 all unchecked except 1.1) — product
+  decisions for Moments 3/4 and the send are CLOSED as of 2026-08-03, with all sixteen
+  discovery-gap questions ruled (`gather-moment-4-spec-v1.md`, `gather-hinge-spec-v1.md`; no open
+  questions remain in either). See `docs/04_roadmap/moment4-hinge-discovery-report.md` for the
+  decided-vs-built map and ticket breakdown.
 - Since GTC-145/146, Moment 2 generation is ONE coordinated AI call at "Generate" — the modal
   header comment in `src/components/plan/Moment2Step1Modal.tsx` explicitly says per-section
   incremental generation was removed. Docs describing per-section generation
   (`docs/moment-1-and-2-build-report.md`, `docs/moment-2-flow-document.md`) are STALE.
 - Event lifecycle behind the Moments: `EventStatus` = DRAFT → CONFIRMING → FROZEN → COMPLETE
-  (`src/lib/workflow.ts`). Frozen = the psychological finish line; participant responses are
-  locked while frozen.
+  (`src/lib/workflow.ts`) — current code. Per `gather-hinge-spec-v1.md` §2, the SEND (not FROZEN)
+  is now the specified psychological pivot and lock point; FROZEN is marked for architectural
+  reconciliation/collapse by `gather-moment-4-spec-v1.md` §7 (Plan mode, max effort — Epic A,
+  `docs/tickets/GTC-167.md` onward). COMPLETE survives the reconciliation but becomes
+  calendar-triggered, not host-declared (`gather-moment-4-spec-v1.md` §10.1). Treat every
+  FROZEN-keyed claim elsewhere in this skill (the RSVP/Assignment-response table below, the
+  compliance-threshold bullet, the freeze-gating section) as an accurate description of
+  pre-reconciliation code, not settled architecture — full rewrite is owed once Epic A lands.
 
 ## Households (Moment 1 vocabulary)
 

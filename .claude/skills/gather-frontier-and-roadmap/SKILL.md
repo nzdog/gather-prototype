@@ -40,7 +40,7 @@ docs drift (see Section 2, which is itself a worked example of that drift).
 | Reachability tier | PersonEvent.reachabilityTier enum: DIRECT / PROXY / SHARED / UNTRACKABLE (`enum ReachabilityTier` in prisma/schema.prisma) — how the app can reach a guest |
 | Nudge | Automated SMS reminder, run by cron GET /api/cron/nudges every 15 min (vercel.json) |
 | Proxy nudge | Nudge sent to a household's PRIMARY_CONTACT on behalf of unreachable members |
-| Freeze | Event lifecycle transition CONFIRMING → FROZEN (src/lib/workflow.ts) |
+| Freeze | Event lifecycle transition CONFIRMING → FROZEN (src/lib/workflow.ts) — current code; slated for architectural reconciliation into a send-lock + why-when-touching-someone + universal-versioning ledger model per `gather-moment-4-spec-v1.md` §7 and `gather-hinge-spec-v1.md` §2 (Epic A, Plan mode + max effort, `docs/tickets/GTC-167.md` onward) |
 | God file | src/app/plan/[eventId]/page.tsx (3,870 lines as of 2026-07-09), renders V1 dashboard AND V2 Moment flow |
 
 ## 1. The roadmap as recorded (docs/BUILD_STATUS.md)
@@ -53,8 +53,20 @@ BUILD_STATUS.md ("Last Updated: 2026-01-25") records:
 - **Epic 2 — RSVP Layer:** 2.1 RSVP state machine, 2.2 Not-Sure forced conversion, 2.3 dashboard attendance vs items.
 - **Epic 3 — Nudge Infrastructure:** background jobs, scheduling engine, delivery.
 - **Epic 4 — Freeze Enhancements:** freeze warnings, sub-80% reason tag, surgical edit while frozen.
+  NOTE (2026-08-03): "surgical edit while frozen" (an exception carved out of a locked state) is
+  superseded in shape by `gather-hinge-spec-v1.md` §2 — post-send, everything is editable with a
+  why only when the change touches someone, plus universal silent versioning, not
+  frozen-with-exceptions. Revisit this epic's scope alongside Epic A (state-machine
+  reconciliation, `docs/tickets/GTC-167.md` onward).
 - **Epic 5 — Threshold UX:** 80% threshold visual state.
-- **Epic 6 — Metric Instrumentation:** frozen-rate metric, repeat-host-rate metric, reachability breakdown logging.
+- **Epic 6 — Metric Instrumentation:** frozen-rate metric [SUPERSEDED TERM — see note below],
+  repeat-host-rate metric, reachability breakdown logging.
+
+**Note (2026-08-03):** Epic 6's "frozen-rate" metric has no referent once FROZEN dissolves into
+the send (`gather-moment-4-spec-v1.md` §7) — every "frozen rate" mention in this file (§§1-3)
+needs redefinition against the send event once Epic A lands. Epic 6 is already GENUINELY OPEN
+(§2 below) with no code built, so this is a definition update at ticket time, not a live-code
+correction. See `docs/04_roadmap/moment4-hinge-discovery-report.md` for the full picture.
 
 Epic spec + implementation notes live under `docs/04_roadmap/tickets/` (directories
 `epic1-reachability 26-1-26` … `epic5-threshold 31-1-26` — note spaces in dir names, quote them).
@@ -154,7 +166,8 @@ hash, or GTC reference that a fresh session can verify in under a minute, and th
 **Current state:** nothing computes frozen rate, repeat-host rate, or reachability
 breakdown. Substrate exists: `InviteEvent` rows are already logged fail-soft via
 `logInviteEvent` (src/lib/invite-events.ts — catches and console.errors, never throws);
-Event.status and PersonEvent.reachabilityTier are queryable directly.
+Event.status and PersonEvent.reachabilityTier are queryable directly. **Note (2026-08-03):**
+define this metric against the send event, not FROZEN — see the Epic 6 note in Section 1.
 
 **Why it's hard:** definitional, not technical. "Frozen rate" needs a denominator decision
 (all events? events that reached CONFIRMING? exclude Event.isDemo?). Decide with the
