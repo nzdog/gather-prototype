@@ -6,7 +6,8 @@
 CONFIRMING→FROZEN transition "must be treated as a state-machine change (Plan mode, max effort,
 review step)." It decides how `EventStatus.FROZEN` and `EventStatus.COMPLETE` are disposed of, what
 replaces them, how the ledger and versions are stored, when a change owes a why, and in what order
-the consumers migrate. [[GTC-168]] (A2) and [[GTC-169]] (A3) execute it.
+the consumers migrate. [[GTC-168]] (A2) and [[GTC-169]]/[[GTC-196]]/[[GTC-197]]/[[GTC-198]] (A3a–d)
+execute it; [[GTC-199]] (A4) closes it out.
 
 **Authority order.** `docs/03_specs/gather-moment-4-spec-v1.md` and
 `docs/03_specs/gather-hinge-spec-v1.md` first; then the discovery report
@@ -71,7 +72,7 @@ The report says "~30 call sites." Measured on the working tree:
 
 The report's "~30" counted decision sites in the *gating* map. The real A3 surface is the gating map
 **plus** every mutation route that must now write to the ledger. This is the main reason A3 must be
-split (§3.4).
+split (§11).
 
 ---
 
@@ -559,15 +560,18 @@ version number. Version *N* of the plan is the state after ledger entry *N*.
 This is what makes the storage problem tractable. The alternative — a `PlanRevision` per change — is
 what the current code would do if `createRevision` were auto-fired, and it does not scale:
 
-| Approach | Bytes per change (est.) | 200 changes | Notes |
-|---|---|---|---|
-| Full `PlanRevision` snapshot | ~60 KB | ~12 MB / event | `createRevision` stores `teams` *with nested items* **and** `items` separately — items are serialised twice. |
-| Scoped ledger entry | ~0.3–0.8 KB | ~160 KB / event | Only the changed entity's changed fields. |
+**Measured** against the dev DB, 2026-08-03 (read-only; the prediction that preceded it was ~60 KB
+per snapshot and 0.3–0.8 KB per entry — the snapshot prediction was 2.6× low, the entry prediction
+held):
 
-The 60 KB figure is an **estimate** derived from `Item`'s 45-column shape × 25 items, doubled for the
-nested duplication, plus teams/days/conflicts/acknowledgements. **A2's first task is to measure it**
-against the seeded Henderson fixture and record the real number in the ticket — this is exactly the
-"predict numbers first, then measure" discipline from `gather-experiment-methodology`.
+| Approach | Per change | 200 changes | Notes |
+|---|---|---|---|
+| Full `PlanRevision` snapshot | **156.6 KB** (Henderson, 56 items) — up to **598.9 KB** (260-item fixture); ~2,500 B/item | **30.6 MB** / event | `createRevision` stores `teams` *with nested items* **and** `teams.flatMap(t => t.items)` again — **roughly half of every snapshot is duplication.** |
+| Scoped ledger entry | **455 B** field edit · **549 B** reassignment · **1,601 B** whole-row delete | **107 KB** / event | Only the changed entity's changed fields. |
+
+**Ratio: 285×** on the demo event; **1,117×** on the largest fixture. Full results and method in
+[[GTC-168]]. Revised target for §10.2: **< 700 B p95 for T1/T4 entries, < 2 KB for whole-row
+deletes.**
 
 **Reachability.** Complete history is reachable two ways, both cheap:
 - *Forward:* the `PlanSnapshot` written at DRAFT→CONFIRMING, plus entries 1..N applied.
@@ -794,7 +798,7 @@ Predict first, then measure, per house methodology.
 | **Hard-block count** | Scripted post-send mutation attempt against every route in §4.2 Layer 1; count non-2xx responses caused by lifecycle state | **0** (Moment 4 §7) |
 | **Why-scope precision** | Fixture run of 20 mutations spanning all §5 triggers and non-triggers; count reason prompts | Exactly the T1–T5 subset. Today: 3 required (all in `frozen-edit`), ~8 owed → wrong in both directions |
 | **Ledger completeness** | Same fixture; count entries | 1 per changed field; `changeSetId` groups match request count |
-| **Ledger size** | Measure bytes/entry on the Henderson fixture | < 1 KB p95 (prediction: 0.3–0.8 KB). **Also measure the `PlanRevision` blob** to confirm or correct the ~60 KB estimate in §6.3 |
+| **Ledger size** | Measure bytes/entry on the Henderson fixture | **< 700 B p95** for T1/T4, **< 2 KB** for whole-row deletes (measured baseline in §6.3) |
 | **Nudge predicate** | Sent event with a live date yields candidates; complete event yields none | Both true (today the first is false) |
 | **Regression** | `npx tsc --noEmit`; `npm run format:check`; `npx next build`; `npm run test:security` | All clean / exit 0 |
 | **Browser walk** | Host dashboard (A3c) + 4 token surfaces (A3d) per GTC-169's acceptance | All pass |
@@ -805,16 +809,17 @@ Predict first, then measure, per house methodology.
 
 Per the ticket, A2/A3 do not start until they are rescoped against this plan. Recommended shape:
 
+**Filed 2026-08-03**, after Nigel approved the plan and the four-way A3 split:
+
 | Ticket | Scope | Effort |
 |---|---|---|
-| [[GTC-168]] (A2) | Unchanged in intent; scope confirmed as §4.2 Layer 0 + §6.2 + §8.2. Add: measure the two storage numbers before writing the migration. **Stop Condition 7 applies — schema migration.** | max |
-| [[GTC-169]] (A3) | **Split. Recommended: yes.** See below. | — |
-| A3a — server gating | §4.2 Layer 1, ~39 sites / 16 files. Security-relevant. **Blocked on §12.1's resolution.** | high |
-| A3b — ledger wiring | §4.2 Layer 2, ~30 sites, incl. deleting `frozen-edit` and the F1 hook. | xhigh |
-| A3c — host UI | §4.2 Layer 3, god file + 11 components. | xhigh |
-| A3d — token-route UI | §4.2 Layer 4, 5 pages / 4 surfaces. | high |
-| A-merge (unfiled) | Cherry-pick onto `feat/moment-one-redesign`; dead-code removal as a separate commit; carries §10.2's numbers. | medium |
-| A4 (unfiled) | §9.2 steps 4–5: data migration + enum drop. Sequence after Epic J. | medium |
+| [[GTC-168]] (A2) | §4.2 Layer 0 + §6.2 + §9.3. Storage measured (§6.3) before the migration. **Stop Condition 7 — schema migration.** | max |
+| [[GTC-169]] (A3a) | §4.2 Layer 1, ~39 sites / 16 files. Server gates. Carries the zone-6 approval on record. | high |
+| [[GTC-196]] (A3b) | §4.2 Layer 2, ~30 sites, incl. deleting `frozen-edit` and the F1 hook. | xhigh |
+| [[GTC-197]] (A3c) | §4.2 Layer 3, god file + 11 components. | xhigh |
+| [[GTC-198]] (A3d) | §4.2 Layer 4, 5 pages / 4 surfaces. Last before the merge. | high |
+| [[GTC-199]] (A4) | §9.2 steps 4–5: data migration + enum drop. Sequenced after Epic J. **The only irreversible ticket in the epic.** | medium |
+| A-merge | **Still unfiled.** Cherry-pick onto `feat/moment-one-redesign`; dead-code removal as a separate commit; carries §10.2's numbers. | medium |
 
 **The A3 split question, answered:** split it, into four. GTC-169 anticipated a two-way split (routes
 vs UI); the measured surface argues for four. The seam that matters most is **A3a vs A3b** — A3a is a
@@ -826,13 +831,21 @@ walks), and A3c alone touches the god file.
 
 ---
 
-## 12. STOP — decisions escalated to Nigel
+## 12. Decisions escalated to Nigel — ALL RULED (2026-08-03)
 
-Per GTC-167's Stop Conditions and the house rule that a plan which guesses past an unknown is worse
-than one that stops. **A2 and A3a should not start until 12.1 and 12.2 are answered.** 12.3 blocks
-A3b only.
+Raised per GTC-167's Stop Conditions and the house rule that a plan which guesses past an unknown is
+worse than one that stops. **All three were ruled by Nigel on 2026-08-03**, along with an endorsement
+of §13.1. The rulings are recorded inline below and folded into the filed tickets; the original
+framing is kept so the reasoning behind each ruling stays legible.
 
-### 12.1 The security suite's FROZEN assertions must be rewritten — Do-Not-Touch zone 6
+| # | Ruling |
+|---|---|
+| 12.1 | **APPROVED to rewrite the security suite — replace, never delete**, at equal strength: post-send mutations carry ledger entries, why-scope triggers fire, hard-blocks absent. Explicit zone-6 instruction, noted in [[GTC-169]] (A3a). |
+| 12.2 | **(a)** — coordinators get the same always-allow + ledger as the host. *"No walls anywhere, ledger is actor-agnostic."* |
+| 12.3 | **(a) now, (c) once F1 exists** — with the consequence stated plainly in the UI before the act: *"this replaces the plan people have claimed against."* Copy owned by [[GTC-197]] (A3c), which must merge with [[GTC-196]] (A3b). |
+| §13.1 | **Endorsed as written** — a required reason never blocks the change. |
+
+### 12.1 The security suite's FROZEN assertions must be rewritten — Do-Not-Touch zone 6 — **RULED: approved, replace never delete**
 
 **Stop Condition 3.** `tests/security-validation.ts` asserts the current contract in four places:
 
@@ -860,7 +873,7 @@ are **superseded**. They must be *replaced* with assertions of the new contract,
 corrections to them). I have not touched either file. Without this, A3a cannot land — deleting
 `requireNotFrozen` breaks the preflight gate.
 
-### 12.2 Coordinator authority after the send — genuinely underdetermined
+### 12.2 Coordinator authority after the send — **RULED: (a), no walls anywhere**
 
 Today, `requireNotFrozen` + `canMutate` hard-block **coordinators** from creating, editing, deleting,
 and assigning items once an event is FROZEN (7 call sites across the three `c/[token]/items/*`
@@ -885,7 +898,7 @@ willing to widen coordinator write access across a sent plan on an inference.
 
 **What I need from you:** (a) or (b).
 
-### 12.3 Post-send AI regeneration — no spec covers it
+### 12.3 Post-send AI regeneration — **RULED: (a) now, (c) once F1 exists, with the consequence stated in the UI**
 
 `POST /api/events/[id]/regenerate` calls `createRevision`, then replaces the entire plan. Post-send,
 that orphans every assignment and invalidates every yes at once. Neither spec addresses whether the
@@ -908,7 +921,7 @@ treatment of `regenerate`/`generate`/`finalize-plan` only; A2 and A3a are unaffe
 
 ---
 
-## 13. Interpretations taken (not stops — but worth your eye)
+## 13. Interpretations taken (§13.1 endorsed by Nigel 2026-08-03; the rest stand as written)
 
 These are decisions I made *from* the specs where the specs did not spell out the mechanics. Each is
 reversible without redesigning the plan.
