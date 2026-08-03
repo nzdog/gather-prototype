@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireEventRole, requireNotFrozen } from '@/lib/auth/guards';
+import { requireEventRole } from '@/lib/auth/guards';
 
 // POST /api/events/[id]/items/[itemId]/assign - Assign item to person
 export async function POST(
@@ -19,10 +19,6 @@ export async function POST(
     if (!event) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
-
-    // Block assignments when frozen (HOST can override)
-    const frozenBlock = requireNotFrozen(event, auth.role === 'HOST');
-    if (frozenBlock) return frozenBlock;
 
     const body = await request.json();
     const { personId } = body;
@@ -129,10 +125,6 @@ export async function DELETE(
     if (!event) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
-
-    // Block unassignments when frozen (HOST can override)
-    const frozenBlock = requireNotFrozen(event, auth.role === 'HOST');
-    if (frozenBlock) return frozenBlock;
 
     // Get item with assignment
     const item = await prisma.item.findUnique({

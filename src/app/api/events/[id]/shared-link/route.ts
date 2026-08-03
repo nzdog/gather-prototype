@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { isSent } from '@/lib/lifecycle';
 import { requireEventRole } from '@/lib/auth/guards';
 import { generateSecureToken } from '@/lib/tokens';
 
@@ -70,14 +71,14 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
   try {
     const event = await prisma.event.findUnique({
       where: { id: eventId },
-      select: { status: true, sharedLinkToken: true },
+      select: { status: true, sentAt: true, endDate: true, sharedLinkToken: true },
     });
 
     if (!event) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
-    if (event.status !== 'CONFIRMING' && event.status !== 'FROZEN') {
+    if (event.status !== 'CONFIRMING' && !isSent(event)) {
       return NextResponse.json(
         { error: 'Shared link only available after transitioning to CONFIRMING' },
         { status: 400 }

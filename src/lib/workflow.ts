@@ -1,5 +1,6 @@
 import { prisma } from './prisma';
 import type { Item, Assignment, Person, EventStatus, Prisma } from '@prisma/client';
+import { isSent } from './lifecycle';
 
 // Type for items with assignment + person included
 type ItemWithAssignmentAndPerson = Item & {
@@ -13,6 +14,8 @@ type Tx = Prisma.TransactionClient;
  * UI Status Labels - Consistent status naming for UI display
  * Use these constants throughout the UI to ensure consistent terminology
  */
+// FROZEN/COMPLETE remain only for legacy rows and the UI surfaces GTC-197/198 have
+// yet to migrate. No server code writes either status after GTC-169.
 export const STATUS_LABELS = {
   DRAFT: 'DRAFT',
   CONFIRMING: 'CONFIRMING',
@@ -80,8 +83,7 @@ export interface FreezeWarning {
   details: string[];
 }
 
-export interface FreezeCheckResult {
-  canFreeze: boolean; // always true — warnings don't block
+export interface SendReadinessResult {
   warnings: FreezeWarning[];
   complianceRate: number; // 0-100
   criticalGaps: {
@@ -91,8 +93,15 @@ export interface FreezeCheckResult {
 }
 
 /**
- * Checks freeze readiness and returns warnings.
- * Warnings never block freeze - canFreeze is always true.
+ * Sweeps the plan for gaps ahead of the send, and returns WARNINGS ONLY.
+ *
+ * GTC-169 (A3a): renamed from checkFreezeReadiness. There is no freeze to be ready
+ * for — this is the Hinge §1 pre-flight's "hunt for absence", and its final form is
+ * GTC-188 (I1). Nothing here blocks: Moment 4 §2 refuses readiness scores and
+ * thresholds outright, and §7 forbids the product contesting the host. The old
+ * canFreeze field (hardcoded true) is gone; the <80%-compliance-requires-a-reason
+ * rule went with it, because demanding justification at a threshold is exactly what
+ * §7 forbids.
  *
  * Compliance calculation:
  * - Numerator: Assignments with status = ACCEPTED where assignee has reachabilityTier != UNTRACKABLE
@@ -104,7 +113,7 @@ export interface FreezeCheckResult {
  * - complianceRate < 80: LOW_COMPLIANCE warning
  * - Any critical item with no accepted assignment: CRITICAL_GAPS warning
  */
-export async function checkFreezeReadiness(eventId: string): Promise<FreezeCheckResult> {
+export async function checkSendReadiness(eventId: string): Promise<SendReadinessResult> {
   const warnings: FreezeWarning[] = [];
 
   // Check for unassigned items
@@ -207,7 +216,6 @@ export async function checkFreezeReadiness(eventId: string): Promise<FreezeCheck
   }
 
   return {
-    canFreeze: true,
     warnings,
     complianceRate,
     criticalGaps,
@@ -216,53 +224,50 @@ export async function checkFreezeReadiness(eventId: string): Promise<FreezeCheck
 
 /**
  * Validates event status transitions.
- * State machine from spec Section 6:
- *   DRAFT → CONFIRMING : Always allowed
- *   CONFIRMING → FROZEN : Blocked if critical gaps (checked separately)
- *   FROZEN → CONFIRMING : Allowed (override, logged)
- *   FROZEN → COMPLETE : Allowed
- *   COMPLETE → * : Never allowed
+ *
+ * GTC-169 (A3a): only ONE authored transition survives the send-lock reconciliation.
+ *
+ *   DRAFT → CONFIRMING : always allowed — real, load-bearing work (gate check,
+ *                        PlanSnapshot, structureMode LOCKED, AccessToken generation)
+ *   CONFIRMING → *     : nothing. The press is not a transition, it is a timestamp
+ *                        (Event.sentAt), and COMPLETE is derived from the calendar
+ *                        (Moment 4 §10.1 — "no one declares it").
+ *
+ * FROZEN is gone as a destination: it was a second, later ceremony bolted on after
+ * the send that already existed. FROZEN → CONFIRMING (unfreeze) is gone with it —
+ * Hinge §2 rules out recall at the mechanism level; recovery from a bad send runs
+ * through the material-change machinery (GTC-183 / F1), not an undo.
  */
 export function canTransition(fromStatus: EventStatus, toStatus: EventStatus): boolean {
   if (fromStatus === toStatus) return true;
-  if (fromStatus === 'COMPLETE') return false;
 
   const validTransitions: Record<EventStatus, EventStatus[]> = {
     DRAFT: ['CONFIRMING'],
-    CONFIRMING: ['FROZEN'],
-    FROZEN: ['CONFIRMING', 'COMPLETE'],
+    CONFIRMING: [],
+    // Legacy rows only — no code path produces these statuses after A3a, and nothing
+    // may transition out of them. GTC-199 (A4) drops both enum values.
+    FROZEN: [],
     COMPLETE: [],
   };
 
   return validTransitions[fromStatus].includes(toStatus);
 }
 
-/**
- * Mutation gating from spec Section 6 MUTATION_RULES.
+/*
+ * canMutate() was DELETED by GTC-169 (A3a).
  *
- * @param eventStatus - Current event status
- * @param action - The mutation action to check
- * @param itemCritical - For deleteItem action, whether the item is critical
- * @returns true if mutation is allowed
+ * It denied every mutation on FROZEN and COMPLETE events, and denied deleting a
+ * critical item while CONFIRMING. The send-lock model removes the first two (the lock
+ * is a ledger, not a wall — Moment 4 §7), and the third was unreachable dead code: its
+ * only caller passed itemCritical: false unconditionally.
+ *
+ * With all three gone the function returned true for every input. A gate that always
+ * passes is worse than no gate — it reads as protection while providing none, which is
+ * exactly why the unwired canFreeze() was removed in GTC-154.
+ *
+ * Authority still comes from requireEventRole / requireTokenScope / requireTeamAccess.
+ * Accountability comes from src/lib/ledger.ts. Neither is a lifecycle gate.
  */
-export function canMutate(
-  eventStatus: EventStatus,
-  action: 'createItem' | 'editItem' | 'deleteItem' | 'assignItem' | 'addPerson' | 'removePerson',
-  itemCritical?: boolean
-): boolean {
-  if (eventStatus === 'COMPLETE') return false;
-  if (eventStatus === 'FROZEN') return false;
-
-  if (eventStatus === 'CONFIRMING') {
-    if (action === 'deleteItem' && itemCritical) {
-      return false;
-    }
-    return true;
-  }
-
-  // DRAFT: all mutations allowed
-  return true;
-}
 
 /**
  * Audit helper: logs action to AuditEntry within transaction.
@@ -520,7 +525,7 @@ export async function runGateCheck(eventId: string): Promise<GateCheckResult> {
   }
 
   // Note: ALL_ITEMS_ASSIGNED check removed from DRAFT → CONFIRMING gate
-  // Assignment coverage is now enforced only at CONFIRMING → FROZEN transition
+  // Assignment coverage is never enforced as a gate — checkSendReadiness warns only.
 
   return {
     passed: blocks.length === 0,
@@ -852,6 +857,27 @@ export async function restoreFromRevision(
   revisionId: string,
   actorId: string
 ): Promise<void> {
+  // GTC-169 (A3a) — THE EPIC'S ONE ADDED RESTRICTION.
+  //
+  // Restoring a revision after the send is recall by another name: it would silently
+  // undo asks that people have already received and claimed against. Hinge §2 rules
+  // that out at the MECHANISM level — "there is no unsend for the disaster case" —
+  // and a wrong send is recovered forwards through the material-change machinery
+  // (Moment 4 §8.5 / GTC-183), never by pretending it did not happen.
+  //
+  // The guard lives here rather than in the route because no-undo is a domain
+  // invariant: it must hold for every caller, not just the one HTTP path.
+  const event = await prisma.event.findUniqueOrThrow({
+    where: { id: eventId },
+    select: { status: true, sentAt: true, endDate: true },
+  });
+  if (isSent(event)) {
+    throw new Error(
+      'Cannot restore a revision after the plan has been sent — nothing is undone by moving ' +
+        'forward. Change the plan instead; the history keeps the story.'
+    );
+  }
+
   await prisma.$transaction(async (tx) => {
     // Get the revision
     const revision = await tx.planRevision.findUnique({

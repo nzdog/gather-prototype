@@ -26,10 +26,15 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
-  // Check if event is frozen
-  if (resolvedContext.event.status === 'FROZEN') {
-    return NextResponse.json({ error: 'Plan is frozen — responses are locked' }, { status: 400 });
-  }
+  // GTC-169 (A3a) — SEMANTIC INVERSION. This route used to 400 with "Plan is frozen
+  // — responses are locked" once the host froze the plan. That is backwards: after
+  // the send is precisely when guests are supposed to respond.
+  //
+  // Moment 4 §7: "Responses, claims, and reassignments-with-reasons are not the plan
+  // changing; they are the plan being answered. Greens keep accumulating after the
+  // send — that's the Moment working, not a mutation of the locked plan."
+  //
+  // There is no lifecycle gate here, by design.
 
   // Parse request body for response type
   const body = await request.json();
