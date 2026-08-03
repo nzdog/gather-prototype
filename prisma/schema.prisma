@@ -57,9 +57,16 @@ model Event {
   manualAdditionsCount       Int                      @default(0)
   hostReadinessConfidence    HostReadinessConfidence?
   currentRevisionId          String?
-  inviteSendConfirmedAt      DateTime?
+  // GTC-168 (A2): THE SEND. Renamed from inviteSendConfirmedAt — this field already
+  // was the send (it anchors the nudge machinery and fires before freezing), so the
+  // rename is Prisma-level only via @map: the column keeps its name and its data, and
+  // no SQL runs. The physical column rename is deferred to GTC-199 (A4), which already
+  // requires a backup. See send-lock-reconciliation-plan.md §0.1, §2.
+  sentAt                     DateTime?                @map("inviteSendConfirmedAt")
   sharedLinkToken            String?                  @unique
   sharedLinkEnabled          Boolean                  @default(false)
+  // Retained, unwritten after GTC-169 (A3a). Historical evidence of the old freeze
+  // ceremony. Dropped by GTC-199 (A4).
   frozenAt                   DateTime?
   complianceAtFreeze         Float?
   freezeReason               String?
@@ -159,28 +166,40 @@ model PersonEvent {
   rsvpStatus           RsvpStatus       @default(PENDING)
   rsvpRespondedAt      DateTime?
   rsvpFollowupSentAt   DateTime?
-  householdId           String?
-  household             Household?       @relation(fields: [householdId], references: [id])
-  householdRole         HouseholdRole?
-  event                 Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  /// GTC-168 (A2): THIS person's send clock — the mini-send anchor (Hinge §2, gap #5).
+  /// Set to Event.sentAt at the press; set to now() for anyone added afterwards, so
+  /// their nudge cadence and red-by-time run from THEIR send date, truncated by the
+  /// event date. isMiniSend = PersonEvent.sentAt > Event.sentAt — no extra field.
+  ///
+  /// Replaces Person.inviteAnchorAt, which holds the same value on the WRONG MODEL:
+  /// Person is global, so a person in two events shares one anchor and the second
+  /// event's clocks are wrong from the start (the guard at people/route.ts:133 only
+  /// sets it when null). Person.inviteAnchorAt is retained-but-unwritten until
+  /// GTC-199 (A4). Person.nudge24hSentAt/nudge48hSentAt carry the identical leak and
+  /// move under GTC-178 (E1) — zone-7-adjacent, not this ticket's.
+  sentAt               DateTime?
+  householdId          String?
+  household            Household?       @relation(fields: [householdId], references: [id])
+  householdRole        HouseholdRole?
+  event                Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
   person               Person           @relation(fields: [personId], references: [id], onDelete: Cascade)
   proxy                PersonEvent?     @relation("ProxyRelation", fields: [proxyPersonEventId], references: [id])
   householdMembers     PersonEvent[]    @relation("ProxyRelation")
   team                 Team?            @relation(fields: [teamId], references: [id], onDelete: SetNull)
 
-  nudgeLogs   NudgeLog[]
+  nudgeLogs NudgeLog[]
 
   @@unique([personId, eventId])
 }
 
 model Household {
-  id         String        @id @default(cuid())
-  eventId    String
-  event      Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  members    PersonEvent[]
+  id          String        @id @default(cuid())
+  eventId     String
+  event       Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  members     PersonEvent[]
   littleCount Int           @default(0)
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 }
 
 model Item {
@@ -369,17 +388,87 @@ model EventRole {
   @@index([eventId])
 }
 
+/// THE LEDGER (GTC-168 / A2).
+///
+/// Extended in place rather than replaced: ~15 call sites all funnel through
+/// logAudit(), so extension preserves existing history with no data migration.
+///
+/// VERSIONS ARE LEDGER ENTRIES (Hinge spec §2, "reasons explain the steps; versions
+/// ARE the steps"). `sequence` IS the version number. Version N of the plan is the
+/// state after entry N. This is what makes storage tractable: a scoped entry costs
+/// 455–1601 B against 156.6 KB for a full PlanRevision snapshot of the demo event —
+/// a 285x ratio, measured 2026-08-03. See send-lock-reconciliation-plan.md §6.
+///
+/// InviteEvent remains a SEPARATE log for messaging/channel telemetry (LINK_OPENED,
+/// NUDGE_SENT_AUTO, SMS_BLOCKED_OPT_OUT, guest responses). Do not merge them: Hinge §2
+/// — "the ledger stays meaningful because it is never asked to hold noise."
 model AuditEntry {
-  id         String   @id @default(cuid())
-  timestamp  DateTime @default(now())
+  id        String   @id @default(cuid())
+  timestamp DateTime @default(now())
+  eventId   String
+
+  /// The version number, monotonic per event. NULL = a pre-ledger audit row: it
+  /// predates versioning and was never a version. Postgres permits multiple NULLs
+  /// under the composite unique, so no history is fabricated to satisfy the schema.
+  sequence Int?
+
+  /// One request = one changeSet = one human-visible step. A single request that
+  /// changes three fields emits three rows sharing one changeSetId ("I renamed and
+  /// re-quantified the pavlova" is one step to a person). Granularity stays
+  /// per-individual-change; the grouping is a display key, not batching.
+  /// NULL = pre-ledger row.
+  changeSetId String?
+
+  /// NULLABLE by design: the calendar, the cron sweep, and the release-notification
+  /// path have no Person to point at. The system is a first-class actor in the
+  /// history (Hinge §7: "the system does what the system does").
+  actorId   String?
+  actorKind ActorKind @default(HOST)
+
   actionType String
   targetType String
   targetId   String
-  details    String?
-  eventId    String
-  actorId    String
-  actor      Person   @relation(fields: [actorId], references: [id])
-  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  /// NULL for whole-entity actions (create/delete). Otherwise the changed field.
+  field String?
+
+  /// Scoped to the changed entity — NEVER the whole plan. `before` is what makes
+  /// history reachable backwards by inversion; the CONFIRMING PlanSnapshot makes it
+  /// reachable forwards. Neither requires a snapshot per change.
+  before Json?
+  after  Json?
+
+  /// NULLABLE BY DESIGN — plan §13.1, endorsed by Nigel 2026-08-03. The why is
+  /// required only for changes that touch someone (T1–T5), but "required" means the
+  /// flow always asks, NOT that the server rejects. Moment 4 §7 forbids the product
+  /// demanding justification; Hinge §2 says the reason "is not compliance — it's her
+  /// own memory". A 400 would make it compliance. NO ROUTE MAY 4xx FOR A MISSING
+  /// REASON. reasonRequired records that the rule fired, so a null reason is never
+  /// ambiguous between "not owed" and "owed and not given".
+  reason         String?
+  reasonRequired Boolean @default(false)
+
+  /// Retained for the ~15 pre-ledger call sites and their existing rows.
+  details String?
+
+  actor Person? @relation(fields: [actorId], references: [id])
+  event Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, sequence])
+  @@index([eventId, timestamp])
+  @@index([changeSetId])
+}
+
+/// Who made a change. Needed because AuditEntry.actorId is nullable — SYSTEM actions
+/// (the calendar transition, the cron sweep, a release notification) have no Person.
+/// The why-scope rule is actor-agnostic: a coordinator owes the same why a host does
+/// (ruled by Nigel 2026-08-03 — "no walls anywhere, ledger is actor-agnostic").
+enum ActorKind {
+  HOST
+  COHOST
+  COORDINATOR
+  GUEST
+  SYSTEM
 }
 
 model Conflict {
@@ -936,12 +1025,12 @@ model NudgeLog {
 }
 
 model EventSetup {
-  id               String   @id @default(cuid())
-  eventId          String   @unique
-  event            Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  id      String @id @default(cuid())
+  eventId String @unique
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
-  eventType        String?
-  eventTypeOther   String?
+  eventType      String?
+  eventTypeOther String?
 
   mainsData              Json?
   sidesData              Json?
@@ -959,6 +1048,6 @@ model EventSetup {
   // without dedicated columns. Shape: { [categoryKey]: { selections: OptionTreeSelections, stillDeciding?: boolean } }
   extendedCategoriesData Json?
 
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
