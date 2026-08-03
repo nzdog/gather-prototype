@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ensureEventTokens } from '@/lib/tokens';
 import { requireEventRole } from '@/lib/auth/guards';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordChange } from '@/lib/ledger';
 import { normalizePhoneNumber } from '@/lib/phone';
 
 // PATCH /api/events/[id]/people/[personId] - Update person (role, team)
@@ -264,6 +266,8 @@ export async function DELETE(
     const auth = await requireEventRole(eventId, ['HOST', 'COORDINATOR']);
     if (auth instanceof NextResponse) return auth;
 
+    const removalActor = await ledgerActorForUser(auth.user, auth.role);
+
     // Execute removal in transaction
     await prisma.$transaction(async (tx) => {
       // 1. Find all assignments for this person in this event
@@ -315,6 +319,25 @@ export async function DELETE(
       // 5. Delete PersonEvent (membership)
       await tx.personEvent.deleteMany({
         where: { personId, eventId },
+      });
+
+      // T2 — removing someone who is HOLDING something touches them: their asks
+      // disappear. The count decides it, exactly as in removePerson(); this route
+      // does its own removal inline rather than calling that helper.
+      await recordChange(tx, {
+        eventId,
+        actor: removalActor,
+        reason: null,
+        changes: [
+          {
+            action: 'REMOVE_PERSON',
+            targetType: 'PersonEvent',
+            targetId: personId,
+            before: { personId, heldAssignments: assignments.length },
+            after: null,
+            context: { heldAssignmentCount: assignments.length },
+          },
+        ],
       });
     });
 

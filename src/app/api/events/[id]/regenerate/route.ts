@@ -6,6 +6,8 @@ import { regeneratePlan, RegenerationParams } from '@/lib/ai/generate';
 import { resolveGeneratedTeamCoordinatorId } from '@/lib/ai/coordinator-assignment';
 import { randomBytes } from 'crypto';
 import { requireEventRole } from '@/lib/auth/guards';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordBulkPlanChange } from '@/lib/ledger';
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -203,6 +205,19 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     await prisma.event.update({
       where: { id: eventId },
       data: { aiCallsUsed: { increment: 1 } },
+    });
+
+    // The ruled (a)-now-(c)-later case. Post-send this replaces a plan people have
+    // claimed against — allowed, and recorded as one changeSet carrying the why, with
+    // the pre-regenerate PlanRevision above as the checkpoint. GTC-197 (A3c) states the
+    // consequence in the UI before the act; GTC-183 (F1) eventually fires the re-ask.
+    await recordBulkPlanChange(prisma, {
+      eventId,
+      actor: await ledgerActorForUser(auth.user, auth.role),
+      action: 'REGENERATE_PLAN',
+      reason: body.reason ?? (modifier ? `Regenerated: ${modifier}` : null),
+      before: { revisionId, preservedItems: preservedItems.length },
+      after: { teams: teamsCreated, modifier },
     });
 
     return NextResponse.json({

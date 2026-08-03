@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordBulkPlanChange } from '@/lib/ledger';
 import { callClaudeForJSON } from '@/lib/ai/claude';
 import { MAX_TOKENS_FULL_PLAN } from '@/lib/ai/token-limits';
 import {
@@ -315,6 +317,13 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
         nextDisplayOrder++;
       }
     }
+
+    await recordBulkPlanChange(prisma, {
+      eventId,
+      actor: await ledgerActorForUser(auth.user, auth.role),
+      action: 'GENERATE_PLAN',
+      after: { categories: categories.length, batchId },
+    });
 
     return NextResponse.json({
       plan: {

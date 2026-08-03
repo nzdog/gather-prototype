@@ -114,7 +114,15 @@ export type ChangeAction =
   | 'SEND_PRESSED'
   | 'WRAP_UP_SENT';
 
-export type ChangeTargetType = 'Assignment' | 'Item' | 'PersonEvent' | 'Event' | 'Team';
+export type ChangeTargetType =
+  | 'Assignment'
+  | 'Item'
+  | 'PersonEvent'
+  | 'Event'
+  | 'Team'
+  // GTC-201: a conflict resolution can move or drop an ask, so it is a ledger target.
+  | 'Conflict'
+  | 'Household';
 
 /**
  * A single field-level change, before it becomes a row.
@@ -498,6 +506,49 @@ function toJson(value: unknown): Prisma.InputJsonValue | undefined {
  */
 function cuidish(): string {
   return `cs_${globalThis.crypto.randomUUID()}`;
+}
+
+/**
+ * Record a BULK plan change — a generation, a regeneration, a clone, a restore.
+ *
+ * GTC-201 (A3b-2). These replace or populate the whole plan at once, so a per-field
+ * ledger of them would be hundreds of entries describing a state no longer reachable
+ * any other way. They land as ONE step, with the `PlanRevision` checkpoint carrying
+ * the detail (plan §6.4 — revisions demoted to coarse checkpoints, which is exactly
+ * what a bulk rewrite is).
+ *
+ * Opens its own transaction, and is therefore called AFTER the work succeeds. That is
+ * correct rather than a compromise: these routes are not transactional end-to-end, so
+ * a ledger entry written on success describes writes that actually landed. It must
+ * never be called speculatively.
+ */
+export async function recordBulkPlanChange(
+  prisma: { $transaction: <T>(fn: (tx: Tx) => Promise<T>) => Promise<T> },
+  params: {
+    eventId: string;
+    actor: LedgerActor;
+    action: Extract<ChangeAction, 'GENERATE_PLAN' | 'REGENERATE_PLAN'>;
+    reason?: string | null;
+    before?: unknown;
+    after?: unknown;
+  }
+): Promise<RecordChangeResult> {
+  return prisma.$transaction((tx) =>
+    recordChange(tx, {
+      eventId: params.eventId,
+      actor: params.actor,
+      reason: params.reason ?? null,
+      changes: [
+        {
+          action: params.action,
+          targetType: 'Event',
+          targetId: params.eventId,
+          before: params.before ?? null,
+          after: params.after ?? null,
+        },
+      ],
+    })
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

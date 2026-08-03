@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
+import { recordChange } from '@/lib/ledger';
 
 interface PersonToImport {
   name: string;
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // Validate event exists
     const event = await prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, status: true, sentAt: true },
+      select: { id: true, status: true, sentAt: true, hostId: true },
     });
 
     if (!event) {
@@ -78,6 +79,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     let imported = 0;
+    const importedPeople: { personEventId: string; personId: string; name: string }[] = [];
     let skipped = 0;
     const errors: string[] = [];
 
@@ -159,7 +161,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         }
 
         // Create PersonEvent linking person to event
-        await prisma.personEvent.create({
+        const createdPersonEvent = await prisma.personEvent.create({
           data: {
             personId: person.id,
             eventId,
@@ -172,12 +174,39 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           },
         });
 
+        importedPeople.push({
+          personEventId: createdPersonEvent.id,
+          personId: person.id,
+          name: person.name,
+        });
         imported++;
       } catch (error: any) {
         console.error(`Error importing person ${personData.name}:`, error);
         errors.push(`Error importing ${personData.name}: ${error.message}`);
         skipped++;
       }
+    }
+
+    // Per-person entries under ONE changeSet — the import is one step to a human, N
+    // rows to the ledger. Versioned, never interrogated: an import asks nothing of
+    // anyone until items are assigned to them.
+    //
+    // This route has TWO auth paths (session and ?hostId=), so the actor is derived
+    // from the event's host rather than an `auth` binding that only one path sets.
+    if (importedPeople.length > 0) {
+      await prisma.$transaction((tx) =>
+        recordChange(tx, {
+          eventId,
+          actor: { id: event.hostId ?? null, kind: 'HOST', name: null },
+          changes: importedPeople.map((imported) => ({
+            action: 'ADD_PERSON' as const,
+            targetType: 'PersonEvent' as const,
+            targetId: imported.personEventId,
+            before: null,
+            after: { personId: imported.personId, personName: imported.name },
+          })),
+        })
+      );
     }
 
     return NextResponse.json({

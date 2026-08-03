@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordChange } from '@/lib/ledger';
 import { normalizePhoneNumber } from '@/lib/phone';
 
 // GET /api/events/[id]/households - List households for event
@@ -246,6 +248,23 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         },
       },
     });
+
+    const hhActor = await ledgerActorForUser(auth.user, auth.role);
+    await prisma.$transaction((tx) =>
+      recordChange(tx, {
+        eventId,
+        actor: hhActor,
+        changes: [
+          {
+            action: 'ADD_PERSON',
+            targetType: 'Household',
+            targetId: result?.id ?? '',
+            before: null,
+            after: { primaryContact: primaryContact?.name ?? null },
+          },
+        ],
+      })
+    );
 
     return NextResponse.json({ household: result }, { status: 201 });
   } catch (error: any) {

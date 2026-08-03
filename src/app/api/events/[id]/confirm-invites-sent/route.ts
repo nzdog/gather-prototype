@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordChange } from '@/lib/ledger';
 import { logInviteEvent } from '@/lib/invite-events';
 
 export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -59,6 +61,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       );
     }
 
+    const pressActor = await ledgerActorForUser(auth.user, 'HOST');
     const now = new Date();
 
     // Update event timestamp
@@ -100,6 +103,27 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
         previouslyAnchored: event.people.length - peopleNeedingAnchor.length,
       },
     });
+
+    // THE PRESS ITSELF, as the ledger's first entry.
+    //
+    // Moment 4 §7: "The audit trail starts at the send." Everything after this is
+    // versioned and, where it touches someone, interrogated. The entry that marks the
+    // threshold should be in the history it opens.
+    await prisma.$transaction((tx) =>
+      recordChange(tx, {
+        eventId,
+        actor: pressActor,
+        changes: [
+          {
+            action: 'SEND_PRESSED',
+            targetType: 'Event',
+            targetId: eventId,
+            before: { sentAt: null },
+            after: { sentAt: now.toISOString(), recipients: event.people.length },
+          },
+        ],
+      })
+    );
 
     return NextResponse.json({
       success: true,

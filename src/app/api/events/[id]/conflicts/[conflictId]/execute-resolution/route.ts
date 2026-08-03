@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordChange } from '@/lib/ledger';
 
 export async function POST(
   request: NextRequest,
@@ -62,6 +64,27 @@ export async function POST(
         resolvedAt: new Date(),
       },
     });
+
+    // A conflict resolution can move or drop an ask, so it is recorded like any other
+    // change. The per-action detail lives in `after`; the resolution is one step.
+    const resolutionActor = await ledgerActorForUser(auth.user, auth.role);
+    await prisma.$transaction((tx) =>
+      recordChange(tx, {
+        eventId,
+        actor: resolutionActor,
+        reason: body.reason ?? null,
+        changes: [
+          {
+            action: 'EDIT_ITEM',
+            targetType: 'Conflict',
+            targetId: conflictId,
+            field: 'resolution',
+            before: null,
+            after: { actions: executableActions.length },
+          },
+        ],
+      })
+    );
 
     return NextResponse.json({
       success: true,

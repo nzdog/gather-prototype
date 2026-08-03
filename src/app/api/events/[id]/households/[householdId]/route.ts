@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
 import { reconcileHouseholdMembers } from '@/lib/households/reconcileMembers';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordChange } from '@/lib/ledger';
 
 interface HouseholdMemberInput {
   /** Stable identity of an existing member's PersonEvent (GTC-159); absent = new member. */
@@ -153,12 +155,37 @@ export async function PUT(
     // non-primary members are matched by personEventId and updated in place so
     // teamId / RSVP / NudgeLog survive an edit; only removed members are
     // deleted, only new members created. Logic lives in a testable seam.
-    await reconcileHouseholdMembers(prisma, {
-      eventId,
-      household,
-      primaryMember,
-      sentAt: event.sentAt,
-      input: { primaryContact, partner, helpers, littleCount, guests },
+    // GTC-201 (A3b-2): the reconcile now runs INSIDE a transaction — the correctness
+    // fix that has been on record since GTC-159 (b73f140) as its residual risk. A
+    // household edit is many dependent writes; a partial failure used to leave it
+    // half-reconciled.
+    const actor = await ledgerActorForUser(auth.user, auth.role);
+
+    await prisma.$transaction(async (tx) => {
+      await reconcileHouseholdMembers(tx, {
+        eventId,
+        household,
+        primaryMember,
+        sentAt: event.sentAt,
+        input: { primaryContact, partner, helpers, littleCount, guests },
+      });
+
+      // Versioned, never interrogated: editing a household's composition is not an
+      // ask moving. Where it removes someone who holds items, that person's
+      // assignments are untouched here — removal is removePerson()'s T2 path.
+      await recordChange(tx, {
+        eventId,
+        actor,
+        changes: [
+          {
+            action: 'EDIT_EVENT',
+            targetType: 'PersonEvent',
+            targetId: household.id,
+            before: { memberCount: household.members.length },
+            after: { primaryContact: primaryContact.name, littleCount: littleCount ?? 0 },
+          },
+        ],
+      });
     });
 
     // Fetch the complete updated household
