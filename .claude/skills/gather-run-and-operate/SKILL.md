@@ -122,6 +122,55 @@ Consequences you will hit:
 Until fixed: don't use `/demo` for local verification; use the seed's printed
 `/h/` `/c/` `/p/` token URLs directly.
 
+## 3b. NEVER pass a live DATABASE_URL as `--shadow-database-url` (incident, 2026-08-03)
+
+**Prisma resets whatever database it is handed as the shadow: it drops the schema and
+replays `prisma/migrations` into it.** So any command given `--shadow-database-url
+"$DATABASE_URL"` destroys `gather_dev` — silently, with a success message.
+
+This happened during GTC-168 (A2). A drift check run as
+
+```bash
+# DESTRUCTIVE — this wiped gather_dev. Never run this form.
+npx prisma migrate diff --from-migrations prisma/migrations \
+  --to-schema-datasource prisma/schema.prisma --shadow-database-url "$DATABASE_URL"
+```
+
+deleted every row in all 31 tables (21 events, the Henderson demo, the security
+fixtures) and dropped `_prisma_migrations`. It then reported "empty migration" — the
+result looked clean precisely *because* it had just rebuilt the database from the same
+migrations it was comparing against. **A drift check that resets its own target cannot
+detect drift; a clean result from this form is meaningless, not reassuring.** Recovery
+was `prisma migrate resolve --applied` × 29 to rebuild history, then `db:seed` and
+`tests/security-fixtures.ts` — the seeded data came back, the ad-hoc test events did not.
+
+Use one of these instead:
+
+- **Read-only, no shadow needed** — diff the live DB against the schema file. This is
+  the right tool for "what would my schema edit change?":
+  ```bash
+  npx prisma migrate diff --from-schema-datasource prisma/schema.prisma \
+    --to-schema-datamodel prisma/schema.prisma --script
+  ```
+- **Is the DB in sync with `prisma/migrations`?** — `npx prisma migrate status`. No
+  shadow, no writes, and it answers the drift question directly.
+- **If you genuinely need a shadow** (some `migrate diff --from-migrations` forms do),
+  create a throwaway first and point at *that*, never at `gather_dev`:
+  ```bash
+  createdb shadow_check
+  npx prisma migrate diff --from-migrations prisma/migrations \
+    --to-schema-datasource prisma/schema.prisma \
+    --shadow-database-url "postgresql://localhost:5432/shadow_check" --script
+  dropdb shadow_check
+  ```
+
+Related: `prisma migrate reset` and `prisma migrate dev` are interactive and refuse to
+run non-interactively — `migrate reset` additionally requires explicit user consent from
+Prisma's own AI-agent guardrail. Both refusals are working as intended; route around
+them with `migrate resolve --applied` (baseline without dropping), `migrate dev
+--create-only` through a pty, and `migrate deploy` (non-interactive apply). **Do not
+reach for `migrate reset` to clear a drift problem** — see `gather-data-model-and-migrations`.
+
 ## 4. Token URL conventions
 
 | URL prefix | Scope | Resolved by | Notes |
