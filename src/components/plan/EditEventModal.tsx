@@ -41,6 +41,8 @@ interface EditEventModalProps {
   eventId: string;
   stepLabel?: string;
   showPaymentConfirmation?: boolean;
+  /** True once the plan has been sent — drives the material-change note (GTC-197). */
+  isSent?: boolean;
   /** Optional tab bar rendered between header and form content */
   tabBar?: React.ReactNode;
 }
@@ -64,6 +66,7 @@ export default function EditEventModal({
   stepLabel,
   showPaymentConfirmation,
   tabBar,
+  isSent = false,
 }: EditEventModalProps) {
   const { openModal, closeModal } = useModal();
   const toast = useToast();
@@ -230,6 +233,19 @@ export default function EditEventModal({
             <p className="text-sm text-green-800">
               <span className="font-medium">Payment received!</span> A receipt has been sent to your
               email. Continue setting up your event below.
+            </p>
+          </div>
+        )}
+
+        {/* THE F1 GAP, STATED PLAINLY — plan §7.3. A post-send date or venue change
+            is RECORDED, but nobody is re-asked until GTC-183 (F1) builds the
+            material-change machinery. Telling her is a fact, not a challenge, and it
+            does not block or require acknowledgement (Moment 4 §7). Delete this the
+            day F1 lands. */}
+        {isSent && (
+          <div className="mx-6 mt-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <p className="text-sm text-gray-700">
+              If you change the date or venue, your guests won&apos;t be re-asked automatically yet.
             </p>
           </div>
         )}

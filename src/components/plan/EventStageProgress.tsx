@@ -5,27 +5,30 @@ import { STATUS_LABELS } from '@/lib/workflow';
 
 type EventStatus = 'DRAFT' | 'CONFIRMING' | 'FROZEN' | 'COMPLETE';
 
+// GTC-197 (A3c): three steps, not four. The send is the last one — there is no
+// freeze ceremony after it, and COMPLETE is the calendar's, not a step she takes.
+
 interface EventStageProgressProps {
   currentStatus: EventStatus;
-  onFreezeClick?: () => void;
+  onSendClick?: () => void;
 }
 
 const stages: { status: EventStatus; label: string; icon: string }[] = [
   { status: 'DRAFT', label: STATUS_LABELS.DRAFT, icon: '📝' },
   { status: 'CONFIRMING', label: STATUS_LABELS.CONFIRMING, icon: '👥' },
-  { status: 'FROZEN', label: STATUS_LABELS.FROZEN, icon: '🧊' },
+  { status: 'FROZEN', label: 'Sent', icon: '📤' },
   { status: 'COMPLETE', label: STATUS_LABELS.COMPLETE, icon: '✅' },
 ];
 
-function getFrozenStepLabel(currentStatus: EventStatus): string {
-  if (currentStatus === 'CONFIRMING') return 'Freeze Event';
-  if (currentStatus === 'FROZEN' || currentStatus === 'COMPLETE') return 'Frozen';
-  return STATUS_LABELS.FROZEN;
+function getSendStepLabel(currentStatus: EventStatus): string {
+  if (currentStatus === 'CONFIRMING') return 'Send';
+  if (currentStatus === 'FROZEN' || currentStatus === 'COMPLETE') return 'Sent';
+  return 'Sent';
 }
 
 export default function EventStageProgress({
   currentStatus,
-  onFreezeClick,
+  onSendClick,
 }: EventStageProgressProps) {
   const currentIndex = stages.findIndex((s) => s.status === currentStatus);
 
@@ -37,17 +40,17 @@ export default function EventStageProgress({
           const isCurrent = index === currentIndex;
           const isLast = index === stages.length - 1;
 
-          const isFrozenStep = stage.status === 'FROZEN';
-          const isClickableFreezeStep =
-            isFrozenStep && currentStatus === 'CONFIRMING' && onFreezeClick;
-          const displayLabel = isFrozenStep ? getFrozenStepLabel(currentStatus) : stage.label;
+          // The third step is keyed to the legacy enum value until GTC-199 drops it.
+          const isSendStep = stage.status === 'FROZEN';
+          const isClickableFreezeStep = isSendStep && currentStatus === 'CONFIRMING' && onSendClick;
+          const displayLabel = isSendStep ? getSendStepLabel(currentStatus) : stage.label;
 
           return (
             <div key={stage.status} className="flex items-center flex-1">
               {/* Stage Circle */}
               <div
                 className={`flex flex-col items-center${isClickableFreezeStep ? ' cursor-pointer group' : ''}`}
-                onClick={isClickableFreezeStep ? onFreezeClick : undefined}
+                onClick={isClickableFreezeStep ? onSendClick : undefined}
                 role={isClickableFreezeStep ? 'button' : undefined}
                 tabIndex={isClickableFreezeStep ? 0 : undefined}
                 onKeyDown={
@@ -55,7 +58,7 @@ export default function EventStageProgress({
                     ? (e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
-                          onFreezeClick();
+                          onSendClick();
                         }
                       }
                     : undefined
@@ -125,17 +128,17 @@ export default function EventStageProgress({
             <p className="font-medium text-gray-900 mb-1">CONFIRMING</p>
             <p>
               Share invite links with your team and assign all items to people. Once all items are
-              assigned, you can transition to FROZEN to lock the plan for execution.
+              assigned, you can send the plan to your guests.
             </p>
             <p className="mt-3 text-blue-700 bg-blue-50 border border-blue-200 rounded-md px-3 py-2">
               Share your invite links with guests and wait for them to confirm their items. Once
-              everyone has responded, you can freeze the plan and lock it for the event.
+              everyone has responded, you can send the plan to your guests.
             </p>
           </div>
         )}
         {currentStatus === 'FROZEN' && (
           <div className="text-sm text-gray-600">
-            <p className="font-medium text-gray-900 mb-1">FROZEN</p>
+            <p className="font-medium text-gray-900 mb-1">SENT</p>
             <p>
               Plan is locked and ready for execution. Team members can view their assignments and
               acknowledge items. Mark COMPLETE when the event is finished.

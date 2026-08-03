@@ -17,15 +17,14 @@ import {
   CheckCircle,
   Eye,
   Send,
-  Lock,
   Download,
   Gift,
 } from 'lucide-react';
 import ConflictList from '@/components/plan/ConflictList';
 import GateCheck from '@/components/plan/GateCheck';
 import FreezeCheck from '@/components/plan/FreezeCheck';
+import { isSentJson, isCompleteJson } from '@/lib/lifecycle';
 import TransitionModal from '@/components/plan/TransitionModal';
-import UnfreezeSection from '@/components/plan/UnfreezeSection';
 import EventStageProgress from '@/components/plan/EventStageProgress';
 import SaveTemplateModal from '@/components/templates/SaveTemplateModal';
 import AddTeamModal, { TeamFormData } from '@/components/plan/AddTeamModal';
@@ -185,6 +184,8 @@ interface Event {
   id: string;
   name: string;
   status: string;
+  /** GTC-197: the send is a timestamp, not a status. Drives isSentJson/isCompleteJson. */
+  sentAt: string | null;
   occasionType: string | null;
   occasionDescription: string | null;
   guestCount: number | null;
@@ -296,7 +297,6 @@ type SectionId =
   | 'people'
   | 'teams'
   | 'planstatus'
-  | 'unfreeze'
   | 'invites'
   | 'history'
   | 'wrapup';
@@ -307,7 +307,6 @@ const validSectionIds: SectionId[] = [
   'people',
   'teams',
   'planstatus',
-  'unfreeze',
   'invites',
   'history',
   'wrapup',
@@ -467,7 +466,7 @@ export default function PlanEditorPage() {
 
   // Load invite links when event status is CONFIRMING or later
   useEffect(() => {
-    if (event && ['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status)) {
+    if (event && (event.status === 'CONFIRMING' || isSentJson(event))) {
       loadInviteLinks();
     }
   }, [event?.status]);
@@ -1532,7 +1531,7 @@ export default function PlanEditorPage() {
       await loadTeams();
       setGateCheckRefresh((prev) => prev + 1);
       // Reload invite links if event is in CONFIRMING or later status
-      if (event && ['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status)) {
+      if (event && (event.status === 'CONFIRMING' || isSentJson(event))) {
         loadInviteLinks();
       }
       autoRecheck();
@@ -2146,9 +2145,7 @@ export default function PlanEditorPage() {
                     Your event includes 10 AI calls. You have {10 - event.aiCallsUsed} remaining.
                   </span>
                 )}
-                {(event.status === 'CONFIRMING' ||
-                  event.status === 'FROZEN' ||
-                  event.status === 'COMPLETE') && (
+                {(event.status === 'CONFIRMING' || isSentJson(event)) && (
                   <button
                     onClick={() => setSaveTemplateModalOpen(true)}
                     className="px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark flex items-center gap-2"
@@ -2167,7 +2164,7 @@ export default function PlanEditorPage() {
           {!(event.status === 'DRAFT' && !checklistDismissed) && (
             <EventStageProgress
               currentStatus={event.status as any}
-              onFreezeClick={() => handleExpandSection('planstatus')}
+              onSendClick={() => handleExpandSection('planstatus')}
             />
           )}
 
@@ -2242,38 +2239,44 @@ export default function PlanEditorPage() {
                   />
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {/* Plan Frozen Card - Only show for FROZEN */}
-                  {event.status === 'FROZEN' && (
-                    <div
-                      onClick={() => handleExpandSection('unfreeze')}
-                      className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group border-2 border-yellow-300"
-                    >
+                  {/* THE THRESHOLD SCRIPT — Hinge §2's two sentences, verbatim.
+                      "What the threshold says — the complete script, two sentences."
+                      Sentence 2 is deliberate in what it OMITS: it leads with what
+                      she'll watch and never mentions chasing, because behaviours seen
+                      in advance are pre-worry material. Do not add a third sentence. */}
+                  {isSentJson(event) && !isCompleteJson(event) && (
+                    <div className="bg-gradient-to-br from-sage-50 to-white rounded-lg shadow-md p-6 h-64 flex flex-col border-2 border-sage-200">
                       <div className="flex items-center gap-4 mb-4">
-                        <div className="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center ring-4 ring-amber-200/50">
-                          <CheckCircle className="w-8 h-8 text-amber-600" />
+                        <div className="w-14 h-14 bg-sage-100 rounded-full flex items-center justify-center ring-4 ring-sage-200/50">
+                          <CheckCircle className="w-8 h-8 text-sage-600" />
                         </div>
-                        <h2 className="text-xl font-semibold text-gray-900">
-                          Everything&apos;s in place
-                        </h2>
+                        <h2 className="text-xl font-semibold text-gray-900">It&apos;s away</h2>
                       </div>
-                      <div className="flex-1">
+                      <div className="flex-1 space-y-3">
                         <p className="text-sm text-gray-700 leading-relaxed">
-                          Your guests know what they&apos;re bringing. Nothing left to do but show
-                          up.
+                          You can still change anything — I&apos;ll just keep the history.
                         </p>
-                      </div>
-                      <div className="text-xs text-amber-500/70 group-hover:text-amber-600 transition-colors">
-                        Click to unfreeze →
+                        <p className="text-sm text-gray-700 leading-relaxed">
+                          You&apos;ll start to see replies coming in. I&apos;ll track them and flag
+                          anything that needs you.
+                        </p>
                       </div>
                     </div>
                   )}
 
-                  {/* Complete Event Card - Show for FROZEN (not yet complete) and COMPLETE (show status) */}
-                  {(event.status === 'FROZEN' || event.status === 'COMPLETE') && (
+                  {/* GTC-197 (A3c): the "Plan Frozen" card is DELETED. There is no freeze
+                      to announce, and its only affordance was "Click to unfreeze" —
+                      which Hinge §2 rules out at the mechanism level. What replaces it
+                      is the threshold script below, shown once the plan is sent. */}
+
+                  {/* Wrap-up card. Shown once the plan is sent; the calendar decides
+                      whether the event is past (Moment 4 §10.1), so nothing here offers
+                      a "mark complete" action — there is nothing to declare. */}
+                  {isSentJson(event) && (
                     <div
                       onClick={() => handleExpandSection('wrapup')}
                       className={`bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group ${
-                        event.status === 'COMPLETE'
+                        isCompleteJson(event)
                           ? 'border-2 border-green-300'
                           : 'border-2 border-accent/30'
                       }`}
@@ -2281,19 +2284,19 @@ export default function PlanEditorPage() {
                       <div className="flex items-center gap-3 mb-4">
                         <div
                           className={`w-12 h-12 rounded-lg flex items-center justify-center group-hover:opacity-80 transition-colors ${
-                            event.status === 'COMPLETE' ? 'bg-green-100' : 'bg-accent-light/20'
+                            isCompleteJson(event) ? 'bg-green-100' : 'bg-accent-light/20'
                           }`}
                         >
                           <Gift
-                            className={`w-6 h-6 ${event.status === 'COMPLETE' ? 'text-green-600' : 'text-accent'}`}
+                            className={`w-6 h-6 ${isCompleteJson(event) ? 'text-green-600' : 'text-accent'}`}
                           />
                         </div>
                         <h2 className="text-xl font-semibold text-gray-900">
-                          {event.status === 'COMPLETE' ? 'Event Complete' : 'Complete Event'}
+                          {isCompleteJson(event) ? 'Event past' : 'Wrap up'}
                         </h2>
                       </div>
                       <div className="flex-1">
-                        {event.status === 'COMPLETE' ? (
+                        {isCompleteJson(event) ? (
                           <p className="text-sm text-gray-600">
                             Thank-you messages sent. Click to view dispatch status.
                           </p>
@@ -2305,10 +2308,10 @@ export default function PlanEditorPage() {
                       </div>
                       <div
                         className={`text-sm font-medium ${
-                          event.status === 'COMPLETE' ? 'text-green-600' : 'text-accent'
+                          isCompleteJson(event) ? 'text-green-600' : 'text-accent'
                         }`}
                       >
-                        {event.status === 'COMPLETE' ? 'View status →' : 'Complete event →'}
+                        {isCompleteJson(event) ? 'View status →' : 'Send thank-yous →'}
                       </div>
                     </div>
                   )}
@@ -2415,20 +2418,18 @@ export default function PlanEditorPage() {
                           ? '0 conflicts'
                           : `${conflicts.length} conflict${conflicts.length > 1 ? 's' : ''}`}
                         {' · '}
-                        {event.status === 'FROZEN'
-                          ? 'Plan frozen'
-                          : event.status === 'COMPLETE'
-                            ? 'Complete'
-                            : items.filter((i) => !i.assignment).length === 0
-                              ? 'Ready to freeze'
-                              : `${items.filter((i) => !i.assignment).length} unassigned`}
+                        {isCompleteJson(event)
+                          ? 'Event past'
+                          : isSentJson(event)
+                            ? 'Sent'
+                            : `${items.filter((i) => !i.assignment).length} unassigned`}
                       </p>
                     </div>
                     <div className="text-sm text-accent font-medium">Click to expand →</div>
                   </div>
 
                   {/* Invite Links Card */}
-                  {['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status) &&
+                  {(event.status === 'CONFIRMING' || isSentJson(event)) &&
                     inviteLinks.length > 0 && (
                       <div
                         onClick={() => handleExpandSection('invites')}
@@ -2502,7 +2503,7 @@ export default function PlanEditorPage() {
               loadPeople();
               loadTeams();
               setGateCheckRefresh((prev) => prev + 1);
-              if (event && ['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status)) {
+              if (event && (event.status === 'CONFIRMING' || isSentJson(event))) {
                 loadInviteLinks();
               }
               autoRecheck();
@@ -2532,16 +2533,6 @@ export default function PlanEditorPage() {
             }}
             onExpand={() => handleExpandSection('planstatus')}
           />
-          {event?.status === 'FROZEN' && (
-            <UnfreezeSection
-              eventId={eventId}
-              onUnfreezeComplete={() => {
-                loadEvent();
-                loadTeams();
-              }}
-              onExpand={() => handleExpandSection('unfreeze')}
-            />
-          )}
           {/* V1-shape snapshot/restore system — hidden on V2 events (GTC-149) */}
           {!event?.setup && (
             <RevisionHistory
@@ -2605,6 +2596,7 @@ export default function PlanEditorPage() {
           manualTeamCount={manualTeamCount}
           manualItemCount={manualItemCount}
           eventId={eventId}
+          isSent={event ? isSentJson(event) : false}
         />
 
         {/* Host Description Modal — choke point for every V1 generate entry;
@@ -2666,6 +2658,7 @@ export default function PlanEditorPage() {
             stepLabel={checklistStepContext || undefined}
             showPaymentConfirmation={isPostPayment}
             tabBar={buildTabBar('details')}
+            isSent={event ? isSentJson(event) : false}
           />
         )}
 
@@ -2723,10 +2716,12 @@ export default function PlanEditorPage() {
             )}
           </div>
 
-          {/* Freeze Readiness section — only visible in CONFIRMING */}
-          {event && event.status === 'CONFIRMING' && (
+          {/* Send readiness — a hunt for absence, not a verdict. Hinge §1: "Gather
+              sweeps for gaps, and each 'no holes here' is weight down." Warnings only;
+              nothing here can block, and nothing scores her (Moment 4 §2). */}
+          {event && event.status === 'CONFIRMING' && !isSentJson(event) && (
             <div className="border-t border-gray-200 pt-8">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Freeze Readiness</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Before you send</h3>
               <FreezeCheck
                 eventId={eventId}
                 currentStatus={event?.status as any}
@@ -3070,7 +3065,7 @@ export default function PlanEditorPage() {
               loadPeople();
               loadTeams();
               setGateCheckRefresh((prev) => prev + 1);
-              if (event && ['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status)) {
+              if (event && (event.status === 'CONFIRMING' || isSentJson(event))) {
                 loadInviteLinks();
               }
               setChecklistStepContext(null);
@@ -3398,26 +3393,8 @@ export default function PlanEditorPage() {
           </div>
         )}
 
-        {/* Unfreeze Expansion */}
-        {event && event.status === 'FROZEN' && (
-          <SectionExpandModal
-            isOpen={expandedSection === 'unfreeze'}
-            onClose={handleCloseExpansion}
-            title="Unfreeze Plan"
-            icon={<Lock className="w-6 h-6" />}
-          >
-            <UnfreezeSection
-              eventId={eventId}
-              onUnfreezeComplete={() => {
-                loadEvent();
-                loadTeams();
-              }}
-            />
-          </SectionExpandModal>
-        )}
-
         {/* Invite Links Expansion */}
-        {event && ['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status) && (
+        {event && (event.status === 'CONFIRMING' || isSentJson(event)) && (
           <SectionExpandModal
             isOpen={expandedSection === 'invites'}
             onClose={handleCloseExpansion}
@@ -3425,9 +3402,12 @@ export default function PlanEditorPage() {
             icon={<LinkIcon className="w-6 h-6" />}
             tabBar={buildTabBar('invites')}
           >
-            {/* Shared Link Section - Show in CONFIRMING and FROZEN */}
+            {/* Shared Link Section — available from CONFIRMING onward, through the send */}
             <div className="mb-6">
-              <SharedLinkSection eventId={eventId} eventStatus={event.status} />
+              <SharedLinkSection
+                eventId={eventId}
+                available={event.status === 'CONFIRMING' || isSentJson(event)}
+              />
             </div>
 
             {/* Invite Status Section - Only show in CONFIRMING */}
@@ -3611,14 +3591,14 @@ export default function PlanEditorPage() {
         )}
 
         {/* Complete Event Expansion */}
-        {event && (event.status === 'FROZEN' || event.status === 'COMPLETE') && (
+        {event && isSentJson(event) && (
           <SectionExpandModal
             isOpen={expandedSection === 'wrapup'}
             onClose={handleCloseExpansion}
             title="Event Complete"
             icon={<Gift className="w-6 h-6" />}
           >
-            {event.status === 'FROZEN' && !wrapUpResult?.success && (
+            {isCompleteJson(event) && !wrapUpResult?.success && (
               <div className="space-y-6">
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">
@@ -3664,7 +3644,7 @@ export default function PlanEditorPage() {
               </div>
             )}
 
-            {(event.status === 'COMPLETE' || wrapUpResult?.success) && (
+            {(isCompleteJson(event) || wrapUpResult?.success) && (
               <div className="space-y-6">
                 {wrapUpResult?.success && (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-4">

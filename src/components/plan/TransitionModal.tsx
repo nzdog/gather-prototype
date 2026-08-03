@@ -69,7 +69,12 @@ export default function TransitionModal({
   const [freezeReason, setFreezeReason] = useState<string>('');
   const [unassignedItems, setUnassignedItems] = useState<UnassignedItem[]>([]);
 
-  const isFreezeTransition = currentStatus === 'CONFIRMING';
+  // GTC-197 (A3c): there is no freeze transition. CONFIRMING is the last authored
+  // state; what follows is the send, which stamps a timestamp rather than moving a
+  // status. The <80%-compliance reason prompt this branch carried is gone with it —
+  // demanding justification at a threshold is what Moment 4 §7 forbids.
+  void currentStatus; // retained on the props contract until GTC-198 migrates callers
+  const isFreezeTransition = false;
 
   // Modal blocking check - TransitionModal needs special handling since it's opened programmatically
   useEffect(() => {
