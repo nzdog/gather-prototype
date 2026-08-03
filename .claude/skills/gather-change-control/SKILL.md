@@ -251,6 +251,73 @@ unwinding it cost ~3 weeks. Any proposal to change generation architecture, the
 V1/V2 split, or state-machine semantics should be pitched AS an experiment
 ticket in this shape. Full methodology: load `gather-experiment-methodology`.
 
+### The merge protocol (landing an experiment branch)
+
+The pattern above covers *building* on an experiment branch. This is the
+landing half — how a finished experiment (or a whole epic of them) gets onto
+`feat/moment-one-redesign` without smuggling an unruled decision through the
+seam. Worked example: **GTC-200** (the merge) and **GTC-202** (the
+merge-blocking corrections GTC-200's own review forced before a single commit
+was picked) — Epic A landing on `feat/moment-one-redesign`, 2026-08-04.
+
+1. **A cold session reviews, not the session that built it.** GTC-200 was
+   deliberately executed by a fresh session with no memory of writing the
+   branch, so its review of the diff had no stake in defending prior work. An
+   executor reviewing their own recent output reads intention into a checkbox
+   instead of checking the code.
+2. **Re-run every gate before reading a line of diff.** Reseed, then the full
+   gate suite — `tsc`, format check, build, security suite, every
+   ticket-specific test script — on the experiment branch's tip, cold, before
+   the review begins. A review built on stale gate results is a review of what
+   the branch looked like, not what it is.
+3. **Read the diff against the governing plan, section by section** — not
+   file by file, not commit by commit. The plan-of-record is the ruler; the
+   diff is what's being measured. GTC-200 read all 87 changed files against
+   the A1 plan section by section, and that is what surfaced GTC-202's two
+   corrections — both invisible from inside the sessions that had written
+   them, because both tickets' own prose was accurate about intention; only
+   the checkbox had run ahead of the evidence.
+4. **STOP before the first pick on any unruled divergence.** If the diff
+   contains a decision the plan doesn't already make — an acceptance box
+   ticked ahead of its evidence, a deviation nobody signed off on, a scope
+   item that quietly grew — do not merge around it and do not fix it inline.
+   Stop, report it, get a ruling. GTC-200 found two merge-blocking gaps this
+   way (the reason-prompt component promised but never built; the backfill
+   promised but never run) and did not cherry-pick a single commit until both
+   were ruled.
+5. **Corrections land on the experiment branch, never mid-merge.** A ruled
+   correction is its own ticket (GTC-202), committed to `experiment/<name>`,
+   gated exactly like any other experiment commit, and sequenced as the new
+   last commit in the series before the merge ticket resumes. The merge
+   ticket does not grow a fix of its own — "any behaviour change... belongs to
+   the ticket that owns the site" (GTC-200's own rule for itself).
+6. **Gate suite after every pick, matching each ticket's recorded numbers —
+   not just at the end.** Cherry-pick in chronological (as-built) order, not
+   the filed order, if the two differ: GTC-200 had to correct its own filed
+   pick order because the as-filed sequence produced an intermediate commit
+   that didn't compile. After each ticket's commits land, the running gate
+   count must match what that ticket's own evidence recorded — security suite
+   16 → 38 → 45 → 51, matching A2 → A3a → A3b/A3c → A3d/A3b-2/A3c-2 exactly. A
+   mismatch means the picks did not land the same code in the same order,
+   even if every individual gate is green.
+7. **A byte-identical diff against the experiment tip is the proof, not an
+   assertion of "no conflicts".** `git diff experiment/<name> HEAD` should be
+   empty once the series is fully picked. GTC-200's merge produced exactly
+   this — stronger evidence than "zero conflicts reported", because it also
+   rules out silent reconciliation during a pick that applied cleanly but
+   landed different content than the source.
+8. **Push the history branch whole — never delete it.** `experiment/<name>`
+   stays intact after the merge, unsquashed, as the record of how the work was
+   actually built; the per-ticket closed tickets keep citing their
+   *experiment-branch* hashes rather than being rewritten to the merge's
+   target hashes — renumbering history to point at trunk would sever the link
+   back to the branch being kept as the record.
+
+The corollary this protocol exists to prevent: an executor close to their own
+work reviewing it, cherry-picking around a gap they wrote and no longer see,
+and merging an audit trail — a ledger or otherwise — that records its own
+blind spots as if they were complete.
+
 ## What gates a commit
 
 ### Locally (Husky)

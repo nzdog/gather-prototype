@@ -179,6 +179,45 @@ It is also the last step of the preflight sequence every executor runs before
 any ticket: `npm install` -> `npm run db:migrate` -> `npm run dev` (Ready) ->
 `npm run test:security` (exit 0).
 
+### 3a. RED-first for contract replacement (distinct from bug-RED)
+
+Section 1's RED→GREEN is for **bugs**: write a test pinning the wrong
+behaviour, watch it fail against the current code, fix the code, watch it
+pass. **Contract replacement is the opposite direction** — the code isn't
+wrong, the *contract* the tests assert is being deliberately replaced (a
+state-machine invariant, a whole security-suite assertion set). The sequence
+inverts:
+
+1. **Rewrite the assertions to the new contract first** — before touching the
+   implementation at all.
+2. **Run the new assertions against the unchanged code.** This is the RED, and
+   it does a different job than bug-RED: it proves the new assertions
+   actually distinguish old behaviour from new. If they pass against unchanged
+   code, they aren't testing the replacement.
+3. **Record the RED in its own commit** — a real commit, not a throwaway
+   local run — so the failing state is visible in history, not just asserted
+   in prose. (`[EXPERIMENTAL]`-tagged commits are the usual vehicle when this
+   happens on an experiment branch — see `gather-change-control`.)
+4. **Migrate the implementation to GREEN.** Same assertions, now passing.
+5. **Never fewer tests than before the replacement** — a contract replacement
+   that shrinks coverage is scope creep on the gate itself, not a rewrite.
+6. **For protected (do-not-touch) zones, equal-strength is a ruling, not a
+   default** — get it stated explicitly, in the founder's own words, before
+   touching a single assertion. Do not infer permission to weaken a
+   zone-6-class gate from "the old assertions don't apply anymore."
+
+Worked example: **GTC-169** (`docs/tickets/GTC-169.md`), replacing the
+frozen-state security-suite assertions with the send-lock contract. The
+founder's zone-6 approval was recorded verbatim in the ticket *before* any
+assertion was touched ("APPROVED to rewrite — replace, never delete... equal
+strength"). The rewritten suite was then run against the **unmigrated** code
+in commit `8d799a4`: 38 tests, 29 passed, 9 failed — nine real send-lock
+violations the old suite had no way to see, including one (post-date nudges
+still firing) that no prior test covered at all. Migration landed in
+`794e0ff`: 38/38. The suite grew, 16 → 38, and every removed assertion has a
+named equal-strength replacement recorded in the ticket's table — none simply
+vanished.
+
 ## 4. Cleanup discipline for DB tests
 
 Tests run against the shared `gather_dev` database. Rules, from the exemplar

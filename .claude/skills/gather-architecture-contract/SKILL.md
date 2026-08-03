@@ -346,6 +346,58 @@ data loss, cascade semantics surprises (GTC-147), token-budget truncation
 (GTC-142), one-canonical-source for counts (GTC-136). When your change smells
 like one of these, stop and check the chronicle.
 
+## 11. Single definition — screens consume the server's predicates, never reimplement them
+
+**Statement:** any predicate that decides "does this state trigger X" —
+lifecycle-phase checks, `whyTrigger()`'s "does this change touch someone",
+anything a screen needs in order to decide whether to show UI or fire a
+request — is defined ONCE, in the server-side module that owns it, and every
+consumer (client component, other route, script) imports that definition. A
+screen must never re-derive the same judgement from raw fields.
+
+**Why:** a reimplementation passes every test written against it on day one —
+it was written to satisfy exactly those tests — and then drifts silently the
+first time the owning module's rule changes, because nothing forces the copy
+to update. This is the same failure mode that let the FROZEN-era gates fall
+out of step with `canFreeze()`'s intended behaviour (GTC-154), and it is what
+Epic A's ledger explicitly designed against: `ReasonPrompt`
+(`src/components/plan/ReasonPrompt.tsx`, GTC-202) does not carry its own idea
+of "does this change need a why" — its `useReasonPrompt().ask()` calls
+`whyTrigger()` from `src/lib/ledger.ts` directly, the same function
+`recordChange()` consults server-side. If no trigger fires, the hook resolves
+immediately and renders nothing; there is one definition of "touches
+someone", and a screen cannot drift from it.
+
+**Where enforced:** `whyTrigger()` / `touchesSomeone()` (`src/lib/ledger.ts`)
+is exported and client-safe (its only `@prisma/client` import is type-only,
+so it erases at build time) specifically so screens import it rather than
+reimplement it. `toLifecycleEvent()` (`src/lib/lifecycle.ts`) is exported for
+the same reason — a client parsing a serialised event runs it through the
+same adapter the JSON predicates use server-side, instead of hand-rolling a
+second parse.
+
+**What breaks if violated:** a screen's local copy of a predicate keeps
+working right up until the owning module's rule changes for a reason the
+screen's author never saw — at which point the screen silently asks (or
+fails to ask) by the old rule. Treat "I need this predicate in a client
+component" as a signal to export the server's version, not to write a
+client-side equivalent.
+
+**Note (as of 2026-08-04) — section 5's rewrite is still owed, not done
+here.** Section 5 above describes the pre-Epic-A FROZEN/`canMutate` state
+machine, which Epic A (GTC-167 → GTC-202, merged in GTC-200) has superseded on
+this branch with the send-lock/ledger model (`src/lib/lifecycle.ts`,
+`src/lib/ledger.ts`): `requireNotFrozen` and `canFreeze()` are deleted, and
+`FROZEN` survives only as a compat-shim enum value plus two tombstone
+references. GTC-166 flagged section 5's full rewrite as owed "post-Epic-A";
+that condition is now met. It is deliberately **not** done in this ticket —
+matching section 5's own level of rigor (transition table, `canMutate`
+matrix, re-verification commands) means re-reading `lifecycle.ts` and
+`ledger.ts` in full and re-deriving the whole state model, which would double
+this ticket's scope for a section that already carries an explicit flag.
+Filed as follow-up work; this section adds the cross-cutting principle Epic A
+established and leaves section 5's content rewrite outstanding.
+
 ## Provenance and maintenance
 
 All facts verified against the working tree on branch `feat/moment-one-redesign`,
