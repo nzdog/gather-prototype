@@ -46,6 +46,12 @@ export async function POST(_req: NextRequest, context: { params: Promise<{ token
     data: { sentAt: now },
   });
 
+  // GTC-196 (A3b): the press stamps every existing member's personal clock at once.
+  await prisma.personEvent.updateMany({
+    where: { eventId, sentAt: null },
+    data: { sentAt: now },
+  });
+
   const needAnchor = event.people
     .filter((pe) => !pe.person.inviteAnchorAt)
     .map((pe) => pe.person.id);

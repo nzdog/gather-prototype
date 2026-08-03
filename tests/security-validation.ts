@@ -303,11 +303,44 @@ async function testSuite5_SendLock(f: Fixtures) {
   logSection('Test Suite 5: The Send-Lock — post-send mutations are ALLOWED');
 
   try {
+    const before = await prisma.auditEntry.count({ where: { eventId: f.eventSent.id } });
     const res = await coordinatorAssign(f.eventSent);
     logTest(
       'Post-send assignment succeeds (replaces: "requireNotFrozen blocks FROZEN")',
       res.status === 200,
       res.status === 200 ? undefined : `Got ${res.status}: ${JSON.stringify(res.json)}`
+    );
+
+    // GTC-196 (A3b): the OTHER half of the A1 plan's §12.1 replacement, deferred out
+    // of A3a by decision because recordChange was uncalled there by design. The
+    // send-lock is "allowed AND recorded" — asserting only the first half would let
+    // the second silently regress.
+    // Versioned rows only: logAudit lifecycle rows carry a NULL sequence and Postgres
+    // sorts those FIRST on DESC.
+    const entries = await prisma.auditEntry.findMany({
+      where: { eventId: f.eventSent.id, sequence: { not: null } },
+      orderBy: { sequence: 'desc' },
+      take: 1,
+    });
+    logTest(
+      'Post-send assignment WRITES A LEDGER ENTRY',
+      entries.length > 0 &&
+        (await prisma.auditEntry.count({ where: { eventId: f.eventSent.id } })) > before
+    );
+    const latest = entries[0];
+    logTest(
+      'and the entry is a T1 reassignment owed a why',
+      latest?.actionType === 'MOVE_ASSIGNMENT' || latest?.actionType === 'CREATE_ASSIGNMENT'
+    );
+    logTest('and it carries a version (sequence)', typeof latest?.sequence === 'number');
+    logTest('and a changeSetId', typeof latest?.changeSetId === 'string');
+    logTest(
+      'and it records the actor by name at time of action',
+      latest?.actorName !== null && latest?.actorKind === 'COORDINATOR'
+    );
+    logTest(
+      'and reasonRequired fired for a touching-someone change',
+      latest?.reasonRequired === true
     );
   } catch (error: any) {
     logTest('Post-send assignment succeeds', false, error.message);
@@ -432,35 +465,51 @@ async function testSuite6_CoordinatorAuthority(f: Fixtures) {
  * restoring a revision post-send is recall by another name.
  */
 async function testSuite7_NoUndoPostSend(f: Fixtures) {
-  logSection('Test Suite 7: No undo post-send (the one ADDED restriction)');
+  logSection('Test Suite 7: Bulk restore — recorded, not refused');
 
   // The guard lives in restoreFromRevision() itself, not in the route: no-undo is a
   // domain invariant, so it must hold for EVERY caller, not just the one HTTP path.
   // Testing the function directly also keeps this assertion honest — the route is
   // session-authed, and a 4xx from a missing cookie would look like a pass.
 
+  // GTC-196 (A3b) — THE CONVERSION. A3a refused this; the refusal was interim
+  // scaffolding around the window where the gate was off but the recording was not yet
+  // in. Post-send restore is the same species as post-send regeneration — ruled
+  // allowed with checkpoint + ledger + why — so with recordChange wired it converts to
+  // allowed-as-recorded-changeSet, and this assertion flips with it.
   const sentRevision = await createRevision(f.eventSent.id, f.host.id, 'security suite');
-  let refused = false;
-  let refusalMessage = '';
+  const revisionsBefore = await prisma.planRevision.count({ where: { eventId: f.eventSent.id } });
+  const entriesBefore = await prisma.auditEntry.count({ where: { eventId: f.eventSent.id } });
+
+  let restoreError = '';
   try {
-    await restoreFromRevision(f.eventSent.id, sentRevision, f.host.id);
+    await restoreFromRevision(f.eventSent.id, sentRevision, f.host.id, {
+      reason: 'security suite — bulk restore',
+    });
   } catch (error: any) {
-    refused = true;
-    refusalMessage = error.message;
+    restoreError = error.message;
   }
   logTest(
-    'restoreFromRevision is refused on a sent event (Hinge §2: no undo at the mechanism level)',
-    refused,
-    refused ? undefined : 'Restore succeeded on a sent event — undo is reachable'
+    "restoreFromRevision is ALLOWED post-send (converted from A3a's interim refusal)",
+    restoreError === '',
+    restoreError || undefined
   );
   logTest(
-    'and it is refused for the RIGHT reason (not an incidental error)',
-    /sent|undo|restore/i.test(refusalMessage),
-    `Message was: ${refusalMessage || '(none — it did not throw)'}`
+    'and it took a checkpoint first — nothing is lost by moving forward',
+    (await prisma.planRevision.count({ where: { eventId: f.eventSent.id } })) > revisionsBefore
+  );
+  const restoreEntry = await prisma.auditEntry.findFirst({
+    where: { eventId: f.eventSent.id, sequence: { not: null } },
+    orderBy: { sequence: 'desc' },
+  });
+  logTest(
+    'and it landed as ONE recorded changeSet carrying the why',
+    (await prisma.auditEntry.count({ where: { eventId: f.eventSent.id } })) > entriesBefore &&
+      restoreEntry?.reason === 'security suite — bulk restore'
   );
 
-  // Pre-send, restore is still a legitimate tool. Round-trip the DRAFT event through
-  // its own snapshot so the fixture is left exactly as it was found.
+  // Pre-send it is versioned and never interrogated. Round-trip the DRAFT event
+  // through its own snapshot so the fixture is left exactly as it was found.
   const draftRevision = await createRevision(f.eventDraft.id, f.host.id, 'security suite');
   let preSendWorked = true;
   try {
@@ -468,7 +517,7 @@ async function testSuite7_NoUndoPostSend(f: Fixtures) {
   } catch {
     preSendWorked = false;
   }
-  logTest('restoreFromRevision still works pre-send (the restriction is scoped)', preSendWorked);
+  logTest('restoreFromRevision still works pre-send', preSendWorked);
 
   const restoreSrc = readCode('src/app/api/events/[id]/revisions/[revisionId]/restore/route.ts');
   logTest(

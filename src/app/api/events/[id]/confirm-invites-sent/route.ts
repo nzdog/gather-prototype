@@ -67,6 +67,15 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       data: { sentAt: now },
     });
 
+    // GTC-196 (A3b): the press stamps EVERY existing member's personal clock at once.
+    // Hinge §7 — "Mechanically it may be many messages over an hour with retries;
+    // experientially it is one act." One send date for the cohort; anyone added later
+    // gets their own (isMiniSend = personEvent.sentAt > event.sentAt).
+    await prisma.personEvent.updateMany({
+      where: { eventId, sentAt: null },
+      data: { sentAt: now },
+    });
+
     // Set anchor for people who don't have one yet
     const peopleNeedingAnchor = event.people
       .filter((pe) => !pe.person.inviteAnchorAt)

@@ -300,6 +300,34 @@ export interface LedgerActor {
   name?: string | null;
 }
 
+/**
+ * The actor behind a token-authenticated request.
+ *
+ * TokenScope maps onto ActorKind directly: a PARTICIPANT token is a guest acting on
+ * their own behalf. The why-scope rule does not consult this — it is actor-agnostic
+ * (ruled 2026-08-03, "no walls anywhere") — but the ledger records WHO, and Kate's
+ * history should say "Rob moved the beef", not "someone did".
+ */
+export function actorFromToken(context: {
+  scope: 'HOST' | 'COORDINATOR' | 'PARTICIPANT';
+  person: { id: string; name: string };
+}): LedgerActor {
+  const kind: ActorKind =
+    context.scope === 'HOST' ? 'HOST' : context.scope === 'COORDINATOR' ? 'COORDINATOR' : 'GUEST';
+  return { id: context.person.id, kind, name: context.person.name };
+}
+
+/** The actor behind a session-authenticated (host dashboard) request. */
+export function actorFromPerson(
+  person: { id: string; name: string },
+  kind: ActorKind = 'HOST'
+): LedgerActor {
+  return { id: person.id, kind, name: person.name };
+}
+
+/** The calendar, a cron sweep, or a system-initiated notification. */
+export const SYSTEM_ACTOR: LedgerActor = { id: null, kind: 'SYSTEM', name: null };
+
 export interface RecordChangeParams {
   eventId: string;
   actor: LedgerActor;
@@ -390,8 +418,19 @@ export async function recordChange(
   const triggers = changes.map((c) => whyTrigger(c, lifecycleEvent));
   const reasonRequired = triggers.some((t) => t !== null);
 
+  // `sequence: { not: null }` is load-bearing, not defensive.
+  //
+  // logAudit() writes lifecycle rows into the same table with a NULL sequence — they
+  // are audit lines, not versions. Postgres orders NULLS FIRST on DESC, so without
+  // this filter the "highest sequence" lookup returns a NULL-sequence row, every
+  // changeSet is allocated sequence 1, and the second one violates
+  // @@unique([eventId, sequence]).
+  //
+  // The bug is invisible until logAudit and recordChange coexist on one event, which
+  // is precisely what GTC-196 created. Caught by the security suite's ledger
+  // assertion; regression-tested in tests/ledger-record-change-test.ts.
   const latest = await tx.auditEntry.findFirst({
-    where: { eventId },
+    where: { eventId, sequence: { not: null } },
     orderBy: { sequence: 'desc' },
     select: { sequence: true },
   });
@@ -459,4 +498,48 @@ function toJson(value: unknown): Prisma.InputJsonValue | undefined {
  */
 function cuidish(): string {
   return `cs_${globalThis.crypto.randomUUID()}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hooks left for later epics
+//
+// Both are deliberate no-ops. They exist so the CALL SITE is decided now, inside the
+// transaction that knows the facts, rather than being hunted for later — and so the
+// epic that fills them changes one function instead of twenty routes.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A material change (T5 — date or venue) happened on a sent event.
+ *
+ * GTC-183 (F1) implements the opt-out reconfirmation this fires: "the date's moved to
+ * the 27th — still good for the pavlova?", with claims holding unless people object
+ * (Moment 4 §8.5).
+ *
+ * ⚠ UNTIL F1 LANDS, A POST-SEND DATE CHANGE IS RECORDED BUT NOBODY IS RE-ASKED. That
+ * gap is real, documented in the plan (§7.3), and is why F1 is a CORRECTNESS
+ * dependency of Epic A rather than a feature that comes later. GTC-197 (A3c) ships the
+ * plain sentence that tells the host so.
+ */
+export async function onMaterialChange(
+  _eventId: string,
+  _changeSetId: string,
+  _changedFields: string[]
+): Promise<void> {
+  // no-op — GTC-183 (F1)
+}
+
+/**
+ * Someone's claim was released: their assignment was moved away or deleted.
+ *
+ * GTC-176 (D3) implements the loop-closing message — "all good, the pavlova's
+ * covered". Hinge §8: "releasing them is something the system can do, so it does."
+ * This is the half of frozen-edit's handleReassign that was correct and is preserved
+ * here rather than reinvented later.
+ */
+export async function onAssignmentReleased(
+  _personId: string,
+  _itemId: string,
+  _changeSetId: string
+): Promise<void> {
+  // no-op — GTC-176 (D3)
 }

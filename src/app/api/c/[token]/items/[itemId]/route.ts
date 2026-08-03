@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logAudit } from '@/lib/workflow';
+import { recordChange, actorFromToken, fieldChanges, ASK_FIELDS } from '@/lib/ledger';
+
+const TRACKED = [...ASK_FIELDS, 'description', 'critical', 'dietaryTags'] as const;
 
 /**
  * PATCH /api/c/[token]/items/[itemId]
@@ -23,9 +26,12 @@ export async function PATCH(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
-  // Verify item ownership
+  // Verify item ownership. The assignment comes along because the why-scope rule
+  // turns on whether anyone has ANSWERED (T4) — an ASK_FIELDS edit on a PENDING item
+  // is the typo case and is never interrogated.
   const item = await prisma.item.findUnique({
     where: { id: itemId },
+    include: { assignment: { select: { response: true } } },
   });
 
   if (!item || item.teamId !== resolvedContext.team.id) {
@@ -86,6 +92,26 @@ export async function PATCH(
       details: `Updated item: ${updated.name}`,
     });
 
+    const changes = fieldChanges(
+      { action: 'EDIT_ITEM', targetType: 'Item', targetId: itemId },
+      item as unknown as Record<string, unknown>,
+      updated as unknown as Record<string, unknown>,
+      TRACKED
+    ).map((c) => ({
+      ...c,
+      action: c.field === 'critical' ? ('TOGGLE_CRITICAL' as const) : c.action,
+      context: { assignmentResponse: item.assignment?.response ?? null },
+    }));
+
+    if (changes.length > 0) {
+      await recordChange(tx, {
+        eventId: resolvedContext.event.id,
+        actor: actorFromToken(resolvedContext),
+        reason: body.reason ?? null,
+        changes,
+      });
+    }
+
     return updated;
   });
 
@@ -103,10 +129,11 @@ export async function PATCH(
  * - Cascade will delete assignment (via schema)
  */
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ token: string; itemId: string }> }
 ) {
   const { token, itemId } = await context.params;
+  const delBody = await request.json().catch(() => ({}) as { reason?: string });
   const resolvedContext = await resolveToken(token);
 
   if (!resolvedContext || resolvedContext.scope !== 'COORDINATOR' || !resolvedContext.team) {
@@ -116,6 +143,7 @@ export async function DELETE(
   // Verify item ownership
   const item = await prisma.item.findUnique({
     where: { id: itemId },
+    include: { assignment: { select: { response: true } } },
   });
 
   if (!item || item.teamId !== resolvedContext.team.id) {
@@ -135,6 +163,23 @@ export async function DELETE(
       targetType: 'Item',
       targetId: itemId,
       details: `Deleted item: ${item.name}`,
+    });
+
+    // T3 — deleting an item someone holds takes their ask away.
+    await recordChange(tx, {
+      eventId: resolvedContext.event.id,
+      actor: actorFromToken(resolvedContext),
+      reason: delBody.reason ?? null,
+      changes: [
+        {
+          action: 'DELETE_ITEM',
+          targetType: 'Item',
+          targetId: itemId,
+          before: { name: item.name, quantity: item.quantity },
+          after: null,
+          context: { assignmentResponse: item.assignment?.response ?? null },
+        },
+      ],
     });
   });
 

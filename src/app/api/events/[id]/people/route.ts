@@ -173,6 +173,20 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         role: role || 'PARTICIPANT',
         reachabilityTier,
         contactMethod,
+        // GTC-196 (A3b) — THE MINI-SEND CLOCK GOES LIVE.
+        //
+        // Someone added AFTER the press gets their own send date, not the event's.
+        // Their nudge cadence and red-by-time run from here, truncated by the event
+        // date, so "a Bob added three days out may pass straight to Kate's line"
+        // falls out of the arithmetic with no special case (Hinge §2, gap #5).
+        //
+        // On PersonEvent, not Person: Person is global, so the old
+        // Person.inviteAnchorAt gave a person in two events ONE anchor and got the
+        // second event's clocks wrong from the start (plan §8.2). inviteAnchorAt is
+        // still written alongside until GTC-178 (E1) moves the nudge bookkeeping.
+        //
+        // Pre-send this is null and the press stamps everyone at once.
+        sentAt: event.sentAt ?? null,
       },
       include: {
         person: {

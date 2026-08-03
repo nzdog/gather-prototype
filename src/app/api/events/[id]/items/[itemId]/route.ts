@@ -3,6 +3,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordChange, fieldChanges, ASK_FIELDS } from '@/lib/ledger';
+
+// GTC-196 (A3b): this route absorbs frozen-edit's `edit_item` AND `toggle_critical`.
+//
+// The two are recorded differently, and that asymmetry is the ruling:
+//   - An ASK_FIELDS change on an ANSWERED item is T4 — it moves what someone claimed
+//     against, so it carries a why.
+//   - A criticality toggle is NEVER interrogated. Moment 4 §8.3: "criticality does
+//     exactly two things (the badge, and the assistant's message at red) and touches
+//     nothing else. It is entirely a host-facing signal, never a guest-facing
+//     pressure." frozen-edit demanded a reason for it; that was the contradiction the
+//     discovery report flagged.
+//
+// Every changed field gets its own entry; unchanged fields get nothing. A submission
+// is not a change.
+const TRACKED_ITEM_FIELDS = [
+  ...ASK_FIELDS,
+  'description',
+  'critical',
+  'dietaryTags',
+  'dayId',
+  'serveTime',
+  'displayOrder',
+] as const;
 
 export async function PATCH(
   request: NextRequest,
@@ -17,10 +42,11 @@ export async function PATCH(
 
     const body = await request.json();
 
-    // Fetch current item to check if it's generated
+    // Fetch the item BEFORE the write — the ledger's `before` must be the real prior
+    // state, and the why-scope rule needs to know whether anyone has answered.
     const currentItem = await prisma.item.findUnique({
       where: { id: itemId },
-      select: { source: true },
+      include: { assignment: { select: { response: true } } },
     });
 
     if (!currentItem) {
@@ -89,10 +115,36 @@ export async function PATCH(
       updateData.source = 'HOST_EDITED';
     }
 
-    // Update item
-    const item = await prisma.item.update({
-      where: { id: itemId },
-      data: updateData,
+    const actor = await ledgerActorForUser(auth.user, auth.role);
+
+    const item = await prisma.$transaction(async (tx) => {
+      const updated = await tx.item.update({
+        where: { id: itemId },
+        data: updateData,
+      });
+
+      const changes = fieldChanges(
+        { action: 'EDIT_ITEM', targetType: 'Item', targetId: itemId },
+        currentItem as unknown as Record<string, unknown>,
+        updateData,
+        TRACKED_ITEM_FIELDS
+      ).map((c) => ({
+        ...c,
+        // TOGGLE_CRITICAL is versioned but never interrogated (§8.3).
+        action: c.field === 'critical' ? ('TOGGLE_CRITICAL' as const) : c.action,
+        context: { assignmentResponse: currentItem.assignment?.response ?? null },
+      }));
+
+      if (changes.length > 0) {
+        await recordChange(tx, {
+          eventId,
+          actor,
+          reason: body.reason ?? null,
+          changes,
+        });
+      }
+
+      return updated;
     });
 
     return NextResponse.json({
@@ -112,7 +164,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string; itemId: string }> }
 ) {
   try {
@@ -122,10 +174,12 @@ export async function DELETE(
     const auth = await requireEventRole(eventId, ['HOST', 'COORDINATOR']);
     if (auth instanceof NextResponse) return auth;
 
+    const delBody = await request.json().catch(() => ({}) as { reason?: string });
+
     // Verify item exists
     const item = await prisma.item.findUnique({
       where: { id: itemId },
-      include: { team: true },
+      include: { team: true, assignment: { select: { response: true, personId: true } } },
     });
 
     if (!item) {
@@ -136,9 +190,29 @@ export async function DELETE(
       return NextResponse.json({ error: 'Item does not belong to this event' }, { status: 400 });
     }
 
-    // Delete item (cascade will handle assignment if any)
-    await prisma.item.delete({
-      where: { id: itemId },
+    const actor = await ledgerActorForUser(auth.user, auth.role);
+
+    await prisma.$transaction(async (tx) => {
+      // Delete item (cascade will handle assignment if any)
+      await tx.item.delete({ where: { id: itemId } });
+
+      // T3 — deleting an item someone holds takes their ask away, at any response
+      // state. Deleting an unassigned item touches nobody.
+      await recordChange(tx, {
+        eventId,
+        actor,
+        reason: delBody.reason ?? null,
+        changes: [
+          {
+            action: 'DELETE_ITEM',
+            targetType: 'Item',
+            targetId: itemId,
+            before: { name: item.name, quantity: item.quantity, teamId: item.teamId },
+            after: null,
+            context: { assignmentResponse: item.assignment?.response ?? null },
+          },
+        ],
+      });
     });
 
     return NextResponse.json({ success: true, message: 'Item deleted' });

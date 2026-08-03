@@ -167,6 +167,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
             role: (personData.role as any) || 'PARTICIPANT',
             reachabilityTier,
             contactMethod,
+            // GTC-196: the mini-send clock — see people/route.ts for the full note.
+            sentAt: event.sentAt ?? null,
           },
         });
 
