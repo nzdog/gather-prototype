@@ -186,6 +186,34 @@ The token IS the credential — never paste real production token URLs into tick
 commits, or docs. Middleware keeps host/participant cookies isolated (GTC-001,
 do-not-touch zone 1).
 
+### 4b. TRAP: `npm run test:security` leaves coordinator tokens teamless (observed 2026-08-04)
+
+**Symptom:** you capture a `/c/<token>` URL for a security fixture, open it, and the page
+shows *"Something went wrong loading your page"* (or a 500). The token exists in the
+database and looks fine.
+
+**Cause:** running the security suite leaves the SENT fixture's COORDINATOR `AccessToken`
+rows with **`teamId = NULL`**. Some route the suite drives deletes and re-issues them via
+`ensureEventTokens()`, which does not restore the team scoping the fixture created. A
+coordinator token with no `teamId` cannot resolve a team, so `/c/` fails.
+
+**Discriminating check** — compare the two, and note the ordering:
+
+```bash
+# tokens are correct straight after a bare fixture build
+npx tsx tests/security-fixtures.ts
+psql "$DATABASE_URL" -c 'SELECT scope, "teamId" FROM "AccessToken" WHERE scope = '"'"'COORDINATOR'"'"';'
+# ...and teamId is NULL for the SENT event's rows after this
+npm run test:security
+```
+
+**Workaround:** capture coordinator URLs **after** `npx tsx tests/security-fixtures.ts`, not
+after `npm run test:security`. If you have already run the suite, rebuild the fixtures.
+
+Cost a careful session fifteen minutes during the GTC-200 merge walk, chasing a 500 that
+looked like a regression in the code under review. Filed as a suite-teardown fix on
+[[GTC-203]]; this entry stands until that lands.
+
 ## 5. Per-ticket seed convention
 
 For browser-walk verification of a ticket, the house pattern is a dedicated script
