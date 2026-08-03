@@ -154,6 +154,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ tok
       id: resolvedContext.event.id,
       name: resolvedContext.event.name,
       status: resolvedContext.event.status,
+      // GTC-198 (A3d): lifecycle inputs for the shared predicates.
+      sentAt: resolvedContext.event.sentAt,
+      endDate: resolvedContext.event.endDate,
       guestCount: resolvedContext.event.guestCount,
     },
     team: {

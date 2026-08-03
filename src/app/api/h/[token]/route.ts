@@ -185,7 +185,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ to
         sent: peopleStatus.filter((p) => p.status === 'SENT').length,
         opened: peopleStatus.filter((p) => p.status === 'OPENED').length,
         responded: peopleStatus.filter((p) => p.status === 'RESPONDED').length,
-        inviteSendConfirmedAt: eventWithPeople.sentAt?.toISOString() ?? null,
+        sentAt: eventWithPeople.sentAt?.toISOString() ?? null,
       };
       people = peopleStatus;
     }
@@ -203,6 +203,10 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ to
       startDate: resolvedContext.event.startDate,
       endDate: resolvedContext.event.endDate,
       status: resolvedContext.event.status,
+      // GTC-198 (A3d): the token pages use the SAME lifecycle predicates as the
+      // server, so they need the same inputs. A screen that decides "sent" its own
+      // way is how FROZEN drifted.
+      sentAt: resolvedContext.event.sentAt,
       guestCount: resolvedContext.event.guestCount,
     },
     authStatus,

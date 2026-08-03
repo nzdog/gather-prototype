@@ -344,18 +344,18 @@ export default function ParticipantView() {
           )}
         </div>
 
-        {/* Frozen State Banner */}
-        {data.event.status === 'FROZEN' && (
-          <div className="bg-sage-50 px-6 py-4 flex items-start gap-3 border-b border-sage-100">
-            <span className="text-2xl">🔒</span>
-            <div className="flex-1">
-              <h3 className="text-sm font-bold text-sage-900">This plan has been finalised</h3>
-              <p className="text-xs text-sage-800 mt-1">
-                Contact your host if you need to make changes.
-              </p>
-            </div>
-          </div>
-        )}
+        {/* GTC-198 (A3d) — THE GUEST-SIDE INVERSION.
+            This showed "This plan has been finalised — contact your host if you need
+            to make changes" once the host froze. That is backwards: after the send is
+            precisely when a guest is meant to answer.
+
+            Moment 4 §7: "Responses, claims, and reassignments-with-reasons are not the
+            plan changing; they are the plan being answered. Greens keep accumulating
+            after the send — that's the Moment working."
+
+            A3a deleted the server gate that 400'd these responses. This deletes the
+            screen that hid the buttons. Nothing replaces it: there is no lock to
+            announce to a guest. */}
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6">
@@ -500,14 +500,14 @@ export default function ParticipantView() {
                 )}
                 Your host has been notified.
               </p>
-              {data.event.status !== 'FROZEN' && (
+              {
                 <button
                   onClick={() => setViewPhase('items')}
                   className="text-sm text-accent hover:underline"
                 >
                   Review or change your responses
                 </button>
-              )}
+              }
             </div>
           )}
 
@@ -656,26 +656,20 @@ export default function ParticipantView() {
 
                           {/* Response Buttons */}
                           {assignment.response === 'PENDING' ? (
-                            data.event.status === 'FROZEN' ? (
-                              <div className="py-3 rounded-lg bg-gray-100 text-gray-600 text-center text-sm">
-                                Plan is locked
-                              </div>
-                            ) : (
-                              <div className="grid grid-cols-2 gap-3">
-                                <button
-                                  onClick={() => handleResponse(assignment.id, 'ACCEPTED')}
-                                  className="py-3 rounded-lg font-medium bg-sage-600 text-white hover:bg-sage-700 transition-all"
-                                >
-                                  Accept
-                                </button>
-                                <button
-                                  onClick={() => handleResponse(assignment.id, 'DECLINED')}
-                                  className="py-3 rounded-lg font-medium bg-gray-400 text-white hover:bg-gray-500 transition-all"
-                                >
-                                  Decline
-                                </button>
-                              </div>
-                            )
+                            <div className="grid grid-cols-2 gap-3">
+                              <button
+                                onClick={() => handleResponse(assignment.id, 'ACCEPTED')}
+                                className="py-3 rounded-lg font-medium bg-sage-600 text-white hover:bg-sage-700 transition-all"
+                              >
+                                Accept
+                              </button>
+                              <button
+                                onClick={() => handleResponse(assignment.id, 'DECLINED')}
+                                className="py-3 rounded-lg font-medium bg-gray-400 text-white hover:bg-gray-500 transition-all"
+                              >
+                                Decline
+                              </button>
+                            </div>
                           ) : (
                             <div className="flex flex-col gap-2">
                               <div
@@ -693,7 +687,7 @@ export default function ParticipantView() {
                                   ? "Your host can see you've confirmed ✓"
                                   : 'Your host has been notified'}
                               </p>
-                              {data.event.status !== 'FROZEN' && (
+                              {
                                 <button
                                   onClick={() =>
                                     handleResponse(
@@ -706,7 +700,7 @@ export default function ParticipantView() {
                                   Change to{' '}
                                   {assignment.response === 'ACCEPTED' ? 'Decline' : 'Accept'}
                                 </button>
-                              )}
+                              }
                             </div>
                           )}
                         </div>

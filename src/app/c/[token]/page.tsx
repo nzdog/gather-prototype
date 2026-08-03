@@ -170,10 +170,6 @@ export default function CoordinatorView() {
   };
 
   const handleAssign = async (itemId: string, personId: string) => {
-    if (data?.event.status === 'FROZEN') {
-      toast.warning(`Event is frozen. Contact ${data.host?.name || 'the host'} to make changes.`);
-      return;
-    }
     try {
       const response = await fetch(`/api/c/${token}/items/${itemId}/assign`, {
         method: 'POST',
@@ -192,10 +188,6 @@ export default function CoordinatorView() {
   };
 
   const handleUnassign = async (itemId: string) => {
-    if (data?.event.status === 'FROZEN') {
-      toast.warning(`Event is frozen. Contact ${data.host?.name || 'the host'} to make changes.`);
-      return;
-    }
     try {
       const response = await fetch(`/api/c/${token}/items/${itemId}/assign`, {
         method: 'DELETE',
@@ -377,21 +369,16 @@ export default function CoordinatorView() {
         </div>
       </div>
 
-      {/* Frozen State Banner */}
-      {data.event.status === 'FROZEN' && (
-        <div className="bg-sage-50 px-6 py-4 flex items-start gap-3">
-          <span className="text-2xl">🔒</span>
-          <div className="flex-1">
-            <h3 className="text-sm font-bold text-sage-900">Plan is FROZEN</h3>
-            <p className="text-xs text-sage-800 mt-1">
-              Contact {data.host?.name || 'the host'} to request changes.
-            </p>
-          </div>
-        </div>
-      )}
+      {/* GTC-198 (A3d): the "Plan is FROZEN — contact the host" banner is DELETED,
+          and with it every read-only branch below.
+
+          The coordinator ruling (2026-08-03): "same always-allow + ledger as the host.
+          No walls anywhere, ledger is actor-agnostic." A3a un-gated the server; this
+          removes the screen that still said otherwise. A coordinator's changes are
+          recorded — with a why where they touch someone — not refused. */}
 
       {/* Status Bar */}
-      {data.event.status !== 'FROZEN' && (
+      {
         <>
           {criticalCount > 0 ? (
             <div className="bg-red-50 px-6 py-4 flex items-center gap-3">
@@ -417,14 +404,14 @@ export default function CoordinatorView() {
             </div>
           )}
         </>
-      )}
+      }
 
       {/* Items List */}
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm uppercase tracking-wide text-gray-500">Team Items</h2>
           <div className="flex items-center gap-2">
-            {data.event.status !== 'FROZEN' && (
+            {
               <button
                 onClick={() => setShowAddModal(true)}
                 className="flex items-center gap-2 px-3 py-1.5 text-sm bg-accent text-white hover:bg-accent-dark rounded-lg transition-colors"
@@ -432,7 +419,7 @@ export default function CoordinatorView() {
                 <Plus className="size-4" />
                 Add Item
               </button>
-            )}
+            }
             {data && data.items.length > 0 && (
               <button
                 onClick={toggleAllItems}
@@ -579,14 +566,14 @@ export default function CoordinatorView() {
                           <span className="text-sm font-medium text-gray-900">
                             {item.assignment.person.name}
                           </span>
-                          {data.event.status !== 'FROZEN' && (
+                          {
                             <button
                               onClick={() => handleUnassign(item.id)}
                               className="text-sm text-red-600 hover:text-red-800"
                             >
                               Unassign
                             </button>
-                          )}
+                          }
                         </div>
                         {item.assignment.response === 'ACCEPTED' ? (
                           <div className="inline-flex items-center gap-1.5 bg-green-100 text-green-800 px-3 py-1.5 rounded-full text-sm font-semibold">
@@ -607,7 +594,7 @@ export default function CoordinatorView() {
                       </div>
                     ) : (
                       <div>
-                        {data.event.status !== 'FROZEN' ? (
+                        {true ? (
                           <select
                             onChange={(e) => {
                               if (e.target.value) {
@@ -632,7 +619,7 @@ export default function CoordinatorView() {
                   </div>
 
                   {/* Delete button */}
-                  {data.event.status !== 'FROZEN' && (
+                  {
                     <div className="pt-3 mt-3 border-t border-gray-200">
                       <button
                         onClick={() => handleDeleteItem(item.id, item.name)}
@@ -642,7 +629,7 @@ export default function CoordinatorView() {
                         Delete Item
                       </button>
                     </div>
-                  )}
+                  }
                 </div>
               )}
             </div>

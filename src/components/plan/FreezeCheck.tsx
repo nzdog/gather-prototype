@@ -49,11 +49,9 @@ export default function FreezeCheck({
   }, [eventId, refreshTrigger]);
 
   const handleFreeze = () => {
-    // Don't show modal if already frozen
-    if (currentStatus === 'FROZEN') {
-      setError('Event is already frozen. Use unfreeze to make changes.');
-      return;
-    }
+    // GTC-198 (A3d): the "already frozen — use unfreeze to make changes" branch is
+    // gone. There is no unfreeze to point at, and the panel only renders pre-send
+    // anyway (see the CONFIRMING guard below).
     setShowModal(true);
   };
 
