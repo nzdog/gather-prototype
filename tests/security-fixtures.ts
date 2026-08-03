@@ -342,6 +342,49 @@ async function generateFixtures(): Promise<Fixtures> {
   });
   console.log(`   ✓ ${nudgePerson.name} (${phoneNumber})\n`);
 
+  // 5. The SAME person, on the SENT event — GTC-202 (A3c-2).
+  //
+  // The nudge predicate has two halves and only one of them was fixtured. Plan §10.2:
+  // "sent event with a live date yields candidates; complete event yields none — BOTH
+  // true", and GTC-169's acceptance says "verified both ways". Suite 8 asserted only
+  // the negative, and could not have asserted the positive: NO member of the SENT event
+  // had a phone or an anchor, so findNudgeCandidates() returned zero from that event no
+  // matter what the predicate said. The passing half was passing for the wrong reason.
+  //
+  // This person is deliberately IDENTICAL in shape to the PAST one — same phone format,
+  // same 3-day-old anchor, same role and token. The only difference between them is
+  // their event's phase, which is what makes the pair an assertion about the PREDICATE
+  // rather than about fixture data.
+  console.log('5. Creating nudge-eligible person on the SENT event (the positive half)...');
+  const livePhoneNumber = '+64211234568';
+  const liveNudgePerson = await prisma.person.create({
+    data: {
+      name: 'Nudge Candidate Live',
+      email: `nudge-live@${PERSON_EMAIL_DOMAIN}`,
+      phoneNumber: livePhoneNumber,
+      inviteAnchorAt: new Date(now - 3 * DAY),
+    },
+  });
+  await prisma.personEvent.create({
+    data: {
+      personId: liveNudgePerson.id,
+      eventId: eventSent.id,
+      teamId: eventSent.teamA.id,
+      role: 'PARTICIPANT',
+      sentAt,
+    },
+  });
+  await prisma.accessToken.create({
+    data: {
+      token: randomBytes(32).toString('hex'),
+      scope: 'PARTICIPANT',
+      personId: liveNudgePerson.id,
+      eventId: eventSent.id,
+      expiresAt: new Date('2027-12-31'),
+    },
+  });
+  console.log(`   ✓ ${liveNudgePerson.name} (${livePhoneNumber})\n`);
+
   return {
     user: {
       id: user.id,
@@ -355,6 +398,11 @@ async function generateFixtures(): Promise<Fixtures> {
     eventSentLegacy,
     eventPast,
     nudgeCandidate: { personId: nudgePerson.id, phoneNumber, eventId: eventPast.id },
+    liveNudgeCandidate: {
+      personId: liveNudgePerson.id,
+      phoneNumber: livePhoneNumber,
+      eventId: eventSent.id,
+    },
     teamA: eventDraft.teamA,
     teamB: eventDraft.teamB,
   };

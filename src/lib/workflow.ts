@@ -345,116 +345,23 @@ export async function logAudit(
   });
 }
 
-/**
- * Removes a person from an event.
- * Appends person.name to previouslyAssignedTo (human-readable).
- * Logs REMOVE_PERSON and UNASSIGN_ITEM audit entries.
+/*
+ * removePerson() was DELETED by GTC-202 (A3c-2).
  *
- * CRITICAL: Must be called in exact order:
- * 1. Log REMOVE_PERSON
- * 2. For each assignment:
- *    a. Update item (set previouslyAssignedTo)
- *    b. Delete assignment
- *    c. Repair item status
- *    d. Log UNASSIGN_ITEM
- * 3. Delete access tokens
- * 4. Delete PersonEvent
+ * It had ZERO callers. The host dashboard removes people through PeopleSection, which
+ * calls DELETE /api/events/[id]/people/[personId] — a route that performs its removal
+ * inline and carries its own T2 recordChange() (GTC-201).
  *
- * @param personId - The person to remove
- * @param eventId - The event context
- * @param actorId - The person performing the removal (for audit logging)
+ * GTC-196 wired T2 in here "so every caller inherits it": a true sentence about an
+ * empty set. Keeping both left two implementations of person-removal, one unreachable
+ * and free to drift from the one that runs. That is the same reasoning that removed the
+ * unwired canFreeze() in GTC-154 and the always-true canMutate() in GTC-169 — dead
+ * machinery that reads as coverage while providing none.
+ *
+ * The surviving implementation is the route's, and it is the one the GTC-200 review
+ * verified end-to-end. If a domain-level helper is ever wanted again, it should be
+ * extracted FROM that route, not restored from here.
  */
-export async function removePerson(
-  personId: string,
-  eventId: string,
-  actorId: string,
-  opts: { actorKind?: ActorKind; reason?: string | null } = {}
-): Promise<void> {
-  await prisma.$transaction(async (tx) => {
-    const person = await tx.person.findUnique({
-      where: { id: personId },
-      select: { name: true },
-    });
-
-    if (!person) throw new Error('Person not found');
-
-    // Log REMOVE_PERSON action first
-    await logAudit(tx, {
-      eventId,
-      actorId,
-      actionType: 'REMOVE_PERSON',
-      targetType: 'PersonEvent',
-      targetId: personId,
-      details: `Removed person ${person.name} from event`,
-    });
-
-    const assignments = await tx.assignment.findMany({
-      where: {
-        personId,
-        item: { team: { eventId } },
-      },
-      include: { item: true },
-    });
-
-    for (const assignment of assignments) {
-      // Update item: set previouslyAssignedTo
-      await tx.item.update({
-        where: { id: assignment.itemId },
-        data: {
-          previouslyAssignedTo: assignment.item.previouslyAssignedTo
-            ? `${assignment.item.previouslyAssignedTo}, ${person.name}`
-            : person.name,
-        },
-      });
-
-      // Delete assignment
-      await tx.assignment.delete({
-        where: { id: assignment.id },
-      });
-
-      // Repair Item.status after assignment deletion
-      await repairItemStatusAfterMutation(tx, assignment.itemId);
-
-      // Log UNASSIGN_ITEM action for each item
-      await logAudit(tx, {
-        eventId,
-        actorId,
-        actionType: 'UNASSIGN_ITEM',
-        targetType: 'Item',
-        targetId: assignment.itemId,
-        details: `Unassigned item due to removing person ${person.name}`,
-      });
-    }
-
-    await tx.accessToken.deleteMany({
-      where: { personId, eventId },
-    });
-
-    await tx.personEvent.deleteMany({
-      where: { personId, eventId },
-    });
-
-    // T2 — removing someone who is HOLDING something touches them: their asks
-    // disappear and the system owes anyone released a loop-closing message.
-    // Removing a guest who holds nothing touches nobody, and the count is what
-    // decides it. Wired here rather than at the route so every caller inherits it.
-    await recordChange(tx, {
-      eventId,
-      actor: { id: actorId, kind: opts.actorKind ?? 'HOST', name: null },
-      reason: opts.reason ?? null,
-      changes: [
-        {
-          action: 'REMOVE_PERSON',
-          targetType: 'PersonEvent',
-          targetId: personId,
-          before: { personId, personName: person.name },
-          after: null,
-          context: { heldAssignmentCount: assignments.length },
-        },
-      ],
-    });
-  });
-}
 
 // ============================================
 // PHASE 4: GATE CHECK & TRANSITION

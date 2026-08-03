@@ -21,6 +21,7 @@ import {
 import ItemStatusBadges from '@/components/plan/ItemStatusBadges';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 import { useToast } from '@/contexts/ToastContext';
+import { useReasonPrompt } from '@/components/plan/ReasonPrompt';
 
 interface Assignment {
   id: string;
@@ -84,6 +85,13 @@ interface CoordinatorData {
     id: string;
     name: string;
     status: string;
+    /**
+     * GTC-202: declared here at last. GTC-198 (A3d) put these on the wire so this page
+     * could use the shared lifecycle predicates, but never added them to the interface
+     * — so the data arrived and was unreachable.
+     */
+    sentAt: string | null;
+    endDate: string;
     guestCount: number | null;
   };
   team: {
@@ -119,6 +127,7 @@ export default function CoordinatorView() {
   const params = useParams();
   const token = params.token as string;
   const toast = useToast();
+  const { ask: askForReason, element: reasonPrompt } = useReasonPrompt();
   const [data, setData] = useState<CoordinatorData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -170,11 +179,19 @@ export default function CoordinatorView() {
   };
 
   const handleAssign = async (itemId: string, personId: string) => {
+    // GTC-202: T1. The ledger is actor-agnostic (ruled 2026-08-03, "no walls
+    // anywhere") — a coordinator moving an ask owes exactly the why a host owes, and
+    // is asked in exactly the same words.
+    const answer = await askForReason(
+      { action: 'CREATE_ASSIGNMENT', targetType: 'Assignment', targetId: itemId },
+      data?.event
+    );
+    if (!answer.proceed) return;
     try {
       const response = await fetch(`/api/c/${token}/items/${itemId}/assign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ personId }),
+        body: JSON.stringify({ personId, reason: answer.reason }),
       });
       if (!response.ok) {
         const result = await response.json();
@@ -188,9 +205,17 @@ export default function CoordinatorView() {
   };
 
   const handleUnassign = async (itemId: string) => {
+    // GTC-202: T1 — withdrawing an ask, at any response state.
+    const answer = await askForReason(
+      { action: 'DELETE_ASSIGNMENT', targetType: 'Assignment', targetId: itemId },
+      data?.event
+    );
+    if (!answer.proceed) return;
     try {
       const response = await fetch(`/api/c/${token}/items/${itemId}/assign`, {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: answer.reason }),
       });
       if (!response.ok) {
         const result = await response.json();
@@ -292,9 +317,26 @@ export default function CoordinatorView() {
       return;
     }
 
+    // GTC-202: T3 — only if someone is holding it.
+    const answer = await askForReason(
+      {
+        action: 'DELETE_ITEM',
+        targetType: 'Item',
+        targetId: itemId,
+        context: {
+          assignmentResponse:
+            data?.items.find((i) => i.id === itemId)?.assignment?.response ?? null,
+        },
+      },
+      data?.event
+    );
+    if (!answer.proceed) return;
+
     try {
       const response = await fetch(`/api/c/${token}/items/${itemId}`, {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: answer.reason }),
       });
 
       if (!response.ok) {
@@ -344,6 +386,7 @@ export default function CoordinatorView() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
+      {reasonPrompt}
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-5">
         {data.isDemo && (

@@ -6,6 +6,9 @@ import { useModal } from '@/contexts/ModalContext';
 import { useToast } from '@/contexts/ToastContext';
 import ItemStatusBadges from './ItemStatusBadges';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
+import { useReasonPrompt } from './ReasonPrompt';
+import { ASK_FIELDS, fieldChanges } from '@/lib/ledger';
+import type { SerialisedEvent } from '@/lib/lifecycle';
 
 /**
  * Returns true if the event status prevents unrestricted item editing.
@@ -41,7 +44,13 @@ interface EditItemModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (itemId: string, data: any) => void;
-  eventStatus?: string;
+  /**
+   * GTC-202: the event, so this modal runs the same why-scope rule the server does.
+   * Replaced GTC-197's `eventStatus` prop, which had been dead since the FROZEN block
+   * was removed (it was destructured to `_eventStatus` and never read).
+   * `isEditItemBlocked` above is unaffected — it remains exported and asserted.
+   */
+  event?: SerialisedEvent | null;
   item: {
     id: string;
     name: string;
@@ -98,16 +107,36 @@ const DIETARY_TAGS = [
   { value: 'dairyFree', label: 'Dairy Free' },
 ];
 
+/**
+ * The first ASK_FIELD this save actually moves, or undefined if none does.
+ *
+ * `whyTrigger` is per-field, so T4 needs a field name to test; the modal saves a whole
+ * form at once. One representative changed field is enough to decide whether the save
+ * owes a why — the server still records one entry per changed field.
+ */
+function firstChangedAskField(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>
+): string | undefined {
+  return fieldChanges(
+    { action: 'EDIT_ITEM', targetType: 'Item', targetId: '' },
+    before,
+    after,
+    ASK_FIELDS
+  )[0]?.field;
+}
+
 export default function EditItemModal({
   isOpen,
   onClose,
   onSave,
-  eventStatus: _eventStatus,
+  event,
   item,
   days,
   eventId,
   people,
 }: EditItemModalProps) {
+  const { ask: askForReason, element: reasonPrompt } = useReasonPrompt();
   const { openModal, closeModal } = useModal();
   const toast = useToast();
 
@@ -209,16 +238,46 @@ export default function EditItemModal({
     updateData.dropOffLocation = dropOffLocation || null;
     updateData.dropOffNote = dropOffNote || null;
 
+    // GTC-202: this modal can fire T1 (the assignment dropdown) and T4 (an ASK_FIELD
+    // on an answered item) in ONE save. Ask ONCE, here, for whichever fires, and carry
+    // the answer through both requests — the assignment call below and, via
+    // `updateData.reason`, the item PATCH that onSave performs. The parent's own T4
+    // prompt stands down when a reason is already present, so she is never asked twice
+    // for one save.
+    const currentAssignmentId = item.assignment?.person?.id;
+    const assignmentChanged = assignedPersonId !== currentAssignmentId;
+    const answer = await askForReason(
+      assignmentChanged
+        ? {
+            action: assignedPersonId
+              ? currentAssignmentId
+                ? 'MOVE_ASSIGNMENT'
+                : 'CREATE_ASSIGNMENT'
+              : 'DELETE_ASSIGNMENT',
+            targetType: 'Assignment',
+            targetId: item.id,
+          }
+        : {
+            action: 'EDIT_ITEM',
+            targetType: 'Item',
+            targetId: item.id,
+            field: firstChangedAskField(item, updateData),
+            context: { assignmentResponse: item.assignment?.response ?? null },
+          },
+      event
+    );
+    if (!answer.proceed) return;
+    updateData.reason = answer.reason;
+
     try {
       // Handle assignment changes FIRST, before saving other data
-      const currentAssignmentId = item.assignment?.person?.id;
-      if (assignedPersonId !== currentAssignmentId) {
+      if (assignmentChanged) {
         if (assignedPersonId) {
           // Assign to person
           const assignResponse = await fetch(`/api/events/${eventId}/items/${item.id}/assign`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ personId: assignedPersonId }),
+            body: JSON.stringify({ personId: assignedPersonId, reason: answer.reason }),
           });
           if (!assignResponse.ok) {
             const error = await assignResponse.json();
@@ -228,6 +287,8 @@ export default function EditItemModal({
           // Unassign
           const unassignResponse = await fetch(`/api/events/${eventId}/items/${item.id}/assign`, {
             method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: answer.reason }),
           });
           if (!unassignResponse.ok) {
             const error = await unassignResponse.json();
@@ -248,277 +309,280 @@ export default function EditItemModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white">
-          <h2 className="text-lg font-semibold text-gray-900">Edit Item</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          {/* Status Badges & Drop-off Summary */}
-          <div className="bg-gray-50 p-3 rounded-md border border-gray-200 space-y-2">
-            <ItemStatusBadges assignment={item.assignment} />
-            <DropOffDisplay
-              dropOffLocation={item.dropOffLocation}
-              dropOffAt={null}
-              dropOffNote={item.dropOffNote}
-              variant="inline"
-              showIcons={true}
-            />
+    <>
+      {reasonPrompt}
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]">
+        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white">
+            <h2 className="text-lg font-semibold text-gray-900">Edit Item</h2>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+              <X className="w-5 h-5" />
+            </button>
           </div>
 
-          {/* Name */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Item Name *</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
-              placeholder="e.g., Grilled Chicken Skewers"
-              required
-            />
-          </div>
+          <form onSubmit={handleSubmit} className="p-4 space-y-4">
+            {/* Status Badges & Drop-off Summary */}
+            <div className="bg-gray-50 p-3 rounded-md border border-gray-200 space-y-2">
+              <ItemStatusBadges assignment={item.assignment} />
+              <DropOffDisplay
+                dropOffLocation={item.dropOffLocation}
+                dropOffAt={null}
+                dropOffNote={item.dropOffNote}
+                variant="inline"
+                showIcons={true}
+              />
+            </div>
 
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
-              placeholder="Additional details about the item..."
-            />
-          </div>
-
-          {/* Quantity Section */}
-          <div className="border-t pt-4">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">Quantity</h3>
-
-            {/* Quantity State */}
-            <div className="mb-3">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Quantity Status
-              </label>
-              <select
-                value={quantityState}
-                onChange={(e) => setQuantityState(e.target.value)}
+            {/* Name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Item Name *</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
-              >
-                {QUANTITY_STATES.map((state) => (
-                  <option key={state.value} value={state.value}>
-                    {state.label}
-                  </option>
-                ))}
-              </select>
+                placeholder="e.g., Grilled Chicken Skewers"
+                required
+              />
             </div>
 
-            {/* Quantity Amount and Unit - Only show if SPECIFIED */}
-            {quantityState === 'SPECIFIED' && (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={quantityAmount}
-                    onChange={(e) => setQuantityAmount(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
-                    placeholder="e.g., 100"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
-                  <select
-                    value={quantityUnit}
-                    onChange={(e) => setQuantityUnit(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
-                  >
-                    {QUANTITY_UNITS.map((unit) => (
-                      <option key={unit.value} value={unit.value}>
-                        {unit.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            )}
+            {/* Description */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                placeholder="Additional details about the item..."
+              />
+            </div>
 
-            {/* Placeholder Acknowledgement - Only show if PLACEHOLDER */}
-            {quantityState === 'PLACEHOLDER' && (
-              <div className="flex items-center p-3 bg-orange-50 border border-orange-200 rounded-md">
-                <input
-                  type="checkbox"
-                  id="edit-placeholder-acknowledged"
-                  checked={placeholderAcknowledged}
-                  onChange={(e) => setPlaceholderAcknowledged(e.target.checked)}
-                  className="h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded"
-                />
-                <label
-                  htmlFor="edit-placeholder-acknowledged"
-                  className="ml-2 text-sm text-gray-700"
-                >
-                  Defer to Coordinator (quantity will be determined later)
+            {/* Quantity Section */}
+            <div className="border-t pt-4">
+              <h3 className="text-sm font-medium text-gray-900 mb-3">Quantity</h3>
+
+              {/* Quantity State */}
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Quantity Status
                 </label>
-              </div>
-            )}
-          </div>
-
-          {/* Dietary Tags */}
-          <div className="border-t pt-4">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">Dietary Tags</h3>
-            <div className="grid grid-cols-2 gap-2">
-              {DIETARY_TAGS.map((tag) => (
-                <div key={tag.value} className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id={`edit-dietary-${tag.value}`}
-                    checked={dietaryTags.includes(tag.value)}
-                    onChange={() => handleDietaryTagToggle(tag.value)}
-                    className="h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded"
-                  />
-                  <label
-                    htmlFor={`edit-dietary-${tag.value}`}
-                    className="ml-2 text-sm text-gray-700"
-                  >
-                    {tag.label}
-                  </label>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Timing */}
-          <div className="border-t pt-4">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">Timing</h3>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Day</label>
                 <select
-                  value={dayId}
-                  onChange={(e) => setDayId(e.target.value)}
+                  value={quantityState}
+                  onChange={(e) => setQuantityState(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                 >
-                  <option value="">All days</option>
-                  {days.map((day) => (
-                    <option key={day.id} value={day.id}>
-                      {day.name}
+                  {QUANTITY_STATES.map((state) => (
+                    <option key={state.value} value={state.value}>
+                      {state.label}
                     </option>
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Serve Time</label>
-                <input
-                  type="time"
-                  value={serveTime}
-                  onChange={(e) => setServeTime(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
-                  placeholder="e.g., 18:00"
-                />
-              </div>
-            </div>
-          </div>
 
-          {/* Drop-off Details */}
-          <div className="border-t pt-4">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">Drop-off Details</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Drop-off Location
-                </label>
-                <input
-                  type="text"
-                  value={dropOffLocation}
-                  onChange={(e) => setDropOffLocation(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
-                  placeholder="e.g., Main Kitchen, Marquee"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Drop-off Note
-                </label>
-                <input
-                  type="text"
-                  value={dropOffNote}
-                  onChange={(e) => setDropOffNote(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
-                  placeholder="e.g., 12 noon, Before 5pm"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Human-readable time/instructions (e.g., "12 noon", "after mains")
-                </p>
-              </div>
-            </div>
-          </div>
+              {/* Quantity Amount and Unit - Only show if SPECIFIED */}
+              {quantityState === 'SPECIFIED' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={quantityAmount}
+                      onChange={(e) => setQuantityAmount(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                      placeholder="e.g., 100"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+                    <select
+                      value={quantityUnit}
+                      onChange={(e) => setQuantityUnit(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                    >
+                      {QUANTITY_UNITS.map((unit) => (
+                        <option key={unit.value} value={unit.value}>
+                          {unit.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
 
-          {/* Assignment */}
-          <div className="border-t pt-4">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">Assignment</h3>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Assigned to</label>
-              <select
-                value={assignedPersonId}
-                onChange={(e) => setAssignedPersonId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
-              >
-                <option value="">Unassigned</option>
-                {people
-                  .filter((p) => p.team.id === item.team.id)
-                  .map((person) => (
-                    <option key={person.personId} value={person.personId}>
-                      {person.name}
-                    </option>
-                  ))}
-              </select>
-              {people.filter((p) => p.team.id === item.team.id).length === 0 && (
-                <p className="text-xs text-gray-500 mt-1">
-                  No people in this team yet. Add people to the team first.
-                </p>
+              {/* Placeholder Acknowledgement - Only show if PLACEHOLDER */}
+              {quantityState === 'PLACEHOLDER' && (
+                <div className="flex items-center p-3 bg-orange-50 border border-orange-200 rounded-md">
+                  <input
+                    type="checkbox"
+                    id="edit-placeholder-acknowledged"
+                    checked={placeholderAcknowledged}
+                    onChange={(e) => setPlaceholderAcknowledged(e.target.checked)}
+                    className="h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded"
+                  />
+                  <label
+                    htmlFor="edit-placeholder-acknowledged"
+                    className="ml-2 text-sm text-gray-700"
+                  >
+                    Defer to Coordinator (quantity will be determined later)
+                  </label>
+                </div>
               )}
             </div>
-          </div>
 
-          {/* Critical */}
-          <div className="border-t pt-4">
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="edit-critical"
-                checked={critical}
-                onChange={(e) => setCritical(e.target.checked)}
-                className="h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded"
-              />
-              <label htmlFor="edit-critical" className="ml-2 text-sm text-gray-700">
-                Mark as critical (must-have item)
-              </label>
+            {/* Dietary Tags */}
+            <div className="border-t pt-4">
+              <h3 className="text-sm font-medium text-gray-900 mb-3">Dietary Tags</h3>
+              <div className="grid grid-cols-2 gap-2">
+                {DIETARY_TAGS.map((tag) => (
+                  <div key={tag.value} className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id={`edit-dietary-${tag.value}`}
+                      checked={dietaryTags.includes(tag.value)}
+                      onChange={() => handleDietaryTagToggle(tag.value)}
+                      className="h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded"
+                    />
+                    <label
+                      htmlFor={`edit-dietary-${tag.value}`}
+                      className="ml-2 text-sm text-gray-700"
+                    >
+                      {tag.label}
+                    </label>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
 
-          {/* Actions */}
-          <div className="flex gap-2 pt-4 border-t">
-            <button
-              type="submit"
-              className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark"
-            >
-              Save Changes
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
+            {/* Timing */}
+            <div className="border-t pt-4">
+              <h3 className="text-sm font-medium text-gray-900 mb-3">Timing</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Day</label>
+                  <select
+                    value={dayId}
+                    onChange={(e) => setDayId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                  >
+                    <option value="">All days</option>
+                    {days.map((day) => (
+                      <option key={day.id} value={day.id}>
+                        {day.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Serve Time</label>
+                  <input
+                    type="time"
+                    value={serveTime}
+                    onChange={(e) => setServeTime(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                    placeholder="e.g., 18:00"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Drop-off Details */}
+            <div className="border-t pt-4">
+              <h3 className="text-sm font-medium text-gray-900 mb-3">Drop-off Details</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Drop-off Location
+                  </label>
+                  <input
+                    type="text"
+                    value={dropOffLocation}
+                    onChange={(e) => setDropOffLocation(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                    placeholder="e.g., Main Kitchen, Marquee"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Drop-off Note
+                  </label>
+                  <input
+                    type="text"
+                    value={dropOffNote}
+                    onChange={(e) => setDropOffNote(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                    placeholder="e.g., 12 noon, Before 5pm"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Human-readable time/instructions (e.g., "12 noon", "after mains")
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Assignment */}
+            <div className="border-t pt-4">
+              <h3 className="text-sm font-medium text-gray-900 mb-3">Assignment</h3>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Assigned to</label>
+                <select
+                  value={assignedPersonId}
+                  onChange={(e) => setAssignedPersonId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                >
+                  <option value="">Unassigned</option>
+                  {people
+                    .filter((p) => p.team.id === item.team.id)
+                    .map((person) => (
+                      <option key={person.personId} value={person.personId}>
+                        {person.name}
+                      </option>
+                    ))}
+                </select>
+                {people.filter((p) => p.team.id === item.team.id).length === 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    No people in this team yet. Add people to the team first.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Critical */}
+            <div className="border-t pt-4">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="edit-critical"
+                  checked={critical}
+                  onChange={(e) => setCritical(e.target.checked)}
+                  className="h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded"
+                />
+                <label htmlFor="edit-critical" className="ml-2 text-sm text-gray-700">
+                  Mark as critical (must-have item)
+                </label>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2 pt-4 border-t">
+              <button
+                type="submit"
+                className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark"
+              >
+                Save Changes
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

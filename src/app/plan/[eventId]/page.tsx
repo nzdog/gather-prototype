@@ -24,6 +24,8 @@ import ConflictList from '@/components/plan/ConflictList';
 import GateCheck from '@/components/plan/GateCheck';
 import FreezeCheck from '@/components/plan/FreezeCheck';
 import { isSentJson, isCompleteJson, getEventPhaseJson } from '@/lib/lifecycle';
+import { useReasonPrompt } from '@/components/plan/ReasonPrompt';
+import { ASK_FIELDS, fieldChanges, type PendingChange } from '@/lib/ledger';
 import TransitionModal from '@/components/plan/TransitionModal';
 import EventStageProgress from '@/components/plan/EventStageProgress';
 import SaveTemplateModal from '@/components/templates/SaveTemplateModal';
@@ -346,6 +348,13 @@ export default function PlanEditorPage() {
   const [loadingTeamItems, setLoadingTeamItems] = useState<Set<string>>(new Set());
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [gateCheckRefresh, setGateCheckRefresh] = useState(0);
+  // GTC-202 (A3c-2): the flow that asks for the why. Fires only where the why-scope
+  // rule fires — the same predicate the server applies — and never blocks (plan §13.1).
+  const {
+    ask: askForReason,
+    askForBatch: askForBatchReason,
+    element: reasonPrompt,
+  } = useReasonPrompt();
   const [showTransitionModal, setShowTransitionModal] = useState(false);
   const [transitionLoading, setTransitionLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -1344,6 +1353,20 @@ export default function PlanEditorPage() {
     const entries = Object.entries(pendingAssignments);
     if (entries.length === 0) return;
 
+    // GTC-202: T1 — asked ONCE for the whole save, not once per assignment. A save that
+    // moves eight asks is one act to her; eight dialogs would be interrogation by volume.
+    const answer = await askForBatchReason(
+      entries.map(
+        ([itemId, { personId }]): PendingChange => ({
+          action: personId ? 'CREATE_ASSIGNMENT' : 'DELETE_ASSIGNMENT',
+          targetType: 'Assignment',
+          targetId: itemId,
+        })
+      ),
+      event
+    );
+    if (!answer.proceed) return;
+
     setSavingAssignments(true);
     try {
       for (const [itemId, { personId }] of entries) {
@@ -1351,7 +1374,7 @@ export default function PlanEditorPage() {
           const response = await fetch(`/api/events/${eventId}/items/${itemId}/assign`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ personId }),
+            body: JSON.stringify({ personId, reason: answer.reason }),
           });
           if (!response.ok) {
             const error = await response.json();
@@ -1360,6 +1383,8 @@ export default function PlanEditorPage() {
         } else {
           const response = await fetch(`/api/events/${eventId}/items/${itemId}/assign`, {
             method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: answer.reason }),
           });
           if (!response.ok) {
             const error = await response.json();
@@ -1406,11 +1431,38 @@ export default function PlanEditorPage() {
 
   const handleSaveEditItem = async (itemId: string, data: any) => {
     const item = editingItem; // Store reference before clearing
+    // GTC-202: T4 — only where an ASK_FIELD actually MOVED on an item someone has
+    // already answered. fieldChanges() is the server's own differ, so a submitted-but-
+    // unchanged field asks nothing, and a typo fix on a PENDING ask is never
+    // interrogated (the whole point of the T1/T4 asymmetry).
+    // EditItemModal asks for itself (it can fire T1 and T4 in one save) and passes the
+    // answer down on `data.reason`. Only ask here when nobody has already — otherwise
+    // one save would raise two dialogs.
+    let reason: string | null = data?.reason ?? null;
+    if (!('reason' in (data ?? {}))) {
+      const askAnswer = await askForBatchReason(
+        fieldChanges(
+          {
+            action: 'EDIT_ITEM',
+            targetType: 'Item',
+            targetId: itemId,
+            context: { assignmentResponse: item?.assignment?.response ?? null },
+          },
+          (item ?? {}) as Record<string, unknown>,
+          data as Record<string, unknown>,
+          ASK_FIELDS
+        ),
+        event
+      );
+      if (!askAnswer.proceed) return;
+      reason = askAnswer.reason;
+    }
+
     try {
       const response = await fetch(`/api/events/${eventId}/items/${itemId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, reason }),
       });
 
       if (!response.ok) throw new Error('Failed to update item');
@@ -1439,9 +1491,23 @@ export default function PlanEditorPage() {
   const handleDeleteItem = async (item: Item) => {
     if (!confirm(`Delete "${item.name}"? This cannot be undone.`)) return;
 
+    // GTC-202: T3 — deleting an item someone is holding makes their ask disappear.
+    const answer = await askForReason(
+      {
+        action: 'DELETE_ITEM',
+        targetType: 'Item',
+        targetId: item.id,
+        context: { assignmentResponse: item.assignment?.response ?? null },
+      },
+      event
+    );
+    if (!answer.proceed) return;
+
     try {
       const response = await fetch(`/api/events/${eventId}/items/${item.id}`, {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: answer.reason }),
       });
 
       if (!response.ok) throw new Error('Failed to delete item');
@@ -1817,139 +1883,177 @@ export default function PlanEditorPage() {
     );
     const planGuestCount = householdsHeadcount > 0 ? householdsHeadcount : (event.guestCount ?? 0);
     return (
-      <Moment2PlanView
-        eventId={event.id}
-        eventName={event.name}
-        guestCount={planGuestCount}
-        categories={moment2PlanCategories}
-        onUpdateItem={async (itemId, updates) => {
-          const body: Record<string, unknown> = {};
-          if (updates.name !== undefined) body.name = updates.name;
-          if (updates.quantity !== undefined) body.quantityAmount = updates.quantity;
-          if (updates.unit !== undefined) {
-            body.quantityUnit = 'CUSTOM';
-            body.quantityUnitCustom = updates.unit;
-          }
-          if (updates.servingSize !== undefined) body.quantityText = updates.servingSize;
-          if (updates.notes !== undefined) body.notes = updates.notes;
-          const res = await fetch(`/api/events/${eventId}/items/${itemId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-          });
-          if (!res.ok) throw new Error('Failed to update item');
-          // Patch local state instead of full reload for snappy UX.
-          setMoment2PlanCategories((prev) =>
-            prev.map((cat) => ({
-              ...cat,
-              items: cat.items.map((it) =>
-                it.id === itemId
-                  ? {
-                      ...it,
-                      ...(updates.name !== undefined ? { name: updates.name } : {}),
-                      ...(updates.quantity !== undefined ? { quantity: updates.quantity } : {}),
-                      ...(updates.unit !== undefined ? { unit: updates.unit } : {}),
-                      ...(updates.servingSize !== undefined
-                        ? { servingSize: updates.servingSize }
-                        : {}),
-                      ...(updates.notes !== undefined ? { notes: updates.notes } : {}),
-                    }
-                  : it
+      <>
+        {/* GTC-202: this branch returns early, so the prompt is rendered here too —
+            otherwise a T3/T4 on this surface would await a dialog that never mounts. */}
+        {reasonPrompt}
+        <Moment2PlanView
+          eventId={event.id}
+          eventName={event.name}
+          guestCount={planGuestCount}
+          categories={moment2PlanCategories}
+          onUpdateItem={async (itemId, updates) => {
+            const body: Record<string, unknown> = {};
+            if (updates.name !== undefined) body.name = updates.name;
+            if (updates.quantity !== undefined) body.quantityAmount = updates.quantity;
+            if (updates.unit !== undefined) {
+              body.quantityUnit = 'CUSTOM';
+              body.quantityUnitCustom = updates.unit;
+            }
+            if (updates.servingSize !== undefined) body.quantityText = updates.servingSize;
+            if (updates.notes !== undefined) body.notes = updates.notes;
+            // GTC-202: T4. PlanItem carries no assignment, so the response comes from
+            // `items` — loaded on mount for every path that can reach this view, so the
+            // lookup is reliable rather than best-effort.
+            const known = items.find((i) => i.id === itemId);
+            const answer = await askForBatchReason(
+              fieldChanges(
+                {
+                  action: 'EDIT_ITEM',
+                  targetType: 'Item',
+                  targetId: itemId,
+                  context: { assignmentResponse: known?.assignment?.response ?? null },
+                },
+                (known ?? {}) as Record<string, unknown>,
+                body,
+                ASK_FIELDS
               ),
-            }))
-          );
-        }}
-        onRemoveItem={async (itemId) => {
-          const res = await fetch(`/api/events/${eventId}/items/${itemId}`, {
-            method: 'DELETE',
-          });
-          if (!res.ok) throw new Error('Failed to remove item');
-          setMoment2PlanCategories((prev) =>
-            prev.map((cat) => ({
-              ...cat,
-              items: cat.items.filter((it) => it.id !== itemId),
-            }))
-          );
-        }}
-        onAddItem={async (categoryId, newItem) => {
-          const res = await fetch(`/api/events/${eventId}/teams/${categoryId}/items`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: newItem.name,
-              quantityAmount: newItem.quantity,
-              quantityUnit: 'CUSTOM',
-              quantityUnitCustom: newItem.unit,
-              quantityText: newItem.servingSize || undefined,
-              description: newItem.notes,
-            }),
-          });
-          if (!res.ok) throw new Error('Failed to add item');
-          const data = await res.json();
-          const createdItem = data.item as {
-            id: string;
-            name: string;
-            quantityAmount: number | null;
-            quantityUnitCustom: string | null;
-            quantityText: string | null;
-            notes: string | null;
-            displayOrder: number | null;
-          };
-          const appended: Moment2PlanItem = {
-            id: createdItem.id,
-            name: createdItem.name,
-            quantity: createdItem.quantityAmount ?? newItem.quantity,
-            unit: createdItem.quantityUnitCustom ?? newItem.unit,
-            servingSize: createdItem.quantityText ?? newItem.servingSize,
-            displayOrder: createdItem.displayOrder ?? undefined,
-            notes: createdItem.notes ?? newItem.notes,
-          };
-          setMoment2PlanCategories((prev) =>
-            prev.map((cat) =>
-              cat.id === categoryId ? { ...cat, items: [...cat.items, appended] } : cat
-            )
-          );
-        }}
-        onAddCategory={async (name) => {
-          const res = await fetch(`/api/events/${eventId}/teams`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name,
-              coordinatorId: event.hostId,
-            }),
-          });
-          if (!res.ok) throw new Error('Failed to add category');
-          const data = await res.json();
-          const createdTeam = data.team as { id: string; name: string };
-          setMoment2PlanCategories((prev) => [
-            ...prev,
-            {
-              id: createdTeam.id,
-              name: createdTeam.name,
-              emoji: emojiForCategoryName(createdTeam.name),
-              items: [],
-            },
-          ]);
-        }}
-        onApprove={async () => {
-          await loadEvent();
-          await loadTeams();
-          await loadItems();
-          await loadConflicts();
-          setGateCheckRefresh((prev) => prev + 1);
-          setShowMoment2PlanView(false);
-          setMoment2PlanCategories([]);
-          setMoment2Plan(null);
-          setNextStepDismissed(false);
-          toast.success('Plan approved.');
-        }}
-        onBack={() => {
-          setShowMoment2PlanView(false);
-          setMoment2PlanCategories([]);
-          setShowMoment2Step1(true);
-        }}
-      />
+              event
+            );
+            if (!answer.proceed) return;
+            const res = await fetch(`/api/events/${eventId}/items/${itemId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...body, reason: answer.reason }),
+            });
+            if (!res.ok) throw new Error('Failed to update item');
+            // Patch local state instead of full reload for snappy UX.
+            setMoment2PlanCategories((prev) =>
+              prev.map((cat) => ({
+                ...cat,
+                items: cat.items.map((it) =>
+                  it.id === itemId
+                    ? {
+                        ...it,
+                        ...(updates.name !== undefined ? { name: updates.name } : {}),
+                        ...(updates.quantity !== undefined ? { quantity: updates.quantity } : {}),
+                        ...(updates.unit !== undefined ? { unit: updates.unit } : {}),
+                        ...(updates.servingSize !== undefined
+                          ? { servingSize: updates.servingSize }
+                          : {}),
+                        ...(updates.notes !== undefined ? { notes: updates.notes } : {}),
+                      }
+                    : it
+                ),
+              }))
+            );
+          }}
+          onRemoveItem={async (itemId) => {
+            // GTC-202: T3, same lookup as onUpdateItem above.
+            const known = items.find((i) => i.id === itemId);
+            const answer = await askForReason(
+              {
+                action: 'DELETE_ITEM',
+                targetType: 'Item',
+                targetId: itemId,
+                context: { assignmentResponse: known?.assignment?.response ?? null },
+              },
+              event
+            );
+            if (!answer.proceed) return;
+            const res = await fetch(`/api/events/${eventId}/items/${itemId}`, {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ reason: answer.reason }),
+            });
+            if (!res.ok) throw new Error('Failed to remove item');
+            setMoment2PlanCategories((prev) =>
+              prev.map((cat) => ({
+                ...cat,
+                items: cat.items.filter((it) => it.id !== itemId),
+              }))
+            );
+          }}
+          onAddItem={async (categoryId, newItem) => {
+            const res = await fetch(`/api/events/${eventId}/teams/${categoryId}/items`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: newItem.name,
+                quantityAmount: newItem.quantity,
+                quantityUnit: 'CUSTOM',
+                quantityUnitCustom: newItem.unit,
+                quantityText: newItem.servingSize || undefined,
+                description: newItem.notes,
+              }),
+            });
+            if (!res.ok) throw new Error('Failed to add item');
+            const data = await res.json();
+            const createdItem = data.item as {
+              id: string;
+              name: string;
+              quantityAmount: number | null;
+              quantityUnitCustom: string | null;
+              quantityText: string | null;
+              notes: string | null;
+              displayOrder: number | null;
+            };
+            const appended: Moment2PlanItem = {
+              id: createdItem.id,
+              name: createdItem.name,
+              quantity: createdItem.quantityAmount ?? newItem.quantity,
+              unit: createdItem.quantityUnitCustom ?? newItem.unit,
+              servingSize: createdItem.quantityText ?? newItem.servingSize,
+              displayOrder: createdItem.displayOrder ?? undefined,
+              notes: createdItem.notes ?? newItem.notes,
+            };
+            setMoment2PlanCategories((prev) =>
+              prev.map((cat) =>
+                cat.id === categoryId ? { ...cat, items: [...cat.items, appended] } : cat
+              )
+            );
+          }}
+          onAddCategory={async (name) => {
+            const res = await fetch(`/api/events/${eventId}/teams`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name,
+                coordinatorId: event.hostId,
+              }),
+            });
+            if (!res.ok) throw new Error('Failed to add category');
+            const data = await res.json();
+            const createdTeam = data.team as { id: string; name: string };
+            setMoment2PlanCategories((prev) => [
+              ...prev,
+              {
+                id: createdTeam.id,
+                name: createdTeam.name,
+                emoji: emojiForCategoryName(createdTeam.name),
+                items: [],
+              },
+            ]);
+          }}
+          onApprove={async () => {
+            await loadEvent();
+            await loadTeams();
+            await loadItems();
+            await loadConflicts();
+            setGateCheckRefresh((prev) => prev + 1);
+            setShowMoment2PlanView(false);
+            setMoment2PlanCategories([]);
+            setMoment2Plan(null);
+            setNextStepDismissed(false);
+            toast.success('Plan approved.');
+          }}
+          onBack={() => {
+            setShowMoment2PlanView(false);
+            setMoment2PlanCategories([]);
+            setShowMoment2Step1(true);
+          }}
+        />
+      </>
     );
   }
 
@@ -2038,6 +2142,10 @@ export default function PlanEditorPage() {
 
   return (
     <ModalProvider>
+      {/* GTC-202: the why-scope prompt. Rendered once for the whole dashboard — it is
+          driven imperatively by askForReason/askForBatchReason and renders nothing
+          until a change actually trips the rule. */}
+      {reasonPrompt}
       <div className="min-h-screen bg-gray-50">
         {/* Demo back-link */}
         {event.isDemo && (
@@ -2497,7 +2605,7 @@ export default function PlanEditorPage() {
           <PeopleSection
             eventId={eventId}
             hostId={event?.hostId}
-            isSent={event ? isSentJson(event) : false}
+            event={event}
             teams={teams}
             people={people}
             onPeopleChanged={() => {
@@ -2582,7 +2690,7 @@ export default function PlanEditorPage() {
           isOpen={!!editingItem}
           onClose={() => setEditingItem(null)}
           onSave={handleSaveEditItem}
-          eventStatus={event?.status}
+          event={event}
           item={editingItem}
           days={days}
           eventId={eventId}
@@ -2659,7 +2767,6 @@ export default function PlanEditorPage() {
             stepLabel={checklistStepContext || undefined}
             showPaymentConfirmation={isPostPayment}
             tabBar={buildTabBar('details')}
-            isSent={event ? isSentJson(event) : false}
           />
         )}
 
@@ -3060,7 +3167,7 @@ export default function PlanEditorPage() {
           <PeopleSection
             eventId={eventId}
             hostId={event?.hostId}
-            isSent={event ? isSentJson(event) : false}
+            event={event}
             teams={teams}
             people={people}
             onPeopleChanged={() => {

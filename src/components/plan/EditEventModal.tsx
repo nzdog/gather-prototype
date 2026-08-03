@@ -4,10 +4,16 @@ import { useState, useEffect, useRef } from 'react';
 import { X, CheckCircle } from 'lucide-react';
 import { useModal } from '@/contexts/ModalContext';
 import { useToast } from '@/contexts/ToastContext';
+import { useReasonPrompt } from './ReasonPrompt';
+import { isSentJson } from '@/lib/lifecycle';
+import { MATERIAL_EVENT_FIELDS, fieldChanges } from '@/lib/ledger';
 
 interface Event {
   id: string;
   name: string;
+  /** GTC-202: lifecycle inputs, so this modal reads the shared predicates. */
+  status: string;
+  sentAt: string | null;
   startDate: string;
   endDate: string;
   occasionType: string | null;
@@ -41,8 +47,6 @@ interface EditEventModalProps {
   eventId: string;
   stepLabel?: string;
   showPaymentConfirmation?: boolean;
-  /** True once the plan has been sent — drives the material-change note (GTC-197). */
-  isSent?: boolean;
   /** Optional tab bar rendered between header and form content */
   tabBar?: React.ReactNode;
 }
@@ -66,10 +70,16 @@ export default function EditEventModal({
   stepLabel,
   showPaymentConfirmation,
   tabBar,
-  isSent = false,
 }: EditEventModalProps) {
   const { openModal, closeModal } = useModal();
   const toast = useToast();
+  const { askForBatch: askForBatchReason, element: reasonPrompt } = useReasonPrompt();
+  /**
+   * GTC-202: derived here rather than passed. GTC-197 took an `isSent` boolean prop
+   * for the material-change note; the T5 prompt needs the whole lifecycle event, and
+   * carrying both would be two sources for one fact.
+   */
+  const isSent = event ? isSentJson(event) : false;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [step, setStep] = useState(1); // 1=basics, 2=guests/dietary, 3=venue
   // Guard: React's synchronous re-render can swap the Next (type=button) node
@@ -189,10 +199,28 @@ export default function EditEventModal({
         venueKitchenAccess: formData.venueKitchenAccess || null,
       };
 
+      // GTC-202: T5 — date or venue. Asked only where a MATERIAL_EVENT_FIELD actually
+      // moved: saving this form without touching the date owes nothing. The note in
+      // the header above ("your guests won't be re-asked automatically yet") states
+      // the F1 gap; this records why she moved it.
+      const answer = await askForBatchReason(
+        fieldChanges(
+          { action: 'EDIT_EVENT', targetType: 'Event', targetId: eventId },
+          (event ?? {}) as unknown as Record<string, unknown>,
+          payload as unknown as Record<string, unknown>,
+          MATERIAL_EVENT_FIELDS
+        ),
+        event
+      );
+      if (!answer.proceed) {
+        setIsSubmitting(false);
+        return;
+      }
+
       const response = await fetch(`/api/events/${eventId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, reason: answer.reason }),
       });
 
       if (!response.ok) {
@@ -213,447 +241,470 @@ export default function EditEventModal({
   if (!isOpen || !event) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white z-10">
-          <div>
-            {stepLabel && <p className="text-xs text-gray-400 mb-1">{getStepLabel(step)}</p>}
-            <h2 className="text-lg font-semibold text-gray-900">Edit Event Details</h2>
+    <>
+      {/* GTC-202: renders above this modal (z-[80]) when a T5 change is being saved. */}
+      {reasonPrompt}
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white z-10">
+            <div>
+              {stepLabel && <p className="text-xs text-gray-400 mb-1">{getStepLabel(step)}</p>}
+              <h2 className="text-lg font-semibold text-gray-900">Edit Event Details</h2>
+            </div>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
 
-        {tabBar}
+          {tabBar}
 
-        {showPaymentConfirmation && step === 1 && (
-          <div className="flex items-start gap-3 px-6 py-4 bg-green-50 border-b border-green-100">
-            <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
-            <p className="text-sm text-green-800">
-              <span className="font-medium">Payment received!</span> A receipt has been sent to your
-              email. Continue setting up your event below.
-            </p>
-          </div>
-        )}
+          {showPaymentConfirmation && step === 1 && (
+            <div className="flex items-start gap-3 px-6 py-4 bg-green-50 border-b border-green-100">
+              <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+              <p className="text-sm text-green-800">
+                <span className="font-medium">Payment received!</span> A receipt has been sent to
+                your email. Continue setting up your event below.
+              </p>
+            </div>
+          )}
 
-        {/* THE F1 GAP, STATED PLAINLY — plan §7.3. A post-send date or venue change
+          {/* THE F1 GAP, STATED PLAINLY — plan §7.3. A post-send date or venue change
             is RECORDED, but nobody is re-asked until GTC-183 (F1) builds the
             material-change machinery. Telling her is a fact, not a challenge, and it
             does not block or require acknowledgement (Moment 4 §7). Delete this the
             day F1 lands. */}
-        {isSent && (
-          <div className="mx-6 mt-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
-            <p className="text-sm text-gray-700">
-              If you change the date or venue, your guests won&apos;t be re-asked automatically yet.
-            </p>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="p-6">
-          {/* Step Navigation */}
-          <div className="flex gap-2 mb-6">
-            {[1, 2, 3].map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setStep(s)}
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium ${
-                  step === s
-                    ? 'bg-accent text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                Step {s}
-              </button>
-            ))}
-          </div>
-
-          {/* Step 1: Basics */}
-          {step === 1 && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Event Basics</h3>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Event Name *</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Start Date *
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.startDate}
-                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">End Date *</label>
-                  <input
-                    type="date"
-                    value={formData.endDate}
-                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Occasion Type
-                </label>
-                <select
-                  value={formData.occasionType}
-                  onChange={(e) => setFormData({ ...formData, occasionType: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                >
-                  <option value="">Select type...</option>
-                  <option value="CHRISTMAS">Christmas</option>
-                  <option value="THANKSGIVING">Thanksgiving</option>
-                  <option value="EASTER">Easter</option>
-                  <option value="WEDDING">Wedding</option>
-                  <option value="BIRTHDAY">Birthday</option>
-                  <option value="REUNION">Reunion</option>
-                  <option value="RETREAT">Retreat</option>
-                  <option value="OTHER">Other</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea
-                  value={formData.occasionDescription}
-                  onChange={(e) =>
-                    setFormData({ ...formData, occasionDescription: e.target.value })
-                  }
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                />
-              </div>
+          {isSent && (
+            <div className="mx-6 mt-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <p className="text-sm text-gray-700">
+                If you change the date or venue, your guests won&apos;t be re-asked automatically
+                yet.
+              </p>
             </div>
           )}
 
-          {/* Step 2: Guests & Dietary */}
-          {step === 2 && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Guests & Dietary</h3>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Guest Count</label>
-                <input
-                  type="number"
-                  value={formData.guestCount}
-                  onChange={(e) => setFormData({ ...formData, guestCount: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  min="1"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Guest Count Confidence
-                </label>
-                <select
-                  value={formData.guestCountConfidence}
-                  onChange={(e) =>
-                    setFormData({ ...formData, guestCountConfidence: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          <form onSubmit={handleSubmit} className="p-6">
+            {/* Step Navigation */}
+            <div className="flex gap-2 mb-6">
+              {[1, 2, 3].map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setStep(s)}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium ${
+                    step === s
+                      ? 'bg-accent text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
                 >
-                  <option value="HIGH">High - Confirmed RSVPs</option>
-                  <option value="MEDIUM">Medium - Expected</option>
-                  <option value="LOW">Low - Estimate</option>
-                </select>
-              </div>
+                  Step {s}
+                </button>
+              ))}
+            </div>
 
-              <div className="grid grid-cols-2 gap-4">
+            {/* Step 1: Basics */}
+            {step === 1 && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Event Basics</h3>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Min</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Event Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Start Date *
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.startDate}
+                      onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      End Date *
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.endDate}
+                      onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Occasion Type
+                  </label>
+                  <select
+                    value={formData.occasionType}
+                    onChange={(e) => setFormData({ ...formData, occasionType: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  >
+                    <option value="">Select type...</option>
+                    <option value="CHRISTMAS">Christmas</option>
+                    <option value="THANKSGIVING">Thanksgiving</option>
+                    <option value="EASTER">Easter</option>
+                    <option value="WEDDING">Wedding</option>
+                    <option value="BIRTHDAY">Birthday</option>
+                    <option value="REUNION">Reunion</option>
+                    <option value="RETREAT">Retreat</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    value={formData.occasionDescription}
+                    onChange={(e) =>
+                      setFormData({ ...formData, occasionDescription: e.target.value })
+                    }
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Guests & Dietary */}
+            {step === 2 && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Guests & Dietary</h3>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Guest Count
+                  </label>
                   <input
                     type="number"
-                    value={formData.guestCountMin}
-                    onChange={(e) => setFormData({ ...formData, guestCountMin: e.target.value })}
+                    value={formData.guestCount}
+                    onChange={(e) => setFormData({ ...formData, guestCount: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     min="1"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Max</label>
-                  <input
-                    type="number"
-                    value={formData.guestCountMax}
-                    onChange={(e) => setFormData({ ...formData, guestCountMax: e.target.value })}
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Guest Count Confidence
+                  </label>
+                  <select
+                    value={formData.guestCountConfidence}
+                    onChange={(e) =>
+                      setFormData({ ...formData, guestCountConfidence: e.target.value })
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    min="1"
+                  >
+                    <option value="HIGH">High - Confirmed RSVPs</option>
+                    <option value="MEDIUM">Medium - Expected</option>
+                    <option value="LOW">Low - Estimate</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Min</label>
+                    <input
+                      type="number"
+                      value={formData.guestCountMin}
+                      onChange={(e) => setFormData({ ...formData, guestCountMin: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      min="1"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Max</label>
+                    <input
+                      type="number"
+                      value={formData.guestCountMax}
+                      onChange={(e) => setFormData({ ...formData, guestCountMax: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      min="1"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Dietary Requirements
+                  </label>
+                  <select
+                    value={formData.dietaryStatus}
+                    onChange={(e) => setFormData({ ...formData, dietaryStatus: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  >
+                    <option value="UNSPECIFIED">Not specified yet</option>
+                    <option value="NONE">None</option>
+                    <option value="SPECIFIED">Specified below</option>
+                  </select>
+                </div>
+
+                {formData.dietaryStatus === 'SPECIFIED' && (
+                  <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-md">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Vegetarian
+                      </label>
+                      <input
+                        type="number"
+                        value={formData.dietaryVegetarian}
+                        onChange={(e) =>
+                          setFormData({ ...formData, dietaryVegetarian: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        min="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Vegan</label>
+                      <input
+                        type="number"
+                        value={formData.dietaryVegan}
+                        onChange={(e) => setFormData({ ...formData, dietaryVegan: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        min="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Gluten Free
+                      </label>
+                      <input
+                        type="number"
+                        value={formData.dietaryGlutenFree}
+                        onChange={(e) =>
+                          setFormData({ ...formData, dietaryGlutenFree: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        min="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Dairy Free
+                      </label>
+                      <input
+                        type="number"
+                        value={formData.dietaryDairyFree}
+                        onChange={(e) =>
+                          setFormData({ ...formData, dietaryDairyFree: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        min="0"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Allergies
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.dietaryAllergies}
+                        onChange={(e) =>
+                          setFormData({ ...formData, dietaryAllergies: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        placeholder="e.g., nuts, shellfish"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Step 3: Venue */}
+            {step === 3 && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Venue Details</h3>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Venue Name</label>
+                  <input
+                    type="text"
+                    value={formData.venueName}
+                    onChange={(e) => setFormData({ ...formData, venueName: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
                   />
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Dietary Requirements
-                </label>
-                <select
-                  value={formData.dietaryStatus}
-                  onChange={(e) => setFormData({ ...formData, dietaryStatus: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                >
-                  <option value="UNSPECIFIED">Not specified yet</option>
-                  <option value="NONE">None</option>
-                  <option value="SPECIFIED">Specified below</option>
-                </select>
-              </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Venue Type</label>
+                  <select
+                    value={formData.venueType}
+                    onChange={(e) => setFormData({ ...formData, venueType: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  >
+                    <option value="">Select type...</option>
+                    <option value="HOME">Home</option>
+                    <option value="HIRED_VENUE">Hired Venue</option>
+                    <option value="OUTDOOR">Outdoor</option>
+                    <option value="MIXED">Mixed</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </div>
 
-              {formData.dietaryStatus === 'SPECIFIED' && (
-                <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-md">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Kitchen Access
+                  </label>
+                  <select
+                    value={formData.venueKitchenAccess}
+                    onChange={(e) =>
+                      setFormData({ ...formData, venueKitchenAccess: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  >
+                    <option value="">Select...</option>
+                    <option value="FULL">Full Kitchen</option>
+                    <option value="LIMITED">Limited</option>
+                    <option value="NONE">None</option>
+                    <option value="CATERING_ONLY">Catering Only</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Vegetarian
+                      Oven Count
                     </label>
                     <input
                       type="number"
-                      value={formData.dietaryVegetarian}
+                      value={formData.venueOvenCount}
+                      onChange={(e) => setFormData({ ...formData, venueOvenCount: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      min="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Stovetop Burners
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.venueStoretopBurners}
                       onChange={(e) =>
-                        setFormData({ ...formData, dietaryVegetarian: e.target.value })
+                        setFormData({ ...formData, venueStoretopBurners: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
                       min="0"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Vegan</label>
-                    <input
-                      type="number"
-                      value={formData.dietaryVegan}
-                      onChange={(e) => setFormData({ ...formData, dietaryVegan: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      min="0"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Gluten Free
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.dietaryGlutenFree}
-                      onChange={(e) =>
-                        setFormData({ ...formData, dietaryGlutenFree: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      min="0"
-                    />
-                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    BBQ Available
+                  </label>
+                  <select
+                    value={formData.venueBbqAvailable}
+                    onChange={(e) =>
+                      setFormData({ ...formData, venueBbqAvailable: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  >
+                    <option value="">Unknown</option>
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Dairy Free
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.dietaryDairyFree}
-                      onChange={(e) =>
-                        setFormData({ ...formData, dietaryDairyFree: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      min="0"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Allergies
+                      Event Start Time
                     </label>
                     <input
                       type="text"
-                      value={formData.dietaryAllergies}
+                      value={formData.venueTimingStart}
                       onChange={(e) =>
-                        setFormData({ ...formData, dietaryAllergies: e.target.value })
+                        setFormData({ ...formData, venueTimingStart: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="e.g., nuts, shellfish"
+                      placeholder="e.g., 5:30pm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Event End Time
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.venueTimingEnd}
+                      onChange={(e) => setFormData({ ...formData, venueTimingEnd: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      placeholder="e.g., 11:00pm"
                     />
                   </div>
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Venue Notes
+                  </label>
+                  <textarea
+                    value={formData.venueNotes}
+                    onChange={(e) => setFormData({ ...formData, venueNotes: e.target.value })}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-2 pt-6 border-t mt-6">
+              {step < 3 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    isAdvancingStep.current = true;
+                    setStep(step + 1);
+                    setTimeout(() => {
+                      isAdvancingStep.current = false;
+                    }, 0);
+                  }}
+                  className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark"
+                >
+                  Next
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting ? 'Saving...' : 'Save Changes'}
+                </button>
               )}
-            </div>
-          )}
-
-          {/* Step 3: Venue */}
-          {step === 3 && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Venue Details</h3>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Venue Name</label>
-                <input
-                  type="text"
-                  value={formData.venueName}
-                  onChange={(e) => setFormData({ ...formData, venueName: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Venue Type</label>
-                <select
-                  value={formData.venueType}
-                  onChange={(e) => setFormData({ ...formData, venueType: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                >
-                  <option value="">Select type...</option>
-                  <option value="HOME">Home</option>
-                  <option value="HIRED_VENUE">Hired Venue</option>
-                  <option value="OUTDOOR">Outdoor</option>
-                  <option value="MIXED">Mixed</option>
-                  <option value="OTHER">Other</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Kitchen Access
-                </label>
-                <select
-                  value={formData.venueKitchenAccess}
-                  onChange={(e) => setFormData({ ...formData, venueKitchenAccess: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                >
-                  <option value="">Select...</option>
-                  <option value="FULL">Full Kitchen</option>
-                  <option value="LIMITED">Limited</option>
-                  <option value="NONE">None</option>
-                  <option value="CATERING_ONLY">Catering Only</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Oven Count</label>
-                  <input
-                    type="number"
-                    value={formData.venueOvenCount}
-                    onChange={(e) => setFormData({ ...formData, venueOvenCount: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    min="0"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Stovetop Burners
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.venueStoretopBurners}
-                    onChange={(e) =>
-                      setFormData({ ...formData, venueStoretopBurners: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    min="0"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  BBQ Available
-                </label>
-                <select
-                  value={formData.venueBbqAvailable}
-                  onChange={(e) => setFormData({ ...formData, venueBbqAvailable: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                >
-                  <option value="">Unknown</option>
-                  <option value="true">Yes</option>
-                  <option value="false">No</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Event Start Time
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.venueTimingStart}
-                    onChange={(e) => setFormData({ ...formData, venueTimingStart: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="e.g., 5:30pm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Event End Time
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.venueTimingEnd}
-                    onChange={(e) => setFormData({ ...formData, venueTimingEnd: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="e.g., 11:00pm"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Venue Notes</label>
-                <textarea
-                  value={formData.venueNotes}
-                  onChange={(e) => setFormData({ ...formData, venueNotes: e.target.value })}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex gap-2 pt-6 border-t mt-6">
-            {step < 3 ? (
               <button
                 type="button"
-                onClick={() => {
-                  isAdvancingStep.current = true;
-                  setStep(step + 1);
-                  setTimeout(() => {
-                    isAdvancingStep.current = false;
-                  }, 0);
-                }}
-                className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark"
-              >
-                Next
-              </button>
-            ) : (
-              <button
-                type="submit"
+                onClick={onClose}
                 disabled={isSubmitting}
-                className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50"
               >
-                {isSubmitting ? 'Saving...' : 'Save Changes'}
+                Cancel
               </button>
-            )}
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
