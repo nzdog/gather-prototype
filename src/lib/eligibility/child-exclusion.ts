@@ -31,6 +31,16 @@
  * participants directly to an event and never set `householdRole` at all. Those are
  * adults invited by name; excluding them would silently stop nudging a large slice of
  * real guests. NULL means "not captured via a household", not "unknown age".
+ *
+ * GTC-207 — THIS GATE IS MESSAGE-ONLY. IT MUST NEVER BE EXTENDED TO ASSIGNMENT.
+ * A "kid with a job" (~15-16, does a real task, managed by their parents) is
+ * assignment-eligible BY DESIGN — that is the entire point of capturing them as
+ * CHILD rather than skipping them. They are excluded from being MESSAGED, never
+ * from being ASSIGNED. Do not import this module, `isMessageableRole`, or
+ * `MESSAGEABLE_PERSON_EVENT` into any assignment path (item/task assign routes,
+ * auto-assign) to gate who can hold an item — that would silently break the
+ * kid-with-a-job model this ticket confirmed and pinned. See
+ * tests/child-assignment-eligibility-test.ts for the paired guard.
  */
 
 import type { HouseholdRole } from '@prisma/client';

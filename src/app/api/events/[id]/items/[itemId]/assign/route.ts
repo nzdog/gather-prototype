@@ -69,6 +69,11 @@ export async function POST(
     // only day-of jobs, have no coordinator, and (since PersonEvent.teamId is singular)
     // can never have members. Gating tasks on it would make them permanently
     // unassignable. Same route, same Assignment model, same ack path — one machine.
+    //
+    // GTC-207: deliberately no CHILD-role gate below (or anywhere else in this route).
+    // GTC-172's §10.6 message exclusion (src/lib/eligibility/child-exclusion.ts) is
+    // MESSAGE-ONLY — a "kid with a job" is assignable by design; they simply are never
+    // messaged directly. Do not import that module here to filter personEvent.
     if (item.kind === 'ITEM' && personEvent.teamId !== item.teamId) {
       return NextResponse.json(
         { error: 'Person must be in the same team as the item' },
