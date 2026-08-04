@@ -71,6 +71,8 @@ interface SectionResponse {
     unit: string;
     servingSize: string;
     notes?: string;
+    critical?: boolean;
+    criticalReason?: string | null;
     dietaryTags?: string[];
   }>;
 }
@@ -266,6 +268,13 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
             unit: item.unit,
             servingSize: item.servingSize,
             notes: item.notes,
+            critical: item.critical ?? false,
+            // Match the legacy path's defensive backfill (generate.ts):
+            // a critical item with no reason still gets one rather than
+            // dropping the reason silently.
+            criticalReason: item.critical
+              ? (item.criticalReason ?? 'Important item for the event')
+              : null,
             dietaryTags: item.dietaryTags ?? [],
           })),
         };
@@ -305,6 +314,8 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
             quantityUnitCustom: item.unit,
             quantityText: item.servingSize,
             notes: item.notes ?? null,
+            critical: item.critical,
+            criticalReason: item.criticalReason,
             source: 'GENERATED',
             aiGenerated: true,
             userConfirmed: false,

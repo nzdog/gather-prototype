@@ -616,6 +616,13 @@ ENGAGED CATEGORIES ONLY:
 - Skip categories that are marked still-deciding.
 - Do not invent new categories beyond those provided.
 
+CRITICALITY (a host-facing badge only — it does not change what or how much you generate):
+- Only 3-5 items across the ENTIRE plan may be critical, maximum.
+- Critical means "the event genuinely fails without this item" — main proteins, and key dietary alternatives for guests with restrictions.
+- Sauces, condiments, bread, drinks, setup items, cleanup items, side dishes, and extra desserts are NEVER critical.
+- When in doubt, mark it NOT critical.
+- If critical is true, criticalReason must briefly explain why; otherwise leave criticalReason null.
+
 Return ONLY valid JSON in the exact shape specified. No prose, no markdown, no commentary.`;
 
   // Build per-category input blocks
@@ -693,6 +700,8 @@ Return JSON in EXACTLY this shape:
           "unit": string,             // "kg", "g", "L", "ml", "count", "packs", "trays", "bottles", "bowls", etc.
           "servingSize": string,      // e.g., "serves 4-6", "200g per adult"
           "notes": string,            // optional; omit if not needed
+          "critical": boolean,        // see CRITICALITY above — 3-5 max across the whole plan
+          "criticalReason": string,   // required when critical is true; null otherwise
           "dietaryTags": string[]     // any of VEGETARIAN, VEGAN, GLUTEN_FREE, DAIRY_FREE, NUT_FREE — empty array when none apply
         }
       ]

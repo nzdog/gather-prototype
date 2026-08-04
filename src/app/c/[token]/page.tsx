@@ -373,16 +373,9 @@ export default function CoordinatorView() {
   const unassignedCount = unassignedItems.length;
   const criticalCount = unassignedItems.filter((i) => i.critical).length;
 
-  // Sort items: critical unassigned first, then regular unassigned, then assigned
-  const sortedItems = [...data.items].sort((a, b) => {
-    const aUnassigned = !a.assignment;
-    const bUnassigned = !b.assignment;
-    if (aUnassigned && a.critical && !(bUnassigned && b.critical)) return -1;
-    if (bUnassigned && b.critical && !(aUnassigned && a.critical)) return 1;
-    if (aUnassigned && !bUnassigned) return -1;
-    if (bUnassigned && !aUnassigned) return 1;
-    return 0;
-  });
+  // Moment 4 spec §8.2: criticality is a badge, not a sort key — items stay
+  // in natural order, no float-to-top under any condition.
+  const sortedItems = data.items;
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -521,14 +514,12 @@ export default function CoordinatorView() {
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    {!item.assignment && item.critical && (
-                      <AlertCircle className="size-4 text-red-500 flex-shrink-0" />
-                    )}
+                    {item.critical && <AlertCircle className="size-4 text-red-500 flex-shrink-0" />}
                     <span className="font-semibold text-gray-900">{item.name}</span>
                     {item.quantity && (
                       <span className="text-gray-500 flex-shrink-0">×{item.quantity}</span>
                     )}
-                    {!item.assignment && item.critical && (
+                    {item.critical && (
                       <span className="bg-red-100 text-red-800 text-xs font-semibold px-2 py-1 rounded flex-shrink-0">
                         CRITICAL
                       </span>

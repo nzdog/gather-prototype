@@ -56,6 +56,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ tok
     .catch((err) => console.error('[LinkOpen] Failed to track:', err));
 
   // 1. Fetch coordinator's own team items (scoped to token.teamId)
+  // Moment 4 spec §8.2: criticality is a badge, not a sort key — natural
+  // order (matches the other per-team item routes), no float-to-top.
   const myItems = await prisma.item.findMany({
     where: { teamId: resolvedContext.team.id },
     include: {
@@ -66,7 +68,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ tok
       },
       day: true,
     },
-    orderBy: [{ critical: 'desc' }, { name: 'asc' }],
+    orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
   });
 
   // Compute status from assignment existence (SYNCHRONOUS - no await)
