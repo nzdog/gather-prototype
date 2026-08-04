@@ -157,13 +157,7 @@ export default function HostTeamView() {
     );
   }
 
-  const sortedItems = [...data.items].sort((a, b) => {
-    if (!a.assignment && b.assignment) return -1;
-    if (a.assignment && !b.assignment) return 1;
-    if (a.critical && !b.critical) return -1;
-    if (!a.critical && b.critical) return 1;
-    return a.name.localeCompare(b.name);
-  });
+  const sortedItems = data.items;
 
   return (
     <ModalProvider>
