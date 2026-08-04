@@ -179,8 +179,15 @@ model PersonEvent {
   /// move under GTC-178 (E1) — zone-7-adjacent, not this ticket's.
   sentAt               DateTime?
   householdId          String?
-  household            Household?       @relation(fields: [householdId], references: [id])
+  household            Household?       @relation("HouseholdMembers", fields: [householdId], references: [id])
   householdRole        HouseholdRole?
+  /// GTC-172 (C1): DISPLAY ONLY — "captured as a kid with a job". This is NEVER an
+  /// input to message eligibility; `householdRole` is the sole gate (Moment 4 §10.6,
+  /// absolute). It exists so a young person Kate has DELIBERATELY roled as an adult
+  /// still renders in her helpers list instead of silently jumping to the guests list
+  /// on reload. Setting this true never grants messageability, and setting it false
+  /// never removes it — read it for layout, never for a send decision.
+  isYoungPerson        Boolean          @default(false)
   event                Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
   person               Person           @relation(fields: [personId], references: [id], onDelete: Cascade)
   proxy                PersonEvent?     @relation("ProxyRelation", fields: [proxyPersonEventId], references: [id])
@@ -189,6 +196,11 @@ model PersonEvent {
 
   nudgeLogs NudgeLog[]
 
+  /// GTC-172 (C1): back-relation for Household.contactPersonEvent — the households
+  /// that have picked THIS PersonEvent as their channel. Cross-household by design:
+  /// these households need not be this row's own `household`.
+  householdsAsContact Household[] @relation("HouseholdContactChannel")
+
   @@unique([personId, eventId])
 }
 
@@ -196,10 +208,27 @@ model Household {
   id          String        @id @default(cuid())
   eventId     String
   event       Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  members     PersonEvent[]
+  members     PersonEvent[] @relation("HouseholdMembers")
   littleCount Int           @default(0)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+
+  /// GTC-172 (C1): the household contact picker — Moment 4 §10.7. "Who should Gather
+  /// talk to for this household?" A reference, never a boolean, and CROSS-HOUSEHOLD
+  /// CAPABLE: this may point at a PersonEvent belonging to a DIFFERENT household of
+  /// the same event (Grandma's channel lives in her daughter's household).
+  ///
+  /// NULL means "not picked" and resolves to the household's PRIMARY_CONTACT at read
+  /// time — see resolveHouseholdChannel() in src/lib/households/channel.ts. That is
+  /// why this ships with no data backfill: the default is computed, not stored.
+  ///
+  /// A CHILD-role PersonEvent must never be stored here (§10.6). The picker omits
+  /// them and the API rejects them, but the eligibility layer re-checks anyway rather
+  /// than trusting either.
+  contactPersonEventId String?
+  contactPersonEvent   PersonEvent? @relation("HouseholdContactChannel", fields: [contactPersonEventId], references: [id], onDelete: SetNull)
+
+  @@index([contactPersonEventId])
 }
 
 model Item {

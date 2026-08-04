@@ -17,6 +17,21 @@ import type { Prisma } from '@prisma/client';
  */
 type Tx = Prisma.TransactionClient;
 import { normalizePhoneNumber } from '@/lib/phone';
+import { validateChannelTarget } from '@/lib/households/channel';
+import { isMessageableRole } from '@/lib/eligibility/child-exclusion';
+
+/**
+ * GTC-172 (C1): thrown when a household contact picker target is invalid (wrong event,
+ * or a CHILD). Routes map this to a 400 rather than a 500 — it is a bad request, not a
+ * server fault. Thrown inside the transaction, so the whole edit rolls back: a
+ * rejected channel must not leave a half-applied member reconcile behind.
+ */
+export class ChannelValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ChannelValidationError';
+  }
+}
 
 /**
  * Household member write path for PUT /api/events/[id]/households/[householdId].
@@ -41,6 +56,19 @@ export interface MemberInput {
   name?: string;
   email?: string;
   phone?: string;
+  /**
+   * GTC-172 (C1): the explicit adult-roling path (Moment 4 §10.6). Only meaningful on
+   * a `helpers[]` entry — a kid with a job whom the host has DELIBERATELY decided is
+   * old enough to be messaged directly. It stores `householdRole: GUEST` instead of
+   * CHILD.
+   *
+   * This is a payload input, never stored as a flag: there is no "child, but
+   * messageable" state on the row, because that is exactly the soft override §10.6
+   * forbids. The stored gate remains householdRole alone. It defaults to false, is
+   * never pre-set by the UI, and is NEVER inferred from the presence of a phone number
+   * or from anything else about the person's data.
+   */
+  adultRoled?: boolean;
 }
 
 export interface PrimaryContactInput {
@@ -55,6 +83,11 @@ export interface ReconcileInput {
   helpers?: MemberInput[];
   littleCount?: number;
   guests?: MemberInput[];
+  /**
+   * GTC-172 (C1): the household contact picker (§10.7). `undefined` leaves the current
+   * channel alone; `null` clears it back to "default to the primary contact".
+   */
+  contactPersonEventId?: string | null;
 }
 
 /** Minimal shape of the household loaded with members + person. */
@@ -126,20 +159,35 @@ export async function reconcileHouseholdMembers(prisma: Tx, ctx: ReconcileContex
   const keptIds = new Set<string>();
 
   // Flatten the incoming payload into (member, role) pairs, named members only.
-  const incoming: { member: MemberInput; role: MemberRole }[] = [];
-  if (partner?.name?.trim()) incoming.push({ member: partner, role: 'PARTNER' });
+  //
+  // GTC-172 (C1): a helper is a "kid with a job". `adultRoled` is the host's explicit
+  // decision that this particular one is old enough to be messaged directly (§10.6),
+  // and it changes the STORED ROLE rather than adding an override beside CHILD.
+  // `isYoungPerson` is carried separately and is DISPLAY ONLY — it keeps a re-roled
+  // teenager rendering in the helpers list instead of silently reappearing among the
+  // guests on reload, and it never affects eligibility.
+  const incoming: { member: MemberInput; role: MemberRole; isYoungPerson: boolean }[] = [];
+  if (partner?.name?.trim())
+    incoming.push({ member: partner, role: 'PARTNER', isYoungPerson: false });
   for (const helper of helpers ?? []) {
-    if (helper.name?.trim()) incoming.push({ member: helper, role: 'CHILD' });
+    if (helper.name?.trim()) {
+      incoming.push({
+        member: helper,
+        role: helper.adultRoled ? 'GUEST' : 'CHILD',
+        isYoungPerson: true,
+      });
+    }
   }
   for (const guest of guests ?? []) {
-    if (guest.name?.trim()) incoming.push({ member: guest, role: 'GUEST' });
+    if (guest.name?.trim()) incoming.push({ member: guest, role: 'GUEST', isYoungPerson: false });
   }
 
   /** Update an existing member's Person + PersonEvent in place; never touches teamId/rsvp/nudge. */
   async function updateExistingMember(
     existing: LoadedMember,
     member: MemberInput,
-    role: MemberRole
+    role: MemberRole,
+    isYoungPerson: boolean
   ) {
     const normalizedPhone = member.phone ? normalizePhoneNumber(member.phone) : null;
     let person = await prisma.person.update({
@@ -161,6 +209,7 @@ export async function reconcileHouseholdMembers(prisma: Tx, ctx: ReconcileContex
       where: { id: existing.id },
       data: {
         householdRole: role,
+        isYoungPerson,
         reachabilityTier: reach.reachabilityTier,
         contactMethod: reach.contactMethod,
       },
@@ -168,7 +217,7 @@ export async function reconcileHouseholdMembers(prisma: Tx, ctx: ReconcileContex
   }
 
   /** Create a genuinely new member (find-or-create Person by email; upsert PersonEvent by (personId,eventId)). */
-  async function createNewMember(member: MemberInput, role: MemberRole) {
+  async function createNewMember(member: MemberInput, role: MemberRole, isYoungPerson: boolean) {
     const normalizedPhone = member.phone ? normalizePhoneNumber(member.phone) : null;
 
     let person = member.email
@@ -204,7 +253,7 @@ export async function reconcileHouseholdMembers(prisma: Tx, ctx: ReconcileContex
       if (!existing.householdId || existing.householdId === household.id) {
         await prisma.personEvent.update({
           where: { id: existing.id },
-          data: { householdId: household.id, householdRole: role },
+          data: { householdId: household.id, householdRole: role, isYoungPerson },
         });
       }
       return;
@@ -219,19 +268,20 @@ export async function reconcileHouseholdMembers(prisma: Tx, ctx: ReconcileContex
         contactMethod: reach.contactMethod,
         householdId: household.id,
         householdRole: role,
+        isYoungPerson,
         // GTC-196: the mini-send clock — see people/route.ts for the full note.
         sentAt: sentAt ?? null,
       },
     });
   }
 
-  for (const { member, role } of incoming) {
+  for (const { member, role, isYoungPerson } of incoming) {
     const matched = member.personEventId ? existingById.get(member.personEventId) : undefined;
     if (matched) {
       keptIds.add(matched.id);
-      await updateExistingMember(matched, member, role);
+      await updateExistingMember(matched, member, role, isYoungPerson);
     } else {
-      await createNewMember(member, role);
+      await createNewMember(member, role, isYoungPerson);
     }
   }
 
@@ -240,6 +290,51 @@ export async function reconcileHouseholdMembers(prisma: Tx, ctx: ReconcileContex
   for (const existing of existingNonPrimary) {
     if (!keptIds.has(existing.id)) {
       await prisma.personEvent.delete({ where: { id: existing.id } });
+    }
+  }
+
+  // --- Household contact channel (GTC-172 / C1, §10.7) -----------------------
+  // Applied AFTER the member reconcile so it validates against post-edit roles, and so
+  // a channel whose member was just removed is already NULL via the FK's ON DELETE SET
+  // NULL rather than being re-pointed at a deleted row.
+  if (input.contactPersonEventId !== undefined) {
+    if (input.contactPersonEventId === null) {
+      await prisma.household.update({
+        where: { id: household.id },
+        data: { contactPersonEventId: null },
+      });
+    } else {
+      const target = await prisma.personEvent.findUnique({
+        where: { id: input.contactPersonEventId },
+        select: { eventId: true, householdRole: true },
+      });
+      const check = validateChannelTarget(target, eventId);
+      if (!check.ok) throw new ChannelValidationError(check.error);
+      await prisma.household.update({
+        where: { id: household.id },
+        data: { contactPersonEventId: input.contactPersonEventId },
+      });
+    }
+  }
+
+  // A member re-roled INTO CHILD while holding the channel would leave a channel the
+  // picker would never have allowed. The eligibility layer already fails closed on
+  // that (findProxyNudgeCandidates), but leaving the row is silent corruption, so
+  // clear it back to the primary-contact default here.
+  const current = await prisma.household.findUnique({
+    where: { id: household.id },
+    select: { contactPersonEventId: true },
+  });
+  if (current?.contactPersonEventId) {
+    const channel = await prisma.personEvent.findUnique({
+      where: { id: current.contactPersonEventId },
+      select: { householdRole: true },
+    });
+    if (channel && !isMessageableRole(channel.householdRole)) {
+      await prisma.household.update({
+        where: { id: household.id },
+        data: { contactPersonEventId: null },
+      });
     }
   }
 }

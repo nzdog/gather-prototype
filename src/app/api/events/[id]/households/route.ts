@@ -4,6 +4,7 @@ import { requireEventRole } from '@/lib/auth/guards';
 import { ledgerActorForUser } from '@/lib/auth/actor';
 import { recordChange } from '@/lib/ledger';
 import { normalizePhoneNumber } from '@/lib/phone';
+import { validateChannelTarget } from '@/lib/households/channel';
 
 // GET /api/events/[id]/households - List households for event
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -46,6 +47,8 @@ interface HouseholdMemberInput {
   name?: string;
   email?: string;
   phone?: string;
+  /** GTC-172 (C1): explicit adult-roling of a kid with a job (§10.6). Helpers only. */
+  adultRoled?: boolean;
 }
 
 interface HouseholdRequestBody {
@@ -55,9 +58,11 @@ interface HouseholdRequestBody {
     phone?: string;
   };
   partner?: HouseholdMemberInput;
-  helpers?: Array<{ name: string; email?: string; phone?: string }>;
+  helpers?: Array<{ name: string; email?: string; phone?: string; adultRoled?: boolean }>;
   littleCount?: number;
   guests?: HouseholdMemberInput[];
+  /** GTC-172 (C1): the household contact picker (§10.7). */
+  contactPersonEventId?: string | null;
 }
 
 // POST /api/events/[id]/households - Create a household with members
@@ -70,7 +75,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     if (auth instanceof NextResponse) return auth;
 
     const body: HouseholdRequestBody = await request.json();
-    const { primaryContact, partner, helpers, littleCount, guests } = body;
+    const { primaryContact, partner, helpers, littleCount, guests, contactPersonEventId } = body;
 
     // Validate primary contact name
     if (!primaryContact?.name?.trim()) {
@@ -125,7 +130,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     async function createMember(
       input: HouseholdMemberInput,
       householdId: string,
-      householdRole: 'PRIMARY_CONTACT' | 'PARTNER' | 'GUEST' | 'CHILD'
+      householdRole: 'PRIMARY_CONTACT' | 'PARTNER' | 'GUEST' | 'CHILD',
+      // GTC-172 (C1): DISPLAY ONLY — see the schema note on PersonEvent.isYoungPerson.
+      // Never read for a send decision; householdRole is the sole gate (§10.6).
+      isYoungPerson = false
     ) {
       if (!input.name?.trim()) return null;
 
@@ -175,7 +183,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         if (!existing.householdId) {
           await prisma.personEvent.update({
             where: { id: existing.id },
-            data: { householdId, householdRole },
+            data: { householdId, householdRole, isYoungPerson },
           });
         }
         return existing;
@@ -190,6 +198,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           contactMethod,
           householdId,
           householdRole,
+          isYoungPerson,
           // GTC-196: the mini-send clock — see people/route.ts for the full note.
           sentAt: event!.sentAt ?? null,
         },
@@ -212,11 +221,22 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       await createMember(partner, household.id, 'PARTNER');
     }
 
-    // Create helpers (kids with jobs)
+    // Create helpers (kids with jobs).
+    //
+    // GTC-172 (C1): `adultRoled` is the host's explicit, deliberate decision that this
+    // particular kid with a job is old enough to be messaged directly (§10.6). It
+    // changes the STORED ROLE — there is no "child but messageable" state, because
+    // that is the soft override §10.6 forbids. It is never inferred from a phone
+    // number or anything else about the person's data.
     if (helpers) {
       for (const helper of helpers) {
         if (helper.name?.trim()) {
-          await createMember(helper, household.id, 'CHILD');
+          await createMember(
+            helper,
+            household.id,
+            helper.adultRoled ? 'GUEST' : 'CHILD',
+            true // captured as a kid with a job, whatever role they end up with
+          );
         }
       }
     }
@@ -228,6 +248,24 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           await createMember(guest, household.id, 'GUEST');
         }
       }
+    }
+
+    // GTC-172 (C1): the household contact picker (§10.7). Applied after members exist.
+    // On create this is normally a CROSS-HOUSEHOLD pick — an adult in an already-saved
+    // household — since this household's own members have no ids until just now.
+    if (contactPersonEventId) {
+      const target = await prisma.personEvent.findUnique({
+        where: { id: contactPersonEventId },
+        select: { eventId: true, householdRole: true },
+      });
+      const check = validateChannelTarget(target, eventId);
+      if (!check.ok) {
+        return NextResponse.json({ error: check.error }, { status: 400 });
+      }
+      await prisma.household.update({
+        where: { id: household.id },
+        data: { contactPersonEventId },
+      });
     }
 
     // Fetch the complete household with members

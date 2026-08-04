@@ -9,7 +9,7 @@ import { requireEventRole } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
 import { logAudit } from '@/lib/workflow';
 import { isComplete } from '@/lib/lifecycle';
-import { generateWrapUpLinks } from '@/lib/wrap-up';
+import { generateWrapUpLinks, selectWrapUpRecipients } from '@/lib/wrap-up';
 
 export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id: eventId } = await context.params;
@@ -100,23 +100,10 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       });
     });
 
-    // Build guest list for link generation
-    const guests = event.people
-      .filter((pe) => pe.personId !== event.hostId) // exclude host
-      .map((pe) => ({
-        person: {
-          id: pe.person.id,
-          name: pe.person.name,
-          email: pe.person.email,
-          phone: pe.person.phone,
-          phoneNumber: pe.person.phoneNumber,
-          smsOptedOut: pe.person.smsOptedOut,
-        },
-        assignments: pe.person.assignments.map((a) => ({
-          item: { name: a.item.name },
-          response: a.response,
-        })),
-      }));
+    // Build guest list for link generation. The recipient decision lives in
+    // selectWrapUpRecipients (GTC-172 / C1) so it is testable without this route's
+    // cookie context and so the child rule has exactly one place to hold.
+    const guests = selectWrapUpRecipients(event.people, event.hostId);
 
     const linkResult = await generateWrapUpLinks(eventId, guests);
 

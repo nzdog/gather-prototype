@@ -55,7 +55,10 @@ import { Conflict, ConflictType } from '@prisma/client';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 import SetupChecklistBanner from '@/components/plan/SetupChecklistBanner';
 import SetupOpeningScreen from '@/components/plan/SetupOpeningScreen';
-import Moment1InputForm, { Moment1PersonInput } from '@/components/plan/Moment1InputForm';
+import Moment1InputForm, {
+  Moment1PersonInput,
+  ChannelCandidateOption,
+} from '@/components/plan/Moment1InputForm';
 import HouseholdCardList, { SavedHousehold } from '@/components/plan/HouseholdCardList';
 import Moment1Summary from '@/components/plan/Moment1Summary';
 import Moment2Opening from '@/components/plan/Moment2Opening';
@@ -391,6 +394,8 @@ export default function PlanEditorPage() {
   const [showMoment2PlanView, setShowMoment2PlanView] = useState(false);
   const [moment2PlanCategories, setMoment2PlanCategories] = useState<Moment2PlanCategory[]>([]);
   const [households, setHouseholds] = useState<SavedHousehold[]>([]);
+  /** GTC-172 (C1): every messageable person in the event, for the contact picker (§10.7). */
+  const [channelCandidates, setChannelCandidates] = useState<ChannelCandidateOption[]>([]);
   const [editingHousehold, setEditingHousehold] = useState<SavedHousehold | null>(null);
   const moment1FormRef = useRef<HTMLDivElement>(null);
   const [wrapUpLoading, setWrapUpLoading] = useState(false);
@@ -610,8 +615,14 @@ export default function PlanEditorPage() {
   const apiHouseholdToSaved = useCallback((h: any): SavedHousehold => {
     const primary = h.members?.find((m: any) => m.householdRole === 'PRIMARY_CONTACT');
     const partnerMember = h.members?.find((m: any) => m.householdRole === 'PARTNER');
-    const helperMembers = h.members?.filter((m: any) => m.householdRole === 'CHILD') || [];
-    const guestMembers = h.members?.filter((m: any) => m.householdRole === 'GUEST') || [];
+    // GTC-172 (C1): "kid with a job" is now isYoungPerson, not householdRole === CHILD.
+    // A young person the host deliberately roled as an adult (§10.6) is stored GUEST so
+    // they are messageable, but they are still a kid with a job and must round-trip
+    // back into the helpers list rather than silently reappearing among the guests.
+    const helperMembers =
+      h.members?.filter((m: any) => m.isYoungPerson || m.householdRole === 'CHILD') || [];
+    const guestMembers =
+      h.members?.filter((m: any) => m.householdRole === 'GUEST' && !m.isYoungPerson) || [];
     return {
       id: h.id,
       primaryContact: {
@@ -632,6 +643,8 @@ export default function PlanEditorPage() {
         name: m.person?.name || '',
         email: m.person?.email || undefined,
         phone: m.person?.phoneNumber || undefined,
+        // Reflects the STORED role, so the control shows the host what she chose.
+        adultRoled: m.householdRole !== 'CHILD',
       })),
       littleCount: h.littleCount || 0,
       guests: guestMembers.map((g: any) => ({
@@ -640,6 +653,7 @@ export default function PlanEditorPage() {
         email: g.person?.email || undefined,
         phone: g.person?.phoneNumber || undefined,
       })),
+      contactPersonEventId: h.contactPersonEventId ?? null,
     };
   }, []);
 
@@ -653,6 +667,24 @@ export default function PlanEditorPage() {
       if (res.ok) {
         const data = await res.json();
         setHouseholds(data.households.map(apiHouseholdToSaved));
+        // GTC-172 (C1): the contact picker is CROSS-HOUSEHOLD capable (§10.7) —
+        // Grandma's channel may live in another household — so candidates are
+        // gathered across the whole event, not per household. CHILD-role members are
+        // omitted here as a courtesy; the gate is the eligibility layer, not this list.
+        setChannelCandidates(
+          (data.households ?? []).flatMap((h: any) =>
+            (h.members ?? [])
+              .filter((m: any) => m.householdRole !== 'CHILD')
+              .map((m: any) => ({
+                personEventId: m.id,
+                name: m.person?.name || 'Unknown',
+                householdName:
+                  h.members?.find((x: any) => x.householdRole === 'PRIMARY_CONTACT')?.person
+                    ?.name || 'Household',
+                householdId: h.id,
+              }))
+          )
+        );
       }
     };
     fetchHouseholds();
@@ -1852,6 +1884,7 @@ export default function PlanEditorPage() {
                 onEditSave={handleEditSave}
                 onCancelEdit={() => setEditingHousehold(null)}
                 totalPeopleCount={totalPeopleCount}
+                channelCandidates={channelCandidates}
               />
             </div>
 

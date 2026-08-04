@@ -12,6 +12,7 @@ import {
   resolveGuestTaskItem,
   type WrapUpTemplateParams,
 } from '@/lib/sms/wrap-up-templates';
+import { isMessageableRole } from '@/lib/eligibility/child-exclusion';
 
 const WRAPUP_LINK_EXPIRY_DAYS = 30;
 const DISPATCH_DELAY_MINUTES = 10;
@@ -37,7 +38,7 @@ export function generateLinkToken(): string {
   return randomBytes(24).toString('base64url');
 }
 
-interface GuestForWrapUp {
+export interface GuestForWrapUp {
   person: {
     id: string;
     name: string;
@@ -47,6 +48,59 @@ interface GuestForWrapUp {
     smsOptedOut: boolean;
   };
   assignments: Array<{ item: { name: string }; response: string }>;
+}
+
+/**
+ * A PersonEvent row as the wrap-up route loads it. Prisma's `include` returns every
+ * scalar on the row, so `householdRole` arrives without the query asking for it.
+ */
+export interface WrapUpCandidate {
+  personId: string;
+  householdRole: string | null;
+  person: {
+    id: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    phoneNumber: string | null;
+    smsOptedOut: boolean;
+    assignments: Array<{ item: { name: string }; response: string }>;
+  };
+}
+
+/**
+ * THE wrap-up recipient decision (GTC-172 / C1).
+ *
+ * Extracted from POST /api/events/[id]/wrap-up so it can be exercised by a DB-level
+ * test without the requireEventRole cookie context — the same reason and the same
+ * pattern as reconcileHouseholdMembers (GTC-159).
+ *
+ * This has to be the gate rather than dispatch: `WrapUpLink` denormalises
+ * `guestPhone`/`guestEmail` at creation, so by the time dispatchPendingWrapUpMessages
+ * runs there is no role left to check. A thank-you is a system message, and §10.6 is
+ * absolute about who may receive one.
+ */
+export function selectWrapUpRecipients(
+  people: WrapUpCandidate[],
+  hostId: string
+): GuestForWrapUp[] {
+  return people
+    .filter((pe) => pe.personId !== hostId) // exclude host
+    .filter((pe) => isMessageableRole(pe.householdRole)) // GTC-172 (C1): §10.6
+    .map((pe) => ({
+      person: {
+        id: pe.person.id,
+        name: pe.person.name,
+        email: pe.person.email,
+        phone: pe.person.phone,
+        phoneNumber: pe.person.phoneNumber,
+        smsOptedOut: pe.person.smsOptedOut,
+      },
+      assignments: pe.person.assignments.map((a) => ({
+        item: { name: a.item.name },
+        response: a.response,
+      })),
+    }));
 }
 
 export async function generateWrapUpLinks(

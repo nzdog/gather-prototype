@@ -2,6 +2,11 @@ import { prisma } from '@/lib/prisma';
 import { isValidNZNumber } from '@/lib/phone';
 import { isOptedOut } from '@/lib/sms/opt-out-service';
 import { SENT_AND_LIVE } from '@/lib/lifecycle';
+import {
+  MESSAGEABLE_PERSON_EVENT,
+  isMessageableRole,
+  CHILD_SKIP_REASON,
+} from '@/lib/eligibility/child-exclusion';
 
 export interface NudgeCandidate {
   personId: string;
@@ -63,6 +68,13 @@ export async function findNudgeCandidates(): Promise<EligibilityResult> {
   // CONFIRMING, so a status-only filter would keep matching events whose date had
   // passed and fire nudges after the event — which Moment 4 §10.1 forbids outright
   // ("Post-date: nudges dead"). The security suite asserts this directly.
+  //
+  // GTC-172 (C1): the child rule (Moment 4 §10.6). This query roots on `Person`, but
+  // `householdRole` lives on `PersonEvent` — so the exclusion has to go in BOTH the
+  // `some` (which decides whether the person is loaded at all) and the include's
+  // `where` (which decides which memberships come back). Filtering only the `some`
+  // would load the person for their adult membership and then still emit a candidate
+  // for their CHILD one.
   const candidates = await prisma.person.findMany({
     where: {
       inviteAnchorAt: { not: null },
@@ -70,6 +82,7 @@ export async function findNudgeCandidates(): Promise<EligibilityResult> {
       eventMemberships: {
         some: {
           event: SENT_AND_LIVE(now),
+          ...MESSAGEABLE_PERSON_EVENT,
         },
       },
     },
@@ -77,6 +90,7 @@ export async function findNudgeCandidates(): Promise<EligibilityResult> {
       eventMemberships: {
         where: {
           event: SENT_AND_LIVE(now),
+          ...MESSAGEABLE_PERSON_EVENT,
         },
         include: {
           event: {
@@ -128,6 +142,14 @@ export async function findNudgeCandidates(): Promise<EligibilityResult> {
     // Process each event membership
     for (const membership of person.eventMemberships) {
       const event = membership.event;
+
+      // GTC-172 (C1): belt and braces. The SQL above already excludes CHILD; this
+      // re-checks in JS so that if anyone ever loosens the query, the child rule still
+      // holds and the skip is recorded rather than silently sending.
+      if (!isMessageableRole(membership.householdRole)) {
+        addSkip(CHILD_SKIP_REASON);
+        continue;
+      }
 
       // Find token for this event
       const token = person.tokens.find((t: any) => t.eventId === event.id);
@@ -244,6 +266,9 @@ export async function findRsvpFollowupCandidates(): Promise<{
       // (GTC-178 / E1 deletes this function outright — the NOT_SURE forced conversion
       // is obsoleted twice over, by the maybe ruling and by the one-tap model.)
       event: SENT_AND_LIVE(new Date()),
+      // GTC-172 (C1): the child rule. Unlike findNudgeCandidates this query roots on
+      // PersonEvent, so householdRole is on the very row being filtered.
+      ...MESSAGEABLE_PERSON_EVENT,
     },
     include: {
       person: {
@@ -274,6 +299,12 @@ export async function findRsvpFollowupCandidates(): Promise<{
   };
 
   for (const personEvent of candidates) {
+    // GTC-172 (C1): belt and braces, as above.
+    if (!isMessageableRole(personEvent.householdRole)) {
+      addSkip(CHILD_SKIP_REASON);
+      continue;
+    }
+
     // Skip if no phone number
     if (!personEvent.person.phoneNumber) {
       addSkip('No phone number');

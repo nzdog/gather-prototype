@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
-import { reconcileHouseholdMembers } from '@/lib/households/reconcileMembers';
+import {
+  reconcileHouseholdMembers,
+  ChannelValidationError,
+} from '@/lib/households/reconcileMembers';
 import { ledgerActorForUser } from '@/lib/auth/actor';
 import { recordChange } from '@/lib/ledger';
 
@@ -11,6 +14,8 @@ interface HouseholdMemberInput {
   name?: string;
   email?: string;
   phone?: string;
+  /** GTC-172 (C1): explicit adult-roling of a kid with a job (§10.6). Helpers only. */
+  adultRoled?: boolean;
 }
 
 interface HouseholdRequestBody {
@@ -23,6 +28,8 @@ interface HouseholdRequestBody {
   helpers?: Array<HouseholdMemberInput & { name: string }>;
   littleCount?: number;
   guests?: HouseholdMemberInput[];
+  /** GTC-172 (C1): the household contact picker (§10.7). null clears it. */
+  contactPersonEventId?: string | null;
 }
 
 // DELETE /api/events/[id]/households/[householdId] - Delete a household
@@ -75,7 +82,7 @@ export async function PUT(
     if (auth instanceof NextResponse) return auth;
 
     const body: HouseholdRequestBody = await request.json();
-    const { primaryContact, partner, helpers, littleCount, guests } = body;
+    const { primaryContact, partner, helpers, littleCount, guests, contactPersonEventId } = body;
 
     // Validate primary contact name
     if (!primaryContact?.name?.trim()) {
@@ -167,7 +174,7 @@ export async function PUT(
         household,
         primaryMember,
         sentAt: event.sentAt,
-        input: { primaryContact, partner, helpers, littleCount, guests },
+        input: { primaryContact, partner, helpers, littleCount, guests, contactPersonEventId },
       });
 
       // Versioned, never interrogated: editing a household's composition is not an
@@ -210,6 +217,11 @@ export async function PUT(
 
     return NextResponse.json({ household: result });
   } catch (error: any) {
+    // GTC-172 (C1): a rejected contact picker is a bad request, not a server fault.
+    // The transaction has already rolled back, so the edit is not half-applied.
+    if (error instanceof ChannelValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error('Error updating household:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

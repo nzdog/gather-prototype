@@ -76,13 +76,16 @@ async function simulatePut(eventId: string, householdId: string, body: ClientReq
   const primaryMember = household.members.find((m) => m.householdRole === 'PRIMARY_CONTACT')!;
   const event = await prisma.event.findUniqueOrThrow({
     where: { id: eventId },
-    select: { inviteSendConfirmedAt: true },
+    // GTC-168 (A2) renamed this Prisma field to `sentAt` (the COLUMN keeps its old
+    // name via @map). This test predates the rename and had been failing on it since;
+    // repaired under GTC-172 so it can serve as the diff-upsert regression guard.
+    select: { sentAt: true },
   });
   await reconcileHouseholdMembers(prisma, {
     eventId,
     household: { id: household.id, members: household.members },
     primaryMember,
-    inviteSendConfirmedAt: event.inviteSendConfirmedAt,
+    sentAt: event.sentAt,
     input: {
       primaryContact: body.primaryContact,
       partner: body.partner,

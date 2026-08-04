@@ -6,9 +6,18 @@ export interface SavedHousehold {
   id: string;
   primaryContact: { name: string; email?: string; phone?: string };
   partner?: { personEventId?: string; name: string; email?: string; phone?: string };
-  helpers: Array<{ personEventId?: string; name: string; email?: string; phone?: string }>;
+  helpers: Array<{
+    personEventId?: string;
+    name: string;
+    email?: string;
+    phone?: string;
+    /** GTC-172 (C1): host roled this kid with a job as an adult (§10.6). */
+    adultRoled?: boolean;
+  }>;
   littleCount: number;
   guests: Array<{ personEventId?: string; name: string; email?: string; phone?: string }>;
+  /** GTC-172 (C1): the household contact picker (§10.7). null = default to primary. */
+  contactPersonEventId?: string | null;
 }
 
 interface HouseholdCardListProps {

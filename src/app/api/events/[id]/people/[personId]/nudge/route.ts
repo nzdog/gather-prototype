@@ -6,6 +6,7 @@ import { sendNudgeEmail } from '@/lib/email';
 import { logInviteEvent } from '@/lib/invite-events';
 import { isSmsEnabled } from '@/lib/sms/twilio-client';
 import { isValidNZNumber } from '@/lib/phone';
+import { resolveManualNudgeRecipient } from '@/lib/sms/manual-nudge-recipient';
 
 type NudgeVariant = 'warm' | 'casual' | 'gentle' | 'direct';
 const VALID_VARIANTS: NudgeVariant[] = ['warm', 'casual', 'gentle', 'direct'];
@@ -46,21 +47,16 @@ export async function POST(
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
-    // Load person with event context
-    const person = await prisma.person.findUnique({
-      where: { id: personId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phoneNumber: true,
-        smsOptedOut: true,
-      },
-    });
+    // Load person with event context. The recipient decision lives in
+    // resolveManualNudgeRecipient (GTC-172 / C1) so it is testable without this
+    // route's cookie context and so the child rule has exactly one place to hold.
+    const recipient = await resolveManualNudgeRecipient(eventId, personId);
 
-    if (!person) {
-      return NextResponse.json({ error: 'Person not found' }, { status: 404 });
+    if (!recipient.ok) {
+      return NextResponse.json({ error: recipient.error }, { status: recipient.status });
     }
+
+    const person = recipient.person;
 
     const event = await prisma.event.findUnique({
       where: { id: eventId },

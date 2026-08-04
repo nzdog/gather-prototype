@@ -22,6 +22,12 @@ export interface Moment1PersonInput {
     name: string;
     email?: string;
     phone?: string;
+    /**
+     * GTC-172 (C1): the host's explicit decision that this kid with a job is old
+     * enough to be messaged directly (Moment 4 §10.6). Stores an adult householdRole
+     * instead of CHILD. Never inferred — the host ticks it, or it stays false.
+     */
+    adultRoled?: boolean;
   }>;
   littleCount?: number;
   guests?: Array<{
@@ -30,6 +36,20 @@ export interface Moment1PersonInput {
     email?: string;
     phone?: string;
   }>;
+  /** GTC-172 (C1): the household contact picker (§10.7). null = default to primary. */
+  contactPersonEventId?: string | null;
+}
+
+/**
+ * GTC-172 (C1): a person who may be a household's channel (§10.7). Gathered across the
+ * WHOLE event, not per household — the picker is cross-household capable, because
+ * "Grandma's channel may live in another household".
+ */
+export interface ChannelCandidateOption {
+  personEventId: string;
+  name: string;
+  householdName: string;
+  householdId: string;
 }
 
 interface Moment1InputFormProps {
@@ -41,6 +61,7 @@ interface Moment1InputFormProps {
   onEditSave?: (householdId: string, person: Moment1PersonInput) => Promise<void>;
   onCancelEdit?: () => void;
   totalPeopleCount?: number;
+  channelCandidates?: ChannelCandidateOption[];
 }
 
 interface GuestForm {
@@ -50,6 +71,8 @@ interface GuestForm {
   name: string;
   email: string;
   phone: string;
+  /** GTC-172 (C1): helper rows only — explicit adult-roling (§10.6). Off by default. */
+  adultRoled?: boolean;
 }
 
 let formIdCounter = 0;
@@ -58,6 +81,7 @@ const emptyGuest = (): GuestForm => ({
   name: '',
   email: '',
   phone: '',
+  adultRoled: false,
 });
 
 export default function Moment1InputForm({
@@ -68,6 +92,7 @@ export default function Moment1InputForm({
   onEditSave,
   onCancelEdit,
   totalPeopleCount,
+  channelCandidates = [],
 }: Moment1InputFormProps) {
   // Primary contact
   const [name, setName] = useState('');
@@ -93,6 +118,14 @@ export default function Moment1InputForm({
 
   const [showLittles, setShowLittles] = useState(false);
   const [littleCount, setLittleCount] = useState(1);
+
+  /**
+   * GTC-172 (C1): the household contact picker (§10.7) — "who should Gather talk to
+   * for this household?". null means "not picked", which resolves to the primary
+   * contact at read time. One decision per household, not a matrix: Moment 1 stays
+   * light.
+   */
+  const [contactPersonEventId, setContactPersonEventId] = useState<string | null>(null);
 
   const [guests, setGuests] = useState<GuestForm[]>([]);
   const [guestErrors, setGuestErrors] = useState<{ email?: string; phone?: string }[]>([]);
@@ -156,6 +189,7 @@ export default function Moment1InputForm({
         name: h.name,
         email: h.email || '',
         phone: h.phone || '',
+        adultRoled: h.adultRoled ?? false,
       }));
       setHelpers(loadedHelpers);
       setHelperErrors(editingHousehold.helpers.map(() => ({})));
@@ -188,6 +222,8 @@ export default function Moment1InputForm({
       setGuests([]);
       setGuestErrors([]);
     }
+
+    setContactPersonEventId(editingHousehold.contactPersonEventId ?? null);
 
     setMemberOrder(editOrder);
 
@@ -322,12 +358,18 @@ export default function Moment1InputForm({
         name: h.name.trim(),
         email: h.email.trim() || undefined,
         phone: h.phone.trim() || undefined,
+        // GTC-172 (C1): explicit, never derived from h.phone being present (§10.6).
+        adultRoled: h.adultRoled ?? false,
       }));
     }
 
     if (showLittles && littleCount > 0) {
       payload.littleCount = littleCount;
     }
+
+    // GTC-172 (C1): always sent, so clearing the picker back to the default (null)
+    // round-trips rather than being read as "leave it alone".
+    payload.contactPersonEventId = contactPersonEventId;
 
     const namedGuests = guests.filter((g) => g.name.trim());
     if (namedGuests.length > 0) {
@@ -716,6 +758,36 @@ export default function Moment1InputForm({
                         <p className="text-sm text-red-500 mt-1">{helperErrors[i].phone}</p>
                       )}
                     </div>
+                    {/*
+                      GTC-172 (C1) — the explicit adult-roling path (Moment 4 §10.6).
+                      Kids never get messages, whatever contact details are on the row.
+                      This is the ONE way that changes, and it is a deliberate hosting
+                      decision: off by default, never pre-ticked, never inferred from
+                      the presence of a phone number.
+                    */}
+                    <div className="pt-1">
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={helper.adultRoled ?? false}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setHelpers((prev) =>
+                              prev.map((h, j) => (j === i ? { ...h, adultRoled: checked } : h))
+                            );
+                          }}
+                          className="mt-1 h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
+                        />
+                        <span className="text-sm text-gray-600">
+                          Old enough to message directly
+                          <span className="block text-xs text-gray-400">
+                            Kids never get messages from Gather. Tick this only if{' '}
+                            {helper.name.trim() || 'this young person'} should hear from us directly
+                            rather than through an adult.
+                          </span>
+                        </span>
+                      </label>
+                    </div>
                   </SubForm>
                 );
               }
@@ -826,6 +898,44 @@ export default function Moment1InputForm({
                     className="w-20 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                   />
                 </div>
+              </div>
+            )}
+
+            {/*
+              GTC-172 (C1) — the household contact picker (Moment 4 §10.7).
+              ONE decision per household, not a matrix: Moment 1 stays light. It is
+              cross-household capable, so the options span the whole event — Grandma's
+              channel may live in her daughter's household. Children are not offered.
+            */}
+            {channelCandidates.length > 0 && (
+              <div className="border-l-4 border-gray-300 pl-4 py-3 mb-4 bg-gray-50 rounded-r-md">
+                <label
+                  htmlFor="household-channel"
+                  className="block text-sm font-medium text-gray-600 mb-1"
+                >
+                  Who should Gather talk to for this household?
+                </label>
+                <select
+                  id="household-channel"
+                  value={contactPersonEventId ?? ''}
+                  onChange={(e) => setContactPersonEventId(e.target.value || null)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-accent"
+                >
+                  <option value="">
+                    {name.trim() ? `${name.trim()} (main contact)` : 'The main contact'}
+                  </option>
+                  {channelCandidates
+                    .filter((c) => c.householdId !== editingHousehold?.id)
+                    .map((c) => (
+                      <option key={c.personEventId} value={c.personEventId}>
+                        {c.name} — {c.householdName}&rsquo;s household
+                      </option>
+                    ))}
+                </select>
+                <p className="text-xs text-gray-400 mt-1">
+                  Everything for this household goes to one person. Leave it on the main contact
+                  unless someone else is the better ear.
+                </p>
               </div>
             )}
           </div>

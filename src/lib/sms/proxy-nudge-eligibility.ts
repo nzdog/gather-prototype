@@ -2,6 +2,8 @@ import { prisma } from '@/lib/prisma';
 import { isValidNZNumber } from '@/lib/phone';
 import { isOptedOut } from '@/lib/sms/opt-out-service';
 import { SENT_AND_LIVE } from '@/lib/lifecycle';
+import { isMessageableRole, CHILD_SKIP_REASON } from '@/lib/eligibility/child-exclusion';
+import { resolveHouseholdChannel } from '@/lib/households/channel';
 
 export interface ProxyNudgeCandidate {
   householdId: string;
@@ -35,6 +37,12 @@ export interface ProxyEligibilityResult {
 export async function findProxyNudgeCandidates(): Promise<ProxyEligibilityResult> {
   // GTC-169 (A3a): see nudge-eligibility.ts — the send starts the chasing, and the
   // event date ends it (Moment 4 §10.1).
+  //
+  // GTC-172 (C1): the recipient is now the household's CHANNEL (Moment 4 §10.7), not
+  // "the primary contact" by definition. All members are loaded rather than just
+  // PRIMARY_CONTACT, because the picked channel may be any adult — including one in a
+  // DIFFERENT household, which is why the channel is resolved against a separate
+  // lookup below rather than against `household.members`.
   const households = await prisma.household.findMany({
     where: {
       event: SENT_AND_LIVE(new Date()),
@@ -42,9 +50,6 @@ export async function findProxyNudgeCandidates(): Promise<ProxyEligibilityResult
     include: {
       event: true,
       members: {
-        where: {
-          householdRole: 'PRIMARY_CONTACT',
-        },
         include: {
           person: true,
         },
@@ -60,9 +65,33 @@ export async function findProxyNudgeCandidates(): Promise<ProxyEligibilityResult
   };
 
   for (const household of households) {
-    const primaryContact = household.members[0];
-    if (!primaryContact) {
+    const channelId = resolveHouseholdChannel(household);
+    if (!channelId) {
       addSkip('No primary contact');
+      continue;
+    }
+
+    // The channel may live in another household (§10.7), so it is resolved from the
+    // event rather than from this household's members.
+    const primaryContact =
+      household.members.find((m) => m.id === channelId) ??
+      (await prisma.personEvent.findUnique({
+        where: { id: channelId },
+        include: { person: true },
+      }));
+
+    if (!primaryContact || primaryContact.eventId !== household.eventId) {
+      addSkip('Household channel not found in this event');
+      continue;
+    }
+
+    // GTC-172 (C1): the child rule (§10.6), and it FAILS CLOSED. A channel pointing at
+    // a CHILD is corrupt data — the picker omits children and the API rejects them —
+    // so the household is skipped outright rather than quietly falling back to the
+    // primary contact. Falling back would message somebody the host never picked and
+    // would hide the corruption for as long as it existed.
+    if (!isMessageableRole(primaryContact.householdRole)) {
+      addSkip(CHILD_SKIP_REASON);
       continue;
     }
 
