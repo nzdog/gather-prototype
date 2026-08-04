@@ -14,8 +14,12 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     if (auth instanceof NextResponse) return auth;
 
     // Fetch all AI-generated items that haven't been confirmed yet
+    // GTC-171 (B2): ITEM rows only — the review cards are quantity/dietary-shaped and a
+    // task row has neither. The POST bulk-confirm below stays unfiltered on purpose, so
+    // task rows still clear userConfirmed alongside the items they were generated with.
     const items = await prisma.item.findMany({
       where: {
+        kind: 'ITEM',
         team: {
           eventId,
         },

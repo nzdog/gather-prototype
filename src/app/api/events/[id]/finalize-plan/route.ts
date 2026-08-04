@@ -16,6 +16,14 @@ import {
   getSectionReferenceItems,
 } from '@/lib/ai/config-loader';
 import { readDietaryData } from '@/lib/dietary';
+import {
+  TASK_BUCKETS,
+  isBucketEligible,
+  selectTaskRows,
+  type OtherJobsField,
+  type TaskBucket,
+  type TaskResponse,
+} from '@/lib/ai/tasks';
 
 // GTC-145: lowered from 20 → 10. The single-call architecture fires exactly
 // one Claude call per finalize-plan invocation, so 10 gives ample headroom
@@ -77,8 +85,12 @@ interface SectionResponse {
   }>;
 }
 
+// GTC-171 (B2): day-of job rows. Deliberately no `critical` field — B1's rule that
+// setup/cleanup work is never critical stands, and omitting it here means task rows take
+// the schema default (false) without touching B1's prompt block.
 interface FullPlanResponse {
   sections: SectionResponse[];
+  tasks?: TaskResponse[];
   dietaryCoverage: Array<{ requirement: string; covered: boolean; flaggedItems?: string[] }>;
   thingsToConsider: Array<{ name: string; category: string }>;
 }
@@ -216,10 +228,20 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
     }
 
     // Free-text "Other" notes
+    // GTC-171 (B2): read the full persisted shape — the previous cast dropped
+    // `stillDeciding`, which the food categories have always honoured and these three
+    // never did. A bucket the host is still deciding on must not become task rows.
     const otherNotes = (setup.otherNotes ?? '').trim();
-    const setUpData = setup.setUpData as { freeText?: string } | null;
-    const cleanUpData = setup.cleanUpData as { freeText?: string } | null;
-    const otherJobsData = setup.otherJobsOtherData as { freeText?: string } | null;
+    const setUpData = setup.setUpData as OtherJobsField;
+    const cleanUpData = setup.cleanUpData as OtherJobsField;
+    const otherJobsData = setup.otherJobsOtherData as OtherJobsField;
+
+    const bucketSources: Record<TaskBucket, OtherJobsField> = {
+      set_up: setUpData,
+      clean_up: cleanUpData,
+      other_jobs: otherJobsData,
+    };
+    const bucketIsEligible = (key: TaskBucket): boolean => isBucketEligible(bucketSources[key]);
 
     const { system, user } = buildPlanGenerationPrompt({
       eventType,
@@ -249,6 +271,9 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
     const sections = Array.isArray(result.sections) ? result.sections : [];
     const dietaryCoverage = Array.isArray(result.dietaryCoverage) ? result.dietaryCoverage : [];
     const thingsToConsider = Array.isArray(result.thingsToConsider) ? result.thingsToConsider : [];
+
+    // GTC-171 (B2): a task survives only if its bucket has settled free text behind it.
+    const tasksByBucket = selectTaskRows(result.tasks, bucketIsEligible);
 
     // Map model response → response shape consumed by Moment2Step2Skeleton.
     // Use the model-supplied label/emoji when present; fall back to canonical
@@ -329,16 +354,77 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       }
     }
 
+    // GTC-171 (B2): task rows. Moment 4 spec §6 — day-of choreography enters the plan
+    // here, alongside the items, and is owned in Moment 3 through the same Assignment
+    // machinery. Teams are GENERATED so the delete-and-recreate idempotency above covers
+    // them, and carry a Domain so J3's run sheet gets its phase grouping for free.
+    const taskCategories: Array<{
+      name: string;
+      emoji: string;
+      kind: 'TASK';
+      items: Array<{ name: string; notes?: string; kind: 'TASK' }>;
+    }> = [];
+
+    for (const bucket of TASK_BUCKETS) {
+      const bucketTasks = tasksByBucket.get(bucket.key) ?? [];
+      if (bucketTasks.length === 0) continue;
+
+      const maxOrder = await prisma.team.aggregate({
+        where: { eventId },
+        _max: { displayOrder: true },
+      });
+      const team = await prisma.team.create({
+        data: {
+          name: bucket.teamName,
+          eventId,
+          source: 'GENERATED',
+          domain: bucket.domain,
+          domainConfidence: 'HIGH',
+          displayOrder: (maxOrder._max.displayOrder ?? 0) + 1,
+        },
+      });
+
+      let nextDisplayOrder = 1;
+      for (const task of bucketTasks) {
+        await prisma.item.create({
+          data: {
+            name: task.name,
+            kind: 'TASK',
+            teamId: team.id,
+            // A job has no quantity — NA is the existing enum value for exactly this,
+            // and it keeps task rows clear of the placeholder-quantity gates.
+            quantityState: 'NA',
+            notes: task.notes?.trim() || null,
+            source: 'GENERATED',
+            aiGenerated: true,
+            userConfirmed: false,
+            generatedBatchId: batchId,
+            displayOrder: nextDisplayOrder,
+          },
+        });
+        nextDisplayOrder++;
+      }
+
+      taskCategories.push({
+        name: bucket.teamName,
+        emoji: bucket.emoji,
+        kind: 'TASK',
+        items: bucketTasks.map((t) => ({ name: t.name, notes: t.notes, kind: 'TASK' as const })),
+      });
+    }
+
     await recordBulkPlanChange(prisma, {
       eventId,
       actor: await ledgerActorForUser(auth.user, auth.role),
       action: 'GENERATE_PLAN',
-      after: { categories: categories.length, batchId },
+      after: { categories: categories.length, tasks: taskCategories.length, batchId },
     });
 
     return NextResponse.json({
       plan: {
-        categories,
+        // Task rows ride in the same `categories` array so the Step 2 approval preview
+        // shows the host the jobs they are approving — one surface, not two.
+        categories: [...categories, ...taskCategories],
         dietaryCoverage,
         thingsToConsider,
       },

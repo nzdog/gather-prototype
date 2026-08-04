@@ -64,7 +64,12 @@ export async function POST(
       return NextResponse.json({ error: 'Person is not part of this event' }, { status: 404 });
     }
 
-    if (personEvent.teamId !== item.teamId) {
+    // GTC-171 (B2): the same-team rule is coordinator scoping — "a Mains coordinator
+    // shouldn't reassign Desserts". It has no referent for a task row: task teams hold
+    // only day-of jobs, have no coordinator, and (since PersonEvent.teamId is singular)
+    // can never have members. Gating tasks on it would make them permanently
+    // unassignable. Same route, same Assignment model, same ack path — one machine.
+    if (item.kind === 'ITEM' && personEvent.teamId !== item.teamId) {
       return NextResponse.json(
         { error: 'Person must be in the same team as the item' },
         { status: 400 }

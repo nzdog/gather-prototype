@@ -1,7 +1,7 @@
 // POST /api/events/[id]/regenerate - Regenerate plan with modifier
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { createRevision } from '@/lib/workflow';
+import { createRevision, clearPlanForRegeneration } from '@/lib/workflow';
 import { regeneratePlan, RegenerationParams } from '@/lib/ai/generate';
 import { resolveGeneratedTeamCoordinatorId } from '@/lib/ai/coordinator-assignment';
 import { randomBytes } from 'crypto';
@@ -75,36 +75,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           team: true,
         },
       });
-
-      // Delete only GENERATED items (safe to overwrite)
-      await prisma.item.deleteMany({
-        where: {
-          team: { eventId },
-          source: 'GENERATED', // Only delete AI-generated items that haven't been edited
-          isProtected: false, // Don't delete protected items even if generated
-        },
-      });
-
-      // Delete teams that have no items left and are not protected
-      const teams = await prisma.team.findMany({
-        where: { eventId },
-        include: { _count: { select: { items: true } } },
-      });
-
-      for (const team of teams) {
-        if (team._count.items === 0 && !team.isProtected) {
-          await prisma.team.delete({ where: { id: team.id } });
-        }
-      }
-    } else {
-      // Delete all items and teams (preserveProtected=false means full regeneration)
-      await prisma.item.deleteMany({
-        where: { team: { eventId } },
-      });
-      await prisma.team.deleteMany({
-        where: { eventId },
-      });
     }
+
+    // GTC-171 (B2): plan-clearing lives in one tested helper so the cascade behaviour
+    // this depends on is asserted rather than assumed.
+    await clearPlanForRegeneration(eventId, preserveProtected);
 
     // Build regeneration parameters for AI
     const regenerationParams: RegenerationParams = {

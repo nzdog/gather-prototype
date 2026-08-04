@@ -665,12 +665,23 @@ Return ONLY valid JSON in the exact shape specified. No prose, no markdown, no c
     ? `Other food notes from Kate: ${input.otherNotes.trim()}`
     : '';
 
+  // GTC-171 (B2): these three blocks used to be advisory context with no return path —
+  // they influenced the food plan and then evaporated. They are now the source for the
+  // `tasks` output, so each is labelled with the bucket key the row must come back under.
   const otherJobsParts: string[] = [];
-  if (input.setUpNotes.trim()) otherJobsParts.push(`Set up: ${input.setUpNotes.trim()}`);
-  if (input.cleanUpNotes.trim()) otherJobsParts.push(`Clean up: ${input.cleanUpNotes.trim()}`);
-  if (input.otherJobsNotes.trim()) otherJobsParts.push(`Other: ${input.otherJobsNotes.trim()}`);
+  if (input.setUpNotes.trim())
+    otherJobsParts.push(`Set up (bucket key "set_up"): ${input.setUpNotes.trim()}`);
+  if (input.cleanUpNotes.trim())
+    otherJobsParts.push(`Clean up (bucket key "clean_up"): ${input.cleanUpNotes.trim()}`);
+  if (input.otherJobsNotes.trim())
+    otherJobsParts.push(`Other (bucket key "other_jobs"): ${input.otherJobsNotes.trim()}`);
   const otherJobsBlock =
     otherJobsParts.length > 0 ? `Other jobs Kate mentioned:\n  ${otherJobsParts.join('\n  ')}` : '';
+
+  const tasksInstruction =
+    otherJobsParts.length > 0
+      ? `- tasks: turn the "Other jobs" text above into discrete day-of job rows, each tagged with its bucket key. Split a run-on sentence into separate jobs and normalise the phrasing; do NOT invent jobs Kate did not mention, and do NOT emit a bucket that has no text above. These are jobs done DURING the day (washing, drying, clearing, setting tables) — they are not food and carry no quantity. They do not count toward the item budget above.`
+      : `- tasks: return an empty array — Kate mentioned no set-up, clean-up or other jobs.`;
 
   const userPrompt = `Generate a coordinated plan for a ${eventLabel} for ${input.totalAdults} adults and ${input.totalKids} children (${totalPeople} total).
 
@@ -682,9 +693,12 @@ ${skippedCategories.length > 0 ? `\nCategories Kate is still deciding on (skip t
 ${otherFoodBlock ? '\n' + otherFoodBlock : ''}
 ${otherJobsBlock ? '\n' + otherJobsBlock : ''}
 
-Then produce two short auxiliary outputs in the same response:
+Then produce three short auxiliary outputs in the same response:
 ${dietaryCoverageInstruction}
+${tasksInstruction}
 - thingsToConsider: 6–10 short reminders of practical items the host might forget for a ${eventLabel} of this size (napkins, ice, serving spoons, rubbish bags, etc.). Each has a name and a suggested category.
+
+IMPORTANT: a job from the "Other jobs" text belongs in "tasks" and must NOT also appear as an item in "sections". Sections are food only.
 
 Return JSON in EXACTLY this shape:
 {
@@ -709,6 +723,13 @@ Return JSON in EXACTLY this shape:
   ],
   "dietaryCoverage": [
     { "requirement": string, "covered": boolean, "flaggedItems": string[] }
+  ],
+  "tasks": [
+    {
+      "bucket": string,             // exactly one of "set_up", "clean_up", "other_jobs"
+      "name": string,               // the job, e.g. "Wash the dishes"
+      "notes": string               // optional; omit if not needed
+    }
   ],
   "thingsToConsider": [
     { "name": string, "category": string }

@@ -205,6 +205,11 @@ model Household {
 model Item {
   id                          String              @id @default(cuid())
   name                        String
+  /// GTC-171 (B2): the row-kind discriminator. Moment 4 spec §6 — "one assignment
+  /// machine, two kinds of rows" (items are owed *to* the day; tasks are owed
+  /// *during* it). Task rows are Item rows, so `Assignment` reaches both through
+  /// the identical relation, unchanged.
+  kind                        RowKind             @default(ITEM)
   quantity                    String?
   description                 String?
   critical                    Boolean             @default(false)
@@ -714,6 +719,13 @@ enum EventRoleType {
 enum ItemStatus {
   ASSIGNED
   UNASSIGNED
+}
+
+/// GTC-171 (B2): distinguishes item rows from task rows on `Item`. Both kinds are
+/// assignable through the same `Assignment` relation — there is no second surface.
+enum RowKind {
+  ITEM
+  TASK
 }
 
 enum TokenScope {

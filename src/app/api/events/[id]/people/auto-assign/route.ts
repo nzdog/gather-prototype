@@ -3,13 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
 import { ledgerActorForUser } from '@/lib/auth/actor';
 import { recordChange } from '@/lib/ledger';
-
-interface TeamDistribution {
-  teamId: string;
-  teamName: string;
-  memberCount: number;
-  totalItems: number;
-}
+import { computeAutoAssignments, type TeamDistribution } from '@/lib/auto-assign';
 
 export async function POST(
   request: NextRequest,
@@ -44,7 +38,9 @@ export async function POST(
         name: true,
         _count: {
           select: {
-            items: true,
+            // GTC-171 (B2): ITEM rows only — a team holding nothing but task rows is
+            // not an assignable destination for people.
+            items: { where: { kind: 'ITEM' } },
           },
         },
         members: {
@@ -117,36 +113,17 @@ export async function POST(
       teamId: team.id,
       teamName: team.name,
       memberCount: team.members.length,
-      totalItems: team._count.items,
+      itemCount: team._count.items,
     }));
 
     // 4. Calculate assignments using even distribution
-    const assignments: Array<{
-      personId: string;
-      personName: string;
-      teamId: string;
-      teamName: string;
-      reason: string;
-    }> = [];
-
-    for (const personEvent of unassignedParticipants) {
-      // Find team with fewest members (even distribution)
-      const targetTeam = teamDistributions.reduce((lowest, current) =>
-        current.memberCount < lowest.memberCount ? current : lowest
-      );
-
-      // Record assignment
-      assignments.push({
-        personId: personEvent.personId,
-        personName: personEvent.person.name,
-        teamId: targetTeam.teamId,
-        teamName: targetTeam.teamName,
-        reason: `Even distribution (${targetTeam.memberCount} members before assignment)`,
-      });
-
-      // Update member count for next iteration
-      targetTeam.memberCount += 1;
-    }
+    const assignments = computeAutoAssignments(
+      teamDistributions,
+      unassignedParticipants.map((pe) => ({
+        personId: pe.personId,
+        personName: pe.person.name,
+      }))
+    );
 
     const autoAssignActor = await ledgerActorForUser(auth.user, auth.role);
 

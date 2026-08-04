@@ -289,6 +289,12 @@ async function detectMissingCoordinators(event: any): Promise<ConflictData[]> {
 
   // Check each team for a coordinator
   const teamsWithoutCoordinators = event.teams.filter((team: any) => {
+    // GTC-171 (B2): task teams ("Set up" / "Clean up" / "Other jobs") hold only day-of
+    // job rows and are host-assigned by design — they have no coordinator scope, so
+    // flagging them would emit a permanent, unfixable conflict card on every check.
+    const hasItemRows = (team.items ?? []).some((item: any) => item.kind === 'ITEM');
+    if (!hasItemRows) return false;
+
     // A team needs a coordinator if it exists
     return !team.coordinator || !team.coordinatorId;
   });

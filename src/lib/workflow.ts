@@ -76,6 +76,58 @@ export async function repairItemStatusAfterMutation(tx: Tx, itemId: string): Pro
 }
 
 /**
+ * Clears the existing plan ahead of a regeneration.
+ *
+ * Extracted verbatim from the regenerate route (GTC-171/B2) so this data-loss-critical
+ * path can be asserted behaviourally — `requireEventRole` reads a session cookie, so the
+ * host route itself cannot be driven in-process (see tests/security-validation.ts:454).
+ *
+ * @param preserveProtected true → drop only GENERATED, unprotected rows and sweep the
+ *   teams left empty. false → full regeneration, drop everything.
+ */
+export async function clearPlanForRegeneration(
+  eventId: string,
+  preserveProtected: boolean
+): Promise<void> {
+  if (preserveProtected) {
+    // Delete only GENERATED items (safe to overwrite)
+    await prisma.item.deleteMany({
+      where: {
+        team: { eventId },
+        kind: 'ITEM', // GTC-171 (B2): regenerate is the V1 food path — it never
+        // reproduces task rows, so anything it drops is lost for good.
+        source: 'GENERATED', // Only delete AI-generated items that haven't been edited
+        isProtected: false, // Don't delete protected items even if generated
+      },
+    });
+
+    // Delete teams that have no items left and are not protected.
+    // Task teams keep their TASK rows, so this sweep leaves them standing.
+    const teams = await prisma.team.findMany({
+      where: { eventId },
+      include: { _count: { select: { items: true } } },
+    });
+
+    for (const team of teams) {
+      if (team._count.items === 0 && !team.isProtected) {
+        await prisma.team.delete({ where: { id: team.id } });
+      }
+    }
+  } else {
+    // Delete all items and teams (preserveProtected=false means full regeneration)
+    await prisma.item.deleteMany({
+      where: { team: { eventId }, kind: 'ITEM' },
+    });
+    // GTC-171 (B2): `Item.team` is onDelete: Cascade, so an unscoped delete here would
+    // cascade away the task rows the statement above just spared — filtering the item
+    // delete alone is NOT sufficient. Only teams left with no rows at all may go.
+    await prisma.team.deleteMany({
+      where: { eventId, items: { none: {} } },
+    });
+  }
+}
+
+/**
  * ============================================
  * EPIC 4: FREEZE WARNINGS
  * ============================================
@@ -465,8 +517,11 @@ export async function runGateCheck(eventId: string): Promise<GateCheckResult> {
 
   // Check 4: STRUCTURAL_MINIMUM_ITEMS
   // At least 1 item must exist
+  // GTC-171 (B2): ITEM rows only — a plan consisting solely of day-of task rows is not
+  // a plan, and must not satisfy "the event has something in it".
   const itemCount = await prisma.item.count({
     where: {
+      kind: 'ITEM',
       team: { eventId },
     },
   });
@@ -941,6 +996,9 @@ export async function restoreFromRevision(
         const newItem = await tx.item.create({
           data: {
             name: itemData.name,
+            // GTC-171 (B2): this list is explicit, so an omitted column silently falls
+            // back to its schema default — `kind` would restore every task row as an item.
+            kind: itemData.kind ?? 'ITEM',
             quantity: itemData.quantity,
             description: itemData.description,
             critical: itemData.critical,

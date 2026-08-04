@@ -26,5 +26,13 @@
  * coverage and considerations payloads — together comfortably under 16K
  * tokens. Claude Sonnet 4.6 supports up to 64K output tokens, so this gives
  * generous headroom.
+ *
+ * GTC-171 (B2) added a `tasks` array to the same response — day-of job rows
+ * derived from the host's set-up / clean-up / other-jobs free text. Tasks carry
+ * no quantity, unit, serving size, dietary tags or criticality, so they run
+ * ~80–120 chars each and are capped in practice by how much the host wrote.
+ * A realistic ceiling of ~12 tasks adds under 500 tokens, which does not
+ * disturb the sizing above. The limit was re-checked when tasks were added
+ * rather than assumed to still hold.
  */
 export const MAX_TOKENS_FULL_PLAN = 16384;

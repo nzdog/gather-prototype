@@ -6,17 +6,21 @@ import { useEffect, useState } from 'react';
 
 interface PlanItem {
   name: string;
-  quantity: number;
-  unit: string;
-  servingSize: string;
+  // GTC-171 (B2): task rows travel in the same array as food items and carry no
+  // quantity, so the quantity trio is optional from here down.
+  quantity?: number;
+  unit?: string;
+  servingSize?: string;
   notes?: string;
   dietaryTags?: string[];
+  kind?: 'ITEM' | 'TASK';
 }
 
 interface PlanCategory {
   name: string;
   emoji: string;
   items: PlanItem[];
+  kind?: 'ITEM' | 'TASK';
 }
 
 interface DietaryCoverage {
@@ -111,8 +115,19 @@ export default function Moment2Step2Skeleton({
         </h1>
         {plan && (
           <p className="text-sm text-gray-500 mb-6">
-            {plan.categories.reduce((sum, c) => sum + c.items.length, 0)} items across{' '}
-            {plan.categories.length} categories.
+            {(() => {
+              // GTC-171 (B2): items and day-of jobs share the array but are not the same
+              // thing — counting jobs as items would silently inflate the plan size.
+              const foodCategories = plan.categories.filter((c) => c.kind !== 'TASK');
+              const itemCount = foodCategories.reduce((sum, c) => sum + c.items.length, 0);
+              const taskCount = plan.categories
+                .filter((c) => c.kind === 'TASK')
+                .reduce((sum, c) => sum + c.items.length, 0);
+              const itemPart = `${itemCount} item${itemCount === 1 ? '' : 's'} across ${foodCategories.length} categor${foodCategories.length === 1 ? 'y' : 'ies'}`;
+              return taskCount > 0
+                ? `${itemPart}, plus ${taskCount} job${taskCount === 1 ? '' : 's'} for the day.`
+                : `${itemPart}.`;
+            })()}
           </p>
         )}
         {isLoading && (
