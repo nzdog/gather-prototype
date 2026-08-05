@@ -9,7 +9,12 @@
  * householdRole at all.
  *
  * DB-level test (house pattern, cf. household-edit-preserves-membership-test.ts).
- * Exercises the five real recipient-selection paths against a real dev DB.
+ * Exercises the six real recipient-selection paths against a real dev DB.
+ *
+ * GTC-175 (D2) added path 6, the maybe's decide-by follow-up. It is a real outbound SMS
+ * to a real person, so §10.6 binds it exactly as it binds the other five — the ticket
+ * exempts a maybe from the nudge CADENCE, never from the eligibility gates. Any future
+ * sender belongs in this list too.
  *
  * THE SUBJECT is a CHILD with a valid NZ phone AND an email AND reachabilityTier
  * DIRECT — i.e. maximally messageable by every signal except role.
@@ -28,6 +33,7 @@ import { findNudgeCandidates, findRsvpFollowupCandidates } from '../src/lib/sms/
 import { findProxyNudgeCandidates } from '../src/lib/sms/proxy-nudge-eligibility';
 import { selectWrapUpRecipients } from '../src/lib/wrap-up';
 import { resolveManualNudgeRecipient } from '../src/lib/sms/manual-nudge-recipient';
+import { findDecideByFollowupCandidates } from '../src/lib/sms/decide-by-eligibility';
 
 const prisma = new PrismaClient();
 
@@ -290,6 +296,44 @@ async function main() {
       manualControl.ok === true
     );
 
+    // ── PATH 6 — findDecideByFollowupCandidates (GTC-175 / D2) ───────────
+    // A maybe gets a decide-by clock instead of a nudge cadence — but the clock still
+    // ends in an SMS, so §10.6 binds it. The event ends 14 days out, so with the 5-day
+    // default the decide-by lands at +9d and the follow-up window opens at +8d; the
+    // clock is advanced rather than the fixture rewritten.
+    const team = await prisma.team.create({
+      data: { name: `${TAG} Team`, eventId: event.id },
+    });
+    for (const member of [subject, control, nullRoleControl]) {
+      const maybeItem = await prisma.item.create({
+        data: { name: `${TAG} item for ${member.person.id}`, teamId: team.id, status: 'ASSIGNED' },
+      });
+      await prisma.assignment.create({
+        data: { itemId: maybeItem.id, personId: member.person.id, response: 'MAYBE' },
+      });
+    }
+
+    const decideBySweep = await findDecideByFollowupCandidates(
+      new Date(now.getTime() + 8.5 * 24 * 60 * 60 * 1000)
+    );
+    const inDecideBy = (id: string) => decideBySweep.eligible.some((c) => c.personId === id);
+
+    assert(
+      'path 6',
+      'subject CHILD excluded from the decide-by follow-up',
+      !inDecideBy(subject.person.id)
+    );
+    assert(
+      'path 6 control',
+      're-roled adult IS due the decide-by follow-up',
+      inDecideBy(control.person.id)
+    );
+    assert(
+      'path 6 control',
+      'NULL-role direct-add adult IS still due the decide-by follow-up',
+      inDecideBy(nullRoleControl.person.id)
+    );
+
     // ── Sanity: the subject really is maximally messageable but for role ──
     const subjectRow = await prisma.personEvent.findUniqueOrThrow({
       where: { id: subject.personEvent.id },
@@ -310,6 +354,9 @@ async function main() {
         where: { eventId },
         data: { contactPersonEventId: null },
       });
+      await prisma.assignment.deleteMany({ where: { item: { team: { eventId } } } });
+      await prisma.item.deleteMany({ where: { team: { eventId } } });
+      await prisma.team.deleteMany({ where: { eventId } });
       await prisma.wrapUpLink.deleteMany({ where: { eventId } });
       await prisma.accessToken.deleteMany({ where: { eventId } });
       await prisma.personEvent.deleteMany({ where: { eventId } });

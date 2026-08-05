@@ -130,3 +130,51 @@ export function getRsvpFollowupMessage(params: NudgeTemplateParams): string {
 
   return `${eventName}: We need a final answer — are you coming? ${link} — Reply STOP to opt out`;
 }
+
+export interface DecideByFollowupTemplateParams {
+  hostFirstName: string;
+  itemName: string;
+  /** The decide-by rendered as an NZ weekday — see formatDecideByDay. */
+  decideByDay: string;
+  link: string;
+}
+
+/**
+ * GTC-175 (D2) — the maybe's single decide-by follow-up.
+ *
+ * The copy is Hinge §8's own, near-verbatim: "still good for the pavlova? Kate needs to
+ * know by Thursday." Note what it is NOT. It does not ask "did you see this?" — he saw
+ * it, he tapped maybe; that is the silence cadence's question and §8 rules it the wrong
+ * one here. It does not chase, and it never repeats: one follow-up, then the clock runs
+ * out and the maybe becomes Kate's problem rather than the guest's.
+ *
+ * The host's FIRST name, matching the warm register of the host-composed variants above
+ * rather than the terse auto-nudge ones — this message speaks for Kate, not for the
+ * system. The ` — Reply STOP to opt out` suffix is mandatory on every system-sent
+ * template and is not a stylistic choice.
+ */
+export function getDecideByFollowupMessage(params: DecideByFollowupTemplateParams): string {
+  const { hostFirstName, itemName, decideByDay, link } = params;
+
+  return `Still good for the ${itemName}? ${hostFirstName} needs to know by ${decideByDay}. ${link} — Reply STOP to opt out`;
+}
+
+/**
+ * The decide-by as a guest would say it: a weekday name in NZ local time.
+ *
+ * NZ-local rather than UTC because the guest reads it on an NZ phone, and a deadline
+ * that lands Thursday evening UTC is Friday morning to them. Timezone-correct on any
+ * server — the same reasoning as isQuietHours (quiet-hours.ts:29-31).
+ *
+ * Falls back to a day + month once the deadline is more than a week out, where a bare
+ * weekday is ambiguous.
+ */
+export function formatDecideByDay(decideByAt: Date, now: Date = new Date()): string {
+  const withinAWeek = decideByAt.getTime() - now.getTime() < 7 * 24 * 60 * 60 * 1000;
+
+  return decideByAt.toLocaleDateString('en-NZ', {
+    timeZone: 'Pacific/Auckland',
+    weekday: 'long',
+    ...(withinAWeek ? {} : { day: 'numeric', month: 'long' }),
+  });
+}

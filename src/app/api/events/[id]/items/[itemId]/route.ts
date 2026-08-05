@@ -93,6 +93,25 @@ export async function PATCH(
     if (body.dropOffLocation !== undefined) updateData.dropOffLocation = body.dropOffLocation;
     if (body.dropOffNote !== undefined) updateData.dropOffNote = body.dropOffNote;
 
+    // GTC-175 (D2): the per-item decide-by override — Hinge §8's "Kate able to override
+    // per item". Hours before needed-by; null clears it back to the event default.
+    // Deliberately NOT in `substantiveFieldsBeingEdited` below: this changes WHEN the
+    // system asks, not WHAT it asks, so it must not flip a GENERATED item to HOST_EDITED
+    // and must not read as an ask-change to the ledger.
+    if (body.decideByOffsetHours !== undefined) {
+      const raw = body.decideByOffsetHours;
+      if (raw === null) {
+        updateData.decideByOffsetHours = null;
+      } else if (Number.isInteger(raw) && raw >= 0) {
+        updateData.decideByOffsetHours = raw;
+      } else {
+        return NextResponse.json(
+          { error: 'decideByOffsetHours must be a non-negative integer number of hours, or null' },
+          { status: 400 }
+        );
+      }
+    }
+
     // If this is a GENERATED item and substantive fields are being edited, mark as HOST_EDITED
     // Substantive fields: name, description, quantity*, critical, dietaryTags, timing, drop-off
     // Non-substantive: placeholderAcknowledged, quantityDeferredTo (these are acknowledgements, not edits)

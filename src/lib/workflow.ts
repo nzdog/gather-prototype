@@ -1050,6 +1050,10 @@ export async function restoreFromRevision(
             prepEndTime: itemData.prepEndTime,
             serveTime: itemData.serveTime,
             dropOffAt: itemData.dropOffAt ? new Date(itemData.dropOffAt) : null,
+            // GTC-175 (D2): omit this and a plan restore silently resets Kate's per-item
+            // decide-by override to the event default — the exact failure the GTC-171
+            // note above warns about.
+            decideByOffsetHours: itemData.decideByOffsetHours ?? null,
             dropOffLocation: itemData.dropOffLocation,
             dropOffNote: itemData.dropOffNote,
             source: itemData.source,
@@ -1068,6 +1072,15 @@ export async function restoreFromRevision(
               personId: itemData.assignment.personId,
               response: itemData.assignment.response,
               createdAt: new Date(itemData.assignment.createdAt),
+              // GTC-175 (D2): the follow-up sent-stamp MUST survive a restore. This
+              // block runs after `item.deleteMany` above, so every Assignment row is
+              // destroyed and rebuilt with a fresh id — omit the stamp and the restored
+              // MAYBEs all read "never followed up", and the next sweep texts every one
+              // of them a second time. "Exactly one follow-up" is only true if it
+              // survives the revision machinery.
+              decideByFollowupSentAt: itemData.assignment.decideByFollowupSentAt
+                ? new Date(itemData.assignment.decideByFollowupSentAt)
+                : null,
             },
           });
         }

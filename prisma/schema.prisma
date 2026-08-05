@@ -63,6 +63,20 @@ model Event {
   // no SQL runs. The physical column rename is deferred to GTC-199 (A4), which already
   // requires a backup. See send-lock-reconciliation-plan.md §0.1, §2.
   sentAt                     DateTime?                @map("inviteSendConfirmedAt")
+  /// GTC-175 (D2): the per-EVENT decide-by offset — layer 2 of the three-layer
+  /// resolution in src/lib/decide-by.ts (item override → this → system default).
+  /// Hours BEFORE neededBy(); NULL means "not set", not "zero".
+  ///
+  /// PRODUCT INTENT, for the J-epic ticket that builds the host control (D2 builds no
+  /// UI): the system default is 5 days (DEFAULT_DECIDE_BY_OFFSET_HOURS = 120) and the
+  /// host-facing "decide faster" toggle is THIS field set to 48 — two days. That is not
+  /// a second field or a second code path; it is this layer exercised with a 2-day
+  /// value, and the resolution already handles it.
+  ///
+  /// Moment 4 §10.2 rules a third axis, per-PERSON, which E3 (GTC-180) owns.
+  /// resolveDecideByOffsetHours takes a params object so that layer slots in without
+  /// touching a call site.
+  decideByOffsetHours        Int?
   sharedLinkToken            String?                  @unique
   sharedLinkEnabled          Boolean                  @default(false)
   // Retained, unwritten after GTC-169 (A3a). Historical evidence of the old freeze
@@ -293,6 +307,15 @@ model Item {
   prepEndTime                 String?
   serveTime                   String?
   dropOffAt                   DateTime?
+  /// GTC-175 (D2): the per-ITEM decide-by offset override — layer 1, and the one Hinge
+  /// §8 names directly ("derived by the system from item logistics and event date, with
+  /// Kate able to override per item"). Hours BEFORE neededBy(); NULL falls through to
+  /// the event default. See src/lib/decide-by.ts.
+  ///
+  /// This is an OFFSET, never an instant. A stored decide-by would drift from the
+  /// dropOffAt/endDate it was computed from — the Item.status mistake again
+  /// (architecture-contract §6). The instant is derived on every read.
+  decideByOffsetHours         Int?
   dropOffLocation             String?
   dropOffNote                 String?
   source                      ItemSource          @default(MANUAL)
@@ -317,6 +340,23 @@ model Assignment {
   id        String             @id @default(cuid())
   response  AssignmentResponse @default(PENDING)
   createdAt DateTime           @default(now())
+  /// GTC-175 (D2): the decide-by follow-up sent-stamp. Hinge §8 allows exactly ONE
+  /// follow-up near the decide-by; this is the record that it happened.
+  ///
+  /// WHY PER-ASSIGNMENT. Person.nudge24hSentAt is the shape to avoid — schema.prisma
+  /// warns at PersonEvent.rsvpFollowupSentAt that one stamp on Person leaks across
+  /// events. A per-PersonEvent stamp would fix that and break something worse: it
+  /// cannot honour a per-ITEM offset override, because it has no item. The maybe lives
+  /// on this row, so its clock's receipt does too. It dies with the item (onDelete:
+  /// Cascade), and a reassignment hands the new holder a NULL stamp — correct, because
+  /// the released guest gets a different message entirely (D3 / GTC-176).
+  ///
+  /// NEVER CLEARED. A guest who goes MAYBE → ACCEPTED → MAYBE inside one window keeps
+  /// their stamp and is not texted again. "Exactly one follow-up" then holds literally.
+  /// The alternative — clearing on exit from MAYBE — lets one person be texted twice,
+  /// and a duplicate text is a trust failure where a missed one is a nuisance. All four
+  /// response writers are pinned free of this field by tests/decide-by-clock-test.ts.
+  decideByFollowupSentAt DateTime?
   itemId    String             @unique
   personId  String
   item      Item               @relation(fields: [itemId], references: [id], onDelete: Cascade)

@@ -54,6 +54,20 @@ export const ASK_FIELDS = [
 ] as const;
 
 /**
+ * GTC-175 (D2): `Item.decideByOffsetHours` is deliberately NOT an ask field, and the
+ * question is closer than it looks — D2's follow-up SMS quotes a deadline derived from
+ * it, so the field does reach a guest, which is the test the list above applies.
+ *
+ * It stays out because what it changes is WHEN the system asks about an outstanding
+ * maybe, not WHAT was asked of anyone. Nobody's commitment moves. Adding it would fire a
+ * T4 why-prompt at Kate every time she nudged a deadline — asking her to justify, to
+ * guests, a change none of them experience as a change.
+ *
+ * `dropOffAt` remains an ask field and is unaffected: moving the drop-off moves both the
+ * ask and, through neededBy(), the clock.
+ */
+
+/**
  * Material event fields — Hinge §2 names "date/venue" explicitly. A change here is
  * the T5 trigger and the GTC-183 (F1) re-ask hook point.
  *

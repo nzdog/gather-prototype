@@ -104,6 +104,22 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     const body = await request.json();
 
+    // GTC-175 (D2): the per-EVENT decide-by default — layer 2 of the offset resolution
+    // (src/lib/decide-by.ts). The host-facing "decide faster" control writes 48 here;
+    // null clears it back to the 5-day system default. Not a material field: it changes
+    // when the system asks about a maybe, not what anyone was asked to bring, so it is
+    // deliberately absent from MATERIAL_EVENT_FIELDS and triggers no re-ask.
+    if (
+      body.decideByOffsetHours !== undefined &&
+      body.decideByOffsetHours !== null &&
+      !(Number.isInteger(body.decideByOffsetHours) && body.decideByOffsetHours >= 0)
+    ) {
+      return NextResponse.json(
+        { error: 'decideByOffsetHours must be a non-negative integer number of hours, or null' },
+        { status: 400 }
+      );
+    }
+
     // GTC-196 (A3b): THE T5 SITE. This is the only route that writes startDate,
     // endDate or venue*, and until now it had no status gating AND no audit logging
     // at all — a post-send date change left no trace whatsoever.
@@ -140,6 +156,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       venueTimingStart: body.venueTimingStart || null,
       venueTimingEnd: body.venueTimingEnd || null,
       venueNotes: body.venueNotes || null,
+      // GTC-175 (D2): `undefined` leaves it alone, explicit `null` clears the override.
+      // Not `|| null` — that would read a legitimate 0 as "clear me".
+      decideByOffsetHours: body.decideByOffsetHours,
     };
 
     const updatedEvent = await prisma.event.update({
