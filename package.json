@@ -47,6 +47,7 @@
     "test:child-exclusion": "tsx tests/child-message-exclusion-test.ts",
     "test:household-edit": "tsx tests/household-edit-preserves-membership-test.ts",
     "test:household-edit-integration": "tsx tests/household-edit-client-payload-integration-test.ts",
+    "test:household-edit-toggle-fields": "tsx tests/household-edit-preserves-toggle-fields-test.ts",
     "test:wrap-up-dedupe": "tsx tests/wrap-up-double-send-test.ts",
     "test:wrap-up-quiet-hours": "tsx tests/wrap-up-quiet-hours-test.ts",
     "db:generate": "prisma generate",
