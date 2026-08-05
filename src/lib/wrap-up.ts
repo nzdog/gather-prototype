@@ -13,6 +13,7 @@ import {
   type WrapUpTemplateParams,
 } from '@/lib/sms/wrap-up-templates';
 import { isMessageableRole } from '@/lib/eligibility/child-exclusion';
+import { isQuietHours, getMinutesUntilQuietEnd } from '@/lib/sms/quiet-hours';
 
 const WRAPUP_LINK_EXPIRY_DAYS = 30;
 const DISPATCH_DELAY_MINUTES = 10;
@@ -179,12 +180,14 @@ export async function generateWrapUpLinks(
 
 // ── Dispatch ─────────────────────────────────────────────────────────
 
-export async function dispatchPendingWrapUpMessages(): Promise<{
+export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Promise<{
   sent: number;
   failed: number;
   total: number;
+  deferred: number;
+  deferredUntilMinutes: number;
 }> {
-  const cutoff = new Date(Date.now() - DISPATCH_DELAY_MINUTES * 60 * 1000);
+  const cutoff = new Date(now.getTime() - DISPATCH_DELAY_MINUTES * 60 * 1000);
 
   const pendingLinks = await prisma.wrapUpLink.findMany({
     where: {
@@ -200,6 +203,35 @@ export async function dispatchPendingWrapUpMessages(): Promise<{
       person: true,
     },
   });
+
+  // GTC-210: quiet hours (21:00–08:00 NZ) apply to the thank-you too.
+  //
+  // This path had no time-of-day guard at all — `DISPATCH_DELAY_MINUTES` is an AGE
+  // filter, not a window, and the cron runs */10 around the clock. A host confirming
+  // wrap-up at 23:00 NZ texted every guest at ~23:10.
+  //
+  // Same shape as the two existing guards (nudge-sender.ts:114-138,
+  // proxy-nudge-sender.ts:90-110): check once at the top of the batch, send nothing,
+  // return. The deferral is implicit and durable — no scheduler, no timer. The rows
+  // stay `dispatched: false` and the next run after 08:05 picks them up unchanged.
+  //
+  // Unlike those two this does NOT write an InviteEvent row per deferral:
+  // `InviteEventType` has no wrap-up equivalent of NUDGE_DEFERRED_QUIET, and adding one
+  // is an enum migration. Deliberately deferred to keep this fix schema-free — the
+  // deferral is still observable in the cron's JSON response below.
+  if (isQuietHours(now)) {
+    const deferredUntilMinutes = getMinutesUntilQuietEnd(now);
+    console.log(
+      `[WrapUp] Quiet hours — deferring ${pendingLinks.length} message(s), ~${deferredUntilMinutes} min until send window`
+    );
+    return {
+      sent: 0,
+      failed: 0,
+      total: pendingLinks.length,
+      deferred: pendingLinks.length,
+      deferredUntilMinutes,
+    };
+  }
 
   let sent = 0;
   let failed = 0;
@@ -302,7 +334,7 @@ export async function dispatchPendingWrapUpMessages(): Promise<{
     }
   }
 
-  return { sent, failed, total: pendingLinks.length };
+  return { sent, failed, total: pendingLinks.length, deferred: 0, deferredUntilMinutes: 0 };
 }
 
 // ── Dispatch summary ─────────────────────────────────────────────────
