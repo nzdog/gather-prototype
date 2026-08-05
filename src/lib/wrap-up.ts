@@ -106,13 +106,36 @@ export function selectWrapUpRecipients(
 export async function generateWrapUpLinks(
   eventId: string,
   guests: GuestForWrapUp[]
-): Promise<{ created: number; skipped: number }> {
+): Promise<{ created: number; skipped: number; alreadyLinked: number }> {
   const expiresAt = new Date(Date.now() + WRAPUP_LINK_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
   let created = 0;
   let skipped = 0;
+  let alreadyLinked = 0;
+
+  // GTC-209: one link per (event, person), forever.
+  //
+  // The route guard above stops a second press; this stops the narrower case it cannot
+  // — two presses racing before either writes `wrappedAt`, and any future caller that
+  // reaches here by another door. The dispatcher iterates ROWS, not people (:182), so a
+  // duplicate row is a duplicate thank-you text, not a harmless extra record.
+  //
+  // Keyed on (event, person) rather than on the event, deliberately: a guest added
+  // AFTER the press must still get their link. That is the mini-send model (Hinge §2,
+  // gap #5) and it is what GTC-186 (H1) builds on — an event-level "already done" check
+  // would pass every duplicate test and silently strip late guests instead.
+  const existingLinks = await prisma.wrapUpLink.findMany({
+    where: { eventId },
+    select: { personId: true },
+  });
+  const linkedPersonIds = new Set(existingLinks.map((l) => l.personId));
 
   for (const guest of guests) {
     const { person } = guest;
+
+    if (linkedPersonIds.has(person.id)) {
+      alreadyLinked++;
+      continue;
+    }
     const phone = person.phoneNumber || person.phone || null;
     const email = person.email || null;
 
@@ -142,6 +165,8 @@ export async function generateWrapUpLinks(
       },
     });
 
+    linkedPersonIds.add(person.id);
+
     if (channel === 'skipped') {
       skipped++;
     } else {
@@ -149,7 +174,7 @@ export async function generateWrapUpLinks(
     }
   }
 
-  return { created, skipped };
+  return { created, skipped, alreadyLinked };
 }
 
 // ── Dispatch ─────────────────────────────────────────────────────────

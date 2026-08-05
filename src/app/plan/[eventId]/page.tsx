@@ -191,6 +191,13 @@ interface Event {
   status: string;
   /** GTC-197: the send is a timestamp, not a status. Drives isSentJson/isCompleteJson. */
   sentAt: string | null;
+  /**
+   * GTC-209: "the thank-you was actioned" — not a phase, which is why it is not on
+   * `LifecycleEvent`. Already serialised by GET /api/events/[id] (it uses `include`
+   * with no top-level `select`), so gating the wrap-up offer on it costs no API change;
+   * the field was simply never declared here and so never read.
+   */
+  wrappedAt: string | null;
   occasionType: string | null;
   occasionDescription: string | null;
   guestCount: number | null;
@@ -3740,7 +3747,10 @@ export default function PlanEditorPage() {
             title="Event Complete"
             icon={<Gift className="w-6 h-6" />}
           >
-            {isCompleteJson(event) && !wrapUpResult?.success && (
+            {/* GTC-209: `wrapUpResult` is React state, so a reload or a second tab
+                re-offered the button and the second press sent every guest a second
+                thank-you. `wrappedAt` is the durable fact and outlives both. */}
+            {isCompleteJson(event) && !event.wrappedAt && !wrapUpResult?.success && (
               <div className="space-y-6">
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">

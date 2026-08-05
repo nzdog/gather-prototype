@@ -47,6 +47,7 @@
     "test:child-exclusion": "tsx tests/child-message-exclusion-test.ts",
     "test:household-edit": "tsx tests/household-edit-preserves-membership-test.ts",
     "test:household-edit-integration": "tsx tests/household-edit-client-payload-integration-test.ts",
+    "test:wrap-up-dedupe": "tsx tests/wrap-up-double-send-test.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",

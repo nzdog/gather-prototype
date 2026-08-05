@@ -65,6 +65,26 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       );
     }
 
+    // GTC-209: the thank-you goes out ONCE.
+    //
+    // `isComplete` is `now > endDate` — permanently true once past — so it gates WHEN
+    // the press is allowed and never HOW MANY TIMES. Nothing else stopped a repeat: the
+    // generator had no dedupe, `WrapUpLink` has no composite unique, and the dispatcher
+    // iterates rows. Two presses meant every guest got two thank-you texts.
+    //
+    // The `AuditEntry` composite unique looks like it would have caught this and does
+    // not: `logAudit` never sets `sequence`, and Postgres treats NULLs as distinct
+    // absent `NULLS NOT DISTINCT`, which no migration here declares.
+    //
+    // Same shape as the send press at confirm-invites-sent/route.ts:51-53 — one stored
+    // timestamp, checked before the act it records.
+    if (event.wrappedAt) {
+      return NextResponse.json(
+        { error: 'Thank-you messages have already been sent for this event.' },
+        { status: 400 }
+      );
+    }
+
     // Derive actorId from authenticated session
     let person = await prisma.person.findFirst({
       where: { userId: auth.user.id },
