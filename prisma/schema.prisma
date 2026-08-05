@@ -154,18 +154,42 @@ model Person {
 }
 
 model PersonEvent {
-  id                   String           @id @default(cuid())
+  id                   String            @id @default(cuid())
   personId             String
   eventId              String
   teamId               String?
-  role                 PersonRole       @default(PARTICIPANT)
-  reachabilityTier     ReachabilityTier @default(UNTRACKABLE)
-  contactMethod        ContactMethod    @default(NONE)
-  claimedViaSharedLink Boolean          @default(false)
+  role                 PersonRole        @default(PARTICIPANT)
+  reachabilityTier     ReachabilityTier  @default(UNTRACKABLE)
+  contactMethod        ContactMethod     @default(NONE)
+  claimedViaSharedLink Boolean           @default(false)
   proxyPersonEventId   String?
-  rsvpStatus           RsvpStatus       @default(PENDING)
+  /// GTC-174 (D1): RETAINED BUT UNWRITTEN. Hinge §3 (ruled gap #10) supersedes
+  /// event-level RSVP as a guest-facing question — the tap is the item ask and
+  /// attendance is INFERRED from it. No reachable path writes these three after D1, and
+  /// every reader has moved to deriveAttendance() in src/lib/attendance.ts. (One dead
+  /// write to rsvpFollowupSentAt survives in nudge-sender.ts behind a caller D1
+  /// neutralised — GTC-178 deletes that path whole.) They are kept for one ticket so the
+  /// backfill stays auditable and the change reverts cleanly — exactly the treatment
+  /// GTC-168 (A2) gave Person.inviteAnchorAt. GTC-219 drops all three plus the
+  /// RsvpStatus enum.
+  ///
+  /// DO NOT READ THESE. A stored answer to a derived question is the Item.status
+  /// mistake again (architecture-contract §6): it drifts, and what it makes lie is the
+  /// host's headcount. Read deriveAttendance() instead — always.
+  rsvpStatus           RsvpStatus        @default(PENDING)
   rsvpRespondedAt      DateTime?
   rsvpFollowupSentAt   DateTime?
+  /// GTC-174 (D1): the ONLY stored attendance fact — what the guest answered when
+  /// attendance was genuinely ASKED. Hinge §3 gives exactly two such moments: the
+  /// conditional no-follow-up ("no worries — still coming?") and the itemless
+  /// degenerate case. Everywhere else attendance is inferred from the item tap and
+  /// must be read through deriveAttendance(), never from a column.
+  ///
+  /// NULL means NEVER ASKED — it is not a third answer. There is deliberately no
+  /// MAYBE here: Hinge §8 rules a maybe purely an ITEM-maybe, carried on
+  /// Assignment.response, with attendance unknown until D2's decide-by resolves it.
+  attendanceAnswer     AttendanceAnswer?
+  attendanceAnsweredAt DateTime?
   /// GTC-168 (A2): THIS person's send clock — the mini-send anchor (Hinge §2, gap #5).
   /// Set to Event.sentAt at the press; set to now() for anyone added afterwards, so
   /// their nudge cadence and red-by-time run from THEIR send date, truncated by the
@@ -179,7 +203,7 @@ model PersonEvent {
   /// move under GTC-178 (E1) — zone-7-adjacent, not this ticket's.
   sentAt               DateTime?
   householdId          String?
-  household            Household?       @relation("HouseholdMembers", fields: [householdId], references: [id])
+  household            Household?        @relation("HouseholdMembers", fields: [householdId], references: [id])
   householdRole        HouseholdRole?
   /// GTC-172 (C1): DISPLAY ONLY — "captured as a kid with a job". This is NEVER an
   /// input to message eligibility; `householdRole` is the sole gate (Moment 4 §10.6,
@@ -187,12 +211,12 @@ model PersonEvent {
   /// still renders in her helpers list instead of silently jumping to the guests list
   /// on reload. Setting this true never grants messageability, and setting it false
   /// never removes it — read it for layout, never for a send decision.
-  isYoungPerson        Boolean          @default(false)
-  event                Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  person               Person           @relation(fields: [personId], references: [id], onDelete: Cascade)
-  proxy                PersonEvent?     @relation("ProxyRelation", fields: [proxyPersonEventId], references: [id])
-  householdMembers     PersonEvent[]    @relation("ProxyRelation")
-  team                 Team?            @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  isYoungPerson        Boolean           @default(false)
+  event                Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  person               Person            @relation(fields: [personId], references: [id], onDelete: Cascade)
+  proxy                PersonEvent?      @relation("ProxyRelation", fields: [proxyPersonEventId], references: [id])
+  householdMembers     PersonEvent[]     @relation("ProxyRelation")
+  team                 Team?             @relation(fields: [teamId], references: [id], onDelete: SetNull)
 
   nudgeLogs NudgeLog[]
 
@@ -1008,17 +1032,37 @@ enum DeletionScope {
   SPECIFIC_EVENT
 }
 
+/// GTC-174 (D1): Hinge §3 — one tap, three ways. The tap IS the item ask, and
+/// attendance is inferred from it, so this enum is now the whole guest-facing
+/// response model.
+///
+/// MAYBE is "a decision to decide later" (Hinge §8): not a silence (the guest
+/// engaged and said where they stand) and not a claim (the item isn't secured). It
+/// is an ITEM maybe ONLY — it never says anything directly about attendance. D2
+/// (GTC-175) hangs the decide-by clock off it, anchored on the EXISTING neededBy()
+/// in src/lib/lifecycle.ts — there is no competing decide-by anchor.
 enum AssignmentResponse {
   PENDING
   ACCEPTED
   DECLINED
+  MAYBE
 }
 
+/// GTC-174 (D1): RETAINED BUT UNWRITTEN — see PersonEvent.rsvpStatus. Dropped by
+/// GTC-219 once D1 has settled.
 enum RsvpStatus {
   PENDING
   YES
   NO
   NOT_SURE
+}
+
+/// GTC-174 (D1): the guest's answer when attendance was directly ASKED. Two values,
+/// no PENDING sentinel — NULL on the column carries "never asked", which is a
+/// different fact from either answer. See PersonEvent.attendanceAnswer.
+enum AttendanceAnswer {
+  YES
+  NO
 }
 
 enum InviteEventType {

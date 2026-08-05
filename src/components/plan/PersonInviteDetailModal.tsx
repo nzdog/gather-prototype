@@ -27,7 +27,7 @@ interface PersonDetail {
   inviteAnchorAt: string | null;
   openedAt: string | null;
   respondedAt: string | null;
-  response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | null;
+  response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE' | null;
   hasPhone: boolean;
   smsOptedOut: boolean;
   canReceiveSms: boolean;
@@ -195,7 +195,9 @@ export function PersonInviteDetailModal({ eventId, personId, onClose, onUpdate }
                     ? 'Accepted'
                     : person.response === 'DECLINED'
                       ? 'Declined'
-                      : 'Response pending'
+                      : person.response === 'MAYBE'
+                        ? 'Maybe'
+                        : 'Response pending'
                 }
                 time={person.respondedAt}
                 color={
@@ -203,7 +205,9 @@ export function PersonInviteDetailModal({ eventId, personId, onClose, onUpdate }
                     ? 'green'
                     : person.response === 'DECLINED'
                       ? 'red'
-                      : 'gray'
+                      : person.response === 'MAYBE'
+                        ? 'amber'
+                        : 'gray'
                 }
               />
             </div>
@@ -306,6 +310,9 @@ export function PersonInviteDetailModal({ eventId, personId, onClose, onUpdate }
           {person.response === 'DECLINED' && (
             <p className="text-center text-red-600 font-medium">✗ Declined</p>
           )}
+          {person.response === 'MAYBE' && (
+            <p className="text-center text-amber-600 font-medium">Maybe</p>
+          )}
         </div>
       </div>
     </div>
@@ -323,6 +330,13 @@ function StatusBadge({ status, response }: { status: string; response: string | 
   if (response === 'DECLINED') {
     return (
       <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Declined</span>
+    );
+  }
+  // GTC-174 (D1): a maybe outranks the send/open status badge — it is a decision, and
+  // Hinge §6's rule is that decisions surface while behaviour stays the system's business.
+  if (response === 'MAYBE') {
+    return (
+      <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Maybe</span>
     );
   }
 
@@ -443,6 +457,8 @@ function TimelineItem({
     green: 'bg-green-100 text-green-700',
     red: 'bg-red-100 text-red-700',
     purple: 'bg-purple-100 text-purple-700',
+    // GTC-174 (D1): the maybe colour. Hinge §8 rules it yellow — the system can work it.
+    amber: 'bg-amber-100 text-amber-700',
     gray: 'bg-gray-100 text-gray-500',
   };
 

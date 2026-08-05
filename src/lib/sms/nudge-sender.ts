@@ -169,6 +169,13 @@ function sleep(ms: number): Promise<void> {
 
 /**
  * Send RSVP followup nudge to force conversion from NOT_SURE to YES/NO
+ *
+ * UNREACHABLE AFTER GTC-174 (D1). Its only caller iterates the output of
+ * `findRsvpFollowupCandidates()`, which D1 neutralised to always return `[]` — Hinge §8
+ * rules a maybe explicitly no-nudge, and §3 retires the NOT_SURE state that fed this.
+ * The `rsvpFollowupSentAt` write below is therefore dead: nothing can call this with a
+ * real candidate. Left standing because GTC-178 (E1) deletes the finder, the sender and
+ * the template together; gutting it here would only make E1's removal harder to read.
  */
 export async function sendRsvpFollowupNudge(
   candidate: RsvpFollowupCandidate

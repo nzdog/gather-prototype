@@ -3,16 +3,22 @@ import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logAudit } from '@/lib/workflow';
 import { logInviteEvent } from '@/lib/invite-events';
-import { AssignmentResponse } from '@prisma/client';
+import { deriveAttendance, isAttendanceAskable, parseAssignmentResponse } from '@/lib/attendance';
 
 /**
  * POST /api/p/[token]/ack/[assignmentId]
  *
- * Records participant response (Accept or Decline) for an assignment.
+ * Records the participant's response to an item ask: accept, decline, or maybe.
+ *
+ * GTC-174 (D1) — THIS TAP IS NOW THE WHOLE ASK. Hinge §3: the tap is the item ask and
+ * attendance is inferred from it, so this route no longer records half a decision. It
+ * carries the third way (MAYBE, §8 — "a decision to decide later") and returns the
+ * derived attendance so the caller can render the conditional no-follow-up without a
+ * second round-trip.
  *
  * CRITICAL: Idempotent + race-safe implementation.
  * - Ownership check performed inside transaction
- * - Allows response changes (PENDING → ACCEPTED, PENDING → DECLINED, etc.)
+ * - Allows response changes (PENDING → ACCEPTED, PENDING → MAYBE, MAYBE → DECLINED, …)
  * - Audit logged on response change
  */
 export async function POST(
@@ -38,12 +44,11 @@ export async function POST(
 
   // Parse request body for response type
   const body = await request.json();
-  const { response } = body;
+  const response = parseAssignmentResponse(body?.response);
 
-  // Validate response type
-  if (!response || !['ACCEPTED', 'DECLINED'].includes(response)) {
+  if (response === null) {
     return NextResponse.json(
-      { error: 'Invalid response. Must be ACCEPTED or DECLINED' },
+      { error: 'Invalid response. Must be ACCEPTED, DECLINED or MAYBE' },
       { status: 400 }
     );
   }
@@ -70,16 +75,24 @@ export async function POST(
     // Update response and log
     await tx.assignment.update({
       where: { id: assignmentId },
-      data: { response: response as AssignmentResponse },
+      data: { response },
     });
+
+    const verb =
+      response === 'ACCEPTED' ? 'Accepted' : response === 'DECLINED' ? 'Declined' : 'Maybe on';
 
     await logAudit(tx, {
       eventId: resolvedContext.event.id,
       actorId: resolvedContext.person.id,
-      actionType: response === 'ACCEPTED' ? 'ACCEPT_ASSIGNMENT' : 'DECLINE_ASSIGNMENT',
+      actionType:
+        response === 'ACCEPTED'
+          ? 'ACCEPT_ASSIGNMENT'
+          : response === 'DECLINED'
+            ? 'DECLINE_ASSIGNMENT'
+            : 'MAYBE_ASSIGNMENT',
       targetType: 'Assignment',
       targetId: assignmentId,
-      details: `${response === 'ACCEPTED' ? 'Accepted' : 'Declined'} assignment for item ${assignment.itemId}`,
+      details: `${verb} assignment for item ${assignment.itemId}`,
     });
 
     return {
@@ -109,5 +122,26 @@ export async function POST(
     return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
   }
 
-  return NextResponse.json({ success: true });
+  // GTC-174 (D1): hand back the inference the tap just produced. The client renders the
+  // conditional no-follow-up off `attendanceAskable` (Hinge §3 — "in the same
+  // interaction"), so it must not need a second round-trip to know whether to show it.
+  const [assignments, personEvent] = await Promise.all([
+    prisma.assignment.findMany({
+      where: {
+        personId: resolvedContext.person.id,
+        item: { team: { eventId: resolvedContext.event.id } },
+      },
+      select: { response: true },
+    }),
+    prisma.personEvent.findFirst({
+      where: { personId: resolvedContext.person.id, eventId: resolvedContext.event.id },
+      select: { attendanceAnswer: true },
+    }),
+  ]);
+
+  return NextResponse.json({
+    success: true,
+    attendance: deriveAttendance(assignments, personEvent?.attendanceAnswer ?? null),
+    attendanceAskable: isAttendanceAskable(assignments),
+  });
 }

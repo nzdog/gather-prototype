@@ -25,7 +25,7 @@ import { useReasonPrompt } from '@/components/plan/ReasonPrompt';
 
 interface Assignment {
   id: string;
-  response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+  response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE';
   item: {
     id: string;
     name: string;
@@ -59,7 +59,7 @@ interface Item {
   dropOffNote: string | null;
   assignment: {
     id: string;
-    response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+    response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE';
     person: { id: string; name: string };
   } | null;
 }
@@ -619,6 +619,11 @@ export default function CoordinatorView() {
                             <AlertCircle className="size-4" />
                             Declined
                           </div>
+                        ) : /* GTC-174 (D1): amber, not red — Hinge §8 holds the item softly. */
+                        item.assignment.response === 'MAYBE' ? (
+                          <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full text-sm font-semibold">
+                            Maybe
+                          </div>
                         ) : (
                           <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full text-sm font-semibold">
                             <AlertCircle className="size-4" />
@@ -685,7 +690,7 @@ export default function CoordinatorView() {
                 key={assignment.id}
                 className={`bg-white rounded-lg p-4 shadow-sm border ${
                   viewMode === 'list' ? 'w-full max-w-md' : ''
-                } ${assignment.response === 'ACCEPTED' ? 'border-green-300' : assignment.response === 'DECLINED' ? 'border-red-300' : 'border-blue-300'}`}
+                } ${assignment.response === 'ACCEPTED' ? 'border-green-300' : assignment.response === 'DECLINED' ? 'border-red-300' : assignment.response === 'MAYBE' ? 'border-amber-300' : 'border-blue-300'}`}
               >
                 {/* Card Header - Always Visible */}
                 <div className="flex items-start justify-between mb-2">
@@ -787,6 +792,11 @@ export default function CoordinatorView() {
                       <div className="flex items-center justify-center gap-2 text-red-600 font-medium py-2.5">
                         <AlertCircle className="size-5" />
                         Declined
+                      </div>
+                    ) : /* GTC-174 (D1): a maybe is a surfaced decision, not a silence. */
+                    assignment.response === 'MAYBE' ? (
+                      <div className="flex items-center justify-center gap-2 text-amber-600 font-medium py-2.5">
+                        Maybe
                       </div>
                     ) : (
                       <div className="flex items-center justify-center gap-2 text-amber-600 font-medium py-2.5">

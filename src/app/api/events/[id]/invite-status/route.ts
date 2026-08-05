@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getOptOutStatuses } from '@/lib/sms/opt-out-service';
 import { requireEventRole } from '@/lib/auth/guards';
+import { deriveAttendance, type Attendance } from '@/lib/attendance';
 
 export type InviteStatus = 'NOT_SENT' | 'SENT' | 'OPENED' | 'RESPONDED';
 
@@ -16,7 +17,9 @@ interface PersonInviteStatus {
   id: string;
   name: string;
   status: InviteStatus;
-  response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+  response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE';
+  /** GTC-174 (D1): derived, never stored. See src/lib/attendance.ts. */
+  attendance: Attendance;
   inviteAnchorAt: string | null;
   openedAt: string | null;
   respondedAt: string | null;
@@ -78,8 +81,10 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         people: {
           select: {
             reachabilityTier: true,
-            rsvpStatus: true,
-            rsvpRespondedAt: true,
+            // GTC-174 (D1): the stored attendance ANSWER only. rsvpStatus /
+            // rsvpRespondedAt are retained-but-unwritten and no longer selected —
+            // attendance is derived below.
+            attendanceAnswer: true,
             person: {
               select: {
                 id: true,
@@ -154,13 +159,19 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         : false;
 
       // Determine overall response (if any assignment is ACCEPTED, consider confirmed; if any DECLINED, consider declined)
-      let response: 'PENDING' | 'ACCEPTED' | 'DECLINED' = 'PENDING';
+      //
+      // GTC-174 (D1): MAYBE ranks above DECLINED — Hinge §8 holds a maybe'd item softly
+      // (it is still the guest's), where a decline has released it. Same precedence as
+      // the /api/h/[token] rollup; the two must not disagree.
+      let response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE' = 'PENDING';
       if (person.assignments.length > 0) {
         const responses = person.assignments.map((a: any) => a.response);
         if (responses.every((r: string) => r === 'ACCEPTED')) {
           response = 'ACCEPTED';
         } else if (responses.some((r: string) => r === 'DECLINED')) {
           response = 'DECLINED';
+        } else if (responses.some((r: string) => r === 'MAYBE')) {
+          response = 'MAYBE';
         }
       }
 
@@ -169,6 +180,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         name: person.name,
         status,
         response,
+        attendance: deriveAttendance(person.assignments, personEvent.attendanceAnswer),
         inviteAnchorAt: person.inviteAnchorAt?.toISOString() || null,
         openedAt: token?.openedAt?.toISOString() || null,
         respondedAt: respondedAssignment?.createdAt?.toISOString() || null,
@@ -253,22 +265,25 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
       totalChildren: households.reduce((sum, h) => sum + h.littleCount, 0),
     };
 
-    // RSVP breakdown
-    const rsvp = {
-      pending: event.people.filter((pe: any) => pe.rsvpStatus === 'PENDING').length,
-      yes: event.people.filter((pe: any) => pe.rsvpStatus === 'YES').length,
-      no: event.people.filter((pe: any) => pe.rsvpStatus === 'NO').length,
-      notSure: event.people.filter((pe: any) => pe.rsvpStatus === 'NOT_SURE').length,
-    };
-
-    // Attendance breakdown (RSVP data excluding host)
-    // Note: event.people already excludes host via PersonEvent relation
+    // Attendance breakdown (excluding host — event.people already excludes host via the
+    // PersonEvent relation).
+    //
+    // GTC-174 (D1): counted from deriveAttendance(), not from a stored column. The old
+    // `rsvp` block was a second, identical count off `rsvpStatus` and is deleted rather
+    // than kept in sync — two counts of one fact is how they come to disagree.
+    //
+    // `notSure` becomes `unknown`. Not a rename for tidiness: NOT_SURE meant "maybe I'm
+    // coming", a concept Hinge §8 abolishes. UNKNOWN means "engaged, attendance
+    // undetermined" — a maybe on the item, or a no whose follow-up went unanswered.
+    const derived = event.people.map((pe: any) =>
+      deriveAttendance(pe.person.assignments, pe.attendanceAnswer)
+    );
     const attendance = {
-      total: event.people.length,
-      yes: event.people.filter((pe: any) => pe.rsvpStatus === 'YES').length,
-      no: event.people.filter((pe: any) => pe.rsvpStatus === 'NO').length,
-      notSure: event.people.filter((pe: any) => pe.rsvpStatus === 'NOT_SURE').length,
-      pending: event.people.filter((pe: any) => pe.rsvpStatus === 'PENDING').length,
+      total: derived.length,
+      yes: derived.filter((a: Attendance) => a === 'YES').length,
+      no: derived.filter((a: Attendance) => a === 'NO').length,
+      unknown: derived.filter((a: Attendance) => a === 'UNKNOWN').length,
+      pending: derived.filter((a: Attendance) => a === 'PENDING').length,
     };
 
     // Items breakdown (Assignment status)
@@ -386,7 +401,6 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
       nudgeSummary,
       proxyNudgeSummary,
       reachability,
-      rsvp,
       attendance,
       items,
       itemDetails,

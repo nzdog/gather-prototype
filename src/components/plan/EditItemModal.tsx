@@ -70,7 +70,7 @@ interface EditItemModalProps {
       name: string;
     };
     assignment?: {
-      response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+      response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE';
       person: {
         id: string;
         name: string;

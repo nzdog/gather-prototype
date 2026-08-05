@@ -3,7 +3,8 @@ import { resolveToken } from '@/lib/auth';
 import { getUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/prisma';
 import { logInviteEvent } from '@/lib/invite-events';
-import { RsvpStatus } from '@prisma/client';
+import { logAudit } from '@/lib/workflow';
+import { deriveAttendance, isAttendanceAskable, parseAttendanceBody } from '@/lib/attendance';
 
 /**
  * GET /api/p/[token]
@@ -178,9 +179,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ tok
             : null,
         }
       : null,
-    rsvpStatus: personEvent?.rsvpStatus || 'PENDING',
-    rsvpRespondedAt: personEvent?.rsvpRespondedAt?.toISOString() || null,
-    rsvpFollowupSentAt: personEvent?.rsvpFollowupSentAt?.toISOString() || null,
+    // GTC-174 (D1): attendance is DERIVED, never read from a column. The guest is
+    // never asked "are you coming?" except on the no path and the itemless case, so
+    // there is no attendance status to send — only the inference and the two facts the
+    // client needs to render the follow-up beat (Hinge §3).
+    attendance: deriveAttendance(assignments, personEvent?.attendanceAnswer ?? null),
+    attendanceAnswer: personEvent?.attendanceAnswer ?? null,
+    attendanceAskable: isAttendanceAskable(assignments),
     assignments: assignments.map((a) => ({
       id: a.id,
       response: a.response,
@@ -212,7 +217,21 @@ export async function GET(request: NextRequest, context: { params: Promise<{ tok
 /**
  * PATCH /api/p/[token]
  *
- * Updates participant's RSVP status.
+ * Records the participant's ATTENDANCE ANSWER — and only where attendance was
+ * genuinely asked.
+ *
+ * GTC-174 (D1) — THE DIRECT-RSVP WRITE IS GONE. This route used to take
+ * `{ rsvpStatus: 'YES' | 'NO' | 'NOT_SURE' }` straight from the guest and store it.
+ * Hinge §3 supersedes that: the tap is the item ask, attendance is inferred from it,
+ * and `PersonEvent.rsvpStatus` becomes derived state. The old body shape is rejected
+ * rather than translated — NOT_SURE in particular has no target, because §8 abolishes
+ * the attendance-maybe (a maybe belongs to the item, carried on Assignment.response).
+ *
+ * What remains is narrow and deliberate: the two moments Hinge §3 says attendance IS
+ * asked — the conditional no-follow-up ("no worries — still coming?") and the itemless
+ * degenerate case. The 409 below is what keeps that narrow. Without it "guests are
+ * never asked attendance directly" would be a UI convention that the next screen could
+ * quietly break; with it, the server refuses an answer to a question it never posed.
  */
 export async function PATCH(request: NextRequest, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;
@@ -223,18 +242,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ t
   }
 
   const body = await request.json();
-  const { rsvpStatus } = body;
+  const answer = parseAttendanceBody(body);
 
-  // Validate rsvpStatus
-  const validStatuses: RsvpStatus[] = ['YES', 'NO', 'NOT_SURE'];
-  if (!rsvpStatus || !validStatuses.includes(rsvpStatus)) {
+  if (answer === null) {
     return NextResponse.json(
-      { error: 'Invalid RSVP status. Must be YES, NO, or NOT_SURE' },
+      { error: 'Invalid body. Expected { attending: boolean }' },
       { status: 400 }
     );
   }
 
-  // Find PersonEvent
   const personEvent = await prisma.personEvent.findFirst({
     where: {
       personId: resolvedContext.person.id,
@@ -246,18 +262,59 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ t
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  // Update RSVP status
-  const updated = await prisma.personEvent.update({
-    where: { id: personEvent.id },
-    data: {
-      rsvpStatus,
-      rsvpRespondedAt: new Date(),
+  const assignments = await prisma.assignment.findMany({
+    where: {
+      personId: resolvedContext.person.id,
+      item: { team: { eventId: resolvedContext.event.id } },
     },
+    select: { response: true },
   });
+
+  // The guard. Attendance is answerable only where it was asked (Hinge §3): an itemless
+  // guest, or one who has declined everything. A guest with an accepted item has already
+  // answered it by the tap; one with a maybe has not been asked at all (§8).
+  if (!isAttendanceAskable(assignments)) {
+    return NextResponse.json(
+      {
+        error: 'Attendance was not asked. It is inferred from the item response — see Hinge §3.',
+        attendance: deriveAttendance(assignments, personEvent.attendanceAnswer),
+      },
+      { status: 409 }
+    );
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const row = await tx.personEvent.update({
+      where: { id: personEvent.id },
+      data: {
+        attendanceAnswer: answer,
+        attendanceAnsweredAt: new Date(),
+      },
+    });
+
+    await logAudit(tx, {
+      eventId: resolvedContext.event.id,
+      actorId: resolvedContext.person.id,
+      actionType: 'ANSWER_ATTENDANCE',
+      targetType: 'PersonEvent',
+      targetId: personEvent.id,
+      details: answer === 'YES' ? 'Answered still coming' : 'Answered not coming',
+    });
+
+    return row;
+  });
+
+  logInviteEvent({
+    eventId: resolvedContext.event.id,
+    personId: resolvedContext.person.id,
+    type: 'RESPONSE_SUBMITTED',
+    metadata: { attendanceAnswer: answer, itemless: assignments.length === 0 },
+  }).catch((err) => console.error('[AttendanceTracking] Failed to log:', err));
 
   return NextResponse.json({
     success: true,
-    rsvpStatus: updated.rsvpStatus,
-    rsvpRespondedAt: updated.rsvpRespondedAt?.toISOString() || null,
+    attendance: deriveAttendance(assignments, updated.attendanceAnswer),
+    attendanceAnswer: updated.attendanceAnswer,
+    attendanceAskable: isAttendanceAskable(assignments),
   });
 }

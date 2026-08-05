@@ -133,7 +133,7 @@ assert(
   whyTrigger({ action: 'REMOVE_PERSON', targetType: 'PersonEvent', targetId: 'pe1' }, SENT) === null
 );
 
-const deleteItem = (r: 'PENDING' | 'ACCEPTED' | 'DECLINED' | null): PendingChange => ({
+const deleteItem = (r: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE' | null): PendingChange => ({
   action: 'DELETE_ITEM',
   targetType: 'Item',
   targetId: 'i1',
@@ -153,7 +153,7 @@ assert('deleting an unassigned item → no trigger', whyTrigger(deleteItem(null)
 console.log('\n\x1b[33mSuite 4: T4 — the PENDING/answered distinction (the typo rule)\x1b[0m');
 const editItem = (
   field: string,
-  response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | null
+  response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE' | null
 ): PendingChange => ({
   action: 'EDIT_ITEM',
   targetType: 'Item',

@@ -39,11 +39,16 @@ interface InviteStatusData {
     responded: number;
     withPhone: number;
   };
+  /**
+   * GTC-174 (D1): derived from the item taps, not read from a column. `unknown`
+   * replaces the old `notSure` — NOT_SURE meant "maybe I'm coming", which Hinge §8
+   * abolishes; UNKNOWN means "engaged, attendance undetermined".
+   */
   attendance?: {
     total: number;
     yes: number;
     no: number;
-    notSure: number;
+    unknown: number;
     pending: number;
   };
   items?: {
@@ -236,11 +241,13 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
                   style={{ width: `${(attendance.no / attendance.total) * 100}%` }}
                   title={`${attendance.no} No`}
                 />
-                {/* NOT_SURE segment - amber */}
+                {/* UNKNOWN segment - amber. GTC-174 (D1): a maybe, or a no whose
+                    follow-up went unanswered. Yellow per Hinge §8 — the system can work
+                    it; it is not a failure. */}
                 <div
                   className="bg-amber-500 h-full transition-all duration-300"
-                  style={{ width: `${(attendance.notSure / attendance.total) * 100}%` }}
-                  title={`${attendance.notSure} Not Sure`}
+                  style={{ width: `${(attendance.unknown / attendance.total) * 100}%` }}
+                  title={`${attendance.unknown} Undecided`}
                 />
                 {/* PENDING segment - gray */}
                 <div
@@ -271,7 +278,7 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 bg-amber-500 rounded-sm"></div>
                   <span className="text-gray-700">
-                    Not sure: <span className="font-medium">{attendance.notSure}</span>
+                    Undecided: <span className="font-medium">{attendance.unknown}</span>
                   </span>
                 </div>
                 <div className="flex items-center gap-2">

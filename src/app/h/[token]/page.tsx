@@ -38,7 +38,7 @@ interface Item {
   day: { id: string; name: string; date: string } | null;
   assignment: {
     id: string;
-    response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+    response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE';
     person: { id: string; name: string };
   } | null;
 }
@@ -62,8 +62,9 @@ type PersonSummary = {
   id: string;
   name: string;
   status: 'NOT_SENT' | 'SENT' | 'OPENED' | 'RESPONDED';
-  response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
-  rsvpStatus: string;
+  response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE';
+  /** GTC-174 (D1): derived server-side — see src/lib/attendance.ts. Replaces rsvpStatus. */
+  attendance: 'PENDING' | 'YES' | 'NO' | 'UNKNOWN';
 };
 
 interface HostData {
@@ -101,7 +102,7 @@ interface PlanData {
   people: {
     name: string;
     items: string[];
-    status: 'confirmed' | 'pending' | 'declined';
+    status: 'confirmed' | 'pending' | 'declined' | 'maybe';
     phone?: string;
     email?: string;
   }[];
@@ -120,6 +121,18 @@ function formatPlanAsText(data: PlanData): string {
   if (confirmed.length > 0) {
     lines.push('✓ CONFIRMED:');
     confirmed.forEach((p) => {
+      lines.push(`  ${p.name}: ${p.items.join(', ')}`);
+    });
+    lines.push('');
+  }
+
+  // GTC-174 (D1): maybes get their own section rather than vanishing between the
+  // filters. Their wording is deliberately not "needs reassignment" — Hinge §8 holds
+  // the item softly, and Kate reassigning it is her call (D3), not the sheet's advice.
+  const maybe = data.people.filter((p) => p.status === 'maybe');
+  if (maybe.length > 0) {
+    lines.push('~ MAYBE (still deciding):');
+    maybe.forEach((p) => {
       lines.push(`  ${p.name}: ${p.items.join(', ')}`);
     });
     lines.push('');
@@ -177,6 +190,14 @@ function ResponseBadge({ response }: { response: string }) {
       return (
         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700">
           Declined
+        </span>
+      );
+    // GTC-174 (D1): amber, never red. Hinge §8 — a maybe is a surfaced decision the
+    // system can work, not a gap. "Jake said maybe" is information, not fiction fuel.
+    case 'MAYBE':
+      return (
+        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+          Maybe
         </span>
       );
     default:
@@ -497,6 +518,10 @@ export default function HostView() {
   const outcomesPending = data.people
     ? data.people.filter((p) => p.response === 'PENDING').length
     : 0;
+  // GTC-174 (D1): a maybe is its own outcome — counted, not folded into pending. The
+  // bar's segments must still sum to the total, and Hinge §8's whole point is that a
+  // maybe is a DECISION the host can see, not an absence.
+  const outcomesMaybe = data.people ? data.people.filter((p) => p.response === 'MAYBE').length : 0;
 
   return (
     <ModalProvider>
@@ -885,7 +910,11 @@ export default function HostView() {
                       style={{ width: `${(outcomesDeclined / outcomesTotal) * 100}%` }}
                     />
                     <div
-                      className="bg-amber-400"
+                      className="bg-amber-500"
+                      style={{ width: `${(outcomesMaybe / outcomesTotal) * 100}%` }}
+                    />
+                    <div
+                      className="bg-gray-300"
                       style={{ width: `${(outcomesPending / outcomesTotal) * 100}%` }}
                     />
                   </div>
@@ -897,6 +926,9 @@ export default function HostView() {
                     )}
                     {outcomesDeclined > 0 && (
                       <span className="text-red-600 font-medium">{outcomesDeclined} declined</span>
+                    )}
+                    {outcomesMaybe > 0 && (
+                      <span className="text-amber-600 font-medium">{outcomesMaybe} maybe</span>
                     )}
                     {outcomesPending > 0 && <span>{outcomesPending} pending</span>}
                   </div>

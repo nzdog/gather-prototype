@@ -244,119 +244,29 @@ export async function findNudgeCandidatesForEvent(eventId: string): Promise<Elig
 }
 
 /**
- * Find participants with NOT_SURE RSVP status older than 48h who need forced conversion
+ * NEUTRALISED BY GTC-174 (D1). Always returns no candidates.
+ *
+ * This found PersonEvents sitting at `rsvpStatus = NOT_SURE` for 48h and sent them a
+ * forced-conversion SMS. Every premise it rested on is now gone:
+ *
+ *  - Hinge §8 rules a maybe explicitly NO-NUDGE. "The silence cadence asks *did you see
+ *    this?*; wrong question — he saw it. A maybe needs *time to decide*." What a maybe
+ *    gets instead is a decide-by clock, which is D2's (GTC-175), not a chase.
+ *  - Hinge §3 retires `rsvpStatus` as a guest-facing question altogether, so NOT_SURE
+ *    can no longer be produced. D1 leaves the column retained-but-unwritten.
+ *
+ * It is emptied rather than deleted because deleting it is GTC-178's (E1) job, and E1
+ * removes the caller and the sender with it. Emptying now closes the live path: without
+ * this, a LEGACY NOT_SURE row still in the database would keep matching and fire a
+ * message that contradicts the very ruling this ticket implements. The migration
+ * deliberately does not clear those rows (they are evidence), so the guard belongs here.
+ *
+ * The signature is unchanged so callers keep compiling. Opt-out handling (zone 7) is not
+ * touched by this: no send decision moves, because no send happens.
  */
 export async function findRsvpFollowupCandidates(): Promise<{
   eligible: RsvpFollowupCandidate[];
   skipped: { reason: string; count: number }[];
 }> {
-  const now = new Date();
-  const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
-
-  // Find all PersonEvents with NOT_SURE status older than 48h without followup sent
-  const candidates = await prisma.personEvent.findMany({
-    where: {
-      rsvpStatus: 'NOT_SURE',
-      rsvpRespondedAt: {
-        not: null,
-        lte: fortyEightHoursAgo,
-      },
-      rsvpFollowupSentAt: null,
-      // Same inversion, same reason: a follow-up must never fire after the event.
-      // (GTC-178 / E1 deletes this function outright — the NOT_SURE forced conversion
-      // is obsoleted twice over, by the maybe ruling and by the one-tap model.)
-      event: SENT_AND_LIVE(new Date()),
-      // GTC-172 (C1): the child rule. Unlike findNudgeCandidates this query roots on
-      // PersonEvent, so householdRole is on the very row being filtered.
-      ...MESSAGEABLE_PERSON_EVENT,
-    },
-    include: {
-      person: {
-        select: {
-          id: true,
-          name: true,
-          phoneNumber: true,
-        },
-      },
-      event: {
-        select: {
-          id: true,
-          name: true,
-          hostId: true,
-          host: {
-            select: { name: true },
-          },
-        },
-      },
-    },
-  });
-
-  const eligible: RsvpFollowupCandidate[] = [];
-  const skipReasons: Map<string, number> = new Map();
-
-  const addSkip = (reason: string) => {
-    skipReasons.set(reason, (skipReasons.get(reason) || 0) + 1);
-  };
-
-  for (const personEvent of candidates) {
-    // GTC-172 (C1): belt and braces, as above.
-    if (!isMessageableRole(personEvent.householdRole)) {
-      addSkip(CHILD_SKIP_REASON);
-      continue;
-    }
-
-    // Skip if no phone number
-    if (!personEvent.person.phoneNumber) {
-      addSkip('No phone number');
-      continue;
-    }
-
-    // Skip if invalid phone
-    if (!isValidNZNumber(personEvent.person.phoneNumber)) {
-      addSkip('Invalid/non-NZ phone');
-      continue;
-    }
-
-    // Check opt-out
-    const optedOut = await isOptedOut(personEvent.person.phoneNumber, personEvent.event.hostId);
-    if (optedOut) {
-      addSkip('Opted out');
-      continue;
-    }
-
-    // Find participant token
-    const token = await prisma.accessToken.findFirst({
-      where: {
-        personId: personEvent.person.id,
-        eventId: personEvent.event.id,
-        scope: 'PARTICIPANT',
-      },
-    });
-
-    if (!token) {
-      addSkip('No participant token');
-      continue;
-    }
-
-    eligible.push({
-      personEventId: personEvent.id,
-      personId: personEvent.person.id,
-      personName: personEvent.person.name,
-      phoneNumber: personEvent.person.phoneNumber,
-      eventId: personEvent.event.id,
-      eventName: personEvent.event.name,
-      hostId: personEvent.event.hostId,
-      hostName: personEvent.event.host?.name || 'The host',
-      rsvpRespondedAt: personEvent.rsvpRespondedAt!,
-      participantToken: token.token,
-    });
-  }
-
-  return {
-    eligible,
-    skipped: Array.from(skipReasons.entries()).map(([reason, count]) => ({
-      reason,
-      count,
-    })),
-  };
+  return { eligible: [], skipped: [] };
 }

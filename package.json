@@ -13,6 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test:security": "tsx tests/security-validation.ts",
     "test:lifecycle": "tsx tests/lifecycle-predicates-test.ts",
+    "test:attendance": "tsx tests/attendance-derivation-test.ts",
+    "test:guest-response": "tsx tests/guest-response-model-test.ts",
     "test:ledger-why-scope": "tsx tests/ledger-why-scope-test.ts",
     "test:ledger-record-change": "tsx tests/ledger-record-change-test.ts",
     "test:event-setup": "tsx tests/event-setup-test.ts",

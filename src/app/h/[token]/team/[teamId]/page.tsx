@@ -38,7 +38,7 @@ interface Item {
   } | null;
   assignment: {
     id: string;
-    response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+    response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE';
     person: {
       id: string;
       name: string;
@@ -348,6 +348,11 @@ export default function HostTeamView() {
                                 <div className="inline-flex items-center gap-1.5 bg-red-100 text-red-800 px-3 py-1.5 rounded-full text-sm font-semibold">
                                   <AlertCircle className="size-4" />
                                   Declined
+                                </div>
+                              ) : /* GTC-174 (D1): amber, not red — Hinge §8 holds the item softly. */
+                              item.assignment.response === 'MAYBE' ? (
+                                <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full text-sm font-semibold">
+                                  Maybe
                                 </div>
                               ) : (
                                 <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full text-sm font-semibold">

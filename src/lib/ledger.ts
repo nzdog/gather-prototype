@@ -226,6 +226,9 @@ export function whyTrigger(change: PendingChange, event: LifecycleEvent): WhyTri
       const response = change.context?.assignmentResponse;
       if (response == null) return null; // nobody holds it
       if (response === 'PENDING') return null; // asked, not yet answered — the typo case
+      // GTC-174 (D1): MAYBE falls through to T4 deliberately. A maybe IS an answer
+      // (Hinge §8 — "the guest engaged, tapped, said where they stand"), so changing
+      // what the ask says after one touches someone, exactly as a yes or no does.
       return 'T4';
     }
 

@@ -270,7 +270,7 @@ interface Item {
     displayOrder: number;
   };
   assignment: {
-    response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+    response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE';
     person: {
       id: string;
       name: string;
@@ -2960,7 +2960,7 @@ export default function PlanEditorPage() {
                           item.assignment?.person?.name ||
                           '<span class="status-unassigned">Unassigned</span>';
                         const status = item.assignment
-                          ? `<span class="status-${item.assignment.response === 'ACCEPTED' ? 'confirmed' : item.assignment.response === 'DECLINED' ? 'declined' : 'pending'}">${item.assignment.response === 'ACCEPTED' ? 'Confirmed' : item.assignment.response === 'DECLINED' ? 'Declined' : 'Pending'}</span>`
+                          ? `<span class="status-${item.assignment.response === 'ACCEPTED' ? 'confirmed' : item.assignment.response === 'DECLINED' ? 'declined' : 'pending'}">${item.assignment.response === 'ACCEPTED' ? 'Confirmed' : item.assignment.response === 'DECLINED' ? 'Declined' : item.assignment.response === 'MAYBE' ? 'Maybe' : 'Pending'}</span>`
                           : '';
                         html += `<tr><td>${item.name}</td><td class="qty">${qty}</td><td>${assignee}</td><td>${status}</td></tr>`;
                       }
@@ -3152,11 +3152,16 @@ export default function PlanEditorPage() {
                                                   : 'bg-amber-100 text-amber-800'
                                             }`}
                                           >
+                                            {/* GTC-174 (D1): a maybe surfaces as itself —
+                                                amber alongside pending, never 'Pending'.
+                                                Hinge §8: decisions surface. */}
                                             {item.assignment.response === 'ACCEPTED'
                                               ? 'Confirmed'
                                               : item.assignment.response === 'DECLINED'
                                                 ? 'Declined'
-                                                : 'Pending'}
+                                                : item.assignment.response === 'MAYBE'
+                                                  ? 'Maybe'
+                                                  : 'Pending'}
                                             <span className="text-xs text-inherit opacity-70">
                                               — {item.assignment.person.name}
                                             </span>

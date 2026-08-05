@@ -36,6 +36,15 @@ export const STATUS_LABELS = {
  *
  * Note: Declined assignments are treated as gaps because they indicate
  * items that need attention (participant won't bring them).
+ *
+ * GTC-174 (D1) — A MAYBE IS NOT A GAP. DO NOT "FIX" THIS.
+ * Hinge §8: the item is held softly. "It stays the guest's — a maybe is more claim than
+ * silence, and treating it as loose would make tapping maybe worse than saying nothing."
+ * A maybe is yellow, never red. The predicates below key on DECLINED, so MAYBE already
+ * falls on the correct side; that is deliberate, not an oversight, and
+ * tests/guest-response-model-test.ts pins it. Nothing here blocks Kate from
+ * reassigning a maybe'd item — that is D3's (GTC-176) release-notification path, not a
+ * gap classification.
  */
 export function computeTeamStatusFromItems(
   items: ItemWithAssignmentAndPerson[]
@@ -230,9 +239,16 @@ export async function checkSendReadiness(eventId: string): Promise<SendReadiness
     totalTrackable === 0 ? 100 : Math.round((acceptedCount / totalTrackable) * 100);
 
   // Check for low compliance
+  //
+  // GTC-174 (D1) — A MAYBE MUST BLOCK FREEZE-READINESS. This is the mirror of the
+  // not-a-gap ruling above, and the two are not in tension: a maybe is not LOOSE
+  // (Hinge §8 — the item is still the guest's, so it is no gap), but neither is it a
+  // CONFIRMATION. `acceptedCount` above already counts only ACCEPTED, so a maybe
+  // correctly depresses the rate; this filter is what puts the guest's name in front of
+  // Kate as still-to-answer. Omitting MAYBE here would report a maybe as sorted.
   if (complianceRate < 80 && totalTrackable > 0) {
     const pendingAssignments = allAssignments.filter(
-      (a) => a.response === 'PENDING' || a.response === 'DECLINED'
+      (a) => a.response === 'PENDING' || a.response === 'DECLINED' || a.response === 'MAYBE'
     );
     const details = pendingAssignments.map(
       (a) => `${a.person.name} (${a.response.toLowerCase().replace('_', ' ')})`
@@ -358,6 +374,11 @@ export type AuditLifecycleAction =
   | 'UNASSIGN_ITEM'
   | 'ACCEPT_ASSIGNMENT'
   | 'DECLINE_ASSIGNMENT'
+  // GTC-174 (D1): the third way (Hinge §3) and the attendance answer given on the
+  // no-follow-up / itemless paths. Both are guest decisions, not plan changes, so they
+  // belong here rather than in the ledger's recordChange().
+  | 'MAYBE_ASSIGNMENT'
+  | 'ANSWER_ATTENDANCE'
   | 'CREATE_ITEM'
   | 'EDIT_ITEM'
   | 'DELETE_ITEM'
