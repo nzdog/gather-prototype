@@ -1,7 +1,7 @@
 # GATHER BUILD CONSTANTS
 
 Reference file for AI executors and developers. Keep this file accurate.
-Last updated: 2026-07-09.
+Last updated: 2026-08-06.
 CLAUDE.md reviewed: no conflicts or additions found.
 
 ---
@@ -106,10 +106,10 @@ npm run test:security
 | Security suite | `npm run test:security` | Exits 0 |
 
 > **Pre-existing known issues (do not fix without a dedicated ticket):**
-> - DB schema drift (P3005): `gather_dev` schema was applied outside migration
->   history. `prisma migrate dev` detects drift and prompts for reset;
->   `prisma migrate deploy` errors with P3005. The DB is functional — security
->   tests confirm connection. Fix requires baselining the existing schema.
+> - None currently open. The P3005 schema-drift issue formerly listed here was
+>   resolved by baselining (2026-03-14) and re-confirmed clean by a live
+>   `prisma migrate status` run on 2026-08-06 (37 migrations found, "Database
+>   schema is up to date!"). See GTC-215 for the correction history.
 
 ---
 
