@@ -97,7 +97,7 @@
     "@types/twilio": "^3.19.2",
     "autoprefixer": "^10.4.23",
     "dotenv": "^17.2.3",
-    "eslint-config-next": "^16.2.2",
+    "eslint-config-next": "^15.5.22",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
