@@ -10,6 +10,60 @@ AI executor preamble: Before starting any ticket —
 
 ---
 
+## Citations (binding — GTC-222)
+
+Applies to every citation in this ticket, and to every comment the ticket
+adds to the code. The canonical statement lives here; the FULL and UX
+templates point at this section.
+
+**Cite the symbol, not the line.** A citation addresses a named thing —
+a function, export, const, type, or enum:
+
+```
+`onAssignmentReleased` in `src/lib/ledger.ts`
+`sendSms` in `src/lib/sms/send-sms.ts` (as of 7984652)
+```
+
+Not `src/lib/ledger.ts:590-596`. Line numbers rot. Any edit above the
+reference moves it, and the citation goes on looking correct while
+pointing somewhere else — it fails silently, which is why it survives
+review. GTC-211 cited `ledger.ts:590-596` for `onAssignmentReleased`;
+seventeen lines of drift later those lines hold `onMaterialChange`, a
+different hook owned by a different ticket. An executor working from that
+number edits the wrong function and the build stays green.
+
+A line number may appear as a parenthetical hint after the symbol. It may
+never be the address. Add the short commit hash when precision matters:
+a symbol plus a hash is exact and stays exact.
+
+**When a symbol appears twice in a file**, add a disambiguating cue —
+which function, which branch, which section.
+
+**No symbol to cite?** Leave an anchor in the code and cite the anchor:
+
+```js
+// ANCHOR(GTC-nnn): short label
+```
+
+Grep-shaped on purpose — `grep -rn "ANCHOR(GTC-176)" src/`. Use it for a
+branch arm, a bare config literal, or a place where something should go
+and does not yet. It is a token, not prose: one line, ticket ID, short
+label. Delete it when the ticket that owns it closes.
+
+**A comment may record WHY, or that a state is provisional. It may not
+assert WHAT the code does.** Asserting behaviour is a test's job. A
+comment that describes behaviour is an unverified claim with nothing
+holding it true, so it rots in place — `onAssignmentReleased` carries one
+that is already false. Write the assertion as a test and let the comment
+carry the reason.
+
+**A deliberate temporary state carries the ticket ID that ends it.**
+`eslint.ignoreDuringBuilds: true` in `next.config.js` names GTC-221 as its
+end condition. Without that backward link, a temporary state is
+indistinguishable from a permanent one, and nothing ever flips it back.
+
+---
+
 ## [GTC-XXX] — [Area/Flow]: Short description
 
 **Severity:** [ ] Critical [ ] High [ ] Medium [ ] Low
@@ -112,6 +166,7 @@ Stop and report (do not proceed) if:
 ### Executor Checklist
 
 [ ] GATHER-BUILD-CONSTANTS.md read
+[ ] Citations section read; every citation in this ticket is a symbol, not a line number
 [ ] Preflight passed and results pasted
 [ ] Bug reproduced — Observe confirmed
 [ ] Plan documented (hypothesis, change set, test strategy, rollback risk)
@@ -133,10 +188,11 @@ Stop and report (do not proceed) if:
 > Do not leave blank. Do not commit without completing this section.
 
 **Root cause confirmed**
-[One paragraph — what was actually wrong and where]
+[One paragraph — what was actually wrong and where. Address it by symbol,
+per the Citations section: `theFunction` in `path/file.ts`, not `file.ts:123`.]
 
 **Files changed**
-[List each file and what changed — one line per file]
+[List each file and what changed — one line per file, symbol-addressed]
 
 **Test results**
 - RED: [paste output or "N/A — Medium/Low severity"]

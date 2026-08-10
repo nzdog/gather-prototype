@@ -150,15 +150,16 @@ verification, and the Moment 1 redesign means "was built in January" does not im
 works in July" (item A is the proof).
 
 **First three steps:**
-1. Re-run every command in "Provenance and maintenance" below; record file:line or commit
-   hash per epic item.
+1. Re-run every command in "Provenance and maintenance" below; record the symbol
+   (`theFunction` in `path/file.ts`) or commit hash per epic item — not a line number
+   (GTC-222).
 2. For each "built in Jan" feature, do one browser walk on the seeded dev event to confirm
    it still functions post-redesign (per-ticket seed scripts pattern: scripts/seed-gtc-NNN-test-event.ts).
 3. Open a docs-type GTC ticket; rewrite BUILD_STATUS.md so each item is checked with a
    provenance pointer, or explicitly marked `open` / `built-then-broken (see GTC-NNN)`.
 
-**You have a result when:** every line of docs/BUILD_STATUS.md carries a file:line, commit
-hash, or GTC reference that a fresh session can verify in under a minute, and the
+**You have a result when:** every line of docs/BUILD_STATUS.md carries a symbol citation,
+commit hash, or GTC reference that a fresh session can verify in under a minute, and the
 "Last Updated" date is current.
 
 ### C. Epic 6 metric instrumentation (the only genuinely unstarted epic)

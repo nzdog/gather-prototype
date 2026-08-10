@@ -1,7 +1,7 @@
 # GATHER BUILD CONSTANTS
 
 Reference file for AI executors and developers. Keep this file accurate.
-Last updated: 2026-08-06.
+Last updated: 2026-08-10.
 CLAUDE.md reviewed: no conflicts or additions found.
 
 ---
@@ -18,6 +18,8 @@ regardless of ticket type:
    - Feature, chore, and spike tickets: no dedicated template exists.
      Follow the BUG-TICKET-TEMPLATE.md structure and recent precedents
      in docs/tickets/ (e.g. GTC-152 for a chore).
+   - Citations, in tickets and in code comments: the Citations section of
+     BUG-TICKET-TEMPLATE.md is binding on every ticket type (GTC-222).
    - If the ticket involves unexpected platform behaviour, stale UI
      state, auth anomalies, or DB irregularities, also read
      GATHER-KNOWN-BEHAVIOURS.md

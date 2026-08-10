@@ -148,7 +148,9 @@ assertions checked, and commit hash; save the ticket to `docs/tickets/GTC-NNN.md
 fix + regression test + completed ticket in ONE commit. The observed evidence bar in closed
 tickets (see GTC-151, GTC-152):
 
-- [ ] Root cause stated with file:line evidence, not narrative.
+- [ ] Root cause stated with symbol-level code evidence, not narrative. (This bar used to
+      read "file:line evidence"; GTC-222 replaced line numbers with symbol citations —
+      `theFunction` in `path/file.ts`, optionally with a short commit hash.)
 - [ ] RED→GREEN: before-fix failing behaviour shown next to after-fix passing behaviour
       (GTC-151 does this as a per-event-type 400→200 table).
 - [ ] Security suite result recorded (convention: "security suite 16/16" — re-verify the
@@ -188,6 +190,28 @@ House pattern (23 `backfill` commits in history as of 2026-07-09):
   a top-level `.create()` in `seed.ts`, an inline literal), anchor to the nearest named
   thing plus a relative cue ("inside `runGateCheck()`"), or — only as a last resort — keep
   the line number WITH an as-of commit hash: `file.ts:NNN (as of <short-hash>)`.
+
+  **This rule predates GTC-222 and was ignored anyway.** GTC-211 addressed
+  `onAssignmentReleased` as `ledger.ts:590-596`; those lines now hold `onMaterialChange`
+  — a different hook, owned by GTC-183 (F1). Seventeen lines of drift, and the citation
+  still reads as correct. Writing the rule down was not enough; it now also lives in the
+  ticket templates, which is where citations actually get written (GTC-222, 2026-08-10).
+- **ANCHOR tokens for locations with no symbol.** Preferred over the last-resort
+  line-number-plus-hash above. Leave the anchor in the code and cite the anchor:
+  `// ANCHOR(GTC-nnn): short label`. Grep-shaped on purpose
+  (`grep -rn "ANCHOR(GTC-211)" src/`). Use it for a branch arm, a bare config literal, or
+  a place where something should go and does not yet. One line, ticket ID, short label —
+  a token, not prose. Delete it when the owning ticket closes.
+- **A comment records WHY, or that a state is provisional — never WHAT the code does.**
+  Asserting behaviour is a test's job. A comment describing behaviour is an unverified
+  claim with nothing holding it true, so it rots silently: the docblock on
+  `onAssignmentReleased` in `src/lib/ledger.ts` claims it preserves the correct half of
+  frozen-edit's `handleReassign`, which GTC-211 established is false. Write the assertion
+  as a test; let the comment carry the reason.
+- **A deliberate temporary state carries the ticket ID that ends it.**
+  `eslint.ignoreDuringBuilds: true` in `next.config.js` names GTC-221 as its end
+  condition. Without the backward link, a temporary state is indistinguishable from a
+  permanent one and nothing ever flips it back.
 - Commit messages: `{type}(GTC-NNN): summary` (types observed: feat, fix, chore, refactor,
   docs); `[EXPERIMENTAL]` tag in the subject for experiment-branch commits (GTC-145).
 - KB entries follow a fixed format: Symptom / Cause / Fix pattern / Do not / First seen.
