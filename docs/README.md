@@ -71,3 +71,5 @@ This documentation follows a numbered taxonomy for easy navigation:
 - **Archive superseded versions** to `03_specs/_versions/` or `_archive/`
 - **Review `_archive/` every 6 months** and prune if needed
 - **Keep `.DS_Store` files out** (.gitignore configured)
+
+<!-- 2026-08-10: verification commit for Railway auto-deploy disabled check (GTC-227) -->
