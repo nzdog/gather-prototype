@@ -36,6 +36,14 @@ A line number may appear as a parenthetical hint after the symbol. It may
 never be the address. Add the short commit hash when precision matters:
 a symbol plus a hash is exact and stays exact.
 
+**Verify the name exists at HEAD. Symbol form is not proof.** Cited
+symbols and method names must be checked against the current tree, not
+merely written in symbol form. GTC-211 names "the PUT team-change"; that
+route exports only `PATCH` and `DELETE`. A wrong name, correctly
+formatted, is a class the symbol rule does not catch — the convention
+makes citations durable, not true. One `grep -n` per cited name before
+the ticket is filed.
+
 **When a symbol appears twice in a file**, add a disambiguating cue —
 which function, which branch, which section.
 
