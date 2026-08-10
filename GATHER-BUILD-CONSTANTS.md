@@ -61,11 +61,34 @@ For every ticket executed, before committing:
 
 ## Base Branch
 
-`master` — all work branches off `master` and PRs merge back to `master`.
+`feat/moment-one-redesign` — this is the working trunk in practice. As of
+2026-08-10 it is 161 commits ahead of `master`, and `master`'s HEAD is exactly
+their merge-base — it has not moved since 2026-04-10. Day-to-day work branches
+off `feat/moment-one-redesign` and merges back into it; `master` is not the
+active integration target.
+
+Superseded (kept for history): the repo was originally set up so all work
+branched off `master` and PRs merged back to `master`. That convention is no
+longer followed.
 
 Branching convention: feature branches are not enforced by tooling; the repo has
 dependabot branches (`dependabot/npm_and_yarn/*`) alongside `master`. Use
 descriptive branch names prefixed by ticket ID where applicable (e.g. `GTC-001-fix-session-cookies`).
+
+---
+
+## Deploy
+
+**Railway auto-deploy from `master` is OFF as of 2026-08-10** (changed by
+Nigel). Deploys are now manual, triggered from Railway's Deployments tab.
+Consequence: merging to `master` no longer deploys anything by itself.
+
+**Caveat — this decouples deploy timing, not the database.** Turning off
+auto-deploy only separates code delivery from *when* a deploy happens. It does
+NOT separate code from the production database: schema migrations still apply
+to the production database the moment code carrying them is deployed and run,
+regardless of how that deploy was triggered. Rehearse any migration against a
+copy of the production database before triggering a deploy that carries one.
 
 ---
 
