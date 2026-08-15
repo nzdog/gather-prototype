@@ -4,9 +4,10 @@ import { requireEventRole } from '@/lib/auth/guards';
 import { sendSms } from '@/lib/sms/send-sms';
 import { sendNudgeEmail } from '@/lib/email';
 import { logInviteEvent } from '@/lib/invite-events';
-import { isSmsEnabled } from '@/lib/sms/twilio-client';
-import { isValidNZNumber } from '@/lib/phone';
-import { resolveManualNudgeRecipient } from '@/lib/sms/manual-nudge-recipient';
+import {
+  resolveManualNudgeRecipient,
+  chooseManualNudgeChannel,
+} from '@/lib/sms/manual-nudge-recipient';
 
 type NudgeVariant = 'warm' | 'casual' | 'gentle' | 'direct';
 const VALID_VARIANTS: NudgeVariant[] = ['warm', 'casual', 'gentle', 'direct'];
@@ -94,13 +95,9 @@ export async function POST(
     let contactMethod: 'sms' | 'email';
     let sendResult: { success: boolean; error?: string; messageId?: string };
 
-    const canSms =
-      person.phoneNumber &&
-      isValidNZNumber(person.phoneNumber) &&
-      !person.smsOptedOut &&
-      isSmsEnabled();
+    const channel = chooseManualNudgeChannel(person);
 
-    if (canSms) {
+    if (channel === 'sms') {
       contactMethod = 'sms';
       // Check per-host opt-out
       const optOut = await prisma.smsOptOut.findUnique({
@@ -138,10 +135,11 @@ export async function POST(
           metadata: { source: 'host_nudge', template },
         });
       }
-    } else if (person.email) {
+    } else if (channel === 'email') {
       contactMethod = 'email';
       sendResult = await sendNudgeEmail({
-        to: person.email,
+        // chooseManualNudgeChannel only returns 'email' when an address is present.
+        to: person.email!,
         subject: `Reminder about ${event.name}`,
         body: message.trim(),
         eventId,

@@ -3,10 +3,19 @@ import { processNudges, processRsvpFollowupNudges } from './nudge-sender';
 import { findProxyNudgeCandidates } from './proxy-nudge-eligibility';
 import { processProxyNudges } from './proxy-nudge-sender';
 import { isSmsEnabled } from './twilio-client';
+import { isTnzEnabled } from './tnz-client';
 
 export interface NudgeRunResult {
   timestamp: Date;
-  smsEnabled: boolean;
+  /**
+   * Did this run execute as intended? False when no SMS provider is configured at all,
+   * and false when the catch below fires. GTC-214: `GET` in cron/nudges/route.ts derives
+   * its `success` and its status code from this, so a run that cannot send stops reading
+   * as a healthy cron.
+   */
+  ok: boolean;
+  /** Any provider at all — TNZ or Twilio. A report, never a gate; see runNudgeScheduler. */
+  smsConfigured: boolean;
   candidates: {
     eligible24h: number;
     eligible48h: number;
@@ -39,6 +48,37 @@ export interface NudgeRunResult {
 }
 
 /**
+ * Is a completed run healthy enough for a monitor to leave alone? (GTC-214)
+ *
+ * Pure, and exported so both directions can be asserted without a database or a provider
+ * — the live cron can only ever demonstrate one quadrant per process, because provider
+ * configuration is captured at module scope.
+ *
+ * Two ways a run is unhealthy:
+ *
+ *  1. No provider is configured at all. Nothing it attempts can succeed.
+ *  2. It had work to do and NONE of it landed. `smsConfigured` is deliberately
+ *     destination-agnostic — TNZ or Twilio, either one — so it is true on a Twilio-only
+ *     deployment where every +64 nudge fails at the TNZ arm. That configuration is not
+ *     hypothetical: it is the local dev default. Without this second test the cron would
+ *     report 200 / success:true while sending nothing, which is the same false-healthy
+ *     signal this ticket exists to remove, one layer further in.
+ *
+ * `attempted` counts sends, not candidates, so a quiet-hours run that deferred everything
+ * has attempted 0 and stays healthy — deferring is the machinery working. And a partial
+ * failure stays healthy: one bad number must not flap the alert.
+ */
+export function isNudgeRunHealthy(input: {
+  smsConfigured: boolean;
+  attempted: number;
+  succeeded: number;
+}): boolean {
+  if (!input.smsConfigured) return false;
+  if (input.attempted > 0 && input.succeeded === 0) return false;
+  return true;
+}
+
+/**
  * Run the nudge scheduler
  * This should be called periodically (e.g., every 15 minutes)
  */
@@ -46,16 +86,14 @@ export async function runNudgeScheduler(): Promise<NudgeRunResult> {
   const timestamp = new Date();
   const errors: string[] = [];
 
-  // Check if SMS is enabled
-  if (!isSmsEnabled()) {
-    return {
-      timestamp,
-      smsEnabled: false,
-      candidates: { eligible24h: 0, eligible48h: 0, skipped: [] },
-      results: { sent: 0, succeeded: 0, failed: 0, deferred: 0 },
-      errors: ['SMS not configured'],
-    };
-  }
+  // GTC-214: this is a REPORT, NOT A GATE. The run proceeds either way, and `sendSms`
+  // selects the provider per destination — the only place that decision is correct. There
+  // used to be an early return here on `!isSmsEnabled()`, the TWILIO predicate, which
+  // killed all three nudge families on a TNZ-only deployment before a single query ran.
+  // Do not restore a gate here in any form, widened or otherwise.
+  // tests/nudge-provider-gate-test.ts case B asserts the run proceeds with no provider
+  // configured; that assertion is what holds this open, not this comment.
+  const smsConfigured = isTnzEnabled() || isSmsEnabled();
 
   try {
     // Find eligible candidates for direct nudges
@@ -100,9 +138,19 @@ export async function runNudgeScheduler(): Promise<NudgeRunResult> {
       .filter((r) => !r.success)
       .forEach((r) => errors.push(`Proxy ${r.primaryContactName}: ${r.error}`));
 
+    const attempted =
+      processResult.sent.length +
+      rsvpFollowupProcessResult.sent.length +
+      proxyProcessResult.sent.length;
+
     return {
       timestamp,
-      smsEnabled: true,
+      ok: isNudgeRunHealthy({
+        smsConfigured,
+        attempted,
+        succeeded: succeeded + rsvpFollowupSucceeded + proxySucceeded,
+      }),
+      smsConfigured,
       candidates: {
         eligible24h: candidates.eligible24h.length,
         eligible48h: candidates.eligible48h.length,
@@ -137,9 +185,12 @@ export async function runNudgeScheduler(): Promise<NudgeRunResult> {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[Nudge Scheduler] Error:', errorMessage);
 
+    // A caught run-level exception is not a healthy run either — it used to report
+    // `smsEnabled: true`, which the cron route spread into `success: true` / HTTP 200.
     return {
       timestamp,
-      smsEnabled: true,
+      ok: false,
+      smsConfigured,
       candidates: { eligible24h: 0, eligible48h: 0, skipped: [] },
       results: { sent: 0, succeeded: 0, failed: 0, deferred: 0 },
       errors: [errorMessage],

@@ -7,11 +7,13 @@ import { processDecideByFollowups } from './decide-by-sender';
  * WHY THIS IS NOT A FOURTH BRANCH INSIDE runNudgeScheduler. Three reasons, in order of
  * how badly each would have bitten:
  *
- *  1. `runNudgeScheduler` early-returns on `!isSmsEnabled()`, and `isSmsEnabled()` is the
- *     TWILIO predicate (twilio-client.ts:23) while NZ traffic routes to TNZ
- *     (send-sms.ts:11). On a TNZ-only configuration D2 would never fire, silently. The
- *     alternative — loosening that gate — is a behaviour change to E1's nudge machinery
- *     smuggled in under D2, which is not D2's to make.
+ *  1. SUPERSEDED BY GTC-214 — kept as the record of why D2 sat outside rather than as a
+ *     live constraint. D2 found that `runNudgeScheduler` early-returned on the TWILIO
+ *     predicate (`isSmsEnabled` in twilio-client.ts) while NZ traffic routes to TNZ
+ *     (`shouldUseTnz` in send-sms.ts), so on a TNZ-only configuration D2 would never have
+ *     fired, silently — and routed around the gate rather than fixing it, because
+ *     loosening E1's machinery was not D2's to do. GTC-214 deleted that gate. The reason
+ *     no longer holds; reasons 2 and 3 do, and they are why this still lives here.
  *  2. Its three existing branches share one `try` whose `catch` returns a shape that
  *     drops the other branches' counts. A fourth member inherits that.
  *  3. `now` is not injectable there. This feature IS a clock; a test that cannot fix the

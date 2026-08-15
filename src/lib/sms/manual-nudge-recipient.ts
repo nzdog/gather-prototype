@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { isMessageableRole } from '@/lib/eligibility/child-exclusion';
+import { isValidNZNumber } from '@/lib/phone';
 
 /**
  * THE host-triggered nudge recipient decision (GTC-172 / C1).
@@ -63,4 +64,34 @@ export async function resolveManualNudgeRecipient(
   }
 
   return { ok: true, person };
+}
+
+/**
+ * Which channel a host-triggered nudge takes (GTC-214).
+ *
+ * Extracted from POST /api/events/[id]/people/[personId]/nudge for the reason this file
+ * already exists: so the decision can be asserted without the route's cookie context.
+ *
+ * WHAT THIS DELIBERATELY DOES NOT CONSULT: provider configuration. The expression this
+ * replaces ANDed "the number is a valid NZ number" with `isSmsEnabled()` — the TWILIO
+ * predicate — so on a TNZ-only deployment a guest with a perfectly good +64 mobile
+ * resolved to 'email', and the host was told the nudge succeeded. Reachability is a
+ * property of the recipient; whether a provider can be reached is `sendSms`'s to answer,
+ * and it answers per destination. If SMS genuinely cannot be sent the route surfaces a
+ * 502 — an honest failure the host can act on, rather than a silent channel switch.
+ */
+export type ManualNudgeChannel = 'sms' | 'email' | 'none';
+
+export function chooseManualNudgeChannel(person: {
+  phoneNumber: string | null;
+  smsOptedOut: boolean;
+  email: string | null;
+}): ManualNudgeChannel {
+  // `smsOptedOut` is Do-Not-Touch zone 7 — it outranks the phone number in both
+  // directions, asserted in tests/nudge-provider-gate-test.ts case C.
+  if (person.phoneNumber && isValidNZNumber(person.phoneNumber) && !person.smsOptedOut) {
+    return 'sms';
+  }
+  if (person.email) return 'email';
+  return 'none';
 }
