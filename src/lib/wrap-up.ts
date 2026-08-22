@@ -221,7 +221,7 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
   // deferral is still observable in the cron's JSON response below.
   if (isQuietHours(now)) {
     const deferredUntilMinutes = getMinutesUntilQuietEnd(now);
-    console.log(
+    console.warn(
       `[WrapUp] Quiet hours — deferring ${pendingLinks.length} message(s), ~${deferredUntilMinutes} min until send window`
     );
     return {
