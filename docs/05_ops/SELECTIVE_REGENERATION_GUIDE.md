@@ -68,16 +68,6 @@ Updated AI generation system:
    - `GET` - Fetches all AI-generated, unconfirmed items grouped by team
    - `POST` - Marks all AI-generated items as confirmed
 
-### Phase 5: Demo Integration ✅
-
-Created a demo page to showcase the feature:
-
-**Demo Page** (`src/app/demo/review/page.tsx`)
-- Complete working example of the review flow
-- Navigate to `/demo/review?eventId={eventId}` after generating a plan
-- Shows how to integrate the components
-- Handles regeneration and confirmation
-
 ## How to Use
 
 ### Testing the Feature
@@ -91,10 +81,11 @@ Created a demo page to showcase the feature:
    ```
 
 2. **Review Generated Items**
-   ```bash
-   # Navigate to review demo page
-   http://localhost:3000/demo/review?eventId={eventId}
-   ```
+   - Click **"Regenerate Plan"** on `http://localhost:3000/plan/{eventId}` — shown once a
+     plan already exists, for events in DRAFT or CONFIRMING status, excluding demo events
+     and events that have an EventSetup record
+   - This marks the current items for review and opens the review panel inline on the same
+     page (no separate URL)
 
 3. **Make Decisions**
    - Click "Keep" on items you like
@@ -416,12 +407,11 @@ The selective regeneration flow has been fully integrated into the main plan pag
 - `src/components/plan/GenerationReviewPanel.tsx` - Review panel component
 - `src/app/api/events/[id]/review-items/route.ts` - Review items API
 - `src/app/api/events/[id]/items/mark-for-review/route.ts` - Mark items for review API
-- `src/app/demo/review/page.tsx` - Demo page
 - `SELECTIVE_REGENERATION_GUIDE.md` - This guide
 
 ## Support
 
 For questions or issues:
-1. Check the demo page at `/demo/review?eventId={eventId}`
+1. Review items directly on the plan page at `/plan/{eventId}`
 2. Review the API endpoint documentation above
 3. Check console logs for detailed error messages
