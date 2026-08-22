@@ -1,15 +1,51 @@
 /**
  * Seed a fresh test event for GTC-133 sub-commit (g) browser walk.
  *
- * Direct Prisma writes (no API). Each run creates a fresh event — re-running
- * is safe but produces duplicate events.
+ * Direct Prisma writes (no API). Each run creates a fresh event. Pass --reset
+ * to delete previously-seeded events (matched by name) before seeding a fresh
+ * one; the delete cascades to their Households, PersonEvents, EventRoles, and
+ * EventSetup rows. Person rows are shared across events (found-or-created by
+ * email) and are intentionally left in place by --reset.
  *
- * Usage: npx tsx scripts/seed-gtc-133-test-event.ts
+ * Usage: npx tsx scripts/seed-gtc-133-test-event.ts [--reset]
  */
 
 import { PrismaClient, HouseholdRole } from '@prisma/client';
 
 const prisma = new PrismaClient();
+
+const EVENT_NAME = 'GTC-133 Sub-commit (g) Test';
+
+// Exclude fixture events that other scripts depend on by ID even though they
+// share this script's event name (an artifact of having been created by an
+// earlier run of this same script, before being repurposed as a fixture).
+// Deleting one of these would silently break its dependent script.
+const RESET_EXCLUDE_IDS = [
+  'cmsttnrkj00011ydrkn3jfvue', // SETUP_DONOR_EVENT in scripts/seed-gtc236-test-event.ts:17
+];
+
+async function resetSeededEvents() {
+  const existing = await prisma.event.findMany({
+    where: { name: EVENT_NAME, id: { notIn: RESET_EXCLUDE_IDS } },
+    select: { id: true },
+  });
+  if (existing.length === 0) {
+    process.stdout.write(
+      '--reset: no previously-seeded events found (excluding protected fixtures).\n'
+    );
+    return;
+  }
+  const { count } = await prisma.event.deleteMany({
+    where: { id: { in: existing.map((e) => e.id) } },
+  });
+  process.stdout.write(
+    `--reset: deleted ${count} previously-seeded event(s) (id${existing.length === 1 ? '' : 's'}: ${existing
+      .map((e) => e.id)
+      .join(
+        ', '
+      )}), cascading to their Households, PersonEvents, EventRoles, and EventSetup rows.\n`
+  );
+}
 
 interface MemberSeed {
   name: string;
@@ -89,6 +125,10 @@ const HOUSEHOLDS: HouseholdSeed[] = [
 ];
 
 async function main() {
+  if (process.argv.includes('--reset')) {
+    await resetSeededEvents();
+  }
+
   // Resolve which User owns the seeded event. Order:
   //   1. SEED_HOST_EMAIL env var (explicit override).
   //   2. nigel@mckorbett.co.nz (the realistic dev case).
@@ -136,7 +176,7 @@ async function main() {
 
   const event = await prisma.event.create({
     data: {
-      name: 'GTC-133 Sub-commit (g) Test',
+      name: EVENT_NAME,
       startDate,
       endDate,
       hostId: hostPerson.id,
