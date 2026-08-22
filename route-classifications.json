@@ -328,6 +328,14 @@
     "securityIssues": []
   },
   {
+    "filePath": "src/app/api/events/[id]/regenerate-plan/route.ts",
+    "apiPath": "/api/events/[id]/regenerate-plan",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole(eventId, ['HOST', 'COHOST'])"],
+    "securityIssues": []
+  },
+  {
     "filePath": "src/app/api/events/[id]/regenerate/route.ts",
     "apiPath": "/api/events/:id/regenerate",
     "methods": ["POST"],

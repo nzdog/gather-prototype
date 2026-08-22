@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import MomentArc from './MomentArc';
 import { useToast } from '@/contexts/ToastContext';
+import { CATEGORY_LABELS } from '@/lib/ai/plan-categories';
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -43,6 +44,11 @@ interface Moment2PlanViewProps {
   onAddCategory: (name: string) => Promise<void>;
   onApprove: () => void;
   onBack: () => void;
+  /** GTC-236 */
+  onRegeneratePlan: () => void;
+  onRegenerateCategory: (categoryKey: string) => void;
+  /** 'plan', a categoryKey, or null when idle */
+  regeneratingScope: 'plan' | string | null;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -67,6 +73,13 @@ const COMMON_UNITS = [
   'dozen',
 ];
 
+// GTC-236: per-category regenerate keys on the canonical category vocabulary. A team
+// whose name is not in this map (custom categories, task buckets) simply gets no
+// regenerate trigger.
+const LABEL_TO_KEY: Record<string, string> = Object.fromEntries(
+  Object.entries(CATEGORY_LABELS).map(([key, label]) => [label, key])
+);
+
 // ─── Root component ──────────────────────────────────────────────────────────
 
 export default function Moment2PlanView({
@@ -80,6 +93,9 @@ export default function Moment2PlanView({
   onAddCategory,
   onApprove,
   onBack,
+  onRegeneratePlan,
+  onRegenerateCategory,
+  regeneratingScope,
 }: Moment2PlanViewProps) {
   const toast = useToast();
 
@@ -92,6 +108,12 @@ export default function Moment2PlanView({
   const [bulkRemoving, setBulkRemoving] = useState(false);
 
   const totalItems = categories.reduce((sum, c) => sum + c.items.length, 0);
+
+  // Ruling Q2 (GTC-236): regenerate clears marks — they are staging state, and after a
+  // regenerate the marked GENERATED rows no longer exist anyway.
+  useEffect(() => {
+    if (regeneratingScope !== null) setSelectedItemIds(new Set());
+  }, [regeneratingScope]);
 
   const toggleCollapsed = (categoryId: string) => {
     setCollapsed((prev) => {
@@ -182,6 +204,16 @@ export default function Moment2PlanView({
           {categories.length === 1 ? 'category' : 'categories'}, based on {guestCount}{' '}
           {guestCount === 1 ? 'guest' : 'guests'}.
         </p>
+        <button
+          type="button"
+          onClick={onRegeneratePlan}
+          disabled={regeneratingScope !== null}
+          className="-mt-4 mb-6 text-sm text-gray-600 hover:text-gray-900 underline underline-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
+        >
+          {regeneratingScope === 'plan'
+            ? 'Regenerating the plan…'
+            : 'Not quite right? Regenerate the plan'}
+        </button>
 
         {/* Category sections */}
         <div className="space-y-6">
@@ -215,6 +247,9 @@ export default function Moment2PlanView({
               onAddItem={handleAdd}
               selectedItemIds={selectedItemIds}
               onToggleSelection={toggleSelection}
+              categoryKey={LABEL_TO_KEY[category.name] ?? null}
+              regeneratingScope={regeneratingScope}
+              onRegenerateCategory={onRegenerateCategory}
             />
           ))}
         </div>
@@ -261,14 +296,16 @@ export default function Moment2PlanView({
           <button
             type="button"
             onClick={onBack}
-            className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2"
+            disabled={regeneratingScope !== null}
+            className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             ← Back to event setup
           </button>
           <button
             type="button"
             onClick={onApprove}
-            className="px-6 py-3 bg-accent text-white font-medium rounded-lg hover:bg-accent-dark transition-colors"
+            disabled={regeneratingScope !== null}
+            className="px-6 py-3 bg-accent text-white font-medium rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Plan looks good →
           </button>
@@ -299,6 +336,9 @@ interface CategorySectionProps {
   onAddItem: (categoryId: string, item: NewPlanItem) => Promise<void>;
   selectedItemIds: Set<string>;
   onToggleSelection: (itemId: string) => void;
+  categoryKey: string | null;
+  regeneratingScope: 'plan' | string | null;
+  onRegenerateCategory: (categoryKey: string) => void;
 }
 
 function CategorySection({
@@ -320,11 +360,16 @@ function CategorySection({
   onAddItem,
   selectedItemIds,
   onToggleSelection,
+  categoryKey,
+  regeneratingScope,
+  onRegenerateCategory,
 }: CategorySectionProps) {
   const itemCount = category.items.length;
+  const isRegenerating =
+    regeneratingScope === 'plan' || (categoryKey !== null && regeneratingScope === categoryKey);
 
   return (
-    <div>
+    <div className={isRegenerating ? 'animate-pulse opacity-60 pointer-events-none' : undefined}>
       <button
         type="button"
         onClick={onToggleCollapsed}
@@ -380,13 +425,27 @@ function CategorySection({
                 onCancel={onCancelAddItem}
               />
             ) : (
-              <button
-                type="button"
-                onClick={onStartAddItem}
-                className="text-sm text-gray-600 hover:text-gray-900 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
-              >
-                + Add item
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={onStartAddItem}
+                  className="text-sm text-gray-600 hover:text-gray-900 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+                >
+                  + Add item
+                </button>
+                {categoryKey !== null && (
+                  <button
+                    type="button"
+                    onClick={() => onRegenerateCategory(categoryKey)}
+                    disabled={regeneratingScope !== null}
+                    className="text-sm text-gray-600 hover:text-gray-900 px-2 py-1 rounded hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {regeneratingScope === categoryKey
+                      ? 'Regenerating…'
+                      : '↻ Regenerate this category'}
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>

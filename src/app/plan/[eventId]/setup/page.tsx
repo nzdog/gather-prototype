@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { ASK_FIELDS, fieldChanges } from '@/lib/ledger';
 import type { SerialisedEvent } from '@/lib/lifecycle';
 import { useReasonPrompt } from '@/components/plan/ReasonPrompt';
+import { CATEGORY_LABELS } from '@/lib/ai/plan-categories';
 import { useToast } from '@/contexts/ToastContext';
 import SetupOpeningScreen from '@/components/plan/SetupOpeningScreen';
 import Moment1InputForm, {
@@ -194,6 +195,8 @@ export default function EventSetupPage() {
   const [channelCandidates, setChannelCandidates] = useState<ChannelCandidateOption[]>([]);
   const [editingHousehold, setEditingHousehold] = useState<SavedHousehold | null>(null);
   const moment1FormRef = useRef<HTMLDivElement>(null);
+  // GTC-236: 'plan', a categoryKey, or null when no regeneration is running.
+  const [regeneratingScope, setRegeneratingScope] = useState<'plan' | string | null>(null);
 
   useEffect(() => {
     if (eventId === 'new' || !eventId) {
@@ -322,6 +325,45 @@ export default function EventSetupPage() {
     const teamsData = await teamsRes.json();
     const itemsData = await itemsRes.json();
     return mapTeamsAndItemsToPlanCategories(teamsData.teams ?? [], itemsData.items ?? []);
+  };
+
+  const handleRegenerate = async (scope: 'plan' | 'category', categoryKey?: string) => {
+    setRegeneratingScope(scope === 'plan' ? 'plan' : (categoryKey ?? null));
+    try {
+      const res = await fetch(`/api/events/${eventId}/regenerate-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope, ...(categoryKey ? { categoryKey } : {}) }),
+      });
+      if (res.status === 429) {
+        toast.error("You've used all 10 AI calls for this event.");
+        return;
+      }
+      if (!res.ok) throw new Error('Failed to regenerate');
+      const data = await res.json();
+      if (data.noop) {
+        // Founder refinement: enabled trigger + explanation beats a disabled control.
+        toast.info(
+          scope === 'plan'
+            ? 'Nothing to regenerate — every item in this plan was added or edited by you.'
+            : 'Nothing to regenerate — every item in this category was added or edited by you.'
+        );
+        return;
+      }
+      // Categories drive the view; items back the GTC-202 assignmentResponse lookup —
+      // both must be fresh after a regenerate.
+      setMoment2PlanCategories(await loadMoment2PlanCategories());
+      await loadItems();
+      toast.success(
+        scope === 'plan'
+          ? 'Plan regenerated'
+          : `${CATEGORY_LABELS[categoryKey ?? ''] ?? categoryKey} regenerated`
+      );
+    } catch {
+      toast.error('Failed to regenerate. Please try again.');
+    } finally {
+      setRegeneratingScope(null);
+    }
   };
 
   if (loading) {
@@ -516,6 +558,9 @@ export default function EventSetupPage() {
           eventName={event.name}
           guestCount={planGuestCount}
           categories={moment2PlanCategories}
+          onRegeneratePlan={() => handleRegenerate('plan')}
+          onRegenerateCategory={(categoryKey) => handleRegenerate('category', categoryKey)}
+          regeneratingScope={regeneratingScope}
           onUpdateItem={async (itemId, updates) => {
             const body: Record<string, unknown> = {};
             if (updates.name !== undefined) body.name = updates.name;

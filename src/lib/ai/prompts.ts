@@ -573,6 +573,19 @@ export interface PlanGenerationInput {
   setUpNotes: string;
   cleanUpNotes: string;
   otherJobsNotes: string;
+  /**
+   * GTC-236: items already in the plan that regeneration is keeping (host-added,
+   * host-edited, or protected). Optional so every existing caller is untouched —
+   * absent means fresh generation and the prompt is byte-identical to before.
+   * `quantity` arrives preformatted ("4 kg", "2 bottles") because stored quantities
+   * mix amount/unit/custom-unit/free-text and the model only needs the display form.
+   */
+  preservableItems?: Array<{
+    category: string;
+    name: string;
+    quantity: string;
+    notes?: string;
+  }>;
 }
 
 export function buildPlanGenerationPrompt(input: PlanGenerationInput): {
@@ -661,6 +674,24 @@ Return ONLY valid JSON in the exact shape specified. No prose, no markdown, no c
         ? `- dietaryCoverage: return an empty array — the host has confirmed there are no dietary requirements.`
         : `- dietaryCoverage: return exactly one entry: { "requirement": "Dietary requirements not yet confirmed", "covered": false, "flaggedItems": [] } — so the host is reminded to confirm dietary needs.`;
 
+  // GTC-236: regeneration context. Wording follows the proven in-file precedent
+  // (buildRegenerationPrompt's "PROTECTED ITEMS (already exist - DO NOT include in
+  // output)"), plus ruling D2: the model decides how many new items fit — kept items
+  // count toward coverage, and there is no requirement to match prior item counts.
+  const preservable = input.preservableItems ?? [];
+  const preservableBlock =
+    preservable.length > 0
+      ? `ITEMS ALREADY IN THE PLAN (the host added, edited, or protected these — they are being kept):
+- Do NOT include them in your output, and do NOT generate duplicates or near-duplicates of them.
+- Count them toward each category's coverage and portion math. Generate as many or as few new items as makes a coordinated plan around them — you do not need to match previous item counts.
+${preservable
+  .map(
+    (p) =>
+      `  - ${p.category}: ${p.name}${p.quantity ? ` (${p.quantity})` : ''}${p.notes ? ` — ${p.notes}` : ''}`
+  )
+  .join('\n')}`
+      : '';
+
   const otherFoodBlock = input.otherNotes.trim()
     ? `Other food notes from Kate: ${input.otherNotes.trim()}`
     : '';
@@ -690,6 +721,7 @@ ${dietaryBlock}
 CATEGORIES TO GENERATE (in this order):
 ${categoryBlocks || '(none)'}
 ${skippedCategories.length > 0 ? `\nCategories Kate is still deciding on (skip these): ${skippedCategories.join(', ')}` : ''}
+${preservableBlock ? '\n' + preservableBlock : ''}
 ${otherFoodBlock ? '\n' + otherFoodBlock : ''}
 ${otherJobsBlock ? '\n' + otherJobsBlock : ''}
 
