@@ -22,6 +22,7 @@ import { recordChange, fieldChanges, ASK_FIELDS } from '@/lib/ledger';
 const TRACKED_ITEM_FIELDS = [
   ...ASK_FIELDS,
   'description',
+  'notes',
   'critical',
   'dietaryTags',
   'dayId',
@@ -77,6 +78,10 @@ export async function PATCH(
     // Other fields
     if (body.name !== undefined) updateData.name = body.name;
     if (body.description !== undefined) updateData.description = body.description;
+    // GTC-238: notes was the one edit-form field the route never read — a 200 that
+    // persisted nothing. A note is Kate's manual work (ruling Q1), so it is also
+    // substantive and tracked below.
+    if (body.notes !== undefined) updateData.notes = body.notes;
     if (body.critical !== undefined) updateData.critical = body.critical;
 
     // Display order — pure reorder, not substantive (does not flip GENERATED → HOST_EDITED).
@@ -124,6 +129,7 @@ export async function PATCH(
       body.quantityState !== undefined ||
       body.quantityText !== undefined ||
       body.critical !== undefined ||
+      body.notes !== undefined ||
       body.dietaryTags !== undefined ||
       body.dayId !== undefined ||
       body.serveTime !== undefined ||

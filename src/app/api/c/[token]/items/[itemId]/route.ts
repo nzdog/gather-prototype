@@ -46,6 +46,7 @@ export async function PATCH(
     body.description !== undefined ||
     body.quantity !== undefined ||
     body.critical !== undefined ||
+    body.notes !== undefined ||
     body.glutenFree !== undefined ||
     body.dairyFree !== undefined ||
     body.vegetarian !== undefined ||
