@@ -26,6 +26,11 @@ model Event {
   guestCountConfidence       GuestCountConfidence     @default(MEDIUM)
   guestCountMin              Int?
   guestCountMax              Int?
+  // GTC-184: superseded by EventSetup.dietaryData (the GTC-150 three-state model,
+  // read via readDietaryData()) for conflict detection as of check.ts's
+  // detectDietaryGaps. Deprecated in place, not removed — these fields remain live
+  // for V1 generation and regenerate (9+ consumers per the GTC-228 reconciliation
+  // trace), so do not delete or stop writing them without a dedicated ticket.
   dietaryStatus              DietaryStatus            @default(UNSPECIFIED)
   dietaryVegetarian          Int                      @default(0)
   dietaryVegan               Int                      @default(0)
