@@ -59,6 +59,7 @@ export async function detectConflicts(eventId: string): Promise<ConflictData[]> 
         },
       },
       days: true,
+      setup: true,
     },
   });
 
