@@ -153,6 +153,20 @@ model Person {
   smsOptedOut      Boolean       @default(false)
   smsOptedOutAt    DateTime?
   inviteAnchorAt   DateTime?
+  /// GTC-178 (E1, phase 3): SUPERSEDED BY PersonEvent.firstNudgeSentAt /
+  /// secondNudgeSentAt. These are per-person for a per-EVENT fact — the same
+  /// global-anchor leak as inviteAnchorAt directly above: one person in two events has
+  /// one pair of flags, so a nudge sent for event A silences event B. Phase 2 fixed the
+  /// read side of that leak (the clock); the successor columns fix the write side.
+  ///
+  /// STILL LIVE AS OF THIS MIGRATION. Phase 3 adds the successors and moves nothing.
+  /// nudge-sender.ts still writes these, nudge-eligibility.ts still reads them for
+  /// dedup, and four dashboard consumers still render them. The cutover is phase 4,
+  /// after which they become retained-but-unwritten — the treatment inviteAnchorAt and
+  /// rsvpStatus got — and a later ticket drops them.
+  ///
+  /// DO NOT ADD NEW READERS OR WRITERS. Anything new belongs on the PersonEvent
+  /// columns; a reader added here now is one more call site phase 4 has to find.
   nudge24hSentAt   DateTime?
   nudge48hSentAt   DateTime?
   tokens           AccessToken[]
@@ -218,9 +232,33 @@ model PersonEvent {
   /// Person is global, so a person in two events shares one anchor and the second
   /// event's clocks are wrong from the start (the guard at people/route.ts:133 only
   /// sets it when null). Person.inviteAnchorAt is retained-but-unwritten until
-  /// GTC-199 (A4). Person.nudge24hSentAt/nudge48hSentAt carry the identical leak and
-  /// move under GTC-178 (E1) — zone-7-adjacent, not this ticket's.
+  /// GTC-199 (A4). Person.nudge24hSentAt/nudge48hSentAt carried the identical leak and
+  /// moved under GTC-178 (E1) — see firstNudgeSentAt/secondNudgeSentAt below.
   sentAt               DateTime?
+  /// GTC-178 (E1, phase 3): THE SENT-SIDE DEDUP STATE, per event. Stamped on a
+  /// successful auto-nudge send; read as "has this leg already fired for this person on
+  /// THIS event". Relocates the shape of Person.nudge24hSentAt/nudge48hSentAt onto the
+  /// row that owns the clock they are measured against (sentAt, directly above).
+  ///
+  /// ORDINAL, NOT TIMING-BASED (Ruling 7, 2026-08-27). Deliberately NOT nudgeDay4SentAt:
+  /// GTC-179 (E2) makes the cadence adjustable per event and per person
+  /// (standard/relaxed/off), so a column named after a day count starts lying the moment
+  /// E2 lands. "First" and "second" stay true at every pace. Same reasoning as
+  /// Assignment.decideByFollowupSentAt, which names the EVENT rather than its timing.
+  ///
+  /// NO BACKFILL (Ruling 6, 2026-08-27) — CONDITIONAL, and the condition is recorded
+  /// because it can lapse. Verified immediately before this migration: zero
+  /// InviteEvent NUDGE_SENT_AUTO rows, zero non-null Person.nudge24hSentAt, zero
+  /// non-null Person.nudge48hSentAt. Nobody has ever been messaged, so there is no send
+  /// history to preserve. Had there been any, starting these columns null would make
+  /// every person past their first window eligible again on the next 15-minute cron
+  /// tick — a re-nudge burst with the same TCPA/spam shape as GTC-252.
+  ///
+  /// NOTHING READS OR WRITES THESE YET. The cutover is GTC-178 phase 4; the retime to
+  /// day-4/day-7 is phase 5. Until phase 4 lands, the live dedup state is still
+  /// Person.nudge24hSentAt/nudge48hSentAt.
+  firstNudgeSentAt     DateTime?
+  secondNudgeSentAt    DateTime?
   householdId          String?
   household            Household?        @relation("HouseholdMembers", fields: [householdId], references: [id])
   householdRole        HouseholdRole?
