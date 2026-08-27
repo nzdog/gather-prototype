@@ -26,23 +26,9 @@ export interface NudgeCandidate {
   nudge48hSentAt: Date | null;
 }
 
-export interface RsvpFollowupCandidate {
-  personEventId: string;
-  personId: string;
-  personName: string;
-  phoneNumber: string;
-  eventId: string;
-  eventName: string;
-  hostId: string;
-  hostName: string;
-  rsvpRespondedAt: Date;
-  participantToken: string;
-}
-
 export interface EligibilityResult {
   eligible24h: NudgeCandidate[];
   eligible48h: NudgeCandidate[];
-  eligibleRsvpFollowup?: RsvpFollowupCandidate[];
   skipped: {
     reason: string;
     count: number;
@@ -214,13 +200,9 @@ export async function findNudgeCandidates(): Promise<EligibilityResult> {
     }
   }
 
-  // Find RSVP followup candidates
-  const rsvpFollowupResult = await findRsvpFollowupCandidates();
-
   return {
     eligible24h,
     eligible48h,
-    eligibleRsvpFollowup: rsvpFollowupResult.eligible,
     skipped: Array.from(skipReasons.entries()).map(([reason, count]) => ({
       reason,
       count,
@@ -238,35 +220,6 @@ export async function findNudgeCandidatesForEvent(eventId: string): Promise<Elig
   return {
     eligible24h: allCandidates.eligible24h.filter((c) => c.eventId === eventId),
     eligible48h: allCandidates.eligible48h.filter((c) => c.eventId === eventId),
-    eligibleRsvpFollowup: allCandidates.eligibleRsvpFollowup?.filter((c) => c.eventId === eventId),
     skipped: allCandidates.skipped,
   };
-}
-
-/**
- * NEUTRALISED BY GTC-174 (D1). Always returns no candidates.
- *
- * This found PersonEvents sitting at `rsvpStatus = NOT_SURE` for 48h and sent them a
- * forced-conversion SMS. Every premise it rested on is now gone:
- *
- *  - Hinge §8 rules a maybe explicitly NO-NUDGE. "The silence cadence asks *did you see
- *    this?*; wrong question — he saw it. A maybe needs *time to decide*." What a maybe
- *    gets instead is a decide-by clock, which is D2's (GTC-175), not a chase.
- *  - Hinge §3 retires `rsvpStatus` as a guest-facing question altogether, so NOT_SURE
- *    can no longer be produced. D1 leaves the column retained-but-unwritten.
- *
- * It is emptied rather than deleted because deleting it is GTC-178's (E1) job, and E1
- * removes the caller and the sender with it. Emptying now closes the live path: without
- * this, a LEGACY NOT_SURE row still in the database would keep matching and fire a
- * message that contradicts the very ruling this ticket implements. The migration
- * deliberately does not clear those rows (they are evidence), so the guard belongs here.
- *
- * The signature is unchanged so callers keep compiling. Opt-out handling (zone 7) is not
- * touched by this: no send decision moves, because no send happens.
- */
-export async function findRsvpFollowupCandidates(): Promise<{
-  eligible: RsvpFollowupCandidate[];
-  skipped: { reason: string; count: number }[];
-}> {
-  return { eligible: [], skipped: [] };
 }

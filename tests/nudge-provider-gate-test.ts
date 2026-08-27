@@ -24,8 +24,8 @@
  *     configuration check — before `sendViaTnz` and before `client.messages.create`. A
  *     placeholder `TNZ_AUTH_TOKEN` would NOT be safe: with a `+64` destination it makes a
  *     real POST to api.tnz.co.nz. Do not "fix" this file by setting one.
- *  2. The nudge senders have NO email fallback. `processNudges`, `processRsvpFollowupNudges`
- *     and `processProxyNudges` reach `sendSms` and stop; nothing in `src/lib/sms/` imports
+ *  2. The nudge senders have NO email fallback. `processNudges` and `processProxyNudges`
+ *     reach `sendSms` and stop; nothing in `src/lib/sms/` imports
  *     `sendNudgeEmail`. This matters because `RESEND_API_KEY` is live in `.env` and an email
  *     fallback would make a genuine Resend call (the hazard wrap-up-quiet-hours-test.ts
  *     records). `chooseManualNudgeChannel` is asserted as a pure function precisely so the

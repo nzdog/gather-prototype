@@ -9,12 +9,17 @@
  * householdRole at all.
  *
  * DB-level test (house pattern, cf. household-edit-preserves-membership-test.ts).
- * Exercises the six real recipient-selection paths against a real dev DB.
+ * Exercises every real recipient-selection path against a real dev DB.
  *
  * GTC-175 (D2) added path 6, the maybe's decide-by follow-up. It is a real outbound SMS
- * to a real person, so §10.6 binds it exactly as it binds the other five — the ticket
+ * to a real person, so §10.6 binds it exactly as it binds the others — the ticket
  * exempts a maybe from the nudge CADENCE, never from the eligibility gates. Any future
  * sender belongs in this list too.
+ *
+ * GTC-178 (E1, phase 1) removed path 2 — the RSVP follow-up sender no longer exists.
+ * THE SURVIVING PATHS KEEP THEIR ORIGINAL NUMBERS (1, 3, 4, 5, 6) rather than closing
+ * the gap: those labels are cited by number in GTC-172's and GTC-178's evidence, and
+ * renumbering would silently repoint every one of them. The gap is the record.
  *
  * THE SUBJECT is a CHILD with a valid NZ phone AND an email AND reachabilityTier
  * DIRECT — i.e. maximally messageable by every signal except role.
@@ -29,7 +34,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { findNudgeCandidates, findRsvpFollowupCandidates } from '../src/lib/sms/nudge-eligibility';
+import { findNudgeCandidates } from '../src/lib/sms/nudge-eligibility';
 import { findProxyNudgeCandidates } from '../src/lib/sms/proxy-nudge-eligibility';
 import { selectWrapUpRecipients } from '../src/lib/wrap-up';
 import { resolveManualNudgeRecipient } from '../src/lib/sms/manual-nudge-recipient';
@@ -113,10 +118,6 @@ async function main() {
           householdRole: opts.householdRole,
           isYoungPerson: opts.isYoungPerson ?? false,
           sentAt: anchor,
-          // Drives findRsvpFollowupCandidates.
-          rsvpStatus: 'NOT_SURE',
-          rsvpRespondedAt: anchor,
-          rsvpFollowupSentAt: null,
         },
       });
 
@@ -199,17 +200,13 @@ async function main() {
       in24h(nullRoleControl.person.id) && in48h(nullRoleControl.person.id)
     );
 
-    // ── PATH 2 — findRsvpFollowupCandidates ──────────────────────────────
-    const followups = await findRsvpFollowupCandidates();
-    const inFollowup = (id: string) => followups.eligible.some((c) => c.personId === id);
-
-    assert('path 2', 'subject CHILD excluded from RSVP follow-up', !inFollowup(subject.person.id));
-    assert('path 2 control', 're-roled adult IS in RSVP follow-up', inFollowup(control.person.id));
-    assert(
-      'path 2 control',
-      'NULL-role direct-add adult IS still in RSVP follow-up',
-      inFollowup(nullRoleControl.person.id)
-    );
+    // ── PATH 2 — REMOVED (GTC-178, phase 1) ──────────────────────────────
+    // findRsvpFollowupCandidates and sendRsvpFollowupNudge are gone. GTC-174 (D1) had
+    // already neutralised the finder to always return [], which left the two control
+    // assertions here asserting that a control IS an RSVP-follow-up candidate — RED and
+    // unfixable, because no candidate could exist. Deleting the path deletes the
+    // assertions with it. The remaining five paths still cover §10.6; a maybe's real
+    // follow-up is path 6 (decide-by), which is a different mechanism and unaffected.
 
     // ── PATH 3 — findProxyNudgeCandidates (household channel) ────────────
     // 3a: baseline, no channel picked — the child must never be the recipient.

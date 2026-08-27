@@ -1,5 +1,5 @@
-import { findNudgeCandidates, findRsvpFollowupCandidates } from './nudge-eligibility';
-import { processNudges, processRsvpFollowupNudges } from './nudge-sender';
+import { findNudgeCandidates } from './nudge-eligibility';
+import { processNudges } from './nudge-sender';
 import { findProxyNudgeCandidates } from './proxy-nudge-eligibility';
 import { processProxyNudges } from './proxy-nudge-sender';
 import { isSmsEnabled } from './twilio-client';
@@ -19,7 +19,6 @@ export interface NudgeRunResult {
   candidates: {
     eligible24h: number;
     eligible48h: number;
-    eligibleRsvpFollowup?: number;
     skipped: { reason: string; count: number }[];
   };
   proxyCandidates?: {
@@ -27,12 +26,6 @@ export interface NudgeRunResult {
     skipped: { reason: string; count: number }[];
   };
   results: {
-    sent: number;
-    succeeded: number;
-    failed: number;
-    deferred: number;
-  };
-  rsvpFollowupResults?: {
     sent: number;
     succeeded: number;
     failed: number;
@@ -110,20 +103,6 @@ export async function runNudgeScheduler(): Promise<NudgeRunResult> {
       .filter((r) => !r.success)
       .forEach((r) => errors.push(`${r.personName}: ${r.error}`));
 
-    // Find eligible candidates for RSVP followup
-    const rsvpFollowupResult = await findRsvpFollowupCandidates();
-
-    // Process RSVP followup nudges
-    const rsvpFollowupProcessResult = await processRsvpFollowupNudges(rsvpFollowupResult.eligible);
-
-    const rsvpFollowupSucceeded = rsvpFollowupProcessResult.sent.filter((r) => r.success).length;
-    const rsvpFollowupFailed = rsvpFollowupProcessResult.sent.filter((r) => !r.success).length;
-
-    // Collect RSVP followup errors
-    rsvpFollowupProcessResult.sent
-      .filter((r) => !r.success)
-      .forEach((r) => errors.push(`RSVP followup ${r.personName}: ${r.error}`));
-
     // Find eligible candidates for proxy nudges
     const proxyCandidates = await findProxyNudgeCandidates();
 
@@ -138,23 +117,19 @@ export async function runNudgeScheduler(): Promise<NudgeRunResult> {
       .filter((r) => !r.success)
       .forEach((r) => errors.push(`Proxy ${r.primaryContactName}: ${r.error}`));
 
-    const attempted =
-      processResult.sent.length +
-      rsvpFollowupProcessResult.sent.length +
-      proxyProcessResult.sent.length;
+    const attempted = processResult.sent.length + proxyProcessResult.sent.length;
 
     return {
       timestamp,
       ok: isNudgeRunHealthy({
         smsConfigured,
         attempted,
-        succeeded: succeeded + rsvpFollowupSucceeded + proxySucceeded,
+        succeeded: succeeded + proxySucceeded,
       }),
       smsConfigured,
       candidates: {
         eligible24h: candidates.eligible24h.length,
         eligible48h: candidates.eligible48h.length,
-        eligibleRsvpFollowup: rsvpFollowupResult.eligible.length,
         skipped: candidates.skipped,
       },
       proxyCandidates: {
@@ -166,12 +141,6 @@ export async function runNudgeScheduler(): Promise<NudgeRunResult> {
         succeeded,
         failed,
         deferred: processResult.deferred,
-      },
-      rsvpFollowupResults: {
-        sent: rsvpFollowupProcessResult.sent.length,
-        succeeded: rsvpFollowupSucceeded,
-        failed: rsvpFollowupFailed,
-        deferred: rsvpFollowupProcessResult.deferred,
       },
       proxyResults: {
         sent: proxyProcessResult.sent.length,
