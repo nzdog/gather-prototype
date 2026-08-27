@@ -82,6 +82,29 @@ model Event {
   /// resolveDecideByOffsetHours takes a params object so that layer slots in without
   /// touching a call site.
   decideByOffsetHours        Int?
+  /// GTC-179 (E2, phase 2): the per-EVENT nudge pace (Moment 4 §10.3). NULL means NOT
+  /// SET — no opinion — and resolves to the system default [4, 7], exactly the
+  /// convention `decideByOffsetHours` directly above records. It is NOT "zero", and it
+  /// is NOT a stored STANDARD: an unset pace and an explicit STANDARD reach the same
+  /// days by different routes, and only the unset one yields to a future change in the
+  /// default.
+  ///
+  /// A TYPED COLUMN, NOT EventSetup JSONB (founder ruling on decision 10, 2026-08-27).
+  /// The nudge scheduler reads this on every 15-minute cron tick; `decideByOffsetHours`
+  /// is the existing precedent for a scheduler-read tuning value and it is a typed
+  /// column; EventSetup's JSON tenants are Moment-2 form state, an unrelated concern;
+  /// and a typed enum gets database-level validity checking that JSONB does not.
+  ///
+  /// READ IT THROUGH `resolveNudgeOffsetDays` IN src/lib/nudge-cadence.ts, never
+  /// directly. It composes with PersonEvent.nudgeMark by QUIETER-WINS (Ruling 4), which
+  /// is not an override ladder — a GENTLE person on an OFF event gets NO nudges, not
+  /// one. Reading this column alone would get that backwards.
+  ///
+  /// NO BACKFILL, and none is needed: nullable, and null is existing behaviour.
+  ///
+  /// GTC-188 (I1) builds the pre-flight surface Kate sets this on. Until it lands there
+  /// is no host-facing way to set it — deliberate, and stated rather than implied.
+  nudgePace                  NudgePace?
   sharedLinkToken            String?                  @unique
   sharedLinkEnabled          Boolean                  @default(false)
   // Retained, unwritten after GTC-169 (A3a). Historical evidence of the old freeze
@@ -265,6 +288,36 @@ model PersonEvent {
   /// these are stamped and never WHERE.
   firstNudgeSentAt     DateTime?
   secondNudgeSentAt    DateTime?
+  /// GTC-179 (E2, phase 2): the per-PERSON go-gentle / don't-chase mark (Moment 4
+  /// §10.3). NULL means NO MARK — no opinion — and yields to the event's pace; it is
+  /// not a stored "normal".
+  ///
+  /// ON PersonEvent, NOT Person, and that is the whole point. The mark is a per-EVENT
+  /// hosting judgement: Kate may go gentle on her mother for the wake and not for the
+  /// birthday. Putting it on Person would reproduce exactly the global-for-a-per-event
+  /// leak that Person.inviteAnchorAt and Person.nudge24hSentAt/nudge48hSentAt above are
+  /// both retained-but-unwritten monuments to (GTC-178 Rulings 2 and 4).
+  ///
+  /// PersonEvent CARRIES NO JSON COLUMN, so unlike the event-side pace this had no
+  /// no-migration alternative to weigh — the storage question here was only ever WHICH
+  /// table, and the answer is the one that owns the send clock these offsets count from
+  /// (`sentAt`, above).
+  ///
+  /// READ IT THROUGH `resolveNudgeOffsetDays` IN src/lib/nudge-cadence.ts, never
+  /// directly — quieter-wins composition with Event.nudgePace (Ruling 4).
+  ///
+  /// DONT_CHASE MUST ALSO SUPPRESS THE PROXY PATH (Ruling 3). §10.3's archetype is "the
+  /// mother", and the mother is the person most likely to be her household's picked
+  /// channel (Household.contactPersonEventId), so a direct-path-only suppression would
+  /// fail precisely where the control matters most. That is a boolean read in
+  /// `findProxyNudgeCandidates`, gated AFTER the child rule and AFTER opt-out — never a
+  /// cadence, because retiming the proxy path needs GTC-252's undecided clock decision.
+  ///
+  /// LAYERED ON TOP OF OPT-OUT, NEVER THROUGH IT (Do-Not-Touch Zone 7). See the NudgeMark
+  /// enum docstring.
+  ///
+  /// NOTHING READS OR WRITES THIS AS OF PHASE 2. The cutover is phase 3, the UI phase 4.
+  nudgeMark            NudgeMark?
   householdId          String?
   household            Household?        @relation("HouseholdMembers", fields: [householdId], references: [id])
   householdRole        HouseholdRole?
@@ -386,9 +439,9 @@ model Item {
 }
 
 model Assignment {
-  id        String             @id @default(cuid())
-  response  AssignmentResponse @default(PENDING)
-  createdAt DateTime           @default(now())
+  id                     String             @id @default(cuid())
+  response               AssignmentResponse @default(PENDING)
+  createdAt              DateTime           @default(now())
   /// GTC-175 (D2): the decide-by follow-up sent-stamp. Hinge §8 allows exactly ONE
   /// follow-up near the decide-by; this is the record that it happened.
   ///
@@ -406,10 +459,10 @@ model Assignment {
   /// and a duplicate text is a trust failure where a missed one is a nuisance. All four
   /// response writers are pinned free of this field by tests/decide-by-clock-test.ts.
   decideByFollowupSentAt DateTime?
-  itemId    String             @unique
-  personId  String
-  item      Item               @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  person    Person             @relation(fields: [personId], references: [id])
+  itemId                 String             @unique
+  personId               String
+  item                   Item               @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  person                 Person             @relation(fields: [personId], references: [id])
 }
 
 model InviteEvent {
@@ -1152,6 +1205,44 @@ enum RsvpStatus {
 enum AttendanceAnswer {
   YES
   NO
+}
+
+/// GTC-179 (E2, phase 2): the per-EVENT nudge pace — Moment 4 §10.3, "at the pre-flight
+/// (nudge pace: standard / relaxed / off)". Founder Ruling 2, 2026-08-27 supplies the
+/// days: STANDARD [4, 7], RELAXED [6, 12], OFF [].
+///
+/// ⚠ THIS ENUM MIRRORS `NUDGE_PACE_OFFSET_DAYS` IN src/lib/nudge-cadence.ts. THE MODULE
+/// IS THE SOURCE AND THIS IS THE COPY — schema-follows-module, never the reverse. The
+/// direction is forced, not stylistic: that module must import NOTHING so the host UI can
+/// render the same clock the sweep enforces (Hinge §6), and tests/nudge-cadence-test.ts
+/// asserts the zero-import property structurally. It therefore cannot import this enum,
+/// so the two vocabularies are kept in step by hand. Change the module first, then this.
+enum NudgePace {
+  STANDARD
+  RELAXED
+  OFF
+}
+
+/// GTC-179 (E2, phase 2): the per-PERSON mark — Moment 4 §10.3, "a mark alongside the
+/// recipient picker (go gentle / don't chase), set at Moment 1 or any time — a hosting
+/// judgement the system stores and obeys". Founder Ruling 1, 2026-08-27: GENTLE is one
+/// nudge at day 5; DONT_CHASE is none at all, on the direct path AND the proxy path
+/// (Ruling 3).
+///
+/// TWO VALUES, NO "NORMAL" SENTINEL. NULL on the column carries "no mark", which is a
+/// different fact from either mark and is what makes an unmarked person defer to the
+/// event's pace. Same reasoning AttendanceAnswer records for having no PENDING.
+///
+/// ⚠ MIRRORS `NUDGE_MARK_OFFSET_DAYS` IN src/lib/nudge-cadence.ts — same
+/// schema-follows-module direction, same reason. See NudgePace above.
+///
+/// NOT A SUBSTITUTE FOR OPT-OUT (Do-Not-Touch Zone 7). This is a HOST-set preference
+/// layered ON TOP of `Person.smsOptedOut`/`SmsOptOut`, which is GUEST-set and legally
+/// binding. Every eligibility ladder must check opt-out FIRST and this second, so that
+/// a host clearing DONT_CHASE can never resume messaging someone who opted out.
+enum NudgeMark {
+  GENTLE
+  DONT_CHASE
 }
 
 enum InviteEventType {
