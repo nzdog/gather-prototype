@@ -20,6 +20,12 @@
  * NO SMS IS SENT. `processNudges` is never invoked; every assertion is at the layer where
  * candidacy is decided.
  *
+ * GTC-179 (E2, phase 1) EXTENDS LAYER 1, and only layer 1. The cadence controls are a
+ * pure-resolution change — the pace and the mark have no storage until phase 2 — so
+ * every source below is a literal standing in for a column that does not exist yet.
+ * Layers 2 and 3 are untouched and must stay green unchanged: that is the proof phase 1
+ * changed no behaviour.
+ *
  * Run: npx tsx tests/nudge-cadence-test.ts
  * Destructive to its own created rows only; cleans up in finally.
  */
@@ -34,6 +40,13 @@ import {
   nudgeDueAt,
   dueNudgeIndices,
   nextNudgeAt,
+  // GTC-179 (E2, phase 1). Absent before the fix — see the `attempt` note in layer 1b
+  // for why importing them anyway is safe and keeps RED and GREEN one file.
+  NUDGE_PACE_OFFSET_DAYS,
+  NUDGE_MARK_OFFSET_DAYS,
+  quieterOffsets,
+  type NudgePace,
+  type NudgeMark,
 } from '../src/lib/nudge-cadence';
 import { findNudgeCandidates } from '../src/lib/sms/nudge-eligibility';
 
@@ -155,6 +168,160 @@ async function main() {
       'pure',
       'offsets normalise ascending, deduped, no negatives',
       JSON.stringify(normaliseOffsets([7, 4, 4, -1, 7])) === JSON.stringify([4, 7])
+    );
+
+    // ══ LAYER 1b — GTC-179 (E2, phase 1): the cadence controls ══════════
+    //
+    // Rulings 1-4 of 2026-08-27. Two axes, one resolution. Nothing here touches
+    // storage: phase 1 is the resolver alone, so the sources are literals standing in
+    // for the columns phase 2 adds.
+    //
+    // WHY `attempt`. These symbols do not exist before the fix, and `tsx` transpiles
+    // without typechecking — so an unguarded `NUDGE_MARK_OFFSET_DAYS.GENTLE` throws a
+    // TypeError and ABORTS the file rather than failing one assertion, and the RED run
+    // would show nothing useful. Guarding keeps RED and GREEN the same file, which is
+    // the evidence discipline GTC-178 used for all three of its suites.
+    const attempt = <T>(f: () => T): T | undefined => {
+      try {
+        return f();
+      } catch {
+        return undefined;
+      }
+    };
+    const json = (v: unknown) => JSON.stringify(v);
+
+    // ── The vocabulary (Rulings 1 and 2) ────────────────────────────────
+    // These two tables are the single source the phase-2 Prisma enums must mirror.
+    assert(
+      'gtc179 vocabulary',
+      'GENTLE is ONE nudge at day 5 (Ruling 1)',
+      json(attempt(() => NUDGE_MARK_OFFSET_DAYS.GENTLE)) === json([5])
+    );
+    assert(
+      'gtc179 vocabulary',
+      "DONT_CHASE is no nudges at all (Ruling 1's far end, §10.3)",
+      json(attempt(() => NUDGE_MARK_OFFSET_DAYS.DONT_CHASE)) === json([])
+    );
+    assert(
+      'gtc179 vocabulary',
+      'STANDARD is the system default, days 4 and 7 — the pace names it, never redefines it',
+      json(attempt(() => NUDGE_PACE_OFFSET_DAYS.STANDARD)) === json([4, 7])
+    );
+    assert(
+      'gtc179 vocabulary',
+      'RELAXED is two nudges at days 6 and 12 (Ruling 2)',
+      json(attempt(() => NUDGE_PACE_OFFSET_DAYS.RELAXED)) === json([6, 12])
+    );
+    assert(
+      'gtc179 vocabulary',
+      'OFF is no nudges at all (Ruling 2)',
+      json(attempt(() => NUDGE_PACE_OFFSET_DAYS.OFF)) === json([])
+    );
+
+    // ── The comparator (Ruling 4: quieter = FEWER FIRST, THEN LATER) ────
+    assert(
+      'gtc179 quieter',
+      'fewer beats later — [5] is quieter than [6,12] even though it lands sooner',
+      json(attempt(() => quieterOffsets([5], [6, 12]))) === json([5])
+    );
+    assert(
+      'gtc179 quieter',
+      'on equal counts, LATER wins — [6,12] is quieter than [4,7]',
+      json(attempt(() => quieterOffsets([4, 7], [6, 12]))) === json([6, 12])
+    );
+    assert(
+      'gtc179 quieter',
+      'zero beats everything — [] is quieter than [4,7]',
+      json(attempt(() => quieterOffsets([], [4, 7]))) === json([])
+    );
+    assert(
+      'gtc179 quieter',
+      'the comparison is symmetric — argument order cannot change the answer',
+      json(attempt(() => quieterOffsets([5], [6, 12]))) ===
+        json(attempt(() => quieterOffsets([6, 12], [5]))) &&
+        json(attempt(() => quieterOffsets([4, 7], [6, 12]))) ===
+          json(attempt(() => quieterOffsets([6, 12], [4, 7]))) &&
+        json(attempt(() => quieterOffsets([], [4, 7]))) ===
+          json(attempt(() => quieterOffsets([4, 7], [])))
+    );
+
+    // ── The full composition matrix (Ruling 4) ──────────────────────────
+    // Twelve cells, every one of them ruled. `null` in either column is the UNSET
+    // state — no opinion, not a disguised default — which is why the (unset, unset)
+    // cell lands on the system default and no other cell does.
+    const MATRIX: Array<[NudgeMark | null, NudgePace | null, number[]]> = [
+      [null, null, [4, 7]],
+      [null, 'STANDARD', [4, 7]],
+      [null, 'RELAXED', [6, 12]],
+      [null, 'OFF', []],
+      ['GENTLE', null, [5]],
+      ['GENTLE', 'STANDARD', [5]],
+      ['GENTLE', 'RELAXED', [5]],
+      ['GENTLE', 'OFF', []],
+      ['DONT_CHASE', null, []],
+      ['DONT_CHASE', 'STANDARD', []],
+      ['DONT_CHASE', 'RELAXED', []],
+      ['DONT_CHASE', 'OFF', []],
+    ];
+    for (const [mark, pace, expected] of MATRIX) {
+      assert(
+        'gtc179 matrix',
+        `mark ${mark ?? 'unset'} + pace ${pace ?? 'unset'} resolves to [${expected}]`,
+        json(
+          attempt(() =>
+            resolveNudgeOffsetDays({
+              person: { nudgeMark: mark },
+              event: { nudgePace: pace },
+            })
+          )
+        ) === json(expected)
+      );
+    }
+
+    // The single cell the documented override ladder got BACKWARDS, named on its own
+    // because it is the whole reason Ruling 4 exists: under "per-person overrides
+    // per-event" a GENTLE person on an OFF event gets [5] — MORE nudges than an
+    // unmarked person on the same event, who gets none. A control that only reduces
+    // contact would have increased it.
+    assert(
+      'gtc179 ruling 4',
+      'GENTLE on an OFF event is [] and NOT [5] — the override ladder inverted this',
+      json(
+        attempt(() =>
+          resolveNudgeOffsetDays({
+            person: { nudgeMark: 'GENTLE' },
+            event: { nudgePace: 'OFF' },
+          })
+        )
+      ) === json([])
+    );
+
+    // ── The resolution feeds the seam GTC-178 left ──────────────────────
+    assert(
+      'gtc179 seam',
+      "a DONT_CHASE resolution is never due — 365 days on, still nothing (§10.3's off-switch)",
+      attempt(
+        () =>
+          dueNudgeIndices(
+            T0,
+            at(365),
+            resolveNudgeOffsetDays({ person: { nudgeMark: 'DONT_CHASE' }, event: null })
+          ).length
+      ) === 0
+    );
+    assert(
+      'gtc179 seam',
+      'a GENTLE resolution is due once at day 5 and never grows a second leg',
+      json(
+        attempt(() => {
+          const o = resolveNudgeOffsetDays({ person: { nudgeMark: 'GENTLE' }, event: null });
+          return [
+            dueNudgeIndices(T0, at(4), o),
+            dueNudgeIndices(T0, at(5), o),
+            dueNudgeIndices(T0, at(365), o),
+          ];
+        })
+      ) === json([[], [0], [0]])
     );
 
     // ══ LAYER 2 — the sweep, with now injected ══════════════════════════

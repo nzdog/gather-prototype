@@ -66,14 +66,16 @@ export interface EligibilityResult {
  * whatever the wall clock happened to be when CI ran.
  */
 export async function findNudgeCandidates(now: Date = new Date()): Promise<EligibilityResult> {
-  // GTC-178 (E1, phase 5): the cadence is resolved once per run, from the shared pure
-  // module. Days 4 and 7 (Moment 4 §8.3), the system's own schedule — not "opened but no
-  // response", which is a different mechanism and was never what the spec asked for.
+  // GTC-178 (E1, phase 5): the cadence comes from the shared pure module — days 4 and 7
+  // by default (Moment 4 §8.3), the system's own schedule, not "opened but no response",
+  // which is a different mechanism and was never what the spec asked for.
   //
-  // Resolved with no sources today because no override field exists yet. GTC-179 (E2)
-  // adds the per-event pace and the per-person go-gentle mark, and passes them here; an
-  // empty result from that resolution is don't-chase and needs no branch of its own.
-  const offsetDays = resolveNudgeOffsetDays({});
+  // GTC-179 (E2, phase 1): THE RESOLUTION MOVED INTO THE LOOP. It used to sit here, above
+  // the query, resolved once per sweep — correct while the only layer was a constant, and
+  // wrong the moment §10.3's two layers exist, because BOTH vary per row: the mark is per
+  // PersonEvent, the pace is per Event. A run-level resolution can only ever produce one
+  // answer for everybody, which is the opposite of what "cadence controls live where the
+  // people-decisions live" asks for. See the call site further down.
 
   // GTC-178 (E1, phase 2): ROOTED ON `PersonEvent`, AND THE CLOCK IS `PersonEvent.sentAt`.
   //
@@ -238,6 +240,22 @@ export async function findNudgeCandidates(now: Date = new Date()): Promise<Eligi
       firstNudgeSentAt: membership.firstNudgeSentAt,
       secondNudgeSentAt: membership.secondNudgeSentAt,
     };
+
+    // GTC-179 (E2, phase 1): THIS ROW'S CADENCE. Resolved per membership, because both
+    // of §10.3's layers are per-row — the mark on this PersonEvent, the pace on its
+    // Event. Quieter of the two wins (Ruling 4); an empty result is don't-chase or an
+    // OFF event, and needs no branch of its own because both gates below iterate.
+    //
+    // THE SOURCES ARE STILL EMPTY. Phase 1 is the resolver alone — neither column exists
+    // until phase 2 — so every row resolves to the system default and behaviour is
+    // unchanged from when this ran once per sweep.
+    //
+    // ⚠ PHASE 3 MUST PASS `{ person: membership, event: membership.event }` AND WIDEN THE
+    // `select` ABOVE TO CARRY BOTH COLUMNS. TypeScript cannot catch a miss: NudgeMarkSource
+    // and NudgePaceSource are all-optional by design (a narrow `select` has to satisfy
+    // them), so ANY object type-checks and a forgotten column reads as `undefined` —
+    // silently the default, for everybody, with the suite still green.
+    const offsetDays = resolveNudgeOffsetDays({});
 
     // GTC-178 (E1, phase 5): which legs the clock says are due, by INDEX. Position is
     // what has to line up, because the stamps are ordinal (Ruling 7).
