@@ -21,8 +21,10 @@ interface PersonStatus {
   status: 'NOT_SENT' | 'SENT' | 'OPENED' | 'RESPONDED';
   hasPhone: boolean;
   smsOptedOut: boolean;
-  nudge24hSentAt?: string | null;
-  nudge48hSentAt?: string | null;
+  // GTC-178 (E1, phase 4): sourced from PersonEvent, not Person. The "24h"/"48h" chips
+  // below keep their text — this phase moves storage only.
+  firstNudgeSentAt?: string | null;
+  secondNudgeSentAt?: string | null;
   nudgeStatus?: string;
   reachabilityTier: 'DIRECT' | 'PROXY' | 'SHARED' | 'UNTRACKABLE';
 }
@@ -614,10 +616,10 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
                   <span className="text-sm">{person.name}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  {person.nudge24hSentAt && (
+                  {person.firstNudgeSentAt && (
                     <span className="text-xs bg-yellow-100 text-yellow-700 px-1 rounded">24h</span>
                   )}
-                  {person.nudge48hSentAt && (
+                  {person.secondNudgeSentAt && (
                     <span className="text-xs bg-amber-100 text-amber-700 px-1 rounded">48h</span>
                   )}
                 </div>

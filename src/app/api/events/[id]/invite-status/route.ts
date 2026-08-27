@@ -6,9 +6,17 @@ import { deriveAttendance, type Attendance } from '@/lib/attendance';
 
 export type InviteStatus = 'NOT_SENT' | 'SENT' | 'OPENED' | 'RESPONDED';
 
-function getNudgeStatus(person: any): string {
-  if (person.nudge48hSentAt) return '48h sent';
-  if (person.nudge24hSentAt) return '24h sent';
+/**
+ * GTC-178 (E1, phase 4): the stamps now live on the PersonEvent row, so this takes the
+ * membership and the person separately rather than one `person` carrying both facts.
+ *
+ * The strings stay "24h sent" / "48h sent" — this phase moves storage only. They are
+ * still genuinely the 24h and 48h legs; phase 5 retimes them to day 4 / day 7 and
+ * relabels them then.
+ */
+function getNudgeStatus(personEvent: any, person: any): string {
+  if (personEvent.secondNudgeSentAt) return '48h sent';
+  if (personEvent.firstNudgeSentAt) return '24h sent';
   if (!person.phoneNumber) return 'no phone';
   return 'pending';
 }
@@ -29,8 +37,13 @@ interface PersonInviteStatus {
   canReceiveSms: boolean;
   claimedAt: string | null;
   claimedBy: string | null;
-  nudge24hSentAt: string | null;
-  nudge48hSentAt: string | null;
+  /**
+   * GTC-178 (E1, phase 4): sourced from PersonEvent.firstNudgeSentAt /
+   * secondNudgeSentAt. Renamed with the storage so the wire name matches where the value
+   * comes from — the UI labels stay "24h"/"48h", because in this phase they still are.
+   */
+  firstNudgeSentAt: string | null;
+  secondNudgeSentAt: string | null;
   nudgeStatus: string;
   reachabilityTier: 'DIRECT' | 'PROXY' | 'SHARED' | 'UNTRACKABLE';
 }
@@ -81,6 +94,9 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         people: {
           select: {
             reachabilityTier: true,
+            // GTC-178 (E1, phase 4): the nudge stamps are per-event and live here now.
+            firstNudgeSentAt: true,
+            secondNudgeSentAt: true,
             // GTC-174 (D1): the stored attendance ANSWER only. rsvpStatus /
             // rsvpRespondedAt are retained-but-unwritten and no longer selected —
             // attendance is derived below.
@@ -91,8 +107,6 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
                 name: true,
                 phoneNumber: true,
                 inviteAnchorAt: true,
-                nudge24hSentAt: true,
-                nudge48hSentAt: true,
                 tokens: {
                   where: {
                     scope: 'PARTICIPANT',
@@ -190,9 +204,9 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         canReceiveSms: !!person.phoneNumber && !hasOptedOut,
         claimedAt: token?.claimedAt?.toISOString() || null,
         claimedBy: token?.claimedBy || null,
-        nudge24hSentAt: person.nudge24hSentAt?.toISOString() || null,
-        nudge48hSentAt: person.nudge48hSentAt?.toISOString() || null,
-        nudgeStatus: getNudgeStatus(person),
+        firstNudgeSentAt: personEvent.firstNudgeSentAt?.toISOString() || null,
+        secondNudgeSentAt: personEvent.secondNudgeSentAt?.toISOString() || null,
+        nudgeStatus: getNudgeStatus(personEvent, person),
         reachabilityTier: personEvent.reachabilityTier as
           | 'DIRECT'
           | 'PROXY'
@@ -221,13 +235,18 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     };
 
     // Nudge summary
+    // GTC-178 (E1, phase 4): counted off the per-event stamps. The `!openedAt` /
+    // `!respondedAt` terms mirror the two eligibility gates in nudge-eligibility.ts and
+    // are deliberately left as they are — the `!hasOpened` gate moves in phase 5
+    // (Ruling 5), and this summary must not start disagreeing with the sweep before then.
     const nudgeSummary = {
-      sent24h: peopleStatus.filter((p) => p.nudge24hSentAt).length,
-      sent48h: peopleStatus.filter((p) => p.nudge48hSentAt).length,
-      pending24h: peopleStatus.filter((p) => p.canReceiveSms && !p.nudge24hSentAt && !p.openedAt)
+      sent24h: peopleStatus.filter((p) => p.firstNudgeSentAt).length,
+      sent48h: peopleStatus.filter((p) => p.secondNudgeSentAt).length,
+      pending24h: peopleStatus.filter((p) => p.canReceiveSms && !p.firstNudgeSentAt && !p.openedAt)
         .length,
-      pending48h: peopleStatus.filter((p) => p.canReceiveSms && !p.nudge48hSentAt && !p.respondedAt)
-        .length,
+      pending48h: peopleStatus.filter(
+        (p) => p.canReceiveSms && !p.secondNudgeSentAt && !p.respondedAt
+      ).length,
     };
 
     // Reachability breakdown

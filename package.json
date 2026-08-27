@@ -56,6 +56,7 @@
     "test:wrap-up-quiet-hours": "tsx tests/wrap-up-quiet-hours-test.ts",
     "test:nudge-provider-gate": "tsx tests/nudge-provider-gate-test.ts",
     "test:nudge-clock-origin": "tsx tests/nudge-clock-origin-test.ts",
+    "test:nudge-dedup-scope": "tsx tests/nudge-dedup-scope-test.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",

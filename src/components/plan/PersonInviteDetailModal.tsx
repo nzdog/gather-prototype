@@ -31,8 +31,10 @@ interface PersonDetail {
   hasPhone: boolean;
   smsOptedOut: boolean;
   canReceiveSms: boolean;
-  nudge24hSentAt: string | null;
-  nudge48hSentAt: string | null;
+  // GTC-178 (E1, phase 4): sourced from PersonEvent, not Person. Labels below stay
+  // "24h"/"48h" — this phase moves storage only; phase 5 retimes and relabels.
+  firstNudgeSentAt: string | null;
+  secondNudgeSentAt: string | null;
   lastHostNudgeAt: string | null;
   claimedAt: string | null;
   eventName: string | null;
@@ -214,25 +216,25 @@ export function PersonInviteDetailModal({ eventId, personId, onClose, onUpdate }
           </div>
 
           {/* Reminders */}
-          {(person.nudge24hSentAt || person.nudge48hSentAt || person.lastHostNudgeAt) && (
+          {(person.firstNudgeSentAt || person.secondNudgeSentAt || person.lastHostNudgeAt) && (
             <div className="border rounded-lg p-3">
               <h3 className="font-medium text-sm text-gray-700 mb-2">Reminders</h3>
               <div className="space-y-2">
-                {person.nudge24hSentAt && (
+                {person.firstNudgeSentAt && (
                   <div className="flex items-center gap-2 text-sm">
                     <Bell className="w-4 h-4 text-yellow-600" />
                     <span>24h auto-reminder sent</span>
                     <span className="text-gray-500">
-                      {new Date(person.nudge24hSentAt).toLocaleString()}
+                      {new Date(person.firstNudgeSentAt).toLocaleString()}
                     </span>
                   </div>
                 )}
-                {person.nudge48hSentAt && (
+                {person.secondNudgeSentAt && (
                   <div className="flex items-center gap-2 text-sm">
                     <Bell className="w-4 h-4 text-amber-600" />
                     <span>48h auto-reminder sent</span>
                     <span className="text-gray-500">
-                      {new Date(person.nudge48hSentAt).toLocaleString()}
+                      {new Date(person.secondNudgeSentAt).toLocaleString()}
                     </span>
                   </div>
                 )}

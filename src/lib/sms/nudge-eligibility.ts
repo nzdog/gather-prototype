@@ -29,8 +29,17 @@ export interface NudgeCandidate {
   // Status flags
   hasOpened: boolean;
   hasResponded: boolean;
-  nudge24hSentAt: Date | null;
-  nudge48hSentAt: Date | null;
+  /**
+   * GTC-178 (E1, phase 4): the sent-side dedup stamps, now read from the PersonEvent row
+   * named by `personEventId` above rather than from the global `Person` pair.
+   *
+   * ORDINAL NAMES, matching the columns (Ruling 7). They are still the 24h and 48h legs
+   * in this phase — the retime to day-4/day-7 is phase 5 — so the names describe WHICH
+   * nudge, never WHEN, which is what keeps them true once GTC-179 makes the pace
+   * adjustable.
+   */
+  firstNudgeSentAt: Date | null;
+  secondNudgeSentAt: Date | null;
 }
 
 export interface EligibilityResult {
@@ -88,6 +97,13 @@ export async function findNudgeCandidates(now: Date = new Date()): Promise<Eligi
   // the system does not know when this person was told, so it must not guess — and the
   // global field it used to fall back on is precisely what produced the wrong guess.
   //
+  // GTC-178 (E1, phase 4): THE DEDUP STAMPS ARE READ FROM THIS ROW TOO. They used to be
+  // `Person.nudge24hSentAt`/`nudge48hSentAt` — the same per-person-for-a-per-event leak
+  // as the clock, through the other door: one person in two live events, nudged for event
+  // A, went permanently silent for event B. Nobody was nudged twice; somebody was never
+  // nudged at all, which is the worse direction to fail.
+  // `tests/nudge-dedup-scope-test.ts` is the two-event proof.
+  //
   // COST, STATED HONESTLY: the person payload (tokens, assignments) is now fetched once
   // per membership rather than once per person, so someone in two events is carried
   // twice. Prisma cannot correlate a nested `where` to the outer row's `eventId`, so
@@ -117,8 +133,6 @@ export async function findNudgeCandidates(now: Date = new Date()): Promise<Eligi
           id: true,
           name: true,
           phoneNumber: true,
-          nudge24hSentAt: true,
-          nudge48hSentAt: true,
           tokens: {
             where: { scope: 'PARTICIPANT' },
             select: {
@@ -209,15 +223,15 @@ export async function findNudgeCandidates(now: Date = new Date()): Promise<Eligi
       participantToken: token.token,
       hasOpened: !!token.openedAt,
       hasResponded,
-      nudge24hSentAt: person.nudge24hSentAt,
-      nudge48hSentAt: person.nudge48hSentAt,
+      firstNudgeSentAt: membership.firstNudgeSentAt,
+      secondNudgeSentAt: membership.secondNudgeSentAt,
     };
 
     // Check 24h eligibility
     if (
       candidate.anchorAt <= twentyFourHoursAgo && // 24h passed
       !candidate.hasOpened && // Haven't opened
-      !candidate.nudge24hSentAt // Haven't sent 24h nudge
+      !candidate.firstNudgeSentAt // Haven't sent the first nudge for THIS event
     ) {
       eligible24h.push(candidate);
     }
@@ -226,7 +240,7 @@ export async function findNudgeCandidates(now: Date = new Date()): Promise<Eligi
     if (
       candidate.anchorAt <= fortyEightHoursAgo && // 48h passed
       !candidate.hasResponded && // Haven't responded
-      !candidate.nudge48hSentAt // Haven't sent 48h nudge
+      !candidate.secondNudgeSentAt // Haven't sent the second nudge for THIS event
     ) {
       eligible48h.push(candidate);
     }

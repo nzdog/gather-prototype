@@ -56,12 +56,23 @@ export async function sendNudge(
   });
 
   if (result.success) {
-    // Update person record to mark nudge as sent
+    // GTC-178 (E1, phase 4): STAMP THE MEMBERSHIP, NOT THE PERSON.
+    //
+    // This wrote `Person.nudge24hSentAt`/`nudge48hSentAt`, which are global per person.
+    // One person in two live events, nudged for event A, went permanently silent for
+    // event B — a different host, a different occasion, its own send. Nobody was nudged
+    // twice; somebody was never nudged at all. `personEventId` is carried on the
+    // candidate precisely so this write does not have to re-derive the row.
+    //
+    // Stamped ONLY on success, unchanged: a send that failed leaves no stamp and the
+    // next tick retries it. That is also why the write side is asserted structurally in
+    // tests/nudge-dedup-scope-test.ts — with no SMS provider configured `result.success`
+    // is never true locally, so no runtime assertion could reach this branch.
     const updateData =
-      nudgeType === '24h' ? { nudge24hSentAt: new Date() } : { nudge48hSentAt: new Date() };
+      nudgeType === '24h' ? { firstNudgeSentAt: new Date() } : { secondNudgeSentAt: new Date() };
 
-    await prisma.person.update({
-      where: { id: candidate.personId },
+    await prisma.personEvent.update({
+      where: { id: candidate.personEventId },
       data: updateData,
     });
 

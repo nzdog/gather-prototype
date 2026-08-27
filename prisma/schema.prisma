@@ -159,14 +159,18 @@ model Person {
   /// one pair of flags, so a nudge sent for event A silences event B. Phase 2 fixed the
   /// read side of that leak (the clock); the successor columns fix the write side.
   ///
-  /// STILL LIVE AS OF THIS MIGRATION. Phase 3 adds the successors and moves nothing.
-  /// nudge-sender.ts still writes these, nudge-eligibility.ts still reads them for
-  /// dedup, and four dashboard consumers still render them. The cutover is phase 4,
-  /// after which they become retained-but-unwritten — the treatment inviteAnchorAt and
-  /// rsvpStatus got — and a later ticket drops them.
+  /// RETAINED BUT UNWRITTEN as of phase 4 (the cutover). Nothing reads or writes these:
+  /// nudge-sender.ts stamps PersonEvent.firstNudgeSentAt/secondNudgeSentAt,
+  /// nudge-eligibility.ts dedups on the same two columns, and all four dashboard
+  /// consumers (invite-status, invite-detail, InviteStatusSection,
+  /// PersonInviteDetailModal) now source them from the membership row. Kept for one
+  /// ticket so the change reverts cleanly and any stray value stays auditable — exactly
+  /// the treatment GTC-168 (A2) gave Person.inviteAnchorAt and GTC-174 (D1) gave
+  /// rsvpStatus. A later ticket drops them.
   ///
-  /// DO NOT ADD NEW READERS OR WRITERS. Anything new belongs on the PersonEvent
-  /// columns; a reader added here now is one more call site phase 4 has to find.
+  /// DO NOT READ THESE. Both were null on every row at the cutover (verified: 0 non-null
+  /// of every Person, phase 3), so a value appearing here now can only come from code
+  /// that should not exist. Read the PersonEvent columns — always.
   nudge24hSentAt   DateTime?
   nudge48hSentAt   DateTime?
   tokens           AccessToken[]
@@ -254,9 +258,11 @@ model PersonEvent {
   /// every person past their first window eligible again on the next 15-minute cron
   /// tick — a re-nudge burst with the same TCPA/spam shape as GTC-252.
   ///
-  /// NOTHING READS OR WRITES THESE YET. The cutover is GTC-178 phase 4; the retime to
-  /// day-4/day-7 is phase 5. Until phase 4 lands, the live dedup state is still
-  /// Person.nudge24hSentAt/nudge48hSentAt.
+  /// LIVE AS OF PHASE 4. nudge-sender.ts stamps these on a successful send (and only on
+  /// success — a failed send leaves no stamp and the next tick retries), and
+  /// nudge-eligibility.ts dedups on them. Person.nudge24hSentAt/nudge48hSentAt are now
+  /// retained-but-unwritten. The retime to day-4/day-7 is phase 5, which changes WHEN
+  /// these are stamped and never WHERE.
   firstNudgeSentAt     DateTime?
   secondNudgeSentAt    DateTime?
   householdId          String?
