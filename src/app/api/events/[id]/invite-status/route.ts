@@ -4,6 +4,7 @@ import { getOptOutStatuses } from '@/lib/sms/opt-out-service';
 import { requireEventRole } from '@/lib/auth/guards';
 import { deriveAttendance, type Attendance } from '@/lib/attendance';
 import { isChaseable } from '@/lib/eligibility/nudge-mark';
+import { isPaceOff } from '@/lib/eligibility/nudge-pace';
 
 export type InviteStatus = 'NOT_SENT' | 'SENT' | 'OPENED' | 'RESPONDED';
 
@@ -11,19 +12,41 @@ export type InviteStatus = 'NOT_SENT' | 'SENT' | 'OPENED' | 'RESPONDED';
  * GTC-178 (E1, phase 4): the stamps live on the PersonEvent row, so this takes the
  * membership and the person separately rather than one `person` carrying both facts.
  *
- * GTC-178 (E1, phase 5): the strings follow the timing — the legs are day 4 and day 7
- * now (Moment 4 §8.3), not 24h and 48h.
+ * GTC-179 (E2, phase 5): ORDINAL, AND IT NO LONGER SAYS "PENDING" WHEN NOTHING IS.
  *
- * ⚠ GTC-179 (E2) MUST REVISIT THESE STRINGS. They name the default cadence, and E2 makes
- * it adjustable per event and per person (standard/relaxed/off). The moment a host picks
- * "relaxed", "day 4 sent" is a lie. The stored columns are ordinal precisely so they do
- * not have this problem; these labels are host-facing copy and were ruled to follow the
- * timing, so they inherit the dependency instead.
+ * These strings used to be "day 4 sent" / "day 7 sent". GTC-178 flagged them as the first
+ * of the sites E2 would have to revisit, and the reason has now arrived: the cadence is
+ * adjustable per event and per person, so the moment a host picks "relaxed" a day number
+ * is a lie. The stored columns were named ordinally to avoid exactly this (GTC-178
+ * Ruling 7); this copy now follows them. WHICH nudge, never when.
+ *
+ * ⚠ API CONTRACT VALUE CHANGE. `nudgeStatus` is a shipped field on this payload and three
+ * of its possible values are new strings. Grep-verified at the time of the change: the
+ * only consumer is `InviteStatusSection.tsx`, which declares it optionally on its person
+ * type and does not render it — so nothing on screen moves today, and a future renderer
+ * gets the honest string. Called out because a value change is not a copy change:
+ * anything matching on the old literals would break silently.
+ *
+ * 'not chasing' IS RULING 9 (2026-08-27), and it replaces a falsehood rather than a
+ * label. A don't-chase person would have read "pending" forever, which says something is
+ * coming; nothing is.
+ *
+ * IT ALSO COVERS AN OFF EVENT, WHICH RULING 9 DID NOT NAME. Ruling 11 makes "nothing is
+ * pending" true for those people too — it stops counting them in `nudgeSummary` below —
+ * so leaving them on "pending" would ship a payload that contradicts itself for the same
+ * person in two fields. Flagged rather than assumed: this is Ruling 9's principle applied
+ * to the case Ruling 11 created, not a second ruling invented here.
+ *
+ * ONE STRING FOR BOTH CAUSES, deliberately, where `skipped` uses two. That array is
+ * operator-facing and the cause is the point; this is host-facing, where "the system is
+ * not chasing this person" is the whole meaning and the mechanism behind it would be
+ * noise.
  */
-function getNudgeStatus(personEvent: any, person: any): string {
-  if (personEvent.secondNudgeSentAt) return 'day 7 sent';
-  if (personEvent.firstNudgeSentAt) return 'day 4 sent';
+function getNudgeStatus(personEvent: any, person: any, event: any): string {
+  if (personEvent.secondNudgeSentAt) return 'second reminder sent';
+  if (personEvent.firstNudgeSentAt) return 'first reminder sent';
   if (!person.phoneNumber) return 'no phone';
+  if (!isChaseable(personEvent.nudgeMark) || isPaceOff(event.nudgePace)) return 'not chasing';
   return 'pending';
 }
 
@@ -55,6 +78,10 @@ interface PersonInviteStatus {
    * and phase 5 revisits the labels around it.
    */
   nudgeMark: 'GENTLE' | 'DONT_CHASE' | null;
+  /**
+   * GTC-179 (E2, phase 5): ordinal, and 'not chasing' where nothing is pending. See
+   * getNudgeStatus — this is an API contract VALUE change, not a copy change.
+   */
   nudgeStatus: string;
   reachabilityTier: 'DIRECT' | 'PROXY' | 'SHARED' | 'UNTRACKABLE';
 }
@@ -221,7 +248,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         firstNudgeSentAt: personEvent.firstNudgeSentAt?.toISOString() || null,
         secondNudgeSentAt: personEvent.secondNudgeSentAt?.toISOString() || null,
         nudgeMark: personEvent.nudgeMark ?? null,
-        nudgeStatus: getNudgeStatus(personEvent, person),
+        nudgeStatus: getNudgeStatus(personEvent, person, event),
         reachabilityTier: personEvent.reachabilityTier as
           | 'DIRECT'
           | 'PROXY'
@@ -271,20 +298,30 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     // nudge-eligibility.ts gates on, imported rather than restated, because this block's
     // own rule is that the count and the sweep must never disagree.
     //
-    // KNOWN REMAINING DISAGREEMENT, stated rather than left to be discovered: an OFF
-    // event's people are still counted as pending. Excluding them is not built here —
-    // whether OFF records a skip at all is an open founder question (GTC-179's "The OFF
-    // question — recommended, NOT decided"), and the two answers should land together.
-    // It cannot mislead a real host in the meantime: no surface sets the pace until
-    // GTC-188 (I1) builds the pre-flight, so OFF is unreachable except by direct write.
+    // GTC-179 (E2, phase 5): AND THE PACE. The disagreement phase 3 recorded here — an
+    // OFF event's people still counting as pending — is closed by Ruling 11. Both
+    // predicates are the SAME ones nudge-eligibility.ts gates on, imported rather than
+    // restated, because this block's rule is that the count and the sweep must never
+    // disagree, and two copies of a rule are two chances to drift.
+    //
+    // The pace term is event-level, so it zeroes both counts for the whole event at once.
+    // That is the intended reading of "nudge pace: off", and it is why the accompanying
+    // skip is still recorded PER PERSON: the operator needs to see who was not messaged,
+    // where the host needs the dashboard to stop promising reminders nobody will get.
+    const paceOff = isPaceOff(event.nudgePace);
     const nudgeSummary = {
       sentFirst: peopleStatus.filter((p) => p.firstNudgeSentAt).length,
       sentSecond: peopleStatus.filter((p) => p.secondNudgeSentAt).length,
       pendingFirst: peopleStatus.filter(
-        (p) => p.canReceiveSms && !p.firstNudgeSentAt && isChaseable(p.nudgeMark)
+        (p) => p.canReceiveSms && !p.firstNudgeSentAt && isChaseable(p.nudgeMark) && !paceOff
       ).length,
       pendingSecond: peopleStatus.filter(
-        (p) => p.canReceiveSms && !p.secondNudgeSentAt && !p.respondedAt && isChaseable(p.nudgeMark)
+        (p) =>
+          p.canReceiveSms &&
+          !p.secondNudgeSentAt &&
+          !p.respondedAt &&
+          isChaseable(p.nudgeMark) &&
+          !paceOff
       ).length,
     };
 

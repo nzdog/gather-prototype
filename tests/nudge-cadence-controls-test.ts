@@ -172,6 +172,15 @@ async function main() {
     const dontChase = await makePerson(evStandard.id, 'dont-chase', { mark: 'DONT_CHASE' });
     const gentle = await makePerson(evStandard.id, 'gentle', { mark: 'GENTLE' });
     const offPerson = await makePerson(evOff.id, 'on an OFF event');
+    // A SECOND person on the same OFF event. Ruling 11 records the skip PER PERSON, and a
+    // one-person fixture cannot tell "per person" from "per event" — the count would be 1
+    // either way.
+    const offPerson2 = await makePerson(evOff.id, 'also on the OFF event');
+    // And a GENTLE person on the OFF event: quieter-wins makes them [] too, but the CAUSE
+    // is the pace, so they must be counted under the OFF reason and not the mark's.
+    const gentleOnOff = await makePerson(evOff.id, 'gentle on an OFF event', {
+      mark: 'GENTLE',
+    });
     const relaxedPerson = await makePerson(evRelaxed.id, 'on a RELAXED event');
     const gentleOnRelaxed = await makePerson(evRelaxed.id, 'gentle on RELAXED', {
       mark: 'GENTLE',
@@ -342,6 +351,51 @@ async function main() {
       !d9b.first(control.pe.id) && d9b.second(control.pe.id)
     );
 
+    // ══ LAYER 6 — Ruling 11: an OFF event records a skip, PER PERSON ════
+    //
+    // PLACED BEFORE THE PROXY FIXTURE, DELIBERATELY. The skip COUNTS below are only
+    // attributable while the only marked people in the database are this layer's — the
+    // proxy fixture adds three more DONT_CHASE rows on its own SENT_AND_LIVE event, which
+    // the DIRECT sweep also sees, so running this afterwards made "exactly one under the
+    // mark" a statement about the whole fixture rather than about the subject. Caught by
+    // that assertion failing rather than by reading the fixture, which is the point of
+    // asserting counts and not just membership.
+    const off = await sweep(clock(9));
+    const NAMES_OFF = /pace is off|nudge pace.*off|paused for this event/i;
+    const offSkip = off.raw.skipped.find((sk) => NAMES_OFF.test(sk.reason));
+    const chaseSkip = off.raw.skipped.find((sk) => NAMES_DONT_CHASE.test(sk.reason));
+
+    assert(
+      'layer6 ruling11',
+      'an OFF event records a skip reason naming the pace — not a silent fallthrough',
+      offSkip !== undefined
+    );
+    assert(
+      'layer6 ruling11',
+      "and it is DISTINCT from don't-chase — the two causes are told apart",
+      offSkip !== undefined && chaseSkip !== undefined && offSkip.reason !== chaseSkip.reason
+    );
+    assert(
+      'layer6 ruling11',
+      'counted PER PERSON: three people on the OFF event, count of three',
+      offSkip?.count === 3
+    );
+    assert(
+      'layer6 ruling11',
+      'a GENTLE person on an OFF event is counted under the PACE, not under the mark',
+      chaseSkip?.count === 1
+    );
+    assert(
+      'layer6 ruling11',
+      'and all three are still absent from both eligible arrays',
+      !off.first(offPerson.pe.id) &&
+        !off.first(offPerson2.pe.id) &&
+        !off.first(gentleOnOff.pe.id) &&
+        !off.second(offPerson.pe.id) &&
+        !off.second(offPerson2.pe.id) &&
+        !off.second(gentleOnOff.pe.id)
+    );
+
     // ══ LAYER 4 — Ruling 3: the proxy path ══════════════════════════════
     // Real wall-clock dates: findProxyNudgeCandidates takes no injectable clock, and
     // needs none — it has no time gate of any kind (GTC-178's Ruling 3 determination).
@@ -481,6 +535,55 @@ async function main() {
           /pendingSecond/.test(pending)
         );
       })()
+    );
+
+    // ══ LAYER 7 — phase 5: the labels, ordinal throughout ═══════════════
+    // Structural, on comment-stripped source: a comment that CITES days 4 and 7 must not
+    // be able to satisfy an assertion about host-facing copy. The behavioural half —
+    // pendingFirst/pendingSecond actually changing — is driven live against the running
+    // dev server, the same way GTC-178 proved its own summary change.
+    const ROUTE = 'src/app/api/events/[id]/invite-status/route.ts';
+    const MODAL = 'src/components/plan/PersonInviteDetailModal.tsx';
+    const SECTION = 'src/components/plan/InviteStatusSection.tsx';
+    const DAY_LABEL = /day[-\s]?[47]\b/i;
+
+    for (const rel of [ROUTE, MODAL, SECTION]) {
+      assert(
+        'layer7 labels',
+        `${rel.split('/').pop()} names no day count in host-facing copy`,
+        !DAY_LABEL.test(code(rel))
+      );
+    }
+
+    assert(
+      'layer7 labels',
+      'getNudgeStatus is ordinal — first/second, never a day number',
+      /first reminder sent/i.test(code(ROUTE)) && /second reminder sent/i.test(code(ROUTE))
+    );
+
+    // Ruling 9 — the value that replaces a lie. "pending" for a don't-chase person says
+    // something is coming; nothing is.
+    assert(
+      'layer7 ruling9',
+      "getNudgeStatus returns 'not chasing' rather than 'pending' when nothing is coming",
+      /not chasing/i.test(code(ROUTE))
+    );
+
+    // Ruling 11's other half: the summary must stop counting an OFF event's people.
+    assert(
+      'layer7 ruling11',
+      'both pending terms reference the PACE as well as the mark',
+      (() => {
+        const src = code(ROUTE);
+        const block = src.slice(src.indexOf('const nudgeSummary'));
+        const pending = block.slice(0, block.indexOf('};'));
+        return /isPaceOff|nudgePace|paceOff/.test(pending) && /pendingSecond/.test(pending);
+      })()
+    );
+    assert(
+      'layer7 shared',
+      'the OFF reason is defined once and imported, not restated at the call site',
+      /PACE_OFF_SKIP_REASON/.test(code('src/lib/sms/nudge-eligibility.ts'))
     );
   } finally {
     for (const id of createdOptOutIds) {

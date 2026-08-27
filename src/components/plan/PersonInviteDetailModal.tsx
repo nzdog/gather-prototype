@@ -31,9 +31,12 @@ interface PersonDetail {
   hasPhone: boolean;
   smsOptedOut: boolean;
   canReceiveSms: boolean;
-  // GTC-178 (E1, phase 4): sourced from PersonEvent, not Person. Phase 5 retimed the
-  // labels below to days 4 and 7; GTC-179 (E2) must revisit them when the pace becomes
-  // adjustable.
+  // GTC-178 (E1, phase 4): sourced from PersonEvent, not Person.
+  // GTC-179 (E2, phase 5): the labels below are ORDINAL. They named days 4 and 7 until
+  // the cadence became adjustable per event and per person, which made a day number wrong
+  // for any host who picked anything but the default. The columns were named ordinally
+  // for this reason (GTC-178 Ruling 7); the copy now matches. Each row already prints its
+  // own timestamp, so nothing is lost by dropping the day from the label.
   firstNudgeSentAt: string | null;
   secondNudgeSentAt: string | null;
   lastHostNudgeAt: string | null;
@@ -224,7 +227,7 @@ export function PersonInviteDetailModal({ eventId, personId, onClose, onUpdate }
                 {person.firstNudgeSentAt && (
                   <div className="flex items-center gap-2 text-sm">
                     <Bell className="w-4 h-4 text-yellow-600" />
-                    <span>Day-4 auto-reminder sent</span>
+                    <span>First auto-reminder sent</span>
                     <span className="text-gray-500">
                       {new Date(person.firstNudgeSentAt).toLocaleString()}
                     </span>
@@ -233,7 +236,7 @@ export function PersonInviteDetailModal({ eventId, personId, onClose, onUpdate }
                 {person.secondNudgeSentAt && (
                   <div className="flex items-center gap-2 text-sm">
                     <Bell className="w-4 h-4 text-amber-600" />
-                    <span>Day-7 auto-reminder sent</span>
+                    <span>Second auto-reminder sent</span>
                     <span className="text-gray-500">
                       {new Date(person.secondNudgeSentAt).toLocaleString()}
                     </span>

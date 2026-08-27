@@ -508,28 +508,32 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
         <div className="border-t pt-4 mt-4">
           <h4 className="text-sm font-medium text-gray-700 mb-2">Auto-Reminders</h4>
           <div className="space-y-2 text-sm">
-            {/* GTC-178 (E1, phase 5): days 4 and 7 (Moment 4 §8.3). GTC-179 (E2) makes
-                the cadence adjustable and must revisit this copy. */}
+            {/* GTC-179 (E2, phase 5): ORDINAL. These read "Day-4"/"Day-7" until the
+                cadence became adjustable per event and per person, at which point a day
+                number here was a lie for any host who picked "relaxed" or "gentle". The
+                stored columns were named ordinally to avoid exactly this (GTC-178 Ruling
+                7) and this copy now follows them. Say WHICH reminder, never when — the
+                timestamp beside each row carries the when. */}
             <div className="flex justify-between">
-              <span className="text-gray-600">Day-4 reminders sent</span>
+              <span className="text-gray-600">First reminders sent</span>
               <span className="font-medium">{data.nudgeSummary.sentFirst}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">Day-7 reminders sent</span>
+              <span className="text-gray-600">Second reminders sent</span>
               <span className="font-medium">{data.nudgeSummary.sentSecond}</span>
             </div>
             {(data.nudgeSummary.pendingFirst > 0 || data.nudgeSummary.pendingSecond > 0) && (
               <p className="text-xs text-gray-500 mt-2">
                 {data.nudgeSummary.pendingFirst > 0 && (
                   <span>
-                    {data.nudgeSummary.pendingFirst} pending day-4 reminder
+                    {data.nudgeSummary.pendingFirst} pending first reminder
                     {data.nudgeSummary.pendingFirst !== 1 ? 's' : ''}
                   </span>
                 )}
                 {data.nudgeSummary.pendingFirst > 0 && data.nudgeSummary.pendingSecond > 0 && ', '}
                 {data.nudgeSummary.pendingSecond > 0 && (
                   <span>
-                    {data.nudgeSummary.pendingSecond} pending day-7 reminder
+                    {data.nudgeSummary.pendingSecond} pending second reminder
                     {data.nudgeSummary.pendingSecond !== 1 ? 's' : ''}
                   </span>
                 )}
@@ -618,16 +622,14 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
                   <span className="text-sm">{person.name}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  {/* GTC-178 (E1, phase 5): the legs are days 4 and 7 (Moment 4 §8.3).
-                      GTC-179 (E2) makes the cadence adjustable and must revisit this
-                      text — the stored columns are ordinal, this copy is not. */}
+                  {/* GTC-179 (E2, phase 5): ordinal chips. "1st"/"2nd" rather than
+                      "Day 4"/"Day 7" — four characters have to survive every pace a host
+                      can pick, and a day number survives only the default. */}
                   {person.firstNudgeSentAt && (
-                    <span className="text-xs bg-yellow-100 text-yellow-700 px-1 rounded">
-                      Day 4
-                    </span>
+                    <span className="text-xs bg-yellow-100 text-yellow-700 px-1 rounded">1st</span>
                   )}
                   {person.secondNudgeSentAt && (
-                    <span className="text-xs bg-amber-100 text-amber-700 px-1 rounded">Day 7</span>
+                    <span className="text-xs bg-amber-100 text-amber-700 px-1 rounded">2nd</span>
                   )}
                 </div>
               </div>

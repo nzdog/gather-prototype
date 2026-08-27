@@ -9,6 +9,7 @@ import {
 } from '@/lib/eligibility/child-exclusion';
 import { resolveNudgeOffsetDays, dueNudgeIndices } from '@/lib/nudge-cadence';
 import { isChaseable, DONT_CHASE_SKIP_REASON } from '@/lib/eligibility/nudge-mark';
+import { isPaceOff, PACE_OFF_SKIP_REASON } from '@/lib/eligibility/nudge-pace';
 
 export interface NudgeCandidate {
   /**
@@ -248,6 +249,27 @@ export async function findNudgeCandidates(now: Date = new Date()): Promise<Eligi
     // src/lib/eligibility/nudge-mark.ts for why the two mechanisms deliberately overlap.
     if (!isChaseable(membership.nudgeMark)) {
       addSkip(DONT_CHASE_SKIP_REASON);
+      continue;
+    }
+
+    // GTC-179 (E2, phase 5): THE OFF GATE — Ruling 11, and it sits AFTER the mark.
+    //
+    // Order matters for the REPORT, not for the outcome: both produce no nudge, but a
+    // don't-chase person on an OFF event is counted once, and the question is under which
+    // reason. The mark is the more specific fact — a hosting judgement about that person,
+    // which survives the host later switching the pace back on — so it is reported first.
+    // The pace is the broader one, and a person who is only here because of it goes back
+    // to being chased the moment she changes it.
+    //
+    // A GENTLE person on an OFF event therefore lands HERE, under the pace, which is
+    // correct: gentle is a volume control and OFF is what actually silenced them.
+    // tests/nudge-cadence-controls-test.ts asserts exactly that split.
+    //
+    // See src/lib/eligibility/nudge-pace.ts for the semantic cost this reason carries —
+    // it is the one skip that reports an EVENT-level decision through a per-person tally,
+    // ruled in deliberately rather than arrived at.
+    if (isPaceOff(membership.event.nudgePace)) {
+      addSkip(PACE_OFF_SKIP_REASON);
       continue;
     }
 
