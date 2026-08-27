@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getOptOutStatuses } from '@/lib/sms/opt-out-service';
 import { requireEventRole } from '@/lib/auth/guards';
 import { deriveAttendance, type Attendance } from '@/lib/attendance';
+import { isChaseable } from '@/lib/eligibility/nudge-mark';
 
 export type InviteStatus = 'NOT_SENT' | 'SENT' | 'OPENED' | 'RESPONDED';
 
@@ -48,6 +49,12 @@ interface PersonInviteStatus {
    */
   firstNudgeSentAt: string | null;
   secondNudgeSentAt: string | null;
+  /**
+   * GTC-179 (E2, phase 3): the host's per-person mark (Moment 4 §10.3), or null for no
+   * mark. Additive to this payload. GTC-179 phase 4 sets it beside the recipient picker
+   * and phase 5 revisits the labels around it.
+   */
+  nudgeMark: 'GENTLE' | 'DONT_CHASE' | null;
   nudgeStatus: string;
   reachabilityTier: 'DIRECT' | 'PROXY' | 'SHARED' | 'UNTRACKABLE';
 }
@@ -101,6 +108,9 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
             // GTC-178 (E1, phase 4): the nudge stamps are per-event and live here now.
             firstNudgeSentAt: true,
             secondNudgeSentAt: true,
+            // GTC-179 (E2, phase 3): needed by the pending counts below, which must not
+            // report a reminder for somebody the sweep will never send one to.
+            nudgeMark: true,
             // GTC-174 (D1): the stored attendance ANSWER only. rsvpStatus /
             // rsvpRespondedAt are retained-but-unwritten and no longer selected —
             // attendance is derived below.
@@ -210,6 +220,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         claimedBy: token?.claimedBy || null,
         firstNudgeSentAt: personEvent.firstNudgeSentAt?.toISOString() || null,
         secondNudgeSentAt: personEvent.secondNudgeSentAt?.toISOString() || null,
+        nudgeMark: personEvent.nudgeMark ?? null,
         nudgeStatus: getNudgeStatus(personEvent, person),
         reachabilityTier: personEvent.reachabilityTier as
           | 'DIRECT'
@@ -249,13 +260,31 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     // approximated.
     //
     // `!respondedAt` STAYS on pendingSecond, because `!hasResponded` stays on the second
-    // leg. Neither term encodes the day count, so both survive GTC-179 unchanged.
+    // leg.
+    //
+    // ⚠ GTC-179 (E2, phase 3) — CORRECTION. The line that stood here claimed "neither
+    // term encodes the day count, so both survive GTC-179 unchanged." That was true for a
+    // PACE change and false for a MARK: a don't-chase person has a phone, no opt-out and
+    // no stamps, so they counted as pending and this dashboard promised a reminder the
+    // sweep will never send. A correctness bug, not copy — and the fourth label site,
+    // which GTC-178's closing follow-up did not find. `isChaseable` is the SAME predicate
+    // nudge-eligibility.ts gates on, imported rather than restated, because this block's
+    // own rule is that the count and the sweep must never disagree.
+    //
+    // KNOWN REMAINING DISAGREEMENT, stated rather than left to be discovered: an OFF
+    // event's people are still counted as pending. Excluding them is not built here —
+    // whether OFF records a skip at all is an open founder question (GTC-179's "The OFF
+    // question — recommended, NOT decided"), and the two answers should land together.
+    // It cannot mislead a real host in the meantime: no surface sets the pace until
+    // GTC-188 (I1) builds the pre-flight, so OFF is unreachable except by direct write.
     const nudgeSummary = {
       sentFirst: peopleStatus.filter((p) => p.firstNudgeSentAt).length,
       sentSecond: peopleStatus.filter((p) => p.secondNudgeSentAt).length,
-      pendingFirst: peopleStatus.filter((p) => p.canReceiveSms && !p.firstNudgeSentAt).length,
+      pendingFirst: peopleStatus.filter(
+        (p) => p.canReceiveSms && !p.firstNudgeSentAt && isChaseable(p.nudgeMark)
+      ).length,
       pendingSecond: peopleStatus.filter(
-        (p) => p.canReceiveSms && !p.secondNudgeSentAt && !p.respondedAt
+        (p) => p.canReceiveSms && !p.secondNudgeSentAt && !p.respondedAt && isChaseable(p.nudgeMark)
       ).length,
     };
 

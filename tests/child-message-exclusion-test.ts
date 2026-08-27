@@ -202,11 +202,37 @@ async function main() {
     assert('path 1', 'subject CHILD excluded from eligibleFirst', !inFirst(subject.person.id));
     assert('path 1', 'subject CHILD excluded from eligibleSecond', !inSecond(subject.person.id));
     assert('path 1 control', 're-roled adult IS in eligibleFirst', inFirst(control.person.id));
-    assert('path 1 control', 're-roled adult IS in eligibleSecond', inSecond(control.person.id));
+
+    // GTC-179 (E2, phase 3), Ruling 7(b): AT MOST ONE NUDGE PER PERSON PER RUN, so an
+    // unstamped person past both legs is now a FIRST-leg candidate only. The second-leg
+    // assertions below therefore need the first leg already stamped — that is the state
+    // in which leg two is the earliest OUTSTANDING leg, which is what they were always
+    // really about. Stamp, re-sweep, assert. Nothing here is weakened: the precondition
+    // was previously supplied by a double-send the sweep no longer performs.
+    // The CHILD subject is deliberately NOT stamped: its exclusion must keep turning on
+    // the role, and a stamp would give it a second reason to be absent.
+    await prisma.personEvent.updateMany({
+      where: { id: { in: [control.personEvent.id, nullRoleControl.personEvent.id] } },
+      data: { firstNudgeSentAt: new Date() },
+    });
+    const nudgesAfterFirst = await findNudgeCandidates();
+    const inSecondAfter = (id: string) =>
+      nudgesAfterFirst.eligibleSecond.some((c) => c.personId === id);
+
+    assert(
+      'path 1',
+      'subject CHILD still excluded from eligibleSecond once the controls advance',
+      !inSecondAfter(subject.person.id)
+    );
+    assert(
+      'path 1 control',
+      're-roled adult IS in eligibleSecond',
+      inSecondAfter(control.person.id)
+    );
     assert(
       'path 1 control',
       'NULL-role direct-add adult IS still nudged (allowlist did not over-exclude)',
-      inFirst(nullRoleControl.person.id) && inSecond(nullRoleControl.person.id)
+      inFirst(nullRoleControl.person.id) && inSecondAfter(nullRoleControl.person.id)
     );
 
     // ── PATH 2 — REMOVED (GTC-178, phase 1) ──────────────────────────────

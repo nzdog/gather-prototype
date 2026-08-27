@@ -8,6 +8,7 @@ import {
   CHILD_SKIP_REASON,
 } from '@/lib/eligibility/child-exclusion';
 import { resolveNudgeOffsetDays, dueNudgeIndices } from '@/lib/nudge-cadence';
+import { isChaseable, DONT_CHASE_SKIP_REASON } from '@/lib/eligibility/nudge-mark';
 
 export interface NudgeCandidate {
   /**
@@ -137,6 +138,20 @@ export async function findNudgeCandidates(now: Date = new Date()): Promise<Eligi
           id: true,
           name: true,
           hostId: true,
+          // GTC-179 (E2, phase 3): THE PACE, AND IT HAD TO BE ADDED BY HAND.
+          //
+          // This is the exact hazard phase 1 flagged. `NudgePaceSource` is all-optional
+          // (a narrow select has to satisfy it), so omitting this line type-checks
+          // perfectly and every event silently reads as "no opinion" — the system
+          // default, for everybody, forever, with the whole suite green. Measured on the
+          // tree at 4b3ee57: `'nudgePace' in membership.event` was FALSE.
+          //
+          // The mark needs no equivalent line: the top-level query uses `include` rather
+          // than a root `select`, so every PersonEvent scalar (nudgeMark included) comes
+          // back already. That asymmetry is the trap — one column worked by accident and
+          // the other did not work at all. tests/nudge-cadence-controls-test.ts turns
+          // BOTH into outcomes, so neither can regress silently.
+          nudgePace: true,
           host: {
             select: { name: true },
           },
@@ -217,6 +232,25 @@ export async function findNudgeCandidates(now: Date = new Date()): Promise<Eligi
       continue;
     }
 
+    // GTC-179 (E2, phase 3): THE DON'T-CHASE GATE — Ruling 6, and note WHERE it sits.
+    //
+    // AFTER the child rule and AFTER opt-out, never through either (Do-Not-Touch Zone 7).
+    // Opt-out is guest-set and legally binding; this is a host-set preference layered on
+    // top of it. If this ran first, a host clearing the mark would resume messaging
+    // somebody who had opted out — so the order above is load-bearing, not incidental,
+    // and the controls test asserts it by giving one subject BOTH conditions and checking
+    // which reason comes back.
+    //
+    // A RECORDED SKIP, NOT A SILENT FALLTHROUGH. The resolver returns [] for DONT_CHASE
+    // and that alone would silence the legs below — but [] is also an OFF event and also
+    // not-yet-due, so the reason cannot be recovered downstream. Every other exclusion
+    // here records a skip; this would have been the only silent one. See
+    // src/lib/eligibility/nudge-mark.ts for why the two mechanisms deliberately overlap.
+    if (!isChaseable(membership.nudgeMark)) {
+      addSkip(DONT_CHASE_SKIP_REASON);
+      continue;
+    }
+
     // Check if person has responded to any assignment in this event
     const hasResponded = person.assignments.some(
       (a: any) => a.item.team.eventId === event.id && a.response !== 'PENDING'
@@ -241,21 +275,23 @@ export async function findNudgeCandidates(now: Date = new Date()): Promise<Eligi
       secondNudgeSentAt: membership.secondNudgeSentAt,
     };
 
-    // GTC-179 (E2, phase 1): THIS ROW'S CADENCE. Resolved per membership, because both
-    // of §10.3's layers are per-row — the mark on this PersonEvent, the pace on its
-    // Event. Quieter of the two wins (Ruling 4); an empty result is don't-chase or an
-    // OFF event, and needs no branch of its own because both gates below iterate.
+    // GTC-179 (E2, phase 3): THIS ROW'S CADENCE, from this row's columns.
     //
-    // THE SOURCES ARE STILL EMPTY. Phase 1 is the resolver alone — neither column exists
-    // until phase 2 — so every row resolves to the system default and behaviour is
-    // unchanged from when this ran once per sweep.
+    // Per membership, because both of §10.3's layers are per-row — the mark on this
+    // PersonEvent, the pace on its Event. Quieter of the two wins (Ruling 4), which is
+    // NOT an override ladder: a GENTLE person on an OFF event gets nothing, not one.
     //
-    // ⚠ PHASE 3 MUST PASS `{ person: membership, event: membership.event }` AND WIDEN THE
-    // `select` ABOVE TO CARRY BOTH COLUMNS. TypeScript cannot catch a miss: NudgeMarkSource
-    // and NudgePaceSource are all-optional by design (a narrow `select` has to satisfy
-    // them), so ANY object type-checks and a forgotten column reads as `undefined` —
-    // silently the default, for everybody, with the suite still green.
-    const offsetDays = resolveNudgeOffsetDays({});
+    // DONT_CHASE never reaches here — the gate above already continued — so what this
+    // call actually decides is GENTLE vs the event's pace vs the default. The resolver's
+    // own DONT_CHASE handling stands behind that gate as belt and braces, the same
+    // two-place treatment the child rule gets in this file.
+    //
+    // An empty result (an OFF event) needs no branch of its own: `due` comes back empty
+    // and both gates below simply do not fire.
+    const offsetDays = resolveNudgeOffsetDays({
+      person: membership,
+      event: membership.event,
+    });
 
     // GTC-178 (E1, phase 5): which legs the clock says are due, by INDEX. Position is
     // what has to line up, because the stamps are ordinal (Ruling 7).
@@ -270,9 +306,7 @@ export async function findNudgeCandidates(now: Date = new Date()): Promise<Eligi
     // days"), and that promise is only truthful if opening cannot silently cancel it.
     // DO NOT RESTORE AN OPENED CHECK HERE. tests/nudge-cadence-test.ts asserts that an
     // opened-but-silent person is treated identically to a silent one.
-    if (due.includes(0) && !candidate.firstNudgeSentAt) {
-      eligibleFirst.push(candidate);
-    }
+    const firstLegDue = due.includes(0) && !candidate.firstNudgeSentAt;
 
     // THE SECOND LEG — the same, plus response state.
     //
@@ -281,7 +315,33 @@ export async function findNudgeCandidates(now: Date = new Date()): Promise<Eligi
     // surface, behaviour stays the system's business. A MAYBE counts as responded here,
     // which is Hinge §8's "a maybe gets no nudges" falling out for free; its own clock is
     // the decide-by follow-up, a separate module and a separate cron.
-    if (due.includes(1) && !candidate.hasResponded && !candidate.secondNudgeSentAt) {
+    const secondLegDue = due.includes(1) && !candidate.hasResponded && !candidate.secondNudgeSentAt;
+
+    // GTC-179 (E2, phase 3): AT MOST ONE NUDGE PER PERSON PER RUN — Ruling 7(b).
+    //
+    // THIS IS A BUG FIX, NOT CADENCE SCAFFOLDING, AND IT PREDATES THIS TICKET. These were
+    // two independent `if` statements with no `else` and no cross-check, and
+    // `processNudges` iterates both arrays unconditionally — so anyone past BOTH legs
+    // with both stamps null landed in both and received TWO SMS 500 MILLISECONDS APART in
+    // a single run. Proven on the live database on 2026-08-27, not inferred: a read-only
+    // `findNudgeCandidates()` returned the same person in `eligibleFirst` and
+    // `eligibleSecond`. Nothing has fired only because no SMS provider is configured.
+    //
+    // The shape is unchanged from the 24h/48h era, so this was reachable long before
+    // GTC-178's retime — anyone 48h past send with both stamps null hit it identically.
+    // `dueNudgeIndices` even documents the state ("[0, 1] means both are — someone added
+    // late, or a cron that missed a tick"); nothing downstream ever capped it.
+    //
+    // EARLIEST DUE LEG ONLY. The next 15-minute tick takes the rest: once the first leg
+    // is stamped, `firstLegDue` goes false and the second becomes the earliest
+    // outstanding one. Deferred, never dropped.
+    //
+    // A GENERAL RULE ABOUT THE SWEEP, not a special case for pace changes. A setting
+    // change is only one way legs coincide; a missed cron tick and a late-added person
+    // are two others, and all three are covered by the same `else if`.
+    if (firstLegDue) {
+      eligibleFirst.push(candidate);
+    } else if (secondLegDue) {
       eligibleSecond.push(candidate);
     }
   }

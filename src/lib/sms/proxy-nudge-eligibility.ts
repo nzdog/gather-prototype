@@ -4,6 +4,7 @@ import { isOptedOut } from '@/lib/sms/opt-out-service';
 import { SENT_AND_LIVE } from '@/lib/lifecycle';
 import { isMessageableRole, CHILD_SKIP_REASON } from '@/lib/eligibility/child-exclusion';
 import { resolveHouseholdChannel } from '@/lib/households/channel';
+import { isChaseable, DONT_CHASE_SKIP_REASON } from '@/lib/eligibility/nudge-mark';
 
 export interface ProxyNudgeCandidate {
   householdId: string;
@@ -113,6 +114,38 @@ export async function findProxyNudgeCandidates(): Promise<ProxyEligibilityResult
     const optedOut = await isOptedOut(primaryContact.person.phoneNumber, household.event.hostId);
     if (optedOut) {
       addSkip('Primary contact opted out');
+      continue;
+    }
+
+    // GTC-179 (E2, phase 3): DON'T-CHASE SUPPRESSES THIS PATH TOO — Ruling 3.
+    //
+    // §10.3's archetype for don't-chase is "the mother", and the mother is the person
+    // MOST LIKELY to be her household's picked channel (Household.contactPersonEventId).
+    // A direct-path-only suppression would therefore go quiet on exactly one of the two
+    // ways she is messaged and keep chasing her through the other — the control failing
+    // precisely where it matters most. Kate says stop chasing my mother; the system must
+    // stop, not switch doors.
+    //
+    // SUPPRESSION ONLY. A boolean read, no clock, no window, no stamp. Retiming this path
+    // needs a decision about WHICH clock a household nudge counts from, which is
+    // GTC-252's and is undecided — and GTC-252 is a filing that must not be executed as a
+    // fix. Suppression needs no clock at all, which is exactly why the two separate
+    // cleanly. tests/nudge-cadence-controls-test.ts asserts structurally that no cadence
+    // symbol has appeared in this file.
+    //
+    // PLACED AFTER THE CHILD RULE AND AFTER OPT-OUT, never through either. §10.6 is
+    // absolute and must not be reachable-through by a later gate, and opt-out is
+    // guest-set and legally binding where this is host-set and revocable (Zone 7). The
+    // ordering is asserted, not assumed: the controls test gives one subject the child
+    // role AND this mark, and another opt-out AND this mark, then checks which reason
+    // comes back.
+    //
+    // WHY SUPPRESS RATHER THAN RE-RESOLVE TO ANOTHER ADULT. Same reasoning GTC-172
+    // records one gate up for a CHILD channel: falling back "would message somebody the
+    // host never picked." A mark is a hosting judgement about a person, not a fault in
+    // the channel, and quietly routing around it would be the system overruling her.
+    if (!isChaseable(primaryContact.nudgeMark)) {
+      addSkip(DONT_CHASE_SKIP_REASON);
       continue;
     }
 

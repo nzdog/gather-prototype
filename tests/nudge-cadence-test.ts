@@ -413,6 +413,17 @@ async function main() {
       d6.first(silent.id) && !d6.second(silent.id)
     );
 
+    // GTC-179 (E2, phase 3), Ruling 7(b): AT MOST ONE NUDGE PER PERSON PER RUN, so an
+    // unstamped person past both legs is now a FIRST-leg candidate only. The second-leg
+    // assertions below therefore need the first leg already stamped — that is the state
+    // in which leg two is the earliest OUTSTANDING leg, which is what they were always
+    // really about. Stamp, re-sweep, assert. Nothing here is weakened: the precondition
+    // was previously supplied by a double-send the sweep no longer performs.
+    await prisma.personEvent.updateMany({
+      where: { personId: { in: [silent.id, opener.id] }, eventId: event.id },
+      data: { firstNudgeSentAt: clock(4) },
+    });
+
     const d7 = await sweep(clock(7));
     assert('sweep day 7', 'second leg IS due at exactly day 7', d7.second(silent.id));
 
@@ -441,13 +452,23 @@ async function main() {
     const d7b = await sweep(clock(7));
     assert(
       'ruling 5',
-      'a person who RESPONDED is not a second-leg candidate — decisions stop the cadence',
-      !d7b.second(responder.id)
-    );
-    assert(
-      'ruling 5',
       'but responding does not retroactively suppress the first leg — it is time-only',
       d7b.first(responder.id)
+    );
+
+    // GTC-179 Ruling 7(b): the responder's first leg must be stamped before the
+    // second-leg assertion, or the one-nudge-per-run cap alone would satisfy it and the
+    // RESPONSE gate — the thing actually under test — would go unasserted. Stamped, the
+    // cap cannot fire, so a missing second leg can only be the response.
+    await prisma.personEvent.updateMany({
+      where: { personId: responder.id, eventId: event.id },
+      data: { firstNudgeSentAt: clock(4) },
+    });
+    const d7c = await sweep(clock(7));
+    assert(
+      'ruling 5',
+      'a person who RESPONDED is not a second-leg candidate — decisions stop the cadence',
+      !d7c.second(responder.id)
     );
 
     // ══ LAYER 3 — criticality touches nothing ═══════════════════════════

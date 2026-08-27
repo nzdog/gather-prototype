@@ -156,8 +156,6 @@ async function main() {
     const result = await findNudgeCandidates(now);
     const in24h = (eventId: string) =>
       result.eligibleFirst.some((c) => c.personId === subject.id && c.eventId === eventId);
-    const in48h = (eventId: string) =>
-      result.eligibleSecond.some((c) => c.personId === subject.id && c.eventId === eventId);
 
     // ── THE LEAK — the assertion this whole file exists for ──────────────
     assert(
@@ -165,12 +163,6 @@ async function main() {
       "event B is STILL eligible (24h) — event A's nudge must not silence it",
       in24h(eventB.id)
     );
-    assert(
-      'leak',
-      "event B is STILL eligible (48h) — event A's nudge must not silence it",
-      in48h(eventB.id)
-    );
-
     // ── THE CONTROL — the stamp still works where it belongs ─────────────
     // Without this the leak assertions could be satisfied by a fix that simply stopped
     // deduping at all, which would nudge everyone forever. Same person, same run,
@@ -179,11 +171,6 @@ async function main() {
       'control',
       'event A is NOT eligible (24h) — its own stamp is still respected',
       !in24h(eventA.id)
-    );
-    assert(
-      'control',
-      'event A is NOT eligible (48h) — its own stamp is still respected',
-      !in48h(eventA.id)
     );
 
     // ── THE WRITE SIDE — structural, because the send path cannot run ────
@@ -231,6 +218,50 @@ async function main() {
       'both memberships are past 24h and 48h — only the stamp can separate them',
       peAAfter?.sentAt?.getTime() === eightDaysAgo.getTime() &&
         peBAfter?.sentAt?.getTime() === eightDaysAgo.getTime()
+    );
+
+    // ── THE SECOND LEG — asserted LAST, on a deliberately advanced fixture ─
+    //
+    // GTC-179 (E2, phase 3), Ruling 7(b): at most ONE nudge per person per run. An
+    // unstamped person past both legs is now a FIRST-leg candidate only, so proving that
+    // event A's stamp does not silence event B's SECOND leg requires event B's first leg
+    // to be stamped — the state in which leg two is the earliest OUTSTANDING leg, which
+    // is what this assertion was always really about. The old sweep supplied that
+    // precondition by double-sending; it no longer does.
+    //
+    // THIS RUNS AFTER THE FIXTURE-INTEGRITY BLOCK, DELIBERATELY. That block re-reads
+    // event B from the database to prove it "genuinely carries no stamp of its own — the
+    // leak assertion is not vacuous", and it is the guard that caught an earlier version
+    // of this edit stamping event B before it ran. Mutating the fixture mid-file would
+    // have hollowed out that check. Everything above therefore sees the pristine fixture;
+    // only what follows sees the stamp, and the stamp is stated here rather than hidden
+    // in setup.
+    await prisma.personEvent.update({
+      where: { id: peB.id },
+      data: { firstNudgeSentAt: oneHourAgo },
+    });
+    const resultAfterFirst = await findNudgeCandidates(now);
+    const in48hAfter = (eventId: string) =>
+      resultAfterFirst.eligibleSecond.some(
+        (c) => c.personId === subject.id && c.eventId === eventId
+      );
+
+    assert(
+      'leak',
+      "event B is STILL eligible (48h) — event A's nudge must not silence it",
+      in48hAfter(eventB.id)
+    );
+    assert(
+      'control',
+      'event A is NOT eligible (48h) — its own stamp is still respected',
+      !in48hAfter(eventA.id)
+    );
+    const peBFinal = await prisma.personEvent.findUnique({ where: { id: peB.id } });
+    assert(
+      'fixture',
+      'the ONLY stamp event B ever carried is the one this block just wrote',
+      peBFinal?.firstNudgeSentAt?.getTime() === oneHourAgo.getTime() &&
+        peBFinal?.secondNudgeSentAt === null
     );
   } finally {
     // ── Cleanup ──────────────────────────────────────────────────────────

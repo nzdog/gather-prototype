@@ -146,7 +146,7 @@ async function main() {
     // `inviteAnchorAt: { not: null }`, so this person was invisible to it entirely.
     const eventC = await makeEvent('event C (pressed 8d ago)', eightDaysAgo);
     const inverse = await makePerson('No Global Anchor', '+64212222222', null);
-    await joinEvent(inverse, eventC, eightDaysAgo);
+    const inversePe = await joinEvent(inverse, eventC, eightDaysAgo);
 
     // ── FAIL-SAFE — a global anchor with NO personal clock ───────────────
     // No clock must mean no nudge. If this one stays eligible, the global field is still
@@ -165,8 +165,24 @@ async function main() {
       list.find((c) => c.personId === personId && c.eventId === eventId);
     const in24h = (personId: string, eventId: string) =>
       !!at(result.eligibleFirst, personId, eventId);
+
+    // GTC-179 (E2, phase 3), Ruling 7(b): AT MOST ONE NUDGE PER PERSON PER RUN, so an
+    // unstamped person past both legs is now a FIRST-leg candidate only. The second-leg
+    // assertions below therefore need the first leg already stamped — that is the state
+    // in which leg two is the earliest OUTSTANDING leg, which is what they were always
+    // really about. Stamp, re-sweep, assert. Nothing here is weakened: the precondition
+    // was previously supplied by a double-send the sweep no longer performs.
+    // Only the two subjects whose SECOND leg is asserted are stamped. Event B and the
+    // no-clock row are deliberately left alone, so their `!in48h` assertions still turn on
+    // the clock rather than on the stamp — and stamping event A while event B stays
+    // eligible re-proves the per-event dedup scope for free.
+    await prisma.personEvent.updateMany({
+      where: { id: { in: [subjectPeA.id, inversePe.id] } },
+      data: { firstNudgeSentAt: now },
+    });
+    const resultAfterFirst = await findNudgeCandidates(now);
     const in48h = (personId: string, eventId: string) =>
-      !!at(result.eligibleSecond, personId, eventId);
+      !!at(resultAfterFirst.eligibleSecond, personId, eventId);
 
     // ── THE LEAK — the assertion this whole file exists for ──────────────
     assert(

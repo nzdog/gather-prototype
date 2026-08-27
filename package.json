@@ -64,7 +64,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "prisma migrate reset",
     "railway:setup": "prisma migrate deploy && prisma db seed",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:nudge-controls": "tsx tests/nudge-cadence-controls-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
