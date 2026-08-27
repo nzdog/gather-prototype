@@ -7,6 +7,7 @@ import {
   isMessageableRole,
   CHILD_SKIP_REASON,
 } from '@/lib/eligibility/child-exclusion';
+import { resolveNudgeOffsetDays, dueNudgeIndices } from '@/lib/nudge-cadence';
 
 export interface NudgeCandidate {
   /**
@@ -43,8 +44,13 @@ export interface NudgeCandidate {
 }
 
 export interface EligibilityResult {
-  eligible24h: NudgeCandidate[];
-  eligible48h: NudgeCandidate[];
+  /**
+   * GTC-178 (E1, phase 5): ORDINAL, matching the cadence and the columns. These were
+   * `eligible24h`/`eligible48h`; the legs are days 4 and 7 now, and GTC-179 (E2) makes
+   * even that adjustable — so the names say WHICH nudge, never when.
+   */
+  eligibleFirst: NudgeCandidate[];
+  eligibleSecond: NudgeCandidate[];
   skipped: {
     reason: string;
     count: number;
@@ -60,8 +66,14 @@ export interface EligibilityResult {
  * whatever the wall clock happened to be when CI ran.
  */
 export async function findNudgeCandidates(now: Date = new Date()): Promise<EligibilityResult> {
-  const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+  // GTC-178 (E1, phase 5): the cadence is resolved once per run, from the shared pure
+  // module. Days 4 and 7 (Moment 4 §8.3), the system's own schedule — not "opened but no
+  // response", which is a different mechanism and was never what the spec asked for.
+  //
+  // Resolved with no sources today because no override field exists yet. GTC-179 (E2)
+  // adds the per-event pace and the per-person go-gentle mark, and passes them here; an
+  // empty result from that resolution is don't-chase and needs no branch of its own.
+  const offsetDays = resolveNudgeOffsetDays({});
 
   // GTC-178 (E1, phase 2): ROOTED ON `PersonEvent`, AND THE CLOCK IS `PersonEvent.sentAt`.
   //
@@ -160,8 +172,8 @@ export async function findNudgeCandidates(now: Date = new Date()): Promise<Eligi
     },
   });
 
-  const eligible24h: NudgeCandidate[] = [];
-  const eligible48h: NudgeCandidate[] = [];
+  const eligibleFirst: NudgeCandidate[] = [];
+  const eligibleSecond: NudgeCandidate[] = [];
   const skipReasons: Map<string, number> = new Map();
 
   const addSkip = (reason: string) => {
@@ -227,28 +239,38 @@ export async function findNudgeCandidates(now: Date = new Date()): Promise<Eligi
       secondNudgeSentAt: membership.secondNudgeSentAt,
     };
 
-    // Check 24h eligibility
-    if (
-      candidate.anchorAt <= twentyFourHoursAgo && // 24h passed
-      !candidate.hasOpened && // Haven't opened
-      !candidate.firstNudgeSentAt // Haven't sent the first nudge for THIS event
-    ) {
-      eligible24h.push(candidate);
+    // GTC-178 (E1, phase 5): which legs the clock says are due, by INDEX. Position is
+    // what has to line up, because the stamps are ordinal (Ruling 7).
+    const due = dueNudgeIndices(candidate.anchorAt, now, offsetDays);
+
+    // THE FIRST LEG — TIME ALONE, PLUS THE ALREADY-SENT STAMP.
+    //
+    // Ruling 5 (2026-08-27) DELETED the `!hasOpened` gate that used to sit here. Opening
+    // is BEHAVIOUR, and Hinge §6 refuses showing the host anything a guest did short of
+    // deciding — "the screen shows what the system will do, never what the guest did
+    // short of deciding." It replaces seen-status with the nudge-clock ("nudge in 2
+    // days"), and that promise is only truthful if opening cannot silently cancel it.
+    // DO NOT RESTORE AN OPENED CHECK HERE. tests/nudge-cadence-test.ts asserts that an
+    // opened-but-silent person is treated identically to a silent one.
+    if (due.includes(0) && !candidate.firstNudgeSentAt) {
+      eligibleFirst.push(candidate);
     }
 
-    // Check 48h eligibility
-    if (
-      candidate.anchorAt <= fortyEightHoursAgo && // 48h passed
-      !candidate.hasResponded && // Haven't responded
-      !candidate.secondNudgeSentAt // Haven't sent the second nudge for THIS event
-    ) {
-      eligible48h.push(candidate);
+    // THE SECOND LEG — the same, plus response state.
+    //
+    // `!hasResponded` is KEPT (Ruling 5's other half): responding is a DECISION, and a
+    // decision stops the cadence. That is the same §6 line read the other way — decisions
+    // surface, behaviour stays the system's business. A MAYBE counts as responded here,
+    // which is Hinge §8's "a maybe gets no nudges" falling out for free; its own clock is
+    // the decide-by follow-up, a separate module and a separate cron.
+    if (due.includes(1) && !candidate.hasResponded && !candidate.secondNudgeSentAt) {
+      eligibleSecond.push(candidate);
     }
   }
 
   return {
-    eligible24h,
-    eligible48h,
+    eligibleFirst,
+    eligibleSecond,
     skipped: Array.from(skipReasons.entries()).map(([reason, count]) => ({
       reason,
       count,
@@ -270,8 +292,8 @@ export async function findNudgeCandidatesForEvent(
   const allCandidates = await findNudgeCandidates(now);
 
   return {
-    eligible24h: allCandidates.eligible24h.filter((c) => c.eventId === eventId),
-    eligible48h: allCandidates.eligible48h.filter((c) => c.eventId === eventId),
+    eligibleFirst: allCandidates.eligibleFirst.filter((c) => c.eventId === eventId),
+    eligibleSecond: allCandidates.eligibleSecond.filter((c) => c.eventId === eventId),
     skipped: allCandidates.skipped,
   };
 }

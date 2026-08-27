@@ -256,7 +256,11 @@ async function generateFixtures(): Promise<Fixtures> {
 
   const now = Date.now();
   const DAY = 86_400_000;
-  const sentAt = new Date(now - 7 * DAY);
+  // GTC-178 (E1, phase 5): was 7 days. The second nudge leg is now due at exactly day 7,
+  // so a 7-day-old clock made suite 8's positive half a boundary test by accident — it
+  // passed only on the milliseconds elapsed between fixture creation and assertion. Ten
+  // days puts it clear of both legs.
+  const sentAt = new Date(now - 10 * DAY);
 
   console.log('3. Scaffolding the four lifecycle phases...');
   const common = { hostPersonId: hostPerson.id, userId: user.id };

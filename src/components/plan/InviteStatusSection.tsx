@@ -21,8 +21,7 @@ interface PersonStatus {
   status: 'NOT_SENT' | 'SENT' | 'OPENED' | 'RESPONDED';
   hasPhone: boolean;
   smsOptedOut: boolean;
-  // GTC-178 (E1, phase 4): sourced from PersonEvent, not Person. The "24h"/"48h" chips
-  // below keep their text — this phase moves storage only.
+  // GTC-178 (E1, phase 4): sourced from PersonEvent, not Person.
   firstNudgeSentAt?: string | null;
   secondNudgeSentAt?: string | null;
   nudgeStatus?: string;
@@ -72,11 +71,12 @@ interface InviteStatusData {
     optedOut: number;
     canReceive: number;
   };
+  // GTC-178 (E1, phase 5): ordinal keys, day-4/day-7 legs.
   nudgeSummary?: {
-    sent24h: number;
-    sent48h: number;
-    pending24h: number;
-    pending48h: number;
+    sentFirst: number;
+    sentSecond: number;
+    pendingFirst: number;
+    pendingSecond: number;
   };
   proxyNudgeSummary?: {
     totalHouseholds: number;
@@ -508,27 +508,29 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
         <div className="border-t pt-4 mt-4">
           <h4 className="text-sm font-medium text-gray-700 mb-2">Auto-Reminders</h4>
           <div className="space-y-2 text-sm">
+            {/* GTC-178 (E1, phase 5): days 4 and 7 (Moment 4 §8.3). GTC-179 (E2) makes
+                the cadence adjustable and must revisit this copy. */}
             <div className="flex justify-between">
-              <span className="text-gray-600">24h reminders sent</span>
-              <span className="font-medium">{data.nudgeSummary.sent24h}</span>
+              <span className="text-gray-600">Day-4 reminders sent</span>
+              <span className="font-medium">{data.nudgeSummary.sentFirst}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">48h reminders sent</span>
-              <span className="font-medium">{data.nudgeSummary.sent48h}</span>
+              <span className="text-gray-600">Day-7 reminders sent</span>
+              <span className="font-medium">{data.nudgeSummary.sentSecond}</span>
             </div>
-            {(data.nudgeSummary.pending24h > 0 || data.nudgeSummary.pending48h > 0) && (
+            {(data.nudgeSummary.pendingFirst > 0 || data.nudgeSummary.pendingSecond > 0) && (
               <p className="text-xs text-gray-500 mt-2">
-                {data.nudgeSummary.pending24h > 0 && (
+                {data.nudgeSummary.pendingFirst > 0 && (
                   <span>
-                    {data.nudgeSummary.pending24h} pending 24h reminder
-                    {data.nudgeSummary.pending24h !== 1 ? 's' : ''}
+                    {data.nudgeSummary.pendingFirst} pending day-4 reminder
+                    {data.nudgeSummary.pendingFirst !== 1 ? 's' : ''}
                   </span>
                 )}
-                {data.nudgeSummary.pending24h > 0 && data.nudgeSummary.pending48h > 0 && ', '}
-                {data.nudgeSummary.pending48h > 0 && (
+                {data.nudgeSummary.pendingFirst > 0 && data.nudgeSummary.pendingSecond > 0 && ', '}
+                {data.nudgeSummary.pendingSecond > 0 && (
                   <span>
-                    {data.nudgeSummary.pending48h} pending 48h reminder
-                    {data.nudgeSummary.pending48h !== 1 ? 's' : ''}
+                    {data.nudgeSummary.pendingSecond} pending day-7 reminder
+                    {data.nudgeSummary.pendingSecond !== 1 ? 's' : ''}
                   </span>
                 )}
               </p>
@@ -616,11 +618,16 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
                   <span className="text-sm">{person.name}</span>
                 </div>
                 <div className="flex items-center gap-1">
+                  {/* GTC-178 (E1, phase 5): the legs are days 4 and 7 (Moment 4 §8.3).
+                      GTC-179 (E2) makes the cadence adjustable and must revisit this
+                      text — the stored columns are ordinal, this copy is not. */}
                   {person.firstNudgeSentAt && (
-                    <span className="text-xs bg-yellow-100 text-yellow-700 px-1 rounded">24h</span>
+                    <span className="text-xs bg-yellow-100 text-yellow-700 px-1 rounded">
+                      Day 4
+                    </span>
                   )}
                   {person.secondNudgeSentAt && (
-                    <span className="text-xs bg-amber-100 text-amber-700 px-1 rounded">48h</span>
+                    <span className="text-xs bg-amber-100 text-amber-700 px-1 rounded">Day 7</span>
                   )}
                 </div>
               </div>

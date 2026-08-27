@@ -161,12 +161,12 @@ async function main() {
 
     // ── Act ──────────────────────────────────────────────────────────────
     const result = await findNudgeCandidates(now);
-    const at = (list: typeof result.eligible24h, personId: string, eventId: string) =>
+    const at = (list: typeof result.eligibleFirst, personId: string, eventId: string) =>
       list.find((c) => c.personId === personId && c.eventId === eventId);
     const in24h = (personId: string, eventId: string) =>
-      !!at(result.eligible24h, personId, eventId);
+      !!at(result.eligibleFirst, personId, eventId);
     const in48h = (personId: string, eventId: string) =>
-      !!at(result.eligible48h, personId, eventId);
+      !!at(result.eligibleSecond, personId, eventId);
 
     // ── THE LEAK — the assertion this whole file exists for ──────────────
     assert(
@@ -201,7 +201,7 @@ async function main() {
       'a person with NO inviteAnchorAt is still nudged off their PersonEvent.sentAt',
       in24h(inverse.id, eventC.id) && in48h(inverse.id, eventC.id)
     );
-    const inverseCandidate = at(result.eligible24h, inverse.id, eventC.id);
+    const inverseCandidate = at(result.eligibleFirst, inverse.id, eventC.id);
     assert(
       'inverse',
       'and their anchorAt IS PersonEvent.sentAt — a real date, from the per-event row',
@@ -216,7 +216,7 @@ async function main() {
     );
 
     // ── personEventId — the row the phase-3 columns will hang off ────────
-    const candA = at(result.eligible24h, subject.id, eventA.id);
+    const candA = at(result.eligibleFirst, subject.id, eventA.id);
     assert(
       'personEventId',
       "candidate carries the PersonEvent row's id, not just person + event",

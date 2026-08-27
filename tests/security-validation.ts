@@ -536,7 +536,7 @@ async function testSuite8_NudgePredicateAndOptOut(f: Fixtures) {
 
   try {
     const candidates = await findNudgeCandidates();
-    const all = [...candidates.eligible24h, ...candidates.eligible48h];
+    const all = [...candidates.eligibleFirst, ...candidates.eligibleSecond];
     const onPastEvent = all.filter((c) => c.eventId === f.eventPast.id);
     const onSentEvent = all.filter((c) => c.eventId === f.eventSent.id);
 

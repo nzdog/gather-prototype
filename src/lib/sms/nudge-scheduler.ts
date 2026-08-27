@@ -17,8 +17,9 @@ export interface NudgeRunResult {
   /** Any provider at all — TNZ or Twilio. A report, never a gate; see runNudgeScheduler. */
   smsConfigured: boolean;
   candidates: {
-    eligible24h: number;
-    eligible48h: number;
+    /** GTC-178 (E1, phase 5): ordinal — the legs are days 4 and 7, and adjustable next. */
+    eligibleFirst: number;
+    eligibleSecond: number;
     skipped: { reason: string; count: number }[];
   };
   proxyCandidates?: {
@@ -128,8 +129,8 @@ export async function runNudgeScheduler(): Promise<NudgeRunResult> {
       }),
       smsConfigured,
       candidates: {
-        eligible24h: candidates.eligible24h.length,
-        eligible48h: candidates.eligible48h.length,
+        eligibleFirst: candidates.eligibleFirst.length,
+        eligibleSecond: candidates.eligibleSecond.length,
         skipped: candidates.skipped,
       },
       proxyCandidates: {
@@ -160,7 +161,7 @@ export async function runNudgeScheduler(): Promise<NudgeRunResult> {
       timestamp,
       ok: false,
       smsConfigured,
-      candidates: { eligible24h: 0, eligible48h: 0, skipped: [] },
+      candidates: { eligibleFirst: 0, eligibleSecond: 0, skipped: [] },
       results: { sent: 0, succeeded: 0, failed: 0, deferred: 0 },
       errors: [errorMessage],
     };

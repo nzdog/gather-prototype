@@ -2,13 +2,23 @@ import { prisma } from '@/lib/prisma';
 import { sendSms } from './send-sms';
 import { logInviteEvent } from '@/lib/invite-events';
 import { isQuietHours, getMinutesUntilQuietEnd } from './quiet-hours';
-import { get24hNudgeMessage, get48hNudgeMessage, getMessageInfo } from './nudge-templates';
+import { getFirstNudgeMessage, getSecondNudgeMessage, getMessageInfo } from './nudge-templates';
 import { NudgeCandidate } from './nudge-eligibility';
+
+/**
+ * GTC-178 (E1, phase 5): ORDINAL. Was `'24h' | '48h'`. The legs are days 4 and 7 now and
+ * GTC-179 (E2) makes even that adjustable, so the type says WHICH nudge, never when.
+ *
+ * This value reaches `InviteEvent.metadata.nudgeType` through `sendSms`, so it is a
+ * stored vocabulary, not just an internal label — GTC-251 (E6) may count over those rows.
+ * Keep it stable.
+ */
+export type NudgeLeg = 'first' | 'second';
 
 export interface NudgeSendResult {
   personId: string;
   personName: string;
-  nudgeType: '24h' | '48h';
+  nudgeType: NudgeLeg;
   success: boolean;
   messageId?: string;
   error?: string;
@@ -21,20 +31,20 @@ export interface NudgeSendResult {
  */
 export async function sendNudge(
   candidate: NudgeCandidate,
-  nudgeType: '24h' | '48h'
+  nudgeType: NudgeLeg
 ): Promise<NudgeSendResult> {
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
   const link = `${baseUrl}/p/${candidate.participantToken}`;
 
   // Get message template
   const message =
-    nudgeType === '24h'
-      ? get24hNudgeMessage({
+    nudgeType === 'first'
+      ? getFirstNudgeMessage({
           hostName: candidate.hostName,
           eventName: candidate.eventName,
           link,
         })
-      : get48hNudgeMessage({
+      : getSecondNudgeMessage({
           hostName: candidate.hostName,
           eventName: candidate.eventName,
           link,
@@ -69,7 +79,7 @@ export async function sendNudge(
     // tests/nudge-dedup-scope-test.ts — with no SMS provider configured `result.success`
     // is never true locally, so no runtime assertion could reach this branch.
     const updateData =
-      nudgeType === '24h' ? { firstNudgeSentAt: new Date() } : { secondNudgeSentAt: new Date() };
+      nudgeType === 'first' ? { firstNudgeSentAt: new Date() } : { secondNudgeSentAt: new Date() };
 
     await prisma.personEvent.update({
       where: { id: candidate.personEventId },
@@ -99,8 +109,8 @@ export async function sendNudge(
  * Returns summary of what was sent/skipped
  */
 export async function processNudges(candidates: {
-  eligible24h: NudgeCandidate[];
-  eligible48h: NudgeCandidate[];
+  eligibleFirst: NudgeCandidate[];
+  eligibleSecond: NudgeCandidate[];
 }): Promise<{
   sent: NudgeSendResult[];
   deferred: number;
@@ -111,7 +121,7 @@ export async function processNudges(candidates: {
     const minutesUntil = getMinutesUntilQuietEnd();
 
     // Log deferral for each candidate
-    const allCandidates = [...candidates.eligible24h, ...candidates.eligible48h];
+    const allCandidates = [...candidates.eligibleFirst, ...candidates.eligibleSecond];
 
     for (const candidate of allCandidates) {
       await logInviteEvent({
@@ -134,18 +144,18 @@ export async function processNudges(candidates: {
 
   const results: NudgeSendResult[] = [];
 
-  // Send 24h nudges
-  for (const candidate of candidates.eligible24h) {
-    const result = await sendNudge(candidate, '24h');
+  // Send first-leg nudges
+  for (const candidate of candidates.eligibleFirst) {
+    const result = await sendNudge(candidate, 'first');
     results.push(result);
 
     // Small delay between sends to avoid rate limiting
     await sleep(500);
   }
 
-  // Send 48h nudges
-  for (const candidate of candidates.eligible48h) {
-    const result = await sendNudge(candidate, '48h');
+  // Send second-leg nudges
+  for (const candidate of candidates.eligibleSecond) {
+    const result = await sendNudge(candidate, 'second');
     results.push(result);
 
     await sleep(500);

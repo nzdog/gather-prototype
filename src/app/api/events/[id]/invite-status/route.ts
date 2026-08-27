@@ -7,16 +7,21 @@ import { deriveAttendance, type Attendance } from '@/lib/attendance';
 export type InviteStatus = 'NOT_SENT' | 'SENT' | 'OPENED' | 'RESPONDED';
 
 /**
- * GTC-178 (E1, phase 4): the stamps now live on the PersonEvent row, so this takes the
+ * GTC-178 (E1, phase 4): the stamps live on the PersonEvent row, so this takes the
  * membership and the person separately rather than one `person` carrying both facts.
  *
- * The strings stay "24h sent" / "48h sent" — this phase moves storage only. They are
- * still genuinely the 24h and 48h legs; phase 5 retimes them to day 4 / day 7 and
- * relabels them then.
+ * GTC-178 (E1, phase 5): the strings follow the timing — the legs are day 4 and day 7
+ * now (Moment 4 §8.3), not 24h and 48h.
+ *
+ * ⚠ GTC-179 (E2) MUST REVISIT THESE STRINGS. They name the default cadence, and E2 makes
+ * it adjustable per event and per person (standard/relaxed/off). The moment a host picks
+ * "relaxed", "day 4 sent" is a lie. The stored columns are ordinal precisely so they do
+ * not have this problem; these labels are host-facing copy and were ruled to follow the
+ * timing, so they inherit the dependency instead.
  */
 function getNudgeStatus(personEvent: any, person: any): string {
-  if (personEvent.secondNudgeSentAt) return '48h sent';
-  if (personEvent.firstNudgeSentAt) return '24h sent';
+  if (personEvent.secondNudgeSentAt) return 'day 7 sent';
+  if (personEvent.firstNudgeSentAt) return 'day 4 sent';
   if (!person.phoneNumber) return 'no phone';
   return 'pending';
 }
@@ -39,8 +44,7 @@ interface PersonInviteStatus {
   claimedBy: string | null;
   /**
    * GTC-178 (E1, phase 4): sourced from PersonEvent.firstNudgeSentAt /
-   * secondNudgeSentAt. Renamed with the storage so the wire name matches where the value
-   * comes from — the UI labels stay "24h"/"48h", because in this phase they still are.
+   * secondNudgeSentAt — the wire name matches where the value comes from.
    */
   firstNudgeSentAt: string | null;
   secondNudgeSentAt: string | null;
@@ -235,16 +239,22 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     };
 
     // Nudge summary
-    // GTC-178 (E1, phase 4): counted off the per-event stamps. The `!openedAt` /
-    // `!respondedAt` terms mirror the two eligibility gates in nudge-eligibility.ts and
-    // are deliberately left as they are — the `!hasOpened` gate moves in phase 5
-    // (Ruling 5), and this summary must not start disagreeing with the sweep before then.
+    // GTC-178 (E1, phase 5): counted off the per-event stamps, and the pending terms now
+    // mirror the RETIMED gates in nudge-eligibility.ts exactly.
+    //
+    // `!openedAt` IS GONE FROM pendingFirst — Ruling 5 deleted the `!hasOpened` gate from
+    // the sweep, and a summary that still subtracted openers would under-report every
+    // person the system is genuinely still going to chase. This count and the sweep must
+    // never disagree; that is the whole reason the terms are spelled out here rather than
+    // approximated.
+    //
+    // `!respondedAt` STAYS on pendingSecond, because `!hasResponded` stays on the second
+    // leg. Neither term encodes the day count, so both survive GTC-179 unchanged.
     const nudgeSummary = {
-      sent24h: peopleStatus.filter((p) => p.firstNudgeSentAt).length,
-      sent48h: peopleStatus.filter((p) => p.secondNudgeSentAt).length,
-      pending24h: peopleStatus.filter((p) => p.canReceiveSms && !p.firstNudgeSentAt && !p.openedAt)
-        .length,
-      pending48h: peopleStatus.filter(
+      sentFirst: peopleStatus.filter((p) => p.firstNudgeSentAt).length,
+      sentSecond: peopleStatus.filter((p) => p.secondNudgeSentAt).length,
+      pendingFirst: peopleStatus.filter((p) => p.canReceiveSms && !p.firstNudgeSentAt).length,
+      pendingSecond: peopleStatus.filter(
         (p) => p.canReceiveSms && !p.secondNudgeSentAt && !p.respondedAt
       ).length,
     };

@@ -155,9 +155,9 @@ async function main() {
     // ── Act ──────────────────────────────────────────────────────────────
     const result = await findNudgeCandidates(now);
     const in24h = (eventId: string) =>
-      result.eligible24h.some((c) => c.personId === subject.id && c.eventId === eventId);
+      result.eligibleFirst.some((c) => c.personId === subject.id && c.eventId === eventId);
     const in48h = (eventId: string) =>
-      result.eligible48h.some((c) => c.personId === subject.id && c.eventId === eventId);
+      result.eligibleSecond.some((c) => c.personId === subject.id && c.eventId === eventId);
 
     // ── THE LEAK — the assertion this whole file exists for ──────────────
     assert(

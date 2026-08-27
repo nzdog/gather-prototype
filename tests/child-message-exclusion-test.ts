@@ -43,7 +43,14 @@ import { findDecideByFollowupCandidates } from '../src/lib/sms/decide-by-eligibi
 const prisma = new PrismaClient();
 
 const TAG = 'GTC172';
-const HOURS_72 = 72 * 60 * 60 * 1000;
+/**
+ * GTC-178 (E1, phase 5): was HOURS_72. The cadence retimed from 24h/48h to day 4/day 7
+ * (Moment 4 §8.3), so a 72-hour-old clock is now BEFORE the first leg and every path-1
+ * control assertion below would fail — not because the child rule broke, but because
+ * nobody was due. Ten days puts the fixture clear of both legs with margin, so this file
+ * keeps testing what it is for: that the gate keys on ROLE and nothing else.
+ */
+const DAYS_10 = 10 * 24 * 60 * 60 * 1000;
 
 let passed = 0;
 let failed = 0;
@@ -67,7 +74,7 @@ async function main() {
   try {
     // ── Fixture ──────────────────────────────────────────────────────────
     const now = new Date();
-    const anchor = new Date(now.getTime() - HOURS_72);
+    const anchor = new Date(now.getTime() - DAYS_10);
     const future = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
     const host = await prisma.person.create({ data: { name: `${TAG} Host` } });
@@ -99,7 +106,9 @@ async function main() {
           name: `${TAG} ${opts.name}`,
           email: `${TAG.toLowerCase()}-${opts.name.toLowerCase().replace(/\s+/g, '-')}@example.test`,
           phoneNumber: opts.phone,
-          // Drives the 24h/48h nudge clocks in findNudgeCandidates.
+          // GTC-178 (E1, phase 2): retained-but-unread by the nudge path — the clock is
+          // PersonEvent.sentAt below. Kept set so this fixture proves the child gate, not
+          // an accidental null-anchor exclusion.
           inviteAnchorAt: anchor,
         },
       });
@@ -185,19 +194,19 @@ async function main() {
     console.log(`  control (GUEST)  = ${control.person.id}`);
     console.log(`  grandma (picker) = ${grandma.person.id}\n`);
 
-    // ── PATH 1 — findNudgeCandidates (24h / 48h nudges) ──────────────────
+    // ── PATH 1 — findNudgeCandidates (day-4 / day-7 nudges) ──────────────
     const nudges = await findNudgeCandidates();
-    const in24h = (id: string) => nudges.eligible24h.some((c) => c.personId === id);
-    const in48h = (id: string) => nudges.eligible48h.some((c) => c.personId === id);
+    const inFirst = (id: string) => nudges.eligibleFirst.some((c) => c.personId === id);
+    const inSecond = (id: string) => nudges.eligibleSecond.some((c) => c.personId === id);
 
-    assert('path 1', 'subject CHILD excluded from eligible24h', !in24h(subject.person.id));
-    assert('path 1', 'subject CHILD excluded from eligible48h', !in48h(subject.person.id));
-    assert('path 1 control', 're-roled adult IS in eligible24h', in24h(control.person.id));
-    assert('path 1 control', 're-roled adult IS in eligible48h', in48h(control.person.id));
+    assert('path 1', 'subject CHILD excluded from eligibleFirst', !inFirst(subject.person.id));
+    assert('path 1', 'subject CHILD excluded from eligibleSecond', !inSecond(subject.person.id));
+    assert('path 1 control', 're-roled adult IS in eligibleFirst', inFirst(control.person.id));
+    assert('path 1 control', 're-roled adult IS in eligibleSecond', inSecond(control.person.id));
     assert(
       'path 1 control',
       'NULL-role direct-add adult IS still nudged (allowlist did not over-exclude)',
-      in24h(nullRoleControl.person.id) && in48h(nullRoleControl.person.id)
+      inFirst(nullRoleControl.person.id) && inSecond(nullRoleControl.person.id)
     );
 
     // ── PATH 2 — REMOVED (GTC-178, phase 1) ──────────────────────────────

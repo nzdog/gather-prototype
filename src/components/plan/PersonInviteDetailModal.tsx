@@ -31,8 +31,9 @@ interface PersonDetail {
   hasPhone: boolean;
   smsOptedOut: boolean;
   canReceiveSms: boolean;
-  // GTC-178 (E1, phase 4): sourced from PersonEvent, not Person. Labels below stay
-  // "24h"/"48h" — this phase moves storage only; phase 5 retimes and relabels.
+  // GTC-178 (E1, phase 4): sourced from PersonEvent, not Person. Phase 5 retimed the
+  // labels below to days 4 and 7; GTC-179 (E2) must revisit them when the pace becomes
+  // adjustable.
   firstNudgeSentAt: string | null;
   secondNudgeSentAt: string | null;
   lastHostNudgeAt: string | null;
@@ -223,7 +224,7 @@ export function PersonInviteDetailModal({ eventId, personId, onClose, onUpdate }
                 {person.firstNudgeSentAt && (
                   <div className="flex items-center gap-2 text-sm">
                     <Bell className="w-4 h-4 text-yellow-600" />
-                    <span>24h auto-reminder sent</span>
+                    <span>Day-4 auto-reminder sent</span>
                     <span className="text-gray-500">
                       {new Date(person.firstNudgeSentAt).toLocaleString()}
                     </span>
@@ -232,7 +233,7 @@ export function PersonInviteDetailModal({ eventId, personId, onClose, onUpdate }
                 {person.secondNudgeSentAt && (
                   <div className="flex items-center gap-2 text-sm">
                     <Bell className="w-4 h-4 text-amber-600" />
-                    <span>48h auto-reminder sent</span>
+                    <span>Day-7 auto-reminder sent</span>
                     <span className="text-gray-500">
                       {new Date(person.secondNudgeSentAt).toLocaleString()}
                     </span>

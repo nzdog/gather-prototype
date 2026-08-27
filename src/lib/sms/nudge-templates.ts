@@ -22,10 +22,20 @@ export interface ProxyNudgeTemplateParams {
 }
 
 /**
- * 24h "Open Rescue" nudge
- * Sent when someone hasn't opened their link yet
+ * GTC-178 (E1, phase 5): THE FIRST NUDGE — day 4 by default (Moment 4 §8.3).
+ *
+ * Was `get24hNudgeMessage`, "Open Rescue", "sent when someone hasn't opened their link
+ * yet". Both halves of that description are gone: the leg fires on elapsed time alone
+ * (Ruling 5 deleted the opened gate — opening is behaviour, and Hinge §6 refuses it), and
+ * the window is day 4, not 24h.
+ *
+ * Named ordinally because GTC-179 (E2) makes the day adjustable per event and per person.
+ *
+ * NOT RETIMED, NOT REVOICED: the copy below is unchanged. Moment 4 §4 wants nudges in
+ * Gather's voice — "playful, funny, allowed to get pointed" — and this is not that. That
+ * rewrite is real but unscoped and unfiled; it is deliberately not smuggled in here.
  */
-export function get24hNudgeMessage(params: NudgeTemplateParams): string {
+export function getFirstNudgeMessage(params: NudgeTemplateParams): string {
   const { hostName, eventName, link } = params;
 
   // Target: ~140 chars to leave room for carrier additions
@@ -33,10 +43,15 @@ export function get24hNudgeMessage(params: NudgeTemplateParams): string {
 }
 
 /**
- * 48h "Action Rescue" nudge
- * Sent when someone opened but hasn't responded
+ * GTC-178 (E1, phase 5): THE SECOND NUDGE — day 7 by default (Moment 4 §8.3), matching
+ * the straggler tail in the Hinge walk's reply distribution (§6).
+ *
+ * Was `get48hNudgeMessage`, "Action Rescue", "sent when someone opened but hasn't
+ * responded". The opened half was never true — that leg never had an opened check — and
+ * the window is day 7, not 48h. `!hasResponded` IS still the gate (Ruling 5), so the
+ * "needs your response" copy remains accurate for its audience.
  */
-export function get48hNudgeMessage(params: NudgeTemplateParams): string {
+export function getSecondNudgeMessage(params: NudgeTemplateParams): string {
   const { hostName, eventName, link } = params;
 
   return `Reminder: ${hostName} needs your response for ${eventName}. Please confirm: ${link} — Reply STOP to opt out`;
