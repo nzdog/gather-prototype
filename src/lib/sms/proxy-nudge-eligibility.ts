@@ -5,6 +5,7 @@ import { SENT_AND_LIVE } from '@/lib/lifecycle';
 import { isMessageableRole, CHILD_SKIP_REASON } from '@/lib/eligibility/child-exclusion';
 import { resolveHouseholdChannel } from '@/lib/households/channel';
 import { isChaseable, DONT_CHASE_SKIP_REASON } from '@/lib/eligibility/nudge-mark';
+import { isPaceOff, PACE_OFF_SKIP_REASON } from '@/lib/eligibility/nudge-pace';
 
 export interface ProxyNudgeCandidate {
   householdId: string;
@@ -146,6 +147,37 @@ export async function findProxyNudgeCandidates(): Promise<ProxyEligibilityResult
     // the channel, and quietly routing around it would be the system overruling her.
     if (!isChaseable(primaryContact.nudgeMark)) {
       addSkip(DONT_CHASE_SKIP_REASON);
+      continue;
+    }
+
+    // GTC-179 (E2), Ruling 12: AN OFF EVENT SILENCES THIS PATH TOO.
+    //
+    // Ruling 3 suppressed don't-chase on both paths. Ruling 11 addressed OFF on the
+    // DIRECT path only, and that asymmetry was the gap this ruling closes: a host who
+    // switched the pace off went quiet on one path while this function kept returning her
+    // households on every 15-minute tick. Worse than the don't-chase case it mirrors —
+    // that one fails for a single person, this one for EVERY household on the event. §10.3
+    // calls the pace "an event-level sending decision", and an event-level decision that
+    // only reaches one of two send paths is not one.
+    //
+    // SAME PLACE, SAME ORDERING, SAME REASONING AS THE MARK ABOVE. After the child rule,
+    // after opt-out, never through either. Suppression only — a boolean read, no clock, no
+    // window, no stamp. Retiming this path still needs GTC-252's undecided decision about
+    // which clock a household nudge counts from, and GTC-252 remains a filing that must
+    // not be executed as a fix.
+    //
+    // THE MARK IS CHECKED FIRST, DELIBERATELY, matching nudge-eligibility.ts. Both produce
+    // no nudge, so the order only decides which reason is REPORTED — and the mark is the
+    // more specific fact: it is a hosting judgement about that person which survives the
+    // host switching the pace back on, where a household here only because of the pace
+    // returns the moment she does. The two paths must not explain the same household two
+    // different ways, so this ordering is asserted on both.
+    //
+    // ⚠ THIS DOES NOT BOUND THE PROXY LOOP. GTC-252 stands: a household with an unmarked
+    // channel on a non-OFF event is still eligible on every tick. Suppression removes
+    // households from that loop; it does not put a limit on it.
+    if (isPaceOff(household.event.nudgePace)) {
+      addSkip(PACE_OFF_SKIP_REASON);
       continue;
     }
 

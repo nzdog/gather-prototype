@@ -80,6 +80,9 @@ function code(rel: string): string {
 /** Mechanism-agnostic: the reason must NAME don't-chase, whatever string is chosen. */
 const NAMES_DONT_CHASE = /don'?t[- ]?chase/i;
 
+/** Likewise for the pace. Both paths must report the same fact the same way. */
+const NAMES_OFF = /pace is off|nudge pace.*off|paused for this event/i;
+
 async function main() {
   const createdPersonIds: string[] = [];
   const createdEventIds: string[] = [];
@@ -361,7 +364,6 @@ async function main() {
     // that assertion failing rather than by reading the fixture, which is the point of
     // asserting counts and not just membership.
     const off = await sweep(clock(9));
-    const NAMES_OFF = /pace is off|nudge pace.*off|paused for this event/i;
     const offSkip = off.raw.skipped.find((sk) => NAMES_OFF.test(sk.reason));
     const chaseSkip = off.raw.skipped.find((sk) => NAMES_DONT_CHASE.test(sk.reason));
 
@@ -401,9 +403,9 @@ async function main() {
     // needs none — it has no time gate of any kind (GTC-178's Ruling 3 determination).
     const evProxy = await makeEvent('proxy', null);
 
-    async function makeHousehold(label: string) {
+    async function makeHousehold(label: string, eventId: string = evProxy.id) {
       const h = await prisma.household.create({
-        data: { eventId: evProxy.id, littleCount: 0 },
+        data: { eventId, littleCount: 0 },
       });
       return h;
     }
@@ -491,6 +493,69 @@ async function main() {
       proxy.skipped.find((s) => NAMES_DONT_CHASE.test(s.reason))?.count === 1
     );
 
+    // ── Ruling 12: an OFF EVENT suppresses the proxy path too ────────────
+    //
+    // Ruling 3 suppressed don't-chase on both paths; Ruling 11 addressed OFF on the
+    // DIRECT path only. That asymmetry left a host who switched the pace off silenced on
+    // one path while findProxyNudgeCandidates kept returning her households on every
+    // tick — a failure spanning EVERY household rather than one person, which is why the
+    // argument behind Ruling 3 applies here with more force, not less.
+    const evProxyOff = await makeEvent('proxy on an OFF event', 'OFF');
+
+    const hOffControl = await makeHousehold('off control', evProxyOff.id);
+    await makePerson(evProxyOff.id, 'proxy channel on OFF event', {
+      role: 'PRIMARY_CONTACT',
+      householdId: hOffControl.id,
+    });
+
+    // ORDERING PROOF — the MARK is checked before the PACE, matching the direct sweep.
+    // The mark is the more specific fact and survives the host switching the pace back
+    // on, so it is the reason reported. If the two paths disagreed about this ordering,
+    // the same household would be explained two different ways depending on which sweep
+    // saw it.
+    const hOffMarked = await makeHousehold('off + marked', evProxyOff.id);
+    await makePerson(evProxyOff.id, 'proxy channel dont-chase on OFF event', {
+      role: 'PRIMARY_CONTACT',
+      householdId: hOffMarked.id,
+      mark: 'DONT_CHASE',
+    });
+
+    const proxy2 = await findProxyNudgeCandidates();
+    const proxy2Eligible = (hid: string) => proxy2.eligible.some((c) => c.householdId === hid);
+    const proxy2Off = proxy2.skipped.find((sk) => NAMES_OFF.test(sk.reason));
+    const proxy2Chase = proxy2.skipped.find((sk) => NAMES_DONT_CHASE.test(sk.reason));
+
+    assert(
+      'layer4 ruling12',
+      'PROXY: a household on an OFF event is NOT eligible — the pace covers both paths',
+      !proxy2Eligible(hOffControl.id)
+    );
+    assert(
+      'layer4 ruling12',
+      'PROXY: and it records the OFF skip reason, per household, consistent with Ruling 11',
+      proxy2Off !== undefined
+    );
+    assert(
+      'layer4 ruling12',
+      'PROXY: the pace-unset control household is STILL eligible — OFF is the difference',
+      proxy2Eligible(hControl.id)
+    );
+    assert(
+      'layer4 ruling12',
+      "PROXY ordering: a DON'T-CHASE channel on an OFF event reports the MARK, not the pace",
+      proxy2Chase !== undefined &&
+        proxy2Chase.count === 2 &&
+        proxy2Off !== undefined &&
+        proxy2Off.count === 1
+    );
+    assert(
+      'layer4 ruling12',
+      'PROXY: the two reasons are distinct strings — the causes are told apart',
+      proxy2Off !== undefined &&
+        proxy2Chase !== undefined &&
+        proxy2Off.reason !== proxy2Chase.reason
+    );
+
     // ══ LAYER 5 — structural: the selects, and one shared reason ════════
     const elig = code('src/lib/sms/nudge-eligibility.ts');
     assert(
@@ -509,6 +574,12 @@ async function main() {
       'both eligibility paths import the SAME skip-reason constant — they cannot drift',
       /DONT_CHASE_SKIP_REASON/.test(elig) &&
         /DONT_CHASE_SKIP_REASON/.test(code('src/lib/sms/proxy-nudge-eligibility.ts'))
+    );
+    assert(
+      'layer5 shared',
+      'and the SAME pace reason — one fact, one string, on both paths (Ruling 12)',
+      /PACE_OFF_SKIP_REASON/.test(elig) &&
+        /PACE_OFF_SKIP_REASON/.test(code('src/lib/sms/proxy-nudge-eligibility.ts'))
     );
     assert(
       'layer5 proxy',
