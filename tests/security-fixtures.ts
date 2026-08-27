@@ -309,10 +309,19 @@ async function generateFixtures(): Promise<Fixtures> {
   // 4. A nudge-eligible person on the PAST event.
   //
   // Every condition findNudgeCandidates() checks is satisfied: valid NZ mobile,
-  // inviteAnchorAt older than 48h, a PARTICIPANT token, no nudge yet sent, not opted
-  // out. The ONLY thing that should exclude them is that the event date has passed —
-  // which is exactly the §10.1 rule ("nudges must never fire after it") that the
+  // a personal send clock older than 48h, a PARTICIPANT token, no nudge yet sent, not
+  // opted out. The ONLY thing that should exclude them is that the event date has passed
+  // — which is exactly the §10.1 rule ("nudges must never fire after it") that the
   // status-filter inversion enforces.
+  //
+  // GTC-178 (E1, phase 2) — WHY `PersonEvent.sentAt` IS SET BELOW AND MUST STAY SET.
+  // The clock moved from the global `Person.inviteAnchorAt` to the per-event
+  // `PersonEvent.sentAt`, and this row had no `sentAt`. That would have made suite 8's
+  // negative pass because the person has NO CLOCK, not because the event date passed —
+  // the assertion would still be green while proving nothing, which is precisely the
+  // wrong-reason failure GTC-202 (A3c-2) fixed on the positive half of this same pair.
+  // Setting it keeps the pair honest: the past and live fixtures now differ in their
+  // event's phase and in nothing else.
   console.log('4. Creating nudge-eligible person on the PAST event...');
   const phoneNumber = '+64211234567';
   const nudgePerson = await prisma.person.create({
@@ -329,6 +338,7 @@ async function generateFixtures(): Promise<Fixtures> {
       eventId: eventPast.id,
       teamId: eventPast.teamA.id,
       role: 'PARTICIPANT',
+      sentAt,
     },
   });
   await prisma.accessToken.create({
@@ -352,7 +362,7 @@ async function generateFixtures(): Promise<Fixtures> {
   // matter what the predicate said. The passing half was passing for the wrong reason.
   //
   // This person is deliberately IDENTICAL in shape to the PAST one — same phone format,
-  // same 3-day-old anchor, same role and token. The only difference between them is
+  // same personal send clock, same role and token. The only difference between them is
   // their event's phase, which is what makes the pair an assertion about the PREDICATE
   // rather than about fixture data.
   console.log('5. Creating nudge-eligible person on the SENT event (the positive half)...');
