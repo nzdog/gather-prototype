@@ -835,9 +835,14 @@ function MessageStep({ eventId }: { eventId: string }) {
   const [failed, setFailed] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
 
-  // The host's movement 1, edited here. NOT PERSISTED — see the notice rendered below.
-  // Null means "no edit yet", which falls through to the draft.
+  // The host's movement 1, edited here and STORED in Event.askAuthorLine (GTC-259/GTC-260).
+  // Null means "no local edit", which falls through to the stored line and then to the draft.
+  // ⚠ THE STORED VALUE HAS THREE STATES (founder ruling, 2026-08-29): null = never authored,
+  // `''` = deliberately no line, a value = her words. Every `??` and `=== null` below is
+  // written to keep `''` distinct from null; `||` anywhere here would collapse the two.
   const [edited, setEdited] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -872,6 +877,9 @@ function MessageStep({ eventId }: { eventId: string }) {
 
   const draft = useMemo(() => (facts ? draftAuthorLine(facts) : ''), [facts]);
   const authorLine = edited ?? data?.storedAuthorLine ?? draft;
+  // An unsaved change against whatever the box would show without it — the stored line if
+  // there is one, the draft otherwise. Typing back to the shown text is not a change.
+  const dirty = edited !== null && edited !== (data?.storedAuthorLine ?? draft);
 
   // Every recipient's message, composed. The whole list is composed rather than only the
   // selected one so the segment summary is a fact about the send and not about whoever
@@ -892,6 +900,62 @@ function MessageStep({ eventId }: { eventId: string }) {
       }),
     }));
   }, [data, facts, authorLine]);
+
+  /**
+   * Stores movement 1. GTC-187 decision 2 makes the line reusable across sends — the point
+   * is the late addition two weeks on getting the SAME words everyone else got.
+   *
+   * The server normalises empty to NULL, so this deliberately does NOT pre-empt it: what
+   * comes back is authoritative, and a cleared box returns null and re-renders as the draft.
+   * One rule, one site.
+   */
+  const saveAuthorLine = async (value: string | null) => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/pre-flight/message`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ askAuthorLine: value }),
+      });
+      if (!res.ok) {
+        setSaveError((await res.json().catch(() => ({}))).error ?? 'That did not save.');
+        return;
+      }
+      const { storedAuthorLine } = (await res.json()) as { storedAuthorLine: string | null };
+      setData((d) => (d ? { ...d, storedAuthorLine } : d));
+      setEdited(null);
+    } catch {
+      setSaveError('That did not save.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /**
+   * THE TWO CLEARING ACTIONS ARE DIFFERENT WRITES, and the founder ruling (2026-08-29) is
+   * that Kate must be able to tell them apart. Both empty the box; they mean opposite things.
+   *
+   *   revertToDraft   → NULL → "put the draft back", Gather speaks for her
+   *   sendWithoutLine → ''   → "send without a line from me", nobody speaks for her
+   *
+   * One button each, labelled as the sentence rather than as the state, because "clear" would
+   * be ambiguous between them in exactly the way the ruling forbids.
+   */
+  const revertToDraft = async () => {
+    // Nothing stored and only a local edit: drop the edit, no write needed. `== null` is
+    // deliberate — it must catch null and undefined but NOT `''`, which IS a stored state.
+    if (data?.storedAuthorLine == null) {
+      setEdited(null);
+      setSaveError(null);
+      return;
+    }
+    await saveAuthorLine(null);
+  };
+
+  const sendWithoutLine = async () => {
+    await saveAuthorLine('');
+  };
 
   if (failed) return <p className="text-sm text-red-600">{failed}</p>;
   if (!data) return <p className="text-sm text-gray-400">Loading…</p>;
@@ -920,17 +984,52 @@ function MessageStep({ eventId }: { eventId: string }) {
       <div className="flex flex-wrap items-center gap-3 mt-2 mb-5">
         <button
           type="button"
-          onClick={() => setEdited(null)}
-          disabled={edited === null}
+          onClick={() => saveAuthorLine(authorLine)}
+          disabled={!dirty || saving}
+          className="text-xs px-3 py-1 rounded-md bg-accent text-white disabled:bg-gray-200 disabled:text-gray-400"
+        >
+          {saving ? 'Saving…' : 'Save my line'}
+        </button>
+        <button
+          type="button"
+          onClick={revertToDraft}
+          disabled={saving || (edited === null && data.storedAuthorLine === null)}
           className="text-xs text-gray-500 underline disabled:no-underline disabled:text-gray-300"
         >
-          Back to the draft
+          Put the draft back
         </button>
-        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-          Not saved. There is no field to store this line yet — GTC-187 ruled it stored and
-          reusable, and left the field&rsquo;s design as its own decision. Edits here live until you
-          leave the page.
-        </p>
+        <button
+          type="button"
+          onClick={sendWithoutLine}
+          disabled={saving || (edited === null && data.storedAuthorLine === '')}
+          className="text-xs text-gray-500 underline disabled:no-underline disabled:text-gray-300"
+        >
+          Send without a line from me
+        </button>
+        {/*
+          THE THREE STATES, SAID PLAINLY. Kate cannot see which one she is in from the box
+          alone — an empty box is "no line from me" and a box full of the draft is "Gather
+          speaks for me", and those look nothing alike but read the same if nothing says so.
+        */}
+        {saveError ? (
+          <p className="text-xs text-red-600">{saveError}</p>
+        ) : dirty ? (
+          <p className="text-xs text-amber-700">Not saved yet.</p>
+        ) : data.storedAuthorLine === '' ? (
+          <p className="text-xs text-gray-500">
+            No line from you. Guests get the greeting and then the handover — the preview below is
+            exactly what they will read.
+          </p>
+        ) : data.storedAuthorLine !== null ? (
+          <p className="text-xs text-gray-500">
+            Saved. Everyone gets this line, including anyone you add later.
+          </p>
+        ) : (
+          <p className="text-xs text-gray-500">
+            This is the draft, in your voice. Save it to make it yours, or send without a line from
+            you.
+          </p>
+        )}
       </div>
 
       {/* GTC-256. Stated, not hidden. */}

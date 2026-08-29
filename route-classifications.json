@@ -362,7 +362,7 @@
   {
     "filePath": "src/app/api/events/[id]/pre-flight/message/route.ts",
     "apiPath": "/api/events/:id/pre-flight/message",
-    "methods": ["GET"],
+    "methods": ["GET", "PATCH"],
     "authType": "SESSION",
     "authEvidence": ["requireEventRole"],
     "securityIssues": []

@@ -1,6 +1,9 @@
-// GET /api/events/[id]/pre-flight/message
+// GET   /api/events/[id]/pre-flight/message — the ingredients for step 4
+// PATCH /api/events/[id]/pre-flight/message — stores the host's movement 1
 //
 // GTC-187 (H2) — the ingredients for step 4 of the pre-flight, "the message, shown".
+// GTC-260 — the read and the write of `Event.askAuthorLine`, the column GTC-259 added
+// and deliberately left unwired.
 //
 // THIS ROUTE COMPOSES NOTHING. It returns event facts, the host's name and one row per
 // recipient; the screen calls `composeAsk` in `src/lib/messages/ask-register.ts` itself.
@@ -42,6 +45,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         venueName: true,
         occasionDescription: true,
         hostId: true,
+        askAuthorLine: true,
         host: { select: { id: true, name: true, userId: true } },
       },
     });
@@ -155,15 +159,100 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
       // host; the other candidate is indistinguishable from a guest.
       hostName: event.host?.name?.trim() || HOST_NAME_FALLBACK,
       hostIdentityResolved: hostPersonEventIds.length > 0,
-      // ANCHOR(GTC-187): the host's stored movement 1 belongs here. Decision 2 rules the
-      // line stored and reusable and flags in the same breath that no column holds it and
-      // that the field's design is its own founder decision. Always null until then; the
-      // screen falls through to `draftAuthorLine`.
-      storedAuthorLine: null,
+      // The host's stored movement 1 (GTC-187 decision 2, "stored, not ephemeral"), read
+      // from the column GTC-259 added. NULL means she never wrote one, and the screen falls
+      // through to `draftAuthorLine` — which is what every event does until she does.
+      //
+      // The field keeps the COMPOSER's name here because that is what it feeds: the screen
+      // hands it straight to `composeAsk`'s `storedAuthorLine` parameter. The PATCH below
+      // speaks the COLUMN's name, `askAuthorLine`, because that is what it writes.
+      storedAuthorLine: event.askAuthorLine,
       recipients,
     });
   } catch (error) {
     console.error('Error assembling pre-flight message:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+/**
+ * PATCH — stores the host's movement 1. GTC-260.
+ *
+ *   { askAuthorLine: string | null }  →  Event.askAuthorLine
+ *
+ * ONE VALUE, LAST WRITE WINS (GTC-187, 2026-08-29). An edit at mini-send time overwrites;
+ * no per-send version lives on the column. What each recipient actually received is a
+ * different record and is GTC-189's to decide.
+ *
+ * ⚠ THREE STATES, AND THIS HANDLER'S JOB IS TO KEEP THEM DISTINCT (founder ruling,
+ * 2026-08-29). NULL and `''` are different facts:
+ *
+ *   null   →  never authored        →  composition falls through to the generated draft
+ *   ''     →  deliberately no line  →  the bare greeting, "Hi Rob,", and NO draft
+ *   value  →  her words             →  "Hi Rob - <value>"
+ *
+ * The read is `storedAuthorLine ?? draftAuthorLine(event)`, and `??` falls through on null
+ * but not on `''` — one expression, all three states, no branching needed downstream.
+ *
+ * ⚠ DO NOT COLLAPSE `''` TO NULL. An earlier rule the same day required exactly that, on the
+ * grounds that a stored `''` suppresses the draft. It does — but suppressing the draft is the
+ * point, not the bug. `authorLineFor`'s own comment already treats the blank case as
+ * deliberate ("hers to cut to nothing"), and Hinge §5 makes the handover the load-bearing
+ * beat, not movement 1's length: a host sending to sixty people, or re-sending after she has
+ * said her piece, must be able to decline to speak without Gather's words standing in for
+ * hers. The superseded rule is kept in prisma/schema.prisma and GTC-259 with its reason.
+ *
+ * WHITESPACE-ONLY NORMALISES TO `''`, NOT TO NULL. `authorLineFor` trims before deciding, so
+ * `'   '` composes identically to `''` — storing it verbatim would be a fourth spelling of
+ * the third state. Values are stored trimmed. The column therefore holds exactly NULL, `''`,
+ * or a trimmed non-empty string.
+ *
+ * Normalised HERE, at the one write site, rather than at the read — so nothing downstream
+ * has to remember, and the read stays a plain `??`.
+ *
+ * NO LENGTH CAP, deliberately. GTC-187 decision 6: "no enforced cap ... do not truncate, do
+ * not block". The pre-flight already shows the segment count so the cost is visible, which is
+ * what that decision asks for instead. Matches `EventSetup.otherNotes` and the other free-text
+ * fields, none of which cap.
+ *
+ * Deliberately NOT the event PATCH at /api/events/[id], for the reason the cadence route
+ * records: that route rebuilds a whole update object with `|| null` defaults, so a one-field
+ * PATCH there would clear venue and occasion fields as a side effect.
+ */
+export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id: eventId } = await context.params;
+
+  const auth = await requireEventRole(eventId, ['HOST', 'COHOST']);
+  if (auth instanceof NextResponse) return auth;
+
+  try {
+    const body = await request.json().catch(() => null);
+
+    if (!body || typeof body !== 'object' || !('askAuthorLine' in body)) {
+      return NextResponse.json({ error: 'askAuthorLine is required' }, { status: 400 });
+    }
+
+    const raw = (body as { askAuthorLine: unknown }).askAuthorLine;
+    if (raw !== null && typeof raw !== 'string') {
+      return NextResponse.json(
+        { error: 'askAuthorLine must be a string or null' },
+        { status: 400 }
+      );
+    }
+
+    // Trim, and PRESERVE `''` — the three states, see above. `null` stays null; a string
+    // becomes its trimmed self, which is `''` when it was blank or whitespace-only.
+    const askAuthorLine = raw === null ? null : raw.trim();
+
+    const event = await prisma.event.update({
+      where: { id: eventId },
+      data: { askAuthorLine },
+      select: { askAuthorLine: true },
+    });
+
+    return NextResponse.json({ storedAuthorLine: event.askAuthorLine });
+  } catch (error) {
+    console.error('Error storing the host author line:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

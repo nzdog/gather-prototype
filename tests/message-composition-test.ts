@@ -453,18 +453,88 @@ function main() {
     ![one, four, itemless, nameless].some((a) => /\b(she|her|hers|he|him|his)\b/i.test(a.text))
   );
 
+  /*
+   * GTC-260 replaced the anchor assertions. Until GTC-259 there was no column, so the test
+   * could only pin that the gap was MARKED — `ANCHOR(GTC-187)` in the composer and the route.
+   * The column exists and is wired now, so that assertion would pass on a file that had
+   * simply kept a stale comment. These pin the wiring itself, which is the fact worth
+   * protecting; deleting the old one without a replacement would have been coverage lost.
+   */
   assert(
     'structural',
-    'the missing storage field is anchored, not silently absent (GTC-187 decision 2)',
-    /ANCHOR\(GTC-187\)/.test(
-      readFileSync(join(__dirname, '..', 'src/lib/messages/ask-register.ts'), 'utf8')
-    ) &&
-      /ANCHOR\(GTC-187\)/.test(
-        readFileSync(
-          join(__dirname, '..', 'src/app/api/events/[id]/pre-flight/message/route.ts'),
-          'utf8'
-        )
-      )
+    'the stored line is READ from the column, never hardcoded null again (GTC-260)',
+    /storedAuthorLine:\s*event\.askAuthorLine/.test(routeSrc) &&
+      !/storedAuthorLine:\s*null/.test(routeSrc)
+  );
+
+  assert(
+    'structural',
+    'the route has a write path, it trims, and it does NOT collapse empty to null (GTC-260)',
+    /export async function PATCH/.test(routeSrc) &&
+      /raw === null \? null : raw\.trim\(\)/.test(routeSrc) &&
+      !/length === 0 \? null/.test(routeSrc)
+  );
+
+  /*
+   * THE THREE STATES OF Event.askAuthorLine, pinned as behaviour (founder ruling 2026-08-29).
+   *
+   *   null   never authored        → the generated draft
+   *   ''     deliberately no line  → the bare greeting, and NOT the draft
+   *   value  her words             → her words
+   *
+   * The whole ruling lives in one `??` in `composeAsk`, which catches null and not `''`. That
+   * is easy to "tidy" into a `||` by someone who reads `''` as a bug, and the tidy would put
+   * Gather's draft in the mouth of a host who chose not to speak. These assertions are the
+   * reason it must stay as it is. A superseded rule the same day required the write path to
+   * normalise `''` to null; it is kept in prisma/schema.prisma and GTC-259 with its reason.
+   */
+  const nullStored = ask(['pavlova'], 'Finn', null);
+  const emptyStored = ask(['pavlova'], 'Finn', '');
+  const valueStored = ask(['pavlova'], 'Finn', 'Come hungry, bring nothing but yourself.');
+
+  assert(
+    'behaviour',
+    'state 1 — NULL falls through to the generated draft (GTC-260)',
+    nullStored.movements[0].text.includes(draftAuthorLine(EVENT)) &&
+      nullStored.movements[0].text.startsWith('Hi Finn - ')
+  );
+
+  assert(
+    'behaviour',
+    "state 2 — '' is the bare greeting, and does NOT fall through to the draft (GTC-260)",
+    emptyStored.movements[0].text === 'Hi Finn,' &&
+      !emptyStored.movements[0].text.includes(draftAuthorLine(EVENT))
+  );
+
+  assert(
+    'behaviour',
+    'state 3 — a value is her words, and not the draft (GTC-260)',
+    valueStored.movements[0].text === 'Hi Finn - Come hungry, bring nothing but yourself.' &&
+      !valueStored.movements[0].text.includes(draftAuthorLine(EVENT))
+  );
+
+  assert(
+    'behaviour',
+    "the three states are mutually distinct — null is not the same message as '' (GTC-260)",
+    new Set([
+      nullStored.movements[0].text,
+      emptyStored.movements[0].text,
+      valueStored.movements[0].text,
+    ]).size === 3
+  );
+
+  assert(
+    'behaviour',
+    "the handover survives in ALL THREE — §5's load-bearing beat is never the one cut",
+    [nullStored, emptyStored, valueStored].every(
+      (a) => a.movements.length === 3 && a.movements[1].text === askHandover()
+    )
+  );
+
+  assert(
+    'behaviour',
+    "whitespace-only composes as '' — which is why the write stores it as '', not as null",
+    ask(['pavlova'], 'Finn', '   ').movements[0].text === emptyStored.movements[0].text
   );
 
   assert(

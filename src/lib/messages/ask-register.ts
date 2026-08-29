@@ -165,6 +165,11 @@ export function draftAuthorLine(event: AskEventFacts): string {
  * `line` is the host's authored text when there is one, and the draft otherwise. A blank line
  * leaves the greeting standing alone: Hinge §5 makes this movement the host's, which includes
  * theirs to cut to nothing, and the product "does not permit or approve this movement".
+ *
+ * THAT BLANK CASE IS NOW REACHABLE, not just tolerated. A founder ruling (2026-08-29) made it
+ * the third state of `Event.askAuthorLine`: the host can store `''` from the pre-flight and
+ * every guest gets this greeting and no authored line. The branch below was already written
+ * for it — the ruling gave it a way in rather than changing what it does.
  */
 export function authorLineFor(recipientFirstName: string, line: string | null): string {
   const written = line?.trim();
@@ -253,11 +258,21 @@ export interface ComposeAskInput {
   /**
    * The host's stored movement 1 (decision 2), or null to use `draftAuthorLine`.
    *
-   * ANCHOR(GTC-187): no column holds this yet. Decision 2 rules the line STORED and
-   * reusable, and flags in the same breath that "no schema field exists to hold this today.
-   * A field is needed, and schema changes fall under a Do-Not-Touch zone — so the field's
-   * design is its own decision, not settled here." Nothing in this ticket writes one. The
-   * caller passes null and gets the draft.
+   * Held in `Event.askAuthorLine` (GTC-259, wired by GTC-260) and read by
+   * `GET /api/events/[id]/pre-flight/message`. NULL MEANS SHE NEVER WROTE ONE — the
+   * fall-through below is what every event does until she does.
+   *
+   * ⚠ NULL AND `''` ARE DIFFERENT ARGUMENTS, deliberately (founder ruling, 2026-08-29). The
+   * fall-through below is `??`, which catches null but not an empty string, and that is what
+   * carries all three states through one expression:
+   *
+   *   null   never authored        → `draftAuthorLine(event)`
+   *   ''     deliberately no line  → `authorLineFor` returns the bare greeting, no draft
+   *   value  her words             → her words
+   *
+   * So do not "fix" this to `||`, and do not coalesce `''` at a call site: both would collapse
+   * the third state into the first and put Gather's draft in the mouth of a host who chose not
+   * to speak. `Event.askAuthorLine` stores all three; the write path preserves `''`.
    */
   storedAuthorLine?: string | null;
 }

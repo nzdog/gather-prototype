@@ -108,16 +108,36 @@ model Event {
   /// GTC-259: the host's movement 1 for the ask - Kate's own words, the first of the three
   /// movements Hinge §5 makes seam-visible (GTC-187 decision 2, "stored, not ephemeral").
   ///
-  /// NULL MEANS SHE NEVER WROTE ONE, not "she wrote nothing". `composeAsk` falls through to
-  /// `draftAuthorLine(event)` - today's behaviour, always - via `storedAuthorLine ?? draft`
-  /// in src/lib/messages/ask-register.ts. Same convention as `decideByOffsetHours` and
-  /// `nudgePace` directly above: NULL is not-set, and not-set is not a stored value.
+  /// THREE STATES, NOT TWO (founder ruling, 2026-08-29). NULL and empty string are DIFFERENT
+  /// FACTS and the difference is load-bearing. `composeAsk` reads this as
+  /// `storedAuthorLine ?? draftAuthorLine(event)` in src/lib/messages/ask-register.ts, and
+  /// `??` falls through on null but NOT on `''` - which is exactly what makes all three
+  /// reachable through one expression:
   ///
-  /// ⚠ THE WRITE SITE MUST NORMALISE EMPTY TO NULL. The read is `??`, which falls through on
-  /// null and undefined but NOT on `''`. A host who clears the box and saves would otherwise
-  /// store an empty string and compose an empty movement 1 - the seam Hinge §5 exists to
-  /// protect, silently deleted. No write site exists yet; this is the rule the one that does
-  /// must follow.
+  ///   NULL   never authored          -> falls through to the generated draft
+  ///   ''     DELIBERATELY NO LINE    -> `authorLineFor` returns the bare greeting, "Hi Rob,",
+  ///                                     and does NOT fall through to the draft
+  ///   value  the host's words        -> "Hi Rob - <value>"
+  ///
+  /// NULL keeps the not-set convention `decideByOffsetHours` and `nudgePace` directly above
+  /// use. `''` is a stored value like any other, and means she said her piece by declining to.
+  ///
+  /// ⚠ SUPERSEDED, KEPT FOR THE REASON: an earlier rule the same day required the write site
+  /// to NORMALISE EMPTY TO NULL, on the grounds that a stored `''` "suppresses the draft".
+  /// It does suppress the draft - that part was measured and is true - but suppressing the
+  /// draft turned out to be the FEATURE, not the bug. The founder ruling that replaced it:
+  /// `authorLineFor`'s own comment already treats the blank case as deliberate ("hers to cut
+  /// to nothing"), and Hinge §5 makes the HANDOVER the load-bearing beat, not movement 1's
+  /// length. A host sending to sixty people, or re-sending after she has already said her
+  /// piece, must be able to decline to speak without Gather's words standing in for hers.
+  /// The write site therefore PRESERVES `''` and must not collapse it to NULL.
+  ///
+  /// Whitespace-only IS normalised - to `''`, not to NULL. `authorLineFor` trims before
+  /// deciding, so `'   '` composes identically to `''`; storing it verbatim would be a fourth
+  /// spelling of the third state. Values are stored trimmed, so the column holds exactly
+  /// NULL, `''`, or a trimmed non-empty string and nothing else.
+  ///
+  /// Enforced in the PATCH at src/app/api/events/[id]/pre-flight/message/route.ts (GTC-260).
   ///
   /// ONE VALUE, LAST WRITE WINS (GTC-187, 2026-08-29). A mini-send edit overwrites; no
   /// per-send version lives here. What each recipient actually received is GTC-189's to
@@ -131,9 +151,8 @@ model Event {
   /// the CONFIRMING event that reaches the pre-flight. GTC-179 Ruling 5 made the same call
   /// on the same question for `nudgePace`. Full check in GTC-259.
   ///
-  /// NO READER AND NO WRITER AS OF GTC-259. The pre-flight route still returns
-  /// `storedAuthorLine: null` hardcoded and the screen still says the box is not saved.
-  /// Wiring is deliberately a separate change.
+  /// WIRED BY GTC-260: read and written by the pre-flight message route, set on the
+  /// pre-flight screen. GTC-259 added the column and deliberately wired nothing.
   askAuthorLine              String?
   sharedLinkToken            String?                  @unique
   sharedLinkEnabled          Boolean                  @default(false)
