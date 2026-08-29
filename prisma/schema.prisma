@@ -105,6 +105,36 @@ model Event {
   /// GTC-188 (I1) builds the pre-flight surface Kate sets this on. Until it lands there
   /// is no host-facing way to set it — deliberate, and stated rather than implied.
   nudgePace                  NudgePace?
+  /// GTC-259: the host's movement 1 for the ask - Kate's own words, the first of the three
+  /// movements Hinge §5 makes seam-visible (GTC-187 decision 2, "stored, not ephemeral").
+  ///
+  /// NULL MEANS SHE NEVER WROTE ONE, not "she wrote nothing". `composeAsk` falls through to
+  /// `draftAuthorLine(event)` - today's behaviour, always - via `storedAuthorLine ?? draft`
+  /// in src/lib/messages/ask-register.ts. Same convention as `decideByOffsetHours` and
+  /// `nudgePace` directly above: NULL is not-set, and not-set is not a stored value.
+  ///
+  /// ⚠ THE WRITE SITE MUST NORMALISE EMPTY TO NULL. The read is `??`, which falls through on
+  /// null and undefined but NOT on `''`. A host who clears the box and saves would otherwise
+  /// store an empty string and compose an empty movement 1 - the seam Hinge §5 exists to
+  /// protect, silently deleted. No write site exists yet; this is the rule the one that does
+  /// must follow.
+  ///
+  /// ONE VALUE, LAST WRITE WINS (GTC-187, 2026-08-29). A mini-send edit overwrites; no
+  /// per-send version lives here. What each recipient actually received is GTC-189's to
+  /// decide and does not belong in this column.
+  ///
+  /// NOT LENGTH-CAPPED, on purpose - GTC-187 decision 6: "no enforced cap ... do not
+  /// truncate, do not block". Prisma maps `String` to Postgres `TEXT`.
+  ///
+  /// NOT EventSetup JSONB. EventSetup is Moment-2 form state and does not exist for most
+  /// events - 7 of 9 in the development database, including Henderson Family Christmas 2026,
+  /// the CONFIRMING event that reaches the pre-flight. GTC-179 Ruling 5 made the same call
+  /// on the same question for `nudgePace`. Full check in GTC-259.
+  ///
+  /// NO READER AND NO WRITER AS OF GTC-259. The pre-flight route still returns
+  /// `storedAuthorLine: null` hardcoded and the screen still says the box is not saved.
+  /// Wiring is deliberately a separate change.
+  askAuthorLine              String?
   sharedLinkToken            String?                  @unique
   sharedLinkEnabled          Boolean                  @default(false)
   // Retained, unwritten after GTC-169 (A3a). Historical evidence of the old freeze
