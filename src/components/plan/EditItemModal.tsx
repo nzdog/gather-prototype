@@ -51,6 +51,12 @@ interface EditItemModalProps {
    * `isEditItemBlocked` above is unaffected — it remains exported and asserted.
    */
   event?: SerialisedEvent | null;
+  /**
+   * GTC-256 (phase 4, Rulings 4 and 9): `Event.hostId`, so this modal can offer the host
+   * her own row. `SerialisedEvent` deliberately carries only the three lifecycle fields,
+   * so this arrives alongside it rather than inside it.
+   */
+  hostId?: string;
   item: {
     id: string;
     name: string;
@@ -135,6 +141,7 @@ export default function EditItemModal({
   days,
   eventId,
   people,
+  hostId,
 }: EditItemModalProps) {
   const { ask: askForReason, element: reasonPrompt } = useReasonPrompt();
   const { openModal, closeModal } = useModal();
@@ -186,6 +193,18 @@ export default function EditItemModal({
   }, [item]);
 
   if (!isOpen || !item) return null;
+
+  // The team's own members — the assignee list as it has always been (GTC-171's
+  // same-team rule, mirrored client-side).
+  const teamPeople = people.filter((p) => p.team.id === item.team.id);
+
+  // GTC-256 (phase 4): the host, offered separately. `find` rather than a filter so a
+  // host who somehow IS on this team is not offered twice — the team list wins, because
+  // then she is there on ordinary terms.
+  const hostOption =
+    hostId && !teamPeople.some((p) => p.personId === hostId)
+      ? (people.find((p) => p.personId === hostId) ?? null)
+      : null;
 
   // GTC-197 (A3c): the FROZEN block is GONE. Editing after the send is allowed —
   // the lock is a ledger, not a wall (Moment 4 §7). Where the change touches someone
@@ -532,17 +551,39 @@ export default function EditItemModal({
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                 >
                   <option value="">Unassigned</option>
-                  {people
-                    .filter((p) => p.team.id === item.team.id)
-                    .map((person) => (
-                      <option key={person.personId} value={person.personId}>
-                        {person.name}
-                      </option>
-                    ))}
+                  {teamPeople.map((person) => (
+                    <option key={person.personId} value={person.personId}>
+                      {person.name}
+                    </option>
+                  ))}
+                  {/*
+                    GTC-256 (phase 4, Rulings 4 and 9) — THE HOST'S OWN ROW.
+
+                    "She opts in and chooses her own items." This is that affordance, and
+                    it is deliberately the whole of it: there is no stored toggle. "Off by
+                    default" is a STARTING STATE, not a setting (founder, 2026-08-29) —
+                    she holds nothing until she picks one of these, and nothing pre-selects
+                    her.
+
+                    OFFERED ON EVERY ITEM, not just this team's. `PersonEvent.teamId` is
+                    singular and hers is deliberately null, so she belongs to no team and
+                    the filter above can never surface her. The server grants the same
+                    exemption on the same terms — see src/lib/assignment/same-team.ts,
+                    which is the gate; this is the courtesy.
+
+                    Set apart from the team's members rather than sorted in among them,
+                    the way the pre-flight renders her distinctly: she is not one of the
+                    people being asked.
+                  */}
+                  {hostOption && (
+                    <option value={hostOption.personId}>{hostOption.name} (you)</option>
+                  )}
                 </select>
-                {people.filter((p) => p.team.id === item.team.id).length === 0 && (
+                {teamPeople.length === 0 && (
                   <p className="text-xs text-gray-500 mt-1">
-                    No people in this team yet. Add people to the team first.
+                    {hostOption
+                      ? 'No people in this team yet — add some, or take this one yourself.'
+                      : 'No people in this team yet. Add people to the team first.'}
                   </p>
                 )}
               </div>

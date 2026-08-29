@@ -260,8 +260,14 @@ async function main() {
       'src/app/api/events/[id]/people/auto-assign/route.ts',
       'src/lib/auto-assign.ts',
     ];
+    // Checks for an actual IMPORT, not a mention of the name — the same correction
+    // tests/child-assignment-eligibility-test.ts already carries for child-exclusion, and
+    // for the same reason: these paths deliberately NAME the module in a boundary comment
+    // saying not to import it, so a substring check false-positives on its own warning.
+    // GTC-256 phase 4 tripped exactly that when it sited the boundary comment.
+    const importsHostExclusion = (src: string) => /from\s+['"][^'"]*host-exclusion['"]/.test(src);
     const leaked = assignmentPaths.filter(
-      (p) => fs.existsSync(p) && fs.readFileSync(p, 'utf8').includes('host-exclusion')
+      (p) => fs.existsSync(p) && importsHostExclusion(fs.readFileSync(p, 'utf8'))
     );
     assert(
       'MESSAGE-ONLY: no assignment path imports host-exclusion — Ruling 4 says she may ' +

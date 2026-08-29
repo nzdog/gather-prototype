@@ -2075,6 +2075,7 @@ export default function PlanEditorPage() {
           days={days}
           eventId={eventId}
           people={people}
+          hostId={event?.hostId}
         />
 
         {/* Regenerate Modal */}

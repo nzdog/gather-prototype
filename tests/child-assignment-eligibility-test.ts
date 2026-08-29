@@ -174,6 +174,68 @@ async function main() {
       'auto-assign route does not import the child-exclusion module [structural]',
       !importsChildExclusion(autoAssignRoute)
     );
+
+    // ── GTC-256 phase 4: THE SECOND MESSAGE-ONLY MODULE, PINNED THE SAME WAY ──
+    //
+    // Placed HERE, in this file, on founder instruction — so "child IS assignable" and
+    // "host may hold across teams" sit together, and a future session reading either one
+    // sees both. They are the same invariant twice: a MESSAGE rule never becomes an
+    // ASSIGNMENT rule.
+    //
+    //   CHILD  never messaged (§10.6)              assignable — the kid with a job
+    //   HOST   never messaged (GTC-256 Ruling 5)   may hold items (Rulings 4 and 9)
+    //
+    // The host case is the sharper of the two, because her message exclusion is NEWER than
+    // her assignment right and the pattern-match runs the other way: "she is excluded from
+    // everything" is the wrong generalisation, and Ruling 4 says so directly.
+    const importsHostExclusion = (src: string) => /from\s+['"][^'"]*host-exclusion['"]/.test(src);
+
+    for (const [label, src] of [
+      ['host assign route', hostAssignRoute],
+      ['coordinator-token assign route', tokenAssignRoute],
+      ['auto-assign route', autoAssignRoute],
+      ['the same-team rule module', readCode('src/lib/assignment/same-team.ts')],
+    ] as const) {
+      assert(
+        `${label} does not import the host-exclusion module [structural]`,
+        !importsHostExclusion(src)
+      );
+    }
+
+    // The domain half of the host invariant. `mayHoldRow` is the ONE definition the route
+    // calls, so asserting it here asserts the route — no second copy to drift.
+    const { mayHoldRow } = await import('../src/lib/assignment/same-team');
+    const HOSTID = 'the-host';
+    assert(
+      'GTC-256 Rulings 4/9: the host, on NO team, may hold an item on ANY team when she is ' +
+        'the one picking — the singular PersonEvent.teamId is what stood in the way',
+      mayHoldRow(
+        { personId: HOSTID, role: 'HOST', teamId: null },
+        { kind: 'ITEM', teamId: 'any-team' },
+        'HOST',
+        HOSTID
+      ) === true
+    );
+    assert(
+      'and a CHILD is STILL assignable through the same one rule — neither exclusion ' +
+        'reaches assignment, which is what this file exists to hold',
+      mayHoldRow(
+        { personId: 'kid-with-a-job', role: 'PARTICIPANT', teamId: 'their-team' },
+        { kind: 'ITEM', teamId: 'their-team' },
+        'HOST',
+        HOSTID
+      ) === true
+    );
+    assert(
+      'and the host exemption did NOT widen into a general one: an ordinary guest on the ' +
+        'wrong team is still refused',
+      mayHoldRow(
+        { personId: 'a-guest', role: 'PARTICIPANT', teamId: 'their-team' },
+        { kind: 'ITEM', teamId: 'another-team' },
+        'HOST',
+        HOSTID
+      ) === false
+    );
   } finally {
     // ── Cleanup ──────────────────────────────────────────────────────────
     if (eventId) {

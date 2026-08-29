@@ -4,6 +4,7 @@ import { requireEventRole } from '@/lib/auth/guards';
 import { ledgerActorForUser } from '@/lib/auth/actor';
 import { recordChange, onAssignmentReleased, type PendingChange } from '@/lib/ledger';
 import { repairItemStatusAfterMutation } from '@/lib/workflow';
+import { mayHoldRow, SAME_TEAM_ERROR } from '@/lib/assignment/same-team';
 
 // POST /api/events/[id]/items/[itemId]/assign - Assign item to person
 //
@@ -74,11 +75,23 @@ export async function POST(
     // GTC-172's §10.6 message exclusion (src/lib/eligibility/child-exclusion.ts) is
     // MESSAGE-ONLY — a "kid with a job" is assignable by design; they simply are never
     // messaged directly. Do not import that module here to filter personEvent.
-    if (item.kind === 'ITEM' && personEvent.teamId !== item.teamId) {
-      return NextResponse.json(
-        { error: 'Person must be in the same team as the item' },
-        { status: 400 }
-      );
+    //
+    // GTC-256 (phase 4, Rulings 4 and 9): THE SECOND EXCEPTION, AND IT IS THE SAME
+    // STRUCTURAL PROBLEM AS THE FIRST. `PersonEvent.teamId` is singular, so the host —
+    // who is deliberately on no team — could reach nothing but task rows. She may hold
+    // items and picks them herself, so the rule opens for her when SHE is doing the
+    // picking. It is a RELAXATION and can make nobody unassignable, which is the failure
+    // GTC-207 above exists to prevent; the paired guard in
+    // tests/child-assignment-eligibility-test.ts now carries both invariants side by side.
+    //
+    // ⚠ AND THE HOST PREDICATE IS NOT IMPORTED FROM src/lib/eligibility/host-exclusion.ts.
+    // That module is message-only by ruling — holding an item does not make her an
+    // addressee — and an assignment path reaching into it is the exact GTC-207 mistake.
+    // The decision lives in src/lib/assignment/same-team.ts, whose folder says which kind
+    // of rule it is; read its docstring before changing anything here, including why the
+    // host must keep `teamId: null` rather than being written onto a team.
+    if (!mayHoldRow(personEvent, item, auth.role, event.hostId)) {
+      return NextResponse.json({ error: SAME_TEAM_ERROR }, { status: 400 });
     }
 
     const actor = await ledgerActorForUser(auth.user, auth.role);
