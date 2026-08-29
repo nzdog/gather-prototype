@@ -58,6 +58,7 @@
     "test:nudge-clock-origin": "tsx tests/nudge-clock-origin-test.ts",
     "test:nudge-dedup-scope": "tsx tests/nudge-dedup-scope-test.ts",
     "test:nudge-cadence": "tsx tests/nudge-cadence-test.ts",
+    "test:message-composition": "tsx tests/message-composition-test.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
