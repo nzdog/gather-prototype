@@ -41,7 +41,7 @@
     "test:setup-modal-dashboard-entry": "tsx tests/setup-modal-dashboard-entry-test.ts",
     "test:view-as-host-alert": "tsx tests/view-as-host-alert-test.ts",
     "test:initial-plan-mismatch": "tsx tests/initial-plan-mismatch-test.ts",
-    "test:auto-assign": "tsx tests/auto-assign-items-host-test.ts",
+    "test:auto-assign": "tsx tests/auto-assign-people-only-test.ts",
     "test:vcf-import": "tsx tests/vcf-import-test.ts",
     "test:unassigned-critical-items": "tsx tests/unassigned-critical-items-test.ts",
     "test:task-row-eligibility": "tsx tests/task-row-bucket-eligibility-test.ts",

@@ -238,9 +238,16 @@ export default function PeopleSection({
         throw new Error(data.error || 'Failed to auto-assign people');
       }
 
-      // Success feedback
-      const itemMsg = data.itemsAssigned > 0 ? ` and ${data.itemsAssigned} items to people` : '';
-      toast.success(`Successfully assigned ${data.assigned} people to teams${itemMsg}!`);
+      // Success feedback.
+      //
+      // The "and N items to people" clause is GONE (founder Ruling 1, 2026-08-29):
+      // auto-assign places people and creates no Assignment rows, so there is no item
+      // count to report. Ruling 2 — one behaviour behind one name — is why this wording
+      // changed with the route rather than being left to imply the old half is still
+      // running somewhere.
+      toast.success(
+        `Assigned ${data.assigned} ${data.assigned === 1 ? 'person' : 'people'} to teams. Nothing was assigned to anyone yet.`
+      );
 
       // Refresh data
       onPeopleChanged?.();
