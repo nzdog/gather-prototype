@@ -630,12 +630,25 @@ function MarkRows({
               m.messageable ? '' : 'opacity-60'
             }`}
           >
-            <span className="text-sm text-gray-900 min-w-[8rem]">{m.name}</span>
-            {m.personEventId === channelPersonEventId && (
-              <span className="text-[11px] uppercase tracking-wide text-accent border border-accent/40 rounded px-1.5 py-0.5">
-                channel
+            {/*
+              FIXED-WIDTH NAME COLUMN so every row's controls start at the same x. It was
+              `min-w-[8rem]`, a floor rather than a column, so a long name pushed the pills
+              right and the rows read as ragged — "Aarav Patel-Henderson" sat further out than
+              "Amy Henderson". The channel badge lives INSIDE the column for the same reason:
+              outside it, the one row that has a badge would be the one row out of line.
+              The name truncates rather than growing; `min-w-0` is what lets `truncate` work
+              inside a flex child, and `title` keeps the full name reachable.
+            */}
+            <span className="flex items-center gap-1.5 w-full sm:w-60 sm:shrink-0 min-w-0">
+              <span className="text-sm text-gray-900 truncate" title={m.name}>
+                {m.name}
               </span>
-            )}
+              {m.personEventId === channelPersonEventId && (
+                <span className="shrink-0 text-[11px] uppercase tracking-wide text-accent border border-accent/40 rounded px-1.5 py-0.5">
+                  channel
+                </span>
+              )}
+            </span>
             {!m.messageable && (
               <span className="text-xs text-gray-500">
                 child — never messaged, whatever contact details are on the record
@@ -644,8 +657,14 @@ function MarkRows({
             {m.messageable && (
               <>
                 <span className="flex gap-1.5">
+                  {/*
+                    LABEL ONLY — the stored value for this state is still NULL, which
+                    `resolveNudgeOffsetDays` reads as "no opinion, defer to the event pace"
+                    (GTC-179 Ruling 4, quieter-wins). "Normal nudge" names what the host gets,
+                    not what the column holds; do not turn it into a stored STANDARD.
+                  */}
                   <Pill active={m.nudgeMark === null} onClick={() => onMark(m.personEventId, null)}>
-                    No mark
+                    Normal nudge
                   </Pill>
                   {(Object.keys(MARK_LABELS) as NudgeMark[]).map((k) => (
                     <Pill
