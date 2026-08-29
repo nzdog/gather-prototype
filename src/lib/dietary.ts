@@ -16,6 +16,19 @@ export interface DietaryData {
   other?: string;
 }
 
+/**
+ * The dietary needs Kate can tick. Moved here from Moment2Step1Modal's local const by
+ * GTC-188 (I1) so the pre-flight's re-verify offers the SAME vocabulary the capture
+ * screen wrote — two copies of a list that must match is the GTC-151 shape.
+ */
+export const DIETARY_OPTIONS = [
+  'Vegetarian',
+  'Vegan',
+  'Gluten-free',
+  'Dairy-free',
+  'Nut allergy',
+] as const;
+
 export const DIETARY_STATUSES: DietaryStatus[] = [
   'unanswered',
   'confirmed_none',
