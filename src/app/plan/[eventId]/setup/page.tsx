@@ -11,6 +11,7 @@ import SetupOpeningScreen from '@/components/plan/SetupOpeningScreen';
 import Moment1InputForm, {
   Moment1PersonInput,
   ChannelCandidateOption,
+  HostHouseholdPayload,
 } from '@/components/plan/Moment1InputForm';
 import HouseholdCardList, { SavedHousehold } from '@/components/plan/HouseholdCardList';
 import Moment1Summary from '@/components/plan/Moment1Summary';
@@ -184,7 +185,21 @@ export default function EventSetupPage() {
   // shows unconditionally. Replaces the retired `?setup=true` read.
   const [showSetup, setShowSetup] = useState(true);
   const [showMoment1, setShowMoment1] = useState(false);
-  const [moment1Phase, setMoment1Phase] = useState<'input' | 'summary'>('input');
+  /**
+   * GTC-256 (phase 2): 'host' is Moment 1's new FIRST phase — the host's own household.
+   *
+   * Ruling 1's "Moment 1 OPENS with the host's own household" is a SEQUENCE GUARANTEE,
+   * not a screen order: her row must exist before any other household can be entered, or
+   * `createMember` files her as a `role: 'PARTICIPANT'` the first time her email appears
+   * in someone else's household. This ordering is the client half of that; the server
+   * half is the 409 on `POST /api/events/[id]/households`, and the server half is the one
+   * that actually holds.
+   */
+  const [moment1Phase, setMoment1Phase] = useState<'host' | 'input' | 'summary'>('host');
+  const [hostStep, setHostStep] = useState<{
+    loading: boolean;
+    host: { name: string; email: string | null; phone: string | null } | null;
+  }>({ loading: true, host: null });
   const [showMoment2Opening, setShowMoment2Opening] = useState(false);
   const [showMoment2Step1, setShowMoment2Step1] = useState(false);
   const [showMoment2Step2Skeleton, setShowMoment2Step2Skeleton] = useState(false);
@@ -278,6 +293,11 @@ export default function EventSetupPage() {
         phone: g.person?.phoneNumber || undefined,
       })),
       contactPersonEventId: h.contactPersonEventId ?? null,
+      // GTC-256 (Ruling 8 + Ruling 10): her membership carries `role: HOST`, and it is
+      // the only row on the event that does. Derived here rather than stored on the
+      // household — the household has no host of its own, it merely contains her.
+      isHostHousehold: (h.members ?? []).some((m: any) => m.role === 'HOST'),
+      messagesMuted: h.messagesMuted ?? null,
     };
   }, []);
 
@@ -313,6 +333,34 @@ export default function EventSetupPage() {
     };
     fetchHouseholds();
   }, [showMoment1, showMoment2PlanView, event, apiHouseholdToSaved]);
+
+  /**
+   * GTC-256 (phase 2): who she is, and whether she has already done this step.
+   *
+   * `household` non-null means her row exists, so the step is skipped rather than
+   * offered twice — she edits her household from the card list like any other, which is
+   * the path the demotion guard protects. It never RE-OFFERS the step, because the POST
+   * is create-only and would 409.
+   */
+  useEffect(() => {
+    if (!event || !showMoment1) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/events/${event.id}/host-household`);
+        if (!res.ok) throw new Error('Failed to load host household');
+        const data = await res.json();
+        if (cancelled) return;
+        setHostStep({ loading: false, host: data.host ?? null });
+        if (data.household) setMoment1Phase((prev) => (prev === 'host' ? 'input' : prev));
+      } catch {
+        if (!cancelled) setHostStep({ loading: false, host: null });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showMoment1, event]);
 
   const loadMoment2PlanCategories = async (): Promise<Moment2PlanCategory[]> => {
     const [teamsRes, itemsRes] = await Promise.all([
@@ -419,6 +467,60 @@ export default function EventSetupPage() {
             setMoment1Phase('input');
           }}
         />
+      );
+    }
+
+    /**
+     * GTC-256 (phase 2) — Moment 1's first phase: the host's own household.
+     *
+     * Renders the ordinary capture form in `hostMode`, so the partner / kid-with-a-job /
+     * kid-without-a-job / guest sub-forms, the phone normalisation and the validation are
+     * the same ones every other household gets. What differs is what the form CANNOT do
+     * here: name a different primary (it is `Event.hostId`'s Person, Ruling 10), edit the
+     * account email, or pick a cross-household channel.
+     */
+    if (moment1Phase === 'host') {
+      if (hostStep.loading || !hostStep.host) {
+        return (
+          <div className="fixed inset-0 z-50 bg-white flex items-center justify-center">
+            <div className="text-gray-600">
+              {hostStep.loading ? 'Loading…' : 'Could not load your details. Please reload.'}
+            </div>
+          </div>
+        );
+      }
+
+      const handleSaveHostHousehold = async (payload: HostHouseholdPayload) => {
+        const res = await fetch(`/api/events/${event.id}/host-household`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || 'Failed to save your household');
+        }
+        const data = await res.json();
+        setHouseholds((prev) => [...prev, apiHouseholdToSaved(data.household)]);
+        setMoment1Phase('input');
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
+          <div className="max-w-5xl mx-auto px-6 py-8">
+            <div className="max-w-[640px]">
+              <Moment1InputForm
+                eventId={event.id}
+                eventName={event.name}
+                onComplete={() => setMoment1Phase('input')}
+                onAddPerson={async () => {}}
+                hostMode={hostStep.host}
+                onSaveHostHousehold={handleSaveHostHousehold}
+                channelCandidates={[]}
+              />
+            </div>
+          </div>
+        </div>
       );
     }
 

@@ -18,6 +18,21 @@ export interface SavedHousehold {
   guests: Array<{ personEventId?: string; name: string; email?: string; phone?: string }>;
   /** GTC-172 (C1): the household contact picker (§10.7). null = default to primary. */
   contactPersonEventId?: string | null;
+  /**
+   * GTC-256 (phase 2): this is the HOST'S OWN household — it holds the `role: HOST`
+   * membership row. Derived on read from the members, never stored on the household.
+   * It is still editable (she may add a partner later, and the demotion guard protects
+   * her while she does), but it is NOT removable: the DELETE route refuses it, because
+   * taking the household would take her PersonEvent with it and undo the very thing
+   * phase 2 exists to guarantee.
+   */
+  isHostHousehold?: boolean;
+  /**
+   * GTC-256 (Ruling 6): the stored switch. NULL = not chosen. Carried on the client only
+   * so an edit can round-trip it; the MEANING of null is resolveHouseholdMuted's, never
+   * this component's.
+   */
+  messagesMuted?: boolean | null;
 }
 
 interface HouseholdCardListProps {
@@ -162,6 +177,13 @@ function HouseholdCard({
       <div className="flex items-center justify-between">
         <span className="font-medium text-gray-900">{household.primaryContact.name}</span>
         <div className="flex items-center gap-2">
+          {/* GTC-256 (Ruling 1): "the host is at her own party" — she reads as herself in
+              her own guest list, rather than as one more name in it. */}
+          {household.isHostHousehold && (
+            <span className="text-xs font-medium text-accent bg-accent/10 rounded-full px-2 py-0.5">
+              You
+            </span>
+          )}
           {additionalCount > 0 && (
             <span className="text-xs font-medium text-gray-500 bg-gray-100 rounded-full px-2 py-0.5">
               +{additionalCount}
@@ -196,7 +218,7 @@ function HouseholdCard({
         >
           Edit
         </button>
-        {onDelete && !isEditing && (
+        {onDelete && !isEditing && !household.isHostHousehold && (
           <button
             type="button"
             onClick={() => {

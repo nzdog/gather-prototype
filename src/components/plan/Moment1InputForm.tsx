@@ -38,6 +38,12 @@ export interface Moment1PersonInput {
   }>;
   /** GTC-172 (C1): the household contact picker (§10.7). null = default to primary. */
   contactPersonEventId?: string | null;
+  /**
+   * GTC-256 (Ruling 6): sent ONLY when editing the host's own household, so an ordinary
+   * household's PUT leaves the column alone (`undefined` = untouched). Ruling 6 gives the
+   * switch to the host about HER household; phase 2 surfaces it nowhere else.
+   */
+  messagesMuted?: boolean | null;
 }
 
 /**
@@ -52,6 +58,27 @@ export interface ChannelCandidateOption {
   householdId: string;
 }
 
+/**
+ * GTC-256 (phase 2): what Moment 1's FIRST screen sends — the host's own household.
+ *
+ * A different shape from Moment1PersonInput, and deliberately so. There is no
+ * `primaryContact` here because the primary is not the client's to name: it is
+ * `Event.hostId`'s existing Person (Ruling 10), and her email is read from that row
+ * rather than sent (`Person.email` is @unique and is what joins her to her User).
+ */
+export interface HostHouseholdPayload {
+  /** Ruling 2 — a household of one, NOT absent. She is still eating. */
+  alone: boolean;
+  name: string;
+  phone?: string;
+  partner?: Moment1PersonInput['partner'];
+  helpers?: Moment1PersonInput['helpers'];
+  littleCount?: number;
+  guests?: Moment1PersonInput['guests'];
+  /** Ruling 6 — whether her household's messages send. */
+  messagesMuted: boolean;
+}
+
 interface Moment1InputFormProps {
   eventId: string;
   eventName: string;
@@ -62,6 +89,14 @@ interface Moment1InputFormProps {
   onCancelEdit?: () => void;
   totalPeopleCount?: number;
   channelCandidates?: ChannelCandidateOption[];
+  /**
+   * GTC-256 (phase 2): renders this form as Moment 1's FIRST screen — the host's own
+   * household (Ruling 1, read as a sequence: her row must exist before any other
+   * household can be entered). Absent everywhere else, so every other use of this form
+   * is byte-for-byte what it was.
+   */
+  hostMode?: { name: string; email: string | null; phone: string | null };
+  onSaveHostHousehold?: (payload: HostHouseholdPayload) => Promise<void>;
 }
 
 interface GuestForm {
@@ -93,6 +128,8 @@ export default function Moment1InputForm({
   onCancelEdit,
   totalPeopleCount,
   channelCandidates = [],
+  hostMode,
+  onSaveHostHousehold,
 }: Moment1InputFormProps) {
   // Primary contact
   const [name, setName] = useState('');
@@ -127,6 +164,21 @@ export default function Moment1InputForm({
    */
   const [contactPersonEventId, setContactPersonEventId] = useState<string | null>(null);
 
+  /**
+   * GTC-256 (Ruling 2): "I'm hosting alone" — an explicit choice that produces a
+   * HOUSEHOLD OF ONE, not an absence. Defaulting to the ordinary form is safe because
+   * the two converge: a host who names nobody is already a household of one. The toggle
+   * exists so she can say it plainly and stop being asked.
+   */
+  const [hostingAlone, setHostingAlone] = useState(false);
+
+  /**
+   * GTC-256 (Ruling 6): whether her household's messages send. Starts MUTED, matching
+   * resolveHouseholdMuted's computed default for her household — the ruling's intent,
+   * which Ruling 7's mechanism would otherwise have defaulted the other way.
+   */
+  const [messagesMuted, setMessagesMuted] = useState(true);
+
   const [guests, setGuests] = useState<GuestForm[]>([]);
   const [guestErrors, setGuestErrors] = useState<{ email?: string; phone?: string }[]>([]);
 
@@ -144,6 +196,14 @@ export default function Moment1InputForm({
   // Edit mode
   const isEditing = !!editingHousehold;
 
+  /**
+   * GTC-256 (Ruling 6): the switch belongs to the host's own household, and she must be
+   * able to CHANGE HER MIND — a choice she could only make once, at capture, would not be
+   * the control the ruling describes. So it renders both while capturing her household
+   * (`hostMode`) and whenever she later edits it from the card list.
+   */
+  const isHostHouseholdForm = !!hostMode || !!editingHousehold?.isHostHousehold;
+
   // Track unsaved input for beforeunload
   const hasUnsavedInput = name.trim().length > 0;
 
@@ -152,6 +212,18 @@ export default function Moment1InputForm({
   useEffect(() => {
     nameInputRef.current?.focus();
   }, []);
+
+  // GTC-256: prefill from the host's own Person. `POST /api/events` seeds her name as
+  // `email.split('@')[0]`, so this is usually a placeholder she is expected to correct —
+  // which is why the field stays editable while the email does not. Depends on the
+  // primitives rather than the object, which is a new identity on every parent render.
+  useEffect(() => {
+    if (!hostMode) return;
+    setName(hostMode.name ?? '');
+    setEmail(hostMode.email ?? '');
+    setPhone(hostMode.phone ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hostMode?.name, hostMode?.email, hostMode?.phone]);
 
   // Populate form when editingHousehold changes
   useEffect(() => {
@@ -224,6 +296,9 @@ export default function Moment1InputForm({
     }
 
     setContactPersonEventId(editingHousehold.contactPersonEventId ?? null);
+    // GTC-256 (Ruling 6): NULL is "not chosen", and for her household that resolves to
+    // MUTED — so an unchosen switch renders unticked, matching what the server will do.
+    setMessagesMuted(editingHousehold.messagesMuted ?? true);
 
     setMemberOrder(editOrder);
 
@@ -371,6 +446,11 @@ export default function Moment1InputForm({
     // round-trips rather than being read as "leave it alone".
     payload.contactPersonEventId = contactPersonEventId;
 
+    // GTC-256 (Ruling 6): sent only for HER household, so every other household's PUT
+    // leaves the column untouched (build decision 3 of the proposal: the column exists
+    // everywhere, the control exists in one place).
+    if (isHostHouseholdForm) payload.messagesMuted = messagesMuted;
+
     const namedGuests = guests.filter((g) => g.name.trim());
     if (namedGuests.length > 0) {
       payload.guests = namedGuests.map((g) => ({
@@ -450,6 +530,52 @@ export default function Moment1InputForm({
     onComplete();
   };
 
+  /**
+   * GTC-256 (phase 2) — save the host's own household.
+   *
+   * `alone` collapses the payload rather than merely hiding the fields, so a partner she
+   * typed and then abandoned by choosing "hosting alone" is not silently captured. And
+   * an alone household is sent MUTED unconditionally: a household of one has no
+   * household messages, only messages about herself (the founder's Ruling-6 safety,
+   * which resolveHouseholdMuted also enforces at read time so the UI is not the only
+   * thing holding it).
+   */
+  const handleSaveHostHousehold = async () => {
+    if (!onSaveHostHousehold) return;
+    if (hasValidationErrors()) return;
+
+    setSaving(true);
+    setSaveError(false);
+    try {
+      const base = buildPayload();
+      await onSaveHostHousehold({
+        alone: hostingAlone,
+        name: base.primaryContact.name,
+        phone: base.primaryContact.phone,
+        partner: hostingAlone ? undefined : base.partner,
+        helpers: hostingAlone ? undefined : base.helpers,
+        littleCount: hostingAlone ? 0 : base.littleCount,
+        guests: hostingAlone ? undefined : base.guests,
+        messagesMuted: hostingAlone ? true : messagesMuted,
+      });
+    } catch {
+      setSaveError(true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /**
+   * GTC-256 (Ruling 6): does she have anyone in her household for Gather to talk to her
+   * ABOUT? Counted on named members and never on `littleCount` — kids without jobs have
+   * no PersonEvent, so they are not people a household nudge could be about, and
+   * resolveHouseholdMuted counts member rows for exactly the same reason.
+   */
+  const hostHasOtherMembers =
+    (showPartner && partnerName.trim().length > 0) ||
+    helpers.some((h) => h.name.trim().length > 0) ||
+    guests.some((g) => g.name.trim().length > 0);
+
   const addGuest = () => {
     const g = emptyGuest();
     setGuests((prev) => [g, ...prev]);
@@ -477,19 +603,33 @@ export default function Moment1InputForm({
         </div>
 
         {/* Assistant line */}
-        <p className="text-lg text-gray-600 mb-2">
-          Who&rsquo;s coming to {eventName}? Add them here — just a name and how to reach them. You
-          can sort out what they&rsquo;re bringing later.
-        </p>
+        {hostMode ? (
+          /* GTC-256 (Ruling 1): "the host is at her own party" — the reason this screen
+             exists at all, said to her in her own words rather than left implicit. */
+          <>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">
+              First — you&rsquo;re at {eventName} too.
+            </h2>
+            <p className="text-lg text-gray-600 mb-2">
+              Let&rsquo;s start with your own household. You&rsquo;re eating, so you count — and
+              everyone you add after this gets added around you.
+            </p>
+          </>
+        ) : (
+          <p className="text-lg text-gray-600 mb-2">
+            Who&rsquo;s coming to {eventName}? Add them here — just a name and how to reach them.
+            You can sort out what they&rsquo;re bringing later.
+          </p>
+        )}
 
         {/* Progress counter */}
-        {totalPeopleAdded > 0 && (
+        {!hostMode && totalPeopleAdded > 0 && (
           <p className="text-sm text-gray-400 mb-6">
             {totalPeopleAdded} {totalPeopleAdded === 1 ? 'person' : 'people'} added.
           </p>
         )}
 
-        {totalPeopleAdded === 0 && <div className="mb-6" />}
+        {(hostMode || totalPeopleAdded === 0) && <div className="mb-6" />}
 
         {/* Form container */}
         <div className="border border-gray-200 bg-white rounded-xl p-6">
@@ -517,19 +657,44 @@ export default function Moment1InputForm({
               {nameError && <p className="text-sm text-red-500 mt-1">{nameError}</p>}
             </div>
 
-            <SkipForNowField
-              id="m1-email"
-              label="Email"
-              type="email"
-              value={email}
-              onChange={(v) => {
-                setEmail(v);
-                if (emailError) setEmailError('');
-              }}
-              onBlur={() => setEmailError(validateEmail(email))}
-              error={emailError}
-              placeholder="email@example.com"
-            />
+            {hostMode ? (
+              /* GTC-256 (Ruling 10): this is her ACCOUNT email — `Person.email` is @unique
+                 and is what joins her Person to her User. The server never reads it from
+                 this payload, so showing it read-only is the honest rendering of what is
+                 actually editable, not a restriction invented in the markup. */
+              <div>
+                <label
+                  htmlFor="m1-host-email"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Email
+                </label>
+                <input
+                  id="m1-host-email"
+                  type="email"
+                  value={email}
+                  readOnly
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-gray-500"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Your account email — it&rsquo;s how this event stays yours.
+                </p>
+              </div>
+            ) : (
+              <SkipForNowField
+                id="m1-email"
+                label="Email"
+                type="email"
+                value={email}
+                onChange={(v) => {
+                  setEmail(v);
+                  if (emailError) setEmailError('');
+                }}
+                onBlur={() => setEmailError(validateEmail(email))}
+                error={emailError}
+                placeholder="email@example.com"
+              />
+            )}
 
             <SkipForNowField
               id="m1-phone"
@@ -546,9 +711,36 @@ export default function Moment1InputForm({
             />
           </div>
 
+          {/* GTC-256 (Ruling 2) — "I'm hosting alone", offered explicitly.
+              "No household" and "a household containing only me" are DIFFERENT FACTS and
+              only the second survives Ruling 3: a host who declines to name anyone else
+              must still appear in the headcount, hold items, and be excluded from her own
+              ask. So this collapses the form; it never opts her out of having one. */}
+          {hostMode && (
+            <div className="border-t border-gray-200 pt-6 mb-6">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={hostingAlone}
+                  onChange={(e) => setHostingAlone(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
+                />
+                <span>
+                  <span className="text-sm font-medium text-gray-700">I&rsquo;m hosting alone</span>
+                  <span className="block text-xs text-gray-400 mt-0.5">
+                    Just you in your household. You&rsquo;ll still be counted and fed — you can add
+                    everyone else on the next screen.
+                  </span>
+                </span>
+              </label>
+            </div>
+          )}
+
           {/* Household members section */}
-          <div className="border-t border-gray-200 pt-6 mb-6">
-            <p className="text-sm text-gray-500 mb-4">Anyone else in this group?</p>
+          <div className={`border-t border-gray-200 pt-6 mb-6 ${hostingAlone ? 'hidden' : ''}`}>
+            <p className="text-sm text-gray-500 mb-4">
+              {hostMode ? 'Anyone else in your household?' : 'Anyone else in this group?'}
+            </p>
 
             <div className="flex flex-wrap gap-3 mb-4">
               {!showPartner && (
@@ -907,7 +1099,7 @@ export default function Moment1InputForm({
               cross-household capable, so the options span the whole event — Grandma's
               channel may live in her daughter's household. Children are not offered.
             */}
-            {channelCandidates.length > 0 && (
+            {!hostMode && channelCandidates.length > 0 && (
               <div className="border-l-4 border-gray-300 pl-4 py-3 mb-4 bg-gray-50 rounded-r-md">
                 <label
                   htmlFor="household-channel"
@@ -939,6 +1131,48 @@ export default function Moment1InputForm({
               </div>
             )}
           </div>
+
+          {/* GTC-256 (Ruling 6) — THE HOUSEHOLD MESSAGE SWITCH.
+              "The host may be her household's contact, AND CHOOSES WHETHER THOSE MESSAGES
+              SEND." Separate from Ruling 5, which suppresses her own ask because of what
+              she IS; this is a setting she controls about her household.
+              It ships here rather than later because Ruling 7 makes her her household's
+              proxy channel by default (a null pick resolves to the PRIMARY_CONTACT), so
+              without it the send path is live on her from the first event — Ruling 11. */}
+          {isHostHouseholdForm && !hostingAlone && (
+            <div className="border-t border-gray-200 pt-6">
+              {hostHasOtherMembers ? (
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!messagesMuted}
+                    onChange={(e) => setMessagesMuted(!e.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
+                  />
+                  <span>
+                    <span className="text-sm font-medium text-gray-700">
+                      Message me about my own household
+                    </span>
+                    <span className="block text-xs text-gray-400 mt-0.5">
+                      Gather talks to one person per household, and for yours that&rsquo;s you.
+                      Leave this off and it won&rsquo;t chase you about the people at your own
+                      table.
+                    </span>
+                  </span>
+                </label>
+              ) : (
+                /* The founder's Ruling-6 safety, said plainly rather than shown as a
+                   control that would do nothing: a household of one has no household
+                   messages, only messages about herself. resolveHouseholdMuted enforces
+                   the same rule at read time, so adding a partner and then removing them
+                   again cannot leave a stored "send" behind. */
+                <p className="text-xs text-gray-400">
+                  There&rsquo;s nobody in your household for Gather to chase yet, so it won&rsquo;t
+                  message you about it. Add someone above and you can choose.
+                </p>
+              )}
+            </div>
+          )}
         </div>
         {/* end form container */}
 
@@ -947,7 +1181,16 @@ export default function Moment1InputForm({
           {saveError && (
             <p className="text-red-600 text-sm mb-3">That didn&rsquo;t save — please try again.</p>
           )}
-          {isEditing ? (
+          {hostMode ? (
+            <button
+              type="button"
+              onClick={handleSaveHostHousehold}
+              disabled={saving}
+              className="w-full py-3 text-white font-medium bg-accent rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : 'Save and add everyone else →'}
+            </button>
+          ) : isEditing ? (
             <>
               <button
                 type="button"

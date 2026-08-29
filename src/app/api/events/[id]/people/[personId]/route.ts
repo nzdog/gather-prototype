@@ -278,6 +278,34 @@ export async function DELETE(
     const reason =
       typeof body.reason === 'string' && body.reason.trim() !== '' ? body.reason : null;
 
+    /*
+     * GTC-256 (phase 2) — THE HOST CANNOT BE REMOVED FROM HER OWN EVENT.
+     *
+     * Before phase 2 this was unreachable on a Moment-flow event for the dullest of
+     * reasons: there was no host membership row to remove. Phase 2 writes one (Rulings 1,
+     * 8, 10), so this route — which deletes the PersonEvent AND its access tokens —
+     * becomes a one-click way to undo it, taking her NudgeLog rows with it and leaving
+     * the households POST refusing every further household on the event via the sequence
+     * guarantee. `PeopleSection` already disables her ROLE control but still renders the
+     * remove button, so the durable guard is here rather than in the markup.
+     *
+     * Matched on `role: HOST` and on `Event.hostId` both, because they are the same row
+     * under Ruling 10 and either alone would be a narrower promise than "the host stays".
+     */
+    const targetMembership = await prisma.personEvent.findUnique({
+      where: { personId_eventId: { personId, eventId } },
+      select: { role: true, event: { select: { hostId: true } } },
+    });
+    if (targetMembership?.role === 'HOST' || targetMembership?.event.hostId === personId) {
+      return NextResponse.json(
+        {
+          error: 'The host cannot be removed from their own event.',
+          code: 'HOST_NOT_REMOVABLE',
+        },
+        { status: 409 }
+      );
+    }
+
     const removalActor = await ledgerActorForUser(auth.user, auth.role);
 
     // Execute removal in transaction

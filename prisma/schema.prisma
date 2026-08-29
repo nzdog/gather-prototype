@@ -417,6 +417,35 @@ model Household {
   contactPersonEventId String?
   contactPersonEvent   PersonEvent? @relation("HouseholdContactChannel", fields: [contactPersonEventId], references: [id], onDelete: SetNull)
 
+  /// GTC-256 (Ruling 6, phase 2): does this household's CHANNEL receive messages?
+  /// "The host may be her household's contact, and CHOOSES WHETHER THOSE MESSAGES
+  /// SEND." Separate from Ruling 5 by construction: Ruling 5 suppresses her own ask
+  /// because of WHAT SHE IS; this is a SETTING SHE CONTROLS about her household.
+  ///
+  /// NULL MEANS NOT CHOSEN — the convention Event.decideByOffsetHours and
+  /// Event.nudgePace already keep. It is not a stored "sends". It resolves to MUTED
+  /// for the host's OWN household and to SENDING for every other one, computed at
+  /// read time, which is why this ships with NO BACKFILL: every existing household
+  /// is NULL and keeps today's behaviour exactly.
+  ///
+  /// A SEPARATE COLUMN, NOT A THIRD CHANNEL STATE. contactPersonEventId's NULL is
+  /// "not picked" and resolves to the PRIMARY_CONTACT (GTC-172, and the no-backfill
+  /// property rests on it) — redefining it as "nobody" would silently mute every
+  /// household on every existing event. The reference and the sending are two facts,
+  /// so they are two columns. resolveHouseholdChannel is unchanged.
+  ///
+  /// READ IT THROUGH `resolveHouseholdMuted` IN src/lib/households/channel.ts, NEVER
+  /// DIRECTLY. A bare `if (h.messagesMuted)` reads NULL as false and un-mutes the
+  /// host; a bare `if (h.messagesMuted === false)` misses the host's default. The
+  /// resolver also enforces the founder's Ruling-6 safety: a host hosting alone
+  /// (Ruling 2) CANNOT switch her household's messages on, whatever is stored —
+  /// a household of one has no household messages, only messages about herself.
+  ///
+  /// SUPPRESSION ONLY, gated in findProxyNudgeCandidates AFTER the child rule
+  /// (§10.6, absolute) and AFTER opt-out (Zone 7) — never through either, matching
+  /// PersonEvent.nudgeMark and Event.nudgePace.
+  messagesMuted Boolean?
+
   @@index([contactPersonEventId])
 }
 

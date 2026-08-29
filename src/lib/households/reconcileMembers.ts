@@ -250,6 +250,39 @@ export async function reconcileHouseholdMembers(prisma: Tx, ctx: ReconcileContex
     });
     if (existing) {
       keptIds.add(existing.id);
+
+      // GTC-256 (Ruling 7) — THE DEMOTION GUARD. The host's householdRole must never be
+      // written to anything but PRIMARY_CONTACT, and her householdId must never be moved.
+      //
+      // ⚠ THIS CORRECTS AN EARLIER READING RECORDED IN THE TICKET, which said Ruling 7
+      // closes the risk by construction and no guard should be written. That is right
+      // about DELETION and wrong about DEMOTION, and demotion re-opens deletion. The
+      // delete loop below iterates `existingNonPrimary`, so a PRIMARY_CONTACT is never in
+      // it — but THIS branch writes `householdRole` directly, and
+      // `existing.householdId === household.id` is true whenever the host edits her OWN
+      // household. So if her email reaches this payload's partner/helpers/guests arrays —
+      // a form bug, a stale client, or her typing it into a guest row — she is demoted to
+      // PARTNER/GUEST/CHILD, and three things follow: she lands in `existingNonPrimary`
+      // so the NEXT edit that omits her deletes her row and cascades her NudgeLog; the
+      // household is left with no PRIMARY_CONTACT, which makes the PUT route 400 and the
+      // household UNEDITABLE; and resolveHouseholdChannel returns null for it, so the
+      // proxy finder skips it as 'No primary contact'.
+      //
+      // A TOTAL NO-OP, both arms, deliberately. For her own household there is nothing to
+      // write — Ruling 7 already made her its PRIMARY_CONTACT. For any OTHER household,
+      // Ruling 7 says she cannot join as a PARTNER, and skipping is what the POST path
+      // already does by accident (its condition is `!existing.householdId` alone). Whether
+      // the blocked self-add should SAY so is build decision 4 and is not settled; it is
+      // not silent in practice here, because the route returns the household as saved and
+      // the client re-renders from that response.
+      //
+      // MATCHED ON `role`, not on a threaded-through hostId: `role: HOST` is the property
+      // Ruling 8 stamps and the one Ruling 7 attaches to, and it is already on the row.
+      // `updateExistingMember` needs no such guard — it is only reached for members found
+      // in `existingById`, which is built from `existingNonPrimary`, and the host is never
+      // in that map.
+      if (existing.role === 'HOST') return;
+
       if (!existing.householdId || existing.householdId === household.id) {
         await prisma.personEvent.update({
           where: { id: existing.id },

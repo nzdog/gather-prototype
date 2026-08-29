@@ -3,7 +3,11 @@ import { isValidNZNumber } from '@/lib/phone';
 import { isOptedOut } from '@/lib/sms/opt-out-service';
 import { SENT_AND_LIVE } from '@/lib/lifecycle';
 import { isMessageableRole, CHILD_SKIP_REASON } from '@/lib/eligibility/child-exclusion';
-import { resolveHouseholdChannel } from '@/lib/households/channel';
+import {
+  resolveHouseholdChannel,
+  resolveHouseholdMuted,
+  HOUSEHOLD_MUTED_SKIP_REASON,
+} from '@/lib/households/channel';
 import { isChaseable, DONT_CHASE_SKIP_REASON } from '@/lib/eligibility/nudge-mark';
 import { isPaceOff, PACE_OFF_SKIP_REASON } from '@/lib/eligibility/nudge-pace';
 
@@ -115,6 +119,37 @@ export async function findProxyNudgeCandidates(): Promise<ProxyEligibilityResult
     const optedOut = await isOptedOut(primaryContact.person.phoneNumber, household.event.hostId);
     if (optedOut) {
       addSkip('Primary contact opted out');
+      continue;
+    }
+
+    // GTC-256 (E2/C1's third sibling), Ruling 6: THE HOUSEHOLD MESSAGE SWITCH.
+    //
+    // Ruling 7 makes the host the PRIMARY_CONTACT of her own household, and
+    // resolveHouseholdChannel returns the primary on a null pick — so without this gate
+    // the host is her own household's channel by default on every event, and a host
+    // hosting alone (Ruling 2) is texted "1 person in your group hasn't confirmed yet"
+    // ABOUT HERSELF. Ruling 11 makes closing that a condition of shipping the household
+    // at all, which is why this lands in the same phase.
+    //
+    // RULING 5 DOES NOT CATCH IT, and that is not an oversight to tidy up later: this
+    // path reads `householdRole` and NEVER `role`, so Ruling 8's `role: HOST` is
+    // invisible here, and it requires no PARTICIPANT token for Ruling 8 to withhold.
+    // The never-messaged concept and this switch are two mechanisms; neither substitutes
+    // for the other.
+    //
+    // SAME PLACE, SAME ORDERING, SAME REASONING AS THE MARK AND THE PACE BELOW. After
+    // the child rule (§10.6, absolute) and after opt-out (Zone 7, guest-set and legally
+    // binding) — never through either. Suppression only: a boolean read, no clock, no
+    // window, no stamp. It sits BEFORE the mark and the pace because it is the more
+    // specific fact — this one household, by the host's own decision about it — where
+    // the mark spans every household that person is channel for and the pace spans the
+    // whole event. No existing household is muted (NULL resolves to sends for everyone
+    // but the host), so no household that reports a reason today reports a new one.
+    //
+    // READ THROUGH resolveHouseholdMuted, never off the column: NULL is "not chosen",
+    // and it means MUTED for the host and SENDS for everyone else.
+    if (resolveHouseholdMuted(household, household.event.hostId)) {
+      addSkip(HOUSEHOLD_MUTED_SKIP_REASON);
       continue;
     }
 

@@ -5,6 +5,7 @@ import { ledgerActorForUser } from '@/lib/auth/actor';
 import { recordChange } from '@/lib/ledger';
 import { normalizePhoneNumber } from '@/lib/phone';
 import { validateChannelTarget } from '@/lib/households/channel';
+import { hostHasMembership } from '@/lib/households/hostHousehold';
 
 // GET /api/events/[id]/households - List households for event
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -119,11 +120,39 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // Get event for inviteAnchorAt
     const event = await prisma.event.findUnique({
       where: { id: eventId },
-      select: { sentAt: true },
+      select: { sentAt: true, hostId: true },
     });
 
     if (!event) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
+
+    /*
+     * GTC-256 (phase 2) — THE SEQUENCE GUARANTEE.
+     *
+     * Ruling 1's "Moment 1 OPENS with the host's own household" is a SEQUENCE, not a
+     * screen order, and the difference is load-bearing. `createMember` below looks a
+     * Person up by email and, finding no PersonEvent, creates one with a hard-coded
+     * `role: 'PARTICIPANT'`. So a host who reaches another household first — and whose
+     * own email is in it — is filed as a participant against the correct Person: the
+     * duplicate half of the third state collapses under Ruling 10, but the WRONG-ROLE
+     * half survives. Once her own row exists the same branch is a complete no-op,
+     * because `existing.householdId` is set. Ordering is the entire difference, so it is
+     * enforced here and not only in the UI.
+     *
+     * 409 rather than 400: nothing is wrong with the request, the event is in the wrong
+     * state for it. V1 and seeded events already have a host membership and are
+     * unaffected; no script or test drives this route over HTTP.
+     */
+    if (!(await hostHasMembership(prisma, eventId, event.hostId))) {
+      return NextResponse.json(
+        {
+          error:
+            'Add your own household first — Moment 1 opens with the host, and everyone else is added after.',
+          code: 'HOST_HOUSEHOLD_REQUIRED',
+        },
+        { status: 409 }
+      );
     }
 
     // Helper: find-or-create a Person and create their PersonEvent

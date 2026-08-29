@@ -30,6 +30,12 @@ interface HouseholdRequestBody {
   guests?: HouseholdMemberInput[];
   /** GTC-172 (C1): the household contact picker (§10.7). null clears it. */
   contactPersonEventId?: string | null;
+  /**
+   * GTC-256 (Ruling 6): does this household's channel receive messages? `undefined`
+   * leaves the current value alone; `null` returns it to "not chosen". Read through
+   * resolveHouseholdMuted, never off the column.
+   */
+  messagesMuted?: boolean | null;
 }
 
 // DELETE /api/events/[id]/households/[householdId] - Delete a household
@@ -50,6 +56,36 @@ export async function DELETE(
 
     if (!household || household.eventId !== eventId) {
       return NextResponse.json({ error: 'Household not found' }, { status: 404 });
+    }
+
+    /*
+     * GTC-256 (phase 2) — THE HOST'S HOUSEHOLD CANNOT BE DELETED.
+     *
+     * Ruling 7 closes the delete risk for an ORDINARY HOUSEHOLD EDIT by construction: a
+     * PRIMARY_CONTACT is never in `existingNonPrimary`, so the reconcile's delete loop
+     * cannot reach her. THIS IS A DIFFERENT PATH AND THAT REASONING DOES NOT REACH IT —
+     * the deleteMany below is keyed on `householdId` and takes the primary with it,
+     * cascading her NudgeLog rows and destroying the row phase 2 exists to guarantee.
+     * The sequence guarantee on the households POST would then start refusing every
+     * further household on the event, which is the correct failure but a baffling one.
+     *
+     * You cannot remove the host from her own party. If she wants to be alone again she
+     * edits the household down to herself (Ruling 2's household of one), which the PUT
+     * path does and the demotion guard protects.
+     */
+    const hostRow = await prisma.personEvent.findFirst({
+      where: { householdId, role: 'HOST' },
+      select: { id: true },
+    });
+    if (hostRow) {
+      return NextResponse.json(
+        {
+          error:
+            'This is your own household — it cannot be removed. Edit it down to just you if you are hosting alone.',
+          code: 'HOST_HOUSEHOLD_UNDELETABLE',
+        },
+        { status: 409 }
+      );
     }
 
     // Delete PersonEvent records for this household first (no cascade on this relation)
@@ -83,6 +119,7 @@ export async function PUT(
 
     const body: HouseholdRequestBody = await request.json();
     const { primaryContact, partner, helpers, littleCount, guests, contactPersonEventId } = body;
+    const { messagesMuted } = body;
 
     // Validate primary contact name
     if (!primaryContact?.name?.trim()) {
@@ -176,6 +213,20 @@ export async function PUT(
         sentAt: event.sentAt,
         input: { primaryContact, partner, helpers, littleCount, guests, contactPersonEventId },
       });
+
+      // GTC-256 (Ruling 6): the household message switch. Written HERE rather than inside
+      // reconcileHouseholdMembers on purpose — that file carries the GTC-159 / GTC-172 /
+      // GTC-201 incident history, and this write has none of the ordering dependencies
+      // that put `contactPersonEventId` inside it (the channel must validate against
+      // post-edit roles; a boolean has nothing to validate against). Same transaction, so
+      // a failed reconcile does not leave the switch flipped on a household that never
+      // took the edit.
+      if (messagesMuted !== undefined) {
+        await tx.household.update({
+          where: { id: householdId },
+          data: { messagesMuted },
+        });
+      }
 
       // Versioned, never interrogated: editing a household's composition is not an
       // ask moving. Where it removes someone who holds items, that person's

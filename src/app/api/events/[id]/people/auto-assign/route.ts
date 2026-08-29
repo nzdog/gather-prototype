@@ -87,13 +87,26 @@ export async function POST(
      *      Person row. Guarded on non-null: `userId` is nullable, and `null === null`
      *      must never make every contactless guest the host.
      *
-     * ⚠ WHAT THIS STILL DOES NOT FIX — [[GTC-256]], filed. On a Moment-flow event the host
-     * has NO PersonEvent at all (verified: zero rows for the host Person across every event
-     * in the database), so there is nothing for any of the three paths to match. The host is
-     * not auto-assigned there because the host is not a participant, and the person Kate
-     * captured as herself in Moment 1 is a separate Person row with no link back to the
-     * host. This hardening is resilient to whichever path exists; it cannot conjure a row
-     * that was never written. Closing that is a Moment 1 capture decision.
+     * ⚠ CORRECTED 2026-08-29 (GTC-256 phase 2). This comment used to state, inside this
+     * block, "verified: zero rows for the host Person across every event in the database".
+     * THAT WAS WRONG: it was 1 — Sarah Henderson, on the V1 demo seed — and GTC-256's own
+     * evidence table said so on the line above the claim. The parallel comment in
+     * pre-flight/message/route.ts carried the exception correctly ("0 except on the V1
+     * seed") and was the one to copy. What was genuinely zero is the count for the two
+     * MOMENT-FLOW host Persons, across every event.
+     *
+     * ⚠ AND THE CONDITION IT DESCRIBED HAS NOW LAPSED. GTC-256 phase 2 captures the host's
+     * own household in Moment 1 (Rulings 1, 2, 7, 8, 10), so on any event created through
+     * the Moment flow after that change the host HAS a PersonEvent, it points at
+     * `Event.hostId`'s existing Person, and identity path 1 resolves. Events created
+     * before it still have none — the backfill is GTC-256 phase 5, gated on open
+     * question 3.
+     *
+     * NOTHING HERE CHANGES, AND THAT IS RULING 9 WORKING AS INTENDED. Her row carries
+     * `role: 'HOST'`, so the participant pool below — which selects `role: 'PARTICIPANT'`
+     * — still excludes her, and "the existing rule keeping role: HOST out of auto-assign's
+     * PARTICIPANT pool stays exactly as it is, unchanged". She may hold items, but only
+     * ones she picks herself through the manual assign route, which has no role gate.
      */
     const hostUserId = event.host?.userId ?? null;
 

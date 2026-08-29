@@ -360,8 +360,26 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
       totalChildren: households.reduce((sum, h) => sum + h.littleCount, 0),
     };
 
-    // Attendance breakdown (excluding host — event.people already excludes host via the
-    // PersonEvent relation).
+    // Attendance breakdown.
+    //
+    // ⚠ CORRECTED 2026-08-29 (GTC-256 phase 2). This comment used to claim "excluding
+    // host — event.people already excludes host via the PersonEvent relation". THAT WAS
+    // NEVER TRUE. `event.people` is every PersonEvent on the event and excludes nobody:
+    // it was FALSE on V1 (Sarah is counted on the Henderson seed) and ACCIDENTALLY true
+    // on Moment-flow events, where the host simply had no membership row to count.
+    //
+    // GTC-256 phase 2 gives her one, so she is counted here now — DELIBERATELY, on a
+    // founder ruling of 2026-08-29: "she is at her own party, she is eating, the numbers
+    // should say so." That brings Ruling 3's headcount fix forward from phase 4, and it
+    // was taken as a decision rather than inherited silently, which is the distinction
+    // the ticket's build decision 2 asks for.
+    //
+    // ⚠ THREE NUMBERS, AND THIS IS ONLY ONE OF THEM. Build decision 2 stands: the
+    // HEADCOUNT that sizes the plan (buildPlanGenerationInput), the RECIPIENTS count at
+    // confirm-invites-sent, and these ATTENDANCE totals are different questions —
+    // "attending" and "being asked" are not the same thing, and Ruling 5 says she is not
+    // a recipient. All three now count her; whether the recipients one should is
+    // GTC-256 phase 3/4's to settle, not this route's.
     //
     // GTC-174 (D1): counted from deriveAttendance(), not from a stored column. The old
     // `rsvp` block was a second, identical count off `rsvpStatus` and is deleted rather

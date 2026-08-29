@@ -78,3 +78,72 @@ export function validateChannelTarget(
   }
   return { ok: true };
 }
+
+/**
+ * GTC-256 (Ruling 6, phase 2) — the household message switch.
+ *
+ * "The host may be her household's contact, AND CHOOSES WHETHER THOSE MESSAGES SEND."
+ * This is deliberately NOT Ruling 5. Ruling 5 suppresses the host's OWN ask because of
+ * what she is; this is a setting she controls about her HOUSEHOLD's messages. The two
+ * are different mechanisms and neither substitutes for the other — the proxy path reads
+ * `householdRole` and never `role`, so Ruling 8's `role: HOST` is invisible to it and it
+ * requires no PARTICIPANT token to withhold.
+ *
+ * WHY THIS EXISTS AT ALL — the sequence that makes it blocking (Ruling 11). Ruling 7
+ * makes the host the PRIMARY_CONTACT of her own household; `resolveHouseholdChannel`
+ * above returns the primary whenever `contactPersonEventId` is null; and null is the
+ * state every household starts in. So the host is her own household's proxy channel by
+ * default, on every event, with no pick made. `findProxyNudgeCandidates` has no
+ * member-count gate, so a host hosting alone under Ruling 2 would be texted
+ * "1 person in your group hasn't confirmed yet" ABOUT HERSELF. That is why the switch
+ * ships in the same phase as the household and never after it.
+ */
+export const HOUSEHOLD_MUTED_SKIP_REASON = 'Household messages switched off';
+
+export interface HouseholdMuteState {
+  /**
+   * GTC-256: NULL = not chosen. Never read this field directly — see the schema
+   * docstring on Household.messagesMuted and the resolver below.
+   */
+  messagesMuted: boolean | null;
+  members: { personId: string }[];
+}
+
+/**
+ * Should this household's channel be silenced?
+ *
+ * THE DEFAULT IS COMPUTED, NOT STORED, which is the same property GTC-172 bought for
+ * `contactPersonEventId` and the reason both ship with no backfill: every existing
+ * household is NULL and resolves to exactly today's behaviour.
+ *
+ *   not the host's household  →  NULL means SENDS   (unchanged, and no control in phase 2)
+ *   the host's household      →  NULL means MUTED   (Ruling 6's intent; the switch's
+ *                                                    default and Ruling 7's mechanism
+ *                                                    disagreed, and this closes the gap)
+ *
+ * ⚠ AND A HOST HOSTING ALONE CANNOT SWITCH HERS ON (founder ruling, 2026-08-29).
+ * A household of one has no household messages — only messages about herself — so a
+ * stored `false` is overridden rather than obeyed. This is NOT the general member-count
+ * gate on the proxy finder, which would change behaviour for ordinary one-person
+ * households too and is a Moment 4 §10.7 question, not this ticket's: it is scoped to
+ * the host's OWN household and reaches nothing else. It is a resolution rule rather
+ * than a UI rule on purpose — the UI not offering the control is weaker, because she
+ * could add a partner, switch it on, and then remove the partner again.
+ *
+ * COUNTED ON MEMBER ROWS, NOT `littleCount`. Kids without jobs have no PersonEvent, so
+ * they are not people the household could be nudged about — and `memberCount` in the
+ * proxy candidate is member rows too, so this matches the number the message would say.
+ *
+ * @param hostPersonId `Event.hostId` — a **Person** id (see schema.prisma,
+ *   `host Person @relation("EventHost")`), which under Ruling 10 is exactly the Person
+ *   the host's own PersonEvent points at.
+ */
+export function resolveHouseholdMuted(
+  household: HouseholdMuteState,
+  hostPersonId: string
+): boolean {
+  const isHostHousehold = household.members.some((m) => m.personId === hostPersonId);
+  if (!isHostHousehold) return household.messagesMuted ?? false;
+  if (household.members.length <= 1) return true;
+  return household.messagesMuted ?? true;
+}
