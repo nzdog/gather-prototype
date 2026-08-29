@@ -336,6 +336,30 @@
     "securityIssues": []
   },
   {
+    "filePath": "src/app/api/events/[id]/pre-flight/route.ts",
+    "apiPath": "/api/events/:id/pre-flight",
+    "methods": ["GET"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/pre-flight/cadence/route.ts",
+    "apiPath": "/api/events/:id/pre-flight/cadence",
+    "methods": ["PATCH"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/pre-flight/channel/route.ts",
+    "apiPath": "/api/events/:id/pre-flight/channel",
+    "methods": ["PATCH"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
     "filePath": "src/app/api/events/[id]/regenerate/route.ts",
     "apiPath": "/api/events/:id/regenerate",
     "methods": ["POST"],
