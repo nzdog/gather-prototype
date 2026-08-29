@@ -1072,14 +1072,18 @@ function MessageStep({ eventId }: { eventId: string }) {
         )}
       </div>
 
-      {/* GTC-256. Stated, not hidden. */}
+      {/* GTC-256, CLOSED 2026-08-29. Stated, not hidden.
+          Still correct, and now permanent for these events rather than pending: phase 2
+          gives every NEW event a host membership row, and Ruling 12 rules no backfill for
+          the ones that predate it. So this banner fires only on pre-phase-2 events, and
+          what it describes is not going to be repaired — it is reseeded. */}
       {!data.hostIdentityResolved && (
         <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-4">
           <strong>The name on this message is provisional.</strong> This event has no host
           membership row, so &ldquo;{data.hostName}&rdquo; is taken from the account that owns the
           event rather than from the person you captured as yourself. If you are in the guest list
-          below, that is the same problem: you would be sent your own invitation. Filed as GTC-256;
-          it is a capture decision, not a send one.
+          below, that is the same problem: you would be sent your own invitation. This event
+          predates the fix (GTC-256); newer events capture you properly.
         </p>
       )}
 

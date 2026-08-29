@@ -62,13 +62,17 @@ import {
 /**
  * The from-whom when the event carries no usable host name.
  *
- * ⚠ PROVISIONAL — [[GTC-256]]. `Event.hostId` is a Person FK and usually has a name, but on
- * a Moment-flow event the host has NO `PersonEvent` and "the person Kate captured as
- * herself in Moment 1 is a separate Person row with no link back to the host". GTC-256 names
- * this consequence directly: "Whose name goes on the invitation. The from-whom of a send has
- * two candidate rows and no rule distinguishing them." Until that capture decision is ruled,
- * this module takes whatever name it is handed and the caller flags it — see
- * `resolveHostName`. The fallback string mirrors `findNudgeCandidates` in
+ * ⚠ NO LONGER PROVISIONAL FOR NEW EVENTS — [[GTC-256]], closed 2026-08-29. The consequence
+ * this once described ("the from-whom of a send has two candidate rows and no rule
+ * distinguishing them") is gone at the root: Ruling 10 makes the host's `PersonEvent` point
+ * at `Event.hostId`'s EXISTING Person, so there is one candidate row and no second Person to
+ * disagree with it. There was never a Moment-flow event with a duplicated host in the data —
+ * it was predicted, not observed — and phase 2 removed the code that would have produced one.
+ *
+ * IT REMAINS THE FALLBACK, for two reasons that are not the old one: `Event.hostId`'s Person
+ * may simply have a blank name, and events created before phase 2 keep no host membership row
+ * (Ruling 12 — no backfill). This module still takes whatever name it is handed and the
+ * caller still flags it — see `resolveHostName`. The fallback string mirrors `findNudgeCandidates` in
  * `src/lib/sms/nudge-eligibility.ts`, which already ships `event.host?.name || 'The host'`.
  */
 export const HOST_NAME_FALLBACK = 'your host';

@@ -61,17 +61,23 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
      * including why this is resolved POSITIVELY and excluded by id rather than written as a
      * negation (SQL three-valued logic empties the list on nullable `userId`).
      *
-     * NOT EXTRACTED INTO A SHARED HELPER, deliberately. Extracting would edit GTC-188's
-     * closed deliverable, and [[GTC-256]] may delete the need for the three paths entirely
-     * by giving the host one identity. Two call sites with a citation beats a premature
-     * abstraction over a shape that is expected to change.
+     * NOT EXTRACTED INTO A SHARED HELPER. The original reason was that [[GTC-256]] might
+     * delete the need for the three paths entirely by giving the host one identity.
+     * ⚠ THAT REASON IS DISCHARGED, AND THE ANSWER IS NO — GTC-256 open question 4, closed
+     * 2026-08-29. Ruling 10 makes path 1 resolve on every new event, but path 3 still
+     * catches a row the other two cannot: `POST /api/auth/verify`'s claim branch sets
+     * `person.userId` UNCONDITIONALLY and `Person.userId` carries only an index, so one
+     * human can end up as two Person rows sharing one User — proven against the database,
+     * not inferred. All three paths stay. Whether they are now extracted is a live
+     * question and is [[GTC-263]]'s, not this file's.
      *
-     * ⚠ ON A MOMENT-FLOW EVENT THIS FINDS NOTHING — [[GTC-256]], verified again here:
-     * `PersonEvent` rows for the host Person across all events is 0 except on the V1 seed.
-     * There is no row for any path to match, and the person the host captured as themselves
-     * in Moment 1 is an ordinary participant. They will appear in the recipient list below
-     * as somebody to be sent their own invitation. `hostIdentityResolved` reports that fact
-     * to the screen rather than hiding it.
+     * ⚠ AND THE CLAIM THAT USED TO SIT HERE — "on a Moment-flow event this finds nothing"
+     * — IS FALSE SINCE GTC-256 phase 2. The host is captured with her own `PersonEvent`
+     * pointing at `Event.hostId`'s existing Person (Rulings 1, 8, 10), so path 1 resolves
+     * and `hostIdentityResolved` is true. It still finds nothing on the events that
+     * predate phase 2, which keep no host row under Ruling 12 (no backfill) — those are
+     * where `hostIdentityResolved` goes false and the screen says so rather than hiding
+     * it.
      */
     const hostUserId = event.host?.userId ?? null;
     const hostMemberships = await prisma.personEvent.findMany({

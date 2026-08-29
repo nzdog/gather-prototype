@@ -99,8 +99,12 @@ export async function POST(
      * own household in Moment 1 (Rulings 1, 2, 7, 8, 10), so on any event created through
      * the Moment flow after that change the host HAS a PersonEvent, it points at
      * `Event.hostId`'s existing Person, and identity path 1 resolves. Events created
-     * before it still have none — the backfill is GTC-256 phase 5, gated on open
-     * question 3.
+     * before it still have none, AND THEY KEEP NONE. GTC-256 Ruling 12 (phase 5,
+     * 2026-08-29): no backfill. Every event in the database is seed or script data —
+     * `stripePaymentIntentId` is null on all nine — so the fix applies forward and
+     * anything worth keeping is reseeded rather than patched. ⚠ That ruling is
+     * CONDITIONAL on no real event existing; see GTC-256 for the condition and what a
+     * backfill would have to do if it lapses.
      *
      * NOTHING HERE CHANGES, AND THAT IS RULING 9 WORKING AS INTENDED. Her row carries
      * `role: 'HOST'`, so the participant pool below — which selects `role: 'PARTICIPANT'`

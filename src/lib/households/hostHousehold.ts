@@ -110,7 +110,7 @@ export async function createHostHousehold(prisma: Tx, ctx: HostHouseholdContext)
     // without revoking the PARTICIPANT token it may already hold would re-open the
     // auto-nudge finder and the shared-link claim list — build decision 3, phase 5.
     throw new HostHouseholdError(
-      'This event already has a membership for the host that is not a host row. Re-roling it requires the backfill decision (GTC-256 phase 5).',
+      'This event already has a membership for the host that is not a host row. GTC-256 Ruling 12 rules no backfill, so this event is not repaired — reseed it rather than patching it.',
       409
     );
   }
