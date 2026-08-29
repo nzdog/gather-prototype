@@ -1,0 +1,169 @@
+// GET /api/events/[id]/pre-flight/message
+//
+// GTC-187 (H2) — the ingredients for step 4 of the pre-flight, "the message, shown".
+//
+// THIS ROUTE COMPOSES NOTHING. It returns event facts, the host's name and one row per
+// recipient; the screen calls `composeAsk` in `src/lib/messages/ask-register.ts` itself.
+// That is deliberate and is the same arrangement GTC-188 made for the nudge clock: the
+// composer is client-safe precisely so the screen renders the message the send will
+// produce rather than a server-rendered picture of it, and so the host's edit to movement 1
+// re-composes live through the same function the dispatch path (GTC-189) will call. A
+// server-side copy of the composition here would be the second definition those two are
+// designed not to have.
+//
+// NOTHING HERE SENDS, and nothing here issues a token. `ensureEventTokens` runs at the
+// transition to CONFIRMING (`transitionToConfirming` in src/lib/workflow.ts) and again at
+// the press, which is GTC-189's.
+
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
+import { MESSAGEABLE_PERSON_EVENT } from '@/lib/eligibility/child-exclusion';
+import { buildTokenUrl } from '@/lib/tokens';
+import { HOST_NAME_FALLBACK } from '@/lib/messages/ask-register';
+
+/** Stands in for a guest link on an event whose participant tokens have not been issued
+ *  yet. Deliberately not a plausible URL — the screen must not read as if it had one. */
+const LINK_PENDING = '[link issued at the press]';
+
+export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id: eventId } = await context.params;
+
+  const auth = await requireEventRole(eventId, ['HOST', 'COHOST']);
+  if (auth instanceof NextResponse) return auth;
+
+  try {
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true,
+        name: true,
+        startDate: true,
+        venueName: true,
+        occasionDescription: true,
+        hostId: true,
+        host: { select: { id: true, name: true, userId: true } },
+      },
+    });
+    if (!event) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
+
+    /*
+     * THE HOST EXCLUSION — the same three identity paths the auto-assign route resolves,
+     * and for the same reason: whoever the host is, they are not a recipient of their own
+     * ask. See the THE HOST EXCLUSION comment in
+     * `src/app/api/events/[id]/people/auto-assign/route.ts` for the full reasoning,
+     * including why this is resolved POSITIVELY and excluded by id rather than written as a
+     * negation (SQL three-valued logic empties the list on nullable `userId`).
+     *
+     * NOT EXTRACTED INTO A SHARED HELPER, deliberately. Extracting would edit GTC-188's
+     * closed deliverable, and [[GTC-256]] may delete the need for the three paths entirely
+     * by giving the host one identity. Two call sites with a citation beats a premature
+     * abstraction over a shape that is expected to change.
+     *
+     * ⚠ ON A MOMENT-FLOW EVENT THIS FINDS NOTHING — [[GTC-256]], verified again here:
+     * `PersonEvent` rows for the host Person across all events is 0 except on the V1 seed.
+     * There is no row for any path to match, and the person the host captured as themselves
+     * in Moment 1 is an ordinary participant. They will appear in the recipient list below
+     * as somebody to be sent their own invitation. `hostIdentityResolved` reports that fact
+     * to the screen rather than hiding it.
+     */
+    const hostUserId = event.host?.userId ?? null;
+    const hostMemberships = await prisma.personEvent.findMany({
+      where: {
+        eventId,
+        OR: [
+          { personId: event.hostId },
+          { role: 'HOST' },
+          ...(hostUserId ? [{ person: { userId: hostUserId } }] : []),
+        ],
+      },
+      select: { id: true },
+    });
+    const hostPersonEventIds = hostMemberships.map((m) => m.id);
+
+    const people = await prisma.personEvent.findMany({
+      where: {
+        eventId,
+        id: { notIn: hostPersonEventIds },
+        // Moment 4 §10.6 is absolute: a CHILD is never a recipient of a system message,
+        // whatever contact details their record carries.
+        ...MESSAGEABLE_PERSON_EVENT,
+      },
+      select: {
+        id: true,
+        personId: true,
+        householdId: true,
+        person: { select: { id: true, name: true, email: true, phoneNumber: true } },
+      },
+      orderBy: { person: { name: 'asc' } },
+    });
+
+    const personIds = people.map((p) => p.personId);
+
+    // Item NAMES only (decision 1). Quantity, drop-off location and timing are deliberately
+    // not selected: the message names the items, the tap page carries their logistics, and
+    // a field that is never read cannot leak into a template.
+    const assignments = await prisma.assignment.findMany({
+      where: { personId: { in: personIds }, item: { team: { eventId } } },
+      select: { personId: true, item: { select: { name: true } } },
+      orderBy: { item: { name: 'asc' } },
+    });
+
+    const itemNamesByPerson = new Map<string, string[]>();
+    for (const a of assignments) {
+      const list = itemNamesByPerson.get(a.personId) ?? [];
+      list.push(a.item.name);
+      itemNamesByPerson.set(a.personId, list);
+    }
+
+    const tokens = await prisma.accessToken.findMany({
+      where: { eventId, scope: 'PARTICIPANT', personId: { in: personIds } },
+      select: { personId: true, token: true },
+    });
+    const tokenByPerson = new Map(tokens.map((t) => [t.personId, t.token]));
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+
+    const recipients = people.map((p) => {
+      const token = tokenByPerson.get(p.personId) ?? null;
+      return {
+        personEventId: p.id,
+        personId: p.personId,
+        name: p.person.name,
+        itemNames: itemNamesByPerson.get(p.personId) ?? [],
+        link: token ? buildTokenUrl(baseUrl, 'PARTICIPANT', token) : LINK_PENDING,
+        linkReady: token !== null,
+        // Which carriers this person could be reached on. WHICH ONE IS USED is dispatch's
+        // (GTC-189); decision 5 makes the body identical either way, so this only tells the
+        // host whether a subject line is in play.
+        hasEmail: !!p.person.email,
+        hasPhone: !!p.person.phoneNumber,
+      };
+    });
+
+    return NextResponse.json({
+      event: {
+        name: event.name,
+        startDate: event.startDate,
+        venueName: event.venueName,
+        occasionDescription: event.occasionDescription,
+      },
+      // ⚠ PROVISIONAL when `hostIdentityResolved` is false — [[GTC-256]]: "the from-whom of
+      // a send has two candidate rows and no rule distinguishing them". `Event.host` is
+      // taken as the from-whom because it is the only candidate that is definitionally the
+      // host; the other candidate is indistinguishable from a guest.
+      hostName: event.host?.name?.trim() || HOST_NAME_FALLBACK,
+      hostIdentityResolved: hostPersonEventIds.length > 0,
+      // ANCHOR(GTC-187): the host's stored movement 1 belongs here. Decision 2 rules the
+      // line stored and reusable and flags in the same breath that no column holds it and
+      // that the field's design is its own founder decision. Always null until then; the
+      // screen falls through to `draftAuthorLine`.
+      storedAuthorLine: null,
+      recipients,
+    });
+  } catch (error) {
+    console.error('Error assembling pre-flight message:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}

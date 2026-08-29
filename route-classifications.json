@@ -360,6 +360,14 @@
     "securityIssues": []
   },
   {
+    "filePath": "src/app/api/events/[id]/pre-flight/message/route.ts",
+    "apiPath": "/api/events/:id/pre-flight/message",
+    "methods": ["GET"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
     "filePath": "src/app/api/events/[id]/regenerate/route.ts",
     "apiPath": "/api/events/:id/regenerate",
     "methods": ["POST"],

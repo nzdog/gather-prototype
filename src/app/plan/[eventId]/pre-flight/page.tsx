@@ -31,6 +31,7 @@ import {
 } from '@/lib/nudge-cadence';
 import { DIETARY_OPTIONS, type DietaryData, type DietaryStatus } from '@/lib/dietary';
 import AccordionShell from '@/components/plan/AccordionShell';
+import { composeAsk, draftAuthorLine, firstNameOf } from '@/lib/messages/ask-register';
 
 // ─── Wire shapes (mirror /api/events/[id]/pre-flight) ────────────────────────
 
@@ -557,7 +558,7 @@ export default function PreFlightPage() {
           )}
         </Step>
 
-        {/* ── 4. The message, shown — PLACEHOLDER ─────────────────────────── */}
+        {/* ── 4. The message, shown ───────────────────────────────────────── */}
         <Step
           n={4}
           title="The message, shown"
@@ -565,15 +566,7 @@ export default function PreFlightPage() {
           checked={!!checked[4]}
           onCheck={(v) => setChecked((c) => ({ ...c, 4: v }))}
         >
-          <div className="border border-dashed border-gray-300 rounded-md bg-gray-50 p-5 text-sm text-gray-500">
-            <p className="font-medium text-gray-600 mb-1">Not built yet — placeholder.</p>
-            <p>
-              Message construction is H2 (GTC-187), which is open. There is no composer to read
-              from, so there is nothing truthful to show here: an approximation is exactly what
-              Hinge §1 refuses (&ldquo;not a summary or approximation&rdquo;). This box stays a
-              placeholder until GTC-187 lands.
-            </p>
-          </div>
+          <MessageStep eventId={eventId} />
         </Step>
 
         {/* ── 5. The end ──────────────────────────────────────────────────── */}
@@ -793,6 +786,221 @@ function DietarySection({
           Tick at least one, or say there are none.
         </span>
       )}
+    </div>
+  );
+}
+
+// ─── 4. The message, shown ───────────────────────────────────────────────────
+
+interface AskRecipientRow {
+  personEventId: string;
+  personId: string;
+  name: string;
+  itemNames: string[];
+  link: string;
+  linkReady: boolean;
+  hasEmail: boolean;
+  hasPhone: boolean;
+}
+
+interface MessageData {
+  event: {
+    name: string;
+    startDate: string;
+    venueName: string | null;
+    occasionDescription: string | null;
+  };
+  hostName: string;
+  hostIdentityResolved: boolean;
+  storedAuthorLine: string | null;
+  recipients: AskRecipientRow[];
+}
+
+/**
+ * GTC-187 (H2) — step 4 made real. Hinge §1: "she reads exactly what each person will
+ * receive before it goes... What Kate reads at the pre-flight IS what the guest receives —
+ * one shape, two sides."
+ *
+ * EVERY MESSAGE ON THIS SCREEN COMES OUT OF `composeAsk`, the same function GTC-189's
+ * dispatch will call. The route hands over ingredients and nothing else; the composition
+ * happens here, in the client, through the shared module. That is the arrangement GTC-188
+ * made for the nudge clock and it exists so the screen and the send cannot drift apart.
+ *
+ * THE SEAM IS RENDERED, NOT HIDDEN. Each movement carries its voice as a label, because
+ * Hinge §5's design is that "the guest can tell whose words are whose" — and the threshold's
+ * check is "coverage and voice", so the voice has to be visible to be checked.
+ */
+function MessageStep({ eventId }: { eventId: string }) {
+  const [data, setData] = useState<MessageData | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+
+  // The host's movement 1, edited here. NOT PERSISTED — see the notice rendered below.
+  // Null means "no edit yet", which falls through to the draft.
+  const [edited, setEdited] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    fetch(`/api/events/${eventId}/pre-flight/message`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`(${res.status})`);
+        return res.json();
+      })
+      .then((d: MessageData) => {
+        if (!live) return;
+        setData(d);
+        setSelected(d.recipients[0]?.personEventId ?? null);
+      })
+      .catch((e) => live && setFailed(`Could not load the message ${e.message ?? ''}`));
+    return () => {
+      live = false;
+    };
+  }, [eventId]);
+
+  const facts = useMemo(
+    () =>
+      data
+        ? {
+            name: data.event.name,
+            startDate: new Date(data.event.startDate),
+            venueName: data.event.venueName,
+            occasionDescription: data.event.occasionDescription,
+          }
+        : null,
+    [data]
+  );
+
+  const draft = useMemo(() => (facts ? draftAuthorLine(facts) : ''), [facts]);
+  const authorLine = edited ?? data?.storedAuthorLine ?? draft;
+
+  // Every recipient's message, composed. The whole list is composed rather than only the
+  // selected one so the segment summary is a fact about the send and not about whoever
+  // happens to be on screen.
+  const composed = useMemo(() => {
+    if (!data || !facts) return [];
+    return data.recipients.map((r) => ({
+      recipient: r,
+      ask: composeAsk({
+        event: facts,
+        hostName: data.hostName,
+        recipient: {
+          firstName: firstNameOf(r.name),
+          itemNames: r.itemNames,
+          link: r.link,
+        },
+        storedAuthorLine: authorLine,
+      }),
+    }));
+  }, [data, facts, authorLine]);
+
+  if (failed) return <p className="text-sm text-red-600">{failed}</p>;
+  if (!data) return <p className="text-sm text-gray-400">Loading…</p>;
+  if (data.recipients.length === 0) {
+    return <p className="text-sm text-gray-600">Nobody to message on this event yet.</p>;
+  }
+
+  const current = composed.find((c) => c.recipient.personEventId === selected) ?? composed[0];
+  const maxSegments = composed.reduce((m, c) => Math.max(m, c.ask.segments), 0);
+  const linksPending = composed.some((c) => !c.recipient.linkReady);
+
+  return (
+    <div>
+      {/* Movement 1 — hers. */}
+      <label className="block text-sm font-medium text-gray-900 mb-1">Your line</label>
+      <p className="text-xs text-gray-500 mb-2">
+        A starting point built from the event — change it to whatever you would actually say. It
+        goes first, in your words, to everyone.
+      </p>
+      <textarea
+        value={authorLine}
+        onChange={(e) => setEdited(e.target.value)}
+        rows={3}
+        className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:ring-accent/40 focus:border-accent"
+      />
+      <div className="flex flex-wrap items-center gap-3 mt-2 mb-5">
+        <button
+          type="button"
+          onClick={() => setEdited(null)}
+          disabled={edited === null}
+          className="text-xs text-gray-500 underline disabled:no-underline disabled:text-gray-300"
+        >
+          Back to the draft
+        </button>
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+          Not saved. There is no field to store this line yet — GTC-187 ruled it stored and
+          reusable, and left the field&rsquo;s design as its own decision. Edits here live until you
+          leave the page.
+        </p>
+      </div>
+
+      {/* GTC-256. Stated, not hidden. */}
+      {!data.hostIdentityResolved && (
+        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-4">
+          <strong>The name on this message is provisional.</strong> This event has no host
+          membership row, so &ldquo;{data.hostName}&rdquo; is taken from the account that owns the
+          event rather than from the person you captured as yourself. If you are in the guest list
+          below, that is the same problem: you would be sent your own invitation. Filed as GTC-256;
+          it is a capture decision, not a send one.
+        </p>
+      )}
+
+      {linksPending && (
+        <p className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded px-3 py-2 mb-4">
+          Some guests have no link yet — links are issued at the press. Those messages show a
+          stand-in where the link will go.
+        </p>
+      )}
+
+      {/* Who to read. */}
+      <div className="flex items-baseline justify-between gap-4 mb-2">
+        <label className="block text-sm font-medium text-gray-900">Read it as</label>
+        <p className="text-xs text-gray-500">
+          {composed.length} {composed.length === 1 ? 'person' : 'people'} · longest is {maxSegments}{' '}
+          {maxSegments === 1 ? 'text' : 'texts'}
+        </p>
+      </div>
+      <select
+        value={current.recipient.personEventId}
+        onChange={(e) => setSelected(e.target.value)}
+        className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 mb-4"
+      >
+        {composed.map((c) => (
+          <option key={c.recipient.personEventId} value={c.recipient.personEventId}>
+            {c.recipient.name} —{' '}
+            {c.recipient.itemNames.length === 0
+              ? 'nothing to bring'
+              : c.recipient.itemNames.join(', ')}
+          </option>
+        ))}
+      </select>
+
+      {/* The message itself, seam visible. */}
+      <div className="border border-gray-200 rounded-md bg-white overflow-hidden">
+        {current.recipient.hasEmail && (
+          <div className="px-4 py-2 border-b border-gray-100 bg-gray-50">
+            <p className="text-[11px] uppercase tracking-wide text-gray-400">
+              Subject (email only)
+            </p>
+            <p className="text-sm text-gray-800">{current.ask.subject}</p>
+          </div>
+        )}
+        {current.ask.movements.map((m) => (
+          <div key={m.slot} className="px-4 py-3 border-b border-gray-100 last:border-0">
+            <p className="text-[11px] uppercase tracking-wide text-gray-400 mb-1">
+              {m.voice === 'HOST' ? 'Your voice' : 'Gather'}
+            </p>
+            <p className="text-sm text-gray-900 whitespace-pre-wrap">{m.text}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-gray-500 mt-2">
+        {current.ask.text.length} characters · {current.ask.segments}{' '}
+        {current.ask.segments === 1 ? 'text' : 'texts'} if sent by SMS
+        {current.ask.segments > 1 && ' — long is fine, it just costs more to send'}.
+        {current.ask.narrowSegments &&
+          ' Counted at 70 characters a text rather than 160, because the wording uses punctuation plain SMS cannot carry.'}{' '}
+        The same words go by email, with the subject line above.
+      </p>
     </div>
   );
 }
