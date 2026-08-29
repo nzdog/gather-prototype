@@ -9,6 +9,7 @@ import {
   HOUSEHOLD_MUTED_SKIP_REASON,
 } from '@/lib/households/channel';
 import { isChaseable, DONT_CHASE_SKIP_REASON } from '@/lib/eligibility/nudge-mark';
+import { isAddressable } from '@/lib/eligibility/host-exclusion';
 import { isPaceOff, PACE_OFF_SKIP_REASON } from '@/lib/eligibility/nudge-pace';
 
 export interface ProxyNudgeCandidate {
@@ -20,7 +21,13 @@ export interface ProxyNudgeCandidate {
   eventName: string;
   hostId: string;
   createdAt: Date;
+  /** The household's true size. Diagnostic; carried into the send metadata. */
   memberCount: number;
+  /**
+   * GTC-256 (phase 3), Ruling 5 — the number the MESSAGE quotes, which is not the same
+   * number. See where it is computed below.
+   */
+  checkInCount: number;
 }
 
 export interface ProxyEligibilityResult {
@@ -220,6 +227,38 @@ export async function findProxyNudgeCandidates(): Promise<ProxyEligibilityResult
       where: { householdId: household.id },
     });
 
+    /*
+     * GTC-256 (phase 3), RULING 5 — THE HOST IS NOT SOMEBODY SHE CAN CHECK IN WITH.
+     *
+     * This is a COUNT fix, not an exclusion. Ruling 6 governs whether the host receives
+     * her own household's messages at all, and it is untouched: `resolveHouseholdMuted`
+     * above defaults her household to muted, and if she switches it on she gets them —
+     * "she asked for them, she gets them", and founder answer 2 confirms the same for her
+     * as another household's channel. Ruling 5 does not reach this path and must not be
+     * made to.
+     *
+     * What was wrong is the NUMBER. `memberCount` was passed straight into the template's
+     * `unclaimedCount`, so a host with one partner, having switched her messages on, was
+     * texted "2 people in your group haven't confirmed yet. Can you check in with them?"
+     * — counting herself among the people she is being asked to chase. She cannot check
+     * in with herself, and she is never asked to confirm anything (Ruling 5), so she was
+     * never one of the two.
+     *
+     * FIXED HERE RATHER THAN IN THE TEMPLATE (founder instruction, 2026-08-29: "Fix the
+     * count, not the template"). The wording is right; the arithmetic was not.
+     *
+     * ⚠ STILL A MEMBER COUNT, NOT A TRUE UNCLAIMED COUNT. `unclaimedCount` in
+     * `getProxyHouseholdReminderMessage` has always been passed the household's size
+     * rather than the number who have actually not responded. That misnomer is
+     * pre-existing, is not GTC-256's, and is deliberately left alone — narrowing it to
+     * genuinely-unconfirmed members changes what the proxy path says to every household,
+     * which is a Moment 4 §10.7 question. This removes the host from the count and
+     * nothing else.
+     */
+    const checkInCount = allMembers.filter((m) =>
+      isAddressable({ personId: m.personId, role: m.role }, household.event.hostId)
+    ).length;
+
     eligible.push({
       householdId: household.id,
       primaryContactPersonId: primaryContact.person.id,
@@ -230,6 +269,7 @@ export async function findProxyNudgeCandidates(): Promise<ProxyEligibilityResult
       hostId: household.event.hostId,
       createdAt: household.createdAt,
       memberCount: allMembers.length,
+      checkInCount,
     });
   }
 

@@ -25,6 +25,7 @@ import { checkSendReadiness } from '@/lib/workflow';
 import { readDietaryData } from '@/lib/dietary';
 import { resolveHouseholdChannel } from '@/lib/households/channel';
 import { isMessageableRole } from '@/lib/eligibility/child-exclusion';
+import { isAddressable } from '@/lib/eligibility/host-exclusion';
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id: eventId } = await context.params;
@@ -35,7 +36,14 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
   try {
     const event = await prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, name: true, startDate: true, sentAt: true, nudgePace: true },
+      select: {
+        id: true,
+        name: true,
+        startDate: true,
+        sentAt: true,
+        nudgePace: true,
+        hostId: true,
+      },
     });
     if (!event) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
@@ -68,6 +76,8 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
             select: {
               id: true,
               personId: true,
+              // GTC-256 (phase 3): read by memberView's `markable` (Ruling 5).
+              role: true,
               householdRole: true,
               isYoungPerson: true,
               nudgeMark: true,
@@ -86,6 +96,8 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
           id: true,
           personId: true,
           householdId: true,
+          // GTC-256 (phase 3): read by memberView's `markable` (Ruling 5).
+          role: true,
           householdRole: true,
           nudgeMark: true,
           person: { select: { name: true, email: true, phoneNumber: true } },
@@ -98,6 +110,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     const memberView = (m: {
       id: string;
       personId: string;
+      role?: string | null;
       householdRole: string | null;
       isYoungPerson?: boolean;
       nudgeMark: string | null;
@@ -114,6 +127,25 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
       // record carries. The screen shows them greyed rather than hiding them, so Kate
       // can see that the exclusion happened rather than wondering where they went.
       messageable: isMessageableRole(m.householdRole),
+      /*
+       * GTC-256 (phase 3), RULING 5 — SHE IS IN THE LIST; SHE IS NOT A MARK TARGET.
+       *
+       * Ruling 5's shape is "in the guest list, counted, holding items, never messaged",
+       * so the host STAYS on this screen — removing her would contradict Rulings 1 and 3
+       * and hide the person the plan is sized around. What she must not be offered is the
+       * `nudgeMark` control, because a mark is "a hosting judgement about that person"
+       * and the pre-flight would be offering her to herself under "go gentle on" — the
+       * precise absurdity this ticket lists among its consequences, made reachable by
+       * phase 2 writing her row.
+       *
+       * A FLAG RATHER THAN A FILTER, and it is the same treatment `messageable` gets one
+       * line up: the screen renders the row and withholds the control, so the host can
+       * see that she is accounted for rather than wondering where she went.
+       *
+       * The write side refuses independently — see the cadence PATCH. This flag is what
+       * the screen reads; that route is the gate.
+       */
+      markable: isAddressable({ personId: m.personId, role: m.role }, event.hostId),
       nudgeMark: m.nudgeMark,
     });
 

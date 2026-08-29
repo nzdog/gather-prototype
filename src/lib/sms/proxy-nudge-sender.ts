@@ -28,9 +28,13 @@ export async function sendProxyNudge(
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const dashboardLink = `${baseUrl}/plan/${candidate.eventId}`;
 
+  // GTC-256 (phase 3), Ruling 5: `checkInCount`, not `memberCount`. The host is never
+  // among the people her household's channel is asked to check in with — see the count's
+  // derivation in proxy-nudge-eligibility.ts. `memberCount` stays the true household size
+  // and is still what the send metadata below records.
   const message = getProxyHouseholdReminderMessage({
     eventName: candidate.eventName,
-    unclaimedCount: candidate.memberCount,
+    unclaimedCount: candidate.checkInCount,
     dashboardLink,
   });
 

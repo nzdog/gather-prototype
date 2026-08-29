@@ -2941,6 +2941,8 @@ export default function PlanEditorPage() {
                     status: p.status,
                     hasPhone: p.hasPhone,
                     lastAction: p.response,
+                    // GTC-256 (phase 3), Ruling 5: the host is never missing.
+                    isHost: p.isHost,
                     daysSinceAnchor: p.inviteAnchorAt
                       ? Math.floor(
                           (Date.now() - new Date(p.inviteAnchorAt).getTime()) /

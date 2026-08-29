@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { isMessageableRole } from '@/lib/eligibility/child-exclusion';
+import { isHostMembership, HOST_NOT_ADDRESSABLE_MESSAGE } from '@/lib/eligibility/host-exclusion';
 import { isValidNZNumber } from '@/lib/phone';
 
 /**
@@ -52,7 +53,7 @@ export async function resolveManualNudgeRecipient(
   // is a courtesy and this is the gate.
   const membership = await prisma.personEvent.findUnique({
     where: { personId_eventId: { personId, eventId } },
-    select: { householdRole: true },
+    select: { householdRole: true, role: true },
   });
 
   if (membership && !isMessageableRole(membership.householdRole)) {
@@ -60,6 +61,42 @@ export async function resolveManualNudgeRecipient(
       ok: false,
       status: 403,
       error: 'This person is recorded as a child and cannot be messaged directly.',
+    };
+  }
+
+  /*
+   * GTC-256 (phase 3), RULING 5 — THE HOST MAY NOT BE NUDGED, INCLUDING BY HERSELF.
+   *
+   * Founder answer, 2026-08-29: "Yes — refuse the manual nudge at the host. 403, matching
+   * the child rule's shape in that function." Ruling 5 names five things she never
+   * receives; a nudge she presses at her own row is her own ask arriving by the one door
+   * the ruling did not enumerate, and "the host is not an addressee" reads across it.
+   *
+   * NOT A THEORETICAL PATH. `invite-status` returns every membership row, so her own row
+   * renders in `InviteStatusSection`, and clicking it opens `PersonInviteDetailModal` →
+   * `NudgeComposer` → this route. It was one click, not a crafted request.
+   *
+   * SAME PLACE AND SAME SHAPE AS THE CHILD GATE ABOVE, for the reason that gate gives:
+   * `personId` comes straight from the URL, so the host UI omitting a control is a
+   * courtesy and this is the gate. 403 rather than 404 for the same reason too — the
+   * person exists and the host may see them; what is forbidden is messaging them. This
+   * route is host-authenticated, so unlike the shared-link claim endpoint there is no
+   * oracle to protect against.
+   *
+   * The event is loaded for `hostId` alone. It is a second query rather than a join
+   * because the membership lookup above is a `findUnique` on the compound key and adding
+   * a relation to it would widen the row every caller pays for.
+   */
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { hostId: true },
+  });
+
+  if (event && isHostMembership({ personId, role: membership?.role }, event.hostId)) {
+    return {
+      ok: false,
+      status: 403,
+      error: HOST_NOT_ADDRESSABLE_MESSAGE,
     };
   }
 

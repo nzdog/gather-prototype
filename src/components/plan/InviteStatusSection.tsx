@@ -25,6 +25,12 @@ interface PersonStatus {
   firstNudgeSentAt?: string | null;
   secondNudgeSentAt?: string | null;
   nudgeStatus?: string;
+  /**
+   * GTC-256 (phase 3), Ruling 5. She is in this list — in the guest list and counted
+   * (Rulings 1 and 3) — and she is never messaged, so her row is not an entry point to
+   * the nudge composer. See the row below.
+   */
+  isHost?: boolean;
   reachabilityTier: 'DIRECT' | 'PROXY' | 'SHARED' | 'UNTRACKABLE';
 }
 
@@ -608,11 +614,27 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
 
           <div className="space-y-1">
             {(showAllPeople ? data.people : data.people.slice(0, 5)).map((person) => (
+              /*
+               * GTC-256 (phase 3), RULING 5 — THE HOST'S ROW IS NOT A NUDGE ENTRY POINT.
+               *
+               * She stays in the list, because she is in the guest list and counted
+               * (Rulings 1 and 3). What she does not get is the click, which opens
+               * PersonInviteDetailModal -> HostNudgeSection -> the nudge route — and that
+               * route now refuses her with 403. A refusing route behind a clickable row
+               * means she presses it and gets an error for doing what the screen offered.
+               * Same reasoning as withholding the mark control on the pre-flight: the route
+               * is the gate, and the screen should not offer what the gate will refuse.
+               *
+               * ⚠ WhosMissing is the OTHER door to the same modal and is handled too — she
+               * is not in it at all, because she was never asked and so cannot be missing.
+               */
               <div
                 key={person.id}
-                className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50 cursor-pointer"
+                className={`flex items-center justify-between py-1.5 px-2 rounded ${
+                  person.isHost ? '' : 'hover:bg-gray-50 cursor-pointer'
+                }`}
                 onClick={() => {
-                  if (onPersonClick) {
+                  if (onPersonClick && !person.isHost) {
                     onPersonClick(person.id);
                   }
                 }}
@@ -620,6 +642,11 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
                 <div className="flex items-center gap-2">
                   <StatusIcon status={person.status} />
                   <span className="text-sm">{person.name}</span>
+                  {person.isHost && (
+                    <span className="text-xs text-gray-500">
+                      you — never messaged about your own event
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-1">
                   {/* GTC-179 (E2, phase 5): ordinal chips. "1st"/"2nd" rather than

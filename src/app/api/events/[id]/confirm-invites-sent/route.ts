@@ -4,6 +4,7 @@ import { requireEventRole } from '@/lib/auth/guards';
 import { ledgerActorForUser } from '@/lib/auth/actor';
 import { recordChange } from '@/lib/ledger';
 import { logInviteEvent } from '@/lib/invite-events';
+import { isAddressable } from '@/lib/eligibility/host-exclusion';
 
 export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id: eventId } = await context.params;
@@ -64,6 +65,33 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
     const pressActor = await ledgerActorForUser(auth.user, 'HOST');
     const now = new Date();
 
+    /*
+     * GTC-256 (phase 3), RULING 5 — SHE IS NOT A RECIPIENT.
+     *
+     * Build decision 2 said three numbers need three answers; phase 2 narrowed it to one.
+     * Three of the four counting sites moved to include her ON PURPOSE — the founder's
+     * ruling was "let them move. She is at her own party, she is eating, the numbers
+     * should say so" — and those are the HEADCOUNT numbers: `totalAdults` in
+     * `buildPlanGenerationInput`, "X people coming", and the attendance totals. They stay
+     * exactly as phase 2 left them.
+     *
+     * `recipients` is the fourth, and it is not a headcount. It records who the press
+     * sent to, and Ruling 5 says she is not among them. Phase 2 carried the inconsistency
+     * forward deliberately rather than resolving it by inference; this settles it.
+     *
+     * COUNTED THROUGH THE MODULE, NOT AS `length - 1`. A subtraction assumes exactly one
+     * host row and silently produces a wrong number the moment a co-host row exists.
+     *
+     * ⚠ `totalPeople` BELOW IS DELIBERATELY NOT THIS NUMBER. It sits with `newAnchorsSet`
+     * and `previouslyAnchored` and describes the STAMPING operation — how many rows had
+     * their personal clock set — and her row IS stamped (founder answer 3, 2026-08-29:
+     * "Leave sentAt alone. The token gate carries it."). Two different facts, two
+     * different counts, and conflating them would make the anchor diagnostics lie.
+     */
+    const recipientCount = event.people.filter((pe) =>
+      isAddressable({ personId: pe.personId, role: pe.role }, event.hostId)
+    ).length;
+
     // Update event timestamp
     await prisma.event.update({
       where: { id: eventId },
@@ -119,7 +147,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
             targetType: 'Event',
             targetId: eventId,
             before: { sentAt: null },
-            after: { sentAt: now.toISOString(), recipients: event.people.length },
+            after: { sentAt: now.toISOString(), recipients: recipientCount },
           },
         ],
       })

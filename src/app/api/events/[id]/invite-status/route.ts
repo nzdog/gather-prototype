@@ -5,6 +5,7 @@ import { requireEventRole } from '@/lib/auth/guards';
 import { deriveAttendance, type Attendance } from '@/lib/attendance';
 import { isChaseable } from '@/lib/eligibility/nudge-mark';
 import { isPaceOff } from '@/lib/eligibility/nudge-pace';
+import { isHostMembership } from '@/lib/eligibility/host-exclusion';
 
 export type InviteStatus = 'NOT_SENT' | 'SENT' | 'OPENED' | 'RESPONDED';
 
@@ -66,6 +67,13 @@ interface PersonInviteStatus {
   canReceiveSms: boolean;
   claimedAt: string | null;
   claimedBy: string | null;
+  /**
+   * GTC-256 (phase 3), Ruling 5. The host is IN this list — she is in the guest list and
+   * counted (Rulings 1 and 3) — and is not an addressee, so the nudge and SMS summaries
+   * below exclude her. Exposed on the wire so the screen can tell the two apart without
+   * re-deriving the rule client-side.
+   */
+  isHost: boolean;
   /**
    * GTC-178 (E1, phase 4): sourced from PersonEvent.firstNudgeSentAt /
    * secondNudgeSentAt — the wire name matches where the value comes from.
@@ -245,6 +253,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         canReceiveSms: !!person.phoneNumber && !hasOptedOut,
         claimedAt: token?.claimedAt?.toISOString() || null,
         claimedBy: token?.claimedBy || null,
+        isHost: isHostMembership({ personId: person.id, role: personEvent.role }, event.hostId),
         firstNudgeSentAt: personEvent.firstNudgeSentAt?.toISOString() || null,
         secondNudgeSentAt: personEvent.secondNudgeSentAt?.toISOString() || null,
         nudgeMark: personEvent.nudgeMark ?? null,
@@ -268,12 +277,23 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
       optedOut: peopleStatus.filter((p) => p.smsOptedOut).length,
     };
 
-    // SMS summary
+    /*
+     * GTC-256 (phase 3), RULING 5 — `canReceive` COUNTS WHO WILL BE SENT TO.
+     *
+     * The screen renders it as "Auto-reminders will be sent to N people". The host has a
+     * phone and no opt-out, so before this she was in that N — and no auto-reminder will
+     * ever reach her, because Ruling 8 withholds the PARTICIPANT token the sweep requires.
+     *
+     * `withPhone` / `withoutPhone` / `optedOut` are DELIBERATELY LEFT COUNTING HER. They
+     * describe contact data the host is being shown about her guest list, not sending
+     * intent, and she is genuinely a person in this event with a phone (Rulings 1 and 3).
+     * Only the promise changes.
+     */
     const smsSummary = {
       withPhone: peopleStatus.filter((p) => p.hasPhone).length,
       withoutPhone: peopleStatus.filter((p) => !p.hasPhone).length,
       optedOut: peopleStatus.filter((p) => p.smsOptedOut).length,
-      canReceive: peopleStatus.filter((p) => p.canReceiveSms).length,
+      canReceive: peopleStatus.filter((p) => p.canReceiveSms && !p.isHost).length,
     };
 
     // Nudge summary
@@ -308,16 +328,35 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     // That is the intended reading of "nudge pace: off", and it is why the accompanying
     // skip is still recorded PER PERSON: the operator needs to see who was not messaged,
     // where the host needs the dashboard to stop promising reminders nobody will get.
+    //
+    // GTC-256 (phase 3), RULING 5 — AND THE HOST. This block's own rule is that the count
+    // and the sweep must never disagree, and this is the THIRD instance of the same class:
+    // GTC-179 phase 3 found it for the mark, phase 5 for the pace, and phase 2 of this
+    // ticket created it again by giving the host a membership row. She has a phone, no
+    // opt-out and no stamps, so she counted as pending — and the sweep will never send to
+    // her, because Ruling 8 withholds the PARTICIPANT token it requires. The dashboard was
+    // promising a reminder nobody will get.
+    //
+    // `!p.isHost` rather than a token lookup, deliberately: the token's ABSENCE is what
+    // the sweep gates on, and counting absences here would make this block's answer depend
+    // on token state that `ensureEventTokens` owns. The rule is the reason; the token is
+    // the mechanism.
     const paceOff = isPaceOff(event.nudgePace);
     const nudgeSummary = {
       sentFirst: peopleStatus.filter((p) => p.firstNudgeSentAt).length,
       sentSecond: peopleStatus.filter((p) => p.secondNudgeSentAt).length,
       pendingFirst: peopleStatus.filter(
-        (p) => p.canReceiveSms && !p.firstNudgeSentAt && isChaseable(p.nudgeMark) && !paceOff
+        (p) =>
+          p.canReceiveSms &&
+          !p.isHost &&
+          !p.firstNudgeSentAt &&
+          isChaseable(p.nudgeMark) &&
+          !paceOff
       ).length,
       pendingSecond: peopleStatus.filter(
         (p) =>
           p.canReceiveSms &&
+          !p.isHost &&
           !p.secondNudgeSentAt &&
           !p.respondedAt &&
           isChaseable(p.nudgeMark) &&

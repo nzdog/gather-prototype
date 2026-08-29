@@ -5,6 +5,7 @@ import { requireEventRole } from '@/lib/auth/guards';
 import { ledgerActorForUser } from '@/lib/auth/actor';
 import { recordChange } from '@/lib/ledger';
 import { normalizePhoneNumber } from '@/lib/phone';
+import { isHostMembership } from '@/lib/eligibility/host-exclusion';
 
 // PATCH /api/events/[id]/people/[personId] - Update person (role, team)
 export async function PATCH(
@@ -33,6 +34,47 @@ export async function PATCH(
 
     if (!personEvent) {
       return NextResponse.json({ error: 'Person is not part of this event' }, { status: 404 });
+    }
+
+    /*
+     * GTC-256 (phase 3) — THE HOST'S ROLE IS NOT WRITABLE. Sibling of the
+     * HOST_NOT_REMOVABLE guard on the DELETE below, and it closes the same door.
+     *
+     * Phase 2 guarded removal and left this open, on the strength of `PeopleSection`
+     * disabling her role control — which is markup, and `personId` comes from the URL.
+     * The consequence was not cosmetic: setting her role to PARTICIPANT made
+     * `ensureEventTokens` (called at the foot of this handler) mint her a PARTICIPANT
+     * token, and that token was never revoked, so she became a live auto-nudge and
+     * decide-by recipient and a claimable name — permanently, from one call.
+     *
+     * BOTH HALVES SHIPPED TOGETHER, AND NEITHER IS SUFFICIENT ALONE. This guard stops the
+     * write; `ensureEventTokens` now revokes a PARTICIPANT token held by a role-HOST row,
+     * which is what protects events that already took the write and any route that
+     * reaches a role change by another door.
+     *
+     * Only the ROLE is refused. Name, email, phone and team on her row stay editable —
+     * Ruling 9 needs the team write, since item choice is bounded by team membership.
+     */
+    const eventForHost = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { hostId: true },
+    });
+
+    if (
+      role !== undefined &&
+      role !== personEvent.role &&
+      eventForHost &&
+      isHostMembership({ personId, role: personEvent.role }, eventForHost.hostId)
+    ) {
+      return NextResponse.json(
+        {
+          error: 'HOST_ROLE_NOT_CHANGEABLE',
+          message:
+            "The host's role cannot be changed on her own event (GTC-256 Ruling 5/8). " +
+            'Her membership carries role HOST so that no participant token is issued to her.',
+        },
+        { status: 409 }
+      );
     }
 
     // Update Person fields if provided (name, email, phoneNumber)

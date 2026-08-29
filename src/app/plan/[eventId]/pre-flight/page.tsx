@@ -44,6 +44,13 @@ interface Member {
   householdRole: string | null;
   isYoungPerson: boolean;
   messageable: boolean;
+  /**
+   * GTC-256 (phase 3), Ruling 5. False for the host: she is on this screen because she is
+   * in the guest list and counted (Rulings 1 and 3), and she is never messaged, so a
+   * "hosting judgement about that person" has nothing to suppress. The cadence PATCH
+   * refuses the write independently — this only decides what the screen offers.
+   */
+  markable: boolean;
   nudgeMark: NudgeMark | null;
 }
 
@@ -654,7 +661,21 @@ function MarkRows({
                 child — never messaged, whatever contact details are on the record
               </span>
             )}
-            {m.messageable && (
+            {/*
+              GTC-256 (phase 3), RULING 5 — THE HOST IS SHOWN, NOT OFFERED A MARK.
+              She stays in the list on purpose: removing her would contradict Rulings 1
+              and 3 and hide the person the plan is sized around. What she does not get is
+              the pill row, because the pre-flight offering her "go gentle on" about
+              HERSELF is the absurdity the ticket lists among its consequences. Worded as
+              a statement rather than greyed like a child row, because nothing is being
+              withheld from her — she is the one doing the asking.
+            */}
+            {m.messageable && !m.markable && (
+              <span className="text-xs text-gray-500">
+                you — never messaged about your own event
+              </span>
+            )}
+            {m.messageable && m.markable && (
               <>
                 <span className="flex gap-1.5">
                   {/*
