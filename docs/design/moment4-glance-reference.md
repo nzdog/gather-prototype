@@ -1,0 +1,82 @@
+# Moment 4 glance screen — design reference
+
+Chosen direction, 30 August 2026, after eight mockup iterations. This is what GTC-192 builds toward.
+
+## The chosen layout: household cards with thin colour strips
+
+A grid of neutral household cards. Each card carries the household name and one thin, full-width colour strip per member. The strip's tint is the person's state; the card itself stays quiet.
+
+- Card: neutral surface, small radius, household name as a muted 12px label.
+- Strip: one per person, full card width, ~28px tall, tinted background with matching dark text. Red = yours, amber = with Gather, green = settled, neutral outline = not chased.
+- Summary sentence above the grid is the four-second answer: "3 need you. Gather is on 9. 28 settled."
+- Unassigned critical items sit in their own alert strip above the grid (they have no person, so person-primary gives them no home).
+
+## Why this won
+
+It is the only layout of the eight that delivers both things at once:
+
+1. **The four-second check.** Colour has area, so red pulls the eye from across the screen without any sorting or sectioning. Three red strips in a field of green find Kate; she doesn't hunt.
+2. **The family geography.** Everyone stays in their house. Red arrives with its context attached — not "Amelia" but "the Turner situation." Mixed households read truthfully (the O'Briens: Connor chased, Aoife deliberately left alone), where a card-per-household colour had to paint the whole house by its worst member.
+
+It also draws the data model: messages go to households, states belong to people. Card = channel, strip = person.
+
+## The eight iterations and their trades
+
+1. **Phone, sectioned cards with reasons** — reasons visible, but sections shout equally; green got boxes it didn't need.
+2. **Phone, compressed (red cards / amber rows / green folded)** — constant height at any headcount, but folding buries family members.
+3. **Phone, stable LED board** — spatial memory, red pops; but no whys, and a good week is a wall of lights rather than a sentence.
+4. **Phone, LED grouped by colour** — triage order restores the check; loses stable geography; green wall is pure reassurance.
+5. **Desktop, three-column triage** — reasons and clocks fit; columns imply equal weight they don't have.
+6. **Desktop, all-LED** — calmest, shows the true proportions; loses every why and clock.
+7. **Desktop, LED + amber clocks** — the clock lives where trust is needed; reds become the tersest entries, which may be wrong.
+8. **Household cards, colour-carried-by-card** — reads at the level Kate thinks, but worst-state-wins hides individuals (Charlotte and James painted red by Amelia).
+
+**Winner: household cards + thin strips** — #8's grouping with #7's per-person truth, and colour with enough area to shout.
+
+## Variants to test before building
+
+- **With and without why-lines.** Strips have room for "Amelia — quiet after 2 nudges" and "Sarah — deciding Fri." The spec (§8.3) wants the nudge promise visible; the amber clock line is where trust is earned. Test whether why-lines on red + clock-lines on amber crowd the strips or complete them. Green stays bare either way.
+- **Strip as button.** Each strip is the natural door to the second layer: tap Amelia, get her story and the fix-it actions. The spec only ever described the first layer; this layout gives the second one an obvious shape.
+
+## The arrival replay (founder direction, 30 Aug 2026)
+
+When the host opens the screen after time away, it does not simply show the current state — it opens on the state as of her last visit and replays the changes since, in order. Ambers flip green one by one, each with a spark burst and a pop, and the summary counts update live ("Gather is on 9… 7… 4"). Watching five or six of her family say yes in sequence is the product's promise made visible: she rested, Gather worked.
+
+Rules for the replay:
+
+- **Celebrate only the good news.** Amber-to-green flips get the flourish (spark burst, expanding ring, scale pop). Anything that went red while she was away does NOT spark — reds land last, quietly, so the replay ends on the truth: "…and one thing needs you."
+- **Never hold the answer hostage.** The whole replay runs under ~3 seconds, and the summary line is legible throughout. A host in a hurry gets the four-second check regardless.
+- **No fake fireworks.** If nothing changed, nothing plays.
+- **Live changes get the same flourish.** If a reply lands while she is on the screen, that strip celebrates in real time — this is arguably the product's best moment and implies live updates (polling or push), a build decision for GTC-192.
+
+Build implication: the replay needs a per-host "last seen" record (e.g. a lastViewedAt on the host's relationship to the event) and a diff of state changes since. Small, but it is schema and belongs on GTC-192's migration list, ruled not discovered.
+
+Animation spec as prototyped: ~18 particles per flip in the green/amber ramp hexes, thrown 35–80px, 0.9–1.3s, plus a 3px expanding ring and a scale pop to 1.12 with overshoot easing; background/colour transition 0.7s ease; flips staggered so overlapping bursts read as a sequence, not a mush.
+
+## Open decisions this layout leaves (feed into GTC-192's ruling list)
+
+1. **Sort order.** Do red households float to the top-left, or do houses hold fixed positions? With strips this loud, fixed probably works — red finds you anyway — and fixed preserves learned geography. Not ruled.
+2. **Red terseness.** Bare red strip vs red strip with why-line. See variants.
+3. **Green fold.** At very large events, does the settled field fold to a count, or stay as strips (warmth vs noise)? Unruled.
+4. **Uncle Ray's fade.** A "was in, now out" red: does it stay red until acknowledged, or fade to settled on its own? Spec red-source, behaviour unruled.
+5. **Declined guests.** "Out — can't make it" currently reads as green/settled. Whether a no is rest or something Kate should see differently: unruled.
+6. **Unassigned critical items.** Rendered here as an alert strip above the grid. One of GTC-192's original twelve open decisions; this is a proposal, not a ruling.
+7. **Household merge rule.** Deliberately NOT used — the card stays neutral precisely so no merge rule is needed. If a household-level colour ever returns (e.g. collapsed view), worst-state-wins must be ruled explicitly.
+
+## What this resolves from GTC-192's twelve
+
+- The itemless guest mostly dissolves: children and attendance-only people sit as ordinary strips in their house.
+- The "where does the grid live" question is unaffected — still open.
+- The colour vocabulary: this reference uses red/amber/green with a neutral fourth state for don't-chase ("not chased"). The spec's orange/yellow inconsistency should be ruled once, here.
+
+## States and their strips (as mocked)
+
+| State | Strip | Text |
+|---|---|---|
+| Yours (red) | danger tint | name, weight 500 |
+| With Gather (amber) | warning tint | name; clock line in variant |
+| Settled — in (green) | success tint | name |
+| Settled — out (green) | success tint | name (pending decision 5) |
+| Not chased (grey) | neutral, hairline border | name |
+
+Standalone viewable mockup: `moment4-glance-mockup.html` alongside this file.
