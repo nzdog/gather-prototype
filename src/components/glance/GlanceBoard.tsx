@@ -24,6 +24,7 @@
  */
 
 import type { EventGlance, GlanceHousehold, GlancePerson } from '@/lib/glance/state';
+import { assistantMessage, findCriticalRedHits } from './assistant';
 import {
   criticalStripClauses,
   criticalStripText,
@@ -88,6 +89,7 @@ export default function GlanceBoard({ glance, eventName }: GlanceBoardProps) {
   const { lead, rest } = summaryClauses(glance.summary);
   const critical = criticalStripClauses(glance.unassignedCritical);
   const door = critical ? unassignedDoorText(glance.unassignedOrdinaryCount) : null;
+  const assistant = assistantMessage(findCriticalRedHits(glance));
 
   return (
     <main className="mx-auto w-full max-w-[960px] px-4 py-8">
@@ -140,6 +142,31 @@ export default function GlanceBoard({ glance, eventName }: GlanceBoardProps) {
               </a>
             ) : null}
           </div>
+        ) : null}
+
+        {/*
+          §3's one plain assistant message, BETWEEN the strip and the grid.
+
+          Two objects, not one. The strip is about criticals with NO owner; this is about a
+          critical with the WRONG one — the most important thing on the board, in the hands
+          of someone only the host can reach. Folding them into a single red block would
+          make one band say two different things.
+
+          AND IT IS NOT A SECOND FILLED BAND, deliberately. Two stacked danger fills would
+          dilute the strip exactly as a second alarm dilutes the first; this carries the
+          same red as text and a rule, so the strip stays the only filled band above the
+          grid. `tests/glance-grid-test.tsx` counts them. ⚠ The Scope line calling this
+          "banner-class, the only one the surface has" predates Ruling 8, which added the
+          strip above it — the "only one" is no longer literally available, and the
+          weighting here is what replaces it.
+        */}
+        {assistant ? (
+          <p
+            data-assistant-message={assistant}
+            className="mt-3 mb-0 border-l-2 border-[#A32D2D] pl-3 text-[13px] leading-snug text-[#A32D2D]"
+          >
+            {assistant}
+          </p>
         ) : null}
 
         {/*

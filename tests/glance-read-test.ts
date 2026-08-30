@@ -852,13 +852,16 @@ async function main() {
     const pageSrc = code('src/app/plan/[eventId]/glance/page.tsx');
     const boardSrc = code('src/components/glance/GlanceBoard.tsx');
     const stripSrc = code('src/components/glance/strip.ts');
+    const assistantSrc = code('src/components/glance/assistant.ts');
 
     assert(
       'Ruling 1 source',
       'every glance source exists — the two modules, the route, the page, the view',
-      [stateSrc, readSrc, routeSrc, pageSrc, boardSrc, stripSrc].every((src) => src.length > 0)
+      [stateSrc, readSrc, routeSrc, pageSrc, boardSrc, stripSrc, assistantSrc].every(
+        (src) => src.length > 0
+      )
     );
-    const glanceSources = [stateSrc, readSrc, routeSrc, pageSrc, boardSrc, stripSrc];
+    const glanceSources = [stateSrc, readSrc, routeSrc, pageSrc, boardSrc, stripSrc, assistantSrc];
     const sourcesExist = glanceSources.every((src) => src.length > 0);
     for (const banned of BEHAVIOUR_DENYLIST) {
       const re = new RegExp(`\\b${banned}\\b`);

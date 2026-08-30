@@ -103,16 +103,26 @@ function stripFor(html: string, label: string): string {
   return start < 0 ? '' : html.slice(start, at);
 }
 
-function redItem(reason: string): any {
+function redItem(reason: string, critical = false, name = 'The pavlova'): any {
   return {
     itemId: `i-${reason}-${Math.random().toString(36).slice(2)}`,
     assignmentId: 'a',
-    name: 'The pavlova',
-    critical: false,
+    name,
+    critical,
     state: 'RED',
     reason,
     decideByAt: null,
   };
+}
+
+/** A person who trips the assistant's condition: RED, holding a RED critical row. */
+function criticalRedPerson(name: string, itemName: string): any {
+  return person({
+    name,
+    state: 'RED',
+    reasons: ['EXHAUSTED_SILENCE'],
+    items: [redItem('EXHAUSTED_SILENCE', true, itemName)],
+  });
 }
 
 async function main() {
@@ -121,16 +131,26 @@ async function main() {
   const createdUserIds: string[] = [];
 
   let SP: any = null; // src/components/glance/strip
+  let AS: any = null; // src/components/glance/assistant
   let GB: any = null; // src/components/glance/GlanceBoard
   let R: any = null; // src/lib/glance/read
-  try {
-    SP = await import('../src/components/glance/strip');
-    GB = await import('../src/components/glance/GlanceBoard');
-    R = await import('../src/lib/glance/read');
-  } catch (err) {
-    console.error(
-      `\x1b[31m!\x1b[0m module load failed: ${String((err as Error).message).split('\n')[0]}`
-    );
+  // Each import stands alone. A shared try{} lets one missing module abort the rest, and
+  // the RED run then reports forty failures that are really one — a legible RED is the
+  // whole point of taking one.
+  const modules: [string, () => Promise<unknown>, (m: unknown) => void][] = [
+    ['strip', () => import('../src/components/glance/strip'), (m) => (SP = m)],
+    ['assistant', () => import('../src/components/glance/assistant'), (m) => (AS = m)],
+    ['GlanceBoard', () => import('../src/components/glance/GlanceBoard'), (m) => (GB = m)],
+    ['read', () => import('../src/lib/glance/read'), (m) => (R = m)],
+  ];
+  for (const [name, load, set] of modules) {
+    try {
+      set(await load());
+    } catch (err) {
+      console.error(
+        `\x1b[31m!\x1b[0m ${name} failed to load: ${String((err as Error).message).split('\n')[0]}`
+      );
+    }
   }
 
   try {
@@ -339,7 +359,7 @@ async function main() {
               name: 'Amelia Turner',
               state: 'RED',
               reasons: ['DECIDE_BY_EXPIRED'],
-              items: [redItem('DECIDE_BY_EXPIRED')],
+              items: [redItem('DECIDE_BY_EXPIRED', true)],
             }),
             person({ name: 'Charlotte Turner', state: 'GREEN' }),
           ],
@@ -648,6 +668,300 @@ async function main() {
         () =>
           noDoorHtml.includes('data-critical-strip') && !noDoorHtml.includes('data-unassigned-door')
       )
+    );
+
+    // ══ §3 — the assistant's one critical-red message ════════════════════
+    //
+    // The condition is TWO clauses and both earn their place: the ITEM must be critical
+    // and red, and the PERSON holding it must be red. The person clause is what excludes a
+    // DONT_CHASE holder — Ruling 14 greys the strip while the row stays red — and it does
+    // so BY CONSTRUCTION, without this module ever naming the mark.
+    const hitsOf = (g: any) => (AS ? AS.findCriticalRedHits(g) : null);
+
+    const oneHit = {
+      ...mixed,
+      households: [
+        {
+          householdId: 'h1',
+          primaryContactName: 'Amelia Turner',
+          isHostHousehold: true,
+          members: [criticalRedPerson('Amelia Turner', 'the pavlova')],
+        },
+      ],
+      unhoused: [],
+      unassignedCritical: [],
+      unassignedOrdinaryCount: 0,
+    };
+    assert(
+      '§3 assistant',
+      'FIRES on a critical row that is red, held by a red person',
+      ok(() => {
+        const h = hitsOf(oneHit);
+        return (
+          h.length === 1 && h[0].personName === 'Amelia Turner' && h[0].itemName === 'the pavlova'
+        );
+      })
+    );
+    assert(
+      '§3 assistant',
+      'SILENT on a critical row held by an AMBER person — that is still Gather’s business',
+      ok(
+        () =>
+          hitsOf({
+            ...oneHit,
+            households: [
+              {
+                ...oneHit.households[0],
+                members: [
+                  person({
+                    name: 'Grace',
+                    state: 'AMBER',
+                    reasons: ['AWAITING_REPLY'],
+                    items: [
+                      {
+                        ...redItem('EXHAUSTED_SILENCE', true, 'the ham'),
+                        state: 'AMBER',
+                        reason: 'AWAITING_REPLY',
+                      },
+                    ],
+                  }),
+                ],
+              },
+            ],
+          }).length === 0
+      )
+    );
+    assert(
+      '§3 assistant',
+      'SILENT on an ORDINARY red row held by a red person — §8.2, non-critical reds sit in the grid',
+      ok(
+        () =>
+          hitsOf({
+            ...oneHit,
+            households: [
+              {
+                ...oneHit.households[0],
+                members: [
+                  person({
+                    name: 'Sarah',
+                    state: 'RED',
+                    reasons: ['REVERSAL'],
+                    items: [redItem('REVERSAL', false)],
+                  }),
+                ],
+              },
+            ],
+          }).length === 0
+      )
+    );
+    assert(
+      '§3 assistant',
+      'SILENT on a critical red row held by a DONT_CHASE person — Ruling 14, grey beats red',
+      ok(
+        () =>
+          hitsOf({
+            ...oneHit,
+            households: [
+              {
+                ...oneHit.households[0],
+                members: [
+                  person({
+                    name: 'Aoife',
+                    state: 'NOT_CHASED',
+                    reasons: ['DONT_CHASE'],
+                    items: [redItem('DECIDE_BY_EXPIRED', true, 'the cake')],
+                  }),
+                ],
+              },
+            ],
+          }).length === 0
+      )
+    );
+    assert(
+      '§3 assistant',
+      'and that exclusion is BY CONSTRUCTION — the module never names the mark, it reads the state',
+      ok(() => {
+        const src = code('src/components/glance/assistant.ts');
+        return src.length > 0 && !/DONT_CHASE|nudgeMark/.test(src);
+      })
+    );
+    assert(
+      '§3 assistant',
+      'DISAPPEARS when the person answers — a settled holder ends it',
+      ok(
+        () =>
+          hitsOf({
+            ...oneHit,
+            households: [
+              {
+                ...oneHit.households[0],
+                members: [
+                  person({
+                    name: 'Amelia Turner',
+                    state: 'GREEN',
+                    reasons: ['ACCEPTED'],
+                    items: [
+                      {
+                        ...redItem('EXHAUSTED_SILENCE', true, 'the pavlova'),
+                        state: 'GREEN',
+                        reason: 'ACCEPTED',
+                      },
+                    ],
+                  }),
+                ],
+              },
+            ],
+          }).length === 0
+      )
+    );
+    assert(
+      '§3 assistant',
+      'DISAPPEARS when the item moves — the row is gone from that person’s hands',
+      ok(
+        () =>
+          hitsOf({
+            ...oneHit,
+            households: [
+              {
+                ...oneHit.households[0],
+                members: [
+                  person({
+                    name: 'Amelia Turner',
+                    state: 'RED',
+                    reasons: ['REVERSAL'],
+                    items: [redItem('REVERSAL', false)],
+                  }),
+                ],
+              },
+            ],
+          }).length === 0
+      )
+    );
+    assert(
+      '§3 assistant',
+      'an unhoused person is on the board for this too — no household is not no person',
+      ok(
+        () =>
+          hitsOf({ ...oneHit, households: [], unhoused: [criticalRedPerson('Bob', 'the ice')] })
+            .length === 1
+      )
+    );
+
+    const several = {
+      ...oneHit,
+      households: [
+        {
+          householdId: 'h1',
+          primaryContactName: 'Amelia Turner',
+          isHostHousehold: true,
+          members: [criticalRedPerson('Amelia Turner', 'the pavlova')],
+        },
+        {
+          householdId: 'h2',
+          primaryContactName: 'Sarah Dalton',
+          isHostHousehold: false,
+          members: [criticalRedPerson('Sarah Dalton', 'the ham')],
+        },
+      ],
+    };
+    assert(
+      '§3 assistant',
+      'the wording, ONE — names the thing, admits what the system could not do, hands it over',
+      ok(
+        () =>
+          AS.assistantMessage(hitsOf(oneHit)) ===
+          'Gather is out of moves — the pavlova, with Amelia Turner. It’s yours now.'
+      )
+    );
+    assert(
+      '§3 assistant',
+      'the wording, SEVERAL — ONE message covering all, never a stack',
+      ok(
+        () =>
+          AS.assistantMessage(hitsOf(several)) ===
+          'Gather is out of moves on 2 critical items — the pavlova with Amelia Turner · ' +
+            'the ham with Sarah Dalton. They’re yours now.'
+      )
+    );
+    assert(
+      '§3 assistant',
+      'the item name NEVER sits at a sentence boundary — it follows the em-dash, in both ' +
+        'cases, because host-authored names arrive capitalised AND lower-case',
+      ok(() =>
+        [
+          ['The pavlova', 'The'],
+          ['the glazed ham', 'the'],
+        ].every(([name, first]) => {
+          const one = AS.assistantMessage([{ personName: 'Sarah', itemName: name }]);
+          const many = AS.assistantMessage([
+            { personName: 'Sarah', itemName: name },
+            { personName: 'Amy', itemName: name },
+          ]);
+          return (
+            one.includes(`— ${name},`) &&
+            many.includes(`— ${name} with`) &&
+            !one.startsWith(first) &&
+            !many.startsWith(first)
+          );
+        })
+      )
+    );
+    assert(
+      '§3 assistant',
+      'no message when nothing qualifies',
+      ok(() => AS.assistantMessage([]) === null)
+    );
+    assert(
+      '§3 assistant',
+      'plain register — no exclamation mark, no urgency theatre',
+      ok(() =>
+        [AS.assistantMessage(hitsOf(oneHit)), AS.assistantMessage(hitsOf(several))].every(
+          (m: string) => !/[!]|urgent|immediately|asap|hurry|attention/i.test(m)
+        )
+      )
+    );
+    assert(
+      '§3 assistant',
+      'it does not borrow the summary’s verb — "N need you" counts PEOPLE and must stay unambiguous',
+      ok(() => !/need(s)? you/i.test(AS.assistantMessage(hitsOf(several))))
+    );
+
+    // ── rendered ──────────────────────────────────────────────────────────
+    const severalHtml = GB ? board(several) : '';
+    assert(
+      '§3 assistant',
+      'EXACTLY ONCE in the DOM, however many reds it covers (this ticket’s acceptance)',
+      ok(() => severalHtml.split('data-assistant-message').length - 1 === 1)
+    );
+    assert(
+      '§3 assistant',
+      'it renders BETWEEN the strip and the grid on the mixed board',
+      ok(() => {
+        const strip = html.indexOf('data-critical-strip');
+        const msg = html.indexOf('data-assistant-message');
+        const grid = html.indexOf('data-household-card');
+        return strip >= 0 && msg > strip && msg < grid;
+      })
+    );
+    assert(
+      '§3 assistant',
+      'and it does NOT dilute the strip — the strip stays the only FILLED danger band above the grid',
+      ok(() => {
+        const above = html.slice(0, html.indexOf('data-household-card'));
+        return (above.match(/bg-\[#FCEBEB\]/g) ?? []).length === 1;
+      })
+    );
+    assert(
+      '§3 assistant',
+      'absent entirely when nothing qualifies — no reassuring all-clear',
+      ok(() => {
+        const quiet = GB ? board({ ...oneHit, households: [], unhoused: [] }) : '';
+        return (
+          html.includes('data-assistant-message') &&
+          quiet.length > 0 &&
+          !quiet.includes('data-assistant-message')
+        );
+      })
     );
 
     // ══ LAYER 3 — the ORDER ANCHOR ═══════════════════════════════════════

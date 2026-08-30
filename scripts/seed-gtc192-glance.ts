@@ -245,7 +245,7 @@ async function main() {
             name: 'Aoife OBrien',
             householdRole: 'PARTNER',
             dontChase: true,
-            rows: [{ name: 'The cake', response: 'MAYBE', expired: true }],
+            rows: [{ name: 'The cake', response: 'MAYBE', expired: true, critical: true }],
           },
         ],
       },
