@@ -11,8 +11,9 @@
  *
  * ── WHAT IS DELIBERATELY ABSENT ───────────────────────────────────────────────
  *
- * The alert strip for unassigned criticals is PHASE 3. Tap-for-actions is PHASE 4 — the
- * strips are not buttons and carry no handler. The replay and polling are PHASE 6. The
+ * Tap-for-actions is PHASE 4 — the strips are not buttons and carry no handler, and the
+ * only link on the surface is Ruling 8's door, which leaves the board rather than acting on
+ * it. The replay and polling are PHASE 6. The
  * amber clock-line and the strip-as-button shape are PHASE 7's variants, and shipping
  * either as the default would settle an unruled decision by stealth.
  *
@@ -23,7 +24,17 @@
  */
 
 import type { EventGlance, GlanceHousehold, GlancePerson } from '@/lib/glance/state';
-import { STRIP_TONE, stripLabel, summaryClauses, summarySentence, whyLineFor } from './strip';
+import {
+  criticalStripClauses,
+  criticalStripText,
+  STRIP_TONE,
+  stripLabel,
+  summaryClauses,
+  summarySentence,
+  unassignedDoorHref,
+  unassignedDoorText,
+  whyLineFor,
+} from './strip';
 
 interface GlanceBoardProps {
   glance: EventGlance;
@@ -75,6 +86,8 @@ function HouseholdCard({ household }: { household: GlanceHousehold }) {
 
 export default function GlanceBoard({ glance, eventName }: GlanceBoardProps) {
   const { lead, rest } = summaryClauses(glance.summary);
+  const critical = criticalStripClauses(glance.unassignedCritical);
+  const door = critical ? unassignedDoorText(glance.unassignedOrdinaryCount) : null;
 
   return (
     <main className="mx-auto w-full max-w-[960px] px-4 py-8">
@@ -95,6 +108,39 @@ export default function GlanceBoard({ glance, eventName }: GlanceBoardProps) {
           <span className="font-medium text-[#A32D2D]">{lead}</span>
           {rest ? ` ${rest}` : null}
         </p>
+
+        {/*
+          Ruling 8: unassigned criticals, ABOVE the grid. They have no holder, so
+          person-primary gives them no home, and an ownerless critical is the host's move.
+
+          THE STRIP IS ABSENT WHEN THERE IS NOTHING TO SAY — no all-clear banner. And the
+          door hangs off the strip rather than standing alone: "and N more unassigned" is a
+          continuation, and with no ownerless critical the glance stays quiet about what can
+          wait, which is Ruling 8's own sentence.
+
+          The summary above is UNTOUCHED by any of this. It counts people; a loose item is
+          not one.
+        */}
+        {critical ? (
+          <div className="mt-3">
+            <p
+              data-critical-strip={criticalStripText(glance.unassignedCritical) ?? ''}
+              className="m-0 rounded-lg bg-[#FCEBEB] px-3 py-2 text-[13px] text-[#A32D2D]"
+            >
+              <span className="font-medium">{critical.lead}</span>
+              {` — ${critical.names}`}
+            </p>
+            {door ? (
+              <a
+                data-unassigned-door=""
+                href={unassignedDoorHref(glance.eventId)}
+                className="mt-1.5 inline-block text-[12px] text-[#888780] underline underline-offset-2"
+              >
+                {door}
+              </a>
+            ) : null}
+          </div>
+        ) : null}
 
         {/*
           Ruling 5: green never folds, at any event size. This grid grows; nothing in it

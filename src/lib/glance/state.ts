@@ -202,6 +202,18 @@ export interface GlanceSummary {
   settled: number;
 }
 
+/**
+ * An item nobody holds. Ruling 8's subject.
+ *
+ * TWO FIELDS, AND NO MORE. The strip names it and nothing else; a quantity, a team, a
+ * criticalReason or a dropOffAt would all be plan content, which §3 refuses on this
+ * surface.
+ */
+export interface GlanceUnassignedItem {
+  itemId: string;
+  name: string;
+}
+
 export interface EventGlance {
   eventId: string;
   /** The instant the states were derived against, so a caller can reason about staleness. */
@@ -216,6 +228,30 @@ export interface EventGlance {
    * from phase 1's data shape.
    */
   unhoused: GlancePerson[];
+  /**
+   * Ruling 8: unassigned CRITICAL items, above the grid.
+   *
+   * THE ONE THING ON THIS BOARD THAT IS NOT A PERSON, and it is deliberate rather than a
+   * crack in §10.8: these have no holder, so person-primary gives them nowhere to live,
+   * and an ownerless critical is genuinely the host's move. Named, because a count would
+   * not tell her which.
+   *
+   * "Unassigned" is the ABSENCE OF AN ASSIGNMENT ROW — the house predicate
+   * (`assignment: null`), never `Item.status`, which is a presence cache that is never
+   * consulted for status (architecture-contract §6).
+   *
+   * ⚠ NARROWER THAN "critical without an ACCEPTED assignment". That wider set is a
+   * different fact and the pre-flight already shows it, saying so in its own comment. A
+   * critical held by someone who declined it has a person, reads RED on their strip, and
+   * is not ownerless.
+   */
+  unassignedCritical: GlanceUnassignedItem[];
+  /**
+   * Ruling 8's quiet door: ordinary unassigned items, COUNTED and never named. "Ordinary
+   * unassigned items stay the plan's and pre-flight's business; the glance does not nag
+   * about what can wait."
+   */
+  unassignedOrdinaryCount: number;
 }
 
 /**

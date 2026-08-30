@@ -57,6 +57,17 @@ const PERSON_EVENT_SELECT = {
   person: { select: { id: true, name: true } },
 } satisfies Prisma.PersonEventSelect;
 
+/**
+ * Ruling 8's subject: items with no holder at all.
+ *
+ * `assignment: null` is the HOUSE PREDICATE for unassigned — `/api/events/[id]/pre-flight`,
+ * `/api/c/[token]`, `workflow.ts` and `detectUnassignedItems` in `src/lib/ai/check.ts` all
+ * ask it this way. `Item.status` is deliberately not read: it is a presence cache that is
+ * never consulted for status (architecture-contract §6), and reading it here would make the
+ * strip lie the moment any write path forgot to repair it.
+ */
+const UNASSIGNED_CRITICAL_SELECT = { id: true, name: true } satisfies Prisma.ItemSelect;
+
 const ASSIGNMENT_SELECT = {
   id: true,
   personId: true,
@@ -104,18 +115,29 @@ export async function readEventGlance(
     nudgePace: event.nudgePace,
   };
 
-  const [memberships, assignments, households] = await Promise.all([
-    db.personEvent.findMany({ where: { eventId }, select: PERSON_EVENT_SELECT }),
-    db.assignment.findMany({
-      where: { item: { team: { eventId } } },
-      select: ASSIGNMENT_SELECT,
-    }),
-    db.household.findMany({
-      where: { eventId },
-      select: { id: true, createdAt: true },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    }),
-  ]);
+  const [memberships, assignments, households, unassignedCritical, unassignedOrdinaryCount] =
+    await Promise.all([
+      db.personEvent.findMany({ where: { eventId }, select: PERSON_EVENT_SELECT }),
+      db.assignment.findMany({
+        where: { item: { team: { eventId } } },
+        select: ASSIGNMENT_SELECT,
+      }),
+      db.household.findMany({
+        where: { eventId },
+        select: { id: true, createdAt: true },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      }),
+      // Named, because a count would not tell her WHICH critical has no owner.
+      db.item.findMany({
+        where: { team: { eventId }, assignment: null, critical: true },
+        select: UNASSIGNED_CRITICAL_SELECT,
+        orderBy: [{ name: 'asc' }],
+      }),
+      // COUNTED, never named — Ruling 8 keeps ordinary unassigned items the plan's and
+      // pre-flight's business. A `findMany` here would haul every name across for a number,
+      // and the names would then be one careless render away from the surface.
+      db.item.count({ where: { team: { eventId }, assignment: null, critical: false } }),
+    ]);
 
   // Rows are keyed by Person, not by PersonEvent (`Assignment.personId` is a Person id),
   // so they are grouped once here rather than re-scanned per member.
@@ -216,5 +238,7 @@ export async function readEventGlance(
     summary: summarisePeople(people.map((p) => p.state)),
     households: cards,
     unhoused,
+    unassignedCritical: unassignedCritical.map((i) => ({ itemId: i.id, name: i.name })),
+    unassignedOrdinaryCount,
   };
 }

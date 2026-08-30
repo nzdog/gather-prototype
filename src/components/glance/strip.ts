@@ -15,7 +15,12 @@
  * palette living beside that screen costs nothing and reverts cleanly.
  */
 
-import type { GlancePerson, GlanceSummary, PersonState } from '@/lib/glance/state';
+import type {
+  GlancePerson,
+  GlanceSummary,
+  GlanceUnassignedItem,
+  PersonState,
+} from '@/lib/glance/state';
 
 export interface StripTone {
   className: string;
@@ -129,4 +134,56 @@ export function summaryClauses(summary: GlanceSummary): { lead: string; rest: st
 export function summarySentence(summary: GlanceSummary): string {
   const { lead, rest } = summaryClauses(summary);
   return rest ? `${lead} ${rest}` : lead;
+}
+
+/**
+ * Ruling 8's alert strip, in two parts: the count phrase and the names.
+ *
+ * NULL WHEN THERE IS NOTHING TO SAY. The absence of the strip IS the good news — an
+ * "all criticals covered" banner would be a green tick nobody asked for, sitting where a
+ * danger tint lives, and Ruling 1's general test refuses anything that makes the host lean
+ * in. Silence is the calmer signal and it is the one the reference draws.
+ *
+ * The noun and the verb both agree with the count: one critical item HAS no owner; two
+ * critical items HAVE none.
+ */
+export function criticalStripClauses(
+  items: readonly GlanceUnassignedItem[]
+): { lead: string; names: string } | null {
+  if (items.length === 0) return null;
+  const noun = items.length === 1 ? 'critical item has' : 'critical items have';
+  return {
+    lead: `${items.length} ${noun} no owner`,
+    names: items.map((i) => i.name).join(' · '),
+  };
+}
+
+/** The same line as one string — what a screen reader and the tests both read. */
+export function criticalStripText(items: readonly GlanceUnassignedItem[]): string | null {
+  const clauses = criticalStripClauses(items);
+  return clauses ? `${clauses.lead} — ${clauses.names}` : null;
+}
+
+/**
+ * Ruling 8's quiet door.
+ *
+ * NULL AT ZERO — there is no door to a list with nothing in it. The count is of ORDINARY
+ * unassigned items; the criticals are named above it and are not counted again here.
+ */
+export function unassignedDoorText(ordinaryCount: number): string | null {
+  if (ordinaryCount <= 0) return null;
+  return `and ${ordinaryCount} more unassigned`;
+}
+
+/**
+ * Where the door goes: the plan's Teams section.
+ *
+ * THE HOUSE DESTINATION, NOT A NEW ONE. `?expand=teams` is a live contract the plan page
+ * already honours, and the pre-flight already sends the host there for exactly this errand.
+ * Reusing it means the glance hands off rather than growing a second place to fix coverage —
+ * which is Ruling 8's own sentence: ordinary unassigned items stay the plan's and
+ * pre-flight's business.
+ */
+export function unassignedDoorHref(eventId: string): string {
+  return `/plan/${eventId}?expand=teams`;
 }

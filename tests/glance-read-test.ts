@@ -587,6 +587,20 @@ async function main() {
     ]);
     await give(rays.rows[1].personId, 'The gravy', 'DECLINED');
 
+    // Ruling 8's subject: items with NO Assignment row at all. The house predicate for
+    // "unassigned" is `assignment: null` (pre-flight, the coordinator route, check.ts),
+    // never Item.status — that column is a presence cache (architecture-contract §6).
+    async function loose(name: string, critical: boolean) {
+      await prisma.item.create({
+        data: { teamId: mains.id, name, kind: 'ITEM', critical },
+      });
+    }
+    await loose('the glazed ham', true);
+    await loose('the marquee', true);
+    await loose('the paper cups', false);
+    await loose('the serviettes', false);
+    await loose('the spare chairs', false);
+
     // A person with NO household — the V1 shape, and 61 of 93 rows in gather_dev today.
     const loosePerson = await prisma.person.create({
       data: { name: 'Bob Unhoused', email: `gtc192+${stamp}+bob@example.com` },
@@ -734,6 +748,51 @@ async function main() {
       ok(() => {
         const live = byName('Amelia Turner').items.find((i: any) => i.name === 'The trifle');
         return new Date(live.decideByAt).getTime() === NOW.getTime() + 10 * HOUR;
+      })
+    );
+
+    // ── Ruling 8: the ownerless criticals reach the payload ───────────────
+    assert(
+      'Ruling 8',
+      'unassigned CRITICALS are carried, named, and are exactly the two that have no owner',
+      ok(
+        () =>
+          payload.unassignedCritical.length === 2 &&
+          payload.unassignedCritical
+            .map((i: any) => i.name)
+            .sort()
+            .join('|') === 'the glazed ham|the marquee'
+      )
+    );
+    assert(
+      'Ruling 8',
+      'ordinary unassigned items are COUNTED, never named — the glance does not nag about them',
+      ok(
+        () =>
+          payload.unassignedOrdinaryCount === 3 &&
+          !JSON.stringify(payload).includes('the paper cups')
+      )
+    );
+    assert(
+      'Ruling 8',
+      'an item held by somebody is not ownerless — assignment state is the whole test',
+      ok(
+        () =>
+          !payload.unassignedCritical.some((i: any) => i.name === 'The pavlova') &&
+          !payload.unassignedCritical.some((i: any) => i.name === 'The ham')
+      )
+    );
+    assert(
+      'Ruling 8',
+      'and the board stays PERSON-KEYED — the strip is the exception Ruling 8 names, not a second grid',
+      ok(() => !('items' in payload) && Array.isArray(payload.unassignedCritical))
+    );
+    assert(
+      'architecture §6',
+      'unassigned is derived from the ABSENCE OF AN ASSIGNMENT, never from Item.status’s cache',
+      ok(() => {
+        const src = code('src/lib/glance/read.ts');
+        return /assignment:\s*null/.test(src) && !/ItemStatus|'UNASSIGNED'/.test(src);
       })
     );
 

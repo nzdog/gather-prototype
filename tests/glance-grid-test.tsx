@@ -361,6 +361,11 @@ async function main() {
         },
       ],
       unhoused: [person({ name: 'Bob Unhoused', state: 'GREEN', householdRole: null })],
+      unassignedCritical: [
+        { itemId: 'c1', name: 'the glazed ham' },
+        { itemId: 'c2', name: 'the marquee' },
+      ],
+      unassignedOrdinaryCount: 4,
     };
 
     const html = GB ? board(mixed) : '';
@@ -471,6 +476,8 @@ async function main() {
         },
       ],
       unhoused: [],
+      unassignedCritical: [],
+      unassignedOrdinaryCount: 0,
     };
     const bigHtml = GB ? board(big) : '';
     assert(
@@ -499,15 +506,148 @@ async function main() {
         () => html.length > 0 && !/<progress|role="progressbar"|progress bar|\brate\b|%/i.test(html)
       )
     );
+    // The phase-2 guard "no alert strip — unassigned criticals are phase 3" is RETIRED
+    // here rather than deleted quietly: it held its line until phase 3 arrived, and the
+    // Ruling 8 assertions below are what replaces it.
     assert(
-      'phase 3 held back',
-      'no alert strip — unassigned criticals are phase 3',
-      ok(() => html.length > 0 && !/no owner|unassigned|and \d+ more/i.test(html))
+      'phase 4 held back',
+      'strips are NOT interactive — no button, no handler, no link INSIDE a strip',
+      ok(() => {
+        const strips = html.split('<div data-strip-state').slice(1);
+        return (
+          strips.length > 0 &&
+          strips.every((chunk) => {
+            const el = chunk.slice(0, chunk.indexOf('</div>'));
+            return !/<button|<a |onclick|role="button"/i.test(el);
+          })
+        );
+      })
     );
     assert(
       'phase 4 held back',
-      'strips are NOT interactive — no button, no link, no handler on the surface',
-      ok(() => html.length > 0 && !/<button|<a |onclick|role="button"/i.test(html))
+      'and nothing on the surface is a button — Ruling 8’s door is a link out, not an action',
+      ok(() => html.length > 0 && !/<button|onclick|role="button"/i.test(html))
+    );
+
+    // ══ PHASE 3 — Ruling 8's alert strip ═════════════════════════════════
+    assert(
+      'Ruling 8',
+      'the reference line, verbatim — "2 critical items have no owner — the glazed ham · the marquee"',
+      ok(
+        () =>
+          SP.criticalStripText([
+            { itemId: 'a', name: 'the glazed ham' },
+            { itemId: 'b', name: 'the marquee' },
+          ]) === '2 critical items have no owner — the glazed ham · the marquee'
+      )
+    );
+    assert(
+      'Ruling 8',
+      'ONE critical item HAS no owner — the noun and the verb both agree with the count',
+      ok(
+        () =>
+          SP.criticalStripText([{ itemId: 'a', name: 'the ham' }]) ===
+          '1 critical item has no owner — the ham'
+      )
+    );
+    assert(
+      'Ruling 8',
+      'no criticals means NO STRIP — null, not an empty banner and not a green all-clear',
+      ok(() => SP.criticalStripText([]) === null)
+    );
+    assert(
+      'Ruling 8',
+      'the door counts the ordinary ones and says so quietly',
+      ok(() => SP.unassignedDoorText(7) === 'and 7 more unassigned')
+    );
+    assert(
+      'Ruling 8',
+      'and at zero there is NO DOOR at all',
+      ok(() => SP.unassignedDoorText(0) === null && SP.unassignedDoorText(-1) === null)
+    );
+
+    // ── Ruling 8, rendered ────────────────────────────────────────────────
+    assert(
+      'Ruling 8',
+      'the alert strip renders ABOVE the grid and below the summary — the mockup’s order',
+      ok(() => {
+        const sum = html.indexOf('data-summary');
+        const strip = html.indexOf('data-critical-strip');
+        const grid = html.indexOf('data-household-card');
+        return sum >= 0 && strip > sum && strip < grid;
+      })
+    );
+    assert(
+      'Ruling 8',
+      'it names the criticals, and is danger-tinted',
+      ok(() => {
+        const at = html.indexOf('data-critical-strip');
+        const el = html.slice(at, at + 400);
+        return (
+          el.includes('#FCEBEB') && el.includes('the glazed ham') && el.includes('the marquee')
+        );
+      })
+    );
+    assert(
+      'Ruling 8',
+      'CRITICALS ONLY — no ordinary unassigned item is ever named on the glance',
+      ok(
+        () =>
+          html.includes('data-critical-strip') &&
+          !html.includes('the paper cups') &&
+          !html.includes('the serviettes')
+      )
+    );
+    assert(
+      'Ruling 8',
+      'the door reports the right N and hands off to the plan’s Teams section',
+      ok(() => {
+        const at = html.indexOf('data-unassigned-door');
+        if (at < 0) return false;
+        const el = html.slice(Math.max(0, at - 200), at + 200);
+        return el.includes('and 4 more unassigned') && el.includes('?expand=teams');
+      })
+    );
+    assert(
+      'Ruling 2',
+      'the summary sentence is UNCHANGED by the strip — it counts people, and a loose item is not one',
+      ok(() => html.includes('data-summary="2 need you. Gather is on 1. 2 settled."'))
+    );
+
+    const noCriticals = { ...mixed, unassignedCritical: [], unassignedOrdinaryCount: 9 };
+    const noCritHtml = GB ? board(noCriticals) : '';
+    assert(
+      'Ruling 8',
+      'NO STRIP when nothing critical is ownerless — the good state is silence, not a green banner',
+      ok(
+        () =>
+          // gated on the strip existing at all, so this cannot pass by nothing being built
+          html.includes('data-critical-strip') &&
+          noCritHtml.length > 0 &&
+          !noCritHtml.includes('data-critical-strip') &&
+          !/no owner|all covered|nothing unassigned/i.test(noCritHtml)
+      )
+    );
+    assert(
+      'Ruling 8',
+      'and no door either — with no ownerless critical the glance does not nag about what can wait',
+      ok(
+        () =>
+          html.includes('data-unassigned-door') &&
+          noCritHtml.length > 0 &&
+          !noCritHtml.includes('data-unassigned-door')
+      )
+    );
+
+    const noDoor = { ...mixed, unassignedOrdinaryCount: 0 };
+    const noDoorHtml = GB ? board(noDoor) : '';
+    assert(
+      'Ruling 8',
+      'the strip stands alone when every ordinary item has an owner — strip yes, door no',
+      ok(
+        () =>
+          noDoorHtml.includes('data-critical-strip') && !noDoorHtml.includes('data-unassigned-door')
+      )
     );
 
     // ══ LAYER 3 — the ORDER ANCHOR ═══════════════════════════════════════

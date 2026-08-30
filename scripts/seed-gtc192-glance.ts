@@ -65,7 +65,9 @@ async function buildEvent(
   hostPersonId: string,
   label: string,
   cast: { household: string; members: Spec[] }[],
-  unhoused: Spec[]
+  unhoused: Spec[],
+  /** Ruling 8: items with no Assignment row at all. Criticals name the strip; the rest count. */
+  loose: { name: string; critical: boolean }[] = []
 ) {
   const now = new Date();
   const sentAt = new Date(now.getTime() - 10 * DAY);
@@ -124,6 +126,12 @@ async function buildEvent(
     for (const spec of members) await addPerson(spec, hh.id, spec.name === 'Kate Whittaker');
   }
   for (const spec of unhoused) await addPerson(spec, null, false);
+
+  for (const item of loose) {
+    await prisma.item.create({
+      data: { teamId: team.id, name: item.name, kind: 'ITEM', critical: item.critical },
+    });
+  }
 
   return event.id;
 }
@@ -248,6 +256,15 @@ async function main() {
         householdRole: 'GUEST',
         rows: [{ name: 'The napkins', response: 'ACCEPTED' }],
       },
+    ],
+    // Ruling 8: two ownerless criticals to name, four ordinary ones to count.
+    [
+      { name: 'the glazed ham', critical: true },
+      { name: 'the marquee', critical: true },
+      { name: 'the paper cups', critical: false },
+      { name: 'the serviettes', critical: false },
+      { name: 'the spare chairs', critical: false },
+      { name: 'the ice buckets', critical: false },
     ]
   );
 
