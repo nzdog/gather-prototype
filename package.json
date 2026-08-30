@@ -70,7 +70,8 @@
     "test:host-household": "tsx tests/host-household-capture-test.ts",
     "test:host-directory": "tsx tests/host-directory-exposure-test.ts",
     "test:host-never-messaged": "tsx tests/host-never-messaged-test.ts",
-    "test:host-holds-items": "tsx tests/host-holds-items-test.ts"
+    "test:host-holds-items": "tsx tests/host-holds-items-test.ts",
+    "test:glance-read": "tsx tests/glance-read-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

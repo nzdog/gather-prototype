@@ -264,6 +264,14 @@
     "securityIssues": []
   },
   {
+    "filePath": "src/app/api/events/[id]/glance/route.ts",
+    "apiPath": "/api/events/:id/glance",
+    "methods": ["GET"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
     "filePath": "src/app/api/events/[id]/items/route.ts",
     "apiPath": "/api/events/:id/items",
     "methods": ["GET"],
