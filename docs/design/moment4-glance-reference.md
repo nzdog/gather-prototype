@@ -78,12 +78,14 @@ GTC-192 has **never carried a numbered decisions list** — there is no audit se
 
 ## States and their strips (as mocked)
 
+**Corrected 2026-08-30 (Ruling 11).** The "Settled — out" row previously showed a green success tint marked "(pending decision 5)". Ruling 7 settled that decision and Ruling 11 fixes the table: **OUT is not green.** The two greys are a deliberate pair and must stay distinguishable — NOT-CHASED is *expected, just unbothered*; OUT is *absent*. See `docs/tickets/GTC-192.md`.
+
 | State | Strip | Text |
 |---|---|---|
 | Yours (red) | danger tint | name, weight 500 |
 | With Gather (amber) | warning tint | name; clock line in variant |
 | Settled — in (green) | success tint | name |
-| Settled — out (green) | success tint | name (pending decision 5) |
-| Not chased (grey) | neutral, hairline border | name |
+| Out — declined (faded) | fully faded, **text included**; no border | name + "— out" |
+| Not chased (grey) | neutral, **hairline border, full-strength text** | name |
 
 Standalone viewable mockup: `moment4-glance-mockup.html` alongside this file.
