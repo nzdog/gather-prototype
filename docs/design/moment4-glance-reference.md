@@ -2,6 +2,8 @@
 
 Chosen direction, 30 August 2026, after eight mockup iterations. This is what GTC-192 builds toward.
 
+**Correction (2026-08-30):** an earlier version of this reference asserted that GTC-192 carried twelve open decisions from an audit — it never has, in any of its four commits, and the itemless guest was GTC-187's decision, not GTC-192's; both claims are corrected below rather than preserved.
+
 ## The chosen layout: household cards with thin colour strips
 
 A grid of neutral household cards. Each card carries the household name and one thin, full-width colour strip per member. The strip's tint is the person's state; the card itself stays quiet.
@@ -60,14 +62,17 @@ Animation spec as prototyped: ~18 particles per flip in the green/amber ramp hex
 3. **Green fold.** At very large events, does the settled field fold to a count, or stay as strips (warmth vs noise)? Unruled.
 4. **Uncle Ray's fade.** A "was in, now out" red: does it stay red until acknowledged, or fade to settled on its own? Spec red-source, behaviour unruled.
 5. **Declined guests.** "Out — can't make it" currently reads as green/settled. Whether a no is rest or something Kate should see differently: unruled.
-6. **Unassigned critical items.** Rendered here as an alert strip above the grid. One of GTC-192's original twelve open decisions; this is a proposal, not a ruling.
+6. **Unassigned critical items.** Rendered here as an alert strip above the grid. A genuine GTC-192-owned open decision — flagged downstream by GTC-187's "Flag for downstream, not a decision" note under "Founder ruling — multi-item ask construction" (Nigel, 2026-08-23): *"Where unassigned items surface in the grid is an open GTC-192 decision."* This is a proposal, not a ruling.
 7. **Household merge rule.** Deliberately NOT used — the card stays neutral precisely so no merge rule is needed. If a household-level colour ever returns (e.g. collapsed view), worst-state-wins must be ruled explicitly.
 
-## What this resolves from GTC-192's twelve
+## What this resolves from GTC-192's open items
 
-- The itemless guest mostly dissolves: children and attendance-only people sit as ordinary strips in their house.
-- The "where does the grid live" question is unaffected — still open.
-- The colour vocabulary: this reference uses red/amber/green with a neutral fourth state for don't-chase ("not chased"). The spec's orange/yellow inconsistency should be ruled once, here.
+GTC-192 has **never carried a numbered decisions list** — there is no audit section on that ticket in any of its four commits (`e5f6e82`, `898e729`, `59a4afb`, `3c8f29d`), and no twelve-item list for J1 exists anywhere in the repo. The corroborated open items it does own are **two**: the colour vocabulary, and where unassigned critical items surface.
+
+- **Colour vocabulary — addressed here, not ruled.** GTC-175 records twice that *"J1 (GTC-192) owns the person-grid colour encoding."* This reference uses red/amber/green with a neutral fourth state for don't-chase ("not chased"). The spec's own inconsistency — §3 says orange, §8.2 and §8.5 say yellow — should be ruled once, here.
+- **Unassigned critical items — proposed, not ruled.** See item 6 above for the corroboration and the proposal.
+- **The itemless guest — not GTC-192's, and already ruled.** This was **GTC-187's Phase 1 audit decision 8**, ruled by the founder on 2026-08-23 ("Founder ruling — the itemless guest", which closed all eight of that audit's decisions). The layout observation stands on its own and is worth keeping: children and attendance-only people sit as ordinary strips in their house, so the itemless guest needs no special grid treatment. The attribution moves; the observation does not.
+- **"Where does the grid live" — no referent.** The question appears nowhere else in the repo and no ticket poses it. It is a real *build* question — the Moment 4 screen does not exist in code at all — but it was never a recorded decision, so this layout neither resolves it nor leaves it open.
 
 ## States and their strips (as mocked)
 
