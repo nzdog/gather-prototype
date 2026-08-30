@@ -788,25 +788,31 @@ async function main() {
     const stateSrc = code('src/lib/glance/state.ts');
     const readSrc = code('src/lib/glance/read.ts');
     const routeSrc = code('src/app/api/events/[id]/glance/route.ts');
+    // Phase 2 puts a page and a component in the tree. Ruling 1's fence follows them:
+    // a behaviour field is no less present for arriving through the view layer.
+    const pageSrc = code('src/app/plan/[eventId]/glance/page.tsx');
+    const boardSrc = code('src/components/glance/GlanceBoard.tsx');
+    const stripSrc = code('src/components/glance/strip.ts');
 
     assert(
       'Ruling 1 source',
-      'the glance modules and the route exist',
-      stateSrc.length > 0 && readSrc.length > 0 && routeSrc.length > 0
+      'every glance source exists — the two modules, the route, the page, the view',
+      [stateSrc, readSrc, routeSrc, pageSrc, boardSrc, stripSrc].every((src) => src.length > 0)
     );
-    const sourcesExist = stateSrc.length > 0 && readSrc.length > 0 && routeSrc.length > 0;
+    const glanceSources = [stateSrc, readSrc, routeSrc, pageSrc, boardSrc, stripSrc];
+    const sourcesExist = glanceSources.every((src) => src.length > 0);
     for (const banned of BEHAVIOUR_DENYLIST) {
       const re = new RegExp(`\\b${banned}\\b`);
       assert(
         'Ruling 1 source',
         `no glance source names "${banned}" — the fence is on the select, not the render`,
-        sourcesExist && ![stateSrc, readSrc, routeSrc].some((src) => re.test(src))
+        sourcesExist && !glanceSources.some((src) => re.test(src))
       );
     }
     assert(
       'Ruling 1 source',
-      'the reader and the route use only explicit `select` — no `include:` spreads a whole row in',
-      sourcesExist && !/\binclude\s*:/.test(readSrc) && !/\binclude\s*:/.test(routeSrc)
+      'nothing in the glance uses `include:` — no whole row can spread in behind the select',
+      sourcesExist && !glanceSources.some((src) => /\binclude\s*:/.test(src))
     );
 
     // ── The route ─────────────────────────────────────────────────────────
