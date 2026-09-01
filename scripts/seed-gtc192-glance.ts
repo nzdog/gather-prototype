@@ -40,6 +40,31 @@ type Spec = {
   }[];
   dontChase?: boolean;
   out?: boolean;
+  /**
+   * Phase 4: which team this person is on, and therefore which rows they may be offered.
+   *
+   * WITHOUT THIS THE REASSIGN PICKER IS EMPTY AND LOOKS BROKEN. `PersonEvent.teamId` was
+   * null for everyone in the phase 2/3 seed, and the same-team rule (GTC-171) refuses a
+   * null-team candidate for an ITEM row — so a browser walk would have shown a picker with
+   * nothing in it and no way to tell a bug from the rule working. Two teams, so the rule
+   * is visible REFUSING as well as permitting.
+   *
+   * The host is deliberately on NO team — see src/lib/assignment/same-team.ts on why
+   * putting her on one would be wrong three times over. Her rows are reachable through
+   * Ruling 9's self-pick instead.
+   */
+  team?: 'Mains' | 'Desserts';
+  /**
+   * Phase 4: a valid NZ mobile, so this person's REMIND takes the SMS leg.
+   *
+   * THE TWO LEGS DO NOT FAIL THE SAME WAY, and the walk should show both. `sendSms`
+   * returns `{success:false}` when TNZ is unconfigured, so the route answers 502 and the
+   * surface says so. `sendNudgeEmail` does NOT inspect Resend's returned `error` object
+   * (src/lib/email.ts), so an invalid key comes back as a SUCCESS — see the phase 4
+   * evidence in docs/tickets/GTC-192.md. Everyone else here is email-only, which is why
+   * that second, quieter failure is visible on the same board.
+   */
+  phone?: string;
 };
 
 async function wipe() {
@@ -82,7 +107,11 @@ async function buildEvent(
     },
   });
   await prisma.eventRole.create({ data: { userId: user.id, eventId: event.id, role: 'HOST' } });
-  const team = await prisma.team.create({ data: { eventId: event.id, name: 'Mains' } });
+  const teams = {
+    Mains: await prisma.team.create({ data: { eventId: event.id, name: 'Mains' } }),
+    Desserts: await prisma.team.create({ data: { eventId: event.id, name: 'Desserts' } }),
+  };
+  const team = teams.Mains;
 
   let seq = 0;
   async function addPerson(spec: Spec, householdId: string | null, isHost: boolean) {
@@ -90,13 +119,20 @@ async function buildEvent(
     const person = isHost
       ? await prisma.person.findUniqueOrThrow({ where: { id: hostPersonId } })
       : await prisma.person.create({
-          data: { name: spec.name, email: `${label}-${seq}+${TAG}@example.com` },
+          data: {
+            name: spec.name,
+            email: `${label}-${seq}+${TAG}@example.com`,
+            phoneNumber: spec.phone ?? null,
+          },
         });
     await prisma.personEvent.create({
       data: {
         personId: person.id,
         eventId: event.id,
         role: isHost ? 'HOST' : 'PARTICIPANT',
+        // The host stays on no team, by design. Everyone else gets one so the picker has
+        // something to offer and something to refuse.
+        teamId: isHost ? null : teams[spec.team ?? 'Mains'].id,
         householdId,
         householdRole: spec.householdRole,
         nudgeMark: spec.dontChase ? 'DONT_CHASE' : null,
@@ -107,7 +143,8 @@ async function buildEvent(
     for (const row of spec.rows ?? []) {
       const item = await prisma.item.create({
         data: {
-          teamId: team.id,
+          // The row lives on the HOLDER's team, so the same-team rule has a real referent.
+          teamId: isHost ? team.id : teams[spec.team ?? 'Mains'].id,
           name: row.name,
           kind: 'ITEM',
           critical: row.critical ?? false,
@@ -184,6 +221,7 @@ async function main() {
           {
             name: 'Amelia Turner',
             householdRole: 'PRIMARY_CONTACT',
+            team: 'Mains',
             rows: [
               { name: 'The trifle', response: 'MAYBE' },
               { name: 'The pavlova', response: 'MAYBE', expired: true, critical: true },
@@ -192,11 +230,15 @@ async function main() {
           {
             name: 'Charlotte Turner',
             householdRole: 'PARTNER',
+            team: 'Mains',
             rows: [{ name: 'The salad', response: 'ACCEPTED' }],
           },
+          // GTC-207's kid with a job: CHILD role, on the team, and therefore OFFERED in the
+          // reassign picker. The child rule is message-only and must never reach assignment.
           {
             name: 'James Turner',
             householdRole: 'CHILD',
+            team: 'Mains',
             rows: [{ name: 'The crackers', response: 'ACCEPTED' }],
           },
         ],
@@ -204,18 +246,24 @@ async function main() {
       {
         household: 'Nguyen',
         members: [
+          // The one person on the board with a phone: her REMIND takes the SMS leg and
+          // fails honestly at the provider, where the email-only reds do not.
           {
             name: 'Chloe Nguyen',
+            team: 'Desserts',
             householdRole: 'PRIMARY_CONTACT',
+            phone: '+64211234567',
             rows: [{ name: 'The trifle bowl', response: 'DECLINED' }],
           },
           {
             name: 'Minh Nguyen',
+            team: 'Desserts',
             householdRole: 'PARTNER',
             rows: [{ name: 'The bread', response: 'ACCEPTED' }],
           },
           {
             name: 'Grace Nguyen',
+            team: 'Desserts',
             householdRole: 'GUEST',
             rows: [{ name: 'The cheese', response: 'PENDING' }],
           },
@@ -237,12 +285,14 @@ async function main() {
         members: [
           {
             name: 'Connor OBrien',
+            team: 'Desserts',
             householdRole: 'PRIMARY_CONTACT',
             rows: [{ name: 'The ice', response: 'PENDING' }],
           },
           // Ruling 14 on screen: an expired maybe on the person Kate switched off stays grey.
           {
             name: 'Aoife OBrien',
+            team: 'Desserts',
             householdRole: 'PARTNER',
             dontChase: true,
             rows: [{ name: 'The cake', response: 'MAYBE', expired: true, critical: true }],

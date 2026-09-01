@@ -49,6 +49,9 @@ const PERSON_EVENT_SELECT = {
   id: true,
   personId: true,
   role: true,
+  // Phase 4: `SameTeamSubject`'s team half. Null for the host by design — see the
+  // "she must stay on none" note in src/lib/assignment/same-team.ts.
+  teamId: true,
   householdId: true,
   householdRole: true,
   nudgeMark: true,
@@ -77,6 +80,10 @@ const ASSIGNMENT_SELECT = {
       id: true,
       name: true,
       critical: true,
+      // Phase 4: `SameTeamItem`. Read for the picker's eligibility question, never for a
+      // colour — `deriveItemState` does not see them.
+      kind: true,
+      teamId: true,
       dropOffAt: true,
       decideByOffsetHours: true,
     },
@@ -150,6 +157,8 @@ export async function readEventGlance(
       name: a.item.name,
       critical: a.item.critical,
       response: a.response,
+      kind: a.item.kind,
+      teamId: a.item.teamId,
       item: { dropOffAt: a.item.dropOffAt, decideByOffsetHours: a.item.decideByOffsetHours },
     });
     heldBy.set(a.personId, held);
@@ -181,6 +190,9 @@ export async function readEventGlance(
       name: row.person.name,
       isHost,
       householdRole: row.householdRole,
+      role: row.role,
+      teamId: row.teamId,
+      nudgeMark: row.nudgeMark,
       state,
       reasons,
       nextNudgeAt: nextNudgeFor(row.sentAt, row.nudgeMark, glanceEvent, now)?.toISOString() ?? null,
@@ -191,6 +203,8 @@ export async function readEventGlance(
           assignmentId: i.assignmentId,
           name: i.name,
           critical: i.critical,
+          kind: i.kind,
+          teamId: i.teamId,
           state: derived.state,
           reason: derived.reason,
           decideByAt: decideByAtFor(i.response, i.item, glanceEvent),
@@ -234,6 +248,10 @@ export async function readEventGlance(
 
   return {
     eventId: event.id,
+    // Phase 4: TAKE OVER's target and `mayHoldRow`'s host argument, taken from the FK
+    // rather than found by scanning the cards — see EventGlance's docstring for the
+    // legacy event on which that scan comes back empty.
+    hostPersonId: event.hostId,
     asOf: now.toISOString(),
     summary: summarisePeople(people.map((p) => p.state)),
     households: cards,

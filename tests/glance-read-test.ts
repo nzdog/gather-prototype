@@ -817,6 +817,48 @@ async function main() {
       )
     );
 
+    // ── PHASE 4 — the keys the action layer needs, and no others ─────────
+    //
+    // Every one is a JOIN KEY or a HOSTING DECISION, never a guest behaviour: `nudgeMark`
+    // is a mark Kate set (§10.3), and `role`/`teamId`/`kind` are the inputs the two SHARED
+    // rules already take — `mayHoldRow` (src/lib/assignment/same-team.ts) and `isChaseable`
+    // (src/lib/eligibility/nudge-mark.ts). They are carried so the surface can CALL those
+    // rules rather than write its own; the denylist below is unchanged and still holds.
+    const allPeople = [...payload.households.flatMap((h: any) => h.members), ...payload.unhoused];
+    assert(
+      'phase 4 payload',
+      'the payload names the host — TAKE OVER has a target that is not guessed from the cards',
+      ok(() => payload.hostPersonId === dbEvent.hostId)
+    );
+    assert(
+      'phase 4 payload',
+      'every person carries the mark, the role and the team — isChaseable and mayHoldRow’s inputs',
+      ok(
+        () =>
+          allPeople.length > 0 &&
+          allPeople.every(
+            (p: any) =>
+              'nudgeMark' in p && 'role' in p && 'teamId' in p && typeof p.role === 'string'
+          )
+      )
+    );
+    assert(
+      'phase 4 payload',
+      'and the mark is the DECISION Kate set — the don’t-chase person reports it, not a colour',
+      ok(() => allPeople.some((p: any) => p.nudgeMark === 'DONT_CHASE'))
+    );
+    assert(
+      'phase 4 payload',
+      'every item carries its kind and its team — the two halves of the same-team rule’s subject',
+      ok(() => {
+        const items = allPeople.flatMap((p: any) => p.items);
+        return (
+          items.length > 0 &&
+          items.every((i: any) => typeof i.kind === 'string' && typeof i.teamId === 'string')
+        );
+      })
+    );
+
     // A fence that passes on a missing payload is not a fence: every assertion below is
     // gated on the payload actually existing, so deleting the reader cannot turn it green.
     const keys = collectKeys(payload);
@@ -853,15 +895,37 @@ async function main() {
     const boardSrc = code('src/components/glance/GlanceBoard.tsx');
     const stripSrc = code('src/components/glance/strip.ts');
     const assistantSrc = code('src/components/glance/assistant.ts');
+    // Phase 4 puts an action layer and a tapped surface in the tree. Ruling 1's fence
+    // follows them: a behaviour field is no less present for arriving behind a tap.
+    const actionsSrc = code('src/lib/glance/actions.ts');
+    const surfaceSrc = code('src/components/glance/PersonSurface.tsx');
 
     assert(
       'Ruling 1 source',
-      'every glance source exists — the two modules, the route, the page, the view',
-      [stateSrc, readSrc, routeSrc, pageSrc, boardSrc, stripSrc, assistantSrc].every(
-        (src) => src.length > 0
-      )
+      'every glance source exists — the modules, the route, the page, the view, the actions',
+      [
+        stateSrc,
+        readSrc,
+        routeSrc,
+        pageSrc,
+        boardSrc,
+        stripSrc,
+        assistantSrc,
+        actionsSrc,
+        surfaceSrc,
+      ].every((src) => src.length > 0)
     );
-    const glanceSources = [stateSrc, readSrc, routeSrc, pageSrc, boardSrc, stripSrc, assistantSrc];
+    const glanceSources = [
+      stateSrc,
+      readSrc,
+      routeSrc,
+      pageSrc,
+      boardSrc,
+      stripSrc,
+      assistantSrc,
+      actionsSrc,
+      surfaceSrc,
+    ];
     const sourcesExist = glanceSources.every((src) => src.length > 0);
     for (const banned of BEHAVIOUR_DENYLIST) {
       const re = new RegExp(`\\b${banned}\\b`);

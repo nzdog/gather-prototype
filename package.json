@@ -72,7 +72,8 @@
     "test:host-never-messaged": "tsx tests/host-never-messaged-test.ts",
     "test:host-holds-items": "tsx tests/host-holds-items-test.ts",
     "test:glance-read": "tsx tests/glance-read-test.ts",
-    "test:glance-grid": "tsx --tsconfig tests/tsconfig.json tests/glance-grid-test.tsx"
+    "test:glance-grid": "tsx --tsconfig tests/tsconfig.json tests/glance-grid-test.tsx",
+    "test:glance-actions": "tsx tests/glance-actions-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

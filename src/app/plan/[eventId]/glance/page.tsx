@@ -45,7 +45,7 @@ export default async function GlancePage({ params }: { params: Promise<{ eventId
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { name: true },
+    select: { name: true, startDate: true },
   });
   if (!event) notFound();
 
@@ -53,7 +53,28 @@ export default async function GlancePage({ params }: { params: Promise<{ eventId
 
   return (
     <div className="min-h-screen bg-[#efede6]">
-      <GlanceBoard glance={glance} eventName={event.name} />
+      <GlanceBoard
+        glance={glance}
+        eventName={event.name}
+        /*
+          Phase 4. `auth.role` is the role the guard actually authenticated — HOST or
+          COHOST here — and it is what GTC-256 Ruling 9's self-pick is conditioned on. It
+          is passed down rather than re-derived: a second role lookup in the view is
+          exactly how the two would come to disagree.
+        */
+        actorRole={auth.role}
+        /*
+          The date the reminder copy needs, formatted here because the glance payload
+          deliberately carries no plan content and a date on the board would be a countdown
+          §3 refuses. Same locale and shape `PersonInviteDetailModal` already uses, so the
+          two doors into the same nudge route read alike.
+        */
+        eventDate={event.startDate.toLocaleDateString('en-NZ', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+        })}
+      />
     </div>
   );
 }

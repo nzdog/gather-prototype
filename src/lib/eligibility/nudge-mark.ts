@@ -70,3 +70,25 @@ export function isChaseable(mark: NudgeMark | string | null | undefined): boolea
  * `tests/nudge-cadence-controls-test.ts` asserts both files reference this symbol.
  */
 export const DONT_CHASE_SKIP_REASON = "Host marked don't-chase (Moment 4 §10.3)";
+
+/**
+ * Refusal message for the one path that must SAY NO rather than silently omit — the
+ * host's own press.
+ *
+ * GTC-192 RULING 19 (2026-09-01): "the manual-nudge route enforces Ruling 14 itself...
+ * no surface, old or new, can nudge a person the host said to leave alone." Until that
+ * ruling the mark suppressed only the two AUTOMATED paths above; a host pressing a button
+ * was never gated, and V1's composer could and did nudge a marked person.
+ *
+ * ⚠ DELIBERATELY A SECOND STRING, NOT A REUSE OF THE SKIP REASON ABOVE. They are for two
+ * different readers: `DONT_CHASE_SKIP_REASON` explains a sweep's own arithmetic to whoever
+ * is debugging it, and this is shown to Kate at the moment her press is refused. The same
+ * distinction `host-exclusion.ts` draws between `HOST_SKIP_REASON` and
+ * `HOST_NOT_ADDRESSABLE_MESSAGE`, for the same reason it draws it.
+ *
+ * It names where the mark is CHANGED, because Ruling 17 (same day) sealed the glance's
+ * grey strips on exactly that ground: "the don't-chase mark is revisited where it is set
+ * (the pre-flight), not here."
+ */
+export const DONT_CHASE_NOT_ADDRESSABLE_MESSAGE =
+  "This person is marked don't-chase and will not be nudged. Change the mark in the pre-flight first.";

@@ -334,10 +334,20 @@ async function main() {
 
     // ══ LAYER 2 — the rendered markup ════════════════════════════════════
     const board = (glance: any, eventName = 'Henderson family Christmas') =>
-      renderToStaticMarkup(createElement(GB.default, { glance, eventName }));
+      renderToStaticMarkup(
+        createElement(GB.default, {
+          glance,
+          eventName,
+          // Phase 4: the viewer's own authority and the date the remind copy needs. Both
+          // are the PAGE's to know — neither is board state, so neither is in the payload.
+          actorRole: 'HOST',
+          eventDate: 'Thursday 25 December',
+        })
+      );
 
     const mixed = {
       eventId: 'e1',
+      hostPersonId: 'p-kate',
       asOf: new Date('2026-08-31T12:00:00Z').toISOString(),
       summary: { needYou: 2, withGather: 1, settled: 2 },
       households: [
@@ -529,24 +539,76 @@ async function main() {
     // The phase-2 guard "no alert strip — unassigned criticals are phase 3" is RETIRED
     // here rather than deleted quietly: it held its line until phase 3 arrived, and the
     // Ruling 8 assertions below are what replaces it.
+    // The two phase-2 guards here — "strips are NOT interactive" and "nothing on the
+    // surface is a button" — are RETIRED by phase 4 rather than deleted quietly. They held
+    // their line until tap-for-actions arrived; what replaces them is narrower and says
+    // the same thing about everything that is still not a door: ONLY REDS OPEN.
+    /** The tag name of the element whose opening tag contains the character at `at`. */
+    const tagAt = (src: string, at: number) =>
+      src.slice(src.lastIndexOf('<', at)).split(/[\s>]/)[0];
+    /** Every index at which `needle` occurs in `src`. */
+    const everyAt = (src: string, needle: string) => {
+      const out: number[] = [];
+      for (let i = src.indexOf(needle); i >= 0; i = src.indexOf(needle, i + 1)) out.push(i);
+      return out;
+    };
+
     assert(
-      'phase 4 held back',
-      'strips are NOT interactive — no button, no handler, no link INSIDE a strip',
+      'phase 4',
+      'a RED strip is a door — a real button, so it is reachable by tap AND by keyboard',
       ok(() => {
-        const strips = html.split('<div data-strip-state').slice(1);
+        const reds = everyAt(html, 'data-strip-state="RED"');
+        return reds.length === 2 && reds.every((at) => tagAt(html, at) === '<button');
+      })
+    );
+    assert(
+      'phase 4',
+      'and EVERY red is one — two reds on this board, two doors, no red left undoored',
+      ok(() => {
+        const doors = everyAt(html, 'data-strip-door');
+        return doors.length === 2 && doors.every((at) => tagAt(html, at) === '<button');
+      })
+    );
+    assert(
+      'phase 4',
+      'amber, green and the two greys are NOT — no button, no handler, no link on any of them',
+      ok(() => {
+        const others = ['AMBER', 'GREEN', 'OUT', 'NOT_CHASED'].flatMap((state) =>
+          html.split(`data-strip-state="${state}"`).slice(1)
+        );
+        // GATED ON THE POSITIVE CASE. "Nothing here is a door" is trivially true of a
+        // board with no doors at all, so this cannot go green until the reds have theirs.
         return (
-          strips.length > 0 &&
-          strips.every((chunk) => {
+          html.includes('data-strip-door') &&
+          others.length === 6 &&
+          others.every((chunk) => {
             const el = chunk.slice(0, chunk.indexOf('</div>'));
-            return !/<button|<a |onclick|role="button"/i.test(el);
+            return !/<button|<a |onclick|role="button"|data-strip-door/i.test(el);
           })
         );
       })
     );
     assert(
-      'phase 4 held back',
-      'and nothing on the surface is a button — Ruling 8’s door is a link out, not an action',
-      ok(() => html.length > 0 && !/<button|onclick|role="button"/i.test(html))
+      'phase 4',
+      'the CLOSED surface shows state only — no action affordance renders until a red is tapped',
+      ok(
+        () =>
+          html.includes('data-strip-door') &&
+          !/Remind|Move to|I’ll do it|Take over|Reassign/i.test(html)
+      )
+    );
+    assert(
+      'phase 7 held back',
+      'the red strip is NOT styled as a button — same tint, same text, no hover, no cursor',
+      ok(() => {
+        const at = html.indexOf('data-strip-door');
+        const el = html.slice(html.lastIndexOf('<', at), html.indexOf('>', at));
+        return (
+          at > 0 &&
+          el.includes(SP.STRIP_TONE.RED.className) &&
+          !/hover:|cursor-|chevron|→|›/.test(html)
+        );
+      })
     );
 
     // ══ PHASE 3 — Ruling 8's alert strip ═════════════════════════════════

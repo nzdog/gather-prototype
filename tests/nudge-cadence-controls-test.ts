@@ -31,6 +31,11 @@
  *  4. Ruling 3 — don't-chase suppresses the PROXY path too, gated AFTER the child rule
  *     and AFTER opt-out, never through either.
  *  5. Structural — the selects, and the two paths sharing one reason constant.
+ *  8. Ruling 19 (GTC-192, 2026-09-01) — the THIRD path: the host's own press. The mark
+ *     was a rule about the automated sweeps until this ruling; it is now a rule about the
+ *     system, so `resolveManualNudgeRecipient` refuses a marked person beside the child
+ *     and host gates, and BOTH doors into that route — V1's composer and the Moment 4
+ *     glance — refuse with it.
  *
  * `now` IS INJECTED for the direct sweep, so day boundaries are hit exactly rather than
  * approximately. `findProxyNudgeCandidates` takes no clock and needs none — it has no
@@ -49,6 +54,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { findNudgeCandidates } from '../src/lib/sms/nudge-eligibility';
 import { findProxyNudgeCandidates } from '../src/lib/sms/proxy-nudge-eligibility';
+import { resolveManualNudgeRecipient } from '../src/lib/sms/manual-nudge-recipient';
 
 const prisma = new PrismaClient();
 
@@ -554,6 +560,107 @@ async function main() {
       proxy2Off !== undefined &&
         proxy2Chase !== undefined &&
         proxy2Off.reason !== proxy2Chase.reason
+    );
+
+    // ══ LAYER 8 — Ruling 19: the manual path, the host's own press ══════
+    //
+    // NUMBERED 8 BECAUSE 6 AND 7 ARE TAKEN. This file's layer numbers were assigned as
+    // layers were added and are already out of sequence in the source (6 sits above 4);
+    // renumbering them is churn in a file this phase only extends.
+    //
+    // GTC-192's Ruling 19 (2026-09-01), on the founder's own reading of Ruling 14: "no
+    // surface, old or new, can nudge a person the host said to leave alone." Until this
+    // ruling the mark suppressed the two AUTOMATED paths above and had never gated a host
+    // pressing a button — so V1's composer could nudge a marked person, and it did.
+    //
+    // ⚠ CHANGING V1's BEHAVIOUR IS THE POINT, NOT A SIDE EFFECT. The gate is in
+    // `resolveManualNudgeRecipient`, which is the single thing both doors into
+    // POST /api/events/[id]/people/[personId]/nudge go through, so there is no second
+    // place for the two to disagree.
+    const manualMarked = await resolveManualNudgeRecipient(evStandard.id, dontChase.person.id);
+    const manualControl = await resolveManualNudgeRecipient(evStandard.id, control.person.id);
+    const manualGentle = await resolveManualNudgeRecipient(evStandard.id, gentle.person.id);
+
+    assert(
+      'layer8 ruling19',
+      "MANUAL: a DON'T-CHASE person is REFUSED the host's own nudge — 403, the child gate's shape",
+      manualMarked.ok === false && manualMarked.status === 403
+    );
+    assert(
+      'layer8 ruling19',
+      'MANUAL: and the refusal NAMES the mark, so the host knows which of her own settings did it',
+      manualMarked.ok === false && NAMES_DONT_CHASE.test(manualMarked.error)
+    );
+    assert(
+      'layer8 ruling19',
+      'MANUAL control: an unmarked person still resolves — the fixture reaches the path',
+      manualControl.ok === true
+    );
+    assert(
+      'layer8 ruling19',
+      'MANUAL: GENTLE is a volume control, not an off-switch — it is NOT refused',
+      manualGentle.ok === true
+    );
+
+    // ORDERING — the child rule must still fire FIRST, exactly as it does on the proxy
+    // path above. A person who is BOTH a CHILD and DONT_CHASE reports the CHILD reason;
+    // §10.6 is absolute and must not become reachable-through by a gate added later.
+    const manualChildMarked = await makePerson(evStandard.id, 'manual child+dont-chase', {
+      role: 'CHILD',
+      mark: 'DONT_CHASE',
+    });
+    const manualChild = await resolveManualNudgeRecipient(
+      evStandard.id,
+      manualChildMarked.person.id
+    );
+    assert(
+      'layer8 ordering',
+      'MANUAL: a CHILD who is also marked reports the CHILD reason — §10.6 is not reachable-through',
+      manualChild.ok === false && /child/i.test(manualChild.error)
+    );
+
+    // ── Ruling 19, structural: ONE definition, and BOTH doors ────────────
+    const manualSrc = code('src/lib/sms/manual-nudge-recipient.ts');
+    const nudgeRouteSrc = code('src/app/api/events/[id]/people/[personId]/nudge/route.ts');
+    const v1ComposerSrc = code('src/components/plan/NudgeComposer.tsx');
+    const glanceActionsSrc = code('src/lib/glance/actions.ts');
+
+    assert(
+      'layer8 structural',
+      'MANUAL: the gate asks isChaseable — the same predicate both sweeps ask',
+      manualSrc.length > 0 && /isChaseable/.test(manualSrc)
+    );
+    // THE QUOTED LITERAL, NOT THE BARE WORD. A second definition of §10.3's off-switch
+    // looks like `mark !== 'DONT_CHASE'`; importing a constant NAMED after the mark from
+    // the module that owns it is the opposite of that, and a bare-substring test cannot
+    // tell them apart. The mutation this guards against still trips it.
+    const DONT_CHASE_LITERAL = /['"`]DONT_CHASE['"`]/;
+    assert(
+      'layer8 structural',
+      "MANUAL: and never spells 'DONT_CHASE' as a literal — that would be a second definition",
+      manualSrc.length > 0 && !DONT_CHASE_LITERAL.test(manualSrc)
+    );
+    assert(
+      'layer8 structural',
+      'MANUAL: the route resolves the recipient BEFORE it reaches any provider',
+      nudgeRouteSrc.length > 0 &&
+        nudgeRouteSrc.indexOf('resolveManualNudgeRecipient') > 0 &&
+        nudgeRouteSrc.indexOf('resolveManualNudgeRecipient') <
+          Math.min(nudgeRouteSrc.indexOf('sendSms('), nudgeRouteSrc.indexOf('sendNudgeEmail('))
+    );
+    // "Assert the V1 button path refuses too." There is no second route to gate: V1's
+    // composer and the Moment 4 glance build the SAME URL, so the refusal above covers
+    // both by construction. This is the assertion that keeps it that way.
+    const NUDGE_PATH = /\/api\/events\/\$\{[^}]+\}\/people\/\$\{[^}]+\}\/nudge/;
+    assert(
+      'layer8 structural',
+      "V1: the composer's button posts to the very route the gate now guards",
+      v1ComposerSrc.length > 0 && NUDGE_PATH.test(v1ComposerSrc)
+    );
+    assert(
+      'layer8 structural',
+      'GLANCE: and so does the Moment 4 surface — one gate, both doors, no second path',
+      glanceActionsSrc.length > 0 && NUDGE_PATH.test(glanceActionsSrc)
     );
 
     // ══ LAYER 5 — structural: the selects, and one shared reason ════════

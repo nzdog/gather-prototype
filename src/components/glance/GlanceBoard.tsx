@@ -11,11 +11,18 @@
  *
  * ── WHAT IS DELIBERATELY ABSENT ───────────────────────────────────────────────
  *
- * Tap-for-actions is PHASE 4 — the strips are not buttons and carry no handler, and the
- * only link on the surface is Ruling 8's door, which leaves the board rather than acting on
- * it. The replay and polling are PHASE 6. The
- * amber clock-line and the strip-as-button shape are PHASE 7's variants, and shipping
- * either as the default would settle an unruled decision by stealth.
+ * ONLY A RED IS A DOOR (phase 4). A red strip is a real `<button>` that opens
+ * `PersonSurface`; amber, green and both greys carry no handler and no link at all. §3 puts
+ * the actions behind a tap and red is the state that has one — an amber is Gather's move,
+ * a green is nobody's, and the two greys are the states Kate has already settled.
+ *
+ * ⚠ THE RED STRIP IS NOT STYLED AS A BUTTON. It is a button ELEMENT so that the tap works
+ * and so does the keyboard; its tint, text and padding are unchanged. The strip-as-button
+ * SHAPE — border, chevron, hover state — is PHASE 7's variant, and shipping it as the
+ * default would settle an unruled decision by stealth. So is the amber clock-line.
+ *
+ * The replay and polling are PHASE 6: nothing here refreshes itself, and an action that
+ * leaves the board stale says so rather than repainting.
  *
  * ⚠ THE MOCKUP'S META LINE CARRIES A COUNTDOWN ("12 days to go") AND THIS DOES NOT.
  * Moment 4 §3 refuses a countdown outright, and Ruling 1's general test — "anything that
@@ -24,7 +31,10 @@
  */
 
 import type { EventGlance, GlanceHousehold, GlancePerson } from '@/lib/glance/state';
+import type { AssignActorRole } from '@/lib/assignment/same-team';
+import type { GlanceAssignable } from '@/lib/glance/actions';
 import { assistantMessage, findCriticalRedHits } from './assistant';
+import PersonSurface, { type PersonSurfaceProps } from './PersonSurface';
 import {
   criticalStripClauses,
   criticalStripText,
@@ -40,25 +50,88 @@ import {
 interface GlanceBoardProps {
   glance: EventGlance;
   eventName: string;
+  /**
+   * The viewer's own authority on this event, straight from `requireEventRole`. Phase 4
+   * needs it because GTC-256 Ruling 9's self-pick is conditioned on the ACTOR, not only on
+   * the assignee — a coordinator gets no exemption. It is a prop rather than a payload
+   * field because it is a fact about who is looking, not about the board.
+   */
+  actorRole: AssignActorRole;
+  /** Formatted date for the reminder copy. The page owns the formatting. */
+  eventDate: string;
 }
 
 /**
- * One person's strip.
+ * What the surface hands to `reassignCandidates` — every person on the event, filtered by
+ * nothing.
  *
- * Ruling 4: a red carries its why on the same line; everything else is the bare name.
- * `data-strip-state` is the assertable form of the tint — a test that reads a hex is
- * reading the design, and a test that reads this is reading the decision.
+ * ⚠ NOTHING IS FILTERED OUT HERE, AND THAT IS THE POINT. `mayHoldRow`
+ * (`src/lib/assignment/same-team.ts`) is the ONLY eligibility rule an assignment has, and
+ * it is applied per row inside the surface. In particular a CHILD-role person stays in the
+ * pool: GTC-207 pins that a "kid with a job" is assignment-eligible by design and that the
+ * §10.6 message exclusion must never be borrowed as an assignment gate. Adding a filter
+ * here would be that mistake, one layer further out.
  */
-function Strip({ person }: { person: GlancePerson }) {
+function assignablePool(glance: EventGlance): GlanceAssignable[] {
+  return [...glance.households.flatMap((h) => h.members), ...glance.unhoused].map((p) => ({
+    personId: p.personId,
+    name: p.name,
+    role: p.role,
+    teamId: p.teamId,
+    // Ruling 18 reads this, and only for OUT. Carried here rather than filtered here so the
+    // decision stays in one place, next to the same-team rule it sits above.
+    state: p.state,
+  }));
+}
+
+/**
+ * What every strip says, whichever element carries it.
+ *
+ * Ruling 4: a red carries its why on the same line; everything else is the bare name. Held
+ * apart from the element so a door and a plain strip cannot drift into looking different.
+ */
+function StripBody({ person }: { person: GlancePerson }) {
   const why = whyLineFor(person);
   return (
-    <div
-      data-strip-state={person.state}
-      className={`rounded-md px-2.5 py-1.5 text-[13px] leading-snug ${STRIP_TONE[person.state].className}`}
-    >
+    <>
       <span>{stripLabel(person)}</span>
       {why ? <span className="font-normal">{` — ${why}`}</span> : null}
-    </div>
+    </>
+  );
+}
+
+/**
+ * One person's strip — a door if it is red, a label if it is not.
+ *
+ * `data-strip-state` is the assertable form of the tint — a test that reads a hex is
+ * reading the design, and a test that reads this is reading the decision. Phase 4 adds
+ * `data-strip-door` alongside it, on the reds only.
+ *
+ * ⚠ THE TWO BRANCHES SHARE ONE CLASS STRING. The door is a `<button>` and the rest are
+ * `<div>`s, and they must be indistinguishable to look at: `block w-full text-left` is the
+ * whole difference, undoing the element's own inline centring. Anything more is phase 7.
+ */
+function Strip({
+  person,
+  action,
+}: {
+  person: GlancePerson;
+  action: Omit<PersonSurfaceProps, 'person' | 'className' | 'children'>;
+}) {
+  const className = `rounded-md px-2.5 py-1.5 text-[13px] leading-snug ${STRIP_TONE[person.state].className}`;
+
+  if (person.state !== 'RED') {
+    return (
+      <div data-strip-state={person.state} className={className}>
+        <StripBody person={person} />
+      </div>
+    );
+  }
+
+  return (
+    <PersonSurface person={person} className={className} {...action}>
+      <StripBody person={person} />
+    </PersonSurface>
   );
 }
 
@@ -70,7 +143,13 @@ function Strip({ person }: { person: GlancePerson }) {
  * ("Turner", "Aunt June") are a naming derivation no data supports, so the real name is
  * shown rather than a guess at a family name.
  */
-function HouseholdCard({ household }: { household: GlanceHousehold }) {
+function HouseholdCard({
+  household,
+  action,
+}: {
+  household: GlanceHousehold;
+  action: Omit<PersonSurfaceProps, 'person' | 'className' | 'children'>;
+}) {
   return (
     <div data-household-card={household.householdId} className="rounded-lg bg-[#f5f4ef] p-2.5">
       <p className="m-0 mb-1.5 text-[12px] font-medium text-[#5f5e5a]">
@@ -78,14 +157,25 @@ function HouseholdCard({ household }: { household: GlanceHousehold }) {
       </p>
       <div className="flex flex-col gap-1">
         {household.members.map((person) => (
-          <Strip key={person.personEventId} person={person} />
+          <Strip key={person.personEventId} person={person} action={action} />
         ))}
       </div>
     </div>
   );
 }
 
-export default function GlanceBoard({ glance, eventName }: GlanceBoardProps) {
+export default function GlanceBoard({ glance, eventName, actorRole, eventDate }: GlanceBoardProps) {
+  // Everything a red strip's door needs, assembled once. The pool is the same array for
+  // every island; see PersonSurface's header for the trade that buys.
+  const action = {
+    eventId: glance.eventId,
+    eventName,
+    eventDate,
+    hostPersonId: glance.hostPersonId,
+    actorRole,
+    pool: assignablePool(glance),
+  };
+
   const { lead, rest } = summaryClauses(glance.summary);
   const critical = criticalStripClauses(glance.unassignedCritical);
   const door = critical ? unassignedDoorText(glance.unassignedOrdinaryCount) : null;
@@ -175,7 +265,7 @@ export default function GlanceBoard({ glance, eventName }: GlanceBoardProps) {
         */}
         <div className="mt-4 grid items-start gap-2.5 [grid-template-columns:repeat(auto-fit,minmax(160px,1fr))]">
           {glance.households.map((household) => (
-            <HouseholdCard key={household.householdId} household={household} />
+            <HouseholdCard key={household.householdId} household={household} action={action} />
           ))}
 
           {/*
@@ -191,7 +281,7 @@ export default function GlanceBoard({ glance, eventName }: GlanceBoardProps) {
               </p>
               <div className="flex flex-col gap-1">
                 {glance.unhoused.map((person) => (
-                  <Strip key={person.personEventId} person={person} />
+                  <Strip key={person.personEventId} person={person} action={action} />
                 ))}
               </div>
             </div>

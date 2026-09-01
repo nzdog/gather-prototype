@@ -111,6 +111,15 @@ export interface GlanceItemInput {
   critical: boolean;
   /** `Assignment.response`. */
   response: string;
+  /**
+   * `Item.kind` and `Item.teamId` — phase 4. NOT colour inputs: nothing below reads
+   * either, and a mutation that made a TASK row a different colour would fail the suite.
+   * They are carried because they are the two halves of `SameTeamItem`
+   * (`src/lib/assignment/same-team.ts`), so the tapped surface can CALL GTC-171's rule
+   * rather than write a second copy of it that is free to drift.
+   */
+  kind: string;
+  teamId: string;
   item: DecideByItem;
 }
 
@@ -140,6 +149,9 @@ export interface GlanceItem {
   assignmentId: string;
   name: string;
   critical: boolean;
+  /** Phase 4: `SameTeamItem`'s two fields, so REASSIGN's picker asks the shared rule. */
+  kind: string;
+  teamId: string;
   state: ItemState;
   reason: ItemReason;
   /**
@@ -155,6 +167,25 @@ export interface GlancePerson {
   name: string;
   isHost: boolean;
   householdRole: string | null;
+  /**
+   * `PersonEvent.role` and `PersonEvent.teamId` — phase 4, and the other half of
+   * `SameTeamSubject`. `isHost` above is this module's own derivation and is deliberately
+   * NOT substituted for `role`: `mayHoldRow` takes the raw row, and handing it a
+   * reconstructed one would be this module quietly re-deciding who the host is.
+   */
+  role: string;
+  teamId: string | null;
+  /**
+   * `PersonEvent.nudgeMark` — §10.3's hosting judgement, phase 4.
+   *
+   * A DECISION KATE MADE, NOT SOMETHING A GUEST DID, so Ruling 1's fence is untouched by
+   * it. It is on the wire because `state` is a lossy encoding of it: Ruling 14 greys only
+   * a person whose worst row is not green, so a settled marked person reads GREEN and the
+   * mark would be invisible to a caller reading colour alone. The action layer asks
+   * `isChaseable` (`src/lib/eligibility/nudge-mark.ts`) — the same predicate the nudge
+   * sweeps ask — rather than inferring the mark back out of the tint.
+   */
+  nudgeMark: NudgeMark | null;
   state: PersonState;
   /**
    * Ruling 4: reds carry their why. Machine-readable here; the strip's wording is phase
@@ -216,6 +247,15 @@ export interface GlanceUnassignedItem {
 
 export interface EventGlance {
   eventId: string;
+  /**
+   * `Event.hostId` — a **Person** id (schema.prisma, `host Person @relation("EventHost")`).
+   *
+   * Phase 4: TAKE OVER's target, and `mayHoldRow`'s `hostPersonId`. Named rather than
+   * recovered by scanning the cards for `isHost`, because on events created before
+   * [[GTC-256]] no `PersonEvent` carries `role: HOST` at all — the scan would come back
+   * empty and the self-pick exemption would silently disappear on exactly those events.
+   */
+  hostPersonId: string;
   /** The instant the states were derived against, so a caller can reason about staleness. */
   asOf: string;
   summary: GlanceSummary;
