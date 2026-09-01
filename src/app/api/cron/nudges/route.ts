@@ -26,10 +26,12 @@ export async function GET(request: NextRequest) {
   try {
     const result = await runNudgeScheduler();
 
-    return NextResponse.json({
-      success: true,
-      ...result,
-    });
+    // GTC-214: `success` is DERIVED, never asserted. This route used to return
+    // `{ success: true, ...result }` with HTTP 200 even when the run reported
+    // `smsEnabled: false` or its catch had fired — a monitor watching the status code or
+    // `success` saw a healthy cron that had sent nothing. 500 rather than 503 because it
+    // is the status this route's error path already uses, so alerting needs no change.
+    return NextResponse.json({ success: result.ok, ...result }, { status: result.ok ? 200 : 500 });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[Cron Nudges] Error:', errorMessage);

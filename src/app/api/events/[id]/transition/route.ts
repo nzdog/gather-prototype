@@ -1,22 +1,16 @@
 // POST /api/events/[id]/transition
-// Transitions event between statuses:
-// - DRAFT → CONFIRMING: Runs gate check, creates snapshot, locks structure
-// - CONFIRMING → FROZEN: Checks freeze readiness, returns warnings (doesn't block)
+// The ONE authored transition that survives the send-lock model (GTC-169):
+// - DRAFT → CONFIRMING: Runs gate check, creates snapshot, locks structure,
+//   generates access tokens
 // SECURITY: Requires HOST role, derives actorId from authenticated session
 
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  transitionToConfirming,
-  checkFreezeReadiness,
-  canTransition,
-  logAudit,
-} from '@/lib/workflow';
+import { transitionToConfirming } from '@/lib/workflow';
 import { requireEventRole } from '@/lib/auth/guards';
 import { prisma } from '@/lib/prisma';
 
 export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id: eventId } = await context.params;
-  const body = await _request.json();
 
   // SECURITY: Auth check MUST run first and MUST NOT be in try/catch that returns 500
   // Invalid/missing auth must return 401, not 500
@@ -84,115 +78,21 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       });
     }
 
-    // Handle CONFIRMING → FROZEN transition
-    if (event.status === 'CONFIRMING') {
-      // Check freeze readiness (warnings only, doesn't block)
-      const freezeCheck = await checkFreezeReadiness(eventId);
+    // GTC-169 (A3a): the CONFIRMING → FROZEN and FROZEN → COMPLETE branches were
+    // DELETED. Neither destination exists in the send-lock model:
+    //
+    //   - The press is not a transition. It stamps Event.sentAt (see
+    //     /api/events/[id]/confirm-invites-sent, and GTC-189 / I2 for the real
+    //     Hinge). FROZEN was a second ceremony bolted on after the send that
+    //     already existed.
+    //   - COMPLETE is derived from the calendar, not declared. "No one declares it.
+    //     The calendar does the transition, silently" (Moment 4 §10.1). See
+    //     isComplete() in src/lib/lifecycle.ts.
+    //
+    // The <80%-compliance-requires-a-freeze-reason rule went with them: demanding
+    // justification at a threshold is what Moment 4 §7 forbids outright.
 
-      // Validate freeze reason requirement
-      const freezeReason = body.freezeReason as string | undefined;
-
-      if (freezeCheck.complianceRate < 80) {
-        if (!freezeReason) {
-          return NextResponse.json(
-            { error: 'Reason required when freezing below 80% compliance' },
-            { status: 400 }
-          );
-        }
-
-        // Validate reason value
-        const validReasons = ['time_pressure', 'handling_offline', 'small_event', 'other'];
-        if (!validReasons.includes(freezeReason)) {
-          return NextResponse.json({ error: 'Invalid freeze reason' }, { status: 400 });
-        }
-      }
-
-      // Validate transition is allowed
-      if (!canTransition(event.status, 'FROZEN')) {
-        return NextResponse.json(
-          { error: 'Can only freeze from CONFIRMING status' },
-          { status: 400 }
-        );
-      }
-
-      // Perform transition
-      await prisma.$transaction(async (tx) => {
-        await tx.event.update({
-          where: { id: eventId },
-          data: {
-            status: 'FROZEN',
-            frozenAt: new Date(),
-            complianceAtFreeze: freezeCheck.complianceRate,
-            freezeReason: freezeCheck.complianceRate < 80 ? freezeReason : null,
-          },
-        });
-
-        await logAudit(tx, {
-          eventId,
-          actorId,
-          actionType: 'TRANSITION_TO_FROZEN',
-          targetType: 'Event',
-          targetId: eventId,
-          details: `Transitioned event to FROZEN status. Compliance: ${freezeCheck.complianceRate}%. Warnings: ${freezeCheck.warnings.length}${freezeReason ? `. Reason: ${freezeReason}` : ''}`,
-        });
-      });
-
-      // Fetch updated event
-      const updatedEvent = await prisma.event.findUnique({
-        where: { id: eventId },
-      });
-
-      return NextResponse.json({
-        success: true,
-        event: updatedEvent,
-        freezeWarnings: freezeCheck.warnings,
-        complianceRate: freezeCheck.complianceRate,
-        message: 'Event successfully transitioned to FROZEN status',
-      });
-    }
-
-    // Handle FROZEN → COMPLETE transition (wrap-up)
-    // Note: The primary wrap-up flow is POST /api/events/[id]/wrap-up which
-    // also generates WrapUpLinks. This transition handler is for status-only use.
-    if (event.status === 'FROZEN' && body.targetStatus === 'COMPLETE') {
-      if (!canTransition(event.status, 'COMPLETE')) {
-        return NextResponse.json(
-          { error: 'Cannot transition from FROZEN to COMPLETE' },
-          { status: 400 }
-        );
-      }
-
-      await prisma.$transaction(async (tx) => {
-        await tx.event.update({
-          where: { id: eventId },
-          data: {
-            status: 'COMPLETE',
-            wrappedAt: new Date(),
-          },
-        });
-
-        await logAudit(tx, {
-          eventId,
-          actorId,
-          actionType: 'TRANSITION_TO_COMPLETE',
-          targetType: 'Event',
-          targetId: eventId,
-          details: 'Transitioned event to COMPLETE status via transition endpoint.',
-        });
-      });
-
-      const updatedEvent = await prisma.event.findUnique({
-        where: { id: eventId },
-      });
-
-      return NextResponse.json({
-        success: true,
-        event: updatedEvent,
-        message: 'Event successfully transitioned to COMPLETE status',
-      });
-    }
-
-    // Invalid transition
+    // Invalid transition — DRAFT → CONFIRMING is the only one left.
     return NextResponse.json(
       { error: `Cannot transition from ${event.status} status` },
       { status: 400 }

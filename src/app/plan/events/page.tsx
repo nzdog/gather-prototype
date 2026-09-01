@@ -19,6 +19,8 @@ interface Event {
     teams: number;
     days: number;
   };
+  /** GTC-233: present on V2 events; drives the row link to V2's own route. */
+  setup: { id: string } | null;
 }
 
 export default function EventsPage() {
@@ -57,6 +59,7 @@ export default function EventsPage() {
     const styles = {
       DRAFT: 'bg-gray-100 text-gray-800',
       CONFIRMING: 'bg-sage-100 text-sage-800',
+      // Legacy enum key, shown as SENT (GTC-197). GTC-199 drops the value itself.
       FROZEN: 'bg-sage-100 text-sage-800',
       COMPLETE: 'bg-green-100 text-green-800',
     };
@@ -223,7 +226,9 @@ export default function EventsPage() {
             {filteredEvents.map((event) => (
               <div
                 key={event.id}
-                onClick={() => router.push(`/plan/${event.id}`)}
+                onClick={() =>
+                  router.push(event.setup ? `/plan/${event.id}/setup` : `/plan/${event.id}`)
+                }
                 className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition cursor-pointer"
               >
                 <div className="flex items-start justify-between">

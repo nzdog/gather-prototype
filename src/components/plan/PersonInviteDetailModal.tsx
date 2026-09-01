@@ -27,12 +27,18 @@ interface PersonDetail {
   inviteAnchorAt: string | null;
   openedAt: string | null;
   respondedAt: string | null;
-  response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | null;
+  response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE' | null;
   hasPhone: boolean;
   smsOptedOut: boolean;
   canReceiveSms: boolean;
-  nudge24hSentAt: string | null;
-  nudge48hSentAt: string | null;
+  // GTC-178 (E1, phase 4): sourced from PersonEvent, not Person.
+  // GTC-179 (E2, phase 5): the labels below are ORDINAL. They named days 4 and 7 until
+  // the cadence became adjustable per event and per person, which made a day number wrong
+  // for any host who picked anything but the default. The columns were named ordinally
+  // for this reason (GTC-178 Ruling 7); the copy now matches. Each row already prints its
+  // own timestamp, so nothing is lost by dropping the day from the label.
+  firstNudgeSentAt: string | null;
+  secondNudgeSentAt: string | null;
   lastHostNudgeAt: string | null;
   claimedAt: string | null;
   eventName: string | null;
@@ -195,7 +201,9 @@ export function PersonInviteDetailModal({ eventId, personId, onClose, onUpdate }
                     ? 'Accepted'
                     : person.response === 'DECLINED'
                       ? 'Declined'
-                      : 'Response pending'
+                      : person.response === 'MAYBE'
+                        ? 'Maybe'
+                        : 'Response pending'
                 }
                 time={person.respondedAt}
                 color={
@@ -203,32 +211,34 @@ export function PersonInviteDetailModal({ eventId, personId, onClose, onUpdate }
                     ? 'green'
                     : person.response === 'DECLINED'
                       ? 'red'
-                      : 'gray'
+                      : person.response === 'MAYBE'
+                        ? 'amber'
+                        : 'gray'
                 }
               />
             </div>
           </div>
 
           {/* Reminders */}
-          {(person.nudge24hSentAt || person.nudge48hSentAt || person.lastHostNudgeAt) && (
+          {(person.firstNudgeSentAt || person.secondNudgeSentAt || person.lastHostNudgeAt) && (
             <div className="border rounded-lg p-3">
               <h3 className="font-medium text-sm text-gray-700 mb-2">Reminders</h3>
               <div className="space-y-2">
-                {person.nudge24hSentAt && (
+                {person.firstNudgeSentAt && (
                   <div className="flex items-center gap-2 text-sm">
                     <Bell className="w-4 h-4 text-yellow-600" />
-                    <span>24h auto-reminder sent</span>
+                    <span>First auto-reminder sent</span>
                     <span className="text-gray-500">
-                      {new Date(person.nudge24hSentAt).toLocaleString()}
+                      {new Date(person.firstNudgeSentAt).toLocaleString()}
                     </span>
                   </div>
                 )}
-                {person.nudge48hSentAt && (
+                {person.secondNudgeSentAt && (
                   <div className="flex items-center gap-2 text-sm">
                     <Bell className="w-4 h-4 text-amber-600" />
-                    <span>48h auto-reminder sent</span>
+                    <span>Second auto-reminder sent</span>
                     <span className="text-gray-500">
-                      {new Date(person.nudge48hSentAt).toLocaleString()}
+                      {new Date(person.secondNudgeSentAt).toLocaleString()}
                     </span>
                   </div>
                 )}
@@ -306,6 +316,9 @@ export function PersonInviteDetailModal({ eventId, personId, onClose, onUpdate }
           {person.response === 'DECLINED' && (
             <p className="text-center text-red-600 font-medium">✗ Declined</p>
           )}
+          {person.response === 'MAYBE' && (
+            <p className="text-center text-amber-600 font-medium">Maybe</p>
+          )}
         </div>
       </div>
     </div>
@@ -323,6 +336,13 @@ function StatusBadge({ status, response }: { status: string; response: string | 
   if (response === 'DECLINED') {
     return (
       <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Declined</span>
+    );
+  }
+  // GTC-174 (D1): a maybe outranks the send/open status badge — it is a decision, and
+  // Hinge §6's rule is that decisions surface while behaviour stays the system's business.
+  if (response === 'MAYBE') {
+    return (
+      <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Maybe</span>
     );
   }
 
@@ -443,6 +463,8 @@ function TimelineItem({
     green: 'bg-green-100 text-green-700',
     red: 'bg-red-100 text-red-700',
     purple: 'bg-purple-100 text-purple-700',
+    // GTC-174 (D1): the maybe colour. Hinge §8 rules it yellow — the system can work it.
+    amber: 'bg-amber-100 text-amber-700',
     gray: 'bg-gray-100 text-gray-500',
   };
 

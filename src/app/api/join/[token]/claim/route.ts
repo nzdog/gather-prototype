@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { isSent } from '@/lib/lifecycle';
 import { logInviteEvent } from '@/lib/invite-events';
 import { headers } from 'next/headers';
+import { isHostMembership } from '@/lib/eligibility/host-exclusion';
 
 export async function POST(request: NextRequest, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;
@@ -29,6 +31,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
     select: {
       id: true,
       status: true,
+      sentAt: true,
+      endDate: true,
       hostId: true,
     },
   });
@@ -37,7 +41,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
     return NextResponse.json({ error: 'Invalid or disabled invite link' }, { status: 404 });
   }
 
-  if (event.status !== 'CONFIRMING' && event.status !== 'FROZEN') {
+  // Responses are accepted once the plan is built, and stay open through the send.
+  // Someone claiming a name post-send becomes a mini-send (Hinge §2, gap #5).
+  if (event.status !== 'CONFIRMING' && !isSent(event)) {
     return NextResponse.json({ error: 'This event is not accepting responses' }, { status: 400 });
   }
 
@@ -54,6 +60,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
     select: {
       id: true,
       name: true,
+      // GTC-256 (phase 3): the membership's role, for the host check below. Scoped to
+      // this event, which @@unique([personId, eventId]) makes exactly one row.
+      eventMemberships: {
+        where: { eventId: event.id },
+        select: { role: true },
+      },
       tokens: {
         where: {
           eventId: event.id,
@@ -71,6 +83,34 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
   });
 
   if (!person) {
+    return NextResponse.json({ error: 'Person not found in this event' }, { status: 404 });
+  }
+
+  /*
+   * GTC-256 (phase 3), RULING 5 — THE HOST'S NAME IS NOT CLAIMABLE.
+   *
+   * "An excluded list is not a refusing endpoint." The join PAGE already omits her — its
+   * list filters `role: 'PARTICIPANT'` — and that protects nothing here, because this
+   * endpoint is unauthenticated and takes `personId` from the request body. Measured
+   * before this guard: an unauthenticated POST carrying her id returned HTTP 200 with
+   * `redirectPrefix: 'h'` and HER HOST TOKEN in the body, via the non-participant
+   * fallback below. With a stale PARTICIPANT token present it did worse — a full claim,
+   * stamping `reachabilityTier: SHARED` and `claimedViaSharedLink` onto the host's own
+   * membership row.
+   *
+   * 404, NOT 403, AND THE WORDING IS THE UNKNOWN-PERSON ONE. This endpoint has no
+   * authentication at all, so a distinct status or message would confirm that a guessed
+   * `personId` names the host of this event — turning the refusal into an oracle. She is
+   * simply not a claimable name here, which is what Ruling 5 says she is.
+   *
+   * SCOPED TO THE HOST. The COORDINATOR fallback immediately below is untouched and
+   * still redirects, which is deliberate and pre-existing. That path handing tokens to
+   * unauthenticated callers is the same class of defect with a wider blast radius and is
+   * NOT GTC-256's — filed as GTC-262.
+   */
+  if (
+    isHostMembership({ personId: person.id, role: person.eventMemberships[0]?.role }, event.hostId)
+  ) {
     return NextResponse.json({ error: 'Person not found in this event' }, { status: 404 });
   }
 

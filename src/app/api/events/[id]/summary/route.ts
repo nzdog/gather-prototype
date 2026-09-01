@@ -14,8 +14,18 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     });
 
     // Get item counts
+    // GTC-171 (B2): itemCount is host-facing ("23 items") and must not silently inflate
+    // when day-of task rows land in the same table. Tasks are reported separately.
     const itemCount = await prisma.item.count({
       where: {
+        kind: 'ITEM',
+        team: { eventId },
+      },
+    });
+
+    const taskCount = await prisma.item.count({
+      where: {
+        kind: 'TASK',
         team: { eventId },
       },
     });
@@ -61,6 +71,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     return NextResponse.json({
       teamCount,
       itemCount,
+      taskCount,
       criticalItemCount,
       criticalAssignedCount,
       criticalUnassignedCount,

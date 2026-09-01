@@ -12,6 +12,8 @@ import {
   resolveGuestTaskItem,
   type WrapUpTemplateParams,
 } from '@/lib/sms/wrap-up-templates';
+import { isMessageableRole } from '@/lib/eligibility/child-exclusion';
+import { isQuietHours, getMinutesUntilQuietEnd } from '@/lib/sms/quiet-hours';
 
 const WRAPUP_LINK_EXPIRY_DAYS = 30;
 const DISPATCH_DELAY_MINUTES = 10;
@@ -37,7 +39,7 @@ export function generateLinkToken(): string {
   return randomBytes(24).toString('base64url');
 }
 
-interface GuestForWrapUp {
+export interface GuestForWrapUp {
   person: {
     id: string;
     name: string;
@@ -49,16 +51,92 @@ interface GuestForWrapUp {
   assignments: Array<{ item: { name: string }; response: string }>;
 }
 
+/**
+ * A PersonEvent row as the wrap-up route loads it. Prisma's `include` returns every
+ * scalar on the row, so `householdRole` arrives without the query asking for it.
+ */
+export interface WrapUpCandidate {
+  personId: string;
+  householdRole: string | null;
+  person: {
+    id: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    phoneNumber: string | null;
+    smsOptedOut: boolean;
+    assignments: Array<{ item: { name: string }; response: string }>;
+  };
+}
+
+/**
+ * THE wrap-up recipient decision (GTC-172 / C1).
+ *
+ * Extracted from POST /api/events/[id]/wrap-up so it can be exercised by a DB-level
+ * test without the requireEventRole cookie context — the same reason and the same
+ * pattern as reconcileHouseholdMembers (GTC-159).
+ *
+ * This has to be the gate rather than dispatch: `WrapUpLink` denormalises
+ * `guestPhone`/`guestEmail` at creation, so by the time dispatchPendingWrapUpMessages
+ * runs there is no role left to check. A thank-you is a system message, and §10.6 is
+ * absolute about who may receive one.
+ */
+export function selectWrapUpRecipients(
+  people: WrapUpCandidate[],
+  hostId: string
+): GuestForWrapUp[] {
+  return people
+    .filter((pe) => pe.personId !== hostId) // exclude host
+    .filter((pe) => isMessageableRole(pe.householdRole)) // GTC-172 (C1): §10.6
+    .map((pe) => ({
+      person: {
+        id: pe.person.id,
+        name: pe.person.name,
+        email: pe.person.email,
+        phone: pe.person.phone,
+        phoneNumber: pe.person.phoneNumber,
+        smsOptedOut: pe.person.smsOptedOut,
+      },
+      assignments: pe.person.assignments.map((a) => ({
+        item: { name: a.item.name },
+        response: a.response,
+      })),
+    }));
+}
+
 export async function generateWrapUpLinks(
   eventId: string,
   guests: GuestForWrapUp[]
-): Promise<{ created: number; skipped: number }> {
+): Promise<{ created: number; skipped: number; alreadyLinked: number }> {
   const expiresAt = new Date(Date.now() + WRAPUP_LINK_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
   let created = 0;
   let skipped = 0;
+  let alreadyLinked = 0;
+
+  // GTC-209: one link per (event, person), forever.
+  //
+  // The route guard above stops a second press; this stops the narrower case it cannot
+  // — two presses racing before either writes `wrappedAt`, and any future caller that
+  // reaches here by another door. The dispatcher iterates ROWS, not people (:182), so a
+  // duplicate row is a duplicate thank-you text, not a harmless extra record.
+  //
+  // Keyed on (event, person) rather than on the event, deliberately: a guest added
+  // AFTER the press must still get their link. That is the mini-send model (Hinge §2,
+  // gap #5) and it is what GTC-186 (H1) builds on — an event-level "already done" check
+  // would pass every duplicate test and silently strip late guests instead.
+  const existingLinks = await prisma.wrapUpLink.findMany({
+    where: { eventId },
+    select: { personId: true },
+  });
+  const linkedPersonIds = new Set(existingLinks.map((l) => l.personId));
 
   for (const guest of guests) {
     const { person } = guest;
+
+    if (linkedPersonIds.has(person.id)) {
+      alreadyLinked++;
+      continue;
+    }
     const phone = person.phoneNumber || person.phone || null;
     const email = person.email || null;
 
@@ -88,6 +166,8 @@ export async function generateWrapUpLinks(
       },
     });
 
+    linkedPersonIds.add(person.id);
+
     if (channel === 'skipped') {
       skipped++;
     } else {
@@ -95,17 +175,19 @@ export async function generateWrapUpLinks(
     }
   }
 
-  return { created, skipped };
+  return { created, skipped, alreadyLinked };
 }
 
 // ── Dispatch ─────────────────────────────────────────────────────────
 
-export async function dispatchPendingWrapUpMessages(): Promise<{
+export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Promise<{
   sent: number;
   failed: number;
   total: number;
+  deferred: number;
+  deferredUntilMinutes: number;
 }> {
-  const cutoff = new Date(Date.now() - DISPATCH_DELAY_MINUTES * 60 * 1000);
+  const cutoff = new Date(now.getTime() - DISPATCH_DELAY_MINUTES * 60 * 1000);
 
   const pendingLinks = await prisma.wrapUpLink.findMany({
     where: {
@@ -121,6 +203,35 @@ export async function dispatchPendingWrapUpMessages(): Promise<{
       person: true,
     },
   });
+
+  // GTC-210: quiet hours (21:00–08:00 NZ) apply to the thank-you too.
+  //
+  // This path had no time-of-day guard at all — `DISPATCH_DELAY_MINUTES` is an AGE
+  // filter, not a window, and the cron runs */10 around the clock. A host confirming
+  // wrap-up at 23:00 NZ texted every guest at ~23:10.
+  //
+  // Same shape as the two existing guards (nudge-sender.ts:114-138,
+  // proxy-nudge-sender.ts:90-110): check once at the top of the batch, send nothing,
+  // return. The deferral is implicit and durable — no scheduler, no timer. The rows
+  // stay `dispatched: false` and the next run after 08:05 picks them up unchanged.
+  //
+  // Unlike those two this does NOT write an InviteEvent row per deferral:
+  // `InviteEventType` has no wrap-up equivalent of NUDGE_DEFERRED_QUIET, and adding one
+  // is an enum migration. Deliberately deferred to keep this fix schema-free — the
+  // deferral is still observable in the cron's JSON response below.
+  if (isQuietHours(now)) {
+    const deferredUntilMinutes = getMinutesUntilQuietEnd(now);
+    console.warn(
+      `[WrapUp] Quiet hours — deferring ${pendingLinks.length} message(s), ~${deferredUntilMinutes} min until send window`
+    );
+    return {
+      sent: 0,
+      failed: 0,
+      total: pendingLinks.length,
+      deferred: pendingLinks.length,
+      deferredUntilMinutes,
+    };
+  }
 
   let sent = 0;
   let failed = 0;
@@ -223,7 +334,7 @@ export async function dispatchPendingWrapUpMessages(): Promise<{
     }
   }
 
-  return { sent, failed, total: pendingLinks.length };
+  return { sent, failed, total: pendingLinks.length, deferred: 0, deferredUntilMinutes: 0 };
 }
 
 // ── Dispatch summary ─────────────────────────────────────────────────

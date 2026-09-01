@@ -3,6 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordChange } from '@/lib/ledger';
 
 export async function GET(
   _request: NextRequest,
@@ -45,7 +47,7 @@ export async function GET(
         },
         day: true,
       },
-      orderBy: [{ critical: 'desc' }, { name: 'asc' }],
+      orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
     });
 
     return NextResponse.json({ items });
@@ -73,7 +75,16 @@ export async function POST(
     if (auth instanceof NextResponse) return auth;
     const body = await request.json();
 
-    const { name, description, quantityAmount, quantityUnit, critical, dietaryTags } = body;
+    const {
+      name,
+      description,
+      quantityAmount,
+      quantityUnit,
+      quantityUnitCustom,
+      quantityText,
+      critical,
+      dietaryTags,
+    } = body;
 
     if (!name) {
       return NextResponse.json({ error: 'name is required' }, { status: 400 });
@@ -110,6 +121,12 @@ export async function POST(
       itemData.quantityUnit = quantityUnit;
       itemData.quantityState = 'SPECIFIED';
     }
+    if (quantityUnitCustom !== undefined) {
+      itemData.quantityUnitCustom = quantityUnitCustom;
+    }
+    if (quantityText !== undefined) {
+      itemData.quantityText = quantityText;
+    }
 
     // Add dietary tags if provided
     if (dietaryTags && Array.isArray(dietaryTags)) {
@@ -120,6 +137,13 @@ export async function POST(
       if (dietaryTags.includes('glutenFree')) itemData.glutenFree = true;
       if (dietaryTags.includes('dairyFree')) itemData.dairyFree = true;
     }
+
+    // Append to end of category: displayOrder = max(displayOrder) + 1.
+    const maxOrder = await prisma.item.aggregate({
+      where: { teamId },
+      _max: { displayOrder: true },
+    });
+    itemData.displayOrder = (maxOrder._max.displayOrder ?? 0) + 1;
 
     const item = await prisma.item.create({
       data: itemData,
@@ -132,6 +156,24 @@ export async function POST(
         },
       },
     });
+
+    // Versioned, never interrogated: nobody has been asked for this yet.
+    const itemActor = await ledgerActorForUser(auth.user, auth.role);
+    await prisma.$transaction((tx) =>
+      recordChange(tx, {
+        eventId,
+        actor: itemActor,
+        changes: [
+          {
+            action: 'CREATE_ITEM',
+            targetType: 'Item',
+            targetId: item.id,
+            before: null,
+            after: { name: item.name, quantity: item.quantity, teamId: item.teamId },
+          },
+        ],
+      })
+    );
 
     return NextResponse.json({ item }, { status: 201 });
   } catch (error) {

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordChange } from '@/lib/ledger';
 import { normalizePhoneNumber } from '@/lib/phone';
 
 // GET /api/events/[id]/people - List people on this event
@@ -93,7 +95,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // Get event to check if invites have been confirmed
     const event = await prisma.event.findUnique({
       where: { id: eventId },
-      select: { inviteSendConfirmedAt: true, status: true },
+      select: { sentAt: true, status: true },
     });
 
     if (!event) {
@@ -127,14 +129,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           name,
           email: email || null,
           phoneNumber: normalizedPhone,
-          inviteAnchorAt: event.inviteSendConfirmedAt || null,
+          inviteAnchorAt: event.sentAt || null,
         },
       });
-    } else if (event.inviteSendConfirmedAt && !person.inviteAnchorAt) {
+    } else if (event.sentAt && !person.inviteAnchorAt) {
       // If person exists but doesn't have an anchor, set it
       person = await prisma.person.update({
         where: { id: person.id },
-        data: { inviteAnchorAt: event.inviteSendConfirmedAt },
+        data: { inviteAnchorAt: event.sentAt },
       });
     }
 
@@ -173,6 +175,20 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         role: role || 'PARTICIPANT',
         reachabilityTier,
         contactMethod,
+        // GTC-196 (A3b) — THE MINI-SEND CLOCK GOES LIVE.
+        //
+        // Someone added AFTER the press gets their own send date, not the event's.
+        // Their nudge cadence and red-by-time run from here, truncated by the event
+        // date, so "a Bob added three days out may pass straight to Kate's line"
+        // falls out of the arithmetic with no special case (Hinge §2, gap #5).
+        //
+        // On PersonEvent, not Person: Person is global, so the old
+        // Person.inviteAnchorAt gave a person in two events ONE anchor and got the
+        // second event's clocks wrong from the start (plan §8.2). inviteAnchorAt is
+        // still written alongside until GTC-178 (E1) moves the nudge bookkeeping.
+        //
+        // Pre-send this is null and the press stamps everyone at once.
+        sentAt: event.sentAt ?? null,
       },
       include: {
         person: {
@@ -191,6 +207,29 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         },
       },
     });
+
+    // Versioned, never interrogated: adding a person asks nothing of them yet. If an
+    // assignment follows, THAT is the T1 that touches them (Hinge §2, gap #5).
+    const addActor = await ledgerActorForUser(auth.user, auth.role);
+    await prisma.$transaction((tx) =>
+      recordChange(tx, {
+        eventId,
+        actor: addActor,
+        changes: [
+          {
+            action: 'ADD_PERSON',
+            targetType: 'PersonEvent',
+            targetId: personEvent.id,
+            before: null,
+            after: {
+              personId: personEvent.person.id,
+              personName: personEvent.person.name,
+              teamId: personEvent.team?.id ?? null,
+            },
+          },
+        ],
+      })
+    );
 
     return NextResponse.json({
       personEvent: {

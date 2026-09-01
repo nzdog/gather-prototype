@@ -26,6 +26,11 @@ model Event {
   guestCountConfidence       GuestCountConfidence     @default(MEDIUM)
   guestCountMin              Int?
   guestCountMax              Int?
+  // GTC-184: superseded by EventSetup.dietaryData (the GTC-150 three-state model,
+  // read via readDietaryData()) for conflict detection as of check.ts's
+  // detectDietaryGaps. Deprecated in place, not removed — these fields remain live
+  // for V1 generation and regenerate (9+ consumers per the GTC-228 reconciliation
+  // trace), so do not delete or stop writing them without a dedicated ticket.
   dietaryStatus              DietaryStatus            @default(UNSPECIFIED)
   dietaryVegetarian          Int                      @default(0)
   dietaryVegan               Int                      @default(0)
@@ -57,9 +62,102 @@ model Event {
   manualAdditionsCount       Int                      @default(0)
   hostReadinessConfidence    HostReadinessConfidence?
   currentRevisionId          String?
-  inviteSendConfirmedAt      DateTime?
+  // GTC-168 (A2): THE SEND. Renamed from inviteSendConfirmedAt — this field already
+  // was the send (it anchors the nudge machinery and fires before freezing), so the
+  // rename is Prisma-level only via @map: the column keeps its name and its data, and
+  // no SQL runs. The physical column rename is deferred to GTC-199 (A4), which already
+  // requires a backup. See send-lock-reconciliation-plan.md §0.1, §2.
+  sentAt                     DateTime?                @map("inviteSendConfirmedAt")
+  /// GTC-175 (D2): the per-EVENT decide-by offset — layer 2 of the three-layer
+  /// resolution in src/lib/decide-by.ts (item override → this → system default).
+  /// Hours BEFORE neededBy(); NULL means "not set", not "zero".
+  ///
+  /// PRODUCT INTENT, for the J-epic ticket that builds the host control (D2 builds no
+  /// UI): the system default is 5 days (DEFAULT_DECIDE_BY_OFFSET_HOURS = 120) and the
+  /// host-facing "decide faster" toggle is THIS field set to 48 — two days. That is not
+  /// a second field or a second code path; it is this layer exercised with a 2-day
+  /// value, and the resolution already handles it.
+  ///
+  /// Moment 4 §10.2 rules a third axis, per-PERSON, which E3 (GTC-180) owns.
+  /// resolveDecideByOffsetHours takes a params object so that layer slots in without
+  /// touching a call site.
+  decideByOffsetHours        Int?
+  /// GTC-179 (E2, phase 2): the per-EVENT nudge pace (Moment 4 §10.3). NULL means NOT
+  /// SET — no opinion — and resolves to the system default [4, 7], exactly the
+  /// convention `decideByOffsetHours` directly above records. It is NOT "zero", and it
+  /// is NOT a stored STANDARD: an unset pace and an explicit STANDARD reach the same
+  /// days by different routes, and only the unset one yields to a future change in the
+  /// default.
+  ///
+  /// A TYPED COLUMN, NOT EventSetup JSONB (founder ruling on decision 10, 2026-08-27).
+  /// The nudge scheduler reads this on every 15-minute cron tick; `decideByOffsetHours`
+  /// is the existing precedent for a scheduler-read tuning value and it is a typed
+  /// column; EventSetup's JSON tenants are Moment-2 form state, an unrelated concern;
+  /// and a typed enum gets database-level validity checking that JSONB does not.
+  ///
+  /// READ IT THROUGH `resolveNudgeOffsetDays` IN src/lib/nudge-cadence.ts, never
+  /// directly. It composes with PersonEvent.nudgeMark by QUIETER-WINS (Ruling 4), which
+  /// is not an override ladder — a GENTLE person on an OFF event gets NO nudges, not
+  /// one. Reading this column alone would get that backwards.
+  ///
+  /// NO BACKFILL, and none is needed: nullable, and null is existing behaviour.
+  ///
+  /// GTC-188 (I1) builds the pre-flight surface Kate sets this on. Until it lands there
+  /// is no host-facing way to set it — deliberate, and stated rather than implied.
+  nudgePace                  NudgePace?
+  /// GTC-259: the host's movement 1 for the ask - Kate's own words, the first of the three
+  /// movements Hinge §5 makes seam-visible (GTC-187 decision 2, "stored, not ephemeral").
+  ///
+  /// THREE STATES, NOT TWO (founder ruling, 2026-08-29). NULL and empty string are DIFFERENT
+  /// FACTS and the difference is load-bearing. `composeAsk` reads this as
+  /// `storedAuthorLine ?? draftAuthorLine(event)` in src/lib/messages/ask-register.ts, and
+  /// `??` falls through on null but NOT on `''` - which is exactly what makes all three
+  /// reachable through one expression:
+  ///
+  ///   NULL   never authored          -> falls through to the generated draft
+  ///   ''     DELIBERATELY NO LINE    -> `authorLineFor` returns the bare greeting, "Hi Rob,",
+  ///                                     and does NOT fall through to the draft
+  ///   value  the host's words        -> "Hi Rob - <value>"
+  ///
+  /// NULL keeps the not-set convention `decideByOffsetHours` and `nudgePace` directly above
+  /// use. `''` is a stored value like any other, and means she said her piece by declining to.
+  ///
+  /// ⚠ SUPERSEDED, KEPT FOR THE REASON: an earlier rule the same day required the write site
+  /// to NORMALISE EMPTY TO NULL, on the grounds that a stored `''` "suppresses the draft".
+  /// It does suppress the draft - that part was measured and is true - but suppressing the
+  /// draft turned out to be the FEATURE, not the bug. The founder ruling that replaced it:
+  /// `authorLineFor`'s own comment already treats the blank case as deliberate ("hers to cut
+  /// to nothing"), and Hinge §5 makes the HANDOVER the load-bearing beat, not movement 1's
+  /// length. A host sending to sixty people, or re-sending after she has already said her
+  /// piece, must be able to decline to speak without Gather's words standing in for hers.
+  /// The write site therefore PRESERVES `''` and must not collapse it to NULL.
+  ///
+  /// Whitespace-only IS normalised - to `''`, not to NULL. `authorLineFor` trims before
+  /// deciding, so `'   '` composes identically to `''`; storing it verbatim would be a fourth
+  /// spelling of the third state. Values are stored trimmed, so the column holds exactly
+  /// NULL, `''`, or a trimmed non-empty string and nothing else.
+  ///
+  /// Enforced in the PATCH at src/app/api/events/[id]/pre-flight/message/route.ts (GTC-260).
+  ///
+  /// ONE VALUE, LAST WRITE WINS (GTC-187, 2026-08-29). A mini-send edit overwrites; no
+  /// per-send version lives here. What each recipient actually received is GTC-189's to
+  /// decide and does not belong in this column.
+  ///
+  /// NOT LENGTH-CAPPED, on purpose - GTC-187 decision 6: "no enforced cap ... do not
+  /// truncate, do not block". Prisma maps `String` to Postgres `TEXT`.
+  ///
+  /// NOT EventSetup JSONB. EventSetup is Moment-2 form state and does not exist for most
+  /// events - 7 of 9 in the development database, including Henderson Family Christmas 2026,
+  /// the CONFIRMING event that reaches the pre-flight. GTC-179 Ruling 5 made the same call
+  /// on the same question for `nudgePace`. Full check in GTC-259.
+  ///
+  /// WIRED BY GTC-260: read and written by the pre-flight message route, set on the
+  /// pre-flight screen. GTC-259 added the column and deliberately wired nothing.
+  askAuthorLine              String?
   sharedLinkToken            String?                  @unique
   sharedLinkEnabled          Boolean                  @default(false)
+  // Retained, unwritten after GTC-169 (A3a). Historical evidence of the old freeze
+  // ceremony. Dropped by GTC-199 (A4).
   frozenAt                   DateTime?
   complianceAtFreeze         Float?
   freezeReason               String?
@@ -84,10 +182,10 @@ model Event {
   people                     PersonEvent[]
   revisions                  PlanRevision[]
   snapshots                  PlanSnapshot[]
-  structureChanges           StructureChangeRequest[]
   teams                      Team[]
   aiCallsUsed                Int                      @default(0)
   wrapUpLinks                WrapUpLink[]
+  setup                      EventSetup?
 }
 
 model Day {
@@ -127,6 +225,24 @@ model Person {
   smsOptedOut      Boolean       @default(false)
   smsOptedOutAt    DateTime?
   inviteAnchorAt   DateTime?
+  /// GTC-178 (E1, phase 3): SUPERSEDED BY PersonEvent.firstNudgeSentAt /
+  /// secondNudgeSentAt. These are per-person for a per-EVENT fact — the same
+  /// global-anchor leak as inviteAnchorAt directly above: one person in two events has
+  /// one pair of flags, so a nudge sent for event A silences event B. Phase 2 fixed the
+  /// read side of that leak (the clock); the successor columns fix the write side.
+  ///
+  /// RETAINED BUT UNWRITTEN as of phase 4 (the cutover). Nothing reads or writes these:
+  /// nudge-sender.ts stamps PersonEvent.firstNudgeSentAt/secondNudgeSentAt,
+  /// nudge-eligibility.ts dedups on the same two columns, and all four dashboard
+  /// consumers (invite-status, invite-detail, InviteStatusSection,
+  /// PersonInviteDetailModal) now source them from the membership row. Kept for one
+  /// ticket so the change reverts cleanly and any stray value stays auditable — exactly
+  /// the treatment GTC-168 (A2) gave Person.inviteAnchorAt and GTC-174 (D1) gave
+  /// rsvpStatus. A later ticket drops them.
+  ///
+  /// DO NOT READ THESE. Both were null on every row at the cutover (verified: 0 non-null
+  /// of every Person, phase 3), so a value appearing here now can only come from code
+  /// that should not exist. Read the PersonEvent columns — always.
   nudge24hSentAt   DateTime?
   nudge48hSentAt   DateTime?
   tokens           AccessToken[]
@@ -135,7 +251,6 @@ model Person {
   cohostedEvents   Event[]       @relation("EventCoHost")
   hostedEvents     Event[]       @relation("EventHost")
   hostMemory       HostMemory?
-  households       Household[]
   inviteEvents     InviteEvent[]
   user             User?         @relation(fields: [userId], references: [id])
   eventMemberships PersonEvent[]
@@ -148,59 +263,200 @@ model Person {
 }
 
 model PersonEvent {
-  id                   String           @id @default(cuid())
+  id                   String            @id @default(cuid())
   personId             String
   eventId              String
   teamId               String?
-  role                 PersonRole       @default(PARTICIPANT)
-  reachabilityTier     ReachabilityTier @default(UNTRACKABLE)
-  contactMethod        ContactMethod    @default(NONE)
-  claimedViaSharedLink Boolean          @default(false)
+  role                 PersonRole        @default(PARTICIPANT)
+  reachabilityTier     ReachabilityTier  @default(UNTRACKABLE)
+  contactMethod        ContactMethod     @default(NONE)
+  claimedViaSharedLink Boolean           @default(false)
   proxyPersonEventId   String?
-  rsvpStatus           RsvpStatus       @default(PENDING)
+  /// GTC-174 (D1): RETAINED BUT UNWRITTEN. Hinge §3 (ruled gap #10) supersedes
+  /// event-level RSVP as a guest-facing question — the tap is the item ask and
+  /// attendance is INFERRED from it. No reachable path writes these three after D1, and
+  /// every reader has moved to deriveAttendance() in src/lib/attendance.ts. (One dead
+  /// write to rsvpFollowupSentAt survives in nudge-sender.ts behind a caller D1
+  /// neutralised — GTC-178 deletes that path whole.) They are kept for one ticket so the
+  /// backfill stays auditable and the change reverts cleanly — exactly the treatment
+  /// GTC-168 (A2) gave Person.inviteAnchorAt. GTC-219 drops all three plus the
+  /// RsvpStatus enum.
+  ///
+  /// DO NOT READ THESE. A stored answer to a derived question is the Item.status
+  /// mistake again (architecture-contract §6): it drifts, and what it makes lie is the
+  /// host's headcount. Read deriveAttendance() instead — always.
+  rsvpStatus           RsvpStatus        @default(PENDING)
   rsvpRespondedAt      DateTime?
   rsvpFollowupSentAt   DateTime?
-  householdMember      HouseholdMember?
-  event                Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  person               Person           @relation(fields: [personId], references: [id], onDelete: Cascade)
-  proxy                PersonEvent?     @relation("ProxyRelation", fields: [proxyPersonEventId], references: [id])
-  householdMembers     PersonEvent[]    @relation("ProxyRelation")
-  team                 Team?            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  /// GTC-174 (D1): the ONLY stored attendance fact — what the guest answered when
+  /// attendance was genuinely ASKED. Hinge §3 gives exactly two such moments: the
+  /// conditional no-follow-up ("no worries — still coming?") and the itemless
+  /// degenerate case. Everywhere else attendance is inferred from the item tap and
+  /// must be read through deriveAttendance(), never from a column.
+  ///
+  /// NULL means NEVER ASKED — it is not a third answer. There is deliberately no
+  /// MAYBE here: Hinge §8 rules a maybe purely an ITEM-maybe, carried on
+  /// Assignment.response, with attendance unknown until D2's decide-by resolves it.
+  attendanceAnswer     AttendanceAnswer?
+  attendanceAnsweredAt DateTime?
+  /// GTC-168 (A2): THIS person's send clock — the mini-send anchor (Hinge §2, gap #5).
+  /// Set to Event.sentAt at the press; set to now() for anyone added afterwards, so
+  /// their nudge cadence and red-by-time run from THEIR send date, truncated by the
+  /// event date. isMiniSend = PersonEvent.sentAt > Event.sentAt — no extra field.
+  ///
+  /// Replaces Person.inviteAnchorAt, which holds the same value on the WRONG MODEL:
+  /// Person is global, so a person in two events shares one anchor and the second
+  /// event's clocks are wrong from the start (the guard at people/route.ts:133 only
+  /// sets it when null). Person.inviteAnchorAt is retained-but-unwritten until
+  /// GTC-199 (A4). Person.nudge24hSentAt/nudge48hSentAt carried the identical leak and
+  /// moved under GTC-178 (E1) — see firstNudgeSentAt/secondNudgeSentAt below.
+  sentAt               DateTime?
+  /// GTC-178 (E1, phase 3): THE SENT-SIDE DEDUP STATE, per event. Stamped on a
+  /// successful auto-nudge send; read as "has this leg already fired for this person on
+  /// THIS event". Relocates the shape of Person.nudge24hSentAt/nudge48hSentAt onto the
+  /// row that owns the clock they are measured against (sentAt, directly above).
+  ///
+  /// ORDINAL, NOT TIMING-BASED (Ruling 7, 2026-08-27). Deliberately NOT nudgeDay4SentAt:
+  /// GTC-179 (E2) makes the cadence adjustable per event and per person
+  /// (standard/relaxed/off), so a column named after a day count starts lying the moment
+  /// E2 lands. "First" and "second" stay true at every pace. Same reasoning as
+  /// Assignment.decideByFollowupSentAt, which names the EVENT rather than its timing.
+  ///
+  /// NO BACKFILL (Ruling 6, 2026-08-27) — CONDITIONAL, and the condition is recorded
+  /// because it can lapse. Verified immediately before this migration: zero
+  /// InviteEvent NUDGE_SENT_AUTO rows, zero non-null Person.nudge24hSentAt, zero
+  /// non-null Person.nudge48hSentAt. Nobody has ever been messaged, so there is no send
+  /// history to preserve. Had there been any, starting these columns null would make
+  /// every person past their first window eligible again on the next 15-minute cron
+  /// tick — a re-nudge burst with the same TCPA/spam shape as GTC-252.
+  ///
+  /// LIVE AS OF PHASE 4. nudge-sender.ts stamps these on a successful send (and only on
+  /// success — a failed send leaves no stamp and the next tick retries), and
+  /// nudge-eligibility.ts dedups on them. Person.nudge24hSentAt/nudge48hSentAt are now
+  /// retained-but-unwritten. The retime to day-4/day-7 is phase 5, which changes WHEN
+  /// these are stamped and never WHERE.
+  firstNudgeSentAt     DateTime?
+  secondNudgeSentAt    DateTime?
+  /// GTC-179 (E2, phase 2): the per-PERSON go-gentle / don't-chase mark (Moment 4
+  /// §10.3). NULL means NO MARK — no opinion — and yields to the event's pace; it is
+  /// not a stored "normal".
+  ///
+  /// ON PersonEvent, NOT Person, and that is the whole point. The mark is a per-EVENT
+  /// hosting judgement: Kate may go gentle on her mother for the wake and not for the
+  /// birthday. Putting it on Person would reproduce exactly the global-for-a-per-event
+  /// leak that Person.inviteAnchorAt and Person.nudge24hSentAt/nudge48hSentAt above are
+  /// both retained-but-unwritten monuments to (GTC-178 Rulings 2 and 4).
+  ///
+  /// PersonEvent CARRIES NO JSON COLUMN, so unlike the event-side pace this had no
+  /// no-migration alternative to weigh — the storage question here was only ever WHICH
+  /// table, and the answer is the one that owns the send clock these offsets count from
+  /// (`sentAt`, above).
+  ///
+  /// READ IT THROUGH `resolveNudgeOffsetDays` IN src/lib/nudge-cadence.ts, never
+  /// directly — quieter-wins composition with Event.nudgePace (Ruling 4).
+  ///
+  /// DONT_CHASE MUST ALSO SUPPRESS THE PROXY PATH (Ruling 3). §10.3's archetype is "the
+  /// mother", and the mother is the person most likely to be her household's picked
+  /// channel (Household.contactPersonEventId), so a direct-path-only suppression would
+  /// fail precisely where the control matters most. That is a boolean read in
+  /// `findProxyNudgeCandidates`, gated AFTER the child rule and AFTER opt-out — never a
+  /// cadence, because retiming the proxy path needs GTC-252's undecided clock decision.
+  ///
+  /// LAYERED ON TOP OF OPT-OUT, NEVER THROUGH IT (Do-Not-Touch Zone 7). See the NudgeMark
+  /// enum docstring.
+  ///
+  /// NOTHING READS OR WRITES THIS AS OF PHASE 2. The cutover is phase 3, the UI phase 4.
+  nudgeMark            NudgeMark?
+  householdId          String?
+  household            Household?        @relation("HouseholdMembers", fields: [householdId], references: [id])
+  householdRole        HouseholdRole?
+  /// GTC-172 (C1): DISPLAY ONLY — "captured as a kid with a job". This is NEVER an
+  /// input to message eligibility; `householdRole` is the sole gate (Moment 4 §10.6,
+  /// absolute). It exists so a young person Kate has DELIBERATELY roled as an adult
+  /// still renders in her helpers list instead of silently jumping to the guests list
+  /// on reload. Setting this true never grants messageability, and setting it false
+  /// never removes it — read it for layout, never for a send decision.
+  isYoungPerson        Boolean           @default(false)
+  event                Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  person               Person            @relation(fields: [personId], references: [id], onDelete: Cascade)
+  proxy                PersonEvent?      @relation("ProxyRelation", fields: [proxyPersonEventId], references: [id])
+  householdMembers     PersonEvent[]     @relation("ProxyRelation")
+  team                 Team?             @relation(fields: [teamId], references: [id], onDelete: SetNull)
 
-  nudgeLogs   NudgeLog[]
+  nudgeLogs NudgeLog[]
+
+  /// GTC-172 (C1): back-relation for Household.contactPersonEvent — the households
+  /// that have picked THIS PersonEvent as their channel. Cross-household by design:
+  /// these households need not be this row's own `household`.
+  householdsAsContact Household[] @relation("HouseholdContactChannel")
 
   @@unique([personId, eventId])
 }
 
 model Household {
-  id            String            @id @default(cuid())
-  eventId       String
-  proxyPersonId String
-  name          String?
-  createdAt     DateTime          @default(now())
-  event         Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  proxyPerson   Person            @relation(fields: [proxyPersonId], references: [id])
-  members       HouseholdMember[]
+  id          String        @id @default(cuid())
+  eventId     String
+  event       Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  members     PersonEvent[] @relation("HouseholdMembers")
+  littleCount Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
-  @@unique([eventId, proxyPersonId])
-}
+  /// GTC-172 (C1): the household contact picker — Moment 4 §10.7. "Who should Gather
+  /// talk to for this household?" A reference, never a boolean, and CROSS-HOUSEHOLD
+  /// CAPABLE: this may point at a PersonEvent belonging to a DIFFERENT household of
+  /// the same event (Grandma's channel lives in her daughter's household).
+  ///
+  /// NULL means "not picked" and resolves to the household's PRIMARY_CONTACT at read
+  /// time — see resolveHouseholdChannel() in src/lib/households/channel.ts. That is
+  /// why this ships with no data backfill: the default is computed, not stored.
+  ///
+  /// A CHILD-role PersonEvent must never be stored here (§10.6). The picker omits
+  /// them and the API rejects them, but the eligibility layer re-checks anyway rather
+  /// than trusting either.
+  contactPersonEventId String?
+  contactPersonEvent   PersonEvent? @relation("HouseholdContactChannel", fields: [contactPersonEventId], references: [id], onDelete: SetNull)
 
-model HouseholdMember {
-  id               String       @id @default(cuid())
-  householdId      String
-  name             String
-  claimedAt        DateTime?
-  personEventId    String?      @unique
-  proxyNudgeCount  Int          @default(0)
-  lastProxyNudgeAt DateTime?
-  escalatedAt      DateTime?
-  household        Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
-  personEvent      PersonEvent? @relation(fields: [personEventId], references: [id])
+  /// GTC-256 (Ruling 6, phase 2): does this household's CHANNEL receive messages?
+  /// "The host may be her household's contact, and CHOOSES WHETHER THOSE MESSAGES
+  /// SEND." Separate from Ruling 5 by construction: Ruling 5 suppresses her own ask
+  /// because of WHAT SHE IS; this is a SETTING SHE CONTROLS about her household.
+  ///
+  /// NULL MEANS NOT CHOSEN — the convention Event.decideByOffsetHours and
+  /// Event.nudgePace already keep. It is not a stored "sends". It resolves to MUTED
+  /// for the host's OWN household and to SENDING for every other one, computed at
+  /// read time, which is why this ships with NO BACKFILL: every existing household
+  /// is NULL and keeps today's behaviour exactly.
+  ///
+  /// A SEPARATE COLUMN, NOT A THIRD CHANNEL STATE. contactPersonEventId's NULL is
+  /// "not picked" and resolves to the PRIMARY_CONTACT (GTC-172, and the no-backfill
+  /// property rests on it) — redefining it as "nobody" would silently mute every
+  /// household on every existing event. The reference and the sending are two facts,
+  /// so they are two columns. resolveHouseholdChannel is unchanged.
+  ///
+  /// READ IT THROUGH `resolveHouseholdMuted` IN src/lib/households/channel.ts, NEVER
+  /// DIRECTLY. A bare `if (h.messagesMuted)` reads NULL as false and un-mutes the
+  /// host; a bare `if (h.messagesMuted === false)` misses the host's default. The
+  /// resolver also enforces the founder's Ruling-6 safety: a host hosting alone
+  /// (Ruling 2) CANNOT switch her household's messages on, whatever is stored —
+  /// a household of one has no household messages, only messages about herself.
+  ///
+  /// SUPPRESSION ONLY, gated in findProxyNudgeCandidates AFTER the child rule
+  /// (§10.6, absolute) and AFTER opt-out (Zone 7) — never through either, matching
+  /// PersonEvent.nudgeMark and Event.nudgePace.
+  messagesMuted Boolean?
+
+  @@index([contactPersonEventId])
 }
 
 model Item {
   id                          String              @id @default(cuid())
   name                        String
+  /// GTC-171 (B2): the row-kind discriminator. Moment 4 spec §6 — "one assignment
+  /// machine, two kinds of rows" (items are owed *to* the day; tasks are owed
+  /// *during* it). Task rows are Item rows, so `Assignment` reaches both through
+  /// the identical relation, unchanged.
+  kind                        RowKind             @default(ITEM)
   quantity                    String?
   description                 String?
   critical                    Boolean             @default(false)
@@ -231,6 +487,15 @@ model Item {
   prepEndTime                 String?
   serveTime                   String?
   dropOffAt                   DateTime?
+  /// GTC-175 (D2): the per-ITEM decide-by offset override — layer 1, and the one Hinge
+  /// §8 names directly ("derived by the system from item logistics and event date, with
+  /// Kate able to override per item"). Hours BEFORE neededBy(); NULL falls through to
+  /// the event default. See src/lib/decide-by.ts.
+  ///
+  /// This is an OFFSET, never an instant. A stored decide-by would drift from the
+  /// dropOffAt/endDate it was computed from — the Item.status mistake again
+  /// (architecture-contract §6). The instant is derived on every read.
+  decideByOffsetHours         Int?
   dropOffLocation             String?
   dropOffNote                 String?
   source                      ItemSource          @default(MANUAL)
@@ -241,21 +506,41 @@ model Item {
   userConfirmed               Boolean             @default(false)
   teamId                      String
   dayId                       String?
+  displayOrder                Int?
   createdAt                   DateTime            @default(now())
   updatedAt                   DateTime            @updatedAt
   assignment                  Assignment?
   day                         Day?                @relation(fields: [dayId], references: [id])
   team                        Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, displayOrder])
 }
 
 model Assignment {
-  id        String             @id @default(cuid())
-  response  AssignmentResponse @default(PENDING)
-  createdAt DateTime           @default(now())
-  itemId    String             @unique
-  personId  String
-  item      Item               @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  person    Person             @relation(fields: [personId], references: [id])
+  id                     String             @id @default(cuid())
+  response               AssignmentResponse @default(PENDING)
+  createdAt              DateTime           @default(now())
+  /// GTC-175 (D2): the decide-by follow-up sent-stamp. Hinge §8 allows exactly ONE
+  /// follow-up near the decide-by; this is the record that it happened.
+  ///
+  /// WHY PER-ASSIGNMENT. Person.nudge24hSentAt is the shape to avoid — schema.prisma
+  /// warns at PersonEvent.rsvpFollowupSentAt that one stamp on Person leaks across
+  /// events. A per-PersonEvent stamp would fix that and break something worse: it
+  /// cannot honour a per-ITEM offset override, because it has no item. The maybe lives
+  /// on this row, so its clock's receipt does too. It dies with the item (onDelete:
+  /// Cascade), and a reassignment hands the new holder a NULL stamp — correct, because
+  /// the released guest gets a different message entirely (D3 / GTC-176).
+  ///
+  /// NEVER CLEARED. A guest who goes MAYBE → ACCEPTED → MAYBE inside one window keeps
+  /// their stamp and is not texted again. "Exactly one follow-up" then holds literally.
+  /// The alternative — clearing on exit from MAYBE — lets one person be texted twice,
+  /// and a duplicate text is a trust failure where a missed one is a nuisance. All four
+  /// response writers are pinned free of this field by tests/decide-by-clock-test.ts.
+  decideByFollowupSentAt DateTime?
+  itemId                 String             @unique
+  personId               String
+  item                   Item               @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  person                 Person             @relation(fields: [personId], references: [id])
 }
 
 model InviteEvent {
@@ -381,17 +666,99 @@ model EventRole {
   @@index([eventId])
 }
 
+/// THE LEDGER (GTC-168 / A2).
+///
+/// Extended in place rather than replaced: ~15 call sites all funnel through
+/// logAudit(), so extension preserves existing history with no data migration.
+///
+/// VERSIONS ARE LEDGER ENTRIES (Hinge spec §2, "reasons explain the steps; versions
+/// ARE the steps"). `sequence` IS the version number. Version N of the plan is the
+/// state after entry N. This is what makes storage tractable: a scoped entry costs
+/// 455–1601 B against 156.6 KB for a full PlanRevision snapshot of the demo event —
+/// a 285x ratio, measured 2026-08-03. See send-lock-reconciliation-plan.md §6.
+///
+/// InviteEvent remains a SEPARATE log for messaging/channel telemetry (LINK_OPENED,
+/// NUDGE_SENT_AUTO, SMS_BLOCKED_OPT_OUT, guest responses). Do not merge them: Hinge §2
+/// — "the ledger stays meaningful because it is never asked to hold noise."
 model AuditEntry {
-  id         String   @id @default(cuid())
-  timestamp  DateTime @default(now())
+  id        String   @id @default(cuid())
+  timestamp DateTime @default(now())
+  eventId   String
+
+  /// The version number, monotonic per event. NULL = a pre-ledger audit row: it
+  /// predates versioning and was never a version. Postgres permits multiple NULLs
+  /// under the composite unique, so no history is fabricated to satisfy the schema.
+  sequence Int?
+
+  /// One request = one changeSet = one human-visible step. A single request that
+  /// changes three fields emits three rows sharing one changeSetId ("I renamed and
+  /// re-quantified the pavlova" is one step to a person). Granularity stays
+  /// per-individual-change; the grouping is a display key, not batching.
+  /// NULL = pre-ledger row.
+  changeSetId String?
+
+  /// NULLABLE by design: the calendar, the cron sweep, and the release-notification
+  /// path have no Person to point at. The system is a first-class actor in the
+  /// history (Hinge §7: "the system does what the system does").
+  ///
+  /// The FK is ON DELETE SET NULL, so deleting a Person no longer blocks — the
+  /// history survives them. That is right for a ledger and wrong for a memory:
+  /// without a name the entry degrades to "someone reassigned the beef".
+  actorId   String?
+  actorKind ActorKind @default(HOST)
+
+  /// NAME AT TIME OF ACTION — denormalised on purpose, populated at write time
+  /// (GTC-196 / A3b), never re-read from Person. Two reasons it must not be a join:
+  /// the actor may be deleted (SET NULL above), and a later rename would silently
+  /// rewrite history. The ledger is Kate's memory of what happened, and what
+  /// happened is that *Pete* was the one who couldn't do it. NULL for SYSTEM
+  /// actions and for pre-ledger rows.
+  actorName String?
+
   actionType String
   targetType String
   targetId   String
-  details    String?
-  eventId    String
-  actorId    String
-  actor      Person   @relation(fields: [actorId], references: [id])
-  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  /// NULL for whole-entity actions (create/delete). Otherwise the changed field.
+  field String?
+
+  /// Scoped to the changed entity — NEVER the whole plan. `before` is what makes
+  /// history reachable backwards by inversion; the CONFIRMING PlanSnapshot makes it
+  /// reachable forwards. Neither requires a snapshot per change.
+  before Json?
+  after  Json?
+
+  /// NULLABLE BY DESIGN — plan §13.1, endorsed by Nigel 2026-08-03. The why is
+  /// required only for changes that touch someone (T1–T5), but "required" means the
+  /// flow always asks, NOT that the server rejects. Moment 4 §7 forbids the product
+  /// demanding justification; Hinge §2 says the reason "is not compliance — it's her
+  /// own memory". A 400 would make it compliance. NO ROUTE MAY 4xx FOR A MISSING
+  /// REASON. reasonRequired records that the rule fired, so a null reason is never
+  /// ambiguous between "not owed" and "owed and not given".
+  reason         String?
+  reasonRequired Boolean @default(false)
+
+  /// Retained for the ~15 pre-ledger call sites and their existing rows.
+  details String?
+
+  actor Person? @relation(fields: [actorId], references: [id])
+  event Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, sequence])
+  @@index([eventId, timestamp])
+  @@index([changeSetId])
+}
+
+/// Who made a change. Needed because AuditEntry.actorId is nullable — SYSTEM actions
+/// (the calendar transition, the cron sweep, a release notification) have no Person.
+/// The why-scope rule is actor-agnostic: a coordinator owes the same why a host does
+/// (ruled by Nigel 2026-08-03 — "no walls anywhere, ledger is actor-agnostic").
+enum ActorKind {
+  HOST
+  COHOST
+  COORDINATOR
+  GUEST
+  SYSTEM
 }
 
 model Conflict {
@@ -496,25 +863,6 @@ model PlanSnapshot {
   @@index([eventId])
 }
 
-model StructureChangeRequest {
-  id                    String                @id @default(cuid())
-  eventId               String
-  type                  StructureChangeType
-  requestedBy           String
-  requestedAt           DateTime
-  reason                String
-  impactedCoordinators  Json?
-  impactedItems         Json?
-  deltaFromSnapshot     Json?
-  status                StructureChangeStatus @default(PENDING)
-  appliedAt             DateTime?
-  previousCriticalState Boolean?
-  newCriticalState      Boolean?
-  event                 Event                 @relation(fields: [eventId], references: [id], onDelete: Cascade)
-
-  @@index([eventId, status])
-}
-
 model StructureTemplate {
   id               String         @id @default(cuid())
   hostId           String
@@ -615,6 +963,13 @@ enum PersonRole {
   PARTICIPANT
 }
 
+enum HouseholdRole {
+  PRIMARY_CONTACT
+  PARTNER
+  GUEST
+  CHILD
+}
+
 enum ReachabilityTier {
   DIRECT
   PROXY
@@ -637,6 +992,13 @@ enum EventRoleType {
 enum ItemStatus {
   ASSIGNED
   UNASSIGNED
+}
+
+/// GTC-171 (B2): distinguishes item rows from task rows on `Item`. Both kinds are
+/// assignable through the same `Assignment` relation — there is no second surface.
+enum RowKind {
+  ITEM
+  TASK
 }
 
 enum TokenScope {
@@ -865,22 +1227,6 @@ enum SnapshotPhase {
   CONFIRMING
 }
 
-enum StructureChangeType {
-  ADD_TEAM
-  RENAME_TEAM
-  REMOVE_TEAM
-  MOVE_ITEM_TEAM
-  ADD_ITEM_TO_TEAM
-  REMOVE_ITEM
-  CHANGE_CRITICAL_FLAG
-}
-
-enum StructureChangeStatus {
-  PENDING
-  APPLIED
-  CANCELLED
-}
-
 enum TemplateSource {
   HOST
   GATHER_CURATED
@@ -906,17 +1252,75 @@ enum DeletionScope {
   SPECIFIC_EVENT
 }
 
+/// GTC-174 (D1): Hinge §3 — one tap, three ways. The tap IS the item ask, and
+/// attendance is inferred from it, so this enum is now the whole guest-facing
+/// response model.
+///
+/// MAYBE is "a decision to decide later" (Hinge §8): not a silence (the guest
+/// engaged and said where they stand) and not a claim (the item isn't secured). It
+/// is an ITEM maybe ONLY — it never says anything directly about attendance. D2
+/// (GTC-175) hangs the decide-by clock off it, anchored on the EXISTING neededBy()
+/// in src/lib/lifecycle.ts — there is no competing decide-by anchor.
 enum AssignmentResponse {
   PENDING
   ACCEPTED
   DECLINED
+  MAYBE
 }
 
+/// GTC-174 (D1): RETAINED BUT UNWRITTEN — see PersonEvent.rsvpStatus. Dropped by
+/// GTC-219 once D1 has settled.
 enum RsvpStatus {
   PENDING
   YES
   NO
   NOT_SURE
+}
+
+/// GTC-174 (D1): the guest's answer when attendance was directly ASKED. Two values,
+/// no PENDING sentinel — NULL on the column carries "never asked", which is a
+/// different fact from either answer. See PersonEvent.attendanceAnswer.
+enum AttendanceAnswer {
+  YES
+  NO
+}
+
+/// GTC-179 (E2, phase 2): the per-EVENT nudge pace — Moment 4 §10.3, "at the pre-flight
+/// (nudge pace: standard / relaxed / off)". Founder Ruling 2, 2026-08-27 supplies the
+/// days: STANDARD [4, 7], RELAXED [6, 12], OFF [].
+///
+/// ⚠ THIS ENUM MIRRORS `NUDGE_PACE_OFFSET_DAYS` IN src/lib/nudge-cadence.ts. THE MODULE
+/// IS THE SOURCE AND THIS IS THE COPY — schema-follows-module, never the reverse. The
+/// direction is forced, not stylistic: that module must import NOTHING so the host UI can
+/// render the same clock the sweep enforces (Hinge §6), and tests/nudge-cadence-test.ts
+/// asserts the zero-import property structurally. It therefore cannot import this enum,
+/// so the two vocabularies are kept in step by hand. Change the module first, then this.
+enum NudgePace {
+  STANDARD
+  RELAXED
+  OFF
+}
+
+/// GTC-179 (E2, phase 2): the per-PERSON mark — Moment 4 §10.3, "a mark alongside the
+/// recipient picker (go gentle / don't chase), set at Moment 1 or any time — a hosting
+/// judgement the system stores and obeys". Founder Ruling 1, 2026-08-27: GENTLE is one
+/// nudge at day 5; DONT_CHASE is none at all, on the direct path AND the proxy path
+/// (Ruling 3).
+///
+/// TWO VALUES, NO "NORMAL" SENTINEL. NULL on the column carries "no mark", which is a
+/// different fact from either mark and is what makes an unmarked person defer to the
+/// event's pace. Same reasoning AttendanceAnswer records for having no PENDING.
+///
+/// ⚠ MIRRORS `NUDGE_MARK_OFFSET_DAYS` IN src/lib/nudge-cadence.ts — same
+/// schema-follows-module direction, same reason. See NudgePace above.
+///
+/// NOT A SUBSTITUTE FOR OPT-OUT (Do-Not-Touch Zone 7). This is a HOST-set preference
+/// layered ON TOP of `Person.smsOptedOut`/`SmsOptOut`, which is GUEST-set and legally
+/// binding. Every eligibility ladder must check opt-out FIRST and this second, so that
+/// a host clearing DONT_CHASE can never resume messaging someone who opted out.
+enum NudgeMark {
+  GENTLE
+  DONT_CHASE
 }
 
 enum InviteEventType {
@@ -973,4 +1377,32 @@ model NudgeLog {
   errorMessage  String?
   createdAt     DateTime    @default(now())
   personEvent   PersonEvent @relation(fields: [personEventId], references: [id], onDelete: Cascade)
+}
+
+model EventSetup {
+  id      String @id @default(cuid())
+  eventId String @unique
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  eventType      String?
+  eventTypeOther String?
+
+  mainsData              Json?
+  sidesData              Json?
+  dessertsData           Json?
+  drinksData             Json?
+  setupCleanupData       Json?
+  dietaryData            Json?
+  otherNotes             String?
+  // GTC-133 sub-commit (d): Other-jobs section accordions. Each is a free-text + stillDeciding shape.
+  // Shape: { freeText: string, stillDeciding: boolean }
+  setUpData              Json?
+  cleanUpData            Json?
+  otherJobsOtherData     Json?
+  // GTC-133: keyed by config category (entree_starters, drinks_alcoholic, etc.) for the 9 categories
+  // without dedicated columns. Shape: { [categoryKey]: { selections: OptionTreeSelections, stillDeciding?: boolean } }
+  extendedCategoriesData Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

@@ -142,9 +142,11 @@ export default function NewPlanPage() {
       // Clear sessionStorage
       sessionStorage.removeItem('gather_new_event');
 
-      // Redirect to event page, opening the setup wizard automatically
-      // Use full page load so the server layout picks up the new session cookie
-      window.location.href = `/plan/${result.event.id}?setup=true`;
+      // Redirect into V2's setup route (GTC-233 — replaces the retired `?setup=true`).
+      // Still a full page load so the server layout picks up the new session cookie;
+      // `replace` rather than `assign` so Back does not return to the consumed
+      // creation form (its sessionStorage draft is cleared just above).
+      window.location.replace(`/plan/${result.event.id}/setup`);
     } catch (err) {
       console.error('Error creating event:', err);
       setError(

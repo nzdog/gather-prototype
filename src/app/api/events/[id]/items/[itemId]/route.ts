@@ -3,6 +3,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordChange, fieldChanges, ASK_FIELDS } from '@/lib/ledger';
+
+// GTC-196 (A3b): this route absorbs frozen-edit's `edit_item` AND `toggle_critical`.
+//
+// The two are recorded differently, and that asymmetry is the ruling:
+//   - An ASK_FIELDS change on an ANSWERED item is T4 — it moves what someone claimed
+//     against, so it carries a why.
+//   - A criticality toggle is NEVER interrogated. Moment 4 §8.3: "criticality does
+//     exactly two things (the badge, and the assistant's message at red) and touches
+//     nothing else. It is entirely a host-facing signal, never a guest-facing
+//     pressure." frozen-edit demanded a reason for it; that was the contradiction the
+//     discovery report flagged.
+//
+// Every changed field gets its own entry; unchanged fields get nothing. A submission
+// is not a change.
+const TRACKED_ITEM_FIELDS = [
+  ...ASK_FIELDS,
+  'description',
+  'notes',
+  'critical',
+  'dietaryTags',
+  'dayId',
+  'serveTime',
+  'displayOrder',
+] as const;
 
 export async function PATCH(
   request: NextRequest,
@@ -17,10 +43,11 @@ export async function PATCH(
 
     const body = await request.json();
 
-    // Fetch current item to check if it's generated
+    // Fetch the item BEFORE the write — the ledger's `before` must be the real prior
+    // state, and the why-scope rule needs to know whether anyone has answered.
     const currentItem = await prisma.item.findUnique({
       where: { id: itemId },
-      select: { source: true },
+      include: { assignment: { select: { response: true } } },
     });
 
     if (!currentItem) {
@@ -33,6 +60,8 @@ export async function PATCH(
     // Quantity fields
     if (body.quantityAmount !== undefined) updateData.quantityAmount = body.quantityAmount;
     if (body.quantityUnit !== undefined) updateData.quantityUnit = body.quantityUnit;
+    if (body.quantityUnitCustom !== undefined)
+      updateData.quantityUnitCustom = body.quantityUnitCustom;
     if (body.quantityState !== undefined) updateData.quantityState = body.quantityState;
     if (body.quantityText !== undefined) updateData.quantityText = body.quantityText;
 
@@ -49,7 +78,14 @@ export async function PATCH(
     // Other fields
     if (body.name !== undefined) updateData.name = body.name;
     if (body.description !== undefined) updateData.description = body.description;
+    // GTC-238: notes was the one edit-form field the route never read — a 200 that
+    // persisted nothing. A note is Kate's manual work (ruling Q1), so it is also
+    // substantive and tracked below.
+    if (body.notes !== undefined) updateData.notes = body.notes;
     if (body.critical !== undefined) updateData.critical = body.critical;
+
+    // Display order — pure reorder, not substantive (does not flip GENERATED → HOST_EDITED).
+    if (body.displayOrder !== undefined) updateData.displayOrder = body.displayOrder;
 
     // Dietary tags
     if (body.dietaryTags !== undefined) updateData.dietaryTags = body.dietaryTags;
@@ -62,6 +98,25 @@ export async function PATCH(
     if (body.dropOffLocation !== undefined) updateData.dropOffLocation = body.dropOffLocation;
     if (body.dropOffNote !== undefined) updateData.dropOffNote = body.dropOffNote;
 
+    // GTC-175 (D2): the per-item decide-by override — Hinge §8's "Kate able to override
+    // per item". Hours before needed-by; null clears it back to the event default.
+    // Deliberately NOT in `substantiveFieldsBeingEdited` below: this changes WHEN the
+    // system asks, not WHAT it asks, so it must not flip a GENERATED item to HOST_EDITED
+    // and must not read as an ask-change to the ledger.
+    if (body.decideByOffsetHours !== undefined) {
+      const raw = body.decideByOffsetHours;
+      if (raw === null) {
+        updateData.decideByOffsetHours = null;
+      } else if (Number.isInteger(raw) && raw >= 0) {
+        updateData.decideByOffsetHours = raw;
+      } else {
+        return NextResponse.json(
+          { error: 'decideByOffsetHours must be a non-negative integer number of hours, or null' },
+          { status: 400 }
+        );
+      }
+    }
+
     // If this is a GENERATED item and substantive fields are being edited, mark as HOST_EDITED
     // Substantive fields: name, description, quantity*, critical, dietaryTags, timing, drop-off
     // Non-substantive: placeholderAcknowledged, quantityDeferredTo (these are acknowledgements, not edits)
@@ -70,9 +125,11 @@ export async function PATCH(
       body.description !== undefined ||
       body.quantityAmount !== undefined ||
       body.quantityUnit !== undefined ||
+      body.quantityUnitCustom !== undefined ||
       body.quantityState !== undefined ||
       body.quantityText !== undefined ||
       body.critical !== undefined ||
+      body.notes !== undefined ||
       body.dietaryTags !== undefined ||
       body.dayId !== undefined ||
       body.serveTime !== undefined ||
@@ -83,10 +140,36 @@ export async function PATCH(
       updateData.source = 'HOST_EDITED';
     }
 
-    // Update item
-    const item = await prisma.item.update({
-      where: { id: itemId },
-      data: updateData,
+    const actor = await ledgerActorForUser(auth.user, auth.role);
+
+    const item = await prisma.$transaction(async (tx) => {
+      const updated = await tx.item.update({
+        where: { id: itemId },
+        data: updateData,
+      });
+
+      const changes = fieldChanges(
+        { action: 'EDIT_ITEM', targetType: 'Item', targetId: itemId },
+        currentItem as unknown as Record<string, unknown>,
+        updateData,
+        TRACKED_ITEM_FIELDS
+      ).map((c) => ({
+        ...c,
+        // TOGGLE_CRITICAL is versioned but never interrogated (§8.3).
+        action: c.field === 'critical' ? ('TOGGLE_CRITICAL' as const) : c.action,
+        context: { assignmentResponse: currentItem.assignment?.response ?? null },
+      }));
+
+      if (changes.length > 0) {
+        await recordChange(tx, {
+          eventId,
+          actor,
+          reason: body.reason ?? null,
+          changes,
+        });
+      }
+
+      return updated;
     });
 
     return NextResponse.json({
@@ -106,7 +189,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string; itemId: string }> }
 ) {
   try {
@@ -116,10 +199,12 @@ export async function DELETE(
     const auth = await requireEventRole(eventId, ['HOST', 'COORDINATOR']);
     if (auth instanceof NextResponse) return auth;
 
+    const delBody = await request.json().catch(() => ({}) as { reason?: string });
+
     // Verify item exists
     const item = await prisma.item.findUnique({
       where: { id: itemId },
-      include: { team: true },
+      include: { team: true, assignment: { select: { response: true, personId: true } } },
     });
 
     if (!item) {
@@ -130,9 +215,29 @@ export async function DELETE(
       return NextResponse.json({ error: 'Item does not belong to this event' }, { status: 400 });
     }
 
-    // Delete item (cascade will handle assignment if any)
-    await prisma.item.delete({
-      where: { id: itemId },
+    const actor = await ledgerActorForUser(auth.user, auth.role);
+
+    await prisma.$transaction(async (tx) => {
+      // Delete item (cascade will handle assignment if any)
+      await tx.item.delete({ where: { id: itemId } });
+
+      // T3 — deleting an item someone holds takes their ask away, at any response
+      // state. Deleting an unassigned item touches nobody.
+      await recordChange(tx, {
+        eventId,
+        actor,
+        reason: delBody.reason ?? null,
+        changes: [
+          {
+            action: 'DELETE_ITEM',
+            targetType: 'Item',
+            targetId: itemId,
+            before: { name: item.name, quantity: item.quantity, teamId: item.teamId },
+            after: null,
+            context: { assignmentResponse: item.assignment?.response ?? null },
+          },
+        ],
+      });
     });
 
     return NextResponse.json({ success: true, message: 'Item deleted' });

@@ -21,10 +21,11 @@ import {
 import ItemStatusBadges from '@/components/plan/ItemStatusBadges';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 import { useToast } from '@/contexts/ToastContext';
+import { useReasonPrompt } from '@/components/plan/ReasonPrompt';
 
 interface Assignment {
   id: string;
-  response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+  response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE';
   item: {
     id: string;
     name: string;
@@ -58,7 +59,7 @@ interface Item {
   dropOffNote: string | null;
   assignment: {
     id: string;
-    response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+    response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE';
     person: { id: string; name: string };
   } | null;
 }
@@ -84,6 +85,13 @@ interface CoordinatorData {
     id: string;
     name: string;
     status: string;
+    /**
+     * GTC-202: declared here at last. GTC-198 (A3d) put these on the wire so this page
+     * could use the shared lifecycle predicates, but never added them to the interface
+     * — so the data arrived and was unreachable.
+     */
+    sentAt: string | null;
+    endDate: string;
     guestCount: number | null;
   };
   team: {
@@ -119,6 +127,7 @@ export default function CoordinatorView() {
   const params = useParams();
   const token = params.token as string;
   const toast = useToast();
+  const { ask: askForReason, element: reasonPrompt } = useReasonPrompt();
   const [data, setData] = useState<CoordinatorData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -170,15 +179,19 @@ export default function CoordinatorView() {
   };
 
   const handleAssign = async (itemId: string, personId: string) => {
-    if (data?.event.status === 'FROZEN') {
-      toast.warning(`Event is frozen. Contact ${data.host?.name || 'the host'} to make changes.`);
-      return;
-    }
+    // GTC-202: T1. The ledger is actor-agnostic (ruled 2026-08-03, "no walls
+    // anywhere") — a coordinator moving an ask owes exactly the why a host owes, and
+    // is asked in exactly the same words.
+    const answer = await askForReason(
+      { action: 'CREATE_ASSIGNMENT', targetType: 'Assignment', targetId: itemId },
+      data?.event
+    );
+    if (!answer.proceed) return;
     try {
       const response = await fetch(`/api/c/${token}/items/${itemId}/assign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ personId }),
+        body: JSON.stringify({ personId, reason: answer.reason }),
       });
       if (!response.ok) {
         const result = await response.json();
@@ -192,13 +205,17 @@ export default function CoordinatorView() {
   };
 
   const handleUnassign = async (itemId: string) => {
-    if (data?.event.status === 'FROZEN') {
-      toast.warning(`Event is frozen. Contact ${data.host?.name || 'the host'} to make changes.`);
-      return;
-    }
+    // GTC-202: T1 — withdrawing an ask, at any response state.
+    const answer = await askForReason(
+      { action: 'DELETE_ASSIGNMENT', targetType: 'Assignment', targetId: itemId },
+      data?.event
+    );
+    if (!answer.proceed) return;
     try {
       const response = await fetch(`/api/c/${token}/items/${itemId}/assign`, {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: answer.reason }),
       });
       if (!response.ok) {
         const result = await response.json();
@@ -300,9 +317,26 @@ export default function CoordinatorView() {
       return;
     }
 
+    // GTC-202: T3 — only if someone is holding it.
+    const answer = await askForReason(
+      {
+        action: 'DELETE_ITEM',
+        targetType: 'Item',
+        targetId: itemId,
+        context: {
+          assignmentResponse:
+            data?.items.find((i) => i.id === itemId)?.assignment?.response ?? null,
+        },
+      },
+      data?.event
+    );
+    if (!answer.proceed) return;
+
     try {
       const response = await fetch(`/api/c/${token}/items/${itemId}`, {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: answer.reason }),
       });
 
       if (!response.ok) {
@@ -339,19 +373,13 @@ export default function CoordinatorView() {
   const unassignedCount = unassignedItems.length;
   const criticalCount = unassignedItems.filter((i) => i.critical).length;
 
-  // Sort items: critical unassigned first, then regular unassigned, then assigned
-  const sortedItems = [...data.items].sort((a, b) => {
-    const aUnassigned = !a.assignment;
-    const bUnassigned = !b.assignment;
-    if (aUnassigned && a.critical && !(bUnassigned && b.critical)) return -1;
-    if (bUnassigned && b.critical && !(aUnassigned && a.critical)) return 1;
-    if (aUnassigned && !bUnassigned) return -1;
-    if (bUnassigned && !aUnassigned) return 1;
-    return 0;
-  });
+  // Moment 4 spec §8.2: criticality is a badge, not a sort key — items stay
+  // in natural order, no float-to-top under any condition.
+  const sortedItems = data.items;
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
+      {reasonPrompt}
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-5">
         {data.isDemo && (
@@ -377,21 +405,16 @@ export default function CoordinatorView() {
         </div>
       </div>
 
-      {/* Frozen State Banner */}
-      {data.event.status === 'FROZEN' && (
-        <div className="bg-sage-50 px-6 py-4 flex items-start gap-3">
-          <span className="text-2xl">🔒</span>
-          <div className="flex-1">
-            <h3 className="text-sm font-bold text-sage-900">Plan is FROZEN</h3>
-            <p className="text-xs text-sage-800 mt-1">
-              Contact {data.host?.name || 'the host'} to request changes.
-            </p>
-          </div>
-        </div>
-      )}
+      {/* GTC-198 (A3d): the "Plan is FROZEN — contact the host" banner is DELETED,
+          and with it every read-only branch below.
+
+          The coordinator ruling (2026-08-03): "same always-allow + ledger as the host.
+          No walls anywhere, ledger is actor-agnostic." A3a un-gated the server; this
+          removes the screen that still said otherwise. A coordinator's changes are
+          recorded — with a why where they touch someone — not refused. */}
 
       {/* Status Bar */}
-      {data.event.status !== 'FROZEN' && (
+      {
         <>
           {criticalCount > 0 ? (
             <div className="bg-red-50 px-6 py-4 flex items-center gap-3">
@@ -417,14 +440,14 @@ export default function CoordinatorView() {
             </div>
           )}
         </>
-      )}
+      }
 
       {/* Items List */}
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm uppercase tracking-wide text-gray-500">Team Items</h2>
           <div className="flex items-center gap-2">
-            {data.event.status !== 'FROZEN' && (
+            {
               <button
                 onClick={() => setShowAddModal(true)}
                 className="flex items-center gap-2 px-3 py-1.5 text-sm bg-accent text-white hover:bg-accent-dark rounded-lg transition-colors"
@@ -432,7 +455,7 @@ export default function CoordinatorView() {
                 <Plus className="size-4" />
                 Add Item
               </button>
-            )}
+            }
             {data && data.items.length > 0 && (
               <button
                 onClick={toggleAllItems}
@@ -491,14 +514,12 @@ export default function CoordinatorView() {
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    {!item.assignment && item.critical && (
-                      <AlertCircle className="size-4 text-red-500 flex-shrink-0" />
-                    )}
+                    {item.critical && <AlertCircle className="size-4 text-red-500 flex-shrink-0" />}
                     <span className="font-semibold text-gray-900">{item.name}</span>
                     {item.quantity && (
                       <span className="text-gray-500 flex-shrink-0">×{item.quantity}</span>
                     )}
-                    {!item.assignment && item.critical && (
+                    {item.critical && (
                       <span className="bg-red-100 text-red-800 text-xs font-semibold px-2 py-1 rounded flex-shrink-0">
                         CRITICAL
                       </span>
@@ -579,14 +600,14 @@ export default function CoordinatorView() {
                           <span className="text-sm font-medium text-gray-900">
                             {item.assignment.person.name}
                           </span>
-                          {data.event.status !== 'FROZEN' && (
+                          {
                             <button
                               onClick={() => handleUnassign(item.id)}
                               className="text-sm text-red-600 hover:text-red-800"
                             >
                               Unassign
                             </button>
-                          )}
+                          }
                         </div>
                         {item.assignment.response === 'ACCEPTED' ? (
                           <div className="inline-flex items-center gap-1.5 bg-green-100 text-green-800 px-3 py-1.5 rounded-full text-sm font-semibold">
@@ -598,6 +619,11 @@ export default function CoordinatorView() {
                             <AlertCircle className="size-4" />
                             Declined
                           </div>
+                        ) : /* GTC-174 (D1): amber, not red — Hinge §8 holds the item softly. */
+                        item.assignment.response === 'MAYBE' ? (
+                          <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full text-sm font-semibold">
+                            Maybe
+                          </div>
                         ) : (
                           <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full text-sm font-semibold">
                             <AlertCircle className="size-4" />
@@ -607,7 +633,7 @@ export default function CoordinatorView() {
                       </div>
                     ) : (
                       <div>
-                        {data.event.status !== 'FROZEN' ? (
+                        {true ? (
                           <select
                             onChange={(e) => {
                               if (e.target.value) {
@@ -632,7 +658,7 @@ export default function CoordinatorView() {
                   </div>
 
                   {/* Delete button */}
-                  {data.event.status !== 'FROZEN' && (
+                  {
                     <div className="pt-3 mt-3 border-t border-gray-200">
                       <button
                         onClick={() => handleDeleteItem(item.id, item.name)}
@@ -642,7 +668,7 @@ export default function CoordinatorView() {
                         Delete Item
                       </button>
                     </div>
-                  )}
+                  }
                 </div>
               )}
             </div>
@@ -664,7 +690,7 @@ export default function CoordinatorView() {
                 key={assignment.id}
                 className={`bg-white rounded-lg p-4 shadow-sm border ${
                   viewMode === 'list' ? 'w-full max-w-md' : ''
-                } ${assignment.response === 'ACCEPTED' ? 'border-green-300' : assignment.response === 'DECLINED' ? 'border-red-300' : 'border-blue-300'}`}
+                } ${assignment.response === 'ACCEPTED' ? 'border-green-300' : assignment.response === 'DECLINED' ? 'border-red-300' : assignment.response === 'MAYBE' ? 'border-amber-300' : 'border-blue-300'}`}
               >
                 {/* Card Header - Always Visible */}
                 <div className="flex items-start justify-between mb-2">
@@ -766,6 +792,11 @@ export default function CoordinatorView() {
                       <div className="flex items-center justify-center gap-2 text-red-600 font-medium py-2.5">
                         <AlertCircle className="size-5" />
                         Declined
+                      </div>
+                    ) : /* GTC-174 (D1): a maybe is a surfaced decision, not a silence. */
+                    assignment.response === 'MAYBE' ? (
+                      <div className="flex items-center justify-center gap-2 text-amber-600 font-medium py-2.5">
+                        Maybe
                       </div>
                     ) : (
                       <div className="flex items-center justify-center gap-2 text-amber-600 font-medium py-2.5">

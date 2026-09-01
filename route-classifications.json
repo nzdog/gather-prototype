@@ -264,6 +264,14 @@
     "securityIssues": []
   },
   {
+    "filePath": "src/app/api/events/[id]/glance/route.ts",
+    "apiPath": "/api/events/:id/glance",
+    "methods": ["GET"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
     "filePath": "src/app/api/events/[id]/items/route.ts",
     "apiPath": "/api/events/:id/items",
     "methods": ["GET"],
@@ -323,6 +331,46 @@
     "filePath": "src/app/api/events/[id]/people/batch-import/route.ts",
     "apiPath": "/api/events/:id/people/batch-import",
     "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/regenerate-plan/route.ts",
+    "apiPath": "/api/events/[id]/regenerate-plan",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole(eventId, ['HOST', 'COHOST'])"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/pre-flight/route.ts",
+    "apiPath": "/api/events/:id/pre-flight",
+    "methods": ["GET"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/pre-flight/cadence/route.ts",
+    "apiPath": "/api/events/:id/pre-flight/cadence",
+    "methods": ["PATCH"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/pre-flight/channel/route.ts",
+    "apiPath": "/api/events/:id/pre-flight/channel",
+    "methods": ["PATCH"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/pre-flight/message/route.ts",
+    "apiPath": "/api/events/:id/pre-flight/message",
+    "methods": ["GET", "PATCH"],
     "authType": "SESSION",
     "authEvidence": ["requireEventRole"],
     "securityIssues": []

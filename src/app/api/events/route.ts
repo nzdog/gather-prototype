@@ -35,6 +35,10 @@ export async function GET(_request: NextRequest) {
           where: { userId: user.id },
           select: { role: true },
         },
+        // GTC-233: the events list routes V2 events to /plan/[id]/setup, so it needs the
+        // same EventSetup signal the dashboard uses to hide V1 controls (GTC-148/149).
+        // `setup` is a relation, so it is absent unless named here.
+        setup: { select: { id: true } },
       },
       orderBy: {
         createdAt: 'desc',

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { canMutate, logAudit } from '@/lib/workflow';
-import { requireNotFrozen } from '@/lib/auth/guards';
+import { logAudit } from '@/lib/workflow';
+import { recordChange, actorFromToken } from '@/lib/ledger';
 
 /**
  * POST /api/c/[token]/items
@@ -11,9 +11,7 @@ import { requireNotFrozen } from '@/lib/auth/guards';
  *
  * CRITICAL:
  * - Force teamId from token, NEVER from client
- * - Check canMutate() before creating
  * - All operations in transaction
- * - Server-side frozen state validation
  */
 export async function POST(request: NextRequest, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;
@@ -21,20 +19,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
 
   if (!resolvedContext || resolvedContext.scope !== 'COORDINATOR' || !resolvedContext.team) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-  }
-
-  // SECURITY: Block mutations when FROZEN (server-side validation)
-  const frozenBlock = requireNotFrozen(resolvedContext.event, false);
-  if (frozenBlock) return frozenBlock;
-
-  // Check if mutations are allowed
-  if (!canMutate(resolvedContext.event.status, 'createItem')) {
-    return NextResponse.json(
-      {
-        error: `Cannot create items while event is ${resolvedContext.event.status}`,
-      },
-      { status: 403 }
-    );
   }
 
   const body = await request.json();
@@ -72,6 +56,21 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
       targetType: 'Item',
       targetId: newItem.id,
       details: `Created item: ${newItem.name}`,
+    });
+
+    // Versioned, never interrogated: nobody has been asked for this yet.
+    await recordChange(tx, {
+      eventId: resolvedContext.event.id,
+      actor: actorFromToken(resolvedContext),
+      changes: [
+        {
+          action: 'CREATE_ITEM',
+          targetType: 'Item',
+          targetId: newItem.id,
+          before: null,
+          after: { name: newItem.name, quantity: newItem.quantity, teamId: newItem.teamId },
+        },
+      ],
     });
 
     return newItem;

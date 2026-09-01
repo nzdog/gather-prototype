@@ -22,9 +22,11 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+**/.obsidian/
 
 # Claude
-.claude/
+.claude/*
+!.claude/skills/
 docs/_inbox/
 
 # Debug/test scripts (one-off)

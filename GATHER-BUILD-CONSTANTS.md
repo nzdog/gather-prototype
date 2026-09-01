@@ -1,7 +1,7 @@
 # GATHER BUILD CONSTANTS
 
 Reference file for AI executors and developers. Keep this file accurate.
-Last updated: 2026-03-05.
+Last updated: 2026-08-10.
 CLAUDE.md reviewed: no conflicts or additions found.
 
 ---
@@ -12,10 +12,14 @@ regardless of ticket type:
 
 1. Read this file (GATHER-BUILD-CONSTANTS.md) in full
 2. Read the relevant ticket template in full:
-   - Bug tickets: BUG-TICKET-TEMPLATE.md
-   - Feature tickets: FEATURE-TICKET-TEMPLATE.md
-   - Chore tickets: CHORE-TICKET-TEMPLATE.md
-   - Spike tickets: SPIKE-TICKET-TEMPLATE.md
+   - Bug tickets: BUG-TICKET-TEMPLATE.md (complex/multi-actor bugs:
+     BUG-TICKET-TEMPLATE-FULL.md)
+   - UX tickets: UX-TICKET-TEMPLATE.md
+   - Feature, chore, and spike tickets: no dedicated template exists.
+     Follow the BUG-TICKET-TEMPLATE.md structure and recent precedents
+     in docs/tickets/ (e.g. GTC-152 for a chore).
+   - Citations, in tickets and in code comments: the Citations section of
+     BUG-TICKET-TEMPLATE.md is binding on every ticket type (GTC-222).
    - If the ticket involves unexpected platform behaviour, stale UI
      state, auth anomalies, or DB irregularities, also read
      GATHER-KNOWN-BEHAVIOURS.md
@@ -57,11 +61,34 @@ For every ticket executed, before committing:
 
 ## Base Branch
 
-`master` — all work branches off `master` and PRs merge back to `master`.
+`feat/moment-one-redesign` — this is the working trunk in practice. As of
+2026-08-10 it is 161 commits ahead of `master`, and `master`'s HEAD is exactly
+their merge-base — it has not moved since 2026-04-10. Day-to-day work branches
+off `feat/moment-one-redesign` and merges back into it; `master` is not the
+active integration target.
+
+Superseded (kept for history): the repo was originally set up so all work
+branched off `master` and PRs merged back to `master`. That convention is no
+longer followed.
 
 Branching convention: feature branches are not enforced by tooling; the repo has
 dependabot branches (`dependabot/npm_and_yarn/*`) alongside `master`. Use
 descriptive branch names prefixed by ticket ID where applicable (e.g. `GTC-001-fix-session-cookies`).
+
+---
+
+## Deploy
+
+**Railway auto-deploy from `master` is OFF as of 2026-08-10** (changed by
+Nigel). Deploys are now manual, triggered from Railway's Deployments tab.
+Consequence: merging to `master` no longer deploys anything by itself.
+
+**Caveat — this decouples deploy timing, not the database.** Turning off
+auto-deploy only separates code delivery from *when* a deploy happens. It does
+NOT separate code from the production database: schema migrations still apply
+to the production database the moment code carrying them is deployed and run,
+regardless of how that deploy was triggered. Rehearse any migration against a
+copy of the production database before triggering a deploy that carries one.
 
 ---
 
@@ -104,10 +131,10 @@ npm run test:security
 | Security suite | `npm run test:security` | Exits 0 |
 
 > **Pre-existing known issues (do not fix without a dedicated ticket):**
-> - DB schema drift (P3005): `gather_dev` schema was applied outside migration
->   history. `prisma migrate dev` detects drift and prompts for reset;
->   `prisma migrate deploy` errors with P3005. The DB is functional — security
->   tests confirm connection. Fix requires baselining the existing schema.
+> - None currently open. The P3005 schema-drift issue formerly listed here was
+>   resolved by baselining (2026-03-14) and re-confirmed clean by a live
+>   `prisma migrate status` run on 2026-08-06 (37 migrations found, "Database
+>   schema is up to date!"). See GTC-215 for the correction history.
 
 ---
 
@@ -221,7 +248,7 @@ The following areas must not be refactored without explicit instruction. They ar
 high-risk, tightly coupled to security invariants, or carry subtle correctness
 requirements verified by the security test suite.
 
-### 1. Session & Cookie Management (`src/lib/auth*`, `src/middleware*`)
+### 1. Session & Cookie Management (`src/lib/auth*`, `middleware.ts` at repo root)
 Role-scoped session cookies were a hard-won fix (GTC-001). The cookie naming and
 scoping logic that separates host sessions from participant sessions must not be
 changed. Breaking this re-introduces session collision bugs.
@@ -246,7 +273,7 @@ Never hand-edit migration SQL files. Never delete or reorder migrations. Always
 use `prisma migrate dev` to generate new migrations. The production deploy
 command (`prisma migrate deploy`) applies them in order.
 
-### 6. Security Test Suite (`tests/security-*.ts`, `scripts/classify-routes.ts`)
+### 6. Security Test Suite (`tests/security-*.ts`, `scripts/triage-unknown-routes.ts`)
 These tests define the security contract for the API surface. Do not weaken or
 skip assertions to make tests pass. If a test fails, fix the underlying issue.
 

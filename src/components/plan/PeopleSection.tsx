@@ -8,6 +8,8 @@ import EditPersonModal from './EditPersonModal';
 import TeamBoard from './TeamBoard';
 import ImportCSVModal, { PersonRow } from './ImportCSVModal';
 import AssignCoordinatorsModal from './AssignCoordinatorsModal';
+import { useReasonPrompt } from './ReasonPrompt';
+import { isSentJson, type SerialisedEvent } from '@/lib/lifecycle';
 
 interface Team {
   id: string;
@@ -37,11 +39,21 @@ interface PeopleSectionProps {
   stepLabel?: string;
   initialView?: 'table' | 'board';
   onReassignItems?: (teamId: string | null) => void;
+  /**
+   * The event, as it arrives over the wire.
+   *
+   * GTC-202 replaced GTC-201's `isSent: boolean` prop with this: sent-ness is still
+   * derived here (see `isSent` below, which the Auto-Assign tombstone still names), but
+   * the why-scope rule needs the whole lifecycle event, and passing both a boolean and
+   * an event would be two sources for one fact — the drift this epic exists to end.
+   */
+  event?: SerialisedEvent | null;
 }
 
 export default function PeopleSection({
   eventId,
   hostId,
+  event,
   teams,
   people,
   onPeopleChanged,
@@ -61,6 +73,10 @@ export default function PeopleSection({
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [isAutoAssigning, setIsAutoAssigning] = useState(false);
   const [noPlanError, setNoPlanError] = useState(false);
+  const { ask: askForReason, element: reasonPrompt } = useReasonPrompt();
+
+  /** Derived, not passed — one definition of sent (GTC-202). */
+  const isSent = event ? isSentJson(event) : false;
 
   const handleAddPerson = async (data: AddPersonFormData) => {
     try {
@@ -114,9 +130,26 @@ export default function PeopleSection({
   );
 
   const handleRemovePerson = async (personId: string) => {
+    // GTC-202: T2 — removing someone who is HOLDING something. `itemCount` is the
+    // held-assignment count the rule keys off; removing a guest who holds nothing
+    // touches nobody and is never interrogated.
+    const held = people.find((p) => p.personId === personId)?.itemCount ?? 0;
+    const answer = await askForReason(
+      {
+        action: 'REMOVE_PERSON',
+        targetType: 'PersonEvent',
+        targetId: personId,
+        context: { heldAssignmentCount: held },
+      },
+      event
+    );
+    if (!answer.proceed) return;
+
     try {
       const response = await fetch(`/api/events/${eventId}/people/${personId}`, {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: answer.reason }),
       });
 
       if (!response.ok) {
@@ -205,9 +238,16 @@ export default function PeopleSection({
         throw new Error(data.error || 'Failed to auto-assign people');
       }
 
-      // Success feedback
-      const itemMsg = data.itemsAssigned > 0 ? ` and ${data.itemsAssigned} items to people` : '';
-      toast.success(`Successfully assigned ${data.assigned} people to teams${itemMsg}!`);
+      // Success feedback.
+      //
+      // The "and N items to people" clause is GONE (founder Ruling 1, 2026-08-29):
+      // auto-assign places people and creates no Assignment rows, so there is no item
+      // count to report. Ruling 2 — one behaviour behind one name — is why this wording
+      // changed with the route rather than being left to imply the old half is still
+      // running somewhere.
+      toast.success(
+        `Assigned ${data.assigned} ${data.assigned === 1 ? 'person' : 'people'} to teams. Nothing was assigned to anyone yet.`
+      );
 
       // Refresh data
       onPeopleChanged?.();
@@ -234,6 +274,7 @@ export default function PeopleSection({
 
   return (
     <>
+      {reasonPrompt}
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-4">
@@ -279,24 +320,42 @@ export default function PeopleSection({
               <UserCog className="w-4 h-4" />
               Assign Coordinators
             </button>
-            {/* Auto-Assign Button */}
-            <button
-              onClick={handleAutoAssign}
-              disabled={isAutoAssigning || people.length === 0}
-              className="px-3 py-1 bg-accent text-white rounded-md hover:bg-accent-dark disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {isAutoAssigning ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Assigning...
-                </>
-              ) : (
-                <>
-                  <Users className="w-4 h-4" />
-                  Auto-Assign
-                </>
-              )}
-            </button>
+            {/* ⚠ TOMBSTONE — REMOVE THIS CONDITION WHEN I2 + E1 LAND.
+                ────────────────────────────────────────────────────────────────────
+                Auto-Assign is hidden on a SENT event. This is a UI ABSENCE, not a
+                server block (ruled 2026-08-03): the route allows it and records it,
+                because Moment 4 §7 forbids hard-blocking the host. The screen simply
+                does not offer it yet.
+
+                WHY: post-send, auto-assign creates N asks at once — and until the
+                mini-send machinery exists, nobody it asks would ever be TOLD. Asking
+                someone silently is worse than not offering the button.
+
+                EXPIRES ON: GTC-189 (I2, the press — owns mini-sends) and GTC-178 (E1,
+                the nudge cadence those people's clocks run on). When a post-send
+                assignment reliably reaches the person assigned, delete `!isSent &&`
+                and this comment. The ledger side is already done: the batch carries
+                one why as one changeSet.
+                ──────────────────────────────────────────────────────────────────── */}
+            {!isSent && (
+              <button
+                onClick={handleAutoAssign}
+                disabled={isAutoAssigning || people.length === 0}
+                className="px-3 py-1 bg-accent text-white rounded-md hover:bg-accent-dark disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {isAutoAssigning ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Assigning...
+                  </>
+                ) : (
+                  <>
+                    <Users className="w-4 h-4" />
+                    Auto-Assign
+                  </>
+                )}
+              </button>
+            )}
             {/* Import CSV Button */}
             <button
               onClick={() => setImportModalOpen(true)}
