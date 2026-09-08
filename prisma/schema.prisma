@@ -653,13 +653,46 @@ model MagicLink {
 }
 
 model EventRole {
-  id        String        @id @default(cuid())
-  userId    String
-  eventId   String
-  role      EventRoleType
-  createdAt DateTime      @default(now())
-  event     Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String        @id @default(cuid())
+  userId       String
+  eventId      String
+  role         EventRoleType
+  createdAt    DateTime      @default(now())
+  /// GTC-192 (J1, phase 5): RULING 9's REPLAY MEMORY — when THIS viewer was last shown the
+  /// glance's news. The arrival replay opens on the state as of her last visit and plays the
+  /// changes since; this is the only thing that remembers where "since" starts.
+  ///
+  /// PER VIEWER, BY RULING 20 (2026-09-08) — not by inference from @@unique([userId, eventId]).
+  /// A COHOST has her own row and her own glanceSeenAt, and a reversal the host has watched
+  /// settle stays sticky red for the co-host until she watches it too: "the red does not mean
+  /// someone must act on this — it means this person changed, and that news is owed to each of
+  /// them once." Ruling 6's "settles once played" is therefore PER PERSON, not per event. The
+  /// unique key makes this free to build; the ruling is what makes it right.
+  ///
+  /// THIS IS THE HOST'S OWN TIMESTAMP, NOT GUEST DATA. Ruling 1 fences the replay to state
+  /// changes — "no opens, no views, no hesitations, ever" — and that fence is about GUESTS.
+  /// Ruling 9 permits exactly this one field and nothing beside it: "Nothing about guests is
+  /// tracked — only her own glance." DO NOT read this as a precedent for a viewed/opened/seen
+  /// field on PersonEvent, Person or Assignment. It is also never rendered, to her or to anyone.
+  ///
+  /// NULL MEANS NO BASELINE, NOT A BASELINE OF LONG AGO. Phase 6 must branch on null
+  /// explicitly: null -> play NOTHING and stamp now. Treating null as epoch replays the entire
+  /// history of the event on a host's first ever visit — the maximum fake-fireworks case.
+  /// "Nothing changed -> nothing plays" is the SEPARATE rule that an EMPTY DIFF produces; it is
+  /// not what null produces.
+  ///
+  /// STAMPED WHEN THE REPLAY PLAYED, NOT WHEN THE PAGE RENDERED (Ruling 6: "'Seen' means the
+  /// replay played"). Stamping on render settles a sticky reversal she never watched, and burns
+  /// on a refresh or a next/link prefetch.
+  ///
+  /// SCOPED TO THE GLANCE BY ITS NAME, DELIBERATELY. A generic lastViewedAt here would be
+  /// written by the next screen that wants one, and the replay would stop replaying with nothing
+  /// failing. The design reference's sketched "lastViewedAt" is not the name (Ruling 20's pass).
+  ///
+  /// NOTHING READS OR WRITES THIS AS OF PHASE 5. Phase 6 is the reader and the writer.
+  glanceSeenAt DateTime?
+  event        Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, eventId])
   @@index([userId])
