@@ -29,8 +29,14 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { readFileSync } from 'fs';
-import { join } from 'path';
+import {
+  BEHAVIOUR_DENYLIST,
+  REWIND_DENYLIST,
+  REWIND_EXEMPT_NAMES,
+  collectKeys,
+  code,
+  raw,
+} from './glance-fence';
 
 const prisma = new PrismaClient();
 
@@ -63,85 +69,6 @@ function ok(fn: () => boolean): boolean {
   } catch {
     return false;
   }
-}
-
-/** Source exactly as written. Empty string when the file does not exist yet (the RED run). */
-function raw(rel: string): string {
-  try {
-    return readFileSync(join(__dirname, '..', rel), 'utf8');
-  } catch {
-    return '';
-  }
-}
-
-/** Source with comments stripped — naming a thing you excluded must not read as using it. */
-function code(rel: string): string {
-  try {
-    return readFileSync(join(__dirname, '..', rel), 'utf8')
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/(^|[^:])\/\/.*$/gm, '$1');
-  } catch {
-    return '';
-  }
-}
-
-/**
- * Ruling 1's fence, as a list of names.
- *
- * > The replay may only ever show state changes (resolutions), never behaviour. No opens,
- * > no views, no hesitations, ever.
- *
- * Ruling 1 states the fence for the replay (phase 6); this ticket applies it from birth,
- * because a payload that already carries the field only needs somebody to render it.
- * Every name below is a real column, model or enum member in `prisma/schema.prisma` that
- * records what a GUEST DID rather than what they DECIDED — `InviteEvent.LINK_OPENED` is
- * the archetype, and `AuditEntry` is the same thing at a different grain.
- *
- * `firstNudgeSentAt` / `secondNudgeSentAt` are in the list for a second reason: they are
- * the raw material an exhaustion count would be derived from, and GTC-251 owns that
- * derivation. Denying them here forces the seam to take a DECISION (`ExhaustionFact`)
- * rather than telemetry it would have to interpret itself.
- *
- * `PersonEvent.sentAt` is deliberately NOT here. It records when GATHER SENT, which is the
- * anchor E1's cadence counts from — system action, not guest behaviour.
- */
-const BEHAVIOUR_DENYLIST = [
-  'openedAt',
-  'viewedAt',
-  'lastViewedAt',
-  'seenAt',
-  'lastSeenAt',
-  'inviteEvent',
-  'InviteEvent',
-  'LINK_OPENED',
-  'NAME_CLAIMED',
-  'RESPONSE_SUBMITTED',
-  'nudgeLog',
-  'NudgeLog',
-  'auditEntry',
-  'AuditEntry',
-  'rsvpStatus',
-  'rsvpRespondedAt',
-  'rsvpFollowupSentAt',
-  'attendanceAnsweredAt',
-  'claimedViaSharedLink',
-  'claimedAt',
-  'firstNudgeSentAt',
-  'secondNudgeSentAt',
-  'decideByFollowupSentAt',
-];
-
-/** Every key appearing anywhere in a payload, at any depth. */
-function collectKeys(value: unknown, into: Set<string> = new Set()): Set<string> {
-  if (Array.isArray(value)) {
-    for (const v of value) collectKeys(v, into);
-  } else if (value && typeof value === 'object') {
-    for (const [k, v] of Object.entries(value)) {
-      into.add(k);
-      collectKeys(v, into);
-    }
-  }
-  return into;
 }
 
 /** The declaration body of an exported interface, for asserting what a TYPE does not have. */
@@ -915,6 +842,10 @@ async function main() {
         surfaceSrc,
       ].every((src) => src.length > 0)
     );
+    // Phase 6 slice 6a puts the pure replay and its one door in the tree. Ruling 1's fence
+    // follows them UNCHANGED: neither reads a ledger, so neither is exempt from anything.
+    const replaySrc = code('src/lib/glance/replay.ts');
+    const entrySrc = code('src/lib/glance/replay-entry.ts');
     const glanceSources = [
       stateSrc,
       readSrc,
@@ -925,6 +856,8 @@ async function main() {
       assistantSrc,
       actionsSrc,
       surfaceSrc,
+      replaySrc,
+      entrySrc,
     ];
     const sourcesExist = glanceSources.every((src) => src.length > 0);
     for (const banned of BEHAVIOUR_DENYLIST) {
@@ -939,6 +872,56 @@ async function main() {
       'Ruling 1 source',
       'nothing in the glance uses `include:` — no whole row can spread in behind the select',
       sourcesExist && !glanceSources.some((src) => /\binclude\s*:/.test(src))
+    );
+
+    // ── RULING 21 (2026-09-09) — THE FENCE AMENDMENT ─────────────────────
+    //
+    // "The rewind reads AuditEntry and never InviteEvent, so the table carrying LINK_OPENED is
+    // not touched at all rather than touched and guarded. Exempt exactly the two names
+    // auditEntry/AuditEntry, for exactly one file, and assert BOTH: that the exemption is two
+    // names wide, and that it applies to one file. Two names loose across the codebase is a
+    // different thing from two names loose in one module."
+    //
+    // ONE LIST, TWO SCANS. `REWIND_DENYLIST` is a DERIVATION of `BEHAVIOUR_DENYLIST`
+    // (tests/glance-fence.ts), not a second list that could be edited independently — which is
+    // why the width assertion below can be a set difference rather than a hand-counted literal.
+    const rewindSrc = code('src/lib/glance/rewind.ts');
+    const EXEMPT_FILES = ['src/lib/glance/rewind.ts'];
+
+    assert(
+      'Ruling 21',
+      'the exemption is TWO NAMES WIDE — the set difference between the two scans is exactly auditEntry/AuditEntry',
+      BEHAVIOUR_DENYLIST.filter((n) => !REWIND_DENYLIST.includes(n)).join(',') ===
+        REWIND_EXEMPT_NAMES.join(',') && REWIND_EXEMPT_NAMES.length === 2
+    );
+    assert(
+      'Ruling 21',
+      'and it applies to EXACTLY ONE FILE — two names loose in one module, never loose across the codebase',
+      EXEMPT_FILES.length === 1 && EXEMPT_FILES[0] === 'src/lib/glance/rewind.ts'
+    );
+    assert(
+      'Ruling 21',
+      'the exempted file exists — the exemption is not a licence granted to nothing',
+      rewindSrc.length > 0
+    );
+    for (const banned of REWIND_DENYLIST) {
+      assert(
+        'Ruling 21',
+        `the rewind still answers to "${banned}" — everything but the two exempt names applies to it too`,
+        rewindSrc.length > 0 && !new RegExp(`\\b${banned}\\b`).test(rewindSrc)
+      );
+    }
+    for (const exempt of REWIND_EXEMPT_NAMES) {
+      assert(
+        'Ruling 21',
+        `"${exempt}" is loose in the rewind and NOWHERE ELSE in the glance — the exemption does not travel`,
+        sourcesExist && !glanceSources.some((src) => new RegExp(`\\b${exempt}\\b`).test(src))
+      );
+    }
+    assert(
+      'Ruling 21',
+      'and phase 5’s glanceSeenAt is still not caught by `seenAt` — case-sensitive \\bseenAt\\b, measured not assumed',
+      !/\bseenAt\b/.test('glanceSeenAt') && BEHAVIOUR_DENYLIST.includes('seenAt')
     );
 
     // ── The route ─────────────────────────────────────────────────────────
