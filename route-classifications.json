@@ -272,6 +272,14 @@
     "securityIssues": []
   },
   {
+    "filePath": "src/app/api/events/[id]/glance/seen/route.ts",
+    "apiPath": "/api/events/:id/glance/seen",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
     "filePath": "src/app/api/events/[id]/items/route.ts",
     "apiPath": "/api/events/:id/items",
     "methods": ["GET"],

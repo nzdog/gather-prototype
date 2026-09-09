@@ -846,6 +846,10 @@ async function main() {
     // follows them UNCHANGED: neither reads a ledger, so neither is exempt from anything.
     const replaySrc = code('src/lib/glance/replay.ts');
     const entrySrc = code('src/lib/glance/replay-entry.ts');
+    // Phase 6 slice 6b puts the stamp route in the tree. Ruling 1's fence follows it
+    // UNCHANGED: it writes the host's own mark and reads no guest behaviour, so it is
+    // exempt from nothing.
+    const seenSrc = code('src/app/api/events/[id]/glance/seen/route.ts');
     const glanceSources = [
       stateSrc,
       readSrc,
@@ -858,6 +862,7 @@ async function main() {
       surfaceSrc,
       replaySrc,
       entrySrc,
+      seenSrc,
     ];
     const sourcesExist = glanceSources.every((src) => src.length > 0);
     for (const banned of BEHAVIOUR_DENYLIST) {

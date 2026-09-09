@@ -40,24 +40,17 @@
  * direction: it fails to silence, not to noise.
  */
 
+import type { Prisma } from '@prisma/client';
 import type { DecideByItem } from '../decide-by';
 
-/** Prisma's shape, structurally — so this module is testable without binding to a client. */
-export interface RewindDb {
-  auditEntry: {
-    findMany(
-      args: unknown
-    ): Promise<
-      Array<{ targetId: string; actionType: string; timestamp: Date; targetType: string }>
-    >;
-  };
-  assignment: {
-    findMany(args: unknown): Promise<Array<{ id: string; createdAt: Date; item: DecideByItem }>>;
-  };
-  personEvent: {
-    findMany(args: unknown): Promise<Array<{ id: string; attendanceAnswer: string | null }>>;
-  };
-}
+/**
+ * Accepts a client or a transaction — `Prisma.TransactionClient`, the same handle
+ * `readEventGlance` takes and the house pattern for a DB-bound module here. A hand-rolled
+ * structural interface was tried first and was wrong twice over: it did not accept a real
+ * `PrismaClient` (the generic `findMany` is not assignable to a fixed row type), and it hid the
+ * inference that makes the nested `select` below type-check itself.
+ */
+export type RewindDb = Prisma.TransactionClient;
 
 /** A response as it stood at `since`. `PENDING` is the schema default, not a guess. */
 export type PastResponse = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE';

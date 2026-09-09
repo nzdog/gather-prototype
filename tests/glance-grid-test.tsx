@@ -1184,10 +1184,26 @@ async function main() {
       'GlanceBoard is presentational — no client hooks, no data access',
       boardSrc.length > 0 && !/'use client'|useState|useEffect|prisma|fetch\(/.test(boardSrc)
     );
+    // ⚠ NARROWED IN 6b, NOT DELETED QUIETLY — the treatment phase 3 gave phase 2's
+    // alert-strip guard: "One phase-2 guard was retired, not deleted quietly... Its
+    // replacement is named at the site."
+    //
+    //   was:  no polling and no replay anywhere in pageSrc + boardSrc
+    //   now:  no polling and no replay in THE BOARD
+    //
+    // WHY IT HAD TO NARROW. 6b's page COMPUTES the replay (through the one door,
+    // `src/lib/glance/replay-entry.ts`) so it can stamp when there is nothing to play — so
+    // the page necessarily contains the word this guard scans for. The property worth
+    // protecting was never "the page does not mention the replay"; it was THE BOARD DOES NOT
+    // POLL AND DOES NOT ANIMATE, and that is what the successor holds. The board is
+    // byte-identical to what phase 4 shipped.
+    //
+    // ⚠ THE SUCCESSOR'S OWN RETIREMENT IS NAMED: 6c retires this one, when the client island
+    // and the animation land. It is not open-ended.
     assert(
       'phase 6 held back',
-      'no polling and no replay anywhere in the phase 2 surface',
-      pageSrc.length > 0 && !/setInterval|setTimeout|refetch|replay/i.test(pageSrc + boardSrc)
+      'THE BOARD gains no polling and no replay — 6c retires this successor when the island lands',
+      boardSrc.length > 0 && !/setInterval|setTimeout|refetch|replay/i.test(boardSrc)
     );
     assert(
       'V1 untouched',

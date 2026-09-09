@@ -924,6 +924,255 @@ async function main() {
       built && flipRows.length === 3 && ok(() => flipReplay.steps.length === 0)
     );
 
+    // ══ LAYER 3 — THE STAMP ROUTE, OVER HTTP ═════════════════════════════
+    //
+    // `requireEventRole` reads a session cookie, so this cannot be driven in process — the
+    // same reason `tests/glance-actions-test.ts` gives. Needs `npm run dev` against
+    // gather_dev, which is the default DATABASE_URL: no temporary .env.local is created.
+    //
+    // ⚠ KB-005. If a build has been run since the server started, the server is on a stale
+    // build and every route 500s. The probe below asks the GLANCE ROUTE for its 401 rather
+    // than asking whether the server answers at all, because a stale build answers too.
+    const BASE = process.env.GLANCE_TEST_BASE_URL ?? 'http://localhost:3000';
+    const SEEN = (id: string) => `${BASE}/api/events/${id}/glance/seen`;
+
+    async function postSeen(id: string, headers: Record<string, string>, body?: unknown) {
+      const res = await fetch(SEEN(id), {
+        method: 'POST',
+        headers,
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+      let json: any = null;
+      try {
+        json = await res.json();
+      } catch {
+        /* a refusal may carry no JSON */
+      }
+      return { status: res.status, json };
+    }
+
+    /** The stored mark for one viewer, read back from the database rather than inferred. */
+    async function markOf(userId: string, eventId: string): Promise<Date | null> {
+      const row = await prisma.eventRole.findFirst({
+        where: { userId, eventId },
+        select: { glanceSeenAt: true },
+      });
+      return row?.glanceSeenAt ?? null;
+    }
+
+    let probeStatus = 0;
+    try {
+      probeStatus = (await fetch(`${BASE}/api/events/none/glance`)).status;
+    } catch {
+      probeStatus = 0;
+    }
+    const serverUp = probeStatus === 401;
+    assert(
+      'layer 3 / http',
+      `the dev server is healthy on ${BASE} — the glance route answers 401, not 500 (KB-005)`,
+      serverUp
+    );
+
+    // ── The fixture: ONE event, TWO viewers who may look, ONE who may not ──
+    const hostUser = await prisma.user.create({
+      data: { email: `${TAG}-host@example.com` },
+    });
+    const cohostUser = await prisma.user.create({
+      data: { email: `${TAG}-cohost@example.com` },
+    });
+    const coordUser = await prisma.user.create({
+      data: { email: `${TAG}-coord@example.com` },
+    });
+    createdUserIds.push(hostUser.id, cohostUser.id, coordUser.id);
+
+    async function sessionFor(userId: string) {
+      const tok = randomBytes(24).toString('hex');
+      await prisma.session.create({
+        data: { userId, token: tok, expiresAt: new Date(Date.now() + DAY) },
+      });
+      return { Cookie: `session=${tok}`, 'Content-Type': 'application/json' };
+    }
+    const HOST_COOKIE = await sessionFor(hostUser.id);
+    const COORD_COOKIE = await sessionFor(coordUser.id);
+
+    const stampPerson = await prisma.person.create({
+      data: {
+        name: `${TAG} StampHost`,
+        email: `${TAG}-stamphost@example.com`,
+        userId: hostUser.id,
+      },
+    });
+    createdPersonIds.push(stampPerson.id);
+
+    const stampEvent = await prisma.event.create({
+      data: {
+        name: `${TAG} stamp fixture`,
+        startDate: new Date(Date.now() + 100 * HOUR),
+        endDate: new Date(Date.now() + 130 * HOUR),
+        hostId: stampPerson.id,
+        status: 'CONFIRMING',
+        sentAt: new Date(Date.now() - 10 * DAY),
+      },
+    });
+    createdEventIds.push(stampEvent.id);
+
+    // Two rows on ONE event, both null. Ruling 20's per-viewer memory, set up so a write
+    // that ignores `userId` is visible as a fact rather than as an argument.
+    await prisma.eventRole.create({
+      data: { userId: hostUser.id, eventId: stampEvent.id, role: 'HOST' },
+    });
+    await prisma.eventRole.create({
+      data: { userId: cohostUser.id, eventId: stampEvent.id, role: 'COHOST' },
+    });
+    await prisma.eventRole.create({
+      data: { userId: coordUser.id, eventId: stampEvent.id, role: 'COORDINATOR' },
+    });
+
+    // ── The guard: the same one the GET and the page use ──────────────────
+    const anon = await postSeen(stampEvent.id, { 'Content-Type': 'application/json' });
+    assert(
+      'layer 3 / auth',
+      'an unauthenticated caller is refused 401 — before anything is written',
+      serverUp && anon.status === 401
+    );
+    assert(
+      'layer 3 / auth',
+      'and nothing was stamped by that refusal',
+      serverUp && anon.status === 401 && (await markOf(hostUser.id, stampEvent.id)) === null
+    );
+
+    const wrongRole = await postSeen(stampEvent.id, COORD_COOKIE);
+    assert(
+      'layer 3 / auth',
+      'a COORDINATOR is refused 403 — the guard admits HOST and COHOST and nobody else',
+      serverUp && wrongRole.status === 403
+    );
+    assert(
+      'layer 3 / auth',
+      'and the COORDINATOR’s own row is not stamped either — a refusal writes nothing',
+      serverUp && wrongRole.status === 403 && (await markOf(coordUser.id, stampEvent.id)) === null
+    );
+
+    // ── NULL → STAMP NOW ──────────────────────────────────────────────────
+    const beforeFirst = new Date();
+    const first = await postSeen(stampEvent.id, HOST_COOKIE);
+    const afterFirst = new Date();
+    const hostMark1 = await markOf(hostUser.id, stampEvent.id);
+    const cohostMark1 = await markOf(cohostUser.id, stampEvent.id);
+
+    assert('layer 3 / stamp', 'the host’s POST answers 200', serverUp && first.status === 200);
+    assert(
+      'layer 3 / stamp',
+      'NULL → STAMPED NOW: the mark moves from null to a server instant inside this test’s window',
+      serverUp &&
+        hostMark1 !== null &&
+        hostMark1.getTime() >= beforeFirst.getTime() - 1000 &&
+        hostMark1.getTime() <= afterFirst.getTime() + 1000
+    );
+
+    // ── RULING 20, PROVEN IN ISOLATION ────────────────────────────────────
+    //
+    // ONE assertion, both halves, deliberately: "the co-host did not move" is trivially true
+    // of a route that does not exist, and would be a vacuous green at RED. Anding it with
+    // "the caller DID move" makes it a differential that only a scoped write can satisfy.
+    assert(
+      'layer 3 / Ruling 20',
+      'EXACTLY ONE ROW MOVED, and it was the caller’s — the co-host’s memory is untouched',
+      serverUp && hostMark1 !== null && cohostMark1 === null
+    );
+
+    // ── NO BODY IS READ ───────────────────────────────────────────────────
+    //
+    // Gated on a row that actually moved, for the same reason: at RED nothing moves, and
+    // "the stored value is not 2099" is trivially true of a row that was never written.
+    await prisma.eventRole.updateMany({
+      where: { userId: hostUser.id, eventId: stampEvent.id },
+      data: { glanceSeenAt: null },
+    });
+    const FAR_FUTURE = '2099-01-01T00:00:00.000Z';
+    const beforeBody = new Date();
+    const withBody = await postSeen(stampEvent.id, HOST_COOKIE, { glanceSeenAt: FAR_FUTURE });
+    const hostMark2 = await markOf(hostUser.id, stampEvent.id);
+    assert(
+      'layer 3 / no body',
+      'a client-supplied glanceSeenAt is IGNORED — the row is stamped, and stamped with the SERVER clock',
+      serverUp &&
+        withBody.status === 200 &&
+        hostMark2 !== null &&
+        hostMark2.getTime() >= beforeBody.getTime() - 1000 &&
+        hostMark2.getTime() < new Date(FAR_FUTURE).getTime()
+    );
+
+    // ── MONOTONIC ─────────────────────────────────────────────────────────
+    //
+    // A tab that stamped the future would silence the replay forever. The guard is
+    // `glanceSeenAt IS NULL OR glanceSeenAt < now`, so a stored instant ahead of the server
+    // clock is left exactly where it is.
+    const AHEAD = new Date(Date.now() + 2 * DAY);
+    await prisma.eventRole.updateMany({
+      where: { userId: hostUser.id, eventId: stampEvent.id },
+      data: { glanceSeenAt: AHEAD },
+    });
+    const backward = await postSeen(stampEvent.id, HOST_COOKIE);
+    const hostMark3 = await markOf(hostUser.id, stampEvent.id);
+    assert(
+      'layer 3 / monotonic',
+      'the memory NEVER MOVES BACKWARDS — a stored instant ahead of the server clock is left alone',
+      // GATED ON A POSITIVE CONTROL. "The row did not move" is trivially true of a route that
+      // does not exist — this passed vacuously at RED until the `withBody` clause was added,
+      // which proves a FORWARD stamp works against the same row moments earlier. The pair is
+      // the assertion; either half alone is worthless.
+      serverUp &&
+        withBody.status === 200 &&
+        hostMark2 !== null &&
+        hostMark3 !== null &&
+        hostMark3.getTime() === AHEAD.getTime()
+    );
+    assert(
+      'layer 3 / monotonic',
+      'and the route still answers 200 — refusing to move backwards is not an error',
+      serverUp && backward.status === 200
+    );
+
+    // ── THE PAGE STAMPS: null baseline AND empty diff ─────────────────────
+    //
+    // "Nothing to play → stamp immediately" covers BOTH, and the empty diff is the common
+    // case. Driven through the real page over HTTP with the host's cookie, then read back
+    // from the database.
+    await prisma.eventRole.updateMany({
+      where: { userId: hostUser.id, eventId: stampEvent.id },
+      data: { glanceSeenAt: null },
+    });
+    const pageUrl = `${BASE}/plan/${stampEvent.id}/glance`;
+    const pageRes1 = await fetch(pageUrl, { headers: HOST_COOKIE });
+    const pageMark1 = await markOf(hostUser.id, stampEvent.id);
+    assert(
+      'layer 3 / page',
+      'the page renders for the host (200)',
+      serverUp && pageRes1.status === 200
+    );
+    assert(
+      'layer 3 / page',
+      'NULL BASELINE → the page stamps: nothing was played, so the memory advances immediately',
+      serverUp && pageRes1.status === 200 && pageMark1 !== null
+    );
+
+    // Second visit with nothing changed in between: an EMPTY DIFF, not a null baseline. It
+    // must advance too — most visits change nothing, and a memory that only moves on the
+    // first visit would replay every quiet week.
+    await new Promise((r) => setTimeout(r, 1100));
+    const pageRes2 = await fetch(pageUrl, { headers: HOST_COOKIE });
+    const pageMark2 = await markOf(hostUser.id, stampEvent.id);
+    assert(
+      'layer 3 / page',
+      'EMPTY DIFF → the page stamps AGAIN, forward — the common case is not the null case',
+      serverUp &&
+        pageRes2.status === 200 &&
+        pageMark1 !== null &&
+        pageMark2 !== null &&
+        pageMark2.getTime() > pageMark1.getTime()
+    );
+
     // ══ LAYER 4 — STRUCTURAL AND FENCE ═══════════════════════════════════
     const rewindSrc = code('src/lib/glance/rewind.ts');
     const replaySrc = code('src/lib/glance/replay.ts');
@@ -1102,27 +1351,46 @@ async function main() {
         )
     );
 
-    // ── 6a CHANGES NOTHING THE HOST CAN SEE ──────────────────────────────
+    // ── 6b CHANGES NOTHING THE HOST CAN SEE ──────────────────────────────
     //
-    // "NOTHING CALLS THE NEW MODULES. The board must be byte-identical to what phase 4
-    // shipped." Asserted rather than promised.
-    const surfaces = [
+    // ⚠ 6a's assertion "NOTHING calls the new modules" IS RETIRED HERE, WITH ITS SUCCESSOR
+    // NAMED AT THE SITE — the treatment phase 3 gave phase 2's alert-strip guard, and the
+    // one Ruling 25 requires. 6a could assert nothing called the modules because 6a shipped
+    // no caller. 6b ships the page's call, so the invariant NARROWS rather than disappears:
+    //
+    //   was:  nothing imports rewind / replay / replay-entry
+    //   now:  no COMPONENT imports any of them, and the PAGE reaches them ONLY through the
+    //         one door (replay-entry) — never rewind or replay directly.
+    //
+    // The board itself is still byte-identical to phase 4; the components below are the
+    // whole of what the host sees, and none of them has changed.
+    const componentSurfaces = [
       'src/components/glance/GlanceBoard.tsx',
       'src/components/glance/PersonSurface.tsx',
       'src/components/glance/assistant.ts',
-      'src/app/plan/[eventId]/glance/page.tsx',
+      'src/components/glance/strip.ts',
       'src/app/api/events/[id]/glance/route.ts',
       'src/lib/glance/read.ts',
       'src/lib/glance/state.ts',
       'src/lib/glance/actions.ts',
     ];
+    const surfaces = [...componentSurfaces, 'src/app/plan/[eventId]/glance/page.tsx'];
     assert(
       'layer 4 / no UI',
-      'NOTHING calls the new modules — no surface, page, route or existing glance module imports them',
-      surfaces.every((f) => {
+      'NO COMPONENT reaches the replay at all — the board does not know it exists',
+      componentSurfaces.every((f) => {
         const src = code(f);
         return src.length > 0 && !/glance\/(rewind|replay|replay-entry)/.test(src);
       })
+    );
+    const pageSrc6b = code('src/app/plan/[eventId]/glance/page.tsx');
+    assert(
+      'layer 4 / one door',
+      'the PAGE reaches the replay ONLY through the one door — replay-entry, never rewind or replay',
+      pageSrc6b.length > 0 &&
+        /glance\/replay-entry/.test(pageSrc6b) &&
+        !/glance\/rewind/.test(pageSrc6b) &&
+        !/glance\/replay['"]/.test(pageSrc6b)
     );
     assert(
       'layer 4 / no UI',
@@ -1133,6 +1401,95 @@ async function main() {
         const src = code(f);
         return src.length > 0 && !/setInterval|setTimeout|router\.refresh/.test(src);
       })
+    );
+
+    // ── 6b: THE STAMP ROUTE, STRUCTURALLY ────────────────────────────────
+    const seenSrc = code('src/app/api/events/[id]/glance/seen/route.ts');
+    const seenExists = seenSrc.length > 0;
+    assert(
+      'layer 4 / stamp route',
+      'the stamp route exists — every assertion below is gated on this',
+      seenExists
+    );
+    assert(
+      'layer 4 / stamp route',
+      'it is host-scoped through the SAME guard the GET and the page use — no second definition',
+      seenExists && /requireEventRole\(\s*eventId\s*,\s*\['HOST',\s*'COHOST'\]\s*\)/.test(seenSrc)
+    );
+    assert(
+      'layer 4 / stamp route',
+      'and it fails closed — the guard’s NextResponse is returned before any write',
+      seenExists && /if\s*\(auth instanceof NextResponse\)\s*return auth;/.test(seenSrc)
+    );
+    assert(
+      'layer 4 / stamp route',
+      'IT READS NO BODY — a client-supplied instant could stamp the future and silence the replay forever',
+      seenExists &&
+        !/\.json\(\s*\)/.test(seenSrc.replace(/NextResponse\.json/g, '')) &&
+        !/\bbody\b/.test(seenSrc)
+    );
+    assert(
+      'layer 4 / stamp route',
+      'it is a ROUTE, not a server action — a server action bypasses route-classifications, the inventory gate and test:security entirely',
+      seenExists &&
+        !/['"]use server['"]/.test(seenSrc) &&
+        /export async function POST/.test(seenSrc)
+    );
+    assert(
+      'layer 4 / stamp route',
+      'the route writes nothing itself — the monotonic write lives in ONE place and both callers ask it',
+      seenExists && !/updateMany/.test(seenSrc) && /stampGlanceSeen/.test(seenSrc)
+    );
+
+    // ── RULING 20 IS A WRITE-SCOPE RULE ──────────────────────────────────
+    //
+    // The invariant is NOT "uses updateMany" — updateMany is how the monotonic guard is
+    // expressed, since `update` takes only a unique where. The invariant is THAT THE WHERE
+    // NAMES userId: a write scoped to eventId alone stamps every viewer's row and silently
+    // consumes the co-host's news, which is the exact thing Ruling 20 exists to prevent.
+    const stampSrc = entrySrc;
+    assert(
+      'layer 4 / Ruling 20',
+      'THE WRITE IS SCOPED TO THE VIEWER — its where names userId, not the event alone',
+      stampSrc.length > 0 && /where:\s*\{[^}]*userId/.test(stampSrc)
+    );
+    assert(
+      'layer 4 / Ruling 20',
+      'and to the event as well — one viewer, one event, one row',
+      stampSrc.length > 0 && /where:\s*\{[^}]*eventId/.test(stampSrc)
+    );
+    assert(
+      'layer 4 / monotonic',
+      'the write carries the monotonic guard — null OR strictly earlier, so two tabs cannot move it backwards',
+      stampSrc.length > 0 &&
+        /updateMany/.test(stampSrc) &&
+        /glanceSeenAt:\s*null/.test(stampSrc) &&
+        /lt:/.test(stampSrc)
+    );
+    assert(
+      'layer 4 / monotonic',
+      'and the instant is the SERVER’s — new Date() in the write path, never a parameter off the wire',
+      stampSrc.length > 0 && /new Date\(\s*\)/.test(stampSrc)
+    );
+
+    // ── THE INVENTORY GOES 80 → 81, ONCE AND DELIBERATELY ────────────────
+    const classifications = JSON.parse(code('route-classifications.json') || '[]');
+    const seenEntry = classifications.find(
+      (r: any) => r.filePath === 'src/app/api/events/[id]/glance/seen/route.ts'
+    );
+    assert(
+      'layer 4 / inventory',
+      'the stamp route is classified — SESSION, requireEventRole, POST',
+      !!seenEntry &&
+        seenEntry.authType === 'SESSION' &&
+        seenEntry.authEvidence.includes('requireEventRole') &&
+        JSON.stringify(seenEntry.methods) === JSON.stringify(['POST']) &&
+        JSON.stringify(seenEntry.securityIssues) === JSON.stringify([])
+    );
+    assert(
+      'layer 4 / inventory',
+      'and the surface is 81 routes — phase 4’s "no new route" property ends here, once',
+      classifications.length === 81
     );
 
     // ── Ruling 10: no websocket infrastructure, ever, for this screen ────
