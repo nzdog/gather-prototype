@@ -2,7 +2,7 @@
 # Confirmed platform quirks and diagnostic patterns for AI executors.
 # Read this file when a ticket involves unexpected platform behaviour,
 # stale UI state, auth anomalies, or DB irregularities.
-# Last updated: 2026-03-05
+# Last updated: 2026-09-09
 
 ---
 
@@ -84,5 +84,39 @@ relied upon.
 **Do not:** Assume default seed produces a DRAFT event. Always verify
 event status before beginning reproduction steps.
 **First seen:** GTC-003
+
+---
+
+### KB-005 — `npm run build` leaves a running dev server on a stale build, and the next test run reads a FALSE FAILURE
+**Symptom:** After `npm run build` is run while `npm run dev` is up, every
+route 500s with `ENOENT` on `.next/server/.../app-build-manifest.json`, and
+any HTTP-driven suite reports failures that look exactly like a defect in the
+code just written. Measured 2026-09-09: `test:glance-actions` reported
+**42 passed, 20 failed** immediately after a green build, with nothing in the
+working tree changed between the two runs. Probing the guarded glance route
+directly gave **500** before a restart and **401** (the correct unauthenticated
+answer) after it; the suite then returned to **62 passed, 0 failed**.
+**Cause:** The production build REWRITES `.next` underneath the live Turbopack
+dev server, which is still holding the previous build's manifests. The dev
+server does not notice and does not recover on its own. A regenerated Prisma
+client has the same shape of problem for the same reason: a dev server started
+before `npx prisma generate` keeps the old client in memory.
+**Fix pattern:** Restart the dev server after ANY of: `npm run build`,
+`npx prisma generate`, `npx prisma migrate deploy`. Then prove it is healthy
+before trusting a suite — ask a guarded route for its auth refusal rather than
+asking whether the server answers at all:
+```
+curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/events/none/glance
+# 401 = healthy.  500 = stale build.  000 = not running.
+```
+`tests/glance-actions-test.ts` already probes for exactly this and calls it a
+health check; the probe is the pattern, not the exception.
+**Do not:** Debug the code first. A suite that was green minutes ago and is red
+after a build is this, not a regression — check the probe before reading the
+failures. Do not run `npm run build` mid-session with a dev server up unless
+you intend to restart it.
+**First seen:** GTC-192 phase 3 (flagged, not filed), hit again in phase 4
+(flagged again), and a third time in phase 6 slice 6a — where it cost a
+misread suite result before being recognised. Filed on the third occurrence.
 
 ---
