@@ -130,6 +130,15 @@ async function main() {
   } catch (err) {
     console.error(`\x1b[31m!\x1b[0m ack route load failed: ${String((err as Error).message)}`);
   }
+  // Loaded on its own, and NOT part of the `built` gate: `read.ts` is phase 1's and always
+  // exists. Ruling 28's headline assertion drives the whole door — read, rewind, derive — over
+  // a real board, because that is the only place the bug was visible.
+  let RD: any = null;
+  try {
+    RD = await import('../src/lib/glance/read');
+  } catch (err) {
+    console.error(`\x1b[31m!\x1b[0m read module load failed: ${String((err as Error).message)}`);
+  }
 
   /**
    * THE GATE THAT MAKES THE RED MEAN SOMETHING. Every assertion whose subject is one of the
@@ -732,9 +741,34 @@ async function main() {
       gLatest.person.id
     );
 
-    // (b) PENDING default: an assignment with no ledger rows at all
+    // (b) no ledger rows at all, and the row is PENDING now
     const gSilent = await guest('Silent');
     const aSilent = await give(gSilent.person.id, 'napkins', 'PENDING', T0);
+
+    // (e) RULING 28 — THE UNLOGGED RESPONSE. No ledger row at all, and ACCEPTED now.
+    //
+    // This is the row the old rule got wrong, and (b) could never catch it: (b)'s current
+    // response IS `PENDING`, so "default to PENDING" and "carry the current value" agree there
+    // and the assertion passed either way. Here they disagree, and the difference is the bug —
+    // defaulting to PENDING asserts a change from AMBER to GREEN that nothing recorded.
+    const gUnlogged = await guest('Unlogged');
+    const aUnlogged = await give(gUnlogged.person.id, 'the pudding', 'ACCEPTED', T0);
+
+    // (f) RULING 28's OTHER HALF — THE CANONICAL SPARK, which the rule must NOT silence.
+    //
+    // A row created before `since` whose ONLY ledger entry falls INSIDE the window: she was
+    // pending when Kate last looked and accepted while Kate was away. This is the case the
+    // whole feature exists for, and a rule that silenced it would be worse than the bug it
+    // fixes. The dated first change is what makes PENDING positive evidence here rather than an
+    // assumption: the ledger is demonstrably live for this row.
+    const gFirst = await guest('FirstInWindow');
+    const aFirstInWindow = await give(gFirst.person.id, 'the gravy', 'ACCEPTED', T0);
+    await ledger(
+      'ACCEPT_ASSIGNMENT',
+      aFirstInWindow.id,
+      new Date(Date.now() - 2 * HOUR),
+      gFirst.person.id
+    );
 
     // (c) ABSENT: an assignment born after `since`
     const gNew = await guest('NewRow');
@@ -762,10 +796,35 @@ async function main() {
       'the response at `since` is the LATEST ledger row AT OR BEFORE it — not the first, not the last',
       built && ok(() => rewound.responseAt.get(aLatest.id) === 'ACCEPTED')
     );
+    // ⚠ THE "PENDING DEFAULT" ASSERTION IS RETIRED HERE, IN 6a-fix, WITH ITS SUCCESSOR NAMED AT
+    // THE SITE — the treatment phase 3 gave phase 2's alert-strip guard and 6b and 6c gave
+    // theirs. It is retired because it ENCODED THE BUG, which is a different reason from every
+    // other retirement in this ticket and is worth saying plainly:
+    //
+    //   was:  an assignment with no ledger rows reads PENDING — "the schema default,
+    //         positively defaulted"
+    //   now:  an assignment with no ledger rows reads its CURRENT response — nothing is
+    //         recorded as having changed, so nothing changed (RULING 28)
+    //
+    // "Positively defaulted" was the wrong word for it. The old rule inferred a past value from
+    // the ABSENCE of a row, which is the one thing §5 forbids — "no change is ever inferred from
+    // a difference alone" — and it is what let the replay manufacture good news and repeat it on
+    // every visit for ever. Ruling 28 makes responses follow the rule attendance already
+    // followed. Nothing about this retirement is a narrowing; the old assertion was wrong.
     assert(
-      'layer 2 / default',
-      'an assignment with no ledger rows reads PENDING — the schema default, positively defaulted',
-      built && ok(() => (rewound.responseAt.get(aSilent.id) ?? 'PENDING') === 'PENDING')
+      'layer 2 / Ruling 28',
+      'an assignment with no ledger rows reads its CURRENT response — nothing recorded, nothing changed',
+      built && ok(() => rewound.responseAt.get(aUnlogged.id) === 'ACCEPTED')
+    );
+    assert(
+      'layer 2 / Ruling 28',
+      'and the same rule leaves a genuinely-pending row PENDING — the fix is one rule, not a special case',
+      built && ok(() => rewound.responseAt.get(aSilent.id) === 'PENDING')
+    );
+    assert(
+      'layer 2 / Ruling 28',
+      'a row whose FIRST ledger entry falls inside the window reads PENDING — a dated first change proves it had never changed at `since`',
+      built && ok(() => rewound.responseAt.get(aFirstInWindow.id) === 'PENDING')
     );
     assert(
       'layer 2 / absent',
@@ -819,6 +878,70 @@ async function main() {
       'layer 2 / Ruling 27',
       'and it is the ITEM’s own clock, not a copy of the event’s — a null override reads null, not 120',
       built && ok(() => rewound.clockAt.get(aLatest.id).decideByOffsetHours === null)
+    );
+
+    // ── RULING 28's HEADLINE: NOTHING CHANGED → NOTHING PLAYS, ON A REAL BOARD ──
+    //
+    // ⚠ THIS IS THE ASSERTION NEITHER EXISTING LAYER COULD SEE, and it is the one the browser
+    // walk produced. Layer 1 hand-builds `responseAt`, so it can never exercise the default.
+    // Layer 2 above seeds its ledger rows deliberately, so every row it looks at HAS evidence.
+    // The bug lived in the gap: a board whose responses were never logged.
+    //
+    // Measured on the walk before the fix: `since = now − 1 second` on the seeded glance board
+    // yielded SEVEN steps, and did so on every visit, for ever. Nothing changed in that second.
+    //
+    // Driven through the WHOLE DOOR — read, rewind, derive — because that is where it showed.
+    const dbEventFull = {
+      status: dbEvent.status,
+      sentAt: dbEvent.sentAt,
+      endDate: dbEvent.endDate,
+      decideByOffsetHours: dbEvent.decideByOffsetHours,
+      nudgePace: dbEvent.nudgePace,
+    };
+    const nowDb = new Date();
+    const glanceDb = RD ? await RD.readEventGlance(prisma, dbEvent.id, nowDb) : null;
+    const replayOneSecond =
+      built && glanceDb
+        ? await RE.readGlanceReplay(
+            prisma,
+            dbEvent.id,
+            new Date(nowDb.getTime() - 1000),
+            glanceDb,
+            dbEventFull,
+            nowDb
+          )
+        : null;
+    const replayThreeHours =
+      built && glanceDb
+        ? await RE.readGlanceReplay(prisma, dbEvent.id, SINCE_DB, glanceDb, dbEventFull, nowDb)
+        : null;
+
+    // THE POSITIVE CONTROL FIRST, so "zero" can never read as "the door returned nothing".
+    assert(
+      'layer 2 / Ruling 28',
+      'the board REPLAYS at all — a `since` that straddles a real logged change yields steps (the control the zero below hangs on)',
+      built && glanceDb !== null && ok(() => replayThreeHours.steps.length > 0)
+    );
+    assert(
+      'layer 2 / Ruling 28',
+      'NOTHING CHANGED → NOTHING PLAYS: `since` = now − 1 second on unlogged responses yields ZERO steps',
+      built &&
+        glanceDb !== null &&
+        ok(() => replayThreeHours.steps.length > 0 && replayOneSecond.steps.length === 0)
+    );
+    // The canonical spark is the thing a positive-evidence rule could most easily kill, so it is
+    // asserted as its own case rather than left to the control above.
+    assert(
+      'layer 2 / Ruling 28',
+      'and the CANONICAL SPARK still plays — pending when she looked, accepted while she was away, AMBER → GREEN with a spark',
+      built &&
+        glanceDb !== null &&
+        ok(() => {
+          const step = replayThreeHours.steps.find(
+            (s: any) => s.personEventId === gFirst.personEvent.id
+          );
+          return !!step && step.from === 'AMBER' && step.to === 'GREEN' && step.spark === true;
+        })
     );
 
     // ── §5 layer 4: the rewind's RETURN carries no behaviour, at any depth ──

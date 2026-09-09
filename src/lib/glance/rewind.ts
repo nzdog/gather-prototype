@@ -38,6 +38,16 @@
  * row inside the window tells us THAT it changed and never WHAT TO. Rather than guess, the
  * person is marked `ambiguous` and the replay drops them entirely. That is the fail-safe
  * direction: it fails to silence, not to noise.
+ *
+ * ── RULING 28 (2026-09-09) — AND THE SAME RULE NOW GOVERNS RESPONSES ─────────────────────
+ *
+ * Until slice 6a-fix this module applied positive evidence to attendance and an ASSUMPTION to
+ * responses: no ledger row meant `PENDING`. That asymmetry was the bug. A response written by
+ * any path that does not log one read as a change that never happened, so the replay invented
+ * good news and repeated it on every visit for ever — the fake-fireworks case Ruling 1 forbids,
+ * arriving through the rewind rather than through the animation. Found by the 6c browser walk,
+ * which is the first thing that ever looked at a real board: 25 of the 26 events in `gather_dev`
+ * carry no response ledger row at all. The rule is now one rule, and it is stated at its site.
  */
 
 import type { Prisma } from '@prisma/client';
@@ -83,7 +93,15 @@ const RESPONSE_BY_ACTION: Record<string, PastResponse> = {
 };
 
 export interface GlanceRewind {
-  /** The response each assignment carried at `since`. Absent means never responded: PENDING. */
+  /**
+   * The response each assignment carried at `since`, on POSITIVE EVIDENCE ONLY (Ruling 28).
+   *
+   * Three ways a row earns an entry, and no fourth: the latest ledger row at or before `since`;
+   * `PENDING` where a dated FIRST change falls inside the window; otherwise the row's CURRENT
+   * response, because nothing is recorded as having changed. ⚠ **Never `PENDING` by default** —
+   * that inferred a past value from the absence of a row, and it is what let the replay
+   * manufacture good news. See the rule itself, below, for the measurement.
+   */
   responseAt: Map<string, PastResponse>;
   /** Assignments created AFTER `since` — she held no such row then. Not the same as PENDING. */
   absentAt: Set<string>;
@@ -156,6 +174,10 @@ export async function rewindGlanceInputs(
     select: {
       id: true,
       createdAt: true,
+      // RULING 28. The row's response NOW, which is the past response of any row the ledger
+      // does not record as having changed. A decision, not behaviour — the same value
+      // `responseAt` already carries, read from the row instead of from the ledger.
+      response: true,
       item: { select: { dropOffAt: true, decideByOffsetHours: true } },
     },
   });
@@ -184,8 +206,34 @@ export async function rewindGlanceInputs(
     }
   }
 
-  // An assignment with no row at all was never responded to, which IS its past value. Written
-  // positively rather than left to a `?? 'PENDING'` at every call site.
+  // ── RULING 28 (2026-09-09) — POSITIVE EVIDENCE ONLY, FOR RESPONSES TOO ──────────────────
+  //
+  // ⚠ THE RULE THIS REPLACES WAS A BUG, AND ITS SHAPE IS WORTH KEEPING VISIBLE. It read: an
+  // assignment with no ledger row was never responded to, so its past value is `PENDING`. That
+  // infers a past value from the ABSENCE of a row, and §5's rule is that no change is ever
+  // inferred from a difference alone. Where the inference is wrong — any response written by a
+  // path that does not log one — the replay ASSERTS A CHANGE THAT NEVER HAPPENED: a row that is
+  // ACCEPTED now reads AMBER at `since`, sparks, and does it again on every visit, for ever.
+  // Measured on the 6c browser walk: `since = now − 1 second` produced seven steps, and 25 of
+  // the 26 events in `gather_dev` carried no response ledger row at all.
+  //
+  //   "Responses follow the same positive-evidence rule as attendance."  — Ruling 28
+  //
+  // Attendance's rule, a few lines below, is: with no row inside the window the answer cannot
+  // have changed, so the CURRENT value IS the past value. Applied to responses, that is branch
+  // 3. The asymmetry between the two — evidence for one, an assumption for the other — was the
+  // whole of the bug.
+  //
+  // ⚠ IT FAILS TO SILENCE, WHICH IS THE ACCEPTED CONSEQUENCE. On a board whose responses were
+  // never logged, nothing replays: `from` equals `to` and the step is dropped. Manufactured
+  // good news is the one failure this feature cannot have.
+  //
+  // ⚠ AND IT DOES NOT SILENCE THE CANONICAL SPARK — branch 2, which is why the rule is three
+  // branches and not two. A row whose FIRST ledger entry falls inside the window has a DATED
+  // first change, and that positively establishes that at `since` it had never been changed:
+  // `PENDING`, the creation default. That is evidence, not the absence the old rule leant on.
+  // Pending-when-she-looked, accepted-while-she-was-away is the case the feature exists for,
+  // and a rule that silenced it would be worse than the bug it fixes. Asserted as its own case.
   const absentAt = new Set<string>();
   const clockAt = new Map<string, DecideByItem>();
   for (const a of assignments) {
@@ -197,7 +245,15 @@ export async function rewindGlanceInputs(
       absentAt.add(a.id);
       continue;
     }
-    if (!responseAt.has(a.id)) responseAt.set(a.id, 'PENDING');
+    // (1) A dated row at or before `since` already answered it, above.
+    if (responseAt.has(a.id)) continue;
+    // (2) A dated FIRST change inside the window: it had never changed at `since`.
+    if (changedSince.has(a.id)) {
+      responseAt.set(a.id, 'PENDING');
+      continue;
+    }
+    // (3) Nothing recorded as having changed, so nothing changed.
+    responseAt.set(a.id, a.response as PastResponse);
   }
 
   const ambiguous = new Set<string>(attendanceRows.map((r) => r.targetId));
