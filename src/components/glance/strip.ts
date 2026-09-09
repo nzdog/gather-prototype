@@ -45,6 +45,24 @@ export const STRIP_TONE: Record<PersonState, StripTone> = {
 };
 
 /**
+ * The hexes a state's tint is actually made of, read back out of its own class string.
+ *
+ * GTC-192 phase 6 slice 6c. The replay's spark throws "~18 particles per flip in the
+ * green/amber ramp hexes" (`docs/design/moment4-glance-reference.md`), and particles are
+ * painted in a canvas-free DOM layer that cannot be given a Tailwind class — it needs the
+ * colour itself.
+ *
+ * ⚠ DERIVED, NOT RESTATED, AND THAT IS THE WHOLE POINT OF THE FUNCTION. A second copy of
+ * `#EAF3DE` in the island is a second definition of the palette: change the green here and the
+ * sparks keep throwing the old one, with nothing failing. So the island asks the tone what
+ * colour it is. `tests/glance-grid-test.tsx` pins the answers, so a silent extraction failure
+ * (an empty ramp, invisible particles) fails the suite rather than the eye.
+ */
+export function stripHexes(state: PersonState): string[] {
+  return STRIP_TONE[state].className.match(/#[0-9A-Fa-f]{6}/g) ?? [];
+}
+
+/**
  * The strip's own words.
  *
  * Ruling 7 puts the meaning of the fade in the TEXT — "the '— out' text carries the
@@ -52,7 +70,38 @@ export const STRIP_TONE: Record<PersonState, StripTone> = {
  * a viewer who cannot see the fade would lose it.
  */
 export function stripLabel(person: GlancePerson): string {
-  return person.state === 'OUT' ? `${person.name} — out` : person.name;
+  const words = person.state === 'OUT' ? stripStateWords(person) : null;
+  return words ? `${person.name} ${words}` : person.name;
+}
+
+/**
+ * The trailing half of a strip: THE WORDS THAT DESCRIBE THE PERSON'S STATE NOW.
+ *
+ * Two kinds and no others — Ruling 7's "— out" and Ruling 4's why on a red. The NAME is never
+ * one of them, which is the whole point of the split.
+ *
+ * ── WHY THEY ARE ONE CONCEPT (GTC-192 phase 6 slice 6c, finding 1) ───────────────────────
+ *
+ * The arrival replay rewinds a strip's TINT and cannot rewind its WORDS: the past `reasons` are
+ * not on the wire, and `ReplayStep` is exactly four keys by §5 layer 2's allowlist. So during
+ * the rewind a strip painted GREEN was still reading "— out", and one painted AMBER was still
+ * carrying "maybe timed out" — the founder's ruling on it: *"a green strip reading 'out' is
+ * incoherent and the words are the truthful half."*
+ *
+ * The answer is to SUPPRESS them while a step is pending and let them appear as it lands, and
+ * that needs the island to be able to address them — hence one function, one name, and one
+ * `data-strip-words` in the markup. **Rewriting them would need the fifth key the allowlist
+ * refuses; hiding them needs nothing on the wire at all.**
+ *
+ * ⚠ THE INVERSE CASE IS ACCEPTED AND IS NOT A BUG. A strip going RED → GREEN shows no why
+ * during the rewind, because its words are computed from GREEN and GREEN has none. Missing is
+ * the truthful direction: we do not know what her why WAS, and inventing one is the thing the
+ * allowlist exists to prevent.
+ */
+export function stripStateWords(person: GlancePerson): string | null {
+  if (person.state === 'OUT') return '— out';
+  const why = whyLineFor(person);
+  return why ? `— ${why}` : null;
 }
 
 /**

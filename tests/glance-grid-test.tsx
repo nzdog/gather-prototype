@@ -134,6 +134,7 @@ async function main() {
   let AS: any = null; // src/components/glance/assistant
   let GB: any = null; // src/components/glance/GlanceBoard
   let R: any = null; // src/lib/glance/read
+  let GR: any = null; // src/components/glance/GlanceReplay — phase 6 slice 6c's island
   // Each import stands alone. A shared try{} lets one missing module abort the rest, and
   // the RED run then reports forty failures that are really one — a legible RED is the
   // whole point of taking one.
@@ -142,7 +143,20 @@ async function main() {
     ['assistant', () => import('../src/components/glance/assistant'), (m) => (AS = m)],
     ['GlanceBoard', () => import('../src/components/glance/GlanceBoard'), (m) => (GB = m)],
     ['read', () => import('../src/lib/glance/read'), (m) => (R = m)],
+    ['GlanceReplay', () => import('../src/components/glance/GlanceReplay'), (m) => (GR = m)],
   ];
+
+  /**
+   * The island rendered on its own, as the page renders it beside the board.
+   *
+   * `renderToStaticMarkup` runs no effects, so what comes back is the island's FIRST PAINT —
+   * which is the thing under test: nothing at all when there are no steps, and an inert
+   * overlay when there are. The animation itself is a browser property and is walked, not
+   * asserted; see the browser walk in the ticket.
+   */
+  function islandHtml(eventId: string, steps: unknown[]): string {
+    return GR ? renderToStaticMarkup(createElement(GR.default, { eventId, steps } as any)) : '';
+  }
   for (const [name, load, set] of modules) {
     try {
       set(await load());
@@ -300,6 +314,42 @@ async function main() {
         )
       )
     );
+
+    // ── 6c / finding 1: the words that describe the CURRENT state, named as one thing ──
+    //
+    // The replay rewinds a strip's TINT and cannot rewind its WORDS: the past `reasons` are not
+    // on the wire and `ReplayStep` is exactly four keys. So the words are suppressed while a
+    // step is pending and appear as it lands — which needs the two kinds of state-describing
+    // words to be ONE concept the island can address. They are Ruling 7's "— out" and Ruling
+    // 4's why; the name is never one of them.
+    assert(
+      'finding 1',
+      'the state-words are one concept — Ruling 7’s "— out" and Ruling 4’s why, and nothing else',
+      ok(
+        () =>
+          SP.stripStateWords(person({ state: 'OUT', name: 'Ray Dalton' })) === '— out' &&
+          SP.stripStateWords(
+            person({ state: 'RED', reasons: ['DECIDE_BY_EXPIRED'], items: [] })
+          ) === '— maybe timed out'
+      )
+    );
+    assert(
+      'finding 1',
+      'and a state with nothing to say has none — the bare name is the whole strip',
+      ok(() =>
+        ['AMBER', 'GREEN', 'NOT_CHASED'].every(
+          (state) => SP.stripStateWords(person({ state })) === null
+        )
+      )
+    );
+    assert(
+      'finding 1',
+      'ONE definition of "— out": the label is composed from the state-words, never a second copy',
+      ok(() => {
+        const src = code('src/components/glance/strip.ts');
+        return src.length > 0 && (src.match(/— out/g) ?? []).length === 1;
+      })
+    );
     assert(
       'Ruling 7',
       'OUT fades entirely and has NO border — absence receding to a ghost',
@@ -452,8 +502,18 @@ async function main() {
       'Ruling 7',
       'OUT renders faded, with "— out" in its text and no border class',
       ok(() => {
-        const strip = stripFor(html, 'Ray Dalton — out');
-        return strip.length > 0 && /opacity-/.test(strip) && !/border-\[/.test(strip);
+        // ⚠ THE LOOKUP MOVED IN 6c AND THE ASSERTION DID NOT. `stripFor` finds the strip by its
+        // NAME span, and 6c split Ruling 7's "— out" out of that span into its own so the
+        // replay can suppress it (finding 1). The text half is asserted explicitly rather than
+        // riding on the lookup, which is what it used to do.
+        const strip = stripFor(html, 'Ray Dalton');
+        const at = html.indexOf('<span>Ray Dalton</span>');
+        return (
+          strip.length > 0 &&
+          /opacity-/.test(strip) &&
+          !/border-\[/.test(strip) &&
+          html.slice(at, at + 100).includes('— out')
+        );
       })
     );
     assert(
@@ -1152,6 +1212,9 @@ async function main() {
     // ══ LAYER 4 — structural ═════════════════════════════════════════════
     const pageSrc = code('src/app/plan/[eventId]/glance/page.tsx');
     const boardSrc = code('src/components/glance/GlanceBoard.tsx');
+    // Phase 6 slice 6c. Gated on rather than assumed: the three successors below are claims
+    // about an island, and a missing island must read as a failure, never as a pass.
+    const replayIslandSrc = code('src/components/glance/GlanceReplay.tsx');
 
     assert(
       'page',
@@ -1184,26 +1247,128 @@ async function main() {
       'GlanceBoard is presentational — no client hooks, no data access',
       boardSrc.length > 0 && !/'use client'|useState|useEffect|prisma|fetch\(/.test(boardSrc)
     );
-    // ⚠ NARROWED IN 6b, NOT DELETED QUIETLY — the treatment phase 3 gave phase 2's
-    // alert-strip guard: "One phase-2 guard was retired, not deleted quietly... Its
-    // replacement is named at the site."
+    // ⚠ `[phase 6 held back]` IS RETIRED HERE, IN 6c, WITH THREE SUCCESSORS NAMED AT THE SITE
+    // — 6b's own promise kept: "6c retires this successor in turn, when the island and the
+    // animation land." They have landed. This is the treatment phase 3 gave phase 2's
+    // alert-strip guard and 6b gave 6a's; the guard is retired, never deleted quietly.
     //
-    //   was:  no polling and no replay anywhere in pageSrc + boardSrc
-    //   now:  no polling and no replay in THE BOARD
+    //   was:  THE BOARD gains no polling and no replay
+    //   now:  the three below.
     //
-    // WHY IT HAD TO NARROW. 6b's page COMPUTES the replay (through the one door,
-    // `src/lib/glance/replay-entry.ts`) so it can stamp when there is nothing to play — so
-    // the page necessarily contains the word this guard scans for. The property worth
-    // protecting was never "the page does not mention the replay"; it was THE BOARD DOES NOT
-    // POLL AND DOES NOT ANIMATE, and that is what the successor holds. The board is
-    // byte-identical to what phase 4 shipped.
+    // WHY IT HAD TO GO. The guard scanned the board for `/replay/i`, and it was already
+    // narrowed once because 6b's page had to name the replay to compute it. 6c ships the
+    // island itself, so the word now belongs on the surface by design; a guard that forbids
+    // it would have to be lied to rather than kept.
     //
-    // ⚠ THE SUCCESSOR'S OWN RETIREMENT IS NAMED: 6c retires this one, when the client island
-    // and the animation land. It is not open-ended.
+    // ⚠ AND THESE THREE ARE NOT HELD-BACK GUARDS. The one they replace existed to hold a line
+    // until a slice arrived, and named its own retirer each time. These encode Ruling 6 and
+    // phase 2's own property — one definition of what the board is and one of what "seen"
+    // means — so NO SLICE IS SCHEDULED TO RETIRE THEM. If a later slice needs one gone, that
+    // is a ruling, not a narrowing.
     assert(
-      'phase 6 held back',
-      'THE BOARD gains no polling and no replay — 6c retires this successor when the island lands',
-      boardSrc.length > 0 && !/setInterval|setTimeout|refetch|replay/i.test(boardSrc)
+      'phase 6 successor',
+      'THE BOARD STILL HAS NO CLIENT HOOKS AND STARTS NO TIMER — the replay is an ISLAND beside it, phase 4’s pattern',
+      boardSrc.length > 0 &&
+        replayIslandSrc.length > 0 &&
+        !/'use client'|useState|useEffect|useLayoutEffect|setInterval|setTimeout/.test(boardSrc)
+    );
+    assert(
+      'phase 6 successor',
+      'THE ISLAND RENDERS NOTHING WHEN THERE ARE NO STEPS — "no fake fireworks: if nothing changed, nothing plays"',
+      ok(() => GR !== null && islandHtml('e1', []) === '')
+    );
+    assert(
+      'phase 6 successor',
+      'NO ACKNOWLEDGE CONTROL ANYWHERE — not on the board, not in the island; "seen" means the replay played (Ruling 6)',
+      ok(() => {
+        const island = GR
+          ? islandHtml('e1', [{ personEventId: 'pe1', from: 'AMBER', to: 'GREEN', spark: true }])
+          : null;
+        return (
+          island !== null &&
+          island.length > 0 &&
+          !/<button|<a\s|role="button"/i.test(island) &&
+          !/acknowledge|dismiss|got it|mark as seen|skip/i.test(island + html)
+        );
+      })
+    );
+    // ── 6c / finding 1, on the rendered markup ───────────────────────────
+    assert(
+      'finding 1',
+      'the state-words are MARKED in the markup — a red’s why and an OUT’s "— out" both carry data-strip-words',
+      ok(() => {
+        const amelia = html.indexOf('Amelia Turner');
+        const ray = html.indexOf('Ray Dalton');
+        return (
+          amelia > 0 &&
+          ray > 0 &&
+          /<span data-strip-words="" class="font-normal"> — maybe timed out<\/span>/.test(html) &&
+          /<span data-strip-words="" class="font-normal"> — out<\/span>/.test(html)
+        );
+      })
+    );
+    assert(
+      'finding 1',
+      'and a strip with nothing to say carries none — there is nothing there to suppress',
+      ok(() => {
+        const at = html.indexOf('<span>Charlotte Turner</span>');
+        return at > 0 && !html.slice(at, at + 120).includes('data-strip-words');
+      })
+    );
+    assert(
+      'finding 1',
+      'the strip still READS the same — splitting the words into their own span changed no text',
+      ok(
+        () =>
+          html.includes(
+            '<span>Ray Dalton</span><span data-strip-words="" class="font-normal"> — out</span>'
+          ) && html.includes('Amelia Turner')
+      )
+    );
+
+    // The island paints strips it does not own, so the board has to make them findable. This
+    // is the seam between the two, asserted on the rendered markup rather than on intent.
+    assert(
+      'phase 6 island',
+      'and every strip is ADDRESSABLE — the board marks each with its personEventId so the island can find it',
+      ok(() => {
+        const ids = mixed.households.flatMap((h: any) =>
+          h.members.map((m: any) => m.personEventId)
+        );
+        return (
+          html.length > 0 &&
+          ids.length === 7 &&
+          ids.every((id: string) => html.includes(`data-person-event-id="${id}"`))
+        );
+      })
+    );
+    // The replay's particles are drawn in a bare DOM layer that cannot take a Tailwind class,
+    // so they need the colour itself. `stripHexes` reads it out of the tone rather than
+    // restating it — and this pins the answers, so an extraction that silently returned
+    // nothing (invisible sparks) fails here rather than in front of the founder.
+    assert(
+      'phase 6 island',
+      'the spark ramp is DERIVED from the tones — the green/amber hexes come out of the strips themselves, never a second copy',
+      ok(
+        () =>
+          JSON.stringify(SP.stripHexes('AMBER')) === JSON.stringify(['#FAEEDA', '#854F0B']) &&
+          JSON.stringify(SP.stripHexes('GREEN')) === JSON.stringify(['#EAF3DE', '#3B6D11'])
+      )
+    );
+    assert(
+      'phase 6 island',
+      'the island’s overlay is INERT — aria-hidden and pointer-events-none, so it never intercepts a tap on the board beneath',
+      ok(() => {
+        const island = GR
+          ? islandHtml('e1', [{ personEventId: 'pe1', from: 'AMBER', to: 'GREEN', spark: true }])
+          : '';
+        return (
+          island.length > 0 &&
+          /aria-hidden="true"/.test(island) &&
+          /pointer-events-none/.test(island) &&
+          /data-glance-replay="1"/.test(island)
+        );
+      })
     );
     assert(
       'V1 untouched',

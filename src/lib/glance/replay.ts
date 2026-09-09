@@ -70,20 +70,60 @@ export interface ReplayStep {
 /** Ruling 1's guardrail: the whole replay resolves inside ~3 seconds. */
 export const REPLAY_BUDGET_MS = 3000;
 
+/**
+ * A SPARK's envelope — the reference's own flight time, at its top end.
+ *
+ * "~18 particles per flip … thrown 35–80px, 0.9–1.3s." The particles vary inside this; the
+ * envelope is the slowest of them, because the budget has to hold the slowest one.
+ */
+export const SPARK_DURATION_MS = 1300;
+
+/**
+ * A QUIET step's envelope — the reference's "background/colour transition 0.7s ease", alone.
+ *
+ * Ruling 6's reversal plays "quietly, no sparks", and Ruling 26 puts every red in the same
+ * boat: good news and reds both play, and only AMBER → GREEN earns the flourish. So a quiet
+ * step is not a shortened spark. It is a different thing — a tint changing, and nothing else.
+ */
+export const QUIET_DURATION_MS = 700;
+
 /** The unhurried spacing a short replay gets, compressed only when there are many steps. */
 const STEP_INTERVAL_MS = 180;
 
+/** When a step starts, and how long it runs. Milliseconds from the start of the replay. */
+export interface ReplayBeat {
+  delayMs: number;
+  durationMs: number;
+}
+
 /**
- * When each step lands, in milliseconds from the start of the replay.
+ * The steps, placed on the ~3-second clock Ruling 1 fences.
  *
- * Compressed rather than truncated at large headcounts: Ruling 5 keeps every settled person a
+ * ⚠ THE BEAT CARRIES ITS OWN DURATION, AND THAT IS 6c's CORRECTION TO 6a. The first cut
+ * returned start times alone, so the budget could only ever be asserted on the LAST START —
+ * which says nothing about when the last burst FINISHES. Measured: sixty-four steps started at
+ * ~2953ms and ended at ~4.25s, with the assertion green the whole way. The budget Ruling 1
+ * actually fences is when the replay is OVER, so a beat has to say when it ends, and
+ * `delayMs + durationMs <= REPLAY_BUDGET_MS` for every beat is what the suite now proves.
+ *
+ * COMPRESSED RATHER THAN TRUNCATED at large headcounts. Ruling 5 keeps every settled person a
  * strip at any event size, so a big board must still finish inside the budget rather than
  * dropping the tail of its own replay.
+ *
+ * ⚠ AND THE COST OF THAT IS REAL AND IS NOT HIDDEN. Past roughly twenty steps the stagger
+ * falls under the ~50ms it takes for two bursts to read as two events, and a long replay
+ * becomes one wave rather than a sequence. That is the budget winning over the stagger, which
+ * is the order Ruling 1 puts them in: "never hold the answer hostage."
  */
-export function scheduleReplay(steps: readonly ReplayStep[]): number[] {
+export function scheduleReplay(steps: readonly ReplayStep[]): ReplayBeat[] {
   if (steps.length === 0) return [];
-  const interval = Math.min(STEP_INTERVAL_MS, REPLAY_BUDGET_MS / steps.length);
-  return steps.map((_, i) => Math.round(interval * i));
+  const durations = steps.map((s) => (s.spark ? SPARK_DURATION_MS : QUIET_DURATION_MS));
+  // The tail is what the budget has to hold, and the longest envelope is what the tail might
+  // be. Reserving it for every step is a hair conservative and cannot overrun.
+  const longest = Math.max(...durations);
+  const room = Math.max(0, REPLAY_BUDGET_MS - longest);
+  const interval = steps.length === 1 ? 0 : Math.min(STEP_INTERVAL_MS, room / (steps.length - 1));
+  return steps.map((_, i) => ({ delayMs: Math.floor(interval * i), durationMs: durations[i] }));
 }
 
 /**
@@ -200,6 +240,18 @@ export function deriveReplay(
 
   // Ruling 6: the reversal plays LAST, so the replay ends on the truth. Everything else keeps
   // the order it actually happened in.
+  //
+  // ⚠ THE DESIGN REFERENCE SAYS *ALL* REDS LAND LAST. THIS SORTS ONLY THE REVERSAL, AND THAT IS
+  // RULED — recorded here so nobody "fixes" the code toward the reference. The reference's
+  // replay rules read *"reds land last, quietly, so the replay ends on the truth"*; Ruling 6 is
+  // about the reversal's lifecycle specifically, and Ruling 26 — which let ordinary reds play at
+  // all — came after both and said nothing about their order. Put to the founder at 6c's walk,
+  // where two reds visibly played in the middle of the good news:
+  //
+  //   "Reversals last, as built. Ruling 6 is specific about the reversal's lifecycle; the
+  //    reference sentence is a sketch and the ruling governs."
+  //
+  // So an ordinary red keeps the order it actually happened in, like every other step.
   ranked.sort((a, b) => (a.reversal === b.reversal ? a.order - b.order : a.reversal ? 1 : -1));
 
   return { steps: ranked.map((r) => r.step) };

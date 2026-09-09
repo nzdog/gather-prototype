@@ -829,7 +829,7 @@ async function main() {
 
     assert(
       'Ruling 1 source',
-      'every glance source exists — the modules, the route, the page, the view, the actions',
+      'every glance source exists — the modules, the route, the page, the view, the actions, the island',
       [
         stateSrc,
         readSrc,
@@ -840,6 +840,7 @@ async function main() {
         assistantSrc,
         actionsSrc,
         surfaceSrc,
+        code('src/components/glance/GlanceReplay.tsx'),
       ].every((src) => src.length > 0)
     );
     // Phase 6 slice 6a puts the pure replay and its one door in the tree. Ruling 1's fence
@@ -850,6 +851,11 @@ async function main() {
     // UNCHANGED: it writes the host's own mark and reads no guest behaviour, so it is
     // exempt from nothing.
     const seenSrc = code('src/app/api/events/[id]/glance/seen/route.ts');
+    // Phase 6 slice 6c puts the replay's ISLAND in the tree, and it is the one glance source
+    // that ships to a browser as a bundle. Ruling 1's fence follows it UNCHANGED — an
+    // animation is no licence to carry behaviour, and "absent from the payload, not merely
+    // unrendered" applies hardest to the module whose whole job is rendering.
+    const islandSrc = code('src/components/glance/GlanceReplay.tsx');
     const glanceSources = [
       stateSrc,
       readSrc,
@@ -863,6 +869,7 @@ async function main() {
       replaySrc,
       entrySrc,
       seenSrc,
+      islandSrc,
     ];
     const sourcesExist = glanceSources.every((src) => src.length > 0);
     for (const banned of BEHAVIOUR_DENYLIST) {

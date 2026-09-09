@@ -37,6 +37,7 @@ import { requireEventRole } from '@/lib/auth/guards';
 import { readEventGlance } from '@/lib/glance/read';
 import { readGlanceReplay, stampGlanceSeen } from '@/lib/glance/replay-entry';
 import GlanceBoard from '@/components/glance/GlanceBoard';
+import GlanceReplay from '@/components/glance/GlanceReplay';
 
 export default async function GlancePage({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = await params;
@@ -67,11 +68,7 @@ export default async function GlancePage({ params }: { params: Promise<{ eventId
   const glance = await readEventGlance(prisma, eventId, now);
 
   /*
-    ── Phase 6 slice 6b — THE MEMORY, WRITTEN. NOTHING IS PLAYED YET. ──────────────────
-
-    The replay is computed and then DISCARDED: 6b ships no island, no animation and no
-    polling, and `GlanceBoard` below is byte-identical to what phase 4 shipped. Computing it
-    here is what makes the stamp correct rather than unconditional.
+    ── Phase 6 — THE MEMORY (6b), AND THE REPLAY IT GUARDS (6c) ────────────────────────
 
     NOTHING TO PLAY → STAMP IMMEDIATELY, and that covers BOTH cases that produce an empty
     replay. NULL is a viewer who has never been shown this board's news: she is owed nothing,
@@ -79,11 +76,17 @@ export default async function GlancePage({ params }: { params: Promise<{ eventId
     which is most visits. They are different facts (the door keeps them apart, and treating
     null as a baseline would replay the whole event) but they earn the same answer.
 
-    ⚠ AND WHEN THERE *IS* SOMETHING TO PLAY, 6b DOES NOT STAMP. Ruling 6 is that "'seen' means
-    the replay played", and in 6b nothing plays — so stamping here would consume news before
-    any animation exists to show it, and the first host to open the board in 6c would find her
-    reversals already settled. It fails safe: it repeats rather than loses. 6c's completion
-    call is what stamps that case, and it posts to the route this slice adds.
+    ⚠ AND WHEN THERE *IS* SOMETHING TO PLAY, THIS PAGE STILL DOES NOT STAMP. That is 6b's
+    recorded decision and 6c does not move it: Ruling 6 is that "'seen' means the replay
+    played", so the stamp belongs to the moment the replay FINISHES, not to the moment the
+    page is served. It is the island's completion POST that stamps this case, against the
+    route 6b added. Stamping here instead would consume the news before it was shown, and a
+    host who never watched would find her reversals already settled, silently.
+
+    ⚠ SLICE 6c'S WHOLE CHANGE IS THE LINE THAT HANDS `replay.steps` TO THE ISLAND. The board
+    below is untouched: it renders the CURRENT state, exactly as it always has, so the true
+    board is in the first paint and a host in a hurry gets her four-second answer whether or
+    not anything plays. The island paints the past over the top and walks it forward.
   */
   const viewer = await prisma.eventRole.findFirst({
     where: { userId: auth.user.id, eventId },
@@ -133,6 +136,13 @@ export default async function GlancePage({ params }: { params: Promise<{ eventId
           month: 'long',
         })}
       />
+      {/*
+        Phase 6 slice 6c. The island, BESIDE the board rather than inside it, so `GlanceBoard`
+        keeps the no-hooks property phase 2 built it for. It renders nothing at all when there
+        are no steps — "no fake fireworks: if nothing changed, nothing plays" — and in that
+        case the stamp above has already run instead.
+      */}
+      <GlanceReplay eventId={eventId} steps={replay.steps} />
     </div>
   );
 }

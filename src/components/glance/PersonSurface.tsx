@@ -128,6 +128,13 @@ export default function PersonSurface({
         type="button"
         data-strip-state={person.state}
         data-strip-door=""
+        /*
+          Phase 6 slice 6c. The same handle the plain strips carry, so the replay's island can
+          repaint a red exactly as it repaints anything else — a strip that is a door is still
+          a strip. It changes nothing here: this component already hydrates because it IS the
+          door.
+        */
+        data-person-event-id={person.personEventId}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(true)}

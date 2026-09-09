@@ -39,12 +39,11 @@ import {
   criticalStripClauses,
   criticalStripText,
   STRIP_TONE,
-  stripLabel,
+  stripStateWords,
   summaryClauses,
   summarySentence,
   unassignedDoorHref,
   unassignedDoorText,
-  whyLineFor,
 } from './strip';
 
 interface GlanceBoardProps {
@@ -89,13 +88,20 @@ function assignablePool(glance: EventGlance): GlanceAssignable[] {
  *
  * Ruling 4: a red carries its why on the same line; everything else is the bare name. Held
  * apart from the element so a door and a plain strip cannot drift into looking different.
+ *
+ * ⚠ PHASE 6 SLICE 6c SPLITS THE NAME FROM THE STATE-WORDS, AND THE TEXT IS UNCHANGED. Ruling
+ * 7's "— out" used to live inside the name span; it is now beside it, in the same span Ruling
+ * 4's why already used, because the two are one thing: the half of the strip that describes
+ * the person's state NOW. The arrival replay rewinds the TINT and cannot rewind the WORDS, so
+ * the island suppresses them while a step is pending — *"a green strip reading 'out' is
+ * incoherent and the words are the truthful half."* `data-strip-words` is how it finds them.
  */
 function StripBody({ person }: { person: GlancePerson }) {
-  const why = whyLineFor(person);
+  const words = stripStateWords(person);
   return (
     <>
-      <span>{stripLabel(person)}</span>
-      {why ? <span className="font-normal">{` — ${why}`}</span> : null}
+      <span>{person.name}</span>
+      {words ? <span data-strip-words="" className="font-normal">{` ${words}`}</span> : null}
     </>
   );
 }
@@ -106,6 +112,13 @@ function StripBody({ person }: { person: GlancePerson }) {
  * `data-strip-state` is the assertable form of the tint — a test that reads a hex is
  * reading the design, and a test that reads this is reading the decision. Phase 4 adds
  * `data-strip-door` alongside it, on the reds only.
+ *
+ * ⚠ PHASE 6 SLICE 6c ADDS `data-person-event-id`, AND IT IS A HANDLE, NOT A STATE. The
+ * arrival replay is one client island beside this board (`GlanceReplay.tsx`) rather than a
+ * wrapper around every strip, because wrapping would hydrate sixty-four components on the
+ * oversized board to animate five of them. An island that paints strips it does not own has
+ * to be able to find them, and this is how. NOTHING HERE HYDRATES BECAUSE OF IT: the board is
+ * still a server component with no hooks, which is the property phase 2 built it for.
  *
  * ⚠ THE TWO BRANCHES SHARE ONE CLASS STRING. The door is a `<button>` and the rest are
  * `<div>`s, and they must be indistinguishable to look at: `block w-full text-left` is the
@@ -122,7 +135,11 @@ function Strip({
 
   if (person.state !== 'RED') {
     return (
-      <div data-strip-state={person.state} className={className}>
+      <div
+        data-strip-state={person.state}
+        data-person-event-id={person.personEventId}
+        className={className}
+      >
         <StripBody person={person} />
       </div>
     );

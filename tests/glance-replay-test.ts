@@ -1,5 +1,5 @@
 /**
- * GTC-192 (J1, phase 6, slice 6a) — the rewind and the replay derivation. NO UI.
+ * GTC-192 (J1, phase 6) — the rewind, the replay derivation, the stamp, and the island.
  *
  * Ruling 1 fences the arrival replay to state changes: "no opens, no views, no hesitations,
  * ever." Ruling 6 makes the reversal play last and settle once played. Ruling 21 (2026-09-09)
@@ -7,13 +7,19 @@
  * AT ALL rather than touched and guarded. Ruling 26 rules which transitions play: good news and
  * reds; GREEN → AMBER is not a reversal and does not play.
  *
- * FIVE LAYERS IN THE PLAN; 6a BUILDS 1, 2 AND 4.
+ * FIVE LAYERS IN THE PLAN. 6a built 1, 2 and 4; 6b added 3; 6c extends 1 and 4.
  *   1. PURE      — `deriveReplay` and `scheduleReplay` over hand-built inputs. No server, no DB.
  *   2. DB        — `rewindGlanceInputs` against a seeded event with REAL `AuditEntry` rows.
- *   3. HTTP      — the stamp route. NOT 6a; that is 6b.
+ *   3. HTTP      — the stamp route, and the page's own stamping rule.
  *   4. STRUCTURAL + FENCE — the denylist, the allowlist, the no-timestamp rule, the rewind's
- *                  confinement, the one door, no websocket package.
+ *                  confinement, the one door, no websocket package, and 6c's island.
  *   5. the four mutations — run and reported as part of 6a, not encoded here.
+ *
+ * ⚠ WHAT THIS FILE CANNOT PROVE, SAID PLAINLY BECAUSE THE TICKET HAS CAUGHT THE CONFUSION
+ * BEFORE. There is no jsdom, no Playwright and no time axis here. The SCHEDULE is proved — a
+ * pure function from steps to beats, every beat inside the 3000ms budget. The ≤3s budget AS
+ * EXPERIENCED, the pixels, and "the summary is legible throughout" are NOT proved by any green
+ * below; they are browser-walk claims and are earned in the walk, in the ticket.
  *
  * ⚠ LAYER 2 SEEDS ITS OWN TAGGED `AuditEntry` ROWS, AND THAT IS A STATED REQUIREMENT RATHER
  * THAN A PRACTICE. No real event in `gather_dev` has a single `AuditEntry` row, so a rewind
@@ -33,7 +39,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import { randomBytes } from 'crypto';
-import { BEHAVIOUR_DENYLIST, REWIND_DENYLIST, collectKeys, code } from './glance-fence';
+import { BEHAVIOUR_DENYLIST, REWIND_DENYLIST, collectKeys, code, raw } from './glance-fence';
 
 const prisma = new PrismaClient();
 
@@ -608,33 +614,106 @@ async function main() {
         )
     );
 
-    // ── The schedule: the whole replay inside ~3s ──
+    // ── THE SCHEDULE (6c) — AND WHAT THESE ASSERTIONS DO NOT PROVE ───────
+    //
+    // ⚠ SAID PLAINLY, BECAUSE THE TWO CLAIMS ARE DIFFERENT AND THIS TICKET HAS CAUGHT THE
+    // CONFUSION BEFORE. The estate is `tsx` scripts and `renderToStaticMarkup`: no jsdom, no
+    // Playwright, no time axis. What is proved below is THE SCHEDULE — a pure function
+    // turning steps into beats. It is NOT the ≤3s budget as experienced, NOT the pixels, and
+    // NOT "the summary is legible throughout". A green schedule assertion is not a proven
+    // budget; the browser walk is where that claim is earned.
+    //
+    // ⚠ THE SHAPE CHANGED IN 6c, AND THE BUDGET IS WHY. 6a's `scheduleReplay` returned start
+    // times alone and asserted that the LAST START lands inside 3000ms — which says nothing
+    // about when the last burst FINISHES. With the reference's 0.9–1.3s flight, 64 steps
+    // started at ~2953ms and ended at ~4.25s, over budget with every assertion green. A beat
+    // carries its own duration so the budget can be asserted on `delayMs + durationMs`, which
+    // is the thing Ruling 1 actually fences.
     assert(
       'layer 1 / schedule',
       'the replay budget is 3000ms, named rather than scattered',
       built && ok(() => RP.REPLAY_BUDGET_MS === 3000)
     );
-    for (const n of [1, 5, 64]) {
-      const steps = Array.from({ length: n }, (_, i) => ({
+    assert(
+      'layer 1 / schedule',
+      'the two envelopes are named — a spark is the reference’s 0.9–1.3s burst, a quiet step its 0.7s colour transition',
+      built && ok(() => RP.SPARK_DURATION_MS === 1300 && RP.QUIET_DURATION_MS === 700)
+    );
+    const beatSteps = (n: number, spark = true) =>
+      Array.from({ length: n }, (_, i) => ({
         personEventId: `pe${i}`,
-        from: 'AMBER',
-        to: 'GREEN',
-        spark: true,
+        from: spark ? 'AMBER' : 'GREEN',
+        to: spark ? 'GREEN' : 'RED',
+        spark,
       }));
+    for (const n of [1, 2, 5, 12, 64]) {
       assert(
         'layer 1 / schedule',
-        `${n} step(s) schedule inside the 3000ms budget, monotonically`,
+        `${n} spark(s): every beat is {delayMs, durationMs} and NOTHING RUNS PAST 3000ms — delay PLUS duration`,
         built &&
           ok(() => {
-            const at: number[] = RP.scheduleReplay(steps);
+            const beats = RP.scheduleReplay(beatSteps(n));
             return (
-              at.length === n &&
-              at.every((ms, i) => Number.isFinite(ms) && ms >= 0 && (i === 0 || ms >= at[i - 1])) &&
-              at[at.length - 1] <= RP.REPLAY_BUDGET_MS
+              beats.length === n &&
+              beats.every(
+                (b: any) =>
+                  JSON.stringify(Object.keys(b).sort()) ===
+                    JSON.stringify(['delayMs', 'durationMs']) &&
+                  Number.isFinite(b.delayMs) &&
+                  b.delayMs >= 0 &&
+                  b.durationMs > 0 &&
+                  b.delayMs + b.durationMs <= RP.REPLAY_BUDGET_MS
+              )
             );
           })
       );
+      if (n > 1) {
+        assert(
+          'layer 1 / schedule',
+          `${n} sparks: the beats are STAGGERED — strictly increasing, so bursts read as a sequence rather than one flash`,
+          built &&
+            ok(() => {
+              const beats = RP.scheduleReplay(beatSteps(n));
+              return beats.every(
+                (b: any, i: number) => i === 0 || b.delayMs > beats[i - 1].delayMs
+              );
+            })
+        );
+      }
     }
+    assert(
+      'layer 1 / schedule',
+      'a quiet step gets the quiet envelope and a spark the burst — Ruling 6’s "quietly, no sparks" has a DURATION, not only a look',
+      built &&
+        ok(() => {
+          const mix = RP.scheduleReplay([
+            { personEventId: 'a', from: 'AMBER', to: 'GREEN', spark: true },
+            { personEventId: 'b', from: 'GREEN', to: 'OUT', spark: false },
+          ]);
+          return (
+            mix[0].durationMs === RP.SPARK_DURATION_MS && mix[1].durationMs === RP.QUIET_DURATION_MS
+          );
+        })
+    );
+    // Reversal-last is `deriveReplay`'s ordering (asserted above); this asserts the SCHEDULE
+    // agrees, over the derivation's OWN output rather than a hand-ordered array, so the two
+    // cannot drift into disagreeing about which beat ends the replay.
+    assert(
+      'layer 1 / schedule',
+      'the LAST beat is the REVERSAL’s and it is the quiet one — the replay ends on the truth (Ruling 6)',
+      built &&
+        ok(() => {
+          const beats = RP.scheduleReplay(mixed.steps);
+          return (
+            mixed.steps.length === 2 &&
+            mixed.steps[1].to === 'OUT' &&
+            beats.length === 2 &&
+            beats[1].delayMs > beats[0].delayMs &&
+            beats[1].durationMs === RP.QUIET_DURATION_MS &&
+            beats[1].delayMs + beats[1].durationMs <= RP.REPLAY_BUDGET_MS
+          );
+        })
+    );
     assert(
       'layer 1 / schedule',
       'an empty replay schedules nothing — no fake fireworks when nothing changed',
@@ -1296,6 +1375,118 @@ async function main() {
         pageMark2.getTime() > pageMark1.getTime()
     );
 
+    // ── 6c: SOMETHING TO PLAY → THE ISLAND GETS IT, AND THE PAGE DOES NOT STAMP ──
+    //
+    // ⚠ THE STAMP TIMING IS NOT A BUG, AND 6c DOES NOT MOVE IT. 6b's recorded decision:
+    // nothing to play → stamp immediately; something to play → do NOT stamp until the replay
+    // has played. 6c ADDS the completion POST — the island's, after the last beat — and
+    // leaves the page's rule exactly where 6b put it. A slice that made the page stamp
+    // unconditionally would consume the news before anything existed to show it, and the
+    // first host to open the board would find her reversals already settled, silently.
+    //
+    // The fixture is the common good news: an assignment created BEFORE `since`, `ACCEPTED`
+    // now, with its `ACCEPT_ASSIGNMENT` row dated INSIDE the window. AMBER → GREEN, one spark.
+    //
+    // ⚠ THIS FIXTURE ORIGINALLY WROTE NO LEDGER ROW AT ALL, AND RULING 28 BROKE IT — which is
+    // the ruling proving itself on 6c's own test. It leant on the `PENDING` default: no row, so
+    // the rewind assumed pending at `since` and the spark appeared out of an assumption. Under
+    // positive evidence the same fixture correctly replays NOTHING, because nothing recorded a
+    // change. The row below is what makes the change real, and it is what a guest's own tap
+    // writes.
+    const playPerson = await prisma.person.create({
+      data: { name: `${TAG} PlayGuest`, email: `${TAG}-play@example.com` },
+    });
+    createdPersonIds.push(playPerson.id);
+    const playEvent = await prisma.event.create({
+      data: {
+        name: `${TAG} play fixture`,
+        startDate: new Date(Date.now() + 100 * HOUR),
+        endDate: new Date(Date.now() + 130 * HOUR),
+        hostId: stampPerson.id,
+        status: 'CONFIRMING',
+        sentAt: new Date(Date.now() - 10 * DAY),
+      },
+    });
+    createdEventIds.push(playEvent.id);
+    const playSince = new Date(Date.now() - 2 * HOUR);
+    await prisma.eventRole.create({
+      data: {
+        userId: hostUser.id,
+        eventId: playEvent.id,
+        role: 'HOST',
+        glanceSeenAt: playSince,
+      },
+    });
+    await prisma.personEvent.create({
+      data: {
+        personId: playPerson.id,
+        eventId: playEvent.id,
+        role: 'PARTICIPANT',
+        sentAt: new Date(Date.now() - 10 * DAY),
+      },
+    });
+    const playTeam = await prisma.team.create({
+      data: { eventId: playEvent.id, name: `${TAG} PlayMains` },
+    });
+    const playItem = await prisma.item.create({
+      data: { teamId: playTeam.id, name: `${TAG} the pavlova`, kind: 'ITEM' },
+    });
+    const playAssignment = await prisma.assignment.create({
+      data: {
+        itemId: playItem.id,
+        personId: playPerson.id,
+        response: 'ACCEPTED',
+        createdAt: new Date(Date.now() - 6 * HOUR),
+      },
+    });
+    await prisma.auditEntry.create({
+      data: {
+        eventId: playEvent.id,
+        actorId: playPerson.id,
+        actionType: 'ACCEPT_ASSIGNMENT',
+        targetType: 'Assignment',
+        targetId: playAssignment.id,
+        details: '',
+        timestamp: new Date(Date.now() - 1 * HOUR),
+      },
+    });
+
+    const playRes = await fetch(`${BASE}/plan/${playEvent.id}/glance`, { headers: HOST_COOKIE });
+    const playHtml = playRes.status === 200 ? await playRes.text() : '';
+    const playMark = await markOf(hostUser.id, playEvent.id);
+    assert(
+      'layer 3 / play',
+      'the page renders for the host on a board with something to play (200)',
+      serverUp && playRes.status === 200
+    );
+    // THE POSITIVE CONTROL FIRST. Everything below is a claim about a NON-EMPTY replay, and
+    // "the mark did not move" is trivially true of a page that computed nothing at all.
+    assert(
+      'layer 3 / play',
+      'THE REPLAY IS NON-EMPTY — the island is on the page carrying one step (the positive control the two below hang on)',
+      serverUp && playRes.status === 200 && /data-glance-replay="1"/.test(playHtml)
+    );
+    assert(
+      'layer 3 / play',
+      'SOMETHING TO PLAY → THE PAGE DOES NOT STAMP — 6b’s rule survives 6c, and the news is not consumed before it is shown',
+      serverUp &&
+        playRes.status === 200 &&
+        /data-glance-replay="1"/.test(playHtml) &&
+        playMark !== null &&
+        playMark.getTime() === playSince.getTime()
+    );
+    // Ruling 6 end-to-end: "'seen' means the replay played — no acknowledge button, no inbox
+    // mechanics." Asserted on the page a host actually receives, with a replay pending on it,
+    // rather than only on the island's source.
+    assert(
+      'layer 3 / play',
+      'NO ACKNOWLEDGE CONTROL reaches the served page — "seen" means the replay played (Ruling 6)',
+      serverUp &&
+        playRes.status === 200 &&
+        /data-glance-replay="1"/.test(playHtml) &&
+        !/acknowledge|dismiss|got it|mark as seen|skip replay/i.test(playHtml)
+    );
+
     // ══ LAYER 4 — STRUCTURAL AND FENCE ═══════════════════════════════════
     const rewindSrc = code('src/lib/glance/rewind.ts');
     const replaySrc = code('src/lib/glance/replay.ts');
@@ -1474,19 +1665,22 @@ async function main() {
         )
     );
 
-    // ── 6b CHANGES NOTHING THE HOST CAN SEE ──────────────────────────────
+    // ── WHO MAY REACH THE REPLAY, AND WITH WHAT ──────────────────────────
     //
-    // ⚠ 6a's assertion "NOTHING calls the new modules" IS RETIRED HERE, WITH ITS SUCCESSOR
-    // NAMED AT THE SITE — the treatment phase 3 gave phase 2's alert-strip guard, and the
-    // one Ruling 25 requires. 6a could assert nothing called the modules because 6a shipped
-    // no caller. 6b ships the page's call, so the invariant NARROWS rather than disappears:
+    // ⚠ 6b's assertion "NO COMPONENT reaches the replay at all" IS RETIRED HERE, WITH ITS
+    // SUCCESSOR NAMED AT THE SITE — the treatment phase 3 gave phase 2's alert-strip guard
+    // and 6b gave 6a's. 6b could say no component touched the replay because 6b shipped no
+    // island. 6c ships one, so the invariant NARROWS rather than disappears:
     //
-    //   was:  nothing imports rewind / replay / replay-entry
-    //   now:  no COMPONENT imports any of them, and the PAGE reaches them ONLY through the
-    //         one door (replay-entry) — never rewind or replay directly.
+    //   was:  no component imports rewind / replay / replay-entry
+    //   now:  NO COMPONENT REACHES THE DB-BOUND HALF — not the rewind, not the door — and
+    //         EXACTLY ONE component reaches the PURE half, and it is the island.
     //
-    // The board itself is still byte-identical to phase 4; the components below are the
-    // whole of what the host sees, and none of them has changed.
+    // That is the property worth holding. The rewind is the module that touches a ledger and
+    // the door is the module that reads a database; a client component reaching either would
+    // put both in a browser bundle. `replay.ts` is pure and client-safe by construction, and
+    // asserted so a few lines above.
+    const ISLAND = 'src/components/glance/GlanceReplay.tsx';
     const componentSurfaces = [
       'src/components/glance/GlanceBoard.tsx',
       'src/components/glance/PersonSurface.tsx',
@@ -1497,14 +1691,30 @@ async function main() {
       'src/lib/glance/state.ts',
       'src/lib/glance/actions.ts',
     ];
-    const surfaces = [...componentSurfaces, 'src/app/plan/[eventId]/glance/page.tsx'];
+    const islandSrc = code(ISLAND);
+    const islandBuilt = islandSrc.length > 0;
+    assert(
+      'layer 4 / island',
+      'THE ISLAND EXISTS — every assertion whose subject is the island is gated on this, so "absent" cannot read as "correct"',
+      islandBuilt
+    );
     assert(
       'layer 4 / no UI',
-      'NO COMPONENT reaches the replay at all — the board does not know it exists',
-      componentSurfaces.every((f) => {
+      'NO COMPONENT reaches the DB-BOUND half — not the rewind, not the door; a client bundle must not contain either',
+      [...componentSurfaces, ISLAND].every((f) => {
         const src = code(f);
-        return src.length > 0 && !/glance\/(rewind|replay|replay-entry)/.test(src);
+        return src.length > 0 && !/glance\/(rewind|replay-entry)/.test(src);
       })
+    );
+    assert(
+      'layer 4 / no UI',
+      'and EXACTLY ONE component reaches the PURE replay — the island, and nothing else on the board',
+      islandBuilt &&
+        /glance\/replay['"]/.test(islandSrc) &&
+        componentSurfaces.every((f) => {
+          const src = code(f);
+          return src.length > 0 && !/glance\/replay['"]/.test(src);
+        })
     );
     const pageSrc6b = code('src/app/plan/[eventId]/glance/page.tsx');
     assert(
@@ -1515,15 +1725,172 @@ async function main() {
         !/glance\/rewind/.test(pageSrc6b) &&
         !/glance\/replay['"]/.test(pageSrc6b)
     );
+    // ⚠ AND 6b's TIMER ASSERTION NARROWS TOO, FOR THE SAME REASON AND WITH THE SAME
+    // TREATMENT. The island's schedule IS timeouts — that is what a staggered replay is — so
+    // a blanket "no setTimeout anywhere" would have to be either deleted or lied to.
+    //
+    //   was:  no setInterval, no setTimeout, no router.refresh on ANY surface
+    //   now:  NO SURFACE STARTS AN INTERVAL AND NONE REFRESHES ITSELF — polling is Ruling
+    //         10's ~20s and belongs to 6e — and the only timeouts in the glance are the
+    //         island's own schedule.
+    //   and:  6e retires the interval half when polling lands, deliberately and at this site.
+    const surfaces = [...componentSurfaces, 'src/app/plan/[eventId]/glance/page.tsx'];
     assert(
       'layer 4 / no UI',
-      'and no polling was introduced — Ruling 10’s ~20s is 6e, not 6a',
+      'NO SURFACE POLLS — no interval and no self-refresh anywhere, the island included; Ruling 10’s ~20s is 6e’s',
       // Gated on the file actually being read: `code()` returns '' for a missing path, and an
       // absence test over an empty string is the vacuous green this ticket keeps catching.
-      surfaces.every((f) => {
-        const src = code(f);
-        return src.length > 0 && !/setInterval|setTimeout|router\.refresh/.test(src);
+      islandBuilt &&
+        [...surfaces, ISLAND].every((f) => {
+          const src = code(f);
+          return src.length > 0 && !/setInterval|router\.refresh/.test(src);
+        })
+    );
+    assert(
+      'layer 4 / no UI',
+      'and the ONLY timeouts in the glance are the island’s schedule — every other surface starts none',
+      islandBuilt && surfaces.every((f) => code(f).length > 0 && !/setTimeout/.test(code(f)))
+    );
+
+    // ── THE ISLAND ITSELF (6c) ───────────────────────────────────────────
+    assert(
+      'layer 4 / island',
+      'it is a CLIENT component — the animation needs a browser',
+      islandBuilt && /['"]use client['"]/.test(raw(ISLAND))
+    );
+    assert(
+      'layer 4 / island',
+      'and the BOARD still is not — GlanceBoard keeps phase 2’s no-hooks property; the replay is an island BESIDE it, phase 4’s pattern',
+      islandBuilt &&
+        ok(() => {
+          const src = code('src/components/glance/GlanceBoard.tsx');
+          return (
+            src.length > 0 && !/['"]use client['"]|useState|useEffect|useLayoutEffect/.test(src)
+          );
+        })
+    );
+    assert(
+      'layer 4 / island',
+      'it holds NO database handle and no Prisma import — a client bundle is not a place for one',
+      islandBuilt && !/@prisma\/client|PrismaClient|\bprisma\b/.test(islandSrc)
+    );
+    assert(
+      'layer 4 / island',
+      'it reads ONE definition of the colours — the tones and their hexes come from the strip module, and NOT ONE HEX is written here',
+      islandBuilt &&
+        /from '\.\/strip'/.test(islandSrc) &&
+        /STRIP_TONE/.test(islandSrc) &&
+        !/#[0-9A-Fa-f]{6}/.test(islandSrc)
+    );
+    assert(
+      'layer 4 / island',
+      'it asks the SHARED schedule rather than staggering by hand — one definition of the budget',
+      islandBuilt && /scheduleReplay\(/.test(islandSrc)
+    );
+    assert(
+      'layer 4 / island',
+      'NO ACKNOWLEDGE CONTROL — no button, no link, no role="button", no click handler anywhere in it (Ruling 6)',
+      islandBuilt &&
+        !/<button|<a\s|role="button"|onClick|onKeyDown|acknowledge|dismiss/i.test(islandSrc)
+    );
+    assert(
+      'layer 4 / island',
+      'the completion POST goes to 6b’s route, with NO BODY — the instant is the server’s, never the client’s',
+      islandBuilt &&
+        /\/api\/events\/\$\{[^}]*\}\/glance\/seen/.test(islandSrc) &&
+        /method:\s*'POST'/.test(islandSrc) &&
+        !/body:/.test(islandSrc)
+    );
+    assert(
+      'layer 4 / island',
+      'and it fires ONCE — guarded by a ref, so a re-render or a strict-mode double effect cannot stamp twice',
+      islandBuilt && /useRef/.test(islandSrc)
+    );
+    assert(
+      'layer 4 / island',
+      'it paints the past BEFORE the browser paints — a layout effect, not a post-paint one',
+      islandBuilt && /useLayoutEffect/.test(islandSrc)
+    );
+    // ── 6c / FINDING 1, RULED ────────────────────────────────────────────
+    //
+    // "During the replay, SUPPRESS THE REASON LINE on any strip that still has a pending step;
+    // let it appear as the step lands. No past reasons, no fifth key on ReplayStep, the
+    // allowlist holds. A green strip reading 'out' is incoherent and the words are the
+    // truthful half."
+    //
+    // The tint is rewound and the words are not — they describe the state NOW, and during the
+    // rewind that state has not arrived. So the words are hidden, not rewritten: rewinding them
+    // would need the past `reasons`, which is the fifth key the allowlist refuses.
+    assert(
+      'layer 4 / finding 1',
+      'THE WORDS ARE SUPPRESSED WHILE A STEP IS PENDING — the island hides the strip’s state-words with the past paint',
+      islandBuilt && /data-strip-words/.test(islandSrc) && /hidden\s*=\s*true/.test(islandSrc)
+    );
+    assert(
+      'layer 4 / finding 1',
+      'and they APPEAR AS THE STEP LANDS — hidden is set back, in the same place the tint is',
+      islandBuilt && /hidden\s*=\s*false/.test(islandSrc)
+    );
+    assert(
+      'layer 4 / finding 1',
+      'and NO PAST REASON crosses the wire to do it — the step is still exactly the four keys',
+      built &&
+        islandBuilt &&
+        ok(() => {
+          const keys = Object.keys(pendingToAccepted.steps[0]).sort();
+          return JSON.stringify(keys) === JSON.stringify(['from', 'personEventId', 'spark', 'to']);
+        })
+    );
+    assert(
+      'layer 4 / island',
+      'the strips are ADDRESSABLE — the board marks each with its personEventId so the island can find it',
+      ok(() => {
+        const board = code('src/components/glance/GlanceBoard.tsx');
+        const surface = code('src/components/glance/PersonSurface.tsx');
+        return (
+          board.length > 0 &&
+          surface.length > 0 &&
+          /data-person-event-id/.test(board) &&
+          /data-person-event-id/.test(surface)
+        );
       })
+    );
+    // ⚠ NOT A SECOND DEFINITION OF THE NO-OP RULE. 6a drops `from === to` inside
+    // `deriveReplay`, and re-implementing that drop in the island would be the second
+    // definition this ticket refuses everywhere else. So the assertion is on the COMPOSITION:
+    // the double-flip fixture is put through the real derivation and the island is handed
+    // whatever comes out — and what comes out is nothing to paint.
+    assert(
+      'layer 4 / island',
+      'THE ISLAND NEVER RENDERS A NO-OP — the double-flip derives to zero steps, so there is nothing for it to paint',
+      built &&
+        islandBuilt &&
+        ok(() => netZero.steps.length === 0 && RP.scheduleReplay(netZero.steps).length === 0)
+    );
+    assert(
+      'layer 4 / island',
+      'and Ruling 26 holds at the island’s door too — GREEN → AMBER derives to nothing, so no strip is ever painted backwards into amber',
+      built && islandBuilt && ok(() => greenToAmber.steps.length === 0)
+    );
+    assert(
+      'layer 4 / page',
+      'THE PAGE HANDS THE REPLAY TO THE ISLAND — 6b computed it and dropped it; 6c is where it becomes visible',
+      pageSrc6b.length > 0 &&
+        /components\/glance\/GlanceReplay/.test(pageSrc6b) &&
+        /<GlanceReplay/.test(pageSrc6b) &&
+        /replay\.steps/.test(pageSrc6b)
+    );
+    assert(
+      'layer 4 / page',
+      'and it STILL stamps only when there is nothing to play — 6b’s decision is not a bug, and 6c does not move it',
+      pageSrc6b.length > 0 &&
+        /replay\.steps\.length === 0[\s\S]{0,160}stampGlanceSeen/.test(pageSrc6b) &&
+        (pageSrc6b.match(/stampGlanceSeen\(/g) ?? []).length === 1
+    );
+    assert(
+      'layer 4 / page',
+      'the page is still a SERVER component — the board is right in the first paint, not after a fetch',
+      pageSrc6b.length > 0 && !/['"]use client['"]/.test(pageSrc6b)
     );
 
     // ── 6b: THE STAMP ROUTE, STRUCTURALLY ────────────────────────────────
