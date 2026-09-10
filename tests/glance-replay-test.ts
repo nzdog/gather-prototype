@@ -157,6 +157,27 @@ async function main() {
   }
 
   /**
+   * SLICE 6d — Ruling 23's two halves live in modules that ALREADY EXIST, so a `built` gate
+   * over the module is worthless here: `strip.ts` is phase 2's and `state.ts` is phase 1's and
+   * both import fine with none of 6d in them. The gate has to be on THE EXPORTS THEMSELVES,
+   * and it is deliberately split in two — the overlay (what a strip displays) and the reversal
+   * predicate (which people it is displayed for) are different halves and an assertion about
+   * one must not go green because the other landed.
+   *
+   * ⚠ AND THE LOADS ARE INSIDE A `try` FOR THE REASON RULING 30'S RED RECORDED: a fixture that
+   * calls a missing export at module scope CRASHES, and a suite that cannot report its RED is
+   * not a RED.
+   */
+  let ST: any = null;
+  let SS: any = null;
+  try {
+    ST = await import('../src/components/glance/strip');
+    SS = await import('../src/lib/glance/state');
+  } catch (err) {
+    console.error(`\x1b[31m!\x1b[0m strip/state load failed: ${String((err as Error).message)}`);
+  }
+
+  /**
    * THE GATE THAT MAKES THE RED MEAN SOMETHING. Every assertion whose subject is one of the
    * three new modules is anded with this, so "the module does not exist" can never read as
    * "the module behaves correctly".
@@ -170,6 +191,13 @@ async function main() {
   }
   /** 6e's own gate. See the declaration above for why it is separate from `built`. */
   const liveBuilt = LV !== null;
+
+  /** 6d's two gates. See the loads above for why they are exports rather than modules. */
+  const reversalBuilt =
+    RP !== null &&
+    typeof RP.isReversalTransition === 'function' &&
+    typeof RP.stickyReversals === 'function';
+  const overlayBuilt = ST !== null && typeof ST.overlayReversal === 'function';
 
   try {
     // ══ LAYER 1 — THE PURE DERIVATION ════════════════════════════════════
@@ -743,6 +771,333 @@ async function main() {
       'layer 1 / schedule',
       'an empty replay schedules nothing — no fake fireworks when nothing changed',
       built && ok(() => RP.scheduleReplay([]).length === 0)
+    );
+
+    // ══ LAYER 1d — RULING 23, THE SETTLING REVERSAL (SLICE 6d), PURE ═════
+    //
+    // Ruling 23, verbatim: "the sticky red is an OVERLAY on top of the ordinary derivation.
+    // Playing the replay removes the overlay; what is revealed is whatever the person's state
+    // already derives to underneath. This invents no new colour and needs no definition of
+    // 'settled' beyond the overlay lifting." And: "DERIVED, never a write."
+    //
+    // ⚠ WHAT THE TREE ACTUALLY HELD BEFORE THIS SLICE, RECORDED HERE BECAUSE THE ASSERTIONS
+    // BELOW ONLY MAKE SENSE AGAINST IT. `derivePersonState` returns OUT for a reversed person
+    // on its FIRST line, before any red source is consulted, so a reversal has never read red
+    // at all — `strip.ts` says so at its own site: *"'Ray — was in, now out' is the attendance
+    // reversal Ruling 6 fences behind phase 5's last-seen record."* Clause 1 was deliberately
+    // unbuilt because it needs a per-viewer "seen", and phase 5 is what supplied one. So 6d
+    // builds the overlay AND its lifting, because clause 3 has nothing to lift without it.
+    //
+    // The differential that makes this layer real is assertion 14: the overlay reads RED while
+    // `derivePersonState` on the same inputs still reads OUT. An overlay that changed the
+    // derivation would fail it, and that is the whole of "never a write, no new colour".
+    const outPerson = gPerson({
+      personEventId: 'pe-out',
+      personId: 'p-out',
+      name: 'Ray Dalton',
+      state: 'OUT',
+      reasons: ['ATTENDANCE_NO'],
+      items: [
+        gItem({
+          itemId: 'i-ice',
+          assignmentId: 'a-ice',
+          name: 'The ice',
+          state: 'RED',
+          reason: 'REVERSAL',
+        }),
+      ],
+    });
+
+    assert(
+      'layer 1d / Ruling 23',
+      'THE GATE — `isReversalTransition` and `stickyReversals` are exported from replay.ts (every reversal assertion below is anded with this)',
+      reversalBuilt
+    );
+    assert(
+      'layer 1d / Ruling 23',
+      'THE GATE — `overlayReversal` is exported from strip.ts (every overlay assertion below is anded with this)',
+      overlayBuilt
+    );
+
+    // ── ONE DEFINITION OF THE REVERSAL ───────────────────────────────────
+    assert(
+      'layer 1d / Ruling 6',
+      'GREEN → OUT is a reversal — in, then out, which is Ruling 6’s own words',
+      reversalBuilt && ok(() => RP.isReversalTransition('GREEN', 'OUT') === true)
+    );
+    assert(
+      'layer 1d / Ruling 6',
+      'AMBER → OUT is a reversal too — the reversal is about LEAVING, not about which shade she left from',
+      reversalBuilt && ok(() => RP.isReversalTransition('AMBER', 'OUT') === true)
+    );
+    assert(
+      'layer 1d / Ruling 6',
+      'OUT → OUT is NOT — she was already out, and nothing reversed',
+      reversalBuilt && ok(() => RP.isReversalTransition('OUT', 'OUT') === false)
+    );
+    assert(
+      'layer 1d / Ruling 26',
+      'GREEN → AMBER is NOT a reversal — the boundary Ruling 26 states so nobody implements it wrong',
+      reversalBuilt && ok(() => RP.isReversalTransition('GREEN', 'AMBER') === false)
+    );
+    assert(
+      'layer 1d / Ruling 26',
+      'and AMBER → RED is NOT either — an ordinary red plays in the middle, and only the reversal plays last',
+      reversalBuilt && ok(() => RP.isReversalTransition('AMBER', 'RED') === false)
+    );
+    // NOT "the word appears near deriveReplay". THE MECHANISM: the literal comparison exists
+    // exactly once in the file, and `deriveReplay` reaches it by CALLING the predicate. A
+    // second copy of the rule inside the overlay is the drift this ticket refuses at
+    // `isChaseable`, at `mayHoldRow` and at `isSparkTransition` — 6e's own precedent.
+    assert(
+      'layer 1d / one definition',
+      "THE REVERSAL RULE IS WRITTEN ONCE — the `to === 'OUT'` comparison appears exactly once in replay.ts, and deriveReplay CALLS the predicate rather than restating it",
+      reversalBuilt &&
+        ok(() => {
+          const src = code('src/lib/glance/replay.ts');
+          const literals = src.match(/===\s*'OUT'/g) ?? [];
+          return (
+            literals.length === 1 &&
+            /export function isReversalTransition/.test(src) &&
+            /isReversalTransition\(from,\s*to\)/.test(src)
+          );
+        })
+    );
+
+    // ── WHICH REVERSALS ARE STILL OWED TO THIS VIEWER ────────────────────
+    assert(
+      'layer 1d / overlay',
+      'AN EMPTY REPLAY OWES NOTHING — no steps, no overlay, so a viewer who has been shown everything sees the ordinary derivation',
+      reversalBuilt && ok(() => RP.stickyReversals([]).length === 0)
+    );
+    assert(
+      'layer 1d / overlay',
+      'a replay of ordinary steps owes nothing either — a spark and an ordinary red are not reversals',
+      reversalBuilt &&
+        ok(() => {
+          const steps = [
+            { personEventId: 'a', from: 'AMBER', to: 'GREEN', spark: true },
+            { personEventId: 'b', from: 'AMBER', to: 'RED', spark: false },
+          ];
+          return RP.stickyReversals(steps).length === 0;
+        })
+    );
+    assert(
+      'layer 1d / overlay',
+      'and a replay carrying a reversal owes EXACTLY that person — not the spark beside it, not the red beside it',
+      reversalBuilt &&
+        ok(() => {
+          const steps = [
+            { personEventId: 'a', from: 'AMBER', to: 'GREEN', spark: true },
+            { personEventId: 'b', from: 'AMBER', to: 'RED', spark: false },
+            { personEventId: 'pe-out', from: 'GREEN', to: 'OUT', spark: false },
+          ];
+          const owed = RP.stickyReversals(steps);
+          return owed.length === 1 && owed[0] === 'pe-out';
+        })
+    );
+
+    // THE COMPOSITION, not a hand-built step whose ends happen to match. The reversal comes out
+    // of the real derivation — a row ACCEPTED at `since` and DECLINED now, over a stored
+    // attendance NO — so this fails if `deriveReplay` stops producing reversals at all.
+    const reversalReplay = built
+      ? replayOf(
+          glanceOf([outPerson]),
+          rewindOf({
+            responseAt: new Map([['a-ice', 'ACCEPTED']]),
+            attendanceAt: new Map([['pe-out', 'NO']]),
+          })
+        )
+      : null;
+    assert(
+      'layer 1d / overlay',
+      'THE POSITIVE CONTROL — the real derivation produces the reversal (GREEN → OUT), so the two assertions below are about a step that exists',
+      built &&
+        ok(
+          () =>
+            reversalReplay.steps.length === 1 &&
+            reversalReplay.steps[0].from === 'GREEN' &&
+            reversalReplay.steps[0].to === 'OUT' &&
+            reversalReplay.steps[0].spark === false
+        )
+    );
+    assert(
+      'layer 1d / overlay',
+      'and `stickyReversals` names that person off the DERIVED replay — the overlay follows the replay rather than re-deciding who reversed',
+      built &&
+        reversalBuilt &&
+        ok(() => {
+          const owed = RP.stickyReversals(reversalReplay.steps);
+          return owed.length === 1 && owed[0] === 'pe-out';
+        })
+    );
+    // ⚠ THE INVARIANT THAT KEEPS 6e OUT OF THIS. `GlanceLive` reads its baseline off
+    // `data-strip-state`, and an overlaid strip carries RED where the poll route (which is
+    // viewer-agnostic) will answer OUT. That would be a spurious quiet flip, owing Ruling 30's
+    // debt for a change nobody made. It cannot happen: an overlay exists only when the replay
+    // is non-empty, and the island does not arm until the replay is done — at which point the
+    // overlay has been stamped away.
+    assert(
+      'layer 1d / 6e boundary',
+      'AN OVERLAY IMPLIES A PENDING REPLAY — so the live island never arms on an overlaid board and never reads RED as its baseline',
+      reversalBuilt &&
+        ok(() => {
+          const steps = [{ personEventId: 'pe-out', from: 'GREEN', to: 'OUT', spark: false }];
+          return (
+            RP.stickyReversals(steps).length > 0 &&
+            steps.length > 0 &&
+            RP.stickyReversals([]).length === 0
+          );
+        })
+    );
+
+    // ── THE OVERLAY ITSELF — ONE FIELD, ON TOP OF THE ORDINARY DERIVATION ─
+    assert(
+      'layer 1d / Ruling 23',
+      'THE OVERLAY CHANGES EXACTLY ONE FIELD — `state` becomes RED and every other key is byte-identical, which is what "an overlay ON TOP OF the ordinary derivation" means mechanically',
+      overlayBuilt &&
+        ok(() => {
+          const on = ST.overlayReversal(outPerson);
+          if (on.state !== 'RED') return false;
+          const keys = new Set([...Object.keys(outPerson), ...Object.keys(on)]);
+          for (const k of keys) {
+            if (k === 'state') continue;
+            if ((on as any)[k] !== (outPerson as any)[k]) return false;
+          }
+          return keys.size === Object.keys(outPerson).length;
+        })
+    );
+    assert(
+      'layer 1d / Ruling 23',
+      'and it does NOT touch `reasons` — the why is the person’s own ATTENDANCE_NO, not a reason the overlay invented for her',
+      overlayBuilt &&
+        ok(() => {
+          const on = ST.overlayReversal(outPerson);
+          return (
+            on.reasons.length === 1 &&
+            on.reasons[0] === 'ATTENDANCE_NO' &&
+            outPerson.reasons.length === 1 &&
+            outPerson.reasons[0] === 'ATTENDANCE_NO'
+          );
+        })
+    );
+    assert(
+      'layer 1d / Ruling 23',
+      'IT DOES NOT MUTATE — the person handed in still reads OUT afterwards, so the ordinary derivation cannot be edited by rendering',
+      overlayBuilt &&
+        ok(() => {
+          ST.overlayReversal(outPerson);
+          return outPerson.state === 'OUT';
+        })
+    );
+    // ⭐ THE DIFFERENTIAL THIS LAYER EXISTS FOR. Ruling 23: "never a write... what is revealed
+    // is whatever the person's state already derives to underneath." Underneath is
+    // `derivePersonState`, and it must still say OUT on the very inputs the overlay is showing
+    // as RED. A "settling" implemented by editing the derivation fails this and nothing else.
+    assert(
+      'layer 1d / Ruling 23',
+      '⭐ THE DERIVATION UNDERNEATH IS UNTOUCHED — the same person derives to OUT while the overlay displays RED, so lifting reveals the ordinary answer rather than a fourth colour',
+      overlayBuilt &&
+        SS !== null &&
+        ok(() => {
+          const underneath = SS.derivePersonState(
+            {
+              isHost: false,
+              exhaustion: null,
+              nudgeMark: null,
+              attendanceAnswer: 'NO',
+              items: [
+                {
+                  itemId: 'i-ice',
+                  assignmentId: 'a-ice',
+                  name: 'The ice',
+                  critical: true,
+                  response: 'DECLINED',
+                  kind: 'ITEM',
+                  teamId: 't1',
+                  item: { dropOffAt: null, decideByOffsetHours: null },
+                },
+              ],
+            },
+            event,
+            NOW
+          );
+          return underneath.state === 'OUT' && ST.overlayReversal(outPerson).state === 'RED';
+        })
+    );
+
+    // ── RULING 6's "RED WITH ITS WHY" ────────────────────────────────────
+    assert(
+      'layer 1d / Ruling 6',
+      'THE OVERLAID STRIP CARRIES ITS WHY — "was in, now out", the reference’s own words for Uncle Ray’s fade',
+      overlayBuilt && ok(() => ST.whyLineFor(ST.overlayReversal(outPerson)) === 'was in, now out')
+    );
+    assert(
+      'layer 1d / Ruling 4',
+      'and it fits the strip — 16 characters is the cap the browser walk set, and this is inside it',
+      overlayBuilt && ok(() => (ST.whyLineFor(ST.overlayReversal(outPerson)) ?? '').length <= 16)
+    );
+    assert(
+      'layer 1d / Ruling 6',
+      'the words render through the SAME `stripStateWords` the island suppresses and reveals — not a second way of writing a strip’s words',
+      overlayBuilt &&
+        ok(() => ST.stripStateWords(ST.overlayReversal(outPerson)) === '— was in, now out')
+    );
+    // The why is produced by the OVERLAY, not by the state. Without this the branch could be
+    // satisfied by an OUT person growing a why-line, which Ruling 7 refuses ("— out" carries it).
+    assert(
+      'layer 1d / Ruling 7',
+      'AND THE UNOVERLAID PERSON STILL READS "— out" WITH NO WHY — Ruling 7’s fade is intact, and the why arrives with the overlay rather than with the state',
+      overlayBuilt &&
+        ok(() => ST.whyLineFor(outPerson) === null && ST.stripStateWords(outPerson) === '— out')
+    );
+
+    // ── RULING 30 IS UNTOUCHED, AND IT REACHES THIS BY CONSTRUCTION ──────
+    //
+    // The brief's question: is a settling reversal a spark or a quiet change, and does it owe
+    // debt? It is quiet, it owes, and NOTHING WAS BUILT TO MAKE THAT TRUE. The classifier is
+    // `!flip.spark` and the spark rule is `isSparkTransition`, which is AMBER → GREEN and
+    // nothing else — so no transition INTO OUT can ever spark, and any reversal that repaints
+    // live is a non-spark that sets the debt. Asserted rather than argued.
+    assert(
+      'layer 1d / Ruling 30',
+      'A REVERSAL CAN NEVER SPARK — no transition into OUT is AMBER → GREEN, from any of the five states',
+      built &&
+        ok(() =>
+          ['RED', 'AMBER', 'GREEN', 'NOT_CHASED', 'OUT'].every(
+            (from) => RP.isSparkTransition(from, 'OUT') === false
+          )
+        )
+    );
+    assert(
+      'layer 1d / Ruling 30',
+      'SO A SETTLING REVERSAL THAT REPAINTS LIVE OWES THE QUIET DEBT — one non-spark flip, no stamp, debt set, with no second classifier written for it',
+      built &&
+        liveBuilt &&
+        ok(() => {
+          const d = LV.liveStampDecision(
+            [{ personEventId: 'pe-out', from: 'GREEN', to: 'OUT', spark: false }],
+            false
+          );
+          return d.stamp === false && d.quietDebtAfter === true;
+        })
+    );
+    assert(
+      'layer 1d / Ruling 30',
+      'and a spark landing behind it still does not stamp — the debt a reversal set suppresses the stamp exactly as any other quiet change does',
+      built &&
+        liveBuilt &&
+        ok(() => {
+          const first = LV.liveStampDecision(
+            [{ personEventId: 'pe-out', from: 'GREEN', to: 'OUT', spark: false }],
+            false
+          );
+          const second = LV.liveStampDecision(
+            [{ personEventId: 'x', from: 'AMBER', to: 'GREEN', spark: true }],
+            first.quietDebtAfter
+          );
+          return second.stamp === false && second.quietDebtAfter === true;
+        })
     );
 
     // ══ LAYER 1e — THE LIVE DIFF (SLICE 6e), PURE ════════════════════════
@@ -1849,6 +2204,362 @@ async function main() {
         playMark2.getTime() === playSince.getTime()
     );
 
+    // ── 6d: RULING 23's OVERLAY, PER VIEWER, ON THE PAGE SHE ACTUALLY GETS ──
+    //
+    // Ruling 20: "A reversal the host has watched settle stays sticky red for the co-host until
+    // she watches it too... one-per-event would let whoever opens first silently consume the
+    // other's news." Two `EventRole` rows on ONE event, exactly as 6b proved the stamp.
+    //
+    // ⚠ THE STAMP IS DRIVEN THROUGH THE REAL ROUTE, not written by hand. The completion POST is
+    // what the island fires when the last beat ends, so "the host watched it" is expressed the
+    // way the product expresses it. A hand-set `glanceSeenAt` would be this fixture asserting
+    // its own model of how the mark moves — the failure the standing warning names.
+    //
+    // ⚠ AND THE BEFORE STATE IS TAKEN FIRST, AS A POSITIVE CONTROL. "The co-host is red" is
+    // trivially true of a board where everyone is red and of a page that failed to render; it
+    // means something only against the same strip reading OUT for the other viewer, on the same
+    // board, in the same second.
+    const COHOST_COOKIE = await sessionFor(cohostUser.id);
+
+    /** One strip's own markup, from its element's `<` to its own closing tag. */
+    const stripHtmlFor = (html: string, personEventId: string): string => {
+      const at = html.indexOf(`data-person-event-id="${personEventId}"`);
+      if (at < 0) return '';
+      const start = html.lastIndexOf('<', at);
+      const endDiv = html.indexOf('</div>', at);
+      const endBtn = html.indexOf('</button>', at);
+      const end =
+        endBtn >= 0 && (endDiv < 0 || endBtn < endDiv)
+          ? endBtn + '</button>'.length
+          : endDiv + '</div>'.length;
+      return end > start ? html.slice(start, end) : '';
+    };
+
+    const revGuest = await prisma.person.create({
+      data: { name: `${TAG} RevGuest`, email: `${TAG}-rev@example.com` },
+    });
+    createdPersonIds.push(revGuest.id);
+    const revEvent = await prisma.event.create({
+      data: {
+        name: `${TAG} reversal fixture`,
+        startDate: new Date(Date.now() + 100 * HOUR),
+        endDate: new Date(Date.now() + 130 * HOUR),
+        hostId: stampPerson.id,
+        status: 'CONFIRMING',
+        sentAt: new Date(Date.now() - 10 * DAY),
+      },
+    });
+    createdEventIds.push(revEvent.id);
+    const revSince = new Date(Date.now() - 2 * HOUR);
+    await prisma.eventRole.create({
+      data: { userId: hostUser.id, eventId: revEvent.id, role: 'HOST', glanceSeenAt: revSince },
+    });
+    await prisma.eventRole.create({
+      data: { userId: cohostUser.id, eventId: revEvent.id, role: 'COHOST', glanceSeenAt: revSince },
+    });
+    // The degenerate attendance case, answered outright and BEFORE the anchor — the only way a
+    // stored NO can sit under an accepted row, and the same shape the demo board uses. Answered
+    // inside the window it would mark him ambiguous and the replay would drop him.
+    const revMembership = await prisma.personEvent.create({
+      data: {
+        personId: revGuest.id,
+        eventId: revEvent.id,
+        role: 'PARTICIPANT',
+        sentAt: new Date(Date.now() - 10 * DAY),
+        attendanceAnswer: 'NO',
+      },
+    });
+    await prisma.auditEntry.create({
+      data: {
+        eventId: revEvent.id,
+        actorId: revGuest.id,
+        actionType: 'ANSWER_ATTENDANCE',
+        targetType: 'PersonEvent',
+        targetId: revMembership.id,
+        details: '',
+        timestamp: new Date(Date.now() - 9 * DAY),
+      },
+    });
+    const revTeam = await prisma.team.create({
+      data: { eventId: revEvent.id, name: `${TAG} RevMains` },
+    });
+    // CRITICAL, deliberately. Ruling 6: "criticals among them surface in the alert strip." The
+    // ordinary half of the widened predicate is proved in `test:glance-read`; this is the half
+    // the ruling names, and it is proved on the page rather than on the payload.
+    const revItem = await prisma.item.create({
+      data: { teamId: revTeam.id, name: `${TAG} the glazed ham`, kind: 'ITEM', critical: true },
+    });
+    const revAssignment = await prisma.assignment.create({
+      data: {
+        itemId: revItem.id,
+        personId: revGuest.id,
+        response: 'DECLINED',
+        createdAt: new Date(Date.now() - 6 * DAY),
+      },
+    });
+    await prisma.auditEntry.create({
+      data: {
+        eventId: revEvent.id,
+        actorId: revGuest.id,
+        actionType: 'ACCEPT_ASSIGNMENT',
+        targetType: 'Assignment',
+        targetId: revAssignment.id,
+        details: '',
+        timestamp: new Date(Date.now() - 5 * DAY),
+      },
+    });
+    await prisma.auditEntry.create({
+      data: {
+        eventId: revEvent.id,
+        actorId: revGuest.id,
+        actionType: 'DECLINE_ASSIGNMENT',
+        targetType: 'Assignment',
+        targetId: revAssignment.id,
+        details: '',
+        timestamp: new Date(Date.now() - 1 * HOUR),
+      },
+    });
+
+    /** Everything about this board that is NOT the mark, so "no write" is a diff and not a claim. */
+    const revDump = async () => {
+      const [a, pe, item, audits] = await Promise.all([
+        prisma.assignment.findFirst({
+          where: { id: revAssignment.id },
+          select: { id: true, personId: true, response: true, itemId: true },
+        }),
+        prisma.personEvent.findFirst({
+          where: { id: revMembership.id },
+          select: { id: true, attendanceAnswer: true, nudgeMark: true, teamId: true },
+        }),
+        prisma.item.findFirst({
+          where: { id: revItem.id },
+          select: { id: true, critical: true, status: true, name: true },
+        }),
+        prisma.auditEntry.count({ where: { eventId: revEvent.id } }),
+      ]);
+      return JSON.stringify({ a, pe, item, audits });
+    };
+
+    const revUrl = `${BASE}/plan/${revEvent.id}/glance`;
+    const dumpBefore = await revDump();
+    const hostBefore = await fetch(revUrl, { headers: HOST_COOKIE });
+    const hostHtmlBefore = hostBefore.status === 200 ? await hostBefore.text() : '';
+    const cohostBefore = await fetch(revUrl, { headers: COHOST_COOKIE });
+    const cohostHtmlBefore = cohostBefore.status === 200 ? await cohostBefore.text() : '';
+    const hostStripBefore = stripHtmlFor(hostHtmlBefore, revMembership.id);
+    const cohostStripBefore = stripHtmlFor(cohostHtmlBefore, revMembership.id);
+
+    const bothRendered = serverUp && hostBefore.status === 200 && cohostBefore.status === 200;
+    assert(
+      'layer 3 / 6d',
+      'THE POSITIVE CONTROL — both viewers get the board (200) and both are owed the reversal, so the island is on both pages',
+      bothRendered &&
+        /data-glance-replay="1"/.test(hostHtmlBefore) &&
+        /data-glance-replay="1"/.test(cohostHtmlBefore)
+    );
+    assert(
+      'layer 3 / Ruling 6',
+      'AN UNPLAYED REVERSAL READS STICKY RED, WITH ITS WHY — the strip carries data-strip-state="RED" and "— was in, now out", on the page the host actually receives',
+      bothRendered &&
+        /data-strip-state="RED"/.test(hostStripBefore) &&
+        /— was in, now out/.test(hostStripBefore)
+    );
+    assert(
+      'layer 3 / Ruling 17',
+      'and it is a DOOR, like every other red — "only a red is a door" stays true in both directions under the overlay',
+      bothRendered && /^<button/.test(hostStripBefore) && /data-strip-door/.test(hostStripBefore)
+    );
+    assert(
+      'layer 3 / Ruling 6',
+      'the co-host reads the same red at the same instant — before either has watched, the news is owed to both',
+      bothRendered &&
+        /data-strip-state="RED"/.test(cohostStripBefore) &&
+        /— was in, now out/.test(cohostStripBefore)
+    );
+
+    // ── THE HOST WATCHES IT. The real completion POST, not a hand-set mark. ──
+    const revStamp = await postSeen(revEvent.id, HOST_COOKIE);
+    const hostMarkRev = await markOf(hostUser.id, revEvent.id);
+    const cohostMarkRev = await markOf(cohostUser.id, revEvent.id);
+    assert(
+      'layer 3 / 6d',
+      'the host’s replay completes and stamps — 200, and her mark moves off the anchor',
+      serverUp &&
+        revStamp.status === 200 &&
+        hostMarkRev !== null &&
+        hostMarkRev.getTime() > revSince.getTime()
+    );
+    assert(
+      'layer 3 / Ruling 20',
+      'and the CO-HOST’s mark did not move — the stamp is per viewer, so her news is not consumed by the host watching',
+      serverUp &&
+        hostMarkRev !== null &&
+        hostMarkRev.getTime() > revSince.getTime() &&
+        cohostMarkRev !== null &&
+        cohostMarkRev.getTime() === revSince.getTime()
+    );
+
+    const hostAfter = await fetch(revUrl, { headers: HOST_COOKIE });
+    const hostHtmlAfter = hostAfter.status === 200 ? await hostAfter.text() : '';
+    const cohostAfter = await fetch(revUrl, { headers: COHOST_COOKIE });
+    const cohostHtmlAfter = cohostAfter.status === 200 ? await cohostAfter.text() : '';
+    const hostStripAfter = stripHtmlFor(hostHtmlAfter, revMembership.id);
+    const cohostStripAfter = stripHtmlFor(cohostHtmlAfter, revMembership.id);
+    const bothRenderedAfter = serverUp && hostAfter.status === 200 && cohostAfter.status === 200;
+
+    assert(
+      'layer 3 / Ruling 23',
+      'PLAYED → THE OVERLAY LIFTS: the host’s strip now reads OUT with "— out", which is exactly what the ordinary derivation gives — no fourth colour',
+      // GATED ON THE BEFORE. "It reads OUT" is trivially true of a board with no overlay at
+      // all, which is what it read at RED. The pair — RED before, OUT after, same strip, same
+      // viewer — is the assertion; either half alone is worthless.
+      /data-strip-state="RED"/.test(hostStripBefore) &&
+        bothRenderedAfter &&
+        /data-strip-state="OUT"/.test(hostStripAfter) &&
+        /— out</.test(hostStripAfter) &&
+        !/was in, now out/.test(hostStripAfter)
+    );
+    assert(
+      'layer 3 / Ruling 23',
+      'and the settled strip is a plain <div> again — no door, because the state underneath is OUT and Ruling 17 seals it',
+      // Gated on the door having been there. At RED there is no door on any reversal, so
+      // "there is no door now" was trivially true.
+      /^<button/.test(hostStripBefore) &&
+        bothRenderedAfter &&
+        /^<div/.test(hostStripAfter) &&
+        !/data-strip-door/.test(hostStripAfter)
+    );
+    assert(
+      'layer 3 / Ruling 6',
+      'her board also has nothing left to play — the replay is empty, which is what "once played, it settles" means for the next arrival',
+      bothRenderedAfter && !/data-glance-replay="1"/.test(hostHtmlAfter)
+    );
+    // ⭐ THE RULING 20 CASE, AND IT IS THE INTERESTING ONE.
+    assert(
+      'layer 3 / Ruling 20',
+      '⭐ ONE BOARD, TWO VIEWERS, TWO DIFFERENT REDS — the overlay lifted for the host who watched it and STAYED for the co-host who has not',
+      bothRendered &&
+        bothRenderedAfter &&
+        /data-strip-state="RED"/.test(hostStripBefore) &&
+        /data-strip-state="OUT"/.test(hostStripAfter) &&
+        /data-strip-state="RED"/.test(cohostStripAfter) &&
+        /— was in, now out/.test(cohostStripAfter) &&
+        /data-glance-replay="1"/.test(cohostHtmlAfter)
+    );
+
+    // ── WHAT THE OVERLAY MUST NOT REACH, AS A TWO-VIEWER DIFFERENTIAL ────
+    //
+    // ⚠ THIS IS WHERE THE REAL GUARD LIVES, AND IT IS HERE BECAUSE MUTATION (e) SURVIVED
+    // `test:glance-grid`. The grid suite compares an overlaid render with an unoverlaid one and
+    // asserts the summary and the assistant's message are identical — but `GlanceBoard` never
+    // RECOMPUTES the summary, so that half could not fail however wrong the code was. Here the
+    // two boards are two real pages for two real viewers, one of whom is overlaid and one of
+    // whom is not, and the payload behind them is the same event. If the overlay reached the
+    // payload rather than the strip, the co-host's summary would count him among "N need you"
+    // and §3's assistant message would name his critical for her and not for the host.
+    assert(
+      'layer 3 / Ruling 2',
+      // ⚠ WHAT THIS CATCHES AND WHAT IT DOES NOT, MEASURED RATHER THAN ASSUMED. It does NOT
+      // catch an overlay applied inside `GlanceBoard` — mutation (e) was run against it and it
+      // stayed green, because the board renders `glance.summary` and never recomputes it, so no
+      // board-level change can move the sentence. What it DOES catch is the overlay pushed down
+      // into the DERIVATION, which is the thing Ruling 23 actually forbids: mutation (i) makes a
+      // reversed person derive RED and this fails with eleven others. Recorded at the site so
+      // the next reader does not take it for a wider guard than it is.
+      '⭐ THE SUMMARY SENTENCE IS THE SAME FOR BOTH VIEWERS — the overlay is a strip, not a person state, so it never changes how many people need her',
+      bothRenderedAfter &&
+        /data-strip-state="RED"/.test(cohostStripAfter) &&
+        /data-strip-state="OUT"/.test(hostStripAfter) &&
+        ok(() => {
+          const summaryOf = (html: string) => {
+            const at = html.indexOf('data-summary="');
+            if (at < 0) return '';
+            const end = html.indexOf('"', at + 14);
+            return end < 0 ? '' : html.slice(at, end);
+          };
+          const h = summaryOf(hostHtmlAfter);
+          return h.length > 0 && h === summaryOf(cohostHtmlAfter);
+        })
+    );
+    assert(
+      'layer 3 / §3',
+      '⭐ AND SO IS THE ASSISTANT’S MESSAGE — he holds a critical red row, so an overlay that reached the payload would name it to the co-host and not to the host; neither is named',
+      bothRenderedAfter &&
+        /data-strip-state="RED"/.test(cohostStripAfter) &&
+        !/data-assistant-message/.test(hostHtmlAfter) &&
+        !/data-assistant-message/.test(cohostHtmlAfter)
+    );
+
+    // ── "FALL LOOSE", AND IT IS NOT PER VIEWER ───────────────────────────
+    //
+    // Ruling 23's second half keys on "rows held by a reversed person", not on a reversal this
+    // viewer has seen — so it is a fact about the board and both viewers read it the same. That
+    // also keeps `readEventGlance` viewer-agnostic, which is what lets 6e's poll refresh from it.
+    assert(
+      'layer 3 / Ruling 23',
+      'THE CRITICAL HE HELD IS LOOSE — it is named in the alert strip above the grid, which is Ruling 6’s "criticals among them surface in the alert strip"',
+      bothRenderedAfter &&
+        new RegExp(`data-critical-strip="[^"]*${TAG} the glazed ham`).test(hostHtmlAfter)
+    );
+    assert(
+      'layer 3 / Ruling 23',
+      'and the co-host sees it loose too — the fall-loose half is a fact about the board, not about who has looked',
+      bothRenderedAfter &&
+        new RegExp(`data-critical-strip="[^"]*${TAG} the glazed ham`).test(cohostHtmlAfter)
+    );
+    const revRowAfter = await prisma.assignment.findFirst({
+      where: { id: revAssignment.id },
+      select: { personId: true, response: true },
+    });
+    assert(
+      'layer 3 / Ruling 23',
+      'NO UNASSIGNMENT — the Assignment row still exists, still on him, still DECLINED: "loose" is a reading, not a move',
+      // GATED ON THE ROW HAVING GONE LOOSE. "It was not unassigned" is trivially true of a
+      // build where nothing falls loose at all, which is what it was at RED.
+      new RegExp(`data-critical-strip="[^"]*${TAG} the glazed ham`).test(hostHtmlAfter) &&
+        serverUp &&
+        revRowAfter?.personId === revGuest.id &&
+        revRowAfter?.response === 'DECLINED'
+    );
+    // Read through the same module both pages read, in process: the row is in BOTH places at
+    // once. That is what "no unassignment, no write" costs and buys, and it is asserted rather
+    // than left for a later reader to discover.
+    const revGlance = RD ? await RD.readEventGlance(prisma, revEvent.id) : null;
+    assert(
+      'layer 3 / \u00a710.8',
+      'and the item is STILL ON HIM in the payload as well as loose in the strip — one Assignment row, read two ways, never moved',
+      revGlance !== null &&
+        ok(() => {
+          const people = [
+            ...revGlance.households.flatMap((h: any) => h.members),
+            ...revGlance.unhoused,
+          ];
+          const him = people.find((p: any) => p.personEventId === revMembership.id);
+          return (
+            !!him &&
+            him.items.some((i: any) => i.itemId === revItem.id) &&
+            revGlance.unassignedCritical.some((i: any) => i.itemId === revItem.id)
+          );
+        })
+    );
+
+    // ⭐ THE NO-WRITE PROOF, AS A DIFF RATHER THAN AS A CLAIM.
+    const dumpAfter = await revDump();
+    assert(
+      'layer 3 / Ruling 23',
+      '⭐ THE SETTLING WROTE NOTHING — Assignment, PersonEvent, Item and the audit count are byte-identical across the whole walk; the only row that moved is the viewer’s own mark',
+      // ⚠ GATED ON A SETTLING HAVING HAPPENED. "Nothing was written" is trivially true of a
+      // build that settles nothing — it passed at RED until this gate was added, which is the
+      // same vacuous shape 6b caught in "the memory NEVER MOVES BACKWARDS". The overlay must
+      // have been up and must have come down for the diff to mean anything.
+      /data-strip-state="RED"/.test(hostStripBefore) &&
+        /data-strip-state="OUT"/.test(hostStripAfter) &&
+        bothRendered &&
+        bothRenderedAfter &&
+        dumpBefore === dumpAfter &&
+        dumpBefore.length > 0
+    );
+
     // ══ LAYER 4 — STRUCTURAL AND FENCE ═══════════════════════════════════
     const rewindSrc = code('src/lib/glance/rewind.ts');
     const replaySrc = code('src/lib/glance/replay.ts');
@@ -2808,6 +3519,116 @@ async function main() {
           const src = code(f);
           return src.length > 0 && !/\bnew WebSocket\b|\bnew EventSource\b|\bwss:\/\//.test(src);
         })
+    );
+
+    // ── 6d: RULING 23 IS DERIVED, AND "DERIVED" IS A PROPERTY OF THE SOURCE ──
+    //
+    // "DERIVED, never a write. A write makes looking become operating, and the glance is a
+    // place she looks, not a place she operates." The runtime half is at layer 3, where the
+    // whole board is dumped before and after and diffed. This is the half that holds when
+    // nobody runs the walk: the four modules the settling passes through cannot write at all.
+    const settleSources: Array<[string, string]> = [
+      ['src/lib/glance/replay.ts', code('src/lib/glance/replay.ts')],
+      ['src/components/glance/strip.ts', code('src/components/glance/strip.ts')],
+      ['src/components/glance/GlanceBoard.tsx', code('src/components/glance/GlanceBoard.tsx')],
+      ['src/lib/glance/read.ts', code('src/lib/glance/read.ts')],
+    ];
+    const settleSourcesExist = settleSources.every(([, src]) => src.length > 0);
+    const WRITE_VERBS = /\.(update|updateMany|create|createMany|delete|deleteMany|upsert)\s*\(/;
+    assert(
+      'layer 4d / Ruling 23',
+      'THE SETTLING PATH CANNOT WRITE — replay.ts, strip.ts, GlanceBoard.tsx and read.ts name no update/create/delete/upsert at all',
+      settleSourcesExist && settleSources.every(([, src]) => !WRITE_VERBS.test(src))
+    );
+    assert(
+      'layer 4d / Ruling 23',
+      'and three of the four hold no database handle either — the overlay is a pure transform and the reversal predicate is pure, so neither could write if it wanted to',
+      settleSourcesExist &&
+        settleSources
+          .filter(([f]) => f !== 'src/lib/glance/read.ts')
+          .every(([, src]) => !/@prisma\/client|PrismaClient|\bprisma\b/.test(src))
+    );
+    assert(
+      'layer 4d / Ruling 23',
+      'THE PAGE’S ONLY WRITE IS STILL 6b’s STAMP — one call to `stampGlanceSeen`, and no Prisma write verb anywhere in it',
+      pageSrc6b.length > 0 &&
+        (pageSrc6b.match(/stampGlanceSeen\(/g) ?? []).length === 1 &&
+        !WRITE_VERBS.test(pageSrc6b)
+    );
+
+    // ── ONE SITE, ONE DEFINITION ─────────────────────────────────────────
+    const boardSrc6d = code('src/components/glance/GlanceBoard.tsx');
+    assert(
+      'layer 4d / one definition',
+      'THE OVERLAY IS APPLIED AT EXACTLY ONE SITE IN THE BOARD — one `overlayReversal(` call, so a strip and its door cannot disagree about which person is sticky',
+      boardSrc6d.length > 0 && (boardSrc6d.match(/overlayReversal\(/g) ?? []).length === 1
+    );
+    assert(
+      'layer 4d / one definition',
+      "and the board does NOT re-decide who reversed — no `'OUT'` comparison and no reversal literal in it; it is handed the ids the replay derived",
+      // Gated on the overlay existing: a board with no overlay in it trivially contains no
+      // second definition of one.
+      /overlayReversal\(/.test(boardSrc6d) &&
+        boardSrc6d.length > 0 &&
+        !/===\s*'OUT'/.test(boardSrc6d) &&
+        !/was in, now out/.test(boardSrc6d)
+    );
+    assert(
+      'layer 4d / one definition',
+      'THE WHY IS WRITTEN ONCE IN THE WHOLE GLANCE — "was in, now out" appears in strip.ts and in no other source, so the copy cannot drift between the strip and the door',
+      settleSourcesExist &&
+        ok(() => {
+          const everySource = [
+            ...allGlanceSurfaces,
+            'src/lib/glance/replay.ts',
+            'src/lib/glance/replay-entry.ts',
+            'src/lib/glance/rewind.ts',
+            'src/components/glance/GlanceReplayPreview.tsx',
+          ];
+          // ⚠ `code()`, NOT `raw()`. As first written this used `raw` and PASSED AT RED — it
+          // matched strip.ts's own comment about the line being unbuildable. A guard that fires
+          // on a comment about the thing is not a guard on the thing.
+          const hits = everySource.filter((f) => /was in, now out/.test(code(f)));
+          return hits.length === 1 && hits[0] === 'src/components/glance/strip.ts';
+        })
+    );
+    assert(
+      'layer 4d / Ruling 20',
+      'THE OVERLAY AND THE ISLAND COME FROM ONE SOURCE — the page derives both from `replay.steps`, so a board can never be overlaid without the replay that lifts it',
+      pageSrc6b.length > 0 &&
+        /stickyReversals\(replay\.steps\)/.test(pageSrc6b) &&
+        /hasReplay=\{replay\.steps\.length > 0\}/.test(pageSrc6b)
+    );
+
+    assert(
+      'layer 4d / one door',
+      'THE OVERLAY REACHES THE PAGE THROUGH THE DOOR AND IS NOT REDEFINED BEHIND IT — replay-entry RE-EXPORTS `stickyReversals` and declares no function of its own',
+      entrySrc.length > 0 &&
+        /export \{ stickyReversals \} from '\.\/replay';/.test(entrySrc) &&
+        !/function stickyReversals/.test(entrySrc) &&
+        (code('src/lib/glance/replay.ts').match(/export function stickyReversals/g) ?? [])
+          .length === 1
+    );
+
+    // ── THE WIDENED PREDICATE IS THE HOUSE ONE, WIDENED ──────────────────
+    const readSrc6d = code('src/lib/glance/read.ts');
+    assert(
+      'layer 4d / Ruling 23',
+      'THE EMPTY-STRIP PREDICATE IS STILL `assignment: null`, WIDENED — not replaced, and never `Item.status`, which is a presence cache that is never consulted for status',
+      readSrc6d.length > 0 &&
+        /assignment:\s*null/.test(readSrc6d) &&
+        !/status:\s*'UNASSIGNED'/.test(readSrc6d)
+    );
+    assert(
+      'layer 4d / Ruling 23',
+      'and the widening costs NO SECOND QUERY — the loose rows come off the people already assembled, so the board is still one read',
+      // Anded with the runtime proof from layer 3 that the widening is actually there — the
+      // query count alone is trivially satisfied by not having widened anything.
+      revGlance !== null &&
+        revGlance.unassignedCritical.some((i: any) => i.itemId === revItem.id) &&
+        readSrc6d.length > 0 &&
+        (readSrc6d.match(/db\.item\.findMany\(/g) ?? []).length === 1 &&
+        (readSrc6d.match(/db\.item\.count\(/g) ?? []).length === 1
     );
   } finally {
     await prisma.auditEntry.deleteMany({ where: { eventId: { in: createdEventIds } } });

@@ -35,7 +35,7 @@ import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
 import { readEventGlance } from '@/lib/glance/read';
-import { readGlanceReplay, stampGlanceSeen } from '@/lib/glance/replay-entry';
+import { readGlanceReplay, stampGlanceSeen, stickyReversals } from '@/lib/glance/replay-entry';
 import GlanceBoard from '@/components/glance/GlanceBoard';
 import GlanceReplay from '@/components/glance/GlanceReplay';
 import GlanceLive from '@/components/glance/GlanceLive';
@@ -136,6 +136,19 @@ export default async function GlancePage({ params }: { params: Promise<{ eventId
           day: 'numeric',
           month: 'long',
         })}
+        /*
+          Phase 6 slice 6d. RULING 23's overlay: the reversals THIS viewer has not been shown.
+          Derived from the same `replay.steps` the island is armed from, so a board can never be
+          overlaid without the replay that lifts the overlay being on it too — and once the
+          island's completion POST stamps her mark, the next load derives no reversal step and
+          the overlay is simply not there. DERIVED, NEVER A WRITE: nothing on this path touches
+          an Assignment, a PersonEvent or anything else.
+
+          Ruling 20 comes free with it and is the interesting case: the co-host's own
+          `glanceSeenAt` still sits behind the reversal, so her board still reads red while this
+          one has settled.
+        */
+        stickyReversals={stickyReversals(replay.steps)}
       />
       {/*
         Phase 6 slice 6c. The island, BESIDE the board rather than inside it, so `GlanceBoard`

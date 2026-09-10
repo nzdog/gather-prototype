@@ -67,6 +67,7 @@ import {
   reassign,
   reassignCandidates,
   remind,
+  remindOffered,
   remindRefusal,
   takeOver,
   type GlanceActionOutcome,
@@ -115,6 +116,53 @@ export default function PersonSurface({
 
   const why = whyLineFor(person);
   const refusal = remindRefusal(person);
+  /*
+    RULING 31 — the glance stops offering a remind to someone it has just said pulled out.
+
+    "A door that tells her a person has pulled out and offers to remind them is the screen
+    contradicting itself inside one panel. She is not being stopped from doing anything — the
+    route is unchanged and every other path to it remains — the glance simply stops offering it
+    in the one place it has just said the opposite."
+
+    ⚠ THE DECISION IS THE ACTION LAYER'S, ASKED HERE. `remindOffered` sits beside Ruling 18's
+    own picker filter in `actions.ts`, for the placement reason Ruling 18 gives: one surface
+    declining to propose something is not a change to the rule. This file writes no attendance
+    check of its own — asserted — so there is one definition and one call site.
+
+    ⚠ AND IT IS SILENT, UNLIKE RULING 14's REFUSAL BELOW. The mark has a way out and so gets
+    words; a guest who has answered no has nothing for Kate to change, and a paragraph
+    explaining that would be the lean-in Ruling 1's general test refuses.
+  */
+  /*
+    ⚠ AND IT IS AN EARLY RETURN RATHER THAN A TERNARY, WHICH IS NOT A STYLE CHOICE. Written as
+    `{offered ? <section/> : null}` the guard was defeated by a one-character mutation —
+    `{true ? …}` — that left the `remindOffered` call standing, so an assertion counting call
+    sites still passed while the control rendered for a person who had pulled out. The mutation
+    that survived is what moved this: the guard now IS the function's first statement, and
+    `tests/glance-actions-test.ts` asserts that literal plus that the label and the action call
+    live nowhere but inside it.
+  */
+  function remindSection() {
+    if (!remindOffered(person)) return null;
+    return (
+      <div className="mt-4 border-t-[0.5px] border-[#dcdad2] pt-3">
+        {refusal ? (
+          <p data-remind-refused="" className="m-0 text-[13px] text-[#888780]">
+            {refusal}
+          </p>
+        ) : (
+          <button
+            type="button"
+            disabled={busy !== null}
+            onClick={() => run('remind', () => remind(eventId, person, { eventName, eventDate }))}
+            className="rounded-md border-[0.5px] border-[#dcdad2] px-2.5 py-1.5 text-[13px] disabled:opacity-40"
+          >
+            {busy === 'remind' ? 'Reminding…' : 'Remind them'}
+          </button>
+        )}
+      </div>
+    );
+  }
 
   async function run(key: string, action: () => Promise<GlanceActionOutcome>) {
     setBusy(key);
@@ -304,24 +352,11 @@ export default function PersonSurface({
               refusal is real rather than a disabled button, because the rule is about the
               system and not about which strips happen to be tappable.
             */}
-            <div className="mt-4 border-t-[0.5px] border-[#dcdad2] pt-3">
-              {refusal ? (
-                <p data-remind-refused="" className="m-0 text-[13px] text-[#888780]">
-                  {refusal}
-                </p>
-              ) : (
-                <button
-                  type="button"
-                  disabled={busy !== null}
-                  onClick={() =>
-                    run('remind', () => remind(eventId, person, { eventName, eventDate }))
-                  }
-                  className="rounded-md border-[0.5px] border-[#dcdad2] px-2.5 py-1.5 text-[13px] disabled:opacity-40"
-                >
-                  {busy === 'remind' ? 'Reminding…' : 'Remind them'}
-                </button>
-              )}
-            </div>
+            {/*
+              RULING 31: the whole section goes, divider included. A bordered empty band would
+              be the panel pointing at the thing it has decided not to offer.
+            */}
+            {remindSection()}
 
             {/*
               WHAT HAPPENED. A route's refusal is shown in the route's own words — those are

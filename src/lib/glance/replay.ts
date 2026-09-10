@@ -85,6 +85,50 @@ export function isSparkTransition(from: PersonState, to: PersonState): boolean {
   return from === 'AMBER' && to === 'GREEN';
 }
 
+/**
+ * WHICH TRANSITION IS RULING 6's REVERSAL — one definition, asked by two callers.
+ *
+ * ⚠ SLICE 6d EXPORTS THIS OUT OF `deriveReplay` FOR THE REASON 6e EXPORTED `isSparkTransition`.
+ * Until 6d the rule was an inline expression with exactly one reader — the ordering sort below —
+ * which was correct while the only thing that cared about a reversal was where it played. 6d adds
+ * a second reader: the board has to know which people are still owed one, because Ruling 23 makes
+ * the sticky red an overlay that lifts when the replay has played. Re-expressing
+ * `to === 'OUT' && from !== 'OUT'` there would be the reversal rule living twice, weakenable in
+ * one copy with nothing failing — the failure this ticket refuses at `isChaseable`, at
+ * `mayHoldRow`, at the colours and at the spark.
+ *
+ * IN, THEN OUT, AND ONLY THAT. Ruling 26 states the boundary so nobody implements it wrong:
+ * "GREEN -> AMBER is NOT Ruling 6's reversal... Someone going from settled back to unsettled is a
+ * different fact and under this ruling it does not play." An ordinary red is not a reversal
+ * either — it plays, in the order it happened, and only the reversal is moved to the end.
+ */
+export function isReversalTransition(from: PersonState, to: PersonState): boolean {
+  return to === 'OUT' && from !== 'OUT';
+}
+
+/**
+ * The people whose reversal THIS VIEWER has not been shown yet — Ruling 23's overlay, as a list.
+ *
+ * ── WHY THIS IS THE WHOLE OF "STICKY UNTIL SEEN" ─────────────────────────────────────────
+ *
+ * Ruling 6 makes the reversal "red with its why, sticky until seen", and Ruling 23 says what the
+ * red IS: "an OVERLAY on top of the ordinary derivation. Playing the replay removes the overlay;
+ * what is revealed is whatever the person's state already derives to underneath."
+ *
+ * A reversal is owed to a viewer exactly when it is still in HER replay, and her replay is
+ * derived from HER `glanceSeenAt`. So the overlay needs no record of its own, no acknowledge
+ * button, no second definition of "seen" and — above all — NO WRITE: the mark 6b already stamps
+ * when the replay finishes is what lifts it. Ruling 20 comes free with that, and it is the
+ * interesting case: the co-host's replay still owes her the reversal, so her board still reads
+ * red while the host's has settled.
+ *
+ * ⚠ IT IS DERIVED FROM THE STEPS, NOT FROM THE BOARD. Reading "who is OUT" off the glance would
+ * make every out person permanently sticky, which is the opposite of settling.
+ */
+export function stickyReversals(steps: readonly ReplayStep[]): string[] {
+  return steps.filter((s) => isReversalTransition(s.from, s.to)).map((s) => s.personEventId);
+}
+
 /** Ruling 1's guardrail: the whole replay resolves inside ~3 seconds. */
 export const REPLAY_BUDGET_MS = 3000;
 
@@ -238,8 +282,9 @@ export function deriveReplay(
     // THE NO-OP STEP RULE. The states prove it netted to nothing.
     if (from === to) continue;
 
-    // Ruling 6's reversal is IN-THEN-OUT, and only that.
-    const reversal = to === 'OUT' && from !== 'OUT';
+    // Ruling 6's reversal is IN-THEN-OUT, and only that — asked, not restated (see 6d's note
+    // on the predicate above).
+    const reversal = isReversalTransition(from, to);
 
     // RULING 26(b). Everything else is the new board arriving without ceremony.
     if (!(to === 'GREEN' || to === 'RED' || reversal)) continue;

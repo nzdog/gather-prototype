@@ -334,6 +334,73 @@ async function main() {
       })
     );
 
+    // ── RULING 31 (2026-09-10): a person who has answered NO is not offered a REMIND ──
+    //
+    // Verbatim: "Filter it at this surface only, following Ruling 18's precedent. Not
+    // resolveManualNudgeRecipient — that changes V1, and Ruling 19 is the precedent that I make
+    // that call, not that it gets made in passing… a door that tells her a person has pulled out
+    // and offers to remind them is the screen contradicting itself inside one panel. She is not
+    // being stopped from doing anything — the route is unchanged and every other path to it
+    // remains — the glance simply stops offering it in the one place it has just said the
+    // opposite."
+    //
+    // ⚠ THIS IS A SURFACE FILTER, IN RULING 18'S OWN WORDS, AND NOT A ROUTE CHANGE. The boundary
+    // is asserted in BOTH directions, because a split looks like an inconsistency without them:
+    // the surface declines to offer, and layer 3 below proves the ROUTE still accepts the remind
+    // and fails only at the provider. `resolveManualNudgeRecipient` is untouched, so V1's
+    // composer behaves exactly as it did.
+    //
+    // ⚠ IT KEYS ON `reasons`, NOT ON `state`, AND THAT IS RULING 23's OVERLAY MAKING ITSELF
+    // USEFUL. The only way an OUT person has a door at all is slice 6d's sticky red, which sets
+    // `state: 'RED'` and DELIBERATELY leaves `reasons` alone — so `reasons` is the un-overlaid
+    // truth and is the one thing at this surface that still knows she answered no.
+    // `derivePersonState` pairs `ATTENDANCE_NO` with OUT and with nothing else, so this fires
+    // exactly on the overlaid reversal: the one place the panel has just said the opposite.
+    const offeredBuilt = ok(() => typeof A.remindOffered === 'function');
+    assert(
+      'Ruling 31',
+      'THE GATE — `remindOffered` is exported from the action layer (every Ruling 31 assertion below is anded with this)',
+      offeredBuilt
+    );
+    assert(
+      'Ruling 31',
+      'A PERSON WHO HAS ANSWERED NO IS NOT OFFERED THE REMIND — the panel stops offering what it has just contradicted',
+      offeredBuilt && ok(() => A.remindOffered(person({ reasons: ['ATTENDANCE_NO'] })) === false)
+    );
+    // ⭐ THE DIFFERENTIAL. Without it, "not offered" is satisfiable by never offering at all.
+    assert(
+      'Ruling 31',
+      '⭐ AND AN ORDINARY RED STILL IS — an expired maybe is offered the remind, so the filter catches the reversal and not the feature',
+      offeredBuilt &&
+        ok(
+          () =>
+            A.remindOffered(person({ reasons: ['DECIDE_BY_EXPIRED'] })) === true &&
+            A.remindOffered(person({ reasons: ['EXHAUSTED_SILENCE'] })) === true
+        )
+    );
+    assert(
+      'Ruling 31',
+      'IT CATCHES LEAVING AND NOT HANDING BACK — §8.6’s withdrawn claim is still offered a remind, because giving a row back is not pulling out',
+      offeredBuilt && ok(() => A.remindOffered(person({ reasons: ['REVERSAL'] })) === true)
+    );
+    assert(
+      'Ruling 31',
+      'and it is NOT Ruling 14’s rule wearing a second hat — a don’t-chase person who is still coming is OFFERED the control and REFUSED it in words, which are two different facts',
+      offeredBuilt &&
+        ok(
+          () =>
+            A.remindOffered(person({ nudgeMark: 'DONT_CHASE' })) === true &&
+            typeof A.remindRefusal(person({ nudgeMark: 'DONT_CHASE' })) === 'string'
+        )
+    );
+    assert(
+      'Ruling 31',
+      'IT SAYS NOTHING — a boolean, not a message: there is nothing for her to change, and a paragraph explaining a non-problem is a lean-in Ruling 1 refuses',
+      offeredBuilt &&
+        ok(() => A.remindOffered(person({ reasons: ['ATTENDANCE_NO'] })) === false) &&
+        !/not attending|has pulled out|cannot be reminded/i.test(code('src/lib/glance/actions.ts'))
+    );
+
     // ── RULING 18 (2026-09-01): an OUT person is not offered ─────────────
     //
     // "Handing an item to someone who declined is a mistake the surface should not offer;
@@ -788,6 +855,26 @@ async function main() {
         })) === 0
     );
 
+    // ── RULING 31's BOUNDARY — the ROUTE stays permissive ────────────────
+    //
+    // The mirror of Ruling 18's boundary, and it exists for the same reason: the ruling says
+    // "she is not being stopped from doing anything — the route is unchanged and every other
+    // path to it remains." So the route must NOT have grown an attendance gate, and the way to
+    // prove it is to drive a remind at a guest who has answered NO and show the refusal is the
+    // PROVIDER's (502, [[GTC-247]]) rather than a 403 about attendance.
+    const goneOut = await guest('GoneOut', mains.id, { attendanceAnswer: 'NO' });
+    const outNudge = await post(NUDGE(goneOut.id), { template: 'warm', message: 'hi' }, COOKIE);
+    assert(
+      'Ruling 31 boundary',
+      'the ROUTE still accepts a remind for a guest who answered NO — it reaches the provider and fails THERE, so the filter is the surface’s and not the rule’s',
+      outNudge.status === 502
+    );
+    assert(
+      'Ruling 31 boundary',
+      'and it is NOT refused on attendance grounds — no 403, and nothing in the refusal is about coming or not coming',
+      outNudge.status !== 403 && !/attend|coming|pulled out/i.test(outNudge.json?.error ?? '')
+    );
+
     // ── REMIND — the honest provider failure ([[GTC-247]]) ────────────────
     const realNudge = await post(
       NUDGE(amelia.id),
@@ -809,6 +896,7 @@ async function main() {
     );
 
     // ══ LAYER 4 — the structural fences ══════════════════════════════════
+    let remindScope = '';
     const actionsSrc = code('src/lib/glance/actions.ts');
     const surfaceSrc = code('src/components/glance/PersonSurface.tsx');
     const boardSrc = code('src/components/glance/GlanceBoard.tsx');
@@ -891,6 +979,79 @@ async function main() {
           assignRouteSrc + code('src/lib/assignment/same-team.ts')
         )
     );
+    // ── RULING 31, STRUCTURALLY: ONE DEFINITION, ONE CALL SITE, NO ROUTE CHANGE ──
+    assert(
+      'Ruling 31',
+      'THE FILTER LIVES IN THE ACTION LAYER AND NOWHERE ELSE — one `export function remindOffered`, beside Ruling 18’s own filter',
+      sourcesExist && (actionsSrc.match(/export function remindOffered/g) ?? []).length === 1
+    );
+    // ⚠ THE MECHANISM, NOT A CALL COUNT — AND THE REASON IS A MUTATION THAT SURVIVED.
+    // As first written this asserted "exactly one `remindOffered(` call site", which proves the
+    // function is CALLED and not that its answer GATES anything: the mutation replacing
+    // `{offered ? … : null}` with `{true ? … : null}` left the call standing and rendered the
+    // control for a person who had pulled out, with the whole suite green. So the guard is now
+    // the FIRST STATEMENT of the only function that renders the control, asserted as its own
+    // literal, and the label and the action call are asserted to live nowhere but inside that
+    // function's body — a syntactic scope, which is what "behind the guard" actually means.
+    const remindBody = ok(() => {
+      const at = surfaceSrc.indexOf('function remindSection()');
+      if (at < 0) return false;
+      let i = surfaceSrc.indexOf('{', at);
+      let depth = 0;
+      for (; i < surfaceSrc.length; i++) {
+        if (surfaceSrc[i] === '{') depth++;
+        else if (surfaceSrc[i] === '}' && --depth === 0) break;
+      }
+      remindScope = surfaceSrc.slice(at, i + 1);
+      return remindScope.length > 0;
+    });
+    assert(
+      'Ruling 31',
+      'THE GUARD IS THE FIRST STATEMENT OF THE ONLY FUNCTION THAT RENDERS THE CONTROL — `if (!remindOffered(person)) return null;`, not a condition standing beside it',
+      sourcesExist &&
+        remindBody &&
+        /^function remindSection\(\)\s*\{\s*if \(!remindOffered\(person\)\) return null;/.test(
+          remindScope
+        )
+    );
+    assert(
+      'Ruling 31',
+      'THE SURFACE ASKS IT ONCE — one `remindOffered(` call in the whole file, and it is that guard',
+      sourcesExist && (surfaceSrc.match(/remindOffered\(/g) ?? []).length === 1
+    );
+    assert(
+      'Ruling 31',
+      'AND THE LABEL AND THE ACTION LIVE NOWHERE BUT BEHIND IT — "Remind them" and the `remind(` call each appear exactly once in the file, and both inside that function’s body',
+      sourcesExist &&
+        remindBody &&
+        (surfaceSrc.match(/Remind them/g) ?? []).length === 1 &&
+        (surfaceSrc.match(/\bremind\(eventId/g) ?? []).length === 1 &&
+        (remindScope.match(/Remind them/g) ?? []).length === 1 &&
+        (remindScope.match(/\bremind\(eventId/g) ?? []).length === 1
+    );
+    assert(
+      'Ruling 31',
+      'the surface writes NO attendance rule of its own — it names neither the reason literal nor D1’s predicate; the decision is the action layer’s',
+      // Gated on the surface actually asking: a surface with no rule at all trivially contains
+      // no second copy of one, which is what this was at RED.
+      /remindOffered\(/.test(surfaceSrc) &&
+        sourcesExist &&
+        !/['"`]ATTENDANCE_NO['"`]/.test(surfaceSrc) &&
+        !/deriveAttendance|attendanceAnswer/.test(surfaceSrc)
+    );
+    // ⚠ THE BOUNDARY, STRUCTURALLY. Ruling 31: "Not resolveManualNudgeRecipient — that changes
+    // V1, and Ruling 19 is the precedent that I make that call, not that it gets made in
+    // passing." So the send path must be free of any attendance term, and this is what a later
+    // slice that quietly pushes the filter down will fail.
+    assert(
+      'Ruling 31 boundary',
+      'NO ATTENDANCE GATE WAS ADDED TO THE NUDGE PATH — neither the route nor `resolveManualNudgeRecipient` names attendance at all, so V1’s composer is unchanged',
+      nudgeRouteSrc.length > 0 &&
+        !/deriveAttendance|attendanceAnswer|['"`]ATTENDANCE_NO['"`]/.test(
+          nudgeRouteSrc + code('src/lib/sms/manual-nudge-recipient.ts')
+        )
+    );
+
     assert(
       'Ruling 19',
       'the manual-nudge route now enforces the mark, through the SHARED predicate',

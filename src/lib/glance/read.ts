@@ -216,6 +216,42 @@ export async function readEventGlance(
   const people = memberships.map(toPerson);
   const byId = new Map(memberships.map((row, i) => [row.id, people[i]]));
 
+  /*
+    ── RULING 23 (2026-09-09) — "FALL LOOSE", DERIVED ────────────────────────────────────
+
+    Ruling 6: "Items the person held fall loose; criticals among them surface in the alert strip."
+    Ruling 23 says how: "widen the empty-strip predicate to include rows held by a reversed
+    person. No unassignment, no write."
+
+    ⚠ THIS OVERRIDES PHASE 3's DECISION, DELIBERATELY, AND PHASE 3's REASON IS ANSWERED RATHER
+    THAN IGNORED. Phase 3 declined to build this and said why: "the strip's test is 'no
+    Assignment row' and theirs still has one… building half of it now would put a SECOND
+    DEFINITION of 'loose' in the tree." The hazard it named is real and this does not walk into
+    it: there is still exactly ONE predicate for loose, at one site, and it now has two limbs —
+    no Assignment row, OR an Assignment row held by a person who is OUT. "Loose" gained a
+    meaning; it did not gain a definition.
+
+    ⚠ WHAT IS *NOT* ANSWERED, SAID PLAINLY. Phase 3's neighbouring note warns that "critical
+    without an ACCEPTED assignment" is "a wider set and a different fact" — the pre-flight's set,
+    which this strip is deliberately narrower than. That warning still stands and this widening
+    is deliberately not that set: a person who merely DECLINED a row is still holding it, and
+    their critical stays under them and out of the strip. Only OUT is loose, and
+    `tests/glance-read-test.ts` pins the difference across all five states.
+
+    ⚠ NOT PER VIEWER, AND THAT IS A READING RATHER THAN A RULING. Ruling 23's second half keys
+    on "rows held by a reversed person", not on a reversal a viewer has been shown — so this is
+    a fact about the board and every viewer reads it the same. Two reasons it is built that way:
+    Ruling 6's own ordering puts the loose items with the reversal rather than with the seeing,
+    and making it per-viewer would make `readEventGlance` viewer-dependent, which would mean
+    6e's ~20-second poll answered a different alert strip to each caller. Recorded here so a
+    later reader knows it was decided rather than missed.
+
+    DERIVED, NEVER A WRITE. This reads rows already assembled above — no second query, no
+    `Assignment` touched, and the row stays on the person and visible on tap (§10.8). The item
+    is genuinely in two places at once, and that is what "no unassignment" costs and buys.
+  */
+  const reversedRows = people.filter((p) => p.state === 'OUT').flatMap((p) => p.items);
+
   const hostHouseholdId =
     memberships.find((row) => row.personId === event.hostId)?.householdId ?? null;
 
@@ -256,7 +292,13 @@ export async function readEventGlance(
     summary: summarisePeople(people.map((p) => p.state)),
     households: cards,
     unhoused,
-    unassignedCritical: unassignedCritical.map((i) => ({ itemId: i.id, name: i.name })),
-    unassignedOrdinaryCount,
+    unassignedCritical: [
+      ...unassignedCritical.map((i) => ({ itemId: i.id, name: i.name })),
+      ...reversedRows.filter((i) => i.critical).map((i) => ({ itemId: i.itemId, name: i.name })),
+    ].sort((a, b) => a.name.localeCompare(b.name) || a.itemId.localeCompare(b.itemId)),
+    // The door's N is the SAME predicate, and it has to be: one meaning of loose, not one for
+    // the names above and another for the count beside them.
+    unassignedOrdinaryCount:
+      unassignedOrdinaryCount + reversedRows.filter((i) => !i.critical).length,
   };
 }

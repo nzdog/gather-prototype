@@ -211,6 +211,12 @@ const CAST: Spec[] = [
     rows: [
       {
         item: 'The ice',
+        // CRITICAL as of slice 6d. Ruling 6: "Items the person held fall loose; criticals among
+        // them surface in the alert strip (Ruling 8)." Ruling 23 builds that by widening the
+        // strip's own predicate, and this is the row that makes it visible on the board the
+        // reversal is demonstrated on — otherwise the only loose critical here is one nobody
+        // ever held, which is the case phase 3 already shipped.
+        critical: true,
         createdAt: -6 * DAY,
         taps: [
           { at: -5 * DAY, tap: 'ACCEPTED' },

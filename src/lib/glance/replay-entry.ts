@@ -38,6 +38,22 @@ import { deriveReplay } from './replay';
 import type { GlanceReplay } from './replay';
 import type { EventGlance, GlanceEvent } from './state';
 
+/**
+ * SLICE 6d — Ruling 23's overlay, RE-EXPORTED THROUGH THE DOOR RATHER THAN DEFINED BEHIND IT.
+ *
+ * The board has to know which reversals this viewer is still owed, and the page is the only
+ * thing that can tell it — but the page reaches the replay ONLY through this module, which
+ * `tests/glance-replay-test.ts` asserts ("the PAGE reaches the replay only through the one
+ * door — replay-entry, never rewind or replay"). A direct import in the page would have made
+ * that guard fail for a real reason and the honest fix is the door, not the guard.
+ *
+ * A RE-EXPORT, NOT A COPY. The rule stays in `replay.ts` beside the sort that already asks it;
+ * this line only widens what the door names. It belongs here for the same reason
+ * `stampGlanceSeen` does — what news is owed, the record that it was shown, and which of that
+ * news the board must still be showing as red are three halves of one thing.
+ */
+export { stickyReversals } from './replay';
+
 export async function readGlanceReplay(
   db: RewindDb,
   eventId: string,

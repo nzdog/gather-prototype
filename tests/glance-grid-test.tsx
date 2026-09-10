@@ -429,7 +429,18 @@ async function main() {
           primaryContactName: 'Ray Dalton',
           isHostHousehold: false,
           members: [
-            person({ name: 'Ray Dalton', state: 'OUT', reasons: ['ATTENDANCE_NO'] }),
+            // ⚠ HE HOLDS A CRITICAL WITHDRAWN CLAIM ON PURPOSE (slice 6d). §3's assistant
+            // message fires on a critical RED row held by a RED person, and he is OUT — so it
+            // does not fire for him. If the overlay ever reached the PAYLOAD rather than the
+            // strip, it would, and the identity below would catch it. With no items he is
+            // invisible to that message and the identity could not fail. Mutation (e) is what
+            // found this.
+            person({
+              name: 'Ray Dalton',
+              state: 'OUT',
+              reasons: ['ATTENDANCE_NO'],
+              items: [redItem('REVERSAL', true, 'the glazed ham')],
+            }),
             person({ name: 'Aoife Dalton', state: 'NOT_CHASED', reasons: ['DONT_CHASE'] }),
             person({
               name: 'Sarah Dalton',
@@ -1211,6 +1222,182 @@ async function main() {
 
     // ══ LAYER 4 — structural ═════════════════════════════════════════════
     const pageSrc = code('src/app/plan/[eventId]/glance/page.tsx');
+
+    // ══ 6d — RULING 23's OVERLAY, ON THE RENDERED MARKUP ═════════════════
+    //
+    // Ruling 6: "was in, now out" is red with its why, sticky until seen. Ruling 23: the sticky
+    // red is an OVERLAY on top of the ordinary derivation, and playing the replay lifts it.
+    //
+    // ⚠ THE OVERLAY IS EXACTLY WHAT RULING 6 NAMES — "red with its why" — AND NOTHING ELSE ON
+    // THE BOARD READS IT. The summary sentence, the assistant's message and Ruling 8's alert
+    // strip are three separate objects with three separate rulings, and 6d is not entitled to
+    // decide them by widening one overlay. That is asserted below as three IDENTITIES between
+    // the overlaid and unoverlaid renders, which is the only form in which "it did not reach
+    // there" is a measurement rather than a promise.
+    const boardWith = (glance: any, sticky: readonly string[]) =>
+      renderToStaticMarkup(
+        createElement(GB.default, {
+          glance,
+          eventName: 'Henderson family Christmas',
+          actorRole: 'HOST',
+          eventDate: 'Thursday 25 December',
+          stickyReversals: sticky,
+        } as any)
+      );
+
+    /** One strip's own element, whichever tag carries it — the door is a <button>. */
+    const elementFor = (html: string, label: string): string => {
+      const at = html.indexOf(`<span>${label}</span>`);
+      if (at < 0) return '';
+      const start = Math.max(
+        html.lastIndexOf('<div data-strip-state', at),
+        html.lastIndexOf('<button', at)
+      );
+      if (start < 0) return '';
+      const endDiv = html.indexOf('</div>', at);
+      const endBtn = html.indexOf('</button>', at);
+      const end =
+        endBtn >= 0 && (endDiv < 0 || endBtn < endDiv)
+          ? endBtn + '</button>'.length
+          : endDiv + '</div>'.length;
+      return end > start ? html.slice(start, end) : '';
+    };
+
+    const rayId = mixed.households[2].members[0].personEventId;
+    const settledHtml = GB ? boardWith(mixed, []) : '';
+    const stickyHtml = GB ? boardWith(mixed, [rayId]) : '';
+    const raySettled = elementFor(settledHtml, 'Ray Dalton');
+    const raySticky = elementFor(stickyHtml, 'Ray Dalton');
+    const overlayRendered = raySticky.length > 0 && raySettled.length > 0;
+
+    assert(
+      '6d control',
+      'THE BOARD TAKES THE OVERLAY AND STILL RENDERS BOTH WAYS — the two markups below both contain Ray’s strip (the control the identities hang on)',
+      overlayRendered
+    );
+    assert(
+      '6d / Ruling 7',
+      'WITH NO OVERLAY HE IS OUT — faded, "— out", a plain div and no door: Ruling 7’s ghost, untouched',
+      overlayRendered &&
+        /data-strip-state="OUT"/.test(raySettled) &&
+        /— out</.test(raySettled) &&
+        !/was in, now out/.test(raySettled) &&
+        raySettled.startsWith('<div')
+    );
+    assert(
+      '6d / Ruling 6',
+      'WITH THE OVERLAY HE IS RED WITH HIS WHY — data-strip-state="RED" and "— was in, now out" on the same strip',
+      overlayRendered &&
+        /data-strip-state="RED"/.test(raySticky) &&
+        /— was in, now out/.test(raySticky)
+    );
+    assert(
+      '6d / Ruling 17',
+      'and it is a DOOR — "only a red is a door" holds in both directions, so the overlay does not create a red that cannot be acted on',
+      overlayRendered && raySticky.startsWith('<button') && /data-strip-door/.test(raySticky)
+    );
+    assert(
+      '6d / Ruling 17',
+      'EVERY red on the overlaid board is still a door — two ordinary reds plus the overlaid one, three doors, none left undoored',
+      overlayRendered &&
+        ok(() => {
+          const reds = stickyHtml.split('data-strip-state="RED"').length - 1;
+          const doors = stickyHtml.split('data-strip-door').length - 1;
+          return reds === 3 && doors === 3;
+        })
+    );
+
+    // ── THE THREE IDENTITIES: what the overlay does NOT reach ────────────
+    //
+    // ⚠ THE SUMMARY IDENTITY IS NECESSARY AND NOT SUFFICIENT, AND IT IS LABELLED RATHER THAN
+    // TRUSTED. `GlanceBoard` does not RECOMPUTE the sentence — it renders `glance.summary`,
+    // which `read.ts` derived — so an overlay applied to the members could not move it here
+    // however wrong it was. Its real differential is at layer 3 of `test:glance-replay`, where
+    // two viewers' actual pages are compared and only one of them is overlaid. Named here so
+    // nobody reads this green as the whole guard.
+    //
+    // The assistant identity IS sufficient, and only because Ray was given a critical withdrawn
+    // claim above; the alert-strip identity is sufficient because `unassignedCritical` is a
+    // payload array the board never rebuilds. The `glance is never rebound` guard below is what
+    // closes the last road in: mutation (e) shadowed the prop and reached all three at once.
+    // ⚠ THE FOUR ASSERTIONS BELOW ARE ANDED WITH `overlayMoved`. "The summary did not change"
+    // is trivially true of two renders that are the same render, which is what they were at
+    // RED — the identity only means something once the overlay has visibly moved a strip. The
+    // differential is the assertion; the identity alone is worthless.
+    const overlayMoved = overlayRendered && raySettled !== raySticky;
+
+    const between = (html: string, marker: string): string => {
+      const at = html.indexOf(marker);
+      if (at < 0) return '';
+      const end = html.indexOf('"', at + marker.length);
+      return end < 0 ? '' : html.slice(at, end);
+    };
+    assert(
+      '6d / Ruling 2',
+      'THE SUMMARY SENTENCE IS UNCHANGED BY THE OVERLAY — it counts people by their derived state, and a reversal owed to one viewer is not a different number of people',
+      overlayMoved &&
+        between(settledHtml, 'data-summary="').length > 0 &&
+        between(settledHtml, 'data-summary="') === between(stickyHtml, 'data-summary="')
+    );
+    assert(
+      '6d / §3',
+      'THE ASSISTANT’S MESSAGE IS UNCHANGED — it fires on a critical red held by a red PERSON, read off the ordinary derivation, so an overlaid strip never conjures one',
+      overlayMoved &&
+        between(settledHtml, 'data-assistant-message="').length > 0 &&
+        between(settledHtml, 'data-assistant-message="') ===
+          between(stickyHtml, 'data-assistant-message="')
+    );
+    assert(
+      '6d / Ruling 8',
+      'AND THE ALERT STRIP IS UNCHANGED — "fall loose" is a fact about the board that the reader derives, not something the overlay paints per viewer',
+      overlayMoved &&
+        between(settledHtml, 'data-critical-strip="').length > 0 &&
+        between(settledHtml, 'data-critical-strip="') ===
+          between(stickyHtml, 'data-critical-strip="') &&
+        between(settledHtml, 'data-unassigned-door="') ===
+          between(stickyHtml, 'data-unassigned-door="')
+    );
+    // ⭐ THE STRONGEST FORM OF ALL THREE AT ONCE: remove the one strip that is meant to differ,
+    // and the two boards are byte-identical. Nothing else on the surface moved.
+    assert(
+      '6d / blast radius',
+      '⭐ EXACTLY ONE STRIP DIFFERS — with Ray’s own element cut out, the overlaid and settled boards are BYTE-IDENTICAL',
+      overlayRendered &&
+        settledHtml.replace(raySettled, '') === stickyHtml.replace(raySticky, '') &&
+        raySettled !== raySticky
+    );
+    assert(
+      '6d / defensive',
+      'AN ID THAT IS NOT ON THE BOARD CHANGES NOTHING — a stale sticky id paints nobody rather than throwing or greying the wrong strip',
+      overlayMoved && ok(() => boardWith(mixed, ['pe-not-here']) === settledHtml)
+    );
+    assert(
+      '6d / blast radius',
+      'THE PAYLOAD IS NEVER REBOUND IN THE BOARD — `glance` is a const prop, never reassigned and never shadowed, which is the one road by which an overlay could reach the summary, the assistant and the pool at once',
+      ok(() => {
+        const src = code('src/components/glance/GlanceBoard.tsx');
+        return (
+          src.length > 0 &&
+          !/\blet\s+glance\b/.test(src) &&
+          !/\bglance\s*=(?!=)/.test(src) &&
+          !/glance\s*:\s*glance[A-Z]/.test(src)
+        );
+      })
+    );
+    assert(
+      '6d / Ruling 18',
+      'THE REASSIGN POOL IS BUILT FROM THE ORDINARY DERIVATION — so an overlaid person is still OUT to the picker and Ruling 18 still refuses him as a target',
+      ok(() => {
+        const src = code('src/components/glance/GlanceBoard.tsx');
+        return (
+          /overlayReversal\(/.test(src) &&
+          /assignablePool\(glance\)/.test(src) &&
+          !/overlayReversal\(\s*glance/.test(src) &&
+          !/assignablePool\(\s*[^g)]/.test(src)
+        );
+      })
+    );
+
     const boardSrc = code('src/components/glance/GlanceBoard.tsx');
     // Phase 6 slice 6c. Gated on rather than assumed: the three successors below are claims
     // about an island, and a missing island must read as a failure, never as a pass.

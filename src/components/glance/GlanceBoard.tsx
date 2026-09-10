@@ -44,6 +44,7 @@ import PersonSurface, { type PersonSurfaceProps } from './PersonSurface';
 import {
   criticalStripClauses,
   criticalStripText,
+  overlayReversal,
   STRIP_TONE,
   STRIP_WORDS_CLASS,
   stripStateWords,
@@ -65,6 +66,18 @@ interface GlanceBoardProps {
   actorRole: AssignActorRole;
   /** Formatted date for the reminder copy. The page owns the formatting. */
   eventDate: string;
+  /**
+   * RULING 23 — the reversals THIS VIEWER has not been shown yet, by `personEventId`.
+   *
+   * A PROP RATHER THAN A PAYLOAD FIELD, for the same reason `actorRole` is one: it is a fact
+   * about who is looking, not about the board. `readEventGlance` stays viewer-agnostic, which
+   * is what lets 6e's ~20-second poll refresh the board from the same assembly.
+   *
+   * The page derives it from `replay.steps`, the same array it derives `hasReplay` from — so a
+   * board can never be overlaid without the replay that lifts the overlay being on it too.
+   * Empty on almost every visit, which is the common case and costs nothing.
+   */
+  stickyReversals: readonly string[];
 }
 
 /**
@@ -132,12 +145,34 @@ function StripBody({ person }: { person: GlancePerson }) {
  * whole difference, undoing the element's own inline centring. Anything more is phase 7.
  */
 function Strip({
-  person,
+  person: derived,
   action,
+  sticky,
 }: {
   person: GlancePerson;
   action: Omit<PersonSurfaceProps, 'person' | 'className' | 'children'>;
+  sticky: ReadonlySet<string>;
 }) {
+  /*
+    RULING 23's OVERLAY, APPLIED ONCE AND HERE.
+
+    "The sticky red is an OVERLAY on top of the ordinary derivation. Playing the replay removes
+    the overlay; what is revealed is whatever the person's state already derives to underneath."
+    `derived` is that underneath and is never edited — `overlayReversal` returns a new object.
+
+    ⚠ ONE SITE, DELIBERATELY, AND IT IS ABOVE THE ELEMENT BRANCH. The tint, the words and the
+    door all read `person` below, so applying the overlay here is what makes them agree. Applied
+    twice — once for the tone, once for the element — is a red strip that is not a door, which
+    would be the first red on this board Ruling 17 does not reach.
+
+    ⚠ AND IT IS APPLIED HERE RATHER THAN TO THE PAYLOAD. Ruling 2's summary sentence, §3's
+    assistant message, Ruling 8's alert strip and phase 4's reassign pool all read `glance`
+    itself and are UNCHANGED by the overlay — three of those are separate rulings and the fourth
+    is Ruling 18, and widening one overlay into them would settle four unruled questions by
+    stealth. `tests/glance-grid-test.tsx` asserts the identity of all three rendered objects
+    across an overlaid and an unoverlaid board.
+  */
+  const person = sticky.has(derived.personEventId) ? overlayReversal(derived) : derived;
   const className = `rounded-md px-2.5 py-1.5 text-[13px] leading-snug ${STRIP_TONE[person.state].className}`;
 
   if (person.state !== 'RED') {
@@ -170,9 +205,11 @@ function Strip({
 function HouseholdCard({
   household,
   action,
+  sticky,
 }: {
   household: GlanceHousehold;
   action: Omit<PersonSurfaceProps, 'person' | 'className' | 'children'>;
+  sticky: ReadonlySet<string>;
 }) {
   return (
     <div data-household-card={household.householdId} className="rounded-lg bg-[#f5f4ef] p-2.5">
@@ -181,14 +218,22 @@ function HouseholdCard({
       </p>
       <div className="flex flex-col gap-1">
         {household.members.map((person) => (
-          <Strip key={person.personEventId} person={person} action={action} />
+          <Strip key={person.personEventId} person={person} action={action} sticky={sticky} />
         ))}
       </div>
     </div>
   );
 }
 
-export default function GlanceBoard({ glance, eventName, actorRole, eventDate }: GlanceBoardProps) {
+export default function GlanceBoard({
+  glance,
+  eventName,
+  actorRole,
+  eventDate,
+  stickyReversals,
+}: GlanceBoardProps) {
+  // Ruling 23. A set, so the lookup in `Strip` is one place and one operation at any headcount.
+  const sticky: ReadonlySet<string> = new Set(stickyReversals);
   // Everything a red strip's door needs, assembled once. The pool is the same array for
   // every island; see PersonSurface's header for the trade that buys.
   const action = {
@@ -289,7 +334,12 @@ export default function GlanceBoard({ glance, eventName, actorRole, eventDate }:
         */}
         <div className="mt-4 grid items-start gap-2.5 [grid-template-columns:repeat(auto-fit,minmax(160px,1fr))]">
           {glance.households.map((household) => (
-            <HouseholdCard key={household.householdId} household={household} action={action} />
+            <HouseholdCard
+              key={household.householdId}
+              household={household}
+              action={action}
+              sticky={sticky}
+            />
           ))}
 
           {/*
@@ -305,7 +355,12 @@ export default function GlanceBoard({ glance, eventName, actorRole, eventDate }:
               </p>
               <div className="flex flex-col gap-1">
                 {glance.unhoused.map((person) => (
-                  <Strip key={person.personEventId} person={person} action={action} />
+                  <Strip
+                    key={person.personEventId}
+                    person={person}
+                    action={action}
+                    sticky={sticky}
+                  />
                 ))}
               </div>
             </div>

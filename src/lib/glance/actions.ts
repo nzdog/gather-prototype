@@ -170,6 +170,54 @@ export function remindRefusal(person: Pick<GlancePerson, 'nudgeMark'>): string |
 }
 
 /**
+ * RULING 31 (2026-09-10) — a person who has answered NO is not OFFERED a remind, HERE.
+ *
+ * Verbatim:
+ *
+ *   "Filter it at this surface only, following Ruling 18's precedent. Not
+ *    resolveManualNudgeRecipient — that changes V1, and Ruling 19 is the precedent that I make
+ *    that call, not that it gets made in passing.
+ *    a door that tells her a person has pulled out and offers to remind them is the screen
+ *    contradicting itself inside one panel. She is not being stopped from doing anything — the
+ *    route is unchanged and every other path to it remains — the glance simply stops offering it
+ *    in the one place it has just said the opposite."
+ *
+ * ── A SURFACE FILTER, IN RULING 18'S OWN WORDS, AND NOT A ROUTE CHANGE ───────────────────
+ *
+ * `resolveManualNudgeRecipient` is UNTOUCHED and the manual-nudge route still accepts a remind
+ * for a guest who has answered no — it reaches the provider and fails there, which
+ * `tests/glance-actions-test.ts` proves over HTTP as the other half of this boundary. V1's
+ * composer behaves exactly as it did. **A later slice that pushes this down into the send path
+ * is asking for a ruling, not making a tidy-up**, and the structural assertion at that site is
+ * where it has to argue for it.
+ *
+ * ── IT SAYS NOTHING, AND THAT IS THE DIFFERENCE FROM RULING 14 ───────────────────────────
+ *
+ * `remindRefusal` above returns WORDS, because the mark is a thing Kate set and the way out is
+ * to change it. Here there is nothing for her to change — the guest answered — so a paragraph
+ * explaining a non-problem would be a lean-in Ruling 1's general test refuses, and Ruling 8's
+ * absent strip is the same instinct: no banner where there is nothing to say. Ruling 18 drops a
+ * name from a picker without annotating the gap, and this drops a control the same way.
+ *
+ * ── IT KEYS ON `reasons`, NOT ON `state`, AND THE REASON IS RULING 23's OVERLAY ──────────
+ *
+ * The only way an OUT person has a door at all is slice 6d's sticky red, which sets
+ * `state: 'RED'` and deliberately leaves `reasons` alone. So by the time a person reaches this
+ * surface `state` may have been overlaid and `reasons` has NOT — `reasons` is the un-overlaid
+ * truth, and it is the one thing here that still knows she answered no.
+ * `derivePersonState` pairs `ATTENDANCE_NO` with OUT and with nothing else, so this fires on
+ * exactly one case: the overlaid reversal, which is the one panel that has just said the
+ * opposite.
+ *
+ * IT CATCHES LEAVING AND NOT HANDING BACK. §8.6's withdrawn claim — a `DECLINED` row reading
+ * RED with "handed it back" — is still offered the remind, because giving a row back is not
+ * pulling out and she is still coming.
+ */
+export function remindOffered(person: Pick<GlancePerson, 'reasons'>): boolean {
+  return !person.reasons.includes('ATTENDANCE_NO');
+}
+
+/**
  * What a remind is about, in the words the template wants.
  *
  * THE UNSETTLED ROWS, NOT ALL OF THEM. A green row is one she has already agreed to;

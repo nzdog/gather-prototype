@@ -124,17 +124,66 @@ export function stripStateWords(person: GlancePerson): string | null {
  * about which of two true things to say in one short line, and the loose row wins because
  * it is the one with a move attached. A rendering default, not a ruling.
  */
-export const WHY_PRECEDENCE = ['REVERSAL', 'DECIDE_BY_EXPIRED', 'EXHAUSTED_SILENCE'] as const;
+export const WHY_PRECEDENCE = [
+  'ATTENDANCE_NO',
+  'REVERSAL',
+  'DECIDE_BY_EXPIRED',
+  'EXHAUSTED_SILENCE',
+] as const;
+
+/**
+ * Ruling 6's own words for the reversal, and the reference's: "Ray — was in, now out".
+ *
+ * ⚠ THIS LINE WAS UNBUILDABLE UNTIL PHASE 5 LANDED, AND THE NOTE THAT SAID SO IS REPLACED BY IT
+ * RATHER THAN LEFT STANDING. It read: *"'Ray — was in, now out' is the attendance reversal
+ * Ruling 6 fences behind phase 5's last-seen record."* That was exactly right — a why-line for a
+ * reversal needs to know whether THIS VIEWER has been shown it, and until `EventRole.glanceSeenAt`
+ * existed there was nobody to ask. Slice 6d asks it: `stickyReversals` off her own replay.
+ */
+export const REVERSAL_WHY = 'was in, now out';
+
+/**
+ * RULING 23's OVERLAY — the sticky red, as one field on top of the ordinary derivation.
+ *
+ * Verbatim: "the sticky red is an OVERLAY on top of the ordinary derivation. Playing the replay
+ * removes the overlay; what is revealed is whatever the person's state already derives to
+ * underneath. This invents no new colour and needs no definition of 'settled' beyond the overlay
+ * lifting." And: "DERIVED, never a write. A write makes looking become operating, and the glance
+ * is a place she looks, not a place she operates."
+ *
+ * ── WHY IT IS HERE AND NOT IN `state.ts` ─────────────────────────────────────────────────
+ *
+ * `derivePersonState` is THE ORDINARY DERIVATION, and Ruling 23's whole point is that this is not
+ * part of it. A reversed person still derives to OUT — `tests/glance-replay-test.ts` asserts the
+ * two side by side on the same inputs — and what changes is what a strip DISPLAYS to a viewer who
+ * has not been shown the news yet. Put this next to `derivePersonState` and the next reader has
+ * to work out which of the two is the colour rule; put it next to the tones and the words it
+ * changes, and it is obviously a display overlay.
+ *
+ * ── ONE FIELD, AND `reasons` IS DELIBERATELY UNTOUCHED ───────────────────────────────────
+ *
+ * The person keeps her own `ATTENDANCE_NO`, which is the true reason and is what `whyLineFor`
+ * below reads to say "was in, now out". Writing a reason in here would be the overlay inventing a
+ * fact about her; leaving hers alone means the why is hers. It also makes the overlay reversible
+ * by construction: drop the one field and the ordinary derivation is what is left.
+ *
+ * NOT A MUTATION. A new object every time, so the payload the summary, the assistant's message
+ * and the reassign pool read cannot be edited by rendering a strip.
+ */
+export function overlayReversal(person: GlancePerson): GlancePerson {
+  return { ...person, state: 'RED' };
+}
 
 /**
  * Ruling 4: "reds carry their why... A red is her move, and a move needs a direction."
  * Amber and green stay bare, and so do the two greys — NOT_CHASED because Ruling 14 says
  * the mark suppresses escalation, and OUT because its "— out" already carries it.
  *
- * ⚠ THE REFERENCE'S OWN TWO EXAMPLES CANNOT BE RENDERED TODAY. "Amelia — quiet after 2
- * nudges" needs the count [[GTC-251]] owns, and "Ray — was in, now out" is the attendance
- * reversal Ruling 6 fences behind phase 5's last-seen record. Both doors exist in the
- * payload; the copy below is what the two live red sources can honestly say.
+ * ⚠ ONE OF THE REFERENCE'S TWO EXAMPLES IS NOW RENDERED, AND THE OTHER STILL IS NOT.
+ * "Ray — was in, now out" is built as of slice 6d: it is the attendance reversal, and it was
+ * fenced behind phase 5's last-seen record because a sticky red needs a viewer to be sticky FOR.
+ * See `REVERSAL_WHY` and `overlayReversal` above. "Amelia — quiet after 2 nudges" still needs the
+ * count [[GTC-251]] owns, and until E6 lands the honest line is the one claiming no number.
  *
  * The register is deliberate: `maybe timed out` puts the clock at fault rather than the
  * guest, which is the voice §8 uses about a maybe.
@@ -150,6 +199,12 @@ export function whyLineFor(person: GlancePerson): string | null {
 
   for (const reason of WHY_PRECEDENCE) {
     if (!person.reasons.includes(reason)) continue;
+
+    // RULING 6, THROUGH RULING 23's OVERLAY, AND UNREACHABLE WITHOUT IT. `derivePersonState`
+    // pairs `ATTENDANCE_NO` with OUT and with nothing else, so RED-plus-ATTENDANCE_NO is exactly
+    // and only an overlaid reversal. It leads the precedence because it is the news: a person
+    // who has left is not first of all a person who handed one row back.
+    if (reason === 'ATTENDANCE_NO') return REVERSAL_WHY;
 
     if (reason === 'REVERSAL') {
       const handedBack = person.items.filter((i) => i.reason === 'REVERSAL').length;

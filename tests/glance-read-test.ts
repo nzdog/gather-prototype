@@ -1018,6 +1018,195 @@ async function main() {
       readSrc.length > 0 && !/exhausted\s*[:=]\s*(true|false|[a-z].*[<>=])/.test(readSrc)
     );
 
+    // ══ RULING 23's SECOND HALF — "FALL LOOSE", ON ITS OWN BOARD ═════════
+    //
+    // "Fall loose: derived too — widen the empty-strip predicate to include rows held by a
+    // reversed person. No unassignment, no write."
+    //
+    // ⚠ THIS OVERRIDES PHASE 3'S DECISION, DELIBERATELY, AND PHASE 3'S REASON IS QUOTED SO THE
+    // OVERRIDE IS VISIBLE AT THE SITE. Phase 3 declined to build this and said why: *"the
+    // strip's test is 'no Assignment row' and theirs still has one… building half of it now
+    // would put a second definition of 'loose' in the tree."* THE REASON IS ANSWERED RATHER
+    // THAN IGNORED: there is still exactly ONE predicate for loose, and it now reads *no
+    // Assignment row, OR an Assignment row held by a person who is OUT*. One site, one meaning,
+    // two limbs. What is NOT answered is the wider worry phase 3 raised in the neighbouring
+    // note — that "critical without an ACCEPTED assignment" is *"a wider set and a different
+    // fact"*. That is still true, and this widening is deliberately NOT that set: a person who
+    // merely declined is not loose, which is what the five-way differential below pins.
+    //
+    // ⚠ A BOARD OF ITS OWN, DELIBERATELY. Hanging this off the mixed fixture would have moved
+    // the ownerless counts every other assertion in this file reads, and a fixture edited to
+    // make a new assertion pass is how a suite stops measuring what it says it measures.
+    const looseHost = await prisma.person.create({
+      data: { name: 'GTC192-6d Host', email: `gtc192+${stamp}+6dhost@example.com` },
+    });
+    createdPersonIds.push(looseHost.id);
+    const looseEvent = await prisma.event.create({
+      data: {
+        name: 'GTC-192 6d — fall loose',
+        startDate: new Date(NOW.getTime() + 100 * HOUR),
+        endDate: new Date(NOW.getTime() + 130 * HOUR),
+        hostId: looseHost.id,
+        status: 'CONFIRMING',
+        sentAt: new Date(NOW.getTime() - 10 * DAY),
+      },
+    });
+    createdEventIds.push(looseEvent.id);
+    const looseTeam = await prisma.team.create({
+      data: { eventId: looseEvent.id, name: '6d Mains' },
+    });
+
+    /** One guest in one state, holding one critical and one ordinary row. */
+    async function stater(
+      name: string,
+      response: 'PENDING' | 'ACCEPTED' | 'DECLINED',
+      answer: 'YES' | 'NO' | null,
+      mark: 'DONT_CHASE' | null,
+      /** The ordinary row's own response, so a reversed person can hold a row he never answered. */
+      ordResponse: 'PENDING' | 'ACCEPTED' | 'DECLINED' = response
+    ) {
+      const person = await prisma.person.create({
+        data: { name, email: `gtc192+${stamp}+${name.replace(/\W/g, '')}@example.com` },
+      });
+      createdPersonIds.push(person.id);
+      await prisma.personEvent.create({
+        data: {
+          personId: person.id,
+          eventId: looseEvent.id,
+          role: 'PARTICIPANT',
+          sentAt: new Date(NOW.getTime() - 10 * DAY),
+          attendanceAnswer: answer,
+          nudgeMark: mark,
+        },
+      });
+      const crit = await prisma.item.create({
+        data: { teamId: looseTeam.id, name: `${name} critical`, kind: 'ITEM', critical: true },
+      });
+      const ord = await prisma.item.create({
+        data: { teamId: looseTeam.id, name: `${name} ordinary`, kind: 'ITEM', critical: false },
+      });
+      await prisma.assignment.create({
+        data: { itemId: crit.id, personId: person.id, response },
+      });
+      await prisma.assignment.create({
+        data: { itemId: ord.id, personId: person.id, response: ordResponse },
+      });
+      return { person, crit, ord };
+    }
+
+    // OUT — attendance answered NO with nothing accepted. Ruling 6's reversed person.
+    // ⚠ HIS TWO ROWS CARRY DIFFERENT RESPONSES ON PURPOSE — the critical is a withdrawn claim,
+    // the ordinary was never answered at all. Ruling 6 says "items the person held fall loose",
+    // not "declined items", and a fixture where both rows were DECLINED could not tell the two
+    // readings apart.
+    const gone = await stater('Ray6d', 'DECLINED', 'NO', null, 'PENDING');
+    // RED — a withdrawn claim (§8.6) with attendance never answered: UNKNOWN, so NOT out.
+    const withdrew = await stater('Sarah6d', 'DECLINED', null, null);
+    // AMBER — never tapped. GREEN — accepted. NOT_CHASED — the mark over a withdrawn claim.
+    const waiting = await stater('Minh6d', 'PENDING', null, null);
+    const settled = await stater('Rob6d', 'ACCEPTED', null, null);
+    const unbothered = await stater('Aoife6d', 'DECLINED', null, 'DONT_CHASE');
+    // And the original half of the predicate, unchanged: an item with NO Assignment row.
+    const ownerless = await prisma.item.create({
+      data: { teamId: looseTeam.id, name: 'the glazed ham 6d', kind: 'ITEM', critical: true },
+    });
+
+    const loosePayload = R ? await R.readEventGlance(prisma, looseEvent.id, NOW) : null;
+    const looseIds: string[] = (loosePayload?.unassignedCritical ?? []).map((i: any) => i.itemId);
+    const stateOf = (personId: string) =>
+      [...(loosePayload?.households ?? []), { members: loosePayload?.unhoused ?? [] }]
+        .flatMap((h: any) => h.members)
+        .find((p: any) => p.personId === personId)?.state ?? null;
+
+    // THE POSITIVE CONTROL FIRST. Every claim below is about a board whose five people must
+    // actually be in the five states the fixture intends; if the fixture drifted, the
+    // differential would be measuring something else.
+    assert(
+      'Ruling 23 control',
+      'THE FIVE STATES ARE ON THE BOARD — OUT, RED, AMBER, GREEN and NOT_CHASED, one guest each, so the differential below is between real states',
+      loosePayload !== null &&
+        ok(
+          () =>
+            stateOf(gone.person.id) === 'OUT' &&
+            stateOf(withdrew.person.id) === 'RED' &&
+            stateOf(waiting.person.id) === 'AMBER' &&
+            stateOf(settled.person.id) === 'GREEN' &&
+            stateOf(unbothered.person.id) === 'NOT_CHASED'
+        )
+    );
+    assert(
+      'Ruling 23',
+      'A REVERSED PERSON’S CRITICAL FALLS LOOSE — it is in `unassignedCritical` even though its Assignment row is untouched',
+      loosePayload !== null && looseIds.includes(gone.crit.id)
+    );
+    assert(
+      'Ruling 23',
+      'and the ownerless critical is still there too — the original limb of the predicate is widened, not replaced',
+      loosePayload !== null && looseIds.includes(ownerless.id)
+    );
+    // ⭐ THE WRONG-SET DIFFERENTIAL. This is the assertion a predicate widened one notch too
+    // far fails, and it is why the fixture holds five people rather than one.
+    assert(
+      'Ruling 23',
+      '⭐ AND NOBODY ELSE’S DOES — a withdrawn claim, a silence, a settled row and a don’t-chase row are all still HELD; only OUT is loose',
+      loosePayload !== null &&
+        looseIds.includes(gone.crit.id) &&
+        !looseIds.includes(withdrew.crit.id) &&
+        !looseIds.includes(waiting.crit.id) &&
+        !looseIds.includes(settled.crit.id) &&
+        !looseIds.includes(unbothered.crit.id)
+    );
+    assert(
+      'Ruling 23',
+      'THE ORDINARY ROWS COUNT TOO — one predicate for loose, not one for the named criticals and another for the door’s N',
+      loosePayload !== null && loosePayload.unassignedOrdinaryCount === 1 && looseIds.length === 2
+    );
+    assert(
+      'Ruling 23',
+      'ALL of a reversed person’s rows are loose, not only the declined one — the row he NEVER ANSWERED is loose too, because he is not coming and nothing he holds is covered',
+      loosePayload !== null &&
+        ok(() => {
+          const him = [...loosePayload.households, { members: loosePayload.unhoused }]
+            .flatMap((h: any) => h.members)
+            .find((p: any) => p.personId === gone.person.id);
+          // The ordinary row is PENDING on him and is still counted in the door's N.
+          return (
+            !!him &&
+            him.items.some((i: any) => i.itemId === gone.ord.id && i.state === 'AMBER') &&
+            loosePayload.unassignedOrdinaryCount === 1
+          );
+        })
+    );
+    // §10.8 stands: the row is in BOTH places, because nothing was unassigned.
+    assert(
+      'Ruling 23',
+      'AND IT IS STILL ON HIM — the same row is under the person AND in the strip: "no unassignment, no write" costs exactly this, and it is asserted rather than discovered',
+      loosePayload !== null &&
+        looseIds.includes(gone.crit.id) &&
+        ok(() => {
+          const him = [...loosePayload.households, { members: loosePayload.unhoused }]
+            .flatMap((h: any) => h.members)
+            .find((p: any) => p.personId === gone.person.id);
+          return !!him && him.items.some((i: any) => i.itemId === gone.crit.id);
+        })
+    );
+    // DERIVED, NEVER A WRITE — read back after the read, not argued from the source.
+    const afterRead = await prisma.assignment.findMany({
+      where: { item: { team: { eventId: looseEvent.id } } },
+      select: { personId: true, response: true },
+      orderBy: [{ personId: 'asc' }, { response: 'asc' }],
+    });
+    assert(
+      'Ruling 23',
+      'THE READ WROTE NOTHING — all ten Assignment rows still carry their own person and their own response after the board was assembled',
+      loosePayload !== null &&
+        looseIds.includes(gone.crit.id) &&
+        afterRead.length === 10 &&
+        afterRead.filter((a) => a.response === 'DECLINED').length === 5 &&
+        afterRead.filter((a) => a.response === 'PENDING').length === 3 &&
+        afterRead.filter((a) => a.response === 'ACCEPTED').length === 2
+    );
+
     assert(
       'client-safe',
       'state.ts holds no database handle — one definition of the colours, not a server and a client one',
