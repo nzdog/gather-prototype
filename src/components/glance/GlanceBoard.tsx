@@ -21,8 +21,14 @@
  * SHAPE — border, chevron, hover state — is PHASE 7's variant, and shipping it as the
  * default would settle an unruled decision by stealth. So is the amber clock-line.
  *
- * The replay and polling are PHASE 6: nothing here refreshes itself, and an action that
- * leaves the board stale says so rather than repainting.
+ * ⚠ THE REPLAY AND THE POLLING ARE ISLANDS BESIDE THIS FILE, NOT IN IT (phase 6). This is
+ * still a server component with no hooks and no timer: `GlanceReplay` walks the arrival replay
+ * and `GlanceLive` polls, and both repaint strips they do not own, finding them by the
+ * `data-person-event-id` below. Nothing here refreshes itself.
+ *
+ * ⚠ SUPERSEDED, NOT DELETED: until slice 6e this line read "an action that leaves the board
+ * stale says so rather than repainting." Ruling 25 replaced that copy with the board being
+ * right — an action now triggers an immediate refresh instead of announcing staleness.
  *
  * ⚠ THE MOCKUP'S META LINE CARRIES A COUNTDOWN ("12 days to go") AND THIS DOES NOT.
  * Moment 4 §3 refuses a countdown outright, and Ruling 1's general test — "anything that
@@ -39,6 +45,7 @@ import {
   criticalStripClauses,
   criticalStripText,
   STRIP_TONE,
+  STRIP_WORDS_CLASS,
   stripStateWords,
   summaryClauses,
   summarySentence,
@@ -101,7 +108,7 @@ function StripBody({ person }: { person: GlancePerson }) {
   return (
     <>
       <span>{person.name}</span>
-      {words ? <span data-strip-words="" className="font-normal">{` ${words}`}</span> : null}
+      {words ? <span data-strip-words="" className={STRIP_WORDS_CLASS}>{` ${words}`}</span> : null}
     </>
   );
 }

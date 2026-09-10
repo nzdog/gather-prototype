@@ -827,22 +827,12 @@ async function main() {
     const actionsSrc = code('src/lib/glance/actions.ts');
     const surfaceSrc = code('src/components/glance/PersonSurface.tsx');
 
-    assert(
-      'Ruling 1 source',
-      'every glance source exists — the modules, the route, the page, the view, the actions, the island',
-      [
-        stateSrc,
-        readSrc,
-        routeSrc,
-        pageSrc,
-        boardSrc,
-        stripSrc,
-        assistantSrc,
-        actionsSrc,
-        surfaceSrc,
-        code('src/components/glance/GlanceReplay.tsx'),
-      ].every((src) => src.length > 0)
-    );
+    // ⚠ THE EXISTENCE GATE MOVED IN 6e, AND THE REASON IS THAT IT WAS A SECOND LIST.
+    // It enumerated ten sources by hand while `glanceSources` below enumerated thirteen, and a
+    // source added to one and not the other would be scanned without being gated — the fence
+    // weakened in one copy with nothing failing, which is the exact hazard `glance-fence.ts`
+    // was extracted to end. It is now asserted ONCE, on `glanceSources` itself, immediately
+    // after that list is built. One list, gated and scanned.
     // Phase 6 slice 6a puts the pure replay and its one door in the tree. Ruling 1's fence
     // follows them UNCHANGED: neither reads a ledger, so neither is exempt from anything.
     const replaySrc = code('src/lib/glance/replay.ts');
@@ -856,6 +846,23 @@ async function main() {
     // animation is no licence to carry behaviour, and "absent from the payload, not merely
     // unrendered" applies hardest to the module whose whole job is rendering.
     const islandSrc = code('src/components/glance/GlanceReplay.tsx');
+    // Phase 6 slice 6e puts THREE more sources in the tree, and every one of them ships to a
+    // browser or is read by something that does. Ruling 1's fence follows them UNCHANGED — they
+    // are exempt from nothing:
+    //   `live.ts`        the pure live diff — the module that decides what a poll SHOWS her;
+    //   `paint.ts`       the shared DOM painters, read by both islands;
+    //   `GlanceLive.tsx` the poller itself, which is the only glance source that repeatedly
+    //                    reads a payload off the wire. "Absent from the payload, not merely
+    //                    unrendered" applies hardest to the module that fetches it every 20s.
+    const liveSrc = code('src/lib/glance/live.ts');
+    const paintSrc = code('src/components/glance/paint.ts');
+    const liveIslandSrc = code('src/components/glance/GlanceLive.tsx');
+    // ⚠ AND THE DEV PREVIEW JOINS TOO, WHICH IS A GAP 6e CLOSED RATHER THAN CREATED.
+    // `GlanceReplayPreview.tsx` has been in the tree since the preview landed and was never in
+    // this list, so Ruling 1's fence has never been run over it. It is a control, not a data
+    // surface, so nothing was leaking — but "the fence follows every glance source" was not
+    // true, and a fence with a hole in it is the thing this ticket keeps catching.
+    const previewSrc = code('src/components/glance/GlanceReplayPreview.tsx');
     const glanceSources = [
       stateSrc,
       readSrc,
@@ -870,8 +877,17 @@ async function main() {
       entrySrc,
       seenSrc,
       islandSrc,
+      liveSrc,
+      paintSrc,
+      liveIslandSrc,
+      previewSrc,
     ];
     const sourcesExist = glanceSources.every((src) => src.length > 0);
+    assert(
+      'Ruling 1 source',
+      'EVERY GLANCE SOURCE EXISTS — the modules, the route, the page, the view, the actions, both islands, the painters and the preview; the gate and the scan are ONE list, so neither can be widened without the other',
+      sourcesExist && glanceSources.length === 17
+    );
     for (const banned of BEHAVIOUR_DENYLIST) {
       const re = new RegExp(`\\b${banned}\\b`);
       assert(

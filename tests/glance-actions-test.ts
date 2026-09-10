@@ -412,10 +412,39 @@ async function main() {
       'a chaseable person issues EXACTLY ONE request, to the existing nudge route',
       ok(() => sent.calls.length === 1 && sent.calls[0].url === '/api/events/ev1/people/p1/nudge')
     );
+    // ⚠ PHASE 4's "reload" TRIO IS RETIRED HERE, IN 6e, WITH THE SUCCESSOR THE TICKET NAMED
+    // BEFORE THE SLICE STARTED — Ruling 25, recorded at GTC-192 so "6e cannot delete the guard
+    // quietly". This is the treatment phase 3 set and 6b and 6c both followed.
+    //
+    //   was:  the word "reload" is PRESENT on the two actions that move the board (REASSIGN,
+    //         TAKE OVER) and ABSENT on the one that does not (REMIND)
+    //   now:  an action that MOVES THE BOARD triggers an immediate refresh, and a REMIND still
+    //         triggers none — the same differential, against the refresh rather than the word
+    //   and:  these are NOT held-back guards and no slice retires them. The old pair held a
+    //         line until polling arrived; this pair encodes Ruling 25 itself.
+    //
+    // ⚠ AND THE THIRD OF THE THREE IS THE REASON ALL THREE MOVE TOGETHER. The REMIND assertion
+    // would not have gone RED — it would have gone VACUOUSLY GREEN, because once "reload" is
+    // out of the vocabulary entirely, "the note does not say reload" is true of every string in
+    // the file. A guard that cannot fail is worse than one that does.
+    //
+    // The successor is asserted on `movedBoard`, which is a FACT ON THE OUTCOME rather than a
+    // side effect, so the differential is provable here with no DOM and no browser — and the
+    // wiring from that fact to the actual refresh is asserted in `test:glance-replay`'s layer
+    // 4e, on the surface that dispatches it and the island that listens.
     assert(
-      'staleness',
-      'and it does NOT claim the board will move — a nudge changes nothing until they reply',
-      ok(() => sentOutcome.ok === true && !/reload/i.test(sentOutcome.note))
+      'Ruling 25',
+      'a REMIND MOVES NOTHING, so it triggers NO refresh — a nudge changes no state, and a board that repainted for it would be repainting nothing',
+      ok(() => sentOutcome.ok === true && sentOutcome.movedBoard === false)
+    );
+    assert(
+      'Ruling 25',
+      'and it makes no staleness claim of any kind — the strip stays exactly as red as it was until they reply',
+      ok(
+        () =>
+          sentOutcome.ok === true &&
+          sentOutcome.note === 'Reminded. Nothing here changes until they reply.'
+      )
     );
 
     const moved = spyFetch({ status: 200, body: { assignment: { id: 'a2' } } });
@@ -428,9 +457,9 @@ async function main() {
       ok(() => moved.calls.length === 1 && moved.calls[0].url === '/api/events/ev1/items/i1/assign')
     );
     assert(
-      'staleness',
-      'and it SAYS the board is now stale — no polling this phase, so it must not pretend',
-      ok(() => movedOutcome.ok === true && /reload/i.test(movedOutcome.note))
+      'Ruling 25',
+      'REASSIGN MOVES THE BOARD, so it triggers an IMMEDIATE refresh — she does not wait up to 20s for the next poll to see what she just did',
+      ok(() => movedOutcome.ok === true && movedOutcome.movedBoard === true)
     );
 
     const took = spyFetch({ status: 200, body: { assignment: { id: 'a3' } } });
@@ -443,9 +472,32 @@ async function main() {
       ok(() => took.calls.length === 1 && took.calls[0].url === '/api/events/ev1/items/i1/assign')
     );
     assert(
-      'staleness',
-      'and it too says the board is stale',
-      ok(() => tookOutcome.ok === true && /reload/i.test(tookOutcome.note))
+      'Ruling 25',
+      'and TAKE OVER too — the third of the trio, so the differential is two-moves-one-does-not rather than a single case',
+      ok(() => tookOutcome.ok === true && tookOutcome.movedBoard === true)
+    );
+    // THE DIFFERENTIAL, IN ONE EXPRESSION. Read separately, "remind is false" could be
+    // satisfied by a field that is false everywhere. Read against the two that are true, it
+    // cannot.
+    assert(
+      'Ruling 25',
+      'THE DIFFERENTIAL — exactly two of the three actions move the board, and the one that does not is the one that changes no state',
+      ok(
+        () =>
+          [movedOutcome, tookOutcome, sentOutcome].filter(
+            (o: any) => o.ok === true && o.movedBoard === true
+          ).length === 2 && sentOutcome.movedBoard === false
+      )
+    );
+    assert(
+      'Ruling 25',
+      'and NO ACTION SAYS "reload" ANY MORE — the copy is not replaced with weaker copy, it is replaced with the board being right',
+      ok(
+        () =>
+          ![movedOutcome, tookOutcome, sentOutcome].some(
+            (o: any) => o.ok === true && /reload/i.test(o.note)
+          ) && !/reload/i.test(code('src/lib/glance/actions.ts'))
+      )
     );
 
     const refusedByRoute = spyFetch({ status: 403, body: { error: 'nope' } });

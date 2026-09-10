@@ -38,12 +38,25 @@
  * serialises the candidate list three times. That is a few hundred bytes against hydrating
  * sixty-four strips to make three of them tappable, and it is the trade taken knowingly.
  *
- * ── NO POLLING, NO REPLAY ─────────────────────────────────────────────────────
+ * ── THE REFRESH, AND WHY IT IS AN EVENT (slice 6e) ────────────────────────────
  *
- * Ruling 10's ~20-second refresh is phase 6. When an action changes what the board shows,
- * this SAYS the board is behind (`STALE_NOTE`) rather than quietly refreshing — a screen
- * that repaints itself is the thing phase 6 has to be ruled into, not something a modal
- * should start doing on its own.
+ * ⚠ SUPERSEDED, NOT DELETED. Until 6e this section read: "Ruling 10's ~20-second refresh is
+ * phase 6. When an action changes what the board shows, this SAYS the board is behind
+ * (`STALE_NOTE`) rather than quietly refreshing." Polling has landed and Ruling 25 replaced
+ * that sentence with the board being right: *"an action must trigger an immediate refresh
+ * rather than waiting up to 20s for the next poll."*
+ *
+ * So an action that MOVED the board — `outcome.movedBoard`, which `actions.ts` states as a
+ * fact rather than as a side effect — dispatches one event, and the live island polls at once.
+ *
+ * WHY AN EVENT RATHER THAN A CALL. This modal and the poller are two separate islands beside a
+ * SERVER-rendered board. There is no shared React tree to hang a callback on, and giving them
+ * one means hydrating the board — phase 2's no-hooks property, which the ticket says a slice
+ * may not retire. An event on `window` is the seam that already exists between them.
+ *
+ * ⚠ A REMIND DISPATCHES NOTHING, and that is the differential Ruling 25 names. A nudge changes
+ * no state, so a board that repainted for it would repaint an identical board and imply that
+ * something moved.
  */
 
 import { useState, type ReactNode } from 'react';
@@ -59,6 +72,7 @@ import {
   type GlanceActionOutcome,
   type GlanceAssignable,
 } from '@/lib/glance/actions';
+import { GLANCE_REFRESH_EVENT } from '@/lib/glance/live';
 import { whyLineFor } from './strip';
 
 export interface PersonSurfaceProps {
@@ -106,7 +120,13 @@ export default function PersonSurface({
     setBusy(key);
     setOutcome(null);
     try {
-      setOutcome(await action());
+      const result = await action();
+      setOutcome(result);
+      // RULING 25. Only an action that actually moved the board asks for the refresh, and only
+      // when the route accepted it — a refused reassign changed nothing to catch up to.
+      if (result.ok && result.movedBoard) {
+        window.dispatchEvent(new Event(GLANCE_REFRESH_EVENT));
+      }
     } finally {
       setBusy(null);
     }

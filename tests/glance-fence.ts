@@ -17,8 +17,17 @@
  * mechanics — "at any depth" and "with comments stripped" are load-bearing, and two
  * implementations of them could disagree about what was scanned.
  *
- * NOTHING ABOUT THE LIST'S CONTENTS CHANGED IN THE MOVE. The 22 names below are byte-for-byte
+ * NOTHING ABOUT THE LIST'S CONTENTS CHANGED IN THE MOVE. The 23 names below are byte-for-byte
  * the ones phase 1 wrote and phases 3b and 4 extended.
+ *
+ * ⚠ THE HEADER'S OTHER COUNT IS CORRECTED HERE RATHER THAN LEFT TO ROT (slice 6e). §5's
+ * "nine existing sources" was the number when the amendment was written; the scan has grown
+ * with every slice that put a file in the tree, and it is SEVENTEEN as of 6e — phase 1's three,
+ * phase 2's three, phase 3b's one, phase 4's two, 6a's two, 6b's one, 6c's two (the island and
+ * the dev preview, the second of which 6e added after finding it had never been scanned), and
+ * 6e's three. The list of sources lives in `glance-read-test.ts` and is asserted by length
+ * there, so this sentence is a description and that assertion is the guard. **6e adds no
+ * exemption**: `REWIND_EXEMPT_NAMES` is still two names wide and still applies to one file.
  */
 
 import { readFileSync } from 'fs';

@@ -38,6 +38,7 @@ import { readEventGlance } from '@/lib/glance/read';
 import { readGlanceReplay, stampGlanceSeen } from '@/lib/glance/replay-entry';
 import GlanceBoard from '@/components/glance/GlanceBoard';
 import GlanceReplay from '@/components/glance/GlanceReplay';
+import GlanceLive from '@/components/glance/GlanceLive';
 
 export default async function GlancePage({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = await params;
@@ -143,6 +144,20 @@ export default async function GlancePage({ params }: { params: Promise<{ eventId
         case the stamp above has already run instead.
       */}
       <GlanceReplay eventId={eventId} steps={replay.steps} />
+      {/*
+        Phase 6 slice 6e. Ruling 10's ~20-second poll, and it is mounted UNCONDITIONALLY —
+        which is the opposite of the island above it and is the whole point. Most visits have
+        nothing to replay, and those are exactly the visits polling exists for: she opens a
+        board that is already true and waits on it while her family answers.
+
+        It is handed a BOOLEAN, never the steps. `step.from` is the board the replay OPENED on,
+        and a live baseline seeded from it would re-spark every flip the replay just played,
+        twenty seconds after she watched them. The boolean answers only "wait for the replay, or
+        arm now?" — the baseline itself is read off the board once the replay has resolved.
+
+        It renders nothing at all, so the board's markup is unchanged by its presence.
+      */}
+      <GlanceLive eventId={eventId} hasReplay={replay.steps.length > 0} />
     </div>
   );
 }

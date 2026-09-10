@@ -96,34 +96,17 @@ import {
   type ReplayBeat,
   type ReplayStep,
 } from '@/lib/glance/replay';
-import type { PersonState } from '@/lib/glance/state';
-import { STRIP_TONE, stripHexes } from './strip';
+import { GLANCE_REPLAY_DONE_EVENT } from '@/lib/glance/live';
+import {
+  SPARK_LAYER_CLASS,
+  TRANSITION,
+  burst,
+  paintStrip,
+  prefersReducedMotion,
+  showWords,
+  stripFor,
+} from './paint';
 import GlanceReplayPreview from './GlanceReplayPreview';
-
-/**
- * The reference's ramp: "~18 particles per flip in the green/amber ramp hexes."
- *
- * DERIVED from the two tints themselves — see `stripHexes`. A hex written here would be a
- * second definition of the palette, free to drift from the strips the sparks come off.
- */
-const SPARK_COLOURS = [...stripHexes('AMBER'), ...stripHexes('GREEN')];
-
-/** The animation, as prototyped (`docs/design/moment4-glance-reference.md`). */
-const PARTICLE_COUNT = 18;
-const THROW_MIN_PX = 35;
-const THROW_MAX_PX = 80;
-const PARTICLE_MIN_MS = 900;
-const PARTICLE_MAX_MS = 1300;
-const PARTICLE_SIZE_PX = 4;
-const RING_WIDTH_PX = 3;
-const RING_MS = 700;
-const POP_SCALE = 1.12;
-const POP_MS = 520;
-const COLOUR_MS = 700;
-/** Overshoot, so the pop lands like a thing with weight rather than a thing being resized. */
-const OVERSHOOT = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
-
-const TRANSITION = `background-color ${COLOUR_MS}ms ease, color ${COLOUR_MS}ms ease, border-color ${COLOUR_MS}ms ease, opacity ${COLOUR_MS}ms ease`;
 
 /**
  * `useLayoutEffect` on the client, `useEffect` on the server pass.
@@ -133,122 +116,6 @@ const TRANSITION = `background-color ${COLOUR_MS}ms ease, color ${COLOUR_MS}ms e
  * App Router is server-rendered for the first HTML. This is the ordinary way to have both.
  */
 const useBrowserLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
-
-/** A number in [min, max). The spread the reference asks for, not a fixed value. */
-function between(min: number, max: number): number {
-  return min + Math.random() * (max - min);
-}
-
-/**
- * Swap a strip's TINT and leave everything else exactly as the board wrote it.
- *
- * The class string is not recomposed here: the tone is a contiguous substring of what the
- * board rendered, so it is substituted in place. That keeps the strip's shape — and the
- * `block w-full text-left` a red door carries — out of this module entirely. If the tone is
- * not found the strip is left alone: the true board is already correct, so failing to animate
- * is the recoverable failure and a mangled class string is not.
- */
-function paint(el: HTMLElement, to: PersonState): boolean {
-  const current = el.dataset.stripState as PersonState | undefined;
-  if (!current || !STRIP_TONE[current] || !STRIP_TONE[to]) return false;
-  const from = STRIP_TONE[current].className;
-  if (!el.className.includes(from)) return false;
-  el.className = el.className.replace(from, STRIP_TONE[to].className);
-  el.dataset.stripState = to;
-  return true;
-}
-
-/**
- * Hide or show the half of a strip that describes the person's state NOW.
- *
- * ── FINDING 1, RULED (6c) ────────────────────────────────────────────────────────────────
- *
- * The tint rewinds and the words cannot: they are server-rendered from the CURRENT state, and
- * the past `reasons` are not on the wire — `ReplayStep` is exactly four keys and the allowlist
- * holds. So during the rewind a strip painted GREEN went on reading "— out", and one painted
- * AMBER went on carrying "maybe timed out". The ruling:
- *
- *   "During the replay, SUPPRESS THE REASON LINE on any strip that still has a pending step;
- *    let it appear as the step lands. A green strip reading 'out' is incoherent and the words
- *    are the truthful half."
- *
- * So they are HIDDEN, never rewritten. Rewriting would need the past reasons — the fifth key.
- * Hiding needs nothing on the wire at all.
- *
- * ⚠ ONLY STRIPS WITH A PENDING STEP. A strip that is not in the replay never changes state, so
- * its words are true of both boards and are left alone throughout.
- */
-function showWords(el: HTMLElement, show: boolean): void {
-  const words = el.querySelector<HTMLElement>('[data-strip-words]');
-  if (!words) return;
-  if (show) words.hidden = false;
-  else words.hidden = true;
-}
-
-/** The flourish: a pop on the strip, a ring off it, and eighteen particles thrown clear. */
-function burst(el: HTMLElement, layer: HTMLElement | null): void {
-  const box = el.getBoundingClientRect();
-
-  // THE POP, on the strip itself — the thing that changed is the thing that moves.
-  el.animate(
-    [
-      { transform: 'scale(1)' },
-      { transform: `scale(${POP_SCALE})`, offset: 0.45 },
-      { transform: 'scale(1)' },
-    ],
-    { duration: POP_MS, easing: OVERSHOOT }
-  );
-
-  if (!layer || SPARK_COLOURS.length === 0) return;
-
-  const cx = box.left + box.width / 2;
-  const cy = box.top + box.height / 2;
-
-  // THE RING — 3px, expanding off the strip's own outline.
-  const ring = document.createElement('div');
-  ring.setAttribute(
-    'style',
-    `position:absolute;left:${box.left}px;top:${box.top}px;width:${box.width}px;height:${box.height}px;` +
-      `border:${RING_WIDTH_PX}px solid ${SPARK_COLOURS[SPARK_COLOURS.length - 1]};border-radius:6px;`
-  );
-  layer.appendChild(ring);
-  const ringAnim = ring.animate(
-    [
-      { transform: 'scale(0.96)', opacity: 0.85 },
-      { transform: 'scale(1.28)', opacity: 0 },
-    ],
-    { duration: RING_MS, easing: 'ease-out' }
-  );
-  ringAnim.onfinish = () => ring.remove();
-
-  // THE PARTICLES — thrown 35–80px over 0.9–1.3s, so the burst frays rather than pulsing.
-  for (let i = 0; i < PARTICLE_COUNT; i++) {
-    const angle = (i / PARTICLE_COUNT) * Math.PI * 2 + between(-0.2, 0.2);
-    const distance = between(THROW_MIN_PX, THROW_MAX_PX);
-    const dot = document.createElement('div');
-    dot.setAttribute(
-      'style',
-      `position:absolute;left:${cx}px;top:${cy}px;width:${PARTICLE_SIZE_PX}px;height:${PARTICLE_SIZE_PX}px;` +
-        `margin:${-PARTICLE_SIZE_PX / 2}px 0 0 ${-PARTICLE_SIZE_PX / 2}px;border-radius:50%;` +
-        `background:${SPARK_COLOURS[i % SPARK_COLOURS.length]};`
-    );
-    layer.appendChild(dot);
-    const anim = dot.animate(
-      [
-        { transform: 'translate(0px, 0px) scale(1)', opacity: 1 },
-        {
-          transform: `translate(${Math.cos(angle) * distance}px, ${Math.sin(angle) * distance + distance * 0.35}px) scale(0.4)`,
-          opacity: 0,
-        },
-      ],
-      {
-        duration: between(PARTICLE_MIN_MS, PARTICLE_MAX_MS),
-        easing: 'cubic-bezier(0.2, 0.7, 0.3, 1)',
-      }
-    );
-    anim.onfinish = () => dot.remove();
-  }
-}
 
 /**
  * ONE DEFINITION OF THE WALK, taking its schedule as an argument.
@@ -266,15 +133,9 @@ function runReplay(
   layer: HTMLElement | null,
   onFinished: () => void
 ): number[] {
-  const reduced =
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reduced = prefersReducedMotion();
 
-  const strips = steps.map((step) =>
-    document.querySelector<HTMLElement>(
-      `[data-person-event-id="${CSS.escape(step.personEventId)}"]`
-    )
-  );
+  const strips = steps.map((step) => stripFor(step.personEventId));
 
   // ── PAINT THE PAST, with transitions OFF ──────────────────────────────────
   //
@@ -284,7 +145,7 @@ function runReplay(
   strips.forEach((el, i) => {
     if (!el) return;
     el.style.transition = 'none';
-    paint(el, steps[i].from);
+    paintStrip(el, steps[i].from);
     // Finding 1: the words describe the state this strip has NOT reached yet.
     showWords(el, false);
   });
@@ -301,7 +162,7 @@ function runReplay(
       if (!el) return;
       // The words become true at exactly the moment the tint does, so they arrive together.
       showWords(el, true);
-      if (paint(el, step.to) && step.spark && !reduced) burst(el, layer);
+      if (paintStrip(el, step.to) && step.spark && !reduced) burst(el, layer);
     }, beats[i].delayMs)
   );
 
@@ -372,16 +233,75 @@ export default function GlanceReplay({ eventId, steps }: { eventId: string; step
       return;
     }
 
-    played.current = true;
-    timers.current = runReplay(steps, scheduleReplay(steps), layer.current, () => {
-      void fetch(`/api/events/${eventId}/glance/seen`, { method: 'POST' }).catch(() => {
-        // A failed stamp costs one repeated replay on the next visit. It fails safe, so it
-        // is swallowed rather than shown: an error toast on a screen whose whole job is a
-        // four-second answer is the lean-in Ruling 1's general test refuses.
-      });
-    });
+    /*
+      ── RULING 29 (slice 6e) — THE REPLAY DOES NOT START IN A BACKGROUND TAB ─────────────
 
-    return () => timers.current.forEach((t) => window.clearTimeout(t));
+      6c's walk found it and the ticket recorded it as finding 3: a replay in a hidden tab
+      plays, completes and stamps, so "seen" is consumed by nobody. The ruling:
+
+        NOTHING STAMPS WHILE THE DOCUMENT IS HIDDEN, and the arrival replay does not START
+        while hidden — it waits for visible.
+
+      ⚠ WAITING IS NOT A DELAY, IT IS A PRECONDITION. The walk is under Ruling 1's ~3s budget
+      from the moment it begins, and it begins when she can see it. A host who opens the board
+      in a background tab and comes to it two minutes later gets the whole replay, from the
+      top, at the ruled pace — which is what "the replay played" was always supposed to mean.
+    */
+    const visible = () => document.visibilityState === 'visible';
+
+    const play = () => {
+      if (played.current) return;
+      played.current = true;
+      timers.current = runReplay(steps, scheduleReplay(steps), layer.current, () => {
+        /*
+          RULING 29's other half, CHECKED WHERE IT FIRES rather than where the walk started.
+          A tab can be hidden part-way through a three-second replay, and the tail of it was
+          then shown to nobody. Not stamping costs one repeated replay next visit, which is
+          the direction 6b ruled safe: "Repeating is the safe direction; losing is not."
+        */
+        if (visible()) {
+          void fetch(`/api/events/${eventId}/glance/seen`, { method: 'POST' })
+            .catch(() => {
+              // A failed stamp costs one repeated replay on the next visit. It fails safe, so
+              // it is swallowed rather than shown: an error toast on a screen whose whole job
+              // is a four-second answer is the lean-in Ruling 1's general test refuses.
+            })
+            .finally(announce);
+          return;
+        }
+        announce();
+      });
+    };
+
+    /*
+      ⚠ AND THIS IS WHAT LETS POLLING BEGIN — 6e's ordering, announced rather than assumed.
+
+      A poll landing mid-replay repaints the board underneath the animation. So the live
+      island does not arm until this fires, and this fires only once the walk is over AND the
+      stamp attempt has settled — "completed and stamped" is two things. It fires even when
+      the stamp was skipped or failed: the replay is over either way, and the board is correct
+      either way, so there is nothing left for polling to trample.
+    */
+    function announce() {
+      window.dispatchEvent(new Event(GLANCE_REPLAY_DONE_EVENT));
+    }
+
+    if (visible()) {
+      play();
+      return () => timers.current.forEach((t) => window.clearTimeout(t));
+    }
+
+    const onVisibility = () => {
+      if (!visible()) return;
+      document.removeEventListener('visibilitychange', onVisibility);
+      play();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      timers.current.forEach((t) => window.clearTimeout(t));
+    };
   }, [eventId, steps]);
 
   /** Timers from a preview press outlive the effect above, so unmount clears them too. */
@@ -419,7 +339,7 @@ export default function GlanceReplay({ eventId, steps }: { eventId: string; step
         ref={layer}
         data-glance-replay={steps.length}
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 z-40 overflow-hidden"
+        className={SPARK_LAYER_CLASS}
       />
       {preview && (
         <GlanceReplayPreview

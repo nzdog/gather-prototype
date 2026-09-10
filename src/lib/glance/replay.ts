@@ -67,6 +67,24 @@ export interface ReplayStep {
   spark: boolean;
 }
 
+/**
+ * WHICH TRANSITION EARNS THE FLOURISH — one definition, asked by two callers.
+ *
+ * ⚠ SLICE 6e EXPORTS THIS OUT OF `deriveReplay`, AND THE EXPORT IS THE WHOLE POINT. Until 6e
+ * the rule was an inline expression with exactly one reader, which was correct while there was
+ * exactly one replay. 6e adds a second: `diffLive` (`src/lib/glance/live.ts`) has to answer the
+ * same question about a live poll, and re-expressing `from === 'AMBER' && to === 'GREEN'` there
+ * would be a spark rule that exists twice — weakenable in one copy with nothing failing, the
+ * failure this ticket refuses at `isChaseable`, at `mayHoldRow` and at the colours.
+ *
+ * Nothing about the rule changed in the move. The reference: "amber-to-green flips get the
+ * flourish"; Ruling 6: the reversal plays quietly, with no spark; Ruling 26: reds play, and
+ * everything else is the new board arriving without ceremony. AMBER → GREEN, and nothing else.
+ */
+export function isSparkTransition(from: PersonState, to: PersonState): boolean {
+  return from === 'AMBER' && to === 'GREEN';
+}
+
 /** Ruling 1's guardrail: the whole replay resolves inside ~3 seconds. */
 export const REPLAY_BUDGET_MS = 3000;
 
@@ -231,7 +249,7 @@ export function deriveReplay(
         personEventId: person.personEventId,
         from,
         to,
-        spark: from === 'AMBER' && to === 'GREEN',
+        spark: isSparkTransition(from, to),
       },
       reversal,
       order,

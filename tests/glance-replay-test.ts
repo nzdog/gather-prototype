@@ -122,6 +122,16 @@ async function main() {
   let RP: any = null;
   let RE: any = null;
   let ACK: any = null;
+  /**
+   * SLICE 6e — the LIVE half's pure module, loaded on its own gate.
+   *
+   * It is deliberately NOT part of `built`. `built` is 6a's three modules, and an assertion
+   * about the arrival replay must not start failing because polling is missing, nor the
+   * reverse. Every 6e assertion is anded with `liveBuilt` instead — the same treatment 6a gave
+   * `built` and 6c gave `islandBuilt`, for the same reason: "absent" must never read as
+   * "correct".
+   */
+  let LV: any = null;
   let loadError: string | null = null;
   try {
     RW = await import('../src/lib/glance/rewind');
@@ -152,6 +162,14 @@ async function main() {
    * "the module behaves correctly".
    */
   const built = RW !== null && RP !== null && RE !== null;
+
+  try {
+    LV = await import('../src/lib/glance/live');
+  } catch (err) {
+    console.error(`\x1b[31m!\x1b[0m live module load failed: ${String((err as Error).message)}`);
+  }
+  /** 6e's own gate. See the declaration above for why it is separate from `built`. */
+  const liveBuilt = LV !== null;
 
   try {
     // ══ LAYER 1 — THE PURE DERIVATION ════════════════════════════════════
@@ -398,23 +416,30 @@ async function main() {
     );
 
     // ── RULING 6: the reversal plays LAST, quietly, no sparks ──
+    /**
+     * The board the replay RESOLVES TO — i.e. what the server rendered and what the walk
+     * forward ends on. Named rather than inlined because slice 6e's baseline assertion needs
+     * exactly this object: the live diff's baseline must be THIS, never the past board the
+     * replay opened on.
+     */
+    const mixedResolved = glanceOf([
+      gPerson({
+        personEventId: 'pe-reversal',
+        personId: 'p-ray',
+        name: 'Ray Dalton',
+        state: 'OUT',
+        reasons: ['ATTENDANCE_NO'],
+        items: [gItem({ assignmentId: 'a-ray', state: 'GREEN', reason: 'ACCEPTED' })],
+      }),
+      gPerson({
+        personEventId: 'pe-good',
+        personId: 'p-amelia',
+        items: [gItem({ assignmentId: 'a-good' })],
+      }),
+    ]);
     const mixed = built
       ? replayOf(
-          glanceOf([
-            gPerson({
-              personEventId: 'pe-reversal',
-              personId: 'p-ray',
-              name: 'Ray Dalton',
-              state: 'OUT',
-              reasons: ['ATTENDANCE_NO'],
-              items: [gItem({ assignmentId: 'a-ray', state: 'GREEN', reason: 'ACCEPTED' })],
-            }),
-            gPerson({
-              personEventId: 'pe-good',
-              personId: 'p-amelia',
-              items: [gItem({ assignmentId: 'a-good' })],
-            }),
-          ]),
+          mixedResolved,
           rewindOf({
             responseAt: new Map([
               ['a-ray', 'ACCEPTED'],
@@ -718,6 +743,313 @@ async function main() {
       'layer 1 / schedule',
       'an empty replay schedules nothing — no fake fireworks when nothing changed',
       built && ok(() => RP.scheduleReplay([]).length === 0)
+    );
+
+    // ══ LAYER 1e — THE LIVE DIFF (SLICE 6e), PURE ════════════════════════
+    //
+    // Ruling 10's ~20-second poll, as a function. The live half needs NO LEDGER AT ALL and
+    // this block is where that is proved: `diffLive` takes two payloads and nothing else — no
+    // rewind, no `since`, no AuditEntry, no clock. The rewind machinery is ARRIVAL-ONLY.
+    //
+    // ⚠ AND THAT IS NOT RULING 28's BUG RETURNING, WHICH IS WHY IT IS WRITTEN DOWN HERE AS
+    // WELL AS AT THE MODULE. Ruling 28 forbids inferring a GUEST'S CHANGE from a difference
+    // between two states nobody watched. The live diff infers something else and weaker: what
+    // THIS VIEWER WAS SHOWN CHANGE, between a board she was looking at and the board that
+    // replaced it under her eyes. The showing is the positive evidence, and it is evidence the
+    // rewind can never have.
+    assert(
+      'layer 1e / live',
+      'THE LIVE MODULE EXISTS — every 6e assertion is anded with this, so "absent" cannot read as "correct"',
+      liveBuilt
+    );
+    assert(
+      'layer 1e / Ruling 10',
+      'GLANCE_POLL_MS is 20000 — Ruling 10’s "roughly every 20 seconds", taken literally and named once',
+      liveBuilt && ok(() => LV.GLANCE_POLL_MS === 20000)
+    );
+
+    // ⭐ THE ONE-LINE BUG THIS SLICE IS MOST LIKELY TO SHIP, ASSERTED AS ITS OWN NAMED PAIR.
+    //
+    // The diff's baseline must be the board the replay RESOLVED TO, not the board it OPENED
+    // ON. The two assertions below are a differential: the first shows the right baseline
+    // yields silence, the second shows the WRONG baseline reproduces the replay's own steps —
+    // so the failure is demonstrated rather than merely forbidden. A single "it is empty"
+    // assertion would pass against a `diffLive` that always returned nothing.
+    const pastStates = liveBuilt && built ? new Map<string, any>() : null;
+    if (pastStates && mixed) for (const s of mixed.steps) pastStates.set(s.personEventId, s.from);
+    assert(
+      'layer 1e / baseline',
+      '⭐ THE BASELINE IS THE BOARD THE REPLAY RESOLVED TO — diffing it against itself yields ZERO flips, so the first poll re-sparks NOTHING',
+      liveBuilt &&
+        built &&
+        ok(() => {
+          const resolved = LV.liveStates(mixedResolved);
+          return mixed.steps.length === 2 && LV.diffLive(resolved, resolved).length === 0;
+        })
+    );
+    assert(
+      'layer 1e / baseline',
+      '⭐ and the WRONG baseline is shown to be wrong — the past board the replay opened on reproduces the replay’s own steps, which is the bug named',
+      liveBuilt &&
+        built &&
+        ok(() => {
+          const wrong = LV.diffLive(pastStates!, LV.liveStates(mixedResolved));
+          return (
+            mixed.steps.length === 2 &&
+            wrong.length === 2 &&
+            wrong.some((f: any) => f.personEventId === 'pe-good' && f.spark === true) &&
+            wrong.some((f: any) => f.personEventId === 'pe-reversal' && f.to === 'OUT')
+          );
+        })
+    );
+
+    // ── What sparks, live. Ruling 26's boundary, carried across. ─────────
+    //
+    // ⚠ THE FILTER IS NOT CARRIED ACROSS, AND ONLY THE SPARK IS. `deriveReplay` DROPS every
+    // step that is not GREEN / RED / reversal, because the server-rendered board underneath is
+    // already the truth. LIVE HAS NO SUCH UNDERNEATH — the DOM is the OLD board — so dropping
+    // a GREEN → AMBER would freeze a strip on good news that is no longer true. That is
+    // manufactured good news, the one failure Ruling 28 says this feature cannot have. So live
+    // APPLIES every change and SPARKS only AMBER → GREEN.
+    const bothWays =
+      liveBuilt && ok(() => true)
+        ? (() => {
+            const prev = new Map<string, any>([
+              ['pe1', 'AMBER'],
+              ['pe2', 'GREEN'],
+              ['pe3', 'AMBER'],
+              ['pe4', 'RED'],
+            ]);
+            const next = new Map<string, any>([
+              ['pe1', 'GREEN'],
+              ['pe2', 'AMBER'],
+              ['pe3', 'RED'],
+              ['pe4', 'GREEN'],
+            ]);
+            return LV.diffLive(prev, next);
+          })()
+        : null;
+    assert(
+      'layer 1e / Ruling 26',
+      'every live change is APPLIED — a GREEN → AMBER flips the strip back, because live has no true board underneath to fall through to',
+      liveBuilt &&
+        ok(
+          () =>
+            bothWays.length === 4 &&
+            bothWays.some((f: any) => f.personEventId === 'pe2' && f.to === 'AMBER')
+        )
+    );
+    assert(
+      'layer 1e / Ruling 26',
+      'but only AMBER → GREEN SPARKS — the flourish is the spark and only the spark, asserted against three non-sparking flips in the same diff',
+      liveBuilt &&
+        ok(() => {
+          const sparks = bothWays.filter((f: any) => f.spark);
+          return bothWays.length === 4 && sparks.length === 1 && sparks[0].personEventId === 'pe1';
+        })
+    );
+    assert(
+      'layer 1e / one definition',
+      'and the spark rule has ONE definition — the live diff asks the same predicate deriveReplay does, so the two cannot drift',
+      liveBuilt &&
+        built &&
+        ok(() => typeof RP.isSparkTransition === 'function') &&
+        !/'AMBER'\s*&&|===\s*'GREEN'/.test(
+          code('src/lib/glance/live.ts').replace(/isSparkTransition/g, '')
+        )
+    );
+    assert(
+      'layer 1e / no-op',
+      'a person whose state did not move produces NO flip — the no-op rule, live',
+      liveBuilt &&
+        ok(() => {
+          const same = new Map<string, any>([['pe1', 'RED']]);
+          return LV.diffLive(same, new Map(same)).length === 0;
+        })
+    );
+    assert(
+      'layer 1e / membership',
+      'a person who APPEARS between polls is not a flip, and one who LEAVES is not either — a diff can only speak about strips that were on the board',
+      liveBuilt &&
+        ok(() => {
+          const prev = new Map<string, any>([['pe1', 'AMBER']]);
+          const next = new Map<string, any>([
+            ['pe1', 'AMBER'],
+            ['pe-new', 'GREEN'],
+          ]);
+          return LV.diffLive(prev, next).length === 0 && LV.diffLive(next, prev).length === 0;
+        })
+    );
+    assert(
+      'layer 1e / allowlist',
+      'a live flip’s keys are EXACTLY {personEventId, from, to, spark} — the replay step’s own allowlist, so nothing can ride along on the live carrier either',
+      liveBuilt &&
+        ok(() => {
+          const flips = LV.diffLive(new Map([['pe1', 'AMBER']]), new Map([['pe1', 'GREEN']]));
+          return (
+            flips.length === 1 &&
+            JSON.stringify(Object.keys(flips[0]).sort()) ===
+              JSON.stringify(['from', 'personEventId', 'spark', 'to'])
+          );
+        })
+    );
+    assert(
+      'layer 1e / no time',
+      'and it carries NO TIMESTAMP — no ISO-shaped string and no epoch-shaped number anywhere in a live diff, at any depth',
+      liveBuilt &&
+        ok(() => {
+          const flips = LV.diffLive(new Map([['pe1', 'AMBER']]), new Map([['pe1', 'GREEN']]));
+          const scalars = collectScalars(flips);
+          return (
+            flips.length === 1 &&
+            !scalars.some((v) => typeof v === 'string' && ISO_LIKE.test(v)) &&
+            !scalars.some((v) => typeof v === 'number' && v > EPOCH_FLOOR)
+          );
+        })
+    );
+    assert(
+      'layer 1e / states',
+      'liveStates reads the WHOLE board — housed and unhoused alike, keyed by personEventId',
+      liveBuilt &&
+        ok(() => {
+          const g = glanceOf([gPerson({ personEventId: 'pe-h', state: 'RED' })]);
+          g.unhoused = [gPerson({ personEventId: 'pe-u', state: 'AMBER' })];
+          const states = LV.liveStates(g);
+          return (
+            states.size === 2 && states.get('pe-h') === 'RED' && states.get('pe-u') === 'AMBER'
+          );
+        })
+    );
+
+    // ── RULING 30 (2026-09-10) — THE QUIET DEBT ─────────────────────────
+    //
+    // "A live spark stamps ONLY IF no non-spark change has repainted since the last stamp."
+    //
+    // ⚠ WHY THE RULE EXISTS, BECAUSE THE MECHANISM IS THE WHOLE ARGUMENT. `glanceSeenAt` is a
+    // SINGLE INSTANT, not a per-person cursor. So a spark's stamp moves the high-water mark
+    // past EVERYTHING behind it — including a red or a reversal that repainted quietly and
+    // stamped nothing of its own. That red is then gone from tomorrow's rewind, silently: 6b's
+    // own named failure ("silently, with no way to know what she missed") arriving through a
+    // door that ruling did not consider. **Losing news is the one failure this screen cannot
+    // have.**
+    //
+    // ⚠ RULING 24 STANDS. This narrows WHEN the stamp fires, not what the mark MEANS. It is
+    // still the high-water mark of news this viewer has been shown; the debt says that a
+    // spark's stamp would carry more than the spark past it.
+    //
+    // ⚠ AND THE DECISION IS PURE, ON PURPOSE. Every other way of writing this — a boolean read
+    // inside an effect, a condition spelled out at the call site — is a rule that can only be
+    // exercised in a browser, and this ticket has caught that confusion in three slices. Here
+    // the rule is a function over (what painted, what is owed) and the island's only say in it
+    // is to call it.
+    // Built inside a try, so a MISSING export reads as a failed assertion rather than as a
+    // crashed run — the same reason `ok()` exists. A fixture that throws takes the whole suite
+    // with it, and a suite that cannot report its RED is not a RED.
+    const debtCases = ((): any => {
+      try {
+        return !liveBuilt
+          ? null
+          : {
+              sparkNoDebt: LV.liveStampDecision(
+                [{ personEventId: 'pe1', from: 'AMBER', to: 'GREEN', spark: true }],
+                false
+              ),
+              sparkWithDebt: LV.liveStampDecision(
+                [{ personEventId: 'pe1', from: 'AMBER', to: 'GREEN', spark: true }],
+                true
+              ),
+              sparkAndQuietSameTick: LV.liveStampDecision(
+                [
+                  { personEventId: 'pe1', from: 'AMBER', to: 'GREEN', spark: true },
+                  { personEventId: 'pe2', from: 'AMBER', to: 'RED', spark: false },
+                ],
+                false
+              ),
+              quietAlone: LV.liveStampDecision(
+                [{ personEventId: 'pe2', from: 'AMBER', to: 'RED', spark: false }],
+                false
+              ),
+              nothingPainted: LV.liveStampDecision([], false),
+              nothingPaintedWithDebt: LV.liveStampDecision([], true),
+            };
+      } catch {
+        return null;
+      }
+    })();
+
+    assert(
+      'layer 1e / Ruling 30',
+      '⭐ A QUIET CHANGE OWES A DEBT, AND A SPARK BEHIND IT DOES NOT STAMP — asserted as a DIFFERENTIAL: the identical spark stamps with no debt and does not stamp with one',
+      liveBuilt &&
+        ok(() => debtCases.sparkNoDebt.stamp === true && debtCases.sparkWithDebt.stamp === false)
+    );
+    assert(
+      'layer 1e / Ruling 30',
+      '⭐ and the SAME TICK is the case that matters most — a red landing beside a spark suppresses it, whichever order the diff put them in',
+      liveBuilt &&
+        ok(
+          () =>
+            debtCases.sparkAndQuietSameTick.stamp === false &&
+            debtCases.sparkAndQuietSameTick.quietDebtAfter === true
+        )
+    );
+    assert(
+      'layer 1e / Ruling 30',
+      'a quiet change alone stamps nothing and OWES the debt — it is the thing the next spark must not carry past the mark',
+      liveBuilt &&
+        ok(
+          () => debtCases.quietAlone.stamp === false && debtCases.quietAlone.quietDebtAfter === true
+        )
+    );
+    assert(
+      'layer 1e / Ruling 30',
+      'the debt PERSISTS across polls until a stamp actually happens — "since the last stamp" is not "in this tick"',
+      liveBuilt &&
+        ok(
+          () =>
+            debtCases.sparkWithDebt.quietDebtAfter === true &&
+            debtCases.nothingPaintedWithDebt.quietDebtAfter === true
+        )
+    );
+    assert(
+      'layer 1e / Ruling 30',
+      'and a stamp CLEARS it — the mark has just moved, so nothing is owed behind it any more',
+      liveBuilt &&
+        ok(
+          () =>
+            debtCases.sparkNoDebt.stamp === true && debtCases.sparkNoDebt.quietDebtAfter === false
+        )
+    );
+    assert(
+      'layer 1e / Ruling 30',
+      'a poll that painted NOTHING neither stamps nor owes — the no-op rule reaches the mark as well as the board',
+      liveBuilt &&
+        ok(
+          () =>
+            debtCases.nothingPainted.stamp === false &&
+            debtCases.nothingPainted.quietDebtAfter === false
+        )
+    );
+    assert(
+      'layer 1e / Ruling 30',
+      'the decision reads WHAT PAINTED, not what the diff found — a flip whose strip was not on the board neither sparks nor owes',
+      liveBuilt &&
+        ok(() => {
+          // The island hands it only the flips it actually painted; the empty case IS that
+          // path, and it must not manufacture a debt out of a diff nobody saw.
+          const seen = LV.liveStampDecision([], false);
+          return seen.stamp === false && seen.quietDebtAfter === false;
+        })
+    );
+    assert(
+      'layer 1e / Ruling 30',
+      'and its answer is exactly two keys — {stamp, quietDebtAfter}; nothing rides along on the decision either',
+      liveBuilt &&
+        ok(
+          () =>
+            JSON.stringify(Object.keys(debtCases.sparkNoDebt).sort()) ===
+            JSON.stringify(['quietDebtAfter', 'stamp'])
+        )
     );
 
     // ══ LAYER 2 — THE REWIND, AGAINST REAL LEDGER ROWS ═══════════════════
@@ -1487,6 +1819,36 @@ async function main() {
         !/acknowledge|dismiss|got it|mark as seen|skip replay/i.test(playHtml)
     );
 
+    // ── RULING 30's SECOND HALF, AT RUNTIME ──────────────────────────────
+    //
+    // The ruling's own assertion is in two parts: *"a quiet red repaints, then a spark fires,
+    // and glanceSeenAt does NOT move. Then the red still plays on the next arrival."*
+    //
+    // ⚠ WHICH HALF THIS IS, SAID PLAINLY. The FIRST half — a spark declining to stamp — is a
+    // browser behaviour and is NOT proved here: it is proved as a pure decision at layer 1e, as
+    // a structural fact at layer 4e, and as a MEASUREMENT in the ticket's walk. This is the
+    // SECOND half, and it is the one that makes the rule worth having: **if the mark does not
+    // move, the news is still owed, and the next arrival plays it.** That is a claim about the
+    // server, and the server is right here.
+    //
+    // It is asserted as a REPEAT rather than as a single read: the same board is fetched twice
+    // with the mark untouched in between, and both loads must carry the same pending step. A
+    // single load would prove only that a replay derives at all.
+    const playRes2 = await fetch(`${BASE}/plan/${playEvent.id}/glance`, { headers: HOST_COOKIE });
+    const playHtml2 = playRes2.status === 200 ? await playRes2.text() : '';
+    const playMark2 = await markOf(hostUser.id, playEvent.id);
+    assert(
+      'layer 3 / Ruling 30',
+      '⭐ AN UNMOVED MARK MEANS THE NEWS IS STILL OWED — the same board, loaded again with glanceSeenAt untouched, STILL carries the same step to play',
+      serverUp &&
+        playRes.status === 200 &&
+        playRes2.status === 200 &&
+        /data-glance-replay="1"/.test(playHtml) &&
+        /data-glance-replay="1"/.test(playHtml2) &&
+        playMark2 !== null &&
+        playMark2.getTime() === playSince.getTime()
+    );
+
     // ══ LAYER 4 — STRUCTURAL AND FENCE ═══════════════════════════════════
     const rewindSrc = code('src/lib/glance/rewind.ts');
     const replaySrc = code('src/lib/glance/replay.ts');
@@ -1681,6 +2043,16 @@ async function main() {
     // put both in a browser bundle. `replay.ts` is pure and client-safe by construction, and
     // asserted so a few lines above.
     const ISLAND = 'src/components/glance/GlanceReplay.tsx';
+    /**
+     * SLICE 6e — the live island and the shared painters, added to the surface list FIRST.
+     *
+     * The ordering is the point and it is recorded so it is not undone: a 6e source that is
+     * not in this list is exempt from all four guards below at once — it could import the
+     * door, start a second interval and self-refresh with everything green. Extending the list
+     * is what turns those guards red for the RIGHT reason during the RED run.
+     */
+    const LIVE_ISLAND = 'src/components/glance/GlanceLive.tsx';
+    const PAINT = 'src/components/glance/paint.ts';
     const componentSurfaces = [
       'src/components/glance/GlanceBoard.tsx',
       'src/components/glance/PersonSurface.tsx',
@@ -1690,7 +2062,11 @@ async function main() {
       'src/lib/glance/read.ts',
       'src/lib/glance/state.ts',
       'src/lib/glance/actions.ts',
+      PAINT,
     ];
+    const liveSrc = code(LIVE_ISLAND);
+    const paintSrc = code(PAINT);
+    const liveIslandBuilt = liveSrc.length > 0 && paintSrc.length > 0;
     const islandSrc = code(ISLAND);
     const islandBuilt = islandSrc.length > 0;
     assert(
@@ -1701,20 +2077,73 @@ async function main() {
     assert(
       'layer 4 / no UI',
       'NO COMPONENT reaches the DB-BOUND half — not the rewind, not the door; a client bundle must not contain either',
-      [...componentSurfaces, ISLAND].every((f) => {
-        const src = code(f);
-        return src.length > 0 && !/glance\/(rewind|replay-entry)/.test(src);
-      })
+      liveIslandBuilt &&
+        [...componentSurfaces, ISLAND, LIVE_ISLAND].every((f) => {
+          const src = code(f);
+          return src.length > 0 && !/glance\/(rewind|replay-entry)/.test(src);
+        })
     );
+    // ⚠ NARROWED IN 6e, WITH ITS SUCCESSOR AT THE SITE — and narrowed honestly rather than
+    // satisfied by its letter. 6e adds a SECOND pure module (`live.ts`), and the person surface
+    // has to know the NAME of the refresh event Ruling 25 requires. The old sentence would have
+    // stayed literally true while the property it protects — "the replay derivation is not
+    // spread across the board's components" — quietly stopped being asserted about the new one.
+    //
+    //   was:  EXACTLY ONE component reaches the PURE replay — the island, and nothing else
+    //   now:  the pure REPLAY module is reached by exactly one component (the arrival island);
+    //         the pure LIVE module is reached by exactly two (the live island, and the person
+    //         surface — and the surface takes ONE name from it and nothing else).
+    //   and:  this is NOT a held-back guard. It is a widening the slice earns; a later slice
+    //         that wants a third reader of either module is making a design change, not a
+    //         narrowing, and this assertion is where it has to argue for it.
     assert(
       'layer 4 / no UI',
-      'and EXACTLY ONE component reaches the PURE replay — the island, and nothing else on the board',
+      'EXACTLY ONE component reaches the PURE REPLAY module — the arrival island, and nothing else on the board',
       islandBuilt &&
+        liveIslandBuilt &&
         /glance\/replay['"]/.test(islandSrc) &&
-        componentSurfaces.every((f) => {
+        [...componentSurfaces, LIVE_ISLAND].every((f) => {
           const src = code(f);
           return src.length > 0 && !/glance\/replay['"]/.test(src);
         })
+    );
+    // ⚠ AND THE LIVE MODULE'S SUCCESSOR IS NOT A HEADCOUNT, BECAUSE A HEADCOUNT IS THE WRONG
+    // PROPERTY. Three components legitimately name `live.ts`: the poller, and — for the NAME of
+    // an event and nothing else — the person surface (Ruling 25's immediate refresh) and the
+    // arrival island (which announces that polling may begin). Counting them would go stale the
+    // first time a fourth island wanted an event name, and would say nothing about the thing
+    // that matters. What matters is that the DIFF has exactly one reader: two components
+    // deciding what a poll means is two definitions of the live board.
+    assert(
+      'layer 4 / no UI',
+      'EXACTLY ONE component reads the LIVE DIFF — the poller; nothing else on the board decides what a poll means',
+      liveIslandBuilt &&
+        /diffLive|liveStates|GLANCE_POLL_MS/.test(liveSrc) &&
+        [...componentSurfaces, ISLAND].every((f) => {
+          const src = code(f);
+          return src.length > 0 && !/diffLive|liveStates|GLANCE_POLL_MS/.test(src);
+        })
+    );
+    assert(
+      'layer 4 / no UI',
+      'and the two components that DO name the live module take ONE name each, and it is an event’s — not a decision',
+      liveIslandBuilt &&
+        ok(() =>
+          [
+            ['src/components/glance/PersonSurface.tsx', 'GLANCE_REFRESH_EVENT'],
+            [ISLAND, 'GLANCE_REPLAY_DONE_EVENT'],
+          ].every(([file, name]) => {
+            const imported = code(file).match(
+              /import\s*\{([^}]*)\}\s*from\s*'@\/lib\/glance\/live'/
+            );
+            if (imported === null) return false;
+            const names = imported[1]
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean);
+            return names.length === 1 && names[0] === name;
+          })
+        )
     );
     const pageSrc6b = code('src/app/plan/[eventId]/glance/page.tsx');
     assert(
@@ -1735,21 +2164,58 @@ async function main() {
     //         island's own schedule.
     //   and:  6e retires the interval half when polling lands, deliberately and at this site.
     const surfaces = [...componentSurfaces, 'src/app/plan/[eventId]/glance/page.tsx'];
+    const allGlanceSurfaces = [...surfaces, ISLAND, LIVE_ISLAND];
+    // ⚠ 6c's TIMER GUARD IS RETIRED HERE — THE INTERVAL HALF ONLY, WITH ITS SUCCESSOR AT THIS
+    // SITE, EXACTLY AS 6c NAMED IT: "6e retires the interval half when polling lands,
+    // deliberately and at this site."
+    //
+    //   was:  NO SURFACE POLLS — no interval AND no self-refresh anywhere, the island included
+    //   now:  split in two, because it was always two claims sharing one regex:
+    //           (a) EXACTLY ONE SURFACE POLLS — the live island — and its period is the named
+    //               GLANCE_POLL_MS, never a literal. Every other surface still starts none.
+    //           (b) NO SURFACE REFRESHES ITSELF — `router.refresh` appears NOWHERE in the
+    //               glance. **THIS HALF IS NOT RETIRED.** It is the one that keeps the live
+    //               update a DOM write rather than a server re-render, which is what lets
+    //               phase 2's no-hooks board survive polling at all.
+    //   and:  (b) names no retirer. A slice that wants a self-refreshing glance is asking for a
+    //         ruling, not for a narrowing.
     assert(
       'layer 4 / no UI',
-      'NO SURFACE POLLS — no interval and no self-refresh anywhere, the island included; Ruling 10’s ~20s is 6e’s',
-      // Gated on the file actually being read: `code()` returns '' for a missing path, and an
-      // absence test over an empty string is the vacuous green this ticket keeps catching.
-      islandBuilt &&
-        [...surfaces, ISLAND].every((f) => {
+      'EXACTLY ONE SURFACE POLLS — the live island — and every other surface still starts no interval (6c’s guard, interval half retired here)',
+      liveIslandBuilt &&
+        /setInterval\(/.test(liveSrc) &&
+        allGlanceSurfaces
+          .filter((f) => f !== LIVE_ISLAND)
+          .every((f) => {
+            const src = code(f);
+            return src.length > 0 && !/setInterval/.test(src);
+          })
+    );
+    assert(
+      'layer 4 / Ruling 10',
+      'and its period is the NAMED constant, never a literal — GLANCE_POLL_MS is the only polling interval on the surface',
+      liveIslandBuilt &&
+        /setInterval\([^,]+,\s*GLANCE_POLL_MS\s*\)/.test(liveSrc) &&
+        /GLANCE_POLL_MS/.test(liveSrc) &&
+        !/setInterval\([^,]+,\s*\d/.test(liveSrc) &&
+        !/\b20000\b|\b20_000\b/.test(liveSrc)
+    );
+    assert(
+      'layer 4 / no UI',
+      'NO SURFACE REFRESHES ITSELF — router.refresh appears nowhere in the glance; the live update is a DOM write, not a server re-render (NOT retired)',
+      liveIslandBuilt &&
+        allGlanceSurfaces.every((f) => {
           const src = code(f);
-          return src.length > 0 && !/setInterval|router\.refresh/.test(src);
+          return src.length > 0 && !/router\.refresh/.test(src);
         })
     );
     assert(
       'layer 4 / no UI',
-      'and the ONLY timeouts in the glance are the island’s schedule — every other surface starts none',
-      islandBuilt && surfaces.every((f) => code(f).length > 0 && !/setTimeout/.test(code(f)))
+      'and the ONLY timeouts in the glance are the arrival island’s schedule — the live path has none, because live news has nothing to stage',
+      islandBuilt &&
+        liveIslandBuilt &&
+        surfaces.every((f) => code(f).length > 0 && !/setTimeout/.test(code(f))) &&
+        !/setTimeout/.test(liveSrc)
     );
 
     // ── THE ISLAND ITSELF (6c) ───────────────────────────────────────────
@@ -1774,13 +2240,37 @@ async function main() {
       'it holds NO database handle and no Prisma import — a client bundle is not a place for one',
       islandBuilt && !/@prisma\/client|PrismaClient|\bprisma\b/.test(islandSrc)
     );
+    // ⚠ THE PAINTING MECHANICS MOVED IN 6e, AND THE ASSERTIONS THAT READ THEM MOVE WITH THEM —
+    // NARROWED AT THE SITE RATHER THAN LEFT TO FAIL OR QUIETLY DELETED.
+    //
+    //   was:  these properties are asserted on the ARRIVAL ISLAND's source
+    //   now:  asserted on the island AND the shared painter it now reads them from, TOGETHER —
+    //         because 6e adds a second island that paints the same strips, and a burst or a
+    //         tone written twice is the second definition this ticket refuses everywhere.
+    //   and:  the accompanying assertion below — that the painters live in ONE module read by
+    //         BOTH islands — is what makes the widening safe rather than merely convenient.
+    const paintingSrc = `${islandSrc}\n${paintSrc}`;
     assert(
       'layer 4 / island',
-      'it reads ONE definition of the colours — the tones and their hexes come from the strip module, and NOT ONE HEX is written here',
+      'it reads ONE definition of the colours — the tones and their hexes come from the strip module, and NOT ONE HEX is written in the painting path',
       islandBuilt &&
-        /from '\.\/strip'/.test(islandSrc) &&
-        /STRIP_TONE/.test(islandSrc) &&
-        !/#[0-9A-Fa-f]{6}/.test(islandSrc)
+        liveIslandBuilt &&
+        /from '\.\/strip'/.test(paintingSrc) &&
+        /STRIP_TONE/.test(paintingSrc) &&
+        !/#[0-9A-Fa-f]{6}/.test(paintingSrc) &&
+        !/#[0-9A-Fa-f]{6}/.test(liveSrc)
+    );
+    assert(
+      'layer 4 / one definition',
+      'and the PAINTERS ARE ONE MODULE, read by BOTH islands — neither writes its own paint, its own burst or its own transition',
+      liveIslandBuilt &&
+        islandBuilt &&
+        /components\/glance\/paint|from '\.\/paint'/.test(islandSrc) &&
+        /components\/glance\/paint|from '\.\/paint'/.test(liveSrc) &&
+        // The burst's geometry is written once, in the painter, and nowhere else.
+        /PARTICLE_COUNT|function burst/.test(paintSrc) &&
+        !/function burst|PARTICLE_COUNT/.test(islandSrc) &&
+        !/function burst|PARTICLE_COUNT/.test(liveSrc)
     );
     assert(
       'layer 4 / island',
@@ -1803,13 +2293,40 @@ async function main() {
     );
     assert(
       'layer 4 / island',
-      'and it fires ONCE — guarded by a ref, so a re-render or a strict-mode double effect cannot stamp twice',
+      'and it fires ONCE — guarded by a ref, so a re-render, a strict-mode double effect or a visibility restart cannot stamp twice',
       islandBuilt && /useRef/.test(islandSrc)
     );
+    // ⚠ NARROWED BY RULING 29, AT THE SITE. The property was unconditional and is now
+    // conditional, and the regex could not tell: `useLayoutEffect` still matches whether or not
+    // the paint waits for visibility.
+    //
+    //   was:  it paints the past BEFORE the browser paints — a layout effect
+    //   now:  it paints the past before the browser paints ON A VISIBLE ARRIVAL, and does not
+    //         paint it AT ALL while the document is hidden (Ruling 29)
+    //   and:  the second half is asserted against `document.hidden` / `visibilitychange`
+    //         appearing in the start path, not merely somewhere in the file.
     assert(
       'layer 4 / island',
-      'it paints the past BEFORE the browser paints — a layout effect, not a post-paint one',
+      'it paints the past BEFORE the browser paints ON A VISIBLE ARRIVAL — a layout effect, not a post-paint one',
       islandBuilt && /useLayoutEffect/.test(islandSrc)
+    );
+    assert(
+      'layer 4 / Ruling 29',
+      'and NOT AT ALL WHILE HIDDEN — the arrival replay does not START in a background tab; it waits for the first visible moment',
+      islandBuilt &&
+        /document\.hidden|visibilityState/.test(islandSrc) &&
+        /visibilitychange/.test(islandSrc) &&
+        /removeEventListener\(\s*'visibilitychange'/.test(islandSrc)
+    );
+    assert(
+      'layer 4 / Ruling 29',
+      'and NOTHING STAMPS WHILE HIDDEN — the completion POST is behind the visibility guard at the moment it FIRES, not at the moment the walk started',
+      islandBuilt &&
+        /const visible = \(\) => document\.visibilityState === 'visible';/.test(islandSrc) &&
+        ok(() => {
+          const at = islandSrc.indexOf('/glance/seen');
+          return at > 0 && /if \(visible\(\)\) \{/.test(islandSrc.slice(Math.max(0, at - 300), at));
+        })
     );
     // ── 6c / FINDING 1, RULED ────────────────────────────────────────────
     //
@@ -1823,13 +2340,16 @@ async function main() {
     // would need the past `reasons`, which is the fifth key the allowlist refuses.
     assert(
       'layer 4 / finding 1',
-      'THE WORDS ARE SUPPRESSED WHILE A STEP IS PENDING — the island hides the strip’s state-words with the past paint',
-      islandBuilt && /data-strip-words/.test(islandSrc) && /hidden\s*=\s*true/.test(islandSrc)
+      'THE WORDS ARE SUPPRESSED WHILE A STEP IS PENDING — the painting path hides the strip’s state-words with the past paint',
+      islandBuilt &&
+        liveIslandBuilt &&
+        /data-strip-words/.test(paintingSrc) &&
+        /hidden\s*=\s*true/.test(paintingSrc)
     );
     assert(
       'layer 4 / finding 1',
       'and they APPEAR AS THE STEP LANDS — hidden is set back, in the same place the tint is',
-      islandBuilt && /hidden\s*=\s*false/.test(islandSrc)
+      islandBuilt && liveIslandBuilt && /hidden\s*=\s*false/.test(paintingSrc)
     );
     assert(
       'layer 4 / finding 1',
@@ -1982,15 +2502,312 @@ async function main() {
       classifications.length === 81
     );
 
+    // ══ LAYER 4e — THE LIVE ISLAND (SLICE 6e) ════════════════════════════
+    //
+    // ⚠ WHAT THIS BLOCK CAN AND CANNOT PROVE, SAID PLAINLY BECAUSE THIS TICKET HAS CAUGHT THE
+    // CONFUSION BEFORE. There is no jsdom, no timer axis and no browser here. Everything below
+    // is STRUCTURAL: the constant's value, that it is the only interval, that the teardown
+    // returns `clearInterval`, that the visibility gates exist, that the baseline is seeded
+    // from the board rather than from the replay's steps. **That the interval actually FIRES
+    // and lands a flip within 20 seconds is NOT proved by any green here.** It is a browser
+    // walk, and it is claimed in the ticket, not in this file.
+    assert(
+      'layer 4e / live',
+      'THE LIVE ISLAND EXISTS — every 6e structural assertion is anded with this, so "absent" cannot read as "correct"',
+      liveIslandBuilt
+    );
+    assert(
+      'layer 4e / live',
+      'it is a CLIENT component, and the BOARD still is not — polling is an island beside the board, not a reason to hydrate it',
+      liveIslandBuilt &&
+        /['"]use client['"]/.test(raw(LIVE_ISLAND)) &&
+        ok(() => {
+          const board = code('src/components/glance/GlanceBoard.tsx');
+          return (
+            board.length > 0 && !/['"]use client['"]|useState|useEffect|useLayoutEffect/.test(board)
+          );
+        })
+    );
+    assert(
+      'layer 4e / live',
+      'IT RENDERS NOTHING, EVER — a pure-effects component with no markup at all, so 6c’s "the island renders nothing when there are no steps" is untouched rather than narrowed to "on the server pass"',
+      liveIslandBuilt &&
+        /return null;?/.test(liveSrc) &&
+        !/<div|<span|<p\b|<button|<a\s/.test(liveSrc)
+    );
+    assert(
+      'layer 4e / no new route',
+      'IT POLLS THE ROUTE PHASE 1 BUILT — GET /api/events/[id]/glance, and it names no other endpoint; no leaner endpoint, no second assembly',
+      liveIslandBuilt &&
+        ok(() => {
+          const paths = [...liveSrc.matchAll(/\/api\/[^`'"\s)]*/g)].map((m) => m[0]);
+          const unique = [...new Set(paths)];
+          return (
+            unique.length === 2 &&
+            unique.some((p) => /^\/api\/events\/\$\{[^}]*\}\/glance$/.test(p)) &&
+            unique.some((p) => /^\/api\/events\/\$\{[^}]*\}\/glance\/seen$/.test(p))
+          );
+        })
+    );
+    assert(
+      'layer 4e / no new route',
+      'and the glance ROUTE ITSELF is untouched — the same GET, assembling nothing of its own; polling reused it rather than growing a states-only twin',
+      ok(() => {
+        const routeSrc = code('src/app/api/events/[id]/glance/route.ts');
+        return (
+          routeSrc.length > 0 &&
+          /export async function GET/.test(routeSrc) &&
+          !/export async function (POST|PUT|PATCH|DELETE)/.test(routeSrc) &&
+          /readEventGlance\(/.test(routeSrc) &&
+          !/derivePersonState|worstItemState|summarisePeople/.test(routeSrc)
+        );
+      })
+    );
+    assert(
+      'layer 4e / house idiom',
+      'THE INTERVAL IS CLEARED ON UNMOUNT — clearInterval is returned from the effect, the idiom InviteStatusSection already uses',
+      liveIslandBuilt && /return\s*\(\)\s*=>/.test(liveSrc) && /clearInterval\(/.test(liveSrc)
+    );
+    // ⭐ THE BASELINE, STRUCTURALLY. Layer 1e proves the FUNCTION picks the right baseline; this
+    // proves the ISLAND hands it the right one. The live path must never read the replay's
+    // steps: `step.from` IS the past board, and seeding from it is the one-line bug.
+    assert(
+      'layer 4e / baseline',
+      '⭐ THE ISLAND NEVER READS THE REPLAY’S STEPS — no `steps` prop, no ReplayStep, no scheduleReplay; a baseline seeded from `step.from` IS the past board and would re-spark the whole replay',
+      liveIslandBuilt && !/\bReplayStep\b|\bscheduleReplay\b|\bsteps\b/.test(liveSrc)
+    );
+    assert(
+      'layer 4e / baseline',
+      '⭐ and it seeds from THE BOARD ITSELF — data-strip-state on the strips the board rendered, which IS by construction what the replay resolved to',
+      liveIslandBuilt &&
+        /data-person-event-id/.test(liveSrc + paintSrc) &&
+        /stripState/.test(liveSrc + paintSrc)
+    );
+    assert(
+      'layer 4e / ordering',
+      'AND IT DOES NOT ARM UNTIL THE ARRIVAL REPLAY IS DONE — a poll landing mid-replay would repaint the board underneath the animation',
+      liveIslandBuilt &&
+        islandBuilt &&
+        /GLANCE_REPLAY_DONE_EVENT/.test(liveSrc) &&
+        /GLANCE_REPLAY_DONE_EVENT/.test(islandSrc)
+    );
+    // ⚠ ASSERTED ON THE CHAINING, NOT ON A TEXTUAL POSITION. "The dispatch appears below the
+    // POST in the file" is satisfied by a dispatch that runs first at runtime, and would also
+    // have been defeated here by the import statement, which names the event at the top of the
+    // file. `.finally(announce)` IS the ordering: it runs when the stamp's promise settles.
+    assert(
+      'layer 4e / ordering',
+      'and the arrival island announces it AFTER the stamp has SETTLED, not when the last beat lands — "completed AND stamped" is two things',
+      islandBuilt &&
+        /\.finally\(announce\)/.test(islandSrc) &&
+        /dispatchEvent\(new Event\(GLANCE_REPLAY_DONE_EVENT\)\)/.test(islandSrc)
+    );
+    assert(
+      'layer 4e / ordering',
+      'and it announces on the SKIPPED and FAILED stamp paths too — the replay is over either way, so polling must not be left waiting for ever',
+      islandBuilt &&
+        ok(() => {
+          // The declaration is not a use; strip it, then count the call sites.
+          const uses = islandSrc.replace(/function announce\(\)/, '');
+          return [...uses.matchAll(/(?<![A-Za-z_])announce(\(\)|\))/g)].length === 2;
+        })
+    );
+    assert(
+      'layer 4e / Ruling 29',
+      'POLLING PAUSES WHILE HIDDEN and refreshes IMMEDIATELY on return — the visibility listener is registered and removed',
+      liveIslandBuilt &&
+        /visibilitychange/.test(liveSrc) &&
+        /document\.hidden|visibilityState/.test(liveSrc) &&
+        /removeEventListener\(\s*'visibilitychange'/.test(liveSrc)
+    );
+    // ⚠ ASSERTED ON THE GUARD ITSELF RATHER THAN ON A TOKEN NEAR THE POST. A proximity scan for
+    // `visibilityState` would be satisfied by a comment, and defeated by a one-line helper —
+    // which is what both islands use, because the predicate deserves one definition. So: the
+    // helper IS `document.visibilityState === 'visible'`, and the POST is behind it.
+    assert(
+      'layer 4e / Ruling 29',
+      'and NOTHING STAMPS WHILE HIDDEN on the live path either — the POST is behind the visibility guard, at the moment it fires',
+      liveIslandBuilt &&
+        /const visible = \(\) => document\.visibilityState === 'visible';/.test(liveSrc) &&
+        ok(() => {
+          const at = liveSrc.indexOf('/glance/seen');
+          return (
+            at > 0 && /if \(!visible\(\)\) return;/.test(liveSrc.slice(Math.max(0, at - 300), at))
+          );
+        })
+    );
+    // ⚠ RULING 24's STAMP NOW HAS TWO CALLERS, AND THE 6b ASSERTION ABOVE CANNOT TELL ONE FROM
+    // TWO. The no-body scan stays exactly as 6b wrote it — it is the load-bearing half — and
+    // this is added beside it rather than folded into it.
+    assert(
+      'layer 4e / Ruling 24',
+      'THE STAMP HAS EXACTLY TWO CALL SITES — the arrival replay’s completion and the live spark — both to 6b’s route, both bodiless, both without a client instant',
+      islandBuilt &&
+        liveIslandBuilt &&
+        ok(() => {
+          const sites = [islandSrc, liveSrc].map((s) => [...s.matchAll(/\/glance\/seen/g)].length);
+          const both = `${islandSrc}\n${liveSrc}`;
+          return (
+            sites[0] === 1 &&
+            sites[1] === 1 &&
+            [...both.matchAll(/method:\s*'POST'/g)].length === 2 &&
+            !/body:/.test(both) &&
+            !/new Date\(|Date\.now\(|toISOString\(/.test(both)
+          );
+        })
+    );
+    // ⚠ NARROWED BY RULING 30, AT THE SITE, ONE DAY AFTER IT WAS WRITTEN.
+    //
+    //   was:  the live stamp is fired for a SPARK — one call site, guarded by `sparked`
+    //   now:  the live stamp is fired by the SHARED DECISION — one call site, guarded by
+    //         `liveStampDecision`, which is Ruling 30's rule and the island's ONLY say in it
+    //   and:  not a held-back guard. The old form encoded "a spark stamps", which Ruling 30
+    //         narrowed to "a spark stamps unless a quiet change is owed behind it". Asserting
+    //         the condition is `decision.stamp` is what stops the rule being re-spelled here,
+    //         where it could only ever be exercised in a browser.
+    assert(
+      'layer 4e / Ruling 24',
+      'the live stamp has ONE call site — not every successful poll, and not a poll that changed nothing',
+      liveIslandBuilt &&
+        /const stamp = \(\) => \{/.test(liveSrc) &&
+        [...liveSrc.matchAll(/(?<![A-Za-z_])stamp\(\)/g)].length === 1
+    );
+    assert(
+      'layer 4e / Ruling 30',
+      '⭐ and its condition is the SHARED DECISION, asked once — the island decides nothing about the mark, so the rule cannot be re-spelled where only a browser could test it',
+      liveIslandBuilt &&
+        [...liveSrc.matchAll(/liveStampDecision\(/g)].length === 1 &&
+        /if \(decision\.stamp\) stamp\(\);/.test(liveSrc) &&
+        // The debt survives polls, so it is a ref rather than a local — a local would be reset
+        // to false on every tick and the rule would silently become "in this tick only".
+        /quietDebt = useRef\(false\)/.test(liveSrc) &&
+        /quietDebt\.current = decision\.quietDebtAfter;/.test(liveSrc)
+    );
+    // ⚠ THIS ASSERTION EXISTS BECAUSE A MUTATION SURVIVED WITHOUT IT, AND THAT IS RECORDED
+    // RATHER THAN QUIETLY PATCHED. The mutation that hands the decision EVERY flip in the diff
+    // — rather than only the ones whose paint actually landed — passed the whole suite. Layer
+    // 1e proves the function is honest about an empty list; nothing proved the ISLAND only ever
+    // gives it what reached the screen.
+    //
+    // The consequence it would have shipped: a flip whose strip is not on the board (a person
+    // added between polls, or a tone the class swap could not find) would claim a spark nobody
+    // saw, or owe a debt for a quiet change nobody saw — and under Ruling 30 an imaginary debt
+    // suppresses real stamps for the rest of the session.
+    assert(
+      'layer 4e / Ruling 30',
+      'and it is given only what REACHED THE SCREEN — a flip whose paint did not land neither sparks nor owes a debt, because it was shown to nobody',
+      liveIslandBuilt &&
+        /const landed = paintStrip\(/.test(liveSrc) &&
+        /if \(landed\) painted\.push\(flip\);/.test(liveSrc) &&
+        [...liveSrc.matchAll(/painted\.push\(/g)].length === 1
+    );
+    assert(
+      'layer 4e / Ruling 1',
+      'A FAILED POLL SAYS NOTHING — no banner, no retry control, no "offline"/"stale"/"reconnecting" wording anywhere on the glance; the interval simply keeps running',
+      liveIslandBuilt &&
+        !/offline|reconnect|stale|retry|try again|could not refresh|failed to refresh/i.test(
+          liveSrc
+        ) &&
+        !/<button|<a\s|role="button"|onClick|onKeyDown/i.test(liveSrc) &&
+        /catch/.test(liveSrc)
+    );
+    assert(
+      'layer 4e / Ruling 25',
+      'AN ACTION TRIGGERS AN IMMEDIATE REFRESH — the live island listens for the action layer’s own event, so the board catches up without waiting up to 20s',
+      liveIslandBuilt &&
+        ok(() => {
+          const surface = code('src/components/glance/PersonSurface.tsx');
+          return (
+            /GLANCE_REFRESH_EVENT/.test(liveSrc) &&
+            /addEventListener\(\s*GLANCE_REFRESH_EVENT/.test(liveSrc) &&
+            /removeEventListener\(\s*GLANCE_REFRESH_EVENT/.test(liveSrc) &&
+            surface.length > 0 &&
+            /dispatchEvent/.test(surface) &&
+            /GLANCE_REFRESH_EVENT/.test(surface)
+          );
+        })
+    );
+    assert(
+      'layer 4e / Ruling 25',
+      'and the ACTION LAYER still owns no endpoint of its own — the refresh is an event on the page, not a second request from actions.ts',
+      ok(() => {
+        const actionsSrc = code('src/lib/glance/actions.ts');
+        return (
+          actionsSrc.length > 0 &&
+          !/\/glance/.test(actionsSrc) &&
+          !/dispatchEvent|window\./.test(actionsSrc)
+        );
+      })
+    );
+    assert(
+      'layer 4e / Ruling 25',
+      'and the word "reload" is gone from the glance entirely — the copy is not replaced with weaker copy, it is replaced with the board being right',
+      ok(() =>
+        [
+          'src/lib/glance/actions.ts',
+          'src/components/glance/PersonSurface.tsx',
+          'src/components/glance/GlanceBoard.tsx',
+        ].every((f) => code(f).length > 0 && !/reload/i.test(code(f)))
+      )
+    );
+    assert(
+      'layer 4e / Ruling 22',
+      'THE WRITE PATH IS NOT WIDENED — polling reads; nothing in the live path writes anything but the host’s own mark',
+      liveIslandBuilt &&
+        !/method:\s*'(PUT|PATCH|DELETE)'/.test(liveSrc) &&
+        [...liveSrc.matchAll(/method:\s*'POST'/g)].length === 1
+    );
+    assert(
+      'layer 4e / page',
+      'THE PAGE MOUNTS THE LIVE ISLAND, and mounts it UNCONDITIONALLY — most visits have nothing to replay, and those are exactly the visits polling exists for',
+      pageSrc6b.length > 0 &&
+        /components\/glance\/GlanceLive/.test(pageSrc6b) &&
+        /<GlanceLive/.test(pageSrc6b) &&
+        !/replay\.steps\.length\s*>\s*0\s*(&&|\?)[^\n]*GlanceLive/.test(pageSrc6b)
+    );
+    assert(
+      'layer 4e / page',
+      'and the page is STILL a server component that stamps only on an empty replay — 6e moves neither rule',
+      pageSrc6b.length > 0 &&
+        !/'use client'/.test(pageSrc6b) &&
+        /replay\.steps\.length === 0/.test(pageSrc6b) &&
+        [...pageSrc6b.matchAll(/stampGlanceSeen\(/g)].length === 1
+    );
+
     // ── Ruling 10: no websocket infrastructure, ever, for this screen ────
     const pkg = JSON.parse(code('package.json') || '{}');
     const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
+    // ⚠ THIS IS A STANDING GUARD AND IS NOT 6e's EVIDENCE. It has been green since 6a and would
+    // be green if 6e had shipped nothing at all. It is Ruling 10's NEGATIVE proof — "push is a
+    // later upgrade"; the positive proof that polling was built is the assertion above that the
+    // live island calls setInterval on GLANCE_POLL_MS against the existing GET.
+    //
+    // 6e adds `eventsource` to the list. The brief named "sse", which is a browser API rather
+    // than a package — `eventsource` is the npm package a server-sent-events implementation
+    // would actually pull in, so that is what is denied. `EventSource` itself needs no
+    // dependency at all, which is why the source scan below is the half that catches it.
     assert(
       'layer 4 / Ruling 10',
-      'the dependency tree gains NO websocket package — "do not build websocket infrastructure for this screen"',
-      !['ws', 'socket.io', 'socket.io-client', 'pusher', 'pusher-js', 'ably', 'sockjs'].some(
-        (p) => p in deps
-      )
+      'the dependency tree gains NO websocket or SSE package — "do not build websocket infrastructure for this screen"',
+      ![
+        'ws',
+        'socket.io',
+        'socket.io-client',
+        'pusher',
+        'pusher-js',
+        'ably',
+        'sockjs',
+        'eventsource',
+      ].some((p) => p in deps)
+    );
+    assert(
+      'layer 4 / Ruling 10',
+      'and NO SOURCE OPENS A SOCKET OR A STREAM EITHER — a dependency-free WebSocket or EventSource would pass the scan above and still be push',
+      liveIslandBuilt &&
+        [...allGlanceSurfaces].every((f) => {
+          const src = code(f);
+          return src.length > 0 && !/\bnew WebSocket\b|\bnew EventSource\b|\bwss:\/\//.test(src);
+        })
     );
   } finally {
     await prisma.auditEntry.deleteMany({ where: { eventId: { in: createdEventIds } } });

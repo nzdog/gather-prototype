@@ -91,7 +91,25 @@ export interface GlanceActionRequest {
  * reasons, one of which is a rule she set herself.
  */
 export type GlanceActionOutcome =
-  | { ok: true; note: string }
+  | {
+      ok: true;
+      note: string;
+      /**
+       * RULING 25 (slice 6e): did this action change what the board shows?
+       *
+       * A FACT ON THE OUTCOME, NOT A SIDE EFFECT, and that is the whole reason it is here
+       * rather than a `window.dispatchEvent` inside this module. This file has no provider, no
+       * Prisma handle, no session and — deliberately — no browser: "the most it can do is ask
+       * a route, which then decides." A module that reached for `window` would be a module the
+       * tests could no longer drive in process, and the differential Ruling 25 names would
+       * become a browser claim instead of an assertion.
+       *
+       * So the action states the fact and the surface acts on it. `tests/glance-actions-test.ts`
+       * proves the differential here — REASSIGN and TAKE OVER move the board, REMIND does not
+       * — and `test:glance-replay` proves the wiring from the fact to the refresh.
+       */
+      movedBoard: boolean;
+    }
   | { ok: false; refusedAtSurface: boolean; status: number | null; error: string };
 
 /** Injectable for the tests. Nothing else is ever passed. */
@@ -120,13 +138,25 @@ export interface GlanceAssignable {
 export const GLANCE_NUDGE_VARIANT: HostNudgeVariant = 'warm';
 
 /**
- * Said on every action that leaves the board showing something that is no longer true.
+ * Said on every action that changes what the board shows.
  *
- * NO POLLING THIS PHASE — Ruling 10's ~20 seconds is phase 6, and until it lands the
- * honest thing is to say the board is behind rather than to let her read a stale strip as
- * a current one.
+ * ⚠ PHASE 4's `STALE_NOTE` IS RETIRED HERE, AND ITS SUCCESSOR IS THIS — Ruling 25, recorded
+ * on the ticket before this slice began. Phase 4 said, honestly for phase 4:
+ *
+ *     "This board still shows the state from before — reload to see it."
+ *
+ * Ruling 25: *"Change the copy, not the polling... The copy is not replaced with weaker copy;
+ * it is replaced with the board being right."* Once polling lands that sentence is false, and
+ * an assertion that pinned the word "reload" would have been pinning a lie. So two things
+ * changed together, and the second is what earns the first: the sentence, AND the immediate
+ * refresh (`movedBoard`, above) that makes the board catch up rather than wait up to twenty
+ * seconds for the next tick.
+ *
+ * The note is present tense and makes no request of her. It describes what is already
+ * happening; it does not ask her to do anything, which is the point — Ruling 1's general test
+ * refuses anything that makes the host lean in, and an instruction is a lean-in.
  */
-export const STALE_NOTE = 'This board still shows the state from before — reload to see it.';
+export const CATCH_UP_NOTE = 'The board is catching up.';
 
 /**
  * Ruling 14, at the action layer. Returns the reason to refuse, or null to proceed.
@@ -287,6 +317,7 @@ export function reassignCandidates(
 async function ask(
   request: GlanceActionRequest,
   note: string,
+  movedBoard: boolean,
   deps: GlanceActionDeps = {}
 ): Promise<GlanceActionOutcome> {
   const call = deps.fetchImpl ?? fetch;
@@ -306,7 +337,7 @@ async function ask(
     };
   }
 
-  if (response.ok) return { ok: true, note };
+  if (response.ok) return { ok: true, note, movedBoard };
 
   let error = 'Something went wrong.';
   try {
@@ -326,8 +357,13 @@ async function ask(
  * system rather than a disabled button.
  *
  * ⚠ AND IT DOES NOT CLAIM THE BOARD WILL MOVE. A nudge changes no state; the strip stays
- * exactly as red as it was until the person answers. `STALE_NOTE` is deliberately absent
- * here — saying "reload to see it" would promise a change that has not happened.
+ * exactly as red as it was until the person answers. `CATCH_UP_NOTE` is deliberately absent
+ * here, and `movedBoard` is false — a board that repainted for a remind would be repainting
+ * nothing, and saying it was catching up would promise a change that has not happened.
+ *
+ * ⚠ SUPERSEDED, NOT DELETED: until slice 6e this said `STALE_NOTE` was absent because "reload
+ * to see it" would promise a change that had not happened. The reasoning survives the rename
+ * exactly; only the sentence it applies to has moved.
  */
 export async function remind(
   eventId: string,
@@ -342,6 +378,9 @@ export async function remind(
   return ask(
     remindRequest(eventId, person, context),
     'Reminded. Nothing here changes until they reply.',
+    // A nudge changes no state, so there is nothing for the board to catch up to. Refreshing
+    // for it would repaint an identical board — and would say, wrongly, that something moved.
+    false,
     deps
   );
 }
@@ -354,7 +393,12 @@ export async function reassign(
   toName: string,
   deps: GlanceActionDeps = {}
 ): Promise<GlanceActionOutcome> {
-  return ask(reassignRequest(eventId, item, toPersonId), `Moved to ${toName}. ${STALE_NOTE}`, deps);
+  return ask(
+    reassignRequest(eventId, item, toPersonId),
+    `Moved to ${toName}. ${CATCH_UP_NOTE}`,
+    true,
+    deps
+  );
 }
 
 /** TAKE OVER — the same route, the host as the assignee. */
@@ -364,5 +408,10 @@ export async function takeOver(
   hostPersonId: string,
   deps: GlanceActionDeps = {}
 ): Promise<GlanceActionOutcome> {
-  return ask(takeOverRequest(eventId, item, hostPersonId), `Yours now. ${STALE_NOTE}`, deps);
+  return ask(
+    takeOverRequest(eventId, item, hostPersonId),
+    `Yours now. ${CATCH_UP_NOTE}`,
+    true,
+    deps
+  );
 }

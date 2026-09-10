@@ -98,6 +98,19 @@ export function stripLabel(person: GlancePerson): string {
  * the truthful direction: we do not know what her why WAS, and inventing one is the thing the
  * allowlist exists to prevent.
  */
+/**
+ * The class the state-words render in — one definition, because 6e writes them twice.
+ *
+ * Phase 6 slice 6e. A live poll repaints a strip's words from the polled payload, and a strip
+ * that GAINS words (an amber going red picks up Ruling 4's why) has no `data-strip-words` span
+ * in the markup to write into, because the board only emits one when there is something to say.
+ * So the live repaint has to make the span — and a second `'font-normal'` written in the island
+ * is a strip whose words could quietly render in a different weight depending on whether they
+ * arrived at first paint or twenty seconds later. `tests/glance-grid-test.tsx` asserts both
+ * sites read this.
+ */
+export const STRIP_WORDS_CLASS = 'font-normal';
+
 export function stripStateWords(person: GlancePerson): string | null {
   if (person.state === 'OUT') return '— out';
   const why = whyLineFor(person);

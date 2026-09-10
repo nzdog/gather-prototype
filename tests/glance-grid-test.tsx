@@ -1215,6 +1215,10 @@ async function main() {
     // Phase 6 slice 6c. Gated on rather than assumed: the three successors below are claims
     // about an island, and a missing island must read as a failure, never as a pass.
     const replayIslandSrc = code('src/components/glance/GlanceReplay.tsx');
+    // Phase 6 slice 6e. The SAME treatment, for the same reason: the successors below are now
+    // claims about TWO islands, and a missing one must read as a failure rather than a pass.
+    const liveIslandSrc = code('src/components/glance/GlanceLive.tsx');
+    const paintSrc = code('src/components/glance/paint.ts');
 
     assert(
       'page',
@@ -1265,11 +1269,18 @@ async function main() {
     // phase 2's own property — one definition of what the board is and one of what "seen"
     // means — so NO SLICE IS SCHEDULED TO RETIRE THEM. If a later slice needs one gone, that
     // is a ruling, not a narrowing.
+    // ⚠ THE CONTENTS OF THIS ASSERTION ARE UNCHANGED IN 6e AND ONLY ITS GATE WIDENS, WHICH IS
+    // THE WHOLE POINT OF THE NOTE ABOVE. This is one of the three the ticket says no slice
+    // retires. 6e is the slice under the most pressure to break it — polling wants the board to
+    // re-render, and the shortest road to that is making `GlanceBoard` a client component — so
+    // it is asserted against BOTH islands existing: the board starts no timer, and the timer
+    // that now exists lives in an island beside it.
     assert(
       'phase 6 successor',
-      'THE BOARD STILL HAS NO CLIENT HOOKS AND STARTS NO TIMER — the replay is an ISLAND beside it, phase 4’s pattern',
+      'THE BOARD STILL HAS NO CLIENT HOOKS AND STARTS NO TIMER — the replay AND the polling are ISLANDS beside it, phase 4’s pattern',
       boardSrc.length > 0 &&
         replayIslandSrc.length > 0 &&
+        liveIslandSrc.length > 0 &&
         !/'use client'|useState|useEffect|useLayoutEffect|setInterval|setTimeout/.test(boardSrc)
     );
     assert(
@@ -1289,6 +1300,39 @@ async function main() {
           island.length > 0 &&
           !/<button|<a\s|role="button"/i.test(island) &&
           !/acknowledge|dismiss|got it|mark as seen|skip/i.test(island + html)
+        );
+      })
+    );
+    // ⚠ EXTENDED IN 6e, NOT NARROWED. The scan above reads MARKUP, and 6e's live island renders
+    // none at all — so a "Refresh now" button, a "live" badge or a failed-poll banner would sit
+    // entirely outside it and the guard would stay green. The negative the brief actually names
+    // — a failed poll says NOTHING — is asserted on the live island's SOURCE instead, which is
+    // the only place such a control could be written.
+    assert(
+      'phase 6 successor',
+      'AND NO CONTROL IN THE LIVE ISLAND EITHER — no button, no retry, and no "offline"/"stale"/"reconnecting" wording; a failed poll makes her lean in and Ruling 1 refuses it',
+      liveIslandSrc.length > 0 &&
+        paintSrc.length > 0 &&
+        !/<button|<a\s|role="button"|onClick|onKeyDown/i.test(liveIslandSrc) &&
+        !/acknowledge|dismiss|got it|mark as seen|skip|offline|reconnect|stale|retry|try again/i.test(
+          liveIslandSrc
+        )
+    );
+    // Slice 6e writes the state-words back into the DOM from a polled payload, so the class the
+    // board renders them with has to be readable rather than a literal in two places.
+    assert(
+      'phase 6 successor',
+      'and the state-words carry ONE class definition — the board and the live repaint read the same constant, so a polled strip cannot render in a different weight',
+      ok(() => {
+        const strip = code('src/components/glance/strip.ts');
+        const board = code('src/components/glance/GlanceBoard.tsx');
+        return (
+          strip.length > 0 &&
+          board.length > 0 &&
+          /STRIP_WORDS_CLASS/.test(strip) &&
+          /STRIP_WORDS_CLASS/.test(board) &&
+          /STRIP_WORDS_CLASS/.test(paintSrc) &&
+          !/className="font-normal"|className={'font-normal'}/.test(board)
         );
       })
     );
