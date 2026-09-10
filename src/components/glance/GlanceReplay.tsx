@@ -60,12 +60,45 @@
  * and the tint walk and its schedule are UNCHANGED. The sequence is the news; the motion is
  * the decoration. Keeping the walk keeps "seen" meaning the same thing for every viewer —
  * skipping straight to the true board would stamp news she was never shown.
+ *
+ * ── A DEV-ONLY VIEWING MODE, AND WHAT IT IS CAREFUL NOT TO TOUCH ────────────────────
+ *
+ * The replay is ~1.8s on a five-step board and is over before a person watching for the
+ * first time has focused on it. `?replay=manual` on the glance URL holds it behind a Play
+ * button and spaces the steps a second apart, so it can be WATCHED rather than caught.
+ *
+ * ⚠ IT IS NOT THE PRODUCT AND IT CHANGES NOTHING ABOUT THE PRODUCT. Three rulings sit on
+ * this file and all three are left exactly where they are:
+ *
+ *   - RULING 1's ~3s budget. `scheduleReplay` is untouched and still the only schedule the
+ *     shipped replay ever uses. The preview's spacing deliberately does NOT fit the budget
+ *     — that is the whole of what makes it a preview — so it is a separate function with a
+ *     separate name, never a widened constant that the real path would inherit.
+ *   - RULING 6's "nothing to press". The button exists ONLY after a client effect has read
+ *     the query param, so the island's rendered markup is byte-for-byte what it always was
+ *     and `test:glance-grid`'s "NO ACKNOWLEDGE CONTROL ANYWHERE" assertion stays green on
+ *     the real thing rather than being narrowed to accommodate a dev affordance.
+ *   - RULING 6's "'seen' means the replay played". The preview does NOT stamp: it is a
+ *     rehearsal, not an arrival, and news consumed by a rehearsal is news she never saw.
+ *     The stamp has exactly one caller and it is the automatic path.
+ *
+ * ⚠ AND THE PREVIEW DOES NOT PAINT THE PAST ON MOUNT. Ruling 1: never hold the answer
+ * hostage. A board that sat showing a two-day-old state until someone pressed a button
+ * would do exactly that, so the true board is left alone until Play is pressed — the rewind
+ * is the first thing the press does.
  */
 
-import { useEffect, useLayoutEffect, useRef } from 'react';
-import { scheduleReplay, type ReplayStep } from '@/lib/glance/replay';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  QUIET_DURATION_MS,
+  SPARK_DURATION_MS,
+  scheduleReplay,
+  type ReplayBeat,
+  type ReplayStep,
+} from '@/lib/glance/replay';
 import type { PersonState } from '@/lib/glance/state';
 import { STRIP_TONE, stripHexes } from './strip';
+import GlanceReplayPreview from './GlanceReplayPreview';
 
 /**
  * The reference's ramp: "~18 particles per flip in the green/amber ramp hexes."
@@ -217,93 +250,184 @@ function burst(el: HTMLElement, layer: HTMLElement | null): void {
   }
 }
 
+/**
+ * ONE DEFINITION OF THE WALK, taking its schedule as an argument.
+ *
+ * Both callers below — the automatic replay and the dev preview — come through here, because
+ * two copies of "paint the past, then walk it forward" would be free to drift, and the one
+ * that drifts would be the one nobody watches. What differs between them is the SCHEDULE and
+ * what happens at the end, so those are the two parameters; everything else is identical.
+ *
+ * Returns its timer ids, so a caller can cancel a walk that is still running.
+ */
+function runReplay(
+  steps: readonly ReplayStep[],
+  beats: readonly ReplayBeat[],
+  layer: HTMLElement | null,
+  onFinished: () => void
+): number[] {
+  const reduced =
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const strips = steps.map((step) =>
+    document.querySelector<HTMLElement>(
+      `[data-person-event-id="${CSS.escape(step.personEventId)}"]`
+    )
+  );
+
+  // ── PAINT THE PAST, with transitions OFF ──────────────────────────────────
+  //
+  // The backwards move is not part of the replay and must not be animated: fading the true
+  // board back into the old one for 0.7s is the "glitch, not a replay" reading the ticket
+  // records as the risk. It is a jump by design; only the walk forward is animated.
+  strips.forEach((el, i) => {
+    if (!el) return;
+    el.style.transition = 'none';
+    paint(el, steps[i].from);
+    // Finding 1: the words describe the state this strip has NOT reached yet.
+    showWords(el, false);
+  });
+  // Commit the past as the transition's starting value before any transition exists.
+  void document.body.offsetHeight;
+  strips.forEach((el) => {
+    if (el) el.style.transition = TRANSITION;
+  });
+
+  // ── WALK FORWARD ──────────────────────────────────────────────
+  const timers = steps.map((step, i) =>
+    window.setTimeout(() => {
+      const el = strips[i];
+      if (!el) return;
+      // The words become true at exactly the moment the tint does, so they arrive together.
+      showWords(el, true);
+      if (paint(el, step.to) && step.spark && !reduced) burst(el, layer);
+    }, beats[i].delayMs)
+  );
+
+  // ── AND THEN HAND THE STRIPS BACK ───────────────────────────────────
+  const endsAt = Math.max(...beats.map((b) => b.delayMs + b.durationMs));
+  timers.push(
+    window.setTimeout(() => {
+      // Exactly as the board wrote them: right tint, right words, no inline style.
+      // `showWords` is idempotent, so a step whose timer already ran is a no-op.
+      strips.forEach((el) => {
+        if (!el) return;
+        showWords(el, true);
+        el.style.removeProperty('transition');
+      });
+      onFinished();
+    }, endsAt)
+  );
+
+  return timers;
+}
+
+/**
+ * DEV ONLY — is `?replay=manual` on this URL?
+ *
+ * Read from `window.location` inside an effect rather than from `searchParams` on the page,
+ * for two reasons that both matter: the page stays a server component that knows nothing
+ * about this, and the control cannot exist in the island's rendered markup — which is what
+ * `test:glance-grid` asserts Ruling 6 with.
+ */
+function previewRequested(): boolean {
+  return new URLSearchParams(window.location.search).get('replay') === 'manual';
+}
+
+/** The preview's spacing: a second between steps, because it is made to be watched. */
+const PREVIEW_STEP_INTERVAL_MS = 1000;
+
+/**
+ * The preview's schedule — deliberately NOT `scheduleReplay`.
+ *
+ * ⚠ THIS OVERRUNS `REPLAY_BUDGET_MS` AND IS MEANT TO. Ruling 1 fences the replay a host
+ * actually receives; a rehearsal that a developer is watching on purpose is not that replay,
+ * and widening the shipped constant to buy a slower rehearsal would put the cost on every
+ * host to serve a person looking at a screen. So the budget keeps its meaning and this keeps
+ * its own name: nothing on the automatic path can reach it.
+ */
+function previewBeats(steps: readonly ReplayStep[]): ReplayBeat[] {
+  return steps.map((step, i) => ({
+    delayMs: i * PREVIEW_STEP_INTERVAL_MS,
+    durationMs: step.spark ? SPARK_DURATION_MS : QUIET_DURATION_MS,
+  }));
+}
+
 export default function GlanceReplay({ eventId, steps }: { eventId: string; steps: ReplayStep[] }) {
   const layer = useRef<HTMLDivElement | null>(null);
   /** One play, one stamp — a re-render or a strict-mode double effect must not repeat either. */
   const played = useRef(false);
+  const timers = useRef<number[]>([]);
+  /** DEV ONLY. False through every server render, so the markup Ruling 6 is asserted on is unchanged. */
+  const [preview, setPreview] = useState(false);
 
   useBrowserLayoutEffect(() => {
     if (steps.length === 0 || played.current) return;
+
+    // DEV ONLY. The preview leaves the true board exactly as the server rendered it and waits
+    // to be asked — no rewind on mount, so nothing is held hostage behind a control.
+    if (previewRequested()) {
+      setPreview(true);
+      return;
+    }
+
     played.current = true;
-
-    const beats = scheduleReplay(steps);
-    const reduced =
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    const strips = steps.map((step) =>
-      document.querySelector<HTMLElement>(
-        `[data-person-event-id="${CSS.escape(step.personEventId)}"]`
-      )
-    );
-
-    // ── PAINT THE PAST, with transitions OFF ────────────────────────────────────────────
-    //
-    // The backwards move is not part of the replay and must not be animated: fading the true
-    // board back into the old one for 0.7s is the "glitch, not a replay" reading the ticket
-    // records as the risk. It is a jump by design; only the walk forward is animated.
-    strips.forEach((el, i) => {
-      if (!el) return;
-      el.style.transition = 'none';
-      paint(el, steps[i].from);
-      // Finding 1: the words describe the state this strip has NOT reached yet.
-      showWords(el, false);
-    });
-    // Commit the past as the transition's starting value before any transition exists.
-    void document.body.offsetHeight;
-    strips.forEach((el) => {
-      if (el) el.style.transition = TRANSITION;
+    timers.current = runReplay(steps, scheduleReplay(steps), layer.current, () => {
+      void fetch(`/api/events/${eventId}/glance/seen`, { method: 'POST' }).catch(() => {
+        // A failed stamp costs one repeated replay on the next visit. It fails safe, so it
+        // is swallowed rather than shown: an error toast on a screen whose whole job is a
+        // four-second answer is the lean-in Ruling 1's general test refuses.
+      });
     });
 
-    // ── WALK FORWARD ────────────────────────────────────────────────────────────────────
-    const timers = steps.map((step, i) =>
-      window.setTimeout(() => {
-        const el = strips[i];
-        if (!el) return;
-        // The words become true at exactly the moment the tint does, so they arrive together.
-        showWords(el, true);
-        if (paint(el, step.to) && step.spark && !reduced) burst(el, layer.current);
-      }, beats[i].delayMs)
-    );
-
-    // ── AND THEN SAY IT WAS SEEN ────────────────────────────────────────────────────────
-    const endsAt = Math.max(...beats.map((b) => b.delayMs + b.durationMs));
-    timers.push(
-      window.setTimeout(() => {
-        // Hand the strips back exactly as the board wrote them: right tint, right words, no
-        // inline style. `showWords` is idempotent, so a step whose timer already ran is a no-op.
-        strips.forEach((el) => {
-          if (!el) return;
-          showWords(el, true);
-          el.style.removeProperty('transition');
-        });
-        void fetch(`/api/events/${eventId}/glance/seen`, { method: 'POST' }).catch(() => {
-          // A failed stamp costs one repeated replay on the next visit. It fails safe, so it
-          // is swallowed rather than shown: an error toast on a screen whose whole job is a
-          // four-second answer is the lean-in Ruling 1's general test refuses.
-        });
-      }, endsAt)
-    );
-
-    return () => timers.forEach((t) => window.clearTimeout(t));
+    return () => timers.current.forEach((t) => window.clearTimeout(t));
   }, [eventId, steps]);
+
+  /** Timers from a preview press outlive the effect above, so unmount clears them too. */
+  useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
+
+  /**
+   * DEV ONLY — rehearse the walk at the preview's spacing.
+   *
+   * NO STAMP, deliberately: the completion callback is empty, so this consumes nothing and can
+   * be pressed as many times as it takes to see what happened. The mechanics are `runReplay`,
+   * the same single definition the automatic path uses — the preview changes the SCHEDULE and
+   * nothing else.
+   */
+  const rehearse = () => {
+    timers.current.forEach((t) => window.clearTimeout(t));
+    timers.current = runReplay(steps, previewBeats(steps), layer.current, () => {});
+  };
 
   // "No fake fireworks. If nothing changed, nothing plays." Nothing is also what renders.
   if (steps.length === 0) return null;
 
   /*
-    The particle layer, and NOTHING ELSE. No control of any kind: Ruling 6 is that "seen"
-    means the replay played — no acknowledge button, no inbox mechanics, and nothing to press
-    to make it stop. `pointer-events-none` keeps it from intercepting a tap on a red door
-    underneath, and `aria-hidden` keeps a decoration out of the accessibility tree; the strips
-    themselves carry the meaning and are read normally.
+    The particle layer, and — on the path a host takes — NOTHING ELSE. Ruling 6 is that "seen"
+    means the replay played: no acknowledge control, no inbox mechanics, and nothing to press
+    to make it stop. `pointer-events-none` keeps the layer from intercepting a tap on a red
+    door underneath, and `aria-hidden` keeps a decoration out of the accessibility tree; the
+    strips themselves carry the meaning and are read normally.
+
+    The dev chrome below renders ONLY under `?replay=manual`, only after a client effect has
+    said so, and never in the markup this island returns from a server render.
   */
   return (
-    <div
-      ref={layer}
-      data-glance-replay={steps.length}
-      aria-hidden="true"
-      className="pointer-events-none fixed inset-0 z-40 overflow-hidden"
-    />
+    <>
+      <div
+        ref={layer}
+        data-glance-replay={steps.length}
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 z-40 overflow-hidden"
+      />
+      {preview && (
+        <GlanceReplayPreview
+          stepCount={steps.length}
+          intervalSeconds={PREVIEW_STEP_INTERVAL_MS / 1000}
+          play={rehearse}
+        />
+      )}
+    </>
   );
 }
