@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth/session';
+import { EVENT_LIST_WIRE_SELECT } from '@/lib/events/wire-select';
 import { stripe } from '@/lib/stripe';
 import { sendWelcomeEmail } from '@/lib/email';
 
@@ -24,21 +25,18 @@ export async function GET(_request: NextRequest) {
           },
         },
       },
-      include: {
-        _count: {
-          select: {
-            teams: true,
-            days: true,
-          },
-        },
+      // GTC-271: a top-level `select`, never a bare `include`. `include` on its own means
+      // "every scalar, plus these relations", which sent `sharedLinkToken` — a join
+      // credential `POST /api/join/[token]/claim` authenticates on — along with the Stripe
+      // columns and the check-plan telemetry, for every event in the list. The field list
+      // lives in `EVENT_LIST_WIRE_SELECT`; `eventRoles` is composed here because its
+      // `where` is bound to the calling user.
+      select: {
+        ...EVENT_LIST_WIRE_SELECT,
         eventRoles: {
           where: { userId: user.id },
           select: { role: true },
         },
-        // GTC-233: the events list routes V2 events to /plan/[id]/setup, so it needs the
-        // same EventSetup signal the dashboard uses to hide V1 controls (GTC-148/149).
-        // `setup` is a relation, so it is absent unless named here.
-        setup: { select: { id: true } },
       },
       orderBy: {
         createdAt: 'desc',

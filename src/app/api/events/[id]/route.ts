@@ -7,65 +7,10 @@ import { canEditEvent } from '@/lib/entitlements';
 import { ledgerActorForUser } from '@/lib/auth/actor';
 import { recordChange, fieldChanges, onMaterialChange, MATERIAL_EVENT_FIELDS } from '@/lib/ledger';
 import { isSent } from '@/lib/lifecycle';
-
-/**
- * GTC-267: the wire shape of an event, and the ONLY thing this route serialises.
- *
- * Both handlers used to hand back `prisma.event.findUnique` with an `include` and no
- * top-level `select`, so every scalar on the row went out — `sharedLinkToken` (a join
- * credential), `stripePaymentIntentId`, `paidAt`, `amountPaid`, and the whole
- * check-plan telemetry block. None of it was ever read by a caller.
- *
- * The list below is not a guess. It is the union of the two declared client contracts
- * — `Event` in `src/app/plan/[eventId]/page.tsx` and `SetupEvent` in
- * `src/app/plan/[eventId]/setup/page.tsx` (which extends `SerialisedEvent` from
- * `src/lib/lifecycle.ts`) — plus `hostId`, which `TransitionModal` reads. Anything
- * outside it had no reader in the tree.
- *
- * `host` and `coHost` are deliberately absent. They were included with `email`
- * selected, and nothing anywhere reads `event.host` off this route.
- *
- * Adding a field here is how a new one reaches the client. Widening it back to a bare
- * `findUnique` is asserted against in `tests/security-validation.ts` (suite 10).
- */
-const EVENT_WIRE_SELECT = {
-  id: true,
-  name: true,
-  status: true,
-  sentAt: true,
-  wrappedAt: true,
-  startDate: true,
-  endDate: true,
-  occasionType: true,
-  occasionDescription: true,
-  guestCount: true,
-  guestCountConfidence: true,
-  guestCountMin: true,
-  guestCountMax: true,
-  dietaryStatus: true,
-  dietaryVegetarian: true,
-  dietaryVegan: true,
-  dietaryGlutenFree: true,
-  dietaryDairyFree: true,
-  dietaryAllergies: true,
-  venueName: true,
-  venueType: true,
-  venueKitchenAccess: true,
-  venueOvenCount: true,
-  venueStoretopBurners: true,
-  venueBbqAvailable: true,
-  venueTimingStart: true,
-  venueTimingEnd: true,
-  venueNotes: true,
-  lastCheckPlanAt: true,
-  hostId: true,
-  isDemo: true,
-  clonedFromId: true,
-  aiCallsUsed: true,
-  // V2 signal: events that entered the Moment flow have an EventSetup row.
-  // The dashboard uses its presence to suppress V1-pipeline actions (GTC-148).
-  setup: { select: { id: true } },
-} as const;
+// GTC-271: EVENT_WIRE_SELECT moved to a shared module so the single-event narrowing and
+// the list narrowing (EVENT_LIST_WIRE_SELECT) are defined in one place and can be read
+// against each other. The field list is unchanged from what GTC-267 shipped.
+import { EVENT_WIRE_SELECT } from '@/lib/events/wire-select';
 
 // Everything the host can change about the event itself. The material subset
 // (date/venue) additionally fires the F1 re-ask; the rest is versioned only.

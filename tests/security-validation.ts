@@ -33,6 +33,7 @@ import { cleanup, generateFixtures, type Fixtures } from './security-fixtures';
 import { NextRequest } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
+import { randomBytes } from 'crypto';
 
 let testsRun = 0;
 let testsPassed = 0;
@@ -1784,6 +1785,264 @@ async function testSuite12_CronSecretFailsClosed(_fixtures: Fixtures) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Test Suite 13 — GTC-271: the LIST route serialises the same forbidden columns
+//
+// GTC-267 narrowed `GET` and `PATCH` on `/api/events/[id]` behind `EVENT_WIRE_SELECT`
+// and asserted the narrowing in suite 10. It did not touch `GET /api/events`, which
+// calls `prisma.event.findMany` with an `include` and no sibling top-level `select` —
+// "all scalars, plus these relations". Every column suite 10 forbids is a scalar on
+// `Event`, so the list route hands back all sixteen for EVERY event the caller holds
+// a role on.
+//
+// This is NOT suite 10's anonymous class. The route calls `getUser` and filters on
+// `eventRoles.some.userId`, so a caller only ever sees events they already hold a role
+// on. What is under test is the WIDTH of the response, not who can reach it.
+//
+// `sharedLinkToken` is the one that matters: `CREDENTIAL_COLUMNS` in
+// `tests/security-route-scan.ts` declares it a credential, and
+// `POST /api/join/[token]/claim` authenticates on it. A `COORDINATOR` on the event
+// gets it too — 13.4 asserts that case with its own caller rather than assuming the
+// HOST result generalises.
+//
+// The forbidden columns are POPULATED before the read, so an absence in the response
+// is a DROP and not a gap. That is suite 10's standard, and it caught a real gap there.
+// ─────────────────────────────────────────────────────────────────────────────
+async function testSuite13_EventListSelect(fixtures: Fixtures) {
+  logSection('Test Suite 13: GTC-271 — the events LIST route narrows its wire shape');
+
+  const BASE = process.env.SECURITY_TEST_BASE_URL ?? 'http://localhost:3000';
+  const ev = fixtures.eventSent;
+  const HOST_COOKIE = { Cookie: fixtures.user.sessionCookie };
+
+  // ── The probe ────────────────────────────────────────────────────────────────
+  let probeOk = false;
+  try {
+    const probe = await fetch(`${BASE}/api/events`);
+    probeOk = probe.status === 401;
+  } catch {
+    probeOk = false;
+  }
+  logTest(
+    `dev server healthy on ${BASE} — GET /api/events answers 401 with no cookie`,
+    probeOk,
+    'Start it with `npm run dev`. These assertions cannot run without it.'
+  );
+  if (!probeOk) return;
+
+  // ── 13.1 FIXTURE: populate the forbidden columns FIRST ───────────────────────
+  //
+  // The shared link is minted through its own route (`POST /api/events/[id]/shared-link`)
+  // — the real writer, per fixture rule 1. The billing and telemetry scalars are written
+  // directly, the same recorded exception suite 10 takes: their real writer is the Stripe
+  // webhook, which cannot be driven offline, and they are inert — nothing reads them back
+  // and nothing derives from them. What is under test is the serialiser, not how the
+  // columns came to hold a value.
+  //
+  // Written unconditionally rather than relying on suite 10 having run first: a suite
+  // whose red depends on another suite's side effects is a suite that goes green when
+  // someone reorders main().
+  const linkRes = await fetch(`${BASE}/api/events/${ev.id}/shared-link`, {
+    method: 'POST',
+    headers: HOST_COOKIE,
+  });
+  logTest(
+    'fixture: the shared link was minted through its own route',
+    linkRes.status === 200,
+    `got ${linkRes.status}`
+  );
+
+  await prisma.event.update({
+    where: { id: ev.id },
+    data: {
+      stripePaymentIntentId: 'pi_gtc271_fixture',
+      paidAt: new Date(),
+      amountPaid: 4900,
+      checkPlanInvocations: 3,
+      checkPlanBeforeGate: true,
+      blindAccept: true,
+      madeAnyEditBeforeCheckPlan: true,
+      manualAdditionsCount: 7,
+      hostReadinessConfidence: 'HIGH',
+      transitionAttempts: 2,
+    },
+  });
+
+  const populated = await prisma.event.findUnique({
+    where: { id: ev.id },
+    select: { sharedLinkToken: true, stripePaymentIntentId: true, amountPaid: true },
+  });
+  logTest(
+    'fixture: the forbidden columns really are populated (so an absence is a drop)',
+    Boolean(populated?.sharedLinkToken) &&
+      populated?.stripePaymentIntentId === 'pi_gtc271_fixture' &&
+      populated?.amountPaid === 4900,
+    `sharedLinkToken ${populated?.sharedLinkToken ? 'set' : 'NULL'}; ` +
+      `stripePaymentIntentId ${populated?.stripePaymentIntentId}; amountPaid ${populated?.amountPaid}`
+  );
+
+  // ── 13.2 THE CONTRACT: none of the sixteen leave over the wire ───────────────
+  //
+  // The same sixteen names suite 10 holds for the single-event route. Kept as its own
+  // list on purpose: if the two ever diverge, that divergence should show up as a test
+  // change and be argued, not inherited silently from a shared constant.
+  const FORBIDDEN_LIST = [
+    'sharedLinkToken',
+    'stripePaymentIntentId',
+    'paidAt',
+    'amountPaid',
+    'checkPlanInvocations',
+    'firstCheckPlanAt',
+    'checkPlanBeforeGate',
+    'transitionAttempts',
+    'transitionedToConfirmingAt',
+    'planSnapshotIdAtConfirming',
+    'blindAccept',
+    'madeAnyEditBeforeCheckPlan',
+    'manualAdditionsCount',
+    'hostReadinessConfidence',
+    'complianceAtFreeze',
+    'freezeReason',
+  ];
+
+  const listRes = await fetch(`${BASE}/api/events`, { headers: HOST_COOKIE });
+  const listText = await listRes.text();
+  const listBody = JSON.parse(listText);
+  const listLeaks = FORBIDDEN_LIST.filter((f) => listText.includes(`"${f}"`));
+
+  logTest(
+    'GET /api/events serialises none of the credential, billing or telemetry columns',
+    listRes.status === 200 && listLeaks.length === 0,
+    `status ${listRes.status}; leaked ${listLeaks.length}/16: ${listLeaks.join(', ')}`
+  );
+
+  // The value itself, not just the key — a select that renamed the field would still
+  // be handing out the credential.
+  logTest(
+    'GET /api/events does not carry the shared-link credential VALUE under any key',
+    populated?.sharedLinkToken ? !listText.includes(populated.sharedLinkToken) : false,
+    populated?.sharedLinkToken
+      ? 'the minted sharedLinkToken string appears in the list response body'
+      : 'fixture has no sharedLinkToken — this assertion proves nothing, fix 13.1 first'
+  );
+
+  // ── 13.3 POSITIVE CONTROL: the fields /plan/events renders are all still there ─
+  //
+  // Paired with 13.2 in the same run and on the same response. An empty response, a
+  // 500, or a select that dropped half the page would also pass 13.2 — this is what
+  // separates "narrowed" from "broken". The list is the `Event` interface in
+  // `src/app/plan/events/page.tsx`, field for field, plus the three fields suite 11
+  // reads off this same route.
+  const rows: any[] = listBody?.events ?? [];
+  const row = rows.find((e: any) => e.id === ev.id);
+  logTest(
+    'CONTROL: the host still gets their event back from the list',
+    row !== undefined,
+    `the list returned ${rows.length} event(s), none with id ${ev.id}`
+  );
+
+  if (row) {
+    // `setup` is legitimately null on an event with no EventSetup row, so presence of
+    // the KEY is what is asserted — that is what `event.setup ? … : …` in the page reads.
+    const RENDERED = [
+      'id',
+      'name',
+      'status',
+      'startDate',
+      'endDate',
+      'guestCount',
+      'occasionType',
+      'archived',
+      'createdAt',
+      'setup',
+    ];
+    const missing = RENDERED.filter((k) => !(k in row));
+    logTest(
+      'CONTROL: every field /plan/events renders is present in the narrowed row',
+      missing.length === 0,
+      `missing: ${missing.join(', ')}`
+    );
+
+    logTest(
+      'CONTROL: _count.teams survives — the page renders it as "N teams"',
+      typeof row?._count?.teams === 'number',
+      `_count is ${JSON.stringify(row?._count)}`
+    );
+
+    // Suite 11 (GTC-269) enumerates what a demo session reaches off THIS route and
+    // reads `isDemo` off each row. Narrowing this select without `isDemo` would turn
+    // that enumeration into a silent pass.
+    logTest(
+      'CONTROL: isDemo survives — suite 11 enumerates the demo blast radius with it',
+      'isDemo' in row,
+      'isDemo is absent; suite 11 would read undefined and its every() would be vacuous'
+    );
+  }
+
+  // The page itself answers, not just its data source.
+  const pageRes = await fetch(`${BASE}/plan/events`, { headers: HOST_COOKIE });
+  logTest(
+    'CONTROL: /plan/events still answers 200',
+    pageRes.status === 200,
+    `status ${pageRes.status}`
+  );
+
+  // ── 13.4 A COORDINATOR-only caller sees no join credential either ────────────
+  //
+  // The route filters on `eventRoles.some.userId` with NO role predicate, so a
+  // COORDINATOR is admitted to the list on equal terms with the HOST. Asserted with its
+  // own caller rather than inferred from 13.2: "the host does not get it" and "nobody
+  // gets it" are different claims.
+  const coordUser = await prisma.user.create({
+    data: { email: `gtc271-coordinator-${Date.now()}@gather.test` },
+  });
+  const coordToken = randomBytes(32).toString('hex');
+  await prisma.session.create({
+    data: {
+      token: coordToken,
+      userId: coordUser.id,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    },
+  });
+  await prisma.eventRole.create({
+    data: { userId: coordUser.id, eventId: ev.id, role: 'COORDINATOR' },
+  });
+
+  try {
+    const coordRes = await fetch(`${BASE}/api/events`, {
+      headers: { Cookie: `session=${coordToken}` },
+    });
+    const coordText = await coordRes.text();
+    const coordBody = JSON.parse(coordText);
+    const coordRows: any[] = coordBody?.events ?? [];
+
+    logTest(
+      'CONTROL: the COORDINATOR really does reach the event through this route',
+      coordRes.status === 200 && coordRows.some((e: any) => e.id === ev.id),
+      `status ${coordRes.status}; reached ${coordRows.length} event(s) — if this is 0 ` +
+        'the refusal below proves nothing'
+    );
+
+    const coordLeaks = FORBIDDEN_LIST.filter((f) => coordText.includes(`"${f}"`));
+    logTest(
+      'a COORDINATOR-only caller gets none of the sixteen columns either',
+      coordLeaks.length === 0,
+      `leaked ${coordLeaks.length}/16: ${coordLeaks.join(', ')}`
+    );
+    logTest(
+      'a COORDINATOR-only caller does not get the shared-link credential VALUE',
+      populated?.sharedLinkToken ? !coordText.includes(populated.sharedLinkToken) : false,
+      'the minted sharedLinkToken string appears in the coordinator list response'
+    );
+  } finally {
+    // Row accounting: this suite leaves nothing behind. `cleanup()` keys off the
+    // fixture host email and the fixture event names, neither of which matches this
+    // user, so it would survive every future run if it were not removed here.
+    await prisma.eventRole.deleteMany({ where: { userId: coordUser.id } });
+    await prisma.session.deleteMany({ where: { userId: coordUser.id } });
+    await prisma.user.deleteMany({ where: { id: coordUser.id } });
+  }
+}
 async function main() {
   console.log(`${BOLD}${YELLOW}=== Security Validation Test Suite ===${RESET}\n`);
   console.log('Contract under test:');
@@ -1808,6 +2067,7 @@ async function main() {
     await testSuite10_EventReadAuth(fixtures);
     await testSuite11_DemoSessionScope(fixtures);
     await testSuite12_CronSecretFailsClosed(fixtures);
+    await testSuite13_EventListSelect(fixtures);
 
     console.log(`\n${BOLD}${YELLOW}=== Test Summary ===${RESET}`);
     console.log(`Total tests: ${testsRun}`);
