@@ -130,6 +130,18 @@ This is do-not-touch zone #8 in `GATHER-BUILD-CONSTANTS.md` and the top entry in
 `*.{js,jsx,ts,tsx,json,css,md}` files. That is ALL it does — no typecheck, no lint, no tests. A
 commit that passes the hook can still fail CI on typecheck.
 
+> ⚠ **The check and the hook disagree about scope, and the hook wins (GTC-267, 2026-09-11).**
+> `format:check` is scoped to `src/**` only; the hook is scoped by EXTENSION and so rewrites
+> every staged file — `tests/`, `docs/`, `scripts/`, root `*.md`, `package.json`. So those paths
+> are **never verified by CI but are always rewritten on commit**, and the two facts together
+> have a consequence worth stating outright: **a deliberate decision to leave a file's
+> formatting as found cannot survive `git commit`.** Seen in GTC-267 — three long-unformatted
+> files in `tests/` were deliberately left alone to keep the real diff legible, and the hook
+> reformatted all three during the commit, inflating the diff and falsifying a note in the
+> ticket that had to be corrected before the push. If you need formatting left untouched, the
+> only options are `--no-verify` (and say so in the message) or a separate formatting-only
+> commit. Do not assume `tests/` is outside Prettier's reach just because `format:check` is.
+
 ## 6. What CI runs (pre-empt it locally)
 
 `.github/workflows/ci.yml` — job `verify`, on every PR and push to `master`, Node 20, 10-min
