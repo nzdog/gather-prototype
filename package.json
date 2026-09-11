@@ -24,7 +24,6 @@
     "test:event-setup": "tsx tests/event-setup-test.ts",
     "test:tnz-sms": "tsx scripts/test-tnz-sms.ts",
     "test:demo-ui": "tsx tests/demo-ui-isolation.ts",
-    "test:conflict-labels": "tsx tests/conflict-action-labels.ts",
     "test:setup-progress-banner": "tsx tests/setup-progress-banner-test.ts",
     "test:host-nudge": "tsx tests/host-nudge-test.ts",
     "test:wrap-up": "tsx tests/wrap-up-dispatch-test.ts",

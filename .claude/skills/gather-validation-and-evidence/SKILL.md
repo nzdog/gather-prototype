@@ -102,7 +102,6 @@ Imports functions from `src/` and asserts on return values.
 
 | npm script | File |
 |---|---|
-| `test:conflict-labels` | tests/conflict-action-labels.ts |
 | `test:coordinator-conflict-detection` | tests/coordinator-conflict-detection-test.ts |
 | `test:edit-item-frozen-block` | tests/edit-item-frozen-block-test.ts |
 | `test:host-nudge` | tests/host-nudge-test.ts |
