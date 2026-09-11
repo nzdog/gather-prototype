@@ -186,11 +186,14 @@ export default function PersonSurface({
         THE DOOR. A real <button>, so the tap works and so does the keyboard — a div with
         an onClick is reachable by neither Tab nor a screen reader.
 
-        ⚠ IT IS NOT STYLED AS A BUTTON. The tint, the text and the padding are the strip's,
-        unchanged; `w-full block text-left` only undoes the element's own inline centring so
-        it renders identically to the div beside it. The strip-as-button SHAPE — a border, a
-        chevron, a hover state — is phase 7's variant, and shipping it here would settle an
-        unruled decision by stealth.
+        ⚠ IT IS STYLED AS A DOOR, AS OF RULING 35 (2026-09-11) — and the styling does not live
+        here. The board composes `className` and hands it down, so an acting door, a reading
+        door and a sealed strip are handed the same string by the same rule (`doorTreatmentFor`,
+        which asks `panelFor`). This file adds only `w-full block text-left`, undoing the
+        element's own inline centring. ⚠ SUPERSEDED, NOT DELETED: until that ruling this note
+        read "IT IS NOT STYLED AS A BUTTON… the strip-as-button SHAPE is phase 7's variant, and
+        shipping it here would settle an unruled decision by stealth." It was ruled, not
+        stolen.
       */}
       <button
         type="button"

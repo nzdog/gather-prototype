@@ -16,10 +16,15 @@
  * the actions behind a tap and red is the state that has one — an amber is Gather's move,
  * a green is nobody's, and the two greys are the states Kate has already settled.
  *
- * ⚠ THE RED STRIP IS NOT STYLED AS A BUTTON. It is a button ELEMENT so that the tap works
- * and so does the keyboard; its tint, text and padding are unchanged. The strip-as-button
- * SHAPE — border, chevron, hover state — is PHASE 7's variant, and shipping it as the
- * default would settle an unruled decision by stealth. So is the amber clock-line.
+ * ⚠ THE STRIP IS STYLED AS A DOOR WHEN IT IS ONE — RULING 35, 2026-09-11. Border, chevron,
+ * pointer cursor and hover dim on every strip that opens something; nothing on the two that
+ * open nothing. Phase 4 shipped the red door deliberately unstyled and said so here until this
+ * ruling; the sentence is replaced rather than left standing. The rule is `panelFor`, not a
+ * list of states, so the promise and the routing cannot drift apart.
+ *
+ * ⚠ THERE IS NO VARIANT SWITCH — RULING 36. Phase 7 tested six presentations behind
+ * `?variant=`; four were ruled against and the switch itself is deleted, because "a switch
+ * left in the tree is a variant nobody ruled on." One board, no flag.
  *
  * ⚠ THE REPLAY AND THE POLLING ARE ISLANDS BESIDE THIS FILE, NOT IN IT (phase 6). This is
  * still a server component with no hooks and no timer: `GlanceReplay` walks the arrival replay
@@ -41,9 +46,16 @@ import type { AssignActorRole } from '@/lib/assignment/same-team';
 import type { GlanceAssignable } from '@/lib/glance/actions';
 import { assistantMessage, findCriticalRedHits } from './assistant';
 import PersonSurface, { type PersonSurfaceProps } from './PersonSurface';
+import GlancePersonReading from './GlancePersonReading';
+import { readingPanelFor } from './reading';
 import {
   criticalStripClauses,
   criticalStripText,
+  DOOR_CHEVRON,
+  DOOR_CHEVRON_CLASS,
+  doorTreatmentFor,
+  doorTreatmentReaches,
+  panelFor,
   overlayReversal,
   STRIP_TONE,
   STRIP_WORDS_CLASS,
@@ -78,6 +90,17 @@ interface GlanceBoardProps {
    * Empty on almost every visit, which is the common case and costs nothing.
    */
   stickyReversals: readonly string[];
+  /**
+   * RULING 34 — the instant the reading panel's nudge day is read against.
+   *
+   * A PROP, not `new Date()` inside the render, so the line is a pure function of inputs and
+   * the tests can pin what it says at a fixed moment rather than at whatever the suite happened
+   * to run at.
+   *
+   * ⚠ WHAT USED TO SIT BESIDE IT: a `variant` prop, and phase 7's six presentations behind it.
+   * RULING 36 deleted the switch — "a switch left in the tree is a variant nobody ruled on."
+   */
+  now?: Date;
 }
 
 /**
@@ -118,10 +141,28 @@ function assignablePool(glance: EventGlance): GlanceAssignable[] {
  */
 function StripBody({ person }: { person: GlancePerson }) {
   const words = stripStateWords(person);
+  /*
+    RULING 35 — the chevron half of the door treatment, on every strip that opens something.
+
+    AN ELEMENT, NOT A `::after`. `setWords` in `paint.ts` appends the state-words span to the
+    strip when a live poll gives a strip words it did not have; a chevron rendered as a
+    trailing element would then sit BEFORE those words. It is absolutely positioned instead, so
+    DOM order cannot decide what the strip reads. `aria-hidden`, because it is decoration and
+    the door is already a `<button>`.
+
+    ⚠ WHAT USED TO BE HERE: RULING 33's clock-line, in two forms. Both are deleted and the
+    guard that forbade them is restored verbatim. The fact lives in the reading panel now.
+  */
+  const chevron = doorTreatmentReaches(person.state);
   return (
     <>
       <span>{person.name}</span>
       {words ? <span data-strip-words="" className={STRIP_WORDS_CLASS}>{` ${words}`}</span> : null}
+      {chevron ? (
+        <span data-strip-chevron="" aria-hidden="true" className={DOOR_CHEVRON_CLASS}>
+          {DOOR_CHEVRON}
+        </span>
+      ) : null}
     </>
   );
 }
@@ -148,10 +189,12 @@ function Strip({
   person: derived,
   action,
   sticky,
+  now,
 }: {
   person: GlancePerson;
   action: Omit<PersonSurfaceProps, 'person' | 'className' | 'children'>;
   sticky: ReadonlySet<string>;
+  now: Date;
 }) {
   /*
     RULING 23's OVERLAY, APPLIED ONCE AND HERE.
@@ -173,9 +216,42 @@ function Strip({
     across an overlaid and an unoverlaid board.
   */
   const person = sticky.has(derived.personEventId) ? overlayReversal(derived) : derived;
-  const className = `rounded-md px-2.5 py-1.5 text-[13px] leading-snug ${STRIP_TONE[person.state].className}`;
+  /*
+    PHASE 7, VARIANT B — the treatment, APPENDED AFTER THE TONE AND NEVER MIXED INTO IT.
 
-  if (person.state !== 'RED') {
+    `paintStrip` (`paint.ts`) swaps a tint by substituting `STRIP_TONE[from].className` for
+    `STRIP_TONE[to].className` as a CONTIGUOUS SUBSTRING of this string, and leaves it alone if
+    it cannot find it. Appending keeps the tone contiguous, so a live repaint still works under
+    every state. Interleaving would silently stop the board animating.
+
+    ⚠ AND IT IS THE SAME STRING FOR ALL THREE BRANCHES BELOW, WHICH IS RULING 35's own fence:
+    the treatment is handed out by `panelFor` and so is the element, so a strip cannot wear the
+    promise of a door without having one, or have one without wearing it.
+  */
+  const treatment = doorTreatmentFor(person.state);
+  const className =
+    `rounded-md px-2.5 py-1.5 text-[13px] leading-snug ${STRIP_TONE[person.state].className}` +
+    (treatment ? ` ${treatment}` : '');
+
+  /*
+    RULING 32 — WHICH ROOM, asked once, of one function.
+
+    The branch used to BE Ruling 17: only a red is a door, written as a literal here. It is
+    still true of the ACTING room, and `panelFor` is where that lives now — so "only a red is a
+    door" cannot be true in the ticket and false in the component, and Ruling 35's treatment
+    reads the same answer rather than a second list.
+
+    ⚠ THE COST IS STRUCTURAL AND IS SMALLER THAN IT LOOKS. Phase 4 took the island trade on the
+    stated basis that "on the oversized board (64 settled people, no reds) nothing here hydrates
+    at all". That is now false — every green and amber strip hydrates — but it hydrates
+    `GlancePersonReading`, which is handed a narrowed payload and NO candidate pool, so the
+    per-strip cost is a name, a word, a weekday and its rows rather than the whole board's
+    assignable list. `GlanceBoard` itself still has no hooks, which is phase 2's property and
+    not a slice's to retire.
+  */
+  const panel = panelFor(person.state);
+
+  if (panel === null) {
     return (
       <div
         data-strip-state={person.state}
@@ -184,6 +260,19 @@ function Strip({
       >
         <StripBody person={person} />
       </div>
+    );
+  }
+
+  if (panel === 'reading') {
+    return (
+      <GlancePersonReading
+        panel={readingPanelFor(person, now)}
+        personEventId={person.personEventId}
+        state={person.state}
+        className={className}
+      >
+        <StripBody person={person} />
+      </GlancePersonReading>
     );
   }
 
@@ -206,10 +295,12 @@ function HouseholdCard({
   household,
   action,
   sticky,
+  now,
 }: {
   household: GlanceHousehold;
   action: Omit<PersonSurfaceProps, 'person' | 'className' | 'children'>;
   sticky: ReadonlySet<string>;
+  now: Date;
 }) {
   return (
     <div data-household-card={household.householdId} className="rounded-lg bg-[#f5f4ef] p-2.5">
@@ -218,7 +309,13 @@ function HouseholdCard({
       </p>
       <div className="flex flex-col gap-1">
         {household.members.map((person) => (
-          <Strip key={person.personEventId} person={person} action={action} sticky={sticky} />
+          <Strip
+            key={person.personEventId}
+            person={person}
+            action={action}
+            sticky={sticky}
+            now={now}
+          />
         ))}
       </div>
     </div>
@@ -231,6 +328,8 @@ export default function GlanceBoard({
   actorRole,
   eventDate,
   stickyReversals,
+  // RULING 34's clock. See `GlanceBoardProps` above.
+  now = new Date(),
 }: GlanceBoardProps) {
   // Ruling 23. A set, so the lookup in `Strip` is one place and one operation at any headcount.
   const sticky: ReadonlySet<string> = new Set(stickyReversals);
@@ -339,6 +438,7 @@ export default function GlanceBoard({
               household={household}
               action={action}
               sticky={sticky}
+              now={now}
             />
           ))}
 
@@ -360,6 +460,7 @@ export default function GlanceBoard({
                     person={person}
                     action={action}
                     sticky={sticky}
+                    now={now}
                   />
                 ))}
               </div>

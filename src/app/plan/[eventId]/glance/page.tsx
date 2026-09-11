@@ -40,6 +40,16 @@ import GlanceBoard from '@/components/glance/GlanceBoard';
 import GlanceReplay from '@/components/glance/GlanceReplay';
 import GlanceLive from '@/components/glance/GlanceLive';
 
+/*
+  ⚠ RULING 36 (2026-09-11) — THE `?variant=` SWITCH IS DELETED, AND `searchParams` WITH IT.
+
+  Phase 7 put six presentations behind a query parameter so they could be looked at on one
+  board with one set of data. Four were ruled against and are gone from the tree; the two that
+  survived — Ruling 32's reading panel and Ruling 35's door treatment — SHIP AS THE DEFAULT.
+  Verbatim: *"Nothing in this phase ships behind a flag. Shipping a variant as a default was
+  the thing phase 7 existed to prevent, and a switch left in the tree is a variant nobody ruled
+  on."* So the page takes `params` and nothing else, exactly as it did before phase 7.
+*/
 export default async function GlancePage({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = await params;
 
@@ -149,6 +159,8 @@ export default async function GlancePage({ params }: { params: Promise<{ eventId
           one has settled.
         */
         stickyReversals={stickyReversals(replay.steps)}
+        /* RULING 34 — the instant the reading panel's nudge day is read against. */
+        now={now}
       />
       {/*
         Phase 6 slice 6c. The island, BESIDE the board rather than inside it, so `GlanceBoard`

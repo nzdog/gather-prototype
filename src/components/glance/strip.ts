@@ -304,3 +304,112 @@ export function unassignedDoorText(ordinaryCount: number): string | null {
 export function unassignedDoorHref(eventId: string): string {
   return `/plan/${eventId}?expand=teams`;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+   PHASE 7 — RULED AND SHIPPED. Rulings 33, 34, 35 and 36, 2026-09-11.
+
+   THERE IS NO VARIANT SWITCH. Ruling 36: "Nothing in this phase ships behind a flag. Shipping a
+   variant as a default was the thing phase 7 existed to prevent, and a switch left in the tree
+   is a variant nobody ruled on." `?variant`, `GlanceVariant`, `GLANCE_VARIANTS` and
+   `parseVariant` are DELETED, not disabled.
+
+   WHAT WAS RULED AGAINST AND IS GONE FROM THE TREE:
+
+     · the amber clock-line on the strip, in BOTH its forms (`a` and `a2`) — RULING 33. The
+       clock-line, its two classes, the weekday formatter and both variant members are deleted
+       from this file, and the guard that forbade them is RESTORED VERBATIM in
+       `tests/glance-grid-test.tsx` with the successors written for its relaxation deleted too.
+       ⚠ THE FACT ITSELF SURVIVES, SOMEWHERE ELSE: Ruling 34 puts the nudge day in the READING
+       PANEL, on amber people only. See `reading.ts`. "The same fact is a countdown on a strip
+       she did not ask for and an answer in a panel she chose to open."
+
+     · the `b-red` / `b-all` pair — RULING 35 supersedes both with ONE rule, below.
+
+   ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * RULING 32 — WHICH ROOM A STRIP OPENS. Two rooms, and they are not the same room.
+ *
+ *   acting   `PersonSurface`       — Move to… / Move / I'll do it / Remind them. RED only.
+ *   reading  `GlancePersonReading` — name, status, nudge day, what they are bringing. No
+ *                                    controls of any kind. GREEN and AMBER.
+ *   null     a sealed `<div>`      — OUT and NOT_CHASED.
+ *
+ * ⚠ RULING 17's SECOND SENTENCE IS WHAT KEEPS THE LAST LINE TRUE, AND IT IS UNTOUCHED BY EVERY
+ * RULING IN THIS PHASE: *"The don't-chase mark is revisited where it is set (the pre-flight),
+ * not here."* A person Kate has taken off the system's hands, and a person who has answered no,
+ * open nothing. Asserted in both directions.
+ *
+ * ⚠ AND IT NO LONGER TAKES A VARIANT, WHICH IS RULING 36 IN ONE SIGNATURE. There is one board.
+ */
+export type GlancePanel = 'acting' | 'reading';
+
+export function panelFor(state: PersonState): GlancePanel | null {
+  if (state === 'RED') return 'acting';
+  return state === 'GREEN' || state === 'AMBER' ? 'reading' : null;
+}
+
+/* ── RULING 35 — THE DOOR TREATMENT, ON EVERY STRIP THAT OPENS SOMETHING ─────────────────────
+ *
+ * The founder's reason, verbatim:
+ *
+ *   "a chevron is a promise that something opens. With variant c in, nine of eleven strips open
+ *    something, so the treatment is honest on all nine. The two that open nothing must not wear
+ *    it."
+ *
+ * ⚠ SO THE RULE IS `panelFor` AND NOT A LIST OF STATES, AND THAT IS THE WHOLE POINT. A list
+ * would have to be kept in step with the routing by hand, and "a guarantee maintained in two
+ * places is a guarantee that is false somewhere" — this ticket's own lesson, from the fence
+ * that had a hole in it for three slices. Here the promise IS the routing: a strip wears the
+ * chevron exactly when it has something to open, because the same function decides both.
+ * Asserted both ways — every treated strip opens something, and every sealed strip is
+ * untreated.
+ *
+ * ⚠ THIS SUPERSEDES `b-red` AND `b-all`. Phase 4 shipped a red door with no border, no chevron,
+ * no hover and no cursor class, and said so at the site; that held the line until this ruling.
+ * The `:672` guard which enforced it is NARROWED, not deleted — see the site for what it still
+ * protects.
+ */
+
+/**
+ * The treatment, as the reference and the ticket both name it: border, chevron, hover, cursor.
+ *
+ * The hover is `brightness`, not a second colour: a hover tint written as a hex would be a
+ * fifth palette entry per state, free to drift from the four `STRIP_TONE` already holds.
+ */
+export const DOOR_TREATMENT_CLASS =
+  'relative pr-6 cursor-pointer transition-[filter] duration-150 hover:brightness-[0.965]';
+
+/**
+ * The border half.
+ *
+ * ⚠ HELD APART, AND STILL CHECKED, THOUGH NOTHING CAN TRIP IT TODAY. Ruling 7 gives NOT_CHASED
+ * a hairline of its own and forbids OUT one — and two `border-width` utilities on one element
+ * are resolved by stylesheet order, not class order, so a treated grey would be visually
+ * indeterminate. Neither grey is treated any more, so the hazard cannot arise; the guard in
+ * `tests/glance-grid-test.tsx` asserts that no TREATED state's tone already carries a border,
+ * so a future state that does cannot quietly acquire a second one.
+ */
+export const DOOR_BORDER_CLASS = 'border border-[#00000014]';
+
+/** The chevron: an element, not a `::after`, so the painters' `appendChild` cannot land after it. */
+export const DOOR_CHEVRON = '›';
+export const DOOR_CHEVRON_CLASS =
+  'pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[12px] leading-none opacity-60';
+
+/** RULING 35: does this strip wear the promise? Exactly when it has something to open. */
+export function doorTreatmentReaches(state: PersonState): boolean {
+  return panelFor(state) !== null;
+}
+
+/**
+ * The classes this strip gains — the empty string when it gains none.
+ *
+ * ONE FUNCTION, ONE SITE. `GlanceBoard` appends whatever this returns and decides nothing of
+ * its own, which is what keeps the treatment out of the element branch: an acting door, a
+ * reading door and a sealed strip are handed the same string by the same rule.
+ */
+export function doorTreatmentFor(state: PersonState): string {
+  if (!doorTreatmentReaches(state)) return '';
+  return `${DOOR_TREATMENT_CLASS} ${DOOR_BORDER_CLASS}`;
+}

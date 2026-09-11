@@ -212,6 +212,18 @@ function pastRow(
     critical: item.critical,
     kind: item.kind,
     teamId: item.teamId,
+    /*
+      RULING 32's three display fields, CARRIED UNCHANGED FROM THE LIVE ROW ON PURPOSE.
+
+      They are not colour inputs, so the past derivation does not read them — but
+      `GlanceItemInput` is one shape and inventing nulls here would be this module asserting
+      that a row had no quantity at `since`, which is a claim about the past it has no evidence
+      for. The rewind reads a response ledger, never an item's fields. Carrying today's value
+      is the same choice `name` and `critical` already make two lines up.
+    */
+    quantityAmount: item.quantityAmount,
+    quantityUnit: item.quantityUnit,
+    quantityUnitCustom: item.quantityUnitCustom,
     response,
     item: clock ?? { dropOffAt: null, decideByOffsetHours: null },
   };

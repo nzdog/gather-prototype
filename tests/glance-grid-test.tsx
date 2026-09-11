@@ -30,6 +30,9 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+// PHASE 7. Ruling 1's fence, from the ONE list — never re-declared here. The variants are
+// scanned with exactly what every other glance source is scanned with.
+import { BEHAVIOUR_DENYLIST, collectKeys } from './glance-fence';
 
 const prisma = new PrismaClient();
 
@@ -95,12 +98,24 @@ function person(over: Record<string, unknown> = {}): any {
   };
 }
 
-/** The strip element that renders `label`, exactly — not a fixed-width slice around it. */
+/**
+ * The strip element that renders `label`, exactly — not a fixed-width slice around it.
+ *
+ * ⚠ IT LOOKS FOR EITHER ELEMENT AS OF RULING 32. Until phase 7 shipped, every strip that was
+ * not a red was a `<div>` and this only ever looked for one. Nine of eleven are doors now, so a
+ * helper that only found `<div>` would return '' for a green — and every assertion built on it
+ * would fail for a reason that had nothing to do with what it was testing.
+ */
 function stripFor(html: string, label: string): string {
   const at = html.indexOf(`<span>${label}</span>`);
   if (at < 0) return '';
-  const start = html.lastIndexOf('<div data-strip-state', at);
-  return start < 0 ? '' : html.slice(start, at);
+  const start = Math.max(
+    html.lastIndexOf('<div data-strip-state', at),
+    html.lastIndexOf('<button', at)
+  );
+  if (start < 0) return '';
+  const el = html.slice(start, at);
+  return el.includes('data-strip-state') ? el : '';
 }
 
 function redItem(reason: string, critical = false, name = 'The pavlova'): any {
@@ -112,6 +127,35 @@ function redItem(reason: string, critical = false, name = 'The pavlova'): any {
     state: 'RED',
     reason,
     decideByAt: null,
+    quantityAmount: null,
+    quantityUnit: null,
+    quantityUnitCustom: null,
+  };
+}
+
+/** A row as the reading panel meets it — RULING 32. `q` is [amount, unit, custom?]. */
+function heldItem(
+  name: string,
+  q: [number | null, string | null, string | null] = [null, null, null],
+  critical = false,
+  state = 'GREEN'
+): any {
+  return {
+    itemId: `i-${name.replace(/\W/g, '')}`,
+    assignmentId: 'a',
+    name,
+    critical,
+    kind: 'ITEM',
+    teamId: 't',
+    state,
+    reason: 'ACCEPTED',
+    // ⚠ A TIMESTAMP, ON PURPOSE. `GlancePerson` really carries these, and a fixture that
+    // omitted them would let the panel's no-timestamp assertion pass against a payload that
+    // never had one to lose. The panel must DROP it, not merely not-receive it.
+    decideByAt: '2026-09-04T05:00:00.000Z',
+    quantityAmount: q[0],
+    quantityUnit: q[1],
+    quantityUnitCustom: q[2],
   };
 }
 
@@ -135,6 +179,7 @@ async function main() {
   let GB: any = null; // src/components/glance/GlanceBoard
   let R: any = null; // src/lib/glance/read
   let GR: any = null; // src/components/glance/GlanceReplay — phase 6 slice 6c's island
+  let RD: any = null; // src/components/glance/reading — phase 7, Rulings 32 and 34
   // Each import stands alone. A shared try{} lets one missing module abort the rest, and
   // the RED run then reports forty failures that are really one — a legible RED is the
   // whole point of taking one.
@@ -144,6 +189,7 @@ async function main() {
     ['GlanceBoard', () => import('../src/components/glance/GlanceBoard'), (m) => (GB = m)],
     ['read', () => import('../src/lib/glance/read'), (m) => (R = m)],
     ['GlanceReplay', () => import('../src/components/glance/GlanceReplay'), (m) => (GR = m)],
+    ['reading', () => import('../src/components/glance/reading'), (m) => (RD = m)],
   ];
 
   /**
@@ -289,6 +335,30 @@ async function main() {
         ok(() => SP.whyLineFor(person({ state, reasons: ['AWAITING_REPLY'] })) === null)
       );
     }
+    /*
+      ⚠ RESTORED VERBATIM BY RULING 33 (2026-09-11), AND THE SUCCESSORS WRITTEN FOR ITS
+      RELAXATION ARE DELETED WITH THE VARIANT THEY GUARDED.
+
+      Phase 7 narrowed this guard in place so variant A could exist, and wrote the path back at
+      the site before taking the path forward: *"THE CONDITION UNDER WHICH THE ORIGINAL IS
+      RESTORED: a ruling against variant A. Then `clockPhraseFor` and its render sites are
+      deleted, `GlanceVariant` loses BOTH `'a'` and `'a2'`… and the guard goes back to its
+      original one-line form with its original label."*
+
+      That ruling came. The four lines below are the original, byte for byte, label included.
+
+      ⚠ AND RULING 34 MOVED THE FACT RATHER THAN KILLING IT, WHICH IS WHY THE GUARD'S OBJECT
+      MATTERS. The nudge day now lives in the READING PANEL (`src/components/glance/reading.ts`),
+      which is a different file for a different room — *"the same fact is a countdown on a strip
+      she did not ask for and an answer in a panel she chose to open."* This guard is about THE
+      STRIP, and Ruling 33 says so in those words: "the strip's source must once again be
+      provably free of nextNudgeAt."
+
+      ⚠ A NAME SCAN IS NOT THE WHOLE GUARD, AND IT IS NOT LEFT AS ONE. A clock could be put back
+      on a strip through the panel's module without either file naming `nextNudgeAt`. So the
+      mechanism is asserted too, further down: the rendered board carries no `data-strip-clock`,
+      and a strip's body is exactly a name, its optional state-words and an optional chevron.
+    */
     assert(
       'phase 7 held back',
       'no amber clock-line — the variant is phase 7 and shipping it would settle it by stealth',
@@ -298,6 +368,10 @@ async function main() {
         return src.length > 0 && !/nextNudgeAt/.test(src);
       })
     );
+    // ⚠ THE MECHANISM HALF OF THIS GUARD IS ASSERTED IN THE MARKUP LAYER, NOT HERE — see
+    // "a strip's body is a NAME…" under PHASE 7 below. It needs a rendered board, and this
+    // layer has none; an assertion written here would have referenced `html` before it exists
+    // and failed for a reason that had nothing to do with clocks.
 
     // ── Ruling 7: the two greys are a deliberate pair ─────────────────────
     assert(
@@ -383,17 +457,40 @@ async function main() {
     );
 
     // ══ LAYER 2 — the rendered markup ════════════════════════════════════
-    const board = (glance: any, eventName = 'Henderson family Christmas') =>
-      renderToStaticMarkup(
-        createElement(GB.default, {
-          glance,
-          eventName,
-          // Phase 4: the viewer's own authority and the date the remind copy needs. Both
-          // are the PAGE's to know — neither is board state, so neither is in the payload.
-          actorRole: 'HOST',
-          eventDate: 'Thursday 25 December',
-        })
-      );
+    /*
+      ⚠ THE RENDER IS WRAPPED, AND A MUTATION IS WHY — TWICE. "A SUITE THAT CANNOT REPORT ITS
+      RED IS NOT A RED" (the standing warning, from Ruling 30's first run, which crashed at
+      module scope and printed none of its 236 passing assertions).
+
+      `readingStatusWord` THROWS for a state `panelFor` cannot deliver, deliberately: a
+      `default:` returning something plausible is how a case that LATER can reach it arrives
+      silently wearing the wrong label. But an unwrapped `renderToStaticMarkup` turns that
+      throw into a dead suite — the mutation "the reading panel opens on a RED" killed the whole
+      run and reported nothing, which reads identically to a suite that was never written.
+
+      Caught here, it reads as an empty render and every assertion built on `html` fails and
+      SAYS SO. Same reason `ok()` exists for the assertions themselves.
+    */
+    const board = (glance: any, eventName = 'Henderson family Christmas') => {
+      try {
+        return renderToStaticMarkup(
+          createElement(GB.default, {
+            glance,
+            eventName,
+            // Phase 4: the viewer's own authority and the date the remind copy needs. Both
+            // are the PAGE's to know — neither is board state, so neither is in the payload.
+            actorRole: 'HOST',
+            eventDate: 'Thursday 25 December',
+          })
+        );
+      } catch (err) {
+        console.error(
+          `\x1b[31m!\x1b[0m the board threw while rendering: ` +
+            `${String((err as Error).message).split('\n')[0]}`
+        );
+        return '';
+      }
+    };
 
     const mixed = {
       eventId: 'e1',
@@ -640,21 +737,42 @@ async function main() {
         return doors.length === 2 && doors.every((at) => tagAt(html, at) === '<button');
       })
     );
+    /*
+      ⚠ NARROWED BY RULING 32 (2026-09-11), NOT DELETED. It read:
+
+        ['phase 4'] amber, green and the two greys are NOT — no button, no handler, no link on
+        any of them
+
+      Half of that is now false by ruling: green and amber open the READING panel, which is a
+      different room behind a different door and has no controls in it at all.
+
+      WHAT IS STILL PROTECTED, AND IT IS THE HALF RULING 17's SECOND SENTENCE HOLDS: the two
+      GREYS are not doors of either kind. A person Kate has taken off the system's hands, and a
+      person who has answered no, open nothing. Asserted here on the render and in `panelFor`
+      itself below, both gated on the positive case.
+
+      AND THE OTHER HALF SURVIVES IN ITS PROPER FORM: no strip is an ACTING door but a red —
+      asserted immediately above, on `data-strip-door`, which is the attribute `PersonSurface`
+      alone writes.
+    */
     assert(
-      'phase 4',
-      'amber, green and the two greys are NOT — no button, no handler, no link on any of them',
+      'Ruling 17 successor',
+      'the two GREYS are doors of NEITHER kind — no button, no handler, no link on either of them',
       ok(() => {
-        const others = ['AMBER', 'GREEN', 'OUT', 'NOT_CHASED'].flatMap((state) =>
+        const others = ['OUT', 'NOT_CHASED'].flatMap((state) =>
           html.split(`data-strip-state="${state}"`).slice(1)
         );
-        // GATED ON THE POSITIVE CASE. "Nothing here is a door" is trivially true of a
-        // board with no doors at all, so this cannot go green until the reds have theirs.
+        // GATED ON THE POSITIVE CASE. "Nothing here is a door" is trivially true of a board
+        // with no doors at all, so this cannot go green until both kinds exist on the board.
         return (
           html.includes('data-strip-door') &&
-          others.length === 6 &&
+          html.includes('data-strip-reading') &&
+          others.length === 2 &&
           others.every((chunk) => {
             const el = chunk.slice(0, chunk.indexOf('</div>'));
-            return !/<button|<a |onclick|role="button"|data-strip-door/i.test(el);
+            return !/<button|<a |onclick|role="button"|data-strip-door|data-strip-reading/i.test(
+              el
+            );
           })
         );
       })
@@ -668,18 +786,72 @@ async function main() {
           !/Remind|Move to|I’ll do it|Take over|Reassign/i.test(html)
       )
     );
+    /*
+      ⚠ NARROWED BY RULING 35 (2026-09-11), NOT DELETED, AND ITS SUCCESSOR IS THE HALF THAT
+      STILL HOLDS. It read:
+
+        ['phase 7 held back'] the red strip is NOT styled as a button — same tint, same text,
+        no hover, no cursor
+            !/hover:|cursor-|chevron|→|›/.test(html)
+
+      It cannot survive, because the treatment now ships by ruling: *"a chevron is a promise
+      that something opens… the treatment is honest on all nine."*
+
+      WHAT IS NO LONGER PROTECTED, PLAINLY: that no strip is styled as a door. Nine of eleven
+      are.
+
+      WHAT IS STILL PROTECTED, AND IT IS THE RULING'S OWN SECOND SENTENCE — *"The two that open
+      nothing must not wear it."* A strip that opens nothing carries no border, no chevron, no
+      cursor and no hover. Asserted BOTH WAYS below, so neither half can drift: every treated
+      strip opens something, and every sealed strip is untreated. The guard is `panelFor`
+      itself, which is also what decides the element — one answer, not two lists.
+
+      ⚠ AND THE OTHER HALF IT USED TO CARRY IS KEPT: a door still wears its own TINT unchanged.
+      The treatment is additive, never a substitute, which is what stops "styled as a door" from
+      quietly becoming "styled as something other than a red".
+    */
     assert(
-      'phase 7 held back',
-      'the red strip is NOT styled as a button — same tint, same text, no hover, no cursor',
+      'Ruling 35',
+      '⭐ EVERY TREATED STRIP OPENS SOMETHING — the promise and the routing are one function, so a chevron cannot appear on a strip with nothing behind it',
+      ok(() =>
+        (['RED', 'AMBER', 'GREEN', 'NOT_CHASED', 'OUT'] as const).every(
+          (st) => (SP.doorTreatmentFor(st) !== '') === (SP.panelFor(st) !== null)
+        )
+      )
+    );
+    assert(
+      'Ruling 35',
+      'and in the RENDER: the two sealed states wear nothing — no border, no chevron, no cursor, no hover, which is the ruling’s own second sentence',
+      ok(() => {
+        const sealed = ['OUT', 'NOT_CHASED'].map((st) =>
+          stripFor(html, st === 'OUT' ? 'Ray Dalton' : 'Aoife Dalton')
+        );
+        return (
+          sealed.every((el) => el.length > 0) &&
+          sealed.every((el) => !/hover:|cursor-|data-strip-chevron/.test(el)) &&
+          // The control: the treatment IS on the board, so the absence above is a refusal
+          // rather than a board that has no treatment anywhere.
+          /cursor-pointer/.test(html)
+        );
+      })
+    );
+    assert(
+      'Ruling 35',
+      'and a door still wears its own TINT — the treatment is additive, never a substitute, so a red door is still red',
       ok(() => {
         const at = html.indexOf('data-strip-door');
         const el = html.slice(html.lastIndexOf('<', at), html.indexOf('>', at));
-        return (
-          at > 0 &&
-          el.includes(SP.STRIP_TONE.RED.className) &&
-          !/hover:|cursor-|chevron|→|›/.test(html)
-        );
+        return at > 0 && el.includes(SP.STRIP_TONE.RED.className);
       })
+    );
+    assert(
+      'Ruling 35 / Ruling 7',
+      'and no TREATED state’s tone already carries a border — the two-border hazard cannot return silently if a state is ever added',
+      ok(() =>
+        (['RED', 'AMBER', 'GREEN', 'NOT_CHASED', 'OUT'] as const)
+          .filter((st) => SP.doorTreatmentReaches(st))
+          .every((st) => !SP.STRIP_TONE[st].className.includes('border-'))
+      )
     );
 
     // ══ PHASE 3 — Ruling 8's alert strip ═════════════════════════════════
@@ -1234,16 +1406,29 @@ async function main() {
     // decide them by widening one overlay. That is asserted below as three IDENTITIES between
     // the overlaid and unoverlaid renders, which is the only form in which "it did not reach
     // there" is a measurement rather than a promise.
-    const boardWith = (glance: any, sticky: readonly string[]) =>
-      renderToStaticMarkup(
-        createElement(GB.default, {
-          glance,
-          eventName: 'Henderson family Christmas',
-          actorRole: 'HOST',
-          eventDate: 'Thursday 25 December',
-          stickyReversals: sticky,
-        } as any)
-      );
+    // ⚠ WRAPPED, for the reason given at `board` above: an unwrapped render turns a deliberate
+    // throw into a dead suite that reports nothing. This is the THIRD render helper in the
+    // file and the last one that was not wrapped — found by the mutation that opens the
+    // reading panel on a red, which got as far as a legible RED and then died here.
+    const boardWith = (glance: any, sticky: readonly string[]) => {
+      try {
+        return renderToStaticMarkup(
+          createElement(GB.default, {
+            glance,
+            eventName: 'Henderson family Christmas',
+            actorRole: 'HOST',
+            eventDate: 'Thursday 25 December',
+            stickyReversals: sticky,
+          } as any)
+        );
+      } catch (err) {
+        console.error(
+          `\x1b[31m!\x1b[0m the overlaid board threw while rendering: ` +
+            `${String((err as Error).message).split('\n')[0]}`
+        );
+        return '';
+      }
+    };
 
     /** One strip's own element, whichever tag carries it — the door is a <button>. */
     const elementFor = (html: string, label: string): string => {
@@ -1601,6 +1786,364 @@ async function main() {
         );
       })
     );
+    /* ══ PHASE 7 — RULED AND SHIPPED. Rulings 32–36, 2026-09-11. ═══════════════════════════
+       ⚠ THE VARIANT-COMPARISON ASSERTIONS ARE DELETED, BY RULING 36. They existed only to
+       compare six renders of one board against each other — "the default is byte-identical to
+       a board with no variant prop", "no other variant renders a clock", and the rest. There
+       is one board now. A test that compares presentations is a test that keeps a switch
+       alive, and the switch is gone.
+
+       What replaces them asserts the RULES, not the renders.
+    */
+
+    /** Every strip in a rendered board, as (tag, state, class) — the mechanism, not a substring. */
+    const strips = (h: string) => {
+      const out: Array<{
+        tag: string;
+        state: string;
+        cls: string;
+        door: boolean;
+        reading: boolean;
+        el: string;
+      }> = [];
+      for (
+        let i = h.indexOf('data-strip-state=');
+        i >= 0;
+        i = h.indexOf('data-strip-state=', i + 1)
+      ) {
+        const open = h.slice(h.lastIndexOf('<', i), h.indexOf('>', i) + 1);
+        out.push({
+          tag: open.startsWith('<button') ? 'button' : open.startsWith('<div') ? 'div' : 'other',
+          state: /data-strip-state="([A-Z_]+)"/.exec(open)?.[1] ?? '',
+          cls: /class="([^"]*)"/.exec(open)?.[1] ?? '',
+          // Two kinds of door, told apart by the attribute each component writes rather than
+          // by both merely being `<button>`.
+          door: /data-strip-door/.test(open),
+          reading: /data-strip-reading/.test(open),
+          el: open,
+        });
+      }
+      return out;
+    };
+
+    const V_NOW = new Date('2026-08-31T12:00:00Z');
+    const STAMP = new Date(V_NOW.getTime() + 2 * DAY).toISOString();
+
+    // ── RULING 36: the switch is GONE from the tree ───────────────────────
+    assert(
+      'Ruling 36',
+      '⭐ THERE IS NO VARIANT SWITCH — no `parseVariant`, no `GlanceVariant`, no `GLANCE_VARIANTS`, and nothing on the page reads a query parameter',
+      ok(() => {
+        const pageSrc = code('src/app/plan/[eventId]/glance/page.tsx');
+        const stripSrc = code('src/components/glance/strip.ts');
+        const boardSrc = code('src/components/glance/GlanceBoard.tsx');
+        return (
+          pageSrc.length > 0 &&
+          stripSrc.length > 0 &&
+          boardSrc.length > 0 &&
+          !/parseVariant|GlanceVariant|GLANCE_VARIANTS/.test(stripSrc + boardSrc + pageSrc) &&
+          !/searchParams/.test(pageSrc) &&
+          typeof (SP as any).parseVariant === 'undefined'
+        );
+      })
+    );
+    assert(
+      'Ruling 33',
+      'and the clock-line is gone with it — no `clockPhraseFor`, no clock classes, in either form',
+      ok(
+        () =>
+          typeof (SP as any).clockPhraseFor === 'undefined' &&
+          typeof (SP as any).CLOCK_ALIGNED_CLASS === 'undefined' &&
+          typeof (SP as any).CLOCK_INLINE_CLASS === 'undefined'
+      )
+    );
+
+    // ── RULING 32 / 36: which room, and it takes no variant ───────────────
+    assert(
+      'Ruling 32 / routing',
+      '⭐ RED OPENS THE ACTING PANEL — and `panelFor` takes ONE argument now, so there is no presentation in which it does not',
+      ok(() => SP.panelFor('RED') === 'acting' && SP.panelFor.length === 1)
+    );
+    assert(
+      'Ruling 32 / routing',
+      'GREEN and AMBER open the READING panel — it ships, it is not a variant',
+      ok(() => SP.panelFor('GREEN') === 'reading' && SP.panelFor('AMBER') === 'reading')
+    );
+    assert(
+      'Ruling 17',
+      '⭐ AND OUT AND NOT_CHASED OPEN NOTHING — Ruling 17’s second sentence, untouched by every ruling in this phase: the mark is revisited at the pre-flight, not here',
+      ok(() => SP.panelFor('OUT') === null && SP.panelFor('NOT_CHASED') === null)
+    );
+    assert(
+      'Ruling 32 / routing',
+      'IN THE RENDER: reds are acting doors, greens and ambers are reading doors, the two greys are plain `<div>`s, and no strip is both kinds',
+      ok(() => {
+        const all = strips(html);
+        const acting = all.filter((x) => x.door);
+        const reading = all.filter((x) => x.reading);
+        const sealed = all.filter((x) => x.state === 'OUT' || x.state === 'NOT_CHASED');
+        return (
+          acting.length === 2 &&
+          acting.every((x) => x.state === 'RED') &&
+          reading.length === 4 &&
+          reading.every((x) => x.state === 'GREEN' || x.state === 'AMBER') &&
+          sealed.length === 2 &&
+          sealed.every((x) => x.tag === 'div') &&
+          all.every((x) => !(x.door && x.reading))
+        );
+      })
+    );
+    assert(
+      'Ruling 33',
+      'a strip’s body is a NAME, its optional state-words and an optional chevron — and nothing else, which is the mechanism that keeps a clock off it whatever it is called',
+      ok(() => {
+        const body = html.slice(html.indexOf('<span>Sam Whittaker</span>'));
+        const upTo = body.slice(0, body.indexOf('</div>'));
+        return (
+          upTo.length > 0 &&
+          // ⭐ THE MECHANISM HALF OF RULING 33's GUARD: no strip renders a clock, whatever it
+          // is called — which holds even if a future edit reached the cadence through another
+          // module and so never named `nextNudgeAt` in either scanned file.
+          !/data-strip-clock|data-strip-nudge/.test(html) &&
+          (upTo.match(/<span/g) ?? []).length <= 2
+        );
+      })
+    );
+
+    // ── RULING 34: the nudge day, in the panel, on ambers only ────────────
+    const amberWithClock = person({
+      name: 'Sam Whittaker',
+      state: 'AMBER',
+      reasons: ['AWAITING_REPLY'],
+      nextNudgeAt: STAMP,
+      items: [heldItem('The bread', [6, 'COUNT', null], false, 'AMBER')],
+    });
+    const greenWithClock = person({
+      name: 'Rob Whittaker',
+      state: 'GREEN',
+      nextNudgeAt: STAMP,
+      items: [
+        heldItem('The gravy', [2, 'L', null]),
+        heldItem('The pavlova', [1, 'TRAYS', null], true),
+        heldItem('The trifle', [1, 'CUSTOM', 'big bowl']),
+        heldItem('The crackers', [null, null, null]),
+      ],
+    });
+
+    assert(
+      'Ruling 34',
+      '⭐ AMBER GETS THE NUDGE DAY AND GREEN DOES NOT — "green has nothing pending and gets no line", on two people carrying the IDENTICAL nextNudgeAt',
+      ok(() => {
+        const amber = RD.readingPanelFor(amberWithClock, V_NOW);
+        const green = RD.readingPanelFor(greenWithClock, V_NOW);
+        return typeof amber.nudge === 'string' && green.nudge === null;
+      })
+    );
+    assert(
+      'Ruling 34',
+      '⭐ A WEEKDAY, NEVER A COUNT — the line contains NO DIGIT, which a count cannot satisfy and neither can a date',
+      ok(() => {
+        const line = RD.readingPanelFor(amberWithClock, V_NOW).nudge;
+        return typeof line === 'string' && line.length > 0 && !/\d/.test(line);
+      })
+    );
+    assert(
+      'Ruling 34',
+      'and a SPENT CADENCE renders nothing — no line saying there will be no more nudges, which would decide GTC-251’s exhaustion question from a display module',
+      ok(() => {
+        const spent = person({ state: 'AMBER', reasons: ['AWAITING_REPLY'], nextNudgeAt: null });
+        return (
+          RD.readingPanelFor(spent, V_NOW).nudge === null && RD.nudgeDayFor(spent, V_NOW) === null
+        );
+      })
+    );
+
+    /*
+      ⚠ THE NO-DATE FENCE IS NARROWED BY RULING 34, AND THE NARROWING IS NAMED HERE RATHER THAN
+      PERFORMED QUIETLY. The founder: *"THIS IS A DELIBERATE CARVE-OUT OF THE NO-TIMESTAMP RULE
+      AND MUST BE RECORDED AS ONE… The no-timestamp fence was about GUEST BEHAVIOUR — when they
+      opened, when they replied. A nudge day is the system's own promise about what IT will do
+      next, which is a different fact about a different actor."*
+
+      WHAT IS NOW ALLOWED: one line derived from `nextNudgeAt`, which is E1's cadence — a
+      SYSTEM instant computed from `PersonEvent.sentAt`, a record of when GATHER SENT. The
+      fence has always let that through; `glance-fence.ts` says so at the denylist: *"`sentAt`
+      is deliberately NOT here. It records when GATHER SENT… What the fence excludes is what
+      the GUEST did."*
+
+      WHAT IS STILL FORBIDDEN, AND IT IS ASSERTED POSITIVELY BELOW: no date of any kind derived
+      from anything a guest did, at any depth, in this panel. And the derived line is a WORD —
+      no ISO string, no epoch number, no digit — so the shape of the original assertion is
+      unchanged. It did not have to be weakened, and it was not.
+    */
+    // A source person carrying guest-derived dates, so the absence below is a DROP and not a
+    // gap: `openedAt` and `respondedAt` are on the behaviour denylist's own subject matter, and
+    // every row carries a `decideByAt`.
+    const leaky: any = {
+      ...greenWithClock,
+      openedAt: '2026-08-30T09:00:00.000Z',
+      respondedAt: '2026-08-30T10:00:00.000Z',
+      lastSeenAt: '2026-08-30T11:00:00.000Z',
+    };
+    assert(
+      'Ruling 34 / still forbidden',
+      '⭐ THE PANEL CARRIES NO GUEST-DERIVED DATE AT ANY DEPTH — on a person who carries three of them plus a decideByAt on every row',
+      ok(() => {
+        const panel = RD.readingPanelFor(leaky, V_NOW);
+        const keys = collectKeys(panel);
+        const src = JSON.stringify(leaky);
+        return (
+          // The control: the SOURCE really does carry them, so this is a drop.
+          /\d{4}-\d{2}-\d{2}T/.test(src) &&
+          ['openedAt', 'respondedAt', 'lastSeenAt', 'decideByAt'].every((k) => src.includes(k)) &&
+          keys.size > 0 &&
+          BEHAVIOUR_DENYLIST.every((b) => !keys.has(b)) &&
+          !keys.has('decideByAt') &&
+          !/\d{4}-\d{2}-\d{2}T/.test(JSON.stringify(panel)) &&
+          !/\b\d{13,}\b/.test(JSON.stringify(panel))
+        );
+      })
+    );
+    assert(
+      'Ruling 32 / payload',
+      'and the panel’s keys are EXACTLY the four ruled, its rows exactly four — an allowlist, because a denylist can only ban what someone thought of',
+      ok(() => {
+        const panel = RD.readingPanelFor(leaky, V_NOW);
+        return (
+          JSON.stringify(Object.keys(panel).sort()) ===
+            JSON.stringify(['name', 'nudge', 'rows', 'status']) &&
+          panel.rows.length === 4 &&
+          panel.rows.every(
+            (r: any) =>
+              JSON.stringify(Object.keys(r).sort()) ===
+              JSON.stringify(['critical', 'itemId', 'name', 'quantity'])
+          )
+        );
+      })
+    );
+    assert(
+      'Ruling 32 / status',
+      'the status word exists for GREEN and AMBER and THROWS for every other state — no plausible default for a case `panelFor` cannot deliver',
+      ok(() => {
+        const fine = ['GREEN', 'AMBER'].every((st) => typeof RD.readingStatusWord(st) === 'string');
+        const throws = ['RED', 'OUT', 'NOT_CHASED'].every((st) => {
+          try {
+            RD.readingStatusWord(st);
+            return false;
+          } catch {
+            return true;
+          }
+        });
+        return fine && throws;
+      })
+    );
+
+    // ── THE WALK'S TWO FIXES ──────────────────────────────────────────────
+    assert(
+      'Ruling 32 / quantity',
+      '⭐ ONE TRAY, NOT ONE TRAYS — the word units singularise at one and pluralise above it',
+      ok(() => {
+        const q = (amount: number, unit: string, custom: string | null = null) =>
+          RD.quantityLabel({
+            quantityAmount: amount,
+            quantityUnit: unit,
+            quantityUnitCustom: custom,
+          });
+        return (
+          q(1, 'TRAYS') === '1 tray' &&
+          q(2, 'TRAYS') === '2 trays' &&
+          q(1, 'PACKS') === '1 pack' &&
+          q(1, 'SERVINGS') === '1 serving' &&
+          q(12, 'SERVINGS') === '12 servings'
+        );
+      })
+    );
+    assert(
+      'Ruling 32 / quantity',
+      'and the SYMBOL units do not pluralise — "2 kg", never "2 kgs": a symbol has no plural',
+      ok(() => {
+        const q = (amount: number, unit: string) =>
+          RD.quantityLabel({
+            quantityAmount: amount,
+            quantityUnit: unit,
+            quantityUnitCustom: null,
+          });
+        return q(2, 'KG') === '2 kg' && q(1, 'KG') === '1 kg' && q(500, 'ML') === '500 ml';
+      })
+    );
+    assert(
+      'Ruling 32 / quantity',
+      'COUNT is dropped and a CUSTOM unit is the host’s own word, left exactly as she typed it',
+      ok(() => {
+        const q = (amount: number, unit: string, custom: string | null = null) =>
+          RD.quantityLabel({
+            quantityAmount: amount,
+            quantityUnit: unit,
+            quantityUnitCustom: custom,
+          });
+        return q(6, 'COUNT') === '6' && q(1, 'CUSTOM', 'big bowl') === '1 big bowl';
+      })
+    );
+    assert(
+      'Ruling 32 / quantity',
+      'A STATED DECISION WITH ITS COST: a PLACEHOLDER quantity and a genuine absence BOTH render blank, and the panel cannot tell her one is still open',
+      ok(() => {
+        const none = RD.quantityLabel({
+          quantityAmount: null,
+          quantityUnit: null,
+          quantityUnitCustom: null,
+        });
+        // A placeholder reaches the payload with a null amount, exactly like an absence —
+        // `quantityState` is deliberately not on the wire. Same input, same output, by design.
+        const placeholder = RD.quantityLabel({
+          quantityAmount: null,
+          quantityUnit: 'KG',
+          quantityUnitCustom: null,
+        });
+        return none === null && placeholder === null;
+      })
+    );
+
+    // ── RULING 31 AND THE TWO CLOSED CONSEQUENCES ─────────────────────────
+    assert(
+      'Ruling 31',
+      '⭐ THE READING PANEL HAS NO ACTION CONTROLS — it imports nothing from the action layer and names none of the four labels, so Ruling 31 is untouched by having nothing to be about',
+      ok(() => {
+        const src = code('src/components/glance/GlancePersonReading.tsx');
+        return (
+          src.length > 0 &&
+          !/from '@\/lib\/glance\/actions'/.test(src) &&
+          !/reassign|takeOver|remind|GLANCE_REFRESH_EVENT/i.test(src) &&
+          !/Move to|I’ll do it|Remind them|Take over/i.test(src)
+        );
+      })
+    );
+    assert(
+      'Ruling 31',
+      'and the only `<button>`s in it are the door and the close — nothing else is pressable, and there is no way out but closing',
+      ok(() => {
+        const src = code('src/components/glance/GlancePersonReading.tsx');
+        return (
+          src.length > 0 &&
+          (src.match(/<button/g) ?? []).length === 2 &&
+          !/<a |href=|useRouter|router\.push|next\/link/i.test(src)
+        );
+      })
+    );
+    assert(
+      'Ruling 32 / recorded',
+      'and the two consequences the superseded variant carried STAY RECORDED at the site — they return the moment a control is added, and they return with nothing failing',
+      ok(() => {
+        const src = raw('src/components/glance/GlancePersonReading.tsx');
+        return (
+          /remindOffered/.test(src) &&
+          /remindItemPhrase/.test(src) &&
+          /403/.test(src) &&
+          /BY CONSTRUCTION/.test(src)
+        );
+      })
+    );
+
     assert(
       'V1 untouched',
       'the V1 dashboard god file is not modified by this phase',

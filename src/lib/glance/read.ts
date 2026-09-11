@@ -84,6 +84,12 @@ const ASSIGNMENT_SELECT = {
       // colour — `deriveItemState` does not see them.
       kind: true,
       teamId: true,
+      // RULING 32 (amended 2026-09-11). The read-only panel's "what they are bringing".
+      // Read for display, never for a colour — `deriveItemState` does not see them, and a
+      // mutation that made a quantity move a tint fails `test:glance-read`.
+      quantityAmount: true,
+      quantityUnit: true,
+      quantityUnitCustom: true,
       dropOffAt: true,
       decideByOffsetHours: true,
     },
@@ -159,6 +165,9 @@ export async function readEventGlance(
       response: a.response,
       kind: a.item.kind,
       teamId: a.item.teamId,
+      quantityAmount: a.item.quantityAmount,
+      quantityUnit: a.item.quantityUnit,
+      quantityUnitCustom: a.item.quantityUnitCustom,
       item: { dropOffAt: a.item.dropOffAt, decideByOffsetHours: a.item.decideByOffsetHours },
     });
     heldBy.set(a.personId, held);
@@ -205,6 +214,9 @@ export async function readEventGlance(
           critical: i.critical,
           kind: i.kind,
           teamId: i.teamId,
+          quantityAmount: i.quantityAmount,
+          quantityUnit: i.quantityUnit,
+          quantityUnitCustom: i.quantityUnitCustom,
           state: derived.state,
           reason: derived.reason,
           decideByAt: decideByAtFor(i.response, i.item, glanceEvent),

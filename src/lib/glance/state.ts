@@ -120,6 +120,29 @@ export interface GlanceItemInput {
    */
   kind: string;
   teamId: string;
+  /**
+   * RULING 32 (amended 2026-09-11) — what the person is BRINGING, for the read-only panel.
+   *
+   * NOT COLOUR INPUTS, exactly like `kind` and `teamId` above: nothing in `deriveItemState`
+   * reads them and a mutation that made a quantity change a tint fails the suite. They are
+   * carried because a green strip "tells her someone is sorted but not what they are sorted
+   * FOR", and the panel that answers that needs the number.
+   *
+   * ⚠ THREE FIELDS, NOT THE TWO THE BRIEF NAMED, AND THE THIRD IS NOT EXTRA INFORMATION.
+   * `QuantityUnit` is an enum whose ninth member is `CUSTOM`; when it is CUSTOM the unit's
+   * actual word lives in `quantityUnitCustom`. Carrying two would render a custom unit as the
+   * literal string "CUSTOM". The third field IS the unit, in the case where the enum cannot
+   * hold it — not a fourth fact about the item.
+   *
+   * ⚠ AND WHAT IS DELIBERATELY LEFT BEHIND: `quantityText`, `quantityState`, `quantityLabel`,
+   * `quantitySource`, `quantityDeferredTo`. An item whose quantity is a PLACEHOLDER, or is
+   * free text ("a big bowl"), therefore shows NO quantity rather than showing that it has one
+   * nobody has settled. That is a stated cost of "quantity and unit only" — see
+   * `quantityLabel` in `src/components/glance/strip.ts`.
+   */
+  quantityAmount: number | null;
+  quantityUnit: string | null;
+  quantityUnitCustom: string | null;
   item: DecideByItem;
 }
 
@@ -152,6 +175,10 @@ export interface GlanceItem {
   /** Phase 4: `SameTeamItem`'s two fields, so REASSIGN's picker asks the shared rule. */
   kind: string;
   teamId: string;
+  /** RULING 32 — the read-only panel's "what they are bringing". See `GlanceItemInput`. */
+  quantityAmount: number | null;
+  quantityUnit: string | null;
+  quantityUnitCustom: string | null;
   state: ItemState;
   reason: ItemReason;
   /**

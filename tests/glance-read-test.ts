@@ -786,6 +786,39 @@ async function main() {
       })
     );
 
+    /*
+      PHASE 7 / RULING 32 — the three quantity fields reach the payload, and they are NOT
+      colour inputs.
+
+      ⚠ THE FIRST ASSERTION IS WHAT MAKES THE FENCE BELOW MEAN ANYTHING FOR THEM. `collectKeys`
+      scans what is there; three fields that never arrived are three fields the denylist
+      trivially does not find. So their presence is asserted as a POSITIVE before the scan, on
+      a board that actually has quantities, exactly as §5 layer 1 gates its runtime pass on a
+      non-empty replay.
+    */
+    assert(
+      'Ruling 32 payload',
+      'quantity, unit and the custom unit reach every row — the three fields the reading panel formats',
+      ok(() => {
+        const items = allPeople.flatMap((p: any) => p.items);
+        return (
+          items.length > 0 &&
+          items.every(
+            (i: any) => 'quantityAmount' in i && 'quantityUnit' in i && 'quantityUnitCustom' in i
+          )
+        );
+      })
+    );
+    assert(
+      'Ruling 32 payload',
+      'and they are NOT colour inputs — `deriveItemState` does not take them, so no quantity can move a tint',
+      ok(() => {
+        const src = code('src/lib/glance/state.ts');
+        const body = /export function deriveItemState[\s\S]*?\n\}/.exec(src)?.[0] ?? '';
+        return body.length > 0 && !/quantity/i.test(body);
+      })
+    );
+
     // A fence that passes on a missing payload is not a fence: every assertion below is
     // gated on the payload actually existing, so deleting the reader cannot turn it green.
     const keys = collectKeys(payload);
@@ -863,6 +896,19 @@ async function main() {
     // surface, so nothing was leaking — but "the fence follows every glance source" was not
     // true, and a fence with a hole in it is the thing this ticket keeps catching.
     const previewSrc = code('src/components/glance/GlanceReplayPreview.tsx');
+    // PHASE 7 / RULING 32 puts the READING PANEL in the tree, and it ships to a browser as a
+    // bundle. Ruling 1's fence follows it UNCHANGED — it is exempt from nothing. It is the one
+    // glance source whose whole content is a second payload, so "absent from the payload, not
+    // merely unrendered" is the sentence it exists to satisfy: it takes `ReadingPanel`, which
+    // has no date-shaped field at any depth, and never a `GlancePerson`, which has two.
+    const readingSrc = code('src/components/glance/GlancePersonReading.tsx');
+    // ⚠ AND ITS PURE MODEL, WHICH IS THE ONE GLANCE SOURCE THAT NOW READS A CADENCE INSTANT ON
+    // PURPOSE. RULING 34 carves the nudge day out of the no-timestamp rule — "a nudge day is
+    // the system's own promise about what IT will do next, which is a different fact about a
+    // different actor". Ruling 1's fence follows this file UNCHANGED and it is exempt from
+    // NOTHING: `nextNudgeAt` was never on the denylist, because `PersonEvent.sentAt` — the
+    // anchor it counts from — records when GATHER SENT and not what the guest did.
+    const readingModelSrc = code('src/components/glance/reading.ts');
     const glanceSources = [
       stateSrc,
       readSrc,
@@ -881,12 +927,14 @@ async function main() {
       paintSrc,
       liveIslandSrc,
       previewSrc,
+      readingSrc,
+      readingModelSrc,
     ];
     const sourcesExist = glanceSources.every((src) => src.length > 0);
     assert(
       'Ruling 1 source',
-      'EVERY GLANCE SOURCE EXISTS — the modules, the route, the page, the view, the actions, both islands, the painters and the preview; the gate and the scan are ONE list, so neither can be widened without the other',
-      sourcesExist && glanceSources.length === 17
+      'EVERY GLANCE SOURCE EXISTS — the modules, the route, the page, the view, the actions, both islands, the painters, the preview, the reading panel and its model; the gate and the scan are ONE list, so neither can be widened without the other',
+      sourcesExist && glanceSources.length === 19
     );
     for (const banned of BEHAVIOUR_DENYLIST) {
       const re = new RegExp(`\\b${banned}\\b`);
