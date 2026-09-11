@@ -586,6 +586,10 @@ function suite5_HardCasesAtHead(head: ScanResult) {
     'a verified webhook signature is a credential'
   );
 
+  // The count did NOT move when GTC-269 was fixed, and that is the correct result,
+  // not a stale number. GTC-269 closed a credential-scope defect, not a missing
+  // guard: `POST /demo/session` is still callable by anyone, so it is still one of
+  // these twelve. See the assertion immediately below for why that is deliberate.
   const noCredential = head.handlers.filter((h) => !h.guarded && h.otherCredentials.length === 0);
   logTest(
     'exactly 12 handlers carry no guard and no other credential of any kind',
@@ -593,14 +597,39 @@ function suite5_HardCasesAtHead(head: ScanResult) {
     `found ${noCredential.length}: ${noCredential.map(handlerKey).sort().join(', ')}`
   );
 
-  // GTC-269. Removed from GTC-268's scope by founder ruling, 2026-09-11: it is a
-  // live auth bypass, not a gate finding. Pinned here so the scanner's verdict on
-  // it is a committed fact while that ticket is open.
+  // GTC-269 — REWRITTEN WHEN THAT TICKET WAS FIXED. Read this before changing it.
+  //
+  // The previous version of this assertion was titled "carries NO guard and NO
+  // other credential of any kind (GTC-269)" and its comment said it pinned the
+  // scanner's verdict "while that ticket is open". Both are now misleading in the
+  // dangerous direction: the verdict is unchanged and still true, but the ticket is
+  // closed, so a reader meeting the old wording would reasonably conclude the
+  // vulnerability is still open. The name is the thing a failing suite prints, so
+  // the name has to say what is actually being held.
+  //
+  // What is deliberate: this handler requires no credential because GTC-015
+  // (`f6e4b41`, 2026-03-08) removed its production gate on purpose, so a stranger
+  // on the deployed site can click "Open Planning Dashboard" on `/demo`. Founder
+  // ruling, 2026-09-11, reaffirmed it.
+  //
+  // Where the containment actually lives — and it is NOT here. GTC-269's defect was
+  // that the route handed back a credential wider than the thing it demoed: a
+  // `Session` for a user whose `EventRole` set grew with the demo Person's hosting
+  // history. The fix bounds what the minted session REACHES, which no static scan
+  // of this route can see. It is asserted behaviourally in suite 11 of
+  // `tests/security-validation.ts`, by enumerating the events that session can
+  // reach. If you are here because you want proof that GTC-269 is still closed,
+  // this assertion is not it — suite 11 is.
   const demoSession = find('POST', 'src/app/api/demo/session/route.ts');
   logTest(
-    'POST /demo/session carries NO guard and NO other credential of any kind (GTC-269)',
+    'POST /demo/session is DELIBERATELY uncredentialed — it mints a bounded session, ' +
+      'it does not check one (GTC-015 product decision; scope held by GTC-269 in ' +
+      'security-validation suite 11)',
     demoSession !== undefined && !demoSession.guarded && demoSession.otherCredentials.length === 0,
-    `guarded=${demoSession?.guarded}, otherCredentials=${demoSession?.otherCredentials.length}`
+    `guarded=${demoSession?.guarded}, otherCredentials=${demoSession?.otherCredentials.length}. ` +
+      'A change here means someone added a guard or a credential to the route. That ' +
+      'may be correct, but it reverses GTC-015 — get a product ruling, do not just ' +
+      'update this number.'
   );
 }
 

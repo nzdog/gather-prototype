@@ -997,6 +997,353 @@ async function testSuite10_EventReadAuth(fixtures: Fixtures) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Test Suite 11 — GTC-269: the credential POST /api/demo/session hands out
+//
+// The defect held closed here is NOT "the route has no credential". The route is
+// DELIBERATELY reachable by anyone: GTC-015 (commit `f6e4b41`, 2026-03-08) removed
+// its production gate on purpose, so that a stranger on the deployed site can click
+// "Open Planning Dashboard" on `/demo`. Founder ruling, 2026-09-11: that product
+// decision stands.
+//
+// What does not stand is a credential wider than the thing it is demoing. The route
+// mints a `Session`, and a `Session` is a bearer credential for a whole `User` —
+// `getUser` in `src/lib/auth/session.ts` resolves the cookie to a user with no event
+// scoping whatsoever. Before this fix the route minted for the `User` linked to the
+// demo `Person`, and THAT user's `EventRole` set grows on its own as the Person's
+// hosting history grows: measured 2026-09-11, it held HOST on two events, one of
+// them `GTC-133 Sub-commit (g) Test` with `isDemo: false`.
+//
+// ⚠ THE ROUTE SCANNER CANNOT BE THE EVIDENCE FOR THIS FIX, and that is deliberate,
+// not a gap. After the fix `POST /api/demo/session` still carries no guard and no
+// credential of any kind, so its verdict in `tests/security-route-scan-control.ts`
+// is UNCHANGED and still true. The containment is not "who may call it" — it is
+// "what the thing it hands back can reach". So this suite asserts the property
+// itself, by ENUMERATING what the minted session reaches. It never counts
+// `EventRole` rows: a row count is a statement about the fix's implementation, and
+// the contract is about reach.
+//
+// Fixture rule 4 (a negative needs a positive control) applies throughout. The
+// legitimate demo path is asserted to still work in the same run as every refusal,
+// because a route that 409s on everything, or 500s, or was renamed, also "refuses".
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Read `session=` back out of a live response's Set-Cookie headers. */
+function sessionCookieFrom(res: Response): string | null {
+  const all =
+    typeof (res.headers as any).getSetCookie === 'function'
+      ? (res.headers as any).getSetCookie()
+      : [res.headers.get('set-cookie') ?? ''];
+  for (const raw of all as string[]) {
+    const m = /(?:^|;\s*)session=([^;]*)/.exec(raw ?? '');
+    if (m && m[1] && m[1].length > 0) return m[1];
+  }
+  return null;
+}
+
+async function testSuite11_DemoSessionScope(fixtures: Fixtures) {
+  logSection('Test Suite 11: GTC-269 — the demo session reaches exactly one event');
+
+  const BASE = process.env.SECURITY_TEST_BASE_URL ?? 'http://localhost:3000';
+
+  // ── The probe, same shape as suite 10 ────────────────────────────────────────
+  let probeOk = false;
+  try {
+    const probe = await fetch(`${BASE}/api/events/${fixtures.eventSent.id}/people`);
+    probeOk = probe.status === 401;
+  } catch {
+    probeOk = false;
+  }
+  logTest(
+    `dev server healthy on ${BASE} — a guarded sibling answers 401, not 500 or ECONNREFUSED`,
+    probeOk,
+    'Start it with `npm run dev`. These assertions cannot run without it.'
+  );
+  if (!probeOk) return;
+
+  // ── The subject ──────────────────────────────────────────────────────────────
+  //
+  // Resolved by `isDemo: true`, NOT by name. The demo event's name has drifted
+  // across six sites (GTC-272): `prisma/seed.ts` writes
+  // "Henderson Family Christmas 2026" while the route looks for "...2025". Mirroring
+  // the literal here would make this file a seventh site. `isDemo` is the column the
+  // route is being fixed to filter on, so it is also the honest handle.
+  const demoEvents = await prisma.event.findMany({
+    where: { isDemo: true },
+    select: { id: true, name: true },
+  });
+  logTest(
+    'CONTROL: exactly one isDemo event exists, so these assertions have a subject',
+    demoEvents.length === 1,
+    `found ${demoEvents.length}: ${demoEvents.map((e) => `${e.id} ${e.name}`).join(' | ')}. ` +
+      'Zero means the seed drift in GTC-272 has bitten — `prisma/seed.ts` writes a ' +
+      '2026 name and the route looks for 2025. This is a loud failure on purpose: a ' +
+      'silent skip here would be a suite that cannot report its red.'
+  );
+  if (demoEvents.length !== 1) return;
+  const demoEventId = demoEvents[0].id;
+
+  // Row accounting, per the ticket: asserted by counting rows, not by reading a
+  // status code. Recorded before anything is driven.
+  const sessionsBefore = await prisma.session.count();
+
+  // ── 11.1 POSITIVE CONTROL: the demo path still works for a stranger ──────────
+  const mintRes = await fetch(`${BASE}/api/demo/session`, { method: 'POST' });
+  const mintBody = await mintRes.json().catch(() => null);
+  const mintedToken = sessionCookieFrom(mintRes);
+
+  logTest(
+    'CONTROL: an anonymous caller still gets a demo session — GTC-015 stands',
+    mintRes.status === 200 && mintedToken !== null && mintBody?.eventId === demoEventId,
+    `status ${mintRes.status}; cookie ${mintedToken ? 'set' : 'ABSENT'}; ` +
+      `eventId ${mintBody?.eventId} (expected ${demoEventId})`
+  );
+
+  // ── 11.2 THE CONTRACT: enumerate what that session reaches ───────────────────
+  //
+  // `GET /api/events` takes a bare session with no event role and returns every
+  // event the user holds any role on. That is the enumeration: whatever it lists is
+  // what `requireEventRole` will then admit the holder to.
+  const mintedCookie = mintedToken ? `session=${mintedToken}` : 'session=';
+  const listRes = await fetch(`${BASE}/api/events`, { headers: { Cookie: mintedCookie } });
+  const listBody = await listRes.json().catch(() => null);
+  const reached: Array<{ id: string; name: string; isDemo: boolean }> = (
+    listBody?.events ?? []
+  ).map((e: any) => ({ id: e.id, name: e.name, isDemo: e.isDemo }));
+
+  logTest(
+    'the minted session reaches EXACTLY ONE event, and it is the demo event',
+    listRes.status === 200 && reached.length === 1 && reached[0].id === demoEventId,
+    `status ${listRes.status}; reaches ${reached.length}: ` +
+      reached.map((e) => `${e.id} "${e.name}" isDemo=${e.isDemo}`).join(' | ')
+  );
+
+  logTest(
+    'every event the minted session reaches is a demo event',
+    reached.length > 0 && reached.every((e) => e.isDemo === true),
+    reached.map((e) => `${e.name} isDemo=${e.isDemo}`).join(' | ') || 'reached nothing'
+  );
+
+  // ── 11.3 The same session, aimed at a real event, is refused ─────────────────
+  //
+  // Paired with its positive control in the same second, on the same URL: the
+  // fixture host's own cookie must still get 200 there. A 401 alone is also what a
+  // broken route, a typo'd path and a 500 return.
+  const crossRes = await fetch(`${BASE}/api/events/${fixtures.eventSent.id}`, {
+    headers: { Cookie: mintedCookie },
+  });
+  const crossControl = await fetch(`${BASE}/api/events/${fixtures.eventSent.id}`, {
+    headers: { Cookie: fixtures.user.sessionCookie },
+  });
+  logTest(
+    'the minted session is refused on a non-demo event (401/403)',
+    crossRes.status === 401 || crossRes.status === 403,
+    `status ${crossRes.status} — expected 401 or 403`
+  );
+  logTest(
+    'CONTROL: the real host still reaches that same event in the same run',
+    crossControl.status === 200,
+    `status ${crossControl.status} — if this is not 200 the refusal above proves nothing`
+  );
+
+  // ── 11.4 The credential is demo-shaped, not a standing one ───────────────────
+  const mintedRow = mintedToken
+    ? await prisma.session.findUnique({
+        where: { token: mintedToken },
+        select: { userId: true, expiresAt: true },
+      })
+    : null;
+  const lifetimeMs = mintedRow ? mintedRow.expiresAt.getTime() - Date.now() : -1;
+  const TWO_HOURS = 2 * 60 * 60 * 1000;
+  logTest(
+    'the minted session expires in hours, not the 30 days a real login gets',
+    mintedRow !== null && lifetimeMs > 0 && lifetimeMs <= TWO_HOURS + 60_000,
+    `lifetime ${Math.round(lifetimeMs / 60_000)} min — expected <= 120 min`
+  );
+
+  // ── 11.5 It does not clobber a session that is already there ─────────────────
+  //
+  // This is a live product bug in its own right, not hygiene: `/demo` is linked
+  // unconditionally from the homepage, so a signed-in host was two clicks from
+  // having their own `session` cookie silently replaced by the demo user's —
+  // signed out of their own account and into the demo without being told.
+  const sessionsBeforeClobber = await prisma.session.count();
+  const clobberRes = await fetch(`${BASE}/api/demo/session`, {
+    method: 'POST',
+    headers: { Cookie: fixtures.user.sessionCookie },
+  });
+  const clobberCookie = sessionCookieFrom(clobberRes);
+  const sessionsAfterClobber = await prisma.session.count();
+
+  logTest(
+    'a caller who already holds a session is refused, not silently re-credentialed',
+    clobberRes.status === 409,
+    `status ${clobberRes.status} — expected 409`
+  );
+  logTest(
+    'the refused call sets no session cookie, so the existing one survives',
+    clobberCookie === null,
+    clobberCookie ? `Set-Cookie carried session=${clobberCookie.slice(0, 12)}…` : ''
+  );
+  logTest(
+    'the refused call creates NO Session row — counted, not inferred from the status',
+    sessionsAfterClobber === sessionsBeforeClobber,
+    `${sessionsBeforeClobber} before, ${sessionsAfterClobber} after`
+  );
+
+  const hostStillValid = await fetch(`${BASE}/api/events/${fixtures.eventSent.id}`, {
+    headers: { Cookie: fixtures.user.sessionCookie },
+  });
+  logTest(
+    "CONTROL: the real host's session still works after the refused demo call",
+    hostStillValid.status === 200,
+    `status ${hostStillValid.status}`
+  );
+
+  // ── 11.6 The demo user is decoupled from the demo Person ─────────────────────
+  //
+  // This is the assertion that makes "exactly one event" durable rather than
+  // momentarily true. The old route minted for `person.userId`, so the demo
+  // credential inherited every event the demo Person ever hosted. A dedicated user
+  // that is never linked to a Person cannot inherit anything.
+  const demoEventRow = await prisma.event.findUnique({
+    where: { id: demoEventId },
+    select: { hostId: true },
+  });
+  const demoPerson = demoEventRow
+    ? await prisma.person.findUnique({
+        where: { id: demoEventRow.hostId },
+        select: { userId: true },
+      })
+    : null;
+  logTest(
+    'the session belongs to a dedicated user, NOT the user linked to the demo Person',
+    mintedRow !== null && demoPerson !== null && mintedRow.userId !== demoPerson.userId,
+    `session user ${mintedRow?.userId}; demo Person's user ${demoPerson?.userId}`
+  );
+
+  // ── 11.7 THE MUTATION — prove the enumeration above actually catches a widening
+  //
+  // Founder instruction, 2026-09-11: "Mutate it: link the demo user to a second
+  // event and prove the assertion catches it." A detector that has never fired is
+  // not a detector. The link is made AFTER the session is minted, so the route's own
+  // pruning cannot repair it before the enumeration runs.
+  let mutationCaught = false;
+  let mutationRestored = false;
+  if (mintedRow) {
+    await prisma.eventRole.create({
+      data: { userId: mintedRow.userId, eventId: fixtures.eventSent.id, role: 'HOST' },
+    });
+    const widened = await fetch(`${BASE}/api/events`, { headers: { Cookie: mintedCookie } });
+    const widenedBody = await widened.json().catch(() => null);
+    const widenedCount = (widenedBody?.events ?? []).length;
+    mutationCaught = widenedCount > 1;
+    logTest(
+      'MUTATION: linking the demo user to a second event IS caught by 11.2',
+      mutationCaught,
+      `after linking, the enumeration reports ${widenedCount} event(s) — if this is ` +
+        'still 1, assertion 11.2 cannot see a widening and proves nothing'
+    );
+
+    // ── The prune, asserted rather than assumed ──────────────────────────────
+    //
+    // Added after mutation M5 (removing the route's `eventRole.deleteMany`) left
+    // this suite fully green: the dedicated demo account has no stray roles to
+    // prune, so nothing above could see the prune's absence. An unasserted line in
+    // a security fix is a line that can be deleted by a future tidy-up without a
+    // single test going red.
+    //
+    // With the widening still in place, a FRESH call must hand back a session that
+    // reaches one event again — the route repairing the invariant, not merely
+    // having been correct once. This is what makes "exactly one EventRole forever"
+    // a property of the route rather than of today's data.
+    const repairRes = await fetch(`${BASE}/api/demo/session`, { method: 'POST' });
+    const repairToken = sessionCookieFrom(repairRes);
+    const repairList = await fetch(`${BASE}/api/events`, {
+      headers: { Cookie: `session=${repairToken ?? ''}` },
+    });
+    const repairBody = await repairList.json().catch(() => null);
+    const repairCount = (repairBody?.events ?? []).length;
+    logTest(
+      'the route PRUNES a widening it finds — a fresh session still reaches one event',
+      repairRes.status === 200 && repairCount === 1,
+      `status ${repairRes.status}; the fresh session reaches ${repairCount} event(s) — ` +
+        'the demo user was deliberately linked to a second event just before this ' +
+        'call, so 2 means the route accepted an inherited role instead of revoking it'
+    );
+    if (repairToken) await prisma.session.deleteMany({ where: { token: repairToken } });
+
+    await prisma.eventRole.deleteMany({
+      where: { userId: mintedRow.userId, eventId: fixtures.eventSent.id },
+    });
+    const restored = await fetch(`${BASE}/api/events`, { headers: { Cookie: mintedCookie } });
+    const restoredBody = await restored.json().catch(() => null);
+    mutationRestored = (restoredBody?.events ?? []).length === 1;
+    logTest(
+      'MUTATION REVERTED: the enumeration is back to exactly one event',
+      mutationRestored,
+      `reports ${(restoredBody?.events ?? []).length} event(s) after the revert`
+    );
+  }
+
+  // ── 11.8 The name lookup cannot resolve a real event ─────────────────────────
+  //
+  // ⚠ HONEST LABEL: this is a FORWARD REGRESSION GUARD, not a reproduced red. The
+  // route resolves by `findFirst` with no `orderBy`, so which of two same-named rows
+  // it returns is Postgres heap order — in practice the older row, which is the demo
+  // one. A decoy therefore cannot be made to win deterministically, and claiming
+  // this assertion as part of the RED would be claiming a proof that was never run.
+  // What it does hold: once `isDemo: true` is on the lookup, no non-demo row can
+  // ever be resolved, whatever the ordering.
+  const decoyName = demoEvents[0].name;
+  const decoyHost = await prisma.person.create({
+    data: { name: 'GTC-269 decoy host', email: 'gtc269-decoy@example.com' },
+  });
+  const decoy = await prisma.event.create({
+    data: {
+      name: decoyName,
+      startDate: new Date(),
+      endDate: new Date(Date.now() + 3_600_000),
+      status: 'DRAFT',
+      isDemo: false,
+      hostId: decoyHost.id,
+    },
+    select: { id: true },
+  });
+  const withDecoy = await fetch(`${BASE}/api/demo/session`, { method: 'POST' });
+  const withDecoyBody = await withDecoy.json().catch(() => null);
+  const decoyToken = sessionCookieFrom(withDecoy);
+  logTest(
+    'with a non-demo event of the SAME NAME present, the route still resolves the demo one',
+    withDecoy.status === 200 && withDecoyBody?.eventId === demoEventId,
+    `resolved ${withDecoyBody?.eventId}; decoy was ${decoy.id}; demo is ${demoEventId}`
+  );
+
+  // ── Teardown. Every row this suite wrote, removed in the same run. ───────────
+  //
+  // `clobberCookie` is deleted too, and that is not defensive padding: BEFORE the
+  // fix the clobber call succeeds and mints a real 30-day session, so a RED run
+  // writes a row the GREEN run never will. The first RED run of this suite leaked
+  // exactly that row and it was deleted by hand; this line is why that cannot
+  // happen twice.
+  if (clobberCookie) await prisma.session.deleteMany({ where: { token: clobberCookie } });
+  if (decoyToken) await prisma.session.deleteMany({ where: { token: decoyToken } });
+  await prisma.event.delete({ where: { id: decoy.id } });
+  await prisma.person.delete({ where: { id: decoyHost.id } });
+  if (mintedToken) await prisma.session.deleteMany({ where: { token: mintedToken } });
+
+  const sessionsAfter = await prisma.session.count();
+  logTest(
+    'teardown: every Session row this suite minted is gone',
+    sessionsAfter === sessionsBefore,
+    `${sessionsBefore} before the suite, ${sessionsAfter} after teardown`
+  );
+  console.log(
+    `  ${YELLOW}row accounting: Session rows ${sessionsBefore} before → ${sessionsAfter} ` +
+      `after; demo EventRole mutation created and deleted${RESET}`
+  );
+}
+
 async function main() {
   console.log(`${BOLD}${YELLOW}=== Security Validation Test Suite ===${RESET}\n`);
   console.log('Contract under test:');
@@ -1019,6 +1366,7 @@ async function main() {
     await testSuite8_NudgePredicateAndOptOut(fixtures);
     await testSuite9_FrozenResidue();
     await testSuite10_EventReadAuth(fixtures);
+    await testSuite11_DemoSessionScope(fixtures);
 
     console.log(`\n${BOLD}${YELLOW}=== Test Summary ===${RESET}`);
     console.log(`Total tests: ${testsRun}`);
