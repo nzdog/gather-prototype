@@ -3,11 +3,17 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  try {
-    const { id: eventId } = await context.params;
+  const { id: eventId } = await context.params;
 
+  // GTC-267: unauthenticated before this. Outside the try/catch so an auth failure
+  // answers 401/403 rather than falling through to a 500.
+  const auth = await requireEventRole(eventId, ['HOST', 'COHOST']);
+  if (auth instanceof NextResponse) return auth;
+
+  try {
     // Get team count
     const teamCount = await prisma.team.count({
       where: { eventId },

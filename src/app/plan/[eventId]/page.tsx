@@ -65,9 +65,12 @@ interface Event {
   sentAt: string | null;
   /**
    * GTC-209: "the thank-you was actioned" — not a phase, which is why it is not on
-   * `LifecycleEvent`. Already serialised by GET /api/events/[id] (it uses `include`
-   * with no top-level `select`), so gating the wrap-up offer on it costs no API change;
-   * the field was simply never declared here and so never read.
+   * `LifecycleEvent`.
+   *
+   * GTC-267: it used to be serialised by accident, because GET /api/events/[id]
+   * returned the whole row. That route now has an explicit `EVENT_WIRE_SELECT` and
+   * this interface is half of what defines it — a field added here must be added
+   * there too, or it arrives undefined.
    */
   wrappedAt: string | null;
   occasionType: string | null;
@@ -396,8 +399,16 @@ export default function PlanEditorPage() {
       // Fetch source event data for overlay summary
       const fetchSourceData = async () => {
         try {
+          // GTC-267: the source event is fetched from `/clone-source`, not from
+          // `/api/events/[id]`. The source of a GATHER_CURATED clone can belong to
+          // someone else, and that route now requires a role on the event it names.
+          //
+          // The `/people` fetch beside it is deliberately left pointing at the guarded
+          // route: it already answered 401 for an unowned source before this ticket,
+          // and the overlay already handles that — `sourcePeople` falls back to `[]`
+          // and the summary simply carries no guest names.
           const [eventRes, peopleRes] = await Promise.all([
-            fetch(`/api/events/${event.clonedFromId}`),
+            fetch(`/api/events/${event.clonedFromId}/clone-source`),
             fetch(`/api/events/${event.clonedFromId}/people`),
           ]);
           const eventData = await eventRes.json();
@@ -548,9 +559,10 @@ export default function PlanEditorPage() {
     try {
       if (!event) return;
 
-      // Use hostId query param for authentication
-      // This allows the Plan page to fetch tokens without requiring a stored token
-      const response = await fetch(`/api/events/${eventId}/tokens?hostId=${event.hostId}`);
+      // GTC-267: the `?hostId=` this used to send is gone. It was never a credential —
+      // it came from `GET /api/events/[id]`, which served it to anyone. Both routes now
+      // authenticate the session this page already holds.
+      const response = await fetch(`/api/events/${eventId}/tokens`);
 
       if (!response.ok) {
         console.error('Failed to load invite links:', response.status);
@@ -565,9 +577,7 @@ export default function PlanEditorPage() {
       // Also fetch invite status if in CONFIRMING status
       if (event.status === 'CONFIRMING') {
         try {
-          const statusResponse = await fetch(
-            `/api/events/${eventId}/invite-status?hostId=${event.hostId}`
-          );
+          const statusResponse = await fetch(`/api/events/${eventId}/invite-status`);
           if (statusResponse.ok) {
             const statusData = await statusResponse.json();
             const statusMap = new Map<string, any>();

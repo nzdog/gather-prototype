@@ -1,6 +1,9 @@
 // POST /api/events/[id]/revisions - Create manual revision snapshot
 // GET /api/events/[id]/revisions - List revisions (uncapped, cursor-paginated)
-// SECURITY: POST requires HOST role, derives actorId from session
+// SECURITY: both methods require a HOST or COHOST role; POST additionally derives
+// actorId from the session. GTC-267: the GET carried no guard at all while the POST
+// did, which is precisely the per-method gap the file-level inventory gate cannot
+// see — see [[GTC-268]].
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -27,9 +30,13 @@ const MAX_PAGE_SIZE = 200;
  * results continue after it). `nextCursor` is null on the last page.
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  try {
-    const { id: eventId } = await context.params;
+  const { id: eventId } = await context.params;
 
+  // GTC-267: unauthenticated before this, while the POST below was guarded.
+  const auth = await requireEventRole(eventId, ['HOST', 'COHOST']);
+  if (auth instanceof NextResponse) return auth;
+
+  try {
     // Verify event exists
     const event = await prisma.event.findUnique({
       where: { id: eventId },

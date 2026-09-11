@@ -1,16 +1,27 @@
 /**
- * Batch Import Auth Test — GTC-027
+ * Batch Import Auth Test — GTC-027, INVERTED BY GTC-267
  *
- * Asserts:
- * 1. /api/events/[id]/people/batch-import route accepts ?hostId= as a valid credential
- *    (mirrors the auth pattern applied in GTC-026 to /invite-status/route.ts)
- * 2. DRAFT-only status guard is preserved
- * 3. PeopleSection component passes ?hostId= in the batch-import fetch
- * 4. GTC-026 /invite-status auth fix is unaffected
+ * ⚠ THIS FILE ASSERTED THE OPPOSITE UNTIL 2026-09-11, AND THE INVERSION IS THE POINT.
  *
- * Root cause: POST /api/events/[id]/people/batch-import used session-only auth via
+ * GTC-027 made this file assert that `POST /api/events/[id]/people/batch-import`
+ * ACCEPTS `?hostId=` as a credential, copying what GTC-026 had done to
+ * `/invite-status`. Its root cause is recorded here so the reversal reads as a
+ * decision and not a regression: "POST .../batch-import used session-only auth via
  * requireEventRole. Hosts visiting via token link have no session → requireEventRole
- * returns 401 → browser shows "Forbidden". Same pattern as pre-fix /invite-status.
+ * returns 401 → browser shows 'Forbidden'."
+ *
+ * GTC-267 removed the parameter. `GET /api/events/[id]` served that same `hostId` to
+ * anonymous callers, which made this route — the only WRITE that accepted it — an
+ * unauthenticated import of arbitrary people into someone else's event, reachable
+ * from an event id alone. The GTC-027 justification does not survive that fix: the
+ * only route that reveals a hostId now requires a session itself.
+ *
+ * Suite 2 (the DRAFT-only guard) is untouched and still asserts what it always did.
+ *
+ * ⚠ EVERY CHECK READS CODE, NOT PROSE — see `readCode` below and the same note in
+ * `tests/invite-status-auth-test.ts`. The behavioural half, that an unauthenticated
+ * `?hostId=` POST is actually refused over HTTP, is in `tests/security-validation.ts`
+ * suite 10.
  *
  * Run with: npx tsx tests/batch-import-auth-test.ts
  */
@@ -57,57 +68,68 @@ const INVITE_STATUS_ROUTE = path.join(
   'src/app/api/events/[id]/invite-status/route.ts'
 );
 
-function testSuite1_BatchImportRouteAcceptsHostId() {
-  logSection('Test Suite 1: /people/batch-import Route — Accepts ?hostId= Credential');
+/**
+ * Source with comments removed — GTC-267's fix explains the removed `?hostId=` branch
+ * in prose, and a raw substring match reads that explanation as the branch itself.
+ * Same guard as `readCode` in `tests/security-validation.ts`.
+ */
+function readCode(file: string): string {
+  return fs
+    .readFileSync(file, 'utf-8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+}
 
-  const content = fs.readFileSync(BATCH_IMPORT_ROUTE, 'utf-8');
+function testSuite1_BatchImportRouteRefusesHostId() {
+  logSection('Test Suite 1: /people/batch-import Route — ?hostId= is NOT a credential');
 
-  // Test 1.1: Route reads hostId from query params
+  const content = readCode(BATCH_IMPORT_ROUTE);
+
+  // Test 1.1: the query param is not read at all.
   const readsHostId =
     content.includes('hostIdParam') || content.includes("searchParams.get('hostId')");
   logTest(
-    '/people/batch-import route reads hostId from query params',
-    readsHostId,
+    '/people/batch-import no longer reads hostId from query params (GTC-267)',
+    !readsHostId,
     readsHostId
-      ? undefined
-      : 'Route does not extract hostId from query params — ?hostId= auth path missing'
+      ? 'The ?hostId= auth path is back — on a WRITE route, reachable from an event id'
+      : undefined
   );
 
-  // Test 1.2: Route validates hostId against event.hostId
-  const validatesHostId =
-    content.includes('eventForAuth.hostId') || content.includes('hostId !== hostIdParam');
+  // Test 1.2: nothing compares a caller-supplied id to the event record.
+  const comparesHostId =
+    content.includes('eventForAuth.hostId') ||
+    content.includes('hostId !== hostIdParam') ||
+    content.includes('coHostId');
   logTest(
-    '/people/batch-import route validates hostId against event record',
-    validatesHostId,
-    validatesHostId ? undefined : 'Route does not validate hostId against DB — auth path incomplete'
+    '/people/batch-import no longer compares a supplied id against the event record',
+    !comparesHostId,
+    comparesHostId ? 'A param-vs-record comparison is back in the auth path' : undefined
   );
 
-  // Test 1.3: Route allows co-host access (parity with /tokens)
-  const allowsCoHost = content.includes('coHostId');
-  logTest(
-    '/people/batch-import route allows co-host access (parity with /tokens)',
-    allowsCoHost,
-    allowsCoHost
-      ? undefined
-      : 'Route does not check coHostId — co-hosts would be locked out (parity gap with /tokens)'
-  );
-
-  // Test 1.4: Session auth path (requireEventRole) is still present
+  // Test 1.3: the session guard is the only path.
   const hasSessionAuth = content.includes('requireEventRole');
   logTest(
-    '/people/batch-import retains session-based auth (requireEventRole) for hosts with active sessions',
+    '/people/batch-import authenticates via requireEventRole and nothing else',
     hasSessionAuth,
     hasSessionAuth ? undefined : 'requireEventRole removed — session auth broken'
   );
 
-  // Test 1.5: Auth check is OUTSIDE the main try/catch (auth failure must not be swallowed as 500)
-  // The auth block must appear before the outer try {
-  const authBeforeTry =
-    content.indexOf('searchParams.get') < content.indexOf('try {') ||
-    content.indexOf('hostIdParam') < content.indexOf('try {');
+  // Test 1.4: co-hosts keep the access the removed branch gave them.
+  const allowsCoHost = /requireEventRole\([^)]*COHOST/s.test(content);
   logTest(
-    'Auth check is outside the main try/catch (auth failures return correct status, not 500)',
-    authBeforeTry,
+    '/people/batch-import still admits the co-host, through the guard role list',
+    allowsCoHost,
+    allowsCoHost ? undefined : 'COHOST dropped from the role list — co-hosts locked out'
+  );
+
+  // Test 1.5: unchanged in intent from GTC-027 — the auth check must still sit outside
+  // the main try/catch, so an auth failure answers 401/403 and never a swallowed 500.
+  // Re-anchored onto the guard call, since the param it used to look for is gone.
+  const authBeforeTry = content.indexOf('requireEventRole') < content.indexOf('const body');
+  logTest(
+    'Auth check is outside the main try/catch (auth failures return a status, not 500)',
+    authBeforeTry && content.indexOf('requireEventRole') > -1,
     authBeforeTry
       ? undefined
       : 'Auth block is inside the outer try/catch — auth errors may be swallowed as 500'
@@ -139,77 +161,72 @@ function testSuite2_DraftOnlyGuardPreserved() {
   );
 }
 
-function testSuite3_PeopleSectionPassesHostId() {
-  logSection('Test Suite 3: PeopleSection — batch-import Fetch Includes ?hostId=');
+function testSuite3_PeopleSectionSendsNoHostId() {
+  logSection('Test Suite 3: PeopleSection — the batch-import fetch sends no ?hostId=');
 
-  const sectionContent = fs.readFileSync(PEOPLE_SECTION, 'utf-8');
+  const sectionContent = readCode(PEOPLE_SECTION);
 
-  // Test 3.1: PeopleSection accepts hostId prop
+  // Test 3.1: the prop survives — it is still read to mark who the host is in the
+  // people list. What changed is that it is no longer sent as a credential.
   const acceptsHostIdProp =
     sectionContent.includes('hostId?:') || sectionContent.includes('hostId:');
   logTest(
-    'PeopleSection accepts hostId prop',
+    'PeopleSection still takes a hostId prop (it marks the host in the list)',
     acceptsHostIdProp,
-    acceptsHostIdProp ? undefined : 'hostId not in PeopleSectionProps — cannot pass credential'
+    acceptsHostIdProp ? undefined : 'hostId dropped from PeopleSectionProps'
   );
 
-  // Test 3.2: The batch-import fetch includes hostId param
-  const hasHostIdInFetch =
-    /batch-import\?hostId/.test(sectionContent) ||
-    /batch-import.*\$\{.*hostId/.test(sectionContent) ||
-    sectionContent.includes('batch-import?hostId') ||
-    // Pattern: URL built conditionally based on hostId
-    (sectionContent.includes('hostId') && sectionContent.includes('batch-import'));
+  // Test 3.2: but the fetch no longer carries it.
+  const hasHostIdInFetch = /batch-import\?hostId/.test(sectionContent);
   logTest(
-    'PeopleSection batch-import fetch includes ?hostId= when hostId is available',
-    hasHostIdInFetch,
-    hasHostIdInFetch
-      ? undefined
-      : 'PeopleSection fetch to batch-import sends no credentials — will 401 for hosts without a session'
+    'PeopleSection batch-import fetch no longer sends ?hostId= (GTC-267)',
+    !hasHostIdInFetch,
+    hasHostIdInFetch ? 'The param is back on the write path' : undefined
   );
 
-  // Test 3.3: Plan page passes hostId to PeopleSection
-  const planContent = fs.readFileSync(PLAN_PAGE, 'utf-8');
-  const planPassesHostId =
-    /PeopleSection[\s\S]{0,200}hostId/.test(planContent) ||
-    /hostId[\s\S]{0,200}PeopleSection/.test(planContent);
+  // Test 3.3: the positive half — the bare call is present, so "no ?hostId=" cannot
+  // be satisfied by the fetch having been deleted.
+  const bareFetch = /batch-import`/.test(sectionContent);
   logTest(
-    'Plan page passes hostId to PeopleSection',
-    planPassesHostId,
-    planPassesHostId ? undefined : 'Plan page does not pass hostId to PeopleSection'
+    'PeopleSection posts to batch-import on the session alone',
+    bareFetch,
+    bareFetch ? undefined : 'The batch-import fetch is missing entirely'
   );
 }
 
-function testSuite4_InviteStatusUnchanged() {
-  logSection('Test Suite 4: /invite-status Auth Fix — Unaffected (Regression Guard)');
+function testSuite4_InviteStatusMatches() {
+  logSection('Test Suite 4: /invite-status — the same removal (parity guard)');
 
-  const content = fs.readFileSync(INVITE_STATUS_ROUTE, 'utf-8');
+  const content = readCode(INVITE_STATUS_ROUTE);
 
-  // Test 4.1: /invite-status still accepts ?hostId=
+  // Test 4.1: the sibling this route copied its auth from lost the param too. The
+  // parity guard is kept, with its sign flipped: the two must not drift apart.
   const acceptsHostId =
     content.includes("searchParams.get('hostId')") || content.includes('hostIdParam');
   logTest(
-    '/invite-status route still accepts ?hostId= credential (GTC-026 unchanged)',
-    acceptsHostId,
-    acceptsHostId ? undefined : '/invite-status route hostId auth path removed — GTC-026 regression'
+    '/invite-status route no longer accepts ?hostId= either (GTC-267 parity)',
+    !acceptsHostId,
+    acceptsHostId ? 'The two routes have drifted — /invite-status takes the param again' : undefined
   );
 
-  // Test 4.2: /invite-status still allows co-host
-  const allowsCoHost = content.includes('coHostId');
+  // Test 4.2: and co-host access still exists on that sibling, via the guard.
+  const allowsCoHost = /requireEventRole\([^)]*COHOST/s.test(content);
   logTest(
-    '/invite-status route still allows co-host access (GTC-026 unchanged)',
+    '/invite-status still admits the co-host, through the guard role list',
     allowsCoHost,
-    allowsCoHost ? undefined : '/invite-status coHostId check removed — GTC-026 regression'
+    allowsCoHost ? undefined : 'COHOST dropped from the role list — co-hosts locked out'
   );
 }
 
 function main() {
-  console.log(`${BOLD}${YELLOW}=== Batch Import Auth Test — GTC-027 ===${RESET}\n`);
+  console.log(
+    `${BOLD}${YELLOW}=== Batch Import Auth Test — GTC-027, inverted by GTC-267 ===${RESET}\n`
+  );
 
-  testSuite1_BatchImportRouteAcceptsHostId();
+  testSuite1_BatchImportRouteRefusesHostId();
   testSuite2_DraftOnlyGuardPreserved();
-  testSuite3_PeopleSectionPassesHostId();
-  testSuite4_InviteStatusUnchanged();
+  testSuite3_PeopleSectionSendsNoHostId();
+  testSuite4_InviteStatusMatches();
 
   console.log(`\n${BOLD}${YELLOW}=== Test Summary ===${RESET}`);
   console.log(`Total tests: ${testsRun}`);

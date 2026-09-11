@@ -722,6 +722,281 @@ async function testSuite9_FrozenResidue() {
   );
 }
 
+/**
+ * GTC-267 — the unguarded event reads.
+ *
+ * Nine GET handlers under /api/events/[id] answered 200 to a caller with no session,
+ * and three more routes accepted a `hostId` query parameter as a credential — a
+ * parameter the first of those nine published. An event id alone therefore reached
+ * the HOST access token and every guest's email. This suite is where that contract
+ * lives from now on.
+ *
+ * ── WHY THESE RUN OVER HTTP AND NOT IN-PROCESS ──────────────────────────────────
+ *
+ * `callRoute` above drives token routes directly because they authenticate from a
+ * path param. These are SESSION routes: `requireEventRole` reads the cookie through
+ * `getUser`, which needs a real request scope. Driving them in-process would assert
+ * against a null session in both the allowed and the refused case and pass for the
+ * wrong reason — so they are driven over HTTP against the dev server, exactly as
+ * `tests/glance-replay-test.ts` drives its own session assertions.
+ *
+ * ── THE SERVER PROBE IS AN ASSERTION, NOT A SKIP ────────────────────────────────
+ *
+ * Fixture rule 5: a suite that cannot report its red is not a red. If the dev server
+ * is down these tests cannot run, so the probe FAILS the suite rather than skipping
+ * it quietly. A green run always means the routes were actually exercised.
+ *
+ * ── EVERY REFUSAL IS PAIRED WITH ITS OWN GRANT ──────────────────────────────────
+ *
+ * Fixture rule 4: a negative needs a positive control. "401 without a session" is
+ * trivially true of a route that is broken, of a 500, and of a typo in the path. So
+ * every one of the nine is asserted TWICE against the same URL in the same run —
+ * refused cold, then 200 with the host's cookie. Only the pair means anything.
+ */
+async function testSuite10_EventReadAuth(fixtures: Fixtures) {
+  logSection('Test Suite 10: GTC-267 — event reads require a session');
+
+  const BASE = process.env.SECURITY_TEST_BASE_URL ?? 'http://localhost:3000';
+  const ev = fixtures.eventSent;
+  const HOST_COOKIE = { Cookie: fixtures.user.sessionCookie };
+
+  // ── The probe ────────────────────────────────────────────────────────────────
+  let probeOk = false;
+  try {
+    const probe = await fetch(`${BASE}/api/events/${ev.id}/people`);
+    probeOk = probe.status === 401;
+  } catch {
+    probeOk = false;
+  }
+  logTest(
+    `dev server healthy on ${BASE} — a guarded sibling answers 401, not 500 or ECONNREFUSED`,
+    probeOk,
+    'Start it with `npm run dev`. These assertions cannot run without it.'
+  );
+  if (!probeOk) return;
+
+  // ── Real sub-resource rows, so the :id routes have something to answer with ───
+  //
+  // The revision is written by `createRevision` in `src/lib/workflow.ts` — the real
+  // writer, per fixture rule 1.
+  //
+  // The Conflict row is written directly, and that is a DELIBERATE exception to rule
+  // 1, recorded rather than skipped: conflicts are produced by the AI detection route,
+  // which cannot be driven offline. The exception is safe here because nothing derives
+  // from a Conflict row — no ledger entry, no status, no downstream predicate. The
+  // assertion is "does this route answer without a session", for which the row is
+  // inert scenery, so writing it directly cannot encode a wrong model of how it got
+  // there.
+  const revisionId = await createRevision(ev.id, fixtures.host.id, 'GTC-267 fixture');
+  const conflict = await prisma.conflict.create({
+    data: {
+      eventId: ev.id,
+      fingerprint: `gtc267-${ev.id}`,
+      type: 'COVERAGE_GAP',
+      severity: 'ADVISORY',
+      claimType: 'RISK',
+      resolutionClass: 'INFORMATIONAL',
+      title: 'GTC-267 fixture conflict',
+      description: 'Exists so the per-conflict read has something to refuse.',
+    },
+  });
+
+  const NINE: Array<{ label: string; path: string }> = [
+    { label: 'GET /api/events/:id', path: `/api/events/${ev.id}` },
+    { label: 'GET /api/events/:id/summary', path: `/api/events/${ev.id}/summary` },
+    { label: 'GET /api/events/:id/items', path: `/api/events/${ev.id}/items` },
+    { label: 'GET /api/events/:id/days', path: `/api/events/${ev.id}/days` },
+    { label: 'GET /api/events/:id/conflicts', path: `/api/events/${ev.id}/conflicts` },
+    {
+      label: 'GET /api/events/:id/conflicts/dismissed',
+      path: `/api/events/${ev.id}/conflicts/dismissed`,
+    },
+    {
+      label: 'GET /api/events/:id/conflicts/:conflictId',
+      path: `/api/events/${ev.id}/conflicts/${conflict.id}`,
+    },
+    { label: 'GET /api/events/:id/revisions', path: `/api/events/${ev.id}/revisions` },
+    {
+      label: 'GET /api/events/:id/revisions/:revisionId',
+      path: `/api/events/${ev.id}/revisions/${revisionId}`,
+    },
+  ];
+
+  for (const route of NINE) {
+    const cold = await fetch(`${BASE}${route.path}`);
+    logTest(
+      `${route.label} — refused without a session (401/403)`,
+      cold.status === 401 || cold.status === 403,
+      `got ${cold.status}`
+    );
+  }
+
+  for (const route of NINE) {
+    const warm = await fetch(`${BASE}${route.path}`, { headers: HOST_COOKIE });
+    logTest(`${route.label} — still 200 for the host`, warm.status === 200, `got ${warm.status}`);
+  }
+
+  // ── `hostId` is not a credential ─────────────────────────────────────────────
+  //
+  // This is the step that turned a read leak into a takeover: the hostId these three
+  // accept is published by the first of the nine above.
+  const hostIdParam = fixtures.host.id;
+
+  const CRED_ROUTES: Array<{ label: string; path: string; method: 'GET' | 'POST' }> = [
+    {
+      label: 'GET /api/events/:id/tokens',
+      path: `/api/events/${ev.id}/tokens?hostId=${hostIdParam}`,
+      method: 'GET',
+    },
+    {
+      label: 'GET /api/events/:id/invite-status',
+      path: `/api/events/${ev.id}/invite-status?hostId=${hostIdParam}`,
+      method: 'GET',
+    },
+    {
+      label: 'POST /api/events/:id/people/batch-import',
+      path: `/api/events/${ev.id}/people/batch-import?hostId=${hostIdParam}`,
+      method: 'POST',
+    },
+  ];
+
+  for (const route of CRED_ROUTES) {
+    const res = await fetch(`${BASE}${route.path}`, {
+      method: route.method,
+      ...(route.method === 'POST'
+        ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ people: [] }) }
+        : {}),
+    });
+    logTest(
+      `${route.label} — ?hostId= alone is refused (401/403)`,
+      res.status === 401 || res.status === 403,
+      `got ${res.status}`
+    );
+  }
+
+  // The paired grant: the same three still work for a real host session.
+  for (const route of CRED_ROUTES) {
+    const res = await fetch(`${BASE}${route.path}`, {
+      method: route.method,
+      headers:
+        route.method === 'POST'
+          ? { ...HOST_COOKIE, 'Content-Type': 'application/json' }
+          : HOST_COOKIE,
+      ...(route.method === 'POST' ? { body: JSON.stringify({ people: [] }) } : {}),
+    });
+    // batch-import with an empty array reaches its own body check — a 400 proves the
+    // auth gate was passed without writing anything.
+    const ok = route.method === 'POST' ? res.status === 400 : res.status === 200;
+    logTest(`${route.label} — still reachable by the host`, ok, `got ${res.status}`);
+  }
+
+  // ── The whole chain, asserted end to end ─────────────────────────────────────
+  const chainStep1 = await fetch(`${BASE}/api/events/${ev.id}`);
+  const chainDead = chainStep1.status !== 200;
+  logTest(
+    'the takeover chain is dead at step 1 — an event id yields no hostId',
+    chainDead,
+    `step 1 answered ${chainStep1.status} to an anonymous caller`
+  );
+
+  // ── The select: fields that must never be serialised ─────────────────────────
+  //
+  // Populated FIRST, so an absence in the response is a DROP and not a gap. The
+  // shared link is written through its own route (`POST /api/events/[id]/shared-link`)
+  // — the real writer, per rule 1.
+  //
+  // The billing and telemetry scalars are written directly, a second recorded
+  // exception: their real writer is the Stripe webhook, which cannot be driven
+  // without Stripe, and like the Conflict row they are inert — nothing reads them
+  // back, nothing derives from them. What is under test is the serialiser, not how
+  // the columns came to hold a value.
+  const linkRes = await fetch(`${BASE}/api/events/${ev.id}/shared-link`, {
+    method: 'POST',
+    headers: HOST_COOKIE,
+  });
+  logTest(
+    'fixture: the shared link was minted through its own route',
+    linkRes.status === 200,
+    `got ${linkRes.status}`
+  );
+
+  await prisma.event.update({
+    where: { id: ev.id },
+    data: {
+      stripePaymentIntentId: 'pi_gtc267_fixture',
+      paidAt: new Date(),
+      amountPaid: 4900,
+      checkPlanInvocations: 3,
+      checkPlanBeforeGate: true,
+      blindAccept: true,
+      madeAnyEditBeforeCheckPlan: true,
+      manualAdditionsCount: 7,
+      hostReadinessConfidence: 'HIGH',
+      transitionAttempts: 2,
+    },
+  });
+
+  const populated = await prisma.event.findUnique({
+    where: { id: ev.id },
+    select: { sharedLinkToken: true, stripePaymentIntentId: true, amountPaid: true },
+  });
+  logTest(
+    'fixture: the forbidden columns really are populated (so an absence is a drop)',
+    Boolean(populated?.sharedLinkToken) &&
+      populated?.stripePaymentIntentId === 'pi_gtc267_fixture' &&
+      populated?.amountPaid === 4900
+  );
+
+  const FORBIDDEN = [
+    'sharedLinkToken',
+    'stripePaymentIntentId',
+    'paidAt',
+    'amountPaid',
+    'checkPlanInvocations',
+    'firstCheckPlanAt',
+    'checkPlanBeforeGate',
+    'transitionAttempts',
+    'transitionedToConfirmingAt',
+    'planSnapshotIdAtConfirming',
+    'blindAccept',
+    'madeAnyEditBeforeCheckPlan',
+    'manualAdditionsCount',
+    'hostReadinessConfidence',
+    'complianceAtFreeze',
+    'freezeReason',
+  ];
+
+  const getRes = await fetch(`${BASE}/api/events/${ev.id}`, { headers: HOST_COOKIE });
+  const getText = await getRes.text();
+  const getLeaks = FORBIDDEN.filter((f) => getText.includes(`"${f}"`));
+  logTest(
+    'GET /api/events/:id serialises none of the credential, billing or telemetry columns',
+    getLeaks.length === 0,
+    `leaked: ${getLeaks.join(', ')}`
+  );
+
+  // The host's email was included for nobody: no caller in the tree reads
+  // `event.host` off this route.
+  logTest(
+    'GET /api/events/:id no longer serialises the host or co-host email',
+    !getText.includes(fixtures.user.email),
+    'the host email is still in the response body'
+  );
+
+  const patchRes = await fetch(`${BASE}/api/events/${ev.id}`, {
+    method: 'PATCH',
+    headers: { ...HOST_COOKIE, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: ev.name }),
+  });
+  const patchText = await patchRes.text();
+  const patchLeaks = FORBIDDEN.filter((f) => patchText.includes(`"${f}"`));
+  logTest(
+    'PATCH /api/events/:id returns the same narrowed shape',
+    patchRes.status === 200 && patchLeaks.length === 0,
+    `status ${patchRes.status}; leaked: ${patchLeaks.join(', ')}`
+  );
+}
+
 async function main() {
   console.log(`${BOLD}${YELLOW}=== Security Validation Test Suite ===${RESET}\n`);
   console.log('Contract under test:');
@@ -743,6 +1018,7 @@ async function main() {
     await testSuite7_NoUndoPostSend(fixtures);
     await testSuite8_NudgePredicateAndOptOut(fixtures);
     await testSuite9_FrozenResidue();
+    await testSuite10_EventReadAuth(fixtures);
 
     console.log(`\n${BOLD}${YELLOW}=== Test Summary ===${RESET}`);
     console.log(`Total tests: ${testsRun}`);

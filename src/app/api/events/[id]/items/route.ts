@@ -1,11 +1,17 @@
 // GET /api/events/[id]/items - Get all items for an event
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  try {
-    const { id: eventId } = await context.params;
+  const { id: eventId } = await context.params;
 
+  // GTC-267: unauthenticated before this, and the widest of the nine by content —
+  // it returns every guest's name against the item they were asked to bring.
+  const auth = await requireEventRole(eventId, ['HOST', 'COHOST']);
+  if (auth instanceof NextResponse) return auth;
+
+  try {
     const items = await prisma.item.findMany({
       where: {
         team: { eventId },

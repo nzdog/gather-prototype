@@ -181,10 +181,11 @@ export default function PeopleSection({
 
   const handleBatchImport = async (people: PersonRow[]) => {
     try {
-      const url = hostId
-        ? `/api/events/${eventId}/people/batch-import?hostId=${hostId}`
-        : `/api/events/${eventId}/people/batch-import`;
-      const response = await fetch(url, {
+      // GTC-267: this used to append `?hostId=` when it had one, and the route
+      // accepted it as a credential. It never was one — `GET /api/events/[id]`
+      // served that same id to anonymous callers, which made this the only
+      // unauthenticated WRITE in the chain. The route now reads the session.
+      const response = await fetch(`/api/events/${eventId}/people/batch-import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ people }),
