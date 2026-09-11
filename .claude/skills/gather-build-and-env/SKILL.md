@@ -70,7 +70,7 @@ Table verified against `.env.example` and code consumers (as of 2026-07-09):
 | `STRIPE_PRICE_ID` | Price for the per-event checkout | Required for the pay-to-create-event flow | Stripe Dashboard → Products (create a price) |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_PHONE_NUMBER` | SMS to non-NZ/AU numbers | OPTIONAL — SMS nudges are skipped with a logged warning if unset | twilio.com/console |
 | `TNZ_AUTH_TOKEN` | SMS to NZ (+64) / AU (+61) via TNZ (`src/lib/sms/tnz-client.ts` — the module-level `TNZ_AUTH_TOKEN` read / `isTnzEnabled()`) | Optional in dev; required for production NZ delivery (Twilio does not deliver to NZ) | TNZ Dashboard → Users → API tab → Auth Token (per `GATHER-BUILD-CONSTANTS.md`) |
-| `CRON_SECRET` | Authenticates `/api/cron/*` requests (nudges, wrap-up dispatch) | Optional in dev — cron routes only enforce it when it is set | `openssl rand -base64 32` |
+| `CRON_SECRET` | Authenticates `/api/cron/*` requests (nudges, wrap-up dispatch, decide-by follow-ups) | **REQUIRED to trigger a cron route at all.** Since GTC-270 the routes fail closed: unset or empty refuses every caller with 401. Put it in `.env.local` — the dev server loads that, `tsx` does not | `openssl rand -base64 32` |
 
 **Known drift (as of 2026-07-09):** `TNZ_AUTH_TOKEN` is documented in `GATHER-BUILD-CONSTANTS.md`
 and consumed in code, but is MISSING from `.env.example`. Add the line to your `.env` by hand.

@@ -1344,6 +1344,446 @@ async function testSuite11_DemoSessionScope(fixtures: Fixtures) {
   );
 }
 
+/**
+ * Test Suite 12 — GTC-270: the cron guard fails closed on an unset secret.
+ *
+ * WHY THE HEADLINE PROPERTY IS ASSERTED IN-PROCESS AND NOT OVER HTTP.
+ *
+ * The property is "an UNSET `CRON_SECRET` admits nobody". All three route modules
+ * read the secret at module scope — `const CRON_SECRET = process.env.CRON_SECRET`
+ * at the top of each file, evaluated once when the module loads. A test process
+ * cannot unset the environment of a server that is already running, and the dev
+ * server on :3000 has the secret set from `.env.local`, so over HTTP this suite can
+ * only ever observe the CONFIGURED quadrant.
+ *
+ * `isNudgeRunHealthy` in `src/lib/sms/nudge-scheduler.ts` records the same problem
+ * and the same answer, for provider configuration rather than this one: "Pure, and
+ * exported so both directions can be asserted without a database or a provider —
+ * the live cron can only ever demonstrate one quadrant per process, because
+ * provider configuration is captured at module scope." That is this problem, solved
+ * once already in this tree.
+ *
+ * So the quadrants are split deliberately, and each part asserts what it alone can:
+ *
+ *   A  the predicate itself — pure, both directions, injected values, no I/O
+ *   B  the six handlers with the secret DELETED BEFORE the module loads — the
+ *      ticket's headline case, reproduced without restarting a server
+ *   C  the live server, which HAS the secret, for the three states it can show
+ *   D  the response body carries counts, never recipient names
+ *   E  row accounting: no send happened, counted rather than assumed
+ *
+ * ⚠ B AND C DRIVE REAL SMS SENDER ROUTES, AND THE ORDERING IS THE SAFETY MECHANISM.
+ * Every probe sits behind a canary on `/api/cron/wrap-up-dispatch` — the only one of
+ * the three that can be SHOWN to send nothing on this database, because zero
+ * undispatched `WrapUpLink` rows is asserted here rather than assumed. If the canary
+ * is ADMITTED rather than refused, the guard is open, and the remaining probes are
+ * not run at all: driving `/api/cron/nudges` through an open guard is the one thing
+ * this ticket must never do to prove its own point. On a RED run the canary is
+ * admitted, so RED drives wrap-up-dispatch and nothing else.
+ */
+async function testSuite12_CronSecretFailsClosed(_fixtures: Fixtures) {
+  logSection('Test Suite 12: GTC-270 — the cron guard fails closed on an unset secret');
+
+  const BASE = process.env.SECURITY_TEST_BASE_URL ?? 'http://localhost:3000';
+  const inviteEventsBefore = await prisma.inviteEvent.count();
+
+  // ── A. THE PREDICATE, PURE ──────────────────────────────────────────────────────
+  //
+  // This is the assertion the ticket exists for, and it is the only form of it that
+  // is deterministic: no server, no database, no provider, no clock.
+  let secretMod: {
+    isCronSecretConfigured: (configured: string | undefined) => boolean;
+    cronSecretAccepted: (
+      configured: string | undefined,
+      provided: string | null | undefined
+    ) => boolean;
+  } | null = null;
+  try {
+    secretMod = await import('../src/app/api/cron/cron-secret');
+  } catch (e: any) {
+    secretMod = null;
+  }
+
+  const predicate = (name: string, fn: () => boolean) => {
+    if (!secretMod) {
+      logTest(name, false, 'src/app/api/cron/cron-secret.ts does not exist or does not export it');
+      return;
+    }
+    let ok = false;
+    let err: string | undefined;
+    try {
+      ok = fn();
+    } catch (e: any) {
+      err = e.message;
+    }
+    logTest(name, ok, err);
+  };
+
+  predicate(
+    'PREDICATE: an UNSET secret refuses a caller who supplies one — the whole ticket',
+    () => secretMod!.cronSecretAccepted(undefined, 'anything-at-all') === false
+  );
+  predicate(
+    'PREDICATE: an UNSET secret refuses a caller who supplies nothing',
+    () => secretMod!.cronSecretAccepted(undefined, undefined) === false
+  );
+  predicate(
+    'PREDICATE: an EMPTY secret is unset too, and refuses',
+    () => secretMod!.cronSecretAccepted('', 'anything-at-all') === false
+  );
+  predicate(
+    'PREDICATE: an EMPTY secret is not satisfied by an EMPTY credential ("" === "")',
+    () => secretMod!.cronSecretAccepted('', '') === false
+  );
+  predicate(
+    'PREDICATE: a SET secret refuses a wrong credential',
+    () => secretMod!.cronSecretAccepted('s3cret-gtc270', 'wrong') === false
+  );
+  predicate(
+    'PREDICATE: a SET secret refuses a missing credential',
+    () => secretMod!.cronSecretAccepted('s3cret-gtc270', null) === false
+  );
+  predicate(
+    'PREDICATE [POSITIVE CONTROL]: a SET secret ACCEPTS the right credential',
+    () => secretMod!.cronSecretAccepted('s3cret-gtc270', 's3cret-gtc270') === true
+  );
+  predicate(
+    'PREDICATE: isCronSecretConfigured(undefined) is false',
+    () => secretMod!.isCronSecretConfigured(undefined) === false
+  );
+  predicate(
+    'PREDICATE: isCronSecretConfigured("") is false',
+    () => secretMod!.isCronSecretConfigured('') === false
+  );
+  predicate(
+    'PREDICATE [POSITIVE CONTROL]: isCronSecretConfigured("s3cret") is true',
+    () => secretMod!.isCronSecretConfigured('s3cret-gtc270') === true
+  );
+
+  // ── B. THE SIX HANDLERS, WITH THE SECRET UNSET AT MODULE LOAD ───────────────────
+  //
+  // `delete process.env.CRON_SECRET` runs BEFORE the first import of any route
+  // module, so each module's own module-scope read sees undefined. That is the
+  // deployment state the ticket is about, reproduced exactly, in-process.
+  //
+  // The module-scope capture is a wart in every other respect and it is the thing
+  // that makes this assertion possible at all. Recorded because it looks accidental.
+  const savedSecret = process.env.CRON_SECRET;
+  delete process.env.CRON_SECRET;
+
+  const pendingWrapUps = await prisma.wrapUpLink.count({ where: { dispatched: false } });
+  logTest(
+    'SAFETY PRECONDITION: zero undispatched WrapUpLink rows, so the canary route sends nothing even if admitted',
+    pendingWrapUps === 0,
+    `${pendingWrapUps} undispatched row(s) — do not run this suite until that is zero`
+  );
+
+  type Handler = (req: NextRequest) => Promise<Response>;
+  const req = (path: string, method: 'GET' | 'POST') =>
+    new NextRequest(`http://localhost:3000${path}`, { method });
+
+  let canaryRefused = false;
+  if (pendingWrapUps === 0) {
+    try {
+      const wrapMod = (await import('../src/app/api/cron/wrap-up-dispatch/route')) as {
+        GET: Handler;
+        POST: Handler;
+      };
+      const canary = await wrapMod.POST(req('/api/cron/wrap-up-dispatch', 'POST'));
+      canaryRefused = canary.status === 401;
+      logTest(
+        'CANARY: POST /api/cron/wrap-up-dispatch with CRON_SECRET unset is REFUSED (401)',
+        canaryRefused,
+        `status ${canary.status} — the guard is open; the remaining five handlers were NOT driven`
+      );
+      // Logged in BOTH states, never conditionally skipped: an assertion that does
+      // not exist when the suite is red is one the red run cannot report.
+      if (canaryRefused) {
+        const wrapGet = await wrapMod.GET(req('/api/cron/wrap-up-dispatch', 'GET'));
+        logTest(
+          'unset secret: GET /api/cron/wrap-up-dispatch is refused (401)',
+          wrapGet.status === 401,
+          `status ${wrapGet.status}`
+        );
+      } else {
+        logTest(
+          'unset secret: GET /api/cron/wrap-up-dispatch is refused (401)',
+          false,
+          'NOT DRIVEN — the canary was admitted, so the guard is open'
+        );
+      }
+    } catch (e: any) {
+      logTest(
+        'CANARY: POST /api/cron/wrap-up-dispatch with CRON_SECRET unset is REFUSED (401)',
+        false,
+        e.message
+      );
+    }
+  }
+
+  const drivenBehindCanary: [string, string, 'GET' | 'POST'][] = [
+    ['../src/app/api/cron/decide-by-followups/route', '/api/cron/decide-by-followups', 'GET'],
+    ['../src/app/api/cron/decide-by-followups/route', '/api/cron/decide-by-followups', 'POST'],
+    ['../src/app/api/cron/nudges/route', '/api/cron/nudges', 'GET'],
+    ['../src/app/api/cron/nudges/route', '/api/cron/nudges', 'POST'],
+  ];
+
+  for (const [modPath, apiPath, method] of drivenBehindCanary) {
+    const name = `unset secret: ${method} ${apiPath} is refused (401)`;
+    if (!canaryRefused) {
+      logTest(
+        name,
+        false,
+        'NOT DRIVEN — the canary was admitted, so the guard is open and driving an SMS sender through it was refused'
+      );
+      continue;
+    }
+    try {
+      const mod = (await import(modPath)) as { GET: Handler; POST: Handler };
+      const res = await mod[method](req(apiPath, method));
+      logTest(name, res.status === 401, `status ${res.status}`);
+    } catch (e: any) {
+      logTest(name, false, e.message);
+    }
+  }
+
+  if (savedSecret !== undefined) process.env.CRON_SECRET = savedSecret;
+
+  // ── C. THE LIVE SERVER, WHICH HAS THE SECRET ────────────────────────────────────
+  //
+  // The dev server loads `.env.local`; this process does not (tsx loads `.env`, and
+  // Prisma loads it for us — see the migrate-status banner). So the credential for
+  // the positive control is read from the same file the server read, by hand. It is
+  // never logged.
+  let serverSecret: string | undefined;
+  try {
+    const dotenv = await import('dotenv');
+    const envLocal = path.join(__dirname, '..', '.env.local');
+    if (fs.existsSync(envLocal)) {
+      serverSecret = dotenv.parse(fs.readFileSync(envLocal)).CRON_SECRET;
+    }
+  } catch {
+    serverSecret = undefined;
+  }
+
+  let liveProbeOk = false;
+  try {
+    const probe = await fetch(`${BASE}/api/cron/wrap-up-dispatch`, { method: 'POST' });
+    liveProbeOk = probe.status === 401;
+  } catch {
+    liveProbeOk = false;
+  }
+  logTest(
+    `LIVE CANARY: dev server on ${BASE} refuses an uncredentialed POST /api/cron/wrap-up-dispatch (401)`,
+    liveProbeOk,
+    'either the server is down, or its CRON_SECRET is unset and the guard is open — the live probes were NOT run'
+  );
+
+  const liveRefusals: [string, 'GET' | 'POST'][] = [
+    ['/api/cron/wrap-up-dispatch', 'GET'],
+    ['/api/cron/wrap-up-dispatch', 'POST'],
+    ['/api/cron/decide-by-followups', 'GET'],
+    ['/api/cron/decide-by-followups', 'POST'],
+    ['/api/cron/nudges', 'GET'],
+    ['/api/cron/nudges', 'POST'],
+  ];
+
+  for (const [apiPath, method] of liveRefusals) {
+    const name = `live: ${method} ${apiPath} with a WRONG secret is refused (401)`;
+    if (!liveProbeOk) {
+      logTest(name, false, 'NOT DRIVEN — the live canary was admitted or the server is down');
+      continue;
+    }
+    try {
+      const res = await fetch(`${BASE}${apiPath}?secret=definitely-not-the-secret`, { method });
+      logTest(name, res.status === 401, `status ${res.status}`);
+    } catch (e: any) {
+      logTest(name, false, e.message);
+    }
+  }
+
+  // Both documented credential channels, asserted on the route that sends nothing.
+  let queryChannelBody: any = null;
+  if (liveProbeOk && serverSecret) {
+    try {
+      const res = await fetch(
+        `${BASE}/api/cron/wrap-up-dispatch?secret=${encodeURIComponent(serverSecret)}`
+      );
+      queryChannelBody = await res.json();
+      logTest(
+        'live [POSITIVE CONTROL]: GET /api/cron/wrap-up-dispatch with the RIGHT secret in ?secret= answers 200',
+        res.status === 200,
+        `status ${res.status}`
+      );
+    } catch (e: any) {
+      logTest('live [POSITIVE CONTROL]: ?secret= channel answers 200', false, e.message);
+    }
+    try {
+      const res = await fetch(`${BASE}/api/cron/wrap-up-dispatch`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${serverSecret}` },
+      });
+      logTest(
+        'live [POSITIVE CONTROL]: POST /api/cron/wrap-up-dispatch with the RIGHT secret in Authorization: Bearer answers 200',
+        res.status === 200,
+        `status ${res.status}`
+      );
+    } catch (e: any) {
+      logTest('live [POSITIVE CONTROL]: Bearer channel answers 200', false, e.message);
+    }
+  } else {
+    const why = !liveProbeOk
+      ? 'the live canary was admitted or the server is down'
+      : 'CRON_SECRET could not be read from .env.local, so the positive control cannot be constructed';
+    logTest('live [POSITIVE CONTROL]: ?secret= channel answers 200', false, why);
+    logTest('live [POSITIVE CONTROL]: Bearer channel answers 200', false, why);
+  }
+
+  // ── D. THE RESPONSE BODY CARRIES COUNTS, NEVER RECIPIENT NAMES ──────────────────
+  //
+  // Every scheduler builds a per-recipient `errors` array as `${personName}: ${err}`
+  // and the routes used to spread it straight into a 200 body, so an anonymous caller
+  // got a list of guest names for every failed send. The trigger half of this ticket
+  // is bounded by send stamps and time gates; this half was bounded by nothing.
+  let responseMod: {
+    withoutRecipientNames: <T extends object>(
+      result: T
+    ) => Omit<T, 'errors'> & { errorCount: number };
+  } | null = null;
+  try {
+    responseMod = await import('../src/app/api/cron/cron-response');
+  } catch {
+    responseMod = null;
+  }
+
+  const leak = (name: string, fn: () => boolean) => {
+    if (!responseMod) {
+      logTest(
+        name,
+        false,
+        'src/app/api/cron/cron-response.ts does not exist or does not export it'
+      );
+      return;
+    }
+    let ok = false;
+    let err: string | undefined;
+    try {
+      ok = fn();
+    } catch (e: any) {
+      err = e.message;
+    }
+    logTest(name, ok, err);
+  };
+
+  leak('LEAK: a recipient name in `errors` does not survive into the wire body', () => {
+    const body = responseMod!.withoutRecipientNames({
+      errors: ['Amelia Turner: SMS_DISABLED', 'Proxy Rob Whittaker: SEND_FAILED'],
+      sent: 2,
+    });
+    return !JSON.stringify(body).includes('Amelia') && !JSON.stringify(body).includes('Whittaker');
+  });
+  leak('LEAK: the `errors` key itself is gone from the wire body', () => {
+    const body: any = responseMod!.withoutRecipientNames({ errors: ['Amelia Turner: x'], sent: 1 });
+    return !('errors' in body);
+  });
+  leak('LEAK: the count survives, so a monitor still sees that sends failed', () => {
+    const body = responseMod!.withoutRecipientNames({ errors: ['a: x', 'b: y'], sent: 2 });
+    return body.errorCount === 2;
+  });
+  leak('LEAK: a result with no `errors` field reports errorCount 0, not undefined', () => {
+    const body = responseMod!.withoutRecipientNames({ sent: 0, failed: 0 } as any);
+    return body.errorCount === 0;
+  });
+  leak('LEAK: the rest of the result is preserved unchanged', () => {
+    const body: any = responseMod!.withoutRecipientNames({ errors: ['a: x'], sent: 7, total: 9 });
+    return body.sent === 7 && body.total === 9;
+  });
+
+  logTest(
+    'LEAK [live]: the 200 body from /api/cron/wrap-up-dispatch carries errorCount and no `errors` key',
+    queryChannelBody !== null &&
+      typeof queryChannelBody.errorCount === 'number' &&
+      !('errors' in queryChannelBody),
+    queryChannelBody === null
+      ? 'the positive control did not run, so there is no body to inspect'
+      : `body keys: ${Object.keys(queryChannelBody).join(', ')}`
+  );
+
+  // ⚠ THE SECOND LIVE BODY, AND WHY IT IS DECIDE-BY AND NOT NUDGES.
+  //
+  // Mutation M3 — `withoutRecipientNames` deleted from the decide-by route — produced
+  // ZERO failures on the first attempt. The pure assertions above prove the helper
+  // works; nothing proved that this route calls it. An unasserted line in a security
+  // fix is a line a future tidy-up deletes with the suite still green, so it is closed
+  // here rather than noted.
+  //
+  // GTC-270's own Reproduce section nominates this route for probing ("USE
+  // decide-by-followups OR wrap-up-dispatch FOR THE PROBE, NOT nudges"). The sweep is
+  // inert on this database and that is ASSERTED below, not assumed: the eligibility
+  // query filters `person: { phoneNumber: { not: null } }` in SQL and re-checks it in
+  // JS, so a candidate without a phone cannot reach `sendSms` by either door.
+  //
+  // /api/cron/nudges is NOT driven with a valid credential anywhere in this suite, by
+  // founder instruction. Its copy of the redaction is held by the shared helper and by
+  // the mutation log in docs/tickets/GTC-270.md, not by a live red.
+  const decideByReachable = await prisma.assignment.count({
+    where: {
+      response: 'MAYBE',
+      decideByFollowupSentAt: null,
+      person: { phoneNumber: { not: null } },
+    },
+  });
+  logTest(
+    'SAFETY PRECONDITION: zero decide-by candidates with a reachable number, so the sweep sends nothing',
+    decideByReachable === 0,
+    `${decideByReachable} candidate(s) with a phone — do not drive this route until that is zero`
+  );
+
+  if (liveProbeOk && serverSecret && decideByReachable === 0) {
+    try {
+      const res = await fetch(
+        `${BASE}/api/cron/decide-by-followups?secret=${encodeURIComponent(serverSecret)}`
+      );
+      const body = await res.json();
+      logTest(
+        'LEAK [live]: the 200 body from /api/cron/decide-by-followups carries errorCount and no `errors` key',
+        res.status === 200 && typeof body.errorCount === 'number' && !('errors' in body),
+        `status ${res.status}; body keys: ${Object.keys(body).join(', ')}`
+      );
+    } catch (e: any) {
+      logTest(
+        'LEAK [live]: the 200 body from /api/cron/decide-by-followups carries errorCount and no `errors` key',
+        false,
+        e.message
+      );
+    }
+  } else {
+    logTest(
+      'LEAK [live]: the 200 body from /api/cron/decide-by-followups carries errorCount and no `errors` key',
+      false,
+      decideByReachable !== 0
+        ? 'NOT DRIVEN — a decide-by candidate has a reachable number, so driving it could send'
+        : 'NOT DRIVEN — the live canary was admitted, the server is down, or the secret was unreadable'
+    );
+  }
+
+  // ── E. ROW ACCOUNTING — THE NO-SEND IS COUNTED, NOT TRUSTED ─────────────────────
+  //
+  // `logInviteEvent` in src/lib/invite-events.ts writes one InviteEvent row per send
+  // ATTEMPT — success, failure and blocked alike. So an unchanged count is the proof
+  // that nothing in this suite reached a provider, and it does not depend on the
+  // fixture happening to have no reachable numbers.
+  const inviteEventsAfter = await prisma.inviteEvent.count();
+  logTest(
+    'NO SEND: InviteEvent row count is unchanged across this suite',
+    inviteEventsAfter === inviteEventsBefore,
+    `${inviteEventsBefore} before → ${inviteEventsAfter} after; a send ATTEMPT of any kind writes one`
+  );
+  console.log(
+    `  ${YELLOW}row accounting: InviteEvent ${inviteEventsBefore} before → ${inviteEventsAfter} after${RESET}`
+  );
+}
+
 async function main() {
   console.log(`${BOLD}${YELLOW}=== Security Validation Test Suite ===${RESET}\n`);
   console.log('Contract under test:');
@@ -1367,6 +1807,7 @@ async function main() {
     await testSuite9_FrozenResidue();
     await testSuite10_EventReadAuth(fixtures);
     await testSuite11_DemoSessionScope(fixtures);
+    await testSuite12_CronSecretFailsClosed(fixtures);
 
     console.log(`\n${BOLD}${YELLOW}=== Test Summary ===${RESET}`);
     console.log(`Total tests: ${testsRun}`);

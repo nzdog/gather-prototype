@@ -270,13 +270,16 @@ script reads only the latter.
 
 ## 7. Cron endpoints
 
-Two cron routes, both accepting GET or POST, both authenticated the same way
-(`src/app/api/cron/nudges/route.ts`, `src/app/api/cron/wrap-up-dispatch/route.ts`):
+Three cron routes, all accepting GET or POST, all authenticated the same way
+(`src/app/api/cron/nudges/route.ts`, `src/app/api/cron/wrap-up-dispatch/route.ts`,
+`src/app/api/cron/decide-by-followups/route.ts`). The shared predicate is
+`cronSecretAccepted` in `src/app/api/cron/cron-secret.ts`:
 
 | Route | Purpose | Vercel schedule (`vercel.json`) |
 |---|---|---|
 | `/api/cron/nudges` | Runs the SMS nudge scheduler | `*/15 * * * *` |
-| `/api/cron/wrap-up-dispatch` | Dispatches pending wrap-up messages (10-min delay after creation) | `*/10 * * * *` |
+| `/api/cron/wrap-up-dispatch` | Dispatches pending wrap-up messages (10-min delay after creation) — SMS **and email** | `*/10 * * * *` |
+| `/api/cron/decide-by-followups` | Sends the maybe's single decide-by follow-up (GTC-175 / D2) | `*/15 * * * *` |
 
 Trigger locally (both auth forms work):
 
@@ -288,10 +291,19 @@ curl http://localhost:3000/api/cron/nudges -H "Authorization: Bearer $CRON_SECRE
 curl "http://localhost:3000/api/cron/wrap-up-dispatch?secret=$CRON_SECRET"
 ```
 
-**Trap:** the guard is `if (CRON_SECRET && providedSecret !== CRON_SECRET)` — if
-`CRON_SECRET` is UNSET in the environment, the endpoints accept unauthenticated
-requests. Convenient in dev; means `CRON_SECRET` must always be set in production.
-Do not "harden" this without a ticket — it touches production cron delivery.
+**These routes FAIL CLOSED (GTC-270, 2026-09-11).** The guard used to be
+`if (CRON_SECRET && providedSecret !== CRON_SECRET)`, where an unset variable made the
+refusal branch unreachable and all three SMS senders answered 200 to anyone. It is now
+two branches: an unconfigured secret refuses every caller with an error-level log, and
+a wrong credential refuses with a warning. Both answer 401.
+
+**Consequence for local work:** with `CRON_SECRET` unset you get 401, not a free run.
+Set it in `.env.local` (the dev server loads that file; `tsx` does not — it loads
+`.env`, so a script and the server can disagree about whether it is set).
+
+The ticket this trap was waiting for was GTC-270, and it is closed. The behaviour is
+held by suite 12 of `tests/security-validation.ts` and pinned in
+`tests/security-route-scan-control.ts`; do not relax either to make a local run easier.
 
 Nudge sends respect the SMS opt-out hard gate and quiet hours (do-not-touch zone 7 —
 never bypass opt-out logic to make a local test fire).

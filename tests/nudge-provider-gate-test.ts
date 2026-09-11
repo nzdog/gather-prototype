@@ -101,10 +101,25 @@ async function positiveControl() {
   );
   if (!configured) return;
 
+  // GTC-270: the cron routes now REFUSE when CRON_SECRET is unset, and this process
+  // loads `.env` (tsx does not load `.env.local`), so it has none. Set one and supply
+  // it, so this section goes on testing what it was written to test — the provider
+  // gate — instead of stopping at the auth guard.
+  //
+  // SET BEFORE THE IMPORT. The route reads CRON_SECRET at module scope, so the value
+  // has to be in place before the module is first loaded; a later assignment is
+  // invisible to it. The `||` keeps the value stable across both call sites, because
+  // the second import is served from the module cache and inherits the first one's view.
+  process.env.CRON_SECRET = process.env.CRON_SECRET || 'gtc270-nudge-provider-gate-test';
+
   const { GET } = await import('../src/app/api/cron/nudges/route');
   const { NextRequest } = await import('next/server');
 
-  const res = await GET(new NextRequest('http://localhost:3000/api/cron/nudges'));
+  const res = await GET(
+    new NextRequest(
+      `http://localhost:3000/api/cron/nudges?secret=${encodeURIComponent(process.env.CRON_SECRET)}`
+    )
+  );
   const body = await res.json();
 
   assert('CONTROL', 'cron reports smsConfigured: true', body.smsConfigured === true);
@@ -328,10 +343,25 @@ async function main() {
   // ── D. The cron must not report a healthy run when it cannot send ───────────────────
   console.log('\n\x1b[1mD — /api/cron/nudges must not report success with no provider\x1b[0m\n');
 
+  // GTC-270: the cron routes now REFUSE when CRON_SECRET is unset, and this process
+  // loads `.env` (tsx does not load `.env.local`), so it has none. Set one and supply
+  // it, so this section goes on testing what it was written to test — the provider
+  // gate — instead of stopping at the auth guard.
+  //
+  // SET BEFORE THE IMPORT. The route reads CRON_SECRET at module scope, so the value
+  // has to be in place before the module is first loaded; a later assignment is
+  // invisible to it. The `||` keeps the value stable across both call sites, because
+  // the second import is served from the module cache and inherits the first one's view.
+  process.env.CRON_SECRET = process.env.CRON_SECRET || 'gtc270-nudge-provider-gate-test';
+
   const { GET } = await import('../src/app/api/cron/nudges/route');
   const { NextRequest } = await import('next/server');
 
-  const res = await GET(new NextRequest('http://localhost:3000/api/cron/nudges'));
+  const res = await GET(
+    new NextRequest(
+      `http://localhost:3000/api/cron/nudges?secret=${encodeURIComponent(process.env.CRON_SECRET)}`
+    )
+  );
   const body = await res.json();
 
   assert('D', 'cron does NOT return HTTP 200 when no provider is configured', res.status !== 200);

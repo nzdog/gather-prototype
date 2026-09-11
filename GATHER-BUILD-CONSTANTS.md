@@ -197,7 +197,11 @@ Console). Test credentials accept API calls but do not send real SMS messages.
 Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_PHONE_NUMBER` in
 `.env` to the test values.
 
-To trigger the auto-nudge cron job locally, call the endpoint directly:
+To trigger a cron job locally, call the endpoint directly. **`CRON_SECRET` must be
+set in the server's environment — GTC-270 made these routes fail closed, so an unset
+secret refuses every caller with 401 rather than admitting everyone.** Note that
+Next loads `.env.local` and `tsx` does not, so a script and the dev server can
+disagree about whether it is set.
 
 ```bash
 # Via Authorization header (GET or POST both accepted)
@@ -213,7 +217,8 @@ curl "http://localhost:3000/api/cron/nudges?secret=<CRON_SECRET>"
 | Route file | Method | HTTP path | Purpose | Intended schedule |
 |------------|--------|-----------|---------|-------------------|
 | `src/app/api/cron/nudges/route.ts` | GET / POST | `/api/cron/nudges` | Runs the nudge scheduler — sends SMS auto-nudges to event participants | Every 15 minutes |
-| `src/app/api/cron/wrap-up-dispatch/route.ts` | GET / POST | `/api/cron/wrap-up-dispatch` | Dispatches pending wrap-up thank-you messages (10 min delay after creation) | Every 10 minutes |
+| `src/app/api/cron/wrap-up-dispatch/route.ts` | GET / POST | `/api/cron/wrap-up-dispatch` | Dispatches pending wrap-up thank-you messages (10 min delay after creation). Sends SMS **and email** — email is the fallback when SMS fails, and the primary channel for `channel: 'email'` links | Every 10 minutes |
+| `src/app/api/cron/decide-by-followups/route.ts` | GET / POST | `/api/cron/decide-by-followups` | Sends the maybe's single decide-by follow-up SMS (GTC-175 / D2) | Every 15 minutes |
 
 ---
 
@@ -236,7 +241,7 @@ Actual values are redacted. Copy `.env.example` to `.env` and fill in real value
 | `TWILIO_ACCOUNT_SID` | SMS via Twilio for non-NZ/AU destinations (OPTIONAL) | `.env` / deployment env |
 | `TWILIO_AUTH_TOKEN` | SMS via Twilio for non-NZ/AU destinations (OPTIONAL) | `.env` / deployment env |
 | `TWILIO_PHONE_NUMBER` | Twilio sender number (OPTIONAL) | `.env` / deployment env |
-| `CRON_SECRET` | Authenticates cron-job HTTP requests | `.env` / deployment env |
+| `CRON_SECRET` | Authenticates cron-job HTTP requests. **Required, not optional** — since GTC-270 an unset or empty value refuses every caller rather than admitting them | `.env` / deployment env |
 
 Template: `.env.example` at repo root.
 

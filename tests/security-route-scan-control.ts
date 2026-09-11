@@ -523,10 +523,16 @@ function suite5_HardCasesAtHead(head: ScanResult) {
     'a guard reached only in an else-branch is still a guard'
   );
 
-  // HELPER + FAIL-OPEN. `handleRequest` holds the whole secret check; the exported
-  // GET and POST are two lines each. And `CRON_SECRET && ...` means an unset
-  // variable disables the check silently. Founder ruling, 2026-09-11: these are a
-  // hole, not an allowlist entry — filed as GTC-270.
+  // HELPER + INLINE, AND NO LONGER FAIL-OPEN. `handleRequest` holds the whole secret
+  // check in wrap-up-dispatch and decide-by-followups; nudges has it inline in `GET`
+  // and its `POST` is `return GET(request)`. Three delegation shapes, six handlers,
+  // and the scanner resolves all three because it follows local helpers and sibling
+  // handlers within a file.
+  //
+  // GTC-270 CLOSED THE FAIL-OPEN. `if (CRON_SECRET && provided !== CRON_SECRET)` meant
+  // an unset variable disabled the check silently and three SMS sender routes answered
+  // 200 to anyone. The assertion below USED TO ASSERT THAT STATE, pinned so it could
+  // not change while the ticket was open. It is now pointed at the fixed state.
   const cronFiles = [
     'src/app/api/cron/nudges/route.ts',
     'src/app/api/cron/wrap-up-dispatch/route.ts',
@@ -540,16 +546,51 @@ function suite5_HardCasesAtHead(head: ScanResult) {
     'a CRON_SECRET comparison is a shared secret, not a session guard'
   );
   logTest(
-    'every cron handler carries a SHARED_SECRET credential, found through the helper',
+    'every cron handler carries a SHARED_SECRET credential, found through the helper or inline',
     cron.length === 6 &&
       cron.every((h) => h.otherCredentials.some((c) => c.kind === 'SHARED_SECRET')),
     `detected on ${cron.filter((h) => h.otherCredentials.some((c) => c.kind === 'SHARED_SECRET')).length}/6`
   );
   logTest(
-    'every cron handler is flagged FAIL-OPEN (GTC-270)',
-    cron.length === 6 &&
-      cron.every((h) => h.otherCredentials.some((c) => c.kind === 'SHARED_SECRET' && c.failOpen)),
-    'an unset CRON_SECRET disables the check silently and the report must say so'
+    'NO cron handler is flagged FAIL-OPEN any more (GTC-270 — do not relax this to make it pass)',
+    cron.length === 6 && cron.every((h) => h.otherCredentials.every((c) => !c.failOpen)),
+    'a cron handler is fail-open again: an unset CRON_SECRET would admit every caller ' +
+      'to an SMS sender. Fix the route so it refuses when the secret is not configured ' +
+      '— suite 12 in tests/security-validation.ts holds the behaviour. Never satisfy ' +
+      'this assertion by editing it.'
+  );
+
+  // ⚠ THE CONTROL FOR THE ASSERTION ABOVE, AND IT IS NOT OPTIONAL.
+  //
+  // "Nothing is flagged" is also what a BROKEN DETECTOR reports. GTC-267's rule: an
+  // empty search result is a claim, and a claim needs a control. So feed the detector
+  // the exact shape GTC-270 removed and require it to fire. If this control goes red,
+  // the assertion above has stopped meaning anything and the six routes are unwatched.
+  //
+  // The detector is narrower than it looks — see GTC-273, which records four rewrites
+  // that are genuinely fail-open and are NOT flagged. This control proves it still
+  // catches the one shape it knows; it does not prove the six routes are safe. The
+  // behaviour is held by suite 12, not by this file.
+  const failOpenSpecimen = [
+    "import { NextResponse } from 'next/server';",
+    'const CRON_SECRET = process.env.CRON_SECRET;',
+    'export async function GET(request: any) {',
+    "  const provided = request.nextUrl.searchParams.get('secret');",
+    '  if (CRON_SECRET && provided !== CRON_SECRET) {',
+    "    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });",
+    '  }',
+    '  return NextResponse.json({ ok: true });',
+    '}',
+  ].join('\n');
+  const specimenVerdict = analyzeSource(
+    'src/app/api/cron/__detector_control__/route.ts',
+    failOpenSpecimen
+  );
+  logTest(
+    '[CONTROL] the FAIL-OPEN detector still fires on the shape GTC-270 removed',
+    specimenVerdict.length === 1 &&
+      specimenVerdict[0].otherCredentials.some((c) => c.kind === 'SHARED_SECRET' && c.failOpen),
+    'the detector is broken, so "no handler is flagged FAIL-OPEN" above proves nothing'
   );
 
   // TOKEN-AS-CREDENTIAL. Structurally identical to an ordinary lookup; the scanner
