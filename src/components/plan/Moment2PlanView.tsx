@@ -49,6 +49,26 @@ interface Moment2PlanViewProps {
   onRegenerateCategory: (categoryKey: string) => void;
   /** 'plan', a categoryKey, or null when idle */
   regeneratingScope: 'plan' | string | null;
+  /**
+   * GTC-235: back to Moment 1.
+   *
+   * Required, not optional. Before this ticket the only route back to Moment 1 from
+   * anywhere in Moment 2 was to reload the page and press Start on the opening screen —
+   * Moment 2's own opening has no back, Step 1 cancels to that opening, and the plan
+   * view's back goes to Step 1. Rehydration closes that door, so this one has to open in
+   * the same change (founder ruling 2, 2026-09-12): fixing a stranding by removing a
+   * capability is a worse trade than the bug.
+   */
+  onEditGuests: () => void;
+  /**
+   * GTC-235: out of the Moment flow, to the event's dashboard.
+   *
+   * A LINK SHE CHOOSES, NOT A FALL-THROUGH. GTC-233 stopped approving from falling
+   * through to the V1 dashboard and that ruling stands — Option A is not being reopened.
+   * What it left behind was a plan view with no exits at all, on an event whose invites,
+   * people and nudges still live only on that dashboard.
+   */
+  onGoToDashboard: () => void;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -96,6 +116,8 @@ export default function Moment2PlanView({
   onRegeneratePlan,
   onRegenerateCategory,
   regeneratingScope,
+  onEditGuests,
+  onGoToDashboard,
 }: Moment2PlanViewProps) {
   const toast = useToast();
 
@@ -201,8 +223,18 @@ export default function Moment2PlanView({
         </h1>
         <p className="text-sm text-gray-500 mb-6">
           {totalItems} {totalItems === 1 ? 'item' : 'items'} across {categories.length}{' '}
-          {categories.length === 1 ? 'category' : 'categories'}, based on {guestCount}{' '}
-          {guestCount === 1 ? 'guest' : 'guests'}.
+          {categories.length === 1 ? 'category' : 'categories'}, based on{' '}
+          {/* GTC-235: the headcount IS the Moment 1 fact, so it is the way back to
+              Moment 1. No new chrome, and the control sits on the thing it changes. */}
+          <button
+            type="button"
+            onClick={onEditGuests}
+            disabled={regeneratingScope !== null}
+            className="underline underline-offset-2 hover:text-gray-900 disabled:no-underline disabled:opacity-50"
+          >
+            {guestCount} {guestCount === 1 ? 'guest' : 'guests'}
+          </button>
+          .
         </p>
         <button
           type="button"
@@ -308,6 +340,19 @@ export default function Moment2PlanView({
             className="px-6 py-3 bg-accent text-white font-medium rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Plan looks good →
+          </button>
+        </div>
+        {/* GTC-235: the exit. Named for what is behind it rather than for the surface,
+            because "dashboard" is a word for the thing she wants, not the thing she
+            wants to do. */}
+        <div className="max-w-2xl mx-auto pt-2 text-center">
+          <button
+            type="button"
+            onClick={onGoToDashboard}
+            disabled={regeneratingScope !== null}
+            className="text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2 disabled:no-underline disabled:opacity-50"
+          >
+            Invites, people and reminders →
           </button>
         </div>
       </div>

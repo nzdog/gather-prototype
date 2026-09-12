@@ -266,6 +266,25 @@ export default function EventsPage() {
                   </div>
 
                   <div className="flex items-center gap-3 flex-shrink-0">
+                    {/* GTC-235: the second door.
+                        The row click routes a V2 event to `/plan/[id]/setup` and a V1
+                        event to `/plan/[id]` — one destination each, so a V2 event could
+                        not be reached from this list at all. Everything after the plan
+                        (invites, people, nudges, conflicts, share links) still lives only
+                        on `/plan/[id]`, and GTC-233 deliberately stopped V2 falling
+                        through to it, which left this list a one-way door. */}
+                    {event.setup && !event.archived && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/plan/${event.id}`);
+                        }}
+                        className="px-3 py-2 text-sm text-gray-700 border border-gray-300 rounded hover:bg-gray-50"
+                        title="Invites, people and reminders"
+                      >
+                        Invites &amp; people
+                      </button>
+                    )}
                     {event.archived ? (
                       <>
                         <button

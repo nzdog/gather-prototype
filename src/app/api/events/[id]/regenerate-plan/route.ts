@@ -14,6 +14,12 @@ import {
   type FullPlanResponse,
 } from '@/lib/ai/plan-input';
 import { createRevision } from '@/lib/workflow';
+// GTC-237: the write phase and the disposable predicate, shared with finalize-plan.
+import {
+  applyPlanSections,
+  disposableItemWhere,
+  sweepEmptyGeneratedTeams,
+} from '@/lib/ai/plan-write';
 
 // GTC-236: V2 regenerate. One Claude call per invocation, same budget pool and limit as
 // finalize-plan (GTC-145 lowered it from 20 → 10) — regenerating and generating draw from
@@ -101,26 +107,28 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     const scopeFilter = targetTeamId ? { teamId: targetTeamId } : { team: { eventId } };
 
-    // Preservables: everything in scope that is not disposable AI output. TEMPLATE is
-    // deliberately included here — V1's regenerate spares TEMPLATE items from deletion
-    // but forgets to tell the model they exist; this route closes that gap.
-    const preservedItems = await prisma.item.findMany({
-      where: {
-        ...scopeFilter,
-        kind: 'ITEM',
-        OR: [{ source: { in: ['MANUAL', 'HOST_EDITED', 'TEMPLATE'] } }, { isProtected: true }],
-      },
-      include: { team: { select: { name: true } } },
+    // Regeneratable: unedited, unanswered AI food output, and only that. TASK rows
+    // (GTC-171) are never touched — regeneration is food-only.
+    //
+    // GTC-237: the predicate moved to `disposableItemWhere`, shared with finalize-plan.
+    // That extraction WIDENED what this route preserves: a GENERATED item a guest has
+    // answered is no longer disposable. The route now deletes strictly fewer rows than
+    // it did, never more. See GTC-284 for the copy that owns this.
+    const regenerableWhere = disposableItemWhere({
+      eventId,
+      teamId: targetTeamId,
+      kind: 'ITEM',
     });
 
-    // Regeneratable: unedited AI food output, and only that. TASK rows (GTC-171) are
-    // never touched — regeneration is food-only.
-    const regenerableWhere = {
-      ...scopeFilter,
-      kind: 'ITEM' as const,
-      source: 'GENERATED' as const,
-      isProtected: false,
-    };
+    // Preservables: the exact complement, expressed as one — so nothing can fall into
+    // the gap between two independently-written predicates and be neither replaced nor
+    // described to the model. TEMPLATE is in here by construction; V1's regenerate
+    // spares TEMPLATE items from deletion but forgets to tell the model they exist,
+    // and this route closes that gap.
+    const preservedItems = await prisma.item.findMany({
+      where: { ...scopeFilter, kind: 'ITEM', NOT: regenerableWhere },
+      include: { team: { select: { name: true } } },
+    });
 
     // Founder refinement (2026-08-22): an empty scope short-circuits BEFORE the
     // checkpoint and the AI call — the trigger stays enabled and the click gets an
@@ -216,80 +224,21 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const batchId = `m2-regen-${Date.now()}`;
 
     const { replaced, created } = await prisma.$transaction(async (tx) => {
-      const del = await tx.item.deleteMany({ where: regenerableWhere });
-
-      let createdCount = 0;
-      for (const section of sections) {
-        const key = section.key ?? '';
-        const label = CATEGORY_LABELS[key] ?? section.category ?? key;
-        let team = await tx.team.findFirst({ where: { eventId, name: label } });
-        if (!team) {
-          const maxOrder = await tx.team.aggregate({
-            where: { eventId },
-            _max: { displayOrder: true },
-          });
-          team = await tx.team.create({
-            data: {
-              name: label,
-              eventId,
-              source: 'GENERATED',
-              displayOrder: (maxOrder._max.displayOrder ?? 0) + 1,
-            },
-          });
-        }
-
-        // Append after surviving (preserved) items rather than restarting at 1.
-        const maxDisp = await tx.item.aggregate({
-          where: { teamId: team.id },
-          _max: { displayOrder: true },
-        });
-        let nextDisplayOrder = (maxDisp._max.displayOrder ?? 0) + 1;
-
-        for (const item of section.items) {
-          await tx.item.create({
-            data: {
-              name: item.name,
-              teamId: team.id,
-              quantityAmount: item.quantity,
-              quantityUnit: 'CUSTOM',
-              quantityUnitCustom: item.unit,
-              quantityText: item.servingSize,
-              notes: item.notes ?? null,
-              critical: item.critical ?? false,
-              criticalReason: item.critical
-                ? (item.criticalReason ?? 'Important item for the event')
-                : null,
-              source: 'GENERATED',
-              aiGenerated: true,
-              userConfirmed: false,
-              generatedBatchId: batchId,
-              displayOrder: nextDisplayOrder,
-              dietaryTags:
-                item.dietaryTags && item.dietaryTags.length > 0 ? item.dietaryTags : undefined,
-            },
-          });
-          nextDisplayOrder++;
-          createdCount++;
-        }
-      }
+      // GTC-237: delete-and-recreate now lives in `applyPlanSections`, one definition
+      // shared with finalize-plan. What moved out of this route is exactly what
+      // finalize-plan was missing: item-level clearing, find-or-create by canonical
+      // label, and append-after-survivors ordering.
+      const { replaced: del, created: createdCount } = await applyPlanSections(tx, {
+        eventId,
+        sections,
+        batchId,
+        scopeTeamId: targetTeamId,
+      });
 
       // Sweep GENERATED teams in scope left empty — per-team deletes, never an unscoped
       // team.deleteMany (the cascade would take TASK rows; clearPlanForRegeneration's
       // comment records the same trap).
-      const sweepCandidates = await tx.team.findMany({
-        where: {
-          eventId,
-          source: 'GENERATED',
-          isProtected: false,
-          ...(targetTeamId ? { id: targetTeamId } : {}),
-        },
-        include: { _count: { select: { items: true } } },
-      });
-      for (const t of sweepCandidates) {
-        if (t._count.items === 0) {
-          await tx.team.delete({ where: { id: t.id } });
-        }
-      }
+      await sweepEmptyGeneratedTeams(tx, { eventId, scopeTeamId: targetTeamId });
 
       await tx.event.update({
         where: { id: eventId },
@@ -313,14 +262,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
               scope,
               categoryKey: categoryKey ?? null,
               preserved: preservedItems.length,
-              replaced: del.count,
+              replaced: del,
             },
             after: { created: createdCount, batchId },
           },
         ],
       });
 
-      return { replaced: del.count, created: createdCount };
+      return { replaced: del, created: createdCount };
     });
 
     return NextResponse.json({

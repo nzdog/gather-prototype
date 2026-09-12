@@ -6,6 +6,7 @@ import { ASK_FIELDS, fieldChanges } from '@/lib/ledger';
 import type { SerialisedEvent } from '@/lib/lifecycle';
 import { useReasonPrompt } from '@/components/plan/ReasonPrompt';
 import { CATEGORY_LABELS } from '@/lib/ai/plan-categories';
+import { hasGeneratedPlan, resolveSetupStage, type SetupStage } from '@/lib/setup/entry-stage';
 import { useToast } from '@/contexts/ToastContext';
 import SetupOpeningScreen from '@/components/plan/SetupOpeningScreen';
 import Moment1InputForm, {
@@ -44,6 +45,12 @@ function emojiForCategoryName(name: string): string {
 type PlanApiItem = {
   id: string;
   name: string;
+  /**
+   * GTC-235: provenance, read by the entry rule to answer "is there a plan here yet".
+   * Already on the wire — `GET /api/events/[id]/items` selects no subset, so every Item
+   * scalar comes back — and declared here because it is now read rather than ignored.
+   */
+  source?: 'GENERATED' | 'TEMPLATE' | 'MANUAL' | 'HOST_EDITED' | null;
   quantityAmount: number | null;
   quantityUnit: string | null;
   quantityUnitCustom: string | null;
@@ -152,6 +159,12 @@ interface SetupEvent extends SerialisedEvent {
   name: string;
   guestCount: number | null;
   hostId: string;
+  /**
+   * GTC-235: the V1/V2 discriminator, and the first input to the entry rule. Already
+   * on the wire — `EVENT_WIRE_SELECT` names it so the events list can route on it —
+   * so reading it here costs no extra request.
+   */
+  setup: { id: string } | null;
 }
 
 /**
@@ -181,9 +194,21 @@ export default function EventSetupPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // GTC-233: arriving at this route IS the request to start setup, so the opening screen
-  // shows unconditionally. Replaces the retired `?setup=true` read.
-  const [showSetup, setShowSetup] = useState(true);
+  /**
+   * ⚠ OVERTURNED 2026-09-12 by GTC-235, deliberately, and left here rather than deleted.
+   *
+   * GTC-233 ruled: "arriving at this route IS the request to start setup, so the opening
+   * screen shows unconditionally" — which is why this initialised `true`. That was a
+   * decision, not an oversight, and it is being reversed as one. Unconditional meant a
+   * reload sent a host with a finished plan back to "Ready to start herding", and her
+   * only way forward was to generate again.
+   *
+   * The stage is now resolved from stored state by `resolveSetupStage` before first
+   * paint, so every flag below initialises `false` and the mount effect sets exactly one.
+   * GTC-233's Scenario 2 evidence ("Opening screen with no query param") records the old
+   * behaviour and is annotated on that ticket as superseded.
+   */
+  const [showSetup, setShowSetup] = useState(false);
   const [showMoment1, setShowMoment1] = useState(false);
   /**
    * GTC-256 (phase 2): 'host' is Moment 1's new FIRST phase — the host's own household.
@@ -213,6 +238,21 @@ export default function EventSetupPage() {
   // GTC-236: 'plan', a categoryKey, or null when no regeneration is running.
   const [regeneratingScope, setRegeneratingScope] = useState<'plan' | string | null>(null);
 
+  /**
+   * GTC-235: show exactly one stage, chosen by the entry rule.
+   *
+   * Every flag is cleared first, so this is the only place that decides which surface is
+   * live and there is no arrangement of calls that leaves two of them true.
+   */
+  const applyStage = useCallback((stage: SetupStage) => {
+    setShowSetup(stage === 'opening');
+    setShowMoment1(stage === 'moment1');
+    setShowMoment2Opening(false);
+    setShowMoment2Step1(stage === 'moment2-step1');
+    setShowMoment2Step2Skeleton(false);
+    setShowMoment2PlanView(stage === 'plan');
+  }, []);
+
   useEffect(() => {
     if (eventId === 'new' || !eventId) {
       setError('Invalid event ID. Please navigate from the demo page or use a valid event link.');
@@ -220,34 +260,75 @@ export default function EventSetupPage() {
       return;
     }
 
-    loadEvent();
-    // GTC-202: `items` backs the assignmentResponse lookup in the plan view's edit and
-    // remove handlers. It must be loaded on mount for that lookup to be reliable rather
-    // than best-effort — see the comment at those call sites.
-    loadItems();
+    let cancelled = false;
+    (async () => {
+      try {
+        // GTC-202: `items` backs the assignmentResponse lookup in the plan view's edit
+        // and remove handlers. It must be loaded on mount for that lookup to be reliable
+        // rather than best-effort — see the comment at those call sites. GTC-235 reads
+        // the same rows for `source`, so the entry rule costs no request of its own.
+        const [loadedEvent, loadedItems] = await Promise.all([loadEvent(), loadItems()]);
+        if (cancelled || !loadedEvent) return;
+
+        /**
+         * The third input, fetched ONLY when it can change the answer. With an
+         * `EventSetup` row the rule never reads the household count, and GTC-233
+         * verified this route makes exactly two mount requests — a third one on every
+         * load would undo that for the common case.
+         */
+        let householdCount = 0;
+        if (!loadedEvent.setup) {
+          const res = await fetch(`/api/events/${eventId}/households`);
+          if (res.ok) householdCount = ((await res.json()).households ?? []).length;
+        }
+        if (cancelled) return;
+
+        const stage = resolveSetupStage({
+          items: loadedItems,
+          hasSetup: Boolean(loadedEvent.setup),
+          householdCount,
+        });
+        applyStage(stage);
+        if (stage === 'plan') {
+          setMoment2PlanCategories(await loadMoment2PlanCategories());
+        }
+      } catch (err: any) {
+        if (!cancelled) setError(err?.message ?? 'Failed to load this event');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
-  const loadEvent = async () => {
+  const loadEvent = async (): Promise<SetupEvent | null> => {
     try {
       const response = await fetch(`/api/events/${eventId}`);
       if (!response.ok) throw new Error('Failed to load event');
       const data = await response.json();
       setEvent(data.event);
+      return data.event as SetupEvent;
     } catch (err: any) {
       setError(err.message);
-    } finally {
       setLoading(false);
+      return null;
     }
   };
 
-  const loadItems = async () => {
+  const loadItems = async (): Promise<SetupItem[]> => {
     try {
       const response = await fetch(`/api/events/${eventId}/items`);
       if (!response.ok) throw new Error('Failed to load items');
       const data = await response.json();
       setItems(data.items || []);
+      return (data.items || []) as SetupItem[];
     } catch (err: any) {
       console.error('Error loading items:', err);
+      return [];
     }
   };
 
@@ -458,9 +539,25 @@ export default function EventSetupPage() {
           eventId={event.id}
           eventName={event.name}
           households={households}
-          onContinue={() => {
-            setShowMoment1(false);
+          onContinue={async () => {
             setMoment1Phase('input');
+            /**
+             * GTC-235: forward on the first pass, BACK on a return visit.
+             *
+             * Moment 1 is now reachable from the plan view, so "Continue" has two
+             * correct answers and the difference is whether a plan already exists. It
+             * reads the same predicate the entry rule reads, so there is one definition
+             * of "there is a plan here" rather than two that can drift apart. Sending a
+             * returning host to Moment 2's opening would walk her at the Generate button
+             * she has no reason to press.
+             */
+            if (hasGeneratedPlan(items)) {
+              setShowMoment1(false);
+              setMoment2PlanCategories(await loadMoment2PlanCategories());
+              setShowMoment2PlanView(true);
+              return;
+            }
+            setShowMoment1(false);
             setShowMoment2Opening(true);
           }}
           onBackToEditing={() => {
@@ -594,6 +691,17 @@ export default function EventSetupPage() {
     return (
       <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
         <div className="max-w-5xl mx-auto px-6 py-8">
+          {/* GTC-235: the way out of the longest-dwell overlay. Every Moment 1 screen is
+              `fixed inset-0 z-50` and so covers the global navigation, and the entry rule
+              now HOLDS a half-finished host here across a reload rather than returning
+              her to an opening screen she could leave. Without this she has the URL bar
+              and nothing else. */}
+          <a
+            href="/plan/events"
+            className="inline-block mb-4 text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
+          >
+            ← Your events
+          </a>
           <div className="flex flex-col md:flex-row md:gap-8">
             {/* Mobile: cards above form */}
             <div className="md:hidden mb-6">
@@ -821,6 +929,19 @@ export default function EventSetupPage() {
             setShowMoment2PlanView(false);
             setMoment2PlanCategories([]);
             setShowMoment2Step1(true);
+          }}
+          onEditGuests={() => {
+            // GTC-235: the only route back to Moment 1 from Moment 2. Her households
+            // rehydrate from the server the moment the flag flips — the effect that
+            // fetches them keys on `showMoment1`.
+            setShowMoment2PlanView(false);
+            setMoment1Phase('input');
+            setShowMoment1(true);
+          }}
+          onGoToDashboard={() => {
+            // GTC-235: a full navigation, not a stage change — the dashboard is a
+            // different route and V2's stages are full-viewport overlays over it.
+            window.location.href = `/plan/${eventId}`;
           }}
         />
       </>
