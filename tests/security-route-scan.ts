@@ -1526,8 +1526,17 @@ export function analyzeSource(
     const guardEvidence: GuardEvidence[] = [];
     const uncheckedGuards: string[] = [];
     const otherCredentials: OtherCredential[] = [];
-    /** SHARED_SECRET credentials, and whether each sits in a branch that refuses. */
-    const secretSites: Array<{ cred: OtherCredential; refuses: boolean }> = [];
+    /**
+     * SHARED_SECRET credentials, and whether each sits in a branch that refuses.
+     *
+     * `secret` is the name this site actually matched. It is carried here because the
+     * DIRECTION pass below rewrites `detail`, and until GTC-264 it rewrote it from
+     * `[...SHARED_SECRETS][0]` — the first member of the set, not the matched name.
+     * With one member that was correct by accident. With two it would report a TNZ
+     * route against `CRON_SECRET`, which is a false statement inside a security
+     * report rather than a cosmetic slip.
+     */
+    const secretSites: Array<{ cred: OtherCredential; refuses: boolean; secret: string }> = [];
 
     const seen = new Set<string>();
 
@@ -1549,7 +1558,7 @@ export function analyzeSource(
             const refuses =
               branchRefusesDirectly(child.thenStatement) ||
               branchRefusesDirectly(child.elseStatement);
-            secretSites.push({ cred, refuses });
+            secretSites.push({ cred, refuses, secret });
             otherCredentials.push(cred);
           }
           const env = collectEnvGate(child, sf, envBindings);
@@ -1612,7 +1621,7 @@ export function analyzeSource(
       const anyRefuses = secretSites.some((s) => s.refuses);
       if (!anyRefuses) {
         for (const s of secretSites) {
-          s.cred.detail = `${[...SHARED_SECRETS][0]} referenced in a condition`;
+          s.cred.detail = `${s.secret} referenced in a condition`;
           s.cred.proof = 'UNPROVEN';
           s.cred.proofReason =
             'the secret appears in a condition but no branch keyed on it returns a 4xx, ' +
