@@ -179,6 +179,7 @@ model Event {
   eventRoles                 EventRole[]
   households                 Household[]
   inviteEvents               InviteEvent[]
+  deliveryReports            SmsDeliveryReport[]
   people                     PersonEvent[]
   revisions                  PlanRevision[]
   snapshots                  PlanSnapshot[]
@@ -216,13 +217,13 @@ model Team {
 }
 
 model Person {
-  id               String        @id @default(cuid())
+  id               String              @id @default(cuid())
   name             String
-  email            String?       @unique
+  email            String?             @unique
   phone            String?
   userId           String?
   phoneNumber      String?
-  smsOptedOut      Boolean       @default(false)
+  smsOptedOut      Boolean             @default(false)
   smsOptedOutAt    DateTime?
   inviteAnchorAt   DateTime?
   /// GTC-178 (E1, phase 3): SUPERSEDED BY PersonEvent.firstNudgeSentAt /
@@ -248,14 +249,15 @@ model Person {
   tokens           AccessToken[]
   assignments      Assignment[]
   auditActions     AuditEntry[]
-  cohostedEvents   Event[]       @relation("EventCoHost")
-  hostedEvents     Event[]       @relation("EventHost")
+  cohostedEvents   Event[]             @relation("EventCoHost")
+  hostedEvents     Event[]             @relation("EventHost")
   hostMemory       HostMemory?
   inviteEvents     InviteEvent[]
-  user             User?         @relation(fields: [userId], references: [id])
+  deliveryReports  SmsDeliveryReport[]
+  user             User?               @relation(fields: [userId], references: [id])
   eventMemberships PersonEvent[]
-  receivedOptOuts  SmsOptOut[]   @relation("HostOptOuts")
-  coordinatedTeams Team[]        @relation("TeamCoordinator")
+  receivedOptOuts  SmsOptOut[]         @relation("HostOptOuts")
+  coordinatedTeams Team[]              @relation("TeamCoordinator")
   wrapUpLinks      WrapUpLink[]
 
   @@index([userId])
@@ -557,6 +559,115 @@ model InviteEvent {
   @@index([personId])
   @@index([type])
   @@index([createdAt])
+}
+
+/// GTC-264 — where TNZ's delivery results live.
+///
+/// TNZ answer 200 when they ACCEPT a message and tell us later whether it actually
+/// arrived. Before this model the second answer had nowhere to go, so Gather could not
+/// tell a delivered message from one that was never delivered at all.
+///
+/// The recorded wire contract is docs/05_ops/tnz-delivery-status-contract-2026-09-12.md,
+/// built from two saved artefacts beside it. Read that before changing anything here.
+///
+/// WHY A NEW MODEL AND NOT A COLUMN OR AN InviteEventType MEMBER.
+///
+/// Not columns on InviteEvent: they would be null on seventeen of eighteen types, the
+/// SEND path would have to populate providerMessageId (and GTC-264 may read what
+/// sendSms writes, never change it), and correcting a row in an append-only event log
+/// erases the accept record that GTC-258 needs in order to tell accept-time from
+/// delivery-time.
+///
+/// Not an InviteEventType member: the join key would stay inside InviteEvent.metadata,
+/// a Json? column with no index reaching into it, so "queryable by message id" would be
+/// a sequential scan over every message ever sent. And naming an enum member commits to
+/// a vocabulary — there are twenty-one documented Result values and one of them,
+/// Undelivered, still cannot be bucketed without real traffic.
+///
+/// SMS_SEND_FAILED is NOT overloaded. It is written in exactly one place, the sendSms
+/// catch block, and it means a send-time failure. A delivery-time failure is a row here.
+model SmsDeliveryReport {
+  id String @id @default(cuid())
+
+  /// 'tnz' today. Named rather than assumed so a second SMS provider needs no migration.
+  provider String
+
+  /// TNZ's MessageID, echoed back on the delivery webhook. The documented join key, and
+  /// the one sendViaTnz has captured on every send since the transport went in.
+  /// INDEXED, NOT UNIQUE, and that is deliberate — see the comment on @@index below.
+  providerMessageId String
+
+  /// Stored EXACTLY as TNZ sent it, E.164, never normalised. normalizePhoneNumber has
+  /// 13 call sites and two test files pinning its behaviour, and GTC-264's instruction is
+  /// to report and stop if a delivery report's destination needs the widening. Keeping
+  /// the raw string means the question is never asked; the join is on providerMessageId.
+  destination String
+
+  /// SUCCESS | FAILED | PENDING on a status report. A string, not an enum: TNZ's own two
+  /// documentation pages disagree on case (SUCCESS versus Success), RECEIVED and UPDATED
+  /// belong to other callback kinds arriving on the same envelope, and the vocabulary is
+  /// documented but not yet observed. Compare case-insensitively.
+  status String
+
+  /// One of twenty-one documented values — 'delivered', 'SentOK', 'Bad Number',
+  /// 'Destination is blacklisted', and so on. Nullable because whether an absent field
+  /// arrives as "" or is omitted entirely is not documented, and the two are worth
+  /// telling apart.
+  ///
+  /// ⚠ Status alone does NOT mean delivery. Two of the four Success values are not
+  /// arrivals: 'delivered-to-network' is explicitly not acknowledged by the mobile, and
+  /// 'Control Deleted' is an aborted send marked success to avoid retries. Only this
+  /// field carries the difference.
+  result String?
+
+  /// TNZ's Detail, a key:value string — 'SMSParts:1' for SMS.
+  detail String?
+
+  /// TNZ's JobNumber, their internal eight-character handle. Kept because it is what a
+  /// TNZ support conversation is keyed on.
+  providerJobNumber String?
+
+  /// When TNZ say the MESSAGE WAS SENT, from SentTimeUTC-RFC3339.
+  ///
+  /// ⚠ NOT when the report was raised. All three timestamps in the payload are send
+  /// times; nothing in the envelope carries the report's own clock. That is why
+  /// receivedAt exists, and why the acceptance-to-outcome gap (GTC-264 Unknowns 5, which
+  /// bears on GTC-258's choice of which stamps move) is measurable only against our side.
+  providerSentAt DateTime?
+
+  /// When the report reached us. Our clock, and the row's creation time — they are the
+  /// same event, so there is no separate createdAt.
+  receivedAt DateTime @default(now())
+
+  /// The exact InviteEvent row for the send, resolved through its metadata.messageId.
+  /// A plain column with no relation: this is a provenance pointer into a log, not an
+  /// ownership edge, and a back-relation array on InviteEvent would invite traversal.
+  inviteEventId String?
+
+  /// Nullable, and the nullability is load-bearing rather than defensive. A report can
+  /// arrive for a send that stored no messageId at all, because sendViaTnz treats a 2xx
+  /// with an unparseable body as a success and leaves it undefined — GTC-264 must handle
+  /// that without throwing, and fixing the send path is GTC-258's. A report can also
+  /// arrive for something we never recorded. An unmatched report is recorded, not an error.
+  eventId  String?
+  personId String?
+  event    Event?  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  person   Person? @relation(fields: [personId], references: [id])
+
+  /// The query path this model exists for. GTC-264 requires delivery state queryable by
+  /// message id, which today is buried in a JSONB column with no index for that path.
+  ///
+  /// ⚠ NOT @@unique, and the reasoning is the ticket's own ethic. TNZ retry a failed
+  /// webhook every five minutes for up to 24 hours, and PENDING-then-SUCCESS appears
+  /// possible, so duplicates and multiple reports per message are both expected. A unique
+  /// constraint over an unobserved vocabulary turns a wrong belief into SILENT DATA LOSS;
+  /// an index turns it into duplicate rows, which are recoverable. Idempotency therefore
+  /// lives in the handler, on a natural key, where it is correctable without a migration.
+  @@index([providerMessageId])
+  @@index([destination])
+  @@index([receivedAt])
+  @@index([eventId])
+  @@index([inviteEventId])
 }
 
 model SmsOptOut {
