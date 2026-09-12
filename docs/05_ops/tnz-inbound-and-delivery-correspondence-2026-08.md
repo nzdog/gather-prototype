@@ -488,6 +488,94 @@ inbound attribution, and on this finding it is no longer one.
 
 ---
 
+## A finding from the rescoping that is not about TNZ
+
+Recorded here rather than only in the two tickets it corrects, because the
+rule it yields is general and the near-miss is the instructive part.
+
+### What happened
+
+[[GTC-229]] F2 and [[GTC-264]]'s auth section both needed a fail-closed
+secret check, and both described the three cron routes as fail-open with
+the fix owned by [[GTC-220]]. Checking that against the tree found it
+stale twice over: [[GTC-270]] had already closed the fail-open, and
+[[GTC-220]] was never that ticket — it is a transport change moving
+`CRON_SECRET` from a query param to a header.
+
+Reading [[GTC-270]] to confirm turned up a doc comment in
+`src/app/api/cron/cron-secret.ts` explaining why the decision lives in a
+pure predicate while the refusing `if` stays in each route file. Its
+stated reason: [[GTC-268]]'s route scanner *"follows local helpers within
+a file and does NOT follow imports"*, naming `collectSharedSecret` in
+`tests/security-route-scan.ts`.
+
+Both halves of that were wrong at `d1577b7`:
+
+- **The symbol does not exist.** `collectSharedSecret` is nowhere in the
+  scanner.
+- **The limitation is superseded.** [[GTC-273]] added cross-file
+  resolution — `MAX_MODULE_DEPTH = 1`, relative imports only, one level
+  deep.
+
+**The dates are the point.** [[GTC-270]] landed at `bf06cc1` on
+**2026-09-11**. [[GTC-273]] landed at `b50dffc` on **2026-09-12** and is
+the commit that introduced `MAX_MODULE_DEPTH`. **The comment was accurate
+for one day.**
+
+And it was written in the worst possible place to be wrong. Whoever wrote
+it had just finished establishing, by measurement, that a helper
+swallowing the whole check made the scanner report all six cron handlers
+as *"no credential of any kind"*. It is a careful comment, written by
+someone with that exact failure mode fresh in mind, and it went stale
+overnight anyway.
+
+**The near-miss:** that comment was about to be cited as current fact in
+two freshly written tickets. Nothing about it looked stale. It was
+specific, it named a symbol, it gave a measured consequence, and it was a
+day old.
+
+### The durable rule
+
+**A comment is a claim about the tree at the moment it was written. A
+citation of a symbol is checkable in a way a claim about behaviour is
+not.**
+
+`collectSharedSecret` was falsifiable in one `grep` and it failed. *"Does
+not follow imports"* required reading the scanner to test, so it survived
+longer and travelled further — and it is the half that would have shaped a
+design decision, since it governs where [[GTC-264]]'s shared credential
+verification can live.
+
+What follows:
+
+- **Verify a cited symbol before repeating it**, including one you found
+  in a comment written by someone who knew more about that file than you
+  do. GTC-222's rule already says this for tickets. It applies to comments
+  as sources, not only as things tickets produce.
+- **Treat a claim about behaviour as dated, and re-derive it.** It carries
+  no handle to check, so it cannot fail loudly. Where the claim governs a
+  design decision, read the code that implements it.
+- **Recency is not freshness.** A one-day-old comment about a file under
+  active work is more likely to be stale than an old comment about a
+  settled one.
+
+### The concrete finding it produced, which is worth more than the correction
+
+`SHARED_SECRETS` in `tests/security-route-scan.ts` is exactly
+`new Set(['CRON_SECRET'])`. **It is the only environment variable the
+scanner treats as a shared secret.** A TNZ callback secret is invisible to
+it as a credential no matter how the check is shaped — so both
+[[GTC-229]] and [[GTC-264]], which each update
+`route-classifications.json`, would have recorded a guarded route the
+scanner reports as unguarded.
+
+⚠ `tests/security-route-scan.ts` is Do-Not-Touch Zone 6. Adding the new
+secret strengthens the contract rather than weakening it, which is what
+Zone 6 forbids — but it is still a Zone 6 edit. Both tickets say raise it
+and get it ruled rather than do it in passing.
+
+---
+
 ## Where this bears
 
 - [[GTC-229]] — MO webhook authentication. Sources A3, plus the
