@@ -107,17 +107,17 @@ discipline (Scope, Acceptance, Stop Conditions, Evidence) — see GTC-151/GTC-15
 worked examples of chore-shaped tickets. Do not invent new template files without founder
 approval.
 
-### Frontmatter schema (older convention, GTC-101 → ~GTC-146)
+### Frontmatter schema
 
 ```yaml
 ---
 ticket: GTC-NNN
 title: "Short description"
-status: closed          # observed values: closed | in-progress | open | deferred
+status: closed          # BINDING SET — see Status vocabulary below
 branch: feat/moment-one-redesign
 commit: e250f64         # often left blank at authoring, backfilled at close
 moment: 2               # optional: 1 | 2
-type: build             # observed: build | ux
+type: build             # observed: build | ux | chore | bug | architecture-build
 depends_on:
   - "[[GTC-137]]"       # Obsidian wiki-links
 blocks: []
@@ -127,8 +127,11 @@ tags:
 ---
 ```
 
-**Convention drift (as of 2026-07-09):** the newest tickets (GTC-138, 139, 140, 147–152)
-have NO YAML frontmatter — they open directly with the H1 and a bold status line:
+Tickets from ~GTC-177 on also use `related:`, `severity:`, and the pointer keys
+required by `superseded` / `absorbed` below.
+
+**Two body forms are live.** GTC-138, 139, 140 and 147–156 have no YAML frontmatter
+at all — they open directly with the H1 and a bold status line:
 
 ```markdown
 # GTC-152 — Tier 1 safe deletes — CLOSED
@@ -136,9 +139,132 @@ have NO YAML frontmatter — they open directly with the H1 and a bold status li
 **Status:** Complete | **Branch:** feat/moment-one-redesign | **Commits:** 82544b6 (code), 05bc621 (schema)
 ```
 
-Both forms are live. If you add frontmatter, keep `status:` truthful (see registry for the
-two tickets where it is not). The `— CLOSED` suffix on the H1 and the bold Status line are
-the load-bearing signals in recent practice.
+That form is confined to those thirteen tickets and is not to be used for new work —
+a ticket with no `status:` is invisible to every query in this file. Frontmatter
+resumed at GTC-177 and is current practice. The `— CLOSED` suffix on the H1 and the
+bold Status line remain load-bearing alongside frontmatter, not instead of it.
+
+### Status vocabulary — enumerated and binding
+
+This list is the permitted set, not a description of what tickets happen to say. A
+status outside it is a defect, not a dialect.
+
+| Status | Means | Requires |
+|---|---|---|
+| `open` | Buildable work. An executor can start today. | — |
+| `in-progress` | Buildable work, started. | — |
+| `awaiting-ruling` | Cannot start until a named act by a named person. | `awaiting:`, `awaiting_from:`, `awaiting_since:` |
+| `closed` | Work landed, evidence recorded. | `commit:` |
+| `superseded` | Made unnecessary by other work. | `superseded_by:` |
+| `absorbed` | Scope folded into another ticket. | `absorbed_by:` |
+| `deferred` | Buildable, intentionally not now. | a reason in the body |
+
+**Why this is enumerated rather than observed.** This section previously read
+`# observed values: closed | in-progress | open | deferred`. A described vocabulary
+cannot be violated — every value a ticket invents is, by construction, another
+observation. The set drifted to nine live values without a single commit noticing it,
+and two of those nine (`superseded`, `absorbed`) were load-bearing conventions that
+existed nowhere in doctrine. Recorded 2026-09-12 during the ticket-state
+reconciliation.
+
+**Known drift not yet corrected.** Enumerating the set surfaced three backlogs. None is
+fixed by the reconciliation that wrote this section, and none should be read as
+compliant:
+
+- **Seven tickets carry `status: fixed`** — a synonym for `closed`, not in the set.
+  Closed in substance. `grep -l "^status: fixed" docs/tickets/*.md`.
+- **Twenty-four `closed` tickets have no `commit:`**, which the table above makes a
+  violation. Spot-checked GTC-133 and GTC-200: both say `**Commit:** [pending]` in the
+  body too, so the hash is recorded nowhere in the ticket — GTC-200's is `e8e2ddd`,
+  findable only because [[GTC-203]] quotes it. This is the same defect as the empty
+  `commit:` fields on shipped Hinge tickets, aged four months longer.
+- **Thirteen tickets have no frontmatter at all** (GTC-138/139/140, GTC-147–156), so
+  they carry no status to be wrong. Invisible to every query here rather than
+  misleading in one.
+
+The rule stands as written in all three cases. A doctrine that bends to fit the
+backlog measures nothing.
+
+#### `awaiting-ruling` — the test
+
+**Can an executor start?** That is the whole test, and the discriminator is **when
+the ruling happens, not whether one is needed.**
+
+- Can start, and whatever rulings the work needs arrive *during* it → `open`.
+- Cannot start, because the ticket withholds its own scope pending an act outside an
+  executor's authority → `awaiting-ruling`.
+
+This repo rules mid-execution constantly — GTC-187 carries seven dated founder
+rulings recorded while it was being built. **A ticket with a decision inside it is
+open. A ticket that cannot be opened until a decision lands is not.**
+
+"Has no commit" is **not** the test. An `open` ticket has no commit either.
+
+**The boundary has been tested against its own proposer.** The reconciliation that
+wrote this section estimated ten tickets as records rather than work, then applied
+this test and found two of the ten — GTC-212 and GTC-221 — failed it. Both read like
+decision tickets (*"Do not write a fix from this stub"*; *"Fix here: to be ruled when
+pulled"*) and both name executable work an executor starts today. They stayed `open`.
+A test that rejects two of the ten the proposer had already counted is a test doing
+its job; one that had confirmed all ten would have been a label.
+
+**Three required fields, and they are what keep this from becoming a parking lot:**
+
+- `awaiting:` — the act, in one line. Not "a decision" — *which* decision.
+- `awaiting_from:` — who owes it. A person, or the ticket where it gets settled.
+- `awaiting_since:` — a date, so a rotting decision queue looks rotten.
+
+No named act or no named owner means not eligible. It is `open`.
+
+An `awaiting-ruling` ticket covers an act only the founder can perform, which
+includes a credential as readily as a product decision — GTC-247 waits on Twilio /
+TNZ / Resend credentials and belongs here for the same reason GTC-266 waits on a
+design question.
+
+**Reading the list.** `open` + `in-progress` is the buildable list; a launch plan
+sums those two and nothing else. `awaiting-ruling` is a decision queue with a
+different owner, read before a planning session rather than during a build week.
+
+**Returning to open.** An `awaiting-ruling` ticket whose question has been answered
+is a bug. The status returns to `open` in the same commit that records the answer.
+GTC-229 is the precedent — held unfiled pending TNZ's reply, filed the day they
+answered.
+
+**There is deliberately no terminal "recorded" status.** A ticket whose own words
+say no fix is wanted still takes `awaiting-ruling`, because the difference between
+"nothing is wanted" and "nothing is wanted yet" is a judgement that ages, and a
+terminal status would make it permanent by filing rather than by decision. GTC-249 is
+the worked example. (Founder ruling, Nigel, 2026-09-12.)
+
+#### `superseded` and `absorbed` — the pointer is mandatory
+
+- `superseded` requires `superseded_by:`, naming at least one ticket as a wiki-link.
+- The superseding ticket carries the reciprocal `supersedes:`.
+- `absorbed` requires `absorbed_by:`, and the absorbing ticket carries `absorbs:`.
+
+A superseded ticket that does not say by what is the same dead end as an empty
+`commit:` field.
+
+**`superseded` and a populated `commit:` are compatible, and together they say
+something no other combination can: built, then obviated.** Where a ticket's work
+landed and was later removed, keep its commit, add `superseded_by:`, and add
+`removed_by:` naming the commit that took it out. Three fields, and the arc reads
+without running git:
+
+```yaml
+status: superseded
+commit: cf389c4                  # it did ship
+superseded_by: "[[GTC-146]]"
+removed_by: be66454, e250f64     # what took it back out
+```
+
+**Why the convention never spread.** It was built correctly, once, for one Epic D
+cleanup — GTC-176 went `superseded`, GTC-211 and GTC-213 went `absorbed`, all three
+pointing at GTC-231, which carries the reciprocals. It was then documented nowhere,
+so nothing generalised it. All three of those tickets were superseded *before* any
+work landed and all three have an empty `commit:`, which is why the built-then-
+obviated pairing above did not exist until GTC-137 and GTC-142 needed it: nobody had
+yet had to describe a ticket that shipped and was then overtaken.
 
 ### Evidence section discipline
 
