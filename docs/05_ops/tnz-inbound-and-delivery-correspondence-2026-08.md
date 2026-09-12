@@ -396,6 +396,44 @@ Questions 1 and 2 are the two that change what gets built rather than
 merely what is known. Both are flagged where they bear: question 1 in
 [[GTC-229]] and [[GTC-288]], question 2 in [[GTC-264]].
 
+**⚠ Question 2 was ANSWERED by the documentation on 2026-09-12, before
+TNZ replied.** A positive delivery receipt exists: `Status: SUCCESS` with
+`Result: delivered` or `SentOK`. See
+`docs/05_ops/tnz-delivery-status-contract-2026-09-12.md`. The mail can
+stand, but the answer is no longer awaited — and the sharper form of the
+question is now whether `delivered-to-network` (a documented `Success`
+that the mobile never acknowledged) should count as delivered, which is
+a product question rather than one for TNZ.
+
+---
+
+## Drafted for TNZ 2026-09-12 — NOT YET SENT
+
+Three further questions, drafted at the close of [[GTC-264]] Phase 0 and
+recorded here before sending so the tickets can point at them. **They are
+drafted, not asked.** Update this heading when they go.
+
+1. **Can the status webhook and the SMS-received webhook be sent to two
+   different URLs?** The documentation shows one webhook URL per Sender
+   and one per-message override, and says that being set up for Status
+   webhooks means also receiving SMS Received webhooks. **Gates
+   [[GTC-264]] Phase 3** — it decides whether the delivery endpoint is
+   its own route or shares [[GTC-229]]'s.
+2. **What is our Sender's default `WebhookCallbackFormat`, JSON or
+   XML?** The format defaults at Sender level and our send code sets
+   neither `WebhookCallbackFormat` nor `WebhookCallbackURL`. **Gates
+   [[GTC-264]] Phase 3, and it is the sharper of the two** — if the
+   default is XML, a JSON-only endpoint fails every report, and with the
+   documented retry contract it fails each one 288 times.
+3. **What HTTP status code do you expect from our endpoint on a
+   successful webhook delivery?** The documentation states that webhook
+   failures are retried every five minutes for a maximum of 24 hours and
+   never defines what constitutes a failure. Not blocking; it decides
+   whether a `202` is safe.
+
+The four questions asked on 2026-09-12 remain outstanding, less question
+2 as noted above.
+
 ---
 
 ## Hazards the correspondence creates or sharpens
@@ -573,6 +611,112 @@ scanner reports as unguarded.
 secret strengthens the contract rather than weakening it, which is what
 Zone 6 forbids — but it is still a Zone 6 edit. Both tickets say raise it
 and get it ruled rather than do it in passing.
+
+---
+
+## A second finding about provenance — the one that cost the most
+
+Recorded as its own finding on a founder ruling, 2026-09-12, because the
+durable lesson is worth more than the correction it produced.
+
+### What happened
+
+Three tickets carried a binding instruction: **the delivery-receipt
+contract is not the MO contract, do not assume one shape covers both, do
+not build one parser for both.** [[GTC-264]] carried it in *The auth
+shape*; [[GTC-288]] carried it as TRAP 3, calling a shared parser *"the
+failure mode, not the tidy-up"*; both attributed it to [[GTC-229]]
+answer 3.
+
+[[GTC-264]] Phase 0 read the documentation on 2026-09-12. **There is one
+envelope.** Nineteen fields, the same names in the same order, the same
+three authentication headers, and one subscription — TNZ's own words:
+*"If you are set up to receive Status webhooks, you will also be
+receiving SMS Received webhooks."* The two callbacks are told apart by
+`Type`: `SMS` for a delivery report, `SMSReply` for a reply,
+`SMSInbound` for an unsolicited inbound.
+
+### Where the claim actually came from
+
+It was never TNZ's. The trail is entirely inside this file.
+
+**Nigel's question 2, 2026-08-15**, asked for the MO payload contract and
+framed it like this: *"The delivery-receipt callback format is already
+known (`Status`, `Result`, `MessageID`, `Destination`, etc.); this asks
+about the MO contract, assumed different."*
+
+**TNZ's answer 2, 2026-08-18**, was a bare URL. No field names, no
+Content-Type, no payload example.
+
+So an assertion in the question — *already known*, *assumed different* —
+was the only source. TNZ neither confirmed nor contradicted it.
+
+**And this file flagged exactly that, at the time it was written.** The
+note under question 2 reads: *"question 2's parenthetical is where the
+delivery-receipt field names enter this thread. They are Nigel's
+statement of existing knowledge from TNZ's documentation, not TNZ's
+confirmation."*
+
+**The flag was correct, and it was inherited past anyway.** The
+assumption was recorded as *answer 3* in [[GTC-229]], and from there two
+more tickets took it as a binding instruction — one of them elevating it
+into a named trap with a stated failure mode.
+
+### The durable rule
+
+**A caution recorded beside a fact does not travel with the fact.** The
+fact is quotable, compact and useful, so it gets copied. The caution is
+a paragraph about provenance, so it stays behind.
+
+This is the same shape as the `collectSharedSecret` near-miss above and
+the opposite failure. There, a checkable citation failed in one `grep`
+while an unfalsifiable claim about behaviour survived and travelled. Here
+the claim was *marked as unverified at its source* and travelled anyway,
+gaining authority at each hop: a parenthetical became an answer, an
+answer became an instruction, an instruction became a trap with a
+failure mode.
+
+What follows:
+
+- **When a ticket cites a fact, cite where the fact came from, not the
+  ticket that repeated it.** [[GTC-264]] and [[GTC-288]] both instruct
+  their executors to *"cite the record, not this ticket's summary of
+  it"*. That rule is what caught this. It works only if the record is
+  actually opened.
+- **An assertion inside a question is not an answer.** When a question
+  states a premise and the reply does not address it, the premise is
+  still unverified — and a reply that answers *around* a premise is the
+  easiest case to misread as confirming it.
+- **Write the caution into the claim, not next to it.** "The MO contract
+  is assumed different" should have been recorded as "**UNVERIFIED:** the
+  MO contract may differ from the delivery-receipt contract; TNZ did not
+  say." Then the hedge cannot be copied away, because it is inside the
+  sentence.
+- **The cheapest check was always available.** TNZ's answer was a URL to
+  a static HTML page, fetchable with no subscription and no account. It
+  went unread through three ticket filings and two rescopings. When the
+  answer to a question is a link, the link is the answer — open it.
+
+### What survived, and what was rewritten
+
+The **semantic** half was right and remains binding: the two payloads
+mean different things and must never be conflated. `Status` and `Result`
+are shared field names carrying different contracts, and on a reply both
+carry `RECEIVED` — **a `RECEIVED` is a reply, never a delivery outcome.**
+
+The **structural** half was wrong and is rewritten in both tickets: one
+documented envelope parser, then a `Type` switch, then two interpreters
+that know nothing of each other. Two hand-written envelope parsers
+against one documented envelope is the duplication, not the separation.
+
+### And one thing it left open
+
+Nothing documents a way to send the two callbacks to two different URLs.
+What is documented is one webhook URL per Sender, overridable per
+outbound message by `WebhookCallbackURL` — per message, not per callback
+type. If they cannot be separated, [[GTC-264]]'s endpoint and
+[[GTC-229]]'s are the same route. **Drafted for TNZ 2026-09-12; it gates
+[[GTC-264]] Phase 3.**
 
 ---
 
