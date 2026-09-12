@@ -245,8 +245,25 @@ const CREDENTIAL_COLUMNS: ReadonlyArray<{ model: string; field: string }> = [
  */
 const PRISMA_CREDENTIAL_METHODS = /^(find[A-Za-z]*|update|updateMany|delete|deleteMany|upsert)$/;
 
-/** Environment variables used as a shared secret by cron endpoints. */
-const SHARED_SECRETS = new Set(['CRON_SECRET']);
+/**
+ * Environment variables presented to a route as a shared secret.
+ *
+ * This set does TWO things, and both are why an unlisted variable is invisible here
+ * rather than merely unlabelled. It seeds `secretTokens`, so an `if` keyed on an
+ * unlisted name is not counted as a credential at all; and `absValue` evaluates
+ * `process.env.<member>` to ABSENT, which is what lets `evaluateSecretAbsent` PROVE a
+ * refusal is reachable when the secret is unset. A route guarded by an unlisted
+ * variable therefore reports as "no credential of any kind" — a worse verdict than
+ * fail-open, and a false one.
+ *
+ * GTC-264 added TNZ_CALLBACK_SECRET. It authenticates TNZ's callbacks, which are a
+ * plain shared secret in a header (`Authorization: <secret>`, no `Basic`) echoed in the
+ * JSON body as `APIKey` — the CRON_SECRET shape, not the Stripe signature shape, so
+ * `collectSignature` cannot reach it: that rule fires only on `constructEvent` /
+ * `constructEventAsync` called on a receiver resolving to a `@/lib/stripe` import.
+ * Listing it here is the only honest way to make the check visible.
+ */
+const SHARED_SECRETS = new Set(['CRON_SECRET', 'TNZ_CALLBACK_SECRET']);
 
 const MAX_HELPER_DEPTH = 3;
 
