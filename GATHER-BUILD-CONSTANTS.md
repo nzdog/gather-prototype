@@ -269,9 +269,15 @@ uniqueness constraint `[eventId, personId, scope, teamId]` and the scoped cookie
 system are interdependent. Do not alter token issuance, validation, or scope
 logic without a full security re-audit.
 
-### 4. Stripe Integration (`src/app/api/webhooks/stripe/`, `src/lib/stripe*`, `prisma/schema.prisma` — `Subscription`, `User.billingStatus`)
+### 4. Stripe Integration (`src/app/api/webhooks/stripe/`, `src/app/api/billing/*`, `src/lib/stripe*`, `prisma/schema.prisma` — `Subscription`, `User.billingStatus`)
 Webhook signature verification, idempotency, and billing-status transitions are
 critical for payment integrity. Changes here affect real money.
+
+> `src/app/api/billing/*` was added by GTC-280, which found the letter and the
+> intent of this zone disagreeing: the checkout, portal, cancel and status
+> routes are Stripe integration by any reading, and none of them was named. A
+> zone that does not name the files it means is a zone that gets walked past
+> honestly.
 
 ### 5. Prisma Migrations (`prisma/migrations/`)
 Never hand-edit migration SQL files. Never delete or reorder migrations. Always

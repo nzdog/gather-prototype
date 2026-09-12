@@ -1624,6 +1624,30 @@ const HEAD_VERDICTS: ReadonlyArray<readonly [string, boolean, string]> = [
   ['POST src/app/api/demo/reset/route.ts', false, 'ENV_GATE:PROVEN'],
   ['POST src/app/api/demo/session/route.ts', false, ''],
   ['POST src/app/api/events/[id]/households/[householdId]/claim/route.ts', false, ''],
+  /*
+   * GTC-280 — UNCHANGED BY THAT TICKET, DELIBERATELY, AND THE COMMENT IS THE POINT.
+   *
+   * GTC-280 closed a live impersonation: paying $12 with an existing host's
+   * email address used to return a 30-day session as that host. It did not add
+   * a guard, and this verdict is the same before and after — `guarded: false`,
+   * one THIRD_PARTY_RECEIPT. Do not "update" it.
+   *
+   *   The verdict is true. The allowlist's REASON was judged on what the route
+   *   creates and never on what it returns.
+   *
+   * That distinction is the durable part. GTC-268's allowlist reason for this
+   * handler was "it refuses unless payment_status === 'paid'", which is an
+   * adequate credential for creating one paid event and was never an adequate
+   * credential for adopting an account. The route is still reachable with a
+   * receipt and no session, by design, because that is how a first-time host
+   * pays. The containment is in what the response CARRIES, which no static read
+   * of this handler can see — so it lives in `tests/security-validation.ts`
+   * suite 14 and `tests/gtc280-payment-identity-test.ts`, not here.
+   *
+   * This is GTC-273's lesson arriving in an allowlist reason rather than in a
+   * detector rule, and GTC-269's rule still holds: do not buy a flattering
+   * scanner verdict with a false one.
+   */
   ['POST src/app/api/events/route.ts', false, 'THIRD_PARTY_RECEIPT:PROVEN'],
   ['POST src/app/api/join/[token]/claim/route.ts', false, 'CREDENTIAL_COLUMN:PROVEN'],
   ['POST src/app/api/sms/inbound/route.ts', false, ''],

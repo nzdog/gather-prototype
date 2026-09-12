@@ -61,6 +61,8 @@
     "test:nudge-cadence": "tsx tests/nudge-cadence-test.ts",
     "test:message-composition": "tsx tests/message-composition-test.ts",
     "test:email-send-result": "tsx tests/email-send-result-test.ts",
+    "test:gtc280": "tsx tests/gtc280-payment-identity-test.ts",
+    "test:gtc280-paid": "tsx tests/gtc280-paid-checkout-test.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",

@@ -2043,6 +2043,110 @@ async function testSuite13_EventListSelect(fixtures: Fixtures) {
     await prisma.user.deleteMany({ where: { id: coordUser.id } });
   }
 }
+
+async function testSuite14_PaymentIsNotIdentity() {
+  logSection('Test Suite 14: GTC-280 — a paid receipt never returns a credential');
+
+  const BASE = process.env.SECURITY_TEST_BASE_URL ?? 'http://localhost:3000';
+
+  /*
+   * THE CONTRACT: a payment may CREATE an event and ATTACH it to an address. It
+   * may never, on its own, return a credential for an account.
+   *
+   * Before GTC-280, `POST /api/events` looked the Stripe address up in `User`
+   * and — found or created — wrote a 30-day `Session` and set the `session`
+   * cookie. Paying $12 with a known host's address returned a logged-in session
+   * as that host.
+   *
+   * ⚠ THE END-TO-END PROOF IS NOT HERE, AND ITS ABSENCE IS NAMED RATHER THAN
+   * PAPERED OVER. Driving the paid path needs a really-completed Checkout
+   * Session, and Stripe has no API that fakes one. That proof lives in
+   * `npm run test:gtc280-paid`, is run deliberately, and its output is recorded
+   * in the ticket. What is asserted below is everything that does NOT need a
+   * charge — which includes the invariant itself, because a cookie the route
+   * cannot set on any path is a cookie it cannot set on the paid one either.
+   */
+
+  const readCode = (p: string) =>
+    require('fs')
+      .readFileSync(p, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+
+  const eventsRoute = readCode('src/app/api/events/route.ts');
+  const verifyRoute = readCode('src/app/api/auth/verify/route.ts');
+
+  logTest(
+    'POST /api/events sets no session cookie on any path',
+    !/\.set\(\s*[\'"`]session[\'"`]/.test(eventsRoute),
+    'the route file contains a session cookie set'
+  );
+  logTest(
+    'CONTROL: POST /api/auth/verify still does — the detector finds one where one exists',
+    /\.set\(\s*[\'"`]session[\'"`]/.test(verifyRoute),
+    'the detector matched nothing anywhere, so the assertion above proves nothing'
+  );
+  logTest(
+    'POST /api/events creates no Session row either — the cookie is not the only way to hand one out',
+    !/session\s*\.\s*create\s*\(/.test(eventsRoute),
+    'the route file creates a Session'
+  );
+  logTest(
+    'CONTROL: POST /api/auth/verify still creates one',
+    /session\.create\(/.test(verifyRoute),
+    'the detector matched nothing anywhere'
+  );
+
+  // ── Live ─────────────────────────────────────────────────────────────────────
+  let probeOk = false;
+  try {
+    probeOk = (await fetch(`${BASE}/api/events`)).status === 401;
+  } catch {
+    probeOk = false;
+  }
+  logTest(
+    `dev server healthy on ${BASE} — GET /api/events answers 401 with no cookie`,
+    probeOk,
+    'Start it with `npm run dev`. These assertions cannot run without it.'
+  );
+  if (!probeOk) return;
+
+  const before = await prisma.session.count();
+
+  const noReceipt = await fetch(`${BASE}/api/events`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  const badReceipt = await fetch(`${BASE}/api/events`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ stripeSessionId: 'cs_test_gtc280_security_suite' }),
+  });
+
+  logTest(
+    'a call with no receipt is refused 402, and the receipt is still the only gate — no 401 anywhere',
+    noReceipt.status === 402,
+    `got ${noReceipt.status}`
+  );
+  logTest(
+    'a call with an unusable receipt is refused 400 before any write',
+    badReceipt.status === 400,
+    `got ${badReceipt.status}`
+  );
+  logTest(
+    'neither refusal returned a session cookie',
+    !(noReceipt.headers.get('set-cookie') ?? '').includes('session=') &&
+      !(badReceipt.headers.get('set-cookie') ?? '').includes('session='),
+    'a Set-Cookie carrying session= came back from a refused call'
+  );
+  logTest(
+    'and neither created a Session row — counted before and after, not read off the status code',
+    (await prisma.session.count()) === before,
+    'the Session row count moved during two refused calls'
+  );
+}
+
 async function main() {
   console.log(`${BOLD}${YELLOW}=== Security Validation Test Suite ===${RESET}\n`);
   console.log('Contract under test:');
@@ -2068,6 +2172,7 @@ async function main() {
     await testSuite11_DemoSessionScope(fixtures);
     await testSuite12_CronSecretFailsClosed(fixtures);
     await testSuite13_EventListSelect(fixtures);
+    await testSuite14_PaymentIsNotIdentity();
 
     console.log(`\n${BOLD}${YELLOW}=== Test Summary ===${RESET}`);
     console.log(`Total tests: ${testsRun}`);

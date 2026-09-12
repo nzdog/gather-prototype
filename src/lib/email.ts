@@ -143,8 +143,24 @@ export async function sendNudgeEmail(params: {
 export async function sendWelcomeEmail(
   email: string,
   eventName: string,
-  eventId: string
+  eventId: string,
+  options: { alreadySignedIn?: boolean } = {}
 ): Promise<SendResult> {
+  /*
+   * GTC-280 — `alreadySignedIn` exists because the old copy became false for
+   * exactly the person who now depends on this link.
+   *
+   * It read "You're currently logged in, but save this link to return
+   * anytime". That was true when `POST /api/events` handed every payer a
+   * session. It no longer does, so a signed-out host reaches the event she has
+   * just paid for ONLY through this link, and telling her she is already
+   * logged in is both wrong and the least helpful thing to say.
+   *
+   * ⚠ ZONE 2 IS CALL-ONLY AND THIS STAYS INSIDE IT. The `magicLink.create`
+   * below, its token and its 30-day expiry are untouched — only the prose
+   * around the same link changes. The expiry is GTC-282's.
+   */
+  const alreadySignedIn = options.alreadySignedIn === true;
   const token = randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
@@ -162,11 +178,19 @@ export async function sendWelcomeEmail(
       from: process.env.EMAIL_FROM || 'Gather <noreply@gather.app>',
       to: email,
       subject: `Your event "${eventName}" is ready!`,
-      html: `
+      html: alreadySignedIn
+        ? `
       <h1>Your event is created!</h1>
       <p>Thanks for using Gather. Your event "${eventName}" is all set up.</p>
       <p>You're currently logged in, but save this link to return anytime:</p>
       <p><a href="${magicLinkUrl}">Access your event →</a></p>
+      <p>This link expires in 30 days. You can always request a new one from the sign-in page.</p>
+    `
+        : `
+      <h1>Your event is created!</h1>
+      <p>Thanks for using Gather. Your payment went through and your event "${eventName}" is all set up.</p>
+      <p>Open this link to sign in and start planning:</p>
+      <p><a href="${magicLinkUrl}">Sign in and open your event →</a></p>
       <p>This link expires in 30 days. You can always request a new one from the sign-in page.</p>
     `,
     });
