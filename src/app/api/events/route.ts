@@ -183,7 +183,14 @@ export async function POST(request: NextRequest) {
       path: '/',
     });
 
-    // Send welcome email with magic link for future access (fire and forget)
+    // Send welcome email with magic link for future access (fire and forget).
+    //
+    // ⚠ DELIBERATELY STILL FIRE-AND-FORGET, AND GTC-280 IS THE TICKET THAT
+    // ENDS THAT STATE. GTC-265 made `sendWelcomeEmail` return its result and
+    // record its own failures; deciding what this route should DO about a
+    // failure is the other half, and it belongs with GTC-280 because that is
+    // the ticket that makes this email the only way a signed-out host reaches
+    // the event she just paid for. Until then the response is unchanged.
     sendWelcomeEmail(email, event.name, event.id).catch((emailError) => {
       console.error('[Event Creation] Failed to send welcome email:', emailError);
     });
