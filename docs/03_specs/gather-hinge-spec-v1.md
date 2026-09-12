@@ -75,6 +75,9 @@ Sentence 2 is deliberate in what it omits: it leads with what she'll watch (repl
 
 - **Who receives messages, per household, is Kate's toggle, set at Moment 1.** Not a system rule — a hosting judgement made when the people go in. She knows the Hendersons message Matt and Matt handles it; she knows which household needs both adults asked. The system's job is the toggle; the wisdom is hers.
 - **The toggled recipients ARE the household's voice.** A decision from any of them is the household deciding — the proxy-response question is answered by placement, not machinery.
+
+> **⚠ OVERTURNED FOR ADULTS — founder ruling, 2026-09-13.** The bullet below routes an adult who has no channel (Grandma, no phone) through another person. That route no longer exists for adults. Every adult who owns an item is messaged directly; an adult with neither email nor phone becomes a line on the host's list, named with their item, for her to handle out of band. A household carries a child's ask and nothing else. See [[GTC-189]], *Founder ruling — the recipient and channel model (Nigel, 2026-09-13)*. The prose below is left as written; the ruling governs where they disagree.
+
 - **Owner and channel are separate fields.** Grandma has no phone: her ask routes to the person Kate always reaches her through — but the pavlova remains *Grandma's*, her name on the amber box *[amber — was "yellow"; renamed by founder ruling, GTC-192 Ruling 13, 2026-08-30]* and on the fridge. The system never needs to know she has no phone; it only needs to know who Kate said to talk to.
 - **This closes most of Moment 4 open question 8.7:** children work the same way — owners of tasks, never recipients of messages; their channel is a parent, by the same toggle. (The residue of 8.7 — whether a child's row can go red — remains with the Moment 4 spec.)
 - **Moment 1 build implication:** per-person message toggles are added to Moment 1's household capture, and the pre-flight sweeps them.
@@ -128,6 +131,9 @@ Sentence 2 is deliberate in what it omits: it leads with what she'll watch (repl
 - **Bounces are red on arrival.** A bounce is not a silence — it's a dead channel; nudging it sends more messages into the same void. The system is out of moves *immediately*, so the ask goes red at once, transparently: she sees exactly what's going on — *twelve are away, two bounced.* The assistant says ***"these need you."***
 - **The bounce door is the Moment 4 door, met early.** Tapping the red opens the same two-way handover built for exhausted silences: let the system try again, or take it herself — manually, outside the system (ring him, ask his mum, fix the number). When the fix is a phone call, Gather doesn't try to become the phone call: it marks the ask as hers-in-motion and waits to be told. One door shape everywhere; bounces just reach it faster.
 - **The colours know the difference.** Never-reached (red at once) can never be mistaken for reached-and-quiet (amber, with its nudge-clock) *[amber — was "yellow"; renamed by founder ruling, GTC-192 Ruling 13, 2026-08-30]*. No silence gets nudged into a void for days and goes red for the wrong reason.
+
+> **⚠ OVERTURNED FOR ADULTS — founder ruling, 2026-09-13.** The bullet below routes a no-channel person's ask to "their human channel". For adults that route no longer exists: an adult with neither email nor phone is a line on the host's list, named with their item, for her to handle out of band. A child's ask is carried by their household contact. See [[GTC-189]], *Founder ruling — the recipient and channel model (Nigel, 2026-09-13)*. The prose below is left as written; the ruling governs where they disagree.
+
 - **No-channel people are not failures** — they're the recipient toggle working at its far end (§4). The send routes their ask to their human channel; nothing bounces because nothing was ever sent to a dead end.
 
 ---
