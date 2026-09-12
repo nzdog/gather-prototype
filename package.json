@@ -80,7 +80,8 @@
     "test:glance-actions": "tsx tests/glance-actions-test.ts",
     "test:glance-replay": "tsx tests/glance-replay-test.ts",
     "test:plan-write-preserve": "tsx tests/plan-write-preserve-test.ts",
-    "test:setup-entry-stage": "tsx tests/setup-entry-stage-test.ts"
+    "test:setup-entry-stage": "tsx tests/setup-entry-stage-test.ts",
+    "test:tnz-delivery-contract": "tsx tests/tnz-delivery-contract-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
