@@ -15,7 +15,8 @@
  * PROPERTIES beside them — whose item is whose, which movement it sits in, that a carried item
  * never reads as the recipient's to bring — so a later rewording is checked for what matters
  * and not only for its letters. The one property that also constrains word order is [ORDER].
- * [DEFECT GTC-302] pins item names composed exactly as stored: a data problem, filed. *
+ * [DEFECT GTC-302] pins item names composed exactly as stored: a data problem, filed.
+ *
  * NO ASSERTION ABOUT A CARRIED MESSAGE CAN PASS BY ABSENCE. Each first requires the carried ask
  * to be in the message. A composer that dropped carried asks would otherwise satisfy "never
  * reads as the carrier's to bring" by saying nothing — which is exactly today's behaviour.
