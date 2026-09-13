@@ -102,6 +102,7 @@ async function main() {
         recipient: {
           firstName: firstNameOf('Rob Henderson'),
           itemNames: ['pavlova'],
+          carried: [],
           link: 'https://x/p/t',
         },
         storedAuthorLine: stored,

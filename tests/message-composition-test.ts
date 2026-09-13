@@ -80,7 +80,7 @@ function ask(itemNames: string[], firstName = 'Finn', storedAuthorLine: string |
   return composeAsk({
     event: EVENT,
     hostName: HOST,
-    recipient: { firstName, itemNames, link: 'https://gather.test/p/tok123' },
+    recipient: { firstName, itemNames, carried: [], link: 'https://gather.test/p/tok123' },
     storedAuthorLine,
   });
 }
@@ -108,7 +108,12 @@ function itemlessEndsWithLink(): boolean {
   return composeAsk({
     event: EVENT,
     hostName: HOST,
-    recipient: { firstName: 'Grandma', itemNames: [], link: 'https://gather.test/p/tok123' },
+    recipient: {
+      firstName: 'Grandma',
+      itemNames: [],
+      carried: [],
+      link: 'https://gather.test/p/tok123',
+    },
   })
     .text.trimEnd()
     .endsWith('https://gather.test/p/tok123');
@@ -300,7 +305,7 @@ function main() {
   assert(
     'decision 8',
     'movement 3 is thinner: no item ask',
-    !itemless.movements[2].text.includes('Could you bring') &&
+    !itemless.movements[2].text.includes('Would you bring') &&
       itemless.movements[2].text.length < one.movements[2].text.length
   );
 
@@ -322,6 +327,13 @@ function main() {
     'hinge',
     'the one decision is stated as yes / no / maybe, one tap',
     /yes, no or maybe/.test(one.text) && /one tap/i.test(one.text)
+  );
+
+  assert(
+    'hinge',
+    'WOULD, not could — the ask asks willingness, not ability (founder ruling), in one voice',
+    [one, four].every((a) => /Would you bring the /.test(a.text)) &&
+      ![one, four, itemless].some((a) => /\bcould\b/i.test(a.text))
   );
 
   assert(
@@ -353,7 +365,12 @@ function main() {
   const nameless = composeAsk({
     event: EVENT,
     hostName: '',
-    recipient: { firstName: 'Finn', itemNames: ['Pavlova'], link: 'https://gather.test/p/t' },
+    recipient: {
+      firstName: 'Finn',
+      itemNames: ['Pavlova'],
+      carried: [],
+      link: 'https://gather.test/p/t',
+    },
   });
   assert(
     'GTC-256',
