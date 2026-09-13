@@ -31,7 +31,8 @@
  *   J  jobs — done, not brought
  *   V  voice — the carried ask is Gather's sentence; the host's movements do not change
  *   G  GSM-7 — the new sentences cost single-rate
- *   D  dark — every caller passes `carried: []`; slice 3 removes this layer
+ *   (D, "dark — every caller passes `carried: []`", was removed at GTC-189 slice 3, when the
+ *   preview began carrying asks and splitting jobs; `tests/ask-preview-test.ts` holds that now)
  *   T  types — decision 1 is not widened: the only other owner a message can name is a child
  *
  * Run: npx tsx tests/carried-ask-composition-test.ts
@@ -39,9 +40,9 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, relative } from 'node:path';
+import { join } from 'node:path';
 import {
   askHandover,
   composeAsk,
@@ -731,77 +732,6 @@ assert(
   'G',
   'a non-GSM-7 CHILD name still costs double — composition cannot launder the data',
   tane.text.includes('Tāne') && tane.narrowSegments === true
-);
-
-// ─────────────────────────────────────────────────────────────────────────────
-section('Layer D: dark — nothing composes a carried ask yet');
-// ─────────────────────────────────────────────────────────────────────────────
-//
-// A DELIBERATE TEMPORARY STATE. GTC-189 slice 3 routes carried asks into the preview and
-// removes this layer; until then a caller carrying something is a slice boundary crossed.
-
-function carriedAtCallSites(src: string) {
-  const code = codeOnly(src);
-  const calls = (code.match(/\bcomposeAsk\(/g) ?? []).length;
-  const empty = (code.match(/\bcarried:\s*\[\s*\]/g) ?? []).length;
-  const any = (code.match(/\bcarried:/g) ?? []).length;
-  const jobsEmpty = (code.match(/\bjobNames:\s*\[\s*\]/g) ?? []).length;
-  const jobsAny = (code.match(/\bjobNames:/g) ?? []).length;
-  return { calls, empty, other: any - empty, jobsEmpty, jobsOther: jobsAny - jobsEmpty };
-}
-
-const plantedCarry = carriedAtCallSites(
-  'composeAsk({ recipient: { jobNames: [job], carried: [ollie] } })'
-);
-const plantedEmpty = carriedAtCallSites('composeAsk({ recipient: { jobNames: [], carried: [] } })');
-const plantedComment = carriedAtCallSites('// composeAsk({ carried: [ollie] })\nconst y = 1;');
-assert(
-  'D',
-  'CONTROL: the matcher sees a carrying call, an empty one, and ignores a comment',
-  plantedCarry.calls === 1 &&
-    plantedCarry.other === 1 &&
-    plantedCarry.jobsOther === 1 &&
-    plantedEmpty.calls === 1 &&
-    plantedEmpty.empty === 1 &&
-    plantedEmpty.other === 0 &&
-    plantedEmpty.jobsEmpty === 1 &&
-    plantedEmpty.jobsOther === 0 &&
-    plantedComment.calls === 0 &&
-    plantedComment.other === 0
-);
-
-const callers: Array<{ rel: string } & ReturnType<typeof carriedAtCallSites>> = [];
-function walk(dir: string) {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === 'node_modules' || entry.name === '.next') continue;
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      walk(full);
-      continue;
-    }
-    if (!/\.(ts|tsx|js|jsx|mjs|cjs)$/.test(entry.name)) continue;
-    const rel = relative(ROOT, full);
-    if (rel === MODULE_REL) continue;
-    const found = carriedAtCallSites(readFileSync(full, 'utf-8'));
-    if (found.calls > 0) callers.push({ rel, ...found });
-  }
-}
-for (const dir of ['src', 'scripts']) walk(join(ROOT, dir));
-
-assert(
-  'D',
-  'every composeAsk call in src and scripts passes carried: [] — and there is at least one',
-  callers.length > 0 && callers.every((f) => f.other === 0 && f.empty >= f.calls),
-  JSON.stringify(callers)
-);
-// NOT A FILTER, AND NOT DARK BY CHOICE. The preview route selects no `Item.kind`, so it has no
-// jobs to hand over: every assigned row, a generated TASK included, still arrives in `itemNames`
-// and reads "bring" on the pre-flight page. Slice 3 splits them; this assertion goes with it.
-assert(
-  'D',
-  'every composeAsk call in src and scripts passes jobNames: [] — the preview reads no kind yet',
-  callers.length > 0 && callers.every((f) => f.jobsOther === 0 && f.jobsEmpty >= f.calls),
-  JSON.stringify(callers)
 );
 
 // ─────────────────────────────────────────────────────────────────────────────

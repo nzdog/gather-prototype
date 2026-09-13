@@ -115,8 +115,9 @@ export interface AskRecipient {
    * 6). REQUIRED for the reason `carried` is: a caller with nowhere to put a job puts it among
    * the dishes, where it reads "bring".
    *
-   * ⚠ EVERY CALLER PASSES `[]` TODAY, AND IT IS NOT A FILTER. The preview route selects no
-   * `Item.kind`, so every assigned row still arrives in `itemNames`; slice 3 splits them.
+   * Split from `itemNames` by `Item.kind`, never filtered: `readAskPreview` in
+   * `src/lib/preflight/ask-preview.ts` puts every assigned row in exactly one of the two
+   * (GTC-189 slice 3).
    */
   jobNames: readonly string[];
   /**
@@ -124,8 +125,8 @@ export interface AskRecipient {
    * optional: a caller that left it out would tell a carrier "Nothing for you to bring",
    * silently — ruling D item 2.
    *
-   * ⚠ DARK UNTIL GTC-189 SLICE 3. Every caller passes `[]`, and
-   * `tests/carried-ask-composition-test.ts` asserts it.
+   * Filled by the pre-flight preview since GTC-189 slice 3, from `chooseAskRoute`'s CARRIED
+   * routes — see `readAskPreview` in `src/lib/preflight/ask-preview.ts`.
    */
   carried: readonly CarriedChildAsk[];
   /** The guest's tap link. Supplied by the caller; token issuance is `ensureEventTokens`'s
@@ -345,10 +346,9 @@ function carriedAskSentences(carried: readonly CarriedChildAsk[], alongsideOwn: 
  *
  * ⚠ RULED BEFORE THE CASE EXISTED. When this sentence was ruled only plan generation wrote a TASK
  * row, so a job added by hand was stored as a dish and read "bring". [[GTC-302]] gave the add
- * routes a kind. What still keeps the sentence from a guest is provisional: the preview hands
- * composition no kind until [[GTC-189]] slice 3 splits jobs from dishes. JOBS ARE NEVER FILTERED
- * OUT instead: a filtered job reaches nobody, and a child's job reaching an adult is what the
- * carried ask is for.
+ * routes a kind, and [[GTC-189]] slice 3 made the preview split jobs from dishes by it. JOBS ARE
+ * NEVER FILTERED OUT: a filtered job reaches nobody, and a child's job reaching an adult is what
+ * the carried ask is for.
  */
 function whatIsAsked(itemNames: readonly string[], jobNames: readonly string[]): string {
   const bring = itemNames.length > 0 ? `bring ${theItems(itemNames)}` : null;

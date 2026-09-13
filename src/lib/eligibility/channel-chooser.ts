@@ -10,9 +10,9 @@
  * (slices 5 and 8) are to call the same two functions, which is what stops the host being shown
  * a route the send does not take.
  *
- * ⚠ DARK UNTIL GTC-189 SLICE 3. Nothing imports this module, and `tests/channel-chooser-test.ts`
- * asserts that; slice 3, the first caller, removes that assertion. `contactMethod` is not
- * touched here — its removal is [[GTC-295]]'s, after slice 8.
+ * WIRED AT GTC-189 SLICE 3. `readAskPreview` in `src/lib/preflight/ask-preview.ts` is the first
+ * caller; the senders (slices 5 and 8) are still to come. `contactMethod` is not touched here —
+ * its removal is [[GTC-295]]'s, after slice 8.
  *
  * TWO FUNCTIONS, NOT ONE WITH A MODE, because the ask and the chase invert (THE ASK and THE
  * CHASE, 2026-09-13): the ask prefers email, the chase prefers text. A shared preference order
@@ -74,7 +74,11 @@ export interface ChooserMembership {
    * out of a narrow select reads as `undefined`, which `isChaseable` treats as chaseable.
    */
   nudgeMark: string | null;
-  /** Whether this membership holds at least one item on this event. */
+  /**
+   * Whether this membership holds at least one row on this event — of EITHER kind. A job counts:
+   * a child whose only row is a job, counted as holding nothing, is `CHILD_WITHOUT_ITEM` and
+   * reaches no one (GTC-189 answer 6, build shape slice 3). See `readAskPreview`.
+   */
   holdsItems: boolean;
   person: ChooserPerson;
 }

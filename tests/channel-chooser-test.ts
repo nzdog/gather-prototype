@@ -10,13 +10,13 @@
  * prefers email and the chase prefers text (THE ASK and THE CHASE, 2026-09-13). A suite that
  * asserted one and inferred the other would pass a chooser that had the inversion backwards.
  *
- * SIX LAYERS
+ * FIVE LAYERS — a sixth, I, "nothing imports the chooser", held slice 1 dark and was removed at
+ * GTC-189 slice 3, the chooser's first caller. `tests/ask-preview-test.ts` asserts that caller.
  *   M  the matrix — email only, phone only, both, neither, a child, a child in the host's
  *      household, don't-chase, an opted-out phone, a non-NZ number, the host
  *   C  children, carriers, and the host as carrier (rulings A, A2, R)
  *   P  purity — frozen inputs, repeatability, roster order
  *   S  structure — the gates are imported from their modules, not copied; nothing stored is read
- *   I  isolation — nothing imports the chooser yet
  *   T  types — a row missing `nudgeMark` or `smsOptedOut` does not typecheck
  *
  * LABELS THAT TIE AN ASSERTION TO A RECORD, so a later ruling or fix knows which assertions it moves:
@@ -33,9 +33,9 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, relative } from 'node:path';
+import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import {
   chooseAskRoute,
@@ -53,7 +53,6 @@ import {
 
 const ROOT = join(__dirname, '..');
 const MODULE_REL = 'src/lib/eligibility/channel-chooser.ts';
-const SELF_REL = 'tests/channel-chooser-test.ts';
 
 let passed = 0;
 let failed = 0;
@@ -804,49 +803,6 @@ assert(
   !STORED_READ.test(moduleCode)
 );
 assert('S', 'touches no database, network, framework or clock', !IMPURE.test(moduleCode));
-
-// ─────────────────────────────────────────────────────────────────────────────
-section('Layer I: isolation — slice 1 lands dark');
-// ─────────────────────────────────────────────────────────────────────────────
-//
-// A DELIBERATE TEMPORARY STATE. GTC-189 slice 3 wires the preview to the chooser and removes
-// this layer; until then a caller appearing anywhere is a slice boundary crossed.
-
-function referencesChooser(src: string): boolean {
-  return /channel-chooser|\bchooseAskRoute\b|\bchooseChaseRoute\b/.test(codeOnly(src));
-}
-
-assert(
-  'I',
-  'CONTROL: the matcher sees a static import and a dynamic one, and not a comment',
-  referencesChooser("import { chooseAskRoute } from '@/lib/eligibility/channel-chooser';") &&
-    referencesChooser("const m = await import('../eligibility/channel-chooser');") &&
-    !referencesChooser('// see channel-chooser for why\nconst x = 1;')
-);
-
-const importers: string[] = [];
-function walk(dir: string) {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === 'node_modules' || entry.name === '.next') continue;
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      walk(full);
-      continue;
-    }
-    if (!/\.(ts|tsx|js|jsx|mjs|cjs)$/.test(entry.name)) continue;
-    const rel = relative(ROOT, full);
-    if (rel === MODULE_REL || rel === SELF_REL) continue;
-    if (referencesChooser(readFileSync(full, 'utf-8'))) importers.push(rel);
-  }
-}
-for (const dir of ['src', 'scripts', 'prisma', 'tests']) walk(join(ROOT, dir));
-
-assert(
-  'I',
-  'nothing in src, scripts, prisma or tests imports the chooser — no caller, no preview, no route',
-  importers.length === 0,
-  importers.length ? `imported by: ${importers.join(', ')}` : undefined
-);
 
 // ─────────────────────────────────────────────────────────────────────────────
 section('Layer T: types — the fields whose absence would fail open');

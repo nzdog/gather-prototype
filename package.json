@@ -84,7 +84,8 @@
     "test:tnz-delivery-contract": "tsx tests/tnz-delivery-contract-test.ts",
     "test:channel-chooser": "tsx tests/channel-chooser-test.ts",
     "test:carried-ask": "tsx tests/carried-ask-composition-test.ts",
-    "test:item-kind-capture": "tsx tests/item-kind-capture-test.ts"
+    "test:item-kind-capture": "tsx tests/item-kind-capture-test.ts",
+    "test:ask-preview": "tsx tests/ask-preview-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
