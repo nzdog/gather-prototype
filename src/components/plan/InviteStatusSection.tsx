@@ -13,7 +13,6 @@ import {
   Ban,
 } from 'lucide-react';
 import { ReachabilityBar } from './ReachabilityBar';
-import { ReadyToFreezeIndicator } from './ReadyToFreezeIndicator';
 import TransitionModal from './TransitionModal';
 
 interface PersonStatus {
@@ -22,15 +21,22 @@ interface PersonStatus {
   status: 'NOT_SENT' | 'SENT' | 'OPENED' | 'RESPONDED';
   hasPhone: boolean;
   smsOptedOut: boolean;
-  nudge24hSentAt?: string | null;
-  nudge48hSentAt?: string | null;
+  // GTC-178 (E1, phase 4): sourced from PersonEvent, not Person.
+  firstNudgeSentAt?: string | null;
+  secondNudgeSentAt?: string | null;
   nudgeStatus?: string;
+  /**
+   * GTC-256 (phase 3), Ruling 5. She is in this list — in the guest list and counted
+   * (Rulings 1 and 3) — and she is never messaged, so her row is not an entry point to
+   * the nudge composer. See the row below.
+   */
+  isHost?: boolean;
   reachabilityTier: 'DIRECT' | 'PROXY' | 'SHARED' | 'UNTRACKABLE';
 }
 
 interface InviteStatusData {
   eventStatus: string;
-  inviteSendConfirmedAt: string | null;
+  sentAt: string | null;
   hasUnsentPeople: boolean;
   counts: {
     total: number;
@@ -40,11 +46,16 @@ interface InviteStatusData {
     responded: number;
     withPhone: number;
   };
+  /**
+   * GTC-174 (D1): derived from the item taps, not read from a column. `unknown`
+   * replaces the old `notSure` — NOT_SURE meant "maybe I'm coming", which Hinge §8
+   * abolishes; UNKNOWN means "engaged, attendance undetermined".
+   */
   attendance?: {
     total: number;
     yes: number;
     no: number;
-    notSure: number;
+    unknown: number;
     pending: number;
   };
   items?: {
@@ -66,17 +77,17 @@ interface InviteStatusData {
     optedOut: number;
     canReceive: number;
   };
+  // GTC-178 (E1, phase 5): ordinal keys, day-4/day-7 legs.
   nudgeSummary?: {
-    sent24h: number;
-    sent48h: number;
-    pending24h: number;
-    pending48h: number;
+    sentFirst: number;
+    sentSecond: number;
+    pendingFirst: number;
+    pendingSecond: number;
   };
   proxyNudgeSummary?: {
     totalHouseholds: number;
-    householdsWithUnclaimed: number;
-    householdsEscalated: number;
-    nudgesSent: number;
+    totalMembers: number;
+    totalChildren: number;
   };
   reachability?: {
     direct: number;
@@ -190,7 +201,7 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
 
   if (!data) return null;
 
-  const { counts, hasUnsentPeople, inviteSendConfirmedAt, attendance, items, itemDetails } = data;
+  const { counts, hasUnsentPeople, sentAt, attendance, items, itemDetails } = data;
 
   return (
     <div className="bg-white rounded-lg border p-4 space-y-4">
@@ -238,11 +249,13 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
                   style={{ width: `${(attendance.no / attendance.total) * 100}%` }}
                   title={`${attendance.no} No`}
                 />
-                {/* NOT_SURE segment - amber */}
+                {/* UNKNOWN segment - amber. GTC-174 (D1): a maybe, or a no whose
+                    follow-up went unanswered. Yellow per Hinge §8 — the system can work
+                    it; it is not a failure. */}
                 <div
                   className="bg-amber-500 h-full transition-all duration-300"
-                  style={{ width: `${(attendance.notSure / attendance.total) * 100}%` }}
-                  title={`${attendance.notSure} Not Sure`}
+                  style={{ width: `${(attendance.unknown / attendance.total) * 100}%` }}
+                  title={`${attendance.unknown} Undecided`}
                 />
                 {/* PENDING segment - gray */}
                 <div
@@ -273,7 +286,7 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 bg-amber-500 rounded-sm"></div>
                   <span className="text-gray-700">
-                    Not sure: <span className="font-medium">{attendance.notSure}</span>
+                    Undecided: <span className="font-medium">{attendance.unknown}</span>
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -401,16 +414,11 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
       )}
 
       {/* Ready to Freeze Indicator */}
-      {data.threshold?.readyToFreeze && data.eventStatus === 'CONFIRMING' && items && (
-        <div className="mb-4">
-          <ReadyToFreezeIndicator
-            confirmed={items.confirmed}
-            total={items.total}
-            complianceRate={data.threshold.complianceRate}
-            onLockPlan={() => setShowTransitionModal(true)}
-          />
-        </div>
-      )}
+      {/* GTC-197 (A3c): ReadyToFreezeIndicator DELETED. It rendered only above 80%
+          compliance and told her she was "ready to freeze" — a readiness score and a
+          threshold, both refused outright by Moment 4 §2: "There is no readiness score,
+          no threshold, no completion nag, and nothing the system withholds pending
+          'enough' confirmation." The gap sweep at the pre-flight replaces it. */}
 
       {/* Legacy status breakdown - keep for backward compatibility */}
       <div className="grid grid-cols-4 gap-2 text-center text-sm">
@@ -506,27 +514,33 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
         <div className="border-t pt-4 mt-4">
           <h4 className="text-sm font-medium text-gray-700 mb-2">Auto-Reminders</h4>
           <div className="space-y-2 text-sm">
+            {/* GTC-179 (E2, phase 5): ORDINAL. These read "Day-4"/"Day-7" until the
+                cadence became adjustable per event and per person, at which point a day
+                number here was a lie for any host who picked "relaxed" or "gentle". The
+                stored columns were named ordinally to avoid exactly this (GTC-178 Ruling
+                7) and this copy now follows them. Say WHICH reminder, never when — the
+                timestamp beside each row carries the when. */}
             <div className="flex justify-between">
-              <span className="text-gray-600">24h reminders sent</span>
-              <span className="font-medium">{data.nudgeSummary.sent24h}</span>
+              <span className="text-gray-600">First reminders sent</span>
+              <span className="font-medium">{data.nudgeSummary.sentFirst}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">48h reminders sent</span>
-              <span className="font-medium">{data.nudgeSummary.sent48h}</span>
+              <span className="text-gray-600">Second reminders sent</span>
+              <span className="font-medium">{data.nudgeSummary.sentSecond}</span>
             </div>
-            {(data.nudgeSummary.pending24h > 0 || data.nudgeSummary.pending48h > 0) && (
+            {(data.nudgeSummary.pendingFirst > 0 || data.nudgeSummary.pendingSecond > 0) && (
               <p className="text-xs text-gray-500 mt-2">
-                {data.nudgeSummary.pending24h > 0 && (
+                {data.nudgeSummary.pendingFirst > 0 && (
                   <span>
-                    {data.nudgeSummary.pending24h} pending 24h reminder
-                    {data.nudgeSummary.pending24h !== 1 ? 's' : ''}
+                    {data.nudgeSummary.pendingFirst} pending first reminder
+                    {data.nudgeSummary.pendingFirst !== 1 ? 's' : ''}
                   </span>
                 )}
-                {data.nudgeSummary.pending24h > 0 && data.nudgeSummary.pending48h > 0 && ', '}
-                {data.nudgeSummary.pending48h > 0 && (
+                {data.nudgeSummary.pendingFirst > 0 && data.nudgeSummary.pendingSecond > 0 && ', '}
+                {data.nudgeSummary.pendingSecond > 0 && (
                   <span>
-                    {data.nudgeSummary.pending48h} pending 48h reminder
-                    {data.nudgeSummary.pending48h !== 1 ? 's' : ''}
+                    {data.nudgeSummary.pendingSecond} pending second reminder
+                    {data.nudgeSummary.pendingSecond !== 1 ? 's' : ''}
                   </span>
                 )}
               </p>
@@ -538,30 +552,23 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
       {/* Proxy nudge summary */}
       {data.proxyNudgeSummary && data.proxyNudgeSummary.totalHouseholds > 0 && (
         <div className="border-t pt-4 mt-4">
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Household Proxy Nudges</h4>
+          <h4 className="text-sm font-medium text-gray-700 mb-2">Households</h4>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-gray-600">Total households</span>
               <span className="font-medium">{data.proxyNudgeSummary.totalHouseholds}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">With unclaimed members</span>
-              <span className="font-medium">{data.proxyNudgeSummary.householdsWithUnclaimed}</span>
+              <span className="text-gray-600">Total members</span>
+              <span className="font-medium">{data.proxyNudgeSummary.totalMembers}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Proxy nudges sent</span>
-              <span className="font-medium">{data.proxyNudgeSummary.nudgesSent}</span>
-            </div>
-            {data.proxyNudgeSummary.householdsEscalated > 0 && (
-              <div className="flex justify-between text-amber-700">
-                <span>Escalated</span>
-                <span className="font-medium">{data.proxyNudgeSummary.householdsEscalated}</span>
+            {data.proxyNudgeSummary.totalChildren > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Children</span>
+                <span className="font-medium">{data.proxyNudgeSummary.totalChildren}</span>
               </div>
             )}
           </div>
-          <p className="text-xs text-gray-500 mt-2">
-            Proxies receive reminders when household members don&apos;t claim their slots
-          </p>
         </div>
       )}
 
@@ -607,11 +614,27 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
 
           <div className="space-y-1">
             {(showAllPeople ? data.people : data.people.slice(0, 5)).map((person) => (
+              /*
+               * GTC-256 (phase 3), RULING 5 — THE HOST'S ROW IS NOT A NUDGE ENTRY POINT.
+               *
+               * She stays in the list, because she is in the guest list and counted
+               * (Rulings 1 and 3). What she does not get is the click, which opens
+               * PersonInviteDetailModal -> HostNudgeSection -> the nudge route — and that
+               * route now refuses her with 403. A refusing route behind a clickable row
+               * means she presses it and gets an error for doing what the screen offered.
+               * Same reasoning as withholding the mark control on the pre-flight: the route
+               * is the gate, and the screen should not offer what the gate will refuse.
+               *
+               * ⚠ WhosMissing is the OTHER door to the same modal and is handled too — she
+               * is not in it at all, because she was never asked and so cannot be missing.
+               */
               <div
                 key={person.id}
-                className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50 cursor-pointer"
+                className={`flex items-center justify-between py-1.5 px-2 rounded ${
+                  person.isHost ? '' : 'hover:bg-gray-50 cursor-pointer'
+                }`}
                 onClick={() => {
-                  if (onPersonClick) {
+                  if (onPersonClick && !person.isHost) {
                     onPersonClick(person.id);
                   }
                 }}
@@ -619,13 +642,21 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
                 <div className="flex items-center gap-2">
                   <StatusIcon status={person.status} />
                   <span className="text-sm">{person.name}</span>
+                  {person.isHost && (
+                    <span className="text-xs text-gray-500">
+                      you — never messaged about your own event
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-1">
-                  {person.nudge24hSentAt && (
-                    <span className="text-xs bg-yellow-100 text-yellow-700 px-1 rounded">24h</span>
+                  {/* GTC-179 (E2, phase 5): ordinal chips. "1st"/"2nd" rather than
+                      "Day 4"/"Day 7" — four characters have to survive every pace a host
+                      can pick, and a day number survives only the default. */}
+                  {person.firstNudgeSentAt && (
+                    <span className="text-xs bg-yellow-100 text-yellow-700 px-1 rounded">1st</span>
                   )}
-                  {person.nudge48hSentAt && (
-                    <span className="text-xs bg-amber-100 text-amber-700 px-1 rounded">48h</span>
+                  {person.secondNudgeSentAt && (
+                    <span className="text-xs bg-amber-100 text-amber-700 px-1 rounded">2nd</span>
                   )}
                 </div>
               </div>
@@ -635,9 +666,9 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
       )}
 
       {/* Last confirmed timestamp */}
-      {inviteSendConfirmedAt && (
+      {sentAt && (
         <p className="text-xs text-gray-500 pt-2 border-t">
-          Last confirmed: {new Date(inviteSendConfirmedAt).toLocaleString()}
+          Sent: {new Date(sentAt).toLocaleString()}
         </p>
       )}
 

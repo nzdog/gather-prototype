@@ -2,7 +2,7 @@
 # Confirmed platform quirks and diagnostic patterns for AI executors.
 # Read this file when a ticket involves unexpected platform behaviour,
 # stale UI state, auth anomalies, or DB irregularities.
-# Last updated: 2026-03-05
+# Last updated: 2026-09-09
 
 ---
 
@@ -84,5 +84,108 @@ relied upon.
 **Do not:** Assume default seed produces a DRAFT event. Always verify
 event status before beginning reproduction steps.
 **First seen:** GTC-003
+
+---
+
+### KB-005 — `.next` has ONE OWNER at a time: sharing it with `npm run build` gives a FALSE FAILURE, either direction
+**The rule, stated generally:** `npm run dev` (Turbopack) and `npm run build`
+both own `.next`, and neither tolerates the other writing it. Whichever runs
+second wins the directory and the first is left reading files that are gone.
+**Both directions produce a failure that reads exactly like a defect in the
+code just written**, and neither names `.next` in its error.
+
+**⚠ Direction 2 was found on 2026-09-12 (GTC-264 Phase 1) and is the more
+dangerous of the two, because the build reports success before it fails.**
+
+---
+
+**DIRECTION 1 — the build breaks the running dev server.**
+
+**Symptom:** After `npm run build` is run while `npm run dev` is up, every
+route 500s with `ENOENT` on `.next/server/.../app-build-manifest.json`, and
+any HTTP-driven suite reports failures that look exactly like a defect in the
+code just written. Measured 2026-09-09: `test:glance-actions` reported
+**42 passed, 20 failed** immediately after a green build, with nothing in the
+working tree changed between the two runs. Probing the guarded glance route
+directly gave **500** before a restart and **401** (the correct unauthenticated
+answer) after it; the suite then returned to **62 passed, 0 failed**.
+
+**Cause:** The production build REWRITES `.next` underneath the live Turbopack
+dev server, which is still holding the previous build's manifests. The dev
+server does not notice and does not recover on its own. A regenerated Prisma
+client has the same shape of problem for the same reason: a dev server started
+before `npx prisma generate` keeps the old client in memory.
+
+---
+
+**DIRECTION 2 — the running dev server breaks the build.** Found 2026-09-12,
+GTC-264 Phase 1.
+
+**Symptom:** `npm run build` with a Turbopack dev server up fails **after
+reporting success**:
+
+```
+✓ Compiled successfully in 4.8s
+   Checking validity of types ...
+   Collecting page data ...
+unhandledRejection Error: Cannot find module '../chunks/ssr/[turbopack]_runtime.js'
+Require stack:
+- .next/server/pages/_document.js
+  code: 'MODULE_NOT_FOUND'
+```
+
+**Why this one is worse.** *Compiled successfully* arrives first, so the
+failure looks like a real problem discovered downstream of a good compile —
+a bad import, a missing dependency, a broken generated client.
+`MODULE_NOT_FOUND` on a path inside `.next` invites deleting `node_modules`
+or re-running
+`prisma generate`, neither of which is the cause. **Nothing in the message says
+`.next` is contended.**
+
+**Cause:** the dev server's Turbopack artefacts are in `.next`, and the
+production build's page-data collection loads `.next/server/pages/_document.js`
+— which is the dev server's, and which requires a Turbopack runtime chunk the
+build did not write.
+
+**Proof it is environmental and not the change:** with the dev server stopped
+and `.next` removed, the identical tree builds and exits 0. GTC-264 Phase 1
+recorded this against an otherwise green typecheck, `test:security` 157/157 and
+`test:security:routes` 118/118.
+
+---
+
+**Fix pattern — the safe sequence, in this order:**
+
+1. **Build with no dev server running**, and remove `.next` first if a dev
+   server has been up since the last build.
+2. **Restart the dev server** — after ANY of `npm run build`,
+   `npx prisma generate`, `npx prisma migrate deploy`.
+3. **Probe** before trusting a suite. Ask a guarded route for its auth refusal
+   rather than asking whether the server answers at all:
+
+```
+curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/events/none/glance
+# 401 = healthy.  500 = stale build.  000 = not running.
+```
+
+4. **Then** run the HTTP-driven suites.
+
+`tests/glance-actions-test.ts` already probes for exactly this and calls it a
+health check; the probe is the pattern, not the exception.
+
+**Do not:** Debug the code first, in either direction. A suite that was green
+minutes ago and is red after a build is direction 1 — check the probe before
+reading the failures. A build that compiles and then dies on
+`MODULE_NOT_FOUND` inside `.next` is direction 2 — stop the dev server, remove
+`.next`, and build again before touching `node_modules`, the imports, or the
+Prisma client. And do not run `npm run build` mid-session with a dev server up
+unless you intend to restart it.
+
+**First seen:** Direction 1 — GTC-192 phase 3 (flagged, not filed), hit again
+in phase 4 (flagged again), and a third time in phase 6 slice 6a, where it cost
+a misread suite result before being recognised. Filed on the third occurrence.
+Direction 2 — GTC-264 Phase 1, 2026-09-12, found on the first build after a
+migration was applied; recognised immediately because direction 1 was already
+filed here, which is the whole value of the entry.
 
 ---

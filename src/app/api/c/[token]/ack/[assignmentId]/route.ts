@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logAudit } from '@/lib/workflow';
-import { AssignmentResponse } from '@prisma/client';
+import { parseAssignmentResponse } from '@/lib/attendance';
 
 /**
  * POST /api/c/[token]/ack/[assignmentId]
  *
- * Coordinator records response (Accept or Decline) for their own assignment
+ * Coordinator records the response to their OWN assignment: accept, decline, or maybe.
+ *
+ * GTC-174 (D1): a coordinator answering their own item is a guest answering an item —
+ * same model, same three ways (Hinge §3). This is not the host-override path, which
+ * stays binary because a host never records a maybe on someone else's behalf.
  */
 export async function POST(
   request: NextRequest,
@@ -22,12 +26,11 @@ export async function POST(
 
   // Parse request body for response type
   const body = await request.json();
-  const { response } = body;
+  const response = parseAssignmentResponse(body?.response);
 
-  // Validate response type
-  if (!response || !['ACCEPTED', 'DECLINED'].includes(response)) {
+  if (response === null) {
     return NextResponse.json(
-      { error: 'Invalid response. Must be ACCEPTED or DECLINED' },
+      { error: 'Invalid response. Must be ACCEPTED, DECLINED or MAYBE' },
       { status: 400 }
     );
   }
@@ -53,16 +56,24 @@ export async function POST(
   await prisma.$transaction(async (tx) => {
     await tx.assignment.update({
       where: { id: assignmentId },
-      data: { response: response as AssignmentResponse },
+      data: { response },
     });
+
+    const verb =
+      response === 'ACCEPTED' ? 'Accepted' : response === 'DECLINED' ? 'Declined' : 'Maybe on';
 
     await logAudit(tx, {
       eventId: resolvedContext.event.id,
       actorId: resolvedContext.person.id,
-      actionType: response === 'ACCEPTED' ? 'ACCEPT_ASSIGNMENT' : 'DECLINE_ASSIGNMENT',
+      actionType:
+        response === 'ACCEPTED'
+          ? 'ACCEPT_ASSIGNMENT'
+          : response === 'DECLINED'
+            ? 'DECLINE_ASSIGNMENT'
+            : 'MAYBE_ASSIGNMENT',
       targetType: 'Assignment',
       targetId: assignmentId,
-      details: `${response === 'ACCEPTED' ? 'Accepted' : 'Declined'} ${assignment.item.name}`,
+      details: `${verb} ${assignment.item.name}`,
     });
   });
 

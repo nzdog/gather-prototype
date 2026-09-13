@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { ADDRESSABLE_PERSON_EVENT } from '@/lib/eligibility/host-exclusion';
 
 /**
  * GET /api/gather/[eventId]/directory
@@ -15,7 +16,8 @@ export async function GET(
   try {
     const { eventId } = await context.params;
 
-    // Fetch event with basic info
+    // `hostId` is selected because the people query below excludes the host by it
+    // (GTC-256 Ruling 5). See THE HOST IS NOT IN THIS DIRECTORY, further down.
     const event = await prisma.event.findUnique({
       where: { id: eventId },
       select: {
@@ -24,6 +26,7 @@ export async function GET(
         startDate: true,
         endDate: true,
         occasionType: true,
+        hostId: true,
       },
     });
 
@@ -31,9 +34,35 @@ export async function GET(
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
-    // Fetch all people in this event with their participant tokens
+    /*
+     * GTC-256 (phase 3), RULING 5 — THE HOST IS NOT IN THIS DIRECTORY.
+     *
+     * "Her name is not claimable through the shared link." This endpoint is the widest
+     * form of that link: it is unauthenticated, it is keyed on the event id alone, and
+     * the payload below pairs every person with an access token AND the URL prefix that
+     * token opens. The dashboard tells the host to "share this single link with your
+     * whole family", and the page renders each returned person as a card that routes to
+     * `/${tokenPrefix}/${token}`. With her row present, one of those cards signed the
+     * clicker in as the host.
+     *
+     * A PHASE-2 REGRESSION, WHICH IS WHY IT LANDS FIRST AND ALONE. Before phase 2 the
+     * host had no `PersonEvent` on a Moment-flow event, so this loop had nothing of hers
+     * to iterate and the exposure did not exist. Phase 2 wrote her row (Rulings 1, 8,
+     * 10) and every reader that enumerates `PersonEvent` inherited her — this one while
+     * handing out tokens. `tests/host-directory-exposure-test.ts` asserts the before and
+     * the after, so the control is not a claim in a comment.
+     *
+     * FILTERED IN SQL, NOT AFTER THE FETCH. Her row never loads, so no later edit to the
+     * mapping below can reintroduce her by accident. That is the fail-closed direction
+     * for an endpoint whose entire output is credentials.
+     *
+     * ⚠ NARROWED TO THE HOST, DELIBERATELY. This endpoint also hands COORDINATOR tokens
+     * to unauthenticated callers, which is the same class of defect with a wider blast
+     * radius and is NOT GTC-256's — filed as GTC-262. Do not widen this filter to close
+     * that; it needs its own decision about what the directory is for.
+     */
     const people = await prisma.personEvent.findMany({
-      where: { eventId },
+      where: { eventId, ...ADDRESSABLE_PERSON_EVENT(event.hostId) },
       include: {
         person: {
           select: {

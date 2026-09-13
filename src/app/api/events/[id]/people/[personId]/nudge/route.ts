@@ -4,8 +4,10 @@ import { requireEventRole } from '@/lib/auth/guards';
 import { sendSms } from '@/lib/sms/send-sms';
 import { sendNudgeEmail } from '@/lib/email';
 import { logInviteEvent } from '@/lib/invite-events';
-import { isSmsEnabled } from '@/lib/sms/twilio-client';
-import { isValidNZNumber } from '@/lib/phone';
+import {
+  resolveManualNudgeRecipient,
+  chooseManualNudgeChannel,
+} from '@/lib/sms/manual-nudge-recipient';
 
 type NudgeVariant = 'warm' | 'casual' | 'gentle' | 'direct';
 const VALID_VARIANTS: NudgeVariant[] = ['warm', 'casual', 'gentle', 'direct'];
@@ -46,21 +48,16 @@ export async function POST(
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
-    // Load person with event context
-    const person = await prisma.person.findUnique({
-      where: { id: personId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phoneNumber: true,
-        smsOptedOut: true,
-      },
-    });
+    // Load person with event context. The recipient decision lives in
+    // resolveManualNudgeRecipient (GTC-172 / C1) so it is testable without this
+    // route's cookie context and so the child rule has exactly one place to hold.
+    const recipient = await resolveManualNudgeRecipient(eventId, personId);
 
-    if (!person) {
-      return NextResponse.json({ error: 'Person not found' }, { status: 404 });
+    if (!recipient.ok) {
+      return NextResponse.json({ error: recipient.error }, { status: recipient.status });
     }
+
+    const person = recipient.person;
 
     const event = await prisma.event.findUnique({
       where: { id: eventId },
@@ -98,13 +95,9 @@ export async function POST(
     let contactMethod: 'sms' | 'email';
     let sendResult: { success: boolean; error?: string; messageId?: string };
 
-    const canSms =
-      person.phoneNumber &&
-      isValidNZNumber(person.phoneNumber) &&
-      !person.smsOptedOut &&
-      isSmsEnabled();
+    const channel = chooseManualNudgeChannel(person);
 
-    if (canSms) {
+    if (channel === 'sms') {
       contactMethod = 'sms';
       // Check per-host opt-out
       const optOut = await prisma.smsOptOut.findUnique({
@@ -142,10 +135,11 @@ export async function POST(
           metadata: { source: 'host_nudge', template },
         });
       }
-    } else if (person.email) {
+    } else if (channel === 'email') {
       contactMethod = 'email';
       sendResult = await sendNudgeEmail({
-        to: person.email,
+        // chooseManualNudgeChannel only returns 'email' when an address is present.
+        to: person.email!,
         subject: `Reminder about ${event.name}`,
         body: message.trim(),
         eventId,

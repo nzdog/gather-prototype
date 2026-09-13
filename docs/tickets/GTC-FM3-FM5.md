@@ -1,4 +1,21 @@
-# GTC-FM3-FM5 — Demo page copy fixes + AI prompt NZ cultural override
+---
+ticket: GTC-FM3-FM5
+title: "Demo page copy fixes + AI prompt NZ cultural override"
+status: closed
+branch: 
+commit: 
+moment: null
+type: ux
+depends_on: []
+blocks: []
+tags:
+  - ux
+  - ai-generation
+  - home-demo
+  - language-copy
+---
+
+# [[GTC-FM3-FM5]] — Demo page copy fixes + AI prompt NZ cultural override
 
 ## Ticket Type
 Chore

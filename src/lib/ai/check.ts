@@ -11,6 +11,7 @@ import {
   ClaimType,
   ResolutionClass,
 } from '@prisma/client';
+import { readDietaryData } from '@/lib/dietary';
 
 const prisma = new PrismaClient();
 
@@ -59,6 +60,7 @@ export async function detectConflicts(eventId: string): Promise<ConflictData[]> 
         },
       },
       days: true,
+      setup: true,
     },
   });
 
@@ -180,12 +182,19 @@ async function detectTimingConflicts(event: any): Promise<ConflictData[]> {
 
 /**
  * Detect dietary gaps
+ *
+ * GTC-184: reads the GTC-150 three-state model (EventSetup.dietaryData) via
+ * readDietaryData, not the legacy Event.dietary* counts. No fallback to the
+ * legacy counts (founder ruling, 2026-08-23) — events with no EventSetup row
+ * simply have no requirements to check. Vegan and nut-allergy are out of
+ * scope here (GTC-249); free-text 'other' is ignored (founder ruling).
  */
 async function detectDietaryGaps(event: any): Promise<ConflictData[]> {
   const conflicts: ConflictData[] = [];
+  const dietary = readDietaryData(event.setup?.dietaryData);
 
   // Check vegetarian coverage
-  if (event.dietaryVegetarian > 0) {
+  if (dietary.requirements.includes('Vegetarian')) {
     const vegetarianItems = await prisma.item.findMany({
       where: {
         team: { eventId: event.id },
@@ -201,9 +210,8 @@ async function detectDietaryGaps(event: any): Promise<ConflictData[]> {
         claimType: 'CONSTRAINT',
         resolutionClass: 'FIX_IN_PLAN',
         title: 'No Vegetarian Options',
-        description: `Event has ${event.dietaryVegetarian} vegetarian guest(s) but no vegetarian items in the plan.`,
+        description: `Event has a vegetarian requirement but no vegetarian items in the plan.`,
         dietaryType: 'vegetarian',
-        guestCount: event.dietaryVegetarian,
         currentCoverage: 0,
         minimumNeeded: 1,
       });
@@ -211,7 +219,7 @@ async function detectDietaryGaps(event: any): Promise<ConflictData[]> {
   }
 
   // Check gluten-free coverage
-  if (event.dietaryGlutenFree > 0) {
+  if (dietary.requirements.includes('Gluten-free')) {
     const gfItems = await prisma.item.findMany({
       where: {
         team: { eventId: event.id },
@@ -227,9 +235,8 @@ async function detectDietaryGaps(event: any): Promise<ConflictData[]> {
         claimType: 'CONSTRAINT',
         resolutionClass: 'FIX_IN_PLAN',
         title: 'No Gluten-Free Options',
-        description: `Event has ${event.dietaryGlutenFree} gluten-free guest(s) but no gluten-free items in the plan.`,
+        description: `Event has a gluten-free requirement but no gluten-free items in the plan.`,
         dietaryType: 'gluten-free',
-        guestCount: event.dietaryGlutenFree,
         currentCoverage: 0,
         minimumNeeded: 1,
       });
@@ -289,6 +296,12 @@ async function detectMissingCoordinators(event: any): Promise<ConflictData[]> {
 
   // Check each team for a coordinator
   const teamsWithoutCoordinators = event.teams.filter((team: any) => {
+    // GTC-171 (B2): task teams ("Set up" / "Clean up" / "Other jobs") hold only day-of
+    // job rows and are host-assigned by design — they have no coordinator scope, so
+    // flagging them would emit a permanent, unfixable conflict card on every check.
+    const hasItemRows = (team.items ?? []).some((item: any) => item.kind === 'ITEM');
+    if (!hasItemRows) return false;
+
     // A team needs a coordinator if it exists
     return !team.coordinator || !team.coordinatorId;
   });

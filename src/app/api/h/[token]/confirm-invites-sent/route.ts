@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { recordChange, actorFromToken } from '@/lib/ledger';
 import { logInviteEvent } from '@/lib/invite-events';
 
 export async function POST(_req: NextRequest, context: { params: Promise<{ token: string }> }) {
@@ -29,6 +30,12 @@ export async function POST(_req: NextRequest, context: { params: Promise<{ token
     return NextResponse.json({ error: 'Event not found' }, { status: 404 });
   }
 
+  // GTC-169 (A3a): the press happens once (Hinge §7). Freezing used to be what
+  // prevented a second press; with FROZEN gone the guard is explicit.
+  if (event.sentAt) {
+    return NextResponse.json({ error: 'This event has already been sent' }, { status: 400 });
+  }
+
   if (event.status !== 'CONFIRMING') {
     return NextResponse.json({ error: 'Event must be in CONFIRMING status' }, { status: 400 });
   }
@@ -37,7 +44,13 @@ export async function POST(_req: NextRequest, context: { params: Promise<{ token
 
   await prisma.event.update({
     where: { id: eventId },
-    data: { inviteSendConfirmedAt: now },
+    data: { sentAt: now },
+  });
+
+  // GTC-196 (A3b): the press stamps every existing member's personal clock at once.
+  await prisma.personEvent.updateMany({
+    where: { eventId, sentAt: null },
+    data: { sentAt: now },
   });
 
   const needAnchor = event.people
@@ -59,6 +72,23 @@ export async function POST(_req: NextRequest, context: { params: Promise<{ token
       newAnchorsSet: needAnchor.length,
     },
   });
+
+  // The press, as the ledger's first entry (Moment 4 §7).
+  await prisma.$transaction((tx) =>
+    recordChange(tx, {
+      eventId,
+      actor: actorFromToken(resolvedContext),
+      changes: [
+        {
+          action: 'SEND_PRESSED',
+          targetType: 'Event',
+          targetId: eventId,
+          before: { sentAt: null },
+          after: { sentAt: now.toISOString() },
+        },
+      ],
+    })
+  );
 
   return NextResponse.json({ success: true, confirmedAt: now.toISOString() });
 }

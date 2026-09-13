@@ -9,7 +9,7 @@ interface PlanData {
   people: {
     name: string;
     items: string[];
-    status: 'confirmed' | 'pending' | 'declined';
+    status: 'confirmed' | 'pending' | 'declined' | 'maybe';
     phone?: string;
     email?: string;
   }[];
@@ -78,6 +78,18 @@ function formatPlanAsText(data: PlanData): string {
   if (confirmed.length > 0) {
     lines.push('✓ CONFIRMED:');
     confirmed.forEach((p) => {
+      lines.push(`  ${p.name}: ${p.items.join(', ')}`);
+    });
+    lines.push('');
+  }
+
+  // Maybe — GTC-174 (D1). Its own section, not folded into pending: a maybe is a
+  // decision the guest gave (Hinge §8), and "needs reassignment" would be the wrong
+  // advice — the item is still theirs until Kate says otherwise (D3).
+  const maybe = data.people.filter((p) => p.status === 'maybe');
+  if (maybe.length > 0) {
+    lines.push('~ MAYBE (still deciding):');
+    maybe.forEach((p) => {
       lines.push(`  ${p.name}: ${p.items.join(', ')}`);
     });
     lines.push('');

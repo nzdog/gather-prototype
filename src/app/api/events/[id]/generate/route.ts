@@ -10,6 +10,9 @@ import {
 import { resolveGeneratedTeamCoordinatorId } from '@/lib/ai/coordinator-assignment';
 import { randomBytes } from 'crypto';
 import { requireEventRole } from '@/lib/auth/guards';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordBulkPlanChange } from '@/lib/ledger';
+import { itemNameForStorage } from '@/lib/items/name';
 
 export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -124,7 +127,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
 
         await prisma.item.create({
           data: {
-            name: itemData.name,
+            name: itemNameForStorage(itemData.name) ?? itemData.name, // GTC-302
             teamId: team.id,
             quantityAmount: itemData.quantityAmount,
             quantityUnit: itemData.quantityUnit as any,
@@ -236,7 +239,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
 
         await prisma.item.create({
           data: {
-            name: itemData.name,
+            name: itemNameForStorage(itemData.name) ?? itemData.name, // GTC-302
             teamId: team.id,
             quantityAmount: itemData.quantityAmount,
             quantityUnit: itemData.quantityUnit as any,
@@ -283,6 +286,14 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
     await prisma.event.update({
       where: { id: eventId },
       data: { aiCallsUsed: { increment: 1 } },
+    });
+
+    // One step, not one per item. The generation populated the plan wholesale.
+    await recordBulkPlanChange(prisma, {
+      eventId,
+      actor: await ledgerActorForUser(auth.user, auth.role),
+      action: 'GENERATE_PLAN',
+      after: { teams: teamsCreated, items: itemsCreated },
     });
 
     return NextResponse.json({

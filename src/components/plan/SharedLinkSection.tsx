@@ -5,7 +5,15 @@ import { Link2, Copy, Check, Users, AlertCircle, ExternalLink } from 'lucide-rea
 
 interface Props {
   eventId: string;
-  eventStatus: string;
+  /**
+   * GTC-197 (A3c): a predicate, not a status string.
+   *
+   * The shared link is available from CONFIRMING onward and stays available through
+   * the send. Passing the phase in as a boolean means this component cannot drift
+   * from the server's definition of "sent" — which is exactly how the FROZEN
+   * divergence started.
+   */
+  available: boolean;
 }
 
 interface SharedLinkData {
@@ -15,7 +23,7 @@ interface SharedLinkData {
   recommendSharedLink: boolean;
 }
 
-export function SharedLinkSection({ eventId, eventStatus }: Props) {
+export function SharedLinkSection({ eventId, available }: Props) {
   const [data, setData] = useState<SharedLinkData | null>(null);
   const [loading, setLoading] = useState(true);
   const [enabling, setEnabling] = useState(false);
@@ -23,12 +31,12 @@ export function SharedLinkSection({ eventId, eventStatus }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (eventStatus === 'CONFIRMING' || eventStatus === 'FROZEN') {
+    if (available) {
       fetchStatus();
     } else {
       setLoading(false);
     }
-  }, [eventId, eventStatus]);
+  }, [eventId, available]);
 
   const fetchStatus = async () => {
     try {
@@ -87,7 +95,7 @@ export function SharedLinkSection({ eventId, eventStatus }: Props) {
   };
 
   // Don't show if not in correct status
-  if (eventStatus !== 'CONFIRMING' && eventStatus !== 'FROZEN') {
+  if (!available) {
     return null;
   }
 

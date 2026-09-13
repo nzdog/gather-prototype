@@ -20,7 +20,7 @@ interface HostPreviewData {
   event: { id: string; name: string };
   assignments: {
     id: string;
-    response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+    response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE';
     item: {
       id: string;
       name: string;
@@ -33,7 +33,7 @@ interface HostPreviewData {
 
 interface Assignment {
   id: string;
-  response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+  response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE';
   item: {
     id: string;
     name: string;
@@ -78,9 +78,14 @@ interface ParticipantData {
       name: string;
     } | null;
   } | null;
-  rsvpStatus: 'PENDING' | 'YES' | 'NO' | 'NOT_SURE';
-  rsvpRespondedAt: string | null;
-  rsvpFollowupSentAt: string | null;
+  /**
+   * GTC-174 (D1): all three are DERIVED or narrowly stored server-side — there is no
+   * rsvpStatus any more. `attendance` is the inference; `attendanceAskable` says whether
+   * this guest is one of the two cases Hinge §3 lets us ask attendance of at all.
+   */
+  attendance: 'PENDING' | 'YES' | 'NO' | 'UNKNOWN';
+  attendanceAnswer: 'YES' | 'NO' | null;
+  attendanceAskable: boolean;
   assignments: Assignment[];
 }
 
@@ -107,8 +112,6 @@ export default function ParticipantView() {
   const [error, setError] = useState<string | null>(null);
   const [collapsedAssignments, setCollapsedAssignments] = useState<Set<string>>(new Set());
   const isInitialLoad = useRef(true);
-  // Tracks the continuous RSVP+items flow: rsvp → items → complete
-  const [viewPhase, setViewPhase] = useState<'rsvp' | 'items' | 'complete'>('rsvp');
 
   useEffect(() => {
     fetchData();
@@ -128,18 +131,7 @@ export default function ParticipantView() {
       }
 
       setData(result);
-
-      if (isInitialLoad.current) {
-        isInitialLoad.current = false;
-        if (result.rsvpStatus === 'YES') {
-          const allResponded =
-            result.assignments.length > 0 &&
-            result.assignments.every((a: Assignment) => a.response !== 'PENDING');
-          setViewPhase(allResponded ? 'complete' : 'items');
-        } else {
-          setViewPhase('rsvp');
-        }
-      }
+      isInitialLoad.current = false;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -147,44 +139,43 @@ export default function ParticipantView() {
     }
   };
 
-  const handleRsvpResponse = async (rsvpStatus: 'YES' | 'NO' | 'NOT_SURE') => {
-    // Optimistically transition to items phase on Yes — no waiting for fetch
-    if (rsvpStatus === 'YES' && data) {
-      setData({ ...data, rsvpStatus: 'YES' });
-      setViewPhase('items');
-    }
+  /**
+   * GTC-174 (D1): the conditional no-follow-up and the itemless degenerate case — the
+   * ONLY two moments Hinge §3 lets us ask attendance. The server enforces the same rule
+   * (409 otherwise), so this is the convenient path, not the guard.
+   */
+  const handleAttendanceAnswer = async (attending: boolean) => {
+    if (data) setData({ ...data, attendanceAnswer: attending ? 'YES' : 'NO' });
 
     try {
       const response = await fetch(`/api/p/${token}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rsvpStatus }),
+        body: JSON.stringify({ attending }),
       });
       if (!response.ok) {
-        throw new Error('Failed to record RSVP');
+        throw new Error('Failed to record answer');
       }
       await fetchData();
     } catch (err) {
-      // Revert optimistic update on failure
-      if (rsvpStatus === 'YES') {
-        await fetchData();
-      }
+      await fetchData();
     }
   };
 
-  const handleResponse = async (assignmentId: string, responseType: 'ACCEPTED' | 'DECLINED') => {
+  /**
+   * GTC-174 (D1): THE tap. One decision, three ways (Hinge §3) — and it is the whole
+   * ask: attendance is inferred from it, never asked alongside it.
+   */
+  const handleResponse = async (
+    assignmentId: string,
+    responseType: 'ACCEPTED' | 'DECLINED' | 'MAYBE'
+  ) => {
     // Optimistically update assignment response
     if (data) {
       const updatedAssignments = data.assignments.map((a) =>
         a.id === assignmentId ? { ...a, response: responseType } : a
       );
       setData({ ...data, assignments: updatedAssignments });
-
-      // Check if all items are now responded to
-      const allResponded = updatedAssignments.every((a) => a.response !== 'PENDING');
-      if (allResponded) {
-        setViewPhase('complete');
-      }
     }
 
     try {
@@ -344,185 +335,118 @@ export default function ParticipantView() {
           )}
         </div>
 
-        {/* Frozen State Banner */}
-        {data.event.status === 'FROZEN' && (
-          <div className="bg-sage-50 px-6 py-4 flex items-start gap-3 border-b border-sage-100">
-            <span className="text-2xl">🔒</span>
-            <div className="flex-1">
-              <h3 className="text-sm font-bold text-sage-900">This plan has been finalised</h3>
-              <p className="text-xs text-sage-800 mt-1">
-                Contact your host if you need to make changes.
-              </p>
-            </div>
-          </div>
-        )}
+        {/* GTC-198 (A3d) — THE GUEST-SIDE INVERSION.
+            This showed "This plan has been finalised — contact your host if you need
+            to make changes" once the host froze. That is backwards: after the send is
+            precisely when a guest is meant to answer.
+
+            Moment 4 §7: "Responses, claims, and reassignments-with-reasons are not the
+            plan changing; they are the plan being answered. Greens keep accumulating
+            after the send — that's the Moment working."
+
+            A3a deleted the server gate that 400'd these responses. This deletes the
+            screen that hid the buttons. Nothing replaces it: there is no lock to
+            announce to a guest. */}
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6">
-          {/* RSVP Question - PENDING state */}
-          {data.rsvpStatus === 'PENDING' && viewPhase === 'rsvp' && (
-            <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 mb-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Are you coming?</h2>
-              {data.assignments.length > 0 && (
-                <p className="text-gray-600 mb-4">
-                  You'll be asked to bring{' '}
-                  <strong>
-                    {data.assignments.length} {data.assignments.length === 1 ? 'item' : 'items'}
-                  </strong>
-                </p>
-              )}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <button
-                  onClick={() => handleRsvpResponse('YES')}
-                  className="py-3 rounded-lg font-medium bg-sage-600 text-white hover:bg-sage-700 transition-all"
-                >
-                  Yes
-                </button>
-                <button
-                  onClick={() => handleRsvpResponse('NO')}
-                  className="py-3 rounded-lg font-medium bg-gray-400 text-white hover:bg-gray-500 transition-all"
-                >
-                  No
-                </button>
-                <button
-                  onClick={() => handleRsvpResponse('NOT_SURE')}
-                  className="py-3 rounded-lg font-medium bg-gray-300 text-gray-800 hover:bg-gray-400 transition-all"
-                >
-                  Not sure
-                </button>
-              </div>
-            </div>
-          )}
+          {/* GTC-174 (D1) — ITEMS FIRST. The RSVP-gate that used to stand here
+              ("Are you coming?" before the items were even shown) is deleted. Hinge §3
+              ruled the tap IS the item ask and attendance is inferred from it: asking
+              attendance up front asks the guest for the same decision twice.
 
-          {/* RSVP Question - NOT_SURE state with followup sent (forced conversion) */}
-          {data.rsvpStatus === 'NOT_SURE' && data.rsvpFollowupSentAt && (
+              MECHANISM ONLY. GTC-191 (I4) rebuilds this page's presentation to the §3
+              shape — Kate's voice, the item carrying its own logistics, nothing else —
+              and adds the post-yes reminder offer. What is here is the working model,
+              not the finished screen. */}
+
+          {/* The conditional no-follow-up, and the itemless degenerate case.
+              Both are the SAME beat — the only two moments §3 permits an attendance
+              question. It shows while the server says attendance is askable and the
+              guest has not answered; answering ends it, so "exactly one follow-up"
+              needs no counter. */}
+          {data.attendanceAskable && data.attendanceAnswer === null && (
             <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 mb-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Are you coming?</h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                {data.assignments.length === 0 ? 'Are you coming?' : 'No worries — still coming?'}
+              </h2>
               <p className="text-gray-600 mb-4">
-                We need to finalize the headcount — please let us know if you're coming.
+                {data.assignments.length === 0
+                  ? "There's nothing for you to bring — just let us know if you'll be there."
+                  : "That's all good. We just need to know whether to expect you."}
               </p>
-              {data.assignments.length > 0 && (
-                <p className="text-gray-600 mb-4">
-                  You'll be asked to bring{' '}
-                  <strong>
-                    {data.assignments.length} {data.assignments.length === 1 ? 'item' : 'items'}
-                  </strong>
-                </p>
-              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
-                  onClick={() => handleRsvpResponse('YES')}
+                  onClick={() => handleAttendanceAnswer(true)}
                   className="py-3 rounded-lg font-medium bg-sage-600 text-white hover:bg-sage-700 transition-all"
                 >
-                  Yes
+                  Yes, still coming
                 </button>
                 <button
-                  onClick={() => handleRsvpResponse('NO')}
+                  onClick={() => handleAttendanceAnswer(false)}
                   className="py-3 rounded-lg font-medium bg-gray-400 text-white hover:bg-gray-500 transition-all"
                 >
-                  No
+                  Can't make it
                 </button>
               </div>
             </div>
           )}
 
-          {/* RSVP Question - NOT_SURE state without followup (show all 3 options) */}
-          {data.rsvpStatus === 'NOT_SURE' && !data.rsvpFollowupSentAt && (
-            <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 mb-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Are you coming?</h2>
-              <p className="text-sm text-gray-500 mb-4">
-                You selected "Not sure" — you can update your response here.
-              </p>
-              {data.assignments.length > 0 && (
-                <p className="text-gray-600 mb-4">
-                  You'll be asked to bring{' '}
-                  <strong>
-                    {data.assignments.length} {data.assignments.length === 1 ? 'item' : 'items'}
-                  </strong>
-                </p>
-              )}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <button
-                  onClick={() => handleRsvpResponse('YES')}
-                  className="py-3 rounded-lg font-medium bg-sage-600 text-white hover:bg-sage-700 transition-all"
-                >
-                  Yes
-                </button>
-                <button
-                  onClick={() => handleRsvpResponse('NO')}
-                  className="py-3 rounded-lg font-medium bg-gray-400 text-white hover:bg-gray-500 transition-all"
-                >
-                  No
-                </button>
-                <button
-                  onClick={() => handleRsvpResponse('NOT_SURE')}
-                  className="py-3 rounded-lg font-medium bg-gray-300 text-gray-800 hover:bg-gray-400 transition-all"
-                >
-                  Not sure
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Thank you message for NO */}
-          {data.rsvpStatus === 'NO' && (
+          {/* The answer, once given. Changing it is a re-answer of the same question,
+              not a new one — the beat above stays closed. */}
+          {data.attendanceAnswer !== null && (
             <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 mb-6 text-center">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Thanks for letting us know</h2>
-              <p className="text-gray-600">We'll miss you at the event!</p>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                {data.attendanceAnswer === 'YES'
+                  ? "Great — we'll see you there."
+                  : 'Thanks for letting us know'}
+              </h2>
+              <p className="text-gray-600">
+                {data.attendanceAnswer === 'YES'
+                  ? 'Your host knows to expect you.'
+                  : "We'll miss you at the event!"}
+              </p>
               <button
-                onClick={() => handleRsvpResponse('YES')}
+                onClick={() => handleAttendanceAnswer(data.attendanceAnswer !== 'YES')}
                 className="mt-4 text-sm text-accent hover:underline"
               >
-                Changed your mind? Click here
+                {data.attendanceAnswer === 'YES'
+                  ? 'Changed your mind?'
+                  : 'Changed your mind? Click here'}
               </button>
             </div>
           )}
 
-          {/* Completion State — all items responded */}
-          {data.rsvpStatus === 'YES' && viewPhase === 'complete' && (
-            <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 mb-6 text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-sage-100 rounded-full mb-4">
-                <Check className="size-8 text-sage-600" />
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                You're all set. See you there.
-              </h2>
-              <p className="text-gray-600 mb-6">
-                {data.assignments.filter((a) => a.response === 'ACCEPTED').length > 0 && (
-                  <>
-                    You're bringing{' '}
-                    {data.assignments.filter((a) => a.response === 'ACCEPTED').length}{' '}
-                    {data.assignments.filter((a) => a.response === 'ACCEPTED').length === 1
-                      ? 'item'
-                      : 'items'}
-                    .{' '}
-                  </>
-                )}
-                Your host has been notified.
-              </p>
-              {data.event.status !== 'FROZEN' && (
-                <button
-                  onClick={() => setViewPhase('items')}
-                  className="text-sm text-accent hover:underline"
-                >
-                  Review or change your responses
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Assignments Section - Show in items phase for YES, or always for NOT_SURE */}
-          {((data.rsvpStatus === 'YES' && viewPhase === 'items') ||
-            data.rsvpStatus === 'NOT_SURE') && (
-            <>
-              {data.rsvpStatus === 'YES' && viewPhase === 'items' && (
-                <div className="mb-4">
-                  <p className="text-sm text-sage-700 font-medium">
-                    Here's what you're asked to bring — confirm each item below.
-                  </p>
+          {/* Everything answered, at least one yes — attendance follows from the tap. */}
+          {data.attendance === 'YES' &&
+            data.assignments.length > 0 &&
+            data.assignments.every((a) => a.response !== 'PENDING') && (
+              <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 mb-6 text-center">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-sage-100 rounded-full mb-4">
+                  <Check className="size-8 text-sage-600" />
                 </div>
-              )}
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                  You're all set. See you there.
+                </h2>
+                <p className="text-gray-600">
+                  {data.assignments.filter((a) => a.response === 'ACCEPTED').length > 0 && (
+                    <>
+                      You're bringing{' '}
+                      {data.assignments.filter((a) => a.response === 'ACCEPTED').length}{' '}
+                      {data.assignments.filter((a) => a.response === 'ACCEPTED').length === 1
+                        ? 'item'
+                        : 'items'}
+                      .{' '}
+                    </>
+                  )}
+                  Your host has been notified. You can change any answer below.
+                </p>
+              </div>
+            )}
 
+          {/* The items themselves — always visible, never gated. */}
+          {data.assignments.length > 0 && (
+            <>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm uppercase tracking-wide text-gray-500">Your Assignments</h2>
                 {data && data.assignments.length > 0 && (
@@ -654,59 +578,71 @@ export default function ParticipantView() {
                             </div>
                           )}
 
-                          {/* Response Buttons */}
+                          {/* GTC-174 (D1) — THE TAP. One decision, three ways (Hinge §3).
+                              It is the whole ask: a yes here IS a yes to coming, and no
+                              attendance question follows it. A maybe is "a decision to
+                              decide later" (§8) — the item stays this guest's, and D2
+                              (GTC-175) will hang the decide-by clock off it. */}
                           {assignment.response === 'PENDING' ? (
-                            data.event.status === 'FROZEN' ? (
-                              <div className="py-3 rounded-lg bg-gray-100 text-gray-600 text-center text-sm">
-                                Plan is locked
-                              </div>
-                            ) : (
-                              <div className="grid grid-cols-2 gap-3">
-                                <button
-                                  onClick={() => handleResponse(assignment.id, 'ACCEPTED')}
-                                  className="py-3 rounded-lg font-medium bg-sage-600 text-white hover:bg-sage-700 transition-all"
-                                >
-                                  Accept
-                                </button>
-                                <button
-                                  onClick={() => handleResponse(assignment.id, 'DECLINED')}
-                                  className="py-3 rounded-lg font-medium bg-gray-400 text-white hover:bg-gray-500 transition-all"
-                                >
-                                  Decline
-                                </button>
-                              </div>
-                            )
+                            <div className="grid grid-cols-3 gap-2">
+                              <button
+                                onClick={() => handleResponse(assignment.id, 'ACCEPTED')}
+                                className="py-3 rounded-lg font-medium bg-sage-600 text-white hover:bg-sage-700 transition-all"
+                              >
+                                Yes
+                              </button>
+                              <button
+                                onClick={() => handleResponse(assignment.id, 'DECLINED')}
+                                className="py-3 rounded-lg font-medium bg-gray-400 text-white hover:bg-gray-500 transition-all"
+                              >
+                                No
+                              </button>
+                              <button
+                                onClick={() => handleResponse(assignment.id, 'MAYBE')}
+                                className="py-3 rounded-lg font-medium bg-amber-500 text-white hover:bg-amber-600 transition-all"
+                              >
+                                Maybe
+                              </button>
+                            </div>
                           ) : (
                             <div className="flex flex-col gap-2">
                               <div
                                 className={`w-full py-3 rounded-lg font-medium text-white flex items-center justify-center gap-2 ${
                                   assignment.response === 'ACCEPTED'
                                     ? 'bg-green-500'
-                                    : 'bg-gray-500'
+                                    : assignment.response === 'MAYBE'
+                                      ? 'bg-amber-500'
+                                      : 'bg-gray-500'
                                 }`}
                               >
-                                <Check className="size-5" />
-                                {assignment.response === 'ACCEPTED' ? 'Accepted' : 'Declined'}
+                                {assignment.response !== 'MAYBE' && <Check className="size-5" />}
+                                {assignment.response === 'ACCEPTED'
+                                  ? "Yes — you're bringing this"
+                                  : assignment.response === 'MAYBE'
+                                    ? 'Maybe'
+                                    : "No — you're not bringing this"}
                               </div>
                               <p className="text-sm text-gray-500 text-center">
                                 {assignment.response === 'ACCEPTED'
                                   ? "Your host can see you've confirmed ✓"
-                                  : 'Your host has been notified'}
+                                  : assignment.response === 'MAYBE'
+                                    ? "It's still yours — we'll check back before your host needs to know."
+                                    : 'Your host has been notified'}
                               </p>
-                              {data.event.status !== 'FROZEN' && (
-                                <button
-                                  onClick={() =>
-                                    handleResponse(
-                                      assignment.id,
-                                      assignment.response === 'ACCEPTED' ? 'DECLINED' : 'ACCEPTED'
-                                    )
-                                  }
-                                  className="text-sm text-accent hover:underline"
-                                >
-                                  Change to{' '}
-                                  {assignment.response === 'ACCEPTED' ? 'Decline' : 'Accept'}
-                                </button>
-                              )}
+                              <div className="grid grid-cols-3 gap-2">
+                                {(['ACCEPTED', 'DECLINED', 'MAYBE'] as const)
+                                  .filter((r) => r !== assignment.response)
+                                  .map((r) => (
+                                    <button
+                                      key={r}
+                                      onClick={() => handleResponse(assignment.id, r)}
+                                      className="text-sm text-accent hover:underline py-1"
+                                    >
+                                      Change to{' '}
+                                      {r === 'ACCEPTED' ? 'Yes' : r === 'DECLINED' ? 'No' : 'Maybe'}
+                                    </button>
+                                  ))}
+                              </div>
                             </div>
                           )}
                         </div>

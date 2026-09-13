@@ -79,6 +79,20 @@ export async function GET(
       select: { name: true, startDate: true, hostId: true },
     });
 
+    // GTC-178 (E1, phase 4): the nudge stamps moved to the membership row, and this
+    // route roots on `Person` with no PersonEvent in its query — so the row has to be
+    // fetched. `personId_eventId` is the model's own compound unique, so this is a
+    // single indexed lookup, not a scan.
+    //
+    // Nullable on purpose: this route answers for a (person, event) pair the caller
+    // supplies, and a person with no membership row for this event is a real 404-ish
+    // state the existing code already tolerates elsewhere. No membership means no
+    // per-event nudge history, which renders as "none sent" rather than throwing.
+    const personEvent = await prisma.personEvent.findUnique({
+      where: { personId_eventId: { personId, eventId } },
+      select: { firstNudgeSentAt: true, secondNudgeSentAt: true },
+    });
+
     // Fetch most recent host nudge for this person+event
     const lastHostNudge = await prisma.inviteEvent.findFirst({
       where: {
@@ -133,8 +147,8 @@ export async function GET(
       hasPhone: !!person.phoneNumber,
       smsOptedOut: !!optOut,
       canReceiveSms: !!person.phoneNumber && !optOut,
-      nudge24hSentAt: person.nudge24hSentAt?.toISOString() || null,
-      nudge48hSentAt: person.nudge48hSentAt?.toISOString() || null,
+      firstNudgeSentAt: personEvent?.firstNudgeSentAt?.toISOString() || null,
+      secondNudgeSentAt: personEvent?.secondNudgeSentAt?.toISOString() || null,
       lastHostNudgeAt: lastHostNudge?.createdAt?.toISOString() || null,
       eventName: event?.name || null,
       eventDate: event?.startDate?.toISOString() || null,

@@ -17,6 +17,8 @@ interface RegenerateModalProps {
   manualTeamCount: number;
   manualItemCount: number;
   eventId: string;
+  /** True once the plan has been sent — drives the consequence line (GTC-197). */
+  isSent?: boolean;
 }
 
 type Step = 'input' | 'preview' | 'loading';
@@ -28,6 +30,7 @@ export default function RegenerateModal({
   manualTeamCount,
   manualItemCount,
   eventId,
+  isSent = false,
 }: RegenerateModalProps) {
   const { openModal, closeModal } = useModal();
   const toast = useToast();
@@ -120,6 +123,24 @@ export default function RegenerateModal({
             <X className="w-6 h-6" />
           </button>
         </div>
+
+        {/* THE CONSEQUENCE, STATED BEFORE THE ACT — required by the founder ruling of
+            2026-08-03 on post-send regeneration: "(a) now, (c) once F1 exists — with
+            the consequence stated plainly in the UI before the act."
+
+            It is a FACT, not a challenge, and not a block (Moment 4 §7: "It states
+            facts plainly... and never says 'hang on' or demands justification"). There
+            is no confirm checkbox and no second dialog: she reads it and decides. */}
+        {isSent && step === 'input' && (
+          <div className="mx-6 mt-6 rounded-lg border-2 border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-medium text-amber-900">
+              This replaces the plan people have claimed against.
+            </p>
+            <p className="mt-1 text-sm text-amber-800">
+              Their answers stay in the history, and you&apos;ll be able to see what changed.
+            </p>
+          </div>
+        )}
 
         {/* Content */}
         <div className="p-6">

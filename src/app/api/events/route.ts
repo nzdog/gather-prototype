@@ -1,9 +1,40 @@
 // GET /api/events - List events where user has a role
-// POST /api/events - Create new event (requires payment, no auth needed)
+// POST /api/events - Create new event from a paid Stripe Checkout Session
+//
+/*
+ * ⚠ GTC-280 — POST NEVER SETS A SESSION COOKIE. That is the whole invariant and
+ * it is one sentence on purpose.
+ *
+ * This route used to read `customer_details.email` off a paid Checkout
+ * Session, look it up in `User`, and — found or created — write a 30-day
+ * `Session` and set the `session` cookie. So paying $12 and typing a known
+ * host's address at Stripe returned a logged-in session as that host, reaching
+ * every event she holds a role on, every guest's contact details, her
+ * message-sending capability and her host memory, for 30 days, with no way for
+ * her to end it.
+ *
+ * A Stripe receipt is a bearer proof of PAYMENT. It was being spent as a
+ * bearer proof of IDENTITY. Stripe does not confirm that address, does not
+ * require a click on it and does not represent it as verified.
+ *
+ * The rule: a payment may CREATE an event and ATTACH it to an address; it may
+ * never, on its own, return a credential for an account. Who the payer is
+ * relative to the request is decided by `resolvePaymentIdentity` in
+ * `src/lib/events/payment-identity.ts`, which is exhaustively tested offline
+ * because this route cannot be driven without really paying.
+ *
+ * DO NOT ADD A BRANCH THAT MINTS. The uniform shape was chosen over a variant
+ * that kept the mint for brand-new addresses precisely because a route with
+ * one branch that mints and three that do not is a route someone later
+ * simplifies in the wrong direction. It also closes account pre-registration:
+ * paying with an address that has no `User` yet used to hand out a live
+ * session on the account its real owner would later sign in to.
+ */
 import { NextRequest, NextResponse } from 'next/server';
-import { randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth/session';
+import { EVENT_LIST_WIRE_SELECT } from '@/lib/events/wire-select';
+import { resolvePaymentIdentity, maskEmail } from '@/lib/events/payment-identity';
 import { stripe } from '@/lib/stripe';
 import { sendWelcomeEmail } from '@/lib/email';
 
@@ -24,13 +55,14 @@ export async function GET(_request: NextRequest) {
           },
         },
       },
-      include: {
-        _count: {
-          select: {
-            teams: true,
-            days: true,
-          },
-        },
+      // GTC-271: a top-level `select`, never a bare `include`. `include` on its own means
+      // "every scalar, plus these relations", which sent `sharedLinkToken` — a join
+      // credential `POST /api/join/[token]/claim` authenticates on — along with the Stripe
+      // columns and the check-plan telemetry, for every event in the list. The field list
+      // lives in `EVENT_LIST_WIRE_SELECT`; `eventRoles` is composed here because its
+      // `where` is bound to the calling user.
+      select: {
+        ...EVENT_LIST_WIRE_SELECT,
         eventRoles: {
           where: { userId: user.id },
           select: { role: true },
@@ -110,6 +142,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    /*
+     * ⚠ THIS `getUser()` CLASSIFIES. IT NEVER REFUSES, AND THAT IS DELIBERATE.
+     *
+     * No branch below returns a 4xx because of it. An anonymous caller with a
+     * valid receipt still gets an event — that is how a first-time host pays,
+     * and it is the reason the route scanner still reports this handler as
+     * carrying no session guard. That verdict is TRUE and is pinned in
+     * `tests/security-route-scan-control.ts`. The containment is what the route
+     * RETURNS, which no static read of this handler can see, so it lives in the
+     * suites instead. GTC-269's rule: do not buy a flattering scanner verdict
+     * with a false one.
+     */
+    const sessionUser = await getUser();
+    const identity = resolvePaymentIdentity(sessionUser, email);
+
     // Build event data
     const eventData = {
       name: eventName,
@@ -130,32 +177,32 @@ export async function POST(request: NextRequest) {
       venueOvenCount: 0,
     };
 
-    // Create user, person, event, and event role in a transaction
-    const { event, user } = await prisma.$transaction(async (tx) => {
-      // Find or create User by email
-      let user = await tx.user.findUnique({ where: { email } });
+    // Create user, person, event, and event role in a transaction.
+    //
+    // `identity.bindTo` is the PAID address on every branch, including the
+    // mismatch branch. Moving someone's event under them is no better than
+    // moving their session, so neither is done silently.
+    const { event } = await prisma.$transaction(async (tx) => {
+      let user = await tx.user.findUnique({ where: { email: identity.bindTo } });
       if (!user) {
-        user = await tx.user.create({ data: { email } });
+        user = await tx.user.create({ data: { email: identity.bindTo } });
       }
 
-      // Find or create Person linked to User
       let person = await tx.person.findFirst({ where: { userId: user.id } });
       if (!person) {
         person = await tx.person.create({
           data: {
-            name: email.split('@')[0],
-            email,
+            name: identity.bindTo.split('@')[0],
+            email: identity.bindTo,
             userId: user.id,
           },
         });
       }
 
-      // Create event with person as host
       const event = await tx.event.create({
         data: { ...eventData, hostId: person.id },
       });
 
-      // Create EventRole for user as HOST
       await tx.eventRole.create({
         data: { userId: user.id, eventId: event.id, role: 'HOST' },
       });
@@ -163,30 +210,42 @@ export async function POST(request: NextRequest) {
       return { event, user };
     });
 
-    // Create session to log the user in automatically
-    const sessionToken = randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
-
-    await prisma.session.create({
-      data: { token: sessionToken, userId: user.id, expiresAt },
+    /*
+     * The sign-in link, and GTC-265's contract arriving at its loud caller.
+     *
+     * `sendWelcomeEmail` returns its result and does not decide what to do
+     * about a failure. `POST /api/auth/magic-link` answers byte-identically
+     * whatever happens, because that is enumeration protection. THIS caller is
+     * the other side of that asymmetry: she typed the address herself and has
+     * just been charged for it, there is nothing to enumerate, and if the link
+     * did not go she needs to be told so on the screen rather than left
+     * watching an inbox. So the send is awaited, not fired and forgotten, and
+     * its outcome is in the response.
+     *
+     * The event is created either way. A failed email withholds a shortcut, not
+     * the goods: the Event and the EventRole are already written and attached
+     * to her User, and /auth/signin is a second door to the same place.
+     */
+    const delivery = await sendWelcomeEmail(email, event.name, event.id, {
+      alreadySignedIn: identity.alreadySignedIn,
     });
+    if (!delivery.success) {
+      console.error(
+        `[Event Creation] sign-in link to ${email} for event ${event.id} was NOT delivered:`,
+        delivery.error
+      );
+    }
 
-    // Build response with session cookie
-    const response = NextResponse.json({ success: true, event });
-    response.cookies.set('session', sessionToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      expires: expiresAt,
-      path: '/',
+    return NextResponse.json({
+      success: true,
+      event,
+      // What the client needs to know, and nothing that is a credential.
+      alreadySignedIn: identity.alreadySignedIn,
+      relation: identity.relation,
+      signInEmailSentTo: identity.needsSignInLink ? maskEmail(email) : null,
+      signInEmailDelivered: identity.needsSignInLink ? delivery.success : null,
+      signedInAs: identity.signedInAs ? maskEmail(identity.signedInAs) : null,
     });
-
-    // Send welcome email with magic link for future access (fire and forget)
-    sendWelcomeEmail(email, event.name, event.id).catch((emailError) => {
-      console.error('[Event Creation] Failed to send welcome email:', emailError);
-    });
-
-    return response;
   } catch (error) {
     console.error('Error creating event:', error);
     return NextResponse.json(

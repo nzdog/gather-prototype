@@ -3,6 +3,7 @@ import { resolveToken } from '@/lib/auth';
 import { getUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/prisma';
 import { computeTeamStatusFromItems } from '@/lib/workflow';
+import { deriveAttendance } from '@/lib/attendance';
 
 /**
  * GET /api/h/[token]
@@ -127,10 +128,13 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ to
     const eventWithPeople = await prisma.event.findUnique({
       where: { id: resolvedContext.event.id },
       select: {
-        inviteSendConfirmedAt: true,
+        sentAt: true,
         people: {
           select: {
-            rsvpStatus: true,
+            // GTC-174 (D1): the stored attendance ANSWER (the no-follow-up / itemless
+            // reply). Attendance itself is derived below — rsvpStatus is
+            // retained-but-unwritten and must not be read.
+            attendanceAnswer: true,
             person: {
               select: {
                 id: true,
@@ -163,11 +167,16 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ to
         else if (person.inviteAnchorAt) status = 'SENT';
         else status = 'NOT_SENT';
 
+        // GTC-174 (D1): the per-person rollup carries the third way. Precedence is
+        // worst-first among things needing attention, but a MAYBE ranks ABOVE a
+        // DECLINED: Hinge §8 holds the item softly (it is still the guest's), where a
+        // decline has released it. All-accepted still wins outright.
         const responses = person.assignments.map((a) => a.response);
-        let response: 'PENDING' | 'ACCEPTED' | 'DECLINED' = 'PENDING';
+        let response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE' = 'PENDING';
         if (responses.length > 0) {
           if (responses.every((r) => r === 'ACCEPTED')) response = 'ACCEPTED';
           else if (responses.some((r) => r === 'DECLINED')) response = 'DECLINED';
+          else if (responses.some((r) => r === 'MAYBE')) response = 'MAYBE';
         }
 
         return {
@@ -175,7 +184,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ to
           name: person.name,
           status,
           response,
-          rsvpStatus: pe.rsvpStatus,
+          attendance: deriveAttendance(person.assignments, pe.attendanceAnswer),
         };
       });
 
@@ -185,7 +194,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ to
         sent: peopleStatus.filter((p) => p.status === 'SENT').length,
         opened: peopleStatus.filter((p) => p.status === 'OPENED').length,
         responded: peopleStatus.filter((p) => p.status === 'RESPONDED').length,
-        inviteSendConfirmedAt: eventWithPeople.inviteSendConfirmedAt?.toISOString() ?? null,
+        sentAt: eventWithPeople.sentAt?.toISOString() ?? null,
       };
       people = peopleStatus;
     }
@@ -203,6 +212,10 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ to
       startDate: resolvedContext.event.startDate,
       endDate: resolvedContext.event.endDate,
       status: resolvedContext.event.status,
+      // GTC-198 (A3d): the token pages use the SAME lifecycle predicates as the
+      // server, so they need the same inputs. A screen that decides "sent" its own
+      // way is how FROZEN drifted.
+      sentAt: resolvedContext.event.sentAt,
       guestCount: resolvedContext.event.guestCount,
     },
     authStatus,
