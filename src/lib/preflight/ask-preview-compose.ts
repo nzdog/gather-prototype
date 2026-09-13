@@ -119,13 +119,15 @@ export const HOST_LIST_BLURB =
 export const HOST_LIST_EMPTY = 'Nobody.';
 
 /**
- * Where a text reply goes. The founder's sentence was "A text reply goes nowhere — I can't receive
- * them yet", with the instruction to check "yet". It overstates: [[GTC-288]] reads a reply only for
- * an opt-out and discards the rest pending its unknown 2, so nothing being built lets a text reply
- * reach the host — and "goes nowhere" stops being true once Gather reads replies for STOP. This one
- * is true before and after [[GTC-288]].
+ * Where a text reply goes. RULED (GTC-189, slice 3 words, second pass): "It is true today and true
+ * after GTC-288, which is exactly what 'yet' was not."
+ *
+ * ⚠ DO NOT ADD "YET". A text reply does not go nowhere temporarily: the inbound route speaks
+ * Twilio's shape and not TNZ's; [[GTC-229]] is unbuilt and blocks [[GTC-288]]; [[GTC-288]] reads a
+ * reply only far enough to catch STOP, and nothing decides whether any other reply is kept; and on
+ * a shared shortcode some replies reach a different TNZ customer entirely. "Yet" implied one fix;
+ * it is three tickets and a possible shortcode purchase. Why, in full: GTC-189.
  */
-// ANCHOR(GTC-189): the text-reply sentence — PROPOSED, not ruled
 const TEXT_REPLY = "A text reply won't reach you — I have no way to pass it on.";
 
 /** The reply-to line (ruling F, and slice 3 words answer 3, change 4). */

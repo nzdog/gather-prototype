@@ -55,7 +55,7 @@
  *   [RULED words]         the screen's words as the founder ruled them at slice 3 — Gather says "I"
  *   [UNREACHABLE kept]    reasons the chooser cannot produce today, kept so that no new route
  *                         through it can produce a line with no words
- *   [PROPOSED]            the text-reply sentence, proposed because "yet" overstated it
+ *                         — the text-reply sentence among them, ruled after "yet" was found wrong
  *
  * Run: npx tsx tests/ask-preview-test.ts
  * Writes only its own fixture rows and its decoy, and deletes both by id.
@@ -1235,7 +1235,7 @@ async function main() {
       );
       assert(
         'W',
-        '[RULED words] the reply-to line names the address — with the [PROPOSED] text-reply sentence',
+        '[RULED words] the reply-to line names the address, and says a text reply will not reach her',
         ok(
           () =>
             APC.replyToLine('nigel@mckorbett.co.nz') ===
