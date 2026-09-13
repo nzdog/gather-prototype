@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
 import { ledgerActorForUser } from '@/lib/auth/actor';
 import { recordChange, fieldChanges, ASK_FIELDS } from '@/lib/ledger';
+import { itemNameForStorage } from '@/lib/items/name';
+import { KIND_ERROR, kindFields, readSubmittedKind } from '@/lib/items/row-kind';
 
 // GTC-196 (A3b): this route absorbs frozen-edit's `edit_item` AND `toggle_critical`.
 //
@@ -21,6 +23,9 @@ import { recordChange, fieldChanges, ASK_FIELDS } from '@/lib/ledger';
 // is not a change.
 const TRACKED_ITEM_FIELDS = [
   ...ASK_FIELDS,
+  // GTC-302: brought or done. Versioned — but NOT yet an ask field, which is a defect: the kind
+  // picks the ask's verb, so changing it on an answered row changes what was asked. [[GTC-304]].
+  'kind',
   'description',
   'notes',
   'critical',
@@ -76,13 +81,43 @@ export async function PATCH(
     }
 
     // Other fields
-    if (body.name !== undefined) updateData.name = body.name;
+    // GTC-302: a submitted name is tidied (`itemNameForStorage`), and a blank one refused rather
+    // than stored. A request that sends no name leaves the stored one exactly as it is.
+    if (body.name !== undefined) {
+      const name = itemNameForStorage(body.name);
+      if (!name) {
+        return NextResponse.json({ error: 'name cannot be blank' }, { status: 400 });
+      }
+      updateData.name = name;
+    }
     if (body.description !== undefined) updateData.description = body.description;
     // GTC-238: notes was the one edit-form field the route never read — a 200 that
     // persisted nothing. A note is Kate's manual work (ruling Q1), so it is also
     // substantive and tracked below.
     if (body.notes !== undefined) updateData.notes = body.notes;
     if (body.critical !== undefined) updateData.critical = body.critical;
+
+    // GTC-302: brought or done — a row added as a dish can be told it is a job, and back. Becoming
+    // a job drops to quantityState NA, the shape a generated job has, unless this same request sets
+    // a quantity state itself.
+    //
+    // ⚠ DEFECT [[GTC-303]]: nothing else about the row moves with its kind. A job assigned across
+    // teams and made a dish keeps a holder `mayHoldRow` would refuse, and keeps quantityState NA; a
+    // dish made a job keeps its quantity. The kind change can leave a row no route would create.
+    const submittedKind = readSubmittedKind(body.kind);
+    if (!submittedKind.ok) {
+      return NextResponse.json({ error: KIND_ERROR }, { status: 400 });
+    }
+    if (submittedKind.kind !== undefined) {
+      updateData.kind = submittedKind.kind;
+      if (
+        submittedKind.kind === 'TASK' &&
+        currentItem.kind !== 'TASK' &&
+        body.quantityState === undefined
+      ) {
+        Object.assign(updateData, kindFields('TASK'));
+      }
+    }
 
     // Display order — pure reorder, not substantive (does not flip GENERATED → HOST_EDITED).
     if (body.displayOrder !== undefined) updateData.displayOrder = body.displayOrder;
@@ -118,10 +153,15 @@ export async function PATCH(
     }
 
     // If this is a GENERATED item and substantive fields are being edited, mark as HOST_EDITED
-    // Substantive fields: name, description, quantity*, critical, dietaryTags, timing, drop-off
+    // Substantive fields: name, kind, description, quantity*, critical, dietaryTags, timing, drop-off
     // Non-substantive: placeholderAcknowledged, quantityDeferredTo (these are acknowledgements, not edits)
+    //
+    // GTC-302: kind is substantive for a reason beyond provenance. Regeneration disposes of GENERATED
+    // rows BY KIND (`disposableItemWhere` in src/lib/ai/plan-write.ts), so a generated row re-kinded
+    // without this flip would be deleted by the next regenerate of the kind it no longer is.
     const substantiveFieldsBeingEdited =
       body.name !== undefined ||
+      body.kind !== undefined ||
       body.description !== undefined ||
       body.quantityAmount !== undefined ||
       body.quantityUnit !== undefined ||

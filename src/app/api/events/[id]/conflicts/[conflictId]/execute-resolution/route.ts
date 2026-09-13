@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
 import { ledgerActorForUser } from '@/lib/auth/actor';
 import { recordChange } from '@/lib/ledger';
+import { itemNameForStorage } from '@/lib/items/name';
 
 export async function POST(
   request: NextRequest,
@@ -129,7 +130,7 @@ async function createItem(eventId: string, action: any): Promise<any> {
   const item = await prisma.item.create({
     data: {
       teamId,
-      name: data.name,
+      name: itemNameForStorage(data.name) ?? data.name, // GTC-302
       description: data.description || null,
       critical: data.critical || false,
       quantityState: 'SPECIFIED',
@@ -177,7 +178,7 @@ async function createTeam(eventId: string, action: any): Promise<any> {
       const item = await prisma.item.create({
         data: {
           teamId: team.id,
-          name: itemData.name,
+          name: itemNameForStorage(itemData.name) ?? itemData.name, // GTC-302
           description: itemData.description || null,
           critical: itemData.critical || false,
           quantityState: 'SPECIFIED',

@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { CATEGORY_EMOJIS, CATEGORY_LABELS } from '@/lib/ai/plan-categories';
 import type { SectionResponse } from '@/lib/ai/plan-input';
+import { itemNameForStorage } from '@/lib/items/name';
 
 type Tx = Prisma.TransactionClient;
 
@@ -132,7 +133,8 @@ export async function applyPlanSections(
     for (const item of section.items) {
       await tx.item.create({
         data: {
-          name: item.name,
+          // GTC-302: the name as stored — one leading article stripped, case untouched.
+          name: itemNameForStorage(item.name) ?? item.name,
           teamId: team.id,
           quantityAmount: item.quantity,
           quantityUnit: 'CUSTOM',

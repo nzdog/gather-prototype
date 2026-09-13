@@ -3,6 +3,7 @@ import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logAudit } from '@/lib/workflow';
 import { recordChange, actorFromToken, fieldChanges, ASK_FIELDS } from '@/lib/ledger';
+import { itemNameForStorage } from '@/lib/items/name';
 
 const TRACKED = [...ASK_FIELDS, 'description', 'critical', 'dietaryTags'] as const;
 
@@ -40,6 +41,18 @@ export async function PATCH(
 
   const body = await request.json();
 
+  // GTC-302: a submitted name is tidied (`itemNameForStorage`), and a blank one refused rather than
+  // stored. A request that sends no name leaves the stored one exactly as it is — GTC-302 Unknown 5
+  // leaves the stored rows alone, so nothing here tidies a name nobody sent.
+  let submittedName: string | undefined;
+  if (body.name != null) {
+    const tidied = itemNameForStorage(body.name);
+    if (!tidied) {
+      return NextResponse.json({ error: 'Item name cannot be blank' }, { status: 400 });
+    }
+    submittedName = tidied;
+  }
+
   // Check if substantive fields are being edited
   const substantiveFieldsBeingEdited =
     body.name !== undefined ||
@@ -60,7 +73,7 @@ export async function PATCH(
     const updated = await tx.item.update({
       where: { id: itemId },
       data: {
-        name: body.name ?? item.name,
+        name: submittedName ?? item.name,
         quantity: body.quantity !== undefined ? body.quantity : item.quantity,
         description: body.description !== undefined ? body.description : item.description,
         critical: body.critical !== undefined ? body.critical : item.critical,

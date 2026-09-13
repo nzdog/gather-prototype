@@ -516,10 +516,10 @@ section('Layer J: jobs — done, not brought');
 // filtered out: a filtered job reaches nobody, and a child's job reaching an adult is what the
 // carried ask exists for.
 //
-// ⚠ RULED ON A CASE THAT HAS NEVER OCCURRED. gather_dev holds no TASK rows, only plan generation
-// writes one, and the routes where a host adds an item set no kind, so a job assigned by hand is
-// an ITEM and reads "bring" ([[GTC-302]]). These assertions hold the sentence ready for the first
-// job that arrives.
+// ⚠ RULED BEFORE THE CASE EXISTED. When these were written gather_dev held no TASK rows and a job
+// added by hand was stored as a dish; [[GTC-302]] gave the add routes a kind. The preview still
+// hands composition no kind until GTC-189 slice 3, so these assertions hold the sentence ready for
+// the first job that reaches it.
 
 function verbBefore(text: string, name: string): string | null {
   const at = text.indexOf(name);
@@ -650,9 +650,10 @@ assert(
     )
 );
 
-// [DEFECT GTC-302] The one writer of TASK rows is plan generation, and its prompt's example job
-// name is a verb phrase — "Wash the dishes" — so the first generated job reads "do the Wash the
-// dishes". The ruled sentence needs a noun-phrase name; the names are GTC-302's.
+// [DEFECT GTC-302] The generator's example job name is a verb phrase — "Wash the dishes" — so a
+// job named as the prompt asks reads "do the Wash the dishes". The ruled sentence needs a
+// noun-phrase name. A job typed by hand is led by the "Do the ___" label since GTC-302; the
+// prompt's naming is GTC-302's still, ordered after GTC-189 slice 3.
 assert(
   'J',
   '[DEFECT GTC-302] a job named as the generator is prompted — "Wash the dishes" — reads "do the Wash the dishes"',

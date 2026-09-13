@@ -343,11 +343,12 @@ function carriedAskSentences(carried: readonly CarriedChildAsk[], alongsideOwn: 
  * holding both kinds is asked in ONE sentence, not two (founder ruling). A carried child holding
  * both is one sentence the same way — the executor's extension of that rule, not a ruling.
  *
- * ⚠ RULED BEFORE THE CASE EXISTS. No TASK row is assigned in gather_dev, only plan generation
- * writes one, and the routes where a host adds an item set no kind — so a job assigned by hand
- * is an ITEM and reads "bring". That is [[GTC-302]]'s, and it keeps this sentence unreachable
- * today. JOBS ARE NEVER FILTERED OUT instead: a filtered job reaches nobody, and a child's job
- * reaching an adult is what the carried ask is for.
+ * ⚠ RULED BEFORE THE CASE EXISTED. When this sentence was ruled only plan generation wrote a TASK
+ * row, so a job added by hand was stored as a dish and read "bring". [[GTC-302]] gave the add
+ * routes a kind. What still keeps the sentence from a guest is provisional: the preview hands
+ * composition no kind until [[GTC-189]] slice 3 splits jobs from dishes. JOBS ARE NEVER FILTERED
+ * OUT instead: a filtered job reaches nobody, and a child's job reaching an adult is what the
+ * carried ask is for.
  */
 function whatIsAsked(itemNames: readonly string[], jobNames: readonly string[]): string {
   const bring = itemNames.length > 0 ? `bring ${theItems(itemNames)}` : null;

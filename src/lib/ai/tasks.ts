@@ -8,6 +8,8 @@
  * prompt as advisory context and had no path back into structured rows.
  */
 
+import { itemNameForStorage } from '@/lib/items/name';
+
 export type TaskBucket = 'set_up' | 'clean_up' | 'other_jobs';
 
 export interface TaskResponse {
@@ -61,7 +63,11 @@ export function selectTaskRows(
 
   for (const raw of rawTasks) {
     const task = raw as Partial<TaskResponse> | null;
-    if (!task || typeof task.name !== 'string' || !task.name.trim()) continue;
+    // GTC-302: the name as it will be stored — one leading article stripped, case untouched. A
+    // verb phrase is NOT rewritten here; how a job is named is the prompt's (ordered after
+    // GTC-189 slice 3).
+    const name = itemNameForStorage(task?.name);
+    if (!task || !name) continue;
 
     const bucket = task.bucket as TaskBucket;
     if (!TASK_BUCKETS.some((b) => b.key === bucket)) continue;
@@ -70,7 +76,7 @@ export function selectTaskRows(
     const list = grouped.get(bucket) ?? [];
     list.push({
       bucket,
-      name: task.name.trim(),
+      name,
       notes: typeof task.notes === 'string' ? task.notes.trim() || undefined : undefined,
     });
     grouped.set(bucket, list);

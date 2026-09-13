@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth/session';
 import { recordBulkPlanChange } from '@/lib/ledger';
+import { itemNameForStorage } from '@/lib/items/name';
 
 /**
  * POST /api/templates/[id]/clone
@@ -180,7 +181,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
       await prisma.item.create({
         data: {
-          name: itemData.name,
+          name: itemNameForStorage(itemData.name) ?? itemData.name, // GTC-302
           description: itemData.description,
           critical: itemData.critical,
           criticalReason: itemData.criticalReason,

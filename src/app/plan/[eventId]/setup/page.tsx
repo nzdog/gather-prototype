@@ -859,10 +859,16 @@ export default function EventSetupPage() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 name: newItem.name,
-                quantityAmount: newItem.quantity,
-                quantityUnit: 'CUSTOM',
-                quantityUnitCustom: newItem.unit,
-                quantityText: newItem.servingSize || undefined,
+                // GTC-302: brought or done. A job carries no quantity, so none is sent for one.
+                kind: newItem.kind,
+                ...(newItem.kind === 'TASK'
+                  ? {}
+                  : {
+                      quantityAmount: newItem.quantity,
+                      quantityUnit: 'CUSTOM',
+                      quantityUnitCustom: newItem.unit,
+                      quantityText: newItem.servingSize || undefined,
+                    }),
                 description: newItem.notes,
               }),
             });

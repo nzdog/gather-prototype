@@ -171,7 +171,7 @@ const CAST: Spec[] = [
     sentAt: -14 * DAY,
     rows: [
       {
-        item: 'The gravy',
+        item: 'gravy',
         createdAt: -10 * DAY,
         qty: [2, 'L'],
         taps: [{ at: -8 * DAY, tap: 'ACCEPTED' }],
@@ -189,7 +189,7 @@ const CAST: Spec[] = [
     sentAt: -2 * DAY,
     rows: [
       {
-        item: 'The pavlova',
+        item: 'pavlova',
         critical: true,
         createdAt: -10 * DAY,
         qty: [1, 'TRAYS'],
@@ -207,7 +207,7 @@ const CAST: Spec[] = [
     sentAt: -14 * DAY,
     rows: [
       {
-        item: 'The salad',
+        item: 'salad',
         createdAt: -10 * DAY,
         qty: [12, 'SERVINGS'],
         taps: [{ at: -8 * DAY, tap: 'ACCEPTED' }],
@@ -225,7 +225,7 @@ const CAST: Spec[] = [
     sentAt: -4 * DAY - HOUR,
     rows: [
       {
-        item: 'The trifle',
+        item: 'trifle',
         createdAt: -10 * DAY,
         qty: [1, 'CUSTOM', 'big bowl'],
         taps: [{ at: -3 * DAY, tap: 'MAYBE' }],
@@ -241,7 +241,7 @@ const CAST: Spec[] = [
     team: 'Desserts',
     // Both legs spent. `nextNudgeAt` is null and variant A shows NOTHING.
     sentAt: -11 * DAY,
-    rows: [{ item: 'The bread', createdAt: -10 * DAY, qty: [6, 'COUNT'], taps: [] }],
+    rows: [{ item: 'bread', createdAt: -10 * DAY, qty: [6, 'COUNT'], taps: [] }],
     note: 'AMBER with a SPENT cadence — the negative case, standing beside its own positive control',
   },
   {
@@ -253,7 +253,7 @@ const CAST: Spec[] = [
     sentAt: -14 * DAY,
     rows: [
       {
-        item: 'The birthday cake',
+        item: 'birthday cake',
         critical: true,
         createdAt: -10 * DAY,
         taps: [
@@ -276,7 +276,7 @@ const CAST: Spec[] = [
     attendance: { at: -9 * DAY, answer: 'NO' },
     rows: [
       {
-        item: 'The ice',
+        item: 'ice',
         critical: true,
         createdAt: -6 * DAY,
         taps: [
@@ -295,7 +295,7 @@ const CAST: Spec[] = [
     team: 'Mains',
     // Day-4 leg lands tomorrow — the near branch of the clock-line.
     sentAt: -3 * DAY,
-    rows: [{ item: 'The wine', createdAt: -10 * DAY, placeholderQty: true, taps: [] }],
+    rows: [{ item: 'wine', createdAt: -10 * DAY, placeholderQty: true, taps: [] }],
     note: 'AMBER, clock TOMORROW — the reference’s own example person, on the nearest clock',
   },
   {
@@ -305,9 +305,7 @@ const CAST: Spec[] = [
     householdRole: 'PRIMARY_CONTACT',
     team: 'Desserts',
     sentAt: -14 * DAY,
-    rows: [
-      { item: 'The crackers', createdAt: -10 * DAY, taps: [{ at: -7 * DAY, tap: 'ACCEPTED' }] },
-    ],
+    rows: [{ item: 'crackers', createdAt: -10 * DAY, taps: [{ at: -7 * DAY, tap: 'ACCEPTED' }] }],
     note: 'GREEN — settled',
   },
   {
@@ -318,16 +316,16 @@ const CAST: Spec[] = [
     team: 'Desserts',
     dontChase: true,
     sentAt: -14 * DAY,
-    rows: [{ item: 'The cake', createdAt: -10 * DAY, qty: [1.5, 'KG'], taps: [] }],
+    rows: [{ item: 'cake', createdAt: -10 * DAY, qty: [1.5, 'KG'], taps: [] }],
     note: 'NOT_CHASED — Ruling 14’s grey, border kept. GTC-179’s trap: her cadence is null too',
   },
 ];
 
 /** Ruling 8: one ownerless critical to NAME beside Ray's loose one, two ordinary ones to COUNT. */
 const LOOSE = [
-  { slug: 'ham', name: 'the glazed ham', critical: true },
-  { slug: 'cups', name: 'the paper cups', critical: false },
-  { slug: 'serviettes', name: 'the serviettes', critical: false },
+  { slug: 'ham', name: 'glazed ham', critical: true },
+  { slug: 'cups', name: 'paper cups', critical: false },
+  { slug: 'serviettes', name: 'serviettes', critical: false },
 ];
 
 const ACTION_BY_TAP: Record<Tap, string> = {

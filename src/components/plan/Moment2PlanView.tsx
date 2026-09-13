@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import MomentArc from './MomentArc';
 import { useToast } from '@/contexts/ToastContext';
 import { CATEGORY_LABELS } from '@/lib/ai/plan-categories';
+import RowKindToggle from './RowKindToggle';
+import { JOB_NAME_LEAD, JOB_NAME_PLACEHOLDER, type RowKindValue } from '@/lib/items/row-kind';
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -27,6 +29,8 @@ export interface PlanCategory {
 
 export interface NewPlanItem {
   name: string;
+  /** GTC-302: brought or done. Required, so no caller can add a job without saying so. */
+  kind: RowKindValue;
   quantity: number;
   unit: string;
   servingSize: string;
@@ -791,27 +795,31 @@ interface AddItemFormProps {
 
 function AddItemForm({ onAdd, onCancel }: AddItemFormProps) {
   const [name, setName] = useState('');
+  const [kind, setKind] = useState<RowKindValue>('ITEM');
   const [quantity, setQuantity] = useState('1');
   const [unit, setUnit] = useState('pieces');
   const [serves, setServes] = useState('');
   const [saving, setSaving] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
 
+  // Refocus on a toggle: the name field is a different input for a dish and a job.
   useEffect(() => {
     nameRef.current?.focus();
-  }, []);
+  }, [kind]);
 
   const handleAdd = async () => {
     if (!name.trim()) return;
-    const parsedQuantity = parseFloat(quantity);
+    // GTC-302: a job carries no quantity, so for one the quantity is neither read nor sent.
+    const parsedQuantity = kind === 'TASK' ? 0 : parseFloat(quantity);
     if (Number.isNaN(parsedQuantity)) return;
     setSaving(true);
     try {
       await onAdd({
         name: name.trim(),
+        kind,
         quantity: parsedQuantity,
-        unit: unit.trim() || 'pieces',
-        servingSize: serves.trim(),
+        unit: kind === 'TASK' ? '' : unit.trim() || 'pieces',
+        servingSize: kind === 'TASK' ? '' : serves.trim(),
       });
     } finally {
       setSaving(false);
@@ -828,39 +836,64 @@ function AddItemForm({ onAdd, onCancel }: AddItemFormProps) {
         }
       }}
     >
-      <FormField label="Name">
-        <input
-          ref={nameRef}
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
-        />
-      </FormField>
+      {/* GTC-302 (Unknown 2): brought or done. */}
+      <RowKindToggle value={kind} onChange={setKind} disabled={saving} />
 
-      <FormField label="Quantity">
-        <div className="flex items-center gap-2">
+      {/* A job's name field leads with the words the ask will say (Unknown 8), so the sentence
+          being completed is visible while typing. */}
+      {kind === 'TASK' ? (
+        <label className="flex items-center gap-2">
+          <span className="text-sm font-medium text-gray-600 whitespace-nowrap">
+            {JOB_NAME_LEAD}
+          </span>
           <input
-            type="number"
-            step="any"
-            min="0"
-            value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
-            className="w-24 text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
+            ref={nameRef}
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={JOB_NAME_PLACEHOLDER}
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
           />
-          <UnitSelector value={unit} onChange={setUnit} />
-        </div>
-      </FormField>
+        </label>
+      ) : (
+        <FormField label="Name">
+          <input
+            ref={nameRef}
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
+          />
+        </FormField>
+      )}
 
-      <FormField label="Serves">
-        <input
-          type="text"
-          value={serves}
-          onChange={(e) => setServes(e.target.value)}
-          placeholder="Optional"
-          className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
-        />
-      </FormField>
+      {kind === 'ITEM' && (
+        <>
+          <FormField label="Quantity">
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="any"
+                min="0"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                className="w-24 text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
+              />
+              <UnitSelector value={unit} onChange={setUnit} />
+            </div>
+          </FormField>
+
+          <FormField label="Serves">
+            <input
+              type="text"
+              value={serves}
+              onChange={(e) => setServes(e.target.value)}
+              placeholder="Optional"
+              className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
+            />
+          </FormField>
+        </>
+      )}
 
       <div className="flex items-center gap-2 pt-1">
         <button

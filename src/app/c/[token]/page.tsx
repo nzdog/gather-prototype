@@ -22,6 +22,8 @@ import ItemStatusBadges from '@/components/plan/ItemStatusBadges';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 import { useToast } from '@/contexts/ToastContext';
 import { useReasonPrompt } from '@/components/plan/ReasonPrompt';
+import RowKindToggle from '@/components/plan/RowKindToggle';
+import { JOB_NAME_LEAD, JOB_NAME_PLACEHOLDER, type RowKindValue } from '@/lib/items/row-kind';
 
 interface Assignment {
   id: string;
@@ -137,6 +139,8 @@ export default function CoordinatorView() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newItem, setNewItem] = useState({
     name: '',
+    // GTC-302 (Unknown 2): a coordinator may add a job.
+    kind: 'ITEM' as RowKindValue,
     quantity: '',
     critical: false,
     glutenFree: false,
@@ -273,7 +277,9 @@ export default function CoordinatorView() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: newItem.name,
-          quantity: newItem.quantity || null,
+          kind: newItem.kind,
+          // A job carries no quantity (GTC-302); the route writes none for one either way.
+          quantity: newItem.kind === 'ITEM' ? newItem.quantity || null : null,
           critical: newItem.critical,
           glutenFree: newItem.glutenFree,
           dairyFree: newItem.dairyFree,
@@ -293,6 +299,7 @@ export default function CoordinatorView() {
       // Reset form and close modal
       setNewItem({
         name: '',
+        kind: 'ITEM',
         quantity: '',
         critical: false,
         glutenFree: false,
@@ -850,31 +857,57 @@ export default function CoordinatorView() {
             </div>
 
             <div className="p-6 space-y-4">
-              {/* Name */}
+              {/* GTC-302 (Unknown 2): brought or done. */}
+              <RowKindToggle
+                value={newItem.kind}
+                onChange={(kind) => setNewItem({ ...newItem, kind })}
+              />
+
+              {/* Name. A job's field leads with the words the ask will say (Unknown 8), so the
+                  sentence being completed is visible while typing. */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Item Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={newItem.name}
-                  onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
-                  placeholder="e.g., Potato salad"
-                />
+                {newItem.kind === 'TASK' ? (
+                  <label className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                      {JOB_NAME_LEAD}
+                    </span>
+                    <input
+                      type="text"
+                      value={newItem.name}
+                      onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+                      placeholder={JOB_NAME_PLACEHOLDER}
+                    />
+                  </label>
+                ) : (
+                  <>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Item Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newItem.name}
+                      onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+                      placeholder="e.g., Potato salad"
+                    />
+                  </>
+                )}
               </div>
 
-              {/* Quantity */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
-                <input
-                  type="text"
-                  value={newItem.quantity}
-                  onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
-                  placeholder="e.g., 2 large bowls, Plenty"
-                />
-              </div>
+              {/* Quantity — a dish's only; a job has none */}
+              {newItem.kind === 'ITEM' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+                  <input
+                    type="text"
+                    value={newItem.quantity}
+                    onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+                    placeholder="e.g., 2 large bowls, Plenty"
+                  />
+                </div>
+              )}
 
               {/* Day */}
               <div>
@@ -943,35 +976,40 @@ export default function CoordinatorView() {
                   <span className="text-sm font-medium text-gray-700">Critical Item</span>
                 </label>
 
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={newItem.glutenFree}
-                    onChange={(e) => setNewItem({ ...newItem, glutenFree: e.target.checked })}
-                    className="rounded border-gray-300 text-accent focus:ring-accent"
-                  />
-                  <span className="text-sm text-gray-700">Gluten Free</span>
-                </label>
+                {/* Dietary — a dish's only; a job has none (GTC-302) */}
+                {newItem.kind === 'ITEM' && (
+                  <>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={newItem.glutenFree}
+                        onChange={(e) => setNewItem({ ...newItem, glutenFree: e.target.checked })}
+                        className="rounded border-gray-300 text-accent focus:ring-accent"
+                      />
+                      <span className="text-sm text-gray-700">Gluten Free</span>
+                    </label>
 
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={newItem.dairyFree}
-                    onChange={(e) => setNewItem({ ...newItem, dairyFree: e.target.checked })}
-                    className="rounded border-gray-300 text-accent focus:ring-accent"
-                  />
-                  <span className="text-sm text-gray-700">Dairy Free</span>
-                </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={newItem.dairyFree}
+                        onChange={(e) => setNewItem({ ...newItem, dairyFree: e.target.checked })}
+                        className="rounded border-gray-300 text-accent focus:ring-accent"
+                      />
+                      <span className="text-sm text-gray-700">Dairy Free</span>
+                    </label>
 
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={newItem.vegetarian}
-                    onChange={(e) => setNewItem({ ...newItem, vegetarian: e.target.checked })}
-                    className="rounded border-gray-300 text-accent focus:ring-accent"
-                  />
-                  <span className="text-sm text-gray-700">Vegetarian</span>
-                </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={newItem.vegetarian}
+                        onChange={(e) => setNewItem({ ...newItem, vegetarian: e.target.checked })}
+                        className="rounded border-gray-300 text-accent focus:ring-accent"
+                      />
+                      <span className="text-sm text-gray-700">Vegetarian</span>
+                    </label>
+                  </>
+                )}
               </div>
             </div>
 

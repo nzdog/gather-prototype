@@ -123,7 +123,7 @@ const CAST: Spec[] = [
     household: 'Whittaker',
     householdRole: 'PARTNER',
     team: 'Mains',
-    rows: [{ item: 'The gravy', createdAt: -10 * DAY, taps: [{ at: -8 * DAY, tap: 'ACCEPTED' }] }],
+    rows: [{ item: 'gravy', createdAt: -10 * DAY, taps: [{ at: -8 * DAY, tap: 'ACCEPTED' }] }],
     note: 'settled long before she looked — no step (branch 1)',
   },
   {
@@ -134,7 +134,7 @@ const CAST: Spec[] = [
     team: 'Mains',
     rows: [
       {
-        item: 'The pavlova',
+        item: 'pavlova',
         critical: true,
         createdAt: -10 * DAY,
         taps: [{ at: -22 * HOUR, tap: 'ACCEPTED' }],
@@ -148,7 +148,7 @@ const CAST: Spec[] = [
     household: 'Turner',
     householdRole: 'PARTNER',
     team: 'Mains',
-    rows: [{ item: 'The salad', createdAt: -10 * DAY, taps: [{ at: -8 * DAY, tap: 'ACCEPTED' }] }],
+    rows: [{ item: 'salad', createdAt: -10 * DAY, taps: [{ at: -8 * DAY, tap: 'ACCEPTED' }] }],
     note: 'settled before the anchor — no step',
   },
   {
@@ -159,7 +159,7 @@ const CAST: Spec[] = [
     team: 'Desserts',
     rows: [
       {
-        item: 'The trifle',
+        item: 'trifle',
         createdAt: -10 * DAY,
         taps: [
           { at: -9 * DAY, tap: 'MAYBE' },
@@ -175,7 +175,7 @@ const CAST: Spec[] = [
     household: 'Nguyen',
     householdRole: 'PARTNER',
     team: 'Desserts',
-    rows: [{ item: 'The bread', createdAt: -10 * DAY, taps: [] }],
+    rows: [{ item: 'bread', createdAt: -10 * DAY, taps: [] }],
     note: 'never tapped — amber, and still amber (branch 3, the Ruling 28 silence)',
   },
   {
@@ -184,9 +184,7 @@ const CAST: Spec[] = [
     household: 'Nguyen',
     householdRole: 'GUEST',
     team: 'Desserts',
-    rows: [
-      { item: 'The cheese', createdAt: -10 * DAY, taps: [{ at: -28 * HOUR, tap: 'DECLINED' }] },
-    ],
+    rows: [{ item: 'cheese', createdAt: -10 * DAY, taps: [{ at: -28 * HOUR, tap: 'DECLINED' }] }],
     note: 'THE QUIET RED — declined while she was away, no spark',
   },
   {
@@ -195,7 +193,7 @@ const CAST: Spec[] = [
     household: 'Dalton',
     householdRole: 'PARTNER',
     team: 'Mains',
-    rows: [{ item: 'The wine', createdAt: -10 * DAY, taps: [{ at: -34 * HOUR, tap: 'ACCEPTED' }] }],
+    rows: [{ item: 'wine', createdAt: -10 * DAY, taps: [{ at: -34 * HOUR, tap: 'ACCEPTED' }] }],
     note: 'SPARK — the third piece of good news, and not the last one shown',
   },
   {
@@ -210,7 +208,7 @@ const CAST: Spec[] = [
     attendance: { at: -9 * DAY, answer: 'NO' },
     rows: [
       {
-        item: 'The ice',
+        item: 'ice',
         // CRITICAL as of slice 6d. Ruling 6: "Items the person held fall loose; criticals among
         // them surface in the alert strip (Ruling 8)." Ruling 23 builds that by widening the
         // strip's own predicate, and this is the row that makes it visible on the board the
@@ -232,9 +230,7 @@ const CAST: Spec[] = [
     household: "O'Brien",
     householdRole: 'PRIMARY_CONTACT',
     team: 'Desserts',
-    rows: [
-      { item: 'The crackers', createdAt: -10 * DAY, taps: [{ at: -7 * DAY, tap: 'ACCEPTED' }] },
-    ],
+    rows: [{ item: 'crackers', createdAt: -10 * DAY, taps: [{ at: -7 * DAY, tap: 'ACCEPTED' }] }],
     note: 'settled before the anchor — no step',
   },
   {
@@ -244,16 +240,16 @@ const CAST: Spec[] = [
     householdRole: 'PARTNER',
     team: 'Desserts',
     dontChase: true,
-    rows: [{ item: 'The cake', createdAt: -10 * DAY, taps: [] }],
+    rows: [{ item: 'cake', createdAt: -10 * DAY, taps: [] }],
     note: 'DONT_CHASE — grey, and stays grey (Ruling 14)',
   },
 ];
 
 /** Ruling 8: one ownerless critical to NAME, two ordinary ones to COUNT. */
 const LOOSE = [
-  { slug: 'ham', name: 'the glazed ham', critical: true },
-  { slug: 'cups', name: 'the paper cups', critical: false },
-  { slug: 'serviettes', name: 'the serviettes', critical: false },
+  { slug: 'ham', name: 'glazed ham', critical: true },
+  { slug: 'cups', name: 'paper cups', critical: false },
+  { slug: 'serviettes', name: 'serviettes', critical: false },
 ];
 
 /**
@@ -286,16 +282,16 @@ const ALL_GREEN_CAST: Spec[] = [
       // The last column is the hour the accept landed, and it is what orders the replay. Read
       // them sorted and the sparks go 3 → 1 → 4 → 2 → 5 → 3 → 5 → 2 → 4 → 3 across the five
       // households: no two in a row in the same column, and never twice down the same card.
-      ['rob', 'Rob Whittaker', 'Whittaker', 'PARTNER', 'Mains', 'The gravy', -38],
-      ['amelia', 'Amelia Turner', 'Turner', 'PRIMARY_CONTACT', 'Mains', 'The pavlova', -34],
-      ['charlotte', 'Charlotte Turner', 'Turner', 'PARTNER', 'Mains', 'The salad', -26],
-      ['chloe', 'Chloe Nguyen', 'Nguyen', 'PRIMARY_CONTACT', 'Desserts', 'The trifle', -22],
-      ['minh', 'Minh Nguyen', 'Nguyen', 'PARTNER', 'Desserts', 'The bread', -30],
-      ['grace', 'Grace Nguyen', 'Nguyen', 'GUEST', 'Desserts', 'The cheese', -40],
-      ['ray', 'Ray Dalton', 'Dalton', 'PRIMARY_CONTACT', 'Mains', 'The ice', -24],
-      ['sarah', 'Sarah Dalton', 'Dalton', 'PARTNER', 'Mains', 'The wine', -36],
-      ['connor', 'Connor OBrien', "O'Brien", 'PRIMARY_CONTACT', 'Desserts', 'The crackers', -32],
-      ['aoife', 'Aoife OBrien', "O'Brien", 'PARTNER', 'Desserts', 'The cake', -28],
+      ['rob', 'Rob Whittaker', 'Whittaker', 'PARTNER', 'Mains', 'gravy', -38],
+      ['amelia', 'Amelia Turner', 'Turner', 'PRIMARY_CONTACT', 'Mains', 'pavlova', -34],
+      ['charlotte', 'Charlotte Turner', 'Turner', 'PARTNER', 'Mains', 'salad', -26],
+      ['chloe', 'Chloe Nguyen', 'Nguyen', 'PRIMARY_CONTACT', 'Desserts', 'trifle', -22],
+      ['minh', 'Minh Nguyen', 'Nguyen', 'PARTNER', 'Desserts', 'bread', -30],
+      ['grace', 'Grace Nguyen', 'Nguyen', 'GUEST', 'Desserts', 'cheese', -40],
+      ['ray', 'Ray Dalton', 'Dalton', 'PRIMARY_CONTACT', 'Mains', 'ice', -24],
+      ['sarah', 'Sarah Dalton', 'Dalton', 'PARTNER', 'Mains', 'wine', -36],
+      ['connor', 'Connor OBrien', "O'Brien", 'PRIMARY_CONTACT', 'Desserts', 'crackers', -32],
+      ['aoife', 'Aoife OBrien', "O'Brien", 'PARTNER', 'Desserts', 'cake', -28],
     ] as const
   ).map(([slug, name, household, householdRole, team, item, hoursAgo]) => ({
     slug,

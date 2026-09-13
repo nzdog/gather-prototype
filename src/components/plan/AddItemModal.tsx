@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useModal } from '@/contexts/ModalContext';
 import { useToast } from '@/contexts/ToastContext';
+import RowKindToggle from '@/components/plan/RowKindToggle';
+import { JOB_NAME_LEAD, JOB_NAME_PLACEHOLDER, type RowKindValue } from '@/lib/items/row-kind';
 
 interface Day {
   id: string;
@@ -26,6 +28,8 @@ interface AddItemModalProps {
 
 export interface ItemFormData {
   name: string;
+  /** GTC-302: brought or done. A job carries no quantity and no dietary tags. */
+  kind?: RowKindValue;
   quantityAmount?: number;
   quantityUnit?: string;
   quantityState?: string;
@@ -74,6 +78,7 @@ export default function AddItemModal({
   const { openModal, closeModal } = useModal();
   const toast = useToast();
   const [name, setName] = useState('');
+  const [kind, setKind] = useState<RowKindValue>('ITEM');
   const [description, setDescription] = useState('');
   const [quantityAmount, setQuantityAmount] = useState('');
   const [quantityUnit, setQuantityUnit] = useState('SERVINGS');
@@ -111,7 +116,7 @@ export default function AddItemModal({
     e.preventDefault();
 
     if (!name.trim()) {
-      toast.warning('Please enter item name');
+      toast.warning('Please enter a name');
       return;
     }
 
@@ -124,21 +129,24 @@ export default function AddItemModal({
     try {
       const itemData: ItemFormData = {
         name: name.trim(),
+        kind,
         description: description.trim() || undefined,
         critical,
-        dietaryTags: dietaryTags.length > 0 ? dietaryTags : undefined,
+        dietaryTags: kind === 'ITEM' && dietaryTags.length > 0 ? dietaryTags : undefined,
       };
 
-      // Add quantity fields based on state
-      if (quantityState === 'SPECIFIED' && quantityAmount && parseFloat(quantityAmount) > 0) {
-        itemData.quantityAmount = parseFloat(quantityAmount);
-        itemData.quantityUnit = quantityUnit;
-        itemData.quantityState = 'SPECIFIED';
-      } else if (quantityState === 'PLACEHOLDER') {
-        itemData.quantityState = 'PLACEHOLDER';
-        itemData.placeholderAcknowledged = placeholderAcknowledged;
-      } else if (quantityState === 'NA') {
-        itemData.quantityState = 'NA';
+      // Add quantity fields based on state. A job has no quantity (GTC-302), so none is sent.
+      if (kind === 'ITEM') {
+        if (quantityState === 'SPECIFIED' && quantityAmount && parseFloat(quantityAmount) > 0) {
+          itemData.quantityAmount = parseFloat(quantityAmount);
+          itemData.quantityUnit = quantityUnit;
+          itemData.quantityState = 'SPECIFIED';
+        } else if (quantityState === 'PLACEHOLDER') {
+          itemData.quantityState = 'PLACEHOLDER';
+          itemData.placeholderAcknowledged = placeholderAcknowledged;
+        } else if (quantityState === 'NA') {
+          itemData.quantityState = 'NA';
+        }
       }
 
       // Add timing fields
@@ -152,6 +160,7 @@ export default function AddItemModal({
 
       // Reset form
       setName('');
+      setKind('ITEM');
       setDescription('');
       setQuantityAmount('');
       setQuantityUnit('SERVINGS');
@@ -174,6 +183,7 @@ export default function AddItemModal({
   const handleClose = () => {
     if (!adding) {
       setName('');
+      setKind('ITEM');
       setDescription('');
       setQuantityAmount('');
       setQuantityUnit('SERVINGS');
@@ -218,18 +228,45 @@ export default function AddItemModal({
               </div>
             )}
 
-            {/* Item Name */}
+            {/* GTC-302 (Unknown 2): brought or done. */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Item Name *</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., Christmas Pudding"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
-                autoFocus
-                disabled={adding}
-              />
+              <RowKindToggle value={kind} onChange={setKind} disabled={adding} />
+            </div>
+
+            {/* Name. A job's field leads with the words the ask will say (Unknown 8), so the
+                sentence being completed is visible while typing. */}
+            <div>
+              {kind === 'TASK' ? (
+                <label className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                    {JOB_NAME_LEAD}
+                  </span>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={JOB_NAME_PLACEHOLDER}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                    autoFocus
+                    disabled={adding}
+                  />
+                </label>
+              ) : (
+                <>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Item Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g., Christmas Pudding"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                    autoFocus
+                    disabled={adding}
+                  />
+                </>
+              )}
             </div>
 
             {/* Description */}
@@ -247,82 +284,84 @@ export default function AddItemModal({
               />
             </div>
 
-            {/* Quantity Section */}
-            <div className="border-t pt-4">
-              <h3 className="text-sm font-medium text-gray-900 mb-3">Quantity</h3>
+            {/* Quantity Section — a dish's only; a job has no quantity */}
+            {kind === 'ITEM' && (
+              <div className="border-t pt-4">
+                <h3 className="text-sm font-medium text-gray-900 mb-3">Quantity</h3>
 
-              {/* Quantity State */}
-              <div className="mb-3">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Quantity Status
-                </label>
-                <select
-                  value={quantityState}
-                  onChange={(e) => setQuantityState(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
-                  disabled={adding}
-                >
-                  {QUANTITY_STATES.map((state) => (
-                    <option key={state.value} value={state.value}>
-                      {state.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                {/* Quantity State */}
+                <div className="mb-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Quantity Status
+                  </label>
+                  <select
+                    value={quantityState}
+                    onChange={(e) => setQuantityState(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                    disabled={adding}
+                  >
+                    {QUANTITY_STATES.map((state) => (
+                      <option key={state.value} value={state.value}>
+                        {state.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              {/* Quantity Amount and Unit - Only show if SPECIFIED */}
-              {quantityState === 'SPECIFIED' && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+                {/* Quantity Amount and Unit - Only show if SPECIFIED */}
+                {quantityState === 'SPECIFIED' && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+                      <input
+                        type="number"
+                        value={quantityAmount}
+                        onChange={(e) => setQuantityAmount(e.target.value)}
+                        placeholder="e.g., 100"
+                        step="0.01"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                        disabled={adding}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+                      <select
+                        value={quantityUnit}
+                        onChange={(e) => setQuantityUnit(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                        disabled={adding}
+                      >
+                        {QUANTITY_UNITS.map((unit) => (
+                          <option key={unit.value} value={unit.value}>
+                            {unit.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {/* Placeholder Acknowledgement - Only show if PLACEHOLDER */}
+                {quantityState === 'PLACEHOLDER' && (
+                  <div className="flex items-center p-3 bg-orange-50 border border-orange-200 rounded-md">
                     <input
-                      type="number"
-                      value={quantityAmount}
-                      onChange={(e) => setQuantityAmount(e.target.value)}
-                      placeholder="e.g., 100"
-                      step="0.01"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                      type="checkbox"
+                      id="add-placeholder-acknowledged"
+                      checked={placeholderAcknowledged}
+                      onChange={(e) => setPlaceholderAcknowledged(e.target.checked)}
+                      className="h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded"
                       disabled={adding}
                     />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
-                    <select
-                      value={quantityUnit}
-                      onChange={(e) => setQuantityUnit(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
-                      disabled={adding}
+                    <label
+                      htmlFor="add-placeholder-acknowledged"
+                      className="ml-2 text-sm text-gray-700"
                     >
-                      {QUANTITY_UNITS.map((unit) => (
-                        <option key={unit.value} value={unit.value}>
-                          {unit.label}
-                        </option>
-                      ))}
-                    </select>
+                      Defer to Coordinator (quantity will be determined later)
+                    </label>
                   </div>
-                </div>
-              )}
-
-              {/* Placeholder Acknowledgement - Only show if PLACEHOLDER */}
-              {quantityState === 'PLACEHOLDER' && (
-                <div className="flex items-center p-3 bg-orange-50 border border-orange-200 rounded-md">
-                  <input
-                    type="checkbox"
-                    id="add-placeholder-acknowledged"
-                    checked={placeholderAcknowledged}
-                    onChange={(e) => setPlaceholderAcknowledged(e.target.checked)}
-                    className="h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded"
-                    disabled={adding}
-                  />
-                  <label
-                    htmlFor="add-placeholder-acknowledged"
-                    className="ml-2 text-sm text-gray-700"
-                  >
-                    Defer to Coordinator (quantity will be determined later)
-                  </label>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
             {/* Critical Flag */}
             <div>
@@ -341,29 +380,31 @@ export default function AddItemModal({
               </p>
             </div>
 
-            {/* Dietary Tags */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Dietary Tags (Optional)
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {DIETARY_TAGS.map((tag) => (
-                  <button
-                    key={tag.value}
-                    type="button"
-                    onClick={() => handleDietaryTagToggle(tag.value)}
-                    disabled={adding}
-                    className={`px-3 py-1 text-xs rounded-full border transition ${
-                      dietaryTags.includes(tag.value)
-                        ? 'bg-sage-100 border-sage-300 text-sage-800'
-                        : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
-                    } disabled:opacity-50`}
-                  >
-                    {tag.label}
-                  </button>
-                ))}
+            {/* Dietary Tags — a dish's only */}
+            {kind === 'ITEM' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Dietary Tags (Optional)
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {DIETARY_TAGS.map((tag) => (
+                    <button
+                      key={tag.value}
+                      type="button"
+                      onClick={() => handleDietaryTagToggle(tag.value)}
+                      disabled={adding}
+                      className={`px-3 py-1 text-xs rounded-full border transition ${
+                        dietaryTags.includes(tag.value)
+                          ? 'bg-sage-100 border-sage-300 text-sage-800'
+                          : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
+                      } disabled:opacity-50`}
+                    >
+                      {tag.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Timing */}
             <div className="border-t pt-4">

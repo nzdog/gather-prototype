@@ -15,6 +15,12 @@
  *
  * Re-runnable: it deletes anything it made before, by the tag below, and makes it again.
  *
+ * ⚠ DO NOT RE-RUN IT TO TIDY THE NAMES ON THE MIXED BOARD (founder ruling, GTC-302). The ids are
+ * generated, not fixed, so a re-run gives both boards new URLs — and the mixed board in gather_dev
+ * holds a row this script never writes, "The camp chairs", which a re-run deletes. Its 20 item
+ * names still begin with an article in the database even though the strings below no longer do.
+ * It is a test board, not a demo one, and was left that way on purpose.
+ *
  * Run: npx tsx scripts/seed-gtc192-glance.ts
  */
 
@@ -206,12 +212,12 @@ async function main() {
           {
             name: 'Kate Whittaker',
             householdRole: 'PRIMARY_CONTACT',
-            rows: [{ name: 'The ham', response: 'PENDING', critical: true }],
+            rows: [{ name: 'ham', response: 'PENDING', critical: true }],
           },
           {
             name: 'Rob Whittaker',
             householdRole: 'PARTNER',
-            rows: [{ name: 'The gravy', response: 'ACCEPTED' }],
+            rows: [{ name: 'gravy', response: 'ACCEPTED' }],
           },
         ],
       },
@@ -223,15 +229,15 @@ async function main() {
             householdRole: 'PRIMARY_CONTACT',
             team: 'Mains',
             rows: [
-              { name: 'The trifle', response: 'MAYBE' },
-              { name: 'The pavlova', response: 'MAYBE', expired: true, critical: true },
+              { name: 'trifle', response: 'MAYBE' },
+              { name: 'pavlova', response: 'MAYBE', expired: true, critical: true },
             ],
           },
           {
             name: 'Charlotte Turner',
             householdRole: 'PARTNER',
             team: 'Mains',
-            rows: [{ name: 'The salad', response: 'ACCEPTED' }],
+            rows: [{ name: 'salad', response: 'ACCEPTED' }],
           },
           // GTC-207's kid with a job: CHILD role, on the team, and therefore OFFERED in the
           // reassign picker. The child rule is message-only and must never reach assignment.
@@ -239,7 +245,7 @@ async function main() {
             name: 'James Turner',
             householdRole: 'CHILD',
             team: 'Mains',
-            rows: [{ name: 'The crackers', response: 'ACCEPTED' }],
+            rows: [{ name: 'crackers', response: 'ACCEPTED' }],
           },
         ],
       },
@@ -253,19 +259,19 @@ async function main() {
             team: 'Desserts',
             householdRole: 'PRIMARY_CONTACT',
             phone: '+64211234567',
-            rows: [{ name: 'The trifle bowl', response: 'DECLINED' }],
+            rows: [{ name: 'trifle bowl', response: 'DECLINED' }],
           },
           {
             name: 'Minh Nguyen',
             team: 'Desserts',
             householdRole: 'PARTNER',
-            rows: [{ name: 'The bread', response: 'ACCEPTED' }],
+            rows: [{ name: 'bread', response: 'ACCEPTED' }],
           },
           {
             name: 'Grace Nguyen',
             team: 'Desserts',
             householdRole: 'GUEST',
-            rows: [{ name: 'The cheese', response: 'PENDING' }],
+            rows: [{ name: 'cheese', response: 'PENDING' }],
           },
         ],
       },
@@ -276,7 +282,7 @@ async function main() {
           {
             name: 'Sarah Dalton',
             householdRole: 'PARTNER',
-            rows: [{ name: 'The wine', response: 'PENDING' }],
+            rows: [{ name: 'wine', response: 'PENDING' }],
           },
         ],
       },
@@ -287,7 +293,7 @@ async function main() {
             name: 'Connor OBrien',
             team: 'Desserts',
             householdRole: 'PRIMARY_CONTACT',
-            rows: [{ name: 'The ice', response: 'PENDING' }],
+            rows: [{ name: 'ice', response: 'PENDING' }],
           },
           // Ruling 14 on screen: an expired maybe on the person Kate switched off stays grey.
           {
@@ -295,7 +301,7 @@ async function main() {
             team: 'Desserts',
             householdRole: 'PARTNER',
             dontChase: true,
-            rows: [{ name: 'The cake', response: 'MAYBE', expired: true, critical: true }],
+            rows: [{ name: 'cake', response: 'MAYBE', expired: true, critical: true }],
           },
         ],
       },
@@ -304,17 +310,17 @@ async function main() {
       {
         name: 'Bob Unhoused',
         householdRole: 'GUEST',
-        rows: [{ name: 'The napkins', response: 'ACCEPTED' }],
+        rows: [{ name: 'napkins', response: 'ACCEPTED' }],
       },
     ],
     // Ruling 8: two ownerless criticals to name, four ordinary ones to count.
     [
-      { name: 'the glazed ham', critical: true },
-      { name: 'the marquee', critical: true },
-      { name: 'the paper cups', critical: false },
-      { name: 'the serviettes', critical: false },
-      { name: 'the spare chairs', critical: false },
-      { name: 'the ice buckets', critical: false },
+      { name: 'glazed ham', critical: true },
+      { name: 'marquee', critical: true },
+      { name: 'paper cups', critical: false },
+      { name: 'serviettes', critical: false },
+      { name: 'spare chairs', critical: false },
+      { name: 'ice buckets', critical: false },
     ]
   );
 
