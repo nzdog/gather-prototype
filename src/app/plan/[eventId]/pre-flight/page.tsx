@@ -934,6 +934,9 @@ function MessageStep({ eventId }: { eventId: string }) {
         recipient: {
           firstName: firstNameOf(r.name),
           itemNames: r.itemNames,
+          // GTC-189 slice 3 splits these. The route selects no Item.kind, so every row — a job
+          // included — arrives in itemNames and reads "bring" (GTC-302). Not a filter.
+          jobNames: [],
           // GTC-189 slice 3 fills this. The route lists no child's item yet, so none is carried.
           carried: [],
           link: r.link,

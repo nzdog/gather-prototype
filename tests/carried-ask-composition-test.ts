@@ -15,8 +15,7 @@
  * PROPERTIES beside them — whose item is whose, which movement it sits in, that a carried item
  * never reads as the recipient's to bring — so a later rewording is checked for what matters
  * and not only for its letters. The one property that also constrains word order is [ORDER].
- * [DEFECT GTC-302] pins item names composed exactly as stored: a data problem, filed.
- *
+ * [DEFECT GTC-302] pins item names composed exactly as stored: a data problem, filed. *
  * NO ASSERTION ABOUT A CARRIED MESSAGE CAN PASS BY ABSENCE. Each first requires the carried ask
  * to be in the message. A composer that dropped carried asks would otherwise satisfy "never
  * reads as the carrier's to bring" by saying nothing — which is exactly today's behaviour.
@@ -28,6 +27,7 @@
  *   C  two carried — two children's items, nothing of the carrier's own
  *   X  a carried item plus two of the carrier's own
  *   W  the carried words, as ruled
+ *   J  jobs — done, not brought
  *   V  voice — the carried ask is Gather's sentence; the host's movements do not change
  *   G  GSM-7 — the new sentences cost single-rate
  *   D  dark — every caller passes `carried: []`; slice 3 removes this layer
@@ -98,22 +98,38 @@ const EVENT: AskEventFacts = deepFreeze({
 const HOST = 'Kate Henderson';
 const LINK = 'https://gather.test/p/tok-sarah';
 
-const OLLIE: CarriedChildAsk = deepFreeze({ childFirstName: 'Ollie', itemNames: ['dishes'] });
+const OLLIE: CarriedChildAsk = deepFreeze({
+  childFirstName: 'Ollie',
+  itemNames: ['dishes'],
+  jobNames: [],
+});
 const OLLIE_TWO: CarriedChildAsk = deepFreeze({
   childFirstName: 'Ollie',
   itemNames: ['dishes', 'plates'],
+  jobNames: [],
 });
-const MIA: CarriedChildAsk = deepFreeze({ childFirstName: 'Mia', itemNames: ['fruit salad'] });
+const MIA: CarriedChildAsk = deepFreeze({
+  childFirstName: 'Mia',
+  itemNames: ['fruit salad'],
+  jobNames: [],
+});
 
 function compose(
   own: string[],
   carried: CarriedChildAsk[],
-  storedAuthorLine: string | null = null
+  storedAuthorLine: string | null = null,
+  jobs: string[] = []
 ): ComposedAsk {
   return composeAsk({
     event: EVENT,
     hostName: HOST,
-    recipient: deepFreeze({ firstName: 'Sarah', itemNames: own, carried, link: LINK }),
+    recipient: deepFreeze({
+      firstName: 'Sarah',
+      itemNames: own,
+      jobNames: jobs,
+      carried,
+      link: LINK,
+    }),
     storedAuthorLine,
   });
 }
@@ -126,10 +142,10 @@ const sentencesWith = (text: string, needle: string) =>
 const names = (text: string, name: string) => new RegExp(`\\b${name}\\b`).test(text);
 const includesAll = (text: string, needles: string[]) => needles.every((n) => text.includes(n));
 
-/** The recipient asked to bring something: "Would you bring", "for you to bring", "you're
- *  bringing", "can you also bring". Second person GOVERNING bring — not any sentence that
- *  happens to hold both words. */
-const ASKED_TO_BRING = /\byou(?:'re|\s+are)?\s+(?:to\s+|also\s+)?bring/i;
+/** The recipient asked to take something on: "Would you bring", "for you to bring", "you're
+ *  bringing", "can you also bring", "Would you do". Second person GOVERNING bring or do — not
+ *  any sentence that happens to hold the words. */
+const ASKED_TO_ACT = /\byou(?:'re|\s+are)?\s+(?:to\s+|also\s+)?(?:bring|do\b)/i;
 /** The item framed as the recipient's. */
 const POSSESSED = /\byours?\b/i;
 /** The existing suite's pronoun check: pronouns are captured nowhere, so any is a guess. */
@@ -141,7 +157,7 @@ function readsAsTheChilds(text: string, child: string, item: string): boolean {
   const found = sentencesWith(text, item);
   return (
     found.length > 0 &&
-    found.every((s) => names(s, child) && !ASKED_TO_BRING.test(s) && !POSSESSED.test(s))
+    found.every((s) => names(s, child) && !ASKED_TO_ACT.test(s) && !POSSESSED.test(s))
   );
 }
 
@@ -255,7 +271,7 @@ assert(
 assert(
   'K',
   'nothing in the message asks the carrier to bring anything',
-  carriedOnly.text.includes('dishes') && !ASKED_TO_BRING.test(carriedOnly.text)
+  carriedOnly.text.includes('dishes') && !ASKED_TO_ACT.test(carriedOnly.text)
 );
 assert(
   'K',
@@ -280,10 +296,10 @@ assert(
   carriedOnly.text.includes('dishes') && carriedOnly.text.trimEnd().endsWith(LINK)
 );
 
-const withEmpty = compose([], [{ childFirstName: 'Ollie', itemNames: [] }, MIA]);
+const withEmpty = compose([], [{ childFirstName: 'Ollie', itemNames: [], jobNames: [] }, MIA]);
 assert(
   'K',
-  'a carried entry with no items adds nothing — a child is named only with an item to answer for',
+  'a carried entry with no items and no jobs adds nothing — a child is named only with something to answer for',
   withEmpty.text.includes('fruit salad') && !names(withEmpty.text, 'Ollie')
 );
 
@@ -304,7 +320,7 @@ assert(
   "the carrier's own item is still asked of the carrier, in a sentence naming no child",
   b.includes('dishes') &&
     sentencesWith(b, 'pavlova').length > 0 &&
-    sentencesWith(b, 'pavlova').every((s) => ASKED_TO_BRING.test(s) && !names(s, 'Ollie'))
+    sentencesWith(b, 'pavlova').every((s) => ASKED_TO_ACT.test(s) && !names(s, 'Ollie'))
 );
 assert(
   'B',
@@ -360,7 +376,7 @@ assert(
   'no "Nothing for you to bring", and nothing asks the carrier to bring',
   includesAll(c, ['dishes', 'fruit salad']) &&
     !/nothing for you to bring/i.test(two.text) &&
-    !ASKED_TO_BRING.test(two.text)
+    !ASKED_TO_ACT.test(two.text)
 );
 assert(
   'C',
@@ -390,7 +406,7 @@ assert(
     ['pavlova', 'trifle'].every(
       (item) =>
         sentencesWith(x, item).length > 0 &&
-        sentencesWith(x, item).every((s) => ASKED_TO_BRING.test(s) && !names(s, 'Ollie'))
+        sentencesWith(x, item).every((s) => ASKED_TO_ACT.test(s) && !names(s, 'Ollie'))
     )
 );
 assert('X', "the child's item reads as the child's", readsAsTheChilds(x, 'Ollie', 'dishes'), x);
@@ -486,6 +502,165 @@ assert(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
+section('Layer J: jobs — done, not brought');
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Founder ruling (GTC-189, "Founder answers — the slice 2 words", answer 6): "A job is DONE, not
+// brought — that is the whole ruling and it changes one word." A job is an `Item` row whose
+// `kind` is TASK, handed to composition as `jobNames`. One person holding both kinds is asked in
+// ONE sentence — "Would you bring the pavlova and do the dishes?" — and with two or more to bring,
+// a comma before "and do" (decision 22). A carried child holding both kinds is one sentence the
+// same way: the executor's extension of the founder's one-person rule, which the founder agreed
+// with and did not rule. The carried half is otherwise unchanged. Jobs are NEVER
+// filtered out: a filtered job reaches nobody, and a child's job reaching an adult is what the
+// carried ask exists for.
+//
+// ⚠ RULED ON A CASE THAT HAS NEVER OCCURRED. gather_dev holds no TASK rows, only plan generation
+// writes one, and the routes where a host adds an item set no kind, so a job assigned by hand is
+// an ITEM and reads "bring" ([[GTC-302]]). These assertions hold the sentence ready for the first
+// job that arrives.
+
+function verbBefore(text: string, name: string): string | null {
+  const at = text.indexOf(name);
+  if (at < 0) return null;
+  const verbs = [...text.slice(0, at).matchAll(/\b(bring|do)\b/g)];
+  return verbs.length > 0 ? verbs[verbs.length - 1][1] : null;
+}
+
+const OLLIE_JOB: CarriedChildAsk = deepFreeze({
+  childFirstName: 'Ollie',
+  itemNames: [],
+  jobNames: ['dishes'],
+});
+const ownJob = compose([], [], null, ['dishes']);
+const ownBoth = compose(['pavlova'], [], null, ['dishes']);
+const carriedJob = compose([], [OLLIE_JOB]);
+const carriedJobBesideOwn = compose(['pavlova'], [OLLIE_JOB]);
+const childBoth = compose(
+  [],
+  [deepFreeze({ childFirstName: 'Ollie', itemNames: ['plates'], jobNames: ['dishes'] })]
+);
+const jobShapes = [ownJob, ownBoth, carriedJob, carriedJobBesideOwn, childBoth];
+const jobPin = (label: string, actual: ComposedAsk, middle: string) =>
+  assert('J', label, systemText(actual) === `${SPEAKER} ${middle} ${TAIL}`, systemText(actual));
+
+jobPin('own job: "Would you do the dishes?"', ownJob, 'Would you do the dishes?');
+jobPin(
+  'own dish and own job, one person: ONE sentence — "Would you bring the pavlova and do the dishes?"',
+  ownBoth,
+  'Would you bring the pavlova and do the dishes?'
+);
+jobPin(
+  "carried job, nothing of the carrier's own",
+  carriedJob,
+  "Ollie has been asked to do the dishes. Would you answer on Ollie's behalf?"
+);
+jobPin(
+  "carried job beside the carrier's own dish — the carried half as ruled, one word changed",
+  carriedJobBesideOwn,
+  'Would you bring the pavlova? Ollie has been asked to do the dishes. ' +
+    "Would you also answer on Ollie's behalf?"
+);
+jobPin(
+  'a carried child holding both kinds is one sentence too',
+  childBoth,
+  "Ollie has been asked to bring the plates and do the dishes. Would you answer on Ollie's behalf?"
+);
+assert(
+  'J',
+  'a job is done and never brought; a dish is brought and never done — the verb before each name',
+  (
+    [
+      [ownJob, 'dishes', 'do'],
+      [ownBoth, 'pavlova', 'bring'],
+      [ownBoth, 'dishes', 'do'],
+      [carriedJob, 'dishes', 'do'],
+      [carriedJobBesideOwn, 'pavlova', 'bring'],
+      [carriedJobBesideOwn, 'dishes', 'do'],
+      [childBoth, 'plates', 'bring'],
+      [childBoth, 'dishes', 'do'],
+    ] as Array<[ComposedAsk, string, string]>
+  ).every(([a, name, verb]) => verbBefore(systemText(a), name) === verb)
+);
+assert(
+  'J',
+  "NOT FILTERED: a child whose only row is a job is still carried to an adult, as the child's",
+  readsAsTheChilds(systemText(carriedJob), 'Ollie', 'dishes') &&
+    readsAsTheChilds(systemText(carriedJobBesideOwn), 'Ollie', 'dishes')
+);
+assert(
+  'J',
+  'someone holding only a job is not itemless — no "Nothing for you to bring", no attendance ask',
+  [ownJob, carriedJob].every(
+    (a) =>
+      a.text.includes('dishes') &&
+      !/nothing for you to bring/i.test(a.text) &&
+      !/whether you can make it/.test(a.text) &&
+      /yes, no or maybe/.test(a.text)
+  )
+);
+assert(
+  'J',
+  'one voice in the job sentences: would, never could, never please',
+  jobShapes.every(
+    (a) =>
+      a.text.includes('dishes') &&
+      /\bWould you\b/.test(a.text) &&
+      !/\bcould\b|\bplease\b/i.test(a.text)
+  )
+);
+assert(
+  'J',
+  'the job sentences are inside GSM-7 and single-rate',
+  jobShapes.every(
+    (a) => a.text.includes('dishes') && nonGsm7(a.text).length === 0 && !a.narrowSegments
+  )
+);
+
+// DECISION 22, ruled: with two or more to bring, a comma before "and do". Without it the list's
+// own "and" sits beside the "and" before "do", and "the trifle and do" reads for a beat like a
+// third dish. FOUND AT TWO, NOT THREE — the obvious test case is the long one, and the collision
+// is worst at the short one — so two is pinned first. One to bring has no list "and" to collide
+// with and takes no comma; nor does a list of jobs, which ends the sentence.
+jobPin(
+  'decision 22: TWO to bring beside a job — a comma before "and do"',
+  compose(['pavlova', 'trifle'], [], null, ['dishes']),
+  'Would you bring the pavlova and the trifle, and do the dishes?'
+);
+jobPin(
+  'decision 22: three to bring beside a job — the comma still',
+  compose(['pavlova', 'trifle', 'ham'], [], null, ['dishes']),
+  'Would you bring the pavlova, the trifle and the ham, and do the dishes?'
+);
+jobPin(
+  'decision 22 reaches a carried child holding two to bring and a job',
+  compose(
+    [],
+    [deepFreeze({ childFirstName: 'Ollie', itemNames: ['plates', 'cups'], jobNames: ['dishes'] })]
+  ),
+  "Ollie has been asked to bring the plates and the cups, and do the dishes. Would you answer on Ollie's behalf?"
+);
+assert(
+  'J',
+  'decision 22: no comma where no list "and" can collide — one to bring, or a list of jobs last',
+  systemText(ownBoth).includes('Would you bring the pavlova and do the dishes?') &&
+    systemText(compose(['pavlova'], [], null, ['dishes', 'bins'])).includes(
+      'Would you bring the pavlova and do the dishes and the bins?'
+    )
+);
+
+// [DEFECT GTC-302] The one writer of TASK rows is plan generation, and its prompt's example job
+// name is a verb phrase — "Wash the dishes" — so the first generated job reads "do the Wash the
+// dishes". The ruled sentence needs a noun-phrase name; the names are GTC-302's.
+assert(
+  'J',
+  '[DEFECT GTC-302] a job named as the generator is prompted — "Wash the dishes" — reads "do the Wash the dishes"',
+  systemText(compose([], [], null, ['Wash the dishes'])).includes(
+    'Would you do the Wash the dishes?'
+  )
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 section("Layer V: voice — the carried ask is Gather's; the host's movements do not move");
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -549,7 +724,7 @@ assert(
   "and the repo's own counter agrees the cost is single-rate",
   allCarry && carriedShapes.every((a) => a.narrowSegments === false)
 );
-const tane = compose([], [{ childFirstName: 'Tāne', itemNames: ['dishes'] }]);
+const tane = compose([], [{ childFirstName: 'Tāne', itemNames: ['dishes'], jobNames: [] }]);
 assert(
   'G',
   'a non-GSM-7 CHILD name still costs double — composition cannot launder the data',
@@ -568,25 +743,32 @@ function carriedAtCallSites(src: string) {
   const calls = (code.match(/\bcomposeAsk\(/g) ?? []).length;
   const empty = (code.match(/\bcarried:\s*\[\s*\]/g) ?? []).length;
   const any = (code.match(/\bcarried:/g) ?? []).length;
-  return { calls, empty, other: any - empty };
+  const jobsEmpty = (code.match(/\bjobNames:\s*\[\s*\]/g) ?? []).length;
+  const jobsAny = (code.match(/\bjobNames:/g) ?? []).length;
+  return { calls, empty, other: any - empty, jobsEmpty, jobsOther: jobsAny - jobsEmpty };
 }
 
-const plantedCarry = carriedAtCallSites('composeAsk({ recipient: { carried: [ollie] } })');
-const plantedEmpty = carriedAtCallSites('composeAsk({ recipient: { carried: [] } })');
+const plantedCarry = carriedAtCallSites(
+  'composeAsk({ recipient: { jobNames: [job], carried: [ollie] } })'
+);
+const plantedEmpty = carriedAtCallSites('composeAsk({ recipient: { jobNames: [], carried: [] } })');
 const plantedComment = carriedAtCallSites('// composeAsk({ carried: [ollie] })\nconst y = 1;');
 assert(
   'D',
   'CONTROL: the matcher sees a carrying call, an empty one, and ignores a comment',
   plantedCarry.calls === 1 &&
     plantedCarry.other === 1 &&
+    plantedCarry.jobsOther === 1 &&
     plantedEmpty.calls === 1 &&
     plantedEmpty.empty === 1 &&
     plantedEmpty.other === 0 &&
+    plantedEmpty.jobsEmpty === 1 &&
+    plantedEmpty.jobsOther === 0 &&
     plantedComment.calls === 0 &&
     plantedComment.other === 0
 );
 
-const callers: Array<{ rel: string; calls: number; empty: number; other: number }> = [];
+const callers: Array<{ rel: string } & ReturnType<typeof carriedAtCallSites>> = [];
 function walk(dir: string) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (entry.name === 'node_modules' || entry.name === '.next') continue;
@@ -610,6 +792,15 @@ assert(
   callers.length > 0 && callers.every((f) => f.other === 0 && f.empty >= f.calls),
   JSON.stringify(callers)
 );
+// NOT A FILTER, AND NOT DARK BY CHOICE. The preview route selects no `Item.kind`, so it has no
+// jobs to hand over: every assigned row, a generated TASK included, still arrives in `itemNames`
+// and reads "bring" on the pre-flight page. Slice 3 splits them; this assertion goes with it.
+assert(
+  'D',
+  'every composeAsk call in src and scripts passes jobNames: [] — the preview reads no kind yet',
+  callers.length > 0 && callers.every((f) => f.jobsOther === 0 && f.jobsEmpty >= f.calls),
+  JSON.stringify(callers)
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 section('Layer T: types — decision 1 is not widened');
@@ -619,7 +810,9 @@ section('Layer T: types — decision 1 is not widened');
 // never does." Composition cannot see roles; the chooser decides who carries. What composition
 // CAN hold is its shape: the only other owner a recipient can name is a child, by that name,
 // and a required `carried` — because a caller that left it out would compose "Nothing for you
-// to bring" to a carrier, silently, which is ruling D item 2 all over again.
+// to bring" to a carrier, silently, which is ruling D item 2 all over again. `jobNames` is
+// required for the same reason: a caller with nowhere to put a job puts it among the dishes,
+// where it reads "bring".
 //
 // Adding a field to either interface is allowed. It must be a conscious edit to this layer.
 
@@ -632,16 +825,16 @@ function fieldsOf(src: string, iface: string): string[] | null {
 const moduleSrc = readFileSync(join(ROOT, MODULE_REL), 'utf-8');
 assert(
   'T',
-  "AskRecipient's fields are exactly firstName, itemNames, carried and link",
+  "AskRecipient's fields are exactly firstName, itemNames, jobNames, carried and link",
   JSON.stringify(fieldsOf(moduleSrc, 'AskRecipient')) ===
-    JSON.stringify(['carried', 'firstName', 'itemNames', 'link']),
+    JSON.stringify(['carried', 'firstName', 'itemNames', 'jobNames', 'link']),
   JSON.stringify(fieldsOf(moduleSrc, 'AskRecipient'))
 );
 assert(
   'T',
-  "CarriedChildAsk's fields are exactly childFirstName and itemNames — a carried ask is a child's",
+  "CarriedChildAsk's fields are exactly childFirstName, itemNames and jobNames — a child's",
   JSON.stringify(fieldsOf(moduleSrc, 'CarriedChildAsk')) ===
-    JSON.stringify(['childFirstName', 'itemNames']),
+    JSON.stringify(['childFirstName', 'itemNames', 'jobNames']),
   JSON.stringify(fieldsOf(moduleSrc, 'CarriedChildAsk'))
 );
 
@@ -650,11 +843,17 @@ const MODULE_IMPORT = join(ROOT, MODULE_REL).replace(/\.ts$/, '');
 const PROBES: Record<string, string> = {
   control:
     `export const r: AskRecipient = { firstName: 'Sarah', itemNames: ['pavlova'], ` +
-    `carried: [{ childFirstName: 'Ollie', itemNames: ['dishes'] }], link: 'x' };`,
-  'no-carried': `export const r: AskRecipient = { firstName: 'Sarah', itemNames: ['pavlova'], link: 'x' };`,
+    `jobNames: ['dishes'], carried: [{ childFirstName: 'Ollie', itemNames: [], ` +
+    `jobNames: ['bins'] }], link: 'x' };`,
+  'no-carried':
+    `export const r: AskRecipient = { firstName: 'Sarah', itemNames: ['pavlova'], ` +
+    `jobNames: [], link: 'x' };`,
   'no-child-name':
-    `export const r: AskRecipient = { firstName: 'Sarah', itemNames: [], ` +
-    `carried: [{ itemNames: ['dishes'] }], link: 'x' };`,
+    `export const r: AskRecipient = { firstName: 'Sarah', itemNames: [], jobNames: [], ` +
+    `carried: [{ itemNames: ['dishes'], jobNames: [] }], link: 'x' };`,
+  'no-jobs':
+    `export const r: AskRecipient = { firstName: 'Sarah', itemNames: ['pavlova'], ` +
+    `carried: [], link: 'x' };`,
   'owned-item': `export const n: AskRecipient['itemNames'] = [{ name: 'pavlova', ownerFirstName: 'Mum' }];`,
 };
 
@@ -699,6 +898,12 @@ try {
     'a recipient without carried does not typecheck, and the error names it',
     /\bcarried\b/.test(errorsFor('no-carried')) && /is missing/.test(errorsFor('no-carried')),
     errorsFor('no-carried') || 'no error'
+  );
+  assert(
+    'T',
+    'a recipient without jobNames does not typecheck, and the error names it',
+    /\bjobNames\b/.test(errorsFor('no-jobs')) && /is missing/.test(errorsFor('no-jobs')),
+    errorsFor('no-jobs') || 'no error'
   );
   assert(
     'T',

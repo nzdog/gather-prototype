@@ -80,7 +80,13 @@ function ask(itemNames: string[], firstName = 'Finn', storedAuthorLine: string |
   return composeAsk({
     event: EVENT,
     hostName: HOST,
-    recipient: { firstName, itemNames, carried: [], link: 'https://gather.test/p/tok123' },
+    recipient: {
+      firstName,
+      itemNames,
+      jobNames: [],
+      carried: [],
+      link: 'https://gather.test/p/tok123',
+    },
     storedAuthorLine,
   });
 }
@@ -111,6 +117,7 @@ function itemlessEndsWithLink(): boolean {
     recipient: {
       firstName: 'Grandma',
       itemNames: [],
+      jobNames: [],
       carried: [],
       link: 'https://gather.test/p/tok123',
     },
@@ -368,6 +375,7 @@ function main() {
     recipient: {
       firstName: 'Finn',
       itemNames: ['Pavlova'],
+      jobNames: [],
       carried: [],
       link: 'https://gather.test/p/t',
     },

@@ -98,15 +98,27 @@ export interface AskEventFacts {
  */
 export interface CarriedChildAsk {
   childFirstName: string;
+  /** The child's items — `Item.kind` ITEM, brought. */
   itemNames: readonly string[];
+  /** The child's jobs — `Item.kind` TASK, done and not brought. See `whatIsAsked`. */
+  jobNames: readonly string[];
 }
 
 /** One recipient's ask. `itemNames` is names ONLY — decision 1 keeps logistics off the
  *  message and on the tap page, and there is deliberately no field here to put them in. */
 export interface AskRecipient {
   firstName: string;
-  /** The recipient's OWN items. No owner field, because they are the recipient's. */
+  /** The recipient's OWN items — `Item.kind` ITEM, brought. No owner field: they are theirs. */
   itemNames: readonly string[];
+  /**
+   * The recipient's OWN jobs — `Item.kind` TASK, done and not brought (GTC-189 slice 2, answer
+   * 6). REQUIRED for the reason `carried` is: a caller with nowhere to put a job puts it among
+   * the dishes, where it reads "bring".
+   *
+   * ⚠ EVERY CALLER PASSES `[]` TODAY, AND IT IS NOT A FILTER. The preview route selects no
+   * `Item.kind`, so every assigned row still arrives in `itemNames`; slice 3 splits them.
+   */
+  jobNames: readonly string[];
   /**
    * Children's asks this recipient carries (GTC-189 slice 2), `[]` when none. REQUIRED, not
    * optional: a caller that left it out would tell a carrier "Nothing for you to bring",
@@ -253,7 +265,8 @@ export function askHandover(): string {
  * THE CARRIED ASK (GTC-189 slice 2) sits here, in Gather's movement, beside the recipient's
  * own ask and never merged into it. Not in movement 1: that line is the host's, stored and
  * shared by every recipient (decisions 2 and 3), so no child's name can go in it. A recipient
- * carrying a child's ask is not itemless — the itemless branch is for nothing of either kind.
+ * carrying a child's ask, or holding only a job, is not itemless — the itemless branch is for
+ * nothing of any kind.
  * The words are `carriedAskSentences`'s, ruled at GTC-189 slice 2.
  *
  * WOULD, NOT COULD — a founder ruling on the whole register, not a style choice: "Could asks
@@ -264,8 +277,8 @@ export function askHandover(): string {
 export function askSystemVoice(recipient: AskRecipient, hostFirstName: string): string {
   const speaker = `Hi - Gather here, helping ${hostFirstName} with this one.`;
   const checkBack = `I'll check back if I haven't heard from you.`;
-  const hasOwn = recipient.itemNames.length > 0;
-  const carried = recipient.carried.filter((c) => c.itemNames.length > 0);
+  const hasOwn = recipient.itemNames.length > 0 || recipient.jobNames.length > 0;
+  const carried = recipient.carried.filter((c) => c.itemNames.length > 0 || c.jobNames.length > 0);
 
   if (!hasOwn && carried.length === 0) {
     return [
@@ -278,7 +291,7 @@ export function askSystemVoice(recipient: AskRecipient, hostFirstName: string): 
 
   return [
     speaker,
-    ...(hasOwn ? [`Would you bring ${theItems(recipient.itemNames)}?`] : []),
+    ...(hasOwn ? [`Would you ${whatIsAsked(recipient.itemNames, recipient.jobNames)}?`] : []),
     ...carriedAskSentences(carried, hasOwn),
     checkBack,
     `One tap to say yes, no or maybe - the details are on the page: ${recipient.link}`,
@@ -314,15 +327,43 @@ function carriedAskSentences(carried: readonly CarriedChildAsk[], alongsideOwn: 
   // ANCHOR(GTC-189): slice 2 carried ask words — ruled, see "Founder answers — the slice 2 words"
   const whose = carried.length === 1 ? `${carried[0].childFirstName}'s` : 'their';
   return [
-    ...carried.map((c) => `${c.childFirstName} has been asked to bring ${theItems(c.itemNames)}.`),
+    ...carried.map(
+      (c) => `${c.childFirstName} has been asked to ${whatIsAsked(c.itemNames, c.jobNames)}.`
+    ),
     `Would you ${alongsideOwn ? 'also ' : ''}answer on ${whose} behalf?`,
   ];
 }
 
 /**
- * Items as a sentence names them: "the pavlova", "the pavlova and the trifle", "the pavlova,
- * the trifle and the ham". Founder ruling: "Would you bring: pavlova?" is a form field, not a
- * sentence.
+ * What one person is asked to take on, as the words after "Would you" or "has been asked to":
+ * "bring the pavlova", "do the dishes", "bring the pavlova and do the dishes".
+ *
+ * A JOB IS DONE, NOT BROUGHT — founder ruling, GTC-189 slice 2 answer 6: "that is the whole
+ * ruling and it changes one word." A job is an `Item` row whose `kind` is TASK. One person
+ * holding both kinds is asked in ONE sentence, not two (founder ruling). A carried child holding
+ * both is one sentence the same way — the executor's extension of that rule, not a ruling.
+ *
+ * ⚠ RULED BEFORE THE CASE EXISTS. No TASK row is assigned in gather_dev, only plan generation
+ * writes one, and the routes where a host adds an item set no kind — so a job assigned by hand
+ * is an ITEM and reads "bring". That is [[GTC-302]]'s, and it keeps this sentence unreachable
+ * today. JOBS ARE NEVER FILTERED OUT instead: a filtered job reaches nobody, and a child's job
+ * reaching an adult is what the carried ask is for.
+ */
+function whatIsAsked(itemNames: readonly string[], jobNames: readonly string[]): string {
+  const bring = itemNames.length > 0 ? `bring ${theItems(itemNames)}` : null;
+  const doing = jobNames.length > 0 ? `do ${theItems(jobNames)}` : null;
+  // Decision 22, ruled: with two or more to bring, a comma before "and do" — otherwise the list's
+  // own "and" sits beside it, and "the trifle and do" reads for a beat like a third dish. Found by
+  // reading two of one kind, not three: the collision is worst at the short list. One to bring has
+  // no list "and" to collide with, so no comma.
+  const joiner = itemNames.length > 1 ? ', and ' : ' and ';
+  return [bring, doing].filter((part): part is string => part !== null).join(joiner);
+}
+
+/**
+ * Names as a sentence names them: "the pavlova", "the pavlova and the trifle", "the pavlova,
+ * the trifle and the ham" — and jobs the same way, "the dishes". Founder ruling: "Would you
+ * bring: pavlova?" is a form field, not a sentence.
  *
  * ⚠ EACH NAME IS USED EXACTLY AS STORED, deliberately. gather_dev holds generated names in
  * Title Case and seeded names that already begin "The", so on that data this reads "the Berry
