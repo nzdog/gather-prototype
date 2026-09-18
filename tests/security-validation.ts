@@ -292,6 +292,58 @@ async function testSuite4_TokenAuth(f: Fixtures) {
   } catch (error: any) {
     logTest('Participant ack route rejects a COORDINATOR-scoped token (403)', false, error.message);
   }
+
+  /*
+   * GTC-191 (a) — ONE PARTICIPANT MAY NOT ANSWER ANOTHER'S ROW.
+   *
+   * ⚠ THIS SUITE DID NOT ASSERT THIS BEFORE, AND THAT IS WHY IT IS HERE. The refusal above
+   * pins a COORDINATOR-scoped token on the participant route; nothing pinned participant A
+   * against participant B. The only guard was an inline ownership check that no test
+   * exercised — which is exactly the state a ticket widening that check should not inherit.
+   *
+   * GTC-191 gave a PARTICIPANT token one reach past its own person: a child whose ask the
+   * holder's message carries, decided by re-running `chooseAskRoute`. Neither participant
+   * here carries anybody, so the reach is closed and the refusal is 403 — "that row is
+   * somebody's and it is not yours", which is a different fact from the 404 a missing row
+   * gets. The full five-way fence is `tests/carried-answer-test.ts` layer F.
+   */
+  try {
+    const res = await callRoute(
+      PARTICIPANT_ACK,
+      'POST',
+      `/api/p/${ev.teamA.participant.token}/ack/${ev.teamB.participant.assignmentId}`,
+      { token: ev.teamA.participant.token, assignmentId: ev.teamB.participant.assignmentId },
+      { response: 'DECLINED' }
+    );
+    logTest(
+      "a PARTICIPANT token cannot answer ANOTHER participant's assignment (403) — GTC-191's " +
+        'carried reach stops at a child the chooser carries to this holder',
+      res.status === 403
+    );
+  } catch (error: any) {
+    logTest(
+      "a PARTICIPANT token cannot answer another participant's assignment",
+      false,
+      error.message
+    );
+  }
+
+  try {
+    const res = await callRoute(
+      PARTICIPANT_ACK,
+      'POST',
+      `/api/p/${ev.teamA.participant.token}/ack/${ev.teamA.participant.assignmentId}`,
+      { token: ev.teamA.participant.token, assignmentId: ev.teamA.participant.assignmentId },
+      { response: 'ACCEPTED' }
+    );
+    logTest(
+      'CONTROL: the same token still answers its OWN row (200) — the refusal above is about ' +
+        'whose row it is, not a route that has stopped working',
+      res.status === 200
+    );
+  } catch (error: any) {
+    logTest('CONTROL: the same token still answers its own row', false, error.message);
+  }
 }
 
 /**

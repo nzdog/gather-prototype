@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { logInviteEvent } from '@/lib/invite-events';
 import { logAudit } from '@/lib/workflow';
 import { deriveAttendance, isAttendanceAskable, parseAttendanceBody } from '@/lib/attendance';
+import { resolveCarriedSubjects } from '@/lib/eligibility/carried-answer';
+import { firstNameOf } from '@/lib/messages/ask-register';
 
 /**
  * GET /api/p/[token]
@@ -13,6 +15,20 @@ import { deriveAttendance, isAttendanceAskable, parseAttendanceBody } from '@/li
  *
  * CRITICAL: No repair loop. This is a GET route - no DB writes.
  * Status is read as-is from database.
+ *
+ * GTC-191 (a) — AND THE ROWS OF ANY CHILD THIS RECIPIENT'S MESSAGE CARRIES, IN A FIELD OF
+ * THEIR OWN. GTC-189 ruling D item 3: "the press must not send a link to a page that cannot
+ * answer what the message asks." The message names the child's item and asks her to answer on
+ * their behalf; until now this route answered with her own rows only.
+ *
+ * ⚠ `carried` IS A SEPARATE FIELD AND MUST STAY ONE. `isAttendanceAskable` and
+ * `deriveAttendance` in `src/lib/attendance.ts` each take ONE flat array, so merging a child's
+ * rows into `assignments` would break ruling AA with the change meant to serve it: a carrier
+ * holding nothing of her own stops being itemless, and a child's ACCEPTED row makes HER read
+ * YES to the host's headcount. `tests/carried-answer-test.ts` layers A and B hold both.
+ *
+ * Who she carries is `resolveCarriedSubjects` — GTC-189's chooser re-run, not a household
+ * lookup. See that module for the fence.
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;
@@ -135,6 +151,42 @@ export async function GET(request: NextRequest, context: { params: Promise<{ tok
     },
   });
 
+  /*
+   * GTC-191 (a): the children this recipient's message carries, and their rows.
+   *
+   * Two reads, deliberately separate from the one above. A child's rows never enter
+   * `assignments` — see the route's doc comment for what merging them would cost.
+   */
+  const carriedSubjects = await resolveCarriedSubjects(
+    prisma,
+    resolvedContext.event.id,
+    resolvedContext.person.id
+  );
+  const carriedAssignments =
+    carriedSubjects.length === 0
+      ? []
+      : await prisma.assignment.findMany({
+          where: {
+            personId: { in: carriedSubjects.map((c) => c.personId) },
+            item: { team: { eventId: resolvedContext.event.id } },
+          },
+          include: { item: { include: { day: true } } },
+          orderBy: { item: { name: 'asc' } },
+        });
+
+  /*
+   * GTC-191, word 1 (founder ruling, 2026-09-18): THE PAGE CARRIES THE ATTRIBUTION, NOT THE
+   * LINE. Hinge §3's content list opens with "a personalised message from Kate", and the
+   * message already carries her movement. The page names her instead of repeating her —
+   * `Event.askAuthorLine` is deliberately absent by default and may be deliberately empty, so
+   * a line is never structural, and the draft is not personalised. The first name only, which
+   * is the form `askSubject` already uses in the email subject she opened.
+   */
+  const host = await prisma.person.findUnique({
+    where: { id: resolvedContext.event.hostId },
+    select: { name: true },
+  });
+
   // Get team info (participant belongs to one team)
   const personEvent = await prisma.personEvent.findFirst({
     where: {
@@ -166,6 +218,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ tok
       status: resolvedContext.event.status,
       guestCount: resolvedContext.event.guestCount,
       venueName: resolvedContext.event.venueName,
+      // GTC-191 word 1 — the attribution. See the read above for why it is a name and not a line.
+      hostFirstName: firstNameOf(host?.name ?? ''),
     },
     team: personEvent?.team
       ? {
@@ -186,32 +240,62 @@ export async function GET(request: NextRequest, context: { params: Promise<{ tok
     attendance: deriveAttendance(assignments, personEvent?.attendanceAnswer ?? null),
     attendanceAnswer: personEvent?.attendanceAnswer ?? null,
     attendanceAskable: isAttendanceAskable(assignments),
-    assignments: assignments.map((a) => ({
-      id: a.id,
-      response: a.response,
-      item: {
-        id: a.item.id,
-        name: a.item.name,
-        quantity: a.item.quantity,
-        description: a.item.description,
-        critical: a.item.critical,
-        glutenFree: a.item.glutenFree,
-        dairyFree: a.item.dairyFree,
-        vegetarian: a.item.vegetarian,
-        notes: a.item.notes,
-        dropOffAt: a.item.dropOffAt,
-        dropOffLocation: a.item.dropOffLocation,
-        dropOffNote: a.item.dropOffNote,
-        day: a.item.day
-          ? {
-              id: a.item.day.id,
-              name: a.item.day.name,
-              date: a.item.day.date,
-            }
-          : null,
-      },
+    assignments: assignments.map(wireAssignment),
+    /*
+     * GTC-191 (a): one entry per child, each with their own rows. NOT merged into
+     * `assignments` above, and the two are mapped through the SAME `wireAssignment` so the
+     * child's item cannot quietly carry less detail than hers — the message says "the details
+     * are on the page", and it says it about the child's item too.
+     */
+    carried: carriedSubjects.map((c) => ({
+      personEventId: c.personEventId,
+      personId: c.personId,
+      name: c.name,
+      firstName: c.firstName,
+      assignments: carriedAssignments.filter((a) => a.personId === c.personId).map(wireAssignment),
     })),
   });
+}
+
+/** One row on the wire. Shared by the recipient's own rows and by a carried child's. */
+function wireAssignment(a: {
+  id: string;
+  response: string;
+  item: {
+    id: string;
+    name: string;
+    quantity: string | null;
+    description: string | null;
+    critical: boolean;
+    glutenFree: boolean;
+    dairyFree: boolean;
+    vegetarian: boolean;
+    notes: string | null;
+    dropOffAt: Date | null;
+    dropOffLocation: string | null;
+    dropOffNote: string | null;
+    day: { id: string; name: string; date: Date } | null;
+  };
+}) {
+  return {
+    id: a.id,
+    response: a.response,
+    item: {
+      id: a.item.id,
+      name: a.item.name,
+      quantity: a.item.quantity,
+      description: a.item.description,
+      critical: a.item.critical,
+      glutenFree: a.item.glutenFree,
+      dairyFree: a.item.dairyFree,
+      vegetarian: a.item.vegetarian,
+      notes: a.item.notes,
+      dropOffAt: a.item.dropOffAt,
+      dropOffLocation: a.item.dropOffLocation,
+      dropOffNote: a.item.dropOffNote,
+      day: a.item.day ? { id: a.item.day.id, name: a.item.day.name, date: a.item.day.date } : null,
+    },
+  };
 }
 
 /**
