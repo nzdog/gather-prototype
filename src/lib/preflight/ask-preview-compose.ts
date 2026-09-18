@@ -17,7 +17,13 @@
  */
 
 import { composeAsk, firstNameOf, type ComposedAsk } from '@/lib/messages/ask-register';
-import type { AskPreview, HostListLine, PreviewRecipient } from './ask-preview';
+import type {
+  AskPreview,
+  HostListLine,
+  NotMessagedLinkState,
+  PreviewRecipient,
+} from './ask-preview';
+import { pressWillMessage } from './ask-preview';
 
 /** Where the link goes for a guest whose token the press will issue. */
 export const LINK_AT_PRESS = '[link issued at the press]';
@@ -107,6 +113,71 @@ export function composePreview(
 
   const texts = rows.flatMap((r) => (r.segments === null ? [] : [r.segments]));
   return { rows, longestText: texts.length === 0 ? null : Math.max(...texts) };
+}
+
+/*
+ * ─── WHAT THE PRESS WILL ACTUALLY SEND — GTC-189 slice 5b, decision 29 ────────
+ *
+ * ⚠ THE SCREEN'S ARITHMETIC WAS WRONG, AND THE FOUNDER'S OWN WORDS AT Q1 NAME IT: "the
+ * pre-flight's own arithmetic says '8 messages' — two of those eight are not messages."
+ *
+ * The page counted `rows.length`, which is every RECIPIENT — and its no-link banner filtered
+ * `NONE_NOT_ISSUED` alone, so the host as carrier was counted as a message AND went unnamed.
+ * Since slice 5a that is a disagreement with the code rather than only a wording problem:
+ * `pressSend` writes a row per recipient it holds a link for, so the screen promised more
+ * messages than the press sends — and it was wrong in the direction that reassures, which is the
+ * same direction as decision 29's original finding.
+ *
+ * ⚠ BOTH LISTS ARE RETURNED, AND THE NOT-MESSAGED ONE IS NOT A FILTER TO HIDE THEM. A recipient
+ * the press cannot message still belongs on this screen — the host as carrier is carrying a real
+ * child's ask, and slice 3 shows her deliberately. What changes is that she is no longer counted
+ * as a message she will not receive.
+ */
+
+/** The rows the press will send. Split by the one predicate, never by a second comparison. */
+export function messageRows(rows: PreviewRow[]): PreviewRow[] {
+  return rows.filter((r) => pressWillMessage(r.recipient.linkState));
+}
+
+/** The complement: shown on the screen, sent nothing by the press. */
+export function notMessagedRows(rows: PreviewRow[]): PreviewRow[] {
+  return rows.filter((r) => !pressWillMessage(r.recipient.linkState));
+}
+
+/**
+ * ⚠ ANCHOR(GTC-189): THESE TWO SENTENCES ARE PROPOSED, NOT RULED.
+ *
+ * Every other word on this screen was founder-ruled at its slice, and `ADULT_WHY` below is the
+ * precedent for how they are held: a `Record` keyed on a union, so a state with no words is a
+ * compile error rather than a blank line (slice 3, answer 4). The marker comes off when they are
+ * ruled, per the Citations rule that a provisional marker names the ticket that ends it.
+ *
+ * Gather says "I" here, as it does everywhere on this screen (slice 3 words, answer 1), and
+ * neither line names Gather in the third person or says "we".
+ *
+ * `LINK_NONE`'s ground governs both: "Honest beats a promise that never arrives." A row counted
+ * as a message that never comes is that promise in arithmetic rather than in prose.
+ */
+export const NOT_MESSAGED_WHY: Record<NotMessagedLinkState, string> = {
+  /*
+   * The host, reached only as another household's picked contact (ruling A2) — the one case in
+   * the model where she receives an ask at all. [[GTC-256]] Ruling 8 gives her no guest link and
+   * [[GTC-297]] owns the one-off link that will, so until then the child's ask reaches her on
+   * this screen and nowhere else. The sentence must not promise the message later.
+   */
+  NONE_HOST_CARRIER:
+    "Yours to pass on — I have no link to send you, so it's here rather than in a message.",
+  /*
+   * Unreachable for every role `PersonRole` currently has, and kept as the fail-closed default
+   * so a role added later reads as having no link rather than being promised one. Same reason
+   * `LINK_NONE` survives.
+   */
+  NONE_NOT_ISSUED: "I can't give them a link, so I won't message them at all.",
+};
+
+/** The one-line summary the count sits in. Plural-aware, and it counts MESSAGES. */
+export function messageCountLine(messages: number, emailed: number, texted: number): string {
+  return `${messages} ${messages === 1 ? 'message' : 'messages'} · ${emailed} by email · ${texted} by text`;
 }
 
 // ─── The words on this screen — ruled at GTC-189 slice 3 ─────────────────────

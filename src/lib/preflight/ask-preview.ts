@@ -89,6 +89,65 @@ export type LinkState =
    */
   | 'NONE_NOT_ISSUED';
 
+/*
+ * ⚠ DECISION 29 ASKED FOR A FIFTH MEMBER HERE AND NONE WAS ADDED. GTC-189 slice 5b, 2026-09-19,
+ * recorded rather than done silently.
+ *
+ * The ruling: "A recipient whose link cannot answer their message is not READY, and slice 3's
+ * LinkState has to carry it the way it already carries the coordinator and host-carrier cases."
+ * The population it was ruled on was eighteen recipients in `gather_dev` carrying thirty-four
+ * children's asks whose page returned only the link holder's own rows — and [[GTC-191]] built
+ * the answer to exactly that: `GET /api/p/[token]` returns a separate `carried` array and the
+ * ack route takes a carried answer, authorised by re-running `chooseAskRoute`. The eighteen are
+ * still there and their links now answer what their message asks.
+ *
+ * So a fifth member would represent nothing, which is the thing the founder warned against when
+ * ruling on GTC-191's order: "a state written after the gap closes is a state nobody has seen
+ * fire." `NONE_COORDINATOR` was retired by [[GTC-294]] on the same logic.
+ *
+ * WHAT DECISION 29 STILL BUYS is below and in `ask-preview-compose.ts`: the withholding the
+ * press actually performs is visible BEFORE the press, because the count the host reads is the
+ * number of MESSAGES and the recipients who get none are named with a reason. The ruling's own
+ * ground — "that is the fix that makes withholding honest" — is met by the arithmetic rather
+ * than by a member.
+ */
+
+/**
+ * The two states in which the press sends nothing at all.
+ *
+ * Typed as an exclusion rather than listed, so a `LinkState` added later is a COMPILE ERROR in
+ * `NOT_MESSAGED_WHY` until somebody decides which side of the line it falls on and writes its
+ * words. That is the same guard `ADULT_WHY` uses, and the founder's rule at slice 3, answer 4:
+ * every case has words, so a new route cannot produce a blank line.
+ */
+export type NotMessagedLinkState = Exclude<LinkState, 'READY' | 'AT_PRESS'>;
+
+/**
+ * WILL THE PRESS SEND THIS RECIPIENT A MESSAGE? One rule, two callers.
+ *
+ * `AT_PRESS` is true because that is what AT_PRESS MEANS — the press issues the token and then
+ * holds the link. `READY` is true because it already holds it. The other two are false: a
+ * message needs a link to carry, and `composeAsk` says so in its type — its `link` is a required
+ * string, not an optional one.
+ *
+ * ⚠ WHY IT IS A FUNCTION HERE RATHER THAN A COMPARISON AT EACH CALLER. GTC-189 slice 5a read
+ * `linkState === 'READY'` inline inside `src/lib/press/press.ts`, which is a second reading of
+ * this rule living in a different file from the states themselves. `linkOf` below already
+ * carries a note about exactly that hazard — it mirrors `ensureEventTokens` step 4, and
+ * [[GTC-294]] is the occasion when the mirror drifted and the screen went on promising a
+ * coordinator no link while the database handed her one. **Two readings of one rule is how the
+ * screen and the send come to disagree about who was messaged**, and this is the module that has
+ * already been bitten by it once.
+ *
+ * ⚠ AND THE PRESS ASSERTS THE STRONGER FORM AS WELL, which is not the same question. Before the
+ * press, `AT_PRESS` is a promise; after `ensureEventTokens` has run it must have become `READY`.
+ * A recipient still reading `AT_PRESS` after issuance means issuance did not do what this screen
+ * promised, and `pressSend` refuses rather than dropping them — see `LINKS_NOT_ISSUED` there.
+ */
+export function pressWillMessage(linkState: LinkState): boolean {
+  return linkState === 'READY' || linkState === 'AT_PRESS';
+}
+
 /** A child's rows, carried in a recipient's message. */
 export interface PreviewCarried {
   personEventId: string;

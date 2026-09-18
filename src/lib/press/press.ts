@@ -1,6 +1,6 @@
 import type { OutboundChannel, PrismaClient } from '@prisma/client';
 import { ensureEventTokens } from '@/lib/tokens';
-import { readAskPreview } from '@/lib/preflight/ask-preview';
+import { pressWillMessage, readAskPreview } from '@/lib/preflight/ask-preview';
 import { recordChange, type LedgerActor } from '@/lib/ledger';
 import { logInviteEvent } from '@/lib/invite-events';
 
@@ -89,7 +89,8 @@ export type PressRefusalCode =
   | 'NOT_CONFIRMING'
   | 'HOST_HAS_NO_ACCOUNT'
   | 'NO_RECIPIENTS'
-  | 'RECIPIENTS_UNAVAILABLE';
+  | 'RECIPIENTS_UNAVAILABLE'
+  | 'LINKS_NOT_ISSUED';
 
 export interface PressRefusal {
   ok: false;
@@ -252,11 +253,42 @@ export async function pressSend(
         }
 
         /*
-         * FOUNDER Q1 — a row is addressed to someone. `READY` is the only state in which the
-         * press holds a link for this recipient; see the module docstring for why the other
-         * two are not messages.
+         * FOUNDER Q1 — a row is addressed to someone.
+         *
+         * ⚠ TWO SETS, AND THE DIFFERENCE BETWEEN THEM IS A REFUSAL RATHER THAN A SILENT DROP.
+         * GTC-189 slice 5b.
+         *
+         * `intended` is what the PRE-FLIGHT promised: `pressWillMessage` is the one rule, shared
+         * with the screen so the two cannot answer "who gets a message" differently. Slice 5a
+         * read `linkState === 'READY'` inline here, which was a second reading of that rule in a
+         * different file from the states — and `ask-preview.ts` already carries a note about the
+         * mirror it keeps of `ensureEventTokens` step 4 drifting once, at [[GTC-294]].
+         *
+         * `addressed` is what issuance actually delivered. After `ensureEventTokens` above,
+         * every intended recipient must hold a token, so the two sets must be equal.
+         *
+         * ⚠ WHEN THEY ARE NOT, SLICE 5a DROPPED THE DIFFERENCE IN SILENCE — no row, no
+         * withholding, nothing telling the host she is reaching fewer people than the screen
+         * promised. That is the exact shape decision 29 exists to prevent, arriving from inside
+         * the press instead of from the preview. It is reachable: `linkOf` answers `AT_PRESS`
+         * for any PARTICIPANT membership, while step 4 mints only where
+         * `role === 'PARTICIPANT' && !coordinatorIds.has(personId)` and `coordinatorIds` carries
+         * NO ROLE FILTER — so a PARTICIPANT membership whose person is a team's `coordinatorId`
+         * is promised a link and minted none. **Measured in `gather_dev` on 2026-09-19: 0 such
+         * memberships.** Latent, not live, and refused rather than left to become live.
          */
-        const addressed = preview.recipients.filter((r) => r.linkState === 'READY');
+        const intended = preview.recipients.filter((r) => pressWillMessage(r.linkState));
+        const addressed = intended.filter((r) => r.linkState === 'READY');
+
+        if (addressed.length !== intended.length) {
+          throw new PressRefused(
+            refuse(
+              409,
+              'LINKS_NOT_ISSUED',
+              'Some guests could not be given a link, so nothing was sent.'
+            )
+          );
+        }
 
         /*
          * ⚠ AN EVENT WITH NOBODY TO ASK IS REFUSED, AND THIS IS THE EXECUTOR'S READING OF

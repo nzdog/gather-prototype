@@ -36,12 +36,16 @@ import {
   HOST_LIST_BLURB,
   HOST_LIST_EMPTY,
   HOST_LIST_HEADING,
+  NOT_MESSAGED_WHY,
   NO_REPLY_TO_LINE,
   composePreview,
   hostListReason,
+  messageCountLine,
+  messageRows,
+  notMessagedRows,
   replyToLine,
 } from '@/lib/preflight/ask-preview-compose';
-import type { AskPreview } from '@/lib/preflight/ask-preview';
+import type { AskPreview, NotMessagedLinkState } from '@/lib/preflight/ask-preview';
 
 // ─── Wire shapes (mirror /api/events/[id]/pre-flight) ────────────────────────
 
@@ -1000,10 +1004,23 @@ function MessageStep({ eventId }: { eventId: string }) {
 
   const rows = composed.rows;
   const current = rows.find((c) => c.recipient.personEventId === selected) ?? rows[0] ?? null;
-  const emailed = rows.filter((c) => c.recipient.channel === 'EMAIL').length;
-  const texted = rows.length - emailed;
-  const linksAtPress = rows.some((c) => c.recipient.linkState === 'AT_PRESS');
-  const noLink = rows.filter((c) => c.recipient.linkState === 'NONE_NOT_ISSUED');
+  /*
+   * ⚠ THE COUNTS ARE OVER THE MESSAGES, NOT OVER THE RECIPIENTS — GTC-189 slice 5b, decision 29.
+   *
+   * This read `rows.length`, and the founder named what was wrong with it at Q1: "the
+   * pre-flight's own arithmetic says '8 messages' — two of those eight are not messages." Since
+   * slice 5a it is a disagreement with the code, not only a wording problem: `pressSend` writes
+   * a row per recipient it holds a link for, so the screen promised more messages than the press
+   * sends, in the direction that reassures.
+   *
+   * The split comes from the module, through the one predicate the press gates on, so this
+   * screen and the send cannot answer "who gets a message" differently.
+   */
+  const messages = messageRows(rows);
+  const notMessaged = notMessagedRows(rows);
+  const emailed = messages.filter((c) => c.recipient.channel === 'EMAIL').length;
+  const texted = messages.length - emailed;
+  const linksAtPress = messages.some((c) => c.recipient.linkState === 'AT_PRESS');
 
   return (
     <div>
@@ -1102,12 +1119,29 @@ function MessageStep({ eventId }: { eventId: string }) {
           sentence has to say what it means WITHOUT naming a population, which is the same
           constraint GTC-262's directory copy was written under and the opposite of the Family
           Directory card's, where the reader is the host. Founder ruling, 2026-09-18: ships. */}
-      {noLink.length > 0 && (
-        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-4">
-          <strong>No link for {noLink.map((c) => c.recipient.name).join(', ')}.</strong> The press
-          issues no guest link for them, so their message shows a stand-in rather than a link that
-          would never arrive. Send them whatever they need directly.
-        </p>
+      {/* ⚠ GTC-189 slice 5b — THIS NAMES EVERY RECIPIENT THE PRESS WILL NOT MESSAGE, NOT JUST
+          `NONE_NOT_ISSUED`. It filtered that one state alone, so the host as carrier was counted
+          as a message AND went unnamed — the two halves of the same defect. The reason comes
+          from `NOT_MESSAGED_WHY`, keyed so a state with no words is a compile error. Its two
+          sentences are PROPOSED and carry an anchor; every other word here was ruled. */}
+      {notMessaged.length > 0 && (
+        <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-4">
+          <strong>
+            {notMessaged.length === 1
+              ? 'One person gets no message'
+              : `${notMessaged.length} people get no message`}
+            .
+          </strong>{' '}
+          They stay on this screen, and the count below does not include them.
+          <ul className="mt-1.5 space-y-1">
+            {notMessaged.map((c) => (
+              <li key={c.recipient.personEventId}>
+                <span className="font-medium">{c.recipient.name}</span> —{' '}
+                {NOT_MESSAGED_WHY[c.recipient.linkState as NotMessagedLinkState]}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {/* The words are the view module's, ruled at slice 3 — Gather says "I". */}
@@ -1125,8 +1159,7 @@ function MessageStep({ eventId }: { eventId: string }) {
           <div className="flex items-baseline justify-between gap-4 mb-2">
             <label className="block text-sm font-medium text-gray-900">Read it as</label>
             <p className="text-xs text-gray-500">
-              {rows.length} {rows.length === 1 ? 'message' : 'messages'} · {emailed} by email ·{' '}
-              {texted} by text
+              {messageCountLine(messages.length, emailed, texted)}
               {composed.longestText !== null &&
                 ` · the longest text runs to ${composed.longestText} ${
                   composed.longestText === 1 ? 'text' : 'texts'
