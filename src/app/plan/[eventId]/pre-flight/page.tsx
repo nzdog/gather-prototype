@@ -1003,7 +1003,7 @@ function MessageStep({ eventId }: { eventId: string }) {
   const emailed = rows.filter((c) => c.recipient.channel === 'EMAIL').length;
   const texted = rows.length - emailed;
   const linksAtPress = rows.some((c) => c.recipient.linkState === 'AT_PRESS');
-  const noLink = rows.filter((c) => c.recipient.linkState === 'NONE_COORDINATOR');
+  const noLink = rows.filter((c) => c.recipient.linkState === 'NONE_NOT_ISSUED');
 
   return (
     <div>
@@ -1092,13 +1092,21 @@ function MessageStep({ eventId }: { eventId: string }) {
         </p>
       )}
 
-      {/* GTC-294. The press issues a coordinator no guest link, so this stand-in would never be
-          replaced — said plainly rather than shown as the one that will be. */}
+      {/* GTC-294. What stood here said "Coordinators are not given a guest link, at the press or
+          before it", which this ticket made false: a coordinator now gets the same link as any
+          other adult.
+
+          The notice is kept rather than deleted because the STATE it speaks to still exists —
+          `NONE_NOT_ISSUED`, a recipient the press will issue no link to — it is simply no longer
+          a coordinator, and is unreachable for every role `PersonRole` currently has. So the
+          sentence has to say what it means WITHOUT naming a population, which is the same
+          constraint GTC-262's directory copy was written under and the opposite of the Family
+          Directory card's, where the reader is the host. Founder ruling, 2026-09-18: ships. */}
       {noLink.length > 0 && (
         <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-4">
-          <strong>No link for {noLink.map((c) => c.recipient.name).join(', ')}.</strong>{' '}
-          Coordinators are not given a guest link, at the press or before it, so their message shows
-          a stand-in that would never be replaced (GTC-294).
+          <strong>No link for {noLink.map((c) => c.recipient.name).join(', ')}.</strong> The press
+          issues no guest link for them, so their message shows a stand-in rather than a link that
+          would never arrive. Send them whatever they need directly.
         </p>
       )}
 

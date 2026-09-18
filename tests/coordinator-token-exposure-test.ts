@@ -25,6 +25,25 @@
  * untouched and issuance is unchanged (that is GTC-294's). The rule about what a stranger
  * may be handed now lives once, in `src/lib/eligibility/shared-link-exposure.ts`.
  *
+ * ── [[GTC-294]] HAS SINCE LANDED (2026-09-18), AND THIS SUITE SURVIVED IT ──────
+ *
+ * It issues a coordinator a PARTICIPANT token beside their COORDINATOR one, which is exactly
+ * the change this file was written to be indifferent to. The refusal keys on
+ * `PersonEvent.role`, and it did not move. THREE assertions here did, each marked at its site:
+ *
+ *   - the precondition that no coordinator held a PARTICIPANT token — INVERTED, and rewritten
+ *     to pin that she now holds one, so the refusal is tested against a real credential;
+ *   - the directory row that carried `token: null` — she now gets her own ask with prefix `p`,
+ *     which is founder ruling 1 arriving rather than being contradicted;
+ *   - the forward guard's hand-minted token — now a READ of the issued one, because minting a
+ *     second PARTICIPANT row would have SUCCEEDED (the unique index treats NULL `teamId` as
+ *     distinct) and made the assertion below flaky rather than red.
+ *
+ * ⚠ REWRITTEN, NOT DELETED, on founder instruction. The preconditions exist so a narrowing
+ * "cannot later be read as scaffolding and deleted"; deleting the one that did its job — it
+ * went red on the day issuance changed, and forced the rule to be restated by hand — would be
+ * the first step in exactly that reading.
+ *
  * Run: npx tsx tests/coordinator-token-exposure-test.ts
  * Destructive to its own created rows only; cleans up in finally.
  */
@@ -244,12 +263,37 @@ async function main() {
         where: { eventId: event.id, personId: coordinatorPerson.id },
       })) === 1
     );
+    /*
+     * ⚠ THIS ASSERTION WAS INVERTED BY [[GTC-294]], AND THE INVERSION IS THE POINT.
+     *
+     * It read: "ensureEventTokens issues no PARTICIPANT token to a coordinator today — the
+     * condition GTC-294 removes, which is why the refusal below must not key on it." That
+     * was true of the tree GTC-262 shipped against, and GTC-262 pinned it deliberately so
+     * that GTC-294 could not move issuance silently.
+     *
+     * IT WORKED. GTC-294 ran this suite, this line went red, and the rule had to be
+     * restated by hand rather than drifting. So it is REWRITTEN, NOT DELETED (founder
+     * instruction, 2026-09-18) — GTC-262's evidence records that these preconditions exist
+     * "so the narrowing cannot later be read as scaffolding and deleted", and deleting the
+     * one that did its job would be the first step in exactly that reading.
+     *
+     * What it pins now is the OTHER half of the same fact, and it is the half that matters
+     * to this file: the coordinator holds a working PARTICIPANT token, and the refusal
+     * below refuses her anyway. A token-shaped refusal would now admit her.
+     */
+    const coordinatorAsk = await prisma.accessToken.findFirst({
+      where: { eventId: event.id, personId: coordinatorPerson.id, scope: 'PARTICIPANT' },
+    });
     assert(
-      'PRECONDITION: ensureEventTokens issues no PARTICIPANT token to a coordinator today ' +
-        '— the condition GTC-294 removes, which is why the refusal below must not key on it',
-      (await prisma.accessToken.count({
-        where: { eventId: event.id, personId: coordinatorPerson.id, scope: 'PARTICIPANT' },
-      })) === 0
+      'PRECONDITION (rewritten by GTC-294, which inverted it): ensureEventTokens NOW issues ' +
+        'the coordinator a PARTICIPANT token as well — so the refusal below is tested ' +
+        'against a person who genuinely holds one, not against an absence',
+      coordinatorAsk !== null && coordinatorAsk.teamId === null
+    );
+    assert(
+      'PRECONDITION: and it is a live credential in its own right — the ask resolves to ' +
+        'PARTICIPANT scope with no team, beside the COORDINATOR token above',
+      (await resolveToken(coordinatorAsk!.token))?.scope === 'PARTICIPANT'
     );
 
     // ── SITE 1: the directory ─────────────────────────────────────────────
@@ -276,11 +320,32 @@ async function main() {
         "family's view of who is coming; what is withheld is the credential, not the name",
       people.some((p) => p.id === coordinatorPerson.id)
     );
+    /*
+     * ⚠ ALSO INVERTED BY [[GTC-294]], AND REWRITTEN RATHER THAN DELETED.
+     *
+     * It read: "their row carries a null token and a null prefix rather than a substitute —
+     * the page has a branch for that and it is the one the new copy speaks to." True while a
+     * coordinator held only a job. GTC-262's own evidence named this as temporary: "the
+     * `token: null` copy, which every coordinator meets in the window until it lands."
+     *
+     * THAT WINDOW HAS CLOSED. She now holds an ask, so she gets a row WITH a link — prefix
+     * `p`, her own token — which is founder ruling 1 arriving rather than being contradicted:
+     * "they reach their own ask from the directory, which is what the directory is for, and
+     * never the /c/ job link."
+     *
+     * ⚠ WHAT THIS FILE STILL OWNS IS THE OTHER HALF, and it is asserted immediately below in
+     * the forward guard: the COORDINATOR token is absent from the payload with BOTH tokens
+     * live. The `token: null` branch on `directory/page.tsx` is NOT now dead code — it still
+     * serves a guest whose PARTICIPANT token has not been issued yet, which is the second
+     * population GTC-262's copy had to be true of and the reason that sentence never named
+     * coordinators. GTC-294 removed one of its two audiences, not the branch.
+     */
+    const coordinatorRow = people.find((p) => p.id === coordinatorPerson.id);
     assert(
-      'and their row carries a null token and a null prefix rather than a substitute — ' +
-        'the page has a branch for that and it is the one the new copy speaks to',
-      people.find((p) => p.id === coordinatorPerson.id)?.token === null &&
-        people.find((p) => p.id === coordinatorPerson.id)?.tokenPrefix === null
+      'and since GTC-294 their row carries their OWN ASK — prefix p and their PARTICIPANT ' +
+        'token, never the /c/ one — which is founder ruling 1 arriving, not being contradicted',
+      coordinatorRow?.tokenPrefix === SHAREABLE_TOKEN_PREFIX &&
+        coordinatorRow?.token === coordinatorAsk!.token
     );
 
     // The endpoint must still do its job. A directory that leaks nothing because it
@@ -346,37 +411,50 @@ async function main() {
         hostClaim.body?.error === 'Person not found in this event'
     );
 
-    // ── THE GTC-294 ASSERTION — the reason the refusal keys on the role ───
-    //
-    // GTC-294 (GTC-189 ruling E) issues coordinators a PARTICIPANT token as well. Minted
-    // by hand here because that ticket is not built, and this is the whole point of the
-    // role key: written the token-shaped way, the refusal above stops refusing on the day
-    // GTC-294 lands, silently, with every other assertion in this file still green.
-    const simulatedGtc294Token = await prisma.accessToken.create({
-      data: {
-        token: `gtc262-sim-gtc294-${stamp}`,
-        scope: 'PARTICIPANT',
-        personId: coordinatorPerson.id,
-        eventId: event.id,
-        teamId: null,
-        expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
-      },
-    });
+    /*
+     * ── THE GTC-294 ASSERTION — the reason the refusal keys on the role ──────────
+     *
+     * GTC-294 (GTC-189 ruling E) issues coordinators a PARTICIPANT token as well, and this
+     * is the whole point of the role key: written the token-shaped way, the refusal above
+     * stops refusing on the day GTC-294 lands, silently, with every other assertion in this
+     * file still green.
+     *
+     * ⚠ IT USED TO MINT THAT TOKEN BY HAND, AND NOW IT READS THE ISSUED ONE. GTC-294 is
+     * built, so `ensureEventTokens` above already created it. Recorded because the reason is
+     * not "the mint became redundant" — it is that the mint became WRONG, and wrong in the
+     * quietest possible way:
+     *
+     *   `AccessToken` is unique on `[eventId, personId, scope, teamId]`, and the index is a
+     *   plain one — `indnullsnotdistinct = f`, checked against Postgres 16.14. A PARTICIPANT
+     *   row carries `teamId: null`, and Postgres treats NULLs in a unique index as DISTINCT.
+     *   So this `create` would NOT have thrown P2002 against the already-issued token. It
+     *   would have SUCCEEDED, leaving the coordinator with TWO PARTICIPANT rows — and the
+     *   directory's `tokenByPerson` map is built from an unordered `findMany`, so the
+     *   assertion below comparing the emitted token to this one would have passed or failed
+     *   on whichever row Postgres returned last. A flaky pass, which is worse than a red
+     *   line, and it is GTC-262's own finding 3 (`person.tokens[0]` with no `orderBy`)
+     *   reappearing inside the fix for it.
+     *
+     * So the forward guard now asserts against the REAL issued token. It tests strictly more
+     * than it did: the row is the one the system made, not one this file arranged.
+     */
+    const coordinatorAskToken = coordinatorAsk!;
 
     const afterGtc294 = await postClaim(sharedLinkToken, coordinatorPerson.id);
     assert(
-      'GTC-294 FORWARD GUARD: with a PARTICIPANT token present the coordinator is STILL ' +
-        'refused — the gate reads PersonEvent.role, which GTC-294 does not touch, so it ' +
-        'survives issuance changing underneath it',
+      'GTC-294 GUARD, NOW LIVE RATHER THAN FORWARD: with a PARTICIPANT token genuinely ' +
+        'issued the coordinator is STILL refused — the gate reads PersonEvent.role, which ' +
+        'GTC-294 did not touch, so it survived issuance changing underneath it',
       afterGtc294.kind === 'refused' &&
         afterGtc294.status === UNKNOWN_PERSON_STATUS &&
         afterGtc294.body?.error === UNKNOWN_PERSON_MESSAGE
     );
     assert(
-      'and nothing was claimed on that simulated token either — after GTC-294 the full ' +
-        'claim path would otherwise have run and stamped the coordinator as SHARED',
+      'and nothing was claimed on her ask token either — without this refusal the full ' +
+        'claim path would now run and stamp the coordinator as SHARED, which is the ' +
+        'consequence GTC-294 inherited and never had to meet',
       (await prisma.accessToken.count({
-        where: { id: simulatedGtc294Token.id, claimedAt: null },
+        where: { id: coordinatorAskToken.id, claimedAt: null },
       })) === 1
     );
 
@@ -385,10 +463,10 @@ async function main() {
       (p: { id: string }) => p.id === coordinatorPerson.id
     );
     assert(
-      "GTC-294 FORWARD GUARD: the directory then emits the coordinator's PARTICIPANT " +
-        'link with prefix p — after GTC-294 they reach their own ask from the directory, ' +
+      "GTC-294 GUARD, NOW LIVE: the directory emits the coordinator's PARTICIPANT " +
+        'link with prefix p — they reach their own ask from the directory, ' +
         'which is what the directory is for, and never the /c/ job link',
-      coordRowAfter?.tokenPrefix === 'p' && coordRowAfter?.token === simulatedGtc294Token.token
+      coordRowAfter?.tokenPrefix === 'p' && coordRowAfter?.token === coordinatorAskToken.token
     );
     assert(
       'and the coordinator token is still absent from the payload with both tokens live — ' +

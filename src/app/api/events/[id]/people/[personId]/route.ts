@@ -241,16 +241,28 @@ export async function PATCH(
     if (roleChanged || teamChanged) {
       // Clean up old tokens based on role changes
       if (roleChanged) {
-        if (finalRole === 'COORDINATOR' && personEvent.role === 'PARTICIPANT') {
-          // Promoted to coordinator - delete old PARTICIPANT token
-          await prisma.accessToken.deleteMany({
-            where: {
-              personId,
-              eventId,
-              scope: 'PARTICIPANT',
-            },
-          });
-        } else if (personEvent.role === 'COORDINATOR' && finalRole === 'PARTICIPANT') {
+        /*
+         * GTC-294 — THE PROMOTION BRANCH IS GONE, AND ITS ABSENCE IS THE POINT.
+         *
+         * What stood here: promoting PARTICIPANT -> COORDINATOR ran `deleteMany` on the
+         * person's PARTICIPANT token, because the old rule was that a coordinator holds
+         * only the job. Founder ruling (Nigel, 2026-09-13), GTC-189 ruling E: "the job
+         * should not cost them the ask", so the ask now survives the promotion.
+         *
+         * ⚠ IT IS DELETED RATHER THAN LEFT AS A NO-OP, and the reason is not tidiness.
+         * `ensureEventTokens` is called at the foot of this block and step 4b re-issues.
+         * So the delete would not have REMOVED her ask — it would have ROTATED it: a new
+         * token value on every role or team write, and every link already sent to her
+         * dead. That is the one thing this ticket could have broken for a guest already
+         * holding a link, and it would have been invisible, because the count of tokens
+         * afterwards is identical. Demonstrated directly in
+         * `tests/coordinator-holds-ask-test.ts`, which performs the delete-then-re-issue
+         * by hand and asserts the value changes.
+         *
+         * The COORDINATOR deletes below are UNCHANGED: demotion drops the job and keeps
+         * the ask, which is correct both before and after this ticket.
+         */
+        if (personEvent.role === 'COORDINATOR' && finalRole === 'PARTICIPANT') {
           // Demoted from coordinator - delete old COORDINATOR token
           await prisma.accessToken.deleteMany({
             where: {

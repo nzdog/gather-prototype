@@ -33,11 +33,16 @@
  * correct later." The widening is [[GTC-288]]'s, and the suite's `[GTC-301]` assertions move with it.
  *
  * THE LINK, TOLD AS THE PRESS WILL ISSUE IT. `ensureEventTokens` in `src/lib/tokens.ts` issues a
- * PARTICIPANT token only to a `role: 'PARTICIPANT'` row that coordinates no team, and revokes one
- * from a HOST row. So a guest with no token yet is AT_PRESS; a coordinator gets none until
- * [[GTC-294]]; the host as carrier gets none until [[GTC-297]]. The rule is read here, not
- * changed — Zone 3 is not entered — and the suite measures it on either side of a real
- * `ensureEventTokens` call.
+ * PARTICIPANT token to a `role: 'PARTICIPANT'` row and — since [[GTC-294]] — to a
+ * `role: 'COORDINATOR'` row as well, and revokes one from a HOST row. So a guest OR a coordinator
+ * with no token yet is AT_PRESS, and both are READY once it is issued; the host as carrier gets
+ * none until [[GTC-297]]. The rule is read here, not changed — Zone 3 is not entered — and the
+ * suite measures it on either side of a real `ensureEventTokens` call.
+ *
+ * ⚠ SUPERSEDED, KEPT SO THE CHANGE IS LEGIBLE: until [[GTC-294]] a coordinator was reported
+ * `NONE_COORDINATOR` — "the press issues her no guest link" — which was true of the tree and is
+ * now false of it. GTC-189 ruling E gave her the ask, and this file had to move with issuance
+ * rather than after it, because a preview that contradicts the database is worse than no preview.
  *
  * THE HOST'S THIRD IDENTITY PATH. The chooser knows the host by `Event.hostId` and `role: 'HOST'`.
  * The route this replaced also excluded any Person on the host's own `User` — `POST
@@ -68,10 +73,21 @@ export type LinkState =
   | 'READY'
   /** No token yet, and the press will issue one. */
   | 'AT_PRESS'
-  /** A coordinator: the press issues no guest link — [[GTC-294]]. */
-  | 'NONE_COORDINATOR'
   /** The host as carrier: no guest link — her one-off link is [[GTC-297]]. */
-  | 'NONE_HOST_CARRIER';
+  | 'NONE_HOST_CARRIER'
+  /**
+   * No link, and the press will not issue one either.
+   *
+   * ⚠ UNREACHABLE FOR EVERY ROLE `PersonRole` CURRENTLY HAS, AND KEPT ANYWAY. `NONE_COORDINATOR`
+   * stood here until [[GTC-294]] gave coordinators a PARTICIPANT token; with HOST rows caught
+   * above as carriers and PARTICIPANT and COORDINATOR rows both issued at the press, nothing
+   * reaches this today. It survives as the fail-closed default so that a role added to the enum
+   * later is reported as having no link rather than promised one it will never get — the same
+   * allowlist direction `shared-link-exposure.ts` and `child-exclusion.ts` take next door, and
+   * the reason `LINK_NONE` in `ask-preview-compose.ts` exists at all ("honest beats a promise
+   * that never arrives", GTC-189 slice 3 answer 2).
+   */
+  | 'NONE_NOT_ISSUED';
 
 /** A child's rows, carried in a recipient's message. */
 export interface PreviewCarried {
@@ -148,7 +164,10 @@ export async function readAskPreview(
   });
   if (!event) return null;
 
-  const [memberships, households, assignments, tokens, coordinatedTeams] = await Promise.all([
+  // GTC-294: the `Team.coordinatorId` query that used to be the fifth member of this tuple is
+  // gone with it. It fed `coordinatorIds` in `linkOf`, and `linkOf` now keys on the membership
+  // role — see the note there for why that is a correctness change and not a tidy-up.
+  const [memberships, households, assignments, tokens] = await Promise.all([
     db.personEvent.findMany({
       where: { eventId },
       select: {
@@ -177,10 +196,6 @@ export async function readAskPreview(
     db.accessToken.findMany({
       where: { eventId, scope: 'PARTICIPANT' },
       select: { personId: true, token: true },
-    }),
-    db.team.findMany({
-      where: { eventId, coordinatorId: { not: null } },
-      select: { coordinatorId: true },
     }),
   ]);
 
@@ -235,10 +250,20 @@ export async function readAskPreview(
     isHostMembership(m, event.hostId) || (hostUserId !== null && m.person.userId === hostUserId);
 
   const tokenByPerson = new Map(tokens.map((t) => [t.personId, t.token]));
-  const coordinatorIds = new Set([
-    ...coordinatedTeams.map((t) => t.coordinatorId),
-    ...memberships.filter((m) => m.role === 'COORDINATOR').map((m) => m.personId),
-  ]);
+  /**
+   * ⚠ THIS MIRRORS `ensureEventTokens`, AND [[GTC-294]] IS WHY THE MIRROR IS NAMED.
+   *
+   * Nothing here issues anything; this function reports the state the press will leave. But
+   * it restates step 4's rule, and a restatement drifts. GTC-294 moved issuance and this had
+   * to move with it or the screen would have gone on telling the host a coordinator gets no
+   * link while the database handed her one.
+   *
+   * SO IT KEYS ON THE ROLE, exactly as step 4b does, and `coordinatorIds` is gone from here
+   * too. Keyed on `coordinatorIds` — which is built without a role filter and so contains a
+   * host who is a team's `coordinatorId` — this would have reported her AT_PRESS, promising
+   * the host a guest link for the one person GTC-256 Ruling 5 guarantees will never have one.
+   * She is caught above as a carrier, and that ordering is load-bearing rather than incidental.
+   */
   const linkOf = (
     m: (typeof memberships)[number],
     hostAsCarrier: boolean
@@ -246,10 +271,10 @@ export async function readAskPreview(
     if (hostAsCarrier) return { link: null, linkState: 'NONE_HOST_CARRIER' };
     const token = tokenByPerson.get(m.personId);
     if (token) return { link: buildTokenUrl(baseUrl, 'PARTICIPANT', token), linkState: 'READY' };
-    if (m.role === 'PARTICIPANT' && !coordinatorIds.has(m.personId)) {
+    if (m.role === 'PARTICIPANT' || m.role === 'COORDINATOR') {
       return { link: null, linkState: 'AT_PRESS' };
     }
-    return { link: null, linkState: 'NONE_COORDINATOR' };
+    return { link: null, linkState: 'NONE_NOT_ISSUED' };
   };
 
   const byId = new Map(memberships.map((m) => [m.id, m]));

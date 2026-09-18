@@ -971,12 +971,23 @@ async function main() {
         'before tokens: an ordinary guest is AT_PRESS with no link',
         ok(() => rec('Sarah Nguyen').linkState === 'AT_PRESS' && rec('Sarah Nguyen').link === null)
       );
+      /*
+       * ⚠ INVERTED BY [[GTC-294]] (2026-09-18), and rewritten rather than deleted.
+       *
+       * It read: "a coordinator is NONE_COORDINATOR — the press issues her no guest link".
+       * That was true of the tree, and GTC-189 ruling E made it false: "the job should not
+       * cost them the ask." A coordinator is now routed for a link exactly like any other
+       * adult, so before issuance she is AT_PRESS and after it she is READY.
+       *
+       * THE DISTINCTION THIS ASSERTION NOW CARRIES is that she is AT_PRESS and not the
+       * fail-closed `NONE_NOT_ISSUED`: the press really will issue her one, so the honest
+       * stand-in is the one that promises a link. Layer V below checks the same thing
+       * through the words.
+       */
       assert(
         'L',
-        'before tokens: a coordinator is NONE_COORDINATOR — the press issues her no guest link (GTC-294)',
-        ok(
-          () => rec('Cora Hill').linkState === 'NONE_COORDINATOR' && rec('Cora Hill').link === null
-        )
+        'before tokens: a coordinator is AT_PRESS, like any other adult — GTC-294 gave her the ask, so the press will issue her a link and the preview may promise one',
+        ok(() => rec('Cora Hill').linkState === 'AT_PRESS' && rec('Cora Hill').link === null)
       );
       assert(
         'L',
@@ -1016,8 +1027,15 @@ async function main() {
       );
       assert(
         'L',
-        'after the tokens: the coordinator is still NONE_COORDINATOR, and the database holds no guest token for her',
-        ok(() => recAfter('Cora Hill').linkState === 'NONE_COORDINATOR' && !tokenOf(f.person.cora))
+        'after the tokens: the coordinator is READY and the database DOES hold a guest token for her — the other half of the GTC-294 inversion, asserted on the real issued row',
+        ok(() => {
+          const t = tokenOf(f.person.cora);
+          return (
+            recAfter('Cora Hill').linkState === 'READY' &&
+            !!t &&
+            recAfter('Cora Hill').link.includes(t)
+          );
+        })
       );
       assert(
         'L',
@@ -1126,15 +1144,31 @@ async function main() {
             row('Sarah Nguyen').ask.text.includes('the Berry Trifle')
         )
       );
+      /*
+       * ⚠ INVERTED BY [[GTC-294]], and the inversion is the whole of the ticket in one line.
+       *
+       * It read: "a coordinator's stand-in is not the at-the-press one — it does not promise
+       * a link the press will not issue." The press now DOES issue her one, so her words
+       * carry the same promise as any other adult's.
+       *
+       * ⚠ THE TWO CONSTANTS ARE STILL BOTH ASSERTED TO EXIST AND TO DIFFER, and what
+       * `LINK_NONE` is now for is stated rather than implied. NOBODY IN THIS FIXTURE
+       * COMPOSES IT: the only other state that reaches it is `NONE_HOST_CARRIER`, and a
+       * host-as-carrier row composes no ask at all (decision 20), so her words never get a
+       * link of either kind. It survives as the fail-closed stand-in behind
+       * `NONE_NOT_ISSUED` — a `PersonRole` the enum does not yet have — which is the
+       * direction the ruling chose ("honest beats a promise that never arrives", GTC-189
+       * slice 3 answer 2) and is not an executor's to delete because it went quiet.
+       */
       assert(
         'V',
-        "a coordinator's stand-in is not the at-the-press one — it does not promise a link the press will not issue",
+        "a coordinator's stand-in IS the at-the-press one since GTC-294 — her words promise the link the press will now issue, and LINK_NONE survives as the fail-closed one nobody here composes",
         ok(
           () =>
             typeof APC.LINK_AT_PRESS === 'string' &&
             typeof APC.LINK_NONE === 'string' &&
             APC.LINK_AT_PRESS !== APC.LINK_NONE &&
-            row('Cora Hill').ask.text.endsWith(APC.LINK_NONE) &&
+            row('Cora Hill').ask.text.endsWith(APC.LINK_AT_PRESS) &&
             row('Sarah Nguyen').ask.text.endsWith(APC.LINK_AT_PRESS)
         )
       );

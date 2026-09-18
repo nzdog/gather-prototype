@@ -2986,15 +2986,42 @@ export default function PlanEditorPage() {
                     access their personal page.
                   </p>
                   {/*
-                    GTC-262. The card promises "everyone can click their name", and since this
-                    ticket that is no longer true of a coordinator: their /c/ link is a job
-                    rather than an ask, and this link is public to anyone holding the event id,
-                    so it is not published here. The host is the one who has to know that, and
-                    the individual links she needs are rendered directly below this card.
+                    GTC-262 wrote this sentence and GTC-294 made half of it false. Founder
+                    ruling, 2026-09-18: the replacement ships, and the REASONING is recorded
+                    here because it is the better half of the change.
+
+                    GTC-262's version said a coordinator's link "opens their team's plan, so it
+                    isn't in the shared directory". That was true when a coordinator held exactly
+                    one token. Since GTC-294 they hold two, and the two go different ways:
+
+                      /p/ — the ask. Now IS in this directory, under their own name, because
+                            GTC-262 ruling 1 is that "they reach their own ask from the
+                            directory, which is what the directory is for".
+                      /c/ — the job. Still is NOT, and for the reason GTC-262 gave: "the
+                            no-verification bargain was struck about the ask. It was never
+                            struck about write access to a team's plan."
+
+                    ⚠ SO THE CARD'S ORIGINAL PROMISE — "everyone can click their name" — IS TRUE
+                    AGAIN FOR THE FIRST TIME. GTC-262 had to qualify it; GTC-294 restores it. And
+                    that changes what kind of sentence belongs here: what needed saying stopped
+                    being an EXCEPTION to the promise and became an EXTRA beside it. The job link
+                    is not a carve-out from the directory any more, it is a separate thing the
+                    host sends herself.
+
+                    ⚠ AND NAMING COORDINATORS IS SAFE HERE, WHICH IS THE DISTINCTION GTC-262'S OWN
+                    COPY COULD NOT MAKE. On the directory page that ticket had to write a sentence
+                    true of two populations it could not tell apart, because a marker saying which
+                    would let an unauthenticated caller enumerate who holds write access to this
+                    event's teams. THE READER OF THIS CARD IS THE HOST. She already knows who her
+                    coordinators are — she appointed them — so naming them discloses nothing and
+                    is simply the clearer sentence. Same fact, different reader, different
+                    constraint.
                   */}
                   <p className="text-sm text-gray-600 mb-3">
-                    Coordinators are the exception — their link opens their team&apos;s plan, so it
-                    isn&apos;t in the shared directory. Send those from the list below.
+                    Coordinators are in there too — their name opens their own ask, like everyone
+                    else&apos;s. What the directory doesn&apos;t carry is the link to their
+                    team&apos;s plan: that one gives write access, so you send it yourself from the
+                    list below.
                   </p>
                   <div className="bg-white rounded-md p-3 mb-3 border border-sage-200">
                     <p className="text-xs text-gray-500 font-mono break-all">

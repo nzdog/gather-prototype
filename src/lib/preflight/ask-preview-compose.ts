@@ -23,10 +23,14 @@ import type { AskPreview, HostListLine, PreviewRecipient } from './ask-preview';
 export const LINK_AT_PRESS = '[link issued at the press]';
 
 /**
- * Where the link goes for a coordinator, who the press issues no guest link ([[GTC-294]]).
+ * Where the link goes for a recipient the press will issue no guest link to at all.
  * Deliberately not `LINK_AT_PRESS`: that one promises a link, and this one would never arrive.
  * Kept by founder ruling (GTC-189 slice 3 answer 2): "Honest beats a promise that never arrives."
- * [[GTC-294]] owns the fix; once it issues coordinators a token, they read AT_PRESS with no change here.
+ *
+ * ⚠ IT NO LONGER MEANS "A COORDINATOR". [[GTC-294]] landed and coordinators now read AT_PRESS and
+ * then READY, exactly as the note here predicted, with no change in this file. What still reaches
+ * this constant is the host as carrier (`NONE_HOST_CARRIER`, whose one-off link is [[GTC-297]])
+ * and `NONE_NOT_ISSUED`, the fail-closed default for a `PersonRole` the enum does not yet have.
  */
 export const LINK_NONE = '[no guest link yet]';
 
