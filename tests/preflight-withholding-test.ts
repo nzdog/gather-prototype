@@ -395,10 +395,33 @@ async function main() {
         )
       )
     );
+    /*
+     * ⚠ THIS ASSERTION INVERTED WHEN THE WORDS WERE RULED, 2026-09-19. It held that they carried
+     * an `ANCHOR(GTC-189)` marking them provisional; the founder ruled all three as proposed, so
+     * the marker came off per the Citations rule that a provisional marker names the ticket that
+     * ends it. What replaces it is stronger: the sentences themselves, verbatim, and the absence
+     * of the marker — because an anchor left behind on a ruled line is the next reader's
+     * invitation to re-open a settled question.
+     */
     assert(
-      '⚠ THE WORDS ARE MARKED PROPOSED — every other word on this screen was founder-ruled at ' +
-        'its slice, so these carry an anchor naming the ticket that ends it',
-      read(COMPOSE).includes('ANCHOR(GTC-189)')
+      '✅ THE TWO SENTENCES ARE RULED AND PINNED VERBATIM',
+      ok(
+        () =>
+          compose.NOT_MESSAGED_WHY.NONE_HOST_CARRIER ===
+            "Yours to pass on — I have no link to send you, so it's here rather than in a message." &&
+          compose.NOT_MESSAGED_WHY.NONE_NOT_ISSUED ===
+            "I can't give them a link, so I won't message them at all."
+      )
+    );
+    assert(
+      'and the provisional marker is GONE from the module — they are no longer proposed',
+      read(COMPOSE).length > 0 && !read(COMPOSE).includes('ANCHOR(GTC-189)')
+    );
+    assert(
+      "⚠ AND THE FOUNDER'S REASON FOR THE FIRST LINE IS KEPT BESIDE IT, because it is what a " +
+        'later editor would undo: the sentence tells her where to look and deliberately does not ' +
+        "explain why, which is this screen's register",
+      read(COMPOSE).includes('without explaining why')
     );
 
     // ── Layer S: the page reads the module, and counts messages ──────────

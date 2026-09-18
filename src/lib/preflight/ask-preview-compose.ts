@@ -145,18 +145,26 @@ export function notMessagedRows(rows: PreviewRow[]): PreviewRow[] {
 }
 
 /**
- * ⚠ ANCHOR(GTC-189): THESE TWO SENTENCES ARE PROPOSED, NOT RULED.
+ * Why a recipient on this screen gets no message. RULED 2026-09-19, GTC-189 slice 5b.
  *
- * Every other word on this screen was founder-ruled at its slice, and `ADULT_WHY` below is the
- * precedent for how they are held: a `Record` keyed on a union, so a state with no words is a
- * compile error rather than a blank line (slice 3, answer 4). The marker comes off when they are
- * ruled, per the Citations rule that a provisional marker names the ticket that ends it.
+ * Held the way `ADULT_WHY` below is held: a `Record` keyed on a union, so a state with no words is
+ * a compile error rather than a blank line (slice 3, answer 4).
  *
  * Gather says "I" here, as it does everywhere on this screen (slice 3 words, answer 1), and
  * neither line names Gather in the third person or says "we".
  *
  * `LINK_NONE`'s ground governs both: "Honest beats a promise that never arrives." A row counted
  * as a message that never comes is that promise in arithmetic rather than in prose.
+ *
+ * ⚠ THE FOUNDER'S REASON FOR THE FIRST LINE, KEPT BECAUSE IT IS WHAT A LATER EDITOR WOULD UNDO:
+ *
+ *   "The NONE_HOST_CARRIER line is the best of them: 'it's here rather than in a message' tells
+ *    her where to look without explaining why, which is the register the rest of the screen
+ *    holds."
+ *
+ * So the sentence stops where it stops ON PURPOSE. Adding the reason — that GTC-256 Ruling 8
+ * gives her no guest link, that GTC-297 owns the one that will — would be true and would be the
+ * wrong register for this screen. The explanation belongs here, in the code, and not on her page.
  */
 export const NOT_MESSAGED_WHY: Record<NotMessagedLinkState, string> = {
   /*
@@ -238,6 +246,21 @@ export function hostListReason(line: Pick<HostListLine, 'why' | 'child' | 'carri
  * child's channel refusal always names the carrier:
  *   ADULT_WHY.HOST_HOUSEHOLD_CHILD, ADULT_WHY.NO_CARRIER, ADULT_WHY.HOUSEHOLD_MUTED,
  *   CHILD_WHY.NO_CHANNEL, CHILD_WHY.SMS_OPTED_OUT, CHILD_WHY.PHONE_UNUSABLE.
+ *
+ * ✅ AND THE `Record` CLAIM ABOVE IS NOW DEMONSTRATED RATHER THAN ASSERTED — GTC-189 slice 5b,
+ * 2026-09-19. This docstring has said "the `Record` types make a missing case a compile error"
+ * since slice 3, and nothing had ever produced the error. `NOT_MESSAGED_WHY` above is keyed the
+ * same way, and slice 5b's mutation M5 added a fifth `LinkState` member and made `tsc` refuse the
+ * tree:
+ *
+ *   error TS2741: Property 'NONE_SOME_NEW_GAP' is missing in type
+ *   '{ NONE_HOST_CARRIER: string; NONE_NOT_ISSUED: string; }' but required in type
+ *   'Record<NotMessagedLinkState, string>'
+ *
+ * ⚠ NOTE WHAT READ IT: `tsc`, and nothing else could have. A guard whose whole value is that the
+ * tree does not compile is invisible to a mutation table that only runs suites — every other
+ * mutation in this ticket was measured by a suite, and this one had to be measured by a
+ * typecheck. Recorded at GTC-189 slice 5b's evidence in full.
  */
 const ADULT_WHY: Record<HostListLine['why'], string> = {
   NO_CHANNEL: 'No email or mobile number.',
