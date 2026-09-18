@@ -105,6 +105,37 @@ model Event {
   /// GTC-188 (I1) builds the pre-flight surface Kate sets this on. Until it lands there
   /// is no host-facing way to set it — deliberate, and stated rather than implied.
   nudgePace                  NudgePace?
+  /// GTC-189 ruling AH (decision 25) — THE EVENT-LEVEL DEFAULT for the chase's channel:
+  /// the founder's own sentence, "chase by email when there's no mobile", ON.
+  ///
+  /// A SIBLING OF `nudgePace` DIRECTLY ABOVE, and deliberately its shape: nullable, per
+  /// event, host-set, NULL MEANS NOT SET — no opinion. It is NOT a stored BY_EMAIL. An
+  /// unset default and an explicit BY_EMAIL reach the same behaviour by different routes,
+  /// and only the unset one yields to a future change in the system default. That is the
+  /// convention `nudgePace` records above and `decideByOffsetHours` before it.
+  ///
+  /// NO BACKFILL — and THE REASON DIFFERS FROM `nudgePace`'s, recorded rather than
+  /// inherited. For `nudgePace`, "null is existing behaviour". Here it is not: the chase
+  /// has no email leg in code at all today. No backfill is needed because nothing reads
+  /// this column until slice 8, and every existing row then wants exactly the ruled
+  /// default.
+  ///
+  /// A TYPED COLUMN, NOT EventSetup JSONB — the same question the founder already ruled
+  /// for `nudgePace` (GTC-179 decision 10, and Ruling 5), with the same answers: the
+  /// chase reads this on every 15-minute cron tick, `decideByOffsetHours` is the
+  /// precedent for a scheduler-read tuning value and is a typed column, and an enum gets
+  /// database-level validity checking that JSONB does not. Measured read-only on
+  /// 2026-09-18: gather_dev holds 29 Events and 7 EventSetup rows, so 22 of 29 would need
+  /// a row created purely to hold a default.
+  ///
+  /// READ IT THROUGH `resolveChaseWhenNoMobile`, NEVER DIRECTLY. It composes with
+  /// `PersonEvent.chaseException` by THE NAMED EXCEPTION WINS (ruling AL) — see that
+  /// column's docstring for the founder's reason, and the `ChaseWhenNoMobile` enum's for
+  /// the expression.
+  ///
+  /// NOTHING READS OR WRITES THIS AS OF SLICE 4. The control is GTC-311's, the reader is
+  /// slice 8's.
+  chaseWhenNoMobileDefault   ChaseWhenNoMobile?
   /// GTC-259: the host's movement 1 for the ask - Kate's own words, the first of the three
   /// movements Hinge §5 makes seam-visible (GTC-187 decision 2, "stored, not ephemeral").
   ///
@@ -180,6 +211,7 @@ model Event {
   households                 Household[]
   inviteEvents               InviteEvent[]
   deliveryReports            SmsDeliveryReport[]
+  outboundMessages           OutboundMessage[]
   people                     PersonEvent[]
   revisions                  PlanRevision[]
   snapshots                  PlanSnapshot[]
@@ -265,14 +297,14 @@ model Person {
 }
 
 model PersonEvent {
-  id                   String            @id @default(cuid())
+  id                   String             @id @default(cuid())
   personId             String
   eventId              String
   teamId               String?
-  role                 PersonRole        @default(PARTICIPANT)
-  reachabilityTier     ReachabilityTier  @default(UNTRACKABLE)
-  contactMethod        ContactMethod     @default(NONE)
-  claimedViaSharedLink Boolean           @default(false)
+  role                 PersonRole         @default(PARTICIPANT)
+  reachabilityTier     ReachabilityTier   @default(UNTRACKABLE)
+  contactMethod        ContactMethod      @default(NONE)
+  claimedViaSharedLink Boolean            @default(false)
   proxyPersonEventId   String?
   /// GTC-174 (D1): RETAINED BUT UNWRITTEN. Hinge §3 (ruled gap #10) supersedes
   /// event-level RSVP as a guest-facing question — the tap is the item ask and
@@ -287,7 +319,7 @@ model PersonEvent {
   /// DO NOT READ THESE. A stored answer to a derived question is the Item.status
   /// mistake again (architecture-contract §6): it drifts, and what it makes lie is the
   /// host's headcount. Read deriveAttendance() instead — always.
-  rsvpStatus           RsvpStatus        @default(PENDING)
+  rsvpStatus           RsvpStatus         @default(PENDING)
   rsvpRespondedAt      DateTime?
   rsvpFollowupSentAt   DateTime?
   /// GTC-174 (D1): the ONLY stored attendance fact — what the guest answered when
@@ -369,8 +401,63 @@ model PersonEvent {
   ///
   /// NOTHING READS OR WRITES THIS AS OF PHASE 2. The cutover is phase 3, the UI phase 4.
   nudgeMark            NudgeMark?
+  /// GTC-189 rulings AG, AH and AL — THE NAMED EXCEPTION to the event-level chase default
+  /// on `Event.chaseWhenNoMobileDefault`. Host-set, per person, per event.
+  ///
+  /// ⚠ READ THE VALUE, NEVER A POLARITY — AND THIS CONTROL'S MEANING INVERTED ON
+  /// 2026-09-15. Under ruling AG as first stated, the event default handed people over and
+  /// the per-person control meant CHASE THIS ONE. Under ruling AH, later the same day, the
+  /// default chases them and the exception means HAND THIS ONE TO ME. Same column, same
+  /// screen, opposite meaning — and every sentence written under AG still reads perfectly
+  /// well. The founder's one-line check: anything describing this control as "tick to
+  /// chase" was written under AG and is now backwards.
+  ///
+  /// THAT IS WHY THIS IS NOT A BOOLEAN. A boolean can be read either way, so a field
+  /// name, a comment or a test label about it would read correctly while meaning the
+  /// opposite, and would not announce itself in a diff. This column holds the NAME of a
+  /// behaviour — HAND_TO_HOST, or BY_EMAIL — so a read cannot invert.
+  ///
+  /// NULL MEANS FOLLOW THE EVENT DEFAULT, which under ruling AH is the common case and
+  /// most rows. It does NOT mean "never asked": ruling AJ sends the same question to the
+  /// mini-send's collapsed one-person pre-flight, so nobody is ever unasked.
+  ///
+  /// ⚠ AN EARLIER REASON FOR THE SAME NULLABILITY IS STALE, and is recorded rather than
+  /// silently rewritten. At ruling AG this column was argued nullable because THREE states
+  /// were needed — she ticked, she looked and did not, and she was never asked. Ruling AJ
+  /// removed the third. The conclusion survives and its reason does not, which is the
+  /// shape GTC-273 and GTC-276 are both about: a right conclusion resting on a wrong
+  /// reason.
+  ///
+  /// ON PersonEvent, NOT Person, for the reason `nudgeMark`'s docstring directly above
+  /// argues in full — it is a per-EVENT hosting judgement. The grain is exact:
+  /// @@unique([personId, eventId]) below.
+  ///
+  /// THE NAMED EXCEPTION WINS (ruling AL), in both directions. Where this is set it
+  /// decides; where it is NULL the event default decides; where that is NULL the system
+  /// default decides. No third case.
+  ///
+  /// ⚠ THE ADJACENT PAIR'S COMPOSITION RULE IS NOT THIS PAIR'S, and the founder's reason
+  /// is the argument rather than just the outcome: `Event.nudgePace` and `nudgeMark`
+  /// compose two settings about INTENSITY, where choosing the gentler of two instructions
+  /// cannot send a message nobody asked for. This composes a DEFAULT with a DECISION ABOUT
+  /// ONE NAMED PERSON, where either answer silently discards something the host said — so
+  /// safety cannot pick the winner and the meaning has to. The structural sibling in this
+  /// tree is `resolveDecideByOffsetHours` in src/lib/decide-by.ts — per-item, else
+  /// per-event, else system — and NOT `resolveNudgeOffsetDays`, which must go on
+  /// implementing the intensity axis's rule for the intensity axis.
+  ///
+  /// `nudgeMark` COMPOSES DOWNSTREAM OF BOTH: a person handed to the host is not chased
+  /// whatever the mark says, and a DONT_CHASE person is not chased whatever this says.
+  ///
+  /// AN OPTED-OUT ROW IS NEVER OFFERED THE EXCEPTION (ruling AI; Do-Not-Touch Zone 7 is
+  /// adjacent). Ruling O stands unnarrowed — a no to one channel is a no to being chased.
+  ///
+  /// NOTHING READS OR WRITES THIS AS OF SLICE 4. The control is GTC-311's, the reader is
+  /// slice 8's, and the resolver is its own module rather than a branch inside
+  /// nudge-cadence.ts.
+  chaseException       ChaseWhenNoMobile?
   householdId          String?
-  household            Household?        @relation("HouseholdMembers", fields: [householdId], references: [id])
+  household            Household?         @relation("HouseholdMembers", fields: [householdId], references: [id])
   householdRole        HouseholdRole?
   /// GTC-172 (C1): DISPLAY ONLY — "captured as a kid with a job". This is NEVER an
   /// input to message eligibility; `householdRole` is the sole gate (Moment 4 §10.6,
@@ -378,14 +465,21 @@ model PersonEvent {
   /// still renders in her helpers list instead of silently jumping to the guests list
   /// on reload. Setting this true never grants messageability, and setting it false
   /// never removes it — read it for layout, never for a send decision.
-  isYoungPerson        Boolean           @default(false)
-  event                Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  person               Person            @relation(fields: [personId], references: [id], onDelete: Cascade)
-  proxy                PersonEvent?      @relation("ProxyRelation", fields: [proxyPersonEventId], references: [id])
-  householdMembers     PersonEvent[]     @relation("ProxyRelation")
-  team                 Team?             @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  isYoungPerson        Boolean            @default(false)
+  event                Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  person               Person             @relation(fields: [personId], references: [id], onDelete: Cascade)
+  proxy                PersonEvent?       @relation("ProxyRelation", fields: [proxyPersonEventId], references: [id])
+  householdMembers     PersonEvent[]      @relation("ProxyRelation")
+  team                 Team?              @relation(fields: [teamId], references: [id], onDelete: SetNull)
 
   nudgeLogs NudgeLog[]
+
+  /// GTC-189 slice 4: back-relation for `OutboundMessage.personEvent` — every message this
+  /// membership has been sent, one row per message. Cascade, by founder decision 28: a row
+  /// about a person no longer on the event is worse than a missing row, and slice 6 must
+  /// handle an unmatchable bounce anyway, which `SmsDeliveryReport`'s nullability already
+  /// assumes.
+  outboundMessages OutboundMessage[]
 
   /// GTC-172 (C1): back-relation for Household.contactPersonEvent — the households
   /// that have picked THIS PersonEvent as their channel. Cross-household by design:
@@ -586,6 +680,181 @@ model InviteEvent {
 ///
 /// SMS_SEND_FAILED is NOT overloaded. It is written in exactly one place, the sendSms
 /// catch block, and it means a send-time failure. A delivery-time failure is a row here.
+/// GTC-189 slice 4 — THE OUTBOUND RECORD. One row per message per recipient.
+///
+/// WHAT IT IS: an account of a message that was intended, attempted, and then either
+/// taken by a provider, refused by one, or withheld by Gather. The press (slice 5) writes
+/// one row per recipient inside the same transaction as `Event.sentAt` and the
+/// SEND_PRESSED ledger row; a dispatcher on the existing cron pattern drains them; slice
+/// 6 and GTC-264's `SmsDeliveryReport` join back on `providerMessageId`.
+///
+/// ⚠ WHAT IT IS NOT: A STANDING DECISION. Nothing on this row says what Gather should do
+/// NEXT time. The host's standing decisions about the chase live on
+/// `Event.chaseWhenNoMobileDefault` and `PersonEvent.chaseException` — one per event and
+/// one per membership, made before anything is sent, with a different lifetime. Putting
+/// either here would make an instruction into a property of a message (ruling AG).
+///
+/// AND IT DOES NOT HOLD THE WORDS — founder decision 27, RULED 2026-09-18, and ruled
+/// rather than inferred from the approved column list. The record says what was sent, to
+/// whom, on which channel, and what came back. Not the message body. Two consequences,
+/// recorded plainly because they are the price: the pre-flight preview is the only
+/// account of what each person was asked, and ruling U's bounce-door "send again"
+/// RECOMPOSES from today's plan rather than resending what was sent. If either turns out
+/// to matter, a TEXT column is a later migration. `Event.askAuthorLine`'s docstring
+/// defers exactly this question here, and this is its answer.
+///
+/// NOR DELIVERY. This is the SEND side, and acceptance is not delivery — THE PRESS
+/// (2026-09-13): "It reports the send on acceptance, not on delivery." TNZ's outcome is
+/// `SmsDeliveryReport` (GTC-264); Resend's will be GTC-289's; both join here.
+///
+/// NOTHING READS OR WRITES THIS AS OF SLICE 4.
+model OutboundMessage {
+  id String @id @default(cuid())
+
+  /// The event. DENORMALISED — it is derivable through `personEvent` — and kept for three
+  /// reasons: every read of this table is per event, the Event cascade gets a direct edge,
+  /// and `SmsDeliveryReport` carries the same denormalisation. Founder ruling, 2026-09-18:
+  /// written once, at insert, in one transaction, from the same source as `personEventId`.
+  /// The counter-argument is ruling C's shape — a stored derivable value is one that can
+  /// drift — and it is answered by that single writer rather than dismissed.
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  /// THE RECIPIENT, AND THE GRAIN. `PersonEvent` is the membership —
+  /// @@unique([personId, eventId]) — and it is the row that owns the send clock
+  /// (`sentAt`) this message's cadence counts from. Under ruling A2 the host is a
+  /// legitimate recipient as a carrier, and she has a `PersonEvent` row, so the grain
+  /// needs no exception for her.
+  ///
+  /// CASCADE, by founder decision 28: a row about a person no longer on the event is
+  /// worse than a missing row, and slice 6 must handle an unmatchable bounce anyway —
+  /// which `SmsDeliveryReport`'s load-bearing nullability already assumes.
+  personEventId String
+  personEvent   PersonEvent @relation(fields: [personEventId], references: [id], onDelete: Cascade)
+
+  /// Which message this is. See the `OutboundKind` enum docstring for why the chase legs
+  /// are ordinal and never day-named, and for what COORDINATOR_BRIEF is doing here
+  /// unwritten.
+  kind OutboundKind
+
+  /// EMAIL or TEXT, decided by `chooseAskRoute`/`chooseChaseRoute` at the press and then
+  /// stored. See the `OutboundChannel` enum docstring for the spelling and for why it is
+  /// an enum.
+  channel OutboundChannel
+
+  /// Row creation — the press, or the chase tick that scheduled this leg. The drain's FIFO
+  /// order.
+  createdAt DateTime @default(now())
+
+  /// THE CLAIM, AND IT IS SET BEFORE THE PROVIDER IS CALLED RATHER THAN AFTER. That is the
+  /// whole point of it, and it is the one place this model departs from the house
+  /// dispatcher pattern deliberately. `dispatchPendingWrapUpMessages` in src/lib/wrap-up.ts
+  /// marks its rows AFTER sending, so a crash between the send and the mark re-sends on
+  /// the next tick, and two overlapping cron runs both send. For a wrap-up thank-you that
+  /// is a duplicate thank-you. For the press it is a second invitation to everyone in the
+  /// window, and the press is ruled ONE ACT, NO RECALL, no undo at the mechanism level
+  /// (Hinge §2, ruled gap #1).
+  ///
+  /// So: claim with `updateMany({ where: { id, attemptedAt: null }, ... })` and send only
+  /// when the update count is 1. A double-send is then structurally impossible rather than
+  /// merely unlikely, and a row left with `attemptedAt` set and no end state below is a
+  /// crashed attempt — a visible fact rather than a silent resend.
+  attemptedAt  DateTime?
+  attemptCount Int       @default(0)
+
+  /// Backoff. The dispatcher retries a transient failure and never retries a rejection.
+  /// ⚠ THE RETRY POLICY IS SLICE 5'S — this is only the storage that policy needs, carried
+  /// here rather than in a second migration and a second rehearsal (ruling W's reason).
+  ///
+  /// ⚠ A RETRY IS NOT A RESEND. A retry is the machine trying the same message again: THIS
+  /// row, with `attemptCount` incremented. Ruling U's three bounce-door actions are the
+  /// HOST trying again, and each of those is a NEW row.
+  nextAttemptAt DateTime?
+
+  /// 'resend', 'tnz' or 'twilio', written at the attempt rather than at the press, because
+  /// until the attempt it is an intention and not a fact. A String, not an enum, following
+  /// `SmsDeliveryReport.provider` and its stated reason: a second provider should need no
+  /// migration.
+  provider String?
+
+  /// THE JOIN KEY. Resend's `data.id` for EMAIL; TNZ's `MessageID` for TEXT. The same name
+  /// and the same meaning as `SmsDeliveryReport.providerMessageId` — the good kind of
+  /// shared word, one question with one answer.
+  ///
+  /// Nullable, and the nullability is load-bearing rather than defensive. GTC-264 records
+  /// that `sendViaTnz` treats a 2xx with an unparseable body as a success and leaves the
+  /// id undefined, so a send can be accepted and permanently unjoinable. And the email
+  /// half cannot be written at all until slice 4b makes the senders return Resend's id,
+  /// which `SendResult` discards today.
+  providerMessageId String?
+
+  /// THE PROVIDER TOOK IT. Ruling G: `PersonEvent.sentAt` is stamped from this instant,
+  /// per person, so each person's clock starts at their own acceptance rather than at the
+  /// press.
+  ///
+  /// ⚠ THE DUPLICATION IS DELIBERATE AND IS NAMED RATHER THAN LEFT TO BE FOUND. For an ASK
+  /// row this instant is the same instant as `PersonEvent.sentAt`, which is therefore
+  /// derivable from it. It is kept because the 15-minute cron already selects
+  /// `PersonEvent` and must read that clock without a join. Slice 4 does not touch
+  /// `sentAt`.
+  acceptedAt DateTime?
+
+  /// THE PROVIDER REFUSED IT at submission — slice 5's fourth red at once. `providerError`
+  /// carries THEIR words, verbatim and untyped, which is GTC-264 Phase 1's restraint: do
+  /// not model a vocabulary you have not observed.
+  rejectedAt    DateTime?
+  providerError String?
+
+  /// GATHER DID NOT SEND IT. A gate refused the row between the press and the dispatch —
+  /// an opt-out arriving in the window, a household switched off, a DONT_CHASE mark set.
+  /// `withheldWhy` carries OUR code: a TS union with a `Record` guard so a missing case is
+  /// a compile error, exactly as `HostListWhy` and `ChaseNoneWhy` live in
+  /// src/lib/eligibility/channel-chooser.ts and the ledger's ~30 actions live behind
+  /// `AuditEntry.actionType String`. Whys in this tree are typed in TypeScript and stored
+  /// as text.
+  ///
+  /// ⚠ SEPARATE FROM `providerError` BY RULING AN'S GROUND, AND KEEPING THEM APART IS THE
+  /// POINT OF BOTH COLUMNS. "Why would the provider not take it" and "why did Gather not
+  /// send it" are two different questions with different true answers for the same row.
+  /// One column holding both answers puts a false sentence on a row QUIETLY, because the
+  /// code path that produced it was correct for the other question. That is the family
+  /// GTC-273 (a detector matching the spelling of a credential rather than evaluating
+  /// it), GTC-276 (a detector inheriting the defect the ticket that wrote it had just
+  /// named), ruling AN (an ask refusal and a chase refusal sharing SMS_OPTED_OUT) and
+  /// ruling AH's measurement (reading an answer's kind and never its channel) all belong
+  /// to. Do not collapse them, and do not delete this note when collapsing looks tidy.
+  ///
+  /// ⚠ QUIET HOURS IS NOT A WITHHOLDING. It DEFERS: the row stays unfinished and the first
+  /// run after the window takes it, exactly as the wrap-up dispatcher's deferral is
+  /// "implicit and durable — no scheduler, no timer".
+  withheldAt  DateTime?
+  withheldWhy String?
+
+  /// ⚠ NO @@unique, AND @@unique([personEventId, kind]) IS THE ONE THAT LOOKS RIGHT AND IS
+  /// WRONG. It would make the press idempotent at the row level — and then ruling U's
+  /// "send again to the same address" and "let the host edit the address and send", each
+  /// of which is a new row of the same kind for the same membership, would fail the save.
+  /// GTC-264 Phase 1 finding 2's asymmetry applies: a constraint over a lifetime you have
+  /// not fully seen turns a wrong belief into silent loss or a hard failure, while an
+  /// index turns it into duplicate rows, which are recoverable. The press's idempotency is
+  /// the route's refusal of a second press; the dispatcher's is `attemptedAt` above.
+  ///
+  /// The join slice 6 runs on every inbound bounce.
+  @@index([providerMessageId])
+  @@index([personEventId])
+  @@index([eventId])
+  /// THE DRAIN, in the shape of `WrapUpLink`'s @@index([dispatched, createdAt]): the
+  /// never-attempted pass reads `attemptedAt IS NULL` in creation order, the retry pass
+  /// reads `nextAttemptAt`. A partial index over the unfinished predicate would be better
+  /// and is not available — Prisma has no syntax for one, and Do-Not-Touch Zone 5 forbids
+  /// hand-editing migration SQL. ⚠ SLICE 5 MUST `EXPLAIN (ANALYZE, BUFFERS)` the real
+  /// drain against a table large enough to mean something, the way GTC-264 Phase 1 finding
+  /// 3 settled its own storage question by measurement rather than assertion. Index tuning
+  /// afterwards is another migration and another rehearsal.
+  @@index([attemptedAt, createdAt])
+  @@index([nextAttemptAt])
+}
+
 model SmsDeliveryReport {
   id String @id @default(cuid())
 
@@ -1467,6 +1736,35 @@ enum NudgeMark {
   DONT_CHASE
 }
 
+/// GTC-189 rulings AH and AL — the chase's channel for a person with no usable mobile.
+///
+/// ONE ENUM, TWO COLUMNS: `Event.chaseWhenNoMobileDefault` (the default — NULL means NOT
+/// SET) and `PersonEvent.chaseException` (the named exception — NULL means FOLLOW THE
+/// DEFAULT). Sharing it is what makes the composition one total expression:
+///
+///   personEvent.chaseException
+///     ?? event.chaseWhenNoMobileDefault
+///     ?? DEFAULT_CHASE_WHEN_NO_MOBILE        // BY_EMAIL — ON, ruling AH
+///
+/// ⚠ NAMED VALUES, NOT A BOOLEAN, AND THAT IS THE POINT. This control's polarity inverted
+/// on 2026-09-15: under ruling AG the per-person control meant CHASE THIS ONE, and under
+/// ruling AH it means HAND THIS ONE TO ME. A boolean could be read either way, so a field
+/// name, a comment or a test label about it would read perfectly well while meaning the
+/// opposite, and would not announce itself in a diff. The founder's one-line check is that
+/// anything describing the control as "tick to chase" was written under AG and is now
+/// backwards. Every value here names its own behaviour, so a read cannot invert.
+///
+/// TWO VALUES, NOT ONE, because ruling AL rules BOTH directions: default ON plus
+/// HAND_TO_HOST means she takes him, and default OFF plus BY_EMAIL means he is chased.
+///
+/// ⚠ ITS COMPOSITION RULE IS NOT `NudgePace`/`NudgeMark`'s, a few lines above, and copying
+/// the neighbour is the obvious move and the wrong one. THE NAMED EXCEPTION WINS. The
+/// founder's reason is on `PersonEvent.chaseException`.
+enum ChaseWhenNoMobile {
+  BY_EMAIL
+  HAND_TO_HOST
+}
+
 enum InviteEventType {
   INVITE_SEND_CONFIRMED
   LINK_OPENED
@@ -1486,6 +1784,45 @@ enum InviteEventType {
   NUDGE_SENT_HOST
   WRAPUP_MESSAGE_SENT
   WRAPUP_MESSAGE_FAILED
+}
+
+/// GTC-189 slice 4 — which message an `OutboundMessage` row is.
+///
+/// ORDINAL FOR THE CHASE, NEVER DAY-NAMED, for exactly the reason GTC-178 Ruling 7 gave
+/// `PersonEvent.firstNudgeSentAt`/`secondNudgeSentAt`: GTC-179 makes the cadence
+/// adjustable per event and per person, so a member named after a day count starts lying
+/// the moment a pace moves. CHASE_FIRST and CHASE_SECOND map one-to-one onto those two
+/// stamps, and two legs covers every cadence the tree can resolve to —
+/// NUDGE_PACE_OFFSET_DAYS is STANDARD [4,7], RELAXED [6,12], OFF []; NUDGE_MARK_OFFSET_DAYS
+/// is GENTLE [5], DONT_CHASE [].
+///
+/// COORDINATOR_BRIEF is ruling W's third kind — "the coordinator is messaged even when she
+/// is bringing nothing... her message outlines everyone in her team and everything they
+/// are bringing". PRESENT AND UNWRITTEN, and here rather than in a later migration for the
+/// reason ruling W itself gave about it: cheaper to meet before this migration than after.
+/// ⚠ The member's EXISTENCE is the ruling's; its SPELLING is the executor's. GTC-299 owns
+/// the message, and which message an itemless coordinator receives is still open there, so
+/// GTC-299 may rename this before anything ever writes it.
+enum OutboundKind {
+  ASK
+  CHASE_FIRST
+  CHASE_SECOND
+  COORDINATOR_BRIEF
+}
+
+/// GTC-189 slice 4 — the channel an `OutboundMessage` was, or will be, sent on.
+///
+/// SPELLED TO MATCH `Channel` in src/lib/eligibility/channel-chooser.ts exactly, so the
+/// chooser's answer becomes this column with no mapping layer — a mapping layer is a place
+/// for the two to disagree.
+///
+/// AN ENUM, NOT A STRING, on the tree's own evidence rather than on taste:
+/// `WrapUpLink.channel` is a String and has grown a third value, 'skipped', which is not a
+/// channel and is read as one in two places. An untyped channel column acquires a value
+/// that is not a channel.
+enum OutboundChannel {
+  EMAIL
+  TEXT
 }
 
 model WrapUpLink {
