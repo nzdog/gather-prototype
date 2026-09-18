@@ -48,6 +48,24 @@ import { prisma } from '@/lib/prisma';
 export interface SendResult {
   success: boolean;
   error?: string;
+  /*
+   * Resend's own id for the accepted message — GTC-189 slice 4b.
+   *
+   * WHY IT IS SLICE 4'S AND NOT SLICE 6'S. Slice 5's dispatcher writes it onto
+   * `OutboundMessage.providerMessageId` at acceptance, so the sender has to
+   * return it BEFORE slice 5's code is written. Slice 6 reads the STORED id off
+   * that row when a bounce webhook arrives, and never touches this return
+   * value. The consumer is slice 5.
+   *
+   * OPTIONAL, AND ADDITIVE ON PURPOSE. Present only on success, because only an
+   * accepted send has one. ⚠ NEVER A PLACEHOLDER on failure: slice 6 joins on
+   * this value, so a value that is not the provider's would match nothing and
+   * read as a lost bounce rather than as a send that never happened.
+   *
+   * NOTHING READS IT YET. No caller of any sender in this file touches it, and
+   * `tests/email-send-result-test.ts` layer 2b asserts that.
+   */
+  providerMessageId?: string;
 }
 
 /** Resend returns its failure; it does not throw it. This is the read. */
@@ -55,11 +73,13 @@ function resultOf(
   label: string,
   to: string,
   response: {
+    data?: { id?: string } | null;
     error?: { message?: string; name?: string; statusCode?: number | null } | null;
   }
 ): SendResult {
   const err = response?.error;
-  if (!err) return { success: true };
+  // GTC-189 slice 4b: the id rides back with the success, for slice 5 to store.
+  if (!err) return { success: true, providerMessageId: response?.data?.id };
   const message = err.message ?? err.name ?? 'Unknown Resend error';
   console.error(`[Email] ${label} to ${to} REJECTED by Resend:`, {
     name: err.name,

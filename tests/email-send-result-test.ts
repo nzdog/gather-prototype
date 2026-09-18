@@ -77,6 +77,10 @@ const RESEND_401_BODY = {
 const realFetch = globalThis.fetch;
 let fetchCalls = 0;
 
+// GTC-189 slice 4b: ONE source for the stub's message id, so the stub and the
+// assertions that read it cannot drift apart.
+const STUB_MESSAGE_ID = `${TAG}-stub-message-id`;
+
 function stubFetchFailing() {
   fetchCalls = 0;
   globalThis.fetch = (async () => {
@@ -92,7 +96,7 @@ function stubFetchSucceeding() {
   fetchCalls = 0;
   globalThis.fetch = (async () => {
     fetchCalls++;
-    return new Response(JSON.stringify({ id: `${TAG}-stub-message-id` }), {
+    return new Response(JSON.stringify({ id: STUB_MESSAGE_ID }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -343,6 +347,107 @@ async function main() {
     'sendWelcomeEmail',
     'CONTROL: a successful send still reports success',
     !!welcomeOk && welcomeOk.success === true
+  );
+
+  // ══ LAYER 2b — THE PROVIDER MESSAGE ID (GTC-189 slice 4b) ═══════════════════
+  //
+  // WHY IT IS SLICE 4'S AND NOT SLICE 6'S. Slice 5's dispatcher writes
+  // `OutboundMessage.providerMessageId` at acceptance, so the sender has to
+  // return the id BEFORE slice 5's code is written. Slice 6 reads the STORED id
+  // off the row when a webhook arrives and never touches the sender's return
+  // value. So the consumer is slice 5, and slice 4 is where it belongs — which
+  // holds even though slices 5, 6 and 7 land as one release.
+  //
+  // ⚠ NOTHING READS THE FIELD YET, and the last assertion in this layer pins
+  // that. It is optional and additive, so no caller changes.
+  //
+  // The id cannot be proven against the live provider here: GTC-247 records
+  // that this environment's RESEND_API_KEY does not authenticate, and layer 4's
+  // own precondition asserts the provider REJECTS it. A rejected send has no
+  // id to return. So what is proven here is the read of Resend's documented
+  // success envelope, against the stub that already models it.
+
+  stubFetchSucceeding();
+  const idNudge = await sendNudgeEmail({
+    to: `${TAG}-id@example.com`,
+    subject: 'x',
+    body: 'y',
+    eventId: 'x',
+    personId: 'y',
+  });
+  assert(
+    'stub',
+    'CONTROL: the success stub carries an id at all — without this the three assertions below could pass against an empty envelope',
+    JSON.parse(await new Response(JSON.stringify({ id: STUB_MESSAGE_ID })).text()).id ===
+      STUB_MESSAGE_ID
+  );
+  assert(
+    'providerMessageId',
+    "sendNudgeEmail returns Resend's message id on success — slice 5's dispatcher has nothing to join a bounce on otherwise",
+    idNudge.providerMessageId === STUB_MESSAGE_ID
+  );
+
+  stubFetchSucceeding();
+  const idMagic = await sendMagicLinkEmail(`${TAG}-id-magic@example.com`, `${TAG}-token-id`);
+  assert(
+    'providerMessageId',
+    'sendMagicLinkEmail returns it too — all three senders answer through resultOf, so they gain it at once rather than one at a time',
+    idMagic.providerMessageId === STUB_MESSAGE_ID
+  );
+
+  stubFetchSucceeding();
+  const idWelcomeAddr = `${TAG}-id-welcome-${Date.now()}@example.com`;
+  const idWelcome = await sendWelcomeEmail(idWelcomeAddr, `${TAG} event`, 'evt_x');
+  (await prisma.magicLink.findMany({ where: { email: idWelcomeAddr } })).forEach((l) =>
+    createdMagicLinkIds.push(l.id)
+  );
+  assert(
+    'providerMessageId',
+    'sendWelcomeEmail returns it too',
+    idWelcome.providerMessageId === STUB_MESSAGE_ID
+  );
+
+  // ⚠ AND ABSENT ON A FAILURE, which is the half that matters more. A rejected
+  // send has no provider id, and storing something that is not the provider's
+  // id would be worse than storing none: slice 6 joins on this value, so a
+  // placeholder would match nothing and look like a lost bounce.
+  stubFetchFailing();
+  captureConsoleError();
+  const idFail = await sendNudgeEmail({
+    to: `${TAG}-id-fail@example.com`,
+    subject: 'x',
+    body: 'y',
+    eventId: 'x',
+    personId: 'y',
+  });
+  restoreConsoleError();
+  assert(
+    'providerMessageId',
+    'and it is ABSENT on a rejected send — no placeholder, because slice 6 joins on this value and a value that is not the provider’s matches nothing',
+    idFail.success === false && idFail.providerMessageId === undefined
+  );
+
+  // ⚠ NOTHING READS IT. Asserted over the four files that call the three
+  // senders, not over all of `src/` — `providerMessageId` legitimately appears
+  // in `src/lib/sms/tnz-delivery-contract.ts`, which is GTC-264's SMS side and
+  // is a different sender's id. A caller reading this field is slice 5's work,
+  // and 4b may not anticipate it.
+  const callerFiles = [
+    'src/app/api/events/[id]/people/[personId]/nudge/route.ts',
+    'src/lib/wrap-up.ts',
+    'src/app/api/auth/magic-link/route.ts',
+    'src/app/api/events/route.ts',
+  ];
+  const callerSrc = callerFiles.map((f) => fs.readFileSync(f, 'utf8'));
+  assert(
+    'stub',
+    'CONTROL: the four caller files were actually read — each names the sender it calls, so the absence below is measured and not a bad path',
+    callerSrc.every((src) => /sendNudgeEmail|sendMagicLinkEmail|sendWelcomeEmail/.test(src))
+  );
+  assert(
+    'providerMessageId',
+    'NO CALLER READS IT — the field is optional and additive, and every consumer of it is slice 5 or later',
+    callerSrc.every((src) => !/providerMessageId/.test(src))
   );
 
   // ⚠ THE CONSTRUCTOR PATH, ASSERTED SO NOBODY LEANS ON IT.
