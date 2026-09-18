@@ -2985,6 +2985,17 @@ export default function PlanEditorPage() {
                     Share this single link with your whole family. Everyone can click their name to
                     access their personal page.
                   </p>
+                  {/*
+                    GTC-262. The card promises "everyone can click their name", and since this
+                    ticket that is no longer true of a coordinator: their /c/ link is a job
+                    rather than an ask, and this link is public to anyone holding the event id,
+                    so it is not published here. The host is the one who has to know that, and
+                    the individual links she needs are rendered directly below this card.
+                  */}
+                  <p className="text-sm text-gray-600 mb-3">
+                    Coordinators are the exception — their link opens their team&apos;s plan, so it
+                    isn&apos;t in the shared directory. Send those from the list below.
+                  </p>
                   <div className="bg-white rounded-md p-3 mb-3 border border-sage-200">
                     <p className="text-xs text-gray-500 font-mono break-all">
                       {typeof window !== 'undefined'

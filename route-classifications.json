@@ -532,7 +532,7 @@
     "apiPath": "/api/gather/:eventId/directory",
     "methods": ["GET"],
     "authType": "PUBLIC",
-    "authEvidence": ["public directory"],
+    "authEvidence": ["public directory — PARTICIPANT tokens only (GTC-262)"],
     "securityIssues": []
   },
   {

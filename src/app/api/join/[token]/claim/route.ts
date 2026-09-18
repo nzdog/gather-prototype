@@ -4,6 +4,11 @@ import { isSent } from '@/lib/lifecycle';
 import { logInviteEvent } from '@/lib/invite-events';
 import { headers } from 'next/headers';
 import { isHostMembership } from '@/lib/eligibility/host-exclusion';
+import {
+  isClaimableRole,
+  UNKNOWN_PERSON_MESSAGE,
+  UNKNOWN_PERSON_STATUS,
+} from '@/lib/eligibility/shared-link-exposure';
 
 export async function POST(request: NextRequest, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;
@@ -103,41 +108,57 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
    * `personId` names the host of this event — turning the refusal into an oracle. She is
    * simply not a claimable name here, which is what Ruling 5 says she is.
    *
-   * SCOPED TO THE HOST. The COORDINATOR fallback immediately below is untouched and
-   * still redirects, which is deliberate and pre-existing. That path handing tokens to
-   * unauthenticated callers is the same class of defect with a wider blast radius and is
-   * NOT GTC-256's — filed as GTC-262.
+   * ⚠ BOTH GATES ARE REQUIRED AND NEITHER REPLACES THE OTHER (GTC-262). This one keys on
+   * `Event.hostId` as well as on the role, precisely because `PersonEvent.role` is
+   * writable — a host row re-roled to PARTICIPANT passes the role allowlist below and is
+   * caught only here. Do not collapse them.
    */
   if (
     isHostMembership({ personId: person.id, role: person.eventMemberships[0]?.role }, event.hostId)
   ) {
-    return NextResponse.json({ error: 'Person not found in this event' }, { status: 404 });
+    return NextResponse.json({ error: UNKNOWN_PERSON_MESSAGE }, { status: UNKNOWN_PERSON_STATUS });
   }
 
-  // Prefer PARTICIPANT token, but fall back to COORDINATOR or HOST
-  const participantToken = person.tokens.find((t) => t.scope === 'PARTICIPANT');
-  const anyToken = participantToken || person.tokens[0];
+  /*
+   * GTC-262 — ONLY A PARTICIPANT'S NAME IS CLAIMABLE.
+   *
+   * Founder ruling, 2026-09-18 (unknown 1): "a participant token is an ask, a coordinator
+   * token is a job, and the no-verification bargain was struck about the ask."
+   *
+   * What stood below was `participantToken || person.tokens[0]` and a branch that, for a
+   * caller with no participant token, returned that other token with a `redirectPrefix`
+   * — `c` for a coordinator — under a field named `participantToken`. Measured 2026-09-18,
+   * unauthenticated: `HTTP 200`, `redirectPrefix: "c"`, the coordinator's live token in
+   * the body. The join PAGE lists only `role: 'PARTICIPANT'` and so never names a
+   * coordinator, which protected nothing: this endpoint takes `personId` from the request
+   * body, and `GET /api/gather/[eventId]/directory` is where a caller gets one.
+   *
+   * ⚠ THE GATE READS THE MEMBERSHIP ROLE, NOT THE TOKENS. This is the load-bearing choice.
+   * Refusing on "holds no PARTICIPANT token" works exactly until GTC-294 issues
+   * coordinators one (GTC-189 ruling E) — at which point it stops refusing, silently, with
+   * every test still green. `PersonEvent.role` is what GTC-294 does not touch.
+   * `tests/coordinator-token-exposure-test.ts` mints that token by hand and asserts the
+   * refusal holds, so the guard is proved against the change that is coming.
+   *
+   * ⚠ THE BRANCH IS REMOVED, NOT RESTRICTED. Founder ruling, the same day: "restricting
+   * leaves the mechanism standing as dead code, and the dead code is the mechanism."
+   *
+   * 404 AND THE UNKNOWN-PERSON WORDING, byte-identical to the host refusal above and for
+   * the identical reason: unauthenticated, so a distinct status or message would confirm
+   * that a guessed `personId` coordinates a team on this event.
+   */
+  if (!isClaimableRole(person.eventMemberships[0]?.role)) {
+    return NextResponse.json({ error: UNKNOWN_PERSON_MESSAGE }, { status: UNKNOWN_PERSON_STATUS });
+  }
 
-  if (!anyToken) {
+  const accessToken = person.tokens.find((t) => t.scope === 'PARTICIPANT');
+
+  if (!accessToken) {
     return NextResponse.json(
       { error: 'No access token found. Please contact the host.' },
       { status: 500 }
     );
   }
-
-  // If person has a non-PARTICIPANT token (coordinator/host), redirect them
-  // to their role-appropriate view instead of claiming
-  if (!participantToken) {
-    const prefix = anyToken.scope === 'HOST' ? 'h' : anyToken.scope === 'COORDINATOR' ? 'c' : 'p';
-    return NextResponse.json({
-      success: true,
-      participantToken: anyToken.token,
-      personName: person.name,
-      redirectPrefix: prefix,
-    });
-  }
-
-  const accessToken = participantToken;
 
   // Check if already claimed
   if (accessToken.claimedAt) {
