@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { logAudit } from '@/lib/workflow';
+import { recordAssignmentAnswer } from '@/lib/assignment/answer';
 import { logInviteEvent } from '@/lib/invite-events';
 import { deriveAttendance, isAttendanceAskable, parseAssignmentResponse } from '@/lib/attendance';
 import { resolveCarriedSubjects } from '@/lib/eligibility/carried-answer';
@@ -131,35 +131,25 @@ export async function POST(
 
     const previousResponse = assignment.response;
 
-    // Update response and log
-    await tx.assignment.update({
-      where: { id: assignmentId },
-      data: { response },
-    });
-
-    const verb =
-      response === 'ACCEPTED' ? 'Accepted' : response === 'DECLINED' ? 'Declined' : 'Maybe on';
-
     /*
-     * GTC-191 (a): THE LINE NAMES BOTH PEOPLE. `actorId` is the carrier — she is who acted —
-     * and `targetId` is the child's `Assignment`. Without the name in `details`, a carried
-     * answer and her own read identically in the ledger, and the one fact worth keeping about
-     * a carried answer is on whose behalf it was given.
+     * GTC-320: the write and the audit line are `recordAssignmentAnswer` in
+     * src/lib/assignment/answer.ts, shared with the coordinator door. The line this route
+     * used to write named the item by its CUID; the helper names it. See that module for
+     * why the coordinator's form was the one that survived.
+     *
+     * ⚠ WHAT IS NOT SHARED, AND MUST NOT BECOME SHARED. Everything above — the resolver,
+     * the carried-vs-own decision, the 403, and the re-check inside this transaction — is
+     * the Zone 3 approval given to THIS route on 2026-09-18. The helper is handed the name
+     * this route already resolved; it does not resolve it, and it decides nothing about who
+     * may answer.
      */
-    await logAudit(tx, {
+    await recordAssignmentAnswer(tx, {
       eventId: resolvedContext.event.id,
+      assignmentId,
+      itemName: assignment.item.name,
+      response,
       actorId: resolvedContext.person.id,
-      actionType:
-        response === 'ACCEPTED'
-          ? 'ACCEPT_ASSIGNMENT'
-          : response === 'DECLINED'
-            ? 'DECLINE_ASSIGNMENT'
-            : 'MAYBE_ASSIGNMENT',
-      targetType: 'Assignment',
-      targetId: assignmentId,
-      details: onBehalfOf
-        ? `${verb} assignment for item ${assignment.itemId} on behalf of ${onBehalfOf.name}`
-        : `${verb} assignment for item ${assignment.itemId}`,
+      onBehalfOfName: onBehalfOf?.name ?? null,
     });
 
     return {

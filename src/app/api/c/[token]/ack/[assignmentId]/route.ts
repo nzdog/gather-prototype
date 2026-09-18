@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { logAudit } from '@/lib/workflow';
+import { recordAssignmentAnswer } from '@/lib/assignment/answer';
 import { parseAssignmentResponse } from '@/lib/attendance';
 
 /**
@@ -52,28 +52,18 @@ export async function POST(
     return NextResponse.json({ success: true });
   }
 
-  // Update response in transaction
+  // Update response in transaction.
+  //
+  // GTC-320: the write and the audit line are `recordAssignmentAnswer` in
+  // src/lib/assignment/answer.ts, shared with the participant door. This route's own-row
+  // check above is NOT shared — that is GTC-174's ruling and it stays here.
   await prisma.$transaction(async (tx) => {
-    await tx.assignment.update({
-      where: { id: assignmentId },
-      data: { response },
-    });
-
-    const verb =
-      response === 'ACCEPTED' ? 'Accepted' : response === 'DECLINED' ? 'Declined' : 'Maybe on';
-
-    await logAudit(tx, {
+    await recordAssignmentAnswer(tx, {
       eventId: resolvedContext.event.id,
+      assignmentId,
+      itemName: assignment.item.name,
+      response,
       actorId: resolvedContext.person.id,
-      actionType:
-        response === 'ACCEPTED'
-          ? 'ACCEPT_ASSIGNMENT'
-          : response === 'DECLINED'
-            ? 'DECLINE_ASSIGNMENT'
-            : 'MAYBE_ASSIGNMENT',
-      targetType: 'Assignment',
-      targetId: assignmentId,
-      details: `${verb} ${assignment.item.name}`,
     });
   });
 

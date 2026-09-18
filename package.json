@@ -89,7 +89,8 @@
     "test:item-kind-capture": "tsx tests/item-kind-capture-test.ts",
     "test:ask-preview": "tsx tests/ask-preview-test.ts",
     "test:coordinator-holds-ask": "tsx tests/coordinator-holds-ask-test.ts",
-    "test:carried-answer": "tsx tests/carried-answer-test.ts"
+    "test:carried-answer": "tsx tests/carried-answer-test.ts",
+    "test:assignment-answer": "tsx tests/assignment-answer-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
