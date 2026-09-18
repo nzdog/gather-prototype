@@ -2,7 +2,7 @@
 # Confirmed platform quirks and diagnostic patterns for AI executors.
 # Read this file when a ticket involves unexpected platform behaviour,
 # stale UI state, auth anomalies, or DB irregularities.
-# Last updated: 2026-09-09
+# Last updated: 2026-09-18
 
 ---
 
@@ -187,5 +187,75 @@ a misread suite result before being recognised. Filed on the third occurrence.
 Direction 2 — GTC-264 Phase 1, 2026-09-12, found on the first build after a
 migration was applied; recognised immediately because direction 1 was already
 filed here, which is the whole value of the entry.
+
+---
+
+### KB-006 — A source file git calls binary: a literal control byte written where an escape was meant
+**Symptom:** A `.ts` file runs, passes every assertion, and reads normally in
+an editor, but `git diff --stat` shows `Bin` for it (`Bin 0 -> 58454 bytes`)
+and every diff of it is unreadable. `file <path>` says `data` instead of text.
+Nothing fails, so nothing warns you — the file is pushed that way.
+**Cause:** git treats a file with a NUL byte in it as binary. Here the NUL
+was an escape for NUL (a string separator) written into the file as the
+literal byte rather than as the escape's characters. The byte is invisible in
+the editor, in tool output and in review.
+**Find it:**
+
+```
+LC_ALL=C grep -n -a -P '[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]' <file>
+file <file>    # "data" means a control byte is in it
+```
+
+**Fix pattern:** remove the byte and do not reintroduce the escape — compare
+lists with `JSON.stringify(sorted)`, or join on a printable character that
+cannot occur in the data. Confirm with `file <path>` and with
+`git grep -I -c . HEAD -- <path>`, which skips binary files and so prints a
+count only for text.
+**Do not:** Look for the cause in `.gitattributes`, line endings or encoding —
+the file is valid UTF-8 apart from the one byte. And do not trust a green suite
+as evidence the file is fine; the byte changed no behaviour.
+**First seen:** GTC-189 slice 3, 2026-09-13 — `tests/ask-preview-test.ts`,
+committed in `87741d7`, fixed in `5adfc28`.
+
+---
+
+### KB-007 — A search filtered by the NEW name discards the one line carrying BOTH, which is where a legacy read hides
+**Symptom:** A `grep` written to enumerate every remaining use of an old
+name returns a short, clean list, and the list is wrong. The migration or
+deprecation proceeds on it, and the sites it missed are found later by a
+compiler error, a failing test, or not at all. Nothing in the output looks
+incomplete — a short list is the result you were hoping for.
+**Cause:** The search was narrowed by SUBTRACTING the new name to cut noise:
+
+```
+grep -rn 'person\.phone' src/ | grep -v phoneNumber      # WRONG
+```
+
+`person.phoneNumber` and `person.phone` share a prefix, so the first grep
+matches both and the `-v` was added to drop the new-name hits. But a
+transitional site reads **both on one line** — `person.phoneNumber || person.phone`
+— and that line contains the new name, so `-v` deletes it. **The exact
+shape you are hunting is the exact shape the filter removes.**
+**Find it:** narrow with a regex instead of subtracting lines, so a line
+holding both is still matched on the half that matters:
+
+```
+grep -rnE 'person\.phone\b' src/          # \b already excludes phoneNumber
+grep -rnP 'person\.phone\b(?!Number)' src/ # explicit, when the prefix is ambiguous
+```
+
+**Fix pattern:** for a rename or column unification, do not trust any
+hand-written search as the site list. Write a structural test that WALKS the
+tree and asserts the absence, and let it discover the sites. In GTC-312 the
+walk found three reads that both the ticket's filed list and the executor's
+grep had missed, one of them a channel choice rather than a display, and
+`tsc --noEmit` then found a fourth that no grep would have caught.
+**Do not:** treat a short result as a small job. And do not add `-v <newname>`
+to any search whose purpose is to find the old name — the transitional line is
+the finding.
+**First seen:** GTC-312, 2026-09-18 — `Person.phone` vs `Person.phoneNumber`,
+fixed in `473deba`. Same family as KB-005 and the two findings at GTC-189
+ruling AH and its slice 5 shape proposal: a check whose output is evidence
+about the check as much as about the code.
 
 ---
