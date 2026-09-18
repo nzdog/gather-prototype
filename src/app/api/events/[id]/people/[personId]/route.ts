@@ -211,7 +211,7 @@ export async function PATCH(
             id: true,
             name: true,
             email: true,
-            phone: true,
+            phoneNumber: true,
           },
         },
         team: {
@@ -283,7 +283,8 @@ export async function PATCH(
         personId: updated.person.id,
         name: updated.person.name,
         email: updated.person.email,
-        phone: updated.person.phone,
+        // GTC-312: wire key `phone`, sourced from `Person.phoneNumber`. See GET above.
+        phone: updated.person.phoneNumber,
         role: updated.role,
         team: updated.team || { id: '', name: 'Unassigned' },
         itemCount,

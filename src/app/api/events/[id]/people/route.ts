@@ -23,7 +23,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
             id: true,
             name: true,
             email: true,
-            phone: true,
+            phoneNumber: true,
           },
         },
         team: {
@@ -57,7 +57,14 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
           personId: pe.person.id,
           name: pe.person.name,
           email: pe.person.email,
-          phone: pe.person.phone,
+          /*
+           * GTC-312: the WIRE KEY stays `phone`; its SOURCE moves to `Person.phoneNumber`.
+           * The key is not renamed because this route's own POST already accepts `phone`
+           * on the way in and stores `phoneNumber` — the asymmetry was the input contract
+           * before it was the output one, and renaming the key would ripple into every
+           * component that renders a contact line without making one of them more correct.
+           */
+          phone: pe.person.phoneNumber,
           role: pe.role,
           team: pe.team || { id: '', name: 'Unassigned' },
           itemCount,
@@ -158,7 +165,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     let reachabilityTier: 'DIRECT' | 'UNTRACKABLE' = 'UNTRACKABLE';
     let contactMethod: 'EMAIL' | 'SMS' | 'NONE' = 'NONE';
 
-    if (person.phoneNumber || person.phone) {
+    // GTC-312: `|| person.phone` removed — the third of three copies of this rule
+    // (batch-import and households carry the others). Same rule, same value, one column.
+    if (person.phoneNumber) {
       contactMethod = 'SMS';
       reachabilityTier = 'DIRECT';
     } else if (person.email) {
@@ -196,7 +205,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
             id: true,
             name: true,
             email: true,
-            phone: true,
+            phoneNumber: true,
           },
         },
         team: {
@@ -237,7 +246,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         personId: personEvent.person.id,
         name: personEvent.person.name,
         email: personEvent.person.email,
-        phone: personEvent.person.phone,
+        phone: personEvent.person.phoneNumber,
         role: personEvent.role,
         team: personEvent.team || { id: '', name: 'Unassigned' },
         itemCount: 0,

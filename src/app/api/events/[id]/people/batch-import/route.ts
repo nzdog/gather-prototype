@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
 import { recordChange } from '@/lib/ledger';
+import { normalizePhoneNumber } from '@/lib/phone';
 
 interface PersonToImport {
   name: string;
@@ -103,7 +104,21 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
             data: {
               name: personData.name.trim(),
               email: personData.email || null,
-              phone: personData.phone || null,
+              /*
+               * GTC-312: `phoneNumber`, normalised — NOT the legacy `phone` column.
+               *
+               * This was the ONE capture path of six that wrote `Person.phone`, and
+               * nothing reads that column: `findNudgeCandidates`, `chooseManualNudgeChannel`,
+               * `findDecideByFollowupCandidates` and `ChooserPerson` all read `phoneNumber`.
+               * A person imported here had a mobile and read to the product as having none.
+               *
+               * And it normalises HERE rather than trusting the caller. `ImportCSVModal`
+               * already normalises client-side, which is why every stored legacy number was
+               * valid `+64` — but this route is a guarded API, not a private door of that
+               * modal, and a direct call carrying `021 123 4567` would fail `isValidNZNumber`
+               * and be untextable in a column that reads as populated.
+               */
+              phoneNumber: personData.phone ? normalizePhoneNumber(personData.phone) : null,
               inviteAnchorAt: event.sentAt || null,
             },
           });
@@ -135,7 +150,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         let reachabilityTier: 'DIRECT' | 'UNTRACKABLE' = 'UNTRACKABLE';
         let contactMethod: 'EMAIL' | 'SMS' | 'NONE' = 'NONE';
 
-        if (person.phoneNumber || person.phone) {
+        // GTC-312: the `|| person.phone` branch is gone. The VALUE this computes is
+        // unchanged — after the backfill no row has `phone` without `phoneNumber` — so
+        // this removes a read of the legacy column and does not repair `contactMethod`,
+        // which stays [[GTC-295]]'s.
+        if (person.phoneNumber) {
           contactMethod = 'SMS';
           reachabilityTier = 'DIRECT';
         } else if (person.email) {

@@ -44,7 +44,9 @@ export interface GuestForWrapUp {
     id: string;
     name: string;
     email: string | null;
-    phone: string | null;
+    // GTC-312: the legacy `phone` field is gone from both shapes here. It was written
+    // by `selectWrapUpRecipients` and read by nothing — the wrap-up sender has always
+    // used `phoneNumber`. A dead field carrying the column nothing reads.
     phoneNumber: string | null;
     smsOptedOut: boolean;
   };
@@ -62,7 +64,6 @@ export interface WrapUpCandidate {
     id: string;
     name: string;
     email: string | null;
-    phone: string | null;
     phoneNumber: string | null;
     smsOptedOut: boolean;
     assignments: Array<{ item: { name: string }; response: string }>;
@@ -93,7 +94,6 @@ export function selectWrapUpRecipients(
         id: pe.person.id,
         name: pe.person.name,
         email: pe.person.email,
-        phone: pe.person.phone,
         phoneNumber: pe.person.phoneNumber,
         smsOptedOut: pe.person.smsOptedOut,
       },
@@ -137,7 +137,10 @@ export async function generateWrapUpLinks(
       alreadyLinked++;
       continue;
     }
-    const phone = person.phoneNumber || person.phone || null;
+    // GTC-312: `|| person.phone` removed. This is a CHANNEL choice, not a display —
+    // a thank-you went by SMS on the strength of a column no sender reads, so the
+    // channel could be chosen as 'sms' for a number `sendSms` would never see.
+    const phone = person.phoneNumber || null;
     const email = person.email || null;
 
     // Determine channel

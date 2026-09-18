@@ -194,7 +194,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       let reachabilityTier: 'DIRECT' | 'UNTRACKABLE' = 'UNTRACKABLE';
       let contactMethod: 'EMAIL' | 'SMS' | 'NONE' = 'NONE';
 
-      if (person.phoneNumber || person.phone) {
+      // GTC-312: `|| person.phone` removed — same rule, same value, one column.
+      // Found by this ticket's layer W walk rather than from its filed site list.
+      if (person.phoneNumber) {
         contactMethod = 'SMS';
         reachabilityTier = 'DIRECT';
       } else if (person.email) {
