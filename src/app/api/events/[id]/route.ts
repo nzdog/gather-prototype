@@ -2,30 +2,43 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth/session';
+import { requireEventRole } from '@/lib/auth/guards';
 import { canEditEvent } from '@/lib/entitlements';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordChange, fieldChanges, onMaterialChange, MATERIAL_EVENT_FIELDS } from '@/lib/ledger';
+import { isSent } from '@/lib/lifecycle';
+// GTC-271: EVENT_WIRE_SELECT moved to a shared module so the single-event narrowing and
+// the list narrowing (EVENT_LIST_WIRE_SELECT) are defined in one place and can be read
+// against each other. The field list is unchanged from what GTC-267 shipped.
+import { EVENT_WIRE_SELECT } from '@/lib/events/wire-select';
+
+// Everything the host can change about the event itself. The material subset
+// (date/venue) additionally fires the F1 re-ask; the rest is versioned only.
+const TRACKED_EVENT_FIELDS = [
+  ...MATERIAL_EVENT_FIELDS,
+  'name',
+  'occasionType',
+  'occasionDescription',
+  'guestCount',
+  'dietaryStatus',
+  'dietaryAllergies',
+] as const;
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  try {
-    const { id: eventId } = await context.params;
+  const { id: eventId } = await context.params;
 
+  // GTC-267: this GET had no guard at all while the PATCH and DELETE below both
+  // called getUser(), so the per-file inventory gate read the whole file as
+  // authenticated. An event id alone reached the host's email — and, through the
+  // hostId this route publishes, the HOST access token. Outside the try/catch on
+  // purpose: an auth failure must answer 401/403, never fall through to a 500.
+  const auth = await requireEventRole(eventId, ['HOST', 'COHOST']);
+  if (auth instanceof NextResponse) return auth;
+
+  try {
     const event = await prisma.event.findUnique({
       where: { id: eventId },
-      include: {
-        host: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        coHost: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
+      select: EVENT_WIRE_SELECT,
     });
 
     if (!event) {
@@ -82,52 +95,97 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     const body = await request.json();
 
-    // Update event with provided fields
+    // GTC-175 (D2): the per-EVENT decide-by default — layer 2 of the offset resolution
+    // (src/lib/decide-by.ts). The host-facing "decide faster" control writes 48 here;
+    // null clears it back to the 5-day system default. Not a material field: it changes
+    // when the system asks about a maybe, not what anyone was asked to bring, so it is
+    // deliberately absent from MATERIAL_EVENT_FIELDS and triggers no re-ask.
+    if (
+      body.decideByOffsetHours !== undefined &&
+      body.decideByOffsetHours !== null &&
+      !(Number.isInteger(body.decideByOffsetHours) && body.decideByOffsetHours >= 0)
+    ) {
+      return NextResponse.json(
+        { error: 'decideByOffsetHours must be a non-negative integer number of hours, or null' },
+        { status: 400 }
+      );
+    }
+
+    // GTC-196 (A3b): THE T5 SITE. This is the only route that writes startDate,
+    // endDate or venue*, and until now it had no status gating AND no audit logging
+    // at all — a post-send date change left no trace whatsoever.
+    //
+    // A change here is material: Hinge §2 names date/venue as touching someone, and
+    // Moment 4 §8.5 has the system re-asking everyone against the correction. It is
+    // also the recovery path for a wrong-date send, since release is absolute and
+    // there is no unsend.
+    const actor = await ledgerActorForUser(user, 'HOST');
+    const beforeEvent = existingEvent as unknown as Record<string, unknown>;
+
+    const updateData = {
+      name: body.name,
+      startDate: body.startDate ? new Date(body.startDate) : undefined,
+      endDate: body.endDate ? new Date(body.endDate) : undefined,
+      occasionType: body.occasionType || null,
+      occasionDescription: body.occasionDescription || null,
+      guestCount: body.guestCount,
+      guestCountConfidence: body.guestCountConfidence,
+      guestCountMin: body.guestCountMin,
+      guestCountMax: body.guestCountMax,
+      dietaryStatus: body.dietaryStatus,
+      dietaryVegetarian: body.dietaryVegetarian,
+      dietaryVegan: body.dietaryVegan,
+      dietaryGlutenFree: body.dietaryGlutenFree,
+      dietaryDairyFree: body.dietaryDairyFree,
+      dietaryAllergies: body.dietaryAllergies || null,
+      venueName: body.venueName || null,
+      venueType: body.venueType || null,
+      venueKitchenAccess: body.venueKitchenAccess || null,
+      venueOvenCount: body.venueOvenCount,
+      venueStoretopBurners: body.venueStoretopBurners,
+      venueBbqAvailable: body.venueBbqAvailable,
+      venueTimingStart: body.venueTimingStart || null,
+      venueTimingEnd: body.venueTimingEnd || null,
+      venueNotes: body.venueNotes || null,
+      // GTC-175 (D2): `undefined` leaves it alone, explicit `null` clears the override.
+      // Not `|| null` — that would read a legitimate 0 as "clear me".
+      decideByOffsetHours: body.decideByOffsetHours,
+    };
+
     const updatedEvent = await prisma.event.update({
       where: { id: eventId },
-      data: {
-        name: body.name,
-        startDate: body.startDate ? new Date(body.startDate) : undefined,
-        endDate: body.endDate ? new Date(body.endDate) : undefined,
-        occasionType: body.occasionType || null,
-        occasionDescription: body.occasionDescription || null,
-        guestCount: body.guestCount,
-        guestCountConfidence: body.guestCountConfidence,
-        guestCountMin: body.guestCountMin,
-        guestCountMax: body.guestCountMax,
-        dietaryStatus: body.dietaryStatus,
-        dietaryVegetarian: body.dietaryVegetarian,
-        dietaryVegan: body.dietaryVegan,
-        dietaryGlutenFree: body.dietaryGlutenFree,
-        dietaryDairyFree: body.dietaryDairyFree,
-        dietaryAllergies: body.dietaryAllergies || null,
-        venueName: body.venueName || null,
-        venueType: body.venueType || null,
-        venueKitchenAccess: body.venueKitchenAccess || null,
-        venueOvenCount: body.venueOvenCount,
-        venueStoretopBurners: body.venueStoretopBurners,
-        venueBbqAvailable: body.venueBbqAvailable,
-        venueTimingStart: body.venueTimingStart || null,
-        venueTimingEnd: body.venueTimingEnd || null,
-        venueNotes: body.venueNotes || null,
-      },
-      include: {
-        host: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        coHost: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
+      data: updateData,
+      // GTC-267: the same wire shape as the GET. `EditEventModal` in
+      // `src/components/plan/EditEventModal.tsx` discards this body entirely, so
+      // nothing narrows by it — but it is the same row and it left by the same door.
+      select: EVENT_WIRE_SELECT,
     });
+
+    // One entry per changed field, grouped as one step. `fieldChanges` drops
+    // unchanged fields — a submission is not a change, and the ledger must not be
+    // asked to hold noise (Hinge §2).
+    const changes = fieldChanges(
+      { action: 'EDIT_EVENT', targetType: 'Event', targetId: eventId },
+      beforeEvent,
+      updateData as Record<string, unknown>,
+      TRACKED_EVENT_FIELDS
+    );
+
+    if (changes.length > 0) {
+      const { changeSetId } = await prisma.$transaction((tx) =>
+        recordChange(tx, { eventId, actor, reason: body.reason ?? null, changes })
+      );
+
+      // T5 fires the re-ask. No-op until GTC-183 (F1) — and until then a post-send
+      // date change is RECORDED but nobody is re-asked, which is why F1 is a
+      // correctness dependency of Epic A and not a later feature (plan §7.3).
+      const materialFields = changes
+        .map((c) => c.field!)
+        .filter((f) => MATERIAL_EVENT_FIELDS.includes(f as never));
+      if (materialFields.length > 0 && isSent(existingEvent)) {
+        await onMaterialChange(eventId, changeSetId, materialFields);
+      }
+    }
 
     return NextResponse.json({ event: updatedEvent });
   } catch (error) {

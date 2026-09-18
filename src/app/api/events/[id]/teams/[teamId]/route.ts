@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordChange } from '@/lib/ledger';
 
 export async function DELETE(
   _request: NextRequest,
@@ -36,6 +38,26 @@ export async function DELETE(
     await prisma.team.delete({
       where: { id: teamId },
     });
+    // Deleting a team does NOT delete its members' PersonEvent rows — GTC-147 changed
+    // that cascade to SetNull. Their items go with the team, so any assignment lost
+    // this way is a T3 the item routes would have recorded individually; this entry
+    // records the team-level act.
+    const delTeamActor = await ledgerActorForUser(auth.user, auth.role);
+    await prisma.$transaction((tx) =>
+      recordChange(tx, {
+        eventId,
+        actor: delTeamActor,
+        changes: [
+          {
+            action: 'DELETE_TEAM',
+            targetType: 'Team',
+            targetId: teamId,
+            before: { name: team.name },
+            after: null,
+          },
+        ],
+      })
+    );
 
     return NextResponse.json({
       success: true,

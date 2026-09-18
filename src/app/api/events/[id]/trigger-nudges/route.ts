@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { findNudgeCandidatesForEvent } from '@/lib/sms/nudge-eligibility';
 import { processNudges } from '@/lib/sms/nudge-sender';
-import { isSmsEnabled } from '@/lib/sms/twilio-client';
 import { requireEventRole } from '@/lib/auth/guards';
 
 export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -21,9 +20,11 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
   }
 
   try {
-    if (!isSmsEnabled()) {
-      return NextResponse.json({ error: 'SMS is not configured' }, { status: 400 });
-    }
+    // GTC-214: no provider check here. This route used to 400 with "SMS is not configured"
+    // on `!isSmsEnabled()` — the Twilio predicate — while every candidate it finds is a
+    // +64 number that routes to TNZ. `sendSms` selects the provider per destination and
+    // reports per-recipient failures through `result.sent`, which this response already
+    // surfaces.
     // Find candidates for this event only
     const candidates = await findNudgeCandidatesForEvent(eventId);
 
@@ -32,9 +33,10 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
 
     return NextResponse.json({
       success: true,
+      // GTC-178 (E1, phase 5): ordinal keys — the legs are days 4 and 7 now.
       eligible: {
-        '24h': candidates.eligible24h.length,
-        '48h': candidates.eligible48h.length,
+        first: candidates.eligibleFirst.length,
+        second: candidates.eligibleSecond.length,
       },
       sent: result.sent.length,
       succeeded: result.sent.filter((r) => r.success).length,

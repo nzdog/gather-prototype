@@ -1,14 +1,20 @@
 // GET /api/events/[id]/conflicts/[conflictId] - Get conflict details
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
 
 export async function GET(
   _request: NextRequest,
   context: { params: Promise<{ id: string; conflictId: string }> }
 ) {
-  try {
-    const { id: eventId, conflictId } = await context.params;
+  const { id: eventId, conflictId } = await context.params;
 
+  // GTC-267: unauthenticated before this. The guard runs before the lookup, so a
+  // bogus conflictId is refused rather than answered with a 404 that confirms it.
+  const auth = await requireEventRole(eventId, ['HOST', 'COHOST']);
+  if (auth instanceof NextResponse) return auth;
+
+  try {
     const conflict = await prisma.conflict.findUnique({
       where: { id: conflictId },
       include: {

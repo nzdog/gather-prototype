@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { canMutate, logAudit } from '@/lib/workflow';
-import { requireNotFrozen } from '@/lib/auth/guards';
+import { logAudit } from '@/lib/workflow';
+import { recordChange, actorFromToken, fieldChanges, ASK_FIELDS } from '@/lib/ledger';
+import { itemNameForStorage } from '@/lib/items/name';
+
+const TRACKED = [...ASK_FIELDS, 'description', 'critical', 'dietaryTags'] as const;
 
 /**
  * PATCH /api/c/[token]/items/[itemId]
@@ -11,9 +14,7 @@ import { requireNotFrozen } from '@/lib/auth/guards';
  *
  * CRITICAL:
  * - Verify item.teamId === token.teamId before mutation
- * - Check canMutate() before updating
  * - Never accept teamId from client (ownership already verified)
- * - Server-side frozen state validation
  */
 export async function PATCH(
   request: NextRequest,
@@ -26,30 +27,31 @@ export async function PATCH(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
-  // SECURITY: Block mutations when FROZEN (server-side validation)
-  const frozenBlock = requireNotFrozen(resolvedContext.event, false);
-  if (frozenBlock) return frozenBlock;
-
-  // Verify item ownership
+  // Verify item ownership. The assignment comes along because the why-scope rule
+  // turns on whether anyone has ANSWERED (T4) — an ASK_FIELDS edit on a PENDING item
+  // is the typo case and is never interrogated.
   const item = await prisma.item.findUnique({
     where: { id: itemId },
+    include: { assignment: { select: { response: true } } },
   });
 
   if (!item || item.teamId !== resolvedContext.team.id) {
     return NextResponse.json({ error: 'Item not found' }, { status: 404 });
   }
 
-  // Check if mutations are allowed
-  if (!canMutate(resolvedContext.event.status, 'editItem')) {
-    return NextResponse.json(
-      {
-        error: `Cannot edit items while event is ${resolvedContext.event.status}`,
-      },
-      { status: 403 }
-    );
-  }
-
   const body = await request.json();
+
+  // GTC-302: a submitted name is tidied (`itemNameForStorage`), and a blank one refused rather than
+  // stored. A request that sends no name leaves the stored one exactly as it is — GTC-302 Unknown 5
+  // leaves the stored rows alone, so nothing here tidies a name nobody sent.
+  let submittedName: string | undefined;
+  if (body.name != null) {
+    const tidied = itemNameForStorage(body.name);
+    if (!tidied) {
+      return NextResponse.json({ error: 'Item name cannot be blank' }, { status: 400 });
+    }
+    submittedName = tidied;
+  }
 
   // Check if substantive fields are being edited
   const substantiveFieldsBeingEdited =
@@ -57,6 +59,7 @@ export async function PATCH(
     body.description !== undefined ||
     body.quantity !== undefined ||
     body.critical !== undefined ||
+    body.notes !== undefined ||
     body.glutenFree !== undefined ||
     body.dairyFree !== undefined ||
     body.vegetarian !== undefined ||
@@ -70,7 +73,7 @@ export async function PATCH(
     const updated = await tx.item.update({
       where: { id: itemId },
       data: {
-        name: body.name ?? item.name,
+        name: submittedName ?? item.name,
         quantity: body.quantity !== undefined ? body.quantity : item.quantity,
         description: body.description !== undefined ? body.description : item.description,
         critical: body.critical !== undefined ? body.critical : item.critical,
@@ -103,6 +106,26 @@ export async function PATCH(
       details: `Updated item: ${updated.name}`,
     });
 
+    const changes = fieldChanges(
+      { action: 'EDIT_ITEM', targetType: 'Item', targetId: itemId },
+      item as unknown as Record<string, unknown>,
+      updated as unknown as Record<string, unknown>,
+      TRACKED
+    ).map((c) => ({
+      ...c,
+      action: c.field === 'critical' ? ('TOGGLE_CRITICAL' as const) : c.action,
+      context: { assignmentResponse: item.assignment?.response ?? null },
+    }));
+
+    if (changes.length > 0) {
+      await recordChange(tx, {
+        eventId: resolvedContext.event.id,
+        actor: actorFromToken(resolvedContext),
+        reason: body.reason ?? null,
+        changes,
+      });
+    }
+
     return updated;
   });
 
@@ -116,44 +139,29 @@ export async function PATCH(
  *
  * CRITICAL:
  * - Verify item.teamId === token.teamId
- * - FROZEN: delete blocked (no override)
- * - CONFIRMING: blocked if critical
  * - DRAFT: always allowed
  * - Cascade will delete assignment (via schema)
- * - Server-side frozen state validation
  */
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ token: string; itemId: string }> }
 ) {
   const { token, itemId } = await context.params;
+  const delBody = await request.json().catch(() => ({}) as { reason?: string });
   const resolvedContext = await resolveToken(token);
 
   if (!resolvedContext || resolvedContext.scope !== 'COORDINATOR' || !resolvedContext.team) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
-  // SECURITY: Block mutations when FROZEN (server-side validation)
-  const frozenBlock = requireNotFrozen(resolvedContext.event, false);
-  if (frozenBlock) return frozenBlock;
-
   // Verify item ownership
   const item = await prisma.item.findUnique({
     where: { id: itemId },
+    include: { assignment: { select: { response: true } } },
   });
 
   if (!item || item.teamId !== resolvedContext.team.id) {
     return NextResponse.json({ error: 'Item not found' }, { status: 404 });
-  }
-
-  // Check if deletion is allowed (allow both critical and non-critical)
-  if (!canMutate(resolvedContext.event.status, 'deleteItem', false)) {
-    return NextResponse.json(
-      {
-        error: `Cannot delete items while event is ${resolvedContext.event.status}`,
-      },
-      { status: 403 }
-    );
   }
 
   // Delete item in transaction (cascade will delete assignment)
@@ -169,6 +177,23 @@ export async function DELETE(
       targetType: 'Item',
       targetId: itemId,
       details: `Deleted item: ${item.name}`,
+    });
+
+    // T3 — deleting an item someone holds takes their ask away.
+    await recordChange(tx, {
+      eventId: resolvedContext.event.id,
+      actor: actorFromToken(resolvedContext),
+      reason: delBody.reason ?? null,
+      changes: [
+        {
+          action: 'DELETE_ITEM',
+          targetType: 'Item',
+          targetId: itemId,
+          before: { name: item.name, quantity: item.quantity },
+          after: null,
+          context: { assignmentResponse: item.assignment?.response ?? null },
+        },
+      ],
     });
   });
 

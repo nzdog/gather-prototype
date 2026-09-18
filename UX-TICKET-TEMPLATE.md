@@ -9,6 +9,20 @@ UX tickets are UI changes only. No preflight required.
 
 ---
 
+### Citations (binding — GTC-222)
+
+**The Citations section of `BUG-TICKET-TEMPLATE.md` is binding here too.**
+Cite the component or handler by name — `PlanHeader` in
+`src/components/plan/PlanHeader.tsx` — never by line number. Use
+`// ANCHOR(GTC-nnn): label` where there is no symbol to name. A comment
+records WHY, not WHAT. A deliberate temporary state names the ticket that
+ends it.
+
+UX tickets cite JSX, which moves more than anything else in the repo. A
+line number in `The Fix` is stale by the next styling pass.
+
+---
+
 # GTC-[NUMBER] — [One line: the user moment, not the element]
 
 **Type:** UX
@@ -87,6 +101,7 @@ while breaking something else]
 
 [ ] GATHER-BUILD-CONSTANTS.md read
 [ ] GATHER-KNOWN-BEHAVIOURS.md read
+[ ] Citations are symbols, not line numbers
 [ ] Fix implemented
 [ ] Felt test passed — [specific felt condition]
 [ ] Functional test passed — [specific observable condition]

@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/wrap-up-dispatch?secret=${CRON_SECRET}",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/decide-by-followups?secret=${CRON_SECRET}",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

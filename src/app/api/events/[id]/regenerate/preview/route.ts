@@ -33,7 +33,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     // AI call cap check (preview does not increment, but blocks when cap reached)
-    const AI_CALL_LIMIT = 10;
+    const AI_CALL_LIMIT = 20;
     if ((event.aiCallsUsed ?? 0) >= AI_CALL_LIMIT) {
       return NextResponse.json({ error: 'AI call limit reached for this event' }, { status: 429 });
     }

@@ -24,9 +24,13 @@ type PrismaClient = typeof prisma | Prisma.TransactionClient;
  * - HOST token for event.coHostId (if present)
  * - COORDINATOR token for each team's coordinatorId (with teamId)
  * - PARTICIPANT token for each PersonEvent with role=PARTICIPANT (without teamId)
+ * - PARTICIPANT token for each PersonEvent with role=COORDINATOR (without teamId) —
+ *   GTC-294, so a coordinator holds the ASK as well as the JOB
  *
- * NOTE: Coordinators do NOT receive PARTICIPANT tokens.
- * The coordinator view already shows their personal assignments.
+ * NOTE: a `role: 'HOST'` row receives no PARTICIPANT token, and holds none — GTC-256
+ * Ruling 5/8, enforced by the revocation sweep below as well as by declining to issue.
+ * ⚠ THAT INCLUDES A HOST WHO IS A TEAM'S `coordinatorId`, which is a live shape rather
+ * than a curiosity — see the key note on step 4b.
  *
  * @param eventId - Event to ensure tokens for
  * @param tx - Optional transaction client for atomic operations
@@ -100,6 +104,51 @@ export async function ensureEventTokens(eventId: string, tx?: PrismaClient): Pro
     await db.accessToken.deleteMany({
       where: {
         id: { in: tokensToDelete.map((t) => t.id) },
+      },
+    });
+  }
+
+  /*
+   * GTC-256 (phase 3), RULING 5 + BUILD DECISION 3 — REVOKE, DO NOT MERELY DECLINE.
+   *
+   * Ruling 8 closes the auto-nudge finder and the decide-by finder BY WITHHOLDING the
+   * PARTICIPANT token: both skip with 'No participant token'. That is construction-deep
+   * only for as long as no such token exists. Step 4 below has always declined to ISSUE
+   * one to a non-PARTICIPANT row — and nothing revoked one already issued, because the
+   * cleanup above prunes COORDINATOR tokens and nothing else.
+   *
+   * SO THIS WAS A ONE-WAY DOOR, AND IT WAS REACHABLE TODAY, WITHOUT ANY BACKFILL. A
+   * single `PATCH /api/events/[id]/people/[personId]` setting the host's role to
+   * PARTICIPANT minted her one here; setting it back to HOST did not take it away. From
+   * that point she was a live auto-nudge recipient, a live decide-by recipient, and a
+   * fully claimable name on the shared link — permanently, on a new event. Measured, then
+   * pinned in tests/host-never-messaged-test.ts, which asserts the RED state first so the
+   * revocation cannot be mistaken for scaffolding.
+   *
+   * ⚠ DO-NOT-TOUCH ZONE 3, ENTERED DELIBERATELY AND NARROWLY (founder-approved,
+   * 2026-08-29: "scoped to role: 'HOST' rows only, structurally symmetric with the
+   * existing COORDINATOR prune. Nothing wider.").
+   *
+   *   - It keys on the WRONG SCOPE FOR THIS ROLE, never on the person: a HOST row must
+   *     not hold a PARTICIPANT token. Her HOST token is untouched.
+   *   - It reaches no ordinary participant. A `role: 'PARTICIPANT'` row is outside the
+   *     query, so the token issuance every guest depends on is unchanged.
+   *   - It is NOT the general PARTICIPANT prune the COORDINATOR block performs (revoking
+   *     any token that no longer matches current state). That is a wider change to
+   *     issuance semantics and would need the full security re-audit Zone 3 requires.
+   *
+   * This is also build decision 3's requirement for the phase-5 backfill, arriving early:
+   * any event re-roled to HOST now has its stale token revoked by the same sweep, so the
+   * backfill inherits a mechanism rather than needing to name a separate write.
+   */
+  const hostRowPersonIds = personEvents.filter((pe) => pe.role === 'HOST').map((pe) => pe.personId);
+
+  if (hostRowPersonIds.length > 0) {
+    await db.accessToken.deleteMany({
+      where: {
+        eventId,
+        scope: 'PARTICIPANT',
+        personId: { in: hostRowPersonIds },
       },
     });
   }
@@ -192,7 +241,12 @@ export async function ensureEventTokens(eventId: string, tx?: PrismaClient): Pro
   }
 
   // 4. PARTICIPANT tokens for PersonEvents with role=PARTICIPANT only
-  // NOTE: Coordinators do NOT get PARTICIPANT tokens
+  //
+  // UNCHANGED BY GTC-294, DELIBERATELY. A coordinator is reached by step 4b below, not by
+  // relaxing this predicate: `pe.role === 'PARTICIPANT'` already excludes a COORDINATOR
+  // row, so dropping the `coordinatorIds` clause here would look like the change and do
+  // nothing, and dropping both clauses would admit the HOST row step 4b is careful to miss.
+  //
   // Build set of all coordinator person IDs (both team.coordinatorId AND PersonEvent.role = COORDINATOR)
   const coordinatorIds = new Set([
     ...event.teams.map((t) => t.coordinatorId).filter(Boolean),
@@ -201,7 +255,7 @@ export async function ensureEventTokens(eventId: string, tx?: PrismaClient): Pro
 
   for (const pe of personEvents) {
     // Only create PARTICIPANT tokens for people with PARTICIPANT role
-    // AND who are NOT coordinators
+    // AND who are NOT coordinators (their own token comes from step 4b)
     if (pe.role === 'PARTICIPANT' && !coordinatorIds.has(pe.personId)) {
       if (!tokenExists(pe.personId, 'PARTICIPANT', null)) {
         tokensToCreate.push({
@@ -213,6 +267,87 @@ export async function ensureEventTokens(eventId: string, tx?: PrismaClient): Pro
           expiresAt,
         });
       }
+    }
+  }
+
+  /*
+   * 4b. GTC-294 — THE COORDINATOR'S ASK. Founder ruling (Nigel, 2026-09-13), GTC-189
+   * ruling E, option (a):
+   *
+   *   "A coordinator who owns an item is a guest with an item and a job, and the job
+   *    should not cost them the ask."
+   *
+   * So a COORDINATOR membership holds a PARTICIPANT token BESIDE its COORDINATOR one. The
+   * two rows are the pair `@@unique([eventId, personId, scope, teamId])` already admits —
+   * they differ in SCOPE — so there is no schema change and no migration here.
+   *
+   * ⚠ DO-NOT-TOUCH ZONE 3, ENTERED DELIBERATELY AND NARROWLY (founder-approved,
+   * 2026-09-18: "the new step in tokens.ts, the two notes stating the old rule, and the
+   * promotion route's PARTICIPANT deleteMany. Step 4 unchanged, the prune unchanged,
+   * GTC-256's revocation unchanged, no schema.").
+   *
+   * ── IT KEYS ON `pe.role`, AND NEVER ON `coordinatorIds`. THIS IS THE WHOLE DESIGN. ──
+   *
+   * `coordinatorIds` above is built from `Team.coordinatorId` unioned with COORDINATOR
+   * memberships, and it has NO ROLE FILTER — so it contains hosts. Measured in
+   * `gather_dev` on 2026-09-18, before any code was written:
+   *
+   *   Henderson Family Christmas 2025 (CONFIRMING)
+   *     team "Mains" -> coordinatorId = Sarah Henderson
+   *     Sarah's PersonEvent.role = HOST, and she IS Event.hostId
+   *
+   * Keyed that way this step would mint HER a PARTICIPANT token, which GTC-256 Ruling 5
+   * forbids outright — and NOTHING DOWNSTREAM WOULD CATCH IT, because `findNudgeCandidates`
+   * and `findDecideByFollowupCandidates` gate on the TOKEN and never read `role`.
+   * Withholding it is the entirety of Ruling 8's mechanism.
+   *
+   * ⚠ AND THE HOST SWEEP ABOVE WOULD NOT HAVE SAVED IT, because of the ORDER: that
+   * revocation runs before `existingTokens` is read, which is before this block. A token
+   * minted here survives the call that minted it. The next call revokes it and this block
+   * mints a fresh one — mint, revoke, re-mint, forever, with the host a live auto-nudge and
+   * decide-by recipient in every window between. A defect that never fails.
+   *
+   * ⚠ AND SHE IS A LIVE SHAPE, NOT A SEED ARTIFACT. Two routes write a host as a team's
+   * coordinator: `src/app/api/templates/[id]/clone/route.ts` sets `coordinatorId: hostId`
+   * on EVERY team it creates and then writes her membership as `role: 'HOST'`, and the
+   * `CREATE_TEAM` action in
+   * `src/app/api/events/[id]/conflicts/[conflictId]/execute-resolution/route.ts` does the
+   * same for one team — reachable from `ResolveWithAIModal`.
+   *
+   * `tests/coordinator-holds-ask-test.ts` builds her the way the clone route does and
+   * asserts she gets no ask, in the RED run and the GREEN one. That assertion is not
+   * measuring this ticket; it is fencing it.
+   *
+   * ── WHAT THIS STEP IS NOT ────────────────────────────────────────────────────
+   *
+   * NOT CONDITIONAL ON HOLDING AN ITEM (founder ruling, 2026-09-18). Tokens are issued at
+   * the transition to CONFIRMING and again at the press, before items are settled, so a
+   * conditional token would churn — and it would put a fourth key into a function that
+   * already carries three (step 3 on `team.coordinatorId`, step 3b and this one on
+   * `pe.role`, step 4 on `personEvents`).
+   *
+   * ⚠ THE CONSEQUENCE, RULED WITH EYES OPEN: an itemless coordinator with a stamped
+   * `sentAt` becomes a live auto-nudge recipient, because `findNudgeCandidates` roots on
+   * `PersonEvent` and requires no assignment. All 16 coordinator memberships in
+   * `gather_dev` have `sentAt` NULL, so it is real in code and dormant in data — which is
+   * why it is asserted now rather than found later. Which MESSAGE she receives is
+   * [[GTC-299]]'s third register and does not exist; until it does she holds a working link
+   * that nothing sends, the same state 155 of 232 recipients are already in.
+   *
+   * NOT A RENEWAL. Like every branch here it only creates a MISSING row; it never refreshes
+   * `expiresAt` on one that exists. A coordinator whose ask lapses before their job does is
+   * back to holding only the job — GTC-262's way 2, out of scope and filed, not fixed.
+   */
+  for (const pe of personEvents) {
+    if (pe.role === 'COORDINATOR' && !tokenExists(pe.personId, 'PARTICIPANT', null)) {
+      tokensToCreate.push({
+        token: generateToken(),
+        scope: 'PARTICIPANT',
+        personId: pe.personId,
+        eventId,
+        teamId: null,
+        expiresAt,
+      });
     }
   }
 

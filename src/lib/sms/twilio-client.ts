@@ -39,17 +39,8 @@ export function getTwilioClient() {
   return client;
 }
 
-/**
- * Validate Twilio webhook signature
- * Use this to verify inbound webhooks are actually from Twilio
- */
-export function validateTwilioSignature(
-  signature: string,
-  url: string,
-  params: Record<string, string>
-): boolean {
-  if (!authToken) return false;
-
-  const twilioLib = require('twilio');
-  return twilioLib.validateRequest(authToken, signature, url, params);
-}
+// GTC-214: `validateTwilioSignature` was deleted here. It had zero callers, and the
+// inbound handler it looked like it protected never called it — dead verification code
+// reads as though a path is secured when it is not. Inbound signature verification is
+// GTC-229's, and will need TNZ's scheme rather than Twilio's. Do not restore this from
+// git history to "wire it up".

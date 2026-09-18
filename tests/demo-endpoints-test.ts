@@ -1,12 +1,61 @@
 /**
- * Demo Endpoints Test — GTC-015
+ * Demo Endpoints Test — GTC-015, narrowed by GTC-269
  *
  * Asserts:
- * 1. Demo route files do NOT contain the production guard that returns 404
+ * 1. Both demo routes are REACHABLE in production — the GTC-015 decision
  * 2. Demo seed data exists in DB (event + required persona tokens)
  * 3. The tokens route is scoped to specific demo personas (not all tokens)
  *
  * Run with: npx tsx tests/demo-endpoints-test.ts
+ *
+ * ───────────────────────────────────────────────────────────────────────────────
+ * NARROWED BY GTC-269, 2026-09-11. The original reasoning is preserved below
+ * because the inversion is a decision, not a regression — GTC-267's precedent.
+ *
+ * WHAT GTC-015 DECIDED, and it still stands. Commit `f6e4b41` (2026-03-08),
+ * "enable demo APIs in production": both demo routes carried
+ * `if (process.env.NODE_ENV === 'production') return 404` and both had it removed
+ * on purpose, so that a stranger on the deployed site can try the demo. The
+ * founder reaffirmed that on 2026-09-11. This file was written in that same
+ * commit to hold the decision in place, and holding it is still correct.
+ *
+ * WHAT WAS WRONG WITH HOW IT HELD IT. Suite 1 asserted
+ * `!content.includes("process.env.NODE_ENV === 'production'")` on each route's
+ * source, and its failure message read "Route still returns 404 in production —
+ * guard must be removed". So a green test carried an instruction to reintroduce a
+ * vulnerability, in the file GTC-269 was editing. Founder ruling, 2026-09-11:
+ * "A green test whose failure message instructs the reader to reintroduce a
+ * vulnerability is not an adjacent problem, it is a loaded gun in the file you
+ * are editing."
+ *
+ * Two further reasons the old shape was unsound, both worth stating plainly:
+ *
+ *   A SUBSTRING MATCH IS NOT A SECURITY ASSERTION. It tests the spelling of the
+ *   code, not its behaviour. The proof: the route's cookie flag reads
+ *   `(process.env.NODE_ENV as string) === 'production'` — a cast added in
+ *   `a20fbad` (2026-02-21), which PREDATES GTC-015 and has nothing to do with
+ *   gating. That cast is the only reason the substring failed to match and the
+ *   only reason this suite was green. Delete the cast, change no behaviour
+ *   whatsoever, and the old assertion failed.
+ *
+ *   IT ASSERTED THE ABSENCE OF A MECHANISM, NOT THE PRESENCE OF A PROPERTY.
+ *   "No NODE_ENV string anywhere in this file" forbids every future use of
+ *   NODE_ENV in these routes, including uses that have nothing to do with gating.
+ *   What GTC-015 actually wanted is narrower and is what is asserted now: the
+ *   handler does not refuse on the grounds of the environment.
+ *
+ * WHAT IS ASSERTED NOW. That each demo handler contains no refusal branch keyed
+ * on the environment — a `NODE_ENV` test in an `if` whose body returns a 4xx.
+ * That is the shape of an environment gate, and it is the same shape
+ * `collectEnvGate` in `tests/security-route-scan.ts` looks for, so the two files
+ * agree on what a gate is. A `NODE_ENV` reference that is not a refusal — the
+ * cookie's `secure` flag — is correctly ignored.
+ *
+ * NOT ASSERTED HERE, AND DELIBERATELY: whether the session these routes mint is
+ * safe. It is not this file's contract and a source scan cannot see it. GTC-269
+ * bounds what the demo session reaches and asserts it behaviourally, by
+ * enumeration, in suite 11 of `tests/security-validation.ts`.
+ * ───────────────────────────────────────────────────────────────────────────────
  */
 
 import * as fs from 'fs';
@@ -45,35 +94,88 @@ const DEMO_EVENT_NAME = 'Henderson Family Christmas 2025';
 const TOKENS_ROUTE = path.join(process.cwd(), 'src/app/api/demo/tokens/route.ts');
 const SESSION_ROUTE = path.join(process.cwd(), 'src/app/api/demo/session/route.ts');
 
-const PRODUCTION_GUARD = "process.env.NODE_ENV === 'production'";
+/**
+ * Does this source refuse on the grounds of the environment?
+ *
+ * GTC-269: replaces a bare `content.includes("process.env.NODE_ENV === 'production'")`.
+ * An environment gate has a shape — a `NODE_ENV` test in an `if` whose body returns
+ * a 4xx — and that shape is what is looked for here. A `NODE_ENV` reference that is
+ * not a refusal (the cookie's `secure` flag) is not a gate and is ignored.
+ *
+ * Comments are stripped first. Both routes now carry headed comments explaining the
+ * GTC-015 decision, and those comments quote the gate they are explaining the
+ * absence of. Reading a tombstone as the thing itself is the mistake GTC-267's
+ * `readCode` helper exists to prevent; this is the same guard rail.
+ */
+function hasEnvironmentRefusal(source: string): { gated: boolean; evidence: string } {
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  // An `if (...NODE_ENV...)` and, within the next few lines, a 4xx return.
+  const re = /if\s*\([^)]*NODE_ENV[^)]*\)\s*\{?[\s\S]{0,240}?status:\s*4\d{2}/;
+  const m = re.exec(code);
+  return { gated: m !== null, evidence: m ? m[0].replace(/\s+/g, ' ').slice(0, 120) : '' };
+}
 
 async function testSuite1_RouteFileContent() {
-  logSection('Test Suite 1: Route Files — Production Guard Removed');
+  logSection('Test Suite 1: Route Files — reachable in production (GTC-015 decision)');
 
-  // Test 1.1: tokens route does not block in production
+  // Test 1.1: tokens route does not refuse on the environment
   try {
-    const content = fs.readFileSync(TOKENS_ROUTE, 'utf-8');
-    const hasGuard = content.includes(PRODUCTION_GUARD);
+    const { gated, evidence } = hasEnvironmentRefusal(fs.readFileSync(TOKENS_ROUTE, 'utf-8'));
     logTest(
-      'GET /api/demo/tokens: production guard removed',
-      !hasGuard,
-      hasGuard ? 'Route still returns 404 in production — guard must be removed' : undefined
+      'GET /api/demo/tokens: no environment refusal — reachable in production',
+      !gated,
+      gated
+        ? `Found an environment gate: "${evidence}". GTC-015 removed this on purpose ` +
+            `so the deployed demo works. If it is being reintroduced, that reverses a ` +
+            `product decision — get a ruling and update the header of this file. Do ` +
+            `NOT assume this assertion is the stale one.`
+        : undefined
     );
   } catch (err: any) {
-    logTest('GET /api/demo/tokens: production guard removed', false, err.message);
+    logTest('GET /api/demo/tokens: no environment refusal', false, err.message);
   }
 
-  // Test 1.2: session route does not block in production
+  // Test 1.2: session route does not refuse on the environment
   try {
-    const content = fs.readFileSync(SESSION_ROUTE, 'utf-8');
-    const hasGuard = content.includes(PRODUCTION_GUARD);
+    const { gated, evidence } = hasEnvironmentRefusal(fs.readFileSync(SESSION_ROUTE, 'utf-8'));
     logTest(
-      'POST /api/demo/session: production guard removed',
-      !hasGuard,
-      hasGuard ? 'Route still returns 404 in production — guard must be removed' : undefined
+      'POST /api/demo/session: no environment refusal — reachable in production',
+      !gated,
+      gated
+        ? `Found an environment gate: "${evidence}". GTC-015 removed this on purpose ` +
+            `so the deployed demo works, and GTC-269 reaffirmed it: the fix there was ` +
+            `to bound what the minted session REACHES, not to gate who may call the ` +
+            `route. That containment is asserted in suite 11 of ` +
+            `tests/security-validation.ts. If a gate is being reintroduced, that ` +
+            `reverses a product decision — get a ruling.`
+        : undefined
     );
   } catch (err: any) {
-    logTest('POST /api/demo/session: production guard removed', false, err.message);
+    logTest('POST /api/demo/session: no environment refusal', false, err.message);
+  }
+
+  // Test 1.3: the check above can actually see a gate.
+  //
+  // GTC-269: without this, tests 1.1 and 1.2 are two assertions that a regex found
+  // nothing — and a regex that never matches anything finds nothing too. The
+  // control is `src/app/api/demo/reset/route.ts`, which DOES carry the gate, and is
+  // asserted here to be detected as gated. An empty search result is a claim, and a
+  // claim needs a control (GTC-267).
+  try {
+    const resetRoute = path.join(process.cwd(), 'src/app/api/demo/reset/route.ts');
+    const { gated } = hasEnvironmentRefusal(fs.readFileSync(resetRoute, 'utf-8'));
+    logTest(
+      'CONTROL: the same check DOES detect the gate on POST /api/demo/reset',
+      gated,
+      'demo/reset is gated on NODE_ENV. If this reports not-gated, the detector is ' +
+        'broken and tests 1.1 and 1.2 above prove nothing.'
+    );
+  } catch (err: any) {
+    logTest(
+      'CONTROL: the same check DOES detect the gate on POST /api/demo/reset',
+      false,
+      err.message
+    );
   }
 
   // Test 1.3: tokens route is scoped to specific demo personas (not a findMany of all tokens)

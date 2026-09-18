@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Calendar } from 'lucide-react';
 
-type PageState = 'form' | 'creating' | 'canceled' | 'error';
+type PageState = 'form' | 'creating' | 'canceled' | 'error' | 'emailed';
 
 // Sanitise pre-populated query params to prevent XSS
 function sanitiseParam(value: string | null): string {
@@ -33,7 +33,24 @@ export default function NewPlanPage() {
     email: '',
     phone: '',
   });
-  const [referralRef, setReferralRef] = useState('');
+  /*
+   * GTC-280 — the `ref` referral token is NOT captured any more, and that is a
+   * deletion of dead code rather than a loss of a feature.
+   *
+   * Its only consumer was the `gather_prefilled_contact` write in
+   * `startCheckout`, now deleted, which
+   * nothing ever read. So GTC-FM2's wrap-up conversion attribution has never
+   * landed anywhere since April; parking the value in a second place nobody
+   * reads would not change that. Recorded on GTC-280 as found-in-passing so
+   * that wiring it up properly is a decision someone takes on purpose.
+   */
+  // GTC-280: what the server did instead of logging her in.
+  const [handoff, setHandoff] = useState<{
+    eventName: string;
+    sentTo: string | null;
+    delivered: boolean | null;
+    signedInAs: string | null;
+  } | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
   const [showExpiredNotice, setShowExpiredNotice] = useState(false);
 
@@ -47,8 +64,6 @@ export default function NewPlanPage() {
     const refName = sanitiseParam(searchParams.get('name'));
     const refEmail = sanitiseParam(searchParams.get('email'));
     const refPhone = sanitiseParam(searchParams.get('phone'));
-    const ref = sanitiseParam(searchParams.get('ref'));
-
     if (refName || refEmail || refPhone) {
       setFormData((prev) => ({
         ...prev,
@@ -57,9 +72,6 @@ export default function NewPlanPage() {
         phone: refPhone,
       }));
       setShowWelcome(!!refName);
-    }
-    if (ref) {
-      setReferralRef(ref);
     }
   }, [searchParams]);
 
@@ -142,9 +154,35 @@ export default function NewPlanPage() {
       // Clear sessionStorage
       sessionStorage.removeItem('gather_new_event');
 
-      // Redirect to event page, opening the setup wizard automatically
-      // Use full page load so the server layout picks up the new session cookie
-      window.location.href = `/plan/${result.event.id}?setup=true`;
+      /*
+       * GTC-280 — the payment no longer logs anyone in, so the return splits.
+       *
+       * If she was ALREADY signed in as the paying address, nothing has
+       * changed for her: straight into setup, no extra step, no email. That is
+       * the common second-event path, because the "New Event" buttons live on
+       * `/plan/events`, which she can only reach signed in.
+       *
+       * Otherwise the server has attached the event to the paid address and
+       * emailed a sign-in link there. She is NOT locked out — the Event and the
+       * EventRole are already hers and `/auth/signin` is a second door to the
+       * same place — but she cannot be dropped into the dashboard, because
+       * handing her a session on the strength of a receipt is the bug.
+       */
+      if (result.alreadySignedIn) {
+        // Still a full page load so the server layout picks up her session;
+        // `replace` rather than `assign` so Back does not return to the consumed
+        // creation form (its sessionStorage draft is cleared just above).
+        window.location.replace(`/plan/${result.event.id}/setup`);
+        return;
+      }
+
+      setHandoff({
+        eventName: result.event.name,
+        sentTo: result.signInEmailSentTo ?? null,
+        delivered: result.signInEmailDelivered ?? null,
+        signedInAs: result.signedInAs ?? null,
+      });
+      setPageState('emailed');
     } catch (err) {
       console.error('Error creating event:', err);
       setError(
@@ -167,19 +205,20 @@ export default function NewPlanPage() {
   const startCheckout = async (data: typeof formData) => {
     // Save form data so we can restore it if payment is canceled
     sessionStorage.setItem('gather_new_event', JSON.stringify(data));
-    // Persist contact info for use after payment
-    if (data.hostName || data.email || data.phone) {
-      sessionStorage.setItem(
-        'gather_prefilled_contact',
-        JSON.stringify({
-          name: data.hostName,
-          email: data.email,
-          phone: data.phone,
-          ref: referralRef,
-        })
-      );
-    }
 
+    /*
+     * GTC-280 — the address she typed is the address that is used.
+     *
+     * `gather_prefilled_contact` used to be written here "for use after
+     * payment". Nothing ever read it: one `setItem` in the tree and no
+     * `getItem`, from GTC-FM2 in April through GTC-047 in the same file, which
+     * preserved compatibility with a reader that did not exist. So she typed an
+     * address into Gather, a second form at Stripe decided who she was, and the
+     * two could differ. The key is deleted rather than repointed — a
+     * browser-side parking spot for an identity value is what let this drift
+     * unnoticed for five months, and it is not a channel the server can trust
+     * anyway. The value travels in the request instead.
+     */
     const response = await fetch('/api/billing/checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -187,6 +226,7 @@ export default function NewPlanPage() {
         eventName: data.name,
         startDate: data.startDate,
         endDate: data.endDate,
+        email: data.email,
       }),
     });
 
@@ -205,6 +245,9 @@ export default function NewPlanPage() {
 
     try {
       if (!formData.name) throw new Error('Event name is required');
+      // GTC-280: the email is the identity the event binds to, so it can no
+      // longer be the one optional field on the form.
+      if (!formData.email) throw new Error('Email is required');
       if (!formData.startDate) throw new Error('Start date is required');
       if (!formData.endDate) throw new Error('End date is required');
 
@@ -231,6 +274,68 @@ export default function NewPlanPage() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent mx-auto mb-4"></div>
           <p className="text-gray-600">Creating your event...</p>
+        </div>
+      </div>
+    );
+  }
+
+  /*
+   * GTC-280 — payment received, and the link is the way in.
+   *
+   * The founder's constraint on this whole ticket was that a host who
+   * legitimately pays for her second event must still get in. She does: the
+   * Event and the EventRole are already written and attached to her User
+   * before this screen renders. What is withheld is a shortcut, never the
+   * event — and /auth/signin is a second door to exactly the same place, which
+   * is why the failure case below is a nuisance rather than a lockout.
+   */
+  if (pageState === 'emailed' && handoff) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="max-w-md w-full mx-4">
+          <div className="bg-white rounded-lg shadow-md p-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Payment received</h2>
+            <p className="text-gray-600 mb-6">
+              Your event &ldquo;{handoff.eventName}&rdquo; is ready.
+            </p>
+
+            {handoff.signedInAs && (
+              <div className="bg-amber-50 border-2 border-amber-200 rounded-lg p-4 mb-6">
+                <p className="text-amber-800 text-sm">
+                  You&rsquo;re signed in as {handoff.signedInAs} but you paid as {handoff.sentTo}.
+                  Your event is attached to the address you paid with, and we&rsquo;ve sent the
+                  sign-in link there. Nothing has changed about the account you&rsquo;re signed in
+                  to.
+                </p>
+              </div>
+            )}
+
+            {handoff.delivered === false ? (
+              <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 mb-6">
+                <p className="text-red-800 font-medium">We couldn&rsquo;t send the sign-in link</p>
+                <p className="text-red-700 text-sm mt-1">
+                  Your payment went through and the event is yours — only the email failed. Sign in
+                  with {handoff.sentTo} and it will be waiting for you.
+                </p>
+              </div>
+            ) : (
+              <p className="text-gray-700 mb-6">
+                We&rsquo;ve sent a sign-in link to <strong>{handoff.sentTo}</strong>. Open it and
+                you&rsquo;ll land straight in your event.
+              </p>
+            )}
+
+            <a
+              href="/auth/signin"
+              className="block w-full text-center px-6 py-3 bg-accent text-white rounded-lg font-semibold hover:bg-accent-dark"
+            >
+              Go to sign-in
+            </a>
+            <p className="text-sm text-gray-500 text-center mt-4">
+              Wrong address? Your payment is safe — contact support and we&rsquo;ll move the event
+              for you. We won&rsquo;t rebind it automatically.
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -380,6 +485,7 @@ export default function NewPlanPage() {
               type="email"
               id="email"
               name="email"
+              required
               value={formData.email}
               onChange={handleChange}
               placeholder="e.g., sarah@example.com"

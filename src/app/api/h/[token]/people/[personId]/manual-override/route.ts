@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { recordChange, actorFromToken } from '@/lib/ledger';
 import { logInviteEvent } from '@/lib/invite-events';
 
 export async function POST(
@@ -52,6 +53,27 @@ export async function POST(
     type: 'MANUAL_OVERRIDE_MARKED',
     metadata: { response, reason, assignmentsUpdated: updated.count },
   });
+
+  // Same shape as the session-authed manual-override: setting a response on someone's
+  // behalf moves their claim.
+  if (updated.count > 0) {
+    await prisma.$transaction((tx) =>
+      recordChange(tx, {
+        eventId,
+        actor: actorFromToken(resolvedContext),
+        changes: [
+          {
+            action: 'MOVE_ASSIGNMENT',
+            targetType: 'Assignment',
+            targetId: personId,
+            before: null,
+            after: { response, assignmentsUpdated: updated.count },
+            context: { assignmentResponse: 'PENDING' },
+          },
+        ],
+      })
+    );
+  }
 
   return NextResponse.json({ success: true, assignmentsUpdated: updated.count });
 }

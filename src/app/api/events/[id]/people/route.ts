@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordChange } from '@/lib/ledger';
 import { normalizePhoneNumber } from '@/lib/phone';
 
 // GET /api/events/[id]/people - List people on this event
@@ -21,7 +23,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
             id: true,
             name: true,
             email: true,
-            phone: true,
+            phoneNumber: true,
           },
         },
         team: {
@@ -55,7 +57,14 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
           personId: pe.person.id,
           name: pe.person.name,
           email: pe.person.email,
-          phone: pe.person.phone,
+          /*
+           * GTC-312: the WIRE KEY stays `phone`; its SOURCE moves to `Person.phoneNumber`.
+           * The key is not renamed because this route's own POST already accepts `phone`
+           * on the way in and stores `phoneNumber` — the asymmetry was the input contract
+           * before it was the output one, and renaming the key would ripple into every
+           * component that renders a contact line without making one of them more correct.
+           */
+          phone: pe.person.phoneNumber,
           role: pe.role,
           team: pe.team || { id: '', name: 'Unassigned' },
           itemCount,
@@ -93,7 +102,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // Get event to check if invites have been confirmed
     const event = await prisma.event.findUnique({
       where: { id: eventId },
-      select: { inviteSendConfirmedAt: true, status: true },
+      select: { sentAt: true, status: true },
     });
 
     if (!event) {
@@ -127,14 +136,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           name,
           email: email || null,
           phoneNumber: normalizedPhone,
-          inviteAnchorAt: event.inviteSendConfirmedAt || null,
+          inviteAnchorAt: event.sentAt || null,
         },
       });
-    } else if (event.inviteSendConfirmedAt && !person.inviteAnchorAt) {
+    } else if (event.sentAt && !person.inviteAnchorAt) {
       // If person exists but doesn't have an anchor, set it
       person = await prisma.person.update({
         where: { id: person.id },
-        data: { inviteAnchorAt: event.inviteSendConfirmedAt },
+        data: { inviteAnchorAt: event.sentAt },
       });
     }
 
@@ -156,7 +165,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     let reachabilityTier: 'DIRECT' | 'UNTRACKABLE' = 'UNTRACKABLE';
     let contactMethod: 'EMAIL' | 'SMS' | 'NONE' = 'NONE';
 
-    if (person.phoneNumber || person.phone) {
+    // GTC-312: `|| person.phone` removed — the third of three copies of this rule
+    // (batch-import and households carry the others). Same rule, same value, one column.
+    if (person.phoneNumber) {
       contactMethod = 'SMS';
       reachabilityTier = 'DIRECT';
     } else if (person.email) {
@@ -173,6 +184,20 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         role: role || 'PARTICIPANT',
         reachabilityTier,
         contactMethod,
+        // GTC-196 (A3b) — THE MINI-SEND CLOCK GOES LIVE.
+        //
+        // Someone added AFTER the press gets their own send date, not the event's.
+        // Their nudge cadence and red-by-time run from here, truncated by the event
+        // date, so "a Bob added three days out may pass straight to Kate's line"
+        // falls out of the arithmetic with no special case (Hinge §2, gap #5).
+        //
+        // On PersonEvent, not Person: Person is global, so the old
+        // Person.inviteAnchorAt gave a person in two events ONE anchor and got the
+        // second event's clocks wrong from the start (plan §8.2). inviteAnchorAt is
+        // still written alongside until GTC-178 (E1) moves the nudge bookkeeping.
+        //
+        // Pre-send this is null and the press stamps everyone at once.
+        sentAt: event.sentAt ?? null,
       },
       include: {
         person: {
@@ -180,7 +205,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
             id: true,
             name: true,
             email: true,
-            phone: true,
+            phoneNumber: true,
           },
         },
         team: {
@@ -192,13 +217,36 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       },
     });
 
+    // Versioned, never interrogated: adding a person asks nothing of them yet. If an
+    // assignment follows, THAT is the T1 that touches them (Hinge §2, gap #5).
+    const addActor = await ledgerActorForUser(auth.user, auth.role);
+    await prisma.$transaction((tx) =>
+      recordChange(tx, {
+        eventId,
+        actor: addActor,
+        changes: [
+          {
+            action: 'ADD_PERSON',
+            targetType: 'PersonEvent',
+            targetId: personEvent.id,
+            before: null,
+            after: {
+              personId: personEvent.person.id,
+              personName: personEvent.person.name,
+              teamId: personEvent.team?.id ?? null,
+            },
+          },
+        ],
+      })
+    );
+
     return NextResponse.json({
       personEvent: {
         id: personEvent.id,
         personId: personEvent.person.id,
         name: personEvent.person.name,
         email: personEvent.person.email,
-        phone: personEvent.person.phone,
+        phone: personEvent.person.phoneNumber,
         role: personEvent.role,
         team: personEvent.team || { id: '', name: 'Unassigned' },
         itemCount: 0,

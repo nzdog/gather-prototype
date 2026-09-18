@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordChange } from '@/lib/ledger';
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -12,8 +14,12 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     if (auth instanceof NextResponse) return auth;
 
     // Fetch all AI-generated items that haven't been confirmed yet
+    // GTC-171 (B2): ITEM rows only — the review cards are quantity/dietary-shaped and a
+    // task row has neither. The POST bulk-confirm below stays unfiltered on purpose, so
+    // task rows still clear userConfirmed alongside the items they were generated with.
     const items = await prisma.item.findMany({
       where: {
+        kind: 'ITEM',
         team: {
           eventId,
         },
@@ -109,6 +115,26 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
         userConfirmed: true,
       },
     });
+
+    if (result.count > 0) {
+      const reviewActor = await ledgerActorForUser(auth.user, auth.role);
+      await prisma.$transaction((tx) =>
+        recordChange(tx, {
+          eventId,
+          actor: reviewActor,
+          changes: [
+            {
+              action: 'EDIT_ITEM',
+              targetType: 'Item',
+              targetId: eventId,
+              field: 'reviewState',
+              before: null,
+              after: { count: result.count, note: 'review state changed' },
+            },
+          ],
+        })
+      );
+    }
 
     return NextResponse.json({
       success: true,

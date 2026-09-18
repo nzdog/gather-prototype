@@ -42,7 +42,7 @@ export async function GET(
       },
       day: true,
     },
-    orderBy: [{ critical: 'desc' }, { name: 'asc' }],
+    orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
   });
 
   // Fetch all people in this event for frozen edit modal

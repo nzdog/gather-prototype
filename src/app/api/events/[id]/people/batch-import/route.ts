@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
+import { recordChange } from '@/lib/ledger';
+import { normalizePhoneNumber } from '@/lib/phone';
 
 interface PersonToImport {
   name: string;
@@ -16,39 +18,22 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const eventId = id;
 
   // SECURITY: Auth check MUST run first and MUST NOT be in try/catch that returns 500
-  // Two authentication methods supported (mirrors /api/events/[id]/tokens/route.ts):
-  // 1. Session-based auth via requireEventRole (hosts with active sessions)
-  // 2. ?hostId= query param (hosts visiting via token link, no session)
-  const { searchParams } = new URL(request.url);
-  const hostIdParam = searchParams.get('hostId');
-
-  if (hostIdParam) {
-    // Method 2: hostId query param auth
-    const eventForAuth = await prisma.event.findUnique({
-      where: { id: eventId },
-      select: { hostId: true, coHostId: true },
-    });
-
-    if (!eventForAuth) {
-      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
-    }
-
-    if (eventForAuth.hostId !== hostIdParam && eventForAuth.coHostId !== hostIdParam) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-  } else {
-    // Method 1: Session-based auth
-    let auth;
-    try {
-      auth = await requireEventRole(eventId, ['HOST']);
-      if (auth instanceof NextResponse) return auth;
-    } catch (authError) {
-      console.error('Auth check error:', authError);
-      return NextResponse.json(
-        { error: 'Unauthorized', message: 'Authentication required' },
-        { status: 401 }
-      );
-    }
+  //
+  // GTC-267: the `?hostId=` branch that used to sit here is gone. This route WRITES —
+  // an event id yielded a hostId from `GET /api/events/[id]`, and that hostId admitted
+  // an import of arbitrary people into the event. It was the only unauthenticated
+  // write in the chain. COHOST is included because the removed branch accepted
+  // `event.coHostId`.
+  let auth;
+  try {
+    auth = await requireEventRole(eventId, ['HOST', 'COHOST']);
+    if (auth instanceof NextResponse) return auth;
+  } catch (authError) {
+    console.error('Auth check error:', authError);
+    return NextResponse.json(
+      { error: 'Unauthorized', message: 'Authentication required' },
+      { status: 401 }
+    );
   }
 
   try {
@@ -62,7 +47,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // Validate event exists
     const event = await prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, status: true, inviteSendConfirmedAt: true },
+      select: { id: true, status: true, sentAt: true, hostId: true },
     });
 
     if (!event) {
@@ -78,6 +63,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     let imported = 0;
+    const importedPeople: { personEventId: string; personId: string; name: string }[] = [];
     let skipped = 0;
     const errors: string[] = [];
 
@@ -118,15 +104,29 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
             data: {
               name: personData.name.trim(),
               email: personData.email || null,
-              phone: personData.phone || null,
-              inviteAnchorAt: event.inviteSendConfirmedAt || null,
+              /*
+               * GTC-312: `phoneNumber`, normalised — NOT the legacy `phone` column.
+               *
+               * This was the ONE capture path of six that wrote `Person.phone`, and
+               * nothing reads that column: `findNudgeCandidates`, `chooseManualNudgeChannel`,
+               * `findDecideByFollowupCandidates` and `ChooserPerson` all read `phoneNumber`.
+               * A person imported here had a mobile and read to the product as having none.
+               *
+               * And it normalises HERE rather than trusting the caller. `ImportCSVModal`
+               * already normalises client-side, which is why every stored legacy number was
+               * valid `+64` — but this route is a guarded API, not a private door of that
+               * modal, and a direct call carrying `021 123 4567` would fail `isValidNZNumber`
+               * and be untextable in a column that reads as populated.
+               */
+              phoneNumber: personData.phone ? normalizePhoneNumber(personData.phone) : null,
+              inviteAnchorAt: event.sentAt || null,
             },
           });
-        } else if (event.inviteSendConfirmedAt && !person.inviteAnchorAt) {
+        } else if (event.sentAt && !person.inviteAnchorAt) {
           // If person exists but doesn't have an anchor, set it
           person = await prisma.person.update({
             where: { id: person.id },
-            data: { inviteAnchorAt: event.inviteSendConfirmedAt },
+            data: { inviteAnchorAt: event.sentAt },
           });
         }
 
@@ -150,7 +150,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         let reachabilityTier: 'DIRECT' | 'UNTRACKABLE' = 'UNTRACKABLE';
         let contactMethod: 'EMAIL' | 'SMS' | 'NONE' = 'NONE';
 
-        if (person.phoneNumber || person.phone) {
+        // GTC-312: the `|| person.phone` branch is gone. The VALUE this computes is
+        // unchanged — after the backfill no row has `phone` without `phoneNumber` — so
+        // this removes a read of the legacy column and does not repair `contactMethod`,
+        // which stays [[GTC-295]]'s.
+        if (person.phoneNumber) {
           contactMethod = 'SMS';
           reachabilityTier = 'DIRECT';
         } else if (person.email) {
@@ -159,7 +163,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         }
 
         // Create PersonEvent linking person to event
-        await prisma.personEvent.create({
+        const createdPersonEvent = await prisma.personEvent.create({
           data: {
             personId: person.id,
             eventId,
@@ -167,15 +171,44 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
             role: (personData.role as any) || 'PARTICIPANT',
             reachabilityTier,
             contactMethod,
+            // GTC-196: the mini-send clock — see people/route.ts for the full note.
+            sentAt: event.sentAt ?? null,
           },
         });
 
+        importedPeople.push({
+          personEventId: createdPersonEvent.id,
+          personId: person.id,
+          name: person.name,
+        });
         imported++;
       } catch (error: any) {
         console.error(`Error importing person ${personData.name}:`, error);
         errors.push(`Error importing ${personData.name}: ${error.message}`);
         skipped++;
       }
+    }
+
+    // Per-person entries under ONE changeSet — the import is one step to a human, N
+    // rows to the ledger. Versioned, never interrogated: an import asks nothing of
+    // anyone until items are assigned to them.
+    //
+    // This route has TWO auth paths (session and ?hostId=), so the actor is derived
+    // from the event's host rather than an `auth` binding that only one path sets.
+    if (importedPeople.length > 0) {
+      await prisma.$transaction((tx) =>
+        recordChange(tx, {
+          eventId,
+          actor: { id: event.hostId ?? null, kind: 'HOST', name: null },
+          changes: importedPeople.map((imported) => ({
+            action: 'ADD_PERSON' as const,
+            targetType: 'PersonEvent' as const,
+            targetId: imported.personEventId,
+            before: null,
+            after: { personId: imported.personId, personName: imported.name },
+          })),
+        })
+      );
     }
 
     return NextResponse.json({

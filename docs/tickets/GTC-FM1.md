@@ -1,4 +1,21 @@
-# BUILD TICKET — GTC-FM1
+---
+ticket: GTC-FM1
+title: "Host-initiated nudge with one-tap warm message sending"
+status: closed
+branch: 
+commit: 
+moment: null
+type: build
+depends_on: []
+blocks: []
+tags:
+  - build
+  - nudges
+  - sms
+  - email
+---
+
+# BUILD TICKET — [[GTC-FM1]]
 
 ## Ticket Title
 `Host-initiated nudge with one-tap warm message sending`

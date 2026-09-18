@@ -2,6 +2,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordChange } from '@/lib/ledger';
+import { itemNameForStorage } from '@/lib/items/name';
 
 export async function POST(
   request: NextRequest,
@@ -63,6 +66,27 @@ export async function POST(
       },
     });
 
+    // A conflict resolution can move or drop an ask, so it is recorded like any other
+    // change. The per-action detail lives in `after`; the resolution is one step.
+    const resolutionActor = await ledgerActorForUser(auth.user, auth.role);
+    await prisma.$transaction((tx) =>
+      recordChange(tx, {
+        eventId,
+        actor: resolutionActor,
+        reason: body.reason ?? null,
+        changes: [
+          {
+            action: 'EDIT_ITEM',
+            targetType: 'Conflict',
+            targetId: conflictId,
+            field: 'resolution',
+            before: null,
+            after: { actions: executableActions.length },
+          },
+        ],
+      })
+    );
+
     return NextResponse.json({
       success: true,
       results,
@@ -106,7 +130,7 @@ async function createItem(eventId: string, action: any): Promise<any> {
   const item = await prisma.item.create({
     data: {
       teamId,
-      name: data.name,
+      name: itemNameForStorage(data.name) ?? data.name, // GTC-302
       description: data.description || null,
       critical: data.critical || false,
       quantityState: 'SPECIFIED',
@@ -154,7 +178,7 @@ async function createTeam(eventId: string, action: any): Promise<any> {
       const item = await prisma.item.create({
         data: {
           teamId: team.id,
-          name: itemData.name,
+          name: itemNameForStorage(itemData.name) ?? itemData.name, // GTC-302
           description: itemData.description || null,
           critical: itemData.critical || false,
           quantityState: 'SPECIFIED',

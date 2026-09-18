@@ -1,11 +1,16 @@
 // GET /api/events/[id]/days - Get days for an event
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  try {
-    const { id: eventId } = await context.params;
+  const { id: eventId } = await context.params;
 
+  // GTC-267: unauthenticated before this.
+  const auth = await requireEventRole(eventId, ['HOST', 'COHOST']);
+  if (auth instanceof NextResponse) return auth;
+
+  try {
     // Fetch days for this event
     const days = await prisma.day.findMany({
       where: { eventId },

@@ -3,3 +3,12 @@ node_modules
 dist
 prisma/migrations
 *.md
+
+# npm owns this file's formatting. Prettier is a no-op on it today only because
+# .prettierrc happens to set "tabWidth": 2, which matches npm's own output — not
+# because the two never disagree. Changing that one value would make the
+# lint-staged hook rewrite the whole lockfile on every commit and drop reformat
+# churn into the diff that most needs reading. This line makes the lockfile
+# independent of that setting. It changes nothing today and is NOT evidence of a
+# current problem. See GTC-277 Finding 7.
+package-lock.json

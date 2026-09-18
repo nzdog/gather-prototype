@@ -1,5 +1,7 @@
 import { prisma } from './prisma';
 import type { Item, Assignment, Person, EventStatus, Prisma } from '@prisma/client';
+import { isSent } from './lifecycle';
+import { recordChange, type ActorKind } from './ledger';
 
 // Type for items with assignment + person included
 type ItemWithAssignmentAndPerson = Item & {
@@ -13,11 +15,16 @@ type Tx = Prisma.TransactionClient;
  * UI Status Labels - Consistent status naming for UI display
  * Use these constants throughout the UI to ensure consistent terminology
  */
+// GTC-197 (A3c): the enum values FROZEN/COMPLETE survive for legacy rows until
+// GTC-199 drops them, but nothing shows a host the word "FROZEN" any more — the key
+// is legacy, the label is not. COMPLETE is the calendar's word, not a state she moved
+// the plan into.
 export const STATUS_LABELS = {
   DRAFT: 'DRAFT',
   CONFIRMING: 'CONFIRMING',
-  FROZEN: 'FROZEN',
-  COMPLETE: 'COMPLETE',
+  /** Legacy key. Displayed as the send, because that is what it now means. */
+  FROZEN: 'SENT',
+  COMPLETE: 'PAST',
 } as const;
 
 /**
@@ -29,6 +36,15 @@ export const STATUS_LABELS = {
  *
  * Note: Declined assignments are treated as gaps because they indicate
  * items that need attention (participant won't bring them).
+ *
+ * GTC-174 (D1) — A MAYBE IS NOT A GAP. DO NOT "FIX" THIS.
+ * Hinge §8: the item is held softly. "It stays the guest's — a maybe is more claim than
+ * silence, and treating it as loose would make tapping maybe worse than saying nothing."
+ * A maybe is yellow, never red. The predicates below key on DECLINED, so MAYBE already
+ * falls on the correct side; that is deliberate, not an oversight, and
+ * tests/guest-response-model-test.ts pins it. Nothing here blocks Kate from
+ * reassigning a maybe'd item — that is D3's (GTC-176) release-notification path, not a
+ * gap classification.
  */
 export function computeTeamStatusFromItems(
   items: ItemWithAssignmentAndPerson[]
@@ -69,22 +85,55 @@ export async function repairItemStatusAfterMutation(tx: Tx, itemId: string): Pro
 }
 
 /**
- * Returns true if event can be frozen.
- * Freeze blocked if ANY item lacks assignment (T6 - all items assigned gate).
- * Queries Assignment directly, NOT Item.status.
+ * Clears the existing plan ahead of a regeneration.
  *
- * CRITICAL: This queries assignment: null, NOT Item.status.
- * The freeze gate is safety-critical and must not trust cached state.
+ * Extracted verbatim from the regenerate route (GTC-171/B2) so this data-loss-critical
+ * path can be asserted behaviourally — `requireEventRole` reads a session cookie, so the
+ * host route itself cannot be driven in-process (see tests/security-validation.ts:454).
+ *
+ * @param preserveProtected true → drop only GENERATED, unprotected rows and sweep the
+ *   teams left empty. false → full regeneration, drop everything.
  */
-export async function canFreeze(eventId: string): Promise<boolean> {
-  const unassignedCount = await prisma.item.count({
-    where: {
-      team: { eventId },
-      assignment: null,
-    },
-  });
+export async function clearPlanForRegeneration(
+  eventId: string,
+  preserveProtected: boolean
+): Promise<void> {
+  if (preserveProtected) {
+    // Delete only GENERATED items (safe to overwrite)
+    await prisma.item.deleteMany({
+      where: {
+        team: { eventId },
+        kind: 'ITEM', // GTC-171 (B2): regenerate is the V1 food path — it never
+        // reproduces task rows, so anything it drops is lost for good.
+        source: 'GENERATED', // Only delete AI-generated items that haven't been edited
+        isProtected: false, // Don't delete protected items even if generated
+      },
+    });
 
-  return unassignedCount === 0;
+    // Delete teams that have no items left and are not protected.
+    // Task teams keep their TASK rows, so this sweep leaves them standing.
+    const teams = await prisma.team.findMany({
+      where: { eventId },
+      include: { _count: { select: { items: true } } },
+    });
+
+    for (const team of teams) {
+      if (team._count.items === 0 && !team.isProtected) {
+        await prisma.team.delete({ where: { id: team.id } });
+      }
+    }
+  } else {
+    // Delete all items and teams (preserveProtected=false means full regeneration)
+    await prisma.item.deleteMany({
+      where: { team: { eventId }, kind: 'ITEM' },
+    });
+    // GTC-171 (B2): `Item.team` is onDelete: Cascade, so an unscoped delete here would
+    // cascade away the task rows the statement above just spared — filtering the item
+    // delete alone is NOT sufficient. Only teams left with no rows at all may go.
+    await prisma.team.deleteMany({
+      where: { eventId, items: { none: {} } },
+    });
+  }
 }
 
 /**
@@ -99,8 +148,7 @@ export interface FreezeWarning {
   details: string[];
 }
 
-export interface FreezeCheckResult {
-  canFreeze: boolean; // always true — warnings don't block
+export interface SendReadinessResult {
   warnings: FreezeWarning[];
   complianceRate: number; // 0-100
   criticalGaps: {
@@ -110,8 +158,15 @@ export interface FreezeCheckResult {
 }
 
 /**
- * Checks freeze readiness and returns warnings.
- * Warnings never block freeze - canFreeze is always true.
+ * Sweeps the plan for gaps ahead of the send, and returns WARNINGS ONLY.
+ *
+ * GTC-169 (A3a): renamed from checkFreezeReadiness. There is no freeze to be ready
+ * for — this is the Hinge §1 pre-flight's "hunt for absence", and its final form is
+ * GTC-188 (I1). Nothing here blocks: Moment 4 §2 refuses readiness scores and
+ * thresholds outright, and §7 forbids the product contesting the host. The old
+ * canFreeze field (hardcoded true) is gone; the <80%-compliance-requires-a-reason
+ * rule went with it, because demanding justification at a threshold is exactly what
+ * §7 forbids.
  *
  * Compliance calculation:
  * - Numerator: Assignments with status = ACCEPTED where assignee has reachabilityTier != UNTRACKABLE
@@ -123,7 +178,7 @@ export interface FreezeCheckResult {
  * - complianceRate < 80: LOW_COMPLIANCE warning
  * - Any critical item with no accepted assignment: CRITICAL_GAPS warning
  */
-export async function checkFreezeReadiness(eventId: string): Promise<FreezeCheckResult> {
+export async function checkSendReadiness(eventId: string): Promise<SendReadinessResult> {
   const warnings: FreezeWarning[] = [];
 
   // Check for unassigned items
@@ -184,9 +239,16 @@ export async function checkFreezeReadiness(eventId: string): Promise<FreezeCheck
     totalTrackable === 0 ? 100 : Math.round((acceptedCount / totalTrackable) * 100);
 
   // Check for low compliance
+  //
+  // GTC-174 (D1) — A MAYBE MUST BLOCK FREEZE-READINESS. This is the mirror of the
+  // not-a-gap ruling above, and the two are not in tension: a maybe is not LOOSE
+  // (Hinge §8 — the item is still the guest's, so it is no gap), but neither is it a
+  // CONFIRMATION. `acceptedCount` above already counts only ACCEPTED, so a maybe
+  // correctly depresses the rate; this filter is what puts the guest's name in front of
+  // Kate as still-to-answer. Omitting MAYBE here would report a maybe as sorted.
   if (complianceRate < 80 && totalTrackable > 0) {
     const pendingAssignments = allAssignments.filter(
-      (a) => a.response === 'PENDING' || a.response === 'DECLINED'
+      (a) => a.response === 'PENDING' || a.response === 'DECLINED' || a.response === 'MAYBE'
     );
     const details = pendingAssignments.map(
       (a) => `${a.person.name} (${a.response.toLowerCase().replace('_', ' ')})`
@@ -226,7 +288,6 @@ export async function checkFreezeReadiness(eventId: string): Promise<FreezeCheck
   }
 
   return {
-    canFreeze: true,
     warnings,
     complianceRate,
     criticalGaps,
@@ -234,81 +295,111 @@ export async function checkFreezeReadiness(eventId: string): Promise<FreezeCheck
 }
 
 /**
- * Returns the count of unassigned items blocking freeze (T6).
- * Used for UI messaging ("Cannot freeze: N items unassigned").
- *
- * CRITICAL: Queries assignment: null, NOT Item.status.
- */
-export async function getCriticalGapCount(eventId: string): Promise<number> {
-  return prisma.item.count({
-    where: {
-      team: { eventId },
-      assignment: null,
-    },
-  });
-}
-
-/**
  * Validates event status transitions.
- * State machine from spec Section 6:
- *   DRAFT → CONFIRMING : Always allowed
- *   CONFIRMING → FROZEN : Blocked if critical gaps (checked separately)
- *   FROZEN → CONFIRMING : Allowed (override, logged)
- *   FROZEN → COMPLETE : Allowed
- *   COMPLETE → * : Never allowed
+ *
+ * GTC-169 (A3a): only ONE authored transition survives the send-lock reconciliation.
+ *
+ *   DRAFT → CONFIRMING : always allowed — real, load-bearing work (gate check,
+ *                        PlanSnapshot, structureMode LOCKED, AccessToken generation)
+ *   CONFIRMING → *     : nothing. The press is not a transition, it is a timestamp
+ *                        (Event.sentAt), and COMPLETE is derived from the calendar
+ *                        (Moment 4 §10.1 — "no one declares it").
+ *
+ * FROZEN is gone as a destination: it was a second, later ceremony bolted on after
+ * the send that already existed. FROZEN → CONFIRMING (unfreeze) is gone with it —
+ * Hinge §2 rules out recall at the mechanism level; recovery from a bad send runs
+ * through the material-change machinery (GTC-183 / F1), not an undo.
  */
 export function canTransition(fromStatus: EventStatus, toStatus: EventStatus): boolean {
   if (fromStatus === toStatus) return true;
-  if (fromStatus === 'COMPLETE') return false;
 
   const validTransitions: Record<EventStatus, EventStatus[]> = {
     DRAFT: ['CONFIRMING'],
-    CONFIRMING: ['FROZEN'],
-    FROZEN: ['CONFIRMING', 'COMPLETE'],
+    CONFIRMING: [],
+    // Legacy rows only — no code path produces these statuses after A3a, and nothing
+    // may transition out of them. GTC-199 (A4) drops both enum values.
+    FROZEN: [],
     COMPLETE: [],
   };
 
   return validTransitions[fromStatus].includes(toStatus);
 }
 
-/**
- * Mutation gating from spec Section 6 MUTATION_RULES.
+/*
+ * canMutate() was DELETED by GTC-169 (A3a).
  *
- * @param eventStatus - Current event status
- * @param action - The mutation action to check
- * @param itemCritical - For deleteItem action, whether the item is critical
- * @returns true if mutation is allowed
+ * It denied every mutation on FROZEN and COMPLETE events, and denied deleting a
+ * critical item while CONFIRMING. The send-lock model removes the first two (the lock
+ * is a ledger, not a wall — Moment 4 §7), and the third was unreachable dead code: its
+ * only caller passed itemCritical: false unconditionally.
+ *
+ * With all three gone the function returned true for every input. A gate that always
+ * passes is worse than no gate — it reads as protection while providing none, which is
+ * exactly why the unwired canFreeze() was removed in GTC-154.
+ *
+ * Authority still comes from requireEventRole / requireTokenScope / requireTeamAccess.
+ * Accountability comes from src/lib/ledger.ts. Neither is a lifecycle gate.
  */
-export function canMutate(
-  eventStatus: EventStatus,
-  action: 'createItem' | 'editItem' | 'deleteItem' | 'assignItem' | 'addPerson' | 'removePerson',
-  itemCritical?: boolean
-): boolean {
-  if (eventStatus === 'COMPLETE') return false;
-  if (eventStatus === 'FROZEN') return false;
 
-  if (eventStatus === 'CONFIRMING') {
-    if (action === 'deleteItem' && itemCritical) {
-      return false;
-    }
-    return true;
-  }
-
-  // DRAFT: all mutations allowed
-  return true;
-}
+/**
+ * Lifecycle and housekeeping audit lines — things that happen TO an event rather than
+ * changes to the plan inside it.
+ *
+ * GTC-196 (A3b) — WHY THIS IS A TS UNION AND NOT A POSTGRES ENUM.
+ *
+ * A2 deferred the `AuditActionType` enum to this ticket, on the grounds that the
+ * writer set would be known once the routes were wired. It now is, and it turns out to
+ * be TWO vocabularies, not one:
+ *
+ *   - `recordChange()` writes plan changes, typed by `ChangeAction` in ledger.ts.
+ *   - `logAudit()` writes lifecycle lines — this union.
+ *
+ * Freezing both into a single Postgres enum now would cement that conflation in the
+ * schema at exactly the moment logAudit is mid-retirement (its plan-change callers
+ * moved to recordChange in this ticket; what remains is lifecycle-only). It would also
+ * need a text→enum cast, which fails on any historical value outside the enum — a
+ * one-way migration risk taken for something already solved.
+ *
+ * Because the real prize was compile-time safety, and this union plus `ChangeAction`
+ * delivers it on both paths with zero migration risk: a typo is a type error today.
+ * The Postgres enum belongs with logAudit's retirement, not ahead of it.
+ */
+export type AuditLifecycleAction =
+  | 'TRANSITION_TO_CONFIRMING'
+  | 'CREATE_REVISION'
+  | 'RESTORE_REVISION'
+  | 'WRAP_UP_SENT'
+  | 'EDIT_EVENT'
+  | 'REMOVE_PERSON'
+  | 'UNASSIGN_ITEM'
+  | 'ACCEPT_ASSIGNMENT'
+  | 'DECLINE_ASSIGNMENT'
+  // GTC-174 (D1): the third way (Hinge §3) and the attendance answer given on the
+  // no-follow-up / itemless paths. Both are guest decisions, not plan changes, so they
+  // belong here rather than in the ledger's recordChange().
+  | 'MAYBE_ASSIGNMENT'
+  | 'ANSWER_ATTENDANCE'
+  | 'CREATE_ITEM'
+  | 'EDIT_ITEM'
+  | 'DELETE_ITEM'
+  | 'ASSIGN_ITEM'
+  | 'REASSIGN_ITEM';
 
 /**
  * Audit helper: logs action to AuditEntry within transaction.
  *
  * CRITICAL: All audit logging must happen inside transactions.
+ *
+ * For PLAN CHANGES use recordChange() in src/lib/ledger.ts instead — it allocates a
+ * version, groups the changeSet, and applies the why-scope rule. This helper writes
+ * lifecycle lines that are not versions of the plan.
  */
 export async function logAudit(
   tx: Tx,
   params: {
     eventId: string;
     actorId: string;
-    actionType: string;
+    actionType: AuditLifecycleAction;
     targetType: string;
     targetId: string;
     details?: string;
@@ -327,95 +418,23 @@ export async function logAudit(
   });
 }
 
-/**
- * Removes a person from an event.
- * Appends person.name to previouslyAssignedTo (human-readable).
- * Logs REMOVE_PERSON and UNASSIGN_ITEM audit entries.
+/*
+ * removePerson() was DELETED by GTC-202 (A3c-2).
  *
- * CRITICAL: Must be called in exact order:
- * 1. Log REMOVE_PERSON
- * 2. For each assignment:
- *    a. Update item (set previouslyAssignedTo)
- *    b. Delete assignment
- *    c. Repair item status
- *    d. Log UNASSIGN_ITEM
- * 3. Delete access tokens
- * 4. Delete PersonEvent
+ * It had ZERO callers. The host dashboard removes people through PeopleSection, which
+ * calls DELETE /api/events/[id]/people/[personId] — a route that performs its removal
+ * inline and carries its own T2 recordChange() (GTC-201).
  *
- * @param personId - The person to remove
- * @param eventId - The event context
- * @param actorId - The person performing the removal (for audit logging)
+ * GTC-196 wired T2 in here "so every caller inherits it": a true sentence about an
+ * empty set. Keeping both left two implementations of person-removal, one unreachable
+ * and free to drift from the one that runs. That is the same reasoning that removed the
+ * unwired canFreeze() in GTC-154 and the always-true canMutate() in GTC-169 — dead
+ * machinery that reads as coverage while providing none.
+ *
+ * The surviving implementation is the route's, and it is the one the GTC-200 review
+ * verified end-to-end. If a domain-level helper is ever wanted again, it should be
+ * extracted FROM that route, not restored from here.
  */
-export async function removePerson(
-  personId: string,
-  eventId: string,
-  actorId: string
-): Promise<void> {
-  await prisma.$transaction(async (tx) => {
-    const person = await tx.person.findUnique({
-      where: { id: personId },
-      select: { name: true },
-    });
-
-    if (!person) throw new Error('Person not found');
-
-    // Log REMOVE_PERSON action first
-    await logAudit(tx, {
-      eventId,
-      actorId,
-      actionType: 'REMOVE_PERSON',
-      targetType: 'PersonEvent',
-      targetId: personId,
-      details: `Removed person ${person.name} from event`,
-    });
-
-    const assignments = await tx.assignment.findMany({
-      where: {
-        personId,
-        item: { team: { eventId } },
-      },
-      include: { item: true },
-    });
-
-    for (const assignment of assignments) {
-      // Update item: set previouslyAssignedTo
-      await tx.item.update({
-        where: { id: assignment.itemId },
-        data: {
-          previouslyAssignedTo: assignment.item.previouslyAssignedTo
-            ? `${assignment.item.previouslyAssignedTo}, ${person.name}`
-            : person.name,
-        },
-      });
-
-      // Delete assignment
-      await tx.assignment.delete({
-        where: { id: assignment.id },
-      });
-
-      // Repair Item.status after assignment deletion
-      await repairItemStatusAfterMutation(tx, assignment.itemId);
-
-      // Log UNASSIGN_ITEM action for each item
-      await logAudit(tx, {
-        eventId,
-        actorId,
-        actionType: 'UNASSIGN_ITEM',
-        targetType: 'Item',
-        targetId: assignment.itemId,
-        details: `Unassigned item due to removing person ${person.name}`,
-      });
-    }
-
-    await tx.accessToken.deleteMany({
-      where: { personId, eventId },
-    });
-
-    await tx.personEvent.deleteMany({
-      where: { personId, eventId },
-    });
-  });
-}
 
 // ============================================
 // PHASE 4: GATE CHECK & TRANSITION
@@ -450,7 +469,6 @@ export interface GateCheckResult {
  * - UNSAVED_DRAFT_CHANGES
  *
  * Note: ALL_ITEMS_ASSIGNED is NOT required for DRAFT → CONFIRMING.
- * Assignment coverage is enforced at CONFIRMING → FROZEN transition.
  *
  * @param eventId - Event to check
  * @returns GateCheckResult with passed boolean and array of blocks
@@ -520,8 +538,11 @@ export async function runGateCheck(eventId: string): Promise<GateCheckResult> {
 
   // Check 4: STRUCTURAL_MINIMUM_ITEMS
   // At least 1 item must exist
+  // GTC-171 (B2): ITEM rows only — a plan consisting solely of day-of task rows is not
+  // a plan, and must not satisfy "the event has something in it".
   const itemCount = await prisma.item.count({
     where: {
+      kind: 'ITEM',
       team: { eventId },
     },
   });
@@ -555,7 +576,7 @@ export async function runGateCheck(eventId: string): Promise<GateCheckResult> {
   }
 
   // Note: ALL_ITEMS_ASSIGNED check removed from DRAFT → CONFIRMING gate
-  // Assignment coverage is now enforced only at CONFIRMING → FROZEN transition
+  // Assignment coverage is never enforced as a gate — checkSendReadiness warns only.
 
   return {
     passed: blocks.length === 0,
@@ -885,8 +906,40 @@ export async function createRevision(
 export async function restoreFromRevision(
   eventId: string,
   revisionId: string,
-  actorId: string
+  actorId: string,
+  opts: { actorKind?: ActorKind; reason?: string | null } = {}
 ): Promise<void> {
+  // GTC-196 (A3b) — THE CONVERSION. A3a refused this on a sent event; that refusal
+  // was interim scaffolding, not doctrine (recorded in GTC-196 and by founder ruling
+  // 2026-08-03).
+  //
+  // Post-send restore is the SAME SPECIES as post-send regeneration, which was ruled
+  // allowed: a bulk change that carries a checkpoint, a ledger changeSet and a why —
+  // not a thing to forbid. A3a refused it only because the gate came off before the
+  // recording went in, and an UNRECORDED bulk rewrite of a sent plan is the one thing
+  // worse than either. The recording now exists, so the refusal converts:
+  //
+  //   refused  →  allowed-as-recorded-changeSet
+  //
+  // A checkpoint of the pre-restore state goes in FIRST — nothing is lost by moving
+  // forward, which is exactly what makes no-undo safe to live with (Hinge §2) — and
+  // the restore itself lands as one changeSet carrying the host's why.
+  //
+  // The UI consequence line ("this replaces the plan people have claimed against") is
+  // GTC-197 (A3c)'s and must merge with this.
+  const event = await prisma.event.findUniqueOrThrow({
+    where: { id: eventId },
+    select: { status: true, sentAt: true, endDate: true },
+  });
+  const wasSent = isSent(event);
+
+  // The pre-restore plan is worth keeping whole: a restore replaces every team and
+  // item, so a per-field ledger of it would be hundreds of entries describing a state
+  // no longer reachable any other way.
+  if (wasSent) {
+    await createRevision(eventId, actorId, 'Checkpoint before restore');
+  }
+
   await prisma.$transaction(async (tx) => {
     // Get the revision
     const revision = await tx.planRevision.findUnique({
@@ -964,6 +1017,9 @@ export async function restoreFromRevision(
         const newItem = await tx.item.create({
           data: {
             name: itemData.name,
+            // GTC-171 (B2): this list is explicit, so an omitted column silently falls
+            // back to its schema default — `kind` would restore every task row as an item.
+            kind: itemData.kind ?? 'ITEM',
             quantity: itemData.quantity,
             description: itemData.description,
             critical: itemData.critical,
@@ -994,6 +1050,10 @@ export async function restoreFromRevision(
             prepEndTime: itemData.prepEndTime,
             serveTime: itemData.serveTime,
             dropOffAt: itemData.dropOffAt ? new Date(itemData.dropOffAt) : null,
+            // GTC-175 (D2): omit this and a plan restore silently resets Kate's per-item
+            // decide-by override to the event default — the exact failure the GTC-171
+            // note above warns about.
+            decideByOffsetHours: itemData.decideByOffsetHours ?? null,
             dropOffLocation: itemData.dropOffLocation,
             dropOffNote: itemData.dropOffNote,
             source: itemData.source,
@@ -1012,6 +1072,15 @@ export async function restoreFromRevision(
               personId: itemData.assignment.personId,
               response: itemData.assignment.response,
               createdAt: new Date(itemData.assignment.createdAt),
+              // GTC-175 (D2): the follow-up sent-stamp MUST survive a restore. This
+              // block runs after `item.deleteMany` above, so every Assignment row is
+              // destroyed and rebuilt with a fresh id — omit the stamp and the restored
+              // MAYBEs all read "never followed up", and the next sweep texts every one
+              // of them a second time. "Exactly one follow-up" is only true if it
+              // survives the revision machinery.
+              decideByFollowupSentAt: itemData.assignment.decideByFollowupSentAt
+                ? new Date(itemData.assignment.decideByFollowupSentAt)
+                : null,
             },
           });
         }
@@ -1032,6 +1101,24 @@ export async function restoreFromRevision(
       targetType: 'PlanRevision',
       targetId: revisionId,
       details: `Restored event to revision #${revision.revisionNumber}`,
+    });
+
+    // The restore itself, as one recorded step. It is a bulk change — the whole plan
+    // moved — so it lands as a single changeSet carrying the why, exactly like a
+    // post-send regenerate. Pre-send it is versioned and never interrogated.
+    await recordChange(tx, {
+      eventId,
+      actor: { id: actorId, kind: opts.actorKind ?? 'HOST', name: null },
+      reason: opts.reason ?? null,
+      changes: [
+        {
+          action: 'REGENERATE_PLAN',
+          targetType: 'Event',
+          targetId: eventId,
+          before: { restoredFrom: 'current plan' },
+          after: { revisionId, revisionNumber: revision.revisionNumber },
+        },
+      ],
     });
   });
 }

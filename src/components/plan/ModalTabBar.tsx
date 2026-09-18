@@ -52,6 +52,8 @@ interface ModalTabBarProps {
   onCloseToDashboard: () => void;
   /** Breadcrumb trail of tab IDs visited (optional — defaults to just active) */
   breadcrumbTrail?: ModalTabId[];
+  /** Tabs to omit entirely, e.g. 'history' on V2 events (GTC-149) */
+  hiddenTabs?: ModalTabId[];
 }
 
 export default function ModalTabBar({
@@ -60,8 +62,9 @@ export default function ModalTabBar({
   onNavigate,
   onCloseToDashboard,
   breadcrumbTrail,
+  hiddenTabs,
 }: ModalTabBarProps) {
-  const tabs = getTabsForStatus(eventStatus);
+  const tabs = getTabsForStatus(eventStatus).filter((t) => !hiddenTabs?.includes(t.id));
 
   // Breadcrumb: Plan › [previous tabs] › current
   const trail = breadcrumbTrail ?? [activeTab];

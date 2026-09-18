@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { canMutate, logAudit, repairItemStatusAfterMutation } from '@/lib/workflow';
-import { requireNotFrozen } from '@/lib/auth/guards';
+import { logAudit, repairItemStatusAfterMutation } from '@/lib/workflow';
+import { recordChange, actorFromToken, onAssignmentReleased } from '@/lib/ledger';
 
 /**
  * POST /api/c/[token]/items/[itemId]/assign
@@ -12,10 +12,8 @@ import { requireNotFrozen } from '@/lib/auth/guards';
  * CRITICAL:
  * - Verify item.teamId === token.teamId
  * - Verify assignee's PersonEvent.teamId === item.teamId (same team)
- * - Check canMutate() before assigning
  * - After assignment create: call repairItemStatusAfterMutation(tx, itemId)
  * - Log ASSIGN_ITEM or REASSIGN_ITEM
- * - Server-side frozen state validation
  */
 export async function POST(
   request: NextRequest,
@@ -28,10 +26,6 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
-  // SECURITY: Block mutations when FROZEN (server-side validation)
-  const frozenBlock = requireNotFrozen(resolvedContext.event, false);
-  if (frozenBlock) return frozenBlock;
-
   // Verify item ownership
   const item = await prisma.item.findUnique({
     where: { id: itemId },
@@ -40,16 +34,6 @@ export async function POST(
 
   if (!item || item.teamId !== resolvedContext.team.id) {
     return NextResponse.json({ error: 'Item not found' }, { status: 404 });
-  }
-
-  // Check if mutations are allowed
-  if (!canMutate(resolvedContext.event.status, 'assignItem')) {
-    return NextResponse.json(
-      {
-        error: `Cannot assign items while event is ${resolvedContext.event.status}`,
-      },
-      { status: 403 }
-    );
   }
 
   const body = await request.json();
@@ -75,15 +59,18 @@ export async function POST(
     );
   }
 
+  const actor = actorFromToken(resolvedContext);
+  const released = item.assignment;
+
   // Assign/reassign in transaction
-  const result = await prisma.$transaction(async (tx) => {
-    const isReassignment = item.assignment !== null;
+  const { assignment: result, changeSetId } = await prisma.$transaction(async (tx) => {
+    const isReassignment = released !== null;
     const actionType = isReassignment ? 'REASSIGN_ITEM' : 'ASSIGN_ITEM';
 
     // Delete existing assignment if present
-    if (item.assignment) {
+    if (released) {
       await tx.assignment.delete({
-        where: { id: item.assignment.id },
+        where: { id: released.id },
       });
     }
 
@@ -118,8 +105,34 @@ export async function POST(
       details: `${isReassignment ? 'Reassigned' : 'Assigned'} ${item.name} to ${assignment.person.name}`,
     });
 
-    return assignment;
+    // T1 — the ask itself moves. A coordinator owes the same why a host does; the
+    // rule is a property of the change, not the changer (ruled 2026-08-03).
+    const ledger = await recordChange(tx, {
+      eventId: resolvedContext.event.id,
+      actor,
+      reason: body.reason ?? null,
+      changes: [
+        {
+          action: isReassignment ? 'MOVE_ASSIGNMENT' : 'CREATE_ASSIGNMENT',
+          targetType: 'Assignment',
+          targetId: assignment.id,
+          before: released ? { personId: released.personId, response: released.response } : null,
+          after: {
+            personId: assignment.personId,
+            personName: assignment.person.name,
+            response: assignment.response,
+          },
+          context: { assignmentResponse: released?.response ?? null },
+        },
+      ],
+    });
+
+    return { assignment, changeSetId: ledger.changeSetId };
   });
+
+  if (released) {
+    await onAssignmentReleased(released.personId, itemId, changeSetId);
+  }
 
   return NextResponse.json({ assignment: result });
 }
@@ -133,22 +146,18 @@ export async function POST(
  * - Verify item.teamId === token.teamId
  * - After assignment delete: call repairItemStatusAfterMutation(tx, itemId)
  * - Log UNASSIGN_ITEM
- * - Server-side frozen state validation
  */
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ token: string; itemId: string }> }
 ) {
   const { token, itemId } = await context.params;
+  const delBody = await request.json().catch(() => ({}) as { reason?: string });
   const resolvedContext = await resolveToken(token);
 
   if (!resolvedContext || resolvedContext.scope !== 'COORDINATOR' || !resolvedContext.team) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
-
-  // SECURITY: Block mutations when FROZEN (server-side validation)
-  const frozenBlock = requireNotFrozen(resolvedContext.event, false);
-  if (frozenBlock) return frozenBlock;
 
   // Verify item ownership
   const item = await prisma.item.findUnique({
@@ -170,18 +179,8 @@ export async function DELETE(
     return NextResponse.json({ error: 'Item has no assignment' }, { status: 400 });
   }
 
-  // Check if mutations are allowed
-  if (!canMutate(resolvedContext.event.status, 'assignItem')) {
-    return NextResponse.json(
-      {
-        error: `Cannot unassign items while event is ${resolvedContext.event.status}`,
-      },
-      { status: 403 }
-    );
-  }
-
   // Delete assignment in transaction
-  await prisma.$transaction(async (tx) => {
+  const { changeSetId: delChangeSetId } = await prisma.$transaction(async (tx) => {
     await tx.assignment.delete({
       where: { id: item.assignment!.id },
     });
@@ -197,7 +196,30 @@ export async function DELETE(
       targetId: itemId,
       details: `Unassigned ${item.name} from ${item.assignment!.person.name}`,
     });
+
+    // T1 — withdrawing the ask touches whoever held it, at any response state.
+    return recordChange(tx, {
+      eventId: resolvedContext.event.id,
+      actor: actorFromToken(resolvedContext),
+      reason: delBody.reason ?? null,
+      changes: [
+        {
+          action: 'DELETE_ASSIGNMENT',
+          targetType: 'Assignment',
+          targetId: item.assignment!.id,
+          before: {
+            personId: item.assignment!.personId,
+            personName: item.assignment!.person.name,
+            response: item.assignment!.response,
+          },
+          after: null,
+          context: { assignmentResponse: item.assignment!.response },
+        },
+      ],
+    });
   });
+
+  await onAssignmentReleased(item.assignment.personId, itemId, delChangeSetId);
 
   return NextResponse.json({ success: true });
 }

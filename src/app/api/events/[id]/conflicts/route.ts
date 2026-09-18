@@ -6,10 +6,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ConflictStatus } from '@prisma/client';
+import { requireEventRole } from '@/lib/auth/guards';
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id: eventId } = await context.params;
+
+  // GTC-267: unauthenticated before this.
+  const auth = await requireEventRole(eventId, ['HOST', 'COHOST']);
+  if (auth instanceof NextResponse) return auth;
+
   try {
-    const { id: eventId } = await context.params;
     const { searchParams } = new URL(request.url);
     const statusParam = searchParams.get('status');
 

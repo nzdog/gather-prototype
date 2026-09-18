@@ -65,8 +65,10 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     });
 
     // Determine status
+    // GTC-174 (D1): 'maybe' is its own line in the export — same precedence as the
+    // /api/h/[token] and invite-status rollups, so sheet and screen cannot disagree.
     const responses = person.assignments.map((a) => a.response);
-    let status: 'confirmed' | 'pending' | 'declined';
+    let status: 'confirmed' | 'pending' | 'declined' | 'maybe';
 
     if (responses.length === 0) {
       status = 'pending';
@@ -74,6 +76,8 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
       status = 'confirmed';
     } else if (responses.some((r) => r === 'DECLINED')) {
       status = 'declined';
+    } else if (responses.some((r) => r === 'MAYBE')) {
+      status = 'maybe';
     } else {
       status = 'pending';
     }
