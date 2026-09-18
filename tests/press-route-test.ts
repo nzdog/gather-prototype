@@ -883,9 +883,31 @@ async function main() {
           pressSrc
         )
     );
+    /*
+     * ⚠ THIS ASSERTION FIRED WHEN SLICE 5c LANDED, AND THAT IS THE TRIPWIRE WORKING. It held
+     * `!fs.existsSync('src/app/api/cron/outbound-dispatch')` — "no dispatcher exists yet" — which
+     * was true of 5a and became false the moment 5c's first half was built. Replaced with the
+     * thing that must stay true FOREVER rather than the thing that was true for two commits.
+     *
+     * ⚠ NO INLINE DRAIN AT THE PRESS. Ruled 2026-09-19, and the reason is the ruling: "a request
+     * that can be killed halfway is not one act with no recall." The press writes the rows; the
+     * cron route drains them; and the press must never reach the dispatcher itself, because a
+     * press that drained synchronously could be killed with half its rows claimed and unfinished.
+     */
     assert(
-      'and there is no dispatcher: no cron route for the outbound drain exists yet',
-      !fs.existsSync('src/app/api/cron/outbound-dispatch')
+      '⚠ THE PRESS DOES NOT DRAIN: it names neither the dispatch module nor any of its claims, so ' +
+        'there is no inline drain and a killed request cannot leave claimed rows behind',
+      pressSrc.length > 0 &&
+        !pressSrc.includes('dispatch') &&
+        !pressSrc.includes('claimForFirstAttempt') &&
+        !pressSrc.includes('claimForRetry') &&
+        !pressSrc.includes('describeDrain')
+    );
+    assert(
+      'CONTROL: and the dispatcher really does exist now, so the absence above is an absence and ' +
+        'not a module that was never there — slice 5c built it',
+      fs.existsSync('src/app/api/cron/outbound-dispatch/route.ts') &&
+        fs.existsSync('src/lib/press/dispatch.ts')
     );
     assert(
       '⚠ AND NO FAKE PROVIDER ANYWHERE (founder Q7, 2026-09-19: "no fake"). The press module ' +

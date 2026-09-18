@@ -92,7 +92,8 @@
     "test:carried-answer": "tsx tests/carried-answer-test.ts",
     "test:assignment-answer": "tsx tests/assignment-answer-test.ts",
     "test:press": "tsx tests/press-route-test.ts",
-    "test:preflight-withholding": "tsx tests/preflight-withholding-test.ts"
+    "test:preflight-withholding": "tsx tests/preflight-withholding-test.ts",
+    "test:outbound-dispatch": "tsx tests/outbound-dispatch-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

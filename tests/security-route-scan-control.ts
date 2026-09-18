@@ -27,7 +27,15 @@
  *
  * ── THE NUMBERS ARE PINNED ON PURPOSE ──────────────────────────────────────────
  *
- * 106 files / 134 handlers / 23 unguarded at HEAD, and 105 / 133 / 32 at `298b62d`,
+ * ⚠ UPDATED 2026-09-19 BY [[GTC-189]] SLICE 5c: 106 -> 107 files, 134 -> 136 handlers,
+ * 23 -> 25 unguarded. The addition is `src/app/api/cron/outbound-dispatch/route.ts`, the press's
+ * drain, and its two handlers sit beside the other three cron routes' six with the same verdict —
+ * `SHARED_SECRET:PROVEN+SHARED_SECRET:PROVEN`. **The "no credential of any kind" count did NOT
+ * move and is still 12**, which is the scanner confirming the new route carries its credential
+ * rather than the executor asserting it. This is the update the paragraph below instructs, made in
+ * the commit that added the route.
+ *
+ * 107 files / 136 handlers / 25 unguarded at HEAD, and 105 / 133 / 32 at `298b62d`,
  * are asserted as exact equalities, not floors. A pinned number fails when a route
  * is added, which is the point: the old gate's ONE real property was that its count
  * moved 80 -> 81 when someone hand-edited the JSON. This keeps that property and
@@ -153,6 +161,25 @@ const GTC273_ALSO_CLOSED = [
 
 /** GTC-267 added exactly one deliberately-public route. */
 const GTC267_ADDED = 'GET src/app/api/events/[id]/clone-source/route.ts';
+
+/*
+ * ⚠ ADDED 2026-09-19 BY [[GTC-189]] SLICE 5c, AND NAMED INDIVIDUALLY ON PURPOSE.
+ *
+ * The press's drain, `src/app/api/cron/outbound-dispatch/route.ts`. Both handlers are "unguarded"
+ * in this file's own precise sense — no SESSION guard and no TOKEN guard — and that is what the
+ * other three cron routes' six handlers read as too. They are NOT unauthenticated: the verdict
+ * table pins both as `SHARED_SECRET:PROVEN+SHARED_SECRET:PROVEN`, and the "no credential of any
+ * kind" count did not move off 12.
+ *
+ * ⚠ THEY ARE LISTED BY NAME RATHER THAN THE ASSERTION BEING LOOSENED TO A COUNT. This is the
+ * assertion whose whole job is to catch a handler silently losing its guard, so widening it is the
+ * one move that could hide the thing it exists for. Named entries mean a FOURTH addition still
+ * fails, and whoever makes it has to come here and say why.
+ */
+const GTC189_CRON_ADDED = [
+  'GET src/app/api/cron/outbound-dispatch/route.ts',
+  'POST src/app/api/cron/outbound-dispatch/route.ts',
+] as const;
 
 function keys(result: ScanResult): Set<string> {
   return new Set(unguardedHandlers(result).map(handlerKey));
@@ -284,14 +311,14 @@ function suite1_HeadShape(head: ScanResult) {
   logSection('Suite 1: the surface at HEAD — counted from disk, not from a ledger');
 
   logTest(
-    'the scanner discovers exactly 106 route files under src/app/api',
-    head.files.length === 106,
+    'the scanner discovers exactly 107 route files under src/app/api',
+    head.files.length === 107,
     `found ${head.files.length}`
   );
 
   logTest(
-    'the scanner enumerates exactly 134 exported HTTP handlers',
-    head.handlers.length === 134,
+    'the scanner enumerates exactly 136 exported HTTP handlers',
+    head.handlers.length === 136,
     `found ${head.handlers.length}`
   );
 
@@ -303,8 +330,8 @@ function suite1_HeadShape(head: ScanResult) {
   );
 
   logTest(
-    'exactly 23 handlers carry no session or token guard at HEAD',
-    keys(head).size === 23,
+    'exactly 25 handlers carry no session or token guard at HEAD',
+    keys(head).size === 25,
     `found ${keys(head).size}: ${[...keys(head)].sort().join(', ')}`
   );
 
@@ -313,7 +340,7 @@ function suite1_HeadShape(head: ScanResult) {
   // by arithmetic.
   logTest(
     'the surface is larger than the retired inventory could express (81 entries)',
-    head.files.length === 106 && head.handlers.length === 134,
+    head.files.length === 107 && head.handlers.length === 136,
     `files ${head.files.length}, handlers ${head.handlers.length}`
   );
 }
@@ -402,15 +429,24 @@ function suite2_Gtc267Control(head: ScanResult, pre: ScanResult) {
   );
 
   const opened = sortedDiff(headKeys, preKeys);
+  const expectedOpened = [GTC267_ADDED, ...GTC189_CRON_ADDED].sort();
   logTest(
-    'exactly one handler became unguarded — clone-source, deliberately public',
-    JSON.stringify(opened) === JSON.stringify([GTC267_ADDED]),
+    'exactly three handlers became unguarded — clone-source, deliberately public, and the ' +
+      "press's drain, which carries a SHARED_SECRET the verdict table pins as PROVEN",
+    JSON.stringify(opened) === JSON.stringify(expectedOpened),
     `got ${opened.length}: ${opened.join(', ')}`
   );
 
-  // 32 - 10 + 1 = 23. Stated as arithmetic so a drift in either number is visible.
+  /*
+   * 32 - 10 + 3 = 25. Stated as arithmetic so a drift in either number is visible.
+   *
+   * ⚠ THE LABEL WAS UPDATED WITH THE NUMBERS, AND THAT IS NOT COSMETIC. The condition below
+   * computes from the live sets, so it stayed GREEN while the label read "32 - 10 + 1 = 23" and
+   * the tree said 25 — a true assertion carrying false prose, which is the worst of the two
+   * because nothing goes red to tell you. Slice 5c updated both.
+   */
   logTest(
-    'the arithmetic closes: 32 - 10 + 1 = 23',
+    'the arithmetic closes: 32 - 10 + 3 = 25',
     preKeys.size - closed.length + opened.length === headKeys.size,
     `${preKeys.size} - ${closed.length} + ${opened.length} !== ${headKeys.size}`
   );
@@ -1595,6 +1631,14 @@ const HEAD_VERDICTS: ReadonlyArray<readonly [string, boolean, string]> = [
   ],
   ['GET src/app/api/cron/nudges/route.ts', false, 'SHARED_SECRET:PROVEN+SHARED_SECRET:PROVEN'],
   [
+    // GTC-189 slice 5c — the press's drain. Same shape as its three siblings, deliberately:
+    // both refusing ifs written out in the route file, because GTC-268's scanner reads the
+    // conditions inside a handler and does not follow imports.
+    'GET src/app/api/cron/outbound-dispatch/route.ts',
+    false,
+    'SHARED_SECRET:PROVEN+SHARED_SECRET:PROVEN',
+  ],
+  [
     'GET src/app/api/cron/wrap-up-dispatch/route.ts',
     false,
     'SHARED_SECRET:PROVEN+SHARED_SECRET:PROVEN',
@@ -1616,6 +1660,11 @@ const HEAD_VERDICTS: ReadonlyArray<readonly [string, boolean, string]> = [
     'SHARED_SECRET:PROVEN+SHARED_SECRET:PROVEN',
   ],
   ['POST src/app/api/cron/nudges/route.ts', false, 'SHARED_SECRET:PROVEN+SHARED_SECRET:PROVEN'],
+  [
+    'POST src/app/api/cron/outbound-dispatch/route.ts',
+    false,
+    'SHARED_SECRET:PROVEN+SHARED_SECRET:PROVEN',
+  ],
   [
     'POST src/app/api/cron/wrap-up-dispatch/route.ts',
     false,
