@@ -336,17 +336,32 @@ async function main() {
     // are asserted over HTTP in the ticket's evidence. This catches the failure that
     // evidence cannot: a later edit deleting the guard while every suite stays green.
     const fs = await import('fs');
+    /*
+     * ⚠ THE PRESS MOVED, AND ITS GUARD MOVED ONE MODULE DEEPER — GTC-189 slice 5a.
+     *
+     * `src/app/api/events/[id]/confirm-invites-sent/route.ts` stood in this list. It counted
+     * recipients through `isAddressable` inline, so it imported this module. Slice 5a renamed
+     * the press to `POST /api/events/[id]/send` (decision 31), moved its body into
+     * `src/lib/press/press.ts` (decision 30), and left the old path as a redirect with no
+     * behaviour of its own.
+     *
+     * The press no longer needs an inline filter: the row set is `chooseAskRoute`'s answer,
+     * and that function refuses the host her own ask through `isHostMembership` from this
+     * module. So Ruling 5 is enforced through the CHOOSER now, which this list follows. That
+     * is stronger than the inline filter was — one predicate, every caller — and it is why
+     * the entry is replaced rather than dropped.
+     */
     const guarded = [
       'src/app/api/events/[id]/people/[personId]/route.ts',
       'src/app/api/events/[id]/pre-flight/route.ts',
       'src/app/api/events/[id]/pre-flight/cadence/route.ts',
-      'src/app/api/events/[id]/confirm-invites-sent/route.ts',
+      'src/lib/eligibility/channel-chooser.ts',
       'src/app/api/events/[id]/invite-status/route.ts',
     ];
     const unguarded = guarded.filter((p) => !fs.readFileSync(p, 'utf8').includes('host-exclusion'));
     assert(
-      `every route carrying an inline Ruling 5 guard imports the one module — no second ` +
-        `copy of the rule (missing: ${unguarded.join(', ') || 'none'})`,
+      `every route or module carrying a Ruling 5 guard imports the one definition — no ` +
+        `second copy of the rule (missing: ${unguarded.join(', ') || 'none'})`,
       unguarded.length === 0
     );
 

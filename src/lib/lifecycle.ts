@@ -92,18 +92,23 @@ export function getEventPhase(event: LifecycleEvent, now: Date = new Date()): Ev
   return 'CONFIRMING';
 }
 
-/**
- * Was this person a mini-send — added after the press, on their own clock?
+/*
+ * isMiniSend() WAS DELETED BY GTC-189 SLICE 5a. DO NOT REINTRODUCE IT.
  *
- * Hinge §2 gap #5. No stored flag is needed: a later personal send date IS the fact.
- * Their nudge cadence and red-by-time run from `personEvent.sentAt` (GTC-178 / E1,
- * GTC-180 / E3), truncated by the event date, so "a Bob added three days out may pass
- * straight to Kate's line" falls out of the arithmetic with no special case.
+ * It was `personEvent.sentAt > event.sentAt`, and GTC-189 ruling G falsified that
+ * definition: `PersonEvent.sentAt` is now written at each person's PROVIDER ACCEPTANCE,
+ * per person, so every recipient's stamp lands after the press and every one of them
+ * would have read as a mini-send.
+ *
+ * DECISION 33, ruled 2026-09-18: REMOVED, not redefined. "No live caller, and the
+ * outbound row answers the question directly. A redefinition would be a second answer to
+ * a question that now has one."
+ *
+ * So the question "was this person a mini-send" is answered by `OutboundMessage` —
+ * `createdAt` on the ASK row against `Event.sentAt` — and not by a predicate over two
+ * clocks that no longer mean what this one assumed. Suite 5 of
+ * `tests/lifecycle-predicates-test.ts` went with it.
  */
-export function isMiniSend(personEvent: LifecyclePersonEvent, event: LifecycleEvent): boolean {
-  if (personEvent.sentAt === null || event.sentAt === null) return false;
-  return personEvent.sentAt.getTime() > event.sentAt.getTime();
-}
 
 /**
  * When is this ask needed by? The shared derivation behind the red-by-time line

@@ -90,7 +90,8 @@
     "test:ask-preview": "tsx tests/ask-preview-test.ts",
     "test:coordinator-holds-ask": "tsx tests/coordinator-holds-ask-test.ts",
     "test:carried-answer": "tsx tests/carried-answer-test.ts",
-    "test:assignment-answer": "tsx tests/assignment-answer-test.ts"
+    "test:assignment-answer": "tsx tests/assignment-answer-test.ts",
+    "test:press": "tsx tests/press-route-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

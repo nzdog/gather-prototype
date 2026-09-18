@@ -337,7 +337,22 @@ export default function PeopleSection({
                 assignment reliably reaches the person assigned, delete `!isSent &&`
                 and this comment. The ledger side is already done: the batch carries
                 one why as one changeSet.
-                ──────────────────────────────────────────────────────────────────── */}
+
+                ⚠ 2026-09-19, GTC-189 SLICE 5a — ONE OF THE TWO CONDITIONS IS NOW MET,
+                AND THIS CONDITION STAYS. Read this before deleting it.
+
+                GTC-189's build shape says the `!isSent &&` comes out "when this ticket
+                lands". It has not landed: slice 5a is the press ROUTE, dark — it writes
+                the lock and one OutboundMessage per addressed recipient and sends
+                nothing. The dispatcher is slice 5c and the mini-send path is slice 5e.
+                And E1 (GTC-178) is not built at all, so the cadence a late-added
+                person's clock would run on does not exist.
+
+                So deleting this today would offer a button that creates N asks which
+                reach nobody — which is exactly the failure the tombstone was written
+                against, with the ticket number that was supposed to end it now half
+                done. Named in place rather than left for the next reader to work out
+                from two ticket numbers. */}
             {!isSent && (
               <button
                 onClick={handleAutoAssign}

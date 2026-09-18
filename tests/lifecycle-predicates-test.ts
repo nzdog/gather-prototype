@@ -16,7 +16,6 @@ import {
   isSent,
   isComplete,
   getEventPhase,
-  isMiniSend,
   neededBy,
   SENT_AND_LIVE,
   COMPLETE_WHERE,
@@ -111,26 +110,14 @@ assert(
   getEventPhase(ev({ status: 'FROZEN', sentAt: null }), NOW) === 'SENT'
 );
 
-// ── isMiniSend ───────────────────────────────────────────────────────────────
-console.log('\n\x1b[33mSuite 5: isMiniSend — derived, no stored flag\x1b[0m');
-const sentEvent = ev({ sentAt: SEND_TIME });
-const LATER = new Date(SEND_TIME.getTime() + 86_400_000);
-assert(
-  'person sent at the press → not a mini-send',
-  isMiniSend({ sentAt: SEND_TIME }, sentEvent) === false
-);
-assert(
-  'person sent after the press → mini-send',
-  isMiniSend({ sentAt: LATER }, sentEvent) === true
-);
-assert(
-  'person not yet sent to → not a mini-send',
-  isMiniSend({ sentAt: null }, sentEvent) === false
-);
-assert(
-  'unsent event → nobody is a mini-send',
-  isMiniSend({ sentAt: LATER }, ev({ sentAt: null })) === false
-);
+/*
+ * SUITE 5 WAS isMiniSend, AND IT WENT WITH THE FUNCTION — GTC-189 slice 5a, decision 33.
+ * Ruling G moves `PersonEvent.sentAt` to each person's provider acceptance, which
+ * falsifies `personEvent.sentAt > event.sentAt`: every recipient's stamp then lands after
+ * the press and every one reads as a mini-send. Removed rather than redefined, because the
+ * outbound row answers the question directly. The suite numbering below is left as it was
+ * so references to "suite 6" keep working.
+ */
 
 // ── neededBy ─────────────────────────────────────────────────────────────────
 console.log('\n\x1b[33mSuite 6: neededBy — the anchor both clocks share (§10.2)\x1b[0m');
