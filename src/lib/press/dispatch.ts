@@ -410,7 +410,17 @@ export function isRetryableProviderError(failure: ProviderFailure): boolean {
   );
 }
 
-/** The provider took it. Ruling G's clock starts here. */
+/**
+ * The provider took it. Ruling G's clock starts here.
+ *
+ * ⚠ IT DOES NOT CLEAR `providerError` OR `providerErrorCode`, AND THAT IS UNCHANGED RATHER THAN
+ * OVERLOOKED — named here at GTC-289 phase 3b because the new column makes it more visible. A row that
+ * failed, retried and then succeeded keeps the LAST FAILURE'S words and code beside its acceptance.
+ * That is how `providerError` has behaved since slice 5c, and the history is worth more than a tidy
+ * row: the pair reads *"accepted, and here is what went wrong first"*, not *"accepted and refused"*.
+ * `acceptedAt` is what says the send succeeded. Do not read a code on an accepted row as a
+ * contradiction, and do not clear it to make the row look neat.
+ */
 export async function recordAcceptance(
   db: PrismaClient,
   args: { id: string; personEventId: string; provider: string; providerMessageId?: string }
@@ -449,10 +459,25 @@ export async function recordAcceptance(
   });
 }
 
-/** The provider refused it at submission. Their words, verbatim. */
+/**
+ * The provider refused it at submission. Their words, verbatim — and now their CODE beside them.
+ *
+ * ✅ THE CODE REACHES THE RECORD — GTC-289 phase 3b, founder ruling 2026-09-19: *"the decision reads
+ * one and the record does not, and that gap is the thing slice 7 will need when it asks why a row is
+ * red."* Phase 2 gave this decision the code and threw it away; phase 3a gave it a column.
+ *
+ * ⚠ AN EMPTY CODE IS STORED AS NULL, NEVER AS `''`. The ruling's own requirement: a `''` and a NULL
+ * are the difference between *we asked and got nothing* and *we never asked*, and on an EMAIL row a
+ * NULL code means the provider was never reached — the sender's `catch` sets no code, deliberately,
+ * because a thrown `Error` has a `.name` too.
+ *
+ * ⚠ AND IT OVERWRITES, INCLUDING WITH NULL, WHICH IS CORRECT RATHER THAN CARELESS. `providerError`
+ * has always described the LAST attempt; the code does the same, so a retry that fails differently
+ * cannot leave the earlier attempt's code standing beside the later attempt's prose.
+ */
 export async function recordRejection(
   db: PrismaClient,
-  args: { id: string; provider: string; error: string }
+  args: { id: string; provider: string; error: string; code?: string | null }
 ): Promise<void> {
   await db.outboundMessage.update({
     where: { id: args.id },
@@ -460,6 +485,7 @@ export async function recordRejection(
       rejectedAt: new Date(),
       provider: args.provider,
       providerError: args.error,
+      providerErrorCode: args.code ? args.code : null,
       nextAttemptAt: null,
     },
   });
@@ -498,14 +524,26 @@ export async function recordWithholding(
   return count === 1;
 }
 
-/** Try again later. The row stays unfinished on purpose; `nextAttemptAt` is the claim key. */
+/**
+ * Try again later. The row stays unfinished on purpose; `nextAttemptAt` is the claim key.
+ *
+ * ⚠ IT RECORDS THE CODE TOO (GTC-289 phase 3b), and that is the half easy to leave out: a row waiting
+ * to be tried again ALREADY has a provider answer, so writing the prose without the code would leave
+ * the record thinnest on exactly the rows still moving. Same normalisation as `recordRejection` — an
+ * empty code is NULL, and it overwrites, because both columns describe the last attempt.
+ */
 export async function scheduleRetry(
   db: PrismaClient,
-  args: { id: string; provider: string; error: string; at: Date }
+  args: { id: string; provider: string; error: string; at: Date; code?: string | null }
 ): Promise<void> {
   await db.outboundMessage.update({
     where: { id: args.id },
-    data: { provider: args.provider, providerError: args.error, nextAttemptAt: args.at },
+    data: {
+      provider: args.provider,
+      providerError: args.error,
+      providerErrorCode: args.code ? args.code : null,
+      nextAttemptAt: args.at,
+    },
   });
 }
 
@@ -667,11 +705,13 @@ export async function drainOnce(
           })
             ? nextBackoffAt(attemptCount, now)
             : null;
+          // GTC-289 phase 3b: the code the decision just read is also what the record keeps.
+          const code = sent.providerErrorCode;
           if (at) {
-            await scheduleRetry(db, { id: row.id, provider: 'resend', error, at });
+            await scheduleRetry(db, { id: row.id, provider: 'resend', error, at, code });
             result.retrying++;
           } else {
-            await recordRejection(db, { id: row.id, provider: 'resend', error });
+            await recordRejection(db, { id: row.id, provider: 'resend', error, code });
             result.rejected++;
           }
         }
@@ -713,7 +753,12 @@ export async function drainOnce(
         continue;
       }
       const error = sent.error ?? 'Unknown SMS error';
-      // The message alone: TNZ's result vocabulary arrives on a delivery receipt, not on a submission.
+      /*
+       * The message alone: TNZ's result vocabulary arrives on a delivery receipt, not on a submission.
+       * ⚠ AND NO `code` IS PASSED TO EITHER WRITER BELOW, DELIBERATELY — `providerErrorCode` stays NULL
+       * on a TEXT row, which is the third of the column's three states. Do not fill it with a parsed
+       * fragment of TNZ's prose to make the column look complete.
+       */
       const at = isRetryableProviderError({ error }) ? nextBackoffAt(attemptCount, now) : null;
       if (at) {
         await scheduleRetry(db, { id: row.id, provider: 'tnz', error, at });

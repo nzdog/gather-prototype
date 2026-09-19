@@ -86,6 +86,21 @@ function read(path: string): string {
 }
 
 /**
+ * The text between two markers — for reading ONE BRANCH of `drainOnce` rather than the whole function.
+ *
+ * ⚠ WRITTEN BECAUSE A MUTATION SURVIVED. Phase 3b's N2 removed `code` from the email branch's
+ * `recordRejection` call and BOTH suites stayed green: the existing assertion covers the code reaching
+ * the DECISION, and nothing covered it reaching the WRITER. The guard was missing rather than weak.
+ */
+function between(src: string, start: string, end: string): string {
+  const a = src.indexOf(start);
+  if (a === -1) return '';
+  const rest = src.slice(a + start.length);
+  const b = rest.indexOf(end);
+  return b === -1 ? rest : rest.slice(0, b);
+}
+
+/**
  * One function's body, bounded by the next top-level `export` after it.
  *
  * ⚠ WRITTEN BECAUSE THE UNBOUNDED VERSION WENT RED FOR THE WRONG REASON, in this suite's own first
@@ -463,6 +478,58 @@ async function main() {
     /isRetryableProviderError\(\{ error \}\)/.test(read(DISPATCH))
   );
 
+  /*
+   * ✅ AND THE CODE REACHES THE WRITERS, NOT ONLY THE DECISION — GTC-289 phase 3b.
+   *
+   * ⚠ THESE FOUR EXIST BECAUSE MUTATION N2 SURVIVED. Removing `code` from the email branch's
+   * `recordRejection` call left both suites green: the assertion above proves the code reaches the
+   * RETRY DECISION and said nothing about the RECORD. A surviving mutation is not evidence a guard
+   * held; here it was evidence there was no guard. [[GTC-192]]'s standing warning.
+   *
+   * ⚠ AND THEY ARE SOURCE ASSERTIONS, WHICH IS A LIMIT AND NOT A CHOICE. The only email outcome this
+   * environment can produce carries NO code at all — under `tsx` there is no `RESEND_API_KEY`, so the
+   * SDK constructor throws and no provider is reached — so no behavioural run can tell "the code was
+   * passed" from "there was no code to pass". The WRITER's behaviour is proven behaviourally, in
+   * `tests/outbound-drain-test.ts`, by calling it with a code. End-to-end waits on [[GTC-247]].
+   */
+  const emailBranch = between(
+    stripComments(read(DISPATCH)),
+    "if (stored.channel === 'EMAIL')",
+    'const to = stored.personEvent.person.phoneNumber'
+  );
+  const textBranch = between(
+    stripComments(read(DISPATCH)),
+    'const to = stored.personEvent.person.phoneNumber',
+    'return result;'
+  );
+  assert(
+    'CONTROL: the two branch readers really split the drain — the email branch names sendAskEmail and ' +
+      'not sendSms, the text branch names sendSms and not sendAskEmail, and neither is the whole file',
+    emailBranch.length > 0 &&
+      textBranch.length > 0 &&
+      /sendAskEmail/.test(emailBranch) &&
+      !/sendSms/.test(emailBranch) &&
+      /sendSms/.test(textBranch) &&
+      !/sendAskEmail/.test(textBranch)
+  );
+  assert(
+    '✅ THE EMAIL BRANCH PASSES THE CODE TO THE REJECTION WRITER — the record keeps what the decision ' +
+      'read, which is the whole of the founder ruling that put a column there',
+    /recordRejection\(db, \{ id: row\.id, provider: 'resend', error, code \}\)/.test(emailBranch)
+  );
+  assert(
+    '✅ AND TO THE RETRY WRITER TOO — a row waiting to be tried again already has a provider answer',
+    /scheduleRetry\(db, \{ id: row\.id, provider: 'resend', error, at, code \}\)/.test(emailBranch)
+  );
+  assert(
+    '⚠ AND THE TEXT BRANCH PASSES NO CODE TO EITHER WRITER, DELIBERATELY — a NULL on a TEXT row is the ' +
+      "third of the column's three states, and filling it with a parsed fragment of TNZ's prose to " +
+      'make the column look complete is the thing the comment there forbids',
+    textBranch.length > 0 &&
+      /recordRejection\(db, \{ id: row\.id, provider: 'tnz', error \}\)/.test(textBranch) &&
+      !/provider: 'tnz', error, code/.test(textBranch)
+  );
+
   // ── Layer L: what is NOT done here ──────────────────────────────────────
   section('Layer L: the limits, asserted so they are not mistaken for oversights');
 
@@ -478,12 +545,42 @@ async function main() {
       /rejectedAt/.test(rejectionBody) &&
       !/drainOnce/.test(rejectionBody)
   );
+  /*
+   * ✅ THE 3b MARKER INVERTED, ON SCHEDULE, AND THAT IS THE WHOLE POINT OF HAVING LABELLED IT.
+   *
+   * Through phases 2 and 3a this assertion read "THE CODE IS NOT PERSISTED — the DECISION has the code
+   * and the RECORD does not", and its label named the commit that would turn it round. Phase 3b is that
+   * commit, so it went red on the run after the writer landed and was inverted rather than deleted.
+   *
+   * ⚠ AN ASSERTION DESIGNED TO INVERT IN A NAMED COMMIT IS A DIFFERENT THING FROM ONE THAT BROKE, and
+   * the difference is entirely in whether somebody wrote the name down in advance. Founder, 2026-09-19.
+   */
+  const retryBody = fnBody(stripComments(read(DISPATCH)), 'export async function scheduleRetry');
   assert(
-    "⚠ THE CODE IS STILL NOT PERSISTED. `providerError` holds the provider's words VERBATIM and gains " +
-      'no code prefix; the COLUMN now exists (phase 3a) and `recordRejection` does not write it yet. ' +
-      'So the DECISION has the code and the RECORD does not, and THIS ASSERTION IS THE 3b MARKER — ' +
-      'it inverts in the commit that adds the writer',
-    /providerError: args\.error/.test(rejectionBody) && !/providerErrorCode/.test(rejectionBody)
+    '✅ THE CODE IS PERSISTED NOW, AND THE PROSE IS STILL VERBATIM BESIDE IT — `recordRejection` writes ' +
+      'providerError unchanged and providerErrorCode as its own field, never prefixed into the string',
+    /providerError: args\.error/.test(rejectionBody) &&
+      /providerErrorCode: args\.code/.test(rejectionBody)
+  );
+  assert(
+    "⚠ AND AN EMPTY CODE IS NORMALISED TO NULL IN BOTH WRITERS — the ruling's own requirement, because " +
+      'a "" and a NULL are the difference between "we asked and got nothing" and "we never asked". ' +
+      'Asserted behaviourally too, in tests/outbound-drain-test.ts, on a row that already held a code',
+    /providerErrorCode: args\.code \? args\.code : null/.test(rejectionBody) &&
+      /providerErrorCode: args\.code \? args\.code : null/.test(retryBody)
+  );
+  assert(
+    '⚠ AND THE RETRY WRITER KEEPS IT TOO — a row waiting to be tried again already has a provider ' +
+      'answer, so the record would otherwise be thinnest on the rows still moving',
+    retryBody.length > 0 && /nextAttemptAt: args\.at/.test(retryBody)
+  );
+  assert(
+    "CONTROL: the second bounded body is really scheduleRetry's and stops before the next export — " +
+      'the same bound that stopped the first fence reading three functions past its subject',
+    retryBody.length > 0 &&
+      retryBody.length < stripComments(read(DISPATCH)).length / 4 &&
+      !/drainOnce/.test(retryBody) &&
+      !/rejectedAt/.test(retryBody)
   );
   /*
    * ✅ THE FENCE BELOW FIRED, AND RECORDING THAT IS WORTH MORE THAN QUIETLY FLIPPING IT.

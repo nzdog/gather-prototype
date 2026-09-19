@@ -371,6 +371,8 @@ async function main() {
         acceptedAt: true,
         rejectedAt: true,
         providerError: true,
+        // GTC-289 phase 3b: the column the three-state rule is asserted on, below.
+        providerErrorCode: true,
         provider: true,
         nextAttemptAt: true,
         withheldAt: true,
@@ -426,6 +428,91 @@ async function main() {
         'message, so this row records a send that never reached a provider at all — asserted, not ' +
         'inferred from the environment',
       ok(() => /Missing API key/i.test(ameliaRow!.providerError ?? ''))
+    );
+
+    /*
+     * ── GTC-289 PHASE 3b — THE CODE REACHES THE RECORD ───────────────────────────
+     *
+     * Phase 2 gave the retry the provider's error CODE and then threw it away; phase 3a gave it a
+     * column. This is the writer that connects them, and it is a separate commit on a founder ruling:
+     * "a migration commit that also carries a writer is how the convention erodes."
+     *
+     * ⚠ THE FIRST ASSERTION IS THE THREE-STATE RULE, ON A REAL ROW RATHER THAN A FIXTURE. The row
+     * above was rejected in THIS process, where RESEND_API_KEY is absent and the SDK constructor
+     * throws — so no provider was reached and the column must be NULL. That is exactly why the ruling
+     * forbade a default: "no code on an EMAIL row means the provider was never reached."
+     */
+    assert(
+      '✅ THE REAL REJECTED ROW CARRIES NO CODE, AND THAT IS THE POINT: the provider was never reached ' +
+        'in this process, so the column is NULL rather than empty. The distinction phase 2 could only ' +
+        'assert inside a suite now survives in the record',
+      ok(() => ameliaRow!.providerErrorCode === null)
+    );
+
+    const codeRow = await prisma.outboundMessage.create({
+      data: { eventId: event.id, personEventId: ameliaPe!.id, kind: 'ASK', channel: 'EMAIL' },
+      select: { id: true },
+    });
+    await dispatch.recordRejection(prisma, {
+      id: codeRow.id,
+      provider: 'resend',
+      error: 'The from address is not verified',
+      code: 'invalid_from_address',
+    });
+    const codeStored = await prisma.outboundMessage.findUnique({
+      where: { id: codeRow.id },
+      select: { providerError: true, providerErrorCode: true, rejectedAt: true },
+    });
+    assert(
+      '✅ AND A REJECTION THAT HAS A CODE STORES IT VERBATIM, BESIDE the provider prose rather than ' +
+        'inside it — ruled: providerError holds the prose, the code belongs beside it as its own field ' +
+        'and is never prefixed into the string',
+      ok(
+        () =>
+          codeStored!.providerErrorCode === 'invalid_from_address' &&
+          codeStored!.providerError === 'The from address is not verified' &&
+          codeStored!.rejectedAt !== null
+      )
+    );
+
+    await dispatch.recordRejection(prisma, {
+      id: codeRow.id,
+      provider: 'resend',
+      error: 'something with no code',
+      code: '',
+    });
+    const emptyStored = await prisma.outboundMessage.findUnique({
+      where: { id: codeRow.id },
+      select: { providerErrorCode: true },
+    });
+    assert(
+      '⚠ AND AN EMPTY STRING IS STORED AS NULL, NEVER AS "" — the ruling own requirement, because a "" ' +
+        'and a NULL are the difference between "we asked and got nothing" and "we never asked". ' +
+        'Asserted on a row that ALREADY had a code, so it proves the write CLEARS a stale one rather ' +
+        "than leaving the previous attempt's answer behind",
+      ok(() => emptyStored!.providerErrorCode === null)
+    );
+
+    await dispatch.scheduleRetry(prisma, {
+      id: codeRow.id,
+      provider: 'resend',
+      error: 'Too many requests',
+      code: 'rate_limit_exceeded',
+      at: new Date(now.getTime() + 60_000),
+    });
+    const retryStored = await prisma.outboundMessage.findUnique({
+      where: { id: codeRow.id },
+      select: { providerErrorCode: true, nextAttemptAt: true },
+    });
+    assert(
+      '⚠ AND THE RETRY PATH WRITES IT TOO, which is the half that is easy to miss: a row waiting to be ' +
+        'tried again already has a provider answer, and recording the prose without the code would ' +
+        'leave the record worst on exactly the rows that are still moving',
+      ok(
+        () =>
+          retryStored!.providerErrorCode === 'rate_limit_exceeded' &&
+          retryStored!.nextAttemptAt !== null
+      )
     );
     assert(
       'and it named the provider it called',
@@ -617,8 +704,24 @@ async function main() {
       where: { eventId: event.id, personId: tess.id },
       select: { id: true },
     });
+    /*
+     * ⚠ `orderBy` ADDED 2026-09-19, AND IT IS A REPAIR RATHER THAN A TIDY-UP — GTC-289 phase 3b.
+     *
+     * Tess's membership has TWO outbound rows by this point: the press's ASK, which the drain withheld
+     * `SMS_DISABLED`, and the quiet-hours row layer Q created and deliberately left untouched. An
+     * unordered `findFirst` therefore returned EITHER of them, at the database's discretion.
+     *
+     * It had passed every run until phase 3b inserted three unrelated writes earlier in the suite —
+     * which changed nothing this assertion reads, and changed the heap order enough for `findFirst` to
+     * return the OTHER row, whose `withheldWhy` is NULL by design. **The assertion failed with the code
+     * it names untouched.**
+     *
+     * So: oldest first, which is the press's row and the one the label means. An unordered `findFirst`
+     * where more than one row can match does not name a row; it names one of them at random.
+     */
     const tessRow = await prisma.outboundMessage.findFirst({
       where: { personEventId: tessPe!.id },
+      orderBy: { createdAt: 'asc' },
       select: { id: true, withheldAt: true, withheldWhy: true, attemptedAt: true },
     });
     assert(
