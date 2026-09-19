@@ -12,6 +12,7 @@
     "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx}\"",
     "typecheck": "tsc --noEmit",
     "test:security": "tsx tests/security-validation.ts",
+    "test:bounce-door": "tsx tests/bounce-door-test.ts",
     "security:routes": "tsx tests/security-route-scan.ts",
     "test:security:routes": "tsx tests/security-route-scan-control.ts",
     "test:lifecycle": "tsx tests/lifecycle-predicates-test.ts",

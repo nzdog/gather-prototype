@@ -221,6 +221,33 @@ function chaseChannelOf(
   return { ok: false, why: 'NO_CHANNEL' };
 }
 
+/**
+ * GTC-189 SLICE 7b, RULING U'S THIRD ACTION — *"send to the phone instead"*.
+ *
+ * WOULD THE ASK REACH THIS PERSON BY TEXT IF THEY HELD NO ADDRESS? `askChannelOf` above answers
+ * EMAIL for anybody holding one and stops, so the chooser can never produce a TEXT route for the
+ * very people this action exists for: somebody whose live address has just bounced.
+ *
+ * ⚠ IT IS THE SAME LADDER WITH THE EMAIL SET ASIDE, NOT A SECOND COPY OF IT. The alternative was
+ * a predicate in the door reading `smsOptedOut` and `isValidNZNumber` for itself — a second
+ * spelling of Do-Not-Touch Zone 7's ask-side rule, living in the one module that must never be
+ * the place it drifts. So this calls `askChannelOf` with `email: null` and passes its refusal
+ * through unchanged, which means a mutation to Zone 7's line in that function fails the door's
+ * suite as well as the chooser's. That is the property, not a convenience.
+ *
+ * ⚠ AND IT IS NOT A ROUTE. It answers whether an offer may be made; `chooseAskRoute` still owns
+ * what the press and the drain do. Ruling U's third action is the HOST overriding the channel
+ * the chooser chose, and the override lives on the `OutboundMessage` row rather than here.
+ */
+export type TextAskReach =
+  | { ok: true }
+  | { ok: false; why: 'NO_CHANNEL' | 'SMS_OPTED_OUT' | 'PHONE_UNUSABLE' };
+
+export function textAskReachOf(person: ChooserPerson): TextAskReach {
+  const reach = askChannelOf({ ...person, email: null });
+  return reach.ok ? { ok: true } : { ok: false, why: reach.why };
+}
+
 /** How this membership's ask reaches an adult — or why it goes on the host's list instead. */
 export function chooseAskRoute(subject: ChooserMembership, event: ChooserEvent): AskRoute {
   // The child rule leads, as in every ladder that has it: §10.6 must not become reachable

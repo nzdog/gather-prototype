@@ -148,6 +148,27 @@ export function pressWillMessage(linkState: LinkState): boolean {
   return linkState === 'READY' || linkState === 'AT_PRESS';
 }
 
+/**
+ * [[GTC-301]]'S TWO OPT-OUT FACTS, MERGED IN ONE PLACE.
+ *
+ * ⚠ EXTRACTED AT GTC-189 SLICE 7b RATHER THAN COPIED. This expression lived inline in
+ * `readAskPreview` below, and ruling U's third action — *"send to the phone instead"* — needs
+ * the identical answer at the bounce door. GTC-301's whole finding is that two opt-out facts
+ * with different writers and different readers is a defect nobody had named; a second reader
+ * spelling the `||` for itself is how the door and the pre-flight come to disagree about
+ * whether a phone may be used, which is Do-Not-Touch Zone 7.
+ *
+ * The QUERY stays per caller and stays narrow — the preview reads every number on the event in
+ * one go, the door reads one — because the cost of the two lookups differs by two orders of
+ * magnitude. It is the RULE that has one definition, not the fetch.
+ */
+export function smsOptedOutFact(
+  person: { smsOptedOut: boolean; phoneNumber: string | null },
+  optedOutNumbers: ReadonlySet<string>
+): boolean {
+  return person.smsOptedOut || (!!person.phoneNumber && optedOutNumbers.has(person.phoneNumber));
+}
+
 /** A child's rows, carried in a recipient's message. */
 export interface PreviewCarried {
   personEventId: string;
@@ -296,10 +317,9 @@ export async function readAskPreview(
       person: {
         email: m.person.email,
         phoneNumber: m.person.phoneNumber,
-        // [[GTC-301]] — either fact; see the header.
-        smsOptedOut:
-          m.person.smsOptedOut ||
-          (!!m.person.phoneNumber && optedOutNumbers.has(m.person.phoneNumber)),
+        // [[GTC-301]] — either fact; see the header and `smsOptedOutFact` above, which is the
+        // one definition of the merge and is what the bounce door asks as well.
+        smsOptedOut: smsOptedOutFact(m.person, optedOutNumbers),
       },
     })),
   };

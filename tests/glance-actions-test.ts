@@ -976,23 +976,58 @@ async function main() {
         /getHostNudgeMessage/.test(actionsSrc) &&
         !/just checking in|Quick one|gentle reminder|confirming you/i.test(actionsSrc)
     );
+    /*
+     * ⚠ THE ANCHOR MOVED AT GTC-189 SLICE 7b, AND IT MOVED TO BE STRICTER RATHER THAN TO LET
+     * SOMETHING THROUGH. Until then this matched the bare word `resend`, which is the EMAIL
+     * PROVIDER'S BRAND NAME — and ruling U's door calls its own actions "resend", so the fence
+     * was about to fail for the wrong reason on the day its subject changed. That is 5f's own
+     * finding about controls, arriving at a fence: *"a control's anchor should outlive the slice
+     * it was written in."*
+     *
+     * So it now reads the IMPORT SPECIFIERS instead of the prose. That catches strictly more:
+     * the provider SDK by module name, Prisma, and the whole of `@/lib/sms` and `@/lib/email`
+     * rather than the two sender functions that were spelled out. A module these two files may
+     * not reach cannot be reached by any name, including one nobody has thought of.
+     */
+    const clientImports = [...(actionsSrc + surfaceSrc).matchAll(/from\s+'([^']+)'/g)].map(
+      (m) => m[1]
+    );
     assert(
       'no second send path',
       'the surface reaches no provider and no database — it can only ask the routes',
       sourcesExist &&
-        !/sendSms|sendNudgeEmail|@\/lib\/prisma|PrismaClient|twilio|resend/i.test(
-          actionsSrc + surfaceSrc
-        )
+        clientImports.length > 0 &&
+        !clientImports.some((spec) =>
+          /^resend$|^twilio$|^@prisma\/client$|@\/lib\/prisma|@\/lib\/email|@\/lib\/sms\/(?!nudge-templates)/.test(
+            spec
+          )
+        ) &&
+        !/PrismaClient/.test(actionsSrc + surfaceSrc)
     );
     assert(
+      'no second send path',
+      'CONTROL: the import reader really read — it found the same-team rule and the mark, both ' +
+        'of which these files DO import, so the absences above are absences rather than an ' +
+        'empty list',
+      clientImports.includes('@/lib/assignment/same-team') &&
+        clientImports.includes('@/lib/eligibility/nudge-mark')
+    );
+    /*
+     * ⚠ MARKER INVERTED ON SCHEDULE AT GTC-189 SLICE 7b, AND IT NAMED THIS COMMIT BEFORE IT
+     * EXISTED: ruling U's door is the third endpoint this surface may reach. The INVARIANT is
+     * unchanged — how many endpoints, and which — which is why the count moves rather than the
+     * assertion being deleted.
+     */
+    assert(
       'no new surface',
-      'the only endpoints the action layer names are the two existing routes',
+      'the only endpoints the action layer names are the two existing routes and ruling U’s door',
       ok(() => {
         const paths = [...actionsSrc.matchAll(/`\/api\/[^`]*`/g)].map((m) => m[0]);
         return (
-          paths.length === 2 &&
+          paths.length === 3 &&
           paths.some((p) => /people\/\$\{[^}]+\}\/nudge/.test(p)) &&
-          paths.some((p) => /items\/\$\{[^}]+\}\/assign/.test(p))
+          paths.some((p) => /items\/\$\{[^}]+\}\/assign/.test(p)) &&
+          paths.some((p) => /people\/\$\{[^}]+\}\/resend/.test(p))
         );
       })
     );

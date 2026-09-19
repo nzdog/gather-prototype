@@ -126,7 +126,23 @@ export type ChangeAction =
   | 'REGENERATE_PLAN'
   | 'GENERATE_PLAN'
   | 'SEND_PRESSED'
-  | 'WRAP_UP_SENT';
+  | 'WRAP_UP_SENT'
+  /*
+   * GTC-189 slice 7b — ruling U's "let the host edit the address and send". Founder answer 5,
+   * 2026-09-19: *"The press starts the audit trail and this changes a guest's contact detail
+   * inside the versioned window."*
+   *
+   * ⚠ IT IS THE ONLY ONE OF THE THREE DOOR ACTIONS THAT WRITES HERE, and that is a decision
+   * rather than an omission: send-again and send-to-phone write an `OutboundMessage` row, which
+   * IS the record of a send, and a ledger entry beside it would be the same fact in two places.
+   * This action changes a PERSON, and nothing else records that.
+   *
+   * ⚠ AND THE `PATCH` PEOPLE ROUTE IS DELIBERATELY NOT GIVEN THIS. It has written no entry for
+   * an email change since it existed; giving the door one and that route another would be two
+   * histories for one edit. Closing that gap is that route's own ticket, on the founder's
+   * ruling — "one history that starts where the trail does" is what this buys today.
+   */
+  | 'EDIT_PERSON_CONTACT';
 
 export type ChangeTargetType =
   | 'Assignment'
@@ -263,6 +279,14 @@ export function whyTrigger(change: PendingChange, event: LifecycleEvent): WhyTri
     case 'GENERATE_PLAN':
     case 'SEND_PRESSED':
     case 'WRAP_UP_SENT':
+    /*
+     * ⚠ PLACED HERE ON PURPOSE, GTC-189 slice 7b. A contact-detail edit is versioned and never
+     * interrogated: T4 asks for a why when what the ask SAYS changes after somebody answered it,
+     * and this changes who RECEIVES it — after a delivery failure, at Gather's own prompting.
+     * Demanding a why for repairing an address Gather could not reach is the lean-in Ruling 1's
+     * general test refuses, and she would be explaining a failure that was not hers.
+     */
+    case 'EDIT_PERSON_CONTACT':
       return null;
   }
 }

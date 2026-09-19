@@ -59,20 +59,24 @@
  * something moved.
  */
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import type { GlanceItem, GlancePerson } from '@/lib/glance/state';
 import type { AssignActorRole } from '@/lib/assignment/same-team';
 import {
+  doorOffered,
   reassign,
   reassignCandidates,
+  readDoorView,
   remind,
   remindOffered,
   remindRefusal,
+  resendAsk,
   takeOver,
   type GlanceActionOutcome,
   type GlanceAssignable,
 } from '@/lib/glance/actions';
+import { DOOR_WORDS, type DoorView } from '@/lib/press/resend-door';
 import { GLANCE_REFRESH_EVENT } from '@/lib/glance/live';
 import { whyLineFor } from './strip';
 
@@ -113,6 +117,40 @@ export default function PersonSurface({
   const [busy, setBusy] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<GlanceActionOutcome | null>(null);
   const [moveTo, setMoveTo] = useState<Record<string, string>>({});
+  const [door, setDoor] = useState<DoorView | null>(null);
+  const [doorError, setDoorError] = useState<string | null>(null);
+  const [address, setAddress] = useState('');
+
+  /*
+    ── GTC-189 SLICE 7b — RULING U'S DOOR, FETCHED WHEN IT OPENS ─────────────────
+
+    FOUNDER ANSWER 6, 2026-09-19: "The door fetches the address when it opens. Not on the
+    board's payload. §3 fixed that wire's shape and a guest's contact details have never
+    been on it; one panel wanting one field is not a reason to widen it."
+
+    So `GlancePerson` is unchanged, the board stays one server-rendered paint, and the two
+    facts of the last look arrive on a GET made by the one panel that needs them.
+
+    ⚠ AND ONLY FOR THE TWO REDS THE DOOR IS FOR. `doorOffered` reads the same list
+    `remindOffered` reads — 7a wrote it so this slice had one place to ask — so a person who
+    pulled out is not fetched for, and neither is anybody else.
+  */
+  useEffect(() => {
+    if (!open || !doorOffered(person)) return;
+    let live = true;
+    readDoorView(eventId, person.personId).then((result) => {
+      if (!live) return;
+      if (result.ok) {
+        setDoor(result.view);
+        setAddress(result.view.address ?? '');
+      } else {
+        setDoorError(result.error);
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, [open, eventId, person]);
 
   const why = whyLineFor(person);
   const refusal = remindRefusal(person);
@@ -160,6 +198,101 @@ export default function PersonSurface({
             {busy === 'remind' ? 'Reminding…' : 'Remind them'}
           </button>
         )}
+      </div>
+    );
+  }
+
+  /*
+    ── THE DOOR, AND IT IS A LAST LOOK RATHER THAN A BARE BUTTON ─────────────────
+
+    FOUNDER ANSWER 2, 2026-09-19: "THE DOOR CARRIES A LAST LOOK — step 4's property and step
+    5's. The address it will send to, the message it will send, and a press rather than a
+    link." The founder's own ground for it: "the bare press is what was withdrawn, because a
+    press that did not know the address was dead was the wrong shape here."
+
+    ⚠ AND IT IS NOT [[GTC-311]]'s ONE-PERSON PRE-FLIGHT, said here because this is the site
+    somebody would mistake for one. That is a ruled object (ruling AJ, decision 23) with a
+    CHASE-CHANNEL QUESTION in it, and it does not exist. This shows two facts before a press.
+    "If they later converge, that is GTC-311's to decide."
+
+    ⚠ AND IT IS NOT A COMPOSER. §3 refuses messaging on this surface and Ruling 1's general
+    test refuses anything that makes the host lean in. The message is SHOWN, never edited —
+    the one editable field on this panel is the address, which is the whole of the second
+    action. A host who wants her own words still goes to V1's composer.
+
+    ⚠ THE WORDS ARE THE DOOR'S, KEYED ON THE RED. `DOOR_WORDS` is a Record over the two
+    reasons: ruling M's red is not a wrong address being corrected, so its one action reads
+    "Add a way to reach them" — the founder's words, 2026-09-19 — and never "edit".
+  */
+  function doorSection() {
+    if (!doorOffered(person)) return null;
+    return (
+      <div data-bounce-door="" className="mt-4 border-t-[0.5px] border-[#dcdad2] pt-3">
+        {doorError ? (
+          <p data-door-error="" className="m-0 text-[13px] text-[#A32D2D]">
+            {doorError}
+          </p>
+        ) : null}
+
+        {door ? (
+          <>
+            {/*
+              THE LAST LOOK, HALF ONE — the address it will send to. Null on ruling M's red,
+              where there has never been one, and the field below is how she supplies it.
+            */}
+            <label className="m-0 block text-[11px] uppercase tracking-wide text-[#888780]">
+              Send to
+            </label>
+            <input
+              type="email"
+              aria-label="Address to send to"
+              data-door-address=""
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder={door.address ?? 'No address'}
+              className="mt-1 w-full rounded-md border-[0.5px] border-[#dcdad2] bg-[#ffffff] px-2 py-1.5 text-[13px]"
+            />
+
+            {/*
+              THE LAST LOOK, HALF TWO — the message it will send, composed by the same walk the
+              pre-flight and the drain run. Absent on ruling M's red, where Gather has composed
+              nothing because it has nobody to send to.
+            */}
+            {door.message ? (
+              <div className="mt-2 rounded-lg bg-[#f5f4ef] p-2.5">
+                {door.message.subject ? (
+                  <p className="m-0 text-[13px] font-medium">{door.message.subject}</p>
+                ) : null}
+                <p className="m-0 mt-1 whitespace-pre-wrap text-[12px] text-[#5c5b57]">
+                  {door.message.text}
+                </p>
+              </div>
+            ) : null}
+
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {door.actions.map((action) => (
+                <button
+                  key={action}
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={() =>
+                    run(`door-${action}`, () =>
+                      resendAsk(
+                        eventId,
+                        person.personId,
+                        action,
+                        action === 'EDIT' ? address : null
+                      )
+                    )
+                  }
+                  className="rounded-md border-[0.5px] border-[#dcdad2] px-2.5 py-1.5 text-[13px] disabled:opacity-40"
+                >
+                  {DOOR_WORDS[door.reason][action]}
+                </button>
+              ))}
+            </div>
+          </>
+        ) : null}
       </div>
     );
   }
@@ -360,6 +493,16 @@ export default function PersonSurface({
               be the panel pointing at the thing it has decided not to offer.
             */}
             {remindSection()}
+
+            {/*
+              GTC-189 slice 7b — RULING U'S DOOR. It REPLACES the remind on these two reds
+              rather than sitting beside it, which is the founder's ruling of 2026-09-19 and
+              the reason `remindOffered` and `doorOffered` read one list: "Two ways to do
+              nearly the same thing, one of which does not know the address is dead and does
+              not go through the dispatcher, is the board offering her a tap that wastes her
+              time and tells her nothing." Exactly one of these two sections can render.
+            */}
+            {doorSection()}
 
             {/*
               WHAT HAPPENED. A route's refusal is shown in the route's own words — those are

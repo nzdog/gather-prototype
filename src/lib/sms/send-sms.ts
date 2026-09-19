@@ -18,6 +18,31 @@ function shouldUseTnz(phone: string): boolean {
   return TNZ_COUNTRY_CODES.some((code) => phone.startsWith(code));
 }
 
+/**
+ * IS THERE A PROVIDER CONFIGURED THAT COULD CARRY A TEXT TO THIS NUMBER?
+ *
+ * GTC-189 slice 7b, founder answer 1 of 2026-09-19 — ruling U's third action is FENCED on this:
+ *
+ * > 5f's fence would have hidden a true failure — the board going red for a broken key — and
+ * > that was the state worth seeing. This fence prevents a FALSE improvement: the red clearing
+ * > when nothing was sent and no provider was reached. One is the environment telling the truth
+ * > loudly; the other is the board lying quietly.
+ *
+ * ⚠ SO IT IS NOT 5f REVERSED, and the distinction is the ruling rather than a caveat on it.
+ * Without the fence, "send to the phone instead" in this environment withholds `SMS_DISABLED`,
+ * which slice 7a maps to NOT a red — correctly, because an operator failure must not become a
+ * false sentence about a guest — and the person falls from RED to AMBER having been sent
+ * nothing. A button that makes a red disappear without reaching a provider is the quiet lie.
+ *
+ * ⚠ IT LIVES HERE, BESIDE `sendSms`, BECAUSE IT IS `sendSms`'S OWN BRANCH. The door asking
+ * "is TNZ configured" directly would be a second reading of which provider serves which number,
+ * free to drift from the one below the moment a third provider or a third country code arrives.
+ * `shouldUseTnz` stays private; this is the question a caller is allowed to ask.
+ */
+export function smsProviderConfiguredFor(to: string): boolean {
+  return shouldUseTnz(to) ? isTnzEnabled() : isSmsEnabled();
+}
+
 export interface SendSmsParams {
   to: string; // Phone number in E.164 format
   message: string; // SMS body (max 160 chars for single SMS)

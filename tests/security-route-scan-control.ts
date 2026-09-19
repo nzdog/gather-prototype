@@ -310,15 +310,27 @@ function suite0_Coverage(head: ScanResult, pre: ScanResult) {
 function suite1_HeadShape(head: ScanResult) {
   logSection('Suite 1: the surface at HEAD — counted from disk, not from a ledger');
 
+  /*
+   * ⚠ 107 → 108 FILES AND 136 → 138 HANDLERS AT GTC-189 SLICE 7b, and the numbers are updated
+   * rather than loosened. Ruling U's bounce door is one new route file carrying two handlers,
+   * `GET` (the last look) and `POST` (the press).
+   *
+   * THE ASSERTION THAT MATTERS DID NOT MOVE: "exactly 25 handlers carry no session or token
+   * guard" is unchanged below, which is the whole point of counting the two separately. A new
+   * route that had arrived unguarded would have moved THAT number and this one, and only one of
+   * them is a security fact. `press-route-test.ts` records the last time this mattered — two
+   * handlers added as redirect `route.ts` files moved 7 of this suite's pinned assertions and
+   * were rewritten as config redirects because of it.
+   */
   logTest(
-    'the scanner discovers exactly 107 route files under src/app/api',
-    head.files.length === 107,
+    'the scanner discovers exactly 108 route files under src/app/api',
+    head.files.length === 108,
     `found ${head.files.length}`
   );
 
   logTest(
-    'the scanner enumerates exactly 136 exported HTTP handlers',
-    head.handlers.length === 136,
+    'the scanner enumerates exactly 138 exported HTTP handlers',
+    head.handlers.length === 138,
     `found ${head.handlers.length}`
   );
 
@@ -340,7 +352,7 @@ function suite1_HeadShape(head: ScanResult) {
   // by arithmetic.
   logTest(
     'the surface is larger than the retired inventory could express (81 entries)',
-    head.files.length === 107 && head.handlers.length === 136,
+    head.files.length === 108 && head.handlers.length === 138,
     `files ${head.files.length}, handlers ${head.handlers.length}`
   );
 }

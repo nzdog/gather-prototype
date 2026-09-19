@@ -74,6 +74,13 @@
 import { mayHoldRow, type AssignActorRole } from '@/lib/assignment/same-team';
 import { isChaseable, DONT_CHASE_NOT_ADDRESSABLE_MESSAGE } from '@/lib/eligibility/nudge-mark';
 import { getHostNudgeMessage, type HostNudgeVariant } from '@/lib/sms/nudge-templates';
+/*
+ * GTC-189 slice 7b. `resend-door.ts` is the CLIENT-SAFE half of ruling U's door — words, a pure
+ * offer rule and two types — and it holds no database handle and no provider, the same fence
+ * `press-words.ts` carries for the pre-flight. The mechanism is `@/lib/press/resend.ts` and this
+ * file must never reach it.
+ */
+import { RESEND_NOTES, type DoorView, type ResendAction } from '@/lib/press/resend-door';
 import type { GlanceItem, GlancePerson, PersonState } from './state';
 
 /** One request to one existing route. Built purely, so it can be asserted without a network. */
@@ -238,12 +245,37 @@ export function remindOffered(person: Pick<GlancePerson, 'reasons'>): boolean {
 }
 
 /**
+ * ⚠ THE REDS THIS DOOR IS FOR — GTC-189 slice 7b, ruling U.
+ *
+ * Slice 7a wrote `REMIND_WITHDRAWN` as a named list *"so slice 7b's door has one place to read
+ * when it asks which reds am I the door for"*. This is that read, and the relationship is
+ * STRUCTURAL rather than asserted: the withdrawn list is spread FROM this one, so the door's
+ * reasons cannot drift out of the set the remind was taken off. A fourth withdrawn reason that
+ * is not a door reason stays a visible decision — `ATTENDANCE_NO` is exactly that, and it is
+ * not this door's business: a guest who pulled out got their message.
+ */
+export const DOOR_REASONS = ['NOT_DELIVERED', 'UNREACHABLE'] as const;
+
+/**
  * The reasons that withdraw the remind.
  *
  * A named list rather than three `includes` calls, so slice 7b's door has one place to read when it
  * asks *"which reds am I the door for"* — and so a fourth entry is a visible decision.
  */
-const REMIND_WITHDRAWN = ['ATTENDANCE_NO', 'NOT_DELIVERED', 'UNREACHABLE'] as const;
+const REMIND_WITHDRAWN = ['ATTENDANCE_NO', ...DOOR_REASONS] as const;
+
+/**
+ * ⚠ AND SINCE SLICE 7b THE TWO NEW REDS HAVE AN ACTION AGAIN. Between 7a and this commit a
+ * `NOT_DELIVERED` person had a red with no action at all — the founder's chosen order, and the
+ * gap this closes.
+ *
+ * It keys on `reasons` for Ruling 23's reason, the same one `remindOffered` gives: slice 6d's
+ * sticky red overlays `state` and deliberately leaves `reasons` alone, so `reasons` is the
+ * un-overlaid truth.
+ */
+export function doorOffered(person: Pick<GlancePerson, 'reasons'>): boolean {
+  return DOOR_REASONS.some((reason) => person.reasons.includes(reason));
+}
 
 /**
  * What a remind is about, in the words the template wants.
@@ -472,6 +504,83 @@ export async function reassign(
   return ask(
     reassignRequest(eventId, item, toPersonId),
     `Moved to ${toName}. ${CATCH_UP_NOTE}`,
+    true,
+    deps
+  );
+}
+
+/**
+ * RULING U'S DOOR — one endpoint, GET for the look and POST for the press.
+ *
+ * ⚠ ONE TEMPLATE LITERAL, DELIBERATELY. `tests/glance-actions-test.ts` counts the `/api/` paths
+ * this file names, and the count is the invariant: how many endpoints this surface can reach.
+ * Writing the path twice would read as two endpoints and would let the panel read one door and
+ * press another.
+ */
+function doorPath(eventId: string, personId: string): string {
+  return `/api/events/${eventId}/people/${personId}/resend`;
+}
+
+/**
+ * THE LAST LOOK, FETCHED WHEN THE DOOR OPENS — founder answer 6, 2026-09-19:
+ *
+ * > Not on the board's payload. §3 fixed that wire's shape and a guest's contact details have
+ * > never been on it; one panel wanting one field is not a reason to widen it.
+ *
+ * So `GlancePerson` still carries no address and no number, the board is still one server-
+ * rendered paint, and the one panel that needs the field asks for it at the moment it is opened.
+ */
+export async function readDoorView(
+  eventId: string,
+  personId: string,
+  deps: GlanceActionDeps = {}
+): Promise<{ ok: true; view: DoorView } | { ok: false; error: string }> {
+  const call = deps.fetchImpl ?? fetch;
+  let response: Response;
+  try {
+    response = await call(doorPath(eventId, personId), { method: 'GET' });
+  } catch {
+    return { ok: false, error: 'Could not reach Gather.' };
+  }
+  if (!response.ok) {
+    let error = 'Something went wrong.';
+    try {
+      const body = (await response.json()) as { error?: string };
+      if (typeof body?.error === 'string' && body.error.length > 0) error = body.error;
+    } catch {
+      /* some refusals have no body */
+    }
+    return { ok: false, error };
+  }
+  return { ok: true, view: (await response.json()) as DoorView };
+}
+
+/**
+ * THE PRESS, PER PERSON. Ruling U's three actions are one request with three shapes, because
+ * they are one mechanism: each writes a new `OutboundMessage` row and the dispatcher does the
+ * rest. Three functions here would be three names for one call, which is what `takeOverRequest`
+ * refused next door — *"a name for a destination, not a second mechanism"*.
+ *
+ * ⚠ `movedBoard` IS TRUE, AND THE BOARD REALLY DOES MOVE — which is not the case for a remind.
+ * The new row is immediately the latest, it carries no end state, so the red clears to amber on
+ * the refresh this dispatches. Honest by amber's own definition: Gather has a next move and the
+ * row is waiting for the cron. `RESEND_NOTES` says "sending", never "sent", for the other half
+ * of the same honesty.
+ */
+export async function resendAsk(
+  eventId: string,
+  personId: string,
+  action: ResendAction,
+  email: string | null = null,
+  deps: GlanceActionDeps = {}
+): Promise<GlanceActionOutcome> {
+  return ask(
+    {
+      url: doorPath(eventId, personId),
+      method: 'POST',
+      body: { action, email },
+    },
+    `${RESEND_NOTES[action]} ${CATCH_UP_NOTE}`,
     true,
     deps
   );
