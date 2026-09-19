@@ -2,7 +2,7 @@ import type { OutboundChannel, PrismaClient } from '@prisma/client';
 import { sendAskEmail } from '@/lib/email';
 import { sendSms, type SmsBlockReason } from '@/lib/sms/send-sms';
 import { isQuietHours } from '@/lib/sms/quiet-hours';
-import { pressWillMessage, readAskPreview } from '@/lib/preflight/ask-preview';
+import { askRowPopulation, readAskPreview } from '@/lib/preflight/ask-preview';
 import { composePreview } from '@/lib/preflight/ask-preview-compose';
 import { interpretResendErrorCode } from '@/lib/email-delivery/resend-error-contract';
 
@@ -936,15 +936,17 @@ export async function enrolMiniSends(db: PrismaClient, takeEvents: number): Prom
     });
     const dealtWith = new Set(existing.map((r) => r.personEventId));
 
-    for (const recipient of preview.recipients) {
+    /*
+     * ⚠ ONE PREDICATE, SHARED — [[GTC-322]], founder ruling 2026-09-19. This loop used to spell
+     * the press's two-step rule for itself. It now asks `askRowPopulation`, which `pressSend` and
+     * GTC-322's backfill also ask, because *"identical populations is a property, not a margin,
+     * and one person of difference is a real invitation from an event pressed months ago."*
+     */
+    const { ready, awaitingLink } = askRowPopulation(preview.recipients);
+    result.awaitingLink += awaitingLink.filter((r) => !dealtWith.has(r.personEventId)).length;
+
+    for (const recipient of ready) {
       if (dealtWith.has(recipient.personEventId)) continue;
-      // The same predicate the press and the pre-flight use. One rule, three callers.
-      if (!pressWillMessage(recipient.linkState)) continue;
-      if (recipient.linkState !== 'READY') {
-        // Addressed, and no link to carry. See the note above: minting is GTC-316's.
-        result.awaitingLink++;
-        continue;
-      }
       await db.outboundMessage.create({
         data: {
           eventId: event.id,

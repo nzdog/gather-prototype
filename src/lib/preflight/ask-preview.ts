@@ -149,6 +149,43 @@ export function pressWillMessage(linkState: LinkState): boolean {
 }
 
 /**
+ * WHO THE PRESS WRITES A ROW FOR, ON ONE EVENT — ONE RULE, NOW THREE CALLERS.
+ *
+ * ⚠ EXTRACTED AT [[GTC-322]] ON A FOUNDER RULING, 2026-09-19, AND THE REASON IS THE RULING:
+ *
+ * > One predicate, shared with `enrolMiniSends`. Identical populations is a property, not a
+ * > margin, and one person of difference is a real invitation from an event pressed months ago.
+ *
+ * The two-step rule — *would the press message them at all*, then *do they hold a link yet* —
+ * was spelled three times: in `pressSend` as `intended`/`addressed`, in `enrolMiniSends` as a
+ * `continue` pair, and a third time in GTC-322's backfill. `pressWillMessage` below was already
+ * shared; **the split built on it was not**, and it is the split that decides who gets a row.
+ *
+ * ⚠ WHY THAT MATTERS MORE THAN TIDINESS, MEASURED: GTC-322's backfill writes rows for the
+ * people a legacy press never wrote rows for, which **flips `enrolMiniSends`' event predicate
+ * on all eight of those events** — from 1 event considered to 8. It would enrol ZERO, and only
+ * because the two populations are identical. **One person of difference and the two-minute cron
+ * sends that person a real invitation from an event pressed months ago** — which is the incident
+ * slice 5e already had once, at 20 rows across four real boards.
+ */
+export function askRowPopulation(recipients: readonly PreviewRecipient[]): {
+  /** Holds a link now: the press writes them an addressed row. */
+  ready: PreviewRecipient[];
+  /**
+   * The press WOULD message them and issuance has not produced a link yet. `pressSend` refuses
+   * the whole press when this is non-empty after `ensureEventTokens` (`LINKS_NOT_ISSUED`);
+   * `enrolMiniSends` counts them and waits, because minting from a cron is [[GTC-316]]'s.
+   */
+  awaitingLink: PreviewRecipient[];
+} {
+  const intended = recipients.filter((r) => pressWillMessage(r.linkState));
+  return {
+    ready: intended.filter((r) => r.linkState === 'READY'),
+    awaitingLink: intended.filter((r) => r.linkState !== 'READY'),
+  };
+}
+
+/**
  * [[GTC-301]]'S TWO OPT-OUT FACTS, MERGED IN ONE PLACE.
  *
  * ⚠ EXTRACTED AT GTC-189 SLICE 7b RATHER THAN COPIED. This expression lived inline in

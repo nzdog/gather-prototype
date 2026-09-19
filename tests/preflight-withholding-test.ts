@@ -74,6 +74,7 @@ const BASE = 'http://localhost:3000';
 const PREVIEW = 'src/lib/preflight/ask-preview.ts';
 const COMPOSE = 'src/lib/preflight/ask-preview-compose.ts';
 const PAGE = 'src/app/plan/[eventId]/pre-flight/page.tsx';
+const ASK_PREVIEW = 'src/lib/preflight/ask-preview.ts';
 const PRESS_MODULE = 'src/lib/press/press.ts';
 
 let passed = 0;
@@ -189,13 +190,31 @@ async function main() {
       ok(() => preview.pressWillMessage('NONE_NOT_ISSUED') === false)
     );
     assert(
-      '⚠ THE PRESS GATES ON THE PREDICATE AND NOT ON A SECOND READING OF THE RULE. Slice 5a ' +
-        "read `linkState === 'READY'` inline, in a different file from the states themselves — " +
+      '⚠ THE PRESS GATES ON THE SHARED PREDICATE AND NOT ON A SECOND READING OF THE RULE. Slice ' +
+        "5a read `linkState === 'READY'` inline, in a different file from the states themselves — " +
         'which is the drift this very module records GTC-294 catching once already',
       ok(() => {
         const src = stripComments(read(PRESS_MODULE));
-        return src.length > 0 && src.includes('pressWillMessage');
+        /*
+         * ⚠ MARKER MOVED AT [[GTC-322]], AND THE INVARIANT GOT STRONGER RATHER THAN WEAKER. It
+         * read `includes('pressWillMessage')`, which pinned the FIRST half of the two-step rule
+         * — would the press message them at all. The founder's ruling of 2026-09-19 extracted
+         * the WHOLE step, `askRowPopulation`, because it is the split that decides who gets a
+         * row and it was spelled three times: here, in `enrolMiniSends`, and in GTC-322's
+         * backfill. So this now pins the shared function AND the absence of the inline
+         * comparison it replaced — two clauses where there was one.
+         */
+        return (
+          src.length > 0 &&
+          src.includes('askRowPopulation') &&
+          !/linkState\s*===\s*'READY'/.test(src)
+        );
       })
+    );
+    assert(
+      'CONTROL: the comparison this forbids is really spelled that way where it DOES belong — in ' +
+        'the shared function, in the module that owns `LinkState`',
+      ok(() => /linkState\s*!==\s*'READY'|linkState\s*===\s*'READY'/.test(read(ASK_PREVIEW)))
     );
 
     // ── Layer N: no new state, and the reason ────────────────────────────

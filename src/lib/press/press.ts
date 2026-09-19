@@ -1,6 +1,6 @@
 import type { OutboundChannel, PrismaClient } from '@prisma/client';
 import { ensureEventTokens } from '@/lib/tokens';
-import { pressWillMessage, readAskPreview } from '@/lib/preflight/ask-preview';
+import { askRowPopulation, readAskPreview } from '@/lib/preflight/ask-preview';
 import { recordChange, type LedgerActor } from '@/lib/ledger';
 import { logInviteEvent } from '@/lib/invite-events';
 
@@ -292,10 +292,9 @@ export async function pressSend(
          * is promised a link and minted none. **Measured in `gather_dev` on 2026-09-19: 0 such
          * memberships.** Latent, not live, and refused rather than left to become live.
          */
-        const intended = preview.recipients.filter((r) => pressWillMessage(r.linkState));
-        const addressed = intended.filter((r) => r.linkState === 'READY');
+        const { ready: addressed, awaitingLink } = askRowPopulation(preview.recipients);
 
-        if (addressed.length !== intended.length) {
+        if (awaitingLink.length > 0) {
           throw new PressRefused(
             refuse(
               409,
