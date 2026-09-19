@@ -50,6 +50,27 @@ const APPLY = process.argv.includes('--apply');
 const BOARD = 'Henderson Family Christmas 2025';
 
 /**
+ * ⚠ DOMAINS THAT CANNOT REACH A STRANGER, AND THE LIST IS THE WHOLE SAFETY ARGUMENT.
+ *
+ * A blunt `domain <> 'example.com'` predicate was the first draft and it was WRONG: it would have
+ * rewritten `security-test@gather.test`, which `tests/security-fixtures.ts` keys its whole
+ * teardown on, and the 18 `test.local` rows with it. **A rewrite that breaks a fixture is not a
+ * safety improvement.**
+ *
+ * So the rule is reserved-or-non-resolving, by standard rather than by taste:
+ *   * `example.com` / `.net` / `.org`, and the `.test`, `.invalid`, `.localhost` and `.example`
+ *     TLDs — RFC 2606 and RFC 6761, reserved so they can never be registered.
+ *   * `.local` — RFC 6762, mDNS, never publicly resolvable.
+ *
+ * Everything else is assumed to resolve, because assuming the other way is how mail reaches a
+ * stranger.
+ */
+const RESERVED = /(^|\.)(example\.(com|net|org))$|\.(test|invalid|localhost|example|local)$/i;
+
+/** Addresses a press could actually attempt delivery to. */
+const resolves = (email: string) => !RESERVED.test(email.split('@')[1] ?? '');
+
+/**
  * The change, as SQL. ⚠ Printed to be read, and NOT executed — the run does the Prisma
  * equivalent so the before/after preview comparison shares its transaction. The predicate here
  * and the one in `targets()` below are the same three clauses, in the same order.
@@ -58,12 +79,13 @@ const SQL_EQUIVALENT = `
 UPDATE "Person" p
    SET email = split_part(p.email, '@', 1) || '@example.com'
  WHERE p.email IS NOT NULL
-   AND split_part(p.email, '@', 2) <> 'example.com'
+   -- a domain that can actually take delivery. Reserved and non-resolving names are left alone:
+   -- RFC 2606 / 6761 (example.com|net|org, .test, .invalid, .localhost, .example) and RFC 6762
+   -- (.local). Rewriting 'security-test@gather.test' would break the security fixtures.
+   AND split_part(p.email, '@', 2) !~* '(^|\\.)(example\\.(com|net|org))$|\\.(test|invalid|localhost|example|local)$'
    AND p."userId" IS NULL                         -- a login address is a credential
-   AND EXISTS (                                   -- on the one pressable board only
-         SELECT 1 FROM "PersonEvent" pe
-           JOIN "Event" e ON e.id = pe."eventId"
-          WHERE pe."personId" = p.id AND e.name = '${BOARD}'
+   AND EXISTS (                                   -- somebody no send can reach is not a risk
+         SELECT 1 FROM "PersonEvent" pe WHERE pe."personId" = p.id
        );
 `.trim();
 
@@ -71,13 +93,23 @@ async function targets(db: PrismaClient) {
   const people = await db.person.findMany({
     where: {
       email: { not: null },
+      // A login address is a credential, not test data.
       userId: null,
-      eventMemberships: { some: { event: { name: BOARD } } },
+      // ⚠ WIDENED ON A FOUNDER RULING, 2026-09-19, FROM ONE BOARD TO EVERY MEMBERSHIP:
+      //
+      //   "A risk one status change away is not meaningfully smaller than one press away,
+      //    because moving a draft to confirming is a thing a host does. And leaving thirty
+      //    consumer addresses in the database while removing thirty-seven means the next person
+      //    to measure gets a number that looks clean and is not."
+      //
+      // The membership clause stays: somebody on no event cannot be reached by any send, so
+      // rewriting them changes no risk and only loses a row's provenance.
+      eventMemberships: { some: {} },
     },
     select: { id: true, email: true },
   });
   return people
-    .filter((p) => !p.email!.endsWith('@example.com'))
+    .filter((p) => resolves(p.email!))
     .map((p) => ({ id: p.id, from: p.email!, to: `${p.email!.split('@')[0]}@example.com` }));
 }
 
