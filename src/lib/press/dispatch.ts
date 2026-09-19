@@ -257,7 +257,27 @@ export type OutboundWithheldWhy =
   | 'OPTED_OUT'
   | 'INVALID_NUMBER'
   // Ruling AC's state, arriving late: the host's account went away in the window.
-  | 'NO_REPLY_TO';
+  | 'NO_REPLY_TO'
+  /*
+   * ⚠ [[GTC-322]] — AND IT IS THE ONLY MEMBER OF THIS UNION NO GATE PRODUCES.
+   *
+   * Founder ruling, 2026-09-19, shape 3: the press predates the sender. `Event.sentAt` has been
+   * written since [[GTC-169]] by a press that dispatched nothing, so eight events in `gather_dev`
+   * carry a send stamp and zero ask rows, and nothing will ever create them — `enrolMiniSends`
+   * refuses such an event by design. The backfill writes a row saying so.
+   *
+   * ⚠ IT NEEDED ITS OWN CODE RATHER THAN BORROWING A GATE'S, and the founder's reason is the
+   * whole of why: *"the code says exactly what is true, which is that this event predates the
+   * press and no message was ever composed for these people. That is not a false sentence; it is
+   * a different one."* Every other member of this union is a decision the dispatcher took about a
+   * message it was holding. This one is the absence of any such decision, recorded so the record
+   * stops claiming a send that never happened.
+   *
+   * ⚠ DO NOT WRITE IT FROM THE DRAIN. Nothing in `drainOnce` may produce it: a row reaching the
+   * dispatcher HAS a composed message behind it, so this code would be false of it. The backfill
+   * migration is its only writer, and `tests/legacy-press-test.ts` asserts the absence here.
+   */
+  | 'PREDATES_SENDER';
 
 /**
  * Every withholding is terminal — there is nothing to retry, because nothing was attempted.
@@ -281,6 +301,9 @@ export const WITHHELD_WHY_IS_TERMINAL: Record<OutboundWithheldWhy, true> = {
   OPTED_OUT: true,
   INVALID_NUMBER: true,
   NO_REPLY_TO: true,
+  // [[GTC-322]]: terminal in the strongest sense of the word — there is no message to retry,
+  // because none was ever composed.
+  PREDATES_SENDER: true,
 };
 
 /**

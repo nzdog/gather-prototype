@@ -81,6 +81,40 @@ export const WITHHELD_MEANS_UNREACHABLE: Record<OutboundWithheldWhy, 'UNREACHABL
   HOUSEHOLD_MUTED: null,
   HOST_HOUSEHOLD_CHILD: null,
   CHILD_WITHOUT_ITEM: null,
+
+  /*
+   * ⚠ [[GTC-322]]'s BACKFILL — `null`, AND THE CHOICE IS A RULING THE FOUNDER HAS NOT MADE YET.
+   * Entered as null because null is the only value that asserts nothing while it is open.
+   *
+   * THE TEST THIS MODULE APPLIES — *is this a fact about the PERSON, or about GATHER?* — answers
+   * GATHER, which is `SMS_DISABLED`'s answer and would settle it. ⚠ BUT THIS IS THE CODE THAT
+   * SHOWS THE TEST IS A PROXY. `SMS_DISABLED` is about Gather AND TEMPORARY: *"the person is
+   * perfectly reachable the moment somebody sets a token."* `PREDATES_SENDER` is about Gather and
+   * PERMANENT — nothing will ever create an ask row for these people, which is the whole of
+   * GTC-322 shape 3 — so ruling M's red is true of them in its own words: *Gather is out of moves
+   * and this is yours.* The property the test is reaching for is **has Gather a next move**, and
+   * whose fault it is happens to answer that correctly everywhere else.
+   *
+   * ⚠ AND THE COLOUR CANNOT BE CHOSEN WITHOUT CHOOSING A MECHANISM, WHICH IS WHY IT IS RULED
+   * RATHER THAN DECIDED HERE. This `Record`'s value type is `'UNREACHABLE' | null`: a withholding
+   * can say *nowhere to send* or say nothing. Three options, and none is free:
+   *
+   *   (a) null, as built — the record is repaired and no strip moves.
+   *   (b) 'UNREACHABLE' — red, with the why-line *"nowhere to send"*, which is FALSE of people
+   *       who hold live addresses. That is the false-sentence family this ledger has caught
+   *       repeatedly, and it is refused rather than deferred.
+   *   (c) widen this `Record` so a withholding may also mean `NOT_DELIVERED` — red, with
+   *       *"never got it"*, which is TRUE of them: 7a named that reason for three mechanisms
+   *       because they are *"one fact to the host: it did not arrive"*, and never-sent is a
+   *       fourth of the same kind. It changes the shape of this mapping, which [[GTC-325]]'s
+   *       scope reserves to a ruling.
+   *
+   * ⚠ AND (c) HAS A CONSEQUENCE NOBODY HAS SEEN: a `NOT_DELIVERED` strip is a DOOR (slice 7b), so
+   * red here puts a one-press "send it again" on 86 people across eight legacy boards — three of
+   * them security-test events and two seeded demo boards. That may be exactly the affordance the
+   * host wants; it is not a side effect a record repair should acquire unruled.
+   */
+  PREDATES_SENDER: null,
 };
 
 /**

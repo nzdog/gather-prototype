@@ -210,6 +210,39 @@ async function main() {
       ok(() => dispatch.blockedToWithheld('SEND_FAILED') === null)
     );
 
+    /*
+     * ── [[GTC-322]] — THE ONE MEMBER OF THIS UNION NO GATE PRODUCES ──────────────
+     *
+     * `PREDATES_SENDER` is written by a backfill migration and by nothing else. Every other
+     * member is a decision the dispatcher took about a message it was holding; this one is the
+     * absence of any such decision, on eight events pressed before a sender existed.
+     */
+    assert(
+      '⚠ [[GTC-322]] — PREDATES_SENDER IS IN THE VOCABULARY AND IS TERMINAL in the strongest ' +
+        'sense: there is no message to retry, because none was ever composed',
+      ok(() => dispatch.WITHHELD_WHY_IS_TERMINAL.PREDATES_SENDER === true)
+    );
+    assert(
+      '⚠ AND THE DRAIN NEVER WRITES IT — a row reaching the dispatcher HAS a composed message ' +
+        'behind it, so the code would be false of it. The backfill is its only writer, and this ' +
+        'is the fence that says so',
+      ok(() => !stripComments(read(DISPATCH)).includes("why: 'PREDATES_SENDER'"))
+    );
+    assert(
+      'CONTROL: the reader really read — a why the drain DOES write is present in the same ' +
+        'source, so the absence above is an absence rather than an empty file',
+      ok(() => stripComments(read(DISPATCH)).includes("why: 'NOT_THIS_RECIPIENT'"))
+    );
+    assert(
+      '⚠ AND NO GATE MAY PRODUCE IT EITHER: `blockedToWithheld` cannot answer it, because ' +
+        'every value it maps comes from `sendSms` refusing a message it was handed',
+      ok(() =>
+        (['SMS_DISABLED', 'OPTED_OUT', 'INVALID_NUMBER', 'SEND_FAILED'] as const).every(
+          (b) => dispatch.blockedToWithheld(b) !== 'PREDATES_SENDER'
+        )
+      )
+    );
+
     // ── The fixture ──────────────────────────────────────────────────────
     const now = new Date();
     const stamp = Date.now();
