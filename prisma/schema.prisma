@@ -740,7 +740,36 @@ model OutboundMessage {
   /// EMAIL or TEXT, decided by `chooseAskRoute`/`chooseChaseRoute` at the press and then
   /// stored. See the `OutboundChannel` enum docstring for the spelling and for why it is
   /// an enum.
-  channel OutboundChannel
+  ///
+  /// ⚠ NULLABLE SINCE [[GTC-325]], AND THE NULL IS A MEANING RATHER THAN AN ABSENCE:
+  /// THIS ROW HAS NO CHANNEL BECAUSE THERE WAS NOBODY TO SEND TO. Founder ruling,
+  /// 2026-09-19, choosing nullable over two alternatives that were offered:
+  ///
+  ///   "Nullable. Not a NONE member, and certainly not EMAIL by convention, which you are
+  ///    right to refuse: a column saying EMAIL about a person with no channel is the
+  ///    false-sentence family, and this ledger has caught it four times.
+  ///    NONE is the tempting middle and it is wrong for a quieter reason — it makes 'no
+  ///    channel' a kind of channel, and the next reader has to learn that one of the three
+  ///    members is not one."
+  ///
+  /// ⚠ WHICH ROWS CARRY IT: the ones the press writes for the HOST LIST. Since GTC-325 the
+  /// model means ONE ROW PER PERSON THE PRESS DECIDED ABOUT, not one row per addressed
+  /// recipient — "deciding not to message someone is a decision about them" — so a person
+  /// the chooser could not route gets a row, born withheld, carrying the chooser's own
+  /// why-code and no channel. That is what makes ruling M's `UNREACHABLE` red able to fire
+  /// at all: slice 7a reads the fact off the row, and before this there was no row.
+  ///
+  /// ⚠ AND THE DRAIN MUST REFUSE A NULL RATHER THAN FALL THROUGH. Founder instruction,
+  /// 2026-09-19: "a NULL falling through to the text path would send a text to somebody the
+  /// press decided had no channel at all." A NULL row is born with `withheldAt` set, so
+  /// `findNeverAttempted` never selects it and the refusal is a FENCE rather than a code
+  /// path — which is how `drainOnce` asserts it.
+  ///
+  /// ⚠ AND THE ROW COUNT STOPS BEING THE MESSAGE COUNT ON THE DAY THIS SHIPS. Anything
+  /// reading one for the other becomes wrong. Surveyed at GTC-325: every count in the tree
+  /// is computed from the addressed set rather than from rows, so the only casualty was one
+  /// docstring on `PressSuccess.recipientCount`, corrected with this change.
+  channel OutboundChannel?
 
   /// Row creation — the press, or the chase tick that scheduled this leg. The drain's FIFO
   /// order.

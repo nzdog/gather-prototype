@@ -683,6 +683,28 @@ export async function drainOnce(
         continue;
       }
 
+      /*
+       * ── ⚠ [[GTC-325]] — A NULL CHANNEL IS REFUSED, AND THIS IS A FENCE RATHER THAN A CODE
+       * PATH. Founder instruction, 2026-09-19:
+       *
+       *   "THE DRAIN MUST REFUSE A NULL CHANNEL AS A FENCE, not fall through. It is the one
+       *    line in this that could go wrong quietly: a NULL falling through to the text path
+       *    would send a text to somebody the press decided had no channel at all."
+       *
+       * ⚠ AND NOTHING SHOULD EVER REACH IT. A NULL-channel row is written by the press ALREADY
+       * WITHHELD, so `findNeverAttempted`'s `withheldAt: null` clause excludes it on every tick
+       * and `findDueForRetry` needs a `nextAttemptAt` nothing ever sets on it. This guard exists
+       * for the row that should not be here, which is what a fence is for.
+       *
+       * ⚠ AND THE FALL-THROUGH IS REAL, NOT HYPOTHETICAL — `tsc` found it the moment the column
+       * became nullable, at `quietHoursDefers` below. The branch beneath is `if EMAIL … else
+       * TEXT`, so before this guard a NULL would have been TEXTED: the exact sentence the
+       * instruction names. It is refused with no write, because the row is already in an end
+       * state and `recordWithholding` would no-op on it; claiming it or re-withholding it would
+       * be the drain editing a decision the press already recorded.
+       */
+      if (!stored.channel) continue;
+
       // ── QUIET HOURS. Defers; touches nothing.
       if (quietHoursDefers(stored.channel, quiet)) {
         result.deferred++;

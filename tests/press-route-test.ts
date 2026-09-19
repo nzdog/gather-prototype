@@ -575,12 +575,30 @@ async function main() {
     });
 
     // ── Layer Q: Q1's arithmetic ────────────────────────────────────────
-    section('Layer Q: SIX rows, not eight — a row is addressed to someone (founder Q1)');
+    section('Layer Q: SIX addressed rows, not eight — a row is addressed to someone (founder Q1)');
+
+    /*
+     * ⚠ MARKERS INVERTED ON SCHEDULE AT [[GTC-325]], AND THE INVARIANT MOVED WITH THEM RATHER
+     * THAN BEING LOOSENED. Founder ruling, 2026-09-19: `OutboundMessage` stops meaning ONE ROW
+     * PER ADDRESSED RECIPIENT and starts meaning ONE ROW PER PERSON THE PRESS DECIDED ABOUT,
+     * because *"deciding not to message someone is a decision about them."*
+     *
+     * So every assertion in layers Q and D that read "the rows" now names WHICH rows. The
+     * addressed set keeps every property founder Q1 gave it — the ids, the stored channel, the
+     * unclaimed and unfinished state — and the withheld set gets its own, because a row born
+     * finished is the opposite claim and would otherwise read as a press that had already
+     * attempted something.
+     *
+     * ⚠ AND THE SPLIT IS THE ASSERTION. Counting all rows together is exactly how the two
+     * populations would drift back into one number.
+     */
+    const addressedRows = rows.filter((r) => r.withheldAt === null);
+    const decidedRows = rows.filter((r) => r.withheldAt !== null);
 
     assert(
-      '⚠ SIX ROWS FOR SEVEN RECIPIENTS — a row is addressed to someone, and the seventh is ' +
-        'the host as carrier, who has no link to be addressed by (founder Q1)',
-      rows.length === 6 && previewAfterCount === 7
+      '⚠ SIX ADDRESSED ROWS FOR SEVEN RECIPIENTS — a row is addressed to someone, and the ' +
+        'seventh is the host as carrier, who has no link to be addressed by (founder Q1)',
+      addressedRows.length === 6 && previewAfterCount === 7
     );
     assert('every row is kind ASK', rows.length > 0 && rows.every((r) => r.kind === 'ASK'));
     assert(
@@ -603,10 +621,10 @@ async function main() {
       )
     );
     assert(
-      '⚠ THE ROW SET IS EXACTLY THE RECIPIENTS WITH A LINK — asserted by comparing the two ' +
-        'id sets, not by comparing two counts that could agree by accident',
+      '⚠ THE ADDRESSED SET IS EXACTLY THE RECIPIENTS WITH A LINK — asserted by comparing the ' +
+        'two id sets, not by comparing two counts that could agree by accident',
       ok(() => {
-        const fromRows = rows.map((r) => r.personEventId).sort();
+        const fromRows = addressedRows.map((r) => r.personEventId).sort();
         const fromPreview = previewAfter!.recipients
           .filter((r) => r.linkState === 'READY')
           .map((r) => r.personEventId)
@@ -618,11 +636,58 @@ async function main() {
       })
     );
     assert(
-      "the channel on each row is the chooser's answer for that recipient, stored — not " +
-        'recomputed later',
+      "the channel on each addressed row is the chooser's answer for that recipient, stored — " +
+        'not recomputed later',
       ok(() => {
         const byPe = new Map(previewAfter!.recipients.map((r) => [r.personEventId, r.channel]));
-        return rows.length > 0 && rows.every((r) => byPe.get(r.personEventId) === r.channel);
+        return (
+          addressedRows.length > 0 &&
+          addressedRows.every((r) => byPe.get(r.personEventId) === r.channel)
+        );
+      })
+    );
+
+    /*
+     * ⚠ [[GTC-325]] — AND THE OTHER HALF OF THE ROW SET, WHICH DID NOT EXIST BEFORE. The press
+     * now records the people it decided NOT to message, so that ruling M's red has a fact to
+     * read: before this it fired for nobody, and four people on the one pressable board read
+     * AMBER about a decision Gather had already made.
+     */
+    assert(
+      '⚠ AND A ROW FOR EVERY ADULT ON THE HOST LIST — the population the press reasoned over ' +
+        "and used to leave no trace of. Compared as id sets, for layer Q's own reason",
+      ok(() => {
+        const fromRows = decidedRows.map((r) => r.personEventId).sort();
+        const fromPreview = previewAfter!.hostList
+          .filter((l) => !l.child)
+          .map((l) => l.personEventId)
+          .sort();
+        return fromRows.length > 0 && JSON.stringify(fromRows) === JSON.stringify(fromPreview);
+      })
+    );
+    assert(
+      "⚠ EACH ONE CARRIES A NULL CHANNEL AND THE CHOOSER'S OWN WHY — null because there was " +
+        'nobody to send to, which the founder chose over a NONE member and over EMAIL by ' +
+        'convention: "a column saying EMAIL about a person with no channel is the ' +
+        'false-sentence family"',
+      ok(() => {
+        const whyByPe = new Map(previewAfter!.hostList.map((l) => [l.personEventId, l.why]));
+        return (
+          decidedRows.length > 0 &&
+          decidedRows.every(
+            (r) => r.channel === null && r.withheldWhy === whyByPe.get(r.personEventId)
+          )
+        );
+      })
+    );
+    assert(
+      "⚠ AND STILL NO ROW FOR A CHILD ON THAT LIST — a carrierless child is GTC-325's case 1 " +
+        'and the founder left it OPEN, so writing one would answer it by building',
+      ok(() => {
+        const childOnList = previewAfter!.hostList
+          .filter((l) => l.child)
+          .map((l) => l.personEventId);
+        return !decidedRows.some((r) => childOnList.includes(r.personEventId));
       })
     );
 
@@ -630,27 +695,44 @@ async function main() {
     section('Layer D: dark — nothing is claimed, attempted, accepted, rejected or withheld');
 
     assert(
-      '⚠ EVERY ROW IS UNCLAIMED: attemptedAt null and attemptCount 0. The claim belongs to ' +
-        'the dispatcher (slice 5c) and the press must not take it — a row the press claimed ' +
-        'is a row the dispatcher will never send',
+      '⚠ EVERY ROW IS UNCLAIMED: attemptedAt null and attemptCount 0 — BOTH populations, which ' +
+        'is the one property [[GTC-325]] did not split. The claim belongs to the dispatcher ' +
+        '(slice 5c) and the press must not take it; a withheld row was never attempted either, ' +
+        'because Gather decided before there was anything to attempt',
       rows.length > 0 && rows.every((r) => r.attemptedAt === null && r.attemptCount === 0)
     );
     assert(
-      'every row is unfinished: acceptedAt, rejectedAt and withheldAt all null',
-      rows.length > 0 &&
-        rows.every((r) => r.acceptedAt === null && r.rejectedAt === null && r.withheldAt === null)
+      'every ADDRESSED row is unfinished: acceptedAt, rejectedAt and withheldAt all null',
+      addressedRows.length > 0 &&
+        addressedRows.every(
+          (r) => r.acceptedAt === null && r.rejectedAt === null && r.withheldAt === null
+        )
     );
     assert(
-      'no row carries a provider, a provider message id, a withheld why or a retry time — ' +
-        'all four are facts about an attempt, and no attempt has been made',
-      rows.length > 0 &&
-        rows.every(
+      '⚠ AND EVERY DECIDED ROW IS BORN FINISHED, which is the opposite claim and is why the two ' +
+        'are asserted apart: `withheldAt` is set at creation, so `findNeverAttempted` excludes ' +
+        'it on the first tick and the drain never takes a claim on it',
+      decidedRows.length > 0 &&
+        decidedRows.every(
+          (r) => r.withheldAt !== null && r.acceptedAt === null && r.rejectedAt === null
+        )
+    );
+    assert(
+      'no ADDRESSED row carries a provider, a provider message id, a withheld why or a retry ' +
+        'time — all four are facts about an attempt, and no attempt has been made',
+      addressedRows.length > 0 &&
+        addressedRows.every(
           (r) =>
             r.provider === null &&
             r.providerMessageId === null &&
             r.withheldWhy === null &&
             r.nextAttemptAt === null
         )
+    );
+    assert(
+      'and no row of EITHER kind carries a provider or a retry time — a withheld row reached no ' +
+        'provider either, and nothing is ever going to try it again',
+      rows.every((r) => r.provider === null && r.nextAttemptAt === null)
     );
 
     // ── Layer G2: no per-person clock ───────────────────────────────────
@@ -679,10 +761,29 @@ async function main() {
         ledgerEntries[0].targetType === 'Event' &&
         ledgerEntries[0].targetId === event.id
     );
+    /*
+     * ⚠ THIS ASSERTION IS THE ROW-COUNT TRAP'S SECOND SITE, AND IT WAS MISSED BY A SURVEY THAT
+     * WENT LOOKING FOR IT. [[GTC-325]]'s scope says plainly: *"anything reading a row count as a
+     * message count becomes wrong on that day."* The survey done before that build read `src/`
+     * for readers and found exactly one casualty, a docstring — and this, which asserts the
+     * equality in a TEST, was not in `src/` and so was not read.
+     *
+     * **A survey scoped to the implementation misses the assertions that pin it.** The value was
+     * always `addressed.length`; what was wrong was the sentence claiming it equalled the rows.
+     *
+     * So it now asserts the property that survives — the ledger counts PEOPLE MESSAGED — plus the
+     * differential, because on a fixture where the two numbers happened to agree this assertion
+     * would go on passing while meaning nothing.
+     */
     assert(
-      '⚠ THE RECIPIENT COUNT IN THE LEDGER IS THE NUMBER OF ROWS ACTUALLY WRITTEN, and it ' +
-        'is written inside the same transaction that wrote them (founder Q2)',
-      ok(() => (ledgerEntries[0].after as any).recipients === rows.length)
+      '⚠ THE RECIPIENT COUNT IN THE LEDGER IS THE NUMBER OF PEOPLE MESSAGED, and it is written ' +
+        'inside the same transaction that wrote the rows it counts (founder Q2)',
+      ok(() => (ledgerEntries[0].after as any).recipients === addressedRows.length)
+    );
+    assert(
+      '⚠ AND IT IS NO LONGER THE ROW COUNT — asserted as a strict inequality on a fixture built ' +
+        'to have both populations, so the two can never quietly become one number again',
+      ok(() => (ledgerEntries[0].after as any).recipients < rows.length && decidedRows.length > 0)
     );
     assert(
       'the entry carries the send timestamp it locked',

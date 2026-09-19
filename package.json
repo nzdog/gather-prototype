@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test:security": "tsx tests/security-validation.ts",
     "test:bounce-door": "tsx tests/bounce-door-test.ts",
+    "test:host-list-row": "tsx tests/host-list-row-test.ts",
     "security:routes": "tsx tests/security-route-scan.ts",
     "test:security:routes": "tsx tests/security-route-scan-control.ts",
     "test:lifecycle": "tsx tests/lifecycle-predicates-test.ts",

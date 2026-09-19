@@ -121,7 +121,18 @@ export interface PressRefusal {
 export interface PressSuccess {
   ok: true;
   confirmedAt: Date;
-  /** The number of `OutboundMessage` rows written — see `recipientCount` below. */
+  /**
+   * HOW MANY PEOPLE WERE MESSAGED. `addressed.length`, computed from the addressed set and
+   * never from a row count.
+   *
+   * ⚠ THE DOCSTRING USED TO SAY *"the number of `OutboundMessage` rows written"*, AND
+   * [[GTC-325]] MADE THAT FALSE while leaving the value right. Since that ticket the press
+   * also writes a row for every person on the HOST LIST — one row per person the press
+   * DECIDED ABOUT — so the row count exceeds the message count by the size of that list, for
+   * the first time. Surveyed at GTC-325: this was the only place in the tree where the two
+   * were equated, and it was equated in prose rather than in arithmetic. **Anything that
+   * starts counting rows to answer "how many did we message" is wrong from that day.**
+   */
   recipientCount: number;
   totalMemberships: number;
   peopleAnchored: number;
@@ -329,6 +340,64 @@ export async function pressSend(
             channel: r.channel as OutboundChannel,
           })),
         });
+
+        /*
+         * ── [[GTC-325]] — AND A ROW FOR EVERY PERSON THE PRESS DECIDED NOT TO MESSAGE ────
+         *
+         * Founder ruling, 2026-09-19, shape 3:
+         *
+         *   "YES, the press writes a withheld row for the host list. The reason: the outbound
+         *    row is the record of what the press decided about a person, and deciding not to
+         *    message someone is a decision about them. A population the press reasoned over and
+         *    left no trace of is how the board and the press come to disagree."
+         *
+         * ⚠ SO `OutboundMessage` CHANGES MEANING HERE, from ONE ROW PER ADDRESSED RECIPIENT to
+         * ONE ROW PER PERSON THE PRESS DECIDED ABOUT. That is the ruling and not a side effect
+         * of it; the model's own docstring says the second thing now.
+         *
+         * ⚠ WHAT IT FIXES, AND IT IS WHY THE RULING EXISTS. Slice 7a reads the delivery fact OFF
+         * THE ROW — a founder ruling, so that the board and the press cannot disagree by
+         * construction. But ruling M's red is about *"a line on the host's list"*, and the press
+         * wrote no row for those people, so `UNREACHABLE` **fired for nobody**: four people on
+         * the one pressable board read AMBER — *with Gather* — about a decision Gather had
+         * already made. Nothing in slice 7a or in the drain changes to fix it; the missing row
+         * was the whole defect.
+         *
+         * ⚠ BORN FINISHED, AND THAT IS WHAT KEEPS THE DRAIN AWAY FROM THEM. `withheldAt` is set
+         * at creation, so `findNeverAttempted`'s `withheldAt: null` clause excludes them on the
+         * first tick and every tick after; no claim is ever taken and `recordWithholding` would
+         * no-op on them anyway. The drain needs no new branch — see the fence in `drainOnce`,
+         * which exists for the row that should never reach it rather than for one that does.
+         *
+         * ⚠ `channel` IS NULL, WHICH IS A MEANING AND NOT AN ABSENCE: there was nobody to send
+         * to. The founder refused `EMAIL` by convention and refused a `NONE` member, in those
+         * words, at the same ruling.
+         *
+         * ⚠ AND CHILDREN ARE EXCLUDED, DELIBERATELY. `hostList` carries two kinds of line —
+         * adults the chooser cannot reach, and children whose carrier route is closed — and the
+         * second is GTC-325's **case 1, which the founder left OPEN**. Writing rows for them
+         * would answer it by building, and it would give children `OutboundMessage` rows for the
+         * first time, which several fences in this tree assert they do not have. Measured on the
+         * one pressable board, 2026-09-19: 4 host-list lines, 0 of them children, so the
+         * exclusion costs nothing today and the ruling stays the founder's.
+         *
+         * ⚠ THE COUNTS STAY MESSAGE-COUNTS. `recipientCount` and the ledger's `recipients` are
+         * both `addressed.length` and neither reads a row count — see the docstring above, which
+         * this change had to correct.
+         */
+        const decidedAgainst = preview.hostList.filter((line) => !line.child);
+        if (decidedAgainst.length > 0) {
+          await tx.outboundMessage.createMany({
+            data: decidedAgainst.map((line) => ({
+              eventId,
+              personEventId: line.personEventId,
+              kind: 'ASK' as const,
+              channel: null,
+              withheldAt: now,
+              withheldWhy: line.why,
+            })),
+          });
+        }
 
         /*
          * GTC-196 (A3b): the anchor. NOT the per-person send clock — that is ruling G's and
