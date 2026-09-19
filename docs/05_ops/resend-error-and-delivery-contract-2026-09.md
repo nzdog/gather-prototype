@@ -232,9 +232,17 @@ observable."*
 ## 5. What an executor should do with this
 
 - **Read it before changing either contract module.** Both classify values this file now quotes.
-- **The `application_error` marker can come down**, with this file cited. Nothing else changes.
-- **The `security_error` marker stays up.** Do not remove it on the strength of this file; it
-  records an absence, and an absence is not evidence either way.
+- ✅ **The `application_error` marker IS down** — taken down 2026-09-19 with this file cited.
+  `PROVIDER_FAULT` stands on the document rather than on its neighbours.
+- ⚠ **The `security_error` marker stays up, and now says why in one line**: declared in the SDK,
+  published nowhere. Do not remove it on the strength of this file — it records an ABSENCE, and an
+  absence is not evidence either way. That is the whole difference between it and
+  `application_error`, where the same reading found the answer.
+- ⚠ **Check every value against BOTH sources.** Neither is a superset of the other: the SDK named
+  two fields whose values only the prose enumerates (`type` / `subType`), and the prose publishes
+  a vocabulary the SDK's union does not contain (`security_error`, `internal_server_error`). **A
+  `Record` over an SDK union guards against the SDK changing and not against the provider having
+  values the SDK never declared.**
 - **Do not build anything on `subType`** until a vocabulary is published or observed.
 - ⚠ **Re-check against the SDK version.** This is `resend@6.22.0`. If the installed version moves,
   the union may move with it and this file does not.

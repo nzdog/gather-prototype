@@ -105,11 +105,16 @@ const ERROR_CODE_KIND: Record<ResendErrorCode, ResendErrorKind> = {
   rate_limit_exceeded: 'PROVIDER_BUSY',
   internal_server_error: 'PROVIDER_FAULT',
   /*
-   * ⚠ UNCERTAIN, AND NAMED RATHER THAN SMOOTHED OVER. `application_error` is read as provider-side
-   * from its neighbours — it sits beside `internal_server_error` and `security_error` in the same
-   * union — and no document in this repo says so. If it turns out to mean "your application did
-   * something wrong", this entry is wrong and a retry wastes two attempts. That is the cost, it is
-   * bounded by the three-attempt schedule, and [[GTC-323]] is what settles it.
+   * ✅ SETTLED, AND THE MARKER IS DOWN — [[GTC-323]], 2026-09-19. Resend publish it:
+   *
+   *   `application_error` — HTTP **500** — "An unexpected error occurred."
+   *
+   * Provider-side, at a server status. ⚠ SUPERSEDED, KEPT SO THE CHANGE IS LEGIBLE: this entry
+   * carried an UNCERTAIN marker reading it as provider-side *"from its neighbours"* and warning
+   * that if it meant *"your application did something wrong"* the entry was wrong and a retry
+   * wasted two attempts. **The inference was right and is now read rather than inferred.**
+   * `PROVIDER_FAULT` and the retry stand, on the document rather than on the neighbours.
+   * Transcript: `docs/05_ops/resend-error-and-delivery-contract-2026-09.md`.
    */
   application_error: 'PROVIDER_FAULT',
 
@@ -144,9 +149,16 @@ const ERROR_CODE_KIND: Record<ResendErrorCode, ResendErrorKind> = {
   not_found: 'REQUEST_REFUSED',
   method_not_allowed: 'REQUEST_REFUSED',
   /*
-   * ⚠ UNCERTAIN, AND THE SECOND OF THE TWO. `security_error` does not say WHOSE security, and the
-   * name is compatible with both "we refused this payload" and "something is wrong at our end". Read
-   * as the request, because a terminal keeps a mystery from being sent three times.
+   * ⚠ STILL UNCERTAIN, AND NOW FOR A REASON RATHER THAN FOR WANT OF LOOKING — [[GTC-323]] read the
+   * published error pages on 2026-09-19: **declared in `resend@6.22.0`, published nowhere.**
+   *
+   * `security_error` does not say WHOSE security, and the name is compatible with both "we refused
+   * this payload" and "something is wrong at our end". Read as the request, because a terminal
+   * keeps a mystery from being sent three times.
+   *
+   * ⚠ DO NOT TAKE THIS MARKER DOWN ON THE STRENGTH OF THAT TRANSCRIPT. It records an ABSENCE, and
+   * an absence is not evidence either way — which is the difference between this entry and
+   * `application_error` above, where the same reading found the answer.
    */
   security_error: 'REQUEST_REFUSED',
   /*
