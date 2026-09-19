@@ -27,6 +27,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { DRAIN_BATCH, drainOnce, enrolMiniSends } from '@/lib/press/dispatch';
+import { pollOnce } from '@/lib/email-delivery/delivery-poll';
 import { cronSecretAccepted, isCronSecretConfigured } from '../cron-secret';
 import { withoutRecipientNames } from '../cron-response';
 
@@ -74,11 +75,38 @@ async function handleRequest(request: NextRequest) {
     const enrol = await enrolMiniSends(prisma, DRAIN_BATCH);
     const result = { ...(await drainOnce(prisma, DRAIN_BATCH)), ...enrol };
 
+    /*
+     * GTC-289 phase 4 — THE DELIVERY POLL RIDES THIS TICK, AFTER THE DRAIN.
+     *
+     * ⚠ WHY A THIRD JOB HERE RATHER THAN A SECOND CRON ROUTE, and the reason is this file's own
+     * auth block: GTC-270's shape has to be WRITTEN OUT IN EACH ROUTE, because GTC-268's scanner
+     * reads the `if` conditions and does not follow imports. A second cron route therefore means a
+     * second copy of the refusals — and a duplicated auth block is a place where one copy drifts.
+     * One route, one secret, one pinned route count.
+     *
+     * ⚠ AND THE ORDER IS THE POINT. The drain is the time-sensitive half — she pressed and she is
+     * watching — and a delivery outcome is watched by nobody. So the drain runs first and the poll
+     * takes what is left of the tick, with a batch a quarter of the drain's for the same reason.
+     *
+     * ⚠ AND A BROKEN POLL MUST NOT MAKE A WORKING DRAIN LOOK FAILED. The drain's rows are already
+     * committed by the time this runs, so a throw here would 500 a tick that did its job. The reason
+     * is carried in the response instead of being swallowed — record inside, decide outside.
+     */
+    let poll: object = { skipped: true };
+    try {
+      poll = withoutRecipientNames(await pollOnce(prisma));
+    } catch (pollError) {
+      const message = pollError instanceof Error ? pollError.message : 'Unknown error';
+      console.error('[Cron OutboundDispatch] delivery poll failed:', message);
+      poll = { failed: true, error: message };
+    }
+
     // GTC-270 finding 2: every cron route puts the same shape on the wire, so a later `errors`
     // array added to this dispatcher cannot leak a recipient by default.
     return NextResponse.json({
       success: true,
       ...withoutRecipientNames(result),
+      poll,
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

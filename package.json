@@ -98,7 +98,8 @@
     "test:mini-send": "tsx tests/mini-send-test.ts",
     "test:child-tokens": "tsx tests/child-token-exposure-test.ts",
     "test:resend-delivery": "tsx tests/resend-delivery-contract-test.ts",
-    "test:resend-errors": "tsx tests/resend-error-contract-test.ts"
+    "test:resend-errors": "tsx tests/resend-error-contract-test.ts",
+    "test:delivery-poll": "tsx tests/delivery-poll-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
