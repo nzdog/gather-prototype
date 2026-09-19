@@ -227,7 +227,6 @@ export default function HostView() {
   const [claimSubmitted, setClaimSubmitted] = useState(false);
   const [claimSubmitting, setClaimSubmitting] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<PersonSummary | null>(null);
-  const [confirmingSent, setConfirmingSent] = useState(false);
   const [showAllPeople, setShowAllPeople] = useState(false);
   const [copyState, setCopyState] = useState<'idle' | 'copying' | 'copied'>('idle');
 
@@ -381,15 +380,23 @@ export default function HostView() {
     }
   };
 
-  const handleConfirmSent = async () => {
-    setConfirmingSent(true);
-    try {
-      await fetch(`/api/h/${token}/confirm-invites-sent`, { method: 'POST' });
-      await fetchData();
-    } finally {
-      setConfirmingSent(false);
-    }
-  };
+  /*
+   * ⚠ THIS BUTTON USED TO PRESS SEND. GTC-189 slice 5c, founder ruling of 2026-09-19 — OPTION D.
+   * It is a link now. See the twin note in `src/components/plan/InviteStatusSection.tsx` for why,
+   * and [[GTC-321]] for the workflow this deliberately does not foreclose.
+   *
+   * ⚠ AND THIS SURFACE HAS A PROBLEM THE OTHER ONE DOES NOT, WHICH IS WHY IT IS A LINK WITH A
+   * CAVEAT RATHER THAN A `router.push`. This page is the host MAGIC-LINK view: it authenticates by
+   * token and the reader may hold NO SESSION. The pre-flight is session-gated — its data route is
+   * `requireEventRole` — and `middleware.ts` does not match `/plan/*`, so it issues no redirect to
+   * sign-in. A signed-out host sent straight there gets the page shell and then 401s on every
+   * fetch: a broken screen rather than a door.
+   *
+   * So the destination is named and the sign-in requirement is said out loud. Reported rather than
+   * papered over, because "navigate to the pre-flight" is the ruling and a 401 is not what it
+   * meant.
+   */
+  const preFlightHref = `/plan/${data?.event.id ?? ''}/pre-flight`;
 
   const handleCopyPlan = async () => {
     setCopyState('copying');
@@ -935,15 +942,21 @@ export default function HostView() {
                 </>
               )}
 
-              {/* Confirm sent button */}
+              {/* GTC-189 slice 5c, option D — this no longer presses. See handleConfirmSent's
+                  replacement above, and [[GTC-321]]. */}
               {!data.inviteStatus.sentAt && (
-                <button
-                  onClick={handleConfirmSent}
-                  disabled={confirmingSent}
-                  className="w-full py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-50 transition-colors"
-                >
-                  {confirmingSent ? 'Confirming...' : "I've sent the invites"}
-                </button>
+                <>
+                  <a
+                    href={preFlightHref}
+                    className="block w-full py-2 text-sm font-medium text-center text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                  >
+                    Review and send
+                  </a>
+                  <p className="text-xs text-gray-400 mt-1.5">
+                    Opens the pre-flight, where you can see exactly what each person will get. You
+                    will need to be signed in.
+                  </p>
+                </>
               )}
               {data.inviteStatus.sentAt && (
                 <p className="text-xs text-gray-400">

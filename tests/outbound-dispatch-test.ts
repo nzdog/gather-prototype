@@ -451,26 +451,45 @@ async function main() {
     section('Layer N: this half reaches no provider and takes no claim');
 
     const dispatchSrc = stripComments(read(DISPATCH));
+    /*
+     * ⚠ TWO ASSERTIONS HERE EXPIRED WHEN THIS SLICE'S SECOND HALF LANDED, AND THAT IS THE TRIPWIRE
+     * WORKING. They held "the dispatch module reaches no provider" and "the route takes no claim",
+     * both true of the first half by design and both deliberately false now — the claim went live in
+     * the same commit as the thing that can finish a row, which is what the first half said it
+     * would. Replaced with what must stay true forever rather than what was true for one commit.
+     */
     assert(
-      '⚠ THE DISPATCH MODULE REACHES NO PROVIDER: it names no sender, no Resend, no TNZ, no ' +
-        'Twilio and no fetch. The transports are the second half',
-      dispatchSrc.length > 0 &&
-        !/sendSms|sendAskEmail|sendNudgeEmail|resend|Resend|tnz|Tnz|twilio|Twilio|fetch\(/.test(
-          dispatchSrc
-        )
-    );
-    assert(
-      '⚠ AND THE ROUTE TAKES NO CLAIM. It reports what it WOULD drain and calls neither claim ' +
-        'function, because a claim with no transport behind it is a crashed attempt by the ' +
-        "schema's own definition",
+      '⚠ THE DISPATCHER IS THE ONLY THING THAT CLAIMS, and the route reaches it through ONE entry ' +
+        'point. Two callers of a claim is how two ticks come to send the same row',
       routeSrc.length > 0 &&
+        routeSrc.includes('drainOnce') &&
         !routeSrc.includes('claimForFirstAttempt') &&
         !routeSrc.includes('claimForRetry')
     );
     assert(
       'CONTROL: the route matcher really matches — it finds the function it calls, so the two ' +
         'absences above are absences and not a failed read',
-      routeSrc.includes('describeDrain')
+      routeSrc.includes('drainOnce')
+    );
+    assert(
+      '⚠ AND NOTHING OUTSIDE THE DISPATCHER CLAIMS A ROW. Asserted over src/ rather than over the ' +
+        'route alone, because the press is the other place that touches these rows and a claim ' +
+        'taken there would be a drain inside a request that can be killed halfway',
+      ok(() => {
+        const hits: string[] = [];
+        const walk = (dir: string) => {
+          for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+            const q = `${dir}/${e.name}`;
+            if (e.isDirectory()) walk(q);
+            else if (/\.tsx?$/.test(e.name) && q !== DISPATCH) {
+              const src = stripComments(read(q));
+              if (/claimForFirstAttempt\(|claimForRetry\(/.test(src)) hits.push(q);
+            }
+          }
+        };
+        walk('src');
+        return hits.length === 0;
+      })
     );
     assert(
       'no fake provider anywhere (founder Q7): the module names no NODE_ENV, MOCK, FAKE or ' +

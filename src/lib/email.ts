@@ -123,6 +123,62 @@ export async function sendMagicLinkEmail(to: string, token: string): Promise<Sen
   }
 }
 
+/**
+ * GTC-189 slice 5c — THE ASK. A new sender, and it is slice 4b's first caller.
+ *
+ * ⚠ WHY `sendNudgeEmail` COULD NOT BE REUSED, which is the reason this exists at all:
+ *
+ *  - It sends from `EMAIL_FROM` with no per-message display name, and ruling F wants the
+ *    message to carry THE HOST'S name as sender.
+ *  - It sets no `reply_to`, and ruling F wants `User.email` there — "her address as
+ *    reply-to, sent from our verified domain because it cannot be sent from hers."
+ *
+ * ⚠ THE SEAM HINGE §5 DESCRIBES IS WHAT MAKES THIS HONEST RATHER THAN A PRETENCE. The
+ * message arrives under her name on Gather's domain, and the second movement names
+ * Gather. THE ADDRESS IS NOT HERS AND IS NOT PRESENTED AS HERS — the display name is
+ * hers, the address is ours, and replies go to her. Do not "improve" this by putting her
+ * address in `from`: it would fail SPF/DKIM on a domain she does not control, and it
+ * would be a pretence the founder ruling explicitly declines.
+ *
+ * ⚠ AND `EMAIL_FROM` HERE IS `"Gather <onboarding@resend.dev>"` — Resend's SANDBOX
+ * sender, not a verified Gather domain. So ruling F's "our verified domain" has nothing
+ * behind it in this environment, and neither the display name nor the reply-to can be
+ * observed arriving. [[GTC-247]].
+ *
+ * It answers through the same `resultOf` as the other three, so it inherits slice 4b's
+ * `providerMessageId` rather than getting a second reading of Resend's envelope.
+ */
+export async function sendAskEmail(params: {
+  to: string;
+  subject: string;
+  body: string;
+  /** `User.email` (ruling F). Where a reply goes. */
+  replyTo: string;
+  /** The host's name, as the display name on Gather's address. Never her address. */
+  fromName: string;
+}): Promise<SendResult> {
+  try {
+    const resend = getResendClient();
+    const configured = process.env.EMAIL_FROM || 'Gather <noreply@gather.app>';
+    // The configured value may be "Name <addr>" or a bare address; the host's name replaces
+    // the display part and the address is always ours.
+    const match = configured.match(/<([^>]+)>/);
+    const address = match ? match[1] : configured;
+    const response = await resend.emails.send({
+      from: `${params.fromName} <${address}>`,
+      to: params.to,
+      replyTo: params.replyTo,
+      subject: params.subject,
+      text: params.body,
+    });
+    return resultOf('ask', params.to, response);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`[Email] Failed to send ask to ${params.to}:`, errorMessage);
+    return { success: false, error: errorMessage };
+  }
+}
+
 export async function sendNudgeEmail(params: {
   to: string;
   subject: string;

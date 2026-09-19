@@ -450,6 +450,25 @@ async function main() {
     callerSrc.every((src) => !/providerMessageId/.test(src))
   );
 
+  /*
+   * ✅ AND THE CONSUMER NOW EXISTS, WHICH TURNS 4b's PREDICTION INTO A FACT — GTC-189 slice 5c,
+   * 2026-09-19. The comment above says "a caller reading this field is slice 5's work, and 4b may
+   * not anticipate it." It is `recordAcceptance` in `src/lib/press/dispatch.ts`, writing the id onto
+   * `OutboundMessage.providerMessageId` at acceptance, exactly as the `SendResult` docstring said it
+   * would.
+   *
+   * The four-file assertion above stays true and stays scoped: the dispatcher calls a FOURTH sender,
+   * `sendAskEmail`, which slice 5c added because `sendNudgeEmail` carries no reply-to and no
+   * per-message display name. Asserted positively here so a reader of the absence above finds the
+   * presence rather than concluding the field is still unused.
+   */
+  const dispatchSrc = fs.readFileSync('src/lib/press/dispatch.ts', 'utf8');
+  assert(
+    'providerMessageId',
+    '✅ THE CONSUMER EXISTS: the press dispatcher reads providerMessageId and writes it onto the outbound row at acceptance (slice 5c)',
+    /providerMessageId/.test(dispatchSrc) && /recordAcceptance/.test(dispatchSrc)
+  );
+
   // ⚠ THE CONSTRUCTOR PATH, ASSERTED SO NOBODY LEANS ON IT.
   //
   // `new Resend(undefined)` throws. That throw is why an unset key makes the

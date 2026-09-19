@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   CheckCircle,
   Clock,
@@ -113,7 +114,7 @@ interface Props {
 export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Props) {
   const [data, setData] = useState<InviteStatusData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [confirming, setConfirming] = useState(false);
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [showAllPeople, setShowAllPeople] = useState(false);
   const [expandedAttendance, setExpandedAttendance] = useState(false);
@@ -149,26 +150,31 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
     return () => clearInterval(interval);
   }, [fetchStatus]);
 
-  const handleConfirmSent = async () => {
-    setConfirming(true);
-    setError(null);
-
-    try {
-      const res = await fetch(`/api/events/${eventId}/confirm-invites-sent`, {
-        method: 'POST',
-      });
-
-      if (res.ok) {
-        await fetchStatus();
-      } else {
-        const data = await res.json();
-        setError(data.error || 'Failed to confirm');
-      }
-    } catch (e) {
-      setError('Failed to confirm invites sent');
-    } finally {
-      setConfirming(false);
-    }
+  /*
+   * ⚠ THIS BUTTON USED TO PRESS SEND, AND IT SAID "I've sent the invites" WHILE DOING IT.
+   * GTC-189 slice 5c, founder ruling of 2026-09-19 — OPTION D. It navigates now.
+   *
+   * WHAT IT WAS. It POSTed to `confirm-invites-sent`, which slice 5a renamed to `/send` and left as
+   * a 307. So after 5a this button ran the whole press, and after 5c's second half it would have
+   * SENT — from the host's main planning screen, behind no preview and behind none of the
+   * pre-flight's five checks, under words promising the opposite of what it did.
+   *
+   * ⚠ THE DANGER WAS ALWAYS THE FIRST PRESS, NOT THE SECOND. The second was closed at slice 5a by
+   * GTC-169's guard — `pressSend` refuses `ALREADY_SENT` with a 409 once `Event.sentAt` is set, and
+   * this button is hidden by then anyway. What was open was one irreversible act, on two surfaces,
+   * triggered by a button whose words said it had already happened.
+   *
+   * WHY NAVIGATION AND NOT A CONFIRMATION DIALOG. The founder's reason, recorded because it is the
+   * ruling: "the pre-flight exists to be the one screen where she sees what the press will do
+   * before doing it, and three pressing surfaces is the thing it was built to prevent."
+   *
+   * ⚠ AND IT DOES NOT DECIDE THE WORKFLOW. "I sent them myself" is older than the press and nothing
+   * has ruled it dead — see [[GTC-321]], which asks whether it survives as an act at all and, if it
+   * does, whether the people it covers are ever chased. Option D was chosen because it is
+   * REVERSIBLE: nothing is deleted, and a hand-send act ruled in later gets its own affordance.
+   */
+  const goToPreFlight = () => {
+    router.push(`/plan/${eventId}/pre-flight`);
   };
 
   // Don't render if not in CONFIRMING status
@@ -585,16 +591,14 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
         <div className="border-t pt-4">
           <p className="text-sm text-gray-600 mb-3">
             {counts.notSent === 1
-              ? "1 person hasn't been marked as sent yet."
-              : `${counts.notSent} people haven't been marked as sent yet.`}{' '}
-            After sharing the invite links, confirm below to start tracking.
+              ? "1 person hasn't been sent their invitation yet."
+              : `${counts.notSent} people haven't been sent their invitation yet.`}
           </p>
           <button
-            onClick={handleConfirmSent}
-            disabled={confirming}
-            className="w-full py-2.5 px-4 bg-sage-600 text-white rounded-lg hover:bg-sage-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+            onClick={goToPreFlight}
+            className="w-full py-2.5 px-4 bg-sage-600 text-white rounded-lg hover:bg-sage-700 font-medium transition-colors"
           >
-            {confirming ? 'Confirming...' : "I've sent the invites"}
+            Review and send
           </button>
         </div>
       )}

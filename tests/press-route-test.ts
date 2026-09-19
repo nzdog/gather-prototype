@@ -858,12 +858,41 @@ async function main() {
 
     const inviteStatus = read('src/components/plan/InviteStatusSection.tsx');
     const hostView = read('src/app/h/[token]/page.tsx');
+    /*
+     * ⚠ THIS TRIPWIRE FIRED AT SLICE 5c's SECOND HALF, WHICH IS WHAT IT WAS FOR. It held that both
+     * buttons still read "I've sent the invites" and still posted to the press — safe only while
+     * the rows never drained. They drain now, and the founder ruled OPTION D: both navigate to the
+     * pre-flight instead of pressing.
+     *
+     * Replaced with the standing rule rather than with the same check inverted, because the
+     * inverted form lives in `tests/outbound-drain-test.ts` layer D. What belongs HERE is the
+     * press's own invariant: how many surfaces can reach it.
+     */
+    const POSTS_TO_PRESS = /confirm-invites-sent|\/send['"`]/;
     assert(
-      '⚠ BOTH STILL READ "I\'ve sent the invites" AND BOTH STILL POST TO THE PRESS. While ' +
-        'this slice is dark that is safe: the rows never drain. It stops being safe the ' +
-        'moment slice 5c exists, and this assertion is the tripwire — it FAILS when either ' +
-        'button is changed, which is the moment to re-read it',
-      inviteStatus.includes("I've sent the invites") && hostView.includes("I've sent the invites")
+      '⚠ NOTHING IN THE UI POSTS TO THE PRESS. Slice 5f wires exactly one caller — the ' +
+        "pre-flight's Send button — and until then the count is zero. THREE PRESSING SURFACES IS " +
+        'WHAT THE PRE-FLIGHT WAS BUILT TO PREVENT, and two of them existed until 5c',
+      ok(() => {
+        const hits: string[] = [];
+        const walk = (dir: string) => {
+          for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+            const q = `${dir}/${e.name}`;
+            if (e.isDirectory()) walk(q);
+            else if (/\.tsx$/.test(e.name) && POSTS_TO_PRESS.test(stripComments(read(q)))) {
+              hits.push(q);
+            }
+          }
+        };
+        walk('src');
+        return hits.length === 0;
+      })
+    );
+    assert(
+      'CONTROL: the matcher really matches a post to the press — asserted against planted ' +
+        'sources, because an absence found by a broken pattern is the shape slice 4a got wrong',
+      POSTS_TO_PRESS.test('fetch(`/api/events/x/send`)') &&
+        POSTS_TO_PRESS.test("fetch('/api/events/x/confirm-invites-sent')")
     );
     assert(
       'and the pre-flight Send button is still wired to nothing — slice 5f wires it, not ' +

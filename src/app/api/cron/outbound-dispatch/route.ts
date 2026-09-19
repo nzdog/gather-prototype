@@ -2,13 +2,14 @@
 //
 // GTC-189 slice 5c, FIRST HALF — the press's drain, and it drains nothing yet.
 //
-// ⚠ THIS ROUTE TAKES NO CLAIM AND SENDS NOTHING. It reports what a tick WOULD drain. The reason
-// is the schema's own definition of an unfinished claim — "a row left with `attemptedAt` set and
-// no end state below is a crashed attempt" — so claiming before a transport exists would turn
-// every row it touched into a permanent crashed attempt, on a press ruled one act with no recall.
-// `describeDrain` in src/lib/press/dispatch.ts is deliberately the only thing called here; the
-// claim primitives beside it are proven by `tests/outbound-dispatch-test.ts` and go live in the
-// same commit as the thing that can finish a row.
+// ⚠ THIS ROUTE NOW DRAINS. Slice 5c's first half deliberately did not: a claim with no transport
+// behind it turns every row it touches into a crashed attempt by the schema's own definition, so
+// the claim went live in the same commit as the thing that can finish a row — this one.
+//
+// `drainOnce` in src/lib/press/dispatch.ts runs the order that is a ruling: GATES, then QUIET
+// HOURS, then CLAIM, then SEND. It calls the REAL senders — no seam, no fake, no NODE_ENV branch
+// (founder Q7) — so in this environment every send is refused and every row reaches an end state
+// saying so. That is the state slice 7's fourth red has to read, and a fake would have hidden it.
 //
 // ⚠ AND NO INLINE DRAIN AT THE PRESS, which is the other half of the same ruling (2026-09-19): a
 // request that can be killed halfway is not one act with no recall. The press writes the rows and
@@ -25,7 +26,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { DRAIN_BATCH, describeDrain } from '@/lib/press/dispatch';
+import { DRAIN_BATCH, drainOnce } from '@/lib/press/dispatch';
 import { cronSecretAccepted, isCronSecretConfigured } from '../cron-secret';
 import { withoutRecipientNames } from '../cron-response';
 
@@ -60,16 +61,13 @@ async function handleRequest(request: NextRequest) {
   }
 
   try {
-    const result = await describeDrain(prisma, DRAIN_BATCH);
+    const result = await drainOnce(prisma, DRAIN_BATCH);
 
     // GTC-270 finding 2: every cron route puts the same shape on the wire, so a later `errors`
     // array added to this dispatcher cannot leak a recipient by default.
     return NextResponse.json({
       success: true,
       ...withoutRecipientNames(result),
-      // Said on the wire rather than only in a comment, because a monitor reading 200 with
-      // `sent: 0` for a week should be able to tell "nothing was due" from "nothing can send yet".
-      drainsNothingYet: true,
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
