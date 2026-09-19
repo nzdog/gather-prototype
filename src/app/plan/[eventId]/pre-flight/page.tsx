@@ -11,7 +11,13 @@
  * Hinge §1: the threshold is not a summary screen before a button — it is a guided check
  * Gather does with Kate, and as she moves through it, the weight lifts.
  *
- * NOTHING HERE SENDS. The press is GTC-189 (I2). Step 5 is a dead button on purpose.
+ * ✅ STEP 5 SENDS NOW — GTC-189 SLICE 5f, 2026-09-19, AND THIS LINE USED TO SAY THE OPPOSITE. It read
+ * *"NOTHING HERE SENDS. The press is GTC-189 (I2). Step 5 is a dead button on purpose."* The press
+ * exists, the dispatcher exists, the board's fourth red exists, and this screen is the ONE surface
+ * that may reach them — two others posted to the press until slice 5c took them down (option D).
+ *
+ * ⚠ READ THE COMMENT AT STEP 5 BEFORE PRESSING IT IN THIS ENVIRONMENT. What it does here is not what
+ * it does on a working deployment, and the difference is permanent.
  *
  * THE TWO CADENCE CONTROLS ARE THE POINT OF THIS PASS. GTC-179 stored both, obeys both on
  * the direct and proxy paths, and closed as machinery with neither reachable by a host.
@@ -32,6 +38,7 @@ import {
 import { DIETARY_OPTIONS, type DietaryData, type DietaryStatus } from '@/lib/dietary';
 import AccordionShell from '@/components/plan/AccordionShell';
 import { draftAuthorLine } from '@/lib/messages/ask-register';
+import { PRESS_REFUSAL_WORDS, THRESHOLD_SCRIPT } from '@/lib/press/press-words';
 import {
   HOST_LIST_BLURB,
   HOST_LIST_EMPTY,
@@ -316,6 +323,57 @@ export default function PreFlightPage() {
 
   const allChecked = useMemo(() => [1, 2, 3, 4, 5].every((n) => checked[n]), [checked]);
 
+  /*
+   * ── GTC-189 SLICE 5f — THE PRESS, CALLED ONCE ───────────────────────────────
+   *
+   * ⚠ THREE GUARDS AGAINST A SECOND PRESS, AND THEY ARE NOT REDUNDANT BECAUSE THEY FAIL DIFFERENTLY.
+   * The press is ruled ONE ACT, NO RECALL, so a double-click must not be able to produce a second
+   * anything:
+   *
+   *   1. `pressing` — the in-flight latch, checked at the TOP of this function rather than only in
+   *      the button's `disabled`, because a disabled attribute is a rendering and a second click can
+   *      land before React re-renders.
+   *   2. `pressed` — the done latch, so the button stays spent for the life of the page.
+   *   3. The route's own `ALREADY_SENT`, which is the only one that holds across a page reload and is
+   *      therefore the real guarantee. The two above make the common case quiet; this one makes it
+   *      correct.
+   *
+   * It reads the `code` and shows the press's own words for that state — never the route's prose,
+   * which is written for a log, and never a generic failure sentence for a state the press named.
+   */
+  const [pressing, setPressing] = useState(false);
+  const [pressed, setPressed] = useState<{ recipients: number } | null>(null);
+  const [pressError, setPressError] = useState<string | null>(null);
+
+  const press = useCallback(async () => {
+    if (pressing || pressed !== null) return;
+    setPressing(true);
+    setPressError(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/send`, { method: 'POST' });
+      const body = await res.json().catch(() => ({}) as Record<string, unknown>);
+      if (res.ok && body?.success) {
+        setPressed({ recipients: Number(body.recipients ?? 0) });
+        return;
+      }
+      const code = typeof body?.code === 'string' ? body.code : null;
+      setPressError(
+        (code && PRESS_REFUSAL_WORDS[code as keyof typeof PRESS_REFUSAL_WORDS]) ||
+          'Nothing was sent. Try again in a moment.'
+      );
+    } catch {
+      /*
+       * ⚠ A NETWORK FAILURE IS NOT A REFUSAL, AND THE WORDS SAY SO CAREFULLY. The request may have
+       * reached the press and committed before the connection dropped, so this cannot claim nothing
+       * was sent — every refusal sentence above can, because the route answered. Reloading is the
+       * honest instruction: `ALREADY_SENT` is what will tell her which way it went.
+       */
+      setPressError('Gather could not tell whether that went through. Reload the page to check.');
+    } finally {
+      setPressing(false);
+    }
+  }, [eventId, pressing, pressed]);
+
   if (error && !data) {
     return <div className="max-w-3xl mx-auto px-6 py-16 text-gray-600">{error}</div>;
   }
@@ -598,18 +656,85 @@ export default function PreFlightPage() {
           checked={!!checked[5]}
           onCheck={(v) => setChecked((c) => ({ ...c, 5: v }))}
         >
+          {/*
+            ── GTC-189 SLICE 5f — THE PRESS. ONE ACT, NO RECALL ────────────────────────
+
+            ⚠ WHAT PRESSING THIS DOES IN THIS ENVIRONMENT, RECORDED HERE AND NOT ONLY IN THE TICKET,
+            ON FOUNDER INSTRUCTION (2026-09-19): whoever meets this button next should meet the
+            consequence in the same place.
+
+            Measured on the one pressable board in `gather_dev` — Henderson Family Christmas 2025,
+            43 memberships, 38 recipients:
+
+              • The press writes 38 `OutboundMessage` rows, sets `Event.sentAt`, sets the invite
+                anchors and writes `SEND_PRESSED`. IRREVERSIBLE AT THE MECHANISM LEVEL (Hinge §2,
+                ruled gap #1): no undo, and a second press is refused `ALREADY_SENT`.
+              • When the dispatcher runs, all 37 email rows are REJECTED — `RESEND_API_KEY` does not
+                authenticate here ([[GTC-247]]), and the observed answer is `validation_error` / 401
+                / "API key is invalid", which is terminal on the first attempt. The 1 text row is
+                withheld `SMS_DISABLED` because `TNZ_AUTH_TOKEN` is absent.
+              • ⚠ THE BOARD THEN READS RED, "never got it", FOR 37 PEOPLE WHOSE ADDRESSES ARE FINE
+                (GTC-189 slice 7a's `NOT_DELIVERED`), and the summary says 37 need her.
+              • ⚠ AND THERE IS NO PRODUCT PATH BACK. Ruling U's bounce door is slice 7b and does not
+                exist; the remind is withdrawn on that red; the press cannot be repeated. Those reds
+                are PERMANENT on that board until 7b ships or somebody edits the database.
+
+            That is the press behaving exactly as designed against a broken key, which is the state
+            founder answer Q7 chose over a fake provider. It is not a defect and it is not a surprise
+            — it is written here so it is not discovered by pressing.
+
+            ⚠ AND PRESSING SENDS NOTHING AT ALL LOCALLY. Vercel's cron does not run on a dev machine,
+            so the rows sit unattempted until somebody calls `/api/cron/outbound-dispatch` with
+            `CRON_SECRET`. Anyone testing this presses, sees nothing happen, and that is not a bug:
+            the press and the sending are two acts here.
+          */}
           <button
             type="button"
-            disabled
-            title="The press is GTC-189 (I2) and is not built. This button is wired to nothing."
-            className="w-full py-3 rounded-lg bg-gray-200 text-gray-500 font-medium cursor-not-allowed"
+            disabled={!allChecked || pressing || pressed !== null}
+            onClick={press}
+            className={`w-full py-3 rounded-lg font-medium ${
+              !allChecked || pressing || pressed !== null
+                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                : 'bg-gray-900 text-white hover:bg-gray-800'
+            }`}
           >
-            Send {allChecked ? '' : '— finish the five checks first'}
+            {pressed !== null
+              ? 'Sent'
+              : pressing
+                ? 'Sending…'
+                : `Send${allChecked ? '' : ' — finish the five checks first'}`}
           </button>
-          <p className="text-xs text-gray-400 mt-3">
-            Placeholder. The press is GTC-189 (I2): it commits the release, anchors the send
-            timestamp and dispatches. Nothing on this screen dispatches anything.
-          </p>
+
+          {/*
+            THE TWO-SENTENCE THRESHOLD SCRIPT, at the moment of commitment (Hinge §2). Verbatim, from
+            `press-words.ts`, and deliberately WITHOUT a roadmap door beside it — the spec refuses an
+            options screen showing the machine's plan, and the compressed script is what carries the
+            feeling instead of the inventory.
+          */}
+          {pressed !== null && (
+            <div className="mt-4 rounded-lg bg-gray-50 border border-gray-200 p-4">
+              <p className="text-sm text-gray-900">
+                Sent to {pressed.recipients} {pressed.recipients === 1 ? 'person' : 'people'}.
+              </p>
+              {THRESHOLD_SCRIPT.map((line) => (
+                <p key={line} className="text-sm text-gray-700 mt-2">
+                  {line}
+                </p>
+              ))}
+            </div>
+          )}
+
+          {/*
+            THE REFUSAL, IN THE PRESS'S OWN WORDS FOR THAT STATE. The route sends a `code` beside its
+            prose precisely so this screen can pick the sentence a host should read rather than
+            rendering an internal message — and `PRESS_REFUSAL_WORDS` is a `Record` over the union, so
+            an eighth code cannot arrive here without one.
+          */}
+          {pressError && (
+            <p className="text-sm text-red-700 mt-3" role="alert">
+              {pressError}
+            </p>
+          )}
         </Step>
       </div>
     </div>

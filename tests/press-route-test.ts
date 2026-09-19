@@ -869,24 +869,31 @@ async function main() {
      * press's own invariant: how many surfaces can reach it.
      */
     const POSTS_TO_PRESS = /confirm-invites-sent|\/send['"`]/;
-    assert(
-      '⚠ NOTHING IN THE UI POSTS TO THE PRESS. Slice 5f wires exactly one caller — the ' +
-        "pre-flight's Send button — and until then the count is zero. THREE PRESSING SURFACES IS " +
-        'WHAT THE PRE-FLIGHT WAS BUILT TO PREVENT, and two of them existed until 5c',
-      ok(() => {
-        const hits: string[] = [];
-        const walk = (dir: string) => {
-          for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-            const q = `${dir}/${e.name}`;
-            if (e.isDirectory()) walk(q);
-            else if (/\.tsx$/.test(e.name) && POSTS_TO_PRESS.test(stripComments(read(q)))) {
-              hits.push(q);
-            }
+    const pressCallers = (() => {
+      const hits: string[] = [];
+      const walk = (dir: string) => {
+        for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+          const q = `${dir}/${e.name}`;
+          if (e.isDirectory()) walk(q);
+          else if (/\.tsx$/.test(e.name) && POSTS_TO_PRESS.test(stripComments(read(q)))) {
+            hits.push(q);
           }
-        };
-        walk('src');
-        return hits.length === 0;
-      })
+        }
+      };
+      walk('src');
+      return hits;
+    })();
+    /*
+     * ✅ THE COUNT WENT FROM ZERO TO ONE AT SLICE 5f, WHICH IS WHAT THIS ASSERTION'S OWN LABEL SAID
+     * WOULD HAPPEN — *"Slice 5f wires exactly one caller — the pre-flight's Send button — and until
+     * then the count is zero."* Inverted rather than deleted, and the invariant it holds is the one
+     * that matters: **how many surfaces can reach the press.** One.
+     */
+    assert(
+      '✅ EXACTLY ONE SURFACE POSTS TO THE PRESS, AND IT IS THE PRE-FLIGHT. THREE PRESSING SURFACES ' +
+        'IS WHAT THE PRE-FLIGHT WAS BUILT TO PREVENT, and two of them existed until 5c took them ' +
+        'down (option D). Slice 5f wires the one that was always meant to be it',
+      pressCallers.length === 1 && pressCallers[0] === 'src/app/plan/[eventId]/pre-flight/page.tsx'
     );
     assert(
       'CONTROL: the matcher really matches a post to the press — asserted against planted ' +
@@ -894,10 +901,166 @@ async function main() {
       POSTS_TO_PRESS.test('fetch(`/api/events/x/send`)') &&
         POSTS_TO_PRESS.test("fetch('/api/events/x/confirm-invites-sent')")
     );
+    /*
+     * ── GTC-189 SLICE 5f — THE BUTTON, THE SCRIPT, AND THE CONSEQUENCE AT THE BUTTON ───────
+     *
+     * ✅ THE 5f MARKER INVERTED. Through 5a-5e this read *"the pre-flight Send button is still wired
+     * to nothing — slice 5f wires it, not this one"*, and its label named the commit that would turn
+     * it round. This is that commit.
+     */
+    const preflightSrc = read('src/app/plan/[eventId]/pre-flight/page.tsx');
+    const wordsSrc = read('src/lib/press/press-words.ts');
     assert(
-      'and the pre-flight Send button is still wired to nothing — slice 5f wires it, not ' +
-        'this one',
-      read('src/app/plan/[eventId]/pre-flight/page.tsx').includes('wired to nothing')
+      "✅ THE BUTTON IS WIRED: the placeholder's own words are gone and the page posts to the press",
+      preflightSrc.length > 0 &&
+        !preflightSrc.includes('wired to nothing') &&
+        /\/api\/events\/\$\{eventId\}\/send/.test(preflightSrc)
+    );
+    assert(
+      "⚠ AND THE TWO-SENTENCE THRESHOLD SCRIPT APPEARS VERBATIM — Hinge §2's own words, which the " +
+        "ticket's acceptance list asks for at commitment rather than paraphrased",
+      ok(() => {
+        const W = require('../src/lib/press/press-words');
+        return (
+          W.THRESHOLD_SCRIPT[0] === "You can still change anything — I'll just keep the history." &&
+          W.THRESHOLD_SCRIPT[1] ===
+            "You'll start to see replies coming in. I'll track them and flag anything that needs you." &&
+          W.THRESHOLD_SCRIPT.length === 2
+        );
+      })
+    );
+    /*
+     * ⚠ AND THESE TWO EXIST BECAUSE MUTATION R5 SURVIVED, WHICH IS THE SECOND TIME IN THIS SLICE.
+     * Stopping the script from rendering at all left the suites GREEN, because everything above
+     * asserts the WORDS EXIST in the module. The ticket's acceptance item is that the script *"appears
+     * verbatim at COMMITMENT"* — the render is the requirement and the constant is only where it lives.
+     */
+    assert(
+      '✅ THE SCRIPT IS RENDERED, not merely imported — the page maps THRESHOLD_SCRIPT into the markup',
+      /THRESHOLD_SCRIPT\.map\(/.test(preflightSrc)
+    );
+    assert(
+      '⚠ AND IT APPEARS AT COMMITMENT AND NOT BEFORE IT — gated on the press having SUCCEEDED, because ' +
+        'a handover sentence shown beside an unpressed button is a promise about something that has ' +
+        'not happened. ⚠ A SOURCE ASSERTION, AND THAT IS THE LIMIT: it proves the gate is written, not ' +
+        'that React rendered it. This page is a client page with its own fetches and no suite renders ' +
+        'it',
+      ok(() => {
+        const block = preflightSrc.slice(
+          preflightSrc.indexOf('THRESHOLD SCRIPT, at the moment of commitment')
+        );
+        const gate = block.slice(0, block.indexOf('THRESHOLD_SCRIPT.map('));
+        return gate.includes('pressed !== null &&') && !gate.includes('pressed === null');
+      })
+    );
+    assert(
+      "⚠ AND NO ROADMAP DOOR WITH IT — the spec refuses an options door showing the machine's plan, " +
+        'so the script carries the feeling without the inventory: no cadence, no escalation, no ' +
+        'tone-over-time in either sentence',
+      ok(() => {
+        const W = require('../src/lib/press/press-words');
+        const both = W.THRESHOLD_SCRIPT.join(' ');
+        return !/nudge|cadence|day|escalat|tone|remind/i.test(both);
+      })
+    );
+    assert(
+      '⚠ EVERY REFUSAL HAS HOST-FACING WORDS, AS A RECORD OVER THE UNION — so an eighth refusal code ' +
+        'does not compile until somebody writes the sentence a host reads. The alternative is a ' +
+        'default, and a default here shows her "something went wrong" for a state the press named ' +
+        'precisely',
+      ok(() => {
+        const W = require('../src/lib/press/press-words');
+        const codes = [
+          'EVENT_NOT_FOUND',
+          'ALREADY_SENT',
+          'NOT_CONFIRMING',
+          'HOST_HAS_NO_ACCOUNT',
+          'NO_RECIPIENTS',
+          'RECIPIENTS_UNAVAILABLE',
+          'LINKS_NOT_ISSUED',
+        ];
+        return (
+          Object.keys(W.PRESS_REFUSAL_WORDS).length === 7 &&
+          codes.every(
+            (c) =>
+              typeof W.PRESS_REFUSAL_WORDS[c] === 'string' && W.PRESS_REFUSAL_WORDS[c].length > 10
+          )
+        );
+      })
+    );
+    assert(
+      '⚠ AND NONE OF THOSE SENTENCES BLAMES THE HOST OR NAMES A CODE — she reads what happened and ' +
+        'what to do, never an identifier the press uses internally',
+      ok(() => {
+        const W = require('../src/lib/press/press-words');
+        return Object.values(W.PRESS_REFUSAL_WORDS as Record<string, string>).every(
+          (line) => !/[A-Z]{2,}_[A-Z]/.test(line) && !/you failed|your fault|error code/i.test(line)
+        );
+      })
+    );
+    /*
+     * ⚠ THESE TWO EXIST BECAUSE MUTATION R2 SURVIVED. Replacing
+     * `PRESS_REFUSAL_WORDS[code]` with the route's own `body.error` left all three pre-flight suites
+     * GREEN — 69, 101 and 37 — and was caught only by `tsc` complaining that an IMPORT had become
+     * unused, which is an accident rather than a guard. Remove the words and the import together and
+     * nothing would have failed.
+     *
+     * A surviving mutation is not evidence a guard held; here it was evidence there was none, for the
+     * one line 5f exists to place. [[GTC-192]]'s standing warning, fifth face.
+     */
+    assert(
+      "✅ THE SCREEN PICKS THE PRESS'S OWN WORDS FOR THAT STATE, keyed on the `code` the route sends " +
+        'beside its prose — which is the reason the route sends a code at all',
+      /PRESS_REFUSAL_WORDS\[code as keyof typeof PRESS_REFUSAL_WORDS\]/.test(preflightSrc)
+    );
+    assert(
+      "⚠ AND IT NEVER RENDERS THE ROUTE'S OWN SENTENCE. `outcome.message` is written for a log — " +
+        '"Can only send when the event is in CONFIRMING status" is a true sentence and not one to ' +
+        'show a host. The screen reads the CODE and says its own thing',
+      ok(() => {
+        const handler = preflightSrc.slice(
+          preflightSrc.indexOf('const press = useCallback'),
+          preflightSrc.indexOf('}, [eventId, pressing, pressed]);')
+        );
+        return handler.length > 0 && !/setPressError\([^)]*body\??\.?\??error/.test(handler);
+      })
+    );
+    assert(
+      'CONTROL: that matcher really matches planted source — an absence found by a broken pattern is ' +
+        'not an absence',
+      /setPressError\([^)]*body\??\.?\??error/.test('setPressError(body.error ?? null)') &&
+        /setPressError\([^)]*body\??\.?\??error/.test('setPressError(String(body?.error))')
+    );
+    assert(
+      '⚠ THE WORDS MODULE IS CLIENT-SAFE: no prisma handle and no server import, because the page ' +
+        'that reads them is a client component and pulling the press module into the bundle would ' +
+        'take the database with it. The type is imported as a TYPE, which is erased',
+      wordsSrc.length > 0 &&
+        !/PrismaClient|from '@\/lib\/prisma'/.test(wordsSrc) &&
+        /import type \{[^}]*PressRefusalCode/.test(wordsSrc)
+    );
+    assert(
+      '⚠ THE CONSEQUENCE IS RECORDED AT THE BUTTON, not only in the ticket — founder instruction, ' +
+        '2026-09-19: whoever meets this button next meets what pressing does in this environment, in ' +
+        'the same place. The comment names the broken key and the reds it produces',
+      ok(() => {
+        const step = preflightSrc.slice(preflightSrc.indexOf('5. The end'));
+        return (
+          step.length > 0 &&
+          /GTC-247/.test(step) &&
+          /(NOT_DELIVERED|red)/.test(step) &&
+          /no product path back|no way back|permanent/i.test(step)
+        );
+      })
+    );
+    assert(
+      "⚠ AND SO IS THE FACT THAT PRESSING SENDS NOTHING LOCALLY — Vercel's cron does not run here, " +
+        'so the rows sit until somebody calls the dispatcher with the secret. Anyone testing this ' +
+        'presses and sees nothing happen, and that is not a bug',
+      ok(() => {
+        const step = preflightSrc.slice(preflightSrc.indexOf('5. The end'));
+        return /cron/i.test(step) && /outbound-dispatch/.test(step);
+      })
     );
 
     // ── Layer N: nothing sends ──────────────────────────────────────────

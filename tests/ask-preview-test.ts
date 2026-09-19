@@ -1361,15 +1361,36 @@ async function main() {
         moduleCode.length > 0 &&
           !/\.(create|createMany|update|updateMany|upsert|delete|deleteMany)\(/.test(moduleCode)
       );
+      /*
+       * ✅ TWO 5f MARKERS INVERTED HERE, 2026-09-19. They read *"the Send button is still disabled
+       * outright"* and *"the page calls no send route"* — true of every slice from 5a to 5e and false
+       * the moment 5f wired the button, which is what they were watching for.
+       *
+       * ⚠ WHAT THIS LAYER IS FOR SURVIVES THE INVERSION, and that is why they are rewritten rather
+       * than deleted: **the PREVIEW is not the press.** The module and the route below still write
+       * nothing, and the page's one write is the press itself, called once, from the one surface
+       * allowed to reach it.
+       */
       assert(
         'N',
-        'the Send button is still disabled outright',
-        /<button[^>]*\sdisabled\s[^>]*>\s*Send\b/.test(pageCode)
+        '✅ THE SEND BUTTON IS LIVE BUT NEVER LIVE UNCONDITIONALLY — it is disabled until the five ' +
+          'checks pass, while in flight, and once spent. A `disabled` with no condition was slice 5a ' +
+          "to 5e's placeholder; a `disabled` with no GUARD would be a double press",
+        /disabled=\{!allChecked \|\| pressing \|\| pressed !== null\}/.test(pageCode)
       );
       assert(
         'N',
-        'the page calls no send route',
-        pageCode.length > 0 && !/confirm-invites-sent|\/send\b/.test(pageCode)
+        '⚠ AND THE IN-FLIGHT LATCH IS CHECKED IN THE HANDLER TOO, not only in the attribute — a ' +
+          '`disabled` is a rendering, and a second click can land before React re-renders. The press ' +
+          'is ruled ONE ACT, NO RECALL',
+        /if \(pressing \|\| pressed !== null\) return;/.test(pageCode)
+      );
+      assert(
+        'N',
+        'the page calls the press and NOTHING ELSE that sends — one route, once',
+        pageCode.length > 0 &&
+          (pageCode.match(/\/api\/events\/\$\{eventId\}\/send/g) ?? []).length === 1 &&
+          !/confirm-invites-sent/.test(pageCode)
       );
       assert(
         'N',

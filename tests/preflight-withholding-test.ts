@@ -443,9 +443,18 @@ async function main() {
       page.includes('notMessagedRows') && page.includes('NOT_MESSAGED_WHY')
     );
     assert(
-      'CONTROL: the page really was read and stripped — it still contains the Send button ' +
-        'placeholder, so an empty read would have failed the absences above for the wrong reason',
-      page.includes('wired to nothing')
+      /*
+       * ⚠ THIS CONTROL'S ANCHOR WAS THE PLACEHOLDER'S OWN WORDS AND SLICE 5f DELETED THEM. It keyed
+       * on `'wired to nothing'`, which was true only while the Send button was dead — so a control
+       * asserting the page was really READ was hanging on a string with a known expiry date.
+       *
+       * Re-anchored on something the page cannot lose while it is still the pre-flight: its own
+       * heading. **A control's anchor should outlive the slice it was written in**, or it fails for
+       * the wrong reason on the day the subject changes — which is what it did.
+       */
+      "CONTROL: the page really was read and stripped — it still contains the pre-flight's own " +
+        'heading, so an empty read would have failed the absences above for the wrong reason',
+      page.includes('Before you send')
     );
 
     // ── Layer R: the press refuses rather than dropping ──────────────────
