@@ -96,7 +96,8 @@
     "test:outbound-dispatch": "tsx tests/outbound-dispatch-test.ts",
     "test:outbound-drain": "tsx tests/outbound-drain-test.ts",
     "test:mini-send": "tsx tests/mini-send-test.ts",
-    "test:child-tokens": "tsx tests/child-token-exposure-test.ts"
+    "test:child-tokens": "tsx tests/child-token-exposure-test.ts",
+    "test:resend-delivery": "tsx tests/resend-delivery-contract-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
