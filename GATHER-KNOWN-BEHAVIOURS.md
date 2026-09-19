@@ -288,3 +288,38 @@ regression from a stale runtime, and it takes one minute.
 
 **After any migration, restart the dev server before trusting any HTTP-driven suite.** Migrations
 first, `prisma generate` second (KB-005 and the local-setup notes), and a restart third.
+
+---
+
+### KB-009 — `git checkout <file>` restores from the last COMMIT, so using it to undo a mutation discards the work instead
+
+**Symptom.** A mutation is planted in a source file, run, and then restored with
+`git checkout src/…/file.ts`. The suite goes green, the file looks restored, and the change the
+commit was supposed to carry is **gone** — reverted along with the mutation.
+
+**Cause.** Git's idea of pristine is **HEAD**, and during a slice the work is not committed yet. So
+`git checkout <file>` is not "undo my mutation" but "undo everything since the last commit", and on an
+uncommitted file those are the same operation.
+
+**Seen at [[GTC-189]] slice 7a, 2026-09-19.** Six mutations, five of them restored from `cp` copies
+taken before the table started and verified byte-identical with `diff`. The sixth was restored with
+`git checkout` out of habit, which discarded slice 7a's own change to `src/lib/glance/actions.ts`.
+Caught within seconds by a `grep` for the symbol that should have been there, redone, and verified.
+**Four files restored from scratchpad copies were fine and the one restored from git was the one that
+broke.**
+
+**The rule.** A mutation is restored from **the copy it was taken from**:
+
+```
+cp src/path/file.ts $SCRATCH/pristine-file.ts    # before the table
+…plant, grep to verify landed, run, read…
+cp $SCRATCH/pristine-file.ts src/path/file.ts    # restore
+diff $SCRATCH/pristine-file.ts src/path/file.ts  # and PROVE it
+```
+
+The `diff` is what makes the restore evidence rather than an intention, and it is also what would have
+caught this: a `git checkout` restore passes its own `diff` against HEAD and fails one against the
+pristine copy.
+
+**And it is the same family as KB-008 above** — the tool answered a different question from the one
+being asked, and the answer looked right.
