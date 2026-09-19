@@ -33,6 +33,21 @@
  * by hand, and [[GTC-269]] records it as the account that then accumulated HOST on two events.
  * A rebuild from this file would have produced a board the press refuses. It now creates the
  * account and the `EventRole` deliberately.
+ *
+ * ⚠ AND THIS WAS AN INVERSION, RECORDED AS ONE ON THE FOUNDER'S INSTRUCTION, 2026-09-19:
+ *
+ * > I asked for an event whose host has no account on the strength of a measurement of
+ * > accumulated state, and the truth was that the seed made nothing else: a rebuilt Henderson
+ * > board refuses its own press. Doing both was right.
+ *
+ * The executor had reported that `gather_dev` held two events with no host account and that no
+ * seed produced that shape — true of the two hand-made events, and **exactly backwards about the
+ * seed.** The instruction that followed was to add the shape that already existed. Both were
+ * built: the account, without which this file cannot exercise the press at all, and the
+ * deliberate unclaimed event below, so ruling AC's refusal keeps a population after a rebuild.
+ *
+ * **The rule: a measurement of what IS in a database says nothing about what a REBUILD would
+ * produce, and an instruction reasoned from the first can be backwards about the second.**
  */
 import { PrismaClient } from '@prisma/client';
 import { makeNzdtChristmasDate } from '../src/lib/timezone';
