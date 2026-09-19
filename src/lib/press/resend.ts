@@ -53,11 +53,20 @@ import {
  * `remindRefusal`'s. Checked against ruling T before building and the copy was wrong: *"The ask
  * still goes out. The mark is not an exclusion — he is invited like anyone else."* `chooseAskRoute`
  * consults no mark and the press sends to marked people. A remind is a CHASE and the mark
- * suppresses chasing; this is the ASK, re-sent, and the mark never touched it. Adding a refusal
- * would have been this slice quietly narrowing ruling T.
+ * suppresses chasing; this is the ASK, re-sent, and the mark never touched it.
  *
- * ⚠ The door is still unreachable for them, because Ruling 14 greys them and only reds are doors.
- * That is a fact about which strips are tappable, and it is NOT what makes the absence correct.
+ * ✅ RULED CORRECT BY THE FOUNDER, 2026-09-19, as an error of theirs corrected at the build:
+ * *"I signed a refusal that would have narrowed ruling T, and you caught it by reading the ruling
+ * rather than the proposal."*
+ *
+ * ⚠ AND THE ABSENCE IS SAFE FOR A DIFFERENT REASON THAN THE PROPOSAL GAVE. It said the refusal
+ * should exist anyway *"because the rule is about the system and not about which strips happen to
+ * be tappable"* — which is `remindRefusal`'s ground, carried across without checking that it
+ * applied. The door IS unreachable for a marked person, because Ruling 14 greys them and only reds
+ * are doors; but that is a fact about WHICH STRIPS ARE TAPPABLE, and it is NOT what makes the
+ * absence correct. What makes it correct is that there is no rule here to enforce: ruling T never
+ * suppressed the ask. A refusal resting on the greying would be a right answer resting on the
+ * wrong reason, and a wrong answer the day a marked person's strip becomes tappable.
  */
 
 /** Injectable for the suite alone; the default is the real predicate. See `DoorFacts`. */
