@@ -107,6 +107,42 @@ function restoreFetch() {
   globalThis.fetch = realFetch;
 }
 
+/*
+ * GTC-289 phase 2 — THE SAME STUB, WITH THE ENVELOPE AS AN ARGUMENT.
+ *
+ * `stubFetchFailing()` above hands back ONE body and four assertions read its `message`. The
+ * widening reads its `name` and `statusCode` too, so those two fields stop being decoration and
+ * become load-bearing — and one body cannot cover a rate limit, a refused request and a code the
+ * installed SDK has never heard of.
+ *
+ * ✅ AND RESEND_401_BODY IS NOW OBSERVED RATHER THAN TRANSCRIBED — MEASURED 2026-09-19, and the
+ * executor expected the opposite. Phase 2 first wrote here that its `name: 'validation_error'` with
+ * `statusCode: 401` was "very likely not what Resend answers to a bad key, since `invalid_api_key`
+ * exists for that". A live probe with a deliberately invalid SENTINEL key — no credential, nothing
+ * delivered, refused at submission — answered:
+ *
+ *     { statusCode: 401, name: 'validation_error', message: 'API key is invalid' }
+ *
+ * **Byte-identical to this stub.** So GTC-265's fixture was right, the correction was wrong, and the
+ * two facts worth keeping are these: the declared `ErrorResponse` shape MATCHES the live body, and
+ * ⚠ **Resend answers an invalid key with `validation_error`** — not with any of the four codes whose
+ * names are about keys. A code name is a usable guide to whether to retry and a poor guide to why.
+ * [[GTC-323]], [[GTC-289]] phase 2.
+ */
+function stubFetchFailingWith(
+  body: { statusCode: number; name: string; message: string },
+  httpStatus?: number
+) {
+  fetchCalls = 0;
+  globalThis.fetch = (async () => {
+    fetchCalls++;
+    return new Response(JSON.stringify(body), {
+      status: httpStatus ?? body.statusCode,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }) as typeof fetch;
+}
+
 // Resend's own `logError` writes to console.error on every failure, and the
 // senders are required to record server-side. Both land here; the suite reads
 // the buffer to prove the record exists rather than trusting that it does.
@@ -178,7 +214,7 @@ async function main() {
   process.env.EMAIL_FROM = process.env.EMAIL_FROM ?? 'Gather Test <test@gather.invalid>';
 
   const email = await import('../src/lib/email');
-  const { sendNudgeEmail, sendMagicLinkEmail, sendWelcomeEmail } = email;
+  const { sendNudgeEmail, sendMagicLinkEmail, sendWelcomeEmail, sendAskEmail } = email;
 
   // ══ LAYER 1 — the rule is written where the next person will meet it ════════
   const fs = await import('fs');
@@ -467,6 +503,116 @@ async function main() {
     'providerMessageId',
     '✅ THE CONSUMER EXISTS: the press dispatcher reads providerMessageId and writes it onto the outbound row at acceptance (slice 5c)',
     /providerMessageId/.test(dispatchSrc) && /recordAcceptance/.test(dispatchSrc)
+  );
+
+  /*
+   * ══ GTC-289 PHASE 2 — THE WIDENING: THE CODE AND THE STATUS COME BACK TOO ════
+   *
+   * ⚠ WHY IT IS HERE AND NOT ONLY IN ITS OWN SUITE. `resultOf` is module-private, so the only
+   * honest way to read what it returns is through a real sender and the real SDK. These assertions
+   * therefore prove the SDK's own parse as well as ours: if Resend renamed `error.name`, they fail.
+   * `tests/resend-error-contract-test.ts` owns the vocabulary; this owns the plumbing.
+   *
+   * ⚠ AND THE DEFECT THIS CLOSES IS NAMED IN SLICE 5c's OWN EVIDENCE: `isRetryableProviderError`
+   * matched a MESSAGE STRING because `SendResult` collapsed Resend's error to `error?: string`, and
+   * the SDK declares `ErrorResponse { message; statusCode; name }` with a closed 21-value code union.
+   * The predicate was reading prose where a code existed.
+   */
+  const BUSY_BODY = { statusCode: 429, name: 'rate_limit_exceeded', message: 'Too many requests' };
+
+  stubFetchFailingWith(BUSY_BODY);
+  captureConsoleError();
+  const busy = await sendNudgeEmail({
+    to: `${TAG}-busy@example.com`,
+    subject: 'x',
+    body: 'y',
+    eventId: 'x',
+    personId: 'y',
+  });
+  restoreConsoleError();
+  assert(
+    'providerErrorCode',
+    "a rejected send carries Resend's own error CODE back, verbatim — the field the retry decision was missing",
+    busy.success === false && busy.providerErrorCode === 'rate_limit_exceeded'
+  );
+  assert(
+    'providerErrorCode',
+    'and its status code, as a number rather than as text inside the message',
+    busy.providerStatusCode === 429
+  );
+  assert(
+    'providerErrorCode',
+    "and the message is STILL returned unchanged — the widening is additive, and `providerError` is documented as the provider's words",
+    busy.error === 'Too many requests'
+  );
+
+  // ⚠ A SECOND BODY, BECAUSE ONE CODE PROVES ONLY THAT A CONSTANT SURVIVES A ROUND TRIP.
+  stubFetchFailingWith({
+    statusCode: 422,
+    name: 'invalid_from_address',
+    message: 'The from address is not verified',
+  });
+  captureConsoleError();
+  const badFrom = await sendAskEmail({
+    to: `${TAG}-from@example.com`,
+    subject: 'x',
+    body: 'y',
+    replyTo: 'host@example.com',
+    fromName: 'A Host',
+  });
+  restoreConsoleError();
+  assert(
+    'providerErrorCode',
+    '⚠ A DIFFERENT CODE COMES BACK DIFFERENT, through the ASK sender — and `invalid_from_address` is the one this tree is most likely to meet, because slice 5c rewrites the display name on a SANDBOX sender ([[GTC-247]], ruling F)',
+    badFrom.success === false &&
+      badFrom.providerErrorCode === 'invalid_from_address' &&
+      badFrom.providerStatusCode === 422
+  );
+
+  /*
+   * ⚠ WHICH statusCode WINS — THE HTTP LINE OR THE BODY? Nothing in this repo has ever read it, and
+   * the answer decides whether `providerStatusCode` can be trusted at all. So it is MEASURED here
+   * with the two deliberately disagreeing, rather than assumed in either direction. The body says
+   * 429 and the transport says 500. Whatever this assertion says, it says it about the SDK's own
+   * parse — see the printed value below it on a failure.
+   */
+  stubFetchFailingWith({ statusCode: 429, name: 'rate_limit_exceeded', message: 'busy' }, 500);
+  captureConsoleError();
+  const mismatch = await sendNudgeEmail({
+    to: `${TAG}-mismatch@example.com`,
+    subject: 'x',
+    body: 'y',
+    eventId: 'x',
+    personId: 'y',
+  });
+  restoreConsoleError();
+  assert(
+    'providerErrorCode',
+    `⚠ MEASURED, NOT ASSUMED: with a body saying 429 and an HTTP line saying 500, the SDK's error.statusCode is the BODY's (got ${String(mismatch.providerStatusCode)})`,
+    mismatch.providerStatusCode === 429
+  );
+
+  stubFetchSucceeding();
+  const okSend = await sendNudgeEmail({
+    to: `${TAG}-ok-code@example.com`,
+    subject: 'x',
+    body: 'y',
+    eventId: 'x',
+    personId: 'y',
+  });
+  assert(
+    'providerErrorCode',
+    'and an ACCEPTED send carries NEITHER — the same rule as providerMessageId in reverse: a field that is only ever true of one outcome is absent on the other, never zero and never empty string',
+    okSend.success === true &&
+      okSend.providerErrorCode === undefined &&
+      okSend.providerStatusCode === undefined
+  );
+
+  assert(
+    'providerErrorCode',
+    '✅ AND THE CONSUMER EXISTS IN THE SAME COMMIT, which is what slice 4b could not say about providerMessageId: the dispatcher passes the code into its retry decision',
+    /code: sent\.providerErrorCode/.test(dispatchSrc) &&
+      /status: sent\.providerStatusCode/.test(dispatchSrc)
   );
 
   // ⚠ THE CONSTRUCTOR PATH, ASSERTED SO NOBODY LEANS ON IT.

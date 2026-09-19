@@ -72,6 +72,16 @@ import type { GetEmailResponseSuccess } from 'resend';
  * **That reason does not exist here.** A poll response has one shape and one consumer. Splitting it
  * would be mirroring a file count instead of applying a rule, so it is one module — and if a webhook
  * is ever added, IT is the second consumer and THAT is when the split earns itself.
+ *
+ * ✅ AND THE SAME TEST PRODUCED A SPLIT ONE PHASE LATER, WHICH IS WHAT MAKES IT A RULE RATHER THAN A
+ * PREFERENCE. `resend-error-contract.ts` beside this file is phase 2's: `ErrorResponse.name` off a
+ * SEND, about a message the provider REFUSED, where this reads `last_event` off a POLL, about a
+ * message the provider ACCEPTED. **Mutually exclusive by construction** — a message has an id to poll
+ * or it has an error code, never both — two declarations, two responses, two consumer sets. A reason
+ * existed there and was written down; none existed here and none was invented.
+ *
+ * ⚠ **Following a file count rather than a rule is how a precedent becomes a habit.** Founder
+ * ruling, 2026-09-19. [[GTC-192]]'s standing warning carries it as a general rule.
  */
 
 /**
@@ -199,8 +209,15 @@ export type ResendPollRead =
  *
  * Why it matters more than a field name: slice 4b already recorded the cost of an id that does not
  * match — *"a value that is not the provider's would match nothing and read as a LOST BOUNCE rather
- * than as a send that never happened."* Join on the wrong field and every bounce silently fails to
- * match, in the direction that looks like nothing happened.
+ * than as a send that never happened."*
+ *
+ * ⚠ **SO THIS IS THE SINGLE THING MOST LIKELY TO FAIL SILENTLY ON THE DAY A WORKING KEY EXISTS**, and
+ * it fails in the direction that looks like nothing happened. Founder ruling, 2026-09-19. Every other
+ * unknown here announces itself: an unrecognised `last_event` is flagged, a malformed response is
+ * refused with a reason, a missing field is a red. **A join on the wrong field returns zero rows and
+ * zero rows is what a quiet week looks like.** Nothing distinguishes *no bounces arrived* from *every
+ * bounce failed to match*, so the first live poll must verify the join explicitly — one accepted send,
+ * one poll, the two ids compared — before any board reads a bounce off it.
  */
 export function readResendPollResponse(response: unknown): ResendPollRead {
   if (typeof response !== 'object' || response === null) {

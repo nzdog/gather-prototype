@@ -66,6 +66,31 @@ export interface SendResult {
    * `tests/email-send-result-test.ts` layer 2b asserts that.
    */
   providerMessageId?: string;
+  /*
+   * Resend's own error CODE and HTTP status — GTC-289 phase 2 ([[GTC-189]] slice 6).
+   *
+   * ⚠ WHY THEY WERE ADDED: slice 5c's `isRetryableProviderError` matched this interface's `error`
+   * STRING, because that was all there was. The SDK declares `ErrorResponse { message; statusCode;
+   * name }` where `name` is a closed 21-value union, so the dispatcher was reading prose where a code
+   * existed. Founder ruling, 2026-09-19 — it goes before the migration, because a shipped predicate
+   * known to be reading the wrong field should not wait behind a rehearsal.
+   *
+   * PRESENT ONLY ON A PROVIDER REFUSAL, and absent on both other outcomes:
+   *
+   *   - absent on success, because an accepted send has no error at all;
+   *   - ⚠ absent on the THROWN path, and that absence is load-bearing. `getResendClient()` throws
+   *     when the key is missing, and a thrown `Error` has a `.name` too — `TypeError`, `AbortError`.
+   *     Putting that in this field would say the provider answered when the provider was never
+   *     called. So no `catch` block in this file sets either field, and on an EMAIL row a failure
+   *     with NO code means the request never left the process.
+   *
+   * ⚠ TYPED `string`, NOT AS THE SDK'S 21-VALUE UNION, DELIBERATELY. Typing the return as the union
+   * would assert that the live API only ever answers with a declared code, which is exactly the
+   * unobserved-shape limit [[GTC-323]] exists for. Verbatim in; classified by
+   * `src/lib/email-delivery/resend-error-contract.ts`, which is where an unrecognised code is handled.
+   */
+  providerErrorCode?: string;
+  providerStatusCode?: number;
 }
 
 /** Resend returns its failure; it does not throw it. This is the read. */
@@ -86,7 +111,23 @@ function resultOf(
     statusCode: err.statusCode,
     message,
   });
-  return { success: false, error: message };
+  /*
+   * GTC-289 phase 2 — the two fields the log has printed since GTC-265 now also come BACK.
+   *
+   * ⚠ OBSERVED, 2026-09-19, with a deliberately invalid sentinel key and nothing delivered:
+   * `{ statusCode: 401, name: 'validation_error', message: 'API key is invalid' }`. Three fields,
+   * those names, `statusCode` a number — so this read is against a shape that has been seen, which
+   * is more than slice 4b could say about the success envelope.
+   *
+   * Each field is set only when the provider actually gave it. An `err.statusCode` of `null` is
+   * declared in the SDK and means the provider gave none, so it is left ABSENT rather than coerced
+   * to 0 — the dispatcher reads an absent status as "fall through to the message" and a 0 would
+   * read as "not retryable".
+   */
+  const failure: SendResult = { success: false, error: message };
+  if (typeof err.name === 'string' && err.name.length > 0) failure.providerErrorCode = err.name;
+  if (typeof err.statusCode === 'number') failure.providerStatusCode = err.statusCode;
+  return failure;
 }
 
 // Initialize Resend client lazily to ensure env vars are loaded

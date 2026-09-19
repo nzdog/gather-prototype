@@ -4,6 +4,7 @@ import { sendSms, type SmsBlockReason } from '@/lib/sms/send-sms';
 import { isQuietHours } from '@/lib/sms/quiet-hours';
 import { pressWillMessage, readAskPreview } from '@/lib/preflight/ask-preview';
 import { composePreview } from '@/lib/preflight/ask-preview-compose';
+import { interpretResendErrorCode } from '@/lib/email-delivery/resend-error-contract';
 
 /**
  * GTC-189 slice 5c, FIRST HALF — the drain's two passes and its two claims.
@@ -343,25 +344,70 @@ export function nextBackoffAt(attemptCount: number, now: Date = new Date()): Dat
   return new Date(now.getTime() + minutes * 60_000);
 }
 
+/** What the dispatcher knows about one failed attempt — GTC-289 phase 2. */
+export interface ProviderFailure {
+  /** The provider's words, as the sender returned them. Always present. */
+  error: string;
+  /**
+   * Resend's `ErrorResponse.name`, verbatim — or absent.
+   *
+   * ⚠ ABSENT MEANS THE PROVIDER WAS NEVER REACHED, on the email path: the sender's `catch` sets no
+   * code, because a thrown `Error` has a `.name` too and `TypeError` is not a provider answer. On the
+   * text path it is always absent — TNZ has its own 21-value vocabulary and it arrives on a DELIVERY
+   * RECEIPT rather than on a submission ([[GTC-264]]).
+   */
+  code?: string | null;
+  /** Resend's `ErrorResponse.statusCode`. Declared `number | null` by the SDK. */
+  status?: number | null;
+}
+
 /**
  * Is this provider error worth trying again?
  *
- * ⚠ 401 AND 403 ARE TERMINAL AT ONCE, WHATEVER THE ATTEMPT COUNT. Ruled 2026-09-19: in this
- * environment every provider answer is an auth failure ([[GTC-247]]), so a retry-any-error policy
- * queues every row three times against a key that will never work, and the noise is
- * indistinguishable from a transient outage.
+ * ✅ IT READS THE CODE NOW, AND THAT CLOSES A DEFECT THIS FUNCTION SHIPPED WITH — GTC-289 phase 2,
+ * founder ruling 2026-09-19. Slice 5c's version matched a MESSAGE STRING because `SendResult` carried
+ * nothing else; the SDK declares `ErrorResponse { message; statusCode; name }` with a closed 21-value
+ * code union, so it was reading prose where a code existed. The widening was ruled to go BEFORE
+ * GTC-289's migration, because *"a shipped predicate known to be reading the wrong field should not
+ * wait behind a migration and a rehearsal."*
  *
- * Retry a 429 or a 5xx. Nothing else. A 4xx that is not 429 is the provider saying the request is
- * wrong, and repeating it cannot make it right.
+ * ── THREE READINGS, MOST SPECIFIC FIRST ───────────────────────────────────────
  *
- * ⚠ IT READS A STRING, WHICH IS A LIMIT AND NOT A DESIGN. Neither sender returns a status code —
- * `SendResult` carries `error?: string` and `SendSmsResult` the same — so this matches on the
- * message. [[GTC-289]]'s investigation is where Resend's actual error shape gets read properly, and
- * this function is what it should replace.
+ * 1. **THE CODE**, when the provider gave one and the installed SDK declares it. Two kinds are worth
+ *    another attempt — the provider being busy and the provider being broken — and everything else is
+ *    terminal. The vocabulary lives in `src/lib/email-delivery/resend-error-contract.ts` and the
+ *    policy lives here; a spent daily quota is the case that shows why those are two files.
+ * 2. **THE STATUS**, when the code is one the SDK does not declare. A 429 or a 5xx is retried and every
+ *    other answer is not — so a code newer than the installed SDK falls through to the PROTOCOL
+ *    rather than to prose.
+ * 3. **THE MESSAGE**, last. It is all a text send ever has, and all the email path has when
+ *    `getResendClient()` threw and no request left the process.
+ *
+ * ⚠ 401 AND 403 STAY TERMINAL AT ONCE, WHATEVER THE ATTEMPT COUNT — ruled at slice 5c, unchanged
+ * here, and now held in all three readings rather than in a regex. In this environment every provider
+ * answer is an auth failure ([[GTC-247]]), so a retry-any-error policy queues every row three times
+ * against a key that will never work, and the noise is indistinguishable from a transient outage.
+ *
+ * ⚠ AND IT CHANGES NOTHING OBSERVABLE IN THIS ENVIRONMENT, WHICH IS WHY THE PROOF IS A MUTATION AND
+ * NOT A RUN. The live envelope was observed on 2026-09-19 — `validation_error` / 401 / "API key is
+ * invalid" — which is `REQUEST_REFUSED` by the code and was already terminal by the message. The
+ * widening's value is that the answer stops depending on the provider's prose.
  */
-export function isRetryableProviderError(error: string): boolean {
-  if (/\b40[13]\b|unauthor|forbidden|api[ _-]?key/i.test(error)) return false;
-  return /\b429\b|\b5\d\d\b|rate[ _-]?limit|timeout|ETIMEDOUT|ECONNRESET|network/i.test(error);
+export function isRetryableProviderError(failure: ProviderFailure): boolean {
+  // 1. THE CODE.
+  const read = interpretResendErrorCode(failure.code);
+  if (read.recognised) return read.kind === 'PROVIDER_BUSY' || read.kind === 'PROVIDER_FAULT';
+
+  // 2. THE STATUS. Only reached when the code is absent or undeclared.
+  if (typeof failure.status === 'number') {
+    return failure.status === 429 || failure.status >= 500;
+  }
+
+  // 3. THE MESSAGE.
+  if (/\b40[13]\b|unauthor|forbidden|api[ _-]?key/i.test(failure.error)) return false;
+  return /\b429\b|\b5\d\d\b|rate[ _-]?limit|timeout|ETIMEDOUT|ECONNRESET|network/i.test(
+    failure.error
+  );
 }
 
 /** The provider took it. Ruling G's clock starts here. */
@@ -614,7 +660,13 @@ export async function drainOnce(
           result.sent++;
         } else {
           const error = sent.error ?? 'Unknown Resend error';
-          const at = isRetryableProviderError(error) ? nextBackoffAt(attemptCount, now) : null;
+          const at = isRetryableProviderError({
+            error,
+            code: sent.providerErrorCode,
+            status: sent.providerStatusCode,
+          })
+            ? nextBackoffAt(attemptCount, now)
+            : null;
           if (at) {
             await scheduleRetry(db, { id: row.id, provider: 'resend', error, at });
             result.retrying++;
@@ -661,7 +713,8 @@ export async function drainOnce(
         continue;
       }
       const error = sent.error ?? 'Unknown SMS error';
-      const at = isRetryableProviderError(error) ? nextBackoffAt(attemptCount, now) : null;
+      // The message alone: TNZ's result vocabulary arrives on a delivery receipt, not on a submission.
+      const at = isRetryableProviderError({ error }) ? nextBackoffAt(attemptCount, now) : null;
       if (at) {
         await scheduleRetry(db, { id: row.id, provider: 'tnz', error, at });
         result.retrying++;

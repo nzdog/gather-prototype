@@ -376,10 +376,33 @@ async function main() {
         withheldAt: true,
       },
     });
+    /*
+     * ⚠ TWO LABELS BELOW WERE WRONG AND ARE CORRECTED HERE — GTC-289 phase 2, 2026-09-19, MEASURED.
+     *
+     * They said "THE PROVIDER REFUSED" and "THE PROVIDER'S WORDS ARE STORED VERBATIM". Under `tsx`,
+     * `.env.local` is not loaded, so `RESEND_API_KEY` is ABSENT in this process — `getResendClient()`
+     * throws and the sender's `catch` returns its own message. Measured, rather than reasoned:
+     *
+     *     { success: false, error: 'Missing API key. Pass it to the constructor `new Resend("re_123")`' }
+     *
+     * **No request left the process and Resend never saw it.** The conditions were true; the sentences
+     * were false. That is [[GTC-192]]'s standing warning exactly — a true assertion carrying a false
+     * label goes red for nobody — and it survived slice 5c's whole review.
+     *
+     * ⚠ AND THE DISTINCTION IS NOW MACHINE-READABLE, which is a second consequence of phase 2's
+     * widening: on an EMAIL row a failure with NO `providerErrorCode` means the provider was never
+     * reached. Before the widening there was nothing to tell the two apart.
+     *
+     * The dev server DOES hold the key, so a drain through the cron route gets a real Resend refusal
+     * — observed to be `validation_error` / 401 / "API key is invalid". That path is not this suite's:
+     * `tests/email-send-result-test.ts` layer 4 exists because only an HTTP-driven route runs in a
+     * process that has the key.
+     */
     assert(
-      '⚠ THE EMAILED RECIPIENT WAS CLAIMED AND THE PROVIDER REFUSED — attemptedAt set, ' +
-        'attemptCount 1, and an outcome. GTC-247: the Resend key does not authenticate, so this ' +
-        'is the only thing a real send can do here',
+      '⚠ THE EMAILED RECIPIENT WAS CLAIMED AND THE SEND FAILED — attemptedAt set, attemptCount 1, ' +
+        'and an outcome. ⚠ NOT a provider refusal in THIS process: RESEND_API_KEY is absent under ' +
+        'tsx, so the SDK constructor throws and nothing is sent. Either way it is the only thing a ' +
+        'real send can do here ([[GTC-247]])',
       ok(() => ameliaRow!.attemptedAt !== null && ameliaRow!.attemptCount === 1)
     );
     assert(
@@ -392,9 +415,17 @@ async function main() {
       )
     );
     assert(
-      "⚠ AND THE PROVIDER'S WORDS ARE STORED VERBATIM in providerError — GTC-264 Phase 1's " +
-        'restraint: do not model a vocabulary you have not observed',
+      "⚠ AND THE FAILURE IS STORED VERBATIM in providerError, WHOEVER SAID IT — GTC-264 Phase 1's " +
+        'restraint: do not model a vocabulary you have not observed. In this process the words are ' +
+        "the SDK's own — 'Missing API key' — and the column is documented as the provider's, which " +
+        "is a real imprecision and is recorded in the slice's evidence rather than papered over",
       ok(() => typeof ameliaRow!.providerError === 'string' && ameliaRow!.providerError!.length > 0)
+    );
+    assert(
+      "⚠ AND THE MEASUREMENT THAT SETTLES WHICH IT WAS: the stored words are the SDK's missing-key " +
+        'message, so this row records a send that never reached a provider at all — asserted, not ' +
+        'inferred from the environment',
+      ok(() => /Missing API key/i.test(ameliaRow!.providerError ?? ''))
     );
     assert(
       'and it named the provider it called',
@@ -434,14 +465,22 @@ async function main() {
         return a > 0 && b > a;
       })
     );
+    /*
+     * ✅ THE PREDICATE TAKES A FAILURE OBJECT NOW — GTC-289 phase 2, 2026-09-19. Slice 5c's version
+     * took a bare string because `SendResult` carried nothing else, and these three assertions are
+     * unchanged in what they claim: the same strings, the same expectations, now in `error`. They
+     * exercise the THIRD reading — the message — which is what a text send and a thrown email send
+     * still arrive with. The code and status readings are asserted in
+     * `tests/resend-error-contract-test.ts` layer D, beside the vocabulary they read.
+     */
     assert(
       '⚠ A 401 OR 403 IS TERMINAL AT ONCE, whatever the attempt count — ruled, because in this ' +
         'environment every provider answer is an auth failure and a retry-any-error policy ' +
         'queues every row three times against a key that will never work',
       ok(
         () =>
-          dispatch.isRetryableProviderError('401 Unauthorized') === false &&
-          dispatch.isRetryableProviderError('403 Forbidden') === false
+          dispatch.isRetryableProviderError({ error: '401 Unauthorized' }) === false &&
+          dispatch.isRetryableProviderError({ error: '403 Forbidden' }) === false
       )
     );
     assert(
@@ -452,18 +491,19 @@ async function main() {
         'mutation M4 reporting the wrong assertion',
       ok(
         () =>
-          dispatch.isRetryableProviderError(
-            '401 Unauthorized: rate limit on an invalid api key'
-          ) === false && dispatch.isRetryableProviderError('503 rate limit, try again') === true
+          dispatch.isRetryableProviderError({
+            error: '401 Unauthorized: rate limit on an invalid api key',
+          }) === false &&
+          dispatch.isRetryableProviderError({ error: '503 rate limit, try again' }) === true
       )
     );
     assert(
       'a 429 and a 5xx are retryable; a plain 4xx is not',
       ok(
         () =>
-          dispatch.isRetryableProviderError('429 Too Many Requests') === true &&
-          dispatch.isRetryableProviderError('503 Service Unavailable') === true &&
-          dispatch.isRetryableProviderError('422 Unprocessable') === false
+          dispatch.isRetryableProviderError({ error: '429 Too Many Requests' }) === true &&
+          dispatch.isRetryableProviderError({ error: '503 Service Unavailable' }) === true &&
+          dispatch.isRetryableProviderError({ error: '422 Unprocessable' }) === false
       )
     );
 
