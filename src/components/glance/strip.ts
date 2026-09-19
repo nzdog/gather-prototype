@@ -126,6 +126,19 @@ export function stripStateWords(person: GlancePerson): string | null {
  */
 export const WHY_PRECEDENCE = [
   'ATTENDANCE_NO',
+  /*
+   * GTC-189 slice 7a — the two delivery reasons sit HERE, above the three that presume the ask
+   * landed, and the placement has one reason behind it:
+   *
+   * ⚠ THEY ARE THE ONLY LINES ON THIS LIST THAT SAY THE PERSON MAY NOT KNOW THEY WERE ASKED. *Handed
+   * it back*, *maybe timed out* and *gone quiet* all describe somebody responding to an ask they
+   * received — or failing to. A message that never arrived is a fact ABOUT THE ASK, and saying
+   * anything else first would describe a silence as a choice.
+   *
+   * Still a rendering default rather than a ruling, exactly as the note above says of the whole list.
+   */
+  'NOT_DELIVERED',
+  'UNREACHABLE',
   'REVERSAL',
   'DECIDE_BY_EXPIRED',
   'EXHAUSTED_SILENCE',
@@ -194,26 +207,51 @@ export function overlayReversal(person: GlancePerson): GlancePerson {
  * board also the untidiest. The test caps these at 16 characters so the next line added
  * here is measured against the strip rather than against the writer's ear.
  */
+/**
+ * ONE LINE PER REASON, AS A `Record` OVER THE PRECEDENCE UNION — GTC-189 slice 7a.
+ *
+ * ⚠ IT REPLACED A CHAIN THAT ENDED IN A BARE `return 'gone quiet'`, AND THAT FALL-THROUGH WAS A
+ * SILENT FALSEHOOD WAITING FOR THIS SLICE. Any reason added to `WHY_PRECEDENCE` without its own
+ * branch rendered *"gone quiet"* — which is false of a message that never arrived and false of
+ * somebody with no address at all. And a reason left OUT of the list rendered no why at all, against
+ * [[GTC-192]] Ruling 4, which is the gap ruling M recorded when it asked for a reason of its own.
+ *
+ * **Two silent failure modes, one absent and one FALSE, and the false one is the worse.** A `Record`
+ * keyed on the union closes both: a new precedence member with no line does not compile, and there is
+ * no default to fall into. Founder instruction, 2026-09-19: *"The fall-through closes in the same
+ * edit."*
+ *
+ * A function per line rather than a string, because two of the five read the person.
+ */
+const WHY_LINES: Record<(typeof WHY_PRECEDENCE)[number], (person: GlancePerson) => string> = {
+  // RULING 6, THROUGH RULING 23's OVERLAY, AND UNREACHABLE WITHOUT IT. `derivePersonState` pairs
+  // `ATTENDANCE_NO` with OUT and with nothing else, so RED-plus-ATTENDANCE_NO is exactly and only an
+  // overlaid reversal. It leads the precedence because it is the news: a person who has left is not
+  // first of all a person who handed one row back.
+  ATTENDANCE_NO: () => REVERSAL_WHY,
+  // GTC-189 slice 7a, ruling S and the fourth red. THREE mechanisms, one sentence: a rejection at
+  // submission, a bounce after acceptance and a provider failure are all "it did not arrive".
+  NOT_DELIVERED: () => 'never got it',
+  // Ruling M's red. ⚠ RULED AS "nowhere to send it" AND SHORTENED BY ONE WORD: at 18 characters it
+  // broke the ≤16 pin every other why-line is held to, which comes from the reference's 160px
+  // columns. The pin caught the proposal; the sense is unchanged.
+  UNREACHABLE: () => 'nowhere to send',
+  REVERSAL: (person) => {
+    const handedBack = person.items.filter((i) => i.reason === 'REVERSAL').length;
+    return handedBack > 1 ? `handed ${handedBack} back` : 'handed it back';
+  },
+  DECIDE_BY_EXPIRED: () => 'maybe timed out',
+  // GTC-251 supplies the count this line wants ("quiet after 2 nudges"); until it lands the honest
+  // line is the one that claims no number.
+  EXHAUSTED_SILENCE: () => 'gone quiet',
+};
+
 export function whyLineFor(person: GlancePerson): string | null {
   if (person.state !== 'RED') return null;
 
   for (const reason of WHY_PRECEDENCE) {
     if (!person.reasons.includes(reason)) continue;
-
-    // RULING 6, THROUGH RULING 23's OVERLAY, AND UNREACHABLE WITHOUT IT. `derivePersonState`
-    // pairs `ATTENDANCE_NO` with OUT and with nothing else, so RED-plus-ATTENDANCE_NO is exactly
-    // and only an overlaid reversal. It leads the precedence because it is the news: a person
-    // who has left is not first of all a person who handed one row back.
-    if (reason === 'ATTENDANCE_NO') return REVERSAL_WHY;
-
-    if (reason === 'REVERSAL') {
-      const handedBack = person.items.filter((i) => i.reason === 'REVERSAL').length;
-      return handedBack > 1 ? `handed ${handedBack} back` : 'handed it back';
-    }
-    if (reason === 'DECIDE_BY_EXPIRED') return 'maybe timed out';
-    // GTC-251 supplies the count this line wants ("quiet after 2 nudges"); until it lands
-    // the honest line is the one that claims no number.
-    return 'gone quiet';
+    return WHY_LINES[reason](person);
   }
   return null;
 }

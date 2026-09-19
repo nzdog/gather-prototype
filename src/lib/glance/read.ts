@@ -41,6 +41,9 @@ import {
   type GlancePerson,
 } from './state';
 
+import { isChildMembership } from '@/lib/eligibility/child-exclusion';
+import { carrierMembershipFor, deliveryFactFrom, latestRowByMembership } from './delivery-fact';
+
 /** Accepts a client or a transaction, the shape `createHostHousehold` already takes. */
 type Db = Prisma.TransactionClient;
 
@@ -128,29 +131,70 @@ export async function readEventGlance(
     nudgePace: event.nudgePace,
   };
 
-  const [memberships, assignments, households, unassignedCritical, unassignedOrdinaryCount] =
-    await Promise.all([
-      db.personEvent.findMany({ where: { eventId }, select: PERSON_EVENT_SELECT }),
-      db.assignment.findMany({
-        where: { item: { team: { eventId } } },
-        select: ASSIGNMENT_SELECT,
-      }),
-      db.household.findMany({
-        where: { eventId },
-        select: { id: true, createdAt: true },
-        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      }),
-      // Named, because a count would not tell her WHICH critical has no owner.
-      db.item.findMany({
-        where: { team: { eventId }, assignment: null, critical: true },
-        select: UNASSIGNED_CRITICAL_SELECT,
-        orderBy: [{ name: 'asc' }],
-      }),
-      // COUNTED, never named — Ruling 8 keeps ordinary unassigned items the plan's and
-      // pre-flight's business. A `findMany` here would haul every name across for a number,
-      // and the names would then be one careless render away from the surface.
-      db.item.count({ where: { team: { eventId }, assignment: null, critical: false } }),
-    ]);
+  const [
+    memberships,
+    assignments,
+    households,
+    unassignedCritical,
+    unassignedOrdinaryCount,
+    outbound,
+  ] = await Promise.all([
+    db.personEvent.findMany({ where: { eventId }, select: PERSON_EVENT_SELECT }),
+    db.assignment.findMany({
+      where: { item: { team: { eventId } } },
+      select: ASSIGNMENT_SELECT,
+    }),
+    db.household.findMany({
+      where: { eventId },
+      // GTC-189 slice 7a, ruling S: `contactPersonEventId` is ONE MORE FIELD on a query that was
+      // already being run, and it is the whole cost of sending a carrier's delivery failure to the
+      // child's rows. See `carrierMembershipFor`.
+      select: { id: true, createdAt: true, contactPersonEventId: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    }),
+    // Named, because a count would not tell her WHICH critical has no owner.
+    db.item.findMany({
+      where: { team: { eventId }, assignment: null, critical: true },
+      select: UNASSIGNED_CRITICAL_SELECT,
+      orderBy: [{ name: 'asc' }],
+    }),
+    // COUNTED, never named — Ruling 8 keeps ordinary unassigned items the plan's and
+    // pre-flight's business. A `findMany` here would haul every name across for a number,
+    // and the names would then be one careless render away from the surface.
+    db.item.count({ where: { team: { eventId }, assignment: null, critical: false } }),
+    /*
+     * GTC-189 SLICE 7a — THE DELIVERY FACT'S ONE QUERY, and it is the sixth rather than the sixth
+     * through the eleventh.
+     *
+     * ⚠ EVERY KIND, NOT JUST `ASK`, AND THAT IS DELIBERATE: the fact is about the CHANNEL, not
+     * about one message. Hinge §7's rule is *"a bounce is not a silence, it's a dead channel"*, and
+     * a chase leg that bounces has found the same dead channel an ask would have.
+     *
+     * The fields are the three doors plus the clock that orders them. No names, no bodies, no
+     * provider ids — the board needs to know THAT it failed, never what was in it.
+     */
+    db.outboundMessage.findMany({
+      where: { eventId },
+      select: {
+        id: true,
+        personEventId: true,
+        createdAt: true,
+        rejectedAt: true,
+        withheldAt: true,
+        withheldWhy: true,
+        deliveryState: true,
+      },
+    }),
+  ]);
+
+  /*
+   * GTC-189 slice 7a — THE LATEST ROW PER MEMBERSHIP, not every row.
+   *
+   * ⚠ "Any row ever failed" would make slice 7b's door unable to clear the red it opens: ruling U's
+   * resend writes a NEW row, so the host retries, it works, and a board reading the older row goes on
+   * saying the message never arrived. See `latestRowByMembership`.
+   */
+  const latestOutbound = latestRowByMembership(outbound);
 
   // Rows are keyed by Person, not by PersonEvent (`Assignment.personId` is a Person id),
   // so they are grouped once here rather than re-scanned per member.
@@ -176,11 +220,25 @@ export async function readEventGlance(
   function toPerson(row: (typeof memberships)[number]): GlancePerson {
     const isHost = row.personId === event.hostId || row.role === 'HOST';
     const items = heldBy.get(row.personId) ?? [];
+    /*
+     * GTC-189 SLICE 7a — WHOSE ROW ANSWERS FOR THIS PERSON.
+     *
+     * Their own, unless they are a CHILD: ruling S sends the CARRIER's failure to the child's rows,
+     * because a child is never a recipient and the only message that carried their ask was somebody
+     * else's. `carrierMembershipFor` asks the shared household rule, with no extra query.
+     */
+    const answeringMembership = isChildMembership(row.householdRole)
+      ? carrierMembershipFor(row, households, memberships)
+      : row.id;
     const context = {
       isHost,
       // ANCHOR(GTC-251): exhaustion has no source until E6 lands. NULL says "no signal",
       // which is a different claim from "not exhausted" — see ExhaustionFact in state.ts.
       exhaustion: null,
+      // ANCHOR(GTC-189 slice 7a): the delivery door. NULL before the press, for the same reason.
+      delivery: answeringMembership
+        ? deliveryFactFrom(latestOutbound.get(answeringMembership))
+        : null,
     };
     const { state, reasons } = derivePersonState(
       {

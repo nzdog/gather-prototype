@@ -302,11 +302,95 @@ async function main() {
           ) === 'maybe timed out'
       )
     );
+    /*
+     * ── GTC-189 SLICE 7a — THE FOURTH AND FIFTH WHY-LINES ──────────────────────
+     *
+     * Ruling M left the words open — *"Its name and words are open"* — and they are ruled now:
+     * `NOT_DELIVERED` says **"never got it"** and `UNREACHABLE` says **"nowhere to send"**.
+     *
+     * ⚠ AND THE SECOND ONE WAS RULED AS "nowhere to send it", AT 18 CHARACTERS, WHICH THE ASSERTION
+     * BELOW REFUSES. The pin is 16 and it comes from the reference's 160px columns, so the trailing
+     * "it" is dropped rather than the pin widened — see the slice's evidence. **The pin caught the
+     * executor's own proposal**, which is what a pinned number is for.
+     */
+    assert(
+      'Ruling 4',
+      '⚠ A DELIVERY FAILURE SAYS THE MESSAGE NEVER ARRIVED — none of the three older lines is true of ' +
+        'somebody who never got it, which is exactly why ruling M said the fourth red needs its own',
+      ok(
+        () =>
+          SP.whyLineFor(
+            person({
+              state: 'RED',
+              reasons: ['NOT_DELIVERED'],
+              items: [redItem('NOT_DELIVERED')],
+            })
+          ) === 'never got it'
+      )
+    );
+    assert(
+      'Ruling 4',
+      '⚠ AND AN UNREACHABLE PERSON SAYS THERE IS NOWHERE TO SEND — a different fact from a message ' +
+        'that failed: one was sent and did not arrive, the other was never sendable',
+      ok(
+        () =>
+          SP.whyLineFor(
+            person({ state: 'RED', reasons: ['UNREACHABLE'], items: [redItem('UNREACHABLE')] })
+          ) === 'nowhere to send'
+      )
+    );
+    assert(
+      'Ruling 4',
+      '⚠ AND THE TWO ARE NOT THE SAME LINE — two reasons that rendered one sentence would be a red ' +
+        'whose why is true of a case it is not about',
+      ok(
+        () =>
+          SP.whyLineFor(
+            person({ state: 'RED', reasons: ['NOT_DELIVERED'], items: [redItem('NOT_DELIVERED')] })
+          ) !==
+          SP.whyLineFor(
+            person({ state: 'RED', reasons: ['UNREACHABLE'], items: [redItem('UNREACHABLE')] })
+          )
+      )
+    );
+    assert(
+      'Ruling 4',
+      '⚠ THE FALL-THROUGH IS CLOSED: whyLineFor holds a RECORD keyed on the precedence union rather ' +
+        'than a chain ending in one bare `return`. It used to return "gone quiet" for ANY reason ' +
+        'without its own branch — a silent FALSEHOOD for both new reds — and a Record makes a missing ' +
+        'line a COMPILE ERROR instead',
+      ok(() => {
+        const src = code('src/components/glance/strip.ts');
+        const body = functionBody(src, 'whyLineFor');
+        return body.length > 0 && !/return 'gone quiet'/.test(body) && /WHY_LINES\[/.test(body);
+      })
+    );
+    assert(
+      'Ruling 4',
+      'and EXHAUSTED_SILENCE still says "gone quiet" through the Record — the line that used to be the ' +
+        'fall-through is now its own entry, so closing it changed no words',
+      ok(
+        () =>
+          SP.whyLineFor(
+            person({
+              state: 'RED',
+              reasons: ['EXHAUSTED_SILENCE'],
+              items: [redItem('EXHAUSTED_SILENCE')],
+            })
+          ) === 'gone quiet'
+      )
+    );
     assert(
       'Ruling 4',
       'every why fits a strip — Ruling 4 asks for one short line, and 160px columns are the reference’s',
       ok(() =>
-        ['REVERSAL', 'DECIDE_BY_EXPIRED', 'EXHAUSTED_SILENCE'].every((reason) => {
+        [
+          'REVERSAL',
+          'DECIDE_BY_EXPIRED',
+          'EXHAUSTED_SILENCE',
+          'NOT_DELIVERED',
+          'UNREACHABLE',
+        ].every((reason) => {
           const line = SP.whyLineFor(
             person({ state: 'RED', reasons: [reason], items: [redItem(reason)] })
           );

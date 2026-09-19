@@ -225,6 +225,134 @@ async function main() {
       ok(() => itemState('PENDING', liveItem, { exhaustion: null }).state === 'AMBER')
     );
 
+    /*
+     * ── GTC-189 SLICE 7a — THE FOURTH AND FIFTH REDS ─────────────────────────
+     *
+     * `NOT_DELIVERED` (ruling S and the fourth red) and `UNREACHABLE` (ruling M), both taking a
+     * per-person DELIVERY FACT exactly the way the exhaustion fact above is taken — a decision
+     * handed in, not telemetry, with NULL claiming nothing.
+     *
+     * ⚠ THE FACT'S SOURCE IS THE ROW THE PRESS WROTE, which is what keeps the board and the press
+     * from being able to disagree. See `read.ts`.
+     */
+    assert(
+      'item state',
+      '⚠ THE RED VOCABULARY IS FIVE, NOT THREE — the fourth and fifth reds join DECIDE_BY_EXPIRED, ' +
+        'REVERSAL and EXHAUSTED_SILENCE, and the count is pinned so a sixth is a deliberate edit',
+      ok(
+        () =>
+          S.RED_REASONS.length === 5 &&
+          S.RED_REASONS.includes('NOT_DELIVERED') &&
+          S.RED_REASONS.includes('UNREACHABLE')
+      )
+    );
+    assert(
+      'item state',
+      'a NOT_DELIVERED fact turns a PENDING ask RED — the message did not arrive and the board says so',
+      ok(() => {
+        const r = itemState('PENDING', liveItem, { delivery: { failure: 'NOT_DELIVERED' } });
+        return r.state === 'RED' && r.reason === 'NOT_DELIVERED';
+      })
+    );
+    assert(
+      'item state',
+      'and an UNREACHABLE fact turns it RED with its OWN reason — ruling M: "red already means Gather ' +
+        'is out of moves and this is yours, and a person nobody can reach is exactly that"',
+      ok(() => {
+        const r = itemState('PENDING', liveItem, { delivery: { failure: 'UNREACHABLE' } });
+        return r.state === 'RED' && r.reason === 'UNREACHABLE';
+      })
+    );
+    assert(
+      'item state',
+      '⚠ AND NO DELIVERY FACT LEAVES IT AMBER, and a fact with a NULL failure does too — the same ' +
+        'null-is-not-false discipline the exhaustion fact has: before the press there is no row, and ' +
+        'this module claims nothing rather than claiming the message arrived',
+      ok(
+        () =>
+          itemState('PENDING', liveItem, { delivery: null }).state === 'AMBER' &&
+          itemState('PENDING', liveItem, { delivery: { failure: null } }).state === 'AMBER'
+      )
+    );
+    assert(
+      'item state',
+      '⚠ AN ANSWERED ROW IS NOT REDDENED BY A DELIVERY FAILURE, in all three shapes — an answer is ' +
+        'proof the ask arrived (or that they answered another way), so ACCEPTED stays GREEN, a live ' +
+        'MAYBE stays AMBER, and DECLINED keeps REVERSAL rather than being relabelled',
+      ok(() => {
+        const failed = { delivery: { failure: 'NOT_DELIVERED' } };
+        return (
+          itemState('ACCEPTED', liveItem, failed).state === 'GREEN' &&
+          itemState('MAYBE', liveItem, failed).state === 'AMBER' &&
+          itemState('DECLINED', liveItem, failed).reason === 'REVERSAL'
+        );
+      })
+    );
+    assert(
+      'item state',
+      "⚠ AND THE HOST'S OWN ROW STAYS GREEN even with a delivery failure on it — GTC-256 ruling 5 says " +
+        "she never receives her own ask, and ruling S sends a carrier bounce to the CHILD's rows, not " +
+        'to hers',
+      ok(
+        () =>
+          itemState('PENDING', liveItem, {
+            isHost: true,
+            delivery: { failure: 'NOT_DELIVERED' },
+          }).state === 'GREEN'
+      )
+    );
+    assert(
+      'item state',
+      '⚠ DELIVERY BEATS EXHAUSTION FOR THE REASON, and the reason is the why-line: "gone quiet" is ' +
+        'FALSE of somebody who never got the message. Both are red; the one that explains the silence ' +
+        'is the one to say',
+      ok(() => {
+        const r = itemState('PENDING', liveItem, {
+          exhaustion: { exhausted: true },
+          delivery: { failure: 'NOT_DELIVERED' },
+        });
+        return r.state === 'RED' && r.reason === 'NOT_DELIVERED';
+      })
+    );
+    assert(
+      'item state',
+      "✅ AND RULING 14 GREYS BOTH WITHOUT A CODE CHANGE — `worst !== 'GREEN'` was written so \"any red " +
+        'source added later" is displaced, and rulings T and M both want exactly that: grey means she ' +
+        'has taken him, and nothing puts a taken thing back on the board',
+      ok(() =>
+        ['NOT_DELIVERED', 'UNREACHABLE'].every((failure) => {
+          const r = S.derivePersonState(
+            {
+              isHost: false,
+              exhaustion: null,
+              delivery: { failure },
+              nudgeMark: 'DONT_CHASE',
+              attendanceAnswer: null,
+              items: [
+                {
+                  response: 'PENDING',
+                  item: liveItem,
+                  critical: false,
+                  itemId: 'i',
+                  assignmentId: 'a',
+                  name: 'n',
+                } as any,
+              ],
+            } as any,
+            event,
+            NOW
+          );
+          return r.state === 'NOT_CHASED' && r.reasons.includes('DONT_CHASE');
+        })
+      )
+    );
+    assert(
+      'item state',
+      '✅ AND THE SUMMARY COUNTS THEM AS "NEEDS YOU" WITH NO CHANGE — summarisePeople keys on the ' +
+        "STATE and never on the reason, so ruling 2's sentence absorbs a new red for free",
+      ok(() => S.summarisePeople(['RED', 'RED', 'AMBER']).needYou === 2)
+    );
+
     // ── Worst-colour-wins, per PERSON (§10.8) ─────────────────────────────
     assert(
       'worst wins',
@@ -1253,6 +1381,226 @@ async function main() {
         afterRead.filter((a) => a.response === 'DECLINED').length === 5 &&
         afterRead.filter((a) => a.response === 'PENDING').length === 3 &&
         afterRead.filter((a) => a.response === 'ACCEPTED').length === 2
+    );
+
+    /*
+     * ══ GTC-189 SLICE 7a — THE DELIVERY FACT, OVER A THIRD FIXTURE ══════════════════
+     *
+     * A separate event rather than more states on the shared one, which is this suite's own pattern
+     * (the loose fixture above) and keeps every existing assertion measuring the board it was written
+     * for.
+     *
+     * ⚠ THE FACT COMES OFF THE ROW THE PRESS WROTE. Founder ruling: the press already recorded both
+     * facts per person, so the board reads them back rather than re-deriving them, and the two cannot
+     * disagree by construction. Five people, five different row shapes, one board.
+     */
+    const dEvent = await prisma.event.create({
+      data: {
+        name: 'GTC-189 slice 7a delivery fixture',
+        startDate: new Date(NOW.getTime() + 100 * HOUR),
+        endDate: new Date(NOW.getTime() + 130 * HOUR),
+        hostId: hostPerson.id,
+        status: 'CONFIRMING',
+        sentAt,
+      },
+    });
+    createdEventIds.push(dEvent.id);
+    const dTeam = await prisma.team.create({ data: { eventId: dEvent.id, name: 'Mains' } });
+    const dHh = await prisma.household.create({ data: { eventId: dEvent.id } });
+
+    async function dPerson(name: string, role: string, opts: { items?: boolean } = {}) {
+      const person = await prisma.person.create({
+        data: { name, email: `gtc189s7a+${stamp}+${name.replace(/\W/g, '')}@example.com` },
+      });
+      createdPersonIds.push(person.id);
+      const pe = await prisma.personEvent.create({
+        data: {
+          personId: person.id,
+          eventId: dEvent.id,
+          role: 'PARTICIPANT',
+          householdId: dHh.id,
+          householdRole: role,
+          sentAt,
+        },
+      });
+      if (opts.items !== false) {
+        const item = await prisma.item.create({
+          data: { teamId: dTeam.id, name: `${name}'s dish`, kind: 'ITEM' },
+        });
+        await prisma.assignment.create({
+          data: { itemId: item.id, personId: person.id, response: 'PENDING' },
+        });
+      }
+      return { person, pe };
+    }
+
+    // Sarah carries the household. Her message BOUNCED, so ruling S sends her failure to Ollie.
+    const sarah = await dPerson('Sarah Carrier', 'PRIMARY_CONTACT');
+    const ollie = await dPerson('Ollie Child', 'CHILD');
+    // Nina has no way to be reached at all — the chooser said so at the press.
+    const nina = await dPerson('Nina Nochannel', 'GUEST');
+    // Tom's text was withheld because GATHER has no SMS provider. Not a fact about Tom.
+    const tom = await dPerson('Tom Smsdisabled', 'GUEST');
+    // Ida's ask failed once and the second attempt did not. The latest row is the fact.
+    const ida = await dPerson('Ida Resent', 'GUEST');
+    // Pia holds NOTHING and her message bounced — ruling 16's itemless amber, with no row to carry
+    // a colour.
+    const pia = await dPerson('Pia Empty', 'GUEST', { items: false });
+    await prisma.household.update({
+      where: { id: dHh.id },
+      data: { contactPersonEventId: sarah.pe.id },
+    });
+
+    async function askRow(personEventId: string, data: Record<string, unknown>) {
+      return prisma.outboundMessage.create({
+        data: {
+          eventId: dEvent.id,
+          personEventId,
+          kind: 'ASK',
+          channel: 'EMAIL',
+          ...data,
+        },
+        select: { id: true },
+      });
+    }
+    await askRow(sarah.pe.id, {
+      acceptedAt: sentAt,
+      attemptedAt: sentAt,
+      attemptCount: 1,
+      provider: 'resend',
+      providerMessageId: `s7a-sarah-${stamp}`,
+      deliveryState: 'BOUNCED',
+      providerLastEvent: 'bounced',
+      deliveryCheckedAt: sentAt,
+      deliveryPollDoneAt: sentAt,
+    });
+    await askRow(nina.pe.id, { withheldAt: sentAt, withheldWhy: 'NO_CHANNEL' });
+    await askRow(tom.pe.id, { withheldAt: sentAt, withheldWhy: 'SMS_DISABLED' });
+    await askRow(ida.pe.id, {
+      createdAt: new Date(sentAt.getTime() - 2 * HOUR),
+      attemptedAt: sentAt,
+      attemptCount: 1,
+      provider: 'resend',
+      rejectedAt: sentAt,
+      providerError: 'The from address is not verified',
+      providerErrorCode: 'invalid_from_address',
+    });
+    await askRow(ida.pe.id, {
+      createdAt: sentAt,
+      acceptedAt: sentAt,
+      attemptedAt: sentAt,
+      attemptCount: 1,
+      provider: 'resend',
+      providerMessageId: `s7a-ida-${stamp}`,
+      deliveryState: 'PROVIDER_REPORTS_DELIVERED',
+      providerLastEvent: 'delivered',
+      deliveryCheckedAt: sentAt,
+    });
+    await askRow(pia.pe.id, {
+      acceptedAt: sentAt,
+      attemptedAt: sentAt,
+      attemptCount: 1,
+      provider: 'resend',
+      providerMessageId: `s7a-pia-${stamp}`,
+      deliveryState: 'BOUNCED',
+      providerLastEvent: 'bounced',
+      deliveryCheckedAt: sentAt,
+      deliveryPollDoneAt: sentAt,
+    });
+
+    const dPayload = R ? await R.readEventGlance(prisma, dEvent.id, NOW) : null;
+    const dPeople: any[] = [
+      ...(dPayload?.households ?? []).flatMap((h: any) => h.members),
+      ...(dPayload?.unhoused ?? []),
+    ];
+    const dRead = (personId: string) => dPeople.find((p: any) => p.personId === personId) ?? null;
+
+    assert(
+      'slice 7a control',
+      '⚠ CONTROL: the delivery board assembled and holds its SIX guests — and the host is NOT among ' +
+        'them, because she has no membership on this event, which is what the count caught when the ' +
+        'label said seven. Without this every claim below could pass against an empty payload',
+      dPayload !== null && dPeople.length === 6
+    );
+    assert(
+      'slice 7a',
+      "⚠ A BOUNCED ASK TURNS THE RECIPIENT'S ROWS RED, read off the row the press wrote rather than " +
+        're-derived — so the board and the press cannot disagree about who was reached',
+      ok(() => {
+        const r = dRead(sarah.person.id);
+        return r.state === 'RED' && r.reasons.includes('NOT_DELIVERED');
+      })
+    );
+    assert(
+      'slice 7a',
+      "✅ RULING S: OLLIE'S STRIP GOES RED WHEN THE MESSAGE CARRYING HIS ASK BOUNCED. The fact is the " +
+        "CARRIER's and the rows it reddens are the CHILD's — and it overturns Moment 4 §8.7, whose " +
+        "own words are that a child's row CANNOT go red. The banner is on the spec",
+      ok(() => {
+        const r = dRead(ollie.person.id);
+        return r.state === 'RED' && r.reasons.includes('NOT_DELIVERED');
+      })
+    );
+    assert(
+      'slice 7a',
+      '⚠ AND NINA IS UNREACHABLE, NOT NOT_DELIVERED — two different facts: one message was sent and ' +
+        'did not arrive, the other was never sendable. The withheld code the chooser wrote at the ' +
+        'press is what tells them apart',
+      ok(() => {
+        const r = dRead(nina.person.id);
+        return r.state === 'RED' && r.reasons.includes('UNREACHABLE');
+      })
+    );
+    assert(
+      'slice 7a',
+      '⚠ TOM IS NOT RED, AND HE IS THE DIFFERENTIAL THAT MATTERS: his text was withheld because ' +
+        'GATHER HAS NO SMS PROVIDER ([[GTC-247]]), which is an operator failure and not a fact about ' +
+        'Tom. Painting him "nowhere to send" would be the board telling the host a falsehood about her ' +
+        'guest',
+      ok(() => {
+        const r = dRead(tom.person.id);
+        return r.state === 'AMBER' && !r.reasons.includes('UNREACHABLE');
+      })
+    );
+    assert(
+      'slice 7a',
+      '⚠ IDA IS NOT RED EITHER — THE LATEST ROW IS THE FACT. Her first ask was rejected and her ' +
+        'second was delivered. Reading "any row ever failed" would make slice 7b\'s door unable to ' +
+        'clear the red it opens: the host resends, it works, and the board still says it never arrived',
+      ok(() => {
+        const r = dRead(ida.person.id);
+        return r.state === 'AMBER' && !r.reasons.includes('NOT_DELIVERED');
+      })
+    );
+    assert(
+      'slice 7a',
+      '⚠ AND PIA IS RED WITH NO ROWS AT ALL — an itemless person has nothing to carry a colour, so ' +
+        'the fact is applied at the PERSON level too. Ruling 16 makes an itemless undecided person ' +
+        'amber, and amber for somebody who never got the message is exactly the falsehood ruling J ' +
+        'called wrong',
+      ok(() => {
+        const r = dRead(pia.person.id);
+        return r.state === 'RED' && r.reasons.includes('NOT_DELIVERED') && r.items.length === 0;
+      })
+    );
+    assert(
+      'slice 7a',
+      '⚠ AND THE READ DID NOT GROW A QUERY PER CHILD: it calls the SHARED household rule rather than ' +
+        'resolveCarriedSubjects, whose wrapper runs five queries per carrier and hauls the whole ' +
+        'event each time',
+      ok(() => {
+        const factSrc = code('src/lib/glance/delivery-fact.ts');
+        return (
+          readSrc.length > 0 &&
+          factSrc.length > 0 &&
+          // the read asks the translator, and the translator asks the SHARED household rule
+          /carrierMembershipFor/.test(readSrc) &&
+          /resolveHouseholdChannel/.test(factSrc) &&
+          // and neither reaches for the five-query wrapper
+          !/resolveCarriedSubjects/.test(readSrc) &&
+          !/resolveCarriedSubjects/.test(factSrc)
+        );
+      })
     );
 
     assert(

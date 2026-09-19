@@ -259,3 +259,32 @@ ruling AH and its slice 5 shape proposal: a check whose output is evidence
 about the check as much as about the code.
 
 ---
+
+---
+
+### KB-008 — A long-running dev server keeps the OLD Prisma client after a migration, and every HTTP-driven suite then fails as if the new code broke the page
+
+**Symptom.** A migration is applied and `prisma generate` run. In-process suites pass. Then a suite
+that drives a PAGE over HTTP fails in bulk — 22 assertions at once, all of them "the page renders for
+the host (200)" and everything hanging off it — while the API-route assertions in the same suite pass.
+
+**Cause.** `next dev` imports `@prisma/client` ONCE into a long-lived process. Regenerating the client
+on disk does not replace the one that process is holding, and Turbopack's hot reload does not
+re-import a `node_modules` package. So a `select` naming a column added by the migration throws inside
+the server, the page 500s, and every assertion about the served page fails together.
+
+**Why it is worth a KB entry rather than a shrug: it reads exactly like a regression in the code you
+just wrote.** The in-process suites are green, `tsc` is clean, and the failures cluster on the files
+you touched. GTC-189 slice 7a spent two guesses on the wrong thing before suspecting the server, and
+the failures had been latent for THREE commits — nothing had driven an HTTP page that reads the board
+since the migration landed.
+
+**Fix.** Restart the dev server. Nothing else.
+
+**The diagnosis move, which generalises past Prisma:** `git stash`, re-run the suite, `git stash pop`.
+If the baseline is green and the change is red on the SAME server, the change is suspect; if both are
+red, or the baseline is green only after a restart, the PROCESS is. That is the cheapest way to tell a
+regression from a stale runtime, and it takes one minute.
+
+**After any migration, restart the dev server before trusting any HTTP-driven suite.** Migrations
+first, `prisma generate` second (KB-005 and the local-setup notes), and a restart third.

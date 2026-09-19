@@ -69,7 +69,29 @@ export type PersonState = ItemState | 'NOT_CHASED' | 'OUT';
  * counter and the exhausted predicate and is open. It is in the vocabulary from birth so
  * that E6 plugs a fact into an existing door rather than inventing a second one.
  */
-export const RED_REASONS = ['DECIDE_BY_EXPIRED', 'REVERSAL', 'EXHAUSTED_SILENCE'] as const;
+export const RED_REASONS = [
+  'DECIDE_BY_EXPIRED',
+  'REVERSAL',
+  'EXHAUSTED_SILENCE',
+  /*
+   * GTC-189 SLICE 7a — THE FOURTH AND FIFTH REDS. Ruling M and ruling S, 2026-09-14; words ruled
+   * 2026-09-19.
+   *
+   * ⚠ `NOT_DELIVERED` AND NOT `BOUNCED`, AND THE NAME IS A RULING. It covers THREE mechanisms — a
+   * rejection at submission, a bounce after acceptance, and a provider failure — which are one fact
+   * to the host: **it did not arrive.** Naming it for one of the three would make the other two read
+   * as a different red, and they are not.
+   *
+   * `UNREACHABLE` is ruling M's own word: *"a person nobody can reach"*, red from the press, because
+   * *"red already means Gather is out of moves and this is yours."*
+   *
+   * ⚠ THEY ARE TWO REASONS AND ONE RED. §8.1's rule holds — *"the calendar is a second way to
+   * exhaust, not a new meaning for red"* — and these are two more ways in. No new colour, no new
+   * state, and ruling M turned down both of those offers by name.
+   */
+  'NOT_DELIVERED',
+  'UNREACHABLE',
+] as const;
 export type RedReason = (typeof RED_REASONS)[number];
 
 /** Why a row is amber or green. */
@@ -100,6 +122,29 @@ export type ItemReason = RedReason | MovingReason | SettledReason;
  */
 export interface ExhaustionFact {
   exhausted: boolean;
+}
+
+/**
+ * GTC-189 SLICE 7a — WHAT HAPPENED TO THIS PERSON'S MESSAGE, as this module needs it.
+ *
+ * THE SAME SHAPE AS `ExhaustionFact` ABOVE, AND FOR THE SAME REASON: a DECISION handed in rather
+ * than telemetry to interpret. The derivation must not learn what a bounce is, what a provider
+ * rejection is, or which withheld codes mean "unsendable" — that vocabulary belongs to the press
+ * and to [[GTC-289]], and a second reading of it here is a second place for it to drift.
+ *
+ * ⚠ NULL IS NOT "IT ARRIVED". A null fact means nothing is known — most often because the press
+ * has not happened, so no row exists to read. This module then claims nothing, exactly as it claims
+ * nothing about exhaustion before [[GTC-251]] lands. **A null failure inside a present fact means
+ * the same thing for the opposite reason:** a row exists and has not failed, which is still not a
+ * claim that anybody read the message.
+ *
+ * ⚠ AND ITS SOURCE IS THE ROW THE PRESS WROTE, which is the whole reason it is one field. Founder
+ * ruling, 2026-09-19: the press already recorded both facts per person — a delivery state for the
+ * bounce, a withheld code for the unsendable — and *"reading them back means the board and the press
+ * cannot disagree by construction."* See `readEventGlance`.
+ */
+export interface DeliveryFact {
+  failure: 'NOT_DELIVERED' | 'UNREACHABLE' | null;
 }
 
 /** A row as the derivation needs it. Structural, so a narrow `select` works. */
@@ -154,6 +199,17 @@ export interface GlancePersonContext {
    */
   isHost: boolean;
   exhaustion: ExhaustionFact | null;
+  /**
+   * GTC-189 slice 7a. Optional rather than required, deliberately: every existing caller that
+   * builds a context by hand — and there are several, in tests and in the replay — goes on meaning
+   * *"nothing known about delivery"* without being edited to say so. The same courtesy
+   * `exhaustion: null` gets, one field further on.
+   *
+   * ⚠ AND FOR A CHILD IT IS THE CARRIER'S FACT. Ruling S: *"Ollie's strip goes red when the message
+   * carrying his ask bounced."* Children are never recipients, so the only delivery fact a child can
+   * have is the one belonging to whoever carried the ask. `readEventGlance` resolves that.
+   */
+  delivery?: DeliveryFact | null;
 }
 
 export interface GlancePersonInput extends GlancePersonContext {
@@ -374,6 +430,26 @@ export function deriveItemState(
 
   if (context.isHost) return { state: 'GREEN', reason: 'ACCEPTED' };
 
+  /*
+   * ANCHOR(GTC-189 slice 7a): the delivery door. The press supplies the fact; this is where it lands.
+   *
+   * ⚠ BELOW THE THREE RESPONSE BRANCHES, AND THAT ORDER IS THE POINT: AN ANSWER IS PROOF THE ASK
+   * ARRIVED. A row somebody accepted, declined or answered MAYBE is not reddened by a delivery
+   * failure — they plainly got it, or they answered another way, and either way the answer is the
+   * fact. Only an unanswered row can be explained by a message that never landed.
+   *
+   * ⚠ BELOW `isHost` TOO. GTC-256 ruling 5 keeps her own rows green, and ruling A2 makes her a
+   * CARRIER — so when her carried message fails it is the CHILD's rows that go red (ruling S), never
+   * hers.
+   *
+   * ⚠ AND ABOVE EXHAUSTION, WHICH IS A CHOICE ABOUT THE WHY-LINE. Both are red, so the colour is
+   * the same either way; the REASON is what the strip says. *"Gone quiet"* is false of somebody who
+   * never got the message — the silence has a cause and this is it — so the explaining reason wins.
+   */
+  if (context.delivery?.failure) {
+    return { state: 'RED', reason: context.delivery.failure };
+  }
+
   // ANCHOR(GTC-251): the exhaustion door. E6 supplies the fact; this is where it lands.
   if (context.exhaustion?.exhausted) return { state: 'RED', reason: 'EXHAUSTED_SILENCE' };
 
@@ -420,9 +496,25 @@ export function derivePersonState(
   const worst = worstItemState(derived.map((d) => d.state));
 
   if (worst === null) {
-    return person.isHost
-      ? { state: 'GREEN', reasons: ['ACCEPTED'] }
-      : { state: 'AMBER', reasons: ['AWAITING_REPLY'] };
+    if (person.isHost) return { state: 'GREEN', reasons: ['ACCEPTED'] };
+    /*
+     * ⚠ GTC-189 SLICE 7a — THE DELIVERY FACT IS APPLIED AT THE PERSON LEVEL TOO, AND THIS BRANCH IS
+     * WHY IT HAS TO BE.
+     *
+     * An itemless person has NO ROW to carry a colour, so a fact that only ever reached
+     * `deriveItemState` would leave them AMBER — and amber for somebody who never got the message is
+     * exactly the falsehood ruling J called wrong and ruling M answered. Ruling 16 makes an itemless
+     * undecided person amber because *"the ask is real even when the hands are empty"*; when the ask
+     * did not arrive, the same sentence is the reason they are RED.
+     *
+     * ⚠ THE EXHAUSTION FACT HAS THE IDENTICAL HOLE and is deliberately NOT fixed here: an itemless
+     * person can never read EXHAUSTED_SILENCE either. That is [[GTC-251]]'s to decide when it lands,
+     * and quietly changing it under this slice would be answering somebody else's ruling.
+     */
+    if (person.delivery?.failure) {
+      return { state: 'RED', reasons: [person.delivery.failure] };
+    }
+    return { state: 'AMBER', reasons: ['AWAITING_REPLY'] };
   }
 
   const reasons = Array.from(

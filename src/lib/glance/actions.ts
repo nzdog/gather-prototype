@@ -213,9 +213,37 @@ export function remindRefusal(person: Pick<GlancePerson, 'nudgeMark'>): string |
  * RED with "handed it back" — is still offered the remind, because giving a row back is not
  * pulling out and she is still coming.
  */
+/**
+ * ⚠ AND SINCE GTC-189 SLICE 7a IT CATCHES TWO MORE: THE BOUNCE DOOR REPLACES THE REMIND.
+ *
+ * Founder ruling, 2026-09-19 — *"not beside it"*:
+ *
+ * > Two ways to do nearly the same thing, one of which does not know the address is dead and does not
+ * > go through the dispatcher, is the board offering her a tap that wastes her time and tells her
+ * > nothing.
+ *
+ * **This was a live defect the two new reds would have created rather than a refinement.** The filter
+ * refused exactly ONE case, so a `NOT_DELIVERED` person would have been offered a remind that emails
+ * the address which has just bounced — through the nudge route, not the dispatcher, and knowing
+ * nothing about the failure — and an `UNREACHABLE` person would have been offered one with no address
+ * to send to at all.
+ *
+ * ⚠ SO ON THESE TWO REDS THE PANEL OFFERS NOTHING UNTIL SLICE 7b BUILDS THE DOOR, AND THAT IS THE
+ * ORDER THE FOUNDER CHOSE: *"I would rather ship 7a with remind withdrawn and no door for one commit
+ * than ship it with a remind that emails a dead address."* For `UNREACHABLE` it is not even a gap —
+ * ruling M's red MEANS Gather is out of moves, so an action-less red is the truth about that case.
+ */
 export function remindOffered(person: Pick<GlancePerson, 'reasons'>): boolean {
-  return !person.reasons.includes('ATTENDANCE_NO');
+  return !REMIND_WITHDRAWN.some((reason) => person.reasons.includes(reason));
 }
+
+/**
+ * The reasons that withdraw the remind.
+ *
+ * A named list rather than three `includes` calls, so slice 7b's door has one place to read when it
+ * asks *"which reds am I the door for"* — and so a fourth entry is a visible decision.
+ */
+const REMIND_WITHDRAWN = ['ATTENDANCE_NO', 'NOT_DELIVERED', 'UNREACHABLE'] as const;
 
 /**
  * What a remind is about, in the words the template wants.

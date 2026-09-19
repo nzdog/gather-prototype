@@ -367,6 +367,47 @@ async function main() {
       'A PERSON WHO HAS ANSWERED NO IS NOT OFFERED THE REMIND — the panel stops offering what it has just contradicted',
       offeredBuilt && ok(() => A.remindOffered(person({ reasons: ['ATTENDANCE_NO'] })) === false)
     );
+
+    /*
+     * ── GTC-189 SLICE 7a — THE BOUNCE DOOR REPLACES THE REMIND ────────────────────
+     *
+     * Founder ruling, 2026-09-19: **the bounce door REPLACES remind on both new reds, not beside
+     * it.** Verbatim: *"Two ways to do nearly the same thing, one of which does not know the address
+     * is dead and does not go through the dispatcher, is the board offering her a tap that wastes her
+     * time and tells her nothing."*
+     *
+     * ⚠ THIS WAS A LIVE DEFECT THE NEW REDS WOULD HAVE CREATED, and it is worth naming as that
+     * rather than as a refinement. `remindOffered` refused exactly ONE case, so without this a
+     * NOT_DELIVERED person would be offered a remind that emails the address which just bounced, and
+     * an UNREACHABLE person would be offered one with no address at all.
+     */
+    assert(
+      'slice 7a',
+      '⚠ A NOT_DELIVERED PERSON IS NOT OFFERED THE REMIND — it would email the address that just ' +
+        'bounced, through the nudge route, without knowing it is dead',
+      offeredBuilt && ok(() => A.remindOffered(person({ reasons: ['NOT_DELIVERED'] })) === false)
+    );
+    assert(
+      'slice 7a',
+      "⚠ AND NEITHER IS AN UNREACHABLE ONE — there is no address to send to, and ruling M's red means " +
+        'Gather is out of moves. A tap that cannot work is worse than no tap',
+      offeredBuilt && ok(() => A.remindOffered(person({ reasons: ['UNREACHABLE'] })) === false)
+    );
+    assert(
+      'slice 7a',
+      '⭐ AND THE WITHDRAWAL IS NARROW — a person carrying BOTH an expired maybe and a delivery ' +
+        'failure is still not offered it, because the dead address is the binding fact; but the three ' +
+        'older reds on their own are untouched. Without this pair the filter could be "offer nothing"',
+      offeredBuilt &&
+        ok(
+          () =>
+            A.remindOffered(person({ reasons: ['DECIDE_BY_EXPIRED', 'NOT_DELIVERED'] })) ===
+              false &&
+            A.remindOffered(person({ reasons: ['REVERSAL'] })) === true &&
+            A.remindOffered(person({ reasons: ['DECIDE_BY_EXPIRED'] })) === true &&
+            A.remindOffered(person({ reasons: ['EXHAUSTED_SILENCE'] })) === true
+        )
+    );
     // ⭐ THE DIFFERENTIAL. Without it, "not offered" is satisfiable by never offering at all.
     assert(
       'Ruling 31',
