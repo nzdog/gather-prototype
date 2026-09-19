@@ -1,6 +1,7 @@
 import { randomBytes } from 'crypto';
 import { prisma } from './prisma';
 import type { TokenScope, Prisma } from '@prisma/client';
+import { isChildMembership } from './eligibility/child-exclusion';
 
 export interface InviteLink {
   personId: string;
@@ -141,6 +142,48 @@ export async function ensureEventTokens(eventId: string, tx?: PrismaClient): Pro
    * any event re-roled to HOST now has its stale token revoked by the same sweep, so the
    * backfill inherits a mechanism rather than needing to name a separate write.
    */
+  /*
+   * ⚠ GTC-316 — THE CHILD REVOCATION, AND UNKNOWN 1 IS RULED: WITHHOLD **AND** REVOKE.
+   *
+   * Founder ruling, 2026-09-19: *"a token already minted is already published, so withholding alone
+   * leaves every child currently holding one exposed and fixes only the future. Three exist in
+   * gather_dev today and all three are lapsed, so the live cost is nil — which is exactly the moment
+   * to take a one-way door, not after 5f makes it fifty-seven."*
+   *
+   * ⚠ IT IS [[GTC-256]] BUILD DECISION 3's RULE ONE ROLE DOWN, and that rule is worth quoting because
+   * it is the whole argument: **declining to issue is construction-deep only for as long as none
+   * exists.** Three existed.
+   *
+   * ⚠ DO-NOT-TOUCH ZONE 3, ENTERED DELIBERATELY AND NARROWLY, structurally symmetric with the HOST
+   * sweep directly below and with the COORDINATOR prune above:
+   *
+   *   - It keys on the WRONG SCOPE FOR THIS ROW, never on the person: a CHILD membership must not
+   *     hold a PARTICIPANT token. Nothing else of theirs is touched — a child holds items
+   *     ([[GTC-207]]) and that is untouched.
+   *   - It reaches no adult. A membership with any other `householdRole`, **including NULL**, is
+   *     outside the query.
+   *   - It is NOT a general PARTICIPANT prune. That would be a wider change to issuance semantics
+   *     and would need the full security re-audit Zone 3 requires — the same line GTC-256 drew.
+   *
+   * ⚠ AND IT IS LAZY, WHICH IS NAMED RATHER THAN HIDDEN: a stale child token survives until this
+   * function next runs on that event. What closes the EXPOSURE immediately is the publication half —
+   * the directory and the claim route stop admitting a child row, so the rows stop mattering before
+   * they are gone. Both halves ship together for that reason.
+   */
+  const childRowPersonIds = personEvents
+    .filter((pe) => isChildMembership(pe.householdRole))
+    .map((pe) => pe.personId);
+
+  if (childRowPersonIds.length > 0) {
+    await db.accessToken.deleteMany({
+      where: {
+        eventId,
+        scope: 'PARTICIPANT',
+        personId: { in: childRowPersonIds },
+      },
+    });
+  }
+
   const hostRowPersonIds = personEvents.filter((pe) => pe.role === 'HOST').map((pe) => pe.personId);
 
   if (hostRowPersonIds.length > 0) {
@@ -254,9 +297,30 @@ export async function ensureEventTokens(eventId: string, tx?: PrismaClient): Pro
   ]);
 
   for (const pe of personEvents) {
-    // Only create PARTICIPANT tokens for people with PARTICIPANT role
-    // AND who are NOT coordinators (their own token comes from step 4b)
-    if (pe.role === 'PARTICIPANT' && !coordinatorIds.has(pe.personId)) {
+    /*
+     * Only create PARTICIPANT tokens for people with PARTICIPANT role AND who are NOT
+     * coordinators (their own token comes from step 4b) AND WHO ARE NOT CHILDREN.
+     *
+     * ⚠ GTC-316 — THE CHILDNESS CHECK IS THE FIX, AND IT IS A THIRD COLUMN THIS LOOP NEVER READ.
+     * `PersonEvent.role` is the EVENT role and childness lives on `PersonEvent.householdRole`, so
+     * every CHILD membership carries `role: 'PARTICIPANT'` and every one of them was admitted here.
+     * Measured: all 60 CHILD memberships in `gather_dev`, of which 57 were one press away from a
+     * live token the unauthenticated family directory publishes.
+     *
+     * It is [[GTC-262]]'s shape one role down — a credential that is never sent, published anyway —
+     * and the bargain GTC-262 preserved does not cover it: *"a participant token is an ask"*, and a
+     * child's ask is the one case the model routes through somebody else entirely.
+     *
+     * ⚠ `isChildMembership` AND NOT `isMessageableRole`. GTC-207 fences the messaging gate as
+     * message-only, and minting a credential is not messaging. See the note in
+     * `child-exclusion.ts`: the reason a child gets no token is not "never messaged", it is that the
+     * token is an ask that may never be asked.
+     */
+    if (
+      pe.role === 'PARTICIPANT' &&
+      !coordinatorIds.has(pe.personId) &&
+      !isChildMembership(pe.householdRole)
+    ) {
       if (!tokenExists(pe.personId, 'PARTICIPANT', null)) {
         tokensToCreate.push({
           token: generateToken(),

@@ -5,7 +5,7 @@ import { logInviteEvent } from '@/lib/invite-events';
 import { headers } from 'next/headers';
 import { isHostMembership } from '@/lib/eligibility/host-exclusion';
 import {
-  isClaimableRole,
+  isClaimableMembership,
   UNKNOWN_PERSON_MESSAGE,
   UNKNOWN_PERSON_STATUS,
 } from '@/lib/eligibility/shared-link-exposure';
@@ -69,7 +69,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
       // this event, which @@unique([personId, eventId]) makes exactly one row.
       eventMemberships: {
         where: { eventId: event.id },
-        select: { role: true },
+        // GTC-316: `householdRole` as well as `role` — childness lives on it, and a role-only
+        // read admitted every child.
+        select: { role: true, householdRole: true },
       },
       tokens: {
         where: {
@@ -147,7 +149,19 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
    * the identical reason: unauthenticated, so a distinct status or message would confirm
    * that a guessed `personId` coordinates a team on this event.
    */
-  if (!isClaimableRole(person.eventMemberships[0]?.role)) {
+  /*
+   * ⚠ GTC-316 — THE MEMBERSHIP, NOT THE ROLE ALONE. `isClaimableRole` reads
+   * `PersonEvent.role`, and every CHILD membership carries `role: 'PARTICIPANT'` — all 60 in
+   * `gather_dev` — so a role-only allowlist admitted every one of them. The refusal below is
+   * byte-identical for a child, a coordinator and a host, for the reason stated above: on an
+   * unauthenticated endpoint a distinct answer is an oracle.
+   */
+  if (
+    !isClaimableMembership({
+      role: person.eventMemberships[0]?.role,
+      householdRole: person.eventMemberships[0]?.householdRole,
+    })
+  ) {
     return NextResponse.json({ error: UNKNOWN_PERSON_MESSAGE }, { status: UNKNOWN_PERSON_STATUS });
   }
 

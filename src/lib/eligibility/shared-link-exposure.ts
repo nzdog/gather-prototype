@@ -73,6 +73,7 @@
  */
 
 import type { TokenScope } from '@prisma/client';
+import { NON_CHILD_PERSON_EVENT, isChildMembership } from './child-exclusion';
 
 /**
  * The only scope either unauthenticated surface may emit.
@@ -117,6 +118,52 @@ export const SHAREABLE_ACCESS_TOKEN = { scope: SHAREABLE_TOKEN_SCOPE } as const;
 export function isClaimableRole(role: string | null | undefined): boolean {
   return role === 'PARTICIPANT';
 }
+
+/**
+ * GTC-316 — MAY A STRANGER CLAIM THIS MEMBERSHIP? The role AND the childness, together.
+ *
+ * ⚠ `isClaimableRole` ALONE ADMITS EVERY CHILD, and that is not a slip in it: it reads
+ * `PersonEvent.role`, and **childness lives on `PersonEvent.householdRole`.** Every CHILD membership
+ * in `gather_dev` carries `role: 'PARTICIPANT'` — all 60 of them — so a role-only allowlist says yes
+ * to all 60.
+ *
+ * ⚠ AND THE BARGAIN GTC-262 PRESERVED DOES NOT COVER THEM. That ruling: *"a participant token is an
+ * ask, a coordinator token is a job, and the no-verification bargain was struck about the ask."* A
+ * child's token is neither — it is an ask that **may never be asked**, because the model routes a
+ * child's item through their household contact's message ([[GTC-189]]'s founder ruling). Nobody
+ * struck a no-verification bargain about a child, because a child was never supposed to be reachable.
+ *
+ * It stays an ALLOWLIST on the role for the reason the module note gives, and adds childness as a
+ * separate refusal rather than folding it in — two questions, two predicates, both required, exactly
+ * as `isHostMembership` is the other half of this gate and not optional.
+ *
+ * ⚠ `isChildMembership` AND NOT `isMessageableRole`: GTC-207 fences the messaging gate as
+ * message-only, and publication is not messaging. See the note in `child-exclusion.ts`.
+ *
+ * ⚠ AND `isClaimableRole` IS KEPT, NOT REPLACED, because `SHAREABLE_ACCESS_TOKEN` and the directory
+ * still need the role question on its own. A caller that has only a role should get the role answer
+ * and not a silently partial one.
+ */
+export function isClaimableMembership(membership: {
+  role: string | null | undefined;
+  householdRole: string | null | undefined;
+}): boolean {
+  return isClaimableRole(membership.role) && !isChildMembership(membership.householdRole);
+}
+
+/**
+ * Prisma `where` fragment for the `PersonEvent` rows either unauthenticated surface may load.
+ *
+ * ⚠ USED IN THE QUERY, NOT AFTER IT — [[GTC-262]]'s own precedent and its stated reason:
+ * *"restricting leaves the mechanism standing as dead code, and the dead code is the mechanism."*
+ * A child's row never enters the process, so no later edit to the mapping below it can reintroduce
+ * the token by accident.
+ *
+ * ⚠ IT IS NULL-SAFE BY CONSTRUCTION. `NON_CHILD_PERSON_EVENT` is an allowlist plus an explicit NULL
+ * and never `{ not: 'CHILD' }`, because 99 of 335 memberships in `gather_dev` have a NULL
+ * `householdRole` and SQL would drop every one of them. See `child-exclusion.ts`.
+ */
+export const SHAREABLE_PERSON_EVENT = NON_CHILD_PERSON_EVENT;
 
 /**
  * The refusal an unauthenticated caller gets, and it is deliberately the unknown-person one.

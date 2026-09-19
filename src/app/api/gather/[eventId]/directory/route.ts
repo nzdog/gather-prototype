@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { ADDRESSABLE_PERSON_EVENT } from '@/lib/eligibility/host-exclusion';
 import {
   SHAREABLE_ACCESS_TOKEN,
+  SHAREABLE_PERSON_EVENT,
   SHAREABLE_TOKEN_PREFIX,
 } from '@/lib/eligibility/shared-link-exposure';
 
@@ -66,8 +67,24 @@ export async function GET(
      * withheld instead — see the token query below. This filter is about who is not a
      * name in this directory at all, and the host is still the only one.
      */
+    /*
+     * ⚠ GTC-316 — `SHAREABLE_PERSON_EVENT` IS THE CHILD FILTER, AND IT IS IN THE QUERY.
+     *
+     * The host was already excluded here; a CHILD was not, because
+     * `ADDRESSABLE_PERSON_EVENT` reads `personId` and `role` and childness lives on
+     * `householdRole`. So every child was a directory row, and the token query below emitted the
+     * PARTICIPANT token riding it — a writable surface on a child's row, to anyone holding the
+     * event id.
+     *
+     * Filtered in the query rather than after it, which is this route's own precedent from
+     * GTC-262: "restricting leaves the mechanism standing as dead code, and the dead code is the
+     * mechanism." The row never enters the process.
+     *
+     * ⚠ AND IT IS NULL-SAFE. `{ householdRole: { not: 'CHILD' } }` would have deleted 99 of 335
+     * memberships in `gather_dev`, because NOT(NULL = 'CHILD') is NULL. See `child-exclusion.ts`.
+     */
     const people = await prisma.personEvent.findMany({
-      where: { eventId, ...ADDRESSABLE_PERSON_EVENT(event.hostId) },
+      where: { eventId, ...ADDRESSABLE_PERSON_EVENT(event.hostId), ...SHAREABLE_PERSON_EVENT },
       include: {
         person: {
           select: {

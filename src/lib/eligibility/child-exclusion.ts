@@ -69,3 +69,62 @@ export function isMessageableRole(role: HouseholdRole | string | null | undefine
 
 /** Skip reason recorded when a candidate is dropped for the child rule. */
 export const CHILD_SKIP_REASON = 'CHILD role — never messaged (Moment 4 §10.6)';
+
+/*
+ * ─── GTC-316: CHILDNESS AS A FACT, WHICH IS NOT THE MESSAGING GATE ────────────
+ *
+ * ⚠ READ THE FENCE ABOVE FIRST, THEN THIS. `isMessageableRole` is a GATE — it answers "may a system
+ * message go to this membership", and GTC-207 fences it as message-only. The two exports below
+ * answer a different question: "is this membership a child." A fact, not a gate.
+ *
+ * WHY THAT DISTINCTION EARNED ITS OWN EXPORT RATHER THAN A SECOND CALLER OF THE GATE. [[GTC-316]]
+ * needs childness in two places that are not messaging at all — TOKEN ISSUANCE
+ * (`ensureEventTokens`) and PUBLICATION to an unauthenticated caller
+ * (`shared-link-exposure.ts`). Importing the messaging gate into either would make
+ * "never messaged" the stated reason a credential is withheld, and it is not the reason:
+ * GTC-316's ground is that *a child's token is an ask that may never be asked, so the
+ * no-verification bargain GTC-262 preserved was never struck about it.*
+ *
+ * ⚠ AND CHILDNESS IS DEFINED HERE, ONCE. Two readings of "is this a child" in two modules is the
+ * drift this ledger keeps catching — `contactMethod` at ruling C, the preview's mirror of step 4 at
+ * GTC-294, the two refusals sharing a why-code at ruling AN.
+ */
+
+/**
+ * Is this membership a child? Reads `PersonEvent.householdRole` and nothing else.
+ *
+ * ⚠ NOT A MESSAGING DECISION AND NOT AN ASSIGNMENT DECISION. A child holds items — [[GTC-207]] — and
+ * that is untouched by this. This says only what the row IS.
+ */
+export function isChildMembership(
+  householdRole: HouseholdRole | string | null | undefined
+): boolean {
+  return householdRole === 'CHILD';
+}
+
+/**
+ * Prisma `where` fragment for memberships that are NOT children.
+ *
+ * ⚠ AN ALLOWLIST PLUS AN EXPLICIT NULL, AND **NEVER** `{ householdRole: { not: 'CHILD' } }`. The
+ * module note above already gives the reason — `NOT (col = 'CHILD')` evaluates to NULL, not true, so
+ * every NULL row is silently excluded — and [[GTC-316]] measured what that costs:
+ *
+ *   **99 of 335 memberships in `gather_dev` have `householdRole: null`, and `{ not: 'CHILD' }`
+ *   matches only 176 of 335.**
+ *
+ * So the obvious filter deletes 99 ADULTS from the directory and from token issuance — the fix
+ * becoming a worse defect than the one it closes. `tests/child-token-exposure-test.ts` layer N
+ * asserts, in four files, that nobody writes it.
+ *
+ * ⚠ THE LIST COINCIDES WITH `MESSAGEABLE_HOUSEHOLD_ROLES` TODAY AND IS NOT THE SAME LIST. Both are
+ * "the three that are not CHILD" because `HouseholdRole` has exactly four members. **A fifth member
+ * must be classified against BOTH** — it could be unmessageable and not a child, or a child by
+ * another name — and keeping them separate is what makes that a decision rather than an inheritance.
+ */
+export const NON_CHILD_PERSON_EVENT: {
+  OR: ({ householdRole: { in: HouseholdRole[] } } | { householdRole: null })[];
+} = {
+  // Not `as const`: Prisma's `OR` takes a mutable array, and a readonly tuple is rejected at the
+  // call site rather than here — which reads as a bug in the caller.
+  OR: [{ householdRole: { in: ['PRIMARY_CONTACT', 'PARTNER', 'GUEST'] } }, { householdRole: null }],
+};
