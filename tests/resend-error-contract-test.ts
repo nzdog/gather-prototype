@@ -479,17 +479,57 @@ async function main() {
       !/drainOnce/.test(rejectionBody)
   );
   assert(
-    "⚠ THE CODE IS NOT PERSISTED. `providerError` still holds the provider's words VERBATIM and " +
-      'gains no code prefix, because that column is documented as their words and a column for the ' +
-      'code is a migration. So the DECISION gets the code and the RECORD does not',
+    "⚠ THE CODE IS STILL NOT PERSISTED. `providerError` holds the provider's words VERBATIM and gains " +
+      'no code prefix; the COLUMN now exists (phase 3a) and `recordRejection` does not write it yet. ' +
+      'So the DECISION has the code and the RECORD does not, and THIS ASSERTION IS THE 3b MARKER — ' +
+      'it inverts in the commit that adds the writer',
     /providerError: args\.error/.test(rejectionBody) && !/providerErrorCode/.test(rejectionBody)
   );
+  /*
+   * ✅ THE FENCE BELOW FIRED, AND RECORDING THAT IS WORTH MORE THAN QUIETLY FLIPPING IT.
+   *
+   * Phase 2 asserted the schema had NO `providerErrorCode` column, because the widening was ruled to
+   * carry no migration — *"the fence that makes it a fact rather than a promise."* GTC-289 phase 3a
+   * adds the column on a founder ruling, and that assertion went RED the moment the column landed.
+   * **That is the fence working, not a stale test.** [[GTC-192]]'s false-label rule says the label
+   * moves in the same edit as the fact, so both labels here moved rather than one.
+   *
+   * What is fenced NOW is the half that is still ruled: `providerStatusCode` was ruled OUT — *"a
+   * stored value nothing reads is the derivable-drift risk with no consumer to pay for it. The status
+   * is read by the retry at the moment it has the live envelope; it never needs to survive."*
+   */
   assert(
-    '⚠ AND THE SCHEMA IS UNTOUCHED — no providerErrorCode column on OutboundMessage, which is the ' +
-      'fence that makes "the widening carries no migration" a fact rather than a promise. Zone 5',
+    '✅ THE COLUMN EXISTS AND ITS RULED-OUT TWIN DOES NOT — providerErrorCode is on OutboundMessage ' +
+      '(phase 3a) and providerStatusCode is absent, ruled: the status is read by the retry while it ' +
+      'holds the live envelope and never needs to survive. Zone 5',
     ok(() => {
       const schema = read('prisma/schema.prisma');
-      return schema.length > 0 && !/providerErrorCode|providerStatusCode/.test(schema);
+      return (
+        schema.length > 0 &&
+        /providerErrorCode String\?/.test(schema) &&
+        !/providerStatusCode/.test(schema)
+      );
+    })
+  );
+  assert(
+    '⚠ AND THE FOUR POLL COLUMNS HAVE NO WRITER EITHER — deliveryState, providerLastEvent, ' +
+      'deliveryCheckedAt and deliveryPollDoneAt exist in the schema and appear nowhere in src/, ' +
+      'because the poller is a later phase. Slice 4b shipped a field nothing read for the same reason ' +
+      'and said so',
+    ok(() => {
+      const schema = read('prisma/schema.prisma');
+      const dispatchSrc = read(DISPATCH);
+      const emailDelivery = read(DELIVERY) + read(MODULE);
+      const names = [
+        'deliveryState',
+        'providerLastEvent',
+        'deliveryCheckedAt',
+        'deliveryPollDoneAt',
+      ];
+      return (
+        names.every((n) => schema.includes(n)) &&
+        names.every((n) => !dispatchSrc.includes(n) && !emailDelivery.includes(n))
+      );
     })
   );
   assert(

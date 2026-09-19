@@ -1,7 +1,8 @@
 # GATHER BUILD CONSTANTS
 
 Reference file for AI executors and developers. Keep this file accurate.
-Last updated: 2026-08-10.
+Last updated: 2026-09-19 (Zone 5 gained a standing rule about when a migration is
+read — see GTC-289 phase 3a).
 CLAUDE.md reviewed: no conflicts or additions found.
 
 ---
@@ -283,6 +284,31 @@ critical for payment integrity. Changes here affect real money.
 Never hand-edit migration SQL files. Never delete or reorder migrations. Always
 use `prisma migrate dev` to generate new migrations. The production deploy
 command (`prisma migrate deploy`) applies them in order.
+
+⚠ **A MIGRATION IS READ BEFORE THE COMMIT, NOT ONLY BEFORE THE APPLY.**
+*(Standing rule, added 2026-09-19 on founder ruling, out of GTC-289 phase 3a.)*
+
+The reason is the sentence above it: migrations may not be deleted or reordered.
+So the two states are not equally reversible.
+
+- **Uncommitted**, a rejected column is a deleted folder: remove it, edit the
+  schema, regenerate. Nothing is lost and nothing is recorded.
+- **Committed**, it cannot be removed without rewriting history, so every
+  correction arrives as a SECOND migration and a SECOND rehearsal.
+
+**So the sequence is: generate with `--create-only --skip-generate`, surface the
+SQL, rehearse against a clone, and hold BOTH the commit and the apply until the
+SQL is approved.** Holding only the apply protects the database and leaves the
+irreversible half — the commit — already taken.
+
+The rehearsal shape that goes with it, per the Deploy caveat below and the
+precedent in GTC-189 slice 4 and GTC-289 phase 3a: clone with
+`pg_dump --no-owner --no-acl`, apply to the clone with **`prisma migrate deploy`
+and never `migrate dev`** (which can offer to RESET a transferred database),
+measure `pg_class.relfilenode` before and after to prove an `ADD COLUMN` was
+metadata-only rather than asserting it, probe behaviour in transactions that are
+rolled back, then drop the clone. Apply migrations first and regenerate the
+client second (KB-005).
 
 ### 6. Security Test Suite (`tests/security-*.ts`, `scripts/triage-unknown-routes.ts`)
 These tests define the security contract for the API surface. Do not weaken or

@@ -805,6 +805,39 @@ model OutboundMessage {
   rejectedAt    DateTime?
   providerError String?
 
+  /// THE PROVIDER'S OWN CODE FOR THAT REFUSAL. Resend's `ErrorResponse.name` — one of a
+  /// closed 21-value union in resend@6.22.0 — stored verbatim BESIDE the prose and never
+  /// prefixed into it. Founder ruling, 2026-09-19 (GTC-289 phase 3a): "`providerError`
+  /// holds the provider's prose; the code belongs beside it as its own field."
+  ///
+  /// ⚠ THREE STATES, AND THE THIRD IS WHY THIS IS NULLABLE WITH NO DEFAULT AND NEVER AN
+  /// EMPTY STRING. A code means the provider refused us. NO code on an EMAIL row means
+  /// THE PROVIDER WAS NEVER REACHED — `getResendClient()` throws when the key is missing
+  /// and the sender's `catch` sets no code, deliberately, because a thrown `Error` has a
+  /// `.name` too and `TypeError` is not a provider answer. NO code on a TEXT row means the
+  /// field does not apply to that channel: TNZ's own result vocabulary arrives on a
+  /// DELIVERY RECEIPT (`SmsDeliveryReport.result`) rather than on a submission.
+  ///
+  /// So `''` and `NULL` are the difference between "we asked and got nothing" and "we
+  /// never asked", and a default would destroy the third state on the day it shipped.
+  ///
+  /// ⚠ AND THAT DISTINCTION IS THE WHOLE REASON FOR THE COLUMN. GTC-289 phase 2 made it
+  /// machine-readable in the dispatcher and then threw it away, so it existed only in a
+  /// suite's assertion. Founder ruling: "give it a column and the distinction survives
+  /// into the record rather than living in a suite's assertion" — and slice 7 is what needs
+  /// it, when it asks why a row is red.
+  ///
+  /// A String, not an enum, following `provider` and `withheldWhy`: the vocabulary is
+  /// typed in TypeScript (`src/lib/email-delivery/resend-error-contract.ts`, a `Record`
+  /// over the SDK's own union, so a 22nd code is a compile error) and stored as text, so a
+  /// provider adding a value needs no migration before it can be RECORDED.
+  ///
+  /// ⚠ AND ONE OBSERVED FACT ABOUT THIS COLUMN'S CONTENTS, so nobody reads a kind as a
+  /// reason: a live invalid key answers `validation_error`, not `invalid_api_key`. The one
+  /// code anybody has seen from this provider is filed under a name that does not describe
+  /// the situation it was returned for. GTC-323.
+  providerErrorCode String?
+
   /// GATHER DID NOT SEND IT. A gate refused the row between the press and the dispatch —
   /// an opt-out arriving in the window, a household switched off, a DONT_CHASE mark set.
   /// `withheldWhy` carries OUR code: a TS union with a `Record` guard so a missing case is
@@ -830,6 +863,112 @@ model OutboundMessage {
   withheldAt  DateTime?
   withheldWhy String?
 
+  /// ── WHAT HAPPENED AFTER ACCEPTANCE — GTC-289 (GTC-189 slice 6), phase 3a ──────────
+  ///
+  /// A FOURTH PHASE OF THE ROW'S LIFE, and it begins only where `acceptedAt` ends. The
+  /// three columns above are the three doors at SUBMISSION — accepted, refused, withheld.
+  /// These four are about a message the provider TOOK and then did something with.
+  ///
+  /// ⚠ THE MECHANISM IS A POLL, NOT A WEBHOOK, AND THAT IS WHY THIS IS COLUMNS AND NOT A
+  /// SECOND TABLE. GTC-264 gave `SmsDeliveryReport` its own model for a STATED reason: TNZ
+  /// retry a webhook every five minutes for 24 hours, several reports per message are
+  /// expected, and a report can arrive for a message we never recorded — so unmatched rows
+  /// must be storable and duplicates must be recoverable. NONE of that reason holds here.
+  /// Gather chooses which id to ask about, so there is no unmatched case; the poll answers
+  /// with ONE current state rather than an event stream, so there is no history to keep;
+  /// and the answer is always about a row we already have. A second table would be
+  /// mirroring GTC-264's file COUNT rather than applying its RULE.
+  ///
+  /// ⚠ NOTHING READS OR WRITES THESE FOUR YET. The poller is a later phase of GTC-289.
+  /// This migration carries the storage the way ruling W carried `nextAttemptAt` for a
+  /// retry policy that did not exist: a question found late costs a second rehearsal.
+  ///
+  /// ── THE FOUR STATES THEY EXPRESS, WHICH IS HOW TO READ THEM ──────────────────
+  ///
+  ///   state NULL, pollDone NULL — never asked yet, or not applicable: a TEXT row, or one
+  ///                               the provider never accepted.
+  ///   state NULL, pollDone SET  — ⚠ WE CAN NEVER ASK. Accepted with no join key, so there
+  ///                               is nothing to poll WITH and the row must leave the queue
+  ///                               rather than be asked about forever.
+  ///   state SET,  pollDone NULL — in flight; keep asking.
+  ///   state SET,  pollDone SET  — concluded, or given up on. Which one is DERIVABLE: a
+  ///                               terminal state means concluded, `IN_FLIGHT` means we
+  ///                               stopped asking. No column for it.
+  ///
+  /// ⚠ THE SECOND ROW IS THE REASON `deliveryPollDoneAt` IS A COLUMN AND NOT A DERIVED
+  /// FLAG, and it is not a hypothetical: GTC-264 records that `sendViaTnz` treats a 2xx
+  /// with an unparseable body as a success and leaves the id undefined, so a send can be
+  /// ACCEPTED AND PERMANENTLY UNJOINABLE — which is why `providerMessageId` is nullable at
+  /// all. "We can never ask" is not derivable from any delivery state, because the state
+  /// is NULL and always will be. Nor is "we gave up while it still said in-flight". Both
+  /// are facts about US, and a flag computed from the provider's state cannot hold either.
+  ///
+  /// ── ⚠ AND THE COLUMN THAT IS DELIBERATELY ABSENT, RECORDED BY ITS REASONING ──────
+  ///
+  /// THERE IS NO `deliveryStateAt` — no "when this state was first observed" — and it was
+  /// designed in and then removed by reasoning rather than left out by preference.
+  ///
+  /// It was wanted for two things: the instant a bounce became known (Hinge §7's red) and
+  /// the acceptance-to-outcome gap (GTC-264 Unknown 5, which bears on GTC-258's choice of
+  /// which stamps move). BOTH ARE ALREADY AVAILABLE, because a terminal state STOPS the
+  /// poller: the last check is therefore the check that FOUND the terminal state, so
+  /// `deliveryCheckedAt` holds that instant exactly, and the gap is
+  /// `deliveryCheckedAt - acceptedAt`. The only thing a sixth column would have preserved
+  /// is the timing of NON-terminal transitions — when `queued` became `sent` — which
+  /// nothing reads and no ruling asks for.
+  ///
+  /// Do not add it back without a consumer. Two columns holding the same instant is the
+  /// drift risk ruling C names, and the answer here is not a single writer: it is that the
+  /// second column has no question of its own.
+
+  /// OUR CLASSIFICATION of the provider's last word: a `ResendOutcomeKind` from
+  /// `src/lib/email-delivery/resend-delivery-contract.ts` — `IN_FLIGHT`,
+  /// `PROVIDER_REPORTS_DELIVERED`, `ENGAGEMENT_REPORTED`, `BOUNCED`, `PROVIDER_FAILED`,
+  /// `SUPPRESSED`, `COMPLAINED`, `CANCELLED`, `UNRECOGNISED`.
+  ///
+  /// A String, not an enum, on `withheldWhy`'s stated reason — whys in this tree are typed
+  /// in TypeScript with a `Record` guard and stored as text — and on `provider`'s: a
+  /// thirteenth `last_event` is ALREADY a compile error in that module's `Record`, and it
+  /// must not ALSO be a database error, or the provider adding a value would make the
+  /// value unrecordable until a migration shipped.
+  ///
+  /// ⚠ IT IS NOT A COLOUR AND MUST NEVER BECOME ONE. GTC-192 owns the glance's red and
+  /// GTC-289's scope says this ticket "supplies the data and does not add a `RED_REASON`".
+  /// GTC-264's contract module: "THE BUCKETS ARE NOT COLOURS."
+  ///
+  /// ⚠ AND `PROVIDER_REPORTS_DELIVERED` IS NOT "ARRIVED". Whether Resend's `delivered`
+  /// is affirmative or merely the absence of a failure is GTC-289 Unknown 3 and the poll
+  /// does not settle it. The name is deliberately about who SAID it.
+  deliveryState String?
+
+  /// THE PROVIDER'S OWN WORD, verbatim: `GetEmailResponseSuccess.last_event`. Kept beside
+  /// our classification for the same reason `providerError` is kept beside
+  /// `providerErrorCode` and `SmsDeliveryReport.result` beside its `status` — an
+  /// `UNRECOGNISED` state is worthless without the value that produced it, and an
+  /// unrecognised value here means the installed SDK and the live API have diverged, which
+  /// is a fact somebody will need to read.
+  providerLastEvent String?
+
+  /// WHEN WE LAST ASKED. Our clock, not the provider's — nothing in a poll response
+  /// carries the delivery event's own timestamp (`created_at` is the EMAIL's), which is
+  /// the same gap that made `SmsDeliveryReport.receivedAt` necessary.
+  ///
+  /// The poller's scheduling key: oldest-checked first. Without it every tick would poll
+  /// every unfinished row.
+  deliveryCheckedAt DateTime?
+
+  /// WE HAVE STOPPED ASKING. Set when the state is terminal, when there is no join key to
+  /// ask with, or when the poller gives up on a row still reporting in-flight.
+  ///
+  /// The unfinished predicate is `deliveryPollDoneAt IS NULL`, deliberately the same shape
+  /// as the drain's `attemptedAt IS NULL` above. See the four states in the block above
+  /// for why this is a column and not a flag computed from `deliveryState`.
+  ///
+  /// ⚠ THE STOPPING RULE ITSELF IS THE POLLER'S, NOT THIS COLUMN'S — how many times and
+  /// for how long is a POLICY, exactly as the retry's three fixed attempts are, and it is
+  /// ruled where it is written. This is only the storage that policy needs.
+  deliveryPollDoneAt DateTime?
+
   /// ⚠ NO @@unique, AND @@unique([personEventId, kind]) IS THE ONE THAT LOOKS RIGHT AND IS
   /// WRONG. It would make the press idempotent at the row level — and then ruling U's
   /// "send again to the same address" and "let the host edit the address and send", each
@@ -853,6 +992,19 @@ model OutboundMessage {
   /// afterwards is another migration and another rehearsal.
   @@index([attemptedAt, createdAt])
   @@index([nextAttemptAt])
+  /// THE POLL, in the same shape as the drain above: the unfinished pass reads
+  /// `deliveryPollDoneAt IS NULL`, oldest-checked first. A partial index over that
+  /// predicate would be better and is not available — Prisma has no syntax for one, and
+  /// Do-Not-Touch Zone 5 forbids hand-editing migration SQL.
+  ///
+  /// ⚠ SPECULATIVE, IN THE SAME WORDS THE DRAIN'S INDEX CARRIES, AND IT JOINS THE SAME
+  /// OWED MEASUREMENT RATHER THAN OPENING A SECOND DEBT: the `EXPLAIN (ANALYZE, BUFFERS)`
+  /// slice 5 owes against a table large enough to mean something must now cover the poll's
+  /// predicate as well as the drain's. This table holds zero rows, so both are unmeasured
+  /// for the same reason. Added now on ruling W's reason — a question found late costs a
+  /// second migration and a second rehearsal — and index tuning afterwards is exactly
+  /// that.
+  @@index([deliveryPollDoneAt, deliveryCheckedAt])
 }
 
 model SmsDeliveryReport {
