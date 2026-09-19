@@ -102,11 +102,15 @@ export interface PressRefusal {
    * and neither is true of an event that is not ready. 409 is the honest one — the request is
    * fine, the state is not."*
    *
-   * ⚠ AND THIS MOVED TWO EXISTING REFUSALS FROM 400. The second press and the not-CONFIRMING
-   * guard both answered 400 before slice 5a, and they are state refusals by exactly the
-   * ground above. Measured before changing them: no suite pinned the status, and neither live
-   * caller branches on it — `InviteStatusSection` renders `data.error` on any `!res.ok` and
-   * the host view ignores the response entirely. Named here rather than left to be found.
+   * ✅ AND 409 COVERS THE WHOLE FAMILY — WIDENED DELIBERATELY, RULED 2026-09-19, and not
+   * inherited from slice 5a by accident. The founder's words: *"A refusal about the state of
+   * the event is a 409 whatever the specific state, and two shapes for one family is how a
+   * caller learns to read the wrong one."*
+   *
+   * So the second press and the not-CONFIRMING guard, which both answered 400 before slice
+   * 5a, are 409 by the same ground as the rest. Measured before changing them: no suite
+   * pinned the status, and neither live caller branches on it. ⚠ DO NOT "RESTORE" A 400 FOR
+   * THE OLDER TWO on the grounds that they predate the rest — the family is the point.
    */
   status: 404 | 409;
   code: PressRefusalCode;
@@ -291,13 +295,13 @@ export async function pressSend(
         }
 
         /*
-         * ⚠ AN EVENT WITH NOBODY TO ASK IS REFUSED, AND THIS IS THE EXECUTOR'S READING OF
-         * RULING AC'S GROUND RATHER THAN A FOUNDER RULING. Nothing in the ticket says whether
-         * an event with no addressable recipient may be pressed. The ground borrowed is
-         * ruling AC's — an event with a hole in it is fixed before it sends — and a press that
-         * sends to nobody while locking the plan is exactly that shape. RAISED for a ruling;
-         * `tests/press-route-test.ts` layer X makes the behaviour visible rather than
-         * implicit.
+         * ✅ AN EVENT WITH NOBODY TO ASK IS REFUSED — RULED 2026-09-19, in the founder's words:
+         * *"An event with nobody to message is not an event ready to send, and refusing is the
+         * same fail-closed direction as ruling AC."*
+         *
+         * It was proposed as the executor's reading of ruling AC's ground and is now the
+         * ruling itself. Recorded as ruled rather than left as a reading, because the two
+         * statuses of a sentence like this are not interchangeable to whoever reads it next.
          */
         if (addressed.length === 0) {
           throw new PressRefused(

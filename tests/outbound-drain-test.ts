@@ -101,6 +101,28 @@ const DAYTIME = new Date('2026-09-19T01:00:00.000Z');
 const NIGHT = new Date('2026-09-19T12:00:00.000Z');
 
 async function main() {
+  /*
+   * ⚠ SNAPSHOT-AND-RESTORE, BECAUSE TWO FUNCTIONS THIS SUITE CALLS ARE GLOBAL BY DESIGN.
+   *
+   * `enrolMiniSends` sweeps EVERY pressed event and `drainOnce` drains EVERY unfinished row — they
+   * are cron functions and a cron has no tenant. So the `finally` block below, which deletes what
+   * the FIXTURE created, is not enough: the sweep creates rows on other people's events and the
+   * drain then claims and attempts them.
+   *
+   * ⚠ IT ALREADY HAPPENED. The first run of this suite created 20 rows on four real boards —
+   * including `GTC-192 replay — arrival`, a seeded DEMO board — and the drain attempted a send for
+   * every one. Nothing was delivered, because the Resend key does not authenticate and every
+   * address was on a reserved domain, and `PersonEvent.sentAt` did not move. **Both of those are
+   * luck rather than design.**
+   *
+   * So: every `OutboundMessage` id present before the suite runs is recorded, and anything not in
+   * that set is deleted afterwards. It is the same rule this ledger's standing warning states for
+   * mutations — a query with no tenant filter has the table for a blast radius — arriving as a
+   * FEATURE rather than as a mutation.
+   */
+  const preExistingOutboundIds = new Set(
+    (await prisma.outboundMessage.findMany({ select: { id: true } })).map((r) => r.id)
+  );
   const createdPersonIds: string[] = [];
   const createdEventIds: string[] = [];
   const createdUserIds: string[] = [];
@@ -714,6 +736,13 @@ async function main() {
       inviteStatus.includes('GTC-321') && hostView.includes('GTC-321')
     );
   } finally {
+    // ⚠ The global sweep's and drain's reach, undone. See the note at the top of main().
+    const strays = await prisma.outboundMessage.findMany({ select: { id: true } });
+    const strayIds = strays.map((r) => r.id).filter((id) => !preExistingOutboundIds.has(id));
+    if (strayIds.length > 0) {
+      await prisma.outboundMessage.deleteMany({ where: { id: { in: strayIds } } });
+      console.log(`   cleaned ${strayIds.length} row(s) the global sweep/drain created elsewhere`);
+    }
     for (const eventId of createdEventIds) {
       await prisma.outboundMessage.deleteMany({ where: { eventId } });
       await prisma.assignment.deleteMany({ where: { item: { team: { eventId } } } });

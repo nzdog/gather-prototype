@@ -2,7 +2,7 @@ import type { OutboundChannel, PrismaClient } from '@prisma/client';
 import { sendAskEmail } from '@/lib/email';
 import { sendSms, type SmsBlockReason } from '@/lib/sms/send-sms';
 import { isQuietHours } from '@/lib/sms/quiet-hours';
-import { readAskPreview } from '@/lib/preflight/ask-preview';
+import { pressWillMessage, readAskPreview } from '@/lib/preflight/ask-preview';
 import { composePreview } from '@/lib/preflight/ask-preview-compose';
 
 /**
@@ -386,11 +386,15 @@ export async function recordAcceptance(
     /*
      * RULING G: "each person's clock starts when their provider accepts their message."
      *
-     * ⚠ FIRST ACCEPTANCE WINS, and this is the EXECUTOR'S READING rather than the ruling's words —
-     * raised at slice 5a and asserted here. `sentAt: null` in the predicate is the whole of it.
-     * Ruling U's bounce door produces a SECOND ASK row for the same membership, and a resend that
-     * moved the clock would give that person a fresh four days because Gather tried again — Gather
-     * rewarding its own failure. If the founder rules the other way, this predicate is the change.
+     * ✅ FIRST ACCEPTANCE WINS — RULED 2026-09-19, in the founder's words: *"Ruling G says the clock
+     * starts when that person's provider accepts; a second acceptance for the same person is the
+     * same person's clock already running."*
+     *
+     * `sentAt: null` in the predicate is the whole of it. Ruling U's bounce door produces a SECOND
+     * ASK row for the same membership, and a resend that moved the clock would give that person a
+     * fresh four days because Gather tried again — Gather rewarding its own failure. Proposed as the
+     * executor's reading at slice 5a; recorded as ruled now, because a reading and a ruling are not
+     * the same sentence to whoever reads it next.
      */
     await tx.personEvent.updateMany({
       where: { id: args.personEventId, sentAt: null },
@@ -665,6 +669,148 @@ export async function drainOnce(
         await recordRejection(db, { id: row.id, provider: 'tnz', error });
         result.rejected++;
       }
+    }
+  }
+
+  return result;
+}
+
+// ─── Slice 5e: the mini-send ───────────────────────────────────────────────────
+
+export interface EnrolResult {
+  /** Rows created for late arrivals. */
+  enrolled: number;
+  /** Late arrivals the press would message and the sweep cannot, for want of a link. */
+  awaitingLink: number;
+  /** Pressed events scanned. */
+  events: number;
+}
+
+/**
+ * GTC-189 slice 5e — A PERSON ADDED AFTER THE PRESS GETS THEIR OWN SEND, ON THEIR OWN CLOCK.
+ *
+ * Hinge §2, ruled gap #5. The build shape says *"mini-sends reuse the dispatcher"*, and that is the
+ * whole design: this function creates the row and **everything after it is `drainOnce`** — the same
+ * gates, the same quiet hours, the same claim, the same outcome, and ruling G's clock starting at
+ * that person's own acceptance. There is no mini-send branch anywhere, and `isMiniSend` was removed
+ * at slice 5a (decision 33) precisely because the per-person clock removes the need for one.
+ *
+ * ── WHY A SWEEP AND NOT A HOOK AT CAPTURE ─────────────────────────────────────
+ *
+ * Three paths add a person — `POST /api/events/[id]/people`, `createMember` in the households
+ * route, and the batch import — and a fourth can be added tomorrow. A hook in each is three writers
+ * of one rule, which is the shape decision 30 closed for the press itself.
+ *
+ * ⚠ THE PRECEDENT IS EXACT: `generateWrapUpLinks` in src/lib/wrap-up.ts, whose own comment says why
+ * it is keyed on (event, person) rather than on the event — *"a guest added AFTER the press must
+ * still get their link... an event-level 'already done' check would pass every duplicate test and
+ * silently strip late guests instead."*
+ *
+ * ⚠ AND THE CONDITION IS "NO ASK ROW AT ALL", NOT "NO ACCEPTED ASK ROW". Accepted, rejected and
+ * withheld all mean this membership has been dealt with. Keyed on acceptance, this sweep would
+ * re-create a row for every withholding on every tick, for ever — each one a fresh attempt at
+ * somebody the chooser has already refused. Ruling U's bounce-door resend is the one case that makes
+ * a second ask row deliberately, and it already has one.
+ *
+ * ⚠ ONLY PRESSED EVENTS. A mini-send is a send AFTER the press. On an unpressed event the host has
+ * not decided to send at all, and enrolling her guests would be the press happening by cron.
+ *
+ * ── ⚠ IT DOES NOT MINT TOKENS, AND THAT IS A PRECONDITION ON [[GTC-316]] ──────
+ *
+ * A late arrival holds no PARTICIPANT token, so `linkState` reads `AT_PRESS` and there is no link to
+ * put in a message. The only thing that mints one is `ensureEventTokens`, and calling it from here
+ * is **refused**: it mints a PARTICIPANT token for every CHILD membership — childness lives on
+ * `PersonEvent.householdRole` and step 4 reads `role` — and the unauthenticated family directory
+ * publishes it. On a cron that fires **every two minutes on every pressed event**, with no host
+ * action at all.
+ *
+ * That is strictly worse than the state the founder's ordering ruling of 2026-09-19 reasoned about
+ * (*"nothing presses until 5f wires the button"*), because **a cron does not wait for a button**. So
+ * this sweep enrols only recipients who ALREADY hold a link and counts the rest as `awaitingLink`.
+ *
+ * ⚠ WHEN [[GTC-316]] LANDS, THE CHANGE HERE IS ONE CALL — and `tests/mini-send-test.ts` layer L
+ * asserts the absence so it cannot be added without meeting this note.
+ *
+ * ── ⚠ RULING AJ IS NOT MET, AND IT IS SHIPPING INCOMPLETE RATHER THAN MET ─────
+ *
+ * Ruling AJ (decision 23) says the collapsed one-person pre-flight asks a late arrival the same
+ * chase-channel question the others got, at their own send. **It cannot: the control does not
+ * exist.** `PersonEvent.chaseException` is storage slice 4a landed; [[GTC-311]] owns the control,
+ * the resolver and the screen, and `chooseChaseRoute` still has no caller in `src/`.
+ *
+ * Founder ruling, 2026-09-19: *"5e ships the mini-send without the question, records AJ as unmet
+ * with GTC-311 named as what meets it... Say plainly that this is a ruling shipping incomplete, not
+ * a ruling met."*
+ *
+ * ⚠ SO A MINI-SEND RECIPIENT FALLS TO `Event.chaseWhenNoMobileDefault` AND THE HOST IS NEVER ASKED
+ * ABOUT THEM. Under ruling AH that default is *chase by email when there is no mobile*, ON — so a
+ * late arrival with no usable phone is chased by email without her ever being offered the
+ * *hand this one to me* exception every other recipient was offered. That is decision 23's hole,
+ * still open, with the mini-send shipping over it.
+ */
+export async function enrolMiniSends(db: PrismaClient, takeEvents: number): Promise<EnrolResult> {
+  /*
+   * ⚠ AND IT IS NOT ENOUGH THAT `sentAt` IS SET — THE EVENT MUST HAVE ASK ROWS. This is the
+   * sharpest thing in this function and it was found by running the sweep against `gather_dev`.
+   *
+   * `Event.sentAt` has been written since [[GTC-169]], by the OLD press — the one that stamped
+   * clocks and sent nothing. So an event pressed before slice 5 has `sentAt` set and **zero**
+   * `OutboundMessage` rows. Keyed on `sentAt` alone, this sweep reads every recipient on such an
+   * event as a late arrival and enrols the entire guest list.
+   *
+   * ⚠ IT DID. The first run created 20 rows across four boards — three security-test events and
+   * `GTC-192 replay — arrival`, a seeded DEMO board — and `drainOnce` then claimed and attempted a
+   * send for every one. Nothing was delivered, because the Resend key does not authenticate and
+   * every address was on a reserved domain. **On a real deployment that is every guest of every
+   * event pressed before this slice, invited a second time.**
+   *
+   * So the predicate is `some ask row exists`: an event the NEW press has written for. An event with
+   * `sentAt` and no rows was pressed by machinery that did not send, and a mini-send is a send after
+   * a send — there is nothing for a late arrival to be late to.
+   *
+   * ⚠ WHAT THAT LEAVES OPEN, NAMED RATHER THAN HIDDEN: a legacy pressed event never gets ask rows
+   * from anything, so its guests are never messaged by Gather at all. That is correct — nobody
+   * decided to send them anything through this machinery — and if those events should be re-pressed
+   * it is a migration decision and a founder ruling, not a sweep's to take.
+   */
+  const pressed = await db.event.findMany({
+    where: { sentAt: { not: null }, outboundMessages: { some: { kind: 'ASK' } } },
+    orderBy: { sentAt: 'desc' },
+    take: takeEvents,
+    select: { id: true },
+  });
+
+  const result: EnrolResult = { enrolled: 0, awaitingLink: 0, events: pressed.length };
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+
+  for (const event of pressed) {
+    const preview = await readAskPreview(db, event.id, baseUrl);
+    if (!preview) continue;
+
+    const existing = await db.outboundMessage.findMany({
+      where: { eventId: event.id, kind: 'ASK' },
+      select: { personEventId: true },
+    });
+    const dealtWith = new Set(existing.map((r) => r.personEventId));
+
+    for (const recipient of preview.recipients) {
+      if (dealtWith.has(recipient.personEventId)) continue;
+      // The same predicate the press and the pre-flight use. One rule, three callers.
+      if (!pressWillMessage(recipient.linkState)) continue;
+      if (recipient.linkState !== 'READY') {
+        // Addressed, and no link to carry. See the note above: minting is GTC-316's.
+        result.awaitingLink++;
+        continue;
+      }
+      await db.outboundMessage.create({
+        data: {
+          eventId: event.id,
+          personEventId: recipient.personEventId,
+          kind: 'ASK',
+          channel: recipient.channel as OutboundChannel,
+        },
+      });
+      result.enrolled++;
     }
   }
 

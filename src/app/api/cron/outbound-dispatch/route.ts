@@ -26,7 +26,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { DRAIN_BATCH, drainOnce } from '@/lib/press/dispatch';
+import { DRAIN_BATCH, drainOnce, enrolMiniSends } from '@/lib/press/dispatch';
 import { cronSecretAccepted, isCronSecretConfigured } from '../cron-secret';
 import { withoutRecipientNames } from '../cron-response';
 
@@ -61,7 +61,18 @@ async function handleRequest(request: NextRequest) {
   }
 
   try {
-    const result = await drainOnce(prisma, DRAIN_BATCH);
+    /*
+     * GTC-189 slice 5e — THE MINI-SEND SWEEP RUNS FIRST, so a person added since the last tick is
+     * drained in this one. "Mini-sends reuse the dispatcher" (the build shape) means exactly this:
+     * the sweep makes the row and everything after it is the drain below, with no branch anywhere.
+     *
+     * ⚠ IT ONLY TOUCHES EVENTS THE NEW PRESS HAS WRITTEN ASK ROWS FOR. An event pressed before
+     * slice 5 has `Event.sentAt` set and no rows, and keyed on `sentAt` alone this sweep would
+     * enrol its whole guest list and the drain would invite all of them a second time. See
+     * `enrolMiniSends`.
+     */
+    const enrol = await enrolMiniSends(prisma, DRAIN_BATCH);
+    const result = { ...(await drainOnce(prisma, DRAIN_BATCH)), ...enrol };
 
     // GTC-270 finding 2: every cron route puts the same shape on the wire, so a later `errors`
     // array added to this dispatcher cannot leak a recipient by default.

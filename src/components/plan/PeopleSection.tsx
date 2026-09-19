@@ -338,21 +338,28 @@ export default function PeopleSection({
                 and this comment. The ledger side is already done: the batch carries
                 one why as one changeSet.
 
-                ⚠ 2026-09-19, GTC-189 SLICE 5a — ONE OF THE TWO CONDITIONS IS NOW MET,
-                AND THIS CONDITION STAYS. Read this before deleting it.
+                ⚠ 2026-09-19, GTC-189 SLICES 5a TO 5e — THE FIRST CONDITION IS NOW MET
+                AND THIS CONDITION STILL STAYS. Read this before deleting it.
 
-                GTC-189's build shape says the `!isSent &&` comes out "when this ticket
-                lands". It has not landed: slice 5a is the press ROUTE, dark — it writes
-                the lock and one OutboundMessage per addressed recipient and sends
-                nothing. The dispatcher is slice 5c and the mini-send path is slice 5e.
-                And E1 (GTC-178) is not built at all, so the cadence a late-added
-                person's clock would run on does not exist.
+                MET: mini-sends exist. Slice 5e's `enrolMiniSends` gives a person added
+                after the press their own ask row, and slice 5c's dispatcher drains it —
+                so a post-send assignment now does reach the person assigned. That is the
+                half this comment named as GTC-189's.
 
-                So deleting this today would offer a button that creates N asks which
-                reach nobody — which is exactly the failure the tombstone was written
-                against, with the ticket number that was supposed to end it now half
-                done. Named in place rather than left for the next reader to work out
-                from two ticket numbers. */}
+                NOT MET: GTC-178 (E1), the nudge cadence those people's clocks run on, is
+                not built. The comment names TWO expiries and only one has arrived.
+
+                ⚠ AND A SECOND THING IS UNMET THAT THIS COMMENT COULD NOT HAVE NAMED.
+                Ruling AJ says a late arrival is asked the chase-channel question at their
+                own send, through the collapsed one-person pre-flight. It is not: the
+                control is GTC-311's and does not exist, so a mini-send recipient falls to
+                the event default with no chance to except them. Shipping incomplete by
+                founder ruling, 2026-09-19.
+
+                So deleting `!isSent &&` today would offer a button that creates N asks on
+                a cadence that does not exist, for people nobody was asked about. Named in
+                place rather than left for the next reader to work out from two ticket
+                numbers. */}
             {!isSent && (
               <button
                 onClick={handleAutoAssign}
