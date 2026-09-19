@@ -1,8 +1,53 @@
+/**
+ * THE DEMO SEED — the Henderson board, and the only board in this repo the press can run
+ * against.
+ *
+ * ── ⚠ EVERY ADDRESS IS ON A RESERVED DOMAIN, AND THAT IS A SAFETY PROPERTY ───
+ *
+ * Founder ruling, 2026-09-19. Until then this file wrote 37 addresses at gmail.com,
+ * outlook.com, xtra.co.nz and yahoo.com — fabricated names at REAL, RESOLVING providers. They
+ * are nobody's addresses, and that is not the same as nobody receiving them: a working Resend
+ * key plus one press is 37 delivery attempts at real mail servers, and `aarav.ph@gmail.com`
+ * may well belong to a stranger.
+ *
+ * ⚠ THE EVIDENCE IS [[GTC-189]] SLICE 5e's INCIDENT, and it is why this is a ruling rather
+ * than tidiness. That sweep enrolled and attempted 20 rows across four real boards before
+ * anybody noticed. Nothing was delivered, and [[GTC-322]] records the reason in the founder's
+ * words: *"a broken Resend key and reserved email domains. Both luck."* **This change makes
+ * one half of that not-luck.** `example.com` is reserved by RFC 2606 and does not resolve, so
+ * a press against this board attempts nothing that can reach a person.
+ *
+ * ⚠ AND IT CHANGES WHAT A RESEED PRODUCES, NOT WHAT IS IN `gather_dev` NOW. The 37 consumer
+ * addresses already exist there. Whether to rewrite them as data is a separate decision and a
+ * separate write — surfaced, not taken.
+ *
+ * ── ⚠ AND THE HOST NOW HAS AN ACCOUNT, WITHOUT WHICH THE PRESS REFUSES THIS BOARD ──
+ *
+ * This file created NO `User` at all until 2026-09-19, so a freshly seeded Henderson board had
+ * a host with no account — and ruling AC refuses exactly that: *"an event whose host has no
+ * account is fixed before it sends, not sent with a hole in it,"* because the reply-to is
+ * `User.email` and a message whose replies go nowhere is the hole.
+ *
+ * **So the only pressable board in `gather_dev` was pressable only by accident:** its
+ * `sarah.henderson@demo.gather` account was minted by the magic-link CLAIM flow on 2026-03-13,
+ * by hand, and [[GTC-269]] records it as the account that then accumulated HOST on two events.
+ * A rebuild from this file would have produced a board the press refuses. It now creates the
+ * account and the `EventRole` deliberately.
+ */
 import { PrismaClient } from '@prisma/client';
 import { makeNzdtChristmasDate } from '../src/lib/timezone';
 import { randomBytes } from 'crypto';
 
 const prisma = new PrismaClient();
+
+/**
+ * ⚠ RESERVED BY RFC 2606 AND NON-RESOLVING. Every seeded address uses it. See the header: a
+ * fabricated name at a REAL provider is still a real delivery attempt.
+ */
+const SEED_DOMAIN = 'example.com';
+
+/** The host's login account. Ruling AC refuses a press without one — see the header. */
+const HOST_ACCOUNT_EMAIL = `sarah.henderson@${SEED_DOMAIN}`;
 
 function generateToken(): string {
   return randomBytes(32).toString('hex');
@@ -25,50 +70,81 @@ async function main() {
       teamName: 'Setup & Equipment',
       phone: '+6421234568',
     },
-    { name: 'Jenny Henderson', role: 'PARTICIPANT', teamName: 'Mains', email: 'jenny.h@gmail.com' },
+    {
+      name: 'Jenny Henderson',
+      role: 'PARTICIPANT',
+      teamName: 'Mains',
+      email: 'jenny.h@example.com',
+    },
     {
       name: 'Mike Henderson',
       role: 'PARTICIPANT',
       teamName: 'Mains',
-      email: 'mike.henderson@xtra.co.nz',
+      email: 'mike.henderson@example.com',
     },
     {
       name: 'Emma Henderson',
       role: 'PARTICIPANT',
       teamName: 'Desserts',
-      email: 'emma.h@outlook.com',
+      email: 'emma.h@example.com',
     },
     {
       name: 'Jake Henderson',
       role: 'COORDINATOR',
       teamName: 'Cleanup',
-      email: 'jake.h@gmail.com',
+      email: 'jake.h@example.com',
     },
     {
       name: 'Lily Henderson',
       role: 'PARTICIPANT',
       teamName: 'Starters & Nibbles',
-      email: 'lily.henderson@gmail.com',
+      email: 'lily.henderson@example.com',
     },
     {
       name: 'Sophie Henderson',
       role: 'PARTICIPANT',
       teamName: 'Salads & Sides',
-      email: 'sophie.h@yahoo.com',
+      email: 'sophie.h@example.com',
     }, // vegetarian
     {
       name: 'Tom Henderson',
       role: 'COORDINATOR',
       teamName: 'Kids Zone',
-      email: 'tom.henderson@gmail.com',
+      email: 'tom.henderson@example.com',
     },
-    { name: 'Amy Henderson', role: 'PARTICIPANT', teamName: 'Drinks' }, // UNTRACKABLE
+    /*
+     * ⚠ AMY HOLDS A PHONE AND HAS OPTED OUT OF TEXTS — [[GTC-301]]'s PER-HOST FACT, WHICH HAD
+     * NO INSTANCE ANYWHERE. Founder ruling, 2026-09-19.
+     *
+     * `SmsOptOut` held ZERO rows in `gather_dev` and no seed wrote one, so Do-Not-Touch Zone
+     * 7's per-host half — the table `checkOptOut` in `sendSms` refuses on, and the one
+     * `readAskPreview` merges — had never been exercised against data. Only the global boolean
+     * `Person.smsOptedOut` ever was.
+     *
+     * ⚠ SHE HAS NO EMAIL ON PURPOSE. `askChannelOf` is email-first, so an opt-out on somebody
+     * holding an address changes nothing about the ask and would prove nothing. With a phone
+     * and no address she is the one case where Zone 7 decides the route: ruling O's *"a no to
+     * one channel is treated as a no to being chased"* puts her on the host's list with
+     * `SMS_OPTED_OUT` rather than `NO_CHANNEL`.
+     *
+     * ⚠ AND IT CHANGES WHAT A RESEED MEASURES: the host list keeps its four people and gains a
+     * SECOND why-code. Every measurement in [[GTC-189]] taken against the current
+     * `gather_dev` copy — 38 recipients, 4 host list, all NO_CHANNEL — was taken before this
+     * and does not describe a reseeded board.
+     */
+    {
+      name: 'Amy Henderson',
+      role: 'PARTICIPANT',
+      teamName: 'Drinks',
+      phone: '+6421234570',
+      smsOptedOut: true,
+    }, // UNTRACKABLE BY TEXT — Zone 7, per host
     { name: 'Max Henderson', role: 'PARTICIPANT', teamName: 'Kids Zone' }, // UNTRACKABLE (kid)
     {
       name: 'Olivia Henderson',
       role: 'PARTICIPANT',
       teamName: 'Desserts',
-      email: 'olivia.h@gmail.com',
+      email: 'olivia.h@example.com',
     },
 
     // NGUYENS (8 people)
@@ -77,44 +153,44 @@ async function main() {
       role: 'COORDINATOR',
       teamName: 'Drinks',
       phone: '+6421234569',
-      email: 'david.nguyen@gmail.com',
+      email: 'david.nguyen@example.com',
     },
     {
       name: 'Michelle Nguyen',
       role: 'PARTICIPANT',
       teamName: 'Desserts',
-      email: 'michelle.nguyen@gmail.com',
+      email: 'michelle.nguyen@example.com',
     },
     {
       name: 'Ethan Nguyen',
       role: 'PARTICIPANT',
       teamName: 'Starters & Nibbles',
-      email: 'ethan.n@gmail.com',
+      email: 'ethan.n@example.com',
     },
     {
       name: 'Grace Nguyen',
       role: 'PARTICIPANT',
       teamName: 'Salads & Sides',
-      email: 'grace.nguyen@outlook.com',
+      email: 'grace.nguyen@example.com',
     }, // vegetarian
     {
       name: 'Lucas Nguyen',
       role: 'PARTICIPANT',
       teamName: 'Cleanup',
-      email: 'lucas.nguyen@gmail.com',
+      email: 'lucas.nguyen@example.com',
     },
     {
       name: 'Mia Nguyen',
       role: 'PARTICIPANT',
       teamName: 'Starters & Nibbles',
-      email: 'mia.n@gmail.com',
+      email: 'mia.n@example.com',
     },
     { name: 'Noah Nguyen', role: 'PARTICIPANT', teamName: 'Kids Zone' }, // UNTRACKABLE (kid)
     {
       name: 'Chloe Nguyen',
       role: 'PARTICIPANT',
       teamName: 'Mains',
-      email: 'chloe.nguyen@gmail.com',
+      email: 'chloe.nguyen@example.com',
     }, // gluten-free
 
     // TURNERS (8 people)
@@ -123,44 +199,44 @@ async function main() {
       role: 'COORDINATOR',
       teamName: 'Starters & Nibbles',
       phone: '+6421234570',
-      email: 'kate.turner@gmail.com',
+      email: 'kate.turner@example.com',
     },
     {
       name: 'James Turner',
       role: 'PARTICIPANT',
       teamName: 'Mains',
-      email: 'james.turner@gmail.com',
+      email: 'james.turner@example.com',
     },
     {
       name: 'Isabella Turner',
       role: 'PARTICIPANT',
       teamName: 'Desserts',
-      email: 'isabella.t@gmail.com',
+      email: 'isabella.t@example.com',
     }, // gluten-free
     {
       name: 'Jack Turner',
       role: 'PARTICIPANT',
       teamName: 'Cleanup',
-      email: 'jack.turner@outlook.com',
+      email: 'jack.turner@example.com',
     },
     {
       name: 'Charlotte Turner',
       role: 'PARTICIPANT',
       teamName: 'Salads & Sides',
-      email: 'charlotte.t@gmail.com',
+      email: 'charlotte.t@example.com',
     },
-    { name: 'Harry Turner', role: 'PARTICIPANT', teamName: 'Drinks', email: 'harry.t@gmail.com' },
+    { name: 'Harry Turner', role: 'PARTICIPANT', teamName: 'Drinks', email: 'harry.t@example.com' },
     {
       name: 'Amelia Turner',
       role: 'PARTICIPANT',
       teamName: 'Kids Zone',
-      email: 'amelia.turner@gmail.com',
+      email: 'amelia.turner@example.com',
     },
     {
       name: 'Oscar Turner',
       role: 'PARTICIPANT',
       teamName: 'Starters & Nibbles',
-      email: 'oscar.t@gmail.com',
+      email: 'oscar.t@example.com',
     },
 
     // PATEL-HENDERSONS (8 people)
@@ -169,49 +245,49 @@ async function main() {
       role: 'COORDINATOR',
       teamName: 'Salads & Sides',
       phone: '+6421234571',
-      email: 'priya.ph@gmail.com',
+      email: 'priya.ph@example.com',
     },
     {
       name: 'Raj Patel-Henderson',
       role: 'PARTICIPANT',
       teamName: 'Mains',
-      email: 'raj.ph@gmail.com',
+      email: 'raj.ph@example.com',
     },
     {
       name: 'Aarav Patel-Henderson',
       role: 'PARTICIPANT',
       teamName: 'Cleanup',
-      email: 'aarav.ph@gmail.com',
+      email: 'aarav.ph@example.com',
     },
     {
       name: 'Zara Patel-Henderson',
       role: 'PARTICIPANT',
       teamName: 'Desserts',
-      email: 'zara.ph@outlook.com',
+      email: 'zara.ph@example.com',
     }, // vegetarian, gluten-free
     {
       name: 'Arjun Patel-Henderson',
       role: 'PARTICIPANT',
       teamName: 'Starters & Nibbles',
-      email: 'arjun.ph@gmail.com',
+      email: 'arjun.ph@example.com',
     }, // vegetarian
     {
       name: 'Maya Patel-Henderson',
       role: 'PARTICIPANT',
       teamName: 'Kids Zone',
-      email: 'maya.ph@gmail.com',
+      email: 'maya.ph@example.com',
     },
     {
       name: 'Liam Patel-Henderson',
       role: 'PARTICIPANT',
       teamName: 'Drinks',
-      email: 'liam.ph@gmail.com',
+      email: 'liam.ph@example.com',
     },
     {
       name: 'Nina Patel-Henderson',
       role: 'PARTICIPANT',
       teamName: 'Salads & Sides',
-      email: 'nina.ph@gmail.com',
+      email: 'nina.ph@example.com',
     }, // vegan
 
     // O'BRIENS (7 people)
@@ -219,37 +295,37 @@ async function main() {
       name: "Finn O'Brien",
       role: 'COORDINATOR',
       teamName: 'Desserts',
-      email: 'finn.obrien@gmail.com',
+      email: 'finn.obrien@example.com',
     },
     {
       name: "Siobhan O'Brien",
       role: 'PARTICIPANT',
       teamName: 'Salads & Sides',
-      email: 'siobhan.obrien@gmail.com',
+      email: 'siobhan.obrien@example.com',
     }, // dairy-free
     {
       name: "Connor O'Brien",
       role: 'PARTICIPANT',
       teamName: 'Mains',
-      email: 'connor.ob@gmail.com',
+      email: 'connor.ob@example.com',
     },
     {
       name: "Maeve O'Brien",
       role: 'PARTICIPANT',
       teamName: 'Starters & Nibbles',
-      email: 'maeve.obrien@outlook.com',
+      email: 'maeve.obrien@example.com',
     },
     {
       name: "Declan O'Brien",
       role: 'PARTICIPANT',
       teamName: 'Cleanup',
-      email: 'declan.ob@gmail.com',
+      email: 'declan.ob@example.com',
     },
     {
       name: "Aoife O'Brien",
       role: 'PARTICIPANT',
       teamName: 'Drinks',
-      email: 'aoife.obrien@gmail.com',
+      email: 'aoife.obrien@example.com',
     }, // vegetarian, dairy-free
     { name: "Ronan O'Brien", role: 'PARTICIPANT', teamName: 'Kids Zone' }, // UNTRACKABLE (kid)
   ];
@@ -261,6 +337,14 @@ async function main() {
         name: personData.name,
         email: (personData as any).email || null,
         phoneNumber: (personData as any).phone || null,
+        /*
+         * [[GTC-301]]'s GLOBAL fact. The PER-HOST row goes in below, once the host exists —
+         * `SmsOptOut` keys on `hostId`, so it cannot be written from inside this loop.
+         * ⚠ BOTH ARE SET FOR AMY DELIBERATELY: the two facts have different writers and
+         * different readers, and a seed that set only one would leave whichever reader it
+         * missed still untested. GTC-301 is the ticket that says nobody had named that.
+         */
+        smsOptedOut: (personData as any).smsOptedOut === true,
       },
     });
     personByName.set(personData.name, {
@@ -300,6 +384,100 @@ async function main() {
     },
   });
   console.log(`✓ Created event: ${event.name}`);
+
+  /*
+   * ── ⚠ THE HOST'S ACCOUNT, WITHOUT WHICH THE PRESS REFUSES THIS BOARD ────────
+   *
+   * Ruling AC ([[GTC-189]] decision 12): *"an event whose host has no account is fixed before
+   * it sends, not sent with a hole in it."* The reply-to is `User.email` (ruling F) and there
+   * is no custom reply-to column, so no account means replies go nowhere.
+   *
+   * This file created no `User` until 2026-09-19, so a freshly seeded board was refused by
+   * `pressSend` with `HOST_HAS_NO_ACCOUNT`. The account that made `gather_dev`'s copy
+   * pressable was minted by the magic-link CLAIM flow, by hand, in March — see the header.
+   *
+   * `EventRole` is what `requireEventRole` reads, so the account needs both rows: the `User`
+   * for the reply-to, and the role for the session guard on every host route.
+   */
+  const hostUser = await prisma.user.create({
+    data: { email: HOST_ACCOUNT_EMAIL },
+  });
+  await prisma.person.update({ where: { id: sarah.id }, data: { userId: hostUser.id } });
+  await prisma.eventRole.create({
+    data: { userId: hostUser.id, eventId: event.id, role: 'HOST' },
+  });
+  console.log(`✓ Host account: ${hostUser.email} (and an EventRole on this event)`);
+
+  /*
+   * ── ⚠ ZONE 7's PER-HOST OPT-OUT ROW — see Amy Henderson in `peopleData` ─────
+   *
+   * `SmsOptOut` keys on `[phoneNumber, hostId]`, so it can only be written once the host
+   * Person exists. It held ZERO rows in `gather_dev` and no seed wrote one, so the table
+   * `checkOptOut` refuses on — and the one `readAskPreview` merges through `smsOptedOutFact`
+   * — had never been exercised against data.
+   *
+   * ⚠ THE `rawMessage` IS WHAT A REAL STOP LOOKS LIKE, because a row with a null message is a
+   * row nobody can tell from an administrative write.
+   */
+  const amy = personByName.get('Amy Henderson');
+  await prisma.smsOptOut.create({
+    data: {
+      phoneNumber: amy.phoneNumber,
+      hostId: sarah.id,
+      rawMessage: 'STOP',
+    },
+  });
+  console.log(`✓ Zone 7: one SmsOptOut row for ${amy.name} under this host`);
+
+  /*
+   * ── ⚠ RULING AC'S REFUSAL NEEDS A POPULATION, AND THIS IS IT ────────────────
+   *
+   * Founder ruling, 2026-09-19: seed *"one event whose host has no User"*, because it is a
+   * population a ruling already depends on and one a rebuild otherwise destroys.
+   *
+   * ⚠ THE INSTRUCTION WAS GIVEN ON A READING THAT TURNED OUT BACKWARDS, AND THE SHAPE IS
+   * SEEDED ANYWAY BECAUSE THE INTENT SURVIVES IT. The executor had reported that no seed
+   * creates a host without an account; in fact this file created NOTHING BUT that shape, and
+   * `gather_dev`'s two instances ("Kate test event", "Summer BBQ Party") are hand-made rather
+   * than the only ones possible. So what was actually missing after a rebuild was a host WITH
+   * an account — fixed above — and this event makes the refusal's population DELIBERATE rather
+   * than accidental, which is what the ruling was for.
+   *
+   * It carries one membership and one item so the press has something to refuse ABOUT: a
+   * refusal on an empty event would be indistinguishable from `NO_RECIPIENTS`.
+   */
+  const orphanHost = await prisma.person.create({
+    data: { name: 'Unclaimed Host', email: `unclaimed.host@${SEED_DOMAIN}` },
+  });
+  const unclaimedEvent = await prisma.event.create({
+    data: {
+      name: 'Unclaimed event — the host never signed in',
+      startDate: makeNzdtChristmasDate('2026-12-24', '00:00'),
+      endDate: makeNzdtChristmasDate('2026-12-26', '23:59'),
+      status: 'CONFIRMING',
+      isDemo: true,
+      hostId: orphanHost.id,
+    },
+  });
+  await prisma.personEvent.create({
+    data: { personId: orphanHost.id, eventId: unclaimedEvent.id, role: 'HOST' },
+  });
+  const orphanGuest = await prisma.person.create({
+    data: { name: 'Unclaimed Guest', email: `unclaimed.guest@${SEED_DOMAIN}` },
+  });
+  await prisma.personEvent.create({
+    data: { personId: orphanGuest.id, eventId: unclaimedEvent.id, role: 'PARTICIPANT' },
+  });
+  const unclaimedTeam = await prisma.team.create({
+    data: { name: 'Mains', eventId: unclaimedEvent.id, coordinatorId: orphanHost.id },
+  });
+  const unclaimedItem = await prisma.item.create({
+    data: { teamId: unclaimedTeam.id, name: 'A dish nobody will be asked for', kind: 'ITEM' },
+  });
+  await prisma.assignment.create({
+    data: { itemId: unclaimedItem.id, personId: orphanGuest.id, response: 'PENDING' },
+  });
+  console.log(`✓ Created ${unclaimedEvent.name} — ruling AC's refusal has a population`);
 
   // ============================================
   // STEP 3: CREATE DAYS
