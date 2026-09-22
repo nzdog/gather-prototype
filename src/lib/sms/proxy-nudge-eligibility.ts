@@ -9,6 +9,7 @@ import {
   HOUSEHOLD_MUTED_SKIP_REASON,
 } from '@/lib/households/channel';
 import { isChaseable, DONT_CHASE_SKIP_REASON } from '@/lib/eligibility/nudge-mark';
+import { EMAIL_OPT_OUT_SKIP_REASON, getEmailOptOut } from '@/lib/eligibility/email-opt-out';
 import { isAddressable } from '@/lib/eligibility/host-exclusion';
 import { isPaceOff, PACE_OFF_SKIP_REASON } from '@/lib/eligibility/nudge-pace';
 
@@ -187,6 +188,25 @@ export async function findProxyNudgeCandidates(): Promise<ProxyEligibilityResult
     // records one gate up for a CHILD channel: falling back "would message somebody the
     // host never picked." A mark is a hosting judgement about a person, not a fault in
     // the channel, and quietly routing around it would be the system overruling her.
+    /*
+     * ⚠ [[GTC-296]] RULING 3, THROUGH CORRECTION R2b — AND THE ONE THING TO GET RIGHT HERE IS
+     * WHOSE OPT-OUT APPLIES.
+     *
+     * **The RECIPIENT's**, ruled 2026-09-20. This path messages the household's primary contact
+     * about somebody else's rows, so the person who receives the text is the contact — and the
+     * no that binds is the no made by the person being messaged. Reading the SUBJECT's opt-out
+     * would suppress a message to somebody who never asked for silence, and would go on texting
+     * a contact who did.
+     *
+     * Below the contact's own SMS opt-out at the top of this ladder and above the mark, the
+     * position correction R2 sets for the direct finder. One query per household rather than a
+     * set: this loop is over households, which are few, and the contact is one person.
+     */
+    if (await getEmailOptOut(primaryContact.personId, household.event.id)) {
+      addSkip(EMAIL_OPT_OUT_SKIP_REASON);
+      continue;
+    }
+
     if (!isChaseable(primaryContact.nudgeMark)) {
       addSkip(DONT_CHASE_SKIP_REASON);
       continue;

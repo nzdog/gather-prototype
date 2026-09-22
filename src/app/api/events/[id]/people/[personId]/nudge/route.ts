@@ -8,6 +8,11 @@ import {
   resolveManualNudgeRecipient,
   chooseManualNudgeChannel,
 } from '@/lib/sms/manual-nudge-recipient';
+import {
+  EMAIL_OPT_OUT_NOT_ADDRESSABLE_MESSAGE,
+  EMAIL_OPT_OUT_OVERRIDE_MESSAGE,
+  getEmailOptOut,
+} from '@/lib/eligibility/email-opt-out';
 
 type NudgeVariant = 'warm' | 'casual' | 'gentle' | 'direct';
 const VALID_VARIANTS: NudgeVariant[] = ['warm', 'casual', 'gentle', 'direct'];
@@ -97,6 +102,27 @@ export async function POST(
 
     const channel = chooseManualNudgeChannel(person);
 
+    /*
+     * ⚠ [[GTC-296]] RULING 4 — AD's OVERRIDE SURVIVES AN EMAIL UNSUBSCRIBE, AND THIS ROUTE IS
+     * THE ONLY PLACE IN THE PRODUCT WHERE IT DOES.
+     *
+     * Ruling 3 stops the AUTOMATIC chase on every channel. This nudge is not the automatic
+     * chase — it is the host pressing a button about one person — so [[GTC-189]] ruling AD
+     * still holds: *"the by-hand nudge sends, and says what it is overriding."* What ruling 4
+     * narrows is HOW it sends:
+     *
+     *   - by text, if there is a usable number that is not SMS-opted-out, and the host is told
+     *     what she is overriding;
+     *   - refused with the same reason if there is no usable text channel.
+     *
+     * ⚠ AND THE CONSEQUENCE IS THE LINE BELOW THAT IS EASIEST TO MISS: the SMS-opt-out
+     * fall-through to email, which has been here since [[GTC-172]], MUST NOT FIRE for somebody
+     * who unsubscribed from email. That path is the one route in the tree that turns a text
+     * refusal into an email send, and for this person email is the channel they closed.
+     */
+    const emailOptedOut = (await getEmailOptOut(personId, eventId)) !== null;
+    let overrideNotice: string | undefined;
+
     if (channel === 'sms') {
       contactMethod = 'sms';
       // Check per-host opt-out
@@ -110,6 +136,13 @@ export async function POST(
       });
 
       if (optOut) {
+        // Ruling 4: no usable text channel, and email is closed. Refused with the reason.
+        if (emailOptedOut) {
+          return NextResponse.json(
+            { error: EMAIL_OPT_OUT_NOT_ADDRESSABLE_MESSAGE, reason: 'EMAIL_OPTED_OUT' },
+            { status: 400 }
+          );
+        }
         // Fall through to email
         if (person.email) {
           contactMethod = 'email';
@@ -127,6 +160,8 @@ export async function POST(
           );
         }
       } else {
+        // Ruling 4: it sends, and it says what it is overriding.
+        if (emailOptedOut) overrideNotice = EMAIL_OPT_OUT_OVERRIDE_MESSAGE;
         sendResult = await sendSms({
           to: person.phoneNumber!,
           message: message.trim(),
@@ -136,6 +171,13 @@ export async function POST(
         });
       }
     } else if (channel === 'email') {
+      // Ruling 4: the only channel left is the one they closed. Refused, not sent.
+      if (emailOptedOut) {
+        return NextResponse.json(
+          { error: EMAIL_OPT_OUT_NOT_ADDRESSABLE_MESSAGE, reason: 'EMAIL_OPTED_OUT' },
+          { status: 400 }
+        );
+      }
       contactMethod = 'email';
       sendResult = await sendNudgeEmail({
         // chooseManualNudgeChannel only returns 'email' when an address is present.
@@ -167,6 +209,10 @@ export async function POST(
         contactMethod: contactMethod!,
         messagePreview: message.trim().substring(0, 100),
         messageId: sendResult!.messageId,
+        // [[GTC-296]] ruling 4 — the override is RECORDED as well as shown. Ruling AD asks the
+        // nudge to say what it is overriding; a sentence in one response tells the host who
+        // pressed it and nobody afterwards.
+        ...(overrideNotice ? { overrodeEmailOptOut: true } : {}),
       },
     });
 
@@ -174,6 +220,8 @@ export async function POST(
       success: true,
       contactMethod: contactMethod!,
       sentAt: sentAt.toISOString(),
+      // Ruling 4's notice, for the UI to show. Absent when nothing was overridden.
+      ...(overrideNotice ? { override: 'EMAIL_OPTED_OUT', overrideNotice } : {}),
     });
   } catch (error) {
     console.error('Error sending host nudge:', error);

@@ -239,6 +239,14 @@ export const DRAIN_BATCH = 100;
 export type OutboundWithheldWhy =
   // The chooser, re-run at drain. Its own why-codes, passed through unchanged so the screen and
   // the row cannot disagree about why somebody was not reached.
+  /*
+   * ⚠ [[GTC-296]] — THE GUEST SAID NO, AND IT IS THE ONLY CODE IN THIS UNION THAT RECORDS A
+   * DECISION THE RECIPIENT MADE. Every other member records a decision the dispatcher took
+   * about a message it was holding (or, for `PREDATES_SENDER`, the absence of any such
+   * decision). Ruling 1 makes it per EVENT, so the same person on another event is unaffected
+   * and a reader of this row must not generalise from it.
+   */
+  | 'EMAIL_OPTED_OUT'
   | 'NO_CHANNEL'
   | 'SMS_OPTED_OUT'
   | 'PHONE_UNUSABLE'
@@ -287,6 +295,9 @@ export type OutboundWithheldWhy =
  * made `tsc` refuse the tree for the equivalent map on `LinkState`.
  */
 export const WITHHELD_WHY_IS_TERMINAL: Record<OutboundWithheldWhy, true> = {
+  // [[GTC-296]]: terminal, and only the person can end it — by a host's by-hand nudge, which is
+  // ruling 4's override and is a different send, never a retry of this row.
+  EMAIL_OPTED_OUT: true,
   NO_CHANNEL: true,
   SMS_OPTED_OUT: true,
   PHONE_UNUSABLE: true,
@@ -732,6 +743,10 @@ export async function drainOnce(
           body: composedRow.ask.text,
           replyTo: preview.replyTo!,
           fromName: preview.hostName,
+          // [[GTC-296]] — the two ids the way out is minted from. The sender attaches the
+          // header and the body link; nothing is decided here.
+          personId: composedRow.recipient.personId,
+          eventId,
         });
         if (sent.success) {
           await recordAcceptance(db, {

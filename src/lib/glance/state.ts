@@ -91,6 +91,27 @@ export const RED_REASONS = [
    */
   'NOT_DELIVERED',
   'UNREACHABLE',
+  /*
+   * [[GTC-296]] — THE GUEST TOOK THE EMAIL WAY OUT OF THIS EVENT.
+   *
+   * ⚠ DECLARED WITH NO PRODUCER, WHICH IS `EXHAUSTED_SILENCE`'s ARRANGEMENT DIRECTLY ABOVE AND
+   * IS THE SAME BARGAIN: *"in the vocabulary from birth so that E6 plugs a fact into an
+   * existing door rather than inventing a second one."*
+   *
+   * It is here because correction R7 puts a short line in `WHY_LINES`, and that map is a
+   * `Record` over `WHY_PRECEDENCE` — so the words have nowhere to live unless the reason is in
+   * the vocabulary. It has no producer because correction R6 maps `EMAIL_OPTED_OUT` to `null`
+   * in `WITHHELD_MEANS_UNREACHABLE`: the outbound row records the withholding, and the strip
+   * stays amber. The two corrections read as contradictory and are not — this is the shape that
+   * satisfies both, and the ⚠ below is the cost.
+   *
+   * ⚠ SO A MINI-SEND OR DRAIN-WINDOW OPT-OUT READS AMBER TODAY, WITH NOTHING SAYING WHY. That
+   * gap is [[GTC-327]] and it is ONE EDIT when it is ruled: give `WITHHELD_MEANS_UNREACHABLE`'s
+   * `EMAIL_OPTED_OUT` entry a producer. Do not close it by making this reason mean UNREACHABLE
+   * — "nowhere to send" is false of somebody holding a live address, and slice 7b's door would
+   * then offer to send it again.
+   */
+  'EMAIL_OPTED_OUT',
 ] as const;
 export type RedReason = (typeof RED_REASONS)[number];
 

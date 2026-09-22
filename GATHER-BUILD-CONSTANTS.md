@@ -242,6 +242,7 @@ Actual values are redacted. Copy `.env.example` to `.env` and fill in real value
 | `TWILIO_ACCOUNT_SID` | SMS via Twilio for non-NZ/AU destinations (OPTIONAL) | `.env` / deployment env |
 | `TWILIO_AUTH_TOKEN` | SMS via Twilio for non-NZ/AU destinations (OPTIONAL) | `.env` / deployment env |
 | `TWILIO_PHONE_NUMBER` | Twilio sender number (OPTIONAL) | `.env` / deployment env |
+| `UNSUBSCRIBE_TOKEN_SECRET` | Signs the per-event email unsubscribe links (GTC-296). **Required, not optional** — fails closed when unset, following `CRON_SECRET`'s precedent: reading a token returns null (404) and minting one throws, so no guest email is sent at all rather than one with no way out. Changing it invalidates links already in mailboxes. | `.env` / deployment env |
 | `CRON_SECRET` | Authenticates cron-job HTTP requests. **Required, not optional** — since GTC-270 an unset or empty value refuses every caller rather than admitting them | `.env` / deployment env |
 
 Template: `.env.example` at repo root.

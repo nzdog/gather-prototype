@@ -58,6 +58,19 @@ export interface ChooserPerson {
    * global and one per host, and that is [[GTC-301]].
    */
   smsOptedOut: boolean;
+  /**
+   * [[GTC-296]] — HAS THIS PERSON TAKEN THE EMAIL WAY OUT OF THIS EVENT?
+   *
+   * ⚠ REQUIRED, NOT OPTIONAL, AND FOR THE HAZARD `nudgeMark` DIRECTLY ABOVE RECORDS: a fact
+   * left out of a narrow `select` reads as `undefined`, and `undefined` is falsy — so an
+   * optional field would silently answer "no" for every caller that forgot it, which is the
+   * direction that keeps sending. Required makes a forgetful caller a compile error.
+   *
+   * ⚠ PER EVENT. The set it is read from belongs to ONE event (ruling 1), so a context built
+   * for event A must never be reused for event B. `readAskPreview` builds one per event and is
+   * the only caller that assembles this from the database.
+   */
+  emailOptedOut: boolean;
 }
 
 /** One membership of the event, as little of it as the decision needs. */
@@ -100,6 +113,9 @@ export interface ChooserEvent {
 
 /** Why a person's item is a line on the host's list (GTC-189 THE ASK, ruling A). */
 export type HostListWhy =
+  // [[GTC-296]] ruling 1 — she said no to email for this event. FIRST in the union because it
+  // is first in the ladder: a guest's own no outranks every fact about their channels.
+  | 'EMAIL_OPTED_OUT'
   | 'NO_CHANNEL'
   | 'SMS_OPTED_OUT'
   | 'PHONE_UNUSABLE'
@@ -112,6 +128,10 @@ export type NotRecipientWhy = 'HOST_OWN_ASK' | 'CHILD_WITHOUT_ITEM';
 
 /** Why the chase sends nothing. Timing and how it reads on the board are decision 15's. */
 export type ChaseNoneWhy =
+  // [[GTC-296]] ruling 3 — CHASE-WIDE. An email no stops the chase on EVERY channel for that
+  // event, the text chase included. Ruling O of [[GTC-189]] read straight: *"a no to one
+  // channel is treated as a no to being chased."*
+  | 'EMAIL_OPTED_OUT'
   | NotRecipientWhy
   | 'HOST_HOUSEHOLD_CHILD'
   | 'NO_CARRIER'
@@ -183,7 +203,19 @@ function resolveCarrier(
 /** THE ASK: email first, text if they have no email. */
 function askChannelOf(
   person: ChooserPerson
-): Reached | Refusal<'NO_CHANNEL' | 'SMS_OPTED_OUT' | 'PHONE_UNUSABLE'> {
+): Reached | Refusal<'EMAIL_OPTED_OUT' | 'NO_CHANNEL' | 'SMS_OPTED_OUT' | 'PHONE_UNUSABLE'> {
+  /*
+   * ⚠ [[GTC-296]] RULING 1 AND CORRECTION R1 — IT REFUSES, IT DOES NOT FALL TO TEXT, AND THE
+   * POSITION ABOVE `person.email` IS THE WHOLE OF IT.
+   *
+   * Below the email branch this line would be unreachable for everybody it is about. Below the
+   * PHONE branch it would be worse than unreachable: a person who unsubscribed from email and
+   * holds a usable number would be TEXTED the invitation instead — *"silently keeps sending on
+   * a different channel"*, which is the pattern [[GTC-324]] was raised against and which
+   * correction R1 refused by name. The fixture in `tests/email-opt-out-test.ts` gives its
+   * subject a live +64 number precisely so that implementation cannot pass.
+   */
+  if (person.emailOptedOut) return { ok: false, why: 'EMAIL_OPTED_OUT' };
   if (person.email) return { ok: true, channel: 'EMAIL' };
   if (!person.phoneNumber) return { ok: false, why: 'NO_CHANNEL' };
   // Zone 7: an opted-out phone is never texted, so for the ask it is no channel at all.
@@ -197,12 +229,33 @@ function askChannelOf(
 /** THE CHASE: text first, email if they have no phone — as rulings O, P and T narrow it. */
 function chaseChannelOf(
   membership: ChooserMembership
-): Reached | Refusal<'SMS_OPTED_OUT' | 'MARKED_DONT_CHASE' | 'PHONE_UNUSABLE' | 'NO_CHANNEL'> {
+):
+  | Reached
+  | Refusal<
+      'EMAIL_OPTED_OUT' | 'SMS_OPTED_OUT' | 'MARKED_DONT_CHASE' | 'PHONE_UNUSABLE' | 'NO_CHANNEL'
+    > {
   const { person } = membership;
 
   // Ruling O: a no to one channel is a no to being chased — the refusal, not the number, so it
   // stands after the number is removed. First, as `nudge-mark.ts` requires wherever both apply.
   if (person.smsOptedOut) return { ok: false, why: 'SMS_OPTED_OUT' };
+
+  /*
+   * ⚠ [[GTC-296]] RULING 3 — CHASE-WIDE, AND THIS IS THE LINE THAT MAKES IT CHANNEL-AGNOSTIC.
+   *
+   * The chase prefers TEXT, so an email opt-out checked anywhere below the phone branch would
+   * leave the text chase running for somebody who asked not to be chased. Ruling 3 is explicit:
+   * it stops *"the automatic chase on EVERY channel for that event, including the text chase"* —
+   * ruling O of [[GTC-189]] read straight and applied to the email side.
+   *
+   * ⚠ BELOW ZONE 7's LINE AND ABOVE THE MARK, WHICH IS A FOUNDER RULING (correction R2) AND NOT
+   * THE EXECUTOR'S FIRST GUESS. It was built the other way round first, on the reasoning that a
+   * guest's own no is the more specific fact. The ruling places it here, *"matching
+   * `nudge-mark.ts`'s house order"*. The outcome is identical either way — the chase refuses —
+   * and what the order decides is which REASON a person carrying both conditions is reported
+   * under. `SmsOptOut` is Zone 7 and legally binding; it keeps the top.
+   */
+  if (person.emailOptedOut) return { ok: false, why: 'EMAIL_OPTED_OUT' };
 
   // Ruling T: she has taken him over. Ahead of the channel facts, so a person both marked and
   // unreachable reports the mark — the same precedence Ruling 14's grey has over red.
@@ -241,7 +294,10 @@ function chaseChannelOf(
  */
 export type TextAskReach =
   | { ok: true }
-  | { ok: false; why: 'NO_CHANNEL' | 'SMS_OPTED_OUT' | 'PHONE_UNUSABLE' };
+  // [[GTC-296]]: the ladder it calls can now refuse for an email opt-out, and the refusal is
+  // passed through unchanged rather than translated — which is this function's stated property.
+  // Ruling U's *"send to the phone instead"* must not become a way round ruling 1.
+  | { ok: false; why: 'EMAIL_OPTED_OUT' | 'NO_CHANNEL' | 'SMS_OPTED_OUT' | 'PHONE_UNUSABLE' };
 
 export function textAskReachOf(person: ChooserPerson): TextAskReach {
   const reach = askChannelOf({ ...person, email: null });

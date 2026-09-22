@@ -235,15 +235,25 @@ async function main() {
      * ⚠ THE FACT'S SOURCE IS THE ROW THE PRESS WROTE, which is what keeps the board and the press
      * from being able to disagree. See `read.ts`.
      */
+    /*
+     * ⚠ 5 → 6, AND THE PIN DID EXACTLY WHAT IT SAID IT WOULD. Its own label asked for a sixth to
+     * be *"a deliberate edit"*, and [[GTC-296]] is one: `EMAIL_OPTED_OUT` joins the vocabulary so
+     * that `WHY_LINES` has somewhere to keep its words (correction R7). It is DECLARED WITH NO
+     * PRODUCER, the arrangement `EXHAUSTED_SILENCE` has held since GTC-192 — correction R6 maps
+     * the withheld code to `null`, so nothing turns a strip this colour today. [[GTC-327]] is the
+     * one edit that gives it a producer.
+     */
     assert(
       'item state',
-      '⚠ THE RED VOCABULARY IS FIVE, NOT THREE — the fourth and fifth reds join DECIDE_BY_EXPIRED, ' +
-        'REVERSAL and EXHAUSTED_SILENCE, and the count is pinned so a sixth is a deliberate edit',
+      '⚠ THE RED VOCABULARY IS SIX — the fourth and fifth reds joined DECIDE_BY_EXPIRED, REVERSAL ' +
+        'and EXHAUSTED_SILENCE, GTC-296 added the sixth, and the count stays pinned so a seventh ' +
+        'is a deliberate edit',
       ok(
         () =>
-          S.RED_REASONS.length === 5 &&
+          S.RED_REASONS.length === 6 &&
           S.RED_REASONS.includes('NOT_DELIVERED') &&
-          S.RED_REASONS.includes('UNREACHABLE')
+          S.RED_REASONS.includes('UNREACHABLE') &&
+          S.RED_REASONS.includes('EMAIL_OPTED_OUT')
       )
     );
     assert(

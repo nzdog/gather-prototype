@@ -841,8 +841,10 @@ function tscProbe(name: string, rowFields: string): { ok: boolean; output: strin
   }
 }
 
-const PERSON = `person: { email: null, phoneNumber: null, smsOptedOut: false }`;
-const PERSON_NO_OPT_OUT = `person: { email: null, phoneNumber: null }`;
+// [[GTC-296]]: the chooser person gained `emailOptedOut`, so a "complete" row gained a field.
+const PERSON = `person: { email: null, phoneNumber: null, smsOptedOut: false, emailOptedOut: false }`;
+const PERSON_NO_OPT_OUT = `person: { email: null, phoneNumber: null, emailOptedOut: false }`;
+const PERSON_NO_EMAIL_OPT_OUT = `person: { email: null, phoneNumber: null, smsOptedOut: false }`;
 const ROW = `id: 'a', personId: 'p', role: 'PARTICIPANT', householdId: null, householdRole: null, holdsItems: true`;
 
 try {
@@ -866,6 +868,22 @@ try {
     'T',
     'a person without smsOptedOut does not typecheck, and the error names it',
     !noOptOut.ok && /smsOptedOut/.test(noOptOut.output)
+  );
+
+  /*
+   * [[GTC-296]] — the same property for the email opt-out, and it is owed for the same reason
+   * this layer exists: a fact left out of a narrow `select` reads as `undefined`, `undefined`
+   * is falsy, and falsy here means "go on sending". The field is required so that a forgetful
+   * caller is a compile error rather than a silent send to somebody who asked for none.
+   */
+  const noEmailOptOut = tscProbe(
+    'no-email-opt-out',
+    `${ROW}, nudgeMark: null, ${PERSON_NO_EMAIL_OPT_OUT}`
+  );
+  assert(
+    'T',
+    'a person without emailOptedOut does not typecheck, and the error names it',
+    !noEmailOptOut.ok && /emailOptedOut/.test(noEmailOptOut.output)
   );
 } finally {
   rmSync(probeDir, { recursive: true, force: true });

@@ -219,6 +219,7 @@ model Event {
   aiCallsUsed                Int                      @default(0)
   wrapUpLinks                WrapUpLink[]
   setup                      EventSetup?
+  emailOptOuts               EmailOptOut[]
 }
 
 model Day {
@@ -291,6 +292,7 @@ model Person {
   receivedOptOuts  SmsOptOut[]         @relation("HostOptOuts")
   coordinatedTeams Team[]              @relation("TeamCoordinator")
   wrapUpLinks      WrapUpLink[]
+  emailOptOuts     EmailOptOut[]
 
   @@index([userId])
   @@index([email])
@@ -1131,6 +1133,70 @@ model SmsOptOut {
   @@unique([phoneNumber, hostId])
   @@index([phoneNumber])
   @@index([hostId])
+}
+
+/// [[GTC-296]] — THE EMAIL WAY OUT. A SIBLING OF `SmsOptOut` ABOVE, NOT AN EXTENSION OF IT.
+///
+/// It sits here, next to the model it is a sibling of, because the two answer the same
+/// question on two channels and a reader comparing them should not have to search. They are
+/// NOT the same mechanism and the differences are the point:
+///
+///   `SmsOptOut`   keys on `(phoneNumber, hostId)` — a no to a HOST, set by an inbound text.
+///   `EmailOptOut` keys on `(personId, eventId)`   — a no to an EVENT, set by a link.
+///
+/// ⚠ PER EVENT, AND THAT IS A FOUNDER RULING RATHER THAN A SHAPE THAT FELL OUT. Ruling 1,
+/// 2026-09-20, overturning the executor's proposal of per-host: *"the person is saying no to
+/// THIS event, not to THIS host."* So Alice's next invitation to the same person, for a
+/// different occasion, still sends. Widening this key later would silently retire that ruling.
+///
+/// ⚠ DO-NOT-TOUCH ZONE 7 IS NOT WIDENED BY THIS MODEL. Zone 7 is `SmsOptOut` and
+/// `Person.smsOptedOut`. This is adjacent to it and outside it — its own table, its own module
+/// (`src/lib/eligibility/email-opt-out.ts`), its own gate. Whether the zone grows to name it is
+/// a decision for after it exists, recorded on [[GTC-296]].
+model EmailOptOut {
+  id String @id @default(cuid())
+
+  /// The person who said no, and the event they said it about. Together they are the grain,
+  /// and the unique below is what makes the POST idempotent: ruling 2's one-click header means
+  /// a mail client may deliver the same unsubscribe more than once, and a replay must write
+  /// nothing new rather than a second row.
+  personId String
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  /// CASCADE ON BOTH EDGES, by [[GTC-189]] decision 28's precedent, which `OutboundMessage`
+  /// cites for the same choice: *"a row about a person no longer on the event is worse than a
+  /// missing row."* A suppression that outlives its event suppresses nothing and is read by
+  /// nobody; a suppression that outlives the PERSON has nothing left to be about.
+  ///
+  /// ⚠ AND THE CONSEQUENCE IS WORTH STATING PLAINLY, BECAUSE IT IS A REAL LOSS: deleting a
+  /// person deletes the evidence that they asked not to be emailed. That is decision 28's
+  /// bargain taken deliberately a second time, not an oversight. The `Person` row is the only
+  /// thing that carries the address, so nothing survives that a future send could match on.
+  optedOutAt DateTime @default(now())
+
+  /// WHICH LINK DID IT — a record, never the source of the link.
+  ///
+  /// ⚠ THE LINK EXISTS BEFORE THIS ROW DOES, SO THIS COLUMN CANNOT BE WHAT MINTS IT. The
+  /// unsubscribe URL is carried by an email that goes out long before anybody clicks it, and
+  /// this row is created BY the click. The token is therefore stateless and signed —
+  /// `mintUnsubscribeToken` in `src/lib/unsubscribe-token.ts` — and what lands here is the
+  /// token that was actually presented, kept so a support question ("which message did they
+  /// unsubscribe from?") has an answer.
+  ///
+  /// NULLABLE because a row may be written by a path that had no token to present. Nothing
+  /// writes one today; it is the honest type for a column whose only writer is one route.
+  token String?
+
+  /// Ruling 1's grain, and the idempotency guarantee the POST route depends on.
+  @@unique([personId, eventId])
+  /// The per-event read: `listEmailOptOutsForEvent` loads one event's whole set in one query,
+  /// the way `readAskPreview` already loads the SMS opt-out numbers once per event. Postgres
+  /// creates no index for a foreign key on its own, so the `Event` cascade wants this too.
+  /// `personId` needs none — it leads the unique above.
+  @@index([eventId])
 }
 
 model AccessToken {

@@ -5,6 +5,7 @@ import { randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { sendSms } from '@/lib/sms/send-sms';
 import { sendNudgeEmail } from '@/lib/email';
+import { getEmailOptOut } from '@/lib/eligibility/email-opt-out';
 import { logInviteEvent } from '@/lib/invite-events';
 import {
   buildSmsWrapUpMessage,
@@ -189,6 +190,13 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
   total: number;
   deferred: number;
   deferredUntilMinutes: number;
+  /**
+   * ⚠ [[GTC-296]] — links closed out because the guest unsubscribed from email for this event.
+   * NOT `failed`, and the separation is the point: nothing failed. A suppression counted as a
+   * failure would put a retry affordance and an alarming number in front of a host about a
+   * guest who simply asked not to be emailed.
+   */
+  suppressed: number;
 }> {
   const cutoff = new Date(now.getTime() - DISPATCH_DELAY_MINUTES * 60 * 1000);
 
@@ -233,11 +241,13 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
       total: pendingLinks.length,
       deferred: pendingLinks.length,
       deferredUntilMinutes,
+      suppressed: 0,
     };
   }
 
   let sent = 0;
   let failed = 0;
+  let suppressed = 0;
 
   for (const link of pendingLinks) {
     const hostFirstName = link.event.host.name.split(' ')[0];
@@ -265,6 +275,29 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
 
     let success = false;
     let failReason: string | undefined;
+    // [[GTC-296]]: this link ended because the guest unsubscribed, not because anything
+    // happened to a message. It is neither `sent` nor `failed`, and it logs nothing.
+    let wasSuppressed = false;
+
+    /*
+     * ⚠ [[GTC-296]] RULING 5, AND ITS PREMISE WAS WRONG — READ CORRECTION R3 BEFORE EDITING.
+     *
+     * Ruling 5 was made on the belief that the wrap-up thank-you is *"automatic and
+     * email-only"*. It is not: `generateWrapUpLinks` above picks `channel: 'sms'` for anybody
+     * with a usable phone who is not SMS-opted-out, which was 47 of 333 people in `gather_dev`
+     * on the day this was built. The ruling was re-made on the corrected premise:
+     *
+     *   **An email opt-out stops every EMAIL leg of the thank-you** — the primary email send,
+     *   and the SMS-failure email fallback below — **and leaves the primary text send alone.**
+     *
+     * Ruling 5's *"no fallback"* stands as ruled: it means no text channel is MANUFACTURED to
+     * keep an email send alive (the *"silently keeps sending"* pattern named on [[GTC-324]]).
+     * It does not mean an email no kills a text thank-you the person never objected to.
+     *
+     * ⚠ ONE QUERY PER LINK, AND THIS LOOP ALREADY SLEEPS 500ms BETWEEN SENDS, so the read is
+     * free beside what it sits in. The set-shaped reader is for the roster walks.
+     */
+    const emailOptedOut = (await getEmailOptOut(link.personId, link.eventId)) !== null;
 
     if (link.channel === 'sms' && link.guestPhone) {
       const smsResult = await sendSms({
@@ -276,6 +309,13 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
       });
 
       if (smsResult.success) {
+        success = true;
+      } else if (link.guestEmail && emailOptedOut) {
+        // ⚠ THE FALLBACK IS THE LEG RULING 5 IS REALLY ABOUT. The text failed and email is the
+        // channel they closed, so the thank-you ends here rather than arriving by the one route
+        // they asked Gather not to use.
+        suppressed++;
+        wasSuppressed = true;
         success = true;
       } else if (link.guestEmail) {
         // SMS failed — fall back to email
@@ -292,6 +332,12 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
       } else {
         failReason = smsResult.error || smsResult.blocked || 'SMS failed, no email fallback';
       }
+    } else if (link.channel === 'email' && emailOptedOut) {
+      // Ruling 5: the thank-you is email for this person, and they said no to email. It stops.
+      // No text version is built to keep it alive, which is the whole of *"no fallback"*.
+      suppressed++;
+      wasSuppressed = true;
+      success = true;
     } else if (link.channel === 'email' && link.guestEmail) {
       const emailMsg = buildEmailWrapUpMessage(templateParams);
       const emailResult = await sendNudgeEmail({
@@ -317,18 +363,30 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
       },
     });
 
-    await logInviteEvent({
-      eventId: link.eventId,
-      personId: link.personId,
-      type: success ? 'WRAPUP_MESSAGE_SENT' : 'WRAPUP_MESSAGE_FAILED',
-      metadata: {
-        channel: link.channel,
-        wrapUpLinkId: link.id,
-        ...(failReason ? { failReason } : {}),
-      },
-    });
+    /*
+     * ⚠ A SUPPRESSED LINK LOGS NOTHING, AND THE ABSENCE IS NAMED RATHER THAN HIDDEN.
+     * `InviteEventType` has no member for a suppression, and adding one is an enum migration
+     * this ticket does not own — the same reason GTC-210's quiet-hours deferral above logs
+     * nothing. The fact IS recorded: the count comes back in this function's return and the
+     * cron route reports it. What is missing is a per-person row, and [[GTC-327]] is where the
+     * board-side visibility of this suppression is decided.
+     */
+    if (!wasSuppressed) {
+      await logInviteEvent({
+        eventId: link.eventId,
+        personId: link.personId,
+        type: success ? 'WRAPUP_MESSAGE_SENT' : 'WRAPUP_MESSAGE_FAILED',
+        metadata: {
+          channel: link.channel,
+          wrapUpLinkId: link.id,
+          ...(failReason ? { failReason } : {}),
+        },
+      });
+    }
 
-    if (success) sent++;
+    if (wasSuppressed) {
+      // Neither sent nor failed. Counted on its own line above.
+    } else if (success) sent++;
     else failed++;
 
     // 500ms delay between sends to avoid rate limiting
@@ -337,7 +395,14 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
     }
   }
 
-  return { sent, failed, total: pendingLinks.length, deferred: 0, deferredUntilMinutes: 0 };
+  return {
+    sent,
+    failed,
+    total: pendingLinks.length,
+    deferred: 0,
+    deferredUntilMinutes: 0,
+    suppressed,
+  };
 }
 
 // ── Dispatch summary ─────────────────────────────────────────────────

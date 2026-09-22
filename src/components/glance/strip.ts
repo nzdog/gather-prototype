@@ -139,6 +139,9 @@ export const WHY_PRECEDENCE = [
    */
   'NOT_DELIVERED',
   'UNREACHABLE',
+  // [[GTC-296]], beside the two delivery reasons and for their reason: the three below presume
+  // the ask landed and was answered or not. This one says the person declined to be asked.
+  'EMAIL_OPTED_OUT',
   'REVERSAL',
   'DECIDE_BY_EXPIRED',
   'EXHAUSTED_SILENCE',
@@ -236,6 +239,20 @@ const WHY_LINES: Record<(typeof WHY_PRECEDENCE)[number], (person: GlancePerson) 
   // broke the ≤16 pin every other why-line is held to, which comes from the reference's 160px
   // columns. The pin caught the proposal; the sense is unchanged.
   UNREACHABLE: () => 'nowhere to send',
+  /*
+   * [[GTC-296]] correction R7. The founder proposed *"no email"* (8) and offered *"opted out"*
+   * (9) *"if it reads better"*.
+   *
+   * ⚠ *"no email"* IS TAKEN, AND WORSE THAN TAKEN — IT IS `NO_CHANNEL`'s MEANING. Next to
+   * `ADULT_WHY.NO_CHANNEL`'s *"No email or mobile number."* it would read as *this person has
+   * no address*, which is false of somebody who has one, used it, and asked Gather to stop. The
+   * nine-character line says what happened.
+   *
+   * ⚠ UNREACHABLE TODAY. Nothing produces this reason — see `RED_REASONS` in
+   * `src/lib/glance/state.ts` and [[GTC-327]]. The words exist so that closing that gap is one
+   * edit in one file rather than a second round of wording.
+   */
+  EMAIL_OPTED_OUT: () => 'opted out',
   REVERSAL: (person) => {
     const handedBack = person.items.filter((i) => i.reason === 'REVERSAL').length;
     return handedBack > 1 ? `handed ${handedBack} back` : 'handed it back';

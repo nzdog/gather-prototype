@@ -37,6 +37,32 @@ import type { DeliveryFact } from './state';
  * guest.
  */
 export const WITHHELD_MEANS_UNREACHABLE: Record<OutboundWithheldWhy, 'UNREACHABLE' | null> = {
+  /*
+   * ⚠ [[GTC-296]] — null, AND THE null IS A FOUNDER RULING (correction R6, 2026-09-20) RATHER
+   * THAN A DEFAULT. It is the one entry in this map that is neither *about the person's
+   * channels* nor *about Gather*, so this module's own test — *is this a fact about the PERSON,
+   * or about GATHER?* — does not reach it. The property that test is reaching for is **has
+   * Gather a next move**, and here the answer is: it has one and has been told not to take it.
+   *
+   * Both alternatives were offered at the ruling and both were refused:
+   *
+   *   'UNREACHABLE' renders *"nowhere to send"*, which is FALSE of somebody holding a live
+   *   address they have just used. Same false-sentence family as `SMS_DISABLED`'s, and this
+   *   ledger has refused it repeatedly.
+   *
+   *   A sixth red FAMILY would be true, and it would hand slice 7b's door to this row — the
+   *   door whose actions include *"send it again"* and *"send to the phone instead"*, offered
+   *   about the person who just unsubscribed. *"That is exactly wrong."*
+   *
+   * ⚠ WHAT null COSTS, NAMED RATHER THAN HIDDEN, AND FILED: the outbound row records the
+   * reason, so the ledger and the host's pre-flight list both have it — but the board's STRIP
+   * for a mini-send or drain-window opt-out reads AMBER with nothing saying why. The reason
+   * exists in the vocabulary (`EMAIL_OPTED_OUT` in `RED_REASONS`, with its own line in
+   * `WHY_LINES`) and nothing produces it. Closing that is [[GTC-327]]'s, which is one edit:
+   * give this entry a producer.
+   */
+  EMAIL_OPTED_OUT: null,
+
   // ── About the person: the chooser found no way to reach them.
   NO_CHANNEL: 'UNREACHABLE',
   // No email and a phone they have opted out of. Zone 7 keeps the phone unused, so for the ask there

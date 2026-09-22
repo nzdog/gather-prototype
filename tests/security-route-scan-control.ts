@@ -181,6 +181,31 @@ const GTC189_CRON_ADDED = [
   'POST src/app/api/cron/outbound-dispatch/route.ts',
 ] as const;
 
+/*
+ * ⚠ ADDED 2026-09-22 BY [[GTC-296]], AND LISTED BY NAME FOR THE REASON THE BLOCK ABOVE GIVES.
+ *
+ * The unsubscribe route, `src/app/api/unsubscribe/[token]/route.ts`. Both handlers are
+ * unguarded in this file's precise sense — no session guard and no token guard — and unlike the
+ * cron routes they carry NO shared secret either, so they also move the "no credential of any
+ * kind" count. That is correct and it is the ticket: ruling Q says every guest-bound email
+ * carries a way out, and the people who need it hold no session, no account and no `AccessToken`.
+ *
+ * ⚠ WHAT AUTHORISES THEM IS NOT A CREDENTIAL THIS SCANNER CAN SEE. The token in the URL is an
+ * HMAC signed by `UNSUBSCRIBE_TOKEN_SECRET` and verified by `readUnsubscribeToken` — it is not an
+ * `AccessToken` row, so the scanner's token-guard matcher cannot recognise it, and calling it
+ * "no credential" is the scanner being accurate about its own reach rather than wrong. The
+ * exposure, stated at correction R4: the worst a forged POST achieves is unsubscribing its own
+ * victim from one event.
+ *
+ * ⚠ AND NO CSRF TOKEN, BY RFC 8058. One-click unsubscribe is a cross-origin POST made by the
+ * mail client with no page and no interaction; a CSRF check would refuse exactly the request the
+ * `List-Unsubscribe-Post` header promises to accept.
+ */
+const GTC296_ADDED = [
+  'GET src/app/api/unsubscribe/[token]/route.ts',
+  'POST src/app/api/unsubscribe/[token]/route.ts',
+] as const;
+
 function keys(result: ScanResult): Set<string> {
   return new Set(unguardedHandlers(result).map(handlerKey));
 }
@@ -322,15 +347,24 @@ function suite1_HeadShape(head: ScanResult) {
    * handlers added as redirect `route.ts` files moved 7 of this suite's pinned assertions and
    * were rewritten as config redirects because of it.
    */
+  /*
+   * ⚠ 108 → 109 FILES AND 138 → 140 HANDLERS AT [[GTC-296]] — one new route file carrying two
+   * handlers, `POST` (the one-click write) and `GET` (a 307 to the confirm page).
+   *
+   * ⚠ AND THIS TIME THE GUARD COUNT MOVED TOO, 25 → 27, WHICH THE NOTE ABOVE SAYS IS THE
+   * SECURITY FACT. It moved deliberately: the route is PUBLIC by ruling, because a guest with no
+   * session and no account is exactly who needs it. Both handlers are named in `GTC296_ADDED`
+   * below rather than the assertion being loosened, so a THIRD unguarded handler still fails.
+   */
   logTest(
-    'the scanner discovers exactly 108 route files under src/app/api',
-    head.files.length === 108,
+    'the scanner discovers exactly 109 route files under src/app/api',
+    head.files.length === 109,
     `found ${head.files.length}`
   );
 
   logTest(
-    'the scanner enumerates exactly 138 exported HTTP handlers',
-    head.handlers.length === 138,
+    'the scanner enumerates exactly 140 exported HTTP handlers',
+    head.handlers.length === 140,
     `found ${head.handlers.length}`
   );
 
@@ -341,18 +375,21 @@ function suite1_HeadShape(head: ScanResult) {
     `${head.handlers.length} handlers vs ${head.files.length} files`
   );
 
+  // ⚠ 25 → 27: [[GTC-296]]'s two public unsubscribe handlers, both named in `GTC296_ADDED`.
   logTest(
-    'exactly 25 handlers carry no session or token guard at HEAD',
-    keys(head).size === 25,
+    'exactly 27 handlers carry no session or token guard at HEAD',
+    keys(head).size === 27,
     `found ${keys(head).size}: ${[...keys(head)].sort().join(', ')}`
   );
 
   // route-classifications.json records 81 file-shaped entries. That is a different
   // denominator, not a shortfall of 25 — recorded so the two are never reconciled
   // by arithmetic.
+  // ⚠ 108/138 → 109/140 with the route above. The denominator note below is unchanged: the
+  // inventory now records 82 file-shaped entries and this is still a different unit.
   logTest(
-    'the surface is larger than the retired inventory could express (81 entries)',
-    head.files.length === 108 && head.handlers.length === 138,
+    'the surface is larger than the retired inventory could express (82 entries)',
+    head.files.length === 109 && head.handlers.length === 140,
     `files ${head.files.length}, handlers ${head.handlers.length}`
   );
 }
@@ -441,7 +478,8 @@ function suite2_Gtc267Control(head: ScanResult, pre: ScanResult) {
   );
 
   const opened = sortedDiff(headKeys, preKeys);
-  const expectedOpened = [GTC267_ADDED, ...GTC189_CRON_ADDED].sort();
+  // ⚠ 3 → 5: [[GTC-296]]'s two, added by name for the reason `GTC296_ADDED` records.
+  const expectedOpened = [GTC267_ADDED, ...GTC189_CRON_ADDED, ...GTC296_ADDED].sort();
   logTest(
     'exactly three handlers became unguarded — clone-source, deliberately public, and the ' +
       "press's drain, which carries a SHARED_SECRET the verdict table pins as PROVEN",
@@ -754,8 +792,18 @@ function suite5_HardCasesAtHead(head: ScanResult) {
     // (see `evaluateSecretAbsent` and suite 6). An assertion that catches a defect
     // for an unrelated reason is worth keeping and worth labelling; it is not worth
     // promoting into the thing that holds the property.
-    'exactly 12 handlers carry no guard and no other credential of any kind',
-    noCredential.length === 12,
+    //
+    // ⚠ 12 → 14 AT [[GTC-296]], AND THE MOVE IS THE TICKET RATHER THAN A REGRESSION. The two
+    // unsubscribe handlers carry no session, no token and no shared secret. What authorises
+    // them is an HMAC in the URL, verified by `readUnsubscribeToken` — not an `AccessToken`
+    // row, so this scanner cannot see it and is being accurate about its own reach. Ruling Q
+    // needs a way out reachable by somebody with no account at all. See `GTC296_ADDED`.
+    //
+    // ⚠ NOTE WHAT THE NOTE ABOVE SAYS THIS NUMBER ALSO CATCHES: two of the thirteen fail-open
+    // mutations move it 12 → 14. It now sits at 14, so those two mutations would move it to 16
+    // — still a red, still caught, and the incidental property survives the move.
+    'exactly 14 handlers carry no guard and no other credential of any kind',
+    noCredential.length === 14,
     `found ${noCredential.length}: ${noCredential.map(handlerKey).sort().join(', ')}`
   );
 
@@ -1661,6 +1709,19 @@ const HEAD_VERDICTS: ReadonlyArray<readonly [string, boolean, string]> = [
   ['GET src/app/api/gather/[eventId]/directory/route.ts', false, ''],
   ['GET src/app/api/sms/inbound/route.ts', false, ''],
   ['GET src/app/api/templates/gather/route.ts', false, ''],
+  /*
+   * [[GTC-296]] — the guest's way out, 2026-09-22. Both rows read `false, ''`: unguarded and no
+   * credential this scanner can recognise. That is ACCURATE rather than wrong — the
+   * authorisation is an HMAC in the URL path, verified by `readUnsubscribeToken`, and it is not
+   * an `AccessToken` row, a session, a shared secret or a signature header. The scanner reports
+   * what it can see.
+   *
+   * ⚠ IT IS PUBLIC BY RULING, NOT BY OVERSIGHT. Ruling Q of [[GTC-189]] puts a way out in every
+   * guest-bound email, and the recipients hold no Gather account at all. The GET is a 307 to the
+   * confirm page and writes nothing; the POST is idempotent and its worst forged outcome is
+   * unsubscribing its own victim from one event (correction R4).
+   */
+  ['GET src/app/api/unsubscribe/[token]/route.ts', false, ''],
   ['POST src/app/api/auth/claim/route.ts', false, ''],
   ['POST src/app/api/auth/logout/route.ts', false, ''],
   ['POST src/app/api/auth/magic-link/route.ts', false, ''],
@@ -1685,6 +1746,8 @@ const HEAD_VERDICTS: ReadonlyArray<readonly [string, boolean, string]> = [
   ['POST src/app/api/demo/reset/route.ts', false, 'ENV_GATE:PROVEN'],
   ['POST src/app/api/demo/session/route.ts', false, ''],
   ['POST src/app/api/events/[id]/households/[householdId]/claim/route.ts', false, ''],
+  // [[GTC-296]] — the one-click write. See the GET row above for why both read `false, ''`.
+  ['POST src/app/api/unsubscribe/[token]/route.ts', false, ''],
   /*
    * GTC-280 — UNCHANGED BY THAT TICKET, DELIBERATELY, AND THE COMMENT IS THE POINT.
    *

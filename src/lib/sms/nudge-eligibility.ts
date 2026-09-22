@@ -1,6 +1,11 @@
 import { prisma } from '@/lib/prisma';
 import { isValidNZNumber } from '@/lib/phone';
 import { isOptedOut } from '@/lib/sms/opt-out-service';
+import {
+  EMAIL_OPT_OUT_SKIP_REASON,
+  emailOptedOutFact,
+  listEmailOptOutsForEvent,
+} from '@/lib/eligibility/email-opt-out';
 import { SENT_AND_LIVE } from '@/lib/lifecycle';
 import {
   MESSAGEABLE_PERSON_EVENT,
@@ -192,6 +197,19 @@ export async function findNudgeCandidates(now: Date = new Date()): Promise<Eligi
 
   const eligibleFirst: NudgeCandidate[] = [];
   const eligibleSecond: NudgeCandidate[] = [];
+  /*
+   * [[GTC-296]] — the opt-out set, ONE QUERY PER EVENT rather than one per membership.
+   *
+   * This loop walks every due membership across every event, so a per-person check would make
+   * the query count a property of the guest list. The events in hand are few and known, so the
+   * whole suppression set for all of them costs one round trip each.
+   */
+  const emailOptedOutByEvent = new Map<string, Set<string>>();
+  for (const eventId of new Set(memberships.map((m) => m.event.id))) {
+    emailOptedOutByEvent.set(eventId, await listEmailOptOutsForEvent(prisma, eventId));
+  }
+  const EMPTY: ReadonlySet<string> = new Set<string>();
+
   const skipReasons: Map<string, number> = new Map();
 
   const addSkip = (reason: string) => {
@@ -230,6 +248,31 @@ export async function findNudgeCandidates(now: Date = new Date()): Promise<Eligi
     const optedOut = await isOptedOut(person.phoneNumber!, event.hostId);
     if (optedOut) {
       addSkip('Opted out');
+      continue;
+    }
+
+    /*
+     * ⚠ [[GTC-296]] RULING 3 — THE EMAIL WAY OUT STOPS THE TEXT CHASE, AND THIS IS THE GATE
+     * THAT MAKES IT TRUE TODAY.
+     *
+     * Ruling 3 is chase-WIDE: *"an email unsubscribe for an event stops the automatic chase on
+     * EVERY channel for that event, including the text chase."* The chase that runs today is
+     * this finder and it is SMS-only, so without this line a guest who pressed unsubscribe goes
+     * on being texted — the *"silently keeps sending on a different channel"* pattern.
+     *
+     * ⚠ AND IT IS HERE RATHER THAN IN `chaseChannelOf`, WHICH HAS THE SAME GATE AND NO CALLER.
+     * [[GTC-189]] slice 8 is what wires this finder to the chooser; until it lands, the chooser's
+     * copy is dark and this one is the live one. Both exist deliberately — belt and braces, the
+     * same treatment the child rule gets, failing in the safe direction.
+     *
+     * ⚠ ITS POSITION IS A FOUNDER RULING (correction R2): above the don't-chase mark, below the
+     * opt-out check directly above, *"matching `nudge-mark.ts`'s house order"*. Zone 7 keeps the
+     * top; a host-set mark stays underneath a guest's own no.
+     *
+     * A RECORDED SKIP, never a silent drop — the rule this whole ladder holds.
+     */
+    if (emailOptedOutFact(membership.personId, emailOptedOutByEvent.get(event.id) ?? EMPTY)) {
+      addSkip(EMAIL_OPT_OUT_SKIP_REASON);
       continue;
     }
 

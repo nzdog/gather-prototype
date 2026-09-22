@@ -263,6 +263,14 @@ export function hostListReason(line: Pick<HostListLine, 'why' | 'child' | 'carri
  * typecheck. Recorded at GTC-189 slice 5b's evidence in full.
  */
 const ADULT_WHY: Record<HostListLine['why'], string> = {
+  /*
+   * [[GTC-296]] ruling 3, in the long form correction R7 sends here. The strip's own line is
+   * eight or nine characters; this screen has room for the whole fact and needs it, because
+   * this is where the host learns that the person will not be chased EITHER — which is the
+   * half of ruling 3 a reader would not guess from the word "email".
+   */
+  EMAIL_OPTED_OUT:
+    "They chose not to receive email about this event, so I won't chase them on any channel.",
   NO_CHANNEL: 'No email or mobile number.',
   SMS_OPTED_OUT: 'No email, and has opted out of texts.',
   PHONE_UNUSABLE: "No email, and I can't text that number.",
@@ -272,6 +280,15 @@ const ADULT_WHY: Record<HostListLine['why'], string> = {
 };
 
 const CHILD_WHY: Record<HostListLine['why'], string> = {
+  /*
+   * ⚠ DELIBERATELY NOT THE UNIFORM *"No one in their household can be reached."* THE OTHER
+   * THREE CHANNEL REFUSALS USE, AND THE DEPARTURE IS THE POINT. Those three describe a carrier
+   * nobody CAN reach. This one describes a carrier who can be reached perfectly well and has
+   * asked not to be — so the uniform sentence would be false about a live address, which is the
+   * family of falsehood this ledger keeps catching. Reachability is not the fact here; a choice
+   * is.
+   */
+  EMAIL_OPTED_OUT: "Their household's contact chose not to receive email about this event.",
   NO_CHANNEL: 'No one in their household can be reached.', // unreachable today
   SMS_OPTED_OUT: 'No one in their household can be reached.', // unreachable today
   PHONE_UNUSABLE: 'No one in their household can be reached.', // unreachable today

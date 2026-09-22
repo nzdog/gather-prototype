@@ -43,6 +43,8 @@
 import { Resend } from 'resend';
 import { randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';
+import { listUnsubscribeHeaders, withGuestEmailFooter } from '@/lib/email-footer';
+import { unsubscribeUrls } from '@/lib/unsubscribe-token';
 
 /** What every sender in this file returns. Callers decide what it means. */
 export interface SendResult {
@@ -140,6 +142,15 @@ export function getResendClient(): Resend {
   return resendClient;
 }
 
+/**
+ * ⚠ [[GTC-296]] RULING 6 — EXEMPT, AND DO NOT "FIX" THIS BY ADDING THE HEADER.
+ *
+ * *"Not host-to-guest mail — a direct response to something the account holder just did."*
+ * Same reading commercial-mail law gives transactional mail. And the specific absurdity here
+ * is worth naming: an unsubscribe link on a sign-in email offers to switch off the only way
+ * back in. `tests/email-opt-out-test.ts` layer G asserts the absence, with a subject opted out
+ * of every event that exists.
+ */
 export async function sendMagicLinkEmail(to: string, token: string): Promise<SendResult> {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const link = `${baseUrl}/auth/verify?token=${token}`;
@@ -162,6 +173,41 @@ export async function sendMagicLinkEmail(to: string, token: string): Promise<Sen
     console.error(`[Email] magic link to ${to} could not be attempted:`, message);
     return { success: false, error: message };
   }
+}
+
+/**
+ * [[GTC-296]] — THE WAY OUT, ATTACHED WHERE IT CANNOT BE FORGOTTEN.
+ *
+ * ⚠ THE SENDER MINTS, NOT THE CALLER, AND THAT IS A DELIBERATE DEPARTURE FROM THE APPROVED
+ * PLAN. The plan had each caller build the URL and pass it in. Building it here instead makes
+ * ruling Q — *"every email carries a way out"* — TRUE BY CONSTRUCTION rather than by every
+ * caller remembering: a guest sender cannot compose a message without one, because the only
+ * inputs it needs are the two ids it already takes.
+ *
+ * ⚠ AND IT DOES NOT BREAK GTC-265's RULE AT THE TOP OF THIS FILE. Minting a URL is
+ * COMPOSITION, not a decision about a failure. The sender still returns its result and still
+ * decides nothing for its caller.
+ *
+ * ⚠ IT THROWS WHEN `UNSUBSCRIBE_TOKEN_SECRET` IS UNSET, AND THE THROW IS THE POINT. It is the
+ * same door `getResendClient()` uses for a missing `RESEND_API_KEY`, caught by the same
+ * `try/catch` below and reported the same way — so a Gather with no secret configured sends no
+ * guest email AT ALL rather than sending one with no way out of it. Failing closed, following
+ * [[GTC-270]]'s precedent for `CRON_SECRET`.
+ *
+ * ⚠ NOT USED BY `sendMagicLinkEmail` OR `sendWelcomeEmail` — ruling 6 exempts both. See the
+ * note on each.
+ */
+function guestEmailParts(
+  body: string,
+  personId: string,
+  eventId: string
+): { text: string; headers: Record<string, string> } {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const { pageUrl, oneClickUrl } = unsubscribeUrls(baseUrl, personId, eventId);
+  return {
+    text: withGuestEmailFooter(body, pageUrl),
+    headers: listUnsubscribeHeaders(oneClickUrl),
+  };
 }
 
 /**
@@ -197,6 +243,13 @@ export async function sendAskEmail(params: {
   replyTo: string;
   /** The host's name, as the display name on Gather's address. Never her address. */
   fromName: string;
+  /**
+   * [[GTC-296]] — the recipient and the event, for the way out. REQUIRED, so a future caller
+   * cannot compose a guest email without one; `tsc` is the guard, as it is for every
+   * `Record`-keyed map in this tree.
+   */
+  personId: string;
+  eventId: string;
 }): Promise<SendResult> {
   try {
     const resend = getResendClient();
@@ -205,12 +258,14 @@ export async function sendAskEmail(params: {
     // the display part and the address is always ours.
     const match = configured.match(/<([^>]+)>/);
     const address = match ? match[1] : configured;
+    const { text, headers } = guestEmailParts(params.body, params.personId, params.eventId);
     const response = await resend.emails.send({
       from: `${params.fromName} <${address}>`,
       to: params.to,
       replyTo: params.replyTo,
       subject: params.subject,
-      text: params.body,
+      text,
+      headers,
     });
     return resultOf('ask', params.to, response);
   } catch (error) {
@@ -220,6 +275,18 @@ export async function sendAskEmail(params: {
   }
 }
 
+/**
+ * The by-hand nudge and the wrap-up thank-you.
+ *
+ * ⚠ [[GTC-296]]: A GUEST SENDER, SO IT CARRIES THE WAY OUT — and it already took the two ids
+ * needed to mint one, which is why this sender needed no new argument and the ask did.
+ *
+ * ⚠ IT DOES NOT ITSELF CHECK THE OPT-OUT, AND THAT IS GTC-265's RULE RATHER THAN AN OVERSIGHT.
+ * Its two callers answer the question differently by founder ruling — the manual nudge
+ * OVERRIDES an opt-out and says what it is overriding (ruling 4), the wrap-up thank-you does
+ * not send at all (ruling 5, as corrected by R3). A sender that refused for both would be
+ * wrong for one of them, which is exactly the shape this file's header warns about.
+ */
 export async function sendNudgeEmail(params: {
   to: string;
   subject: string;
@@ -229,11 +296,13 @@ export async function sendNudgeEmail(params: {
 }): Promise<SendResult> {
   try {
     const resend = getResendClient();
+    const { text, headers } = guestEmailParts(params.body, params.personId, params.eventId);
     const response = await resend.emails.send({
       from: process.env.EMAIL_FROM || 'Gather <noreply@gather.app>',
       to: params.to,
       subject: params.subject,
-      text: params.body,
+      text,
+      headers,
     });
     return resultOf('nudge', params.to, response);
   } catch (error) {
@@ -256,6 +325,10 @@ export async function sendNudgeEmail(params: {
  *
  * Zone 2 boundary for GTC-265: inspect the send's result, record the failure,
  * return it. Generation, expiry and consumption are not this ticket's.
+ *
+ * ⚠ [[GTC-296]] RULING 6 — EXEMPT, like the magic link above. It goes to the HOST at event
+ * creation, about the account she just made, and it carries a sign-in link. It reads no
+ * opt-out and gains no header.
  */
 export async function sendWelcomeEmail(
   email: string,

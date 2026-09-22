@@ -46,6 +46,29 @@
  * never resume messaging someone who opted out. Ruling 3 states the same ordering for the
  * proxy path, and `tests/nudge-cadence-controls-test.ts` asserts it on both by giving the
  * ordering subjects BOTH conditions and checking which reason is reported.
+ *
+ * ── ⚠ THERE IS NOW A SECOND LAYER ABOVE THIS ONE — [[GTC-296]] ───────────────
+ *
+ * `getEmailOptOut` in `src/lib/eligibility/email-opt-out.ts` is the per-event EMAIL opt-out,
+ * and it sits between Zone 7 and this module. The whole order, which that module's header
+ * states and every ladder now follows:
+ *
+ *   1. SMS OPT-OUT    — Zone 7. Guest-set, per host, legally binding.
+ *   2. EMAIL OPT-OUT  — `email-opt-out.ts`. Guest-set, per EVENT (ruling 1).
+ *   3. DONT_CHASE     — this module. Host-set, revocable by her.
+ *
+ * ⚠ IT IS A SIBLING OF ZONE 7 AND NOT AN EXTENSION OF IT. Its own table, its own module, its
+ * own gate check; nothing here reads it and nothing there reads `Person.smsOptedOut`. The
+ * ordering argument in the paragraph above is the reason it goes ABOVE this one rather than
+ * beside it: it is a guest's own no, and a host clearing her mark must not resume messaging
+ * somebody who made one. Its position relative to Zone 7 is a founder ruling (GTC-296
+ * correction R2) rather than a reading — the outcome is identical either way, and what the
+ * order decides is which reason a person carrying both is reported under.
+ *
+ * ⚠ AND IT REACHES FURTHER THAN THIS ONE DOES. Ruling 3 of GTC-296 is CHASE-WIDE: an email
+ * unsubscribe stops the automatic chase on EVERY channel for that event, the text chase
+ * included. The three automatic finders — `findNudgeCandidates`, `findProxyNudgeCandidates`
+ * and `findDecideByFollowupCandidates` — each carry the gate for that reason.
  */
 
 import type { NudgeMark } from '@/lib/nudge-cadence';

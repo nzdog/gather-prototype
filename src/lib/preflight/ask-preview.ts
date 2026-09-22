@@ -61,6 +61,7 @@ import {
   type HostListWhy,
 } from '@/lib/eligibility/channel-chooser';
 import { isMessageableRole } from '@/lib/eligibility/child-exclusion';
+import { emailOptedOutFact, listEmailOptOutsForEvent } from '@/lib/eligibility/email-opt-out';
 import { isHostMembership } from '@/lib/eligibility/host-exclusion';
 import { HOST_NAME_FALLBACK, firstNameOf } from '@/lib/messages/ask-register';
 import { buildTokenUrl } from '@/lib/tokens';
@@ -328,6 +329,18 @@ export async function readAskPreview(
         ).map((o) => o.phoneNumber)
   );
 
+  /*
+   * [[GTC-296]] — THE EMAIL WAY OUT, LOADED ONCE PER EVENT.
+   *
+   * ⚠ THE SAME SHAPE AS THE SMS SET DIRECTLY ABOVE, AND FOR THE SAME REASON. This walk is the
+   * one `pressSend`, `drainOnce` and `enrolMiniSends` all run, so a per-person check here would
+   * put the query count under the guest list's control. One query per event, whatever the roster.
+   *
+   * ⚠ AND IT IS SCOPED TO THIS EVENT, WHICH IS RULING 1. A set built for another event would
+   * suppress the wrong people — the failure mode a per-host table would have had by design.
+   */
+  const emailOptedOutPersonIds = await listEmailOptOutsForEvent(db, eventId);
+
   const rowsByPerson = new Map<string, { itemNames: string[]; jobNames: string[] }>();
   for (const a of assignments) {
     const rows = rowsByPerson.get(a.personId) ?? { itemNames: [], jobNames: [] };
@@ -357,6 +370,8 @@ export async function readAskPreview(
         // [[GTC-301]] — either fact; see the header and `smsOptedOutFact` above, which is the
         // one definition of the merge and is what the bounce door asks as well.
         smsOptedOut: smsOptedOutFact(m.person, optedOutNumbers),
+        // [[GTC-296]] ruling 1 — per event, and this set is this event's.
+        emailOptedOut: emailOptedOutFact(m.personId, emailOptedOutPersonIds),
       },
     })),
   };

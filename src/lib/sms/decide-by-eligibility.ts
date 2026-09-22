@@ -3,6 +3,7 @@ import { isOptedOut } from '@/lib/sms/opt-out-service';
 import { SENT_AND_LIVE } from '@/lib/lifecycle';
 import { isMessageableRole, CHILD_SKIP_REASON } from '@/lib/eligibility/child-exclusion';
 import { decideBy, isDecideByFollowupDue } from '@/lib/decide-by';
+import { EMAIL_OPT_OUT_SKIP_REASON, getEmailOptOut } from '@/lib/eligibility/email-opt-out';
 
 /**
  * GTC-175 (D2) — who is due the single decide-by follow-up.
@@ -215,6 +216,19 @@ export async function findDecideByFollowupCandidates(
     //    here so the skip is counted rather than showing up as a silent block.
     if (optedOut.has(`${person.phoneNumber}:${event.hostId}`)) {
       addSkip(OPTED_OUT_SKIP_REASON);
+      continue;
+    }
+
+    /*
+     * 3b. ⚠ [[GTC-296]] RULING 3, THROUGH CORRECTION R2b — the decide-by follow-up is an
+     *     AUTOMATIC chase, so an email unsubscribe for this event stops it like the other two.
+     *     *"A no to one channel is treated as a no to being chased"*, and this is a chase.
+     *
+     *     Below Zone 7's gate directly above, which is the order correction R2 sets. Counted,
+     *     never silent — the rule this whole ladder holds.
+     */
+    if (await getEmailOptOut(person.id, event.id)) {
+      addSkip(EMAIL_OPT_OUT_SKIP_REASON);
       continue;
     }
 

@@ -2,6 +2,7 @@ import type { OutboundChannel, PrismaClient } from '@prisma/client';
 import { readAskPreview, smsOptedOutFact } from '@/lib/preflight/ask-preview';
 import { composePreview } from '@/lib/preflight/ask-preview-compose';
 import { textAskReachOf } from '@/lib/eligibility/channel-chooser';
+import { getEmailOptOut } from '@/lib/eligibility/email-opt-out';
 import { deliveryFactFrom, latestRowByMembership } from '@/lib/glance/delivery-fact';
 import { smsProviderConfiguredFor } from '@/lib/sms/send-sms';
 import { recordChange, type LedgerActor } from '@/lib/ledger';
@@ -120,10 +121,20 @@ class ResendRefused extends Error {
 interface Subject {
   personEventId: string;
   personId: string;
+  eventId: string;
   hostId: string;
   email: string | null;
   phoneNumber: string | null;
   smsOptedOut: boolean;
+  /**
+   * [[GTC-296]] — HAS THIS PERSON TAKEN THE EMAIL WAY OUT OF THIS EVENT?
+   *
+   * ⚠ IT REACHES THE DOOR BECAUSE OF WHAT THE DOOR OFFERS. Ruling U's third action is *"send
+   * to the phone instead"*, which for somebody who unsubscribed is exactly the fall-to-text
+   * correction R1 refused by name. The fact is carried on the subject rather than read inside
+   * `factsFor`, so both entry points resolve it *"once and identically"* — this file's own rule.
+   */
+  emailOptedOut: boolean;
   reason: DoorReason;
 }
 
@@ -191,10 +202,12 @@ async function resolveSubject(
   return {
     personEventId: membership.id,
     personId: membership.personId,
+    eventId,
     hostId: event.hostId,
     email: membership.person.email,
     phoneNumber: membership.person.phoneNumber,
     smsOptedOut: membership.person.smsOptedOut,
+    emailOptedOut: (await getEmailOptOut(membership.personId, eventId)) !== null,
     reason: failure,
   };
 }
@@ -223,6 +236,7 @@ async function factsFor(db: PrismaClient, subject: Subject, deps: ResendDeps) {
     email: subject.email,
     phoneNumber: subject.phoneNumber,
     smsOptedOut: await optedOut(db, subject),
+    emailOptedOut: subject.emailOptedOut,
   };
   return {
     reason: subject.reason,

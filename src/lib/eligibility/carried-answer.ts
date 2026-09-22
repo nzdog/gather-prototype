@@ -53,6 +53,7 @@
 
 import type { Prisma } from '@prisma/client';
 import { chooseAskRoute, type ChooserEvent } from './channel-chooser';
+import { emailOptedOutFact, listEmailOptOutsForEvent } from './email-opt-out';
 import { firstNameOf } from '@/lib/messages/ask-register';
 
 type Db = Prisma.TransactionClient;
@@ -131,6 +132,13 @@ export async function resolveCarriedSubjects(
         ).map((o) => o.phoneNumber)
   );
 
+  /*
+   * [[GTC-296]] — the same per-event set `readAskPreview` loads, for the same reason: this walk
+   * is a whole roster and a per-person check would put the query count under the guest list's
+   * control. One query, whatever the household size.
+   */
+  const emailOptedOutPersonIds = await listEmailOptOutsForEvent(db, eventId);
+
   const chooserEvent: ChooserEvent = {
     hostId: event.hostId,
     households,
@@ -150,6 +158,8 @@ export async function resolveCarriedSubjects(
         smsOptedOut:
           m.person.smsOptedOut ||
           (!!m.person.phoneNumber && optedOutNumbers.has(m.person.phoneNumber)),
+        // [[GTC-296]] ruling 1 — per event, and this set is this event's.
+        emailOptedOut: emailOptedOutFact(m.personId, emailOptedOutPersonIds),
       },
     })),
   };
