@@ -892,19 +892,20 @@ export interface EnrolResult {
  * ── ⚠ RULING AJ IS NOT MET, AND IT IS SHIPPING INCOMPLETE RATHER THAN MET ─────
  *
  * Ruling AJ (decision 23) says the collapsed one-person pre-flight asks a late arrival the same
- * chase-channel question the others got, at their own send. **It cannot: the control does not
- * exist.** `PersonEvent.chaseException` is storage slice 4a landed; [[GTC-311]] owns the control,
- * the resolver and the screen, and `chooseChaseRoute` still has no caller in `src/`.
+ * chase-channel question the others got, at their own send. **It still cannot.** [[GTC-311]] built
+ * the control, the resolver and the full pre-flight's screen, and deferred the late arrival's own
+ * question by SCOPED ruling 4 — the add paths are several, one of them a guest's self-join with no
+ * host present, and each needs its own design. That question is [[GTC-330]]'s.
  *
  * Founder ruling, 2026-09-19: *"5e ships the mini-send without the question, records AJ as unmet
  * with GTC-311 named as what meets it... Say plainly that this is a ruling shipping incomplete, not
  * a ruling met."*
  *
  * ⚠ SO A MINI-SEND RECIPIENT FALLS TO `Event.chaseWhenNoMobileDefault` AND THE HOST IS NEVER ASKED
- * ABOUT THEM. Under ruling AH that default is *chase by email when there is no mobile*, ON — so a
- * late arrival with no usable phone is chased by email without her ever being offered the
- * *hand this one to me* exception every other recipient was offered. That is decision 23's hole,
- * still open, with the mini-send shipping over it.
+ * ABOUT THEM AT THEIR SEND. Under ruling AH that default is *chase by email when there is no
+ * mobile*, ON — which is exactly what the pre-flight's sentence promised her, so nothing false is
+ * shown (GTC-311 SCOPED ruling 4). What is lost until [[GTC-330]]: she cannot hand a late arrival
+ * over at the moment she adds him. Decision 23's hole, narrowed, and still open.
  */
 export async function enrolMiniSends(db: PrismaClient, takeEvents: number): Promise<EnrolResult> {
   /*

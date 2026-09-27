@@ -23,11 +23,12 @@
  * usable phone is. A second spelling of any of them is how one path lets a child through while
  * the other looks correct.
  *
- * ⚠ DECISION 15 IS OPEN, AND NOTHING HERE ANSWERS IT:
- *  - (a) how far ruling P reaches. The NARROW reading is built. Its one point of difference from
- *    the wide reading carries an ANCHOR, and deleting that line is the wide reading.
- *  - (b) and (c), when a chase hand-over reaches the host's list and how it reads on the board.
- *    The chase returns why it sends nothing and nothing about when or what colour.
+ * ⚠ DECISION 15 IS ANSWERED, AND THEN REPLACED — [[GTC-311]], 2026-09-27. Ruling Y ruled it wide,
+ * ruling AG made the hand-over a default the host overrides, and ruling AH turned that default ON:
+ * a person with no mobile the chase can text, who holds an email, is chased by email unless the host
+ * named them. The narrow line and its ANCHOR are gone; in their place `chaseChannelOf` asks
+ * `resolveChaseWhenNoMobile`. When a hand-over reaches the host's list, and how it reads on the
+ * board, are still not this module's — it returns why it sends nothing, never when or what colour.
  *
  * RULED ON THE READINGS THIS SLICE REPORTED (GTC-189, *Founder answers — the slice 1 flags*):
  * the host as carrier is not chased (answer 1); an unusable phone with no email is a line on the
@@ -40,6 +41,10 @@
 
 import { isMessageableRole } from '@/lib/eligibility/child-exclusion';
 import { isHostMembership } from '@/lib/eligibility/host-exclusion';
+import {
+  resolveChaseWhenNoMobile,
+  type ChaseWhenNoMobile,
+} from '@/lib/eligibility/chase-when-no-mobile';
 import { isChaseable } from '@/lib/eligibility/nudge-mark';
 import { resolveHouseholdChannel, resolveHouseholdMuted } from '@/lib/households/channel';
 import { isValidNZNumber } from '@/lib/phone';
@@ -111,6 +116,28 @@ export interface ChooserEvent {
   households: readonly ChooserHousehold[];
 }
 
+/**
+ * [[GTC-311]] — a membership as the CHASE needs it: everything the ask needs, and the host's named
+ * exception.
+ *
+ * ⚠ REQUIRED, NOT OPTIONAL, AND ON A TYPE OF ITS OWN. Required for the hazard `nudgeMark` records: a
+ * field left out of a narrow `select` reads as `undefined`, and here `undefined` would silently
+ * follow the default — which under ruling AH EMAILS the person the host said she would handle. Its
+ * own type because the ask never reads it (Scope: "the ask" is unchanged), so the eight callers of
+ * `chooseAskRoute` are not asked to carry a field they must not use.
+ */
+export interface ChaseChooserMembership extends ChooserMembership {
+  /** `PersonEvent.chaseException`. NULL means follow the event default. Never a polarity. */
+  chaseException: ChaseWhenNoMobile | null;
+}
+
+/** The event as the chase needs it: its roster with the exceptions, and its switch. */
+export interface ChaseChooserEvent extends ChooserEvent {
+  memberships: readonly ChaseChooserMembership[];
+  /** `Event.chaseWhenNoMobileDefault`. NULL means not set — the system default, BY_EMAIL. */
+  chaseWhenNoMobileDefault: ChaseWhenNoMobile | null;
+}
+
 /** Why a person's item is a line on the host's list (GTC-189 THE ASK, ruling A). */
 export type HostListWhy =
   // [[GTC-296]] ruling 1 — she said no to email for this event. FIRST in the union because it
@@ -140,7 +167,11 @@ export type ChaseNoneWhy =
   | 'SMS_OPTED_OUT'
   | 'MARKED_DONT_CHASE'
   | 'PHONE_UNUSABLE'
-  | 'NO_CHANNEL';
+  | 'NO_CHANNEL'
+  // [[GTC-311]] — the host took them: no mobile the chase can text, an email it could use, and
+  // `resolveChaseWhenNoMobile` answered HAND_TO_HOST — by her named exception, or by her switch.
+  // A fact about HER decision, not about the person's channels, which is why it is not NO_CHANNEL.
+  | 'HANDED_TO_HOST';
 
 export type AskRoute =
   | { kind: 'DIRECT'; channel: Channel; recipientId: string }
@@ -160,11 +191,11 @@ type Reached = { ok: true; channel: Channel };
  * Who carries a child's item — Moment 4 §10.6 and §10.7, as GTC-189's founder ruling narrows
  * them: the household is the route by which a child's job reaches an adult, and nothing else.
  */
-function resolveCarrier(
-  child: ChooserMembership,
-  event: ChooserEvent
+function resolveCarrier<M extends ChooserMembership>(
+  child: M,
+  event: Omit<ChooserEvent, 'memberships'> & { memberships: readonly M[] }
 ):
-  | { ok: true; carrier: ChooserMembership }
+  | { ok: true; carrier: M }
   | Refusal<'CHILD_WITHOUT_ITEM' | 'HOST_HOUSEHOLD_CHILD' | 'NO_CARRIER' | 'HOUSEHOLD_MUTED'> {
   if (!child.holdsItems) return { ok: false, why: 'CHILD_WITHOUT_ITEM' };
 
@@ -226,22 +257,51 @@ function askChannelOf(
   return { ok: true, channel: 'TEXT' };
 }
 
-/** THE CHASE: text first, email if they have no phone — as rulings O, P and T narrow it. */
+/**
+ * THE CHASE: text first; email for a person with no mobile it can text, unless the host took them.
+ *
+ * ⚠ THE WHOLE ORDER, STATED ONCE — RULED 2026-09-27 ([[GTC-311]] plan, flag B):
+ *
+ *   1. SMS OPT-OUT      Zone 7. Guest-set, legally binding.            → SMS_OPTED_OUT
+ *   2. EMAIL OPT-OUT    [[GTC-296]]. Guest-set, per event.             → EMAIL_OPTED_OUT
+ *   3. DON'T-CHASE      `nudge-mark.ts`. Host-set.                     → MARKED_DONT_CHASE
+ *   4. A USABLE MOBILE  the chase texts, and the exception is never read → TEXT
+ *   5. AN EMAIL         `resolveChaseWhenNoMobile`                     → EMAIL | HANDED_TO_HOST
+ *   6. NEITHER                                                          → PHONE_UNUSABLE | NO_CHANNEL
+ *
+ * ⚠ THE MARK IS ABOVE THE RESOLVER, AND THE BRIEF HAD IT BELOW. Ruling AL (iii) says the mark
+ * composes *"downstream of both"*: a person handed to the host is not chased whatever the mark says,
+ * and a don't-chase person is not chased whatever the exception says. That is a statement about the
+ * OUTCOME, and both orders give it — nobody in 1 to 3 is chased. What the order decides is the
+ * REPORTED reason, and the mark first keeps ruling T and GTC-192 Ruling 14's grey: a person she has
+ * taken over is grey, whatever else is true. The founder ruled it so on 2026-09-27.
+ *
+ * ⚠ "NO MOBILE IT CAN TEXT" INCLUDES AN UNUSABLE ONE — ruled 2026-09-27 (flag A), and it NARROWS
+ * RULING P. The London cousin with an email is in the email chase by default, because ruling AH was
+ * measured on exactly that population (decision 25's 95.1% counted the unusable numbers). Without an
+ * email he still comes to the host, as ruling P ruled.
+ */
 function chaseChannelOf(
-  membership: ChooserMembership
+  membership: ChaseChooserMembership,
+  eventDefault: ChaseWhenNoMobile | null
 ):
   | Reached
   | Refusal<
-      'EMAIL_OPTED_OUT' | 'SMS_OPTED_OUT' | 'MARKED_DONT_CHASE' | 'PHONE_UNUSABLE' | 'NO_CHANNEL'
+      | 'EMAIL_OPTED_OUT'
+      | 'SMS_OPTED_OUT'
+      | 'MARKED_DONT_CHASE'
+      | 'PHONE_UNUSABLE'
+      | 'NO_CHANNEL'
+      | 'HANDED_TO_HOST'
     > {
   const { person } = membership;
 
-  // Ruling O: a no to one channel is a no to being chased — the refusal, not the number, so it
+  // 1. Ruling O: a no to one channel is a no to being chased — the refusal, not the number, so it
   // stands after the number is removed. First, as `nudge-mark.ts` requires wherever both apply.
   if (person.smsOptedOut) return { ok: false, why: 'SMS_OPTED_OUT' };
 
   /*
-   * ⚠ [[GTC-296]] RULING 3 — CHASE-WIDE, AND THIS IS THE LINE THAT MAKES IT CHANNEL-AGNOSTIC.
+   * 2. ⚠ [[GTC-296]] RULING 3 — CHASE-WIDE, AND THIS IS THE LINE THAT MAKES IT CHANNEL-AGNOSTIC.
    *
    * The chase prefers TEXT, so an email opt-out checked anywhere below the phone branch would
    * leave the text chase running for somebody who asked not to be chased. Ruling 3 is explicit:
@@ -249,29 +309,31 @@ function chaseChannelOf(
    * ruling O of [[GTC-189]] read straight and applied to the email side.
    *
    * ⚠ BELOW ZONE 7's LINE AND ABOVE THE MARK, WHICH IS A FOUNDER RULING (correction R2) AND NOT
-   * THE EXECUTOR'S FIRST GUESS. It was built the other way round first, on the reasoning that a
-   * guest's own no is the more specific fact. The ruling places it here, *"matching
-   * `nudge-mark.ts`'s house order"*. The outcome is identical either way — the chase refuses —
-   * and what the order decides is which REASON a person carrying both conditions is reported
-   * under. `SmsOptOut` is Zone 7 and legally binding; it keeps the top.
+   * THE EXECUTOR'S FIRST GUESS. The outcome is identical either way — the chase refuses — and what
+   * the order decides is which REASON a person carrying both conditions is reported under.
+   * `SmsOptOut` is Zone 7 and legally binding; it keeps the top.
    */
   if (person.emailOptedOut) return { ok: false, why: 'EMAIL_OPTED_OUT' };
 
-  // Ruling T: she has taken him over. Ahead of the channel facts, so a person both marked and
-  // unreachable reports the mark — the same precedence Ruling 14's grey has over red.
+  // 3. Ruling T: she has taken him over. Ahead of the channel facts AND the resolver, so a person
+  // both marked and excepted reports the mark — the same precedence Ruling 14's grey has over red.
   if (!isChaseable(membership.nudgeMark)) return { ok: false, why: 'MARKED_DONT_CHASE' };
 
-  if (person.phoneNumber) {
-    // Ruling P: a phone the chase cannot use hands over; it does not fall to email.
-    return isValidNZNumber(person.phoneNumber)
-      ? { ok: true, channel: 'TEXT' }
-      : { ok: false, why: 'PHONE_UNUSABLE' };
+  // 4. A mobile the chase can use. The exception is about people it CANNOT text, so it is not read.
+  if (person.phoneNumber && isValidNZNumber(person.phoneNumber)) {
+    return { ok: true, channel: 'TEXT' };
   }
 
-  // Decision 15 is open. This line is the narrow reading, built; deleting it is the wide one.
-  // ANCHOR(GTC-189): decision 15 — narrow reading of ruling P
-  if (person.email) return { ok: true, channel: 'EMAIL' };
-  return { ok: false, why: 'NO_CHANNEL' };
+  // 5. [[GTC-311]] — THE NAMED EXCEPTION WINS (ruling AL), through its own module.
+  if (person.email) {
+    return resolveChaseWhenNoMobile({ exception: membership.chaseException, eventDefault }) ===
+      'BY_EMAIL'
+      ? { ok: true, channel: 'EMAIL' }
+      : { ok: false, why: 'HANDED_TO_HOST' };
+  }
+
+  // 6. Ruling P: a phone the chase cannot use, and nothing else to chase by, hands over.
+  return { ok: false, why: person.phoneNumber ? 'PHONE_UNUSABLE' : 'NO_CHANNEL' };
 }
 
 /**
@@ -332,8 +394,17 @@ export function chooseAskRoute(subject: ChooserMembership, event: ChooserEvent):
     : { kind: 'HOST_LIST', why: reach.why };
 }
 
-/** How this membership's items are chased — or why they are not. */
-export function chooseChaseRoute(subject: ChooserMembership, event: ChooserEvent): ChaseRoute {
+/**
+ * How this membership's items are chased — or why they are not.
+ *
+ * [[GTC-311]]: the pre-flight reads this, and [[GTC-189]] slice 8's chase is to read it too — one
+ * answer from one place. A carried child's chase goes to the carrier, so it is the CARRIER's named
+ * exception that decides; a value on the child's own row decides nothing.
+ */
+export function chooseChaseRoute(
+  subject: ChaseChooserMembership,
+  event: ChaseChooserEvent
+): ChaseRoute {
   if (!isMessageableRole(subject.householdRole)) {
     const found = resolveCarrier(subject, event);
     if (!found.ok && (found.why === 'CHILD_WITHOUT_ITEM' || found.why === 'HOST_HOUSEHOLD_CHILD')) {
@@ -351,7 +422,7 @@ export function chooseChaseRoute(subject: ChooserMembership, event: ChooserEvent
       return { kind: 'NONE', why: 'HOST_AS_CARRIER', carrierId: found.carrier.id };
     }
 
-    const reach = chaseChannelOf(found.carrier);
+    const reach = chaseChannelOf(found.carrier, event.chaseWhenNoMobileDefault);
     return reach.ok
       ? { kind: 'CARRIED', channel: reach.channel, recipientId: found.carrier.id }
       : { kind: 'NONE', why: reach.why, carrierId: found.carrier.id };
@@ -359,7 +430,7 @@ export function chooseChaseRoute(subject: ChooserMembership, event: ChooserEvent
 
   if (isHostMembership(subject, event.hostId)) return { kind: 'NONE', why: 'HOST_OWN_ASK' };
 
-  const reach = chaseChannelOf(subject);
+  const reach = chaseChannelOf(subject, event.chaseWhenNoMobileDefault);
   return reach.ok
     ? { kind: 'DIRECT', channel: reach.channel, recipientId: subject.id }
     : { kind: 'NONE', why: reach.why };

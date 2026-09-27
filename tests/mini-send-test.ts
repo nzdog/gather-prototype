@@ -31,9 +31,9 @@
  * Ruling AJ (decision 23): *"the collapsed one-person pre-flight asks me then"* — a person added on
  * day three gets the same chase-channel question the others got, at their own send.
  *
- * **It cannot. The control does not exist.** `PersonEvent.chaseException` is storage slice 4a
- * landed and [[GTC-311]] owns the control, the resolver and the screen; `chooseChaseRoute` still
- * has no caller anywhere in `src/`. Founder ruling, 2026-09-19:
+ * **It still cannot.** [[GTC-311]] built the control, the resolver and the full pre-flight's
+ * screen, and deferred the late arrival's own question to [[GTC-330]] (its SCOPED ruling 4).
+ * Founder ruling, 2026-09-19:
  *
  *   "5e ships the mini-send without the question, records AJ as unmet with GTC-311 named as what
  *    meets it... Say plainly in the ticket that this is a ruling shipping incomplete, not a ruling
@@ -541,10 +541,12 @@ async function main() {
     section('Layer J: ruling AJ is NOT met, and the code says so');
 
     assert(
-      '⚠ THE MODULE NAMES RULING AJ AS UNMET AND NAMES [[GTC-311]] AS WHAT MEETS IT. Founder ' +
-        'ruling, 2026-09-19: this is a ruling SHIPPING INCOMPLETE, not a ruling met, and it must ' +
-        'not read as done',
-      read(DISPATCH).includes('AJ') && read(DISPATCH).includes('GTC-311')
+      '⚠ THE MODULE NAMES RULING AJ AS UNMET, NAMES [[GTC-311]] AS WHAT BUILT THE CONTROL AND ' +
+        '[[GTC-330]] AS WHAT MEETS AJ. Founder ruling, 2026-09-19: this is a ruling SHIPPING ' +
+        'INCOMPLETE, not a ruling met, and it must not read as done',
+      read(DISPATCH).includes('AJ') &&
+        read(DISPATCH).includes('GTC-311') &&
+        read(DISPATCH).includes('GTC-330')
     );
     assert(
       '⚠ AND THE CONSEQUENCE IS NAMED: a mini-send recipient falls to the event default with no ' +

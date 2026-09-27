@@ -20,9 +20,13 @@
  *   T  types — a row missing `nudgeMark` or `smsOptedOut` does not typecheck
  *
  * LABELS THAT TIE AN ASSERTION TO A RECORD, so a later ruling or fix knows which assertions it moves:
- *   [D15-narrow]              pins the NARROW reading of ruling P — a person with no phone is
- *                             chased by email. The wide reading would make each of these NONE.
- *                             ⚠ Decision 15 is OPEN; these are built, not answered.
+ *   [AH-default]              pins ruling AH's default reaching a person with no mobile the chase
+ *                             can text: chased by email, the event switch unset (BY_EMAIL, ON).
+ *                             Was [D15-narrow] until [[GTC-311]] replaced the narrow line with
+ *                             `resolveChaseWhenNoMobile`; the values did not move for the three
+ *                             no-phone cases, and two London-number cases moved by flag A (ruled
+ *                             2026-09-27), which narrows ruling P. The exception and the switch
+ *                             are pinned in `tests/chase-channel-test.ts`, not here.
  *   [RULED slice 1 answer n]  a reading slice 1 reported and the founder ruled on — GTC-189,
  *                             "Founder answers — the slice 1 flags".
  *   [DEFECT GTC-nnn]          pinned as built against a filed defect; expected to change when
@@ -44,9 +48,9 @@ import {
   type Channel,
   type ChaseNoneWhy,
   type ChaseRoute,
-  type ChooserEvent,
+  type ChaseChooserEvent as ChooserEvent,
+  type ChaseChooserMembership as ChooserMembership,
   type ChooserHousehold,
-  type ChooserMembership,
   type HostListWhy,
   type NotRecipientWhy,
 } from '../src/lib/eligibility/channel-chooser';
@@ -130,6 +134,8 @@ function member(id: string, patch: MemberPatch = {}): ChooserMembership {
     householdRole: null,
     nudgeMark: null,
     holdsItems: true,
+    // [[GTC-311]]: NULL follows the event default. The exception is pinned in chase-channel-test.
+    chaseException: null,
     ...rest,
     person: { email: null, phoneNumber: null, smsOptedOut: false, ...person },
   };
@@ -290,6 +296,8 @@ const HOUSEHOLDS: ChooserHousehold[] = [
 
 const EVENT: ChooserEvent = deepFreeze({
   hostId: HOST_ID,
+  // [[GTC-311]]: unset — the system default, BY_EMAIL (ruling AH, ON).
+  chaseWhenNoMobileDefault: null,
   memberships: MEMBERS,
   households: HOUSEHOLDS,
 });
@@ -301,6 +309,7 @@ function variant(patch: {
 }): ChooserEvent {
   return deepFreeze({
     hostId: EVENT.hostId,
+    chaseWhenNoMobileDefault: EVENT.chaseWhenNoMobileDefault,
     memberships: EVENT.memberships.map((row) => {
       const p = patch.members?.[row.id];
       if (!p) return row;
@@ -367,7 +376,7 @@ section('Layer M: the matrix — ask and chase, each asserted');
 runCases('M', [
   {
     id: 'e-only',
-    label: 'email only: asked by email, chased by email [D15-narrow]',
+    label: 'email only: asked by email, chased by email [AH-default]',
     ask: direct('EMAIL', 'e-only'),
     chase: direct('EMAIL', 'e-only'),
   },
@@ -463,9 +472,13 @@ runCases('M', [
   },
   {
     id: 'ldn-email',
-    label: 'London number with email: asked by email, NOT chased by email (ruling P)',
+    // ⚠ MOVED AT [[GTC-311]], FLAG A, RULED 2026-09-27 — THIS NARROWS RULING P. "No usable mobile"
+    // includes an unusable one, so the London cousin WITH an email is in the email chase by default
+    // (ruling AH was measured on that population). Pinned before as NONE PHONE_UNUSABLE.
+    label:
+      'London number with email: asked by email, chased by email by default (ruling AH; narrows ruling P) [AH-default]',
     ask: direct('EMAIL', 'ldn-email'),
-    chase: none('PHONE_UNUSABLE'),
+    chase: direct('EMAIL', 'ldn-email'),
   },
   {
     id: 'ldn-only',
@@ -493,7 +506,7 @@ runCases('M', [
   },
   {
     id: 'walt',
-    label: 'an itemless adult is asked (GTC-187 decision 8) [D15-narrow] [RULED slice 1 answer 4]',
+    label: 'an itemless adult is asked (GTC-187 decision 8) [AH-default] [RULED slice 1 answer 4]',
     ask: direct('EMAIL', 'walt'),
     chase: direct('EMAIL', 'walt'),
   },
@@ -558,7 +571,7 @@ runCases('C', [
   },
   {
     id: 'jack',
-    label: 'carrier with email only: carried and chased by email [D15-narrow]',
+    label: 'carrier with email only: carried and chased by email [AH-default]',
     ask: carried('EMAIL', 'emma'),
     chase: carried('EMAIL', 'emma'),
   },
@@ -588,9 +601,11 @@ runCases('C', [
   },
   {
     id: 'ella',
-    label: 'carrier with a London number and email: carried by email, not chased (P through R)',
+    // ⚠ MOVED AT [[GTC-311]], FLAG A — the same narrowing of ruling P, reached through ruling R.
+    label:
+      'carrier with a London number and email: carried, and chased by email by default (narrows ruling P) [AH-default]',
     ask: carried('EMAIL', 'liam'),
-    chase: none('PHONE_UNUSABLE', 'liam'),
+    chase: carried('EMAIL', 'liam'),
   },
   {
     id: 'zoe',
@@ -719,6 +734,7 @@ assert(
 
 const REVERSED: ChooserEvent = deepFreeze({
   hostId: EVENT.hostId,
+  chaseWhenNoMobileDefault: EVENT.chaseWhenNoMobileDefault,
   memberships: [...EVENT.memberships].reverse(),
   households: [...EVENT.households].reverse(),
 });

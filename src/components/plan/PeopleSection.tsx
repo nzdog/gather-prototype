@@ -351,10 +351,11 @@ export default function PeopleSection({
 
                 ⚠ AND A SECOND THING IS UNMET THAT THIS COMMENT COULD NOT HAVE NAMED.
                 Ruling AJ says a late arrival is asked the chase-channel question at their
-                own send, through the collapsed one-person pre-flight. It is not: the
-                control is GTC-311's and does not exist, so a mini-send recipient falls to
-                the event default with no chance to except them. Shipping incomplete by
-                founder ruling, 2026-09-19.
+                own send, through the collapsed one-person pre-flight. It is not: GTC-311
+                built the control on the full pre-flight and deferred the late arrival's
+                question to GTC-330, so a mini-send recipient falls to the event default
+                with no chance to except them. Shipping incomplete by founder ruling,
+                2026-09-19, and deferred again by GTC-311 SCOPED ruling 4.
 
                 So deleting `!isSent &&` today would offer a button that creates N asks on
                 a cadence that does not exist, for people nobody was asked about. Named in

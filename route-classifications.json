@@ -336,6 +336,14 @@
     "securityIssues": []
   },
   {
+    "filePath": "src/app/api/events/[id]/pre-flight/chase/route.ts",
+    "apiPath": "/api/events/:id/pre-flight/chase",
+    "methods": ["PATCH"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
     "filePath": "src/app/api/events/[id]/pre-flight/channel/route.ts",
     "apiPath": "/api/events/:id/pre-flight/channel",
     "methods": ["PATCH"],

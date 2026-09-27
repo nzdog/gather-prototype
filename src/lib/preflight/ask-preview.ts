@@ -56,10 +56,17 @@
 import type { Prisma } from '@prisma/client';
 import {
   chooseAskRoute,
+  chooseChaseRoute,
   type Channel,
-  type ChooserEvent,
+  type ChaseChooserEvent,
+  type ChaseNoneWhy,
+  type ChaseRoute,
   type HostListWhy,
 } from '@/lib/eligibility/channel-chooser';
+import {
+  resolveChaseWhenNoMobile,
+  type ChaseWhenNoMobile,
+} from '@/lib/eligibility/chase-when-no-mobile';
 import { isMessageableRole } from '@/lib/eligibility/child-exclusion';
 import { emailOptedOutFact, listEmailOptOutsForEvent } from '@/lib/eligibility/email-opt-out';
 import { isHostMembership } from '@/lib/eligibility/host-exclusion';
@@ -244,6 +251,95 @@ export interface HostListLine {
   carrierName: string | null;
 }
 
+/**
+ * [[GTC-311]] — how one RECIPIENT is chased, and whether the host may take them off it.
+ *
+ * ⚠ THE CONTROL IS READ OFF THE CHASE ROUTE, NEVER RE-DERIVED. Since the narrow line left the
+ * chooser, the only way a chase reaches EMAIL is through `resolveChaseWhenNoMobile`, and the only
+ * way it reaches `HANDED_TO_HOST` is the same call answering the other way. So "the exception
+ * applies to this person" is exactly "the chase is EMAIL, or HANDED_TO_HOST" — and nothing here
+ * states the order a second time for it to drift from.
+ */
+export interface RecipientChase {
+  chasedBy: 'TEXT' | 'EMAIL' | 'NONE';
+  why: ChaseNoneWhy | null;
+  /**
+   *  OFFERED             — the resolver decides this person; the per-person pills are shown.
+   *  REFUSED_OPTED_OUT   — ruling AI: an SMS opt-out is never offered it, and ruling AM's
+   *                        placeholder is shown in its place.
+   *  NONE                — a usable mobile, the mark, the host as carrier: nothing to decide.
+   */
+  control: 'OFFERED' | 'REFUSED_OPTED_OUT' | 'NONE';
+  /** `PersonEvent.chaseException` as stored. NULL means follow the default. */
+  exception: ChaseWhenNoMobile | null;
+}
+
+/**
+ * A line in group B of the host's list — ASKED, and not chased.
+ *
+ * ⚠ DELIBERATELY NOT A `HostListLine` AND NEVER IN `hostList`. `pressSend`, `drainOnce` and
+ * `enrolMiniSends` each read `hostList` to write WITHHELD ASK rows ([[GTC-325]], [[GTC-296]]), so a
+ * chase line put there would stop the person's invitation — a chase decision silently withholding
+ * the ask. `tests/chase-channel-test.ts` asserts `hostList` and `recipients` are byte-identical with
+ * and without exceptions.
+ */
+export interface NotChasedLine {
+  personEventId: string;
+  personId: string;
+  name: string;
+  child: boolean;
+  why: ChaseNoneWhy;
+  itemNames: string[];
+  jobNames: string[];
+  /** The adult who carries a child's ask, when it is that adult who is not chased. */
+  carrierName: string | null;
+}
+
+export interface PreviewChase {
+  /** `Event.chaseWhenNoMobileDefault` as stored. NULL means not set. */
+  stored: ChaseWhenNoMobile | null;
+  /** What the switch means today — the stored value, or the system default (ruling AH, ON). */
+  resolved: ChaseWhenNoMobile;
+  /** Keyed by `PreviewRecipient.personEventId`. */
+  byRecipient: Record<string, RecipientChase>;
+  notChased: NotChasedLine[];
+}
+
+/**
+ * The chase refusals that group B leaves out, and where each already is.
+ *  - MARKED_DONT_CHASE: grey, and revisited in step 3 where it is set (GTC-192 Rulings 14 and 17).
+ *  - HOST_AS_CARRIER: already on the screen as a recipient the press does not message.
+ *  - HOST_OWN_ASK, CHILD_WITHOUT_ITEM: not recipients of anything.
+ */
+const NOT_ON_GROUP_B: ReadonlySet<ChaseNoneWhy> = new Set<ChaseNoneWhy>([
+  'MARKED_DONT_CHASE',
+  'HOST_AS_CARRIER',
+  'HOST_OWN_ASK',
+  'CHILD_WITHOUT_ITEM',
+]);
+
+function recipientChaseOf(route: ChaseRoute, exception: ChaseWhenNoMobile | null): RecipientChase {
+  if (route.kind !== 'NONE') {
+    return {
+      chasedBy: route.channel,
+      why: null,
+      control: route.channel === 'EMAIL' ? 'OFFERED' : 'NONE',
+      exception,
+    };
+  }
+  return {
+    chasedBy: 'NONE',
+    why: route.why,
+    control:
+      route.why === 'HANDED_TO_HOST'
+        ? 'OFFERED'
+        : route.why === 'SMS_OPTED_OUT'
+          ? 'REFUSED_OPTED_OUT'
+          : 'NONE',
+    exception,
+  };
+}
+
 export interface AskPreview {
   event: {
     name: string;
@@ -259,6 +355,8 @@ export interface AskPreview {
   replyTo: string | null;
   recipients: PreviewRecipient[];
   hostList: HostListLine[];
+  /** [[GTC-311]] — the chase, as the screen shows it. Read-only; the ask above does not depend on it. */
+  chase: PreviewChase;
 }
 
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
@@ -277,6 +375,7 @@ export async function readAskPreview(
       occasionDescription: true,
       hostId: true,
       askAuthorLine: true,
+      chaseWhenNoMobileDefault: true,
       host: { select: { name: true, userId: true, user: { select: { email: true } } } },
     },
   });
@@ -295,6 +394,7 @@ export async function readAskPreview(
         householdId: true,
         householdRole: true,
         nudgeMark: true,
+        chaseException: true,
         person: {
           select: { name: true, email: true, phoneNumber: true, smsOptedOut: true, userId: true },
         },
@@ -352,8 +452,11 @@ export async function readAskPreview(
     return { itemNames: [...(rows?.itemNames ?? [])], jobNames: [...(rows?.jobNames ?? [])] };
   };
 
-  const chooserEvent: ChooserEvent = {
+  // [[GTC-311]]: typed for the CHASE, which is a superset of what the ask needs — `chooseAskRoute`
+  // reads the same object and never the two chase fields.
+  const chooserEvent: ChaseChooserEvent = {
     hostId: event.hostId,
+    chaseWhenNoMobileDefault: event.chaseWhenNoMobileDefault,
     households,
     memberships: memberships.map((m) => ({
       id: m.id,
@@ -362,6 +465,7 @@ export async function readAskPreview(
       householdId: m.householdId,
       householdRole: m.householdRole,
       nudgeMark: m.nudgeMark,
+      chaseException: m.chaseException,
       // ⚠ A row of EITHER kind. A child holding only a job holds something — see the header.
       holdsItems: rowsByPerson.has(m.personId),
       person: {
@@ -468,6 +572,42 @@ export async function readAskPreview(
   const recipientList = [...recipients.values()].sort(byName);
   for (const r of recipientList) r.carried.sort(byName);
 
+  /*
+   * [[GTC-311]] — THE CHASE, READ BESIDE THE ASK AND NEVER THROUGH IT.
+   *
+   * A second walk rather than a branch in the loop above, so nothing about the ask can come to
+   * depend on it. Pure: no query beyond the two columns the selects above already carry.
+   */
+  const subjectById = new Map(chooserEvent.memberships.map((m) => [m.id, m]));
+  const byRecipient: Record<string, RecipientChase> = {};
+  for (const r of recipientList) {
+    const subject = subjectById.get(r.personEventId)!;
+    byRecipient[r.personEventId] = recipientChaseOf(
+      chooseChaseRoute(subject, chooserEvent),
+      subject.chaseException
+    );
+  }
+
+  const notChased: NotChasedLine[] = [];
+  for (const subject of chooserEvent.memberships) {
+    const m = byId.get(subject.id)!;
+    if (isHost(m)) continue;
+    const ask = chooseAskRoute(subject, chooserEvent);
+    // Asked: the ask reaches them, directly or carried. Group A already holds everyone else.
+    if (ask.kind !== 'DIRECT' && ask.kind !== 'CARRIED') continue;
+    const chase = chooseChaseRoute(subject, chooserEvent);
+    if (chase.kind !== 'NONE' || NOT_ON_GROUP_B.has(chase.why)) continue;
+    notChased.push({
+      personEventId: m.id,
+      personId: m.personId,
+      name: m.person.name,
+      child: !isMessageableRole(m.householdRole),
+      why: chase.why,
+      ...rowsOf(m.personId),
+      carrierName: chase.carrierId ? (byId.get(chase.carrierId)?.person.name ?? null) : null,
+    });
+  }
+
   return {
     event: {
       name: event.name,
@@ -481,5 +621,14 @@ export async function readAskPreview(
     replyTo: event.host?.user?.email ?? null,
     recipients: recipientList,
     hostList: hostList.sort(byName),
+    chase: {
+      stored: event.chaseWhenNoMobileDefault,
+      resolved: resolveChaseWhenNoMobile({
+        exception: null,
+        eventDefault: event.chaseWhenNoMobileDefault,
+      }),
+      byRecipient,
+      notChased: notChased.sort(byName),
+    },
   };
 }

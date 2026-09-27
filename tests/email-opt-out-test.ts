@@ -286,11 +286,13 @@ async function runPureLayers() {
       householdRole: null,
       nudgeMark: null,
       holdsItems: true,
+      // [[GTC-311]]: follows the event default — the chase chooser now requires the field.
+      chaseException: null,
       person,
       ...over,
     }) as never;
   const ev = (memberships: unknown[]) =>
-    ({ hostId: 'host-1', memberships, households: [] }) as never;
+    ({ hostId: 'host-1', memberships, households: [], chaseWhenNoMobileDefault: null }) as never;
 
   const reachable = {
     email: 'guest@example.test',

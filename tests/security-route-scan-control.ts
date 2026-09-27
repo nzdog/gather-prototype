@@ -355,16 +355,20 @@ function suite1_HeadShape(head: ScanResult) {
    * SECURITY FACT. It moved deliberately: the route is PUBLIC by ruling, because a guest with no
    * session and no account is exactly who needs it. Both handlers are named in `GTC296_ADDED`
    * below rather than the assertion being loosened, so a THIRD unguarded handler still fails.
+   *
+   * ⚠ 109 → 110 FILES AND 140 → 141 HANDLERS AT [[GTC-311]] — one new route file,
+   * `pre-flight/chase`, carrying one `PATCH` behind `requireEventRole(HOST, COHOST)`, like its
+   * three siblings. ✅ THE GUARD COUNT DID NOT MOVE — 27 stays 27, which is the security fact.
    */
   logTest(
-    'the scanner discovers exactly 109 route files under src/app/api',
-    head.files.length === 109,
+    'the scanner discovers exactly 110 route files under src/app/api',
+    head.files.length === 110,
     `found ${head.files.length}`
   );
 
   logTest(
-    'the scanner enumerates exactly 140 exported HTTP handlers',
-    head.handlers.length === 140,
+    'the scanner enumerates exactly 141 exported HTTP handlers',
+    head.handlers.length === 141,
     `found ${head.handlers.length}`
   );
 
@@ -387,9 +391,10 @@ function suite1_HeadShape(head: ScanResult) {
   // by arithmetic.
   // ⚠ 108/138 → 109/140 with the route above. The denominator note below is unchanged: the
   // inventory now records 82 file-shaped entries and this is still a different unit.
+  // ⚠ 109/140 → 110/141 and 82 → 83 at [[GTC-311]]: the chase route, classified SESSION.
   logTest(
-    'the surface is larger than the retired inventory could express (82 entries)',
-    head.files.length === 109 && head.handlers.length === 140,
+    'the surface is larger than the retired inventory could express (83 entries)',
+    head.files.length === 110 && head.handlers.length === 141,
     `files ${head.files.length}, handlers ${head.handlers.length}`
   );
 }

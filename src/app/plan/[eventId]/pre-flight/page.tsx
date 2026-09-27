@@ -40,13 +40,24 @@ import AccordionShell from '@/components/plan/AccordionShell';
 import { draftAuthorLine } from '@/lib/messages/ask-register';
 import { PRESS_REFUSAL_WORDS, THRESHOLD_SCRIPT } from '@/lib/press/press-words';
 import {
+  CHASED_BY_LABEL,
+  CHASED_BY_VALUE,
+  CHASE_DEFAULT_PILLS,
+  CHASE_DEFAULT_SENTENCE,
+  CHASE_OPTED_OUT_PLACEHOLDER,
+  DEFAULT_SUFFIX,
   HOST_LIST_BLURB,
   HOST_LIST_EMPTY,
   HOST_LIST_HEADING,
+  HOST_LIST_NOT_ASKED_HEADING,
+  HOST_LIST_NOT_CHASED_BLURB,
+  HOST_LIST_NOT_CHASED_HEADING,
   NOT_MESSAGED_WHY,
   NO_REPLY_TO_LINE,
+  chasePersonPills,
   composePreview,
   hostListReason,
+  notChasedReason,
   messageCountLine,
   messageRows,
   notMessagedRows,
@@ -181,6 +192,7 @@ function Step({
   blurb,
   checked,
   onCheck,
+  checkLabel = 'Checked',
   children,
 }: {
   n: number;
@@ -188,6 +200,12 @@ function Step({
   blurb: string;
   checked: boolean;
   onCheck: (v: boolean) => void;
+  /**
+   * [[GTC-311]] SCOPED ruling 7: no check may claim she LOOKED AT what she CHOSE. Step 4 now carries
+   * decisions, so its box reads "Settled" — true of what she read and of what she decided (W9,
+   * ruled 2026-09-27). The other four steps are still things she looks at, and keep "Checked".
+   */
+  checkLabel?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -206,7 +224,7 @@ function Step({
               onChange={(e) => onCheck(e.target.checked)}
               className="rounded border-gray-300 text-accent focus:ring-accent/40"
             />
-            Checked
+            {checkLabel}
           </label>
         </div>
       </header>
@@ -391,7 +409,7 @@ export default function PreFlightPage() {
           <p className="text-sm text-gray-400 mb-1">{data.event.name}</p>
           <h1 className="text-2xl font-medium text-gray-900">Before you send</h1>
           <p className="text-gray-600 mt-2">
-            Five things to look at. Nothing goes out until you press at the end.
+            Five things to go through. Nothing goes out until you press at the end.
           </p>
           {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
           {saving && <p className="text-sm text-gray-400 mt-3">Saving…</p>}
@@ -641,9 +659,10 @@ export default function PreFlightPage() {
         <Step
           n={4}
           title="The message, shown"
-          blurb="Exactly what each person will receive."
+          blurb="Exactly what each person will receive, and who I'll chase."
           checked={!!checked[4]}
           onCheck={(v) => setChecked((c) => ({ ...c, 4: v }))}
+          checkLabel="Settled"
         >
           <MessageStep eventId={eventId} />
         </Step>
@@ -1019,6 +1038,38 @@ function MessageStep({ eventId }: { eventId: string }) {
   const [edited, setEdited] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [chaseSaving, setChaseSaving] = useState(false);
+  const [chaseError, setChaseError] = useState<string | null>(null);
+
+  /**
+   * [[GTC-311]] — the chase channel's two writes, the switch and one person's exception.
+   *
+   * The server's answer is authoritative, so this re-reads the whole preview rather than patching
+   * local state: flipping the switch moves everyone who follows it, and the list below must show
+   * exactly who moved. The selected recipient is kept.
+   */
+  const patchChase = async (body: Record<string, unknown>) => {
+    setChaseSaving(true);
+    setChaseError(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/pre-flight/chase`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setChaseError(err.message ?? err.error ?? 'That did not save.');
+        return;
+      }
+      const fresh = await fetch(`/api/events/${eventId}/pre-flight/message`);
+      if (fresh.ok) setData(await fresh.json());
+    } catch {
+      setChaseError('That did not save.');
+    } finally {
+      setChaseSaving(false);
+    }
+  };
 
   useEffect(() => {
     let live = true;
@@ -1313,6 +1364,57 @@ function MessageStep({ eventId }: { eventId: string }) {
                 {current.recipient.channel === 'EMAIL' ? 'Email' : 'Text'}
               </dd>
             </div>
+            {/*
+              [[GTC-311]] — HOW THEY ARE CHASED, AND THE ONE PLACE SHE MAY TAKE THEM OFF IT.
+
+              The per-person control lives on the recipient she is reading, not on a list of every
+              emailed guest: ruling AH rejected the forty-row screen, and the list she reads below is
+              the short one — the people she has taken. The pills name BEHAVIOURS, never a tick; the
+              control's polarity inverted on 2026-09-15 and a tick would read either way.
+
+              An opted-out row is refused the control and says so IN ITS PLACE (ruling AI; ruling AM's
+              words, from the module) rather than simply having no switch.
+            */}
+            {(() => {
+              const rc = data.chase.byRecipient[current.recipient.personEventId];
+              if (!rc) return null;
+              return (
+                <div className="flex gap-2">
+                  <dt className="w-24 shrink-0 text-gray-400">{CHASED_BY_LABEL}</dt>
+                  <dd className="text-gray-800">
+                    {CHASED_BY_VALUE[rc.chasedBy]}
+                    {rc.control === 'REFUSED_OPTED_OUT' && (
+                      <span className="block text-xs text-gray-500 mt-1">
+                        {CHASE_OPTED_OUT_PLACEHOLDER}
+                      </span>
+                    )}
+                    {rc.control === 'OFFERED' && (
+                      <span className="flex flex-wrap gap-2 mt-1">
+                        {chasePersonPills({
+                          exception: rc.exception,
+                          eventDefault: data.chase.stored,
+                        }).map((p) => (
+                          <Pill
+                            key={p.value}
+                            active={p.active}
+                            onClick={() =>
+                              !chaseSaving &&
+                              !p.active &&
+                              patchChase({
+                                personEventId: current.recipient.personEventId,
+                                chaseException: p.writes,
+                              })
+                            }
+                          >
+                            {p.label}
+                          </Pill>
+                        ))}
+                      </span>
+                    )}
+                  </dd>
+                </div>
+              );
+            })()}
             {!current.recipient.hostAsCarrier && (
               <div className="flex gap-2">
                 <dt className="w-24 shrink-0 text-gray-400">Theirs</dt>
@@ -1379,23 +1481,78 @@ function MessageStep({ eventId }: { eventId: string }) {
         </>
       )}
 
+      {/*
+        [[GTC-311]] — THE DEFAULT, STATED ONCE (acceptance: "in one sentence, rather than per row").
+        It sits above the list because it decides who is on the second half of it. The switch is the
+        event's; the per-person exception is on each recipient above. Words: W1–W3, ruled 2026-09-27.
+      */}
+      <div className="mt-6 pt-5 border-t border-gray-100">
+        <p className="text-sm text-gray-800 mb-2">{CHASE_DEFAULT_SENTENCE[data.chase.resolved]}</p>
+        <div className="flex flex-wrap gap-2">
+          {(['BY_EMAIL', 'HAND_TO_HOST'] as const).map((v) => (
+            <Pill
+              key={v}
+              active={data.chase.resolved === v}
+              onClick={() =>
+                !chaseSaving &&
+                !(data.chase.stored === v) &&
+                patchChase({ chaseWhenNoMobileDefault: v })
+              }
+            >
+              {CHASE_DEFAULT_PILLS[v]}
+              {data.chase.stored === null && data.chase.resolved === v && DEFAULT_SUFFIX}
+            </Pill>
+          ))}
+        </div>
+        {chaseSaving && <p className="text-xs text-gray-400 mt-2">Saving…</p>}
+        {chaseError && <p className="text-xs text-red-600 mt-2">{chaseError}</p>}
+      </div>
+
       {/* The host's list — ruling A as corrected: adults Gather cannot reach, and children whose
-          route is closed. Each named with what they were asked for, and why it is hers. */}
+          route is closed. Each named with what they were asked for, and why it is hers.
+
+          ⚠ [[GTC-311]] SCOPED ruling 6 — TWO KINDS OF PERSON NOW, AND EVERY HEADING IS TRUE OF
+          EVERYONE UNDER IT. Group A is who Gather does not ask; slice 3's blurb is exactly true of
+          them and stays with them. Group B is who Gather asks and will not chase, which the blurb
+          would be false of. Each half comes from its own field and its own words map — group B's
+          reasons are ruling AN's `CHASE_NONE_WHY`, never `ADULT_WHY`. */}
       <div className="mt-6 pt-5 border-t border-gray-100">
         <h3 className="text-sm font-medium text-gray-900 mb-1">{HOST_LIST_HEADING}</h3>
-        <p className="text-xs text-gray-500 mb-3">{HOST_LIST_BLURB}</p>
-        {data.hostList.length === 0 ? (
+        {data.hostList.length === 0 && data.chase.notChased.length === 0 ? (
           <p className="text-sm text-gray-600">{HOST_LIST_EMPTY}</p>
         ) : (
-          <ul className="space-y-2">
-            {data.hostList.map((l) => (
-              <li key={l.personEventId} className="text-sm">
-                <span className="text-gray-900">{l.name}</span>
-                <span className="text-gray-500"> — {rowsInBrief(l)}</span>
-                <p className="text-xs text-gray-500">{hostListReason(l)}</p>
-              </li>
-            ))}
-          </ul>
+          <>
+            {data.hostList.length > 0 && (
+              <div className="mt-3">
+                <h4 className="text-sm text-gray-800 mb-1">{HOST_LIST_NOT_ASKED_HEADING}</h4>
+                <p className="text-xs text-gray-500 mb-3">{HOST_LIST_BLURB}</p>
+                <ul className="space-y-2">
+                  {data.hostList.map((l) => (
+                    <li key={l.personEventId} className="text-sm">
+                      <span className="text-gray-900">{l.name}</span>
+                      <span className="text-gray-500"> — {rowsInBrief(l)}</span>
+                      <p className="text-xs text-gray-500">{hostListReason(l)}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {data.chase.notChased.length > 0 && (
+              <div className="mt-4">
+                <h4 className="text-sm text-gray-800 mb-1">{HOST_LIST_NOT_CHASED_HEADING}</h4>
+                <p className="text-xs text-gray-500 mb-3">{HOST_LIST_NOT_CHASED_BLURB}</p>
+                <ul className="space-y-2">
+                  {data.chase.notChased.map((l) => (
+                    <li key={l.personEventId} className="text-sm">
+                      <span className="text-gray-900">{l.name}</span>
+                      <span className="text-gray-500"> — {rowsInBrief(l)}</span>
+                      <p className="text-xs text-gray-500">{notChasedReason(l)}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
