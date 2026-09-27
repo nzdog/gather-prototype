@@ -146,7 +146,7 @@ house pattern for pinning auth wiring without spinning up HTTP.
 
 | npm script | File | Requires |
 |---|---|---|
-| `test:tnz-sms` | scripts/test-tnz-sms.ts | **SENDS A REAL SMS.** `TNZ_AUTH_TOKEN` + `TEST_SMS_RECIPIENT=+64...`; refuses to run without recipient |
+| `live:tnz-sms` (was `test:tnz-sms`; renamed 2026-09-27 so the `test:*` gate cannot send) | scripts/test-tnz-sms.ts | **SENDS A REAL SMS.** `TNZ_AUTH_TOKEN` + `TEST_SMS_RECIPIENT=+64...`; refuses to run without recipient |
 | (unwired) | tests/sms-validation-test.ts | DB; exercises `sendSms` validation *without* real sends (per its header) |
 | (unwired) | tests/sms-infrastructure-test.ts | DB; phone/opt-out infrastructure |
 

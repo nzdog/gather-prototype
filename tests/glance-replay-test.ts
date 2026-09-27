@@ -3207,10 +3207,18 @@ async function main() {
         JSON.stringify(seenEntry.methods) === JSON.stringify(['POST']) &&
         JSON.stringify(seenEntry.securityIssues) === JSON.stringify([])
     );
+    /*
+     * ⚠ 81 → 83, MOVED AT [[GTC-189]] SLICE 8a's PIN COMMIT (founder ruling, 2026-09-27). The pin went
+     * stale twice and neither commit ran this suite: f858ae5 ([[GTC-296]]) added the public
+     * unsubscribe handler and 0067be3 ([[GTC-311]]) the chase-choice PATCH. Both are named below, so
+     * the count cannot be satisfied by a different pair of routes arriving.
+     */
     assert(
       'layer 4 / inventory',
-      'and the surface is 81 routes — phase 4’s "no new route" property ends here, once',
-      classifications.length === 81
+      'and the surface is 83 routes — 81 at phase 4, plus GTC-296’s unsubscribe handler and GTC-311’s chase-choice route',
+      classifications.length === 83 &&
+        classifications.some((e: any) => e.apiPath === '/api/unsubscribe/[token]') &&
+        classifications.some((e: any) => e.apiPath === '/api/events/:id/pre-flight/chase')
     );
 
     // ══ LAYER 4e — THE LIVE ISLAND (SLICE 6e) ════════════════════════════

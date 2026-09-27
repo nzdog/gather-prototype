@@ -120,6 +120,31 @@ The test suite consists of security-validation scripts run via `tsx`.
 npm run test:security
 ```
 
+### The gate is every `test:*` script
+*(Founder ruling, 2026-09-27, GTC-189 slice 8.)* From GTC-189 slice 8b on, a
+change is gated on **every `test:*` script in `package.json`**, not a chosen
+list. So nothing in that namespace may send a real message: the live TNZ smoke
+send is `npm run live:tnz-sms` (was `test:tnz-sms`), outside it.
+
+### Known failures — environment-bound, not regressions
+Each fails identically at an unmodified HEAD, and each waits on something
+outside the code. Confirm a failure is one of these by re-running at HEAD, never
+by assuming.
+
+- `test:email-send-result` — layer 4 waits on `GTC265_PROBE_KEY`, a Resend key
+  whose state the suite measures before driving a route that could send
+  (GTC-265, GTC-247).
+- `test:gtc280-paid` — waits on `GTC280_PAID_SESSION_ID`, a really-paid Stripe
+  test-mode checkout session (GTC-280). Run deliberately, never casually.
+- `test:demo-ui` — 1 of 4, *"Participant API identifies demo event by known
+  event name"*: the demo event's name drift, GTC-333.
+- `test:nudge-provider-gate` — its positive control needs an SMS provider in the
+  ambient environment, and with one present it would drive the real nudge cron
+  against the real database and text real guests. So it refuses unless
+  `GATHER_ALLOW_LIVE_SMS_TEST=1` is set, and is red either way until **GTC-274**
+  replaces the ambient provider with a stubbed one. ⚠ GTC-274 is a precondition
+  of setting a TNZ token on any machine that runs the tests.
+
 ---
 
 ## Preflight Sanity Sequence

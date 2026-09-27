@@ -24,7 +24,7 @@
  * Stripe's hosted page and there is no API that fakes one. It lives in
  * `npm run test:gtc280-paid`, is run deliberately with a session id in
  * `GTC280_PAID_SESSION_ID`, and its output is pasted into the ticket. The repo
- * already treats `test:tnz-sms` this way.
+ * already treats `live:tnz-sms` (was `test:tnz-sms`) this way.
  *
  * ⚠ NOTHING IS SENT BY THIS SUITE. Layer 3 stubs `globalThis.fetch` before
  * touching a sender. Layer 2 drives only routes that refuse before reaching a

@@ -266,7 +266,7 @@ Postgres directly via Prisma (needs `DATABASE_URL` only).
 | `scripts/triage-unknown-routes.ts` | Categorises UNKNOWN-auth routes by risk from `SECURITY_ROUTE_INVENTORY.md`. **Currently broken from a clean run:** it expects the file at repo root (`scripts/triage-unknown-routes.ts` — `main()` joins `SECURITY_ROUTE_INVENTORY.md` onto `projectRoot`) but the doc now lives at `docs/05_ops/security/SECURITY_ROUTE_INVENTORY.md`, so it exits "not found". Fixing the path is a (small) GTC ticket. | no | the inventory file |
 | `scripts/update-demo-dates.sql` | GTC-050 one-off SQL: bump prod demo event 2025→2026. Kept as the provenance of the section-3 drift; do not re-run blindly. | no | psql |
 | `scripts/test-phase-*.ts`, `test-magic-link-*.ts`, `test-host-claim.ts`, `test-auth-fix.ts` | Older HTTP-level flow checks. | **yes** (fetch localhost:3000) | DB + server |
-| `scripts/test-tnz-sms.ts` | Live TNZ SMS send (also `npm run test:tnz-sms`). Sends a REAL SMS — needs `TNZ_AUTH_TOKEN`; don't run casually. | no | TNZ creds |
+| `scripts/test-tnz-sms.ts` | Live TNZ SMS send (also `npm run live:tnz-sms`, renamed from `test:tnz-sms` 2026-09-27). Sends a REAL SMS — needs `TNZ_AUTH_TOKEN`; don't run casually. | no | TNZ creds |
 
 Note: `route-classifications.json` (repo root, manually maintained auth classification
 per route) is a separate artifact from `SECURITY_ROUTE_INVENTORY.md`; the triage

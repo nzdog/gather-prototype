@@ -25,7 +25,7 @@
     "test:ledger-why-scope": "tsx tests/ledger-why-scope-test.ts",
     "test:ledger-record-change": "tsx tests/ledger-record-change-test.ts",
     "test:event-setup": "tsx tests/event-setup-test.ts",
-    "test:tnz-sms": "tsx scripts/test-tnz-sms.ts",
+    "live:tnz-sms": "tsx scripts/test-tnz-sms.ts",
     "test:demo-ui": "tsx tests/demo-ui-isolation.ts",
     "test:setup-progress-banner": "tsx tests/setup-progress-banner-test.ts",
     "test:host-nudge": "tsx tests/host-nudge-test.ts",

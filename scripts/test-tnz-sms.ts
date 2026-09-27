@@ -6,7 +6,11 @@
  * LIVE send — set TEST_SMS_RECIPIENT to a real NZ mobile in E.164
  * format before running, or the script will refuse to proceed.
  *
- * Run with: TEST_SMS_RECIPIENT=+64XXXXXXXXX npm run test:tnz-sms
+ * Run with: TEST_SMS_RECIPIENT=+64XXXXXXXXX npm run live:tnz-sms
+ *
+ * ⚠ RENAMED FROM `test:tnz-sms` ON 2026-09-27 (founder ruling, GTC-189 slice 8's gate). The gate is
+ * now every `test:*` script in package.json, so a live send in that namespace would text someone
+ * the day a TNZ token is set.
  */
 
 import { sendViaTnz, isTnzEnabled } from '../src/lib/sms/tnz-client';

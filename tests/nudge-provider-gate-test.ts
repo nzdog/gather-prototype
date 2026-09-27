@@ -85,7 +85,41 @@ function stripProviderCredentials() {
 // ──────────────────────────────────────────────────────────────────────────────
 // The positive control (child process): ambient .env, provider configured.
 // ──────────────────────────────────────────────────────────────────────────────
+/*
+ * ⚠ THE LIVE-SMS GUARD — founder ruling, 2026-09-27 (GTC-189 slice 8's gate). ENDED BY [[GTC-274]].
+ *
+ * This layer drives the real nudge cron against the real database with the AMBIENT environment,
+ * so on a machine holding a TNZ token it would text real guests ([[GTC-270]]'s finding, filed as
+ * GTC-274). The gate is now every `test:*` script, so the day a provider credential lands on a
+ * machine that runs it, this layer refuses — red and loud — instead of sending. An explicit
+ * opt-in is the only way past it. GTC-274 replaces the ambient provider with a stubbed one and
+ * removes this guard.
+ */
+export const LIVE_SMS_OPT_IN = 'GATHER_ALLOW_LIVE_SMS_TEST';
+const PROVIDER_CREDENTIALS = [
+  'TNZ_AUTH_TOKEN',
+  'TWILIO_ACCOUNT_SID',
+  'TWILIO_AUTH_TOKEN',
+  'TWILIO_PHONE_NUMBER',
+] as const;
+
 async function positiveControl() {
+  const present = PROVIDER_CREDENTIALS.filter((k) => !!process.env[k]);
+  if (present.length > 0 && process.env[LIVE_SMS_OPT_IN] !== '1') {
+    console.error(
+      `\n\x1b[41m\x1b[1m REFUSED — SMS PROVIDER CREDENTIALS ARE PRESENT (${present.join(', ')}). \x1b[0m\n` +
+        `\x1b[31mThis layer drives the real nudge cron against the real database and would send real\n` +
+        `texts to real guests. It will not run unless ${LIVE_SMS_OPT_IN}=1 is set explicitly.\n` +
+        `The fix that retires this guard is GTC-274 (a stubbed provider).\x1b[0m\n`
+    );
+    assert(
+      'CONTROL',
+      `REFUSED: provider credentials present and ${LIVE_SMS_OPT_IN} is not set — nothing was sent (GTC-274)`,
+      false
+    );
+    return;
+  }
+
   console.log('\n\x1b[1mPositive control — a provider IS configured\x1b[0m\n');
 
   delete process.env.CRON_SECRET;
@@ -440,11 +474,19 @@ async function main() {
     // Drop comment lines (these files discuss the predicate on purpose) and the
     // declaration itself — `isSmsEnabled(): boolean` contains `isSmsEnabled()`.
     .filter((l) => !/:\s*(\*|\/\/)/.test(l) && !/function\s+isSmsEnabled/.test(l));
+  /*
+   * ⚠ 2 → 3, MOVED AT [[GTC-189]] SLICE 8a's PIN COMMIT (founder ruling, 2026-09-27). Slice 7b
+   * (59decd3) added `smsProviderConfiguredFor` to send-sms.ts — founder answer 1's fence for the
+   * bounce door, which answers per destination exactly as `sendSms` does — and did not run this
+   * suite. It is a REPORT beside the sender, not a gate on the run, so the invariant this assertion
+   * protects (no early return on the Twilio predicate) is intact. Pinned by where each site is, so a
+   * third gate elsewhere still fails.
+   */
   assert(
     'E',
-    `isSmsEnabled() has exactly 2 call sites: sendSms's Twilio arm + the scheduler's report (found ${callSites.length})`,
-    callSites.length === 2 &&
-      callSites.some((l) => l.includes('send-sms.ts')) &&
+    `isSmsEnabled() has exactly 3 call sites: sendSms's Twilio arm, smsProviderConfiguredFor beside it (slice 7b), and the scheduler's report (found ${callSites.length})`,
+    callSites.length === 3 &&
+      callSites.filter((l) => l.includes('src/lib/sms/send-sms.ts')).length === 2 &&
       callSites.some((l) => l.includes('nudge-scheduler.ts'))
   );
 

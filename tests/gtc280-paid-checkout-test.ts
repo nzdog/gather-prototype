@@ -16,7 +16,7 @@
  * ⚠ THIS IS NOT IN THE ORDINARY SWEEP AND MUST NOT BE. It needs a Checkout
  * Session that has actually been paid, and Stripe has no API that fakes one —
  * completing a session requires the hosted page. The repo already treats
- * `test:tnz-sms` this way: run deliberately, never casually.
+ * `live:tnz-sms` (was `test:tnz-sms`) this way: run deliberately, never casually.
  *
  * ── WHAT IT WRITES, AND WHY IT IS ONE CHARGE RATHER THAN THREE ────────────────
  *
