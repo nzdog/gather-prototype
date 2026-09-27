@@ -63,8 +63,12 @@ npm run dev        # = next dev --turbo
   "Specified module format (CommonJs) is not matching…", someone added
   `"type": "commonjs"` to `package.json`. Remove it (documented in root `CLAUDE.md`
   and it is do-not-touch zone 8 in `GATHER-BUILD-CONSTANTS.md`).
-- Host dashboard lives at `/plan/[eventId]` (session-cookie auth). V2 "Moments" flow
-  is the SAME route with `?setup=true`.
+- Host dashboard (V1) lives at `/plan/[eventId]` (session-cookie auth). The V2
+  "Moments" flow is its own route, `/plan/[eventId]/setup`
+  (`src/app/plan/[eventId]/setup/page.tsx`). `?setup=true` was retired by GTC-233
+  (`06fbeee`) and is now silently ignored. You get the V1 dashboard, not an error.
+- `/plan/events` sends an event to `/setup` only if it has an `EventSetup` row. The
+  GTC-133 seed creates none, so open `/plan/<id>/setup` directly for seeded events.
 
 ## 2. Default seed — prisma/seed.ts anatomy
 

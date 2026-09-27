@@ -15,8 +15,8 @@ Line numbers are "(as of 2026-07-09)" and may drift — re-check with the comman
 | Term | Meaning |
 |---|---|
 | V1 | Legacy host dashboard + wizard UI at `/plan/[eventId]` (still live) |
-| V2 / "Moments" | Redesigned host journey (Moment 1 households → Moment 2 AI plan → …) entered via `?setup=true` on the SAME route |
-| God file | `src/app/plan/[eventId]/page.tsx` — one client component rendering both V1 and V2 (3,870 lines as of 2026-07-09) |
+| V2 / "Moments" | Redesigned host journey (Moment 1 households → Moment 2 AI plan → …) at its own route `/plan/[eventId]/setup` (split out by GTC-233; `?setup=true` is retired) |
+| God file | `src/app/plan/[eventId]/page.tsx` — the V1 client component (3,401 lines as of 2026-09-27; rendered both V1 and V2 until GTC-233) |
 | Single-call architecture | One Claude API call generates the entire plan (GTC-145/146); replaced per-section calls |
 | GTC-NNN | Ticket in `docs/tickets/GTC-NNN.md` — the unit of change control |
 | EventSetup | Per-event row storing V2 Step 1 brief answers (JSONB columns); its existence marks an event as "V2-created" |
@@ -41,22 +41,23 @@ This skill is the contract: read it BEFORE designing a change that touches any a
 
 ## 1. V1/V2 coexistence map (the central mess — deliberate, not accidental)
 
-**Decision:** V2 was built INSIDE the V1 page component rather than as a new route,
-so one URL serves both experiences and events created either way keep working.
-There is NO clean cutover.
+**Decision (history):** V2 was originally built INSIDE the V1 page component and
+entered with `?setup=true`. GTC-233 (`06fbeee`, 2026-08-22) split it into its own
+route and retired the flag. Events created either way keep working. There is
+still NO cutover of the *data*: both experiences read the same Event.
 
-The map (all in `src/app/plan/[eventId]/page.tsx`, 3,870 lines as of 2026-07-09):
+The map (as of 2026-09-27):
 
 | Mechanism | Location | Behavior |
 |---|---|---|
-| Entry flag | `useState(searchParams.get('setup') === 'true')` | `?setup=true` → V2 opening screen |
-| V2 render chain | `if (showSetup)` → `SetupOpeningScreen` → `showMoment1` → `showMoment2Opening` → `showMoment2Step1` → `showMoment2Step2Skeleton` → plan view | Sequential boolean `useState` flags, not a router |
-| URL cleanup | effect strips `?setup=true` after mount | KB-003 trap: `window.history.replaceState` does NOT sync `useSearchParams` — see the `replaceState`/`useSearchParams` comment |
-| V1 dashboard | everything after the V2 branches in the same component | Renders when no V2 flag is set |
-| V2-created marker | `event.setup` (`{ id } \| null`, typed) — existence of the EventSetup row | 13 gating sites across page.tsx hide V1-only UI (History tab, "Generate plan" wizard button, host-description modal) when `event.setup` exists |
+| V1 dashboard | `src/app/plan/[eventId]/page.tsx` (`PlanEditorPage`, 3,401 lines) | V1 only. Ignores `?setup=true` |
+| V2 Moment flow | `src/app/plan/[eventId]/setup/page.tsx` (`EventSetupPage`, 1,042 lines) | Opening screen → Moment 1 → Moment 2 Step 1 → Step 2 → plan view |
+| V2 entry stage | `resolveSetupStage` in `src/lib/setup/entry-stage.ts` | Picks the starting stage from stored state on load (GTC-235), not from session flags |
+| Routing into V2 | `src/app/plan/new/page.tsx` (after create) and `src/app/plan/events/page.tsx` (row click, when `event.setup` exists) | Hand-built `/plan/${id}/setup` URLs |
+| V2-created marker | `event.setup` (`{ id } \| null`, typed) — existence of the EventSetup row | Gating sites in the V1 page.tsx hide V1-only UI (History tab, "Generate plan" wizard button, host-description modal) when `event.setup` exists |
 
-**Why it matters:** any UI change to `/plan/[eventId]` can silently affect BOTH
-experiences. `event.setup` truthiness is the de-facto V1/V2 discriminator for an
+**Why it matters:** V1 still shows every event, V2 ones included. A UI change to
+`/plan/[eventId]` can still affect how V2-created events look there. `event.setup` truthiness is the de-facto V1/V2 discriminator for an
 event — there is no explicit `version` field.
 
 **Rules:**
@@ -308,8 +309,13 @@ webhook signature verification). Entitlement questions go through
 
 Ordered roughly by blast radius. "Open" = no ticket has fixed it as of 2026-07-09.
 
-1. **The god file** — `src/app/plan/[eventId]/page.tsx`, 3,870 lines, 75 `useState`
-   occurrences, renders V1 AND V2. Every UI ticket risks cross-contamination.
+1. **The god file** — `src/app/plan/[eventId]/page.tsx`, 3,401 lines and 64 `useState`
+   occurrences as of 2026-09-27 (3,870 and 75 on 2026-07-09, when it rendered V1 AND V2).
+   GTC-233 moved V2 to `src/app/plan/[eventId]/setup/page.tsx`, so page.tsx is V1 only and
+   one component no longer carries both experiences. It is still one very large component,
+   and it still renders V2-created events behind its 13 `event.setup` gates — both
+   spellings: 4 written `event.setup`, 9 written `event?.setup`. Count them with
+   `grep -cE "event\??\.setup"`; a grep for `event\.setup` alone finds only 4.
    Decomposition is the flagship campaign (`gather-v1-v2-reconciliation-campaign`).
    Open.
 2. **Household edit = delete-and-recreate** —
@@ -329,7 +335,8 @@ Ordered roughly by blast radius. "Open" = no ticket has fixed it as of 2026-07-0
    up "…**2025**", so demo endpoints 404 against a fresh seed. Known
    name-drift bug (confirmed 2026-07-09); canonical six-location table and
    fix shape: `gather-config-and-flags` section 7. Open.
-5. **EventSetup-gated UI divergence** — 13 `event.setup` truthiness checks in the
+5. **EventSetup-gated UI divergence** — 13 `event.setup` truthiness checks (both spellings,
+   `event.setup` and `event?.setup`) in the
    god file decide which of two UIs a host sees; there is no explicit event
    version field, so "is this a V2 event?" is answered by row-existence. Fragile
    under any future backfill/migration of EventSetup. Open.
@@ -404,10 +411,11 @@ All facts verified against the working tree on branch `feat/moment-one-redesign`
 2026-07-09. Re-verify before relying on any of them:
 
 ```bash
-# God file size and V1/V2 flags
+# God file size, the V1/V2 route split (GTC-233), and V1's event.setup gates
 wc -l "src/app/plan/[eventId]/page.tsx"
-grep -n "setup') === 'true'\|if (showSetup)" "src/app/plan/[eventId]/page.tsx"
-grep -cn "event.setup\|event?.setup" "src/app/plan/[eventId]/page.tsx"
+grep -n "export default function" "src/app/plan/[eventId]/page.tsx" "src/app/plan/[eventId]/setup/page.tsx"  # PlanEditorPage (V1), EventSetupPage (V2)
+grep -n "if (showSetup)" "src/app/plan/[eventId]/setup/page.tsx"  # V2 render chain; in page.tsx until GTC-233
+grep -cE "event\??\.setup" "src/app/plan/[eventId]/page.tsx"  # both spellings; 13 on 2026-09-27
 
 # Middleware three layers still intact (strip list must NOT contain /api/h/)
 grep -n "TOKEN_PAGE_COOKIES\|SESSION_STRIP_PREFIXES" middleware.ts

@@ -20,14 +20,14 @@ never by eye — every gate is a number.
 | Term | Meaning |
 |---|---|
 | **V1** | Legacy host dashboard + guided wizard + `/generate`/`/regenerate` AI pipeline. Still live. |
-| **V2** | The "Moment" flow: Moment 1 households → Moment 2 Step 1 brief → single-call AI plan via `POST /api/events/[id]/finalize-plan`. Entered via `?setup=true` on the SAME route as V1. |
-| **God file** | `src/app/plan/[eventId]/page.tsx` — 3,870 lines (as of 2026-07-09) rendering BOTH V1 dashboard and the entire V2 Moment flow via early returns. |
+| **V2** | The "Moment" flow: Moment 1 households → Moment 2 Step 1 brief → single-call AI plan via `POST /api/events/[id]/finalize-plan`. Lives at its own route `/plan/[eventId]/setup` since GTC-233 (`?setup=true` is retired). |
+| **God file** | `src/app/plan/[eventId]/page.tsx` — the V1 client component (3,401 lines as of 2026-09-27). It rendered BOTH the V1 dashboard and the entire V2 Moment flow until GTC-233 moved V2 to `/plan/[eventId]/setup`; it is V1 only now. |
 | **EventSetup** | The V2-only Prisma model holding Moment 2 Step 1 answers (JSONB columns). Its PRESENCE is the canonical "this is a V2 event" discriminator (chosen in GTC-148 after auditing 5 candidate signals). |
 | **PersonEvent** | Join row linking a Person to an Event; carries `teamId`, `rsvpStatus`, `householdRole`, reachability. Deleting one cascades away its `NudgeLog` rows. |
 | **Tier 2 prune** | The set of V1 surfaces GTC-152 deliberately did NOT delete, pending product decisions: `/api/events/[id]/generate` + `src/lib/ai/generate.ts` pipeline + legacy prompt surface, `/regenerate` + `/regenerate/preview`, `src/app/demo/review/page.tsx`, PlanRevision and other half-wired models. |
 
 **Founding documents (read before starting):**
-- `gather-v1-v2-brief.md` (repo root) — the founder's diagnostic map. Mostly current, but: its dietary skip-path finding (#4) was FIXED by GTC-150; `EventSetup.generatedData` and `StructureChangeRequest` were dropped by GTC-152; page.tsx has grown from 3,851 to 3,870 lines.
+- `gather-v1-v2-brief.md` (repo root) — the founder's diagnostic map. Mostly current, but: its dietary skip-path finding (#4) was FIXED by GTC-150; `EventSetup.generatedData` and `StructureChangeRequest` were dropped by GTC-152; page.tsx grew from 3,851 to 3,870 lines, then GTC-233 cut it to 3,401 (as of 2026-09-27) by moving V2 to `src/app/plan/[eventId]/setup/page.tsx` — so anything in the brief that places V2 inside page.tsx is out of date.
 - `docs/tickets/GTC-148.md`, `GTC-149.md`, `GTC-152.md` — the campaign's completed opening moves (hide V1 AI controls on V2 events; Tier 1 safe deletes).
 - NOTE: those tickets cite `docs/v1-v2-reconciliation-review.md`. That file is NOT committed to the repo (verified 2026-07-09). The tickets themselves preserve its findings — use them.
 - STALE: `docs/moment-1-and-2-build-report.md` and `docs/moment-2-flow-document.md` describe the DELETED per-section generation architecture. Read GTC-146 first; do not implement from those docs.
@@ -63,16 +63,21 @@ never by eye — every gate is a number.
 # 0.1 God-file size
 wc -l "src/app/plan/[eventId]/page.tsx"
 # EXPECTED (2026-07-09): 3870
+# 2026-09-27: 3401 — GTC-233 moved V2 out to setup/page.tsx; that is not Phase 3 progress
 
-# 0.2 Component imports in the god file (V1 + V2 mixed)
+# 0.2 Component imports in the god file (V1 + V2 mixed until GTC-233; V1 only since)
 grep -c "from '@/components/plan/" "src/app/plan/[eventId]/page.tsx"
 # EXPECTED (2026-07-09): 35
+# 2026-09-27: 27 here, plus 9 in "src/app/plan/[eventId]/setup/page.tsx"
 
 # 0.3 The three render branches (V2 setup / V2 plan view / V1 dashboard)
-grep -n "const \[showSetup" "src/app/plan/[eventId]/page.tsx"      # line 376
-grep -n "if (showSetup) {" "src/app/plan/[eventId]/page.tsx"       # line 1661
-grep -n "if (showMoment2PlanView && event) {" "src/app/plan/[eventId]/page.tsx"  # line 1807
-grep -n "^  return (" "src/app/plan/[eventId]/page.tsx"            # line 2037 = V1 dashboard
+# On 2026-07-09 all three were in page.tsx (showSetup :376, if (showSetup) :1661,
+# showMoment2PlanView :1807, V1 return :2037). GTC-233 moved the two V2 branches to
+# setup/page.tsx. Line numbers below are as of 2026-09-27.
+grep -n "const \[showSetup" "src/app/plan/[eventId]/setup/page.tsx"      # line 211
+grep -n "if (showSetup) {" "src/app/plan/[eventId]/setup/page.tsx"       # line 523
+grep -n "if (showMoment2PlanView && event) {" "src/app/plan/[eventId]/setup/page.tsx"  # line 751
+grep -n "^  return (" "src/app/plan/[eventId]/page.tsx"                  # line 1533 = V1 dashboard
 
 # 0.4 EventSetup-gated branches (the GTC-148/149 "hide V1 on V2 events" pattern)
 grep -cE "event\??\.setup" "src/app/plan/[eventId]/page.tsx"
@@ -97,7 +102,7 @@ python3 -c "import json; print(len(json.load(open('route-classifications.json'))
 ```
 
 **If you see instead → branch:**
-- God file materially smaller than 3,870 → Phase 3 has progressed; read the newest GTC tickets (`ls -t docs/tickets | head`) before assuming this runbook's line numbers.
+- God file materially smaller than 3,401 (its size on 2026-09-27, after GTC-233 moved V2 out; it was 3,870 before) → Phase 3 has progressed; read the newest GTC tickets (`ls -t docs/tickets | head`) before assuming this runbook's line numbers.
 - `/generate` or `/regenerate` directories missing → Phase 4 (Tier 2 prune) already executed; skip Phases 2 and 4, confirm via ticket.
 - `event.setup` gate count near 0 → GTC-148/149 regressed. STOP, treat as a live bug, open a ticket before anything else.
 
@@ -183,8 +188,8 @@ INSERT INTO "NudgeLog" (id, "personEventId", "nudgeType", "scheduledFor", status
 or add a team via the dashboard UI first.)
 
 Trigger: with `npm run dev` running, open the printed Event URL, enter Moment 1
-(`?setup=true`), edit that household (change ANYTHING, e.g. primary phone), save. The UI
-issues the PUT inside `handleEditSave()` in `src/app/plan/[eventId]/page.tsx`.
+(`/plan/<id>/setup`), edit that household (change ANYTHING, e.g. primary phone), save. The UI
+issues the PUT inside `handleEditSave()` in `src/app/plan/[eventId]/setup/page.tsx`.
 
 **EXPECTED observations (this is the bug):** re-run the BEFORE queries —
 - Non-primary members have NEW `PersonEvent.id`s; `teamId` is NULL; `rsvpStatus` back to `PENDING`.
@@ -270,15 +275,18 @@ is still being changed under you). Phase 0 baseline recorded in the ticket.
 **Method:** ONE extraction per ticket per commit. Lowest-risk first:
 
 1. **Pure render/helpers** — e.g. the Moment 2 mapper block (`MOMENT2_CATEGORY_EMOJIS` +
-   plan-view mapping functions, top of page.tsx) → a `src/lib/` or component-local
+   plan-view mapping functions). ⚠ Since GTC-233 these sit at the top of
+   `src/app/plan/[eventId]/setup/page.tsx`, not page.tsx → a `src/lib/` or component-local
    module. No state, no fetch: mechanical move.
-2. **Self-contained V2 render branches** — the `if (showSetup)` block and the
-   `if (showMoment2PlanView && event)` block in page.tsx into container components,
-   passing state down. The bare `return (` V1 dashboard block (last top-level return in
-   page.tsx) moves LAST, if ever.
+2. **Self-contained V2 render branches** — ✅ GTC-233 (`06fbeee`) already moved the
+   `if (showSetup)` chain and the `if (showMoment2PlanView && event)` block out of page.tsx,
+   into `src/app/plan/[eventId]/setup/page.tsx` — a route split, not container components.
+   Splitting them further into container components is now a setup/page.tsx job, not a
+   god-file one. In page.tsx, the bare `return (` V1 dashboard block (last top-level
+   return) moves LAST, if ever.
 3. **Modal open/close state clusters** — group per-modal useState into hooks.
-4. **API client hooks** — the fetch handlers (households: `handleAddHousehold` /
-   `handleEditSave` / `handleDeleteHousehold`; generate: `handleGeneratePlan` /
+4. **API client hooks** — the fetch handlers (households, in setup/page.tsx since GTC-233:
+   `handleAddHousehold` / `handleEditSave` / `handleDeleteHousehold`; in page.tsx, generate: `handleGeneratePlan` /
    `handleReviewRegenerateSelected`; regenerate: `executeRegenerate`) into `useXxx` hooks.
    Highest risk: these encode the
    GTC-148/149 `!event.setup` gating — the gate count from Phase 0.4 must be unchanged or
@@ -292,7 +300,7 @@ npm run test:security               # exit 0
 # targeted test for the touched area (add one if none exists)
 # browser walk of BOTH entries against a seeded event:
 #   /plan/<id>            → V1 dashboard renders, no V1 AI controls on V2 events
-#   /plan/<id>?setup=true → Moment 1 → Moment 2 Step 1 → (plan view if already generated)
+#   /plan/<id>/setup      → Moment 1 → Moment 2 Step 1 → (plan view if already generated)
 wc -l "src/app/plan/[eventId]/page.tsx"   # record the new number in the ticket
 ```
 
@@ -367,7 +375,7 @@ the gate.
 2. Write the success metrics as numbers in the ticket BEFORE coding (predict-first; see
    `gather-experiment-methodology`).
 3. RED→GREEN regression test in `tests/` for any behavior fix; wire it in package.json.
-4. Browser walk of both `/plan/<id>` and `/plan/<id>?setup=true` for any page.tsx change.
+4. Browser walk of both `/plan/<id>` and `/plan/<id>/setup` for any page.tsx change.
 5. Fix + test + completed ticket in ONE commit; commit hash backfilled into the ticket;
    nothing committed/pushed/merged without founder approval in chat (see
    `gather-change-control`).
@@ -378,8 +386,9 @@ All facts verified against the repo on 2026-07-09 (branch `feat/moment-one-redes
 Re-verify before trusting:
 
 ```bash
-wc -l "src/app/plan/[eventId]/page.tsx"                                  # was 3870
-grep -n "const \[showSetup" "src/app/plan/[eventId]/page.tsx"            # was :376; branches :1661/:1807/:2037
+wc -l "src/app/plan/[eventId]/page.tsx"                                  # was 3870; 3401 on 2026-09-27, after GTC-233
+grep -n "const \[showSetup" "src/app/plan/[eventId]/setup/page.tsx"      # was page.tsx:376 (branches :1661/:1807/:2037) until GTC-233; :211 on 2026-09-27
+grep -n "^  return (" "src/app/plan/[eventId]/page.tsx"                  # V1 dashboard; :1533 on 2026-09-27
 grep -cE "event\??\.setup" "src/app/plan/[eventId]/page.tsx"             # was 13
 ls "src/app/api/events/[id]/generate" "src/app/api/events/[id]/regenerate" 2>/dev/null  # Tier 2 still live?
 grep -n "deleteMany" "src/app/api/events/[id]/households/[householdId]/route.ts"        # was :45 in DELETE() (correct/intended whole-household cascade — not the bug) and :156 in PUT() (was the bug; PUT no longer calls deleteMany post-GTC-159 — its member-write logic now lives in src/lib/households/reconcileMembers.ts)

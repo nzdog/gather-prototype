@@ -41,7 +41,7 @@ docs drift (see Section 2, which is itself a worked example of that drift).
 | Nudge | Automated SMS reminder, run by cron GET /api/cron/nudges every 15 min (vercel.json) |
 | Proxy nudge | Nudge sent to a household's PRIMARY_CONTACT on behalf of unreachable members |
 | Freeze | Event lifecycle transition CONFIRMING → FROZEN (src/lib/workflow.ts) — current code; slated for architectural reconciliation into a send-lock + why-when-touching-someone + universal-versioning ledger model per `gather-moment-4-spec-v1.md` §7 and `gather-hinge-spec-v1.md` §2 (Epic A, Plan mode + max effort, `docs/tickets/GTC-167.md` onward) |
-| God file | src/app/plan/[eventId]/page.tsx (3,870 lines as of 2026-07-09), renders V1 dashboard AND V2 Moment flow |
+| God file | src/app/plan/[eventId]/page.tsx (3,401 lines as of 2026-09-27; 3,870 on 2026-07-09), renders the V1 dashboard. It rendered the V2 Moment flow too until GTC-233 moved V2 to /plan/[eventId]/setup |
 
 ## 1. The roadmap as recorded (docs/BUILD_STATUS.md)
 
@@ -221,7 +221,7 @@ unseeded matters first.
 | E2E lifecycle test | open gap — verified | No test walks DRAFT→CONFIRMING→FROZEN→COMPLETE end-to-end (inspected all of tests/, 33 top-level files, 35 including tests/phase-5/ — matching `gather-validation-and-evidence`'s inventory; closest is edit-item-frozen-block-test.ts, one frozen slice). Transitions live in src/lib/workflow.ts (1,037 lines). |
 | Stripe webhook integration test | open gap — verified | src/app/api/webhooks/stripe/route.ts has zero test coverage (only "webhook" hit in tests/ is the SMS inbound route, the "Inbound webhook route.ts exists" assertion in Test 5 of tests/sms-infrastructure-test.ts). CAUTION: Stripe is a do-not-touch zone — a test may READ/exercise it with Stripe CLI fixtures but must not weaken signature verification. Ticket + founder sign-off first. |
 | Proxy-nudge test coverage | open gap — verified | `grep -rl proxy tests/` returns nothing. Falls out of work item A. |
-| God-file decomposition (page.tsx, 3,870 lines) | campaign-owned | Do NOT start from this skill. Load `gather-v1-v2-reconciliation-campaign` — it sequences this behind decision gates. |
+| God-file decomposition (page.tsx, 3,401 lines as of 2026-09-27; V1 only since GTC-233) | campaign-owned | Do NOT start from this skill. Load `gather-v1-v2-reconciliation-campaign` — it sequences this behind decision gates. |
 | GTC-130 (align eslint-config-next with Next major) | open ticket | Genuinely open (docs/tickets/GTC-130.md, status: open). Non-fatal build warning. |
 | Stale ticket frontmatter | open — verified | GTC-137 and GTC-142 frontmatter say `in-progress` but bodies say CLOSED. Cheap docs ticket. |
 

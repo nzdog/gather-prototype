@@ -19,7 +19,7 @@ before touching anything under `src/lib/ai/` or any route that calls Claude.
 **Jargon defined once:**
 - **Moment 2** — the V2 host journey step "What's the plan?": Step 1 accordion brief → Step 2 AI-generated editable plan.
 - **V1** — the legacy dashboard + wizard at `/plan/[eventId]`. Still live. Uses its own AI route (`/api/events/[id]/generate`).
-- **V2** — the Moment flow on the same route via `?setup=true`. Uses `/api/events/[id]/finalize-plan`.
+- **V2** — the Moment flow at `/plan/[eventId]/setup` (own route since GTC-233; `?setup=true` is retired). Uses `/api/events/[id]/finalize-plan`.
 - **Single-call architecture** — one Claude call produces the entire plan (GTC-145/146). Replaced per-section calls.
 - **Team** — a group of responsibilities in the plan (e.g. "Mains"). Items belong to teams via `teamName` string matching.
 - **EventSetup** — the DB row holding the host's Step 1 selections (JSONB columns).
@@ -257,7 +257,7 @@ FIRST → measure before/after on the same fixture → ship/revert decision in t
    ```bash
    npx tsx scripts/seed-gtc-133-test-event.ts
    npm run dev
-   # open http://localhost:3000/plan/<eventId>?setup=true and walk Moment 2
+   # open http://localhost:3000/plan/<eventId>/setup and walk Moment 2
    ```
 3. Generate BEFORE (current prompt) and AFTER (your change), same event shape. Because
    finalize-plan runs temp 0.8, run at least 2–3 generations per side before trusting a
