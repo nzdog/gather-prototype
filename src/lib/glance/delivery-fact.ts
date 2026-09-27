@@ -62,6 +62,16 @@ export const WITHHELD_MEANS_UNREACHABLE: Record<OutboundWithheldWhy, 'UNREACHABL
    * give this entry a producer.
    */
   EMAIL_OPTED_OUT: null,
+  /*
+   * [[GTC-189]] slice 8a. REPORTED is null on R6's ground exactly: the guest's own no, and a red would
+   * hand this row the door whose actions include "send it again". BLOCKED is UNREACHABLE (W9, ruled
+   * 2026-09-27): there is no address Gather may email and no mobile to fall to, which is ruling M's
+   * red — and the door it opens offers "Add a way to reach them" and, where it may, a text.
+   */
+  EMAIL_REPORTED: null,
+  EMAIL_REPORTED_SMS_OPTED_OUT: null,
+  EMAIL_BLOCKED: 'UNREACHABLE',
+  EMAIL_BLOCKED_SMS_OPTED_OUT: 'UNREACHABLE',
 
   // ── About the person: the chooser found no way to reach them.
   NO_CHANNEL: 'UNREACHABLE',

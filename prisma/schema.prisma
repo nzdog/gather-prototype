@@ -220,6 +220,8 @@ model Event {
   wrapUpLinks                WrapUpLink[]
   setup                      EventSetup?
   emailOptOuts               EmailOptOut[]
+  /// [[GTC-189]] slice 8a — blocks first learned from this event's messages. SET NULL.
+  emailBlocks                EmailBlock[]
 }
 
 model Day {
@@ -1000,6 +1002,9 @@ model OutboundMessage {
   /// ruled where it is written. This is only the storage that policy needs.
   deliveryPollDoneAt DateTime?
 
+  /// [[GTC-189]] slice 8a — the block this message's outcome produced, if any. SET NULL.
+  emailBlocks EmailBlock[]
+
   /// ⚠ NO @@unique, AND @@unique([personEventId, kind]) IS THE ONE THAT LOOKS RIGHT AND IS
   /// WRONG. It would make the press idempotent at the row level — and then ruling U's
   /// "send again to the same address" and "let the host edit the address and send", each
@@ -1197,6 +1202,56 @@ model EmailOptOut {
   /// creates no index for a foreign key on its own, so the `Event` cascade wants this too.
   /// `personId` needs none — it leads the unique above.
   @@index([eventId])
+}
+
+/// [[GTC-324]] / [[GTC-189]] slice 8a — AN ADDRESS GATHER CAN NO LONGER EMAIL, ANYWHERE.
+///
+/// A SIBLING OF `EmailOptOut` ABOVE, AND THE DIFFERENCE IS THE GRAIN:
+///
+///   `EmailOptOut` keys on `(personId, eventId)` — a person's no to ONE event.
+///   `EmailBlock`  keys on `address`            — an address the provider will not deliver to.
+///
+/// ⚠ THE PROVIDER DECIDED THIS FIRST, AND THE ROW RECORDS IT RATHER THAN CHOOSING IT. Resend puts
+/// an address on a suppression list that covers the whole team after a spam complaint or a hard
+/// bounce, and a later send is accepted by the API and not delivered (GTC-324 ruling 2, Resend's
+/// documentation read 2026-09-27). Without this row every other host's invitation to that address
+/// would appear to send and silently never arrive.
+///
+/// ⚠ KEYED ON THE ADDRESS, WITH NO FOREIGN KEY TO `Person`, FOR THREE REASONS:
+///   - Resend's list is about an address, so a block that followed a person would disagree with it
+///     the moment a host edits that person's address;
+///   - it must outlive the person and the event — `EmailOptOut`'s cascade bargain (decision 28) is
+///     the wrong one here, because the provider's list does not forget when a guest is deleted;
+///   - [[GTC-293]] may let two people share an address, and the block is true of both.
+///
+/// Written by the delivery poll only (`src/lib/email-delivery/delivery-poll.ts`), from the
+/// address the PROVIDER reports it sent to, never from `Person.email` at poll time.
+model EmailBlock {
+  id String @id @default(cuid())
+
+  /// Trimmed and lowercased by `normalizeEmailAddress` in `src/lib/eligibility/email-block.ts`,
+  /// which every reader and the one writer call. The unique is the idempotency: the poll may
+  /// read the same outcome for two messages to one address.
+  address String @unique
+
+  /// COMPLAINED, BOUNCED or SUPPRESSED — a `ResendOutcomeKind`. A String, on `deliveryState`'s
+  /// stated reason: kinds are typed in TypeScript with a `Record` guard and stored as text.
+  /// A complaint upgrades an earlier reason; nothing else overwrites one.
+  reason String
+
+  firstSeenAt DateTime @default(now())
+
+  /// The message whose outcome produced this row, and its event. SET NULL, never cascade: the
+  /// block outlives both. `eventId` is what decides where ruling 3's middle sentence may be shown
+  /// (D4 — "your invitation" means that invitation).
+  outboundMessageId String?
+  outboundMessage   OutboundMessage? @relation(fields: [outboundMessageId], references: [id], onDelete: SetNull)
+
+  eventId String?
+  event   Event?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  @@index([eventId])
+  @@index([outboundMessageId])
 }
 
 model AccessToken {

@@ -76,6 +76,22 @@ export interface ChooserPerson {
    * the only caller that assembles this from the database.
    */
   emailOptedOut: boolean;
+  /**
+   * [[GTC-324]] ruling 2 / [[GTC-189]] slice 8a — THE PROVIDER WILL NOT DELIVER TO THIS ADDRESS,
+   * for any host. The chooser treats it as NO ADDRESS: the ask and the chase fall to text when there
+   * is a usable mobile, and otherwise the person is the host's.
+   *
+   * ⚠ REQUIRED, FOR `emailOptedOut`'s REASON DIRECTLY ABOVE: a narrow select that left it out would
+   * read as "not blocked" — the direction that keeps emailing an address that will never deliver,
+   * which is the failure that costs every other host (GTC-324's lead sentence).
+   */
+  emailBlocked: boolean;
+  /**
+   * [[GTC-324]] rulings 1 and 3, D4 — THE COMPLAINT WAS ABOUT THIS EVENT'S MESSAGE. Implies
+   * `emailBlocked`. Its own code, ahead of `EMAIL_OPTED_OUT`, only so the host of this event is shown
+   * ruling 3's middle sentence; the behaviour is the opt-out's, chase-wide. Required, as above.
+   */
+  emailReported: boolean;
 }
 
 /** One membership of the event, as little of it as the decision needs. */
@@ -140,9 +156,17 @@ export interface ChaseChooserEvent extends ChooserEvent {
 
 /** Why a person's item is a line on the host's list (GTC-189 THE ASK, ruling A). */
 export type HostListWhy =
+  // [[GTC-324]] ruling 1 — a spam report on THIS event's message, which is GTC-296's no arriving
+  // by another door. Split from EMAIL_OPTED_OUT for the words only (ruling 3, D4).
+  | 'EMAIL_REPORTED'
+  | 'EMAIL_REPORTED_SMS_OPTED_OUT'
   // [[GTC-296]] ruling 1 — she said no to email for this event. FIRST in the union because it
   // is first in the ladder: a guest's own no outranks every fact about their channels.
   | 'EMAIL_OPTED_OUT'
+  // [[GTC-324]] ruling 2 — the address is blocked and there is no mobile Gather may text. Not
+  // NO_CHANNEL, whose words say "No email", which is false of somebody who has one.
+  | 'EMAIL_BLOCKED'
+  | 'EMAIL_BLOCKED_SMS_OPTED_OUT'
   | 'NO_CHANNEL'
   | 'SMS_OPTED_OUT'
   | 'PHONE_UNUSABLE'
@@ -155,6 +179,10 @@ export type NotRecipientWhy = 'HOST_OWN_ASK' | 'CHILD_WITHOUT_ITEM';
 
 /** Why the chase sends nothing. Timing and how it reads on the board are decision 15's. */
 export type ChaseNoneWhy =
+  // [[GTC-324]] ruling 1 — the reported event: GTC-296's chase-wide no, with ruling 3's words.
+  | 'EMAIL_REPORTED'
+  // [[GTC-324]] ruling 2 — a blocked address and no mobile the chase can text.
+  | 'EMAIL_BLOCKED'
   // [[GTC-296]] ruling 3 — CHASE-WIDE. An email no stops the chase on EVERY channel for that
   // event, the text chase included. Ruling O of [[GTC-189]] read straight: *"a no to one
   // channel is treated as a no to being chased."*
@@ -232,9 +260,17 @@ function resolveCarrier<M extends ChooserMembership>(
 }
 
 /** THE ASK: email first, text if they have no email. */
-function askChannelOf(
-  person: ChooserPerson
-): Reached | Refusal<'EMAIL_OPTED_OUT' | 'NO_CHANNEL' | 'SMS_OPTED_OUT' | 'PHONE_UNUSABLE'> {
+type AskRefusalWhy =
+  | 'EMAIL_REPORTED'
+  | 'EMAIL_REPORTED_SMS_OPTED_OUT'
+  | 'EMAIL_OPTED_OUT'
+  | 'EMAIL_BLOCKED'
+  | 'EMAIL_BLOCKED_SMS_OPTED_OUT'
+  | 'NO_CHANNEL'
+  | 'SMS_OPTED_OUT'
+  | 'PHONE_UNUSABLE';
+
+function askChannelOf(person: ChooserPerson): Reached | Refusal<AskRefusalWhy> {
   /*
    * ⚠ [[GTC-296]] RULING 1 AND CORRECTION R1 — IT REFUSES, IT DOES NOT FALL TO TEXT, AND THE
    * POSITION ABOVE `person.email` IS THE WHOLE OF IT.
@@ -246,14 +282,28 @@ function askChannelOf(
    * correction R1 refused by name. The fixture in `tests/email-opt-out-test.ts` gives its
    * subject a live +64 number precisely so that implementation cannot pass.
    */
+  // [[GTC-324]] ruling 1: the reported event. Above EMAIL_OPTED_OUT, which the same complaint also
+  // wrote, so the host of this event reads ruling 3's words rather than GTC-296's.
+  if (person.emailReported) {
+    return {
+      ok: false,
+      why: person.smsOptedOut ? 'EMAIL_REPORTED_SMS_OPTED_OUT' : 'EMAIL_REPORTED',
+    };
+  }
   if (person.emailOptedOut) return { ok: false, why: 'EMAIL_OPTED_OUT' };
-  if (person.email) return { ok: true, channel: 'EMAIL' };
-  if (!person.phoneNumber) return { ok: false, why: 'NO_CHANNEL' };
+  // [[GTC-324]] ruling 2: a blocked address is NO address — it falls to the phone below.
+  if (person.email && !person.emailBlocked) return { ok: true, channel: 'EMAIL' };
+  const blocked = !!person.email;
+  if (!person.phoneNumber) return { ok: false, why: blocked ? 'EMAIL_BLOCKED' : 'NO_CHANNEL' };
   // Zone 7: an opted-out phone is never texted, so for the ask it is no channel at all.
-  if (person.smsOptedOut) return { ok: false, why: 'SMS_OPTED_OUT' };
+  if (person.smsOptedOut) {
+    return { ok: false, why: blocked ? 'EMAIL_BLOCKED_SMS_OPTED_OUT' : 'SMS_OPTED_OUT' };
+  }
   // GTC-189 slice 1 answer 2, a founder ruling: a text that will be rejected is worse than saying
   // plainly that Gather cannot reach him. That `isValidNZNumber` rejects +61 is [[GTC-300]].
-  if (!isValidNZNumber(person.phoneNumber)) return { ok: false, why: 'PHONE_UNUSABLE' };
+  if (!isValidNZNumber(person.phoneNumber)) {
+    return { ok: false, why: blocked ? 'EMAIL_BLOCKED' : 'PHONE_UNUSABLE' };
+  }
   return { ok: true, channel: 'TEXT' };
 }
 
@@ -287,12 +337,14 @@ function chaseChannelOf(
 ):
   | Reached
   | Refusal<
+      | 'EMAIL_REPORTED'
       | 'EMAIL_OPTED_OUT'
       | 'SMS_OPTED_OUT'
       | 'MARKED_DONT_CHASE'
       | 'PHONE_UNUSABLE'
       | 'NO_CHANNEL'
       | 'HANDED_TO_HOST'
+      | 'EMAIL_BLOCKED'
     > {
   const { person } = membership;
 
@@ -313,6 +365,8 @@ function chaseChannelOf(
    * the order decides is which REASON a person carrying both conditions is reported under.
    * `SmsOptOut` is Zone 7 and legally binding; it keeps the top.
    */
+  // [[GTC-324]] ruling 1 — the reported event is GTC-296's no; its own code for ruling 3's words.
+  if (person.emailReported) return { ok: false, why: 'EMAIL_REPORTED' };
   if (person.emailOptedOut) return { ok: false, why: 'EMAIL_OPTED_OUT' };
 
   // 3. Ruling T: she has taken him over. Ahead of the channel facts AND the resolver, so a person
@@ -325,12 +379,16 @@ function chaseChannelOf(
   }
 
   // 5. [[GTC-311]] — THE NAMED EXCEPTION WINS (ruling AL), through its own module.
-  if (person.email) {
+  // [[GTC-324]] ruling 2: a blocked address is no address, so the resolver is never asked about it.
+  if (person.email && !person.emailBlocked) {
     return resolveChaseWhenNoMobile({ exception: membership.chaseException, eventDefault }) ===
       'BY_EMAIL'
       ? { ok: true, channel: 'EMAIL' }
       : { ok: false, why: 'HANDED_TO_HOST' };
   }
+
+  // 5b. [[GTC-324]] ruling 2: an address the provider will not deliver to, and no mobile to text.
+  if (person.email) return { ok: false, why: 'EMAIL_BLOCKED' };
 
   // 6. Ruling P: a phone the chase cannot use, and nothing else to chase by, hands over.
   return { ok: false, why: person.phoneNumber ? 'PHONE_UNUSABLE' : 'NO_CHANNEL' };
@@ -359,7 +417,7 @@ export type TextAskReach =
   // [[GTC-296]]: the ladder it calls can now refuse for an email opt-out, and the refusal is
   // passed through unchanged rather than translated — which is this function's stated property.
   // Ruling U's *"send to the phone instead"* must not become a way round ruling 1.
-  | { ok: false; why: 'EMAIL_OPTED_OUT' | 'NO_CHANNEL' | 'SMS_OPTED_OUT' | 'PHONE_UNUSABLE' };
+  | { ok: false; why: AskRefusalWhy };
 
 export function textAskReachOf(person: ChooserPerson): TextAskReach {
   const reach = askChannelOf({ ...person, email: null });

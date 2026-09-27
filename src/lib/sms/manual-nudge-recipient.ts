@@ -176,12 +176,18 @@ export function chooseManualNudgeChannel(person: {
   phoneNumber: string | null;
   smsOptedOut: boolean;
   email: string | null;
+  /**
+   * [[GTC-189]] slice 8a — [[GTC-324]] ruling 2: the provider will not deliver to this address, so
+   * for the by-hand nudge too it is no address. REQUIRED, for the chooser's reason: a caller that
+   * forgot it would read "not blocked" and email an address that accepts and never delivers.
+   */
+  emailBlocked: boolean;
 }): ManualNudgeChannel {
   // `smsOptedOut` is Do-Not-Touch zone 7 — it outranks the phone number in both
-  // directions, asserted in tests/nudge-provider-gate-test.ts case C.
+  // directions, asserted in tests/nudge-provider-gate-test.ts case C. Only READ here.
   if (person.phoneNumber && isValidNZNumber(person.phoneNumber) && !person.smsOptedOut) {
     return 'sms';
   }
-  if (person.email) return 'email';
+  if (person.email && !person.emailBlocked) return 'email';
   return 'none';
 }

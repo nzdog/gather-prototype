@@ -275,15 +275,27 @@ async function main() {
         const codes = Object.entries(deliveryFact.WITHHELD_MEANS_UNREACHABLE)
           .filter(([, v]) => v === 'UNREACHABLE')
           .map(([k]) => k);
-        if (codes.length !== 5) return false;
-        // Every one of them means: no email (the chooser reached the phone branch to say it),
-        // and no phone the ask may use.
+        /*
+         * ⚠ 5 → 7 AT [[GTC-189]] SLICE 8a, and the property is extended rather than loosened. The two
+         * new codes are [[GTC-324]]'s blocked address: the person HAS an address and the provider
+         * will not deliver to it, so `hasAddress` is true and `addressBlocked` is what withdraws
+         * "send again". As the CHOOSER produces them there is no phone the ask may use either, so
+         * the door still has exactly one action. The drain's fence (F5) can produce EMAIL_BLOCKED
+         * for a textable person too — that case is asserted separately in email-block-test.
+         */
+        if (codes.length !== 7) return false;
+        const BLOCKED = new Set(['EMAIL_BLOCKED', 'EMAIL_BLOCKED_SMS_OPTED_OUT']);
         return codes.every((why) => {
+          const blocked = BLOCKED.has(why);
           const a = door.doorActionsFor(
             facts({
               reason: 'UNREACHABLE',
-              hasAddress: false,
-              textReach: { ok: false, why: why === 'OPTED_OUT' ? 'SMS_OPTED_OUT' : why },
+              hasAddress: blocked,
+              addressBlocked: blocked,
+              textReach: {
+                ok: false,
+                why: why === 'OPTED_OUT' ? 'SMS_OPTED_OUT' : blocked ? 'NO_CHANNEL' : why,
+              },
             })
           );
           return a.length === 1 && a[0] === 'EDIT';

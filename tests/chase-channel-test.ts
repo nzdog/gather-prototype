@@ -765,15 +765,21 @@ async function main() {
       .filter((l) => /^[+-][^+-]/.test(l) && !/^[+-]\s*\/\//.test(l))
       .some((l) => /smsOptedOut|SmsOptOut/.test(l))
   );
+  /*
+   * ⚠ REPLACED AT [[GTC-189]] SLICE 8a, NOT DELETED. These two were GTC-311's scope claims measured
+   * against the working tree — "the chase is slice 8" and "no migration" — and slice 8 is the tree
+   * they were written to exclude, so against HEAD they fire the day it is built, as intended. The
+   * claim was always about GTC-311's own commit, so it is now measured there, where it stays true.
+   */
   assert(
     'G',
-    'no file under src/lib/sms/ is edited — the chase is slice 8',
-    gitDiff('src/lib/sms') === ''
+    "GTC-311's commit (0067be3) edited no file under src/lib/sms/ — the chase is slice 8",
+    gitShowFiles('0067be3', 'src/lib/sms') === ''
   );
   assert(
     'G',
-    'ZONE 5 — no migration: prisma/ is unchanged and nothing untracked is under prisma/migrations',
-    gitDiff('prisma') === '' && gitUntracked('prisma/migrations') === ''
+    "ZONE 5 — GTC-311's commit (0067be3) carried no migration: nothing under prisma/",
+    gitShowFiles('0067be3', 'prisma') === ''
   );
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -816,7 +822,8 @@ function runTypeProbes() {
     }
   };
 
-  const PERSON = `person: { email: null, phoneNumber: null, smsOptedOut: false, emailOptedOut: false }`;
+  // [[GTC-189]] slice 8a added two required facts to the chooser person ([[GTC-324]]).
+  const PERSON = `person: { email: null, phoneNumber: null, smsOptedOut: false, emailOptedOut: false, emailBlocked: false, emailReported: false }`;
   const ROW = `id: 'a', personId: 'p', role: 'PARTICIPANT', householdId: null, householdRole: null, holdsItems: true, nudgeMark: null, ${PERSON}`;
   const head = `import type { ChaseChooserMembership, ChaseChooserEvent } from '${CHOOSER_IMPORT}';\n`;
 
@@ -1294,6 +1301,18 @@ async function attemptAsync<T>(fn: () => Promise<T>): Promise<T | undefined> {
     return await fn();
   } catch {
     return undefined;
+  }
+}
+
+/** The files a commit touched under a path — empty when none. */
+function gitShowFiles(rev: string, path: string): string {
+  try {
+    return execFileSync('git', ['show', '--name-only', '--format=', rev, '--', path], {
+      cwd: ROOT,
+      encoding: 'utf8',
+    }).trim();
+  } catch {
+    return 'git show failed';
   }
 }
 

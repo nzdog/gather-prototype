@@ -1362,6 +1362,12 @@ function MessageStep({ eventId }: { eventId: string }) {
               <dt className="w-24 shrink-0 text-gray-400">Sent by</dt>
               <dd className="text-gray-800">
                 {current.recipient.channel === 'EMAIL' ? 'Email' : 'Text'}
+                {/* GTC-189 slice 8a, W2 — why a person with an address is sent a text. */}
+                {current.recipient.emailNote ? (
+                  <span data-email-note="" className="block text-xs text-gray-500">
+                    {current.recipient.emailNote}
+                  </span>
+                ) : null}
               </dd>
             </div>
             {/*

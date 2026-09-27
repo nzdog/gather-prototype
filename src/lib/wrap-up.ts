@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { sendSms } from '@/lib/sms/send-sms';
 import { sendNudgeEmail } from '@/lib/email';
 import { getEmailOptOut } from '@/lib/eligibility/email-opt-out';
+import { listEmailBlocks } from '@/lib/eligibility/email-block';
 import { logInviteEvent } from '@/lib/invite-events';
 import {
   buildSmsWrapUpMessage,
@@ -298,6 +299,13 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
      * free beside what it sits in. The set-shaped reader is for the roster walks.
      */
     const emailOptedOut = (await getEmailOptOut(link.personId, link.eventId)) !== null;
+    /*
+     * [[GTC-189]] slice 8a — [[GTC-324]] ruling 2 ("anywhere"): an address the provider will not
+     * deliver to closes the email legs exactly as the opt-out does, and for ruling 5's reason no
+     * text is manufactured to replace them. The primary text send is untouched.
+     */
+    const emailClosed =
+      emailOptedOut || (await listEmailBlocks(prisma, [link.guestEmail])).size > 0;
 
     if (link.channel === 'sms' && link.guestPhone) {
       const smsResult = await sendSms({
@@ -310,7 +318,7 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
 
       if (smsResult.success) {
         success = true;
-      } else if (link.guestEmail && emailOptedOut) {
+      } else if (link.guestEmail && emailClosed) {
         // ⚠ THE FALLBACK IS THE LEG RULING 5 IS REALLY ABOUT. The text failed and email is the
         // channel they closed, so the thank-you ends here rather than arriving by the one route
         // they asked Gather not to use.
@@ -332,7 +340,7 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
       } else {
         failReason = smsResult.error || smsResult.blocked || 'SMS failed, no email fallback';
       }
-    } else if (link.channel === 'email' && emailOptedOut) {
+    } else if (link.channel === 'email' && emailClosed) {
       // Ruling 5: the thank-you is email for this person, and they said no to email. It stops.
       // No text version is built to keep it alive, which is the whole of *"no fallback"*.
       suppressed++;

@@ -186,6 +186,13 @@ export type ResendPollRead =
       messageId: string | null;
       outcome: ResendOutcome;
       createdAt: string | null;
+      /**
+       * `GetEmailResponseSuccess.to` — the addresses the PROVIDER says it sent to. [[GTC-189]]
+       * slice 8a keys the address-wide block on this rather than on `Person.email` at poll time,
+       * which ruling U's edit-and-send can have changed since the send. Strings only, never
+       * coerced: a missing or malformed field reads as NO addresses, and no block is written.
+       */
+      to: string[];
     }
   | { ok: false; why: string };
 
@@ -236,5 +243,6 @@ export function readResendPollResponse(response: unknown): ResendPollRead {
     messageId: typeof r.message_id === 'string' ? r.message_id : null,
     outcome: interpretResendLastEvent(r.last_event),
     createdAt: typeof r.created_at === 'string' ? r.created_at : null,
+    to: Array.isArray(r.to) ? r.to.filter((a): a is string => typeof a === 'string' && !!a) : [],
   };
 }

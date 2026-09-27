@@ -858,9 +858,12 @@ function tscProbe(name: string, rowFields: string): { ok: boolean; output: strin
 }
 
 // [[GTC-296]]: the chooser person gained `emailOptedOut`, so a "complete" row gained a field.
-const PERSON = `person: { email: null, phoneNumber: null, smsOptedOut: false, emailOptedOut: false }`;
-const PERSON_NO_OPT_OUT = `person: { email: null, phoneNumber: null, emailOptedOut: false }`;
-const PERSON_NO_EMAIL_OPT_OUT = `person: { email: null, phoneNumber: null, smsOptedOut: false }`;
+// [[GTC-189]] slice 8a: and `emailBlocked` and `emailReported` ([[GTC-324]]), for the same reason.
+const BLOCK = `emailBlocked: false, emailReported: false`;
+const PERSON = `person: { email: null, phoneNumber: null, smsOptedOut: false, emailOptedOut: false, ${BLOCK} }`;
+const PERSON_NO_OPT_OUT = `person: { email: null, phoneNumber: null, emailOptedOut: false, ${BLOCK} }`;
+const PERSON_NO_EMAIL_OPT_OUT = `person: { email: null, phoneNumber: null, smsOptedOut: false, ${BLOCK} }`;
+const PERSON_NO_BLOCK = `person: { email: null, phoneNumber: null, smsOptedOut: false, emailOptedOut: false, emailReported: false }`;
 const ROW = `id: 'a', personId: 'p', role: 'PARTICIPANT', householdId: null, householdRole: null, holdsItems: true`;
 
 try {
@@ -900,6 +903,15 @@ try {
     'T',
     'a person without emailOptedOut does not typecheck, and the error names it',
     !noEmailOptOut.ok && /emailOptedOut/.test(noEmailOptOut.output)
+  );
+
+  // [[GTC-189]] slice 8a — the same property for the address-wide block: a forgetful caller
+  // would read "not blocked" and email an address the provider accepts and never delivers.
+  const noBlock = tscProbe('no-block', `${ROW}, nudgeMark: null, ${PERSON_NO_BLOCK}`);
+  assert(
+    'T',
+    'a person without emailBlocked does not typecheck, and the error names it',
+    !noBlock.ok && /emailBlocked/.test(noBlock.output)
   );
 } finally {
   rmSync(probeDir, { recursive: true, force: true });

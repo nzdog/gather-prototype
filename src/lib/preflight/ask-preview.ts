@@ -69,6 +69,8 @@ import {
 } from '@/lib/eligibility/chase-when-no-mobile';
 import { isMessageableRole } from '@/lib/eligibility/child-exclusion';
 import { emailOptedOutFact, listEmailOptOutsForEvent } from '@/lib/eligibility/email-opt-out';
+import { emailBlockStateOf, listEmailBlocks } from '@/lib/eligibility/email-block';
+import { emailNoteFor } from '@/lib/eligibility/email-block-words';
 import { isHostMembership } from '@/lib/eligibility/host-exclusion';
 import { HOST_NAME_FALLBACK, firstNameOf } from '@/lib/messages/ask-register';
 import { buildTokenUrl } from '@/lib/tokens';
@@ -236,6 +238,11 @@ export interface PreviewRecipient {
   carried: PreviewCarried[];
   link: string | null;
   linkState: LinkState;
+  /**
+   * [[GTC-189]] slice 8a, W2 — set when the provider will not deliver to this person's address and
+   * the ask reaches them by text instead. Null otherwise. A sentence, never the address.
+   */
+  emailNote: string | null;
 }
 
 /** A line on the host's list: an adult Gather cannot reach, or a child whose route is closed. */
@@ -441,6 +448,17 @@ export async function readAskPreview(
    */
   const emailOptedOutPersonIds = await listEmailOptOutsForEvent(db, eventId);
 
+  /*
+   * [[GTC-324]] ruling 2 / [[GTC-189]] slice 8a — THE ADDRESS-WIDE BLOCK, one query per event, the
+   * same shape as the two sets above. Keyed on the address, so it reaches this event whichever event
+   * the provider's refusal was learned from.
+   */
+  const emailBlocks = await listEmailBlocks(
+    db,
+    memberships.map((m) => m.person.email)
+  );
+  const blockStateOf = (email: string | null) => emailBlockStateOf(email, eventId, emailBlocks);
+
   const rowsByPerson = new Map<string, { itemNames: string[]; jobNames: string[] }>();
   for (const a of assignments) {
     const rows = rowsByPerson.get(a.personId) ?? { itemNames: [], jobNames: [] };
@@ -476,6 +494,9 @@ export async function readAskPreview(
         smsOptedOut: smsOptedOutFact(m.person, optedOutNumbers),
         // [[GTC-296]] ruling 1 — per event, and this set is this event's.
         emailOptedOut: emailOptedOutFact(m.personId, emailOptedOutPersonIds),
+        // [[GTC-324]] rulings 2 and 1 — the block, and whether THIS event's message was reported.
+        emailBlocked: blockStateOf(m.person.email) !== 'NONE',
+        emailReported: blockStateOf(m.person.email) === 'REPORTED',
       },
     })),
   };
@@ -528,6 +549,14 @@ export async function readAskPreview(
       jobNames: [],
       carried: [],
       ...linkOf(m, hostAsCarrier),
+      emailNote:
+        channel === 'TEXT' && blockStateOf(m.person.email) !== 'NONE'
+          ? emailNoteFor({
+              state: blockStateOf(m.person.email),
+              textable: true,
+              smsOptedOut: false,
+            })
+          : null,
     };
     recipients.set(m.id, created);
     return created;

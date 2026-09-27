@@ -5,6 +5,7 @@ import { isQuietHours } from '@/lib/sms/quiet-hours';
 import { askRowPopulation, readAskPreview } from '@/lib/preflight/ask-preview';
 import { composePreview } from '@/lib/preflight/ask-preview-compose';
 import { interpretResendErrorCode } from '@/lib/email-delivery/resend-error-contract';
+import { listEmailBlocks, normalizeEmailAddress } from '@/lib/eligibility/email-block';
 
 /**
  * GTC-189 slice 5c, FIRST HALF — the drain's two passes and its two claims.
@@ -247,6 +248,16 @@ export type OutboundWithheldWhy =
    * and a reader of this row must not generalise from it.
    */
   | 'EMAIL_OPTED_OUT'
+  /*
+   * [[GTC-189]] slice 8a — [[GTC-324]]. REPORTED is the reported event (ruling 1, the guest's no by
+   * another door, like EMAIL_OPTED_OUT); BLOCKED is an address the provider will not deliver to
+   * (ruling 2), which the chooser produces for a person with no mobile to fall to, AND which the
+   * drain's own fence below produces for an EMAIL row queued before the block was learned (F5).
+   */
+  | 'EMAIL_REPORTED'
+  | 'EMAIL_REPORTED_SMS_OPTED_OUT'
+  | 'EMAIL_BLOCKED'
+  | 'EMAIL_BLOCKED_SMS_OPTED_OUT'
   | 'NO_CHANNEL'
   | 'SMS_OPTED_OUT'
   | 'PHONE_UNUSABLE'
@@ -298,6 +309,11 @@ export const WITHHELD_WHY_IS_TERMINAL: Record<OutboundWithheldWhy, true> = {
   // [[GTC-296]]: terminal, and only the person can end it — by a host's by-hand nudge, which is
   // ruling 4's override and is a different send, never a retry of this row.
   EMAIL_OPTED_OUT: true,
+  // [[GTC-324]]: terminal. The provider's list does not forget, and a retry is the send it refuses.
+  EMAIL_REPORTED: true,
+  EMAIL_REPORTED_SMS_OPTED_OUT: true,
+  EMAIL_BLOCKED: true,
+  EMAIL_BLOCKED_SMS_OPTED_OUT: true,
   NO_CHANNEL: true,
   SMS_OPTED_OUT: true,
   PHONE_UNUSABLE: true,
@@ -653,6 +669,20 @@ export async function drainOnce(
     }
     const composed = composePreview(preview, preview.storedAuthorLine);
     const byPe = new Map(composed.rows.map((r) => [r.recipient.personEventId, r]));
+    // [[GTC-189]] slice 8a — one query per event for the fence below, whatever the batch holds.
+    const blocked = new Set(
+      (
+        await listEmailBlocks(
+          db,
+          (
+            await db.outboundMessage.findMany({
+              where: { id: { in: rows.map((r) => r.id) } },
+              select: { personEvent: { select: { person: { select: { email: true } } } } },
+            })
+          ).map((r) => r.personEvent.person.email)
+        )
+      ).keys()
+    );
 
     for (const row of rows) {
       const stored = await db.outboundMessage.findUnique({
@@ -687,6 +717,21 @@ export async function drainOnce(
       }
       if (!composedRow.ask || !composedRow.recipient.link) {
         if (await recordWithholding(db, { id: row.id, why: 'NO_LINK' })) result.withheld++;
+        continue;
+      }
+      /*
+       * ⚠ [[GTC-189]] SLICE 8a, F5 — THE BLOCK IS A FENCE HERE AS WELL AS IN THE CHOOSER, because the
+       * drain sends on the STORED channel. Ruling U's door writes an EMAIL row the chooser would not
+       * have written, and a row queued before the poll learned of a complaint or a hard bounce would
+       * otherwise go to an address the provider accepts and never delivers — the send that costs
+       * every other host (GTC-324's lead sentence). Checked against the address it would go to NOW.
+       */
+      if (
+        stored.channel === 'EMAIL' &&
+        stored.personEvent.person.email &&
+        blocked.has(normalizeEmailAddress(stored.personEvent.person.email))
+      ) {
+        if (await recordWithholding(db, { id: row.id, why: 'EMAIL_BLOCKED' })) result.withheld++;
         continue;
       }
       if (!preview.replyTo && stored.channel === 'EMAIL') {

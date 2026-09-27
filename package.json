@@ -104,6 +104,7 @@
     "test:resend-errors": "tsx tests/resend-error-contract-test.ts",
     "test:delivery-poll": "tsx tests/delivery-poll-test.ts",
     "test:email-opt-out": "tsx tests/email-opt-out-test.ts",
+    "test:email-block": "tsx tests/email-block-test.ts",
     "test:chase-channel": "tsx tests/chase-channel-test.ts"
   },
   "prisma": {

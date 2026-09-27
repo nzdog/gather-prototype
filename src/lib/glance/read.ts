@@ -26,6 +26,8 @@
  * the anchor E1's cadence counts from. What the fence excludes is what the GUEST did.
  */
 
+import { readEmailNotes } from './email-note';
+import { EMAIL_BLOCKED_ASK_HELD_WORDS } from '@/lib/eligibility/email-block-words';
 import type { Prisma } from '@prisma/client';
 import {
   decideByAtFor,
@@ -138,6 +140,7 @@ export async function readEventGlance(
     unassignedCritical,
     unassignedOrdinaryCount,
     outbound,
+    emailNotes,
   ] = await Promise.all([
     db.personEvent.findMany({ where: { eventId }, select: PERSON_EVENT_SELECT }),
     db.assignment.findMany({
@@ -185,6 +188,8 @@ export async function readEventGlance(
         deliveryState: true,
       },
     }),
+    // [[GTC-189]] slice 8a, D3 — sentences only; see `readEmailNotes`.
+    readEmailNotes(db, eventId, event.hostId),
   ]);
 
   /*
@@ -215,6 +220,32 @@ export async function readEventGlance(
       item: { dropOffAt: a.item.dropOffAt, decideByOffsetHours: a.item.decideByOffsetHours },
     });
     heldBy.set(a.personId, held);
+  }
+
+  /**
+   * [[GTC-189]] slice 8a — the note and the `textable` fact. A child reads their CARRIER's
+   * `textable` (ruling S: the carrier's failure is the child's red, so the carrier's reach is its
+   * line), and no note of their own — the carrier's surface carries it.
+   *
+   * ⚠ ONE CASE REPLACES THE NOTE: an UNREACHABLE red on a blocked, textable adult is an invitation
+   * the dispatcher's fence withheld, and W2 ("so I'll text them instead") would be false of it —
+   * nothing texts it unless the host sends it as a text.
+   */
+  function emailFactsFor(
+    row: (typeof memberships)[number],
+    answering: string | null,
+    failure: string | null
+  ): { emailNote: string | null; textable: boolean } {
+    const own = emailNotes.get(row.id);
+    if (isChildMembership(row.householdRole)) {
+      return {
+        emailNote: null,
+        textable: answering ? !!emailNotes.get(answering)?.textable : false,
+      };
+    }
+    if (!own) return { emailNote: null, textable: false };
+    const held = failure === 'UNREACHABLE' && own.state === 'BLOCKED' && own.textable;
+    return { emailNote: held ? EMAIL_BLOCKED_ASK_HELD_WORDS : own.note, textable: own.textable };
   }
 
   function toPerson(row: (typeof memberships)[number]): GlancePerson {
@@ -280,6 +311,7 @@ export async function readEventGlance(
           decideByAt: decideByAtFor(i.response, i.item, glanceEvent),
         };
       }),
+      ...emailFactsFor(row, answeringMembership, context.delivery?.failure ?? null),
     };
   }
 

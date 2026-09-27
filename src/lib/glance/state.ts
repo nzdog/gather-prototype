@@ -304,6 +304,20 @@ export interface GlancePerson {
    */
   nextNudgeAt: string | null;
   items: GlanceItem[];
+  /**
+   * [[GTC-189]] slice 8a, D3 — ruling 3's sentence, or its neutral form, when the provider will not
+   * deliver to this person's address. A SENTENCE, NEVER THE ADDRESS: the server decides and ships
+   * only the words (`readEmailNotes` in `src/lib/glance/email-note.ts`). Not a colour.
+   */
+  emailNote: string | null;
+  /**
+   * [[GTC-189]] slice 8a — MAY GATHER TEXT THIS PERSON? A usable mobile not opted out of texts; for a
+   * child, their carrier's (ruling S). A BOOLEAN DERIVED ON THE SERVER, NEVER THE NUMBER. It exists for
+   * one reader: the strip's UNREACHABLE line, which says "nowhere to send" and is false of somebody
+   * Gather can text — the case the dispatcher's fence produces for an invitation queued before the
+   * block was learned (founder ruling, 2026-09-27). False unless the address is blocked.
+   */
+  textable: boolean;
 }
 
 /**

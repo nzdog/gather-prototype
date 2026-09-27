@@ -1,3 +1,5 @@
+import { emailBlockStateOf, listEmailBlocks } from '@/lib/eligibility/email-block';
+import type { EmailBlockState } from '@/lib/eligibility/email-block-words';
 import type { OutboundChannel, PrismaClient } from '@prisma/client';
 import { readAskPreview, smsOptedOutFact } from '@/lib/preflight/ask-preview';
 import { composePreview } from '@/lib/preflight/ask-preview-compose';
@@ -135,6 +137,11 @@ interface Subject {
    * `factsFor`, so both entry points resolve it *"once and identically"* — this file's own rule.
    */
   emailOptedOut: boolean;
+  /**
+   * [[GTC-189]] slice 8a — [[GTC-324]] ruling 2. Resolved on the subject for the same reason as
+   * `emailOptedOut` above: both entry points must answer it once and identically.
+   */
+  emailBlock: EmailBlockState;
   reason: DoorReason;
 }
 
@@ -208,6 +215,11 @@ async function resolveSubject(
     phoneNumber: membership.person.phoneNumber,
     smsOptedOut: membership.person.smsOptedOut,
     emailOptedOut: (await getEmailOptOut(membership.personId, eventId)) !== null,
+    emailBlock: emailBlockStateOf(
+      membership.person.email,
+      eventId,
+      await listEmailBlocks(db, [membership.person.email])
+    ),
     reason: failure,
   };
 }
@@ -237,10 +249,13 @@ async function factsFor(db: PrismaClient, subject: Subject, deps: ResendDeps) {
     phoneNumber: subject.phoneNumber,
     smsOptedOut: await optedOut(db, subject),
     emailOptedOut: subject.emailOptedOut,
+    emailBlocked: subject.emailBlock !== 'NONE',
+    emailReported: subject.emailBlock === 'REPORTED',
   };
   return {
     reason: subject.reason,
     hasAddress: !!subject.email,
+    addressBlocked: subject.emailBlock !== 'NONE',
     // Zone 7 and [[GTC-300]] both live inside this call, in the module that owns them.
     textReach: textAskReachOf(person),
     // Founder answer 1's fence. `false` with no number is not a claim about the provider — the
@@ -332,6 +347,11 @@ export async function resendToPerson(
         // Nothing to send it to. The panel does not offer this control without an address; the
         // route refuses it anyway, because the surface may only ever be stricter.
         if (!facts.hasAddress) throw new ResendRefused(refuse(409, 'NO_ADDRESS'));
+        /*
+         * [[GTC-189]] slice 8a, F4 — the provider will not deliver to this address (GTC-324 ruling
+         * 2), so "send it again" would queue a message Resend accepts and never delivers.
+         */
+        if (facts.addressBlocked) throw new ResendRefused(refuse(409, 'ADDRESS_BLOCKED'));
       }
 
       if (args.action === 'EDIT') {
@@ -345,6 +365,10 @@ export async function resendToPerson(
          */
         if (!address || !/^[^@\s]+@[^@\s]+$/.test(address)) {
           throw new ResendRefused(refuse(400, 'ADDRESS_REQUIRED'));
+        }
+        // [[GTC-189]] slice 8a — never move a person onto an address the provider refuses.
+        if ((await listEmailBlocks(tx, [address])).size > 0) {
+          throw new ResendRefused(refuse(409, 'ADDRESS_BLOCKED'));
         }
         const before = subject.email;
         try {

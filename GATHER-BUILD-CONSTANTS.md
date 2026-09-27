@@ -1,8 +1,9 @@
 # GATHER BUILD CONSTANTS
 
 Reference file for AI executors and developers. Keep this file accurate.
-Last updated: 2026-09-19 (Zone 5 gained a standing rule about when a migration is
-read — see GTC-289 phase 3a).
+Last updated: 2026-09-27 (Zone 9, email opt-out and block, added on founder ruling
+D7 at GTC-189 slice 8a). Previously 2026-09-19 (Zone 5's standing rule, GTC-289
+phase 3a).
 CLAUDE.md reviewed: no conflicts or additions found.
 
 ---
@@ -321,3 +322,23 @@ could constitute illegal sending under TCPA/spam regulations.
 
 ### 8. `package.json` — do not add `"type": "commonjs"`
 See CLAUDE.md. This field breaks Turbopack and returns HTTP 500 on all routes.
+
+### 9. Email Opt-Out and Block (`prisma/schema.prisma` — `EmailOptOut`, `EmailBlock`; `src/lib/eligibility/email-opt-out.ts`, `src/lib/eligibility/email-block.ts`)
+*(Added 2026-09-27 on founder ruling D7, GTC-189 slice 8a. Mirrors Zone 7.)*
+
+The email twin of Zone 7. `EmailOptOut` is a guest's no to one event (GTC-296);
+`EmailBlock` is an address the email provider will not deliver to, for any
+host (GTC-324 — spam complaints, hard bounces, suppressions). Both must be
+respected in every guest-bound email path: the chooser
+(`src/lib/eligibility/channel-chooser.ts`), the dispatcher's fence
+(`drainOnce`), the by-hand nudge, and the wrap-up. Their only writers are the
+unsubscribe route and the delivery poll (`src/lib/email-delivery/delivery-poll.ts`).
+
+Why it is a zone and not only a rule: an email complaint ignored degrades
+delivery for **every host on the platform**, because complaint rate is measured
+per sending domain and Gather has one (GTC-324's lead sentence). Zone 7
+protects a person; this protects a person and the channel every other person
+depends on. Do not weaken a gate, bypass a fence, or add a guest email sender
+that does not read both facts. Account mail (`sendMagicLinkEmail`,
+`sendWelcomeEmail`) is exempt by GTC-296 ruling 6; the sign-in gap that leaves
+is GTC-331.

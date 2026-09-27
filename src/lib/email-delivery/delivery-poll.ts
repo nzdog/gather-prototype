@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import { getResendClient } from '@/lib/email';
+import { BLOCKING_OUTCOMES, recordEmailBlock } from '@/lib/eligibility/email-block';
 import {
   interpretResendLastEvent,
   readResendPollResponse,
@@ -331,14 +332,51 @@ export async function pollOne(
   }
 
   const terminal = isTerminalForPolling(parsed.outcome.kind);
-  await db.outboundMessage.update({
-    where: { id: row.id },
-    data: {
-      deliveryState: parsed.outcome.kind,
-      providerLastEvent: parsed.outcome.lastEvent,
-      deliveryCheckedAt: now,
-      deliveryPollDoneAt: terminal ? now : null,
-    },
+  const kind = parsed.outcome.kind;
+  /*
+   * ⚠ [[GTC-189]] SLICE 8a — ONE TRANSACTION, FOR FOUNDER Q2's REASON AT THE PRESS AND 7b's M8 AT
+   * THE DOOR: a fact written beside the write it describes is free to survive that write's failure.
+   * The outcome, the address-wide block (GTC-324 ruling 2, D6) and — for a complaint only — the
+   * event's opt-out (ruling 1) land together or not at all.
+   */
+  await db.$transaction(async (tx) => {
+    await tx.outboundMessage.update({
+      where: { id: row.id },
+      data: {
+        deliveryState: kind,
+        providerLastEvent: parsed.outcome.lastEvent,
+        deliveryCheckedAt: now,
+        deliveryPollDoneAt: terminal ? now : null,
+      },
+    });
+    if (!BLOCKING_OUTCOMES.has(kind)) return;
+    const message = await tx.outboundMessage.findUnique({
+      where: { id: row.id },
+      select: { eventId: true, personEvent: { select: { personId: true } } },
+    });
+    if (!message) return;
+    for (const address of parsed.to) {
+      await recordEmailBlock(tx, {
+        address,
+        reason: kind,
+        outboundMessageId: row.id,
+        eventId: message.eventId,
+      });
+    }
+    /*
+     * GTC-324 RULING 1 — A SPAM REPORT COUNTS AS AN UNSUBSCRIBE FROM THAT EVENT. The same row an
+     * unsubscribe click writes, so everything GTC-296 built applies to this event. A bounce and a
+     * suppression are not a person's no, and write none.
+     */
+    if (kind === 'COMPLAINED') {
+      await tx.emailOptOut.upsert({
+        where: {
+          personId_eventId: { personId: message.personEvent.personId, eventId: message.eventId },
+        },
+        create: { personId: message.personEvent.personId, eventId: message.eventId },
+        update: {},
+      });
+    }
   });
   return { read: 1, resolved: terminal ? 1 : 0, unreadable: 0, mismatched: 0 };
 }

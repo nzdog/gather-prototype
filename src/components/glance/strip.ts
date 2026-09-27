@@ -224,7 +224,7 @@ export function overlayReversal(person: GlancePerson): GlancePerson {
  * no default to fall into. Founder instruction, 2026-09-19: *"The fall-through closes in the same
  * edit."*
  *
- * A function per line rather than a string, because two of the five read the person.
+ * A function per line rather than a string, because some lines read the person.
  */
 const WHY_LINES: Record<(typeof WHY_PRECEDENCE)[number], (person: GlancePerson) => string> = {
   // RULING 6, THROUGH RULING 23's OVERLAY, AND UNREACHABLE WITHOUT IT. `derivePersonState` pairs
@@ -238,7 +238,12 @@ const WHY_LINES: Record<(typeof WHY_PRECEDENCE)[number], (person: GlancePerson) 
   // Ruling M's red. ⚠ RULED AS "nowhere to send it" AND SHORTENED BY ONE WORD: at 18 characters it
   // broke the ≤16 pin every other why-line is held to, which comes from the reference's 160px
   // columns. The pin caught the proposal; the sense is unchanged.
-  UNREACHABLE: () => 'nowhere to send',
+  //
+  // ⚠ [[GTC-189]] slice 8a — IT READS THE PERSON NOW. Founder ruling, 2026-09-27: *"'Nowhere to
+  // send' is false of someone Gather can text."* The dispatcher's fence withholds an invitation
+  // queued before the provider's block was learned, and that guest may hold a usable mobile; for
+  // them the red is about the address, and the door offers "Send it as a text". 11 characters.
+  UNREACHABLE: (person) => (person.textable ? "can't email" : 'nowhere to send'),
   /*
    * [[GTC-296]] correction R7. The founder proposed *"no email"* (8) and offered *"opted out"*
    * (9) *"if it reads better"*.

@@ -1,3 +1,5 @@
+import { listEmailBlocks } from '@/lib/eligibility/email-block';
+import { EMAIL_BLOCK_FIRST } from '@/lib/eligibility/email-block-words';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
@@ -100,7 +102,13 @@ export async function POST(
     let contactMethod: 'sms' | 'email';
     let sendResult: { success: boolean; error?: string; messageId?: string };
 
-    const channel = chooseManualNudgeChannel(person);
+    /*
+     * [[GTC-189]] slice 8a — [[GTC-324]] ruling 2 reaches the by-hand nudge ("anywhere"). A blocked
+     * address is no address: the nudge goes by text where it can, and is refused with ruling 3's
+     * first sentence where it cannot. Read here once and handed to both email doors below.
+     */
+    const emailBlocked = (await listEmailBlocks(prisma, [person.email])).size > 0;
+    const channel = chooseManualNudgeChannel({ ...person, emailBlocked });
 
     /*
      * ⚠ [[GTC-296]] RULING 4 — AD's OVERRIDE SURVIVES AN EMAIL UNSUBSCRIBE, AND THIS ROUTE IS
@@ -143,7 +151,13 @@ export async function POST(
             { status: 400 }
           );
         }
-        // Fall through to email
+        // Fall through to email — never to an address the provider will not deliver to.
+        if (person.email && emailBlocked) {
+          return NextResponse.json(
+            { error: EMAIL_BLOCK_FIRST, reason: 'EMAIL_BLOCKED' },
+            { status: 400 }
+          );
+        }
         if (person.email) {
           contactMethod = 'email';
           sendResult = await sendNudgeEmail({
@@ -187,6 +201,11 @@ export async function POST(
         eventId,
         personId,
       });
+    } else if (person.email && emailBlocked) {
+      return NextResponse.json(
+        { error: EMAIL_BLOCK_FIRST, reason: 'EMAIL_BLOCKED' },
+        { status: 400 }
+      );
     } else {
       return NextResponse.json({ error: 'No contact method available' }, { status: 400 });
     }

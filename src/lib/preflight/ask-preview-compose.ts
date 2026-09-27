@@ -18,6 +18,16 @@
 
 import type { ChaseNoneWhy } from '@/lib/eligibility/channel-chooser';
 import {
+  EMAIL_BLOCKED_CHASE_WORDS,
+  EMAIL_BLOCKED_CHILD_WORDS,
+  EMAIL_BLOCKED_SMS_OPTED_OUT_WORDS,
+  EMAIL_REPORTED_CHASE_WORDS,
+  EMAIL_BLOCKED_WORDS,
+  EMAIL_REPORTED_CHILD_WORDS,
+  EMAIL_REPORTED_SMS_OPTED_OUT_WORDS,
+  EMAIL_REPORTED_WORDS,
+} from '@/lib/eligibility/email-block-words';
+import {
   resolveChaseWhenNoMobile,
   type ChaseWhenNoMobile,
 } from '@/lib/eligibility/chase-when-no-mobile';
@@ -350,6 +360,9 @@ export function notChasedReason(
  * ⚠ NO SENTENCE HERE MAY EQUAL ONE IN `ADULT_WHY` OR `CHILD_WHY` (ruling AN) — asserted in layer D.
  */
 export const CHASE_NONE_WHY: Record<ChaseNoneWhy, string> = {
+  // [[GTC-189]] slice 8a — proposed, and marked so in `email-block-words.ts`.
+  EMAIL_REPORTED: EMAIL_REPORTED_CHASE_WORDS, // unreachable today
+  EMAIL_BLOCKED: EMAIL_BLOCKED_CHASE_WORDS, // unreachable today
   SMS_OPTED_OUT: "They've opted out of texts — so I won't chase them at all.",
   HANDED_TO_HOST: "You're handling them yourself, so I won't chase them.",
   EMAIL_OPTED_OUT:
@@ -428,6 +441,14 @@ export function hostListReason(line: Pick<HostListLine, 'why' | 'child' | 'carri
  */
 const ADULT_WHY: Record<HostListLine['why'], string> = {
   /*
+   * [[GTC-324]] ruling 3 and W1–W3, ruled 2026-09-27 — one spelling, in `email-block-words.ts`, so
+   * the board's person surface and this screen cannot say two things about one guest.
+   */
+  EMAIL_REPORTED: EMAIL_REPORTED_WORDS,
+  EMAIL_REPORTED_SMS_OPTED_OUT: EMAIL_REPORTED_SMS_OPTED_OUT_WORDS,
+  EMAIL_BLOCKED: EMAIL_BLOCKED_WORDS,
+  EMAIL_BLOCKED_SMS_OPTED_OUT: EMAIL_BLOCKED_SMS_OPTED_OUT_WORDS,
+  /*
    * [[GTC-296]] ruling 3, in the long form correction R7 sends here. The strip's own line is
    * eight or nine characters; this screen has room for the whole fact and needs it, because
    * this is where the host learns that the person will not be chased EITHER — which is the
@@ -444,6 +465,15 @@ const ADULT_WHY: Record<HostListLine['why'], string> = {
 };
 
 const CHILD_WHY: Record<HostListLine['why'], string> = {
+  /*
+   * [[GTC-324]], W4. Unreachable today for the reason every channel refusal here is: a child's
+   * channel refusal always names the carrier, and `hostListReason` gives that its own sentence,
+   * with the carrier's reason on the carrier's own line.
+   */
+  EMAIL_REPORTED: EMAIL_REPORTED_CHILD_WORDS, // unreachable today
+  EMAIL_REPORTED_SMS_OPTED_OUT: EMAIL_REPORTED_CHILD_WORDS, // unreachable today
+  EMAIL_BLOCKED: EMAIL_BLOCKED_CHILD_WORDS, // unreachable today
+  EMAIL_BLOCKED_SMS_OPTED_OUT: EMAIL_BLOCKED_CHILD_WORDS, // unreachable today
   /*
    * ⚠ DELIBERATELY NOT THE UNIFORM *"No one in their household can be reached."* THE OTHER
    * THREE CHANNEL REFUSALS USE, AND THE DEPARTURE IS THE POINT. Those three describe a carrier

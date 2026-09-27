@@ -368,6 +368,15 @@ export default function PersonSurface({
                   come from one function, so the door and the room cannot say two things.
                 */}
                 {why ? <p className="m-0 mt-0.5 text-[13px] text-[#A32D2D]">{why}</p> : null}
+                {/*
+                  GTC-189 slice 8a, D3 — ruling 3's sentence, composed on the server. Grey, not
+                  red: it is a fact about the address, not a colour on the board.
+                */}
+                {person.emailNote ? (
+                  <p data-email-note="" className="m-0 mt-1 text-[13px] text-[#5c5b57]">
+                    {person.emailNote}
+                  </p>
+                ) : null}
               </div>
               <button
                 type="button"

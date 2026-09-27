@@ -51,6 +51,7 @@
  * READS ONLY. Takes a client so a transaction or a test can drive it.
  */
 
+import { emailBlockStateOf, listEmailBlocks } from '@/lib/eligibility/email-block';
 import type { Prisma } from '@prisma/client';
 import { chooseAskRoute, type ChooserEvent } from './channel-chooser';
 import { emailOptedOutFact, listEmailOptOutsForEvent } from './email-opt-out';
@@ -138,6 +139,11 @@ export async function resolveCarriedSubjects(
    * control. One query, whatever the household size.
    */
   const emailOptedOutPersonIds = await listEmailOptOutsForEvent(db, eventId);
+  // [[GTC-189]] slice 8a — the address-wide block, the same set `readAskPreview` loads.
+  const emailBlocks = await listEmailBlocks(
+    db,
+    memberships.map((m) => m.person.email)
+  );
 
   const chooserEvent: ChooserEvent = {
     hostId: event.hostId,
@@ -160,6 +166,8 @@ export async function resolveCarriedSubjects(
           (!!m.person.phoneNumber && optedOutNumbers.has(m.person.phoneNumber)),
         // [[GTC-296]] ruling 1 — per event, and this set is this event's.
         emailOptedOut: emailOptedOutFact(m.personId, emailOptedOutPersonIds),
+        emailBlocked: emailBlockStateOf(m.person.email, eventId, emailBlocks) !== 'NONE',
+        emailReported: emailBlockStateOf(m.person.email, eventId, emailBlocks) === 'REPORTED',
       },
     })),
   };

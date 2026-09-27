@@ -52,6 +52,17 @@ export interface DoorFacts {
   hasAddress: boolean;
   textReach: TextAskReach;
   /**
+   * [[GTC-189]] slice 8a — the provider will not deliver to the address ([[GTC-324]] ruling 2).
+   *
+   * ⚠ F4, RULED 2026-09-27: ruling U's "send again to the same address" was ruled for a FULL
+   * MAILBOX, and Resend reports a full mailbox as `delivery_delayed` — in flight, never a failure.
+   * Its `bounced` is permanent by its own documentation. So after a bounce, a suppression or a
+   * complaint the address is on the provider's list, and AGAIN would queue a message that is
+   * accepted and never delivered. It is offered now only after a refusal at submission or a
+   * provider failure — the failures that are not facts about the address.
+   */
+  addressBlocked: boolean;
+  /**
    * FOUNDER ANSWER 1, 2026-09-19 — the fence, and it is not 5f reversed.
    *
    * > This fence prevents a FALSE improvement: the red clearing when nothing was sent and no
@@ -68,7 +79,7 @@ export function doorActionsFor(facts: DoorFacts): ResendAction[] {
   const offered: ResendAction[] = [];
   // Nothing to send it to. On ruling M's red this is always the case, which is the whole of why
   // that door has one action.
-  if (facts.hasAddress) offered.push('AGAIN');
+  if (facts.hasAddress && !facts.addressBlocked) offered.push('AGAIN');
   // Always. An address is the one thing a host can supply that Gather cannot.
   offered.push('EDIT');
   if (facts.textingConfigured && facts.textReach.ok) offered.push('PHONE');
@@ -135,6 +146,7 @@ export type ResendRefusalCode =
   | 'NO_ADDRESS'
   | 'ADDRESS_REQUIRED'
   | 'ADDRESS_TAKEN'
+  | 'ADDRESS_BLOCKED'
   | 'NO_PHONE'
   | 'PHONE_OPTED_OUT'
   | 'PHONE_UNUSABLE'
@@ -159,6 +171,9 @@ export const RESEND_REFUSAL_WORDS: Record<ResendRefusalCode, string> = {
   NO_ADDRESS: 'There is no address to send to. Add one instead.',
   ADDRESS_REQUIRED: 'Type an address first.',
   ADDRESS_TAKEN: 'Somebody else already has that address, so Gather cannot move them onto it.',
+  // [[GTC-189]] slice 8a, W5 — ruled 2026-09-27. Here with the door's other refusals, and not in
+  // `email-block-words.ts`, so this module keeps its fence: every import `import type`.
+  ADDRESS_BLOCKED: "Gather can't email this address anymore.",
   NO_PHONE: 'They have no mobile number, so there is nothing to text.',
   PHONE_OPTED_OUT: 'They have opted out of texts, so Gather will not send one.',
   PHONE_UNUSABLE: 'Gather cannot text that number.',
