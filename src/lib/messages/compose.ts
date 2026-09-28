@@ -132,10 +132,8 @@ export interface ComposedCost {
    * happens the host is told WHY the number is what it is: a surprising count with no cause
    * reads as a bug, and decision 6's whole point is that the cost be legible.
    *
-   * ⚠ `getFirstNudgeMessage` and `getSecondNudgeMessage` in
-   * `src/lib/sms/nudge-templates.ts` both ship an em dash and pay the same doubling on every
-   * auto-nudge. Out of GTC-187's scope and deliberately not touched here — see the em-dash
-   * finding in `docs/tickets/GTC-187.md`.
+   * The text reminders once paid the same doubling on an em dash; [[GTC-337]] replaced them with
+   * `composeChaseText` in `src/lib/messages/chase-register.ts`, GSM-7 clean like this register.
    */
   narrowSegments: boolean;
 }

@@ -1,4 +1,5 @@
 import { askSubject, listOf } from '@/lib/messages/ask-register';
+import { withOptOutLine } from '@/lib/sms/opt-out-line';
 
 /**
  * [[GTC-189]] SLICE 8b — THE REMINDER EMAIL. W6, W7 and W8, ruled 2026-09-27.
@@ -10,10 +11,13 @@ import { askSubject, listOf } from '@/lib/messages/ask-register';
  * ⚠ THE CHECK-BACK PROMISE IS WHAT MAKES THIS A KEPT PROMISE AND NOT A COLD CONTACT. The ask says
  * *"I'll check back if I haven't heard from you."* (`askSystemVoice`); these are that check-back.
  *
- * ⚠ EMAIL ONLY. The TEXT chase still sends `getFirstNudgeMessage` / `getSecondNudgeMessage` in
- * `src/lib/sms/nudge-templates.ts`, unchanged: their revoicing is unscoped, and this slice did not
- * take it on (the approved plan: "TEXT goes through sendSms with today's SMS templates, words
- * unchanged").
+ * ⚠ [[GTC-337]] RULING 1 — THE TEXT REMINDERS SAY THE SAME, AND NAME THE EVENT. `composeChaseText`
+ * below is the text form: the email's words with the event's name where the email says "this
+ * one", because a text has no subject line and every Gather text comes from one number, so a
+ * guest's texts for different events share a thread. This departs from [[GTC-187]] decision 5 for
+ * the reminders only, knowingly. It replaced `getFirstNudgeMessage` / `getSecondNudgeMessage`,
+ * which told a guest who had answered one dish of two that the host was "waiting for your
+ * response".
  *
  * The register's standing rules hold: would, never could (slice 2 answer 1); no "please" (answer
  * 5); the link ends the message (a URL followed by prose is linkified greedily).
@@ -97,16 +101,34 @@ function notHeard(input: ComposeChaseInput): string {
     : `I still haven't heard back about ${about}.`;
 }
 
-export function composeChase(input: ComposeChaseInput): ComposedChase {
-  const opener =
-    input.leg === 'FIRST'
-      ? `Hi ${input.recipientFirstName} - Gather here again, helping ${input.hostFirstName} with this one.`
-      : `Hi ${input.recipientFirstName} - Gather here, checking in once more for ${input.hostFirstName}.`;
+/** `eventName` null is the email's opener, which leans on the subject line to name the event. */
+function opener(input: ComposeChaseInput, eventName: string | null): string {
+  if (input.leg === 'FIRST') {
+    return `Hi ${input.recipientFirstName} - Gather here again, helping ${input.hostFirstName} with ${eventName ?? 'this one'}.`;
+  }
+  return eventName === null
+    ? `Hi ${input.recipientFirstName} - Gather here, checking in once more for ${input.hostFirstName}.`
+    : `Hi ${input.recipientFirstName} - Gather here, checking in once more for ${input.hostFirstName} about ${eventName}.`;
+}
+
+function body(input: ComposeChaseInput, eventName: string | null): string {
   const tap = input.itemless
     ? `One tap to say whether you can make it: ${input.link}`
     : `One tap to say yes, no or maybe: ${input.link}`;
+  return [opener(input, eventName), notHeard(input), tap].join(' ');
+}
+
+export function composeChase(input: ComposeChaseInput): ComposedChase {
   return {
     subject: askSubject(input.eventName, input.hostFirstName),
-    text: [opener, notHeard(input), tap].join(' '),
+    text: body(input, null),
   };
+}
+
+/**
+ * [[GTC-337]] ruling 1 — the reminder as a TEXT: the second opener's home for the name was
+ * proposed at scoping and not changed by the founder. Ruling 2's line ends it.
+ */
+export function composeChaseText(input: ComposeChaseInput): string {
+  return withOptOutLine(body(input, input.eventName));
 }

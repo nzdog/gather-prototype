@@ -41,11 +41,10 @@
  * CLIENT-SAFE, like `compose.ts` and for the same reason. No Prisma, no database.
  *
  * NOT HERE, AND NOT THIS TICKET'S:
- *  - The send. GTC-189 (I2) owns dispatch, the recipient routing, and the per-channel
- *    opt-out suffix every system-sent SMS carries (`getFirstNudgeMessage` in
- *    `src/lib/sms/nudge-templates.ts` bakes it in; `buildSmsWrapUpMessage` does not).
- *    Composition does not append it, because decision 5 forbids per-channel shaping of the
- *    movements and an SMS-only suffix in a shared body is exactly that.
+ *  - The send. GTC-189 (I2) owns dispatch and the recipient routing. The opt-out line every
+ *    text carries ([[GTC-337]] ruling 2, `withOptOutLine` in `src/lib/sms/opt-out-line.ts`) is
+ *    added at the text send in `drainOnce`, not here, because decision 5 forbids per-channel
+ *    shaping of the movements and an SMS-only line in a shared body is exactly that.
  *  - WHO carries whose ask. `chooseAskRoute` in `src/lib/eligibility/channel-chooser.ts`
  *    decides that (GTC-189 slice 1); this module words what it is handed. Hinge §4's
  *    Grandma — an adult's ask routed through somebody else — is overturned for adults

@@ -145,6 +145,27 @@ by assuming.
   replaces the ambient provider with a stubbed one. ⚠ GTC-274 is a precondition
   of setting a TNZ token on any machine that runs the tests.
 
+- ⚠ **Do not run `tests/sms-validation-test.ts` until GTC-274 fences it** (2026-09-28). It is in
+  no npm script. It calls the real `sendSms` against a real event, and it writes to
+  `SmsOptOut` and `InviteEvent`.
+
+### `test:security`'s live layer needs the dev server
+*(Founder ruling, 2026-09-28, GTC-337 preflight.)* Without a dev server on
+:3000, `test:security` fails its 15 live assertions. That is not a regression.
+Start the server with the provider keys blanked for that process only, and never
+edit `.env.local`:
+`RESEND_API_KEY= TWILIO_ACCOUNT_SID= TWILIO_AUTH_TOKEN= TWILIO_PHONE_NUMBER= TNZ_AUTH_TOKEN= npm run dev`.
+The live layer drives only two cron routes, and only behind asserted
+preconditions (GTC-270):
+- `/api/cron/wrap-up-dispatch`, after zero undispatched `WrapUpLink` rows;
+- `/api/cron/decide-by-followups`, after zero decide-by candidates with a phone.
+
+It never drives `/api/cron/nudges` with a valid secret, and it fails if the
+`InviteEvent` count moves. This is the one approved exception to "no cron
+against `gather_dev`". The wrap-up drive does not itself wait on its
+precondition, so check both counts before starting, and stop if either is
+non-zero.
+
 ---
 
 ## Preflight Sanity Sequence

@@ -1,3 +1,5 @@
+import { withOptOutLine } from './opt-out-line';
+
 /**
  * SMS templates for auto-nudges
  *
@@ -8,48 +10,12 @@
  * - Include opt-out instruction (required by regulations)
  */
 
-export interface NudgeTemplateParams {
-  hostName: string;
-  eventName: string;
-  link: string;
-  personName?: string;
-}
-
-/**
- * GTC-178 (E1, phase 5): THE FIRST NUDGE — day 4 by default (Moment 4 §8.3).
- *
- * Was `get24hNudgeMessage`, "Open Rescue", "sent when someone hasn't opened their link
- * yet". Both halves of that description are gone: the leg fires on elapsed time alone
- * (Ruling 5 deleted the opened gate — opening is behaviour, and Hinge §6 refuses it), and
- * the window is day 4, not 24h.
- *
- * Named ordinally because GTC-179 (E2) makes the day adjustable per event and per person.
- *
- * NOT RETIMED, NOT REVOICED: the copy below is unchanged. Moment 4 §4 wants nudges in
- * Gather's voice — "playful, funny, allowed to get pointed" — and this is not that. That
- * rewrite is real but unscoped and unfiled; it is deliberately not smuggled in here.
+/*
+ * [[GTC-337]] — `getFirstNudgeMessage` and `getSecondNudgeMessage` (and their
+ * `NudgeTemplateParams`) were deleted here. They told anyone with anything open that the host
+ * was "waiting for your response", including a guest who had answered one dish of two. The text
+ * reminders are `composeChaseText` in `src/lib/messages/chase-register.ts` now (ruling 1).
  */
-export function getFirstNudgeMessage(params: NudgeTemplateParams): string {
-  const { hostName, eventName, link } = params;
-
-  // Target: ~140 chars to leave room for carrier additions
-  return `${hostName} is waiting for your response for ${eventName}. Tap to view: ${link} — Reply STOP to opt out`;
-}
-
-/**
- * GTC-178 (E1, phase 5): THE SECOND NUDGE — day 7 by default (Moment 4 §8.3), matching
- * the straggler tail in the Hinge walk's reply distribution (§6).
- *
- * Was `get48hNudgeMessage`, "Action Rescue", "sent when someone opened but hasn't
- * responded". The opened half was never true — that leg never had an opened check — and
- * the window is day 7, not 48h. `!hasResponded` IS still the gate (Ruling 5), so the
- * "needs your response" copy remains accurate for its audience.
- */
-export function getSecondNudgeMessage(params: NudgeTemplateParams): string {
-  const { hostName, eventName, link } = params;
-
-  return `Reminder: ${hostName} needs your response for ${eventName}. Please confirm: ${link} — Reply STOP to opt out`;
-}
 
 /**
  * Validate message length
@@ -137,13 +103,17 @@ export interface DecideByFollowupTemplateParams {
  *
  * The host's FIRST name, matching the warm register of the host-composed variants above
  * rather than the terse auto-nudge ones — this message speaks for Kate, not for the
- * system. The ` — Reply STOP to opt out` suffix is mandatory on every system-sent
- * template and is not a stylistic choice.
+ * system.
+ *
+ * [[GTC-337]] ruling 2: it ends with `OPT_OUT_LINE` on its own line, with no dash — as every
+ * text Gather sends does. The dash was the one non-GSM-7 character in it ([[GTC-257]]).
  */
 export function getDecideByFollowupMessage(params: DecideByFollowupTemplateParams): string {
   const { hostFirstName, itemName, decideByDay, link } = params;
 
-  return `Still good for the ${itemName}? ${hostFirstName} needs to know by ${decideByDay}. ${link} — Reply STOP to opt out`;
+  return withOptOutLine(
+    `Still good for the ${itemName}? ${hostFirstName} needs to know by ${decideByDay}. ${link}`
+  );
 }
 
 /**

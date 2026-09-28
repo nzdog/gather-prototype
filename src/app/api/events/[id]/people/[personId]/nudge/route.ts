@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
 import { sendSms } from '@/lib/sms/send-sms';
+import { withOptOutLine } from '@/lib/sms/opt-out-line';
 import { sendNudgeEmail } from '@/lib/email';
 import { logInviteEvent } from '@/lib/invite-events';
 import {
@@ -176,9 +177,11 @@ export async function POST(
       } else {
         // Ruling 4: it sends, and it says what it is overriding.
         if (emailOptedOut) overrideNotice = EMAIL_OPT_OUT_OVERRIDE_MESSAGE;
+        // [[GTC-337]] ruling 2 — her words, then the line. Appended here, never in her textarea, so
+        // she cannot send a text without it; `NudgeComposer` shows it under a text before she sends.
         sendResult = await sendSms({
           to: person.phoneNumber!,
-          message: message.trim(),
+          message: withOptOutLine(message.trim()),
           eventId,
           personId,
           metadata: { source: 'host_nudge', template },

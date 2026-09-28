@@ -6,9 +6,13 @@ import { askRowPopulation, readAskPreview } from '@/lib/preflight/ask-preview';
 import { composePreview } from '@/lib/preflight/ask-preview-compose';
 import { interpretResendErrorCode } from '@/lib/email-delivery/resend-error-contract';
 import { sendChaseEmail } from '@/lib/email';
-import { composeChase } from '@/lib/messages/chase-register';
+import {
+  composeChase,
+  composeChaseText,
+  type ComposeChaseInput,
+} from '@/lib/messages/chase-register';
 import { firstNameOf } from '@/lib/messages/ask-register';
-import { getFirstNudgeMessage, getSecondNudgeMessage } from '@/lib/sms/nudge-templates';
+import { withOptOutLine } from '@/lib/sms/opt-out-line';
 import { readChaseOwed } from '@/lib/sms/nudge-eligibility';
 import { listEmailBlocks, normalizeEmailAddress } from '@/lib/eligibility/email-block';
 
@@ -722,19 +726,21 @@ async function drainChaseRow(
   if (!claimed) return;
   const attemptCount = row.attemptCount + 1;
   const leg = row.kind === 'CHASE_FIRST' ? 'FIRST' : 'SECOND';
+  // One input for both channels, so the text and the email cannot disagree about what is open.
+  const chaseInput: ComposeChaseInput = {
+    leg,
+    recipientFirstName: firstNameOf(composedRow.recipient.name),
+    hostFirstName: firstNameOf(preview.hostName),
+    eventName: preview.event.name,
+    link,
+    itemless: owed.itemless,
+    answeredAnything: owed.answeredAnything,
+    self: owed.self,
+    carried: owed.carried.map((c) => ({ ...c, firstName: firstNameOf(c.name) })),
+  };
 
   if (channel === 'EMAIL') {
-    const composed = composeChase({
-      leg,
-      recipientFirstName: firstNameOf(composedRow.recipient.name),
-      hostFirstName: firstNameOf(preview.hostName),
-      eventName: preview.event.name,
-      link,
-      itemless: owed.itemless,
-      answeredAnything: owed.answeredAnything,
-      self: owed.self,
-      carried: owed.carried.map((c) => ({ ...c, firstName: firstNameOf(c.name) })),
-    });
+    const composed = composeChase(chaseInput);
     const sent = await sendChaseEmail({
       to: email!,
       subject: composed.subject,
@@ -772,8 +778,8 @@ async function drainChaseRow(
 
   const to = stored.personEvent.person.phoneNumber;
   if (!to) return withhold('NO_CHANNEL');
-  const params = { hostName: preview.hostName, eventName: preview.event.name, link };
-  const message = leg === 'FIRST' ? getFirstNudgeMessage(params) : getSecondNudgeMessage(params);
+  // [[GTC-337]] ruling 1: the email's words, naming the event; ruling 2's line ends it.
+  const message = composeChaseText(chaseInput);
   const sent = await sendSms({
     to,
     message,
@@ -1044,10 +1050,14 @@ export async function drainOnce(
        * `sendSms` logs unconditionally inside itself. The fix is [[GTC-288]]'s — the STOP
        * attribution moves to `OutboundMessage.providerMessageId` and the log row stops carrying
        * anything. DO NOT add an enum member for it.
+       *
+       * [[GTC-337]] ruling 2 — the line is added HERE, at the text send, and not by `composeAsk`:
+       * [[GTC-187]] decision 5 keeps the ask's body one text for both channels. The STORED channel
+       * decides, so the ask, a mini-send and the resend door's text all carry it.
        */
       const sent = await sendSms({
         to,
-        message: composedRow.ask.text,
+        message: withOptOutLine(composedRow.ask.text),
         eventId,
         personId: composedRow.recipient.personId,
         metadata: { type: 'ask', outboundMessageId: row.id },

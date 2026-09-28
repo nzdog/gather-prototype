@@ -64,6 +64,7 @@ import {
   replyToLine,
 } from '@/lib/preflight/ask-preview-compose';
 import type { AskPreview, NotMessagedLinkState } from '@/lib/preflight/ask-preview';
+import { OPT_OUT_LINE } from '@/lib/sms/opt-out-line';
 
 // ─── Wire shapes (mirror /api/events/[id]/pre-flight) ────────────────────────
 
@@ -1468,11 +1469,19 @@ function MessageStep({ eventId }: { eventId: string }) {
                     <p className="text-sm text-gray-900 whitespace-pre-wrap">{m.text}</p>
                   </div>
                 ))}
+                {/* [[GTC-337]] ruling 2 — Gather ends every text with this line; the count below
+                    includes it. An email carries none. */}
+                {current.textAsSent !== null && (
+                  <div className="px-4 py-3 border-b border-gray-100 last:border-0">
+                    <p className="text-[11px] uppercase tracking-wide text-gray-400 mb-1">Gather</p>
+                    <p className="text-sm text-gray-900">{OPT_OUT_LINE}</p>
+                  </div>
+                )}
               </div>
               <p className="text-xs text-gray-500 mt-2">
-                {current.segments !== null ? (
+                {current.segments !== null && current.textAsSent !== null ? (
                   <>
-                    {current.ask.text.length} characters · {current.segments}{' '}
+                    {current.textAsSent.length} characters · {current.segments}{' '}
                     {current.segments === 1 ? 'text' : 'texts'}
                     {current.segments > 1 && ' — long is fine, it just costs more to send'}.
                     {current.narrowSegments &&

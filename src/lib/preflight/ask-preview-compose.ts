@@ -32,6 +32,8 @@ import {
   type ChaseWhenNoMobile,
 } from '@/lib/eligibility/chase-when-no-mobile';
 import { composeAsk, firstNameOf, type ComposedAsk } from '@/lib/messages/ask-register';
+import { composedCost } from '@/lib/messages/compose';
+import { withOptOutLine } from '@/lib/sms/opt-out-line';
 import type {
   AskPreview,
   HostListLine,
@@ -60,6 +62,11 @@ export interface PreviewRow {
   recipient: PreviewRecipient;
   /** Null for the host as carrier — decision 20. */
   ask: ComposedAsk | null;
+  /**
+   * [[GTC-337]] — the text as `drainOnce` will send it: the ask, then the opt-out line. Texted
+   * recipients only; the count below is taken over this, so the screen and the send agree.
+   */
+  textAsSent: string | null;
   /** Texted recipients only. */
   segments: number | null;
   narrowSegments: boolean;
@@ -89,6 +96,7 @@ export function composePreview(
       return {
         recipient,
         ask: null,
+        textAsSent: null,
         segments: null,
         narrowSegments: false,
         subject: null,
@@ -117,11 +125,14 @@ export function composePreview(
       storedAuthorLine: authorLine,
     });
     const texted = recipient.channel === 'TEXT';
+    const textAsSent = texted ? withOptOutLine(ask.text) : null;
+    const cost = textAsSent === null ? null : composedCost(textAsSent);
     return {
       recipient,
       ask,
-      segments: texted ? ask.segments : null,
-      narrowSegments: texted && ask.narrowSegments,
+      textAsSent,
+      segments: cost ? cost.segments : null,
+      narrowSegments: cost ? cost.narrowSegments : false,
       subject: texted ? null : ask.subject,
       replyTo: texted ? null : preview.replyTo,
     };
