@@ -1,7 +1,5 @@
 import { findNudgeCandidates } from './nudge-eligibility';
-import { processNudges } from './nudge-sender';
-import { findProxyNudgeCandidates } from './proxy-nudge-eligibility';
-import { processProxyNudges } from './proxy-nudge-sender';
+import { queueChase } from './nudge-sender';
 import { isSmsEnabled } from './twilio-client';
 import { isTnzEnabled } from './tnz-client';
 
@@ -22,17 +20,7 @@ export interface NudgeRunResult {
     eligibleSecond: number;
     skipped: { reason: string; count: number }[];
   };
-  proxyCandidates?: {
-    eligible: number;
-    skipped: { reason: string; count: number }[];
-  };
   results: {
-    sent: number;
-    succeeded: number;
-    failed: number;
-    deferred: number;
-  };
-  proxyResults?: {
     sent: number;
     succeeded: number;
     failed: number;
@@ -73,81 +61,52 @@ export function isNudgeRunHealthy(input: {
 }
 
 /**
- * Run the nudge scheduler
- * This should be called periodically (e.g., every 15 minutes)
+ * Run the nudge scheduler — every 15 minutes.
+ *
+ * ⚠ [[GTC-189]] SLICE 8b: IT QUEUES AND SENDS NOTHING (founder ruling D2). Each due reminder becomes
+ * one `OutboundMessage` row; the dispatcher (`/api/cron/outbound-dispatch`, `drainOnce`) sends it.
+ * So `results.sent` counts rows QUEUED, and `succeeded`/`failed` are about queueing, not delivery.
+ *
+ * ⚠ RULINGS V AND AE — THE HOUSEHOLD PROXY REMINDER IS RETIRED HERE. It texted a household's contact
+ * about its unconfirmed members, adults included, which THE ASK ruled the household is not; it ran
+ * on `PersonEvent.contactMethod`, the column ruling C measured as wrong; and its replacement is a
+ * different object the host chooses to send ([[GTC-298]]). A carried child's ask is chased through
+ * the chase itself (ruling R). Nothing calls the proxy finder now.
+ *
+ * ⚠ ITS HEALTH IS STILL GTC-214's — `smsConfigured` — AND THAT IS NOW A QUESTION, NOT A SETTLED
+ * FACT. The run no longer attempts a send, so "no provider" no longer means this run failed; the
+ * dispatcher's run is where a send can fail. Kept as it was because `tests/nudge-provider-gate-test.ts`
+ * pins it, and moving it is the founder's call, raised at slice 8b.
  */
-export async function runNudgeScheduler(): Promise<NudgeRunResult> {
-  const timestamp = new Date();
+export async function runNudgeScheduler(
+  now: Date = new Date(),
+  scope: { eventIds?: string[] } = {}
+): Promise<NudgeRunResult> {
+  const timestamp = now;
   const errors: string[] = [];
 
-  // GTC-214: this is a REPORT, NOT A GATE. The run proceeds either way, and `sendSms`
-  // selects the provider per destination — the only place that decision is correct. There
-  // used to be an early return here on `!isSmsEnabled()`, the TWILIO predicate, which
-  // killed all three nudge families on a TNZ-only deployment before a single query ran.
-  // Do not restore a gate here in any form, widened or otherwise.
-  // tests/nudge-provider-gate-test.ts case B asserts the run proceeds with no provider
-  // configured; that assertion is what holds this open, not this comment.
+  // GTC-214: this is a REPORT, NOT A GATE. Do not restore a gate here in any form.
   const smsConfigured = isTnzEnabled() || isSmsEnabled();
 
   try {
-    // Find eligible candidates for direct nudges
-    const candidates = await findNudgeCandidates();
-
-    // Process direct nudges
-    const processResult = await processNudges(candidates);
-
-    const succeeded = processResult.sent.filter((r) => r.success).length;
-    const failed = processResult.sent.filter((r) => !r.success).length;
-
-    // Collect errors
-    processResult.sent
-      .filter((r) => !r.success)
-      .forEach((r) => errors.push(`${r.personName}: ${r.error}`));
-
-    // Find eligible candidates for proxy nudges
-    const proxyCandidates = await findProxyNudgeCandidates();
-
-    // Process proxy nudges
-    const proxyProcessResult = await processProxyNudges(proxyCandidates);
-
-    const proxySucceeded = proxyProcessResult.sent.filter((r) => r.success).length;
-    const proxyFailed = proxyProcessResult.sent.filter((r) => !r.success).length;
-
-    // Collect proxy errors
-    proxyProcessResult.sent
-      .filter((r) => !r.success)
-      .forEach((r) => errors.push(`Proxy ${r.primaryContactName}: ${r.error}`));
-
-    const attempted = processResult.sent.length + proxyProcessResult.sent.length;
+    const candidates = await findNudgeCandidates(now, scope);
+    const queued = await queueChase(candidates);
+    const written = queued.filter((q) => q.queued).length;
 
     return {
       timestamp,
-      ok: isNudgeRunHealthy({
-        smsConfigured,
-        attempted,
-        succeeded: succeeded + proxySucceeded,
-      }),
+      ok: isNudgeRunHealthy({ smsConfigured, attempted: 0, succeeded: 0 }),
       smsConfigured,
       candidates: {
         eligibleFirst: candidates.eligibleFirst.length,
         eligibleSecond: candidates.eligibleSecond.length,
         skipped: candidates.skipped,
       },
-      proxyCandidates: {
-        eligible: proxyCandidates.eligible.length,
-        skipped: proxyCandidates.skipped,
-      },
       results: {
-        sent: processResult.sent.length,
-        succeeded,
-        failed,
-        deferred: processResult.deferred,
-      },
-      proxyResults: {
-        sent: proxyProcessResult.sent.length,
-        succeeded: proxySucceeded,
-        failed: proxyFailed,
-        deferred: proxyProcessResult.deferred,
+        sent: written,
+        succeeded: written,
+        failed: 0,
+        deferred: 0,
       },
       errors,
     };
@@ -155,8 +114,7 @@ export async function runNudgeScheduler(): Promise<NudgeRunResult> {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[Nudge Scheduler] Error:', errorMessage);
 
-    // A caught run-level exception is not a healthy run either — it used to report
-    // `smsEnabled: true`, which the cron route spread into `success: true` / HTTP 200.
+    // A caught run-level exception is not a healthy run either.
     return {
       timestamp,
       ok: false,

@@ -235,7 +235,8 @@ function guestEmailParts(
  * It answers through the same `resultOf` as the other three, so it inherits slice 4b's
  * `providerMessageId` rather than getting a second reading of Resend's envelope.
  */
-export async function sendAskEmail(params: {
+/** The ask and the chase share one shape: her name on Gather's address, replies to her. */
+interface HostVoicedEmail {
   to: string;
   subject: string;
   body: string;
@@ -250,7 +251,27 @@ export async function sendAskEmail(params: {
    */
   personId: string;
   eventId: string;
-}): Promise<SendResult> {
+}
+
+export async function sendAskEmail(params: HostVoicedEmail): Promise<SendResult> {
+  return sendHostVoiced('ask', params);
+}
+
+/**
+ * [[GTC-189]] slice 8b — THE CHASE'S EMAIL LEG. The ask's sender under its own name, so a reader
+ * of a log or a call site never has to learn that "ask" also meant "reminder" — two questions
+ * sharing one answer because they share a word, which this ticket has caught five times. The
+ * reminder is her follow-up to her own invitation, so it carries the same display name and the
+ * same reply-to (ruling F), and the same way out (ruling Q).
+ */
+export async function sendChaseEmail(params: HostVoicedEmail): Promise<SendResult> {
+  return sendHostVoiced('chase', params);
+}
+
+async function sendHostVoiced(
+  label: 'ask' | 'chase',
+  params: HostVoicedEmail
+): Promise<SendResult> {
   try {
     const resend = getResendClient();
     const configured = process.env.EMAIL_FROM || 'Gather <noreply@gather.app>';
@@ -267,10 +288,10 @@ export async function sendAskEmail(params: {
       text,
       headers,
     });
-    return resultOf('ask', params.to, response);
+    return resultOf(label, params.to, response);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`[Email] Failed to send ask to ${params.to}:`, errorMessage);
+    console.error(`[Email] Failed to send ${label} to ${params.to}:`, errorMessage);
     return { success: false, error: errorMessage };
   }
 }

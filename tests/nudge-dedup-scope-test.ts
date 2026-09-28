@@ -180,15 +180,28 @@ async function main() {
       'nudge-sender.ts no longer writes Person.nudge24hSentAt / nudge48hSentAt',
       !senderSrc.includes('nudge24hSentAt') && !senderSrc.includes('nudge48hSentAt')
     );
-    assert(
-      'write',
-      'nudge-sender.ts stamps firstNudgeSentAt / secondNudgeSentAt instead',
-      senderSrc.includes('firstNudgeSentAt') && senderSrc.includes('secondNudgeSentAt')
+    /*
+     * ⚠ RE-POINTED AT [[GTC-189]] SLICE 8b. The stamp moved with the send: `nudge-sender.ts` now only
+     * QUEUES rows (founder ruling D2), and the dispatcher stamps the leg when a provider accepts it —
+     * `recordAcceptance` in `src/lib/press/dispatch.ts`. The property is unchanged and is asserted
+     * where it now lives: the ordinal columns, on the PersonEvent row, never the Person row.
+     */
+    const dispatchSrc = code('src/lib/press/dispatch.ts');
+    const acceptance = dispatchSrc.slice(
+      dispatchSrc.indexOf('export async function recordAcceptance'),
+      dispatchSrc.indexOf('export async function recordRejection')
     );
     assert(
       'write',
-      'and it stamps the PersonEvent row, not the Person row',
-      senderSrc.includes('personEvent.update') && !senderSrc.includes('person.update')
+      'recordAcceptance stamps firstNudgeSentAt / secondNudgeSentAt for a chase leg instead',
+      acceptance.includes('firstNudgeSentAt') && acceptance.includes('secondNudgeSentAt')
+    );
+    assert(
+      'write',
+      'and it stamps the PersonEvent row, not the Person row — and the sender writes neither',
+      acceptance.includes('tx.personEvent.updateMany') &&
+        !acceptance.includes('tx.person.update') &&
+        !senderSrc.includes('person.update')
     );
 
     const eligibilitySrc = code('src/lib/sms/nudge-eligibility.ts');

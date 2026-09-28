@@ -92,7 +92,8 @@ export async function sendDecideByFollowup(
  * Process every due follow-up.
  *
  * Quiet hours are checked ONCE at the top of the batch and nothing is sent — the house
- * idiom (nudge-sender.ts:114-138, proxy-nudge-sender.ts:90-110, wrap-up.ts:222-234). The
+ * idiom (`dispatchPendingWrapUpMessages` in wrap-up.ts; the text chase used it too until
+ * [[GTC-189]] slice 8b moved quiet hours into `drainOnce`, per row and text only). The
  * deferral is implicit and durable: no stamp is written, so the next run after 08:05 NZ
  * picks these candidates up unchanged.
  *

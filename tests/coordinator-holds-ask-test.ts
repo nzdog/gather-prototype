@@ -503,17 +503,23 @@ async function main() {
     const nudge = await findNudgeCandidatesForEvent(event.id, now);
     const inFirst = (personId: string) => nudge.eligibleFirst.some((c) => c.personId === personId);
 
+    /*
+     * ⚠ REPLACED AT [[GTC-189]] SLICE 8b — FOUNDER RULING D5. Both of these asserted a person holding
+     * a MAYBE was chased at day four. That was F7: the first leg fired on time alone, which also
+     * contradicted Hinge §8's "a maybe gets no nudges". A maybe is an answer, so neither is chased
+     * now. The CONTROL moves to the itemless coordinator below (still genuinely found), and GTC-294's
+     * property — a coordinator is chased like any other adult — is asserted as that, directly: the
+     * coordinator holding a maybe gets exactly the ordinary guest's outcome.
+     */
     assert(
-      'CONTROL: the ordinary guest is a live auto-nudge candidate, so this sweep is ' +
-        'genuinely finding people rather than returning empty',
-      inFirst(guest.id)
+      'CONTROL: the sweep is genuinely finding people rather than returning empty — the ' +
+        'itemless coordinator, who has answered nothing, is a live candidate',
+      inFirst(coordItemless.id)
     );
     assert(
-      'GTC-294: the coordinator who owns an item is NOW a live auto-nudge candidate — ' +
-        'correct under the ruling (she owns an item and is chased like any other adult), ' +
-        "and a behaviour change to GTC-178's shipped machinery, so it is asserted here " +
-        'rather than inferred from a sentence',
-      inFirst(coordWithItem.id)
+      'GTC-294: the coordinator who owns an item is chased EXACTLY like the ordinary guest — ' +
+        'both hold a MAYBE, so under D5 neither is sent a reminder (a maybe is an answer)',
+      inFirst(coordWithItem.id) === inFirst(guest.id) && !inFirst(guest.id)
     );
     assert(
       '⚠ AND SO IS THE COORDINATOR WHO OWNS NOTHING. findNudgeCandidates roots on ' +

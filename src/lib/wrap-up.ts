@@ -222,8 +222,8 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
   // filter, not a window, and the cron runs */10 around the clock. A host confirming
   // wrap-up at 23:00 NZ texted every guest at ~23:10.
   //
-  // Same shape as the two existing guards (nudge-sender.ts:114-138,
-  // proxy-nudge-sender.ts:90-110): check once at the top of the batch, send nothing,
+  // Same shape as the batch guards the text chase used before [[GTC-189]] slice 8b moved quiet
+  // hours into `drainOnce` (per row, text only): check once at the top of the batch, send nothing,
   // return. The deferral is implicit and durable — no scheduler, no timer. The rows
   // stay `dispatched: false` and the next run after 08:05 picks them up unchanged.
   //

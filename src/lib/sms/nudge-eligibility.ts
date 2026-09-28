@@ -1,61 +1,50 @@
 import { prisma } from '@/lib/prisma';
 import { isValidNZNumber } from '@/lib/phone';
 import { isOptedOut } from '@/lib/sms/opt-out-service';
-import {
-  EMAIL_OPT_OUT_SKIP_REASON,
-  emailOptedOutFact,
-  listEmailOptOutsForEvent,
-} from '@/lib/eligibility/email-opt-out';
+import { EMAIL_OPT_OUT_SKIP_REASON } from '@/lib/eligibility/email-opt-out';
+import { EMAIL_BLOCK_SKIP_REASON } from '@/lib/eligibility/email-block';
 import { SENT_AND_LIVE } from '@/lib/lifecycle';
-import {
-  MESSAGEABLE_PERSON_EVENT,
-  isMessageableRole,
-  CHILD_SKIP_REASON,
-} from '@/lib/eligibility/child-exclusion';
+import { CHILD_SKIP_REASON } from '@/lib/eligibility/child-exclusion';
 import { resolveNudgeOffsetDays, dueNudgeIndices } from '@/lib/nudge-cadence';
-import { isChaseable, DONT_CHASE_SKIP_REASON } from '@/lib/eligibility/nudge-mark';
+import { DONT_CHASE_SKIP_REASON } from '@/lib/eligibility/nudge-mark';
 import { isPaceOff, PACE_OFF_SKIP_REASON } from '@/lib/eligibility/nudge-pace';
+import { readAskPreview } from '@/lib/preflight/ask-preview';
+import type { ChaseNoneWhy, HostListWhy } from '@/lib/eligibility/channel-chooser';
+import type { Prisma } from '@prisma/client';
 
 export interface NudgeCandidate {
   /**
-   * GTC-178 (E1, phase 2): the membership row this candidacy belongs to. The clock is
-   * read from it, and phase 3's `firstNudgeSentAt`/`secondNudgeSentAt` will be written
-   * back to it. `personId` + `eventId` identify the same row, but carrying the id means
-   * the sender does not have to re-derive it to stamp a send.
+   * The RECIPIENT's membership — the adult the reminder goes to. For a carried child's ask that is
+   * the carrier (ruling R), and the clock, the stamps and the row all belong to that membership.
    */
   personEventId: string;
   personId: string;
   personName: string;
-  phoneNumber: string;
+  /**
+   * [[GTC-189]] slice 8b — the chooser's channel for this reminder. `phoneNumber` is null for an
+   * email chase; the SQL phone-only filter is gone because the chooser must SEE a phoneless person,
+   * to chase them by email (ruling AH) or to hand them over (rulings O and P).
+   */
+  channel: 'EMAIL' | 'TEXT';
+  phoneNumber: string | null;
   eventId: string;
   eventName: string;
   hostId: string;
   hostName: string;
   anchorAt: Date;
   participantToken: string;
-
-  // Status flags
+  /** Kept for the report; neither leg reads it (GTC-178 Ruling 5 deleted the opened gate). */
   hasOpened: boolean;
-  hasResponded: boolean;
   /**
-   * GTC-178 (E1, phase 4): the sent-side dedup stamps, now read from the PersonEvent row
-   * named by `personEventId` above rather than from the global `Person` pair.
-   *
-   * ORDINAL NAMES, matching the columns (Ruling 7). They are still the 24h and 48h legs
-   * in this phase — the retime to day-4/day-7 is phase 5 — so the names describe WHICH
-   * nudge, never WHEN, which is what keeps them true once GTC-179 makes the pace
-   * adjustable.
+   * TRUE when nothing the reminder would ask about is still open. ⚠ D5, founder ruling 2026-09-27:
+   * BOTH legs now require it false — see `stillUnanswered`.
    */
+  hasResponded: boolean;
   firstNudgeSentAt: Date | null;
   secondNudgeSentAt: Date | null;
 }
 
 export interface EligibilityResult {
-  /**
-   * GTC-178 (E1, phase 5): ORDINAL, matching the cadence and the columns. These were
-   * `eligible24h`/`eligible48h`; the legs are days 4 and 7 now, and GTC-179 (E2) makes
-   * even that adjustable — so the names say WHICH nudge, never when.
-   */
   eligibleFirst: NudgeCandidate[];
   eligibleSecond: NudgeCandidate[];
   skipped: {
@@ -65,359 +54,271 @@ export interface EligibilityResult {
 }
 
 /**
- * Find all people eligible for nudges across all active events.
+ * ⚠ D5, FOUNDER RULING 2026-09-27 — "BOTH REMINDERS REQUIRE THAT THE GUEST STILL HAS NOT ANSWERED."
  *
- * `now` is injectable and defaults to the current instant — the same shape as
- * `findDecideByFollowupCandidates(now)` and `isComplete(event, now)`, and for the same
- * reason: this is a clock feature, and a clock test that cannot fix the clock asserts
- * whatever the wall clock happened to be when CI ran.
+ * F7, RECORDED AS A DEFECT IN TODAY'S BEHAVIOUR AND FIXED HERE: the first leg used to fire on
+ * elapsed time alone, so on day four a guest who had already said yes was told the host "is waiting
+ * for your response". GTC-178 Ruling 5 deleted an OPENED gate from that leg — opening is behaviour,
+ * and must not cancel the nudge clock — and never had a RESPONSE gate to delete. A response is a
+ * decision, and a decision stops the cadence (Ruling 5's own other half).
+ *
+ * WHAT "STILL NOT ANSWERED" MEANS, which is the part a reader should check:
+ *  - they said they cannot come — answered, whatever their rows say;
+ *  - any row of their OWN still PENDING — unanswered;
+ *  - any row of a CHILD they carry for the chase still PENDING — unanswered (ruling R: *"a carried
+ *    ask is a real ask and it is chased like one"*);
+ *  - no rows at all, own or carried — the ask was whether they can make it, so unanswered until
+ *    `attendanceAnswer` is set.
+ *
+ * ⚠ THE SECOND HALF IS A CHANGE FROM THE OLD SECOND LEG, WHICH STOPPED ON ANY ONE ANSWER. A guest
+ * with two dishes who answered one is still asked about the other; ruling R's own case — Sarah
+ * answered hers, not Ollie's — cannot be chased under "any one answer stops it".
  */
-export async function findNudgeCandidates(now: Date = new Date()): Promise<EligibilityResult> {
-  // GTC-178 (E1, phase 5): the cadence comes from the shared pure module — days 4 and 7
-  // by default (Moment 4 §8.3), the system's own schedule, not "opened but no response",
-  // which is a different mechanism and was never what the spec asked for.
-  //
-  // GTC-179 (E2, phase 1): THE RESOLUTION MOVED INTO THE LOOP. It used to sit here, above
-  // the query, resolved once per sweep — correct while the only layer was a constant, and
-  // wrong the moment §10.3's two layers exist, because BOTH vary per row: the mark is per
-  // PersonEvent, the pace is per Event. A run-level resolution can only ever produce one
-  // answer for everybody, which is the opposite of what "cadence controls live where the
-  // people-decisions live" asks for. See the call site further down.
+export function stillUnanswered(input: {
+  attendanceAnswer: string | null;
+  ownRows: number;
+  ownPending: number;
+  carriedRows: number;
+  carriedPending: number;
+}): boolean {
+  if (input.attendanceAnswer === 'NO') return false;
+  if (input.ownPending > 0 || input.carriedPending > 0) return true;
+  if (input.ownRows === 0 && input.carriedRows === 0) return input.attendanceAnswer === null;
+  return false;
+}
 
-  // GTC-178 (E1, phase 2): ROOTED ON `PersonEvent`, AND THE CLOCK IS `PersonEvent.sentAt`.
-  //
-  // THE BUG THIS FIXES. This query used to root on `Person` and read
-  // `Person.inviteAnchorAt`, which is GLOBAL PER PERSON. A person who is a guest at two
-  // events therefore shared ONE clock, and the second event's nudge timing was wrong from
-  // the moment they joined it — a mini-send pressed an hour ago inherited an anchor from
-  // an event pressed last week and fired both nudges on the next tick. GTC-168 (A2)
-  // created `PersonEvent.sentAt` for exactly this reason and the schema comment on that
-  // field names this ticket as the fix. Ruled a BUG FIX, not a refactor (Ruling 2,
-  // 2026-08-23). `tests/nudge-clock-origin-test.ts` is the two-event proof; it cannot be
-  // expressed with a one-event fixture, which is why the leak survived this long.
-  //
-  // WHY THE ROOT MOVED AND NOT JUST THE FIELD. Both facts this query gates on —
-  // `sentAt` and `householdRole` — live on `PersonEvent`. Under the old `Person` root each
-  // had to be filtered in BOTH the `some` (which decides whether the person loads at all)
-  // and the include's `where` (which decides which memberships come back); filtering only
-  // the `some` would load a person for their eligible membership and then still emit a
-  // candidate for their ineligible one. That two-place hazard is what the old comment here
-  // warned about for the child rule, and moving the clock in would have created a second
-  // instance of it. Rooting on the row that owns the facts collapses both to one predicate.
-  // Same reasoning `decide-by-eligibility.ts` records for rooting on `Assignment`.
-  //
-  // GTC-169 (A3a): the event filter was `status: 'CONFIRMING'`, which meant FREEZING AN
-  // EVENT STOPPED ITS NUDGES — exactly backwards from the ruled model, where the send is
-  // when the chasing starts (Moment 4 §4; Hinge §6 "I'll tell you the moment anything
-  // comes back"). The endDate half of SENT_AND_LIVE is load-bearing, not cosmetic: after
-  // A3a no event ever leaves CONFIRMING, so a status-only filter would keep matching
-  // events whose date had passed and fire nudges after the event — which Moment 4 §10.1
-  // forbids outright ("Post-date: nudges dead"). The security suite asserts this directly.
-  //
-  // `sentAt: { not: null }` IS A FAIL-SAFE, NOT A TIDY-UP. No personal send clock means
-  // the system does not know when this person was told, so it must not guess — and the
-  // global field it used to fall back on is precisely what produced the wrong guess.
-  //
-  // GTC-178 (E1, phase 4): THE DEDUP STAMPS ARE READ FROM THIS ROW TOO. They used to be
-  // `Person.nudge24hSentAt`/`nudge48hSentAt` — the same per-person-for-a-per-event leak
-  // as the clock, through the other door: one person in two live events, nudged for event
-  // A, went permanently silent for event B. Nobody was nudged twice; somebody was never
-  // nudged at all, which is the worse direction to fail.
-  // `tests/nudge-dedup-scope-test.ts` is the two-event proof.
-  //
-  // COST, STATED HONESTLY: the person payload (tokens, assignments) is now fetched once
-  // per membership rather than once per person, so someone in two events is carried
-  // twice. Prisma cannot correlate a nested `where` to the outer row's `eventId`, so
-  // those two relations are still filtered in JS below — unchanged from before, and the
-  // same limitation `decide-by-eligibility.ts` documents. Memberships per person are 1-2
-  // in practice; correctness is worth the duplication.
-  const memberships = await prisma.personEvent.findMany({
-    where: {
-      sentAt: { not: null },
-      event: SENT_AND_LIVE(now),
-      ...MESSAGEABLE_PERSON_EVENT,
-      person: { phoneNumber: { not: null } },
-    },
-    include: {
-      event: {
-        select: {
-          id: true,
-          name: true,
-          hostId: true,
-          // GTC-179 (E2, phase 3): THE PACE, AND IT HAD TO BE ADDED BY HAND.
-          //
-          // This is the exact hazard phase 1 flagged. `NudgePaceSource` is all-optional
-          // (a narrow select has to satisfy it), so omitting this line type-checks
-          // perfectly and every event silently reads as "no opinion" — the system
-          // default, for everybody, forever, with the whole suite green. Measured on the
-          // tree at 4b3ee57: `'nudgePace' in membership.event` was FALSE.
-          //
-          // The mark needs no equivalent line: the top-level query uses `include` rather
-          // than a root `select`, so every PersonEvent scalar (nudgeMark included) comes
-          // back already. That asymmetry is the trap — one column worked by accident and
-          // the other did not work at all. tests/nudge-cadence-controls-test.ts turns
-          // BOTH into outcomes, so neither can regress silently.
-          nudgePace: true,
-          host: {
-            select: { name: true },
-          },
-        },
-      },
-      person: {
-        select: {
-          id: true,
-          name: true,
-          phoneNumber: true,
-          tokens: {
-            where: { scope: 'PARTICIPANT' },
-            select: {
-              token: true,
-              openedAt: true,
-              eventId: true,
-            },
-          },
-          assignments: {
-            select: {
-              response: true,
-              item: {
-                select: {
-                  team: {
-                    select: {
-                      eventId: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
+/**
+ * The recorded skip for each reason the chooser refuses the chase. A `Record`, so a new refusal does
+ * not compile until it has a line — the rule every skip on this path has held: a RECORDED skip,
+ * never a silent drop. The strings the suites already read are kept verbatim.
+ */
+const CHASE_SKIP_REASON: Record<ChaseNoneWhy, string> = {
+  SMS_OPTED_OUT: 'Opted out',
+  EMAIL_OPTED_OUT: EMAIL_OPT_OUT_SKIP_REASON,
+  EMAIL_REPORTED: EMAIL_OPT_OUT_SKIP_REASON,
+  EMAIL_BLOCKED: EMAIL_BLOCK_SKIP_REASON,
+  MARKED_DONT_CHASE: DONT_CHASE_SKIP_REASON,
+  PHONE_UNUSABLE: 'Invalid/non-NZ phone',
+  NO_CHANNEL: 'No channel to chase by',
+  HANDED_TO_HOST: 'Handed to the host by her exception or her switch (GTC-311)',
+  HOST_AS_CARRIER: 'Host as carrier — not chased (slice 1 answer 1)',
+  HOST_OWN_ASK: 'Host — never chased',
+  HOST_HOUSEHOLD_CHILD: CHILD_SKIP_REASON,
+  NO_CARRIER: CHILD_SKIP_REASON,
+  HOUSEHOLD_MUTED: CHILD_SKIP_REASON,
+  CHILD_WITHOUT_ITEM: CHILD_SKIP_REASON,
+};
+
+/**
+ * The recorded skip for a guest who WAS asked (their clock is running) and whom the chooser now
+ * refuses the ask outright — an unsubscribe, a complaint, a blocked address, an opt-out. They are on
+ * the host's list and not among the recipients, so without this they would drop out of the sweep
+ * silently; `tests/email-opt-out-test.ts` layer I caught exactly that at slice 8b.
+ */
+const HOST_LIST_SKIP_REASON: Record<HostListWhy, string> = {
+  EMAIL_REPORTED: EMAIL_OPT_OUT_SKIP_REASON,
+  EMAIL_REPORTED_SMS_OPTED_OUT: EMAIL_OPT_OUT_SKIP_REASON,
+  EMAIL_OPTED_OUT: EMAIL_OPT_OUT_SKIP_REASON,
+  EMAIL_BLOCKED: EMAIL_BLOCK_SKIP_REASON,
+  EMAIL_BLOCKED_SMS_OPTED_OUT: EMAIL_BLOCK_SKIP_REASON,
+  NO_CHANNEL: CHASE_SKIP_REASON.NO_CHANNEL,
+  SMS_OPTED_OUT: CHASE_SKIP_REASON.SMS_OPTED_OUT,
+  PHONE_UNUSABLE: CHASE_SKIP_REASON.PHONE_UNUSABLE,
+  HOST_HOUSEHOLD_CHILD: CHILD_SKIP_REASON,
+  NO_CARRIER: CHILD_SKIP_REASON,
+  HOUSEHOLD_MUTED: CHILD_SKIP_REASON,
+};
+
+/**
+ * Who is due a reminder, and on which leg. [[GTC-189]] slice 8b.
+ *
+ * ⚠ THE CHOOSER DECIDES WHO IS CHASED AND BY WHAT, AND THIS FUNCTION NO LONGER DOES. It reads
+ * `readAskPreview` — the walk the pre-flight, the press and the drain already run — and takes each
+ * recipient's `chooseChaseRoute` answer from it. So the pre-flight's "Chased by" and the reminder
+ * cannot disagree, and [[GTC-296]]'s gate, which lived here AND in `chaseChannelOf`, now lives only in
+ * the chooser. What stays here is what the chooser does not know: the clock, the cadence, the pace,
+ * whether the guest has answered, and whether a leg is already taken.
+ *
+ * ⚠ THE CLOCK IS STILL `PersonEvent.sentAt`, and under ruling G it is written only when a provider
+ * accepts that person's ask. A membership with none is not yet chased. [[GTC-322]]'s legacy stamps
+ * were cleared in gather_dev on 2026-09-19; the production run of its script is a deploy
+ * precondition of this slice.
+ *
+ * A LEG IS TAKEN once its row exists (any state) or its stamp is set — the stamp for chases the old
+ * text path sent before this slice. So a second tick writes nothing twice, and a failed reminder is
+ * the dispatcher's to retry, never the finder's to re-queue.
+ *
+ * `now` is injectable for the reason every clock function here takes it. `eventIds` narrows the
+ * sweep to named events — the host's trigger route, and a suite that must not touch other boards.
+ */
+export async function findNudgeCandidates(
+  now: Date = new Date(),
+  scope: { eventIds?: string[] } = {}
+): Promise<EligibilityResult> {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const eligibleFirst: NudgeCandidate[] = [];
+  const eligibleSecond: NudgeCandidate[] = [];
+  const skipReasons = new Map<string, number>();
+  const addSkip = (reason: string) => skipReasons.set(reason, (skipReasons.get(reason) ?? 0) + 1);
+
+  // GTC-169 (A3a): the send starts the chasing and the event date ends it (Moment 4 §10.1). The
+  // endDate half of SENT_AND_LIVE is load-bearing; the security suite asserts it.
+  const where: Prisma.EventWhereInput = {
+    ...SENT_AND_LIVE(now),
+    ...(scope.eventIds ? { id: { in: scope.eventIds } } : {}),
+  };
+  const events = await prisma.event.findMany({
+    where,
+    select: {
+      id: true,
+      name: true,
+      hostId: true,
+      // GTC-179 phase 3's hazard, still true: omit this and every event silently reads as the default.
+      nudgePace: true,
+      host: { select: { name: true } },
     },
   });
 
-  const eligibleFirst: NudgeCandidate[] = [];
-  const eligibleSecond: NudgeCandidate[] = [];
-  /*
-   * [[GTC-296]] — the opt-out set, ONE QUERY PER EVENT rather than one per membership.
-   *
-   * This loop walks every due membership across every event, so a per-person check would make
-   * the query count a property of the guest list. The events in hand are few and known, so the
-   * whole suppression set for all of them costs one round trip each.
-   */
-  const emailOptedOutByEvent = new Map<string, Set<string>>();
-  for (const eventId of new Set(memberships.map((m) => m.event.id))) {
-    emailOptedOutByEvent.set(eventId, await listEmailOptOutsForEvent(prisma, eventId));
-  }
-  const EMPTY: ReadonlySet<string> = new Set<string>();
+  for (const event of events) {
+    const preview = await readAskPreview(prisma, event.id, baseUrl);
+    if (!preview) continue;
 
-  const skipReasons: Map<string, number> = new Map();
-
-  const addSkip = (reason: string) => {
-    skipReasons.set(reason, (skipReasons.get(reason) || 0) + 1);
-  };
-
-  for (const membership of memberships) {
-    const event = membership.event;
-    const person = membership.person;
-
-    // GTC-172 (C1): belt and braces. The SQL above already excludes CHILD; this
-    // re-checks in JS so that if anyone ever loosens the query, the child rule still
-    // holds and the skip is recorded rather than silently sending.
-    if (!isMessageableRole(membership.householdRole)) {
-      addSkip(CHILD_SKIP_REASON);
-      continue;
-    }
-
-    // Find token for this event. Prisma cannot scope the nested `where` to this row's
-    // eventId (see the query note above), so the correlation happens here.
-    const token = person.tokens.find((t: any) => t.eventId === event.id);
-
-    // Skip if no participant token
-    if (!token) {
-      addSkip('No participant token');
-      continue;
-    }
-
-    // Skip if invalid phone
-    if (!isValidNZNumber(person.phoneNumber!)) {
-      addSkip('Invalid/non-NZ phone');
-      continue;
-    }
-
-    // Check opt-out
-    const optedOut = await isOptedOut(person.phoneNumber!, event.hostId);
-    if (optedOut) {
-      addSkip('Opted out');
-      continue;
-    }
-
-    /*
-     * ⚠ [[GTC-296]] RULING 3 — THE EMAIL WAY OUT STOPS THE TEXT CHASE, AND THIS IS THE GATE
-     * THAT MAKES IT TRUE TODAY.
-     *
-     * Ruling 3 is chase-WIDE: *"an email unsubscribe for an event stops the automatic chase on
-     * EVERY channel for that event, including the text chase."* The chase that runs today is
-     * this finder and it is SMS-only, so without this line a guest who pressed unsubscribe goes
-     * on being texted — the *"silently keeps sending on a different channel"* pattern.
-     *
-     * ⚠ AND IT IS HERE RATHER THAN IN `chaseChannelOf`, WHICH HAS THE SAME GATE AND NO CALLER.
-     * [[GTC-189]] slice 8 is what wires this finder to the chooser; until it lands, the chooser's
-     * copy is dark and this one is the live one. Both exist deliberately — belt and braces, the
-     * same treatment the child rule gets, failing in the safe direction.
-     *
-     * ⚠ ITS POSITION IS A FOUNDER RULING (correction R2): above the don't-chase mark, below the
-     * opt-out check directly above, *"matching `nudge-mark.ts`'s house order"*. Zone 7 keeps the
-     * top; a host-set mark stays underneath a guest's own no.
-     *
-     * A RECORDED SKIP, never a silent drop — the rule this whole ladder holds.
-     */
-    if (emailOptedOutFact(membership.personId, emailOptedOutByEvent.get(event.id) ?? EMPTY)) {
-      addSkip(EMAIL_OPT_OUT_SKIP_REASON);
-      continue;
-    }
-
-    // GTC-179 (E2, phase 3): THE DON'T-CHASE GATE — Ruling 6, and note WHERE it sits.
-    //
-    // AFTER the child rule and AFTER opt-out, never through either (Do-Not-Touch Zone 7).
-    // Opt-out is guest-set and legally binding; this is a host-set preference layered on
-    // top of it. If this ran first, a host clearing the mark would resume messaging
-    // somebody who had opted out — so the order above is load-bearing, not incidental,
-    // and the controls test asserts it by giving one subject BOTH conditions and checking
-    // which reason comes back.
-    //
-    // A RECORDED SKIP, NOT A SILENT FALLTHROUGH. The resolver returns [] for DONT_CHASE
-    // and that alone would silence the legs below — but [] is also an OFF event and also
-    // not-yet-due, so the reason cannot be recovered downstream. Every other exclusion
-    // here records a skip; this would have been the only silent one. See
-    // src/lib/eligibility/nudge-mark.ts for why the two mechanisms deliberately overlap.
-    if (!isChaseable(membership.nudgeMark)) {
-      addSkip(DONT_CHASE_SKIP_REASON);
-      continue;
-    }
-
-    // GTC-179 (E2, phase 5): THE OFF GATE — Ruling 11, and it sits AFTER the mark.
-    //
-    // Order matters for the REPORT, not for the outcome: both produce no nudge, but a
-    // don't-chase person on an OFF event is counted once, and the question is under which
-    // reason. The mark is the more specific fact — a hosting judgement about that person,
-    // which survives the host later switching the pace back on — so it is reported first.
-    // The pace is the broader one, and a person who is only here because of it goes back
-    // to being chased the moment she changes it.
-    //
-    // A GENTLE person on an OFF event therefore lands HERE, under the pace, which is
-    // correct: gentle is a volume control and OFF is what actually silenced them.
-    // tests/nudge-cadence-controls-test.ts asserts exactly that split.
-    //
-    // See src/lib/eligibility/nudge-pace.ts for the semantic cost this reason carries —
-    // it is the one skip that reports an EVENT-level decision through a per-person tally,
-    // ruled in deliberately rather than arrived at.
-    if (isPaceOff(membership.event.nudgePace)) {
-      addSkip(PACE_OFF_SKIP_REASON);
-      continue;
-    }
-
-    // Check if person has responded to any assignment in this event
-    const hasResponded = person.assignments.some(
-      (a: any) => a.item.team.eventId === event.id && a.response !== 'PENDING'
+    const [memberships, assignments, tokens] = await Promise.all([
+      prisma.personEvent.findMany({
+        where: { eventId: event.id },
+        select: {
+          id: true,
+          personId: true,
+          sentAt: true,
+          nudgeMark: true,
+          attendanceAnswer: true,
+          firstNudgeSentAt: true,
+          secondNudgeSentAt: true,
+          person: { select: { name: true, phoneNumber: true } },
+        },
+      }),
+      prisma.assignment.findMany({
+        where: { item: { team: { eventId: event.id } } },
+        select: { personId: true, response: true },
+      }),
+      prisma.accessToken.findMany({
+        where: { eventId: event.id, scope: 'PARTICIPANT' },
+        select: { personId: true, token: true, openedAt: true },
+      }),
+    ]);
+    const taken = new Set(
+      (
+        await prisma.outboundMessage.findMany({
+          where: { eventId: event.id, kind: { in: ['CHASE_FIRST', 'CHASE_SECOND'] } },
+          select: { personEventId: true, kind: true },
+        })
+      ).map((r) => `${r.personEventId}:${r.kind}`)
     );
-
-    const candidate: NudgeCandidate = {
-      personEventId: membership.id,
-      personId: person.id,
-      personName: person.name,
-      phoneNumber: person.phoneNumber!,
-      eventId: event.id,
-      eventName: event.name,
-      hostId: event.hostId,
-      hostName: event.host?.name || 'The host',
-      // THIS person's clock for THIS event. The `sentAt: { not: null }` filter above is
-      // what makes the assertion safe.
-      anchorAt: membership.sentAt!,
-      participantToken: token.token,
-      hasOpened: !!token.openedAt,
-      hasResponded,
-      firstNudgeSentAt: membership.firstNudgeSentAt,
-      secondNudgeSentAt: membership.secondNudgeSentAt,
+    const byId = new Map(memberships.map((m) => [m.id, m]));
+    const rowsOf = (personId: string) => {
+      const mine = assignments.filter((a) => a.personId === personId);
+      return { rows: mine.length, pending: mine.filter((a) => a.response === 'PENDING').length };
     };
 
-    // GTC-179 (E2, phase 3): THIS ROW'S CADENCE, from this row's columns.
-    //
-    // Per membership, because both of §10.3's layers are per-row — the mark on this
-    // PersonEvent, the pace on its Event. Quieter of the two wins (Ruling 4), which is
-    // NOT an override ladder: a GENTLE person on an OFF event gets nothing, not one.
-    //
-    // DONT_CHASE never reaches here — the gate above already continued — so what this
-    // call actually decides is GENTLE vs the event's pace vs the default. The resolver's
-    // own DONT_CHASE handling stands behind that gate as belt and braces, the same
-    // two-place treatment the child rule gets in this file.
-    //
-    // An empty result (an OFF event) needs no branch of its own: `due` comes back empty
-    // and both gates below simply do not fire.
-    const offsetDays = resolveNudgeOffsetDays({
-      person: membership,
-      event: membership.event,
-    });
+    for (const line of preview.hostList) {
+      if (byId.get(line.personEventId)?.sentAt) addSkip(HOST_LIST_SKIP_REASON[line.why]);
+    }
 
-    // GTC-178 (E1, phase 5): which legs the clock says are due, by INDEX. Position is
-    // what has to line up, because the stamps are ordinal (Ruling 7).
-    const due = dueNudgeIndices(candidate.anchorAt, now, offsetDays);
+    for (const recipient of preview.recipients) {
+      const m = byId.get(recipient.personEventId);
+      // Not yet accepted — ruling G's clock has not started. Silent, as the SQL filter it replaces was.
+      if (!m?.sentAt) continue;
 
-    // THE FIRST LEG — TIME ALONE, PLUS THE ALREADY-SENT STAMP.
-    //
-    // Ruling 5 (2026-08-27) DELETED the `!hasOpened` gate that used to sit here. Opening
-    // is BEHAVIOUR, and Hinge §6 refuses showing the host anything a guest did short of
-    // deciding — "the screen shows what the system will do, never what the guest did
-    // short of deciding." It replaces seen-status with the nudge-clock ("nudge in 2
-    // days"), and that promise is only truthful if opening cannot silently cancel it.
-    // DO NOT RESTORE AN OPENED CHECK HERE. tests/nudge-cadence-test.ts asserts that an
-    // opened-but-silent person is treated identically to a silent one.
-    const firstLegDue = due.includes(0) && !candidate.firstNudgeSentAt;
+      const chase = preview.chase.byRecipient[recipient.personEventId];
+      if (!chase || chase.chasedBy === 'NONE') {
+        addSkip(chase?.why ? CHASE_SKIP_REASON[chase.why] : 'Not chased');
+        continue;
+      }
 
-    // THE SECOND LEG — the same, plus response state.
-    //
-    // `!hasResponded` is KEPT (Ruling 5's other half): responding is a DECISION, and a
-    // decision stops the cadence. That is the same §6 line read the other way — decisions
-    // surface, behaviour stays the system's business. A MAYBE counts as responded here,
-    // which is Hinge §8's "a maybe gets no nudges" falling out for free; its own clock is
-    // the decide-by follow-up, a separate module and a separate cron.
-    const secondLegDue = due.includes(1) && !candidate.hasResponded && !candidate.secondNudgeSentAt;
+      const token = tokens.find((t) => t.personId === m.personId);
+      if (!token) {
+        addSkip('No participant token');
+        continue;
+      }
 
-    // GTC-179 (E2, phase 3): AT MOST ONE NUDGE PER PERSON PER RUN — Ruling 7(b).
-    //
-    // THIS IS A BUG FIX, NOT CADENCE SCAFFOLDING, AND IT PREDATES THIS TICKET. These were
-    // two independent `if` statements with no `else` and no cross-check, and
-    // `processNudges` iterates both arrays unconditionally — so anyone past BOTH legs
-    // with both stamps null landed in both and received TWO SMS 500 MILLISECONDS APART in
-    // a single run. Proven on the live database on 2026-08-27, not inferred: a read-only
-    // `findNudgeCandidates()` returned the same person in `eligibleFirst` and
-    // `eligibleSecond`. Nothing has fired only because no SMS provider is configured.
-    //
-    // The shape is unchanged from the 24h/48h era, so this was reachable long before
-    // GTC-178's retime — anyone 48h past send with both stamps null hit it identically.
-    // `dueNudgeIndices` even documents the state ("[0, 1] means both are — someone added
-    // late, or a cron that missed a tick"); nothing downstream ever capped it.
-    //
-    // EARLIEST DUE LEG ONLY. The next 15-minute tick takes the rest: once the first leg
-    // is stamped, `firstLegDue` goes false and the second becomes the earliest
-    // outstanding one. Deferred, never dropped.
-    //
-    // A GENERAL RULE ABOUT THE SWEEP, not a special case for pace changes. A setting
-    // change is only one way legs coincide; a missed cron tick and a late-added person
-    // are two others, and all three are covered by the same `else if`.
-    if (firstLegDue) {
-      eligibleFirst.push(candidate);
-    } else if (secondLegDue) {
-      eligibleSecond.push(candidate);
+      /*
+       * ZONE 7, BELT AND BRACES, ON THE TEXT LEG. The chooser already refused an opted-out or unusable
+       * number; this re-checks with the per-host opt-out service directly, as this finder always has,
+       * so a regression in the chooser fails SAFE here — the treatment the child rule gets. Only read.
+       */
+      if (chase.chasedBy === 'TEXT') {
+        const phone = m.person.phoneNumber;
+        if (!phone || !isValidNZNumber(phone)) {
+          addSkip('Invalid/non-NZ phone');
+          continue;
+        }
+        if (await isOptedOut(phone, event.hostId)) {
+          addSkip('Opted out');
+          continue;
+        }
+      }
+
+      // GTC-179 (E2, phase 5): THE OFF GATE, a recorded skip. The mark is the chooser's now.
+      if (isPaceOff(event.nudgePace)) {
+        addSkip(PACE_OFF_SKIP_REASON);
+        continue;
+      }
+
+      const own = rowsOf(m.personId);
+      const carried = chase.carried
+        .map((id) => byId.get(id))
+        .filter((c): c is NonNullable<typeof c> => !!c)
+        .map((c) => rowsOf(c.personId));
+      const unanswered = stillUnanswered({
+        attendanceAnswer: m.attendanceAnswer,
+        ownRows: own.rows,
+        ownPending: own.pending,
+        carriedRows: carried.reduce((n, c) => n + c.rows, 0),
+        carriedPending: carried.reduce((n, c) => n + c.pending, 0),
+      });
+
+      const candidate: NudgeCandidate = {
+        personEventId: m.id,
+        personId: m.personId,
+        personName: m.person.name,
+        channel: chase.chasedBy,
+        phoneNumber: m.person.phoneNumber,
+        eventId: event.id,
+        eventName: event.name,
+        hostId: event.hostId,
+        hostName: event.host?.name || 'The host',
+        anchorAt: m.sentAt,
+        participantToken: token.token,
+        hasOpened: !!token.openedAt,
+        hasResponded: !unanswered,
+        firstNudgeSentAt: m.firstNudgeSentAt,
+        secondNudgeSentAt: m.secondNudgeSentAt,
+      };
+      if (!unanswered) {
+        addSkip('Answered — nothing to remind them of (D5)');
+        continue;
+      }
+
+      // Per membership, because both of §10.3's layers are per-row (GTC-179 Ruling 4, quieter wins).
+      const offsetDays = resolveNudgeOffsetDays({ person: m, event });
+      const due = dueNudgeIndices(candidate.anchorAt, now, offsetDays);
+      const firstTaken = !!m.firstNudgeSentAt || taken.has(`${m.id}:CHASE_FIRST`);
+      const secondTaken = !!m.secondNudgeSentAt || taken.has(`${m.id}:CHASE_SECOND`);
+
+      // GTC-179 Ruling 7(b): AT MOST ONE REMINDER PER PERSON PER RUN — earliest due leg only; the
+      // next tick takes the rest. Deferred, never dropped.
+      if (due.includes(0) && !firstTaken) {
+        eligibleFirst.push(candidate);
+      } else if (due.includes(1) && !secondTaken) {
+        eligibleSecond.push(candidate);
+      }
     }
   }
 
   return {
     eligibleFirst,
     eligibleSecond,
-    skipped: Array.from(skipReasons.entries()).map(([reason, count]) => ({
-      reason,
-      count,
-    })),
+    skipped: Array.from(skipReasons.entries()).map(([reason, count]) => ({ reason, count })),
   };
 }
 
@@ -425,18 +326,109 @@ export async function findNudgeCandidates(now: Date = new Date()): Promise<Eligi
  * Find nudge candidates for a specific event.
  *
  * `now` is threaded through rather than re-derived — the host-triggered POST path and the
- * cron path must not be able to disagree about what time it is.
+ * cron path must not be able to disagree about what time it is. Scoped at the query now, rather
+ * than filtered after a sweep of every live event.
  */
 export async function findNudgeCandidatesForEvent(
   eventId: string,
   now: Date = new Date()
 ): Promise<EligibilityResult> {
-  // Similar to above but filtered to one event
-  const allCandidates = await findNudgeCandidates(now);
+  return findNudgeCandidates(now, { eventIds: [eventId] });
+}
 
+/**
+ * One party the reminder is about: the recipient themself, or a child whose ask they carry.
+ *  WHOLE    — nothing of theirs answered yet (for the recipient with no rows of their own: they have
+ *             not said whether they can come).
+ *  PARTIAL  — some answered, some still open; `pendingNames` are the open ones.
+ *  DONE     — nothing open. Never named.
+ */
+export interface ChaseParty {
+  state: 'WHOLE' | 'PARTIAL' | 'DONE';
+  pendingNames: string[];
+}
+
+/**
+ * [[GTC-189]] slice 8b — D5 AGAIN, AT THE SEND. The dispatcher asks this before a reminder goes,
+ * because a guest can answer between the tick that queued it and the tick that sends it, and a
+ * reminder arriving after the answer is the defect F7 names. The same rule as the finder, through
+ * `stillUnanswered`, so the two cannot disagree.
+ *
+ * ⚠ AND IT SAYS WHAT IS STILL OPEN, BY NAME — founder ruling at the 8b hold, 2026-09-27: *"a reminder
+ * names only what is still unanswered, and never tells someone who has answered anything 'I haven't
+ * heard from you'."* So it returns each party's state and open row names, and whether the recipient
+ * has answered anything at all, for `composeChase` to word.
+ */
+export async function readChaseOwed(
+  db: Prisma.TransactionClient,
+  eventId: string,
+  recipientPersonEventId: string,
+  carriedPersonEventIds: readonly string[]
+): Promise<{
+  owed: boolean;
+  itemless: boolean;
+  answeredAnything: boolean;
+  self: ChaseParty;
+  carried: (ChaseParty & { name: string })[];
+}> {
+  const ids = [recipientPersonEventId, ...carriedPersonEventIds];
+  const members = await db.personEvent.findMany({
+    where: { id: { in: ids }, eventId },
+    select: {
+      id: true,
+      personId: true,
+      attendanceAnswer: true,
+      person: { select: { name: true } },
+    },
+  });
+  const rows = await db.assignment.findMany({
+    where: { item: { team: { eventId } }, personId: { in: members.map((m) => m.personId) } },
+    select: { personId: true, response: true, item: { select: { name: true } } },
+    orderBy: { item: { name: 'asc' } },
+  });
+  const partyOf = (personId: string): ChaseParty & { rows: number; answered: number } => {
+    const mine = rows.filter((r) => r.personId === personId);
+    const pending = mine.filter((r) => r.response === 'PENDING');
+    const answered = mine.length - pending.length;
+    const state = pending.length === 0 ? 'DONE' : answered === 0 ? 'WHOLE' : ('PARTIAL' as const);
+    return { state, pendingNames: pending.map((r) => r.item.name), rows: mine.length, answered };
+  };
+  const recipient = members.find((m) => m.id === recipientPersonEventId);
+  if (!recipient) {
+    return {
+      owed: false,
+      itemless: false,
+      answeredAnything: false,
+      self: { state: 'DONE', pendingNames: [] },
+      carried: [],
+    };
+  }
+  const own = partyOf(recipient.personId);
+  // With no rows of their own, the recipient was asked whether they can come (ruling AA).
+  const self: ChaseParty =
+    own.rows > 0
+      ? { state: own.state, pendingNames: own.pendingNames }
+      : { state: recipient.attendanceAnswer === null ? 'WHOLE' : 'DONE', pendingNames: [] };
+  const carried = members
+    .filter((m) => m.id !== recipientPersonEventId)
+    .map((m) => ({ name: m.person.name, ...partyOf(m.personId) }));
+  const carriedRows = carried.reduce((n, c) => n + c.rows, 0);
   return {
-    eligibleFirst: allCandidates.eligibleFirst.filter((c) => c.eventId === eventId),
-    eligibleSecond: allCandidates.eligibleSecond.filter((c) => c.eventId === eventId),
-    skipped: allCandidates.skipped,
+    owed: stillUnanswered({
+      attendanceAnswer: recipient.attendanceAnswer,
+      ownRows: own.rows,
+      ownPending: own.pendingNames.length,
+      carriedRows,
+      carriedPending: carried.reduce((n, c) => n + c.pendingNames.length, 0),
+    }),
+    itemless: own.rows === 0 && carriedRows === 0,
+    answeredAnything:
+      own.answered > 0 ||
+      recipient.attendanceAnswer !== null ||
+      carried.some((c) => c.answered > 0),
+    self,
+    carried: carried
+      .filter((c) => c.state !== 'DONE')
+      .map((c) => ({ name: c.name, state: c.state, pendingNames: c.pendingNames })),
   };
 }

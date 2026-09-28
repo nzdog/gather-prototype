@@ -279,6 +279,12 @@ export interface RecipientChase {
   control: 'OFFERED' | 'REFUSED_OPTED_OUT' | 'NONE';
   /** `PersonEvent.chaseException` as stored. NULL means follow the default. */
   exception: ChaseWhenNoMobile | null;
+  /**
+   * [[GTC-189]] slice 8b, ruling R — the CHILDREN whose chase reaches this recipient as their
+   * carrier (`chooseChaseRoute` answered CARRIED to them). Their pending rows keep the carrier
+   * chased, and their names go in the reminder. `PersonEvent` ids.
+   */
+  carried: string[];
 }
 
 /**
@@ -332,6 +338,7 @@ function recipientChaseOf(route: ChaseRoute, exception: ChaseWhenNoMobile | null
       why: null,
       control: route.channel === 'EMAIL' ? 'OFFERED' : 'NONE',
       exception,
+      carried: [],
     };
   }
   return {
@@ -344,6 +351,7 @@ function recipientChaseOf(route: ChaseRoute, exception: ChaseWhenNoMobile | null
           ? 'REFUSED_OPTED_OUT'
           : 'NONE',
     exception,
+    carried: [],
   };
 }
 
@@ -615,6 +623,15 @@ export async function readAskPreview(
       chooseChaseRoute(subject, chooserEvent),
       subject.chaseException
     );
+  }
+
+  // [[GTC-189]] slice 8b, ruling R — which children each recipient carries for the CHASE. Asked of
+  // the chooser per child, never inferred from the ask's carried list: the two can differ (the
+  // child's own mark stops the chase and not the ask).
+  for (const subject of chooserEvent.memberships) {
+    if (isMessageableRole(subject.householdRole)) continue;
+    const route = chooseChaseRoute(subject, chooserEvent);
+    if (route.kind === 'CARRIED') byRecipient[route.recipientId]?.carried.push(subject.id);
   }
 
   const notChased: NotChasedLine[] = [];

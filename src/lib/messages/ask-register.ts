@@ -375,8 +375,11 @@ function theItems(names: readonly string[]): string {
   return listOf(names.map((name) => `the ${name}`));
 }
 
-/** "a", "a and b", "a, b and c" — no comma before the "and". */
-function listOf(names: readonly string[]): string {
+/**
+ * "a", "a and b", "a, b and c" — no comma before the "and". Exported for the chase register
+ * ([[GTC-189]] slice 8b), so a reminder lists names the way the ask did.
+ */
+export function listOf(names: readonly string[]): string {
   if (names.length <= 1) return names.join('');
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }

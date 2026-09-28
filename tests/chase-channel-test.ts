@@ -1030,6 +1030,8 @@ async function runDatabaseLayers() {
 
     const before = await attemptAsync(() => readPreview());
     const rc = (peId: string) => before?.chase?.byRecipient?.[peId];
+    // [[GTC-189]] slice 8b — every expectation below gained `carried`: the children whose CHASE reaches
+    // this recipient (ruling R). Empty for everybody but Sarah, whose row carries Ollie's.
     expectEq(
       'E',
       'the stored default is null and resolves to BY_EMAIL',
@@ -1044,36 +1046,40 @@ async function runDatabaseLayers() {
       why: null,
       control: 'OFFERED',
       exception: null,
+      carried: [],
     });
     expectEq('E', 'ACCEPTANCE — usable mobile → TEXT, NO control shown', rc(pePhone.id), {
       chasedBy: 'TEXT',
       why: null,
       control: 'NONE',
       exception: null,
+      carried: [],
     });
     expectEq(
       'E',
       'FLAG A — the London cousin with an email → EMAIL, control OFFERED',
       rc(peLondon.id),
-      { chasedBy: 'EMAIL', why: null, control: 'OFFERED', exception: null }
+      { chasedBy: 'EMAIL', why: null, control: 'OFFERED', exception: null, carried: [] }
     );
     expectEq('E', 'RULING AI — opted out → NONE, control REFUSED_OPTED_OUT', rc(peOpted.id), {
       chasedBy: 'NONE',
       why: 'SMS_OPTED_OUT',
       control: 'REFUSED_OPTED_OUT',
       exception: null,
+      carried: [],
     });
     expectEq('E', 'marked DONT_CHASE → NONE, no control (grey, ruling 14)', rc(peMarked.id), {
       chasedBy: 'NONE',
       why: 'MARKED_DONT_CHASE',
       control: 'NONE',
       exception: null,
+      carried: [],
     });
     expectEq(
       'E',
       'Sarah, carrying Ollie, email only → EMAIL, control OFFERED on HER row',
       rc(peSarah.id),
-      { chasedBy: 'EMAIL', why: null, control: 'OFFERED', exception: null }
+      { chasedBy: 'EMAIL', why: null, control: 'OFFERED', exception: null, carried: [peOllie.id] }
     );
     expectEq(
       'E',
@@ -1130,7 +1136,13 @@ async function runDatabaseLayers() {
         'F',
         'and the chooser, reading them fresh, answers HANDED_TO_HOST',
         after?.chase?.byRecipient?.[peEmail.id],
-        { chasedBy: 'NONE', why: 'HANDED_TO_HOST', control: 'OFFERED', exception: 'HAND_TO_HOST' }
+        {
+          chasedBy: 'NONE',
+          why: 'HANDED_TO_HOST',
+          control: 'OFFERED',
+          exception: 'HAND_TO_HOST',
+          carried: [],
+        }
       );
       expectEq(
         'F',

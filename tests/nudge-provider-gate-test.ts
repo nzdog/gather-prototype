@@ -45,7 +45,9 @@
  * be reached from the nudge scheduler even when Twilio is configured.
  *
  * Run: npx tsx tests/nudge-provider-gate-test.ts
- * Creates no rows. No cleanup required.
+ * ⚠ Since [[GTC-189]] slice 8b, layer B creates ONE tagged fixture event, because the scheduler now
+ * writes reminder rows; it removes the fixture and everything under it, and asserts the outbound
+ * count is back where it started (founder ruling D1). Nothing else creates rows.
  */
 
 import { execFileSync } from 'child_process';
@@ -234,15 +236,93 @@ async function main() {
   console.log('\n\x1b[1mB — runNudgeScheduler must not early-return on a Twilio check\x1b[0m\n');
 
   const { runNudgeScheduler } = await import('../src/lib/sms/nudge-scheduler');
-  const run = await runNudgeScheduler();
+
+  /*
+   * ⚠ SCOPED TO ITS OWN FIXTURE, AND IT LEAVES NOTHING BEHIND — founder ruling D1, 2026-09-27.
+   *
+   * Since [[GTC-189]] slice 8b the scheduler WRITES a row per reminder instead of attempting a send.
+   * Run unscoped here it queued reminders on real `gather_dev` boards (two were found on the security
+   * fixture's live event), and any later unscoped drain with a working key or a TNZ token would have
+   * sent them. So the run is scoped to one tagged event holding one due guest, the rows it writes are
+   * counted, and the fixture and everything under it is removed — gather_dev is restored exactly,
+   * which is asserted against the counts taken before, the way the other suites restore it.
+   */
+  const outboundTotal = () => prisma.outboundMessage.count();
+  const beforeTotal = await outboundTotal();
+  const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  const DAY = 24 * 60 * 60 * 1000;
+  const fxHost = await prisma.person.create({ data: { name: `GTC214 gate host ${stamp}` } });
+  const fxGuest = await prisma.person.create({
+    data: { name: `GTC214 gate guest ${stamp}`, phoneNumber: '+64211230999' },
+  });
+  const fxEvent = await prisma.event.create({
+    data: {
+      name: `GTC214 gate ${stamp}`,
+      startDate: new Date(Date.now() + 30 * DAY),
+      endDate: new Date(Date.now() + 30 * DAY),
+      hostId: fxHost.id,
+      status: 'CONFIRMING',
+      sentAt: new Date(Date.now() - 10 * DAY),
+    },
+  });
+  let run: Awaited<ReturnType<typeof runNudgeScheduler>>;
+  let wroteOnFixture = 0;
+  let wroteElsewhere = 0;
+  try {
+    await prisma.personEvent.create({
+      data: { personId: fxHost.id, eventId: fxEvent.id, role: 'HOST' },
+    });
+    await prisma.personEvent.create({
+      data: {
+        personId: fxGuest.id,
+        eventId: fxEvent.id,
+        role: 'PARTICIPANT',
+        sentAt: new Date(Date.now() - 5 * DAY),
+      },
+    });
+    await prisma.accessToken.create({
+      data: {
+        token: `gtc214-gate-${stamp}`,
+        scope: 'PARTICIPANT',
+        eventId: fxEvent.id,
+        personId: fxGuest.id,
+        expiresAt: new Date(Date.now() + 30 * DAY),
+      },
+    });
+    run = await runNudgeScheduler(new Date(), { eventIds: [fxEvent.id] });
+    wroteOnFixture = await prisma.outboundMessage.count({ where: { eventId: fxEvent.id } });
+    wroteElsewhere = (await outboundTotal()) - beforeTotal - wroteOnFixture;
+  } finally {
+    await prisma.event.delete({ where: { id: fxEvent.id } }); // cascades its rows
+    await prisma.person.deleteMany({ where: { id: { in: [fxHost.id, fxGuest.id] } } });
+  }
+  assert('B', 'the scoped run wrote its reminder on its OWN fixture event', wroteOnFixture === 1);
+  assert('B', 'and wrote nothing on any other board in gather_dev (D1)', wroteElsewhere === 0);
+  assert(
+    'B',
+    'and gather_dev is restored exactly: the outbound count equals the count before the run',
+    (await outboundTotal()) === beforeTotal
+  );
 
   // `proxyCandidates` is set only on the full-run return. The `!isSmsEnabled()` early return
   // and the `catch` both omit it, so its presence is a shape-level proof that the finders
   // were reached — and it does not depend on the local database containing any candidate.
+  /*
+   * ⚠ REPLACED AT [[GTC-189]] SLICE 8b. This read `proxyCandidates` as a shape-level proof that the
+   * run got inside its `try`. Rulings V and AE retire the proxy reminder, so the field is gone, and the
+   * proof is now the other half of the same shape: the `catch` is the only path that sets `errors`,
+   * and it returns zeroed candidates — so a run with no errors reached the finder and returned from
+   * the `try`. Still independent of the database holding any candidate.
+   */
   assert(
     'B',
-    'the run reached the proxy branch — i.e. it did not early-return before the try',
-    run.proxyCandidates !== undefined
+    'the run reached the finder and returned from the try — no early return, no caught error',
+    Array.isArray(run.errors) && run.errors.length === 0 && Array.isArray(run.candidates?.skipped)
+  );
+  assert(
+    'B',
+    'rulings V / AE — the proxy household reminder is retired: the run carries no proxy branch',
+    !('proxyCandidates' in run) && !('proxyResults' in run)
   );
   assert(
     'B',
@@ -391,12 +471,37 @@ async function main() {
   const { GET } = await import('../src/app/api/cron/nudges/route');
   const { NextRequest } = await import('next/server');
 
-  const res = await GET(
-    new NextRequest(
-      `http://localhost:3000/api/cron/nudges?secret=${encodeURIComponent(process.env.CRON_SECRET)}`
-    )
+  /*
+   * ⚠ D1, FOUNDER RULING 2026-09-27 — THIS IS WHERE THE LEFTOVER ROWS CAME FROM. The real cron route
+   * runs the scheduler across every live event and cannot be scoped from outside, and since
+   * [[GTC-189]] slice 8b the scheduler QUEUES a row per due reminder. So the rows present before the
+   * call are recorded, every row the call wrote is removed afterwards, and the count is asserted
+   * restored. The scheduler writes nothing else (a leg's stamp is written only at a provider's
+   * acceptance, by the dispatcher), so this restores gather_dev exactly.
+   */
+  const rowsBefore = new Set(
+    (await prisma.outboundMessage.findMany({ select: { id: true } })).map((r) => r.id)
   );
-  const body = await res.json();
+  let res: Response;
+  let body: any;
+  try {
+    res = await GET(
+      new NextRequest(
+        `http://localhost:3000/api/cron/nudges?secret=${encodeURIComponent(process.env.CRON_SECRET)}`
+      )
+    );
+    body = await res.json();
+  } finally {
+    const written = (await prisma.outboundMessage.findMany({ select: { id: true } }))
+      .map((r) => r.id)
+      .filter((id) => !rowsBefore.has(id));
+    await prisma.outboundMessage.deleteMany({ where: { id: { in: written } } });
+  }
+  assert(
+    'D',
+    'D1 — every row the cron run wrote is removed: the outbound count is back where it started',
+    (await prisma.outboundMessage.count()) === rowsBefore.size
+  );
 
   assert('D', 'cron does NOT return HTTP 200 when no provider is configured', res.status !== 200);
   assert(

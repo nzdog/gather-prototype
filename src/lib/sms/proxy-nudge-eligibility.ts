@@ -1,3 +1,17 @@
+/**
+ * ⚠ RETIRED AT [[GTC-189]] SLICE 8b (rulings V and AE) — NOTHING CALLS THIS MODULE.
+ *
+ * The household proxy reminder no longer runs: `runNudgeScheduler` does not call it, and a carried
+ * child's ask is chased through the chase itself (ruling R). Its replacement is a different object —
+ * a status share the host chooses to send — which is [[GTC-298]]'s.
+ *
+ * ⚠ ITS `PersonEvent.contactMethod` READ IS REMOVED HERE — [[GTC-295]]'s last read (ruling C).
+ *
+ * ⚠ WHY THE FILE IS STILL HERE: the security suite (Do-Not-Touch Zone 6) asserts, by file name, that
+ * this module "still enforces opt-out and phone validation". Deleting it would fail that assertion,
+ * and the only fix is an edit to Zone 6 — raised with the founder at slice 8b rather than made.
+ * ANCHOR(GTC-189): retired proxy finder, kept for Zone 6's structural check pending a ruling
+ */
 import { prisma } from '@/lib/prisma';
 import { isValidNZNumber } from '@/lib/phone';
 import { isOptedOut } from '@/lib/sms/opt-out-service';
@@ -116,11 +130,6 @@ export async function findProxyNudgeCandidates(): Promise<ProxyEligibilityResult
 
     if (!isValidNZNumber(primaryContact.person.phoneNumber)) {
       addSkip('Primary contact has invalid/non-NZ phone');
-      continue;
-    }
-
-    if (primaryContact.contactMethod !== 'SMS') {
-      addSkip('Primary contact method not SMS');
       continue;
     }
 

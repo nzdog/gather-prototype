@@ -145,9 +145,13 @@ assert(
   !/rsvpStatus/.test(nudge),
   'a legacy NOT_SURE row could still trigger a nudge that contradicts the maybe ruling'
 );
+// ⚠ REPLACED AT [[GTC-189]] SLICE 8b. The two spellings this matched were stand-ins for "the finder
+// still checks the opt-out". Since 8b the finder asks the chooser (which reads the merged SMS opt-out
+// fact) and re-checks the text leg with Zone 7's own service, `isOptedOut` — so the assertion now
+// names the call itself rather than a word that happened to sit near it.
 assert(
-  'the opt-out zone is untouched — smsOptedOut logic still present',
-  /smsOptedOut|MESSAGEABLE_PERSON_EVENT/.test(nudge)
+  "the opt-out zone is untouched — the finder still calls Zone 7's isOptedOut on the text leg",
+  /await isOptedOut\(/.test(nudge)
 );
 
 // ── The guest page taps three ways ───────────────────────────────────────────

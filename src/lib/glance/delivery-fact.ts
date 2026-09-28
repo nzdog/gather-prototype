@@ -72,6 +72,15 @@ export const WITHHELD_MEANS_UNREACHABLE: Record<OutboundWithheldWhy, 'UNREACHABL
   EMAIL_REPORTED_SMS_OPTED_OUT: null,
   EMAIL_BLOCKED: 'UNREACHABLE',
   EMAIL_BLOCKED_SMS_OPTED_OUT: 'UNREACHABLE',
+  /*
+   * [[GTC-189]] slice 8b — the chase's own refusals. They are only ever written on a CHASE row, and
+   * the board reads ASK rows only (F2), so none can colour a strip; null all the same, because each
+   * is a decision — the host's, or the guest's answer — and none is a person Gather cannot reach.
+   */
+  MARKED_DONT_CHASE: null,
+  HOST_AS_CARRIER: null,
+  HANDED_TO_HOST: null,
+  ANSWERED: null,
 
   // ── About the person: the chooser found no way to reach them.
   NO_CHANNEL: 'UNREACHABLE',

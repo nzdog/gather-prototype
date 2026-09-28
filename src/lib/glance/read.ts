@@ -169,15 +169,21 @@ export async function readEventGlance(
      * GTC-189 SLICE 7a — THE DELIVERY FACT'S ONE QUERY, and it is the sixth rather than the sixth
      * through the eleventh.
      *
-     * ⚠ EVERY KIND, NOT JUST `ASK`, AND THAT IS DELIBERATE: the fact is about the CHANNEL, not
-     * about one message. Hinge §7's rule is *"a bounce is not a silence, it's a dead channel"*, and
-     * a chase leg that bounces has found the same dead channel an ask would have.
+     * ⚠ `ASK` ONLY SINCE [[GTC-189]] SLICE 8b (F2, the approved plan, 2026-09-27) — AND IT REVERSES
+     * 7a's "every kind, deliberately", whose argument is kept because it names the cost. 7a read every
+     * kind because *"a chase leg that bounces has found the same dead channel an ask would have."*
+     * Once the chase writes rows, every kind means the NEWEST row is the fact, and a reminder queued
+     * or refused after a failed ask would clear that ask's red — a message that never arrived, read
+     * as amber because a later row exists. So the fact is the ask's. **What that costs:** a reminder
+     * that bounces does not turn the strip red. Slice 8a's block still learns it — the address is
+     * blocked, the next reminder refuses, and the person surface carries the sentence — but the
+     * colour is the ask's alone. Named in slice 8b's Evidence; not solved here.
      *
      * The fields are the three doors plus the clock that orders them. No names, no bodies, no
      * provider ids — the board needs to know THAT it failed, never what was in it.
      */
     db.outboundMessage.findMany({
-      where: { eventId },
+      where: { eventId, kind: 'ASK' },
       select: {
         id: true,
         personEventId: true,

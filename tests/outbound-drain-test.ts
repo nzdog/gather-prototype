@@ -176,9 +176,19 @@ async function main() {
     assert(
       'it answers through the same resultOf as the other three senders, so it inherits slice ' +
         "4b's providerMessageId rather than getting a second read of Resend's envelope",
+      /*
+       * ⚠ REPLACED AT [[GTC-189]] SLICE 8b, NOT LOOSENED. The ask and the chase now share one sender,
+       * `sendHostVoiced`, and `sendAskEmail` delegates to it — so `resultOf` sits one link further
+       * along than this window reached. The assertion follows the link: the ask delegates, and the
+       * sender it delegates to answers through `resultOf`.
+       */
       ok(() => {
-        const body = emailSrc.slice(emailSrc.indexOf('sendAskEmail'));
-        return body.slice(0, 900).includes('resultOf');
+        const ask = emailSrc.slice(emailSrc.indexOf('export async function sendAskEmail'));
+        const voiced = emailSrc.slice(emailSrc.indexOf('async function sendHostVoiced'));
+        return (
+          /return sendHostVoiced\('ask', params\)/.test(ask.slice(0, 200)) &&
+          voiced.slice(0, 1400).includes('resultOf(label')
+        );
       })
     );
 

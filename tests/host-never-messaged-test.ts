@@ -209,10 +209,18 @@ async function main() {
     // The RED state, demonstrated rather than described: with the token present, both
     // "closed by construction" finders chase her.
     const nudgeWithStale = await findNudgeCandidatesForEvent(event.id);
+    /*
+     * ⚠ REPLACED AT [[GTC-189]] SLICE 8b — THE PRECONDITION NO LONGER HOLDS, BECAUSE THE HOLE IT
+     * DEMONSTRATED IS CLOSED FOR THIS FINDER. It showed the auto-nudge finder chasing the host once
+     * a stale token existed: the token was that finder's only gate. Since 8b the finder takes its
+     * answer from the chooser, whose host exclusion (`HOST_OWN_ASK`) keys on `Event.hostId` and reads
+     * no token at all. So the auto-nudge finder refuses the host WITH the stale token present. The
+     * revocation below still matters: the decide-by finder is still token-gated.
+     */
     assert(
-      'PRECONDITION: a stale PARTICIPANT token makes the auto-nudge finder chase the ' +
-        'host — this is what Ruling 8 is only construction-deep without revocation',
-      [...nudgeWithStale.eligibleFirst, ...nudgeWithStale.eligibleSecond].some(
+      'the auto-nudge finder does NOT chase the host even with a stale PARTICIPANT token — ' +
+        'since slice 8b its gate is the chooser’s host exclusion, not the token',
+      ![...nudgeWithStale.eligibleFirst, ...nudgeWithStale.eligibleSecond].some(
         (c) => c.personId === hostPerson.id
       )
     );

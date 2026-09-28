@@ -1,10 +1,15 @@
-import type { OutboundChannel, PrismaClient } from '@prisma/client';
+import type { OutboundChannel, OutboundKind, PrismaClient } from '@prisma/client';
 import { sendAskEmail } from '@/lib/email';
 import { sendSms, type SmsBlockReason } from '@/lib/sms/send-sms';
 import { isQuietHours } from '@/lib/sms/quiet-hours';
 import { askRowPopulation, readAskPreview } from '@/lib/preflight/ask-preview';
 import { composePreview } from '@/lib/preflight/ask-preview-compose';
 import { interpretResendErrorCode } from '@/lib/email-delivery/resend-error-contract';
+import { sendChaseEmail } from '@/lib/email';
+import { composeChase } from '@/lib/messages/chase-register';
+import { firstNameOf } from '@/lib/messages/ask-register';
+import { getFirstNudgeMessage, getSecondNudgeMessage } from '@/lib/sms/nudge-templates';
+import { readChaseOwed } from '@/lib/sms/nudge-eligibility';
 import { listEmailBlocks, normalizeEmailAddress } from '@/lib/eligibility/email-block';
 
 /**
@@ -88,6 +93,8 @@ export interface DrainCandidate {
   personEventId: string;
   createdAt: Date;
   attemptCount: number;
+  /** [[GTC-189]] slice 8b — ASK, or a chase leg. The drain branches on it; see `drainOnce`. */
+  kind: OutboundKind;
 }
 
 const CANDIDATE_SELECT = {
@@ -96,6 +103,7 @@ const CANDIDATE_SELECT = {
   personEventId: true,
   createdAt: true,
   attemptCount: true,
+  kind: true,
 } as const;
 
 /**
@@ -278,6 +286,15 @@ export type OutboundWithheldWhy =
   // Ruling AC's state, arriving late: the host's account went away in the window.
   | 'NO_REPLY_TO'
   /*
+   * [[GTC-189]] slice 8b — THE CHASE'S OWN REFUSALS, produced only on a CHASE row, by the chooser
+   * re-run at the send (the first three) or by D5 re-checked there (ANSWERED): the guest answered
+   * between the tick that queued the reminder and the tick that would have sent it.
+   */
+  | 'MARKED_DONT_CHASE'
+  | 'HOST_AS_CARRIER'
+  | 'HANDED_TO_HOST'
+  | 'ANSWERED'
+  /*
    * ⚠ [[GTC-322]] — AND IT IS THE ONLY MEMBER OF THIS UNION NO GATE PRODUCES.
    *
    * Founder ruling, 2026-09-19, shape 3: the press predates the sender. `Event.sentAt` has been
@@ -328,6 +345,10 @@ export const WITHHELD_WHY_IS_TERMINAL: Record<OutboundWithheldWhy, true> = {
   OPTED_OUT: true,
   INVALID_NUMBER: true,
   NO_REPLY_TO: true,
+  MARKED_DONT_CHASE: true,
+  HOST_AS_CARRIER: true,
+  HANDED_TO_HOST: true,
+  ANSWERED: true,
   // [[GTC-322]]: terminal in the strongest sense of the word — there is no message to retry,
   // because none was ever composed.
   PREDATES_SENDER: true,
@@ -473,7 +494,14 @@ export function isRetryableProviderError(failure: ProviderFailure): boolean {
  */
 export async function recordAcceptance(
   db: PrismaClient,
-  args: { id: string; personEventId: string; provider: string; providerMessageId?: string }
+  args: {
+    id: string;
+    personEventId: string;
+    provider: string;
+    providerMessageId?: string;
+    /** [[GTC-189]] slice 8b — a chase leg also stamps its column. Omitted means ASK. */
+    kind?: OutboundKind;
+  }
 ): Promise<void> {
   const acceptedAt = new Date();
   await db.$transaction(async (tx) => {
@@ -506,6 +534,22 @@ export async function recordAcceptance(
       where: { id: args.personEventId, sentAt: null },
       data: { sentAt: acceptedAt },
     });
+    /*
+     * [[GTC-189]] slice 8b — A CHASE LEG STAMPS ITS COLUMN AT ACCEPTANCE, as `sendNudge` did on a
+     * successful text before this slice (GTC-178 Ruling 7's ordinal stamps). First acceptance wins,
+     * for ruling G's reason: a retry is the same leg, not a new one.
+     */
+    if (args.kind === 'CHASE_FIRST') {
+      await tx.personEvent.updateMany({
+        where: { id: args.personEventId, firstNudgeSentAt: null },
+        data: { firstNudgeSentAt: acceptedAt },
+      });
+    } else if (args.kind === 'CHASE_SECOND') {
+      await tx.personEvent.updateMany({
+        where: { id: args.personEventId, secondNudgeSentAt: null },
+        data: { secondNudgeSentAt: acceptedAt },
+      });
+    }
   });
 }
 
@@ -607,6 +651,162 @@ export interface DrainResult {
 }
 
 /**
+ * [[GTC-189]] SLICE 8b — ONE REMINDER. The same order the ruling gave the ask: GATES, THEN QUIET
+ * HOURS, THEN CLAIM, THEN SEND.
+ *
+ * ⚠ THE CHOOSER IS RE-RUN AND THE ROW IS NOT TRUSTED, HERE TOO. A reminder queued minutes ago is
+ * refused if the host has since taken the guest, marked them, or the guest opted out — with the
+ * chooser's own reason. And its CHANNEL is re-chosen: the row's channel is updated to the
+ * chooser's answer before the claim, so it records what was actually used. (The ASK keeps its
+ * stored channel, because ruling U's door overrides it on purpose; nothing overrides a chase.)
+ */
+async function drainChaseRow(
+  ctx: {
+    db: PrismaClient;
+    now: Date;
+    quiet: boolean;
+    result: DrainResult;
+    preview: Awaited<ReturnType<typeof readAskPreview>>;
+    byPe: Map<string, ReturnType<typeof composePreview>['rows'][number]>;
+    blocked: Set<string>;
+  },
+  row: DrainCandidate,
+  stored: {
+    channel: OutboundChannel | null;
+    personEvent: { person: { phoneNumber: string | null; email: string | null } };
+  }
+) {
+  const { db, now, quiet, result, preview, byPe, blocked } = ctx;
+  const withhold = async (why: OutboundWithheldWhy) => {
+    if (await recordWithholding(db, { id: row.id, why })) result.withheld++;
+  };
+  if (!preview) return withhold('NOT_THIS_RECIPIENT');
+  /*
+   * ⚠ THE HOST'S LIST FIRST, FOR SLICE 5c's REASON, AND THE CHASE SUITE CAUGHT IT MISSING. A guest
+   * the chooser now refuses the ASK is not a recipient at all — they are on `hostList` with a why —
+   * so looking them up among the recipients first recorded the generic NOT_THIS_RECIPIENT and threw
+   * the chooser's own reason away (a reminder to an address blocked after it was queued read as
+   * "not this recipient", not EMAIL_BLOCKED).
+   */
+  const hostLine = preview.hostList.find((l) => l.personEventId === row.personEventId);
+  if (hostLine) return withhold(hostLine.why);
+  const chase = preview.chase.byRecipient[row.personEventId];
+  const composedRow = byPe.get(row.personEventId);
+  if (!chase || !composedRow) return withhold('NOT_THIS_RECIPIENT');
+  if (chase.chasedBy === 'NONE') return withhold(chase.why ?? 'NOT_THIS_RECIPIENT');
+  const link = composedRow.recipient.link;
+  if (!link) return withhold('NO_LINK');
+
+  const owed = await readChaseOwed(db, row.eventId, row.personEventId, chase.carried);
+  if (!owed.owed) return withhold('ANSWERED');
+
+  const channel: OutboundChannel = chase.chasedBy;
+  if (stored.channel !== channel) {
+    await db.outboundMessage.update({ where: { id: row.id }, data: { channel } });
+  }
+  const email = stored.personEvent.person.email;
+  if (channel === 'EMAIL') {
+    if (!email) return withhold('NO_CHANNEL');
+    if (blocked.has(normalizeEmailAddress(email))) return withhold('EMAIL_BLOCKED');
+    if (!preview.replyTo) return withhold('NO_REPLY_TO');
+  }
+  if (quietHoursDefers(channel, quiet)) {
+    result.deferred++;
+    return;
+  }
+
+  const claimed =
+    row.attemptCount === 0
+      ? await claimForFirstAttempt(db, row.id)
+      : await claimForRetry(db, row.id, now);
+  if (!claimed) return;
+  const attemptCount = row.attemptCount + 1;
+  const leg = row.kind === 'CHASE_FIRST' ? 'FIRST' : 'SECOND';
+
+  if (channel === 'EMAIL') {
+    const composed = composeChase({
+      leg,
+      recipientFirstName: firstNameOf(composedRow.recipient.name),
+      hostFirstName: firstNameOf(preview.hostName),
+      eventName: preview.event.name,
+      link,
+      itemless: owed.itemless,
+      answeredAnything: owed.answeredAnything,
+      self: owed.self,
+      carried: owed.carried.map((c) => ({ ...c, firstName: firstNameOf(c.name) })),
+    });
+    const sent = await sendChaseEmail({
+      to: email!,
+      subject: composed.subject,
+      body: composed.text,
+      replyTo: preview.replyTo!,
+      fromName: preview.hostName,
+      personId: composedRow.recipient.personId,
+      eventId: row.eventId,
+    });
+    if (sent.success) {
+      await recordAcceptance(db, {
+        id: row.id,
+        personEventId: row.personEventId,
+        provider: 'resend',
+        providerMessageId: sent.providerMessageId,
+        kind: row.kind,
+      });
+      result.sent++;
+      return;
+    }
+    const error = sent.error ?? 'Unknown Resend error';
+    const code = sent.providerErrorCode;
+    const at = isRetryableProviderError({ error, code, status: sent.providerStatusCode })
+      ? nextBackoffAt(attemptCount, now)
+      : null;
+    if (at) {
+      await scheduleRetry(db, { id: row.id, provider: 'resend', error, at, code });
+      result.retrying++;
+    } else {
+      await recordRejection(db, { id: row.id, provider: 'resend', error, code });
+      result.rejected++;
+    }
+    return;
+  }
+
+  const to = stored.personEvent.person.phoneNumber;
+  if (!to) return withhold('NO_CHANNEL');
+  const params = { hostName: preview.hostName, eventName: preview.event.name, link };
+  const message = leg === 'FIRST' ? getFirstNudgeMessage(params) : getSecondNudgeMessage(params);
+  const sent = await sendSms({
+    to,
+    message,
+    eventId: row.eventId,
+    personId: composedRow.recipient.personId,
+    // `nudgeType` is the stored vocabulary `InviteEvent.metadata` has always carried (NudgeLeg).
+    metadata: { nudgeType: leg === 'FIRST' ? 'first' : 'second', outboundMessageId: row.id },
+  });
+  if (sent.success) {
+    await recordAcceptance(db, {
+      id: row.id,
+      personEventId: row.personEventId,
+      provider: 'tnz',
+      providerMessageId: sent.messageId,
+      kind: row.kind,
+    });
+    result.sent++;
+    return;
+  }
+  const w = sent.blocked ? blockedToWithheld(sent.blocked) : null;
+  if (w) return withhold(w);
+  const error = sent.error ?? 'Unknown SMS error';
+  const at = isRetryableProviderError({ error }) ? nextBackoffAt(attemptCount, now) : null;
+  if (at) {
+    await scheduleRetry(db, { id: row.id, provider: 'tnz', error, at });
+    result.retrying++;
+  } else {
+    await recordRejection(db, { id: row.id, provider: 'tnz', error });
+    result.rejected++;
+  }
+}
+
+/**
  * ONE TICK.
  *
  * ⚠ THE ORDER IS A RULING (2026-09-19): GATES, THEN QUIET HOURS, THEN CLAIM, THEN SEND. The
@@ -693,6 +893,16 @@ export async function drainOnce(
         },
       });
       if (!stored) continue;
+
+      /*
+       * ⚠ [[GTC-189]] SLICE 8b, F1 — A CHASE ROW NEVER REACHES THE ASK'S PATH BELOW. Before this
+       * slice nothing wrote one, and every row here was composed as the invitation; a reminder falling
+       * through would have sent the guest the invitation again.
+       */
+      if (row.kind === 'CHASE_FIRST' || row.kind === 'CHASE_SECOND') {
+        await drainChaseRow({ db, now, quiet, result, preview, byPe, blocked }, row, stored);
+        continue;
+      }
 
       /*
        * ── GATES. The chooser's answer NOW, not at the press.

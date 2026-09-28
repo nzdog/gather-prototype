@@ -191,8 +191,9 @@ async function resolveSubject(
    * the other half of that job — a membership whose LATEST row is fine has no door, which is
    * what stops a second press putting a second message on somebody who already has theirs.
    */
+  // [[GTC-189]] slice 8b, F2 — the door opens on the ASK's failure; a reminder row is never its fact.
   const rows = await db.outboundMessage.findMany({
-    where: { personEventId: membership.id },
+    where: { personEventId: membership.id, kind: 'ASK' },
     select: {
       id: true,
       personEventId: true,

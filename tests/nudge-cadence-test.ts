@@ -450,10 +450,18 @@ async function main() {
       data: { itemId: item.id, personId: responder.id, response: 'ACCEPTED' },
     });
     const d7b = await sweep(clock(7));
+    /*
+     * ⚠ FLIPPED AT [[GTC-189]] SLICE 8b — FOUNDER RULING D5, 2026-09-27: "Both reminders require that
+     * the guest still has not answered." This assertion pinned the first leg as time-only, which is
+     * F7, recorded as a defect in the old behaviour and fixed there: on day four a guest who had
+     * already said yes was told the host "is waiting for your response". GTC-178 Ruling 5 deleted an
+     * OPENED gate from that leg; it never ruled that a RESPONSE should not stop it. Opening still does
+     * not cancel the clock — the three assertions above are unchanged.
+     */
     assert(
-      'ruling 5',
-      'but responding does not retroactively suppress the first leg — it is time-only',
-      d7b.first(responder.id)
+      'ruling 5 / D5',
+      'responding suppresses the FIRST leg too — a decision stops the cadence (D5, F7 fixed)',
+      !d7b.first(responder.id)
     );
 
     // GTC-179 Ruling 7(b): the responder's first leg must be stamped before the
