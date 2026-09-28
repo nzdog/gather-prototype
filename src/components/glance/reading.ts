@@ -24,7 +24,13 @@
  * knows nothing about cadence. This is the PANEL's content, and the nudge day is its business.
  */
 
-import type { GlanceItem, GlancePerson, PersonState } from '@/lib/glance/state';
+import {
+  greyOpensReading,
+  type GlanceItem,
+  type GlancePerson,
+  type PersonReason,
+  type PersonState,
+} from '@/lib/glance/state';
 
 export interface ReadingRow {
   itemId: string;
@@ -41,6 +47,13 @@ export interface ReadingPanel {
   /** RULING 34 — the nudge day, on amber people only. Null on green and on a spent cadence. */
   nudge: string | null;
   rows: ReadingRow[];
+  /**
+   * [[GTC-305]] — Ruling 32 AMENDED, founder 2026-09-28: a grey that opens this room carries the
+   * ruled sentence saying why Gather will not chase them, and ruling 3's `emailNote` where there is
+   * one. ALWAYS EMPTY FOR GREEN AND AMBER, whose panels stay exactly as ruled — the list is filled
+   * from the state and reasons, never from whatever the person object happens to carry.
+   */
+  notes: string[];
 }
 
 /**
@@ -51,10 +64,16 @@ export interface ReadingPanel {
  * cannot reach here — and a `default:` returning something plausible is how a case that
  * *later* can reach here arrives silently wearing the wrong label. It throws instead.
  */
-export function readingStatusWord(state: PersonState): string {
+export function readingStatusWord(
+  state: PersonState,
+  reasons: readonly PersonReason[] = []
+): string {
   if (state === 'GREEN') return 'Confirmed';
   if (state === 'AMBER') return 'No answer yet';
-  throw new Error(`readingStatusWord: no word for ${state} — panelFor opens GREEN and AMBER only`);
+  // [[GTC-305]] — Ruling 32 as amended opens this room for four greys. They have not answered, so
+  // amber's own word is the true one; the grey already says nobody is chasing them.
+  if (state === 'NOT_CHASED' && greyOpensReading(reasons)) return 'No answer yet';
+  throw new Error(`readingStatusWord: no word for ${state} — panelFor does not open it`);
 }
 
 /** Local calendar day, as an integer — what "today" and "tomorrow" are counted in. */
@@ -171,8 +190,12 @@ export function quantityLabel(
 export function readingPanelFor(person: GlancePerson, now: Date): ReadingPanel {
   return {
     name: person.name,
-    status: readingStatusWord(person.state),
+    status: readingStatusWord(person.state, person.reasons),
     nudge: nudgeDayFor(person, now),
+    notes:
+      person.state === 'NOT_CHASED' && greyOpensReading(person.reasons)
+        ? [person.chaseNote, person.emailNote].filter((n): n is string => !!n)
+        : [],
     rows: person.items.map((row) => ({
       itemId: row.itemId,
       name: row.name,

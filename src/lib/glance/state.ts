@@ -105,11 +105,12 @@ export const RED_REASONS = [
    * stays amber. The two corrections read as contradictory and are not — this is the shape that
    * satisfies both, and the ⚠ below is the cost.
    *
-   * ⚠ SO A MINI-SEND OR DRAIN-WINDOW OPT-OUT READS AMBER TODAY, WITH NOTHING SAYING WHY. That
-   * gap is [[GTC-327]] and it is ONE EDIT when it is ruled: give `WITHHELD_MEANS_UNREACHABLE`'s
-   * `EMAIL_OPTED_OUT` entry a producer. Do not close it by making this reason mean UNREACHABLE
-   * — "nowhere to send" is false of somebody holding a live address, and slice 7b's door would
-   * then offer to send it again.
+   * ✅ PRODUCED SINCE [[GTC-305]], WHICH ABSORBED [[GTC-327]] — and not by the "one edit" GTC-327
+   * proposed. The producer is the chase chooser's EMAIL_OPTED_OUT and EMAIL_REPORTED, through
+   * `CHASE_REFUSAL_MEANS` in `chase-fact.ts`, so it reaches the guest who opted out AFTER her
+   * invitation went out, whose ask row is not withheld at all. `WITHHELD_MEANS_UNREACHABLE` keeps
+   * null (R6). It never means UNREACHABLE — "nowhere to send" is false of a live address — and it
+   * is not a door reason: slice 7b's door must never offer to send it again.
    */
   'EMAIL_OPTED_OUT',
 ] as const;
@@ -125,7 +126,77 @@ export type PersonReason =
   | MovingReason
   | SettledReason
   | 'DONT_CHASE'
-  | 'ATTENDANCE_NO';
+  | 'ATTENDANCE_NO'
+  | GreyChaseStanding;
+
+/**
+ * [[GTC-305]] — WHAT THE CHASE CHOOSER'S REFUSAL MEANS ON THE BOARD, as this module consumes it.
+ *
+ * The principle, SCOPED 2026-09-28: *amber means Gather is chasing someone, and nobody else is
+ * amber.* The GREY standings are people Gather invites and will never remind (rulings 1 and 3, R4
+ * and R6); `EMAIL_OPTED_OUT` is ruling 3's red, a guest's no that is news to the host. The
+ * translation from the chooser's vocabulary lives in `src/lib/glance/chase-fact.ts`.
+ */
+export type GreyChaseStanding =
+  | 'HANDED_TO_HOST'
+  | 'SMS_OPTED_OUT'
+  | 'HOST_AS_CARRIER'
+  | 'HOST_HOUSEHOLD_CHILD'
+  | 'CHILD_WITHOUT_ITEM';
+export type ChaseStanding = GreyChaseStanding | 'EMAIL_OPTED_OUT';
+
+/**
+ * [[GTC-305]] — the chase fact. THE SAME SHAPE AS `DeliveryFact` AND FOR THE SAME REASON: a decision
+ * handed in, so this module never learns the chooser's ladder. Null claims nothing.
+ *
+ * ⚠ IT ANSWERS WHETHER GATHER *WILL* CHASE — what the chase itself asks the chooser on every run.
+ * Whether a message REACHED someone stays with the rows the press wrote (`DeliveryFact`, slice 7a).
+ */
+export interface ChaseFact {
+  standing: ChaseStanding | null;
+  /**
+   * POINT 2, founder ruling 2026-09-28: the child's CARRIER carries the don't-chase mark. Ruling 14's
+   * own ground reaches the child — *"the fix-it action a red would offer is the exact thing the mark
+   * forbids"* — so the carrier's mark covers the child in full. Keyed on the carrier's own mark, not
+   * on the route's reason, so a carrier who is also opted out still covers the child.
+   */
+  carrierMarked: boolean;
+}
+
+/** The grey standings, as a set, for the one derivation that asks. */
+const GREY_STANDINGS: ReadonlySet<string> = new Set<GreyChaseStanding>([
+  'HANDED_TO_HOST',
+  'SMS_OPTED_OUT',
+  'HOST_AS_CARRIER',
+  'HOST_HOUSEHOLD_CHILD',
+  'CHILD_WITHOUT_ITEM',
+]);
+
+function greyStandingOf(chase: ChaseFact | null | undefined): GreyChaseStanding | null {
+  const standing = chase?.standing ?? null;
+  return standing !== null && GREY_STANDINGS.has(standing) ? (standing as GreyChaseStanding) : null;
+}
+
+/**
+ * [[GTC-305]] — GTC-192 RULING 32 AMENDED, founder 2026-09-28, on Ruling 32's own reason: *she
+ * should be able to check what someone is bringing without leaving the board.* A hand-over means
+ * "I'll do the follow-up" (GTC-305 ruling 2), so these greys open the READING room.
+ *
+ * ⚠ A NAMED LIST, SO EVERY OTHER GREY STAYS SEALED BY DEFAULT: the don't-chase mark (Ruling 17's
+ * second sentence, unchanged, a carrier's mark included) and CHILD_WITHOUT_ITEM, whose panel would
+ * hold nothing to check (Ruling 17's first sentence). A grey added later seals until it is ruled.
+ */
+export const READING_GREYS: readonly GreyChaseStanding[] = [
+  'HANDED_TO_HOST',
+  'SMS_OPTED_OUT',
+  'HOST_AS_CARRIER',
+  'HOST_HOUSEHOLD_CHILD',
+];
+
+/** Does this NOT_CHASED person open the reading room? Only for the four ruled greys. */
+export function greyOpensReading(reasons: readonly PersonReason[]): boolean {
+  return reasons.some((r) => (READING_GREYS as readonly string[]).includes(r));
+}
 
 export type ItemReason = RedReason | MovingReason | SettledReason;
 
@@ -231,6 +302,11 @@ export interface GlancePersonContext {
    * have is the one belonging to whoever carried the ask. `readEventGlance` resolves that.
    */
   delivery?: DeliveryFact | null;
+  /**
+   * [[GTC-305]]. Optional for `delivery`'s reason directly above: every caller that builds a context
+   * by hand goes on meaning *"nothing known about the chase"*.
+   */
+  chase?: ChaseFact | null;
 }
 
 export interface GlancePersonInput extends GlancePersonContext {
@@ -318,6 +394,18 @@ export interface GlancePerson {
    * block was learned (founder ruling, 2026-09-27). False unless the address is blocked.
    */
   textable: boolean;
+  /**
+   * [[GTC-305]] — the chase fact this person was derived with. On the wire for ONE reader: the replay,
+   * which hands it to the past unrewound, exactly as it hands over the mark (Finding 2). No contact
+   * detail rides in it.
+   */
+  chase: ChaseFact | null;
+  /**
+   * [[GTC-305]] — the ruled sentence saying why Gather will not chase this person, composed on the
+   * server as `emailNote` is (`chaseNoteFor` in `src/lib/glance/chase-fact.ts`). Set only for a grey
+   * that opens the reading room and for the opted-out red; null everywhere else.
+   */
+  chaseNote: string | null;
 }
 
 /**
@@ -466,6 +554,16 @@ export function deriveItemState(
   if (context.isHost) return { state: 'GREEN', reason: 'ACCEPTED' };
 
   /*
+   * [[GTC-305]] RULING 3 — THE RED "opted out", AND IT SITS ABOVE THE DELIVERY FAILURE ON PURPOSE.
+   * Both are red, so the colour is the same either way; what the order decides is the DOOR. Slice
+   * 7b's door opens on NOT_DELIVERED and offers "send it again", and it must never open on somebody
+   * who said stop. Below the answers, like every red here: a guest who answered shows the answer.
+   */
+  if (context.chase?.standing === 'EMAIL_OPTED_OUT') {
+    return { state: 'RED', reason: 'EMAIL_OPTED_OUT' };
+  }
+
+  /*
    * ANCHOR(GTC-189 slice 7a): the delivery door. The press supplies the fact; this is where it lands.
    *
    * ⚠ BELOW THE THREE RESPONSE BRANCHES, AND THAT ORDER IS THE POINT: AN ANSWER IS PROOF THE ASK
@@ -518,6 +616,11 @@ export function deriveItemState(
  * AN ITEMLESS UNDECIDED PERSON IS AMBER — Ruling 16 (2026-08-31): "the ask is real even
  * when the hands are empty... attendance-only is a state of the ask, not an absence from
  * the board." The host is the exception, by GTC-256 Ruling 5.
+ *
+ * [[GTC-305]] — AMBER MEANS GATHER IS CHASING SOMEONE, AND NOBODY ELSE IS AMBER. The chase fact
+ * greys the people Gather invites and never reminds, in AMBER's place only, and gives ruling 3's
+ * "opted out" its producer. A carrier's don't-chase mark covers the child it carries, and the
+ * itemless branch now reads the mark and a yes (Finding 1 and the itemless-yes ruling).
  */
 export function derivePersonState(
   person: GlancePersonInput,
@@ -527,11 +630,32 @@ export function derivePersonState(
   const attendance = deriveAttendance(person.items, person.attendanceAnswer);
   if (attendance === 'NO') return { state: 'OUT', reasons: ['ATTENDANCE_NO'] };
 
+  // Ruling 14's mark, and since [[GTC-305]] (point 2) a carrier's mark covering the child it carries.
+  const marked = person.nudgeMark === 'DONT_CHASE' || person.chase?.carrierMarked === true;
+  const grey = greyStandingOf(person.chase);
+
   const derived = person.items.map((i) => deriveItemState(i, event, person, now));
   const worst = worstItemState(derived.map((d) => d.state));
 
   if (worst === null) {
     if (person.isHost) return { state: 'GREEN', reasons: ['ACCEPTED'] };
+    /*
+     * [[GTC-305]], founder ruling 2026-09-28 — THE ITEMLESS YES IS SETTLED. Ruling 16 makes an
+     * itemless UNDECIDED person amber; somebody who answered yes has decided, and `stillUnanswered`
+     * already stops the chase for them. Above the delivery failure because an answer is proof the
+     * ask arrived (the answer branches in `deriveItemState` rest on the same ground), and above the
+     * mark because Ruling 14 leaves GREEN alone.
+     */
+    if (attendance === 'YES') return { state: 'GREEN', reasons: ['ACCEPTED'] };
+    /*
+     * [[GTC-305]], FINDING 1, fixed on founder ruling — THIS BRANCH USED TO RETURN BEFORE RULING 14,
+     * so an itemless marked person read amber and a delivery red beat the mark. Ruling 14: *"No
+     * exceptions; if one is ever wanted, it gets its own ruling."* The order below is the rows'.
+     */
+    if (marked) return { state: 'NOT_CHASED', reasons: ['DONT_CHASE'] };
+    if (person.chase?.standing === 'EMAIL_OPTED_OUT') {
+      return { state: 'RED', reasons: ['EMAIL_OPTED_OUT'] };
+    }
     /*
      * ⚠ GTC-189 SLICE 7a — THE DELIVERY FACT IS APPLIED AT THE PERSON LEVEL TOO, AND THIS BRANCH IS
      * WHY IT HAS TO BE.
@@ -549,6 +673,7 @@ export function derivePersonState(
     if (person.delivery?.failure) {
       return { state: 'RED', reasons: [person.delivery.failure] };
     }
+    if (grey) return { state: 'NOT_CHASED', reasons: [grey] };
     return { state: 'AMBER', reasons: ['AWAITING_REPLY'] };
   }
 
@@ -559,8 +684,21 @@ export function derivePersonState(
   // Ruling 14. Deliberately `!== 'GREEN'` rather than a list of red reasons: a reason list
   // would have to be extended by every future red source, and the ruling says there are no
   // exceptions.
-  if (worst !== 'GREEN' && person.nudgeMark === 'DONT_CHASE') {
+  if (worst !== 'GREEN' && marked) {
     return { state: 'NOT_CHASED', reasons: ['DONT_CHASE'] };
+  }
+
+  /*
+   * [[GTC-305]] RULING 2 — THE GREY REPLACES "WAITING TO HEAR BACK", AND NOTHING ELSE. Only when the
+   * worst is AMBER and every amber row is AWAITING_REPLY: any red still wins, an answered row shows
+   * its answer, and a live maybe stays amber (R1, ruled — the gap it leaves is [[GTC-251]]'s).
+   */
+  if (
+    grey &&
+    worst === 'AMBER' &&
+    derived.every((d) => d.state !== 'AMBER' || d.reason === 'AWAITING_REPLY')
+  ) {
+    return { state: 'NOT_CHASED', reasons: [grey] };
   }
 
   return { state: worst, reasons };

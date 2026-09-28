@@ -897,10 +897,23 @@ async function main() {
     assert(
       'Ruling 35',
       '⭐ EVERY TREATED STRIP OPENS SOMETHING — the promise and the routing are one function, so a chevron cannot appear on a strip with nothing behind it',
+      // ⚠ [[GTC-305]]: `panelFor` and the treatment take the PERSON now (Ruling 32 as amended
+      // tells the two greys apart by their reason), so both greys are enumerated here.
       ok(() =>
-        (['RED', 'AMBER', 'GREEN', 'NOT_CHASED', 'OUT'] as const).every(
-          (st) => (SP.doorTreatmentFor(st) !== '') === (SP.panelFor(st) !== null)
-        )
+        (
+          [
+            ['RED', 'REVERSAL'],
+            ['AMBER', 'AWAITING_REPLY'],
+            ['GREEN', 'ACCEPTED'],
+            ['NOT_CHASED', 'DONT_CHASE'],
+            ['NOT_CHASED', 'HANDED_TO_HOST'],
+            ['NOT_CHASED', 'CHILD_WITHOUT_ITEM'],
+            ['OUT', 'ATTENDANCE_NO'],
+          ] as const
+        ).every(([state, reason]) => {
+          const p = { state, reasons: [reason] };
+          return (SP.doorTreatmentFor(p) !== '') === (SP.panelFor(p) !== null);
+        })
       )
     );
     assert(
@@ -930,12 +943,28 @@ async function main() {
     );
     assert(
       'Ruling 35 / Ruling 7',
-      'and no TREATED state’s tone already carries a border — the two-border hazard cannot return silently if a state is ever added',
-      ok(() =>
-        (['RED', 'AMBER', 'GREEN', 'NOT_CHASED', 'OUT'] as const)
-          .filter((st) => SP.doorTreatmentReaches(st))
-          .every((st) => !SP.STRIP_TONE[st].className.includes('border-'))
-      )
+      /*
+        ⚠ MOVED BY [[GTC-305]] — Ruling 32 as amended TREATS a NOT_CHASED strip (the greys that open
+        the reading room), whose tone already carries Ruling 7's hairline. So "no treated tone has a
+        border" can no longer hold, and the hazard it guarded — two border-width utilities on one
+        element — is now asserted directly: every treated strip carries exactly ONE.
+      */
+      'and every TREATED strip carries exactly one border-width utility — the two-border hazard cannot return silently',
+      ok(() => {
+        const widths = (cls: string) =>
+          cls.split(/\s+/).filter((t) => /^border(-\[[\d.]+px\])?$/.test(t)).length;
+        const people = [
+          { state: 'RED', reasons: ['REVERSAL'] },
+          { state: 'AMBER', reasons: ['AWAITING_REPLY'] },
+          { state: 'GREEN', reasons: ['ACCEPTED'] },
+          { state: 'NOT_CHASED', reasons: ['HANDED_TO_HOST'] },
+        ] as const;
+        return people.every(
+          (p) =>
+            SP.doorTreatmentReaches(p) &&
+            widths(`${SP.STRIP_TONE[p.state].className} ${SP.doorTreatmentFor(p)}`) === 1
+        );
+      })
     );
 
     // ══ PHASE 3 — Ruling 8's alert strip ═════════════════════════════════
@@ -1946,17 +1975,32 @@ async function main() {
     assert(
       'Ruling 32 / routing',
       '⭐ RED OPENS THE ACTING PANEL — and `panelFor` takes ONE argument now, so there is no presentation in which it does not',
-      ok(() => SP.panelFor('RED') === 'acting' && SP.panelFor.length === 1)
+      // [[GTC-305]]: the one argument is the PERSON now — still one.
+      ok(
+        () =>
+          SP.panelFor({ state: 'RED', reasons: ['REVERSAL'] }) === 'acting' &&
+          SP.panelFor.length === 1
+      )
     );
     assert(
       'Ruling 32 / routing',
       'GREEN and AMBER open the READING panel — it ships, it is not a variant',
-      ok(() => SP.panelFor('GREEN') === 'reading' && SP.panelFor('AMBER') === 'reading')
+      ok(
+        () =>
+          SP.panelFor({ state: 'GREEN', reasons: ['ACCEPTED'] }) === 'reading' &&
+          SP.panelFor({ state: 'AMBER', reasons: ['AWAITING_REPLY'] }) === 'reading'
+      )
     );
     assert(
       'Ruling 17',
       '⭐ AND OUT AND NOT_CHASED OPEN NOTHING — Ruling 17’s second sentence, untouched by every ruling in this phase: the mark is revisited at the pre-flight, not here',
-      ok(() => SP.panelFor('OUT') === null && SP.panelFor('NOT_CHASED') === null)
+      // ⚠ [[GTC-305]] narrows this to the MARK: Ruling 32 as amended opens four other greys onto
+      // the reading room (asserted in `test:board-not-chased`); the don't-chase grey stays sealed.
+      ok(
+        () =>
+          SP.panelFor({ state: 'OUT', reasons: ['ATTENDANCE_NO'] }) === null &&
+          SP.panelFor({ state: 'NOT_CHASED', reasons: ['DONT_CHASE'] }) === null
+      )
     );
     assert(
       'Ruling 32 / routing',
@@ -2094,8 +2138,12 @@ async function main() {
       ok(() => {
         const panel = RD.readingPanelFor(leaky, V_NOW);
         return (
+          // ⚠ [[GTC-305]] adds `notes` (Ruling 32 as amended) — and for this GREEN/AMBER person
+          // it must be EMPTY, which keeps these panels exactly as ruled.
           JSON.stringify(Object.keys(panel).sort()) ===
-            JSON.stringify(['name', 'nudge', 'rows', 'status']) &&
+            JSON.stringify(['name', 'notes', 'nudge', 'rows', 'status']) &&
+          Array.isArray(panel.notes) &&
+          panel.notes.length === 0 &&
           panel.rows.length === 4 &&
           panel.rows.every(
             (r: any) =>

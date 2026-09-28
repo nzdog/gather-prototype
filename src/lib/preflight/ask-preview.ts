@@ -316,6 +316,15 @@ export interface PreviewChase {
   /** Keyed by `PreviewRecipient.personEventId`. */
   byRecipient: Record<string, RecipientChase>;
   notChased: NotChasedLine[];
+  /**
+   * [[GTC-305]] — THE CHOOSER'S CHASE ANSWER FOR EVERY NON-HOST MEMBERSHIP, keyed by `PersonEvent`
+   * id. The board reads it, so the board, this screen and the chase get one answer from one place.
+   *
+   * ⚠ EVERY membership, not only the asked ones. A guest who unsubscribes or reports after the press
+   * has ask route HOST_LIST — `askChannelOf` refuses on the email no above every channel — and she is
+   * exactly who GTC-305 ruling 3 is about.
+   */
+  byMembership: Record<string, ChaseRoute>;
 }
 
 /**
@@ -635,13 +644,17 @@ export async function readAskPreview(
   }
 
   const notChased: NotChasedLine[] = [];
+  const byMembership: Record<string, ChaseRoute> = {};
   for (const subject of chooserEvent.memberships) {
     const m = byId.get(subject.id)!;
     if (isHost(m)) continue;
+    // [[GTC-305]] — asked of the chooser BEFORE the ask-route skip below, so a guest now on the
+    // host's list still has her chase answer. One call, recorded, then filtered for group B.
+    const chase = chooseChaseRoute(subject, chooserEvent);
+    byMembership[subject.id] = chase;
     const ask = chooseAskRoute(subject, chooserEvent);
     // Asked: the ask reaches them, directly or carried. Group A already holds everyone else.
     if (ask.kind !== 'DIRECT' && ask.kind !== 'CARRIED') continue;
-    const chase = chooseChaseRoute(subject, chooserEvent);
     if (chase.kind !== 'NONE' || NOT_ON_GROUP_B.has(chase.why)) continue;
     notChased.push({
       personEventId: m.id,
@@ -675,6 +688,7 @@ export async function readAskPreview(
       }),
       byRecipient,
       notChased: notChased.sort(byName),
+      byMembership,
     },
   };
 }

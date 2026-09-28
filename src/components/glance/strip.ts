@@ -15,11 +15,12 @@
  * palette living beside that screen costs nothing and reverts cleanly.
  */
 
-import type {
-  GlancePerson,
-  GlanceSummary,
-  GlanceUnassignedItem,
-  PersonState,
+import {
+  greyOpensReading,
+  type GlancePerson,
+  type GlanceSummary,
+  type GlanceUnassignedItem,
+  type PersonState,
 } from '@/lib/glance/state';
 
 export interface StripTone {
@@ -253,9 +254,9 @@ const WHY_LINES: Record<(typeof WHY_PRECEDENCE)[number], (person: GlancePerson) 
    * no address*, which is false of somebody who has one, used it, and asked Gather to stop. The
    * nine-character line says what happened.
    *
-   * ⚠ UNREACHABLE TODAY. Nothing produces this reason — see `RED_REASONS` in
-   * `src/lib/glance/state.ts` and [[GTC-327]]. The words exist so that closing that gap is one
-   * edit in one file rather than a second round of wording.
+   * ✅ PRODUCED SINCE [[GTC-305]] (ruling 3), which absorbed [[GTC-327]]: the chase chooser's
+   * EMAIL_OPTED_OUT and EMAIL_REPORTED, through `CHASE_REFUSAL_MEANS` in
+   * `src/lib/glance/chase-fact.ts`. The words written ahead of it were used unchanged.
    */
   EMAIL_OPTED_OUT: () => 'opted out',
   REVERSAL: (person) => {
@@ -393,7 +394,9 @@ export function unassignedDoorHref(eventId: string): string {
  *   acting   `PersonSurface`       — Move to… / Move / I'll do it / Remind them. RED only.
  *   reading  `GlancePersonReading` — name, status, nudge day, what they are bringing. No
  *                                    controls of any kind. GREEN and AMBER.
- *   null     a sealed `<div>`      — OUT and NOT_CHASED.
+ *   null     a sealed `<div>`      — OUT, and NOT_CHASED for the mark and a child holding
+ *                                    nothing. [[GTC-305]] opens four other greys onto the
+ *                                    reading room — see `panelFor`.
  *
  * ⚠ RULING 17's SECOND SENTENCE IS WHAT KEEPS THE LAST LINE TRUE, AND IT IS UNTOUCHED BY EVERY
  * RULING IN THIS PHASE: *"The don't-chase mark is revisited where it is set (the pre-flight),
@@ -404,9 +407,23 @@ export function unassignedDoorHref(eventId: string): string {
  */
 export type GlancePanel = 'acting' | 'reading';
 
-export function panelFor(state: PersonState): GlancePanel | null {
-  if (state === 'RED') return 'acting';
-  return state === 'GREEN' || state === 'AMBER' ? 'reading' : null;
+/**
+ * ⚠ [[GTC-305]] — RULING 32 AMENDED, founder 2026-09-28, on Ruling 32's own reason: *she should be
+ * able to check what someone is bringing without leaving the board.* The greys Gather invites and
+ * never reminds — handed over, opted out of texts, the host as carrier, the host's own household —
+ * open the READING room, because a hand-over means "I'll do the follow-up" (GTC-305 ruling 2).
+ * The don't-chase grey stays sealed (Ruling 17's second sentence, untouched), and so does a child
+ * holding nothing (its panel would hold nothing to check). The list is `READING_GREYS` in
+ * `state.ts`, so every other grey seals by default.
+ *
+ * It takes the PERSON rather than the state because the two greys are one state told apart by their
+ * reason. Still one argument.
+ */
+export function panelFor(person: Pick<GlancePerson, 'state' | 'reasons'>): GlancePanel | null {
+  if (person.state === 'RED') return 'acting';
+  if (person.state === 'GREEN' || person.state === 'AMBER') return 'reading';
+  if (person.state === 'NOT_CHASED' && greyOpensReading(person.reasons)) return 'reading';
+  return null;
 }
 
 /* ── RULING 35 — THE DOOR TREATMENT, ON EVERY STRIP THAT OPENS SOMETHING ─────────────────────
@@ -458,8 +475,8 @@ export const DOOR_CHEVRON_CLASS =
   'pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[12px] leading-none opacity-60';
 
 /** RULING 35: does this strip wear the promise? Exactly when it has something to open. */
-export function doorTreatmentReaches(state: PersonState): boolean {
-  return panelFor(state) !== null;
+export function doorTreatmentReaches(person: Pick<GlancePerson, 'state' | 'reasons'>): boolean {
+  return panelFor(person) !== null;
 }
 
 /**
@@ -469,7 +486,16 @@ export function doorTreatmentReaches(state: PersonState): boolean {
  * its own, which is what keeps the treatment out of the element branch: an acting door, a
  * reading door and a sealed strip are handed the same string by the same rule.
  */
-export function doorTreatmentFor(state: PersonState): string {
-  if (!doorTreatmentReaches(state)) return '';
+export function doorTreatmentFor(person: Pick<GlancePerson, 'state' | 'reasons'>): string {
+  if (!doorTreatmentReaches(person)) return '';
+  /*
+   * [[GTC-305]] — THE HAZARD `DOOR_BORDER_CLASS` WAS HELD APART FOR HAS NOW ARRIVED. Ruling 32 as
+   * amended treats a NOT_CHASED strip, whose tone already carries Ruling 7's hairline, and two
+   * border-width utilities on one element resolve by stylesheet order. So a tone with a border of
+   * its own keeps it, and gets the chevron, hover and cursor without a second one.
+   */
+  if (/(^|\s)border(-\[[\d.]+px\])?(\s|$)/.test(STRIP_TONE[person.state].className)) {
+    return DOOR_TREATMENT_CLASS;
+  }
   return `${DOOR_TREATMENT_CLASS} ${DOOR_BORDER_CLASS}`;
 }

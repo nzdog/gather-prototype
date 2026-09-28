@@ -1175,6 +1175,29 @@ async function runDatabaseLayers() {
           JSON.stringify(after?.hostList) === hostListBefore &&
           JSON.stringify(after?.recipients) === recipientsBefore
       );
+      /*
+       * [[GTC-305]] — `chase.byMembership` is the board's source, so it must be the SAME answer the
+       * pre-flight shows. For every recipient, its route agrees with `byRecipient` (the chooser's
+       * answer this screen already renders), and for every group-B line it carries the same why.
+       */
+      assert(
+        'F',
+        'GTC-305 — byMembership agrees with the chooser answer the pre-flight shows, recipient by recipient and line by line',
+        attempt(() => {
+          const byM = after.chase.byMembership as Record<string, Loose>;
+          const recipientsAgree = Object.entries(
+            after.chase.byRecipient as Record<string, Loose>
+          ).every(([id, rc]) =>
+            rc.chasedBy === 'NONE'
+              ? byM[id]?.kind === 'NONE' && byM[id].why === rc.why
+              : byM[id]?.kind !== 'NONE' && byM[id]?.channel === rc.chasedBy
+          );
+          const linesAgree = (after.chase.notChased as Loose[]).every(
+            (l) => byM[l.personEventId]?.kind === 'NONE' && byM[l.personEventId].why === l.why
+          );
+          return Object.keys(after.chase.byRecipient).length >= 5 && recipientsAgree && linesAgree;
+        }) === true
+      );
     } finally {
       await fresh.$disconnect();
     }

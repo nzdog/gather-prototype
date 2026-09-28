@@ -47,8 +47,9 @@
  * disagree they fail in the safe direction. Both ask `isChaseable` and both show
  * `DONT_CHASE_NOT_ADDRESSABLE_MESSAGE`, so there is one predicate and one sentence.
  *
- * ⚠ THE REFUSAL KEYS ON THE MARK, NOT ON THE STRIP COLOUR. Greys are not tappable this
- * phase, so a marked person cannot reach these functions through the screen at all — and
+ * ⚠ THE REFUSAL KEYS ON THE MARK, NOT ON THE STRIP COLOUR. The don't-chase grey is sealed
+ * (the greys [[GTC-305]] opens go to the READING room, which has no controls), so a marked
+ * person cannot reach these functions through the screen at all — and
  * the assertion is written anyway, because Ruling 14 is a rule about the system rather
  * than about one screen's buttons. Colour would be the wrong key regardless: Ruling 14
  * greys only a person whose worst row is not green, so a SETTLED marked person reads GREEN

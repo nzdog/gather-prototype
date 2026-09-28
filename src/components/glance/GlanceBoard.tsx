@@ -153,7 +153,7 @@ function StripBody({ person }: { person: GlancePerson }) {
     ⚠ WHAT USED TO BE HERE: RULING 33's clock-line, in two forms. Both are deleted and the
     guard that forbade them is restored verbatim. The fact lives in the reading panel now.
   */
-  const chevron = doorTreatmentReaches(person.state);
+  const chevron = doorTreatmentReaches(person);
   return (
     <>
       <span>{person.name}</span>
@@ -228,7 +228,7 @@ function Strip({
     the treatment is handed out by `panelFor` and so is the element, so a strip cannot wear the
     promise of a door without having one, or have one without wearing it.
   */
-  const treatment = doorTreatmentFor(person.state);
+  const treatment = doorTreatmentFor(person);
   const className =
     `rounded-md px-2.5 py-1.5 text-[13px] leading-snug ${STRIP_TONE[person.state].className}` +
     (treatment ? ` ${treatment}` : '');
@@ -249,7 +249,7 @@ function Strip({
     assignable list. `GlanceBoard` itself still has no hooks, which is phase 2's property and
     not a slice's to retire.
   */
-  const panel = panelFor(person.state);
+  const panel = panelFor(person);
 
   if (panel === null) {
     return (

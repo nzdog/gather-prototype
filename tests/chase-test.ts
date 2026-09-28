@@ -743,6 +743,26 @@ async function runDatabaseLayers() {
           createdAt: now,
         },
       });
+      /*
+       * ⚠ PIN MOVED BY [[GTC-305]]'s ITEMLESS-YES RULING (founder, 2026-09-28). Ivy said YES in
+       * layer D, and an itemless yes now reads GREEN above a delivery failure — an answer is proof
+       * the ask arrived. So F2 is measured on her UNDECIDED, which is the case it is about, and the
+       * ruling is asserted beside it rather than silently absorbed.
+       */
+      const withYes = await glance.readEventGlance(prisma, fx.eventId, now);
+      const ivyYes = [
+        ...withYes.households.flatMap((h: any) => h.members),
+        ...withYes.unhoused,
+      ].find((p: any) => p.personId === fx.itemless.personId);
+      assert(
+        'E',
+        'GTC-305 ITEMLESS YES — having said yes, she reads GREEN though her ask failed',
+        ivyYes?.state === 'GREEN'
+      );
+      await prisma.personEvent.update({
+        where: { id: fx.itemless.peId },
+        data: { attendanceAnswer: null },
+      });
       const g = await glance.readEventGlance(prisma, fx.eventId, now);
       const everyone = [...g.households.flatMap((h: any) => h.members), ...g.unhoused];
       const ivy = everyone.find((p: any) => p.personId === fx.itemless.personId);

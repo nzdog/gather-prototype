@@ -349,6 +349,10 @@ export function notChasedReason(
  * missing case a compile error; `tests/chase-channel-test.ts` layer T proves it with a probe.
  *
  * REACHABLE ON GROUP B as of [[GTC-311]]: SMS_OPTED_OUT (ruling AM, verbatim) and HANDED_TO_HOST.
+ * ⚠ [[GTC-305]]: the board's person view reads this map too, through `chaseNoteFor` in
+ * `src/lib/glance/chase-fact.ts`, so some entries "unreachable" on group B are shown THERE:
+ * EMAIL_OPTED_OUT, HOST_AS_CARRIER and HOST_HOUSEHOLD_CHILD.
+ *
  * Everything else is unreachable there, and why:
  *  - EMAIL_OPTED_OUT, PHONE_UNUSABLE and NO_CHANNEL refuse the ASK first, so the person is in
  *    group A with the ask's reason, never in group B;
@@ -372,7 +376,9 @@ export const CHASE_NONE_WHY: Record<ChaseNoneWhy, string> = {
   NO_CHANNEL: 'I have nothing to chase them by.', // unreachable today
   HOST_AS_CARRIER: "It's with you — I don't chase you.", // unreachable today
   HOST_OWN_ASK: "Your own — I don't chase you.", // unreachable today
-  HOST_HOUSEHOLD_CHILD: "In your own household, so I won't chase.", // unreachable today
+  // [[GTC-305]] R6, ruled 2026-09-28 — reworded as a whole sentence because the board's person view
+  // now shows it. Still unreachable on group B, which refuses the carried ask first.
+  HOST_HOUSEHOLD_CHILD: "They're in your own household, so I won't chase them.", // unreachable today
   NO_CARRIER: 'No one to chase for them.', // unreachable today
   HOUSEHOLD_MUTED: "Messages to their household are switched off, so I won't chase.", // unreachable today
   CHILD_WITHOUT_ITEM: "They hold nothing, so there's nothing to chase.", // unreachable today

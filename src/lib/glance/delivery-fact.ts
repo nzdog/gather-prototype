@@ -54,12 +54,11 @@ export const WITHHELD_MEANS_UNREACHABLE: Record<OutboundWithheldWhy, 'UNREACHABL
    *   door whose actions include *"send it again"* and *"send to the phone instead"*, offered
    *   about the person who just unsubscribed. *"That is exactly wrong."*
    *
-   * ⚠ WHAT null COSTS, NAMED RATHER THAN HIDDEN, AND FILED: the outbound row records the
-   * reason, so the ledger and the host's pre-flight list both have it — but the board's STRIP
-   * for a mini-send or drain-window opt-out reads AMBER with nothing saying why. The reason
-   * exists in the vocabulary (`EMAIL_OPTED_OUT` in `RED_REASONS`, with its own line in
-   * `WHY_LINES`) and nothing produces it. Closing that is [[GTC-327]]'s, which is one edit:
-   * give this entry a producer.
+   * ✅ WHAT null USED TO COST IS CLOSED BY [[GTC-305]], WHICH ABSORBED [[GTC-327]] — AND NOT
+   * HERE. The strip read AMBER with nothing saying why. The red now comes from the chase chooser
+   * (`CHASE_REFUSAL_MEANS` in `chase-fact.ts`), which also reaches the guest who opted out after
+   * her invitation was delivered, whose row carries no withholding at all. This entry stays null,
+   * which is R6 still standing.
    */
   EMAIL_OPTED_OUT: null,
   /*

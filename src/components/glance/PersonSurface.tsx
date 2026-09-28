@@ -377,6 +377,15 @@ export default function PersonSurface({
                     {person.emailNote}
                   </p>
                 ) : null}
+                {/*
+                  [[GTC-305]] ruling 3 — why Gather will not chase this guest, in the chase
+                  why-map's ruled words. Set on this surface only for the "opted out" red.
+                */}
+                {person.chaseNote ? (
+                  <p data-chase-note="" className="m-0 mt-1 text-[13px] text-[#5c5b57]">
+                    {person.chaseNote}
+                  </p>
+                ) : null}
               </div>
               <button
                 type="button"

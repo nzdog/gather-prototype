@@ -106,7 +106,8 @@
     "test:email-opt-out": "tsx tests/email-opt-out-test.ts",
     "test:email-block": "tsx tests/email-block-test.ts",
     "test:chase": "tsx tests/chase-test.ts",
-    "test:chase-channel": "tsx tests/chase-channel-test.ts"
+    "test:chase-channel": "tsx tests/chase-channel-test.ts",
+    "test:board-not-chased": "tsx tests/board-not-chased-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -281,6 +281,13 @@ export function deriveReplay(
         // exist yet; the mark is Kate's own decision rather than something a guest did, and
         // Ruling 22 rules her own override is not news to her.
         exhaustion: null,
+        /*
+         * [[GTC-305]] — THE CHASE FACT, NOT REWOUND, AS THE MARK IS NOT. Without it every grey and
+         * every "opted out" would derive an amber past and replay a step on every visit. ⚠ The cost,
+         * named in GTC-305's Evidence: a guest who opts out while she is away turns red with no
+         * step played, though Ruling 26(b) plays reds. How the replay rewinds facts is filed.
+         */
+        chase: person.chase,
         nudgeMark: person.nudgeMark,
         attendanceAnswer: past.attendanceAt.get(person.personEventId) ?? null,
         items: rows,

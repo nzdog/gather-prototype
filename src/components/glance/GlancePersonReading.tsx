@@ -158,6 +158,20 @@ export default function GlancePersonReading({
                     {panel.nudge}
                   </p>
                 ) : null}
+                {/*
+                  [[GTC-305]] — Ruling 32 as amended: why Gather will not chase this grey, in the
+                  ruled words, and ruling 3's sentence where there is one. Grey, like `emailNote`
+                  on the acting surface: a fact, not a colour. Empty for GREEN and AMBER.
+                */}
+                {panel.notes.map((note) => (
+                  <p
+                    key={note}
+                    data-reading-note=""
+                    className="m-0 mt-1 text-[13px] text-[#5c5b57]"
+                  >
+                    {note}
+                  </p>
+                ))}
               </div>
               <button
                 type="button"

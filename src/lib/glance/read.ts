@@ -44,7 +44,9 @@ import {
 } from './state';
 
 import { isChildMembership } from '@/lib/eligibility/child-exclusion';
+import { readAskPreview } from '@/lib/preflight/ask-preview';
 import { carrierMembershipFor, deliveryFactFrom, latestRowByMembership } from './delivery-fact';
+import { chaseFactFrom, chaseNoteFor } from './chase-fact';
 
 /** Accepts a client or a transaction, the shape `createHostHousehold` already takes. */
 type Db = Prisma.TransactionClient;
@@ -141,6 +143,7 @@ export async function readEventGlance(
     unassignedOrdinaryCount,
     outbound,
     emailNotes,
+    preview,
   ] = await Promise.all([
     db.personEvent.findMany({ where: { eventId }, select: PERSON_EVENT_SELECT }),
     db.assignment.findMany({
@@ -196,7 +199,18 @@ export async function readEventGlance(
     }),
     // [[GTC-189]] slice 8a, D3 — sentences only; see `readEmailNotes`.
     readEmailNotes(db, eventId, event.hostId),
+    /*
+     * [[GTC-305]] — THE CHASE ANSWER, FROM THE ONE PLACE IT LIVES. `readAskPreview` is the walk the
+     * pre-flight shows and the chase itself reads (`findNudgeCandidates`), so the board, the
+     * pre-flight and the reminder give one answer. It costs its own queries — seven or eight,
+     * measured at GTC-305 step 0 at 2–7 ms per event on `gather_dev` — on every load and every poll.
+     * A second assembly of the chooser's inputs from the queries above would be cheaper and is
+     * refused: it is the drift `smsOptedOutFact` was extracted to prevent. No link is read here.
+     */
+    readAskPreview(db, eventId, ''),
   ]);
+
+  const markOf = new Map(memberships.map((m) => [m.id, m.nudgeMark as string | null]));
 
   /*
    * GTC-189 slice 7a — THE LATEST ROW PER MEMBERSHIP, not every row.
@@ -276,6 +290,13 @@ export async function readEventGlance(
       delivery: answeringMembership
         ? deliveryFactFrom(latestOutbound.get(answeringMembership))
         : null,
+      // [[GTC-305]] — the chooser's chase answer for THIS membership (a child's goes through its
+      // carrier, ruling R). Null for the host, whom the preview never chases.
+      chase: chaseFactFrom(
+        preview?.chase.byMembership[row.id],
+        markOf,
+        isChildMembership(row.householdRole)
+      ),
     };
     const { state, reasons } = derivePersonState(
       {
@@ -318,7 +339,23 @@ export async function readEventGlance(
         };
       }),
       ...emailFactsFor(row, answeringMembership, context.delivery?.failure ?? null),
+      chase: context.chase,
+      chaseNote: chaseNoteFor({
+        state,
+        reasons,
+        route: preview?.chase.byMembership[row.id],
+        isChild: isChildMembership(row.householdRole),
+        carrierName: carrierNameOf(preview?.chase.byMembership[row.id]),
+      }),
     };
+  }
+
+  /** The carrier a child's chase route names, by name — for the ruled carrier sentence. */
+  function carrierNameOf(
+    route: { kind: string; carrierId?: string; recipientId?: string } | undefined
+  ) {
+    const id = route?.kind === 'NONE' ? route.carrierId : route?.recipientId;
+    return id ? (memberships.find((m) => m.id === id)?.person.name ?? null) : null;
   }
 
   const people = memberships.map(toPerson);
