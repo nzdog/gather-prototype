@@ -352,7 +352,7 @@ export async function reconcileHouseholdMembers(prisma: Tx, ctx: ReconcileContex
 
   // A member re-roled INTO CHILD while holding the channel would leave a channel the
   // picker would never have allowed. The eligibility layer already fails closed on
-  // that (findProxyNudgeCandidates), but leaving the row is silent corruption, so
+  // that (the chooser's `resolveCarrier`), but leaving the row is silent corruption, so
   // clear it back to the primary-contact default here.
   const current = await prisma.household.findUnique({
     where: { id: household.id },

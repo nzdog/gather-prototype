@@ -53,7 +53,8 @@ import { PrismaClient } from '@prisma/client';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { findNudgeCandidates } from '../src/lib/sms/nudge-eligibility';
-import { findProxyNudgeCandidates } from '../src/lib/sms/proxy-nudge-eligibility';
+import { existsSync } from 'fs';
+import { join } from 'path';
 import { resolveManualNudgeRecipient } from '../src/lib/sms/manual-nudge-recipient';
 
 const prisma = new PrismaClient();
@@ -404,162 +405,14 @@ async function main() {
         !off.second(gentleOnOff.pe.id)
     );
 
-    // ══ LAYER 4 — Ruling 3: the proxy path ══════════════════════════════
-    // Real wall-clock dates: findProxyNudgeCandidates takes no injectable clock, and
-    // needs none — it has no time gate of any kind (GTC-178's Ruling 3 determination).
-    const evProxy = await makeEvent('proxy', null);
-
-    async function makeHousehold(label: string, eventId: string = evProxy.id) {
-      const h = await prisma.household.create({
-        data: { eventId, littleCount: 0 },
-      });
-      return h;
-    }
-
-    const hControl = await makeHousehold('control');
-    const pControl = await makePerson(evProxy.id, 'proxy control channel', {
-      role: 'PRIMARY_CONTACT',
-      householdId: hControl.id,
-    });
-
-    const hMarked = await makeHousehold('marked');
-    const pMarked = await makePerson(evProxy.id, 'proxy channel dont-chase', {
-      role: 'PRIMARY_CONTACT',
-      householdId: hMarked.id,
-      mark: 'DONT_CHASE',
-    });
-
-    // ORDERING PROOF 1 — the child rule must fire FIRST. A channel that is BOTH a CHILD
-    // and DONT_CHASE must report the CHILD reason. §10.6 is absolute and must not be
-    // reachable-through by a later gate.
-    const hChild = await makeHousehold('child channel');
-    const pChild = await makePerson(evProxy.id, 'proxy channel child+dont-chase', {
-      role: 'CHILD',
-      householdId: hChild.id,
-      mark: 'DONT_CHASE',
-    });
-    // The channel must be PICKED explicitly. resolveHouseholdChannel falls back to the
-    // household's PRIMARY_CONTACT, and this household deliberately has none — without
-    // this the household skips as 'No primary contact' and never reaches the child rule,
-    // so the ordering proof would assert nothing. Writing a CHILD here is exactly the
-    // corrupt-data case GTC-172 documents: the picker omits children and the API rejects
-    // them, so the only way in is a direct write, and the eligibility layer must still
-    // fail closed.
-    await prisma.household.update({
-      where: { id: hChild.id },
-      data: { contactPersonEventId: pChild.pe.id },
-    });
-
-    // ORDERING PROOF 2 — opt-out must fire FIRST. Zone 7: the mark is layered ON TOP of
-    // opt-out, never through it.
-    const hOptOut = await makeHousehold('opted out channel');
-    const pOptOut = await makePerson(evProxy.id, 'proxy channel optout+dont-chase', {
-      role: 'PRIMARY_CONTACT',
-      householdId: hOptOut.id,
-      mark: 'DONT_CHASE',
-    });
-    const optOutRow = await prisma.smsOptOut.create({
-      data: { phoneNumber: pOptOut.phone, hostId: host.id },
-    });
-    createdOptOutIds.push(optOutRow.id);
-
-    const proxy = await findProxyNudgeCandidates();
-    const proxyEligible = (hid: string) => proxy.eligible.some((c) => c.householdId === hid);
-
+    // ══ LAYER 4 — Ruling 3: the proxy path — RETIRED ═══════════════════
+    // The household proxy reminder was retired at GTC-189 slice 8b (rulings V and AE) and deleted in its own commit (founder ruling D2, 2026-09-27). Rulings 3 and 12 held the mark and the pace
+    // on it; there is no second path now for either to reach, and the one chase that remains reads
+    // both (layers 1–3 and 6 above).
     assert(
-      'layer4 ruling3',
-      'PROXY control: an unmarked channel is still eligible — the fixture reaches the path',
-      proxyEligible(hControl.id)
-    );
-    assert(
-      'layer4 ruling3',
-      "PROXY: a DON'T-CHASE channel's household is NOT eligible — §10.3's paradigm case",
-      !proxyEligible(hMarked.id)
-    );
-    assert(
-      'layer4 ruling3',
-      "PROXY: and it records a skip naming don't-chase, not a silent drop",
-      proxy.skipped.some((s) => NAMES_DONT_CHASE.test(s.reason))
-    );
-    assert(
-      'layer4 ordering',
-      'PROXY: a CHILD channel is excluded, and the child rule is not reachable-through',
-      !proxyEligible(hChild.id) && proxy.skipped.some((s) => /child/i.test(s.reason))
-    );
-    assert(
-      'layer4 ordering',
-      "PROXY: an OPTED-OUT channel reports OPT-OUT, not don't-chase — Zone 7 gate runs first",
-      !proxyEligible(hOptOut.id) && proxy.skipped.some((s) => /opted out/i.test(s.reason))
-    );
-    // Both ordering subjects are also DONT_CHASE. If the mark gate had been placed
-    // BEFORE the child rule or before opt-out, the don't-chase count would be 3, not 1.
-    assert(
-      'layer4 ordering',
-      "exactly ONE household is counted under don't-chase — the other two were caught earlier",
-      proxy.skipped.find((s) => NAMES_DONT_CHASE.test(s.reason))?.count === 1
-    );
-
-    // ── Ruling 12: an OFF EVENT suppresses the proxy path too ────────────
-    //
-    // Ruling 3 suppressed don't-chase on both paths; Ruling 11 addressed OFF on the
-    // DIRECT path only. That asymmetry left a host who switched the pace off silenced on
-    // one path while findProxyNudgeCandidates kept returning her households on every
-    // tick — a failure spanning EVERY household rather than one person, which is why the
-    // argument behind Ruling 3 applies here with more force, not less.
-    const evProxyOff = await makeEvent('proxy on an OFF event', 'OFF');
-
-    const hOffControl = await makeHousehold('off control', evProxyOff.id);
-    await makePerson(evProxyOff.id, 'proxy channel on OFF event', {
-      role: 'PRIMARY_CONTACT',
-      householdId: hOffControl.id,
-    });
-
-    // ORDERING PROOF — the MARK is checked before the PACE, matching the direct sweep.
-    // The mark is the more specific fact and survives the host switching the pace back
-    // on, so it is the reason reported. If the two paths disagreed about this ordering,
-    // the same household would be explained two different ways depending on which sweep
-    // saw it.
-    const hOffMarked = await makeHousehold('off + marked', evProxyOff.id);
-    await makePerson(evProxyOff.id, 'proxy channel dont-chase on OFF event', {
-      role: 'PRIMARY_CONTACT',
-      householdId: hOffMarked.id,
-      mark: 'DONT_CHASE',
-    });
-
-    const proxy2 = await findProxyNudgeCandidates();
-    const proxy2Eligible = (hid: string) => proxy2.eligible.some((c) => c.householdId === hid);
-    const proxy2Off = proxy2.skipped.find((sk) => NAMES_OFF.test(sk.reason));
-    const proxy2Chase = proxy2.skipped.find((sk) => NAMES_DONT_CHASE.test(sk.reason));
-
-    assert(
-      'layer4 ruling12',
-      'PROXY: a household on an OFF event is NOT eligible — the pace covers both paths',
-      !proxy2Eligible(hOffControl.id)
-    );
-    assert(
-      'layer4 ruling12',
-      'PROXY: and it records the OFF skip reason, per household, consistent with Ruling 11',
-      proxy2Off !== undefined
-    );
-    assert(
-      'layer4 ruling12',
-      'PROXY: the pace-unset control household is STILL eligible — OFF is the difference',
-      proxy2Eligible(hControl.id)
-    );
-    assert(
-      'layer4 ruling12',
-      "PROXY ordering: a DON'T-CHASE channel on an OFF event reports the MARK, not the pace",
-      proxy2Chase !== undefined &&
-        proxy2Chase.count === 2 &&
-        proxy2Off !== undefined &&
-        proxy2Off.count === 1
-    );
-    assert(
-      'layer4 ruling12',
-      'PROXY: the two reasons are distinct strings — the causes are told apart',
-      proxy2Off !== undefined &&
-        proxy2Chase !== undefined &&
-        proxy2Off.reason !== proxy2Chase.reason
+      'layer4',
+      'TOMBSTONE — the proxy finder is gone and stays gone (founder ruling D2)',
+      !existsSync(join(__dirname, '../src/lib/sms/proxy-nudge-eligibility.ts'))
     );
 
     // ══ LAYER 8 — Ruling 19: the manual path, the host's own press ══════
@@ -676,25 +529,15 @@ async function main() {
       /resolveNudgeOffsetDays\(\s*\{[^}]*person:/.test(elig) &&
         !/resolveNudgeOffsetDays\(\{\}\)/.test(elig)
     );
+    // Layer 5's two "both paths share one reason" assertions went with the proxy path (ruling D2):
+    // there is one path left, and it imports both constants.
     assert(
       'layer5 shared',
-      'both eligibility paths import the SAME skip-reason constant — they cannot drift',
-      /DONT_CHASE_SKIP_REASON/.test(elig) &&
-        /DONT_CHASE_SKIP_REASON/.test(code('src/lib/sms/proxy-nudge-eligibility.ts'))
+      "the one remaining chase imports the shared don't-chase and pace reasons",
+      /DONT_CHASE_SKIP_REASON/.test(elig) && /PACE_OFF_SKIP_REASON/.test(elig)
     );
-    assert(
-      'layer5 shared',
-      'and the SAME pace reason — one fact, one string, on both paths (Ruling 12)',
-      /PACE_OFF_SKIP_REASON/.test(elig) &&
-        /PACE_OFF_SKIP_REASON/.test(code('src/lib/sms/proxy-nudge-eligibility.ts'))
-    );
-    assert(
-      'layer5 proxy',
-      'the proxy suppression is a boolean read, with no clock and no window added',
-      !/dueNudgeIndices|resolveNudgeOffsetDays|nextNudgeAt/.test(
-        code('src/lib/sms/proxy-nudge-eligibility.ts')
-      )
-    );
+    // 'layer5 proxy' is removed with the module (ruling D2): read against a deleted file it would
+    // pass VACUOUSLY — an empty string contains no clock — which is a green assertion about nothing.
     assert(
       'layer5 summary',
       'invite-status selects nudgeMark, so pendingFirst/pendingSecond can exclude it',

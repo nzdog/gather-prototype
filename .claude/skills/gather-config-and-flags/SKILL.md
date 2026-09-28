@@ -56,6 +56,10 @@ There are **no boolean feature flags** in this codebase. Behavior switches on
 (`Event.isDemo`). All env vars are documented in `.env.example` (root) and the env
 table in `GATHER-BUILD-CONSTANTS.md` (~line 200) — with one drift, noted below.
 
+> ⚠ **2026-09-27 — THE HOUSEHOLD PROXY REMINDER IS RETIRED AND DELETED** (GTC-189 slice 8b, rulings V
+> and AE; files removed by founder ruling D2). `proxy-nudge-eligibility.ts` and `proxy-nudge-sender.ts`
+> no longer exist; the text below is history. Its replacement, a host-chosen status share, is GTC-298.
+
 | Axis | Guard | When SET / true | When UNSET / false | Prod vs dev notes |
 |---|---|---|---|---|
 | AI availability | `ANTHROPIC_API_KEY` via `isClaudeAvailable()` (`src/lib/ai/claude.ts`) | Real Claude calls (`DEFAULT_MODEL = 'claude-sonnet-4-6'`, `claude.ts — DEFAULT_MODEL`) | **Silent mock fallback**: `generate.ts` logs `[AI Generate] Claude API not available` and returns `generateMockPlan()` — plausible-looking fake items whose `reasoning` says "fallback data because Claude API is not available" | Same in both. If plans look generic/wrong, check the reasoning string and server log FIRST before debugging prompts |

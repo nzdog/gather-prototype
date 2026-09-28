@@ -38,7 +38,8 @@ export interface HouseholdWithChannel {
  *
  * NOTE this returns the picked id EVEN IF it points at a CHILD. Resolution and
  * validation are deliberately separate: callers making a send decision must run the
- * result through the child rule and fail closed (see findProxyNudgeCandidates). If
+ * result through the child rule and fail closed (see `resolveCarrier` in the channel chooser; the
+ * proxy finder that first did this was deleted at GTC-189 slice 8b, ruling D2). If
  * this silently fell back to the primary contact for a bad channel, a corrupt row
  * would send a message to someone the host never picked, and the corruption would
  * never surface.
@@ -93,7 +94,8 @@ export function validateChannelTarget(
  * makes the host the PRIMARY_CONTACT of her own household; `resolveHouseholdChannel`
  * above returns the primary whenever `contactPersonEventId` is null; and null is the
  * state every household starts in. So the host is her own household's proxy channel by
- * default, on every event, with no pick made. `findProxyNudgeCandidates` has no
+ * default, on every event, with no pick made. `findProxyNudgeCandidates` (deleted at GTC-189
+ * slice 8b, ruling D2 — the history is kept because the switch it motivated remains) had no
  * member-count gate, so a host hosting alone under Ruling 2 would be texted
  * "1 person in your group hasn't confirmed yet" ABOUT HERSELF. That is why the switch
  * ships in the same phase as the household and never after it.

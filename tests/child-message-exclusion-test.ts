@@ -35,7 +35,8 @@
 
 import { PrismaClient } from '@prisma/client';
 import { findNudgeCandidates } from '../src/lib/sms/nudge-eligibility';
-import { findProxyNudgeCandidates } from '../src/lib/sms/proxy-nudge-eligibility';
+import { existsSync } from 'fs';
+import { join } from 'path';
 import { selectWrapUpRecipients } from '../src/lib/wrap-up';
 import { resolveManualNudgeRecipient } from '../src/lib/sms/manual-nudge-recipient';
 import { findDecideByFollowupCandidates } from '../src/lib/sms/decide-by-eligibility';
@@ -243,53 +244,15 @@ async function main() {
     // assertions with it. The remaining five paths still cover §10.6; a maybe's real
     // follow-up is path 6 (decide-by), which is a different mechanism and unaffected.
 
-    // ── PATH 3 — findProxyNudgeCandidates (household channel) ────────────
-    // 3a: baseline, no channel picked — the child must never be the recipient.
-    const proxyBaseline = await findProxyNudgeCandidates();
-    const candidateA = () => proxyBaseline.eligible.find((c) => c.householdId === householdA.id);
+    // ── PATH 3 — RETIRED. The household proxy reminder was retired at GTC-189 slice 8b (rulings V and AE) and deleted in its own commit (founder ruling D2, 2026-09-27).
+    // Its four assertions went with it: they held the child rule on a path that no longer
+    // exists. A carried child's ask is chased through the chase itself (ruling R), and the child
+    // rule there is `chooseChaseRoute`'s — asserted in tests/chase-test.ts and channel-chooser.
     assert(
-      'path 3a',
-      'child is not the household recipient (no channel picked)',
-      candidateA()?.primaryContactPersonId !== subject.person.id
+      'path 3',
+      'TOMBSTONE — the proxy finder is gone and stays gone (founder ruling D2)',
+      !existsSync(join(__dirname, '../src/lib/sms/proxy-nudge-eligibility.ts'))
     );
-
-    // 3b: the picker is CONSUMED, and is cross-household capable — household A's
-    // channel is Grandma, who lives in household B (§10.7).
-    await prisma.household.update({
-      where: { id: householdA.id },
-      data: { contactPersonEventId: grandma.personEvent.id },
-    });
-    const proxyPicked = await findProxyNudgeCandidates();
-    const pickedA = proxyPicked.eligible.find((c) => c.householdId === householdA.id);
-    assert(
-      'path 3b',
-      'picked cross-household channel (Grandma) IS the recipient',
-      pickedA?.primaryContactPersonId === grandma.person.id
-    );
-
-    // 3c/3d: a channel pointing at a CHILD must never send, and must fail CLOSED
-    // rather than silently falling back to someone the host did not pick.
-    await prisma.household.update({
-      where: { id: householdA.id },
-      data: { contactPersonEventId: subject.personEvent.id },
-    });
-    const proxyChild = await findProxyNudgeCandidates();
-    const childPickedA = proxyChild.eligible.find((c) => c.householdId === householdA.id);
-    assert(
-      'path 3c',
-      'child channel never becomes the recipient',
-      childPickedA?.primaryContactPersonId !== subject.person.id
-    );
-    assert(
-      'path 3d',
-      'child channel skips the household (fails closed, no silent fallback)',
-      childPickedA === undefined
-    );
-
-    await prisma.household.update({
-      where: { id: householdA.id },
-      data: { contactPersonEventId: null },
-    });
 
     // ── PATH 4 — selectWrapUpRecipients (thank-you messages) ─────────────
     // Must gate here: WrapUpLink denormalises phone/email, so role is gone by dispatch.

@@ -627,10 +627,18 @@ async function testSuite8_NudgePredicateAndOptOut(f: Fixtures) {
   }
 
   // Structural on purpose: exercising the send path would send real messages.
-  for (const rel of [
-    'src/lib/sms/nudge-eligibility.ts',
-    'src/lib/sms/proxy-nudge-eligibility.ts',
-  ]) {
+  /*
+   * ⚠ ZONE 6 EDIT, APPROVED BY THE FOUNDER FOR THIS PURPOSE ONLY (ruling D2, 2026-09-27). This loop
+   * held proxy-nudge-eligibility.ts to opt-out and phone validation. The household proxy reminder was
+   * retired at GTC-189 slice 8b (rulings V and AE) and its module deleted, so the check becomes a
+   * TOMBSTONE below: an automatic sender that comes back must come back through review, not by a file
+   * reappearing unchecked. The remaining finder keeps its check.
+   */
+  logTest(
+    'proxy-nudge-eligibility.ts stays deleted [tombstone, GTC-189 D2]',
+    !fs.existsSync(path.join(__dirname, '../src/lib/sms/proxy-nudge-eligibility.ts'))
+  );
+  for (const rel of ['src/lib/sms/nudge-eligibility.ts']) {
     const src = readCode(rel);
     const hasOptOut = src.includes('isOptedOut');
     const hasPhoneValidation = src.includes('isValidNZNumber');

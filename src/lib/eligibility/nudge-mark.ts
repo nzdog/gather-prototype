@@ -67,8 +67,9 @@
  *
  * ⚠ AND IT REACHES FURTHER THAN THIS ONE DOES. Ruling 3 of GTC-296 is CHASE-WIDE: an email
  * unsubscribe stops the automatic chase on EVERY channel for that event, the text chase
- * included. The three automatic finders — `findNudgeCandidates`, `findProxyNudgeCandidates`
- * and `findDecideByFollowupCandidates` — each carry the gate for that reason.
+ * included. The automatic finders carry the gate for that reason: `findNudgeCandidates` through the
+ * chooser since [[GTC-189]] slice 8b, and `findDecideByFollowupCandidates` directly. (The third,
+ * `findProxyNudgeCandidates`, was retired at slice 8b and deleted — ruling D2.)
  */
 
 import type { NudgeMark } from '@/lib/nudge-cadence';

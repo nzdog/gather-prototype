@@ -101,6 +101,10 @@ output + `npm run test:security` exit 0). See `gather-change-control`.
 
 ### A. Proxy-nudge frequency limiting (Epic 1.5 rebuild) — highest urgency
 
+> ⚠ **2026-09-27 — THE HOUSEHOLD PROXY REMINDER IS RETIRED AND DELETED** (GTC-189 slice 8b, rulings V
+> and AE; files removed by founder ruling D2). `proxy-nudge-eligibility.ts` and `proxy-nudge-sender.ts`
+> no longer exist; the text below is history. Its replacement, a host-chosen status share, is GTC-298.
+
 **Current state:** `runNudgeScheduler` (src/lib/sms/nudge-scheduler.ts) calls
 `findProxyNudgeCandidates` + `processProxyNudges` on every 15-minute cron run. Both
 src/lib/sms/proxy-nudge-eligibility.ts (the doc-comment above `findProxyNudgeCandidates()`) and

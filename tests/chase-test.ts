@@ -778,16 +778,11 @@ async function runStructuralLayer() {
       const p = join(dir, f);
       return statSync(p).isDirectory() ? walk(p) : /\.(ts|tsx)$/.test(f) ? [p] : [];
     });
-  // Unwired, not deleted: the security suite (Zone 6) names the finder's file. See its header.
   assert(
     'S',
-    'ruling V / AE — nothing in src/ calls the proxy reminder',
-    !/findProxyNudgeCandidates\(|processProxyNudges\(/.test(
-      walk(join(ROOT, 'src'))
-        .filter((f) => !/proxy-nudge-(eligibility|sender)\.ts$/.test(f))
-        .map((f) => readFileSync(f, 'utf8'))
-        .join('\n')
-    )
+    'ruling V / AE, D2 — the proxy reminder is deleted: its finder and sender are gone',
+    !existsSync(join(ROOT, 'src/lib/sms/proxy-nudge-eligibility.ts')) &&
+      !existsSync(join(ROOT, 'src/lib/sms/proxy-nudge-sender.ts'))
   );
   assert(
     'S',

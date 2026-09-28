@@ -123,7 +123,8 @@ export async function resolveManualNudgeRecipient(
    * new, can nudge a person the host said to leave alone."
    *
    * ⚠ THIS IS A BEHAVIOUR CHANGE TO V1, MADE ON PURPOSE. Until now the mark suppressed
-   * only the two AUTOMATED paths (`nudge-eligibility.ts`, `proxy-nudge-eligibility.ts`)
+   * only the two AUTOMATED paths (`nudge-eligibility.ts`, `proxy-nudge-eligibility.ts` — the
+   * latter deleted at GTC-189 slice 8b, ruling D2)
    * and had never gated a button. `PersonInviteDetailModal` → `NudgeComposer` → this
    * route could nudge a marked person, and it did. It cannot now, and neither can the
    * Moment 4 glance — both doors build the same URL and both arrive here.

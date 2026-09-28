@@ -125,6 +125,10 @@ Traps and obligations:
 
 Why tiers matter (not cosmetic):
 
+> ⚠ **2026-09-27 — THE HOUSEHOLD PROXY REMINDER IS RETIRED AND DELETED** (GTC-189 slice 8b, rulings V
+> and AE; files removed by founder ruling D2). `proxy-nudge-eligibility.ts` and `proxy-nudge-sender.ts`
+> no longer exist; the text below is history. Its replacement, a host-chosen status share, is GTC-298.
+
 - **Compliance rate excludes UNTRACKABLE from numerator AND denominator** — "can't measure what
   you can't reach" (`src/lib/workflow.ts`, `checkFreezeReadiness`). Threshold: <80% triggers a
   `LOW_COMPLIANCE` freeze warning.

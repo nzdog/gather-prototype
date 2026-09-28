@@ -14,7 +14,7 @@
  *               Closed by construction (Ruling 8), exactly like nudge-eligibility.ts, with
  *               exactly the same stale-token caveat — which is what the revocation below
  *               exists to remove.
- *   NOT A SITE  proxy-nudge-eligibility.ts — covered by phase 2's own Ruling 6 switch.
+ *   NOT A SITE  proxy-nudge-eligibility.ts — retired at GTC-189 slice 8b (rulings V and AE) and deleted in its own commit (founder ruling D2, 2026-09-27).
  *               What IS wrong there is the COUNT, not the exclusion: see checkInCount.
  *   NEW         PATCH /people/[personId] had no host guard on `role`, so one call minted
  *               her a PARTICIPANT token — and ensureEventTokens never revoked it, because
@@ -35,7 +35,8 @@ import { ensureEventTokens } from '../src/lib/tokens';
 import { resolveManualNudgeRecipient } from '../src/lib/sms/manual-nudge-recipient';
 import { findNudgeCandidatesForEvent } from '../src/lib/sms/nudge-eligibility';
 import { findDecideByFollowupCandidates } from '../src/lib/sms/decide-by-eligibility';
-import { findProxyNudgeCandidatesForEvent } from '../src/lib/sms/proxy-nudge-eligibility';
+import { existsSync } from 'fs';
+import { join } from 'path';
 import { isAddressable, HOST_SKIP_REASON } from '../src/lib/eligibility/host-exclusion';
 import { POST as claimPOST } from '../src/app/api/join/[token]/claim/route';
 
@@ -284,32 +285,12 @@ async function main() {
       !decide.eligible.some((c) => c.personId === hostPerson.id && c.eventId === event.id)
     );
 
-    // ── SITE: the proxy message COUNTS her ────────────────────────────────
-    //
-    // Not an exclusion — Ruling 6 says she MAY receive her own household's messages once
-    // she switches them on, and founder answer 2 confirms the analogous case. What was
-    // wrong is the number: the template asks her to "check in with them", and she cannot
-    // check in with herself.
-    await prisma.household.update({
-      where: { id: hostPE.householdId! },
-      data: { messagesMuted: false },
-    });
-    await prisma.personEvent.update({ where: { id: hostPE.id }, data: { contactMethod: 'SMS' } });
-
-    const proxy = await findProxyNudgeCandidatesForEvent(event.id);
+    // ── SITE: the proxy message — RETIRED. The household proxy reminder was retired at GTC-189 slice 8b (rulings V and AE) and deleted in its own commit (founder ruling D2, 2026-09-27).
+    // Its three assertions (Ruling 6's switch, memberCount, Ruling 5's checkInCount) went with it:
+    // there is no proxy message left to count her in. The status share that replaces it is GTC-298's.
     assert(
-      "RULING 6 still holds: she switched her household's messages on, so she is a " +
-        'candidate — Ruling 5 does not reach this path and must not be made to',
-      proxy.eligible.length === 1 && proxy.eligible[0].primaryContactPersonId === hostPerson.id
-    );
-    assert(
-      'memberCount is still the TRUE household size, so the metadata does not start lying',
-      proxy.eligible[0].memberCount === 2
-    );
-    assert(
-      'RULING 5: but checkInCount — the number the message quotes — excludes her. She is ' +
-        'not among the people she is being asked to check in with',
-      proxy.eligible[0].checkInCount === 1
+      'TOMBSTONE — the proxy finder is gone and stays gone (founder ruling D2)',
+      !existsSync(join(__dirname, '../src/lib/sms/proxy-nudge-eligibility.ts'))
     );
 
     // ── The reason string is shared, so two paths cannot explain it two ways
