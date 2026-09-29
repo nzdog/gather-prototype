@@ -277,10 +277,11 @@ export function deriveReplay(
     const from = derivePersonState(
       {
         isHost: person.isHost,
-        // NOT REWOUND, AND NEITHER IS THE MARK. Exhaustion is GTC-251's fact and does not
-        // exist yet; the mark is Kate's own decision rather than something a guest did, and
-        // Ruling 22 rules her own override is not news to her.
-        exhaustion: null,
+        // [[GTC-251]] — REWOUND: the same predicate asked as at `since`, so a guest who was
+        // already quiet plays no step, and one who went quiet while she was away plays once.
+        // The mark is still not rewound: it is Kate's own decision, and Ruling 22 rules her own
+        // override is not news to her.
+        exhaustion: past.exhaustionAt?.get(person.personEventId) ?? null,
         /*
          * [[GTC-305]] — THE CHASE FACT, NOT REWOUND, AS THE MARK IS NOT. Without it every grey and
          * every "opted out" would derive an amber past and replay a step on every visit. ⚠ The cost,

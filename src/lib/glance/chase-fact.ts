@@ -64,12 +64,13 @@ export const CHASE_REFUSAL_MEANS: Record<ChaseNoneWhy, ChaseStanding | null> = {
   NO_CARRIER: null,
   HOUSEHOLD_MUTED: null,
   /*
-   * null — a channel lost AFTER the ask (a hard bounce with no mobile, an address removed). Ruled R4,
-   * 2026-09-28: filed on [[GTC-251]] beside the live-maybe gap, not decided here.
+   * A channel lost AFTER the ask (a hard bounce with no mobile, an address removed, a number that
+   * cannot take texts and no email). Filed on [[GTC-251]] by R4 (2026-09-28) and ruled there as Q5
+   * (2026-09-29): *"Red straight away, handed to you, with a short reason."*
    */
-  EMAIL_BLOCKED: null,
-  NO_CHANNEL: null,
-  PHONE_UNUSABLE: null,
+  EMAIL_BLOCKED: 'CHASE_UNREACHABLE',
+  NO_CHANNEL: 'CHASE_UNREACHABLE',
+  PHONE_UNUSABLE: 'CHASE_UNREACHABLE',
   // null — the host; `isHost` already keeps her green.
   HOST_OWN_ASK: null,
 };
@@ -81,11 +82,15 @@ export const CHASE_REFUSAL_MEANS: Record<ChaseNoneWhy, ChaseStanding | null> = {
  * read for one thing: POINT 2, the carrier named by the child's route carries the don't-chase mark.
  * The carrier is `carrierId` on a NONE route and `recipientId` on a CARRIED one; the host is never a
  * marked carrier here, because a route to her answers HOST_AS_CARRIER and her mark is not read.
+ *
+ * `paceOff` — [[GTC-251]] 4.7: the event's pace is OFF, so a route the chooser would chase is
+ * never reminded. A refusal keeps its own standing: it says more than the pace does.
  */
 export function chaseFactFrom(
   route: ChaseRoute | undefined,
   marks: ReadonlyMap<string, string | null>,
-  isChild: boolean
+  isChild: boolean,
+  paceOff: boolean = false
 ): ChaseFact | null {
   if (!route) return null;
   const carrierId = !isChild
@@ -96,10 +101,13 @@ export function chaseFactFrom(
         : (route.carrierId ?? null)
       : route.recipientId;
   return {
-    standing: route.kind === 'NONE' ? CHASE_REFUSAL_MEANS[route.why] : null,
+    standing: route.kind === 'NONE' ? CHASE_REFUSAL_MEANS[route.why] : paceOff ? 'PACE_OFF' : null,
     carrierMarked: carrierId !== null && !isChaseable(marks.get(carrierId) ?? null),
   };
 }
+
+/** W6, ruled 2026-09-30 ([[GTC-251]]): why nobody on an OFF event is being chased. */
+export const PACE_OFF_CHASE_NOTE = "Reminders are off for this event, so I won't chase them.";
 
 /**
  * THE PERSON VIEW'S SENTENCE — the ruled why-map, never new words.
@@ -120,6 +128,10 @@ export function chaseNoteFor(input: {
   carrierName: string | null;
 }): string | null {
   const { route } = input;
+  // [[GTC-251]] 4.7 — the OFF grey's route is one the chooser WOULD chase, so it is asked first.
+  if (input.state === 'NOT_CHASED' && input.reasons.includes('PACE_OFF')) {
+    return PACE_OFF_CHASE_NOTE;
+  }
   if (!route || route.kind !== 'NONE') return null;
   const opens = input.state === 'NOT_CHASED' && greyOpensReading(input.reasons);
   const optedOutRed = input.state === 'RED' && input.reasons.includes('EMAIL_OPTED_OUT');

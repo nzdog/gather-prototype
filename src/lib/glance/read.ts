@@ -47,6 +47,9 @@ import { isChildMembership } from '@/lib/eligibility/child-exclusion';
 import { readAskPreview } from '@/lib/preflight/ask-preview';
 import { carrierMembershipFor, deliveryFactFrom, latestRowByMembership } from './delivery-fact';
 import { chaseFactFrom, chaseNoteFor } from './chase-fact';
+import { exhaustionFor } from '@/lib/chase-exhaustion';
+import { readChaseSpend } from '@/lib/chase-exhaustion-read';
+import { isPaceOff } from '@/lib/eligibility/nudge-pace';
 
 /** Accepts a client or a transaction, the shape `createHostHousehold` already takes. */
 type Db = Prisma.TransactionClient;
@@ -144,6 +147,7 @@ export async function readEventGlance(
     outbound,
     emailNotes,
     preview,
+    chaseSpend,
   ] = await Promise.all([
     db.personEvent.findMany({ where: { eventId }, select: PERSON_EVENT_SELECT }),
     db.assignment.findMany({
@@ -208,6 +212,12 @@ export async function readEventGlance(
      * refused: it is the drift `smsOptedOutFact` was extracted to prevent. No link is read here.
      */
     readAskPreview(db, eventId, ''),
+    /*
+     * [[GTC-251]] — WHAT EACH RECIPIENT HAS BEEN SENT, read outside this module on purpose. The send
+     * instants stay behind `readChaseSpend`; only `exhaustionFor`'s yes or no is used here, which is
+     * the decision `tests/glance-fence.ts` asks the board to take instead of telemetry.
+     */
+    readChaseSpend(db, eventId),
   ]);
 
   const markOf = new Map(memberships.map((m) => [m.id, m.nudgeMark as string | null]));
@@ -283,9 +293,8 @@ export async function readEventGlance(
       : row.id;
     const context = {
       isHost,
-      // ANCHOR(GTC-251): exhaustion has no source until E6 lands. NULL says "no signal",
-      // which is a different claim from "not exhausted" — see ExhaustionFact in state.ts.
-      exhaustion: null,
+      // [[GTC-251]] — gated on the chooser inside `exhaustionFor`; a child's is its carrier's.
+      exhaustion: exhaustionFor(preview?.chase.byMembership[row.id], chaseSpend, now),
       // ANCHOR(GTC-189 slice 7a): the delivery door. NULL before the press, for the same reason.
       delivery: answeringMembership
         ? deliveryFactFrom(latestOutbound.get(answeringMembership))
@@ -295,7 +304,8 @@ export async function readEventGlance(
       chase: chaseFactFrom(
         preview?.chase.byMembership[row.id],
         markOf,
-        isChildMembership(row.householdRole)
+        isChildMembership(row.householdRole),
+        isPaceOff(event.nudgePace)
       ),
     };
     const { state, reasons } = derivePersonState(

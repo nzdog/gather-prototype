@@ -140,12 +140,11 @@ export function decideByFollowupOpensAt(item: DecideByItem, event: DecideByEvent
 /**
  * Has this maybe's clock run out?
  *
- * GTC-175 RULING (a): D2 makes expiry a CORRECT, DERIVABLE STATE and pins it with tests.
- * D2 does NOT surface it. The "standard door" Hinge §8 sends an expired maybe through —
- * exhausted-silence red (GTC-178 / E1) and the person-grid colour encoding (GTC-192 /
- * J1) — does not exist yet. Both tickets are open, both are told this predicate is here
- * waiting, and neither is reached into from D2. The state is expressible and correct;
- * the red is theirs to render when they build the door.
+ * GTC-175 RULING (a): D2 makes expiry a CORRECT, DERIVABLE STATE and pins it with tests,
+ * and does not surface it itself. The "standard door" Hinge §8 sends an expired maybe
+ * through is the board's one red: `deriveItemState` in `src/lib/glance/state.ts` reads this
+ * predicate (GTC-192 Ruling 15), beside the exhausted-silence red that GTC-251 (E6) owns —
+ * the ownership GTC-178 once held and handed on. One red, several ways in.
  *
  * Gated on `isSent`: a maybe on an unsent event cannot have run out of time, because its
  * clock has not started. Reachable — the ack routes carry no lifecycle gate by design

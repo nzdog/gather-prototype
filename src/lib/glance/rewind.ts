@@ -52,6 +52,7 @@
 
 import type { Prisma } from '@prisma/client';
 import type { DecideByItem } from '../decide-by';
+import type { ExhaustionFact } from './state';
 
 /**
  * Accepts a client or a transaction — `Prisma.TransactionClient`, the same handle
@@ -133,6 +134,12 @@ export interface GlanceRewind {
   attendanceAt: Map<string, 'YES' | 'NO' | null>;
   /** People whose past state cannot be established. Excluded from the replay, silently. */
   ambiguous: Set<string>;
+  /**
+   * [[GTC-251]] — each membership's exhaustion AS AT `since`, filled by `readGlanceReplay` from the
+   * same predicate the board uses. Optional so a rewind built by hand still means "no signal".
+   * A decision, not an instant: nothing dated rides in it.
+   */
+  exhaustionAt?: Map<string, ExhaustionFact | null>;
 }
 
 /**

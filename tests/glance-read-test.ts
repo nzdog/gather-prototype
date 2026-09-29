@@ -242,18 +242,23 @@ async function main() {
      * PRODUCER, the arrangement `EXHAUSTED_SILENCE` has held since GTC-192 — correction R6 maps
      * the withheld code to `null`, so nothing turns a strip this colour today. [[GTC-327]] is the
      * one edit that gives it a producer.
+     *
+     * ⚠ 6 → 7, [[GTC-251]] Q5 (founder, 2026-09-29) — the deliberate edit this pin asks for.
+     * `CHASE_UNREACHABLE` is a channel lost AFTER the ask. It shares `UNREACHABLE`'s words and not
+     * its door, which would answer `NOTHING_FAILED` for an ask that did not fail.
      */
     assert(
       'item state',
-      '⚠ THE RED VOCABULARY IS SIX — the fourth and fifth reds joined DECIDE_BY_EXPIRED, REVERSAL ' +
-        'and EXHAUSTED_SILENCE, GTC-296 added the sixth, and the count stays pinned so a seventh ' +
-        'is a deliberate edit',
+      '⚠ THE RED VOCABULARY IS SEVEN — the fourth and fifth reds joined DECIDE_BY_EXPIRED, REVERSAL ' +
+        'and EXHAUSTED_SILENCE, GTC-296 added the sixth, GTC-251 Q5 the seventh, and the count ' +
+        'stays pinned so an eighth is a deliberate edit',
       ok(
         () =>
-          S.RED_REASONS.length === 6 &&
+          S.RED_REASONS.length === 7 &&
           S.RED_REASONS.includes('NOT_DELIVERED') &&
           S.RED_REASONS.includes('UNREACHABLE') &&
-          S.RED_REASONS.includes('EMAIL_OPTED_OUT')
+          S.RED_REASONS.includes('EMAIL_OPTED_OUT') &&
+          S.RED_REASONS.includes('CHASE_UNREACHABLE')
       )
     );
     assert(
@@ -1193,10 +1198,14 @@ async function main() {
       sourcesExist && !/(percent|proportion|\bratio\b|\brate\b)/i.test(stateSrc + readSrc)
     );
 
+    // ⚠ MOVED BY [[GTC-251]] slice 251a: the anchor marked where E6 would plug in, and the
+    // template says it is deleted when the owning ticket lands. What it guarded is now that the
+    // seam is fed by the SHARED predicate — `exhaustionFor` — and not left null.
     assert(
       'GTC-251 seam',
-      'the seam is grep-findable at the point E6 plugs into — ANCHOR(GTC-251)',
-      /ANCHOR\(GTC-251\)/.test(raw('src/lib/glance/read.ts'))
+      'the seam is fed at the point E6 plugged into — `exhaustionFor`, the anchor gone as landed',
+      /exhaustion:\s*exhaustionFor\(/.test(readSrc) &&
+        !/ANCHOR\(GTC-251\)/.test(raw('src/lib/glance/read.ts'))
     );
     assert(
       'GTC-251 seam',

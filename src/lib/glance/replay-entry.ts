@@ -37,6 +37,9 @@ import type { RewindDb } from './rewind';
 import { deriveReplay } from './replay';
 import type { GlanceReplay } from './replay';
 import type { EventGlance, GlanceEvent } from './state';
+import { readAskPreview } from '@/lib/preflight/ask-preview';
+import { exhaustionFor } from '@/lib/chase-exhaustion';
+import { readChaseSpend } from '@/lib/chase-exhaustion-read';
 
 /**
  * SLICE 6d — Ruling 23's overlay, RE-EXPORTED THROUGH THE DOOR RATHER THAN DEFINED BEHIND IT.
@@ -63,8 +66,22 @@ export async function readGlanceReplay(
   now: Date
 ): Promise<GlanceReplay> {
   if (glanceSeenAt === null) return { steps: [] };
-  const past = await rewindGlanceInputs(db, eventId, glanceSeenAt);
-  return deriveReplay(glance, past, event, glanceSeenAt, now);
+  const [rewound, preview, spend] = await Promise.all([
+    rewindGlanceInputs(db, eventId, glanceSeenAt),
+    readAskPreview(db, eventId, ''),
+    readChaseSpend(db, eventId),
+  ]);
+  /*
+   * [[GTC-251]] — the past's exhaustion is the SAME predicate asked as at `since`. Handing the past
+   * nothing would replay AMBER → RED for every quiet guest on every visit (the shape [[GTC-335]]
+   * records for the delivery fact). The chase route is today's, as GTC-305 left the chase fact.
+   */
+  const exhaustionAt = new Map(
+    Object.entries(preview?.chase.byMembership ?? {}).map(
+      ([id, route]) => [id, exhaustionFor(route, spend, glanceSeenAt)] as const
+    )
+  );
+  return deriveReplay(glance, { ...rewound, exhaustionAt }, event, glanceSeenAt, now);
 }
 
 /** The one write's handle — a client or a transaction, the same shape the read half takes. */

@@ -105,9 +105,11 @@ const EXPECTED_MEANS: Record<(typeof ALL_WHYS)[number], string | null> = {
   MARKED_DONT_CHASE: null,
   NO_CARRIER: null,
   HOUSEHOLD_MUTED: null,
-  EMAIL_BLOCKED: null,
-  NO_CHANNEL: null,
-  PHONE_UNUSABLE: null,
+  // ⚠ MOVED BY [[GTC-251]] Q5 (founder, 2026-09-29): R4 filed these three on GTC-251, which ruled
+  // them red at once — "Red straight away, handed to you, with a short reason."
+  EMAIL_BLOCKED: 'CHASE_UNREACHABLE',
+  NO_CHANNEL: 'CHASE_UNREACHABLE',
+  PHONE_UNUSABLE: 'CHASE_UNREACHABLE',
   HOST_OWN_ASK: null,
 };
 
@@ -332,15 +334,27 @@ async function main() {
         'DECIDE_BY_EXPIRED',
       ])
     );
+    /*
+     * ⚠ MOVED BY [[GTC-251]] slice 251a. R1 kept a live maybe amber and gave "the gap it leaves" to
+     * GTC-251, which closed it: no decide-by follow-up comes for a handed-over guest (Q4: "a
+     * handed-over guest is the host's and gets none"), so amber is false of the maybe too, and it
+     * greys with the rest. The expired maybe above still reads red — the grey replaces amber only.
+     */
     assert(
       'B',
-      'R1 (ruled): a live maybe alone stays AMBER MAYBE_LIVE — ruling 2 replaces "waiting to hear back" and nothing else',
-      is(person({ items: [row('MAYBE')], chase: chase('HANDED_TO_HOST') }), 'AMBER', ['MAYBE_LIVE'])
+      'R1 → GTC-251: a live maybe alone, handed over → NOT_CHASED [HANDED_TO_HOST] (no follow-up comes)',
+      is(person({ items: [row('MAYBE')], chase: chase('HANDED_TO_HOST') }), 'NOT_CHASED', [
+        'HANDED_TO_HOST',
+      ])
     );
     assert(
       'B',
-      'R1: a live maybe beside a pending row stays AMBER — the maybe is an answer and shows',
-      is(person({ items: [row('MAYBE'), row('PENDING')], chase: chase('HANDED_TO_HOST') }), 'AMBER')
+      'R1 → GTC-251: a live maybe beside a pending row, handed over → NOT_CHASED [HANDED_TO_HOST]',
+      is(
+        person({ items: [row('MAYBE'), row('PENDING')], chase: chase('HANDED_TO_HOST') }),
+        'NOT_CHASED',
+        ['HANDED_TO_HOST']
+      )
     );
     assert(
       'B',

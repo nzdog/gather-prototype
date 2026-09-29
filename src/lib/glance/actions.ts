@@ -263,7 +263,16 @@ export const DOOR_REASONS = ['NOT_DELIVERED', 'UNREACHABLE'] as const;
  * A named list rather than three `includes` calls, so slice 7b's door has one place to read when it
  * asks *"which reds am I the door for"* — and so a fourth entry is a visible decision.
  */
-const REMIND_WITHDRAWN = ['ATTENDANCE_NO', ...DOOR_REASONS] as const;
+const REMIND_WITHDRAWN = [
+  'ATTENDANCE_NO',
+  ...DOOR_REASONS,
+  /*
+   * [[GTC-251]] Q5 — the fifth, and a visible decision in this list's own terms: withdrawn for
+   * `UNREACHABLE`'s reason (there is nothing to send a reminder to), and NOT a door reason, because
+   * the ask arrived and the resend door would answer `NOTHING_FAILED` ([[GTC-336]]'s defect).
+   */
+  'CHASE_UNREACHABLE',
+] as const;
 
 /**
  * ⚠ AND SINCE SLICE 7b THE TWO NEW REDS HAVE AN ACTION AGAIN. Between 7a and this commit a

@@ -140,6 +140,8 @@ export const WHY_PRECEDENCE = [
    */
   'NOT_DELIVERED',
   'UNREACHABLE',
+  // [[GTC-251]] Q5 — the same fact after the ask, so it sits beside it: a cause, before any silence.
+  'CHASE_UNREACHABLE',
   // [[GTC-296]], beside the two delivery reasons and for their reason: the three below presume
   // the ask landed and was answered or not. This one says the person declined to be asked.
   'EMAIL_OPTED_OUT',
@@ -199,8 +201,8 @@ export function overlayReversal(person: GlancePerson): GlancePerson {
  * ⚠ ONE OF THE REFERENCE'S TWO EXAMPLES IS NOW RENDERED, AND THE OTHER STILL IS NOT.
  * "Ray — was in, now out" is built as of slice 6d: it is the attendance reversal, and it was
  * fenced behind phase 5's last-seen record because a sticky red needs a viewer to be sticky FOR.
- * See `REVERSAL_WHY` and `overlayReversal` above. "Amelia — quiet after 2 nudges" still needs the
- * count [[GTC-251]] owns, and until E6 lands the honest line is the one claiming no number.
+ * See `REVERSAL_WHY` and `overlayReversal` above. "Amelia — quiet after 2 nudges" is rendered as
+ * "gone quiet": [[GTC-251]]'s W1 ruled the line final without a count.
  *
  * The register is deliberate: `maybe timed out` puts the clock at fault rather than the
  * guest, which is the voice §8 uses about a maybe.
@@ -245,6 +247,9 @@ const WHY_LINES: Record<(typeof WHY_PRECEDENCE)[number], (person: GlancePerson) 
   // queued before the provider's block was learned, and that guest may hold a usable mobile; for
   // them the red is about the address, and the door offers "Send it as a text". 11 characters.
   UNREACHABLE: (person) => (person.textable ? "can't email" : 'nowhere to send'),
+  // [[GTC-251]] Q5, founder 2026-09-29: *"Those words already exist on the board for the same problem
+  // at the invitation, so nothing new to approve."* The same words, read the same way.
+  CHASE_UNREACHABLE: (person) => (person.textable ? "can't email" : 'nowhere to send'),
   /*
    * [[GTC-296]] correction R7. The founder proposed *"no email"* (8) and offered *"opted out"*
    * (9) *"if it reads better"*.
@@ -264,8 +269,8 @@ const WHY_LINES: Record<(typeof WHY_PRECEDENCE)[number], (person: GlancePerson) 
     return handedBack > 1 ? `handed ${handedBack} back` : 'handed it back';
   },
   DECIDE_BY_EXPIRED: () => 'maybe timed out',
-  // GTC-251 supplies the count this line wants ("quiet after 2 nudges"); until it lands the honest
-  // line is the one that claims no number.
+  // [[GTC-251]] W1, ruled 2026-09-30 as final: no count. A count differs by pace (one reminder for
+  // "go gentle"), "nudges" is not the host's word, and "quiet after 2 nudges" breaks the 16 cap.
   EXHAUSTED_SILENCE: () => 'gone quiet',
 };
 

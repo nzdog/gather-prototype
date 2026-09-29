@@ -65,9 +65,9 @@ export type PersonState = ItemState | 'NOT_CHASED' | 'OUT';
  * ONE DOOR, NOT THREE. §8.1: "the calendar is a second way to exhaust, not a new meaning
  * for red." These are the ways in; the red they reach is the same red.
  *
- * `EXHAUSTED_SILENCE` is declared here and has no producer yet — [[GTC-251]] (E6) owns the
- * counter and the exhausted predicate and is open. It is in the vocabulary from birth so
- * that E6 plugs a fact into an existing door rather than inventing a second one.
+ * `EXHAUSTED_SILENCE` was declared here from birth so that E6 would plug a fact into an existing
+ * door rather than invent a second one. ✅ [[GTC-251]] slice 251a gives it its producer:
+ * `exhaustionFor` in `src/lib/chase-exhaustion.ts`, read in by `readEventGlance`.
  */
 export const RED_REASONS = [
   'DECIDE_BY_EXPIRED',
@@ -113,6 +113,18 @@ export const RED_REASONS = [
    * is not a door reason: slice 7b's door must never offer to send it again.
    */
   'EMAIL_OPTED_OUT',
+  /*
+   * [[GTC-251]] Q5 (founder, 2026-09-29) — A CHANNEL LOST AFTER THE ASK: *"Red straight away, handed
+   * to you, with a short reason."* The ask arrived, so this is not the delivery fact's
+   * `UNREACHABLE`; the chase chooser now refuses (`EMAIL_BLOCKED`, `NO_CHANNEL`, `PHONE_UNUSABLE`),
+   * so Gather has no way to reach them again.
+   *
+   * ⚠ A SEPARATE REASON WITH THE SAME WORDS, AND THE DOOR IS WHY. `UNREACHABLE` opens slice 7b's
+   * resend door, which answers `NOTHING_FAILED` for an ask that did not fail ([[GTC-336]]'s defect).
+   * Sharing the reason would offer that dead door; sharing the words (`WHY_LINES` in `strip.ts`)
+   * keeps Q5's "nothing new to approve".
+   */
+  'CHASE_UNREACHABLE',
 ] as const;
 export type RedReason = (typeof RED_REASONS)[number];
 
@@ -142,8 +154,14 @@ export type GreyChaseStanding =
   | 'SMS_OPTED_OUT'
   | 'HOST_AS_CARRIER'
   | 'HOST_HOUSEHOLD_CHILD'
-  | 'CHILD_WITHOUT_ITEM';
-export type ChaseStanding = GreyChaseStanding | 'EMAIL_OPTED_OUT';
+  | 'CHILD_WITHOUT_ITEM'
+  /*
+   * [[GTC-251]] 4.7, founder 2026-09-30 — the host turned reminders off for the event, so amber
+   * ("Gather is chasing") is false; red would tell her what she told Gather first (GTC-305 ruling
+   * 1's ground). Not a chooser refusal: pace is the cadence's, so `chaseFactFrom` sets it.
+   */
+  | 'PACE_OFF';
+export type ChaseStanding = GreyChaseStanding | 'EMAIL_OPTED_OUT' | 'CHASE_UNREACHABLE';
 
 /**
  * [[GTC-305]] — the chase fact. THE SAME SHAPE AS `DeliveryFact` AND FOR THE SAME REASON: a decision
@@ -170,6 +188,20 @@ const GREY_STANDINGS: ReadonlySet<string> = new Set<GreyChaseStanding>([
   'HOST_AS_CARRIER',
   'HOST_HOUSEHOLD_CHILD',
   'CHILD_WITHOUT_ITEM',
+  'PACE_OFF',
+]);
+
+/**
+ * [[GTC-251]] — the greys whose live maybe gets no decide-by follow-up, so amber would be false of
+ * it too (GTC-305's R1 gap, given to this ticket; Q4a for the text-opted-out). PACE_OFF is not
+ * among them: pace is the silence cadence's, and a maybe has none — its follow-up still comes.
+ */
+const MAYBE_UNFOLLOWED: ReadonlySet<string> = new Set<GreyChaseStanding>([
+  'HANDED_TO_HOST',
+  'SMS_OPTED_OUT',
+  'HOST_AS_CARRIER',
+  'HOST_HOUSEHOLD_CHILD',
+  'CHILD_WITHOUT_ITEM',
 ]);
 
 function greyStandingOf(chase: ChaseFact | null | undefined): GreyChaseStanding | null {
@@ -191,6 +223,8 @@ export const READING_GREYS: readonly GreyChaseStanding[] = [
   'SMS_OPTED_OUT',
   'HOST_AS_CARRIER',
   'HOST_HOUSEHOLD_CHILD',
+  // [[GTC-251]] 4.7 — she can still check what they are bringing; W6 says why nobody is chasing.
+  'PACE_OFF',
 ];
 
 /** Does this NOT_CHASED person open the reading room? Only for the four ruled greys. */
@@ -209,8 +243,10 @@ export type ItemReason = RedReason | MovingReason | SettledReason;
  * instant Kate marked them (GTC-179's recorded warning, absorbed by GTC-251). Taking the
  * answer rather than the raw send stamps is what keeps that derivation in one place.
  *
- * NULL IS NOT FALSE. Null means E6 has not landed and no exhaustion signal exists; this
- * module therefore claims nothing about exhaustion, rather than claiming "not exhausted".
+ * NULL IS NOT FALSE. Null means no signal — the host, whom Gather never chases, or a caller
+ * that built a context by hand; this module then claims nothing about exhaustion. Since
+ * [[GTC-251]] slice 251a every chased membership gets a real answer from `exhaustionFor`
+ * (`src/lib/chase-exhaustion.ts`).
  */
 export interface ExhaustionFact {
   exhausted: boolean;
@@ -546,9 +582,15 @@ export function deriveItemState(
   if (input.response === 'DECLINED') return { state: 'RED', reason: 'REVERSAL' };
 
   if (input.response === 'MAYBE') {
-    return isDecideByExpired({ response: input.response }, input.item, event, now)
-      ? { state: 'RED', reason: 'DECIDE_BY_EXPIRED' }
-      : { state: 'AMBER', reason: 'MAYBE_LIVE' };
+    if (isDecideByExpired({ response: input.response }, input.item, event, now)) {
+      return { state: 'RED', reason: 'DECIDE_BY_EXPIRED' };
+    }
+    // [[GTC-251]] Q5 — no channel is left for the maybe's follow-up either, so amber would promise
+    // a message that cannot come. The greys with no follow-up are handled per person, below.
+    if (context.chase?.standing === 'CHASE_UNREACHABLE') {
+      return { state: 'RED', reason: 'CHASE_UNREACHABLE' };
+    }
+    return { state: 'AMBER', reason: 'MAYBE_LIVE' };
   }
 
   if (context.isHost) return { state: 'GREEN', reason: 'ACCEPTED' };
@@ -583,7 +625,16 @@ export function deriveItemState(
     return { state: 'RED', reason: context.delivery.failure };
   }
 
-  // ANCHOR(GTC-251): the exhaustion door. E6 supplies the fact; this is where it lands.
+  /*
+   * [[GTC-251]] Q5 — below the delivery failure, whose door can still act on the ask, and above
+   * exhaustion for the same reason the delivery failure is: "gone quiet" is false of somebody
+   * Gather can no longer reach — the silence has a cause, and this is it.
+   */
+  if (context.chase?.standing === 'CHASE_UNREACHABLE') {
+    return { state: 'RED', reason: 'CHASE_UNREACHABLE' };
+  }
+
+  // [[GTC-251]] Q2 — the exhaustion door, with its producer (`exhaustionFor`).
   if (context.exhaustion?.exhausted) return { state: 'RED', reason: 'EXHAUSTED_SILENCE' };
 
   return { state: 'AMBER', reason: 'AWAITING_REPLY' };
@@ -666,13 +717,17 @@ export function derivePersonState(
      * undecided person amber because *"the ask is real even when the hands are empty"*; when the ask
      * did not arrive, the same sentence is the reason they are RED.
      *
-     * ⚠ THE EXHAUSTION FACT HAS THE IDENTICAL HOLE and is deliberately NOT fixed here: an itemless
-     * person can never read EXHAUSTED_SILENCE either. That is [[GTC-251]]'s to decide when it lands,
-     * and quietly changing it under this slice would be answering somebody else's ruling.
+     * ⚠ THE EXHAUSTION FACT HAD THE IDENTICAL HOLE, left here for [[GTC-251]]. ✅ Closed by its
+     * slice 251a, with Q5's red beside it and in the rows' order: Ruling 16's ask is chased like
+     * any other, so its silence can run out like any other.
      */
     if (person.delivery?.failure) {
       return { state: 'RED', reasons: [person.delivery.failure] };
     }
+    if (person.chase?.standing === 'CHASE_UNREACHABLE') {
+      return { state: 'RED', reasons: ['CHASE_UNREACHABLE'] };
+    }
+    if (person.exhaustion?.exhausted) return { state: 'RED', reasons: ['EXHAUSTED_SILENCE'] };
     if (grey) return { state: 'NOT_CHASED', reasons: [grey] };
     return { state: 'AMBER', reasons: ['AWAITING_REPLY'] };
   }
@@ -689,15 +744,18 @@ export function derivePersonState(
   }
 
   /*
-   * [[GTC-305]] RULING 2 — THE GREY REPLACES "WAITING TO HEAR BACK", AND NOTHING ELSE. Only when the
-   * worst is AMBER and every amber row is AWAITING_REPLY: any red still wins, an answered row shows
-   * its answer, and a live maybe stays amber (R1, ruled — the gap it leaves is [[GTC-251]]'s).
+   * [[GTC-305]] RULING 2 — THE GREY REPLACES AMBER, AND NOTHING ELSE. Only when the worst is AMBER
+   * and every amber row is one Gather will not follow up: any red still wins and an answered row
+   * shows its answer.
+   *
+   * [[GTC-251]] — THE LIVE MAYBE WITH NOTHING COMING. GTC-305 kept it amber (R1) and gave the gap to
+   * this ticket. For these greys no decide-by follow-up comes (a hand-over is the host's; Q4a: a
+   * text opt-out gets none), so amber is false of the maybe too, and it greys with the rest.
    */
-  if (
-    grey &&
-    worst === 'AMBER' &&
-    derived.every((d) => d.state !== 'AMBER' || d.reason === 'AWAITING_REPLY')
-  ) {
+  const unfollowed = (d: { state: ItemState; reason: ItemReason }) =>
+    d.reason === 'AWAITING_REPLY' ||
+    (d.reason === 'MAYBE_LIVE' && !!grey && MAYBE_UNFOLLOWED.has(grey));
+  if (grey && worst === 'AMBER' && derived.every((d) => d.state !== 'AMBER' || unfollowed(d))) {
     return { state: 'NOT_CHASED', reasons: [grey] };
   }
 
