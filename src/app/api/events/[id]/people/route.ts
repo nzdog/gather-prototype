@@ -126,7 +126,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // Create or find person
     let person;
     if (email) {
-      person = await prisma.person.findUnique({ where: { email } });
+      person = await prisma.person.findFirst({ where: { email } });
     }
 
     if (!person) {

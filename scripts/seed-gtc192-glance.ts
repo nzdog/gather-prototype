@@ -187,11 +187,13 @@ async function main() {
     update: {},
     create: { email: EMAIL },
   });
-  const hostPerson = await prisma.person.upsert({
-    where: { email: EMAIL },
-    update: { userId: user.id },
-    create: { name: 'Kate Whittaker', email: EMAIL, userId: user.id },
-  });
+  // Not an upsert: Person.email is not unique ([[GTC-293]]).
+  const existingHost = await prisma.person.findFirst({ where: { email: EMAIL } });
+  const hostPerson = existingHost
+    ? await prisma.person.update({ where: { id: existingHost.id }, data: { userId: user.id } })
+    : await prisma.person.create({
+        data: { name: 'Kate Whittaker', email: EMAIL, userId: user.id },
+      });
 
   await prisma.session.deleteMany({ where: { userId: user.id } });
   const token = randomBytes(24).toString('hex');

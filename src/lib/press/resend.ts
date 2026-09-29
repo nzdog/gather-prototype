@@ -376,12 +376,14 @@ export async function resendToPerson(
           await tx.person.update({ where: { id: subject.personId }, data: { email: address } });
         } catch (e) {
           /*
-           * ⚠ [[GTC-293]] ARRIVING AT THE BUTTON BUILT TO INVITE IT. `Person.email` is `@unique`
+           * ⚠ [[GTC-293]] ARRIVING AT THE BUTTON BUILT TO INVITE IT. `Person.email` was `@unique`
            * and the host's obvious fix for a dead address is the partner's — which is GTC-293's
            * own case. Founder ruling, 2026-09-19: that ticket becomes a precondition of the
-           * DEPLOY and this catches the violation and answers with a true sentence. It does not
-           * fix it: the fix is either dropping the constraint or matching differently, and both
-           * are GTC-293's with a migration behind them.
+           * DEPLOY and this catches the violation and answers with a true sentence.
+           *
+           * GTC-293 dropped the constraint (2026-09-29), so no Person email write raises P2002
+           * any more and this arm is kept only until [[GTC-338]] retires it (founder ruling,
+           * GTC-293 Q5).
            *
            * The throw leaves the transaction rolled back, so a collision writes NEITHER the
            * address nor a queued message. Half of this action landing would be the worse failure:

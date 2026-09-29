@@ -171,7 +171,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       // Find existing person by email if provided
       let person;
       if (input.email) {
-        person = await prisma.person.findUnique({ where: { email: input.email } });
+        person = await prisma.person.findFirst({ where: { email: input.email } });
       }
 
       if (!person) {

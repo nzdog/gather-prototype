@@ -157,11 +157,14 @@ export type ResendRefusalCode =
  * code does not compile until somebody writes it. 5f's guard, and 5f's reason: *"The alternative
  * is a default — 'something went wrong' — for a state the press named precisely."*
  *
- * ⚠ `ADDRESS_TAKEN` IS [[GTC-293]] ARRIVING AT A BUTTON BUILT TO INVITE IT. `Person.email` is
+ * ⚠ `ADDRESS_TAKEN` IS [[GTC-293]] ARRIVING AT A BUTTON BUILT TO INVITE IT. `Person.email` was
  * `@unique` and the host's obvious fix for a dead address is the partner's address. Founder
  * ruling, 2026-09-19: GTC-293 becomes a precondition of the DEPLOY, and 7b answers with a true
  * sentence rather than fixing it. The sentence says what happened and does not promise a merge
  * Gather cannot perform.
+ *
+ * GTC-293 dropped the constraint (2026-09-29), so nothing produces this code any more; it stays
+ * until [[GTC-338]] retires it (founder ruling, GTC-293 Q5).
  */
 export const RESEND_REFUSAL_WORDS: Record<ResendRefusalCode, string> = {
   EVENT_NOT_FOUND: 'That event is no longer here.',

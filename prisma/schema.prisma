@@ -254,7 +254,8 @@ model Team {
 model Person {
   id               String              @id @default(cuid())
   name             String
-  email            String?             @unique
+  /// Not unique ([[GTC-293]]): two people can share one inbox, and each is their own Person.
+  email            String?
   phone            String?
   userId           String?
   phoneNumber      String?

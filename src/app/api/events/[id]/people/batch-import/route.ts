@@ -93,7 +93,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         // Create or find person by email
         let person;
         if (personData.email) {
-          person = await prisma.person.findUnique({
+          person = await prisma.person.findFirst({
             where: { email: personData.email },
           });
         }

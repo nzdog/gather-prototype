@@ -31,7 +31,8 @@
  * 3 — [[GTC-293]] IS NOW A PRECONDITION OF THE DEPLOY, moved by this door: the host's obvious
  *   fix for a dead address is the partner's address, which is GTC-293's own case arriving
  *   through a button built to invite it. 7b CATCHES P2002 and answers with a true sentence; it
- *   does not fix it. Layer C drives a real collision.
+ *   does not fix it. GTC-293 then dropped the constraint, so layer C now presses the partner's
+ *   address and asserts it is accepted (founder ruling, GTC-293 Q5, 2026-09-29).
  * 4 — THE UNREACHABLE ARM SHIPS UNEXERCISED, keyed on the reason, named as unexercised. Its one
  *   action is CAPTURE rather than correction: *"Add a way to reach them."* Layer A pins the
  *   words and the one-action property.
@@ -786,29 +787,6 @@ async function main() {
       ok(() => phonerRows.length === 2 && phonerRows[1].channel === 'TEXT')
     );
 
-    const taken = await press(contact.person.id, { action: 'EDIT', email: rival.person.email! });
-    assert(
-      '⚠ FOUNDER ANSWER 3 — [[GTC-293]] MEETS THE DOOR AND THE DOOR ANSWERS WITH A TRUE ' +
-        'SENTENCE: an address another Person already holds is refused, not 500’d',
-      ok(() => taken.ok === false && taken.code === 'ADDRESS_TAKEN')
-    );
-    const contactAfter = await prisma.person.findUnique({ where: { id: contact.person.id } });
-    assert(
-      '⚠ AND THE REFUSAL ROLLS BACK BOTH HALVES: the old address survives, so a collision ' +
-        'cannot leave a message queued to an address the host did not end up with',
-      ok(() => contactAfter?.email !== rival.person.email && contactAfter?.email !== null)
-    );
-    assert(
-      'no row was written for the refused edit',
-      (await prisma.outboundMessage.count({ where: { personEventId: contact.pe.id } })) === 1
-    );
-    const rivalHolders = await prisma.person.count({ where: { email: rival.person.email! } });
-    assert(
-      'CONTROL: the collision is real — the rival still holds that address, so the refusal is ' +
-        'the constraint and not a typo in the fixture',
-      rivalHolders === 1
-    );
-
     const newAddress = `${TAG.toLowerCase()}+moved+${stamp}@example.com`;
     const edited = await press(optedOut.person.id, { action: 'EDIT', email: newAddress });
     assert(
@@ -850,6 +828,36 @@ async function main() {
       ok(() => !stripComments(read(PATCH_ROUTE)).includes('EDIT_PERSON_CONTACT'))
     );
 
+    /*
+     * ⚠ FOUNDER ANSWER 3, AFTER [[GTC-293]]. 7b refused an address another Person held with
+     * ADDRESS_TAKEN, because `Person.email` was `@unique`. GTC-293 dropped the constraint, and
+     * the founder ruled this suite asserts the new truth (Q5, 2026-09-29): the host's obvious
+     * fix for a dead address — the partner's — is accepted. Pressed AFTER the counts above, so
+     * they go on measuring their own three presses.
+     */
+    const shared = await press(contact.person.id, { action: 'EDIT', email: rival.person.email! });
+    assert(
+      '⚠ FOUNDER ANSWER 3, AFTER [[GTC-293]] — EDIT AND SEND onto an address another Person ' +
+        'holds (the partner’s) is ACCEPTED, not refused',
+      ok(() => shared.ok === true)
+    );
+    const contactAfter = await prisma.person.findUnique({ where: { id: contact.person.id } });
+    assert('the address is written to the contact', contactAfter?.email === rival.person.email);
+    assert(
+      'and one row is queued with it, in the same transaction',
+      (await prisma.outboundMessage.count({ where: { personEventId: contact.pe.id } })) === 2
+    );
+    const rivalAfter = await prisma.person.findUnique({ where: { id: rival.person.id } });
+    assert(
+      'the other holder is unchanged — their address and their name',
+      rivalAfter?.email === rival.person.email && rivalAfter?.name === rival.person.name
+    );
+    assert(
+      'CONTROL: two Persons now hold the address, so this is the shared case and not a typo ' +
+        'in the fixture',
+      (await prisma.person.count({ where: { email: rival.person.email! } })) === 2
+    );
+
     // ── Layer D: the route ───────────────────────────────────────────────────
     section('Layer D: one route, session-guarded, GET for the look and POST for the press');
 
@@ -885,6 +893,9 @@ async function main() {
       })
     );
 
+    // Counted here rather than from `rowsBefore`: [[GTC-293]]'s accepted press on the
+    // partner's address sits between the two, and this control is about the probe alone.
+    const beforeProbe = await prisma.outboundMessage.count({ where: { eventId: event.id } });
     const noCookieGet = await fetch(
       `${BASE}/api/events/${event.id}/people/${bounced.person.id}/resend`
     );
@@ -905,7 +916,7 @@ async function main() {
       noCookiePost.status === 401 || noCookiePost.status === 403
     );
     const afterProbe = await prisma.outboundMessage.count({ where: { eventId: event.id } });
-    assert('CONTROL: the unauthenticated probe wrote no row', afterProbe - rowsBefore === 3);
+    assert('CONTROL: the unauthenticated probe wrote no row', afterProbe === beforeProbe);
 
     // ── Layer E: the fences ──────────────────────────────────────────────────
     section('Layer E: the fences this door must not walk through');

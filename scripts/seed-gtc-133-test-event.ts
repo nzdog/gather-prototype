@@ -203,7 +203,7 @@ async function main() {
     totalLittles += hh.littleCount ?? 0;
 
     for (const m of hh.members) {
-      let person = m.email ? await prisma.person.findUnique({ where: { email: m.email } }) : null;
+      let person = m.email ? await prisma.person.findFirst({ where: { email: m.email } }) : null;
       if (!person) {
         person = await prisma.person.create({
           data: {

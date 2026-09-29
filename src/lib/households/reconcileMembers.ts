@@ -221,7 +221,7 @@ export async function reconcileHouseholdMembers(prisma: Tx, ctx: ReconcileContex
     const normalizedPhone = member.phone ? normalizePhoneNumber(member.phone) : null;
 
     let person = member.email
-      ? await prisma.person.findUnique({ where: { email: member.email } })
+      ? await prisma.person.findFirst({ where: { email: member.email } })
       : null;
 
     if (!person) {
