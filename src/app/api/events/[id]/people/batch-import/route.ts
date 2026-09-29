@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
 import { recordChange } from '@/lib/ledger';
 import { normalizePhoneNumber } from '@/lib/phone';
+import { findOrCreateCapturedPerson } from '@/lib/households/capturePerson';
 
 interface PersonToImport {
   name: string;
@@ -90,45 +91,31 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           }
         }
 
-        // Create or find person by email
-        let person;
-        if (personData.email) {
-          person = await prisma.person.findFirst({
-            where: { email: personData.email },
-          });
-        }
-
-        if (!person) {
-          // Create new person with anchor if invites already confirmed
-          person = await prisma.person.create({
-            data: {
-              name: personData.name.trim(),
-              email: personData.email || null,
-              /*
-               * GTC-312: `phoneNumber`, normalised — NOT the legacy `phone` column.
-               *
-               * This was the ONE capture path of six that wrote `Person.phone`, and
-               * nothing reads that column: `findNudgeCandidates`, `chooseManualNudgeChannel`,
-               * `findDecideByFollowupCandidates` and `ChooserPerson` all read `phoneNumber`.
-               * A person imported here had a mobile and read to the product as having none.
-               *
-               * And it normalises HERE rather than trusting the caller. `ImportCSVModal`
-               * already normalises client-side, which is why every stored legacy number was
-               * valid `+64` — but this route is a guarded API, not a private door of that
-               * modal, and a direct call carrying `021 123 4567` would fail `isValidNZNumber`
-               * and be untextable in a column that reads as populated.
-               */
-              phoneNumber: personData.phone ? normalizePhoneNumber(personData.phone) : null,
-              inviteAnchorAt: event.sentAt || null,
-            },
-          });
-        } else if (event.sentAt && !person.inviteAnchorAt) {
-          // If person exists but doesn't have an anchor, set it
-          person = await prisma.person.update({
-            where: { id: person.id },
-            data: { inviteAnchorAt: event.sentAt },
-          });
-        }
+        /*
+         * [[GTC-293]]: who this row is — the address AND the first name, never the address
+         * alone.
+         *
+         * GTC-312: `phoneNumber`, normalised — NOT the legacy `phone` column.
+         *
+         * This was the ONE capture path of six that wrote `Person.phone`, and
+         * nothing reads that column: `findNudgeCandidates`, `chooseManualNudgeChannel`,
+         * `findDecideByFollowupCandidates` and `ChooserPerson` all read `phoneNumber`.
+         * A person imported here had a mobile and read to the product as having none.
+         *
+         * And it normalises HERE rather than trusting the caller. `ImportCSVModal`
+         * already normalises client-side, which is why every stored legacy number was
+         * valid `+64` — but this route is a guarded API, not a private door of that
+         * modal, and a direct call carrying `021 123 4567` would fail `isValidNZNumber`
+         * and be untextable in a column that reads as populated.
+         */
+        const person = await findOrCreateCapturedPerson(prisma, {
+          eventId,
+          hostPersonId: event.hostId,
+          name: personData.name,
+          email: personData.email,
+          phoneNumber: personData.phone ? normalizePhoneNumber(personData.phone) : null,
+          sentAt: event.sentAt,
+        });
 
         // Check if person already exists in this event
         const existing = await prisma.personEvent.findUnique({

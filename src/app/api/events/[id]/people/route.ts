@@ -4,6 +4,7 @@ import { requireEventRole } from '@/lib/auth/guards';
 import { ledgerActorForUser } from '@/lib/auth/actor';
 import { recordChange } from '@/lib/ledger';
 import { normalizePhoneNumber } from '@/lib/phone';
+import { findOrCreateCapturedPerson } from '@/lib/households/capturePerson';
 
 // GET /api/events/[id]/people - List people on this event
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // Get event to check if invites have been confirmed
     const event = await prisma.event.findUnique({
       where: { id: eventId },
-      select: { sentAt: true, status: true },
+      select: { sentAt: true, status: true, hostId: true },
     });
 
     if (!event) {
@@ -123,29 +124,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       }
     }
 
-    // Create or find person
-    let person;
-    if (email) {
-      person = await prisma.person.findFirst({ where: { email } });
-    }
-
-    if (!person) {
-      // Create new person with anchor if invites already confirmed
-      person = await prisma.person.create({
-        data: {
-          name,
-          email: email || null,
-          phoneNumber: normalizedPhone,
-          inviteAnchorAt: event.sentAt || null,
-        },
-      });
-    } else if (event.sentAt && !person.inviteAnchorAt) {
-      // If person exists but doesn't have an anchor, set it
-      person = await prisma.person.update({
-        where: { id: person.id },
-        data: { inviteAnchorAt: event.sentAt },
-      });
-    }
+    // [[GTC-293]]: who this row is — the address AND the first name, never the address alone.
+    const person = await findOrCreateCapturedPerson(prisma, {
+      eventId,
+      hostPersonId: event.hostId,
+      name,
+      email,
+      phoneNumber: normalizedPhone,
+      sentAt: event.sentAt,
+    });
 
     // Check if person already exists in this event
     const existing = await prisma.personEvent.findUnique({

@@ -19,6 +19,7 @@ type Tx = Prisma.TransactionClient;
 import { normalizePhoneNumber } from '@/lib/phone';
 import { validateChannelTarget } from '@/lib/households/channel';
 import { isMessageableRole } from '@/lib/eligibility/child-exclusion';
+import { findOrCreateCapturedPerson } from '@/lib/households/capturePerson';
 
 /**
  * GTC-172 (C1): thrown when a household contact picker target is invalid (wrong event,
@@ -216,29 +217,30 @@ export async function reconcileHouseholdMembers(prisma: Tx, ctx: ReconcileContex
     });
   }
 
-  /** Create a genuinely new member (find-or-create Person by email; upsert PersonEvent by (personId,eventId)). */
+  // `Event.hostId`, read once and only when a new member needs it ([[GTC-293]], ruling Q8).
+  let hostIdRead: Promise<string | null> | undefined;
+  const eventHostId = () => {
+    if (!hostIdRead) {
+      hostIdRead = prisma.event
+        .findUnique({ where: { id: eventId }, select: { hostId: true } })
+        .then((e) => e?.hostId ?? null);
+    }
+    return hostIdRead;
+  };
+
+  /** Create a genuinely new member (find-or-create Person by address + first name; upsert PersonEvent by (personId,eventId)). */
   async function createNewMember(member: MemberInput, role: MemberRole, isYoungPerson: boolean) {
     const normalizedPhone = member.phone ? normalizePhoneNumber(member.phone) : null;
 
-    let person = member.email
-      ? await prisma.person.findFirst({ where: { email: member.email } })
-      : null;
-
-    if (!person) {
-      person = await prisma.person.create({
-        data: {
-          name: member.name!.trim(),
-          email: member.email || null,
-          phoneNumber: normalizedPhone,
-          inviteAnchorAt: sentAt || null,
-        },
-      });
-    } else if (sentAt && !person.inviteAnchorAt) {
-      person = await prisma.person.update({
-        where: { id: person.id },
-        data: { inviteAnchorAt: sentAt },
-      });
-    }
+    // [[GTC-293]]: who this row is — the address AND the first name, never the address alone.
+    const person = await findOrCreateCapturedPerson(prisma, {
+      eventId,
+      hostPersonId: await eventHostId(),
+      name: member.name!,
+      email: member.email,
+      phoneNumber: normalizedPhone,
+      sentAt,
+    });
 
     const reach = reachabilityFor(person.phoneNumber, person.email);
 
@@ -282,6 +284,11 @@ export async function reconcileHouseholdMembers(prisma: Tx, ctx: ReconcileContex
       // in `existingById`, which is built from `existingNonPrimary`, and the host is never
       // in that map.
       if (existing.role === 'HOST') return;
+
+      // [[GTC-293]] (founder ruling Q2) — no new row re-roles a PRIMARY_CONTACT, host or not.
+      // Retyping the primary as a partner is the same person typed twice, and demoting her is
+      // what emptied a household of its primary and made every later save 500.
+      if (existing.householdRole === 'PRIMARY_CONTACT') return;
 
       if (!existing.householdId || existing.householdId === household.id) {
         await prisma.personEvent.update({

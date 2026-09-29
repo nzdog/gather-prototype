@@ -6,6 +6,7 @@ import { recordChange } from '@/lib/ledger';
 import { normalizePhoneNumber } from '@/lib/phone';
 import { validateChannelTarget } from '@/lib/households/channel';
 import { hostHasMembership } from '@/lib/households/hostHousehold';
+import { findOrCreateCapturedPerson } from '@/lib/households/capturePerson';
 
 // GET /api/events/[id]/households - List households for event
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -168,27 +169,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
       const normalizedPhone = input.phone ? normalizePhoneNumber(input.phone) : null;
 
-      // Find existing person by email if provided
-      let person;
-      if (input.email) {
-        person = await prisma.person.findFirst({ where: { email: input.email } });
-      }
-
-      if (!person) {
-        person = await prisma.person.create({
-          data: {
-            name: input.name.trim(),
-            email: input.email || null,
-            phoneNumber: normalizedPhone,
-            inviteAnchorAt: event!.sentAt || null,
-          },
-        });
-      } else if (event!.sentAt && !person.inviteAnchorAt) {
-        person = await prisma.person.update({
-          where: { id: person.id },
-          data: { inviteAnchorAt: event!.sentAt },
-        });
-      }
+      // [[GTC-293]]: who this row is — the address AND the first name, never the address alone.
+      const person = await findOrCreateCapturedPerson(prisma, {
+        eventId,
+        hostPersonId: event!.hostId,
+        name: input.name,
+        email: input.email,
+        phoneNumber: normalizedPhone,
+        sentAt: event!.sentAt,
+      });
 
       // Determine reachability
       let reachabilityTier: 'DIRECT' | 'UNTRACKABLE' = 'UNTRACKABLE';
