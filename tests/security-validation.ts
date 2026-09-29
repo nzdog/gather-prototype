@@ -1664,8 +1664,13 @@ async function testSuite12_CronSecretFailsClosed(_fixtures: Fixtures) {
   }
 
   // Both documented credential channels, asserted on the route that sends nothing.
+  //
+  // ⚠ [[GTC-274]] — "sends nothing" is TRUE ONLY WHILE ITS PRECONDITION HOLDS, so the drive now waits
+  // on it, the way the decide-by drive below always has. With an undispatched WrapUpLink present,
+  // `dispatchPendingWrapUpMessages` would text or email that guest. The precondition was asserted in
+  // section B but not waited on here; it had to be checked by hand before every run.
   let queryChannelBody: any = null;
-  if (liveProbeOk && serverSecret) {
+  if (liveProbeOk && serverSecret && pendingWrapUps === 0) {
     try {
       const res = await fetch(
         `${BASE}/api/cron/wrap-up-dispatch?secret=${encodeURIComponent(serverSecret)}`
@@ -1695,7 +1700,9 @@ async function testSuite12_CronSecretFailsClosed(_fixtures: Fixtures) {
   } else {
     const why = !liveProbeOk
       ? 'the live canary was admitted or the server is down'
-      : 'CRON_SECRET could not be read from .env.local, so the positive control cannot be constructed';
+      : !serverSecret
+        ? 'CRON_SECRET could not be read from .env.local, so the positive control cannot be constructed'
+        : `NOT DRIVEN — ${pendingWrapUps} undispatched WrapUpLink row(s), so driving it could send (GTC-274)`;
     logTest('live [POSITIVE CONTROL]: ?secret= channel answers 200', false, why);
     logTest('live [POSITIVE CONTROL]: Bearer channel answers 200', false, why);
   }
@@ -1831,9 +1838,14 @@ async function testSuite12_CronSecretFailsClosed(_fixtures: Fixtures) {
   // ── E. ROW ACCOUNTING — THE NO-SEND IS COUNTED, NOT TRUSTED ─────────────────────
   //
   // `logInviteEvent` in src/lib/invite-events.ts writes one InviteEvent row per send
-  // ATTEMPT — success, failure and blocked alike. So an unchanged count is the proof
-  // that nothing in this suite reached a provider, and it does not depend on the
-  // fixture happening to have no reachable numbers.
+  // ATTEMPT that reaches a provider or is refused as invalid or opted out. So an
+  // unchanged count is the proof that nothing in this suite reached a provider, and it
+  // does not depend on the fixture happening to have no reachable numbers.
+  //
+  // ⚠ [[GTC-274]] — CORRECTED: not "blocked alike". `sendSms` writes NO row when it
+  // returns SMS_DISABLED — for an unconfigured provider or the live switch off — so this
+  // count cannot see those refusals. It still sees every send that reached a provider,
+  // which is what it is here to prove.
   const inviteEventsAfter = await prisma.inviteEvent.count();
   logTest(
     'NO SEND: InviteEvent row count is unchanged across this suite',

@@ -21,9 +21,10 @@
  * depends on all three:
  *
  *  1. BOTH providers are stripped, not just Twilio. `sendSms` then fails closed at its
- *     configuration check — before `sendViaTnz` and before `client.messages.create`. A
- *     placeholder `TNZ_AUTH_TOKEN` would NOT be safe: with a `+64` destination it makes a
- *     real POST to api.tnz.co.nz. Do not "fix" this file by setting one.
+ *     configuration check — before `sendViaTnz` and before `client.messages.create`.
+ *     ⚠ [[GTC-274]]: and behind that, the live switch is off, so even a configured provider is
+ *     stopped at `sendSms`'s last step. The children below set FAKE credentials on purpose, and
+ *     trap every outbound request; they never use the machine's keys.
  *  2. The nudge senders have NO email fallback. `processNudges` and `processProxyNudges`
  *     reach `sendSms` and stop; nothing in `src/lib/sms/` imports
  *     `sendNudgeEmail`. This matters because `RESEND_API_KEY` is live in `.env` and an email
@@ -36,13 +37,12 @@
  *     quiet hours (21:00-08:00 NZ), where the senders log NUDGE_DEFERRED_QUIET rows for real
  *     candidates; the assertions below are written to hold on either branch.
  *
- * THE POSITIVE CONTROL RUNS IN A CHILD PROCESS. Module-scope config means one process gets
- * one answer, so "the cron still reports healthy when a provider IS configured" cannot be
- * asserted in the same process as "it reports unhealthy when none is". The child re-runs
- * this file with the ambient `.env` (Twilio configured locally). That child is safe for the
- * same reason the ticket exists: every nudge candidate is `isValidNZNumber`-gated, so all of
- * them route to the TNZ arm, which is unconfigured locally and fails closed. Twilio cannot
- * be reached from the nudge scheduler even when Twilio is configured.
+ * THE POSITIVE CONTROLS RUN IN CHILD PROCESSES. Module-scope config means one process gets
+ * one answer, so "a provider IS configured" cannot be asserted in the same process as "none
+ * is". ⚠ [[GTC-274]]: they no longer inherit the ambient `.env` — that made this file send on
+ * any machine holding a TNZ token. Each child sets FAKE credentials, traps every outbound
+ * request (`tests/helpers/provider-trap.ts`), runs with the live switch off, and scopes its
+ * scheduler run to its own fixture event. See `positiveControl` and `twilioOnlyQuadrant`.
  *
  * Run: npx tsx tests/nudge-provider-gate-test.ts
  * ⚠ Since [[GTC-189]] slice 8b, layer B creates ONE tagged fixture event, because the scheduler now
@@ -53,10 +53,13 @@
 import { execFileSync } from 'child_process';
 import { prisma } from '../src/lib/prisma';
 
-// Captured BEFORE stripping, so the child process can run with the real configuration.
+// Captured BEFORE stripping, as the base of the children's environment (their provider keys and the
+// live switch are removed from it; each child sets fakes of its own — GTC-274).
 const AMBIENT_ENV = { ...process.env };
 
 const IS_POSITIVE_CONTROL = process.argv.includes('--positive-control');
+const IS_TWILIO_ONLY = process.argv.includes('--twilio-only');
+const IS_CHILD = IS_POSITIVE_CONTROL || IS_TWILIO_ONLY;
 
 let passed = 0;
 let failed = 0;
@@ -79,110 +82,183 @@ function stripProviderCredentials() {
   delete process.env.TWILIO_AUTH_TOKEN;
   delete process.env.TWILIO_PHONE_NUMBER;
   delete process.env.TNZ_AUTH_TOKEN;
-  // Falsy CRON_SECRET makes `GET` skip its auth guard, so the cron route can be exercised
-  // directly without minting a secret into the test.
+  // [[GTC-274]]: and the live switch, so this process is off whatever the shell says.
+  delete process.env.GATHER_LIVE_SENDS;
+  // GTC-270: an unset CRON_SECRET now REFUSES every caller; section D sets its own before import.
   delete process.env.CRON_SECRET;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// The positive control (child process): ambient .env, provider configured.
+// The positive controls (child processes): providers CONFIGURED, with fake credentials.
 // ──────────────────────────────────────────────────────────────────────────────
 /*
- * ⚠ THE LIVE-SMS GUARD — founder ruling, 2026-09-27 (GTC-189 slice 8's gate). ENDED BY [[GTC-274]].
+ * ⚠ [[GTC-274]] — THE AMBIENT ENVIRONMENT IS GONE FROM THIS FILE, AND SO IS ITS GUARD.
  *
- * This layer drives the real nudge cron against the real database with the AMBIENT environment,
- * so on a machine holding a TNZ token it would text real guests ([[GTC-270]]'s finding, filed as
- * GTC-274). The gate is now every `test:*` script, so the day a provider credential lands on a
- * machine that runs it, this layer refuses — red and loud — instead of sending. An explicit
- * opt-in is the only way past it. GTC-274 replaces the ambient provider with a stubbed one and
- * removes this guard.
+ * These controls used to run with the ambient `.env`, which made them a loaded gun for anyone who set
+ * a TNZ token: they drove the real nudge cron over all of gather_dev. From 2026-09-27 a guard refused
+ * whenever a provider credential was present unless GATHER_ALLOW_LIVE_SMS_TEST=1 — which made the
+ * file red either way. GTC-274's live switch (founder ruling, 2026-09-29) retires both:
+ *
+ *   - Each child sets FAKE credentials itself, so what it proves no longer depends on the machine.
+ *   - Every outbound request is intercepted and counted (`tests/helpers/provider-trap.ts`), and the
+ *     live switch is off, so nothing can leave even if a door were reached. The trap count is
+ *     asserted to be zero, and so is the number of InviteEvent rows of a sent type.
+ *   - The scheduler run is scoped to its own fixture event, as section B's is, and the rows it queues
+ *     are removed with the fixture (founder ruling D1: section D's is the one run across gather_dev).
+ *
+ * They run EVERY time, on every machine — a control that is skipped whenever a provider exists has
+ * not been fixed, it has been disabled (GTC-274 Acceptance).
  */
-export const LIVE_SMS_OPT_IN = 'GATHER_ALLOW_LIVE_SMS_TEST';
-const PROVIDER_CREDENTIALS = [
-  'TNZ_AUTH_TOKEN',
-  'TWILIO_ACCOUNT_SID',
-  'TWILIO_AUTH_TOKEN',
-  'TWILIO_PHONE_NUMBER',
+const SENT_TYPES = [
+  'NUDGE_SENT_AUTO',
+  'PROXY_NUDGE_SENT',
+  'NUDGE_SENT_HOST',
+  'WRAPUP_MESSAGE_SENT',
 ] as const;
 
+function setFakeCredentials(opts: { tnz: boolean }) {
+  if (opts.tnz) process.env.TNZ_AUTH_TOKEN = 'gtc274-fake-tnz-token';
+  else delete process.env.TNZ_AUTH_TOKEN;
+  process.env.TWILIO_ACCOUNT_SID = 'AC' + '0'.repeat(32);
+  process.env.TWILIO_AUTH_TOKEN = 'gtc274fakeauthtoken0000000000000';
+  process.env.TWILIO_PHONE_NUMBER = '+15005550006';
+  delete process.env.GATHER_LIVE_SENDS;
+}
+
+/** Both providers configured (fakes), switch off: the scheduler run must be reported unhealthy. */
 async function positiveControl() {
-  const present = PROVIDER_CREDENTIALS.filter((k) => !!process.env[k]);
-  if (present.length > 0 && process.env[LIVE_SMS_OPT_IN] !== '1') {
-    console.error(
-      `\n\x1b[41m\x1b[1m REFUSED — SMS PROVIDER CREDENTIALS ARE PRESENT (${present.join(', ')}). \x1b[0m\n` +
-        `\x1b[31mThis layer drives the real nudge cron against the real database and would send real\n` +
-        `texts to real guests. It will not run unless ${LIVE_SMS_OPT_IN}=1 is set explicitly.\n` +
-        `The fix that retires this guard is GTC-274 (a stubbed provider).\x1b[0m\n`
-    );
-    assert(
-      'CONTROL',
-      `REFUSED: provider credentials present and ${LIVE_SMS_OPT_IN} is not set — nothing was sent (GTC-274)`,
-      false
-    );
-    return;
-  }
-
-  console.log('\n\x1b[1mPositive control — a provider IS configured\x1b[0m\n');
-
-  delete process.env.CRON_SECRET;
+  console.log(
+    '\n\x1b[1mPositive control — both providers configured (fake), live switch off\x1b[0m\n'
+  );
+  setFakeCredentials({ tnz: true });
+  const { installProviderTrap, trapCount, trapHits } = await import('./helpers/provider-trap');
+  installProviderTrap();
 
   const { isSmsEnabled } = await import('../src/lib/sms/twilio-client');
   const { isTnzEnabled } = await import('../src/lib/sms/tnz-client');
-
-  const configured = isSmsEnabled() || isTnzEnabled();
   assert(
     'CONTROL',
-    'at least one provider is configured in the ambient environment (else this control proves nothing)',
-    configured
-  );
-  if (!configured) return;
-
-  // GTC-270: the cron routes now REFUSE when CRON_SECRET is unset, and this process
-  // loads `.env` (tsx does not load `.env.local`), so it has none. Set one and supply
-  // it, so this section goes on testing what it was written to test — the provider
-  // gate — instead of stopping at the auth guard.
-  //
-  // SET BEFORE THE IMPORT. The route reads CRON_SECRET at module scope, so the value
-  // has to be in place before the module is first loaded; a later assignment is
-  // invisible to it. The `||` keeps the value stable across both call sites, because
-  // the second import is served from the module cache and inherits the first one's view.
-  process.env.CRON_SECRET = process.env.CRON_SECRET || 'gtc270-nudge-provider-gate-test';
-
-  const { GET } = await import('../src/app/api/cron/nudges/route');
-  const { NextRequest } = await import('next/server');
-
-  const res = await GET(
-    new NextRequest(
-      `http://localhost:3000/api/cron/nudges?secret=${encodeURIComponent(process.env.CRON_SECRET)}`
-    )
-  );
-  const body = await res.json();
-
-  assert('CONTROL', 'cron reports smsConfigured: true', body.smsConfigured === true);
-  assert(
-    'CONTROL',
-    'no nudge reached Twilio even though Twilio IS configured (every candidate is +64 → TNZ arm)',
-    (body.results?.succeeded ?? 0) === 0
+    'both providers are configured in this process (else this control proves nothing)',
+    isSmsEnabled() && isTnzEnabled()
   );
 
-  // THE SCENARIO THE TIGHTENING EXISTS FOR, observed live rather than argued.
-  // Local dev is Twilio-configured and TNZ-absent, so `smsConfigured` is true while every
-  // +64 nudge fails at the TNZ arm. Before the tightening this returned 200 / success:true
-  // — a monitor's-eye view of a cron that had sent nothing.
-  const attempted = body.results?.sent ?? 0;
-  if (attempted > 0 && (body.results?.succeeded ?? 0) === 0) {
-    assert(
-      'CONTROL',
-      `all ${attempted} sends failed → cron does NOT return 200 despite smsConfigured: true`,
-      res.status !== 200 && body.success !== true && body.ok === false
-    );
-  } else {
-    assert(
-      'CONTROL',
-      'nothing failed wholesale → cron returns 200 / success: true',
-      res.status === 200 && body.success === true && body.ok === true
-    );
+  const { runNudgeScheduler } = await import('../src/lib/sms/nudge-scheduler');
+  const sentTotal = () => prisma.inviteEvent.count({ where: { type: { in: [...SENT_TYPES] } } });
+  const sentBefore = await sentTotal();
+  const outboundBefore = await prisma.outboundMessage.count();
+
+  const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  const DAY = 24 * 60 * 60 * 1000;
+  const fxHost = await prisma.person.create({ data: { name: `GTC274 control host ${stamp}` } });
+  const fxGuest = await prisma.person.create({
+    data: { name: `GTC274 control guest ${stamp}`, phoneNumber: '+64211230998' },
+  });
+  const fxEvent = await prisma.event.create({
+    data: {
+      name: `GTC274 control ${stamp}`,
+      startDate: new Date(Date.now() + 30 * DAY),
+      endDate: new Date(Date.now() + 30 * DAY),
+      hostId: fxHost.id,
+      status: 'CONFIRMING',
+      sentAt: new Date(Date.now() - 10 * DAY),
+    },
+  });
+  let run: Awaited<ReturnType<typeof runNudgeScheduler>>;
+  let queuedOnFixture = 0;
+  try {
+    await prisma.personEvent.create({
+      data: { personId: fxHost.id, eventId: fxEvent.id, role: 'HOST' },
+    });
+    await prisma.personEvent.create({
+      data: {
+        personId: fxGuest.id,
+        eventId: fxEvent.id,
+        role: 'PARTICIPANT',
+        sentAt: new Date(Date.now() - 5 * DAY),
+      },
+    });
+    await prisma.accessToken.create({
+      data: {
+        token: `gtc274-control-${stamp}`,
+        scope: 'PARTICIPANT',
+        eventId: fxEvent.id,
+        personId: fxGuest.id,
+        expiresAt: new Date(Date.now() + 30 * DAY),
+      },
+    });
+    run = await runNudgeScheduler(new Date(), { eventIds: [fxEvent.id] });
+    queuedOnFixture = await prisma.outboundMessage.count({ where: { eventId: fxEvent.id } });
+  } finally {
+    await prisma.event.delete({ where: { id: fxEvent.id } }); // cascades its rows
+    await prisma.person.deleteMany({ where: { id: { in: [fxHost.id, fxGuest.id] } } });
   }
+
+  assert('CONTROL', 'the scoped run queued its reminder on its own fixture', queuedOnFixture === 1);
+  assert('CONTROL', 'the run reports smsConfigured: true', run.smsConfigured === true);
+  assert(
+    'CONTROL',
+    'GTC-214 with the switch off: ok is FALSE although a provider is configured — a run that cannot send is not healthy',
+    run.ok === false
+  );
+  assert(
+    'CONTROL',
+    'nothing reached a provider: the trap intercepted no request',
+    trapCount() === 0
+  );
+  if (trapCount() > 0) console.error(trapHits());
+  assert(
+    'CONTROL',
+    'nothing was recorded as sent: the sent-type InviteEvent count did not move',
+    (await sentTotal()) === sentBefore
+  );
+  assert(
+    'CONTROL',
+    'gather_dev restored exactly: the outbound count equals the count before the run',
+    (await prisma.outboundMessage.count()) === outboundBefore
+  );
+}
+
+/**
+ * Section A's quadrant, kept: Twilio configured, TNZ absent — the local-dev shape GTC-214 was
+ * written for. `sendSms` still routes +64 to the TNZ arm and refuses in TNZ's words (configuration,
+ * checked before the switch), and a +1 number that Twilio COULD carry now stops at the switch.
+ */
+async function twilioOnlyQuadrant() {
+  console.log('\n\x1b[1mQuadrant — Twilio configured (fake), TNZ absent, live switch off\x1b[0m\n');
+  setFakeCredentials({ tnz: false });
+  const { installProviderTrap, trapCount } = await import('./helpers/provider-trap');
+  installProviderTrap();
+
+  const { isSmsEnabled } = await import('../src/lib/sms/twilio-client');
+  const { isTnzEnabled } = await import('../src/lib/sms/tnz-client');
+  assert('QUADRANT', 'isSmsEnabled() is true — Twilio configured', isSmsEnabled() === true);
+  assert('QUADRANT', 'isTnzEnabled() is false — TNZ absent', isTnzEnabled() === false);
+
+  const { sendSms } = await import('../src/lib/sms/send-sms');
+  const { LIVE_SENDS_OFF } = await import('../src/lib/live-sends');
+  const probe = (to: string) => ({
+    to,
+    message: 'GTC-274 probe — never dispatched',
+    eventId: 'gtc274-no-such-event',
+    personId: 'gtc274-no-such-person',
+  });
+  const nz = await sendSms(probe('+64211234567'));
+  assert(
+    'QUADRANT',
+    "+64 took the TNZ arm and is SMS_DISABLED in TNZ's words — configuration, before the switch",
+    nz.blocked === 'SMS_DISABLED' && (nz.error ?? '').includes('TNZ') && nz.error !== LIVE_SENDS_OFF
+  );
+  const us = await sendSms(probe('+12025551234'));
+  assert(
+    'QUADRANT',
+    '+1 took the configured Twilio arm and stopped at the live switch',
+    us.blocked === 'SMS_DISABLED' && us.error === LIVE_SENDS_OFF
+  );
+  assert(
+    'QUADRANT',
+    'nothing reached a provider: the trap intercepted no request',
+    trapCount() === 0
+  );
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -347,31 +423,42 @@ async function main() {
 
   const { isNudgeRunHealthy } = await import('../src/lib/sms/nudge-scheduler');
 
+  // [[GTC-274]]: the four quadrants below are all LIVE; the two after them are the switch off.
   assert(
     'B2',
     'no provider configured → unhealthy, whatever the counts',
-    isNudgeRunHealthy({ smsConfigured: false, attempted: 0, succeeded: 0 }) === false &&
-      isNudgeRunHealthy({ smsConfigured: false, attempted: 3, succeeded: 3 }) === false
+    isNudgeRunHealthy({ smsConfigured: false, live: true, attempted: 0, succeeded: 0 }) === false &&
+      isNudgeRunHealthy({ smsConfigured: false, live: true, attempted: 3, succeeded: 3 }) === false
   );
   assert(
     'B2',
     'configured + nothing to send → healthy (an idle cron is a working cron)',
-    isNudgeRunHealthy({ smsConfigured: true, attempted: 0, succeeded: 0 }) === true
+    isNudgeRunHealthy({ smsConfigured: true, live: true, attempted: 0, succeeded: 0 }) === true
   );
   assert(
     'B2',
     'configured + every send failed → UNHEALTHY (the Twilio-set/TNZ-absent hole)',
-    isNudgeRunHealthy({ smsConfigured: true, attempted: 2, succeeded: 0 }) === false
+    isNudgeRunHealthy({ smsConfigured: true, live: true, attempted: 2, succeeded: 0 }) === false
   );
   assert(
     'B2',
     'configured + partial failure → healthy (one bad number must not flap the alert)',
-    isNudgeRunHealthy({ smsConfigured: true, attempted: 5, succeeded: 1 }) === true
+    isNudgeRunHealthy({ smsConfigured: true, live: true, attempted: 5, succeeded: 1 }) === true
   );
   assert(
     'B2',
     'quiet-hours deferral attempts nothing → healthy, not mistaken for total failure',
-    isNudgeRunHealthy({ smsConfigured: true, attempted: 0, succeeded: 0 }) === true
+    isNudgeRunHealthy({ smsConfigured: true, live: true, attempted: 0, succeeded: 0 }) === true
+  );
+  assert(
+    'B2',
+    'GTC-274: live switch off → unhealthy even when configured and idle (nothing can leave)',
+    isNudgeRunHealthy({ smsConfigured: true, live: false, attempted: 0, succeeded: 0 }) === false
+  );
+  assert(
+    'B2',
+    'GTC-274: live switch off → unhealthy even when every attempt landed',
+    isNudgeRunHealthy({ smsConfigured: true, live: false, attempted: 3, succeeded: 3 }) === false
   );
 
   // ── C. The manual nudge must not reroute a valid NZ mobile to email ─────────────────
@@ -615,27 +702,43 @@ async function main() {
 async function run() {
   if (IS_POSITIVE_CONTROL) {
     await positiveControl();
+  } else if (IS_TWILIO_ONLY) {
+    await twilioOnlyQuadrant();
   } else {
     await main();
   }
 
   await prisma.$disconnect();
 
-  // The child inherits the ambient environment on purpose — see the header.
-  if (!IS_POSITIVE_CONTROL && failed === 0) {
-    console.log('\n\x1b[2m— spawning positive control with the real .env —\x1b[0m');
-    try {
-      const out = execFileSync('npx', ['tsx', __filename, '--positive-control'], {
-        env: AMBIENT_ENV,
-        encoding: 'utf8',
-        stdio: 'pipe',
-      });
-      process.stdout.write(out);
-    } catch (error: any) {
-      process.stdout.write(error.stdout ?? '');
-      process.stderr.write(error.stderr ?? '');
-      failed++;
-      redAssertions.push('[CONTROL] positive control failed — see output above');
+  // [[GTC-274]]: each child sets its own FAKE credentials and traps every outbound request; the
+  // ambient provider keys and the live switch are removed from its environment before it starts.
+  if (!IS_CHILD && failed === 0) {
+    const childEnv: NodeJS.ProcessEnv = { ...AMBIENT_ENV };
+    for (const k of [
+      'TNZ_AUTH_TOKEN',
+      'TWILIO_ACCOUNT_SID',
+      'TWILIO_AUTH_TOKEN',
+      'TWILIO_PHONE_NUMBER',
+      'RESEND_API_KEY',
+      'GATHER_LIVE_SENDS',
+    ]) {
+      delete childEnv[k];
+    }
+    for (const flag of ['--positive-control', '--twilio-only']) {
+      console.log(`\n\x1b[2m— spawning ${flag} (fake credentials, every request trapped) —\x1b[0m`);
+      try {
+        const out = execFileSync('npx', ['tsx', __filename, flag], {
+          env: childEnv,
+          encoding: 'utf8',
+          stdio: 'pipe',
+        });
+        process.stdout.write(out);
+      } catch (error: any) {
+        process.stdout.write(error.stdout ?? '');
+        process.stderr.write(error.stderr ?? '');
+        failed++;
+        redAssertions.push(`[CONTROL] ${flag} failed — see output above`);
+      }
     }
   }
 

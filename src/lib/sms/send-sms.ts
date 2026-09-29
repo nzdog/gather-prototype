@@ -2,6 +2,7 @@ import { getTwilioClient, isSmsEnabled, getSendingNumber } from './twilio-client
 import { sendViaTnz, isTnzEnabled } from './tnz-client';
 import { prisma } from '@/lib/prisma';
 import { logInviteEvent } from '@/lib/invite-events';
+import { isLiveSendingOn, LIVE_SENDS_OFF } from '@/lib/live-sends';
 
 /**
  * Country codes routed to TNZ. Twilio does not deliver to NZ (+64); AU (+61)
@@ -38,9 +39,13 @@ function shouldUseTnz(phone: string): boolean {
  * "is TNZ configured" directly would be a second reading of which provider serves which number,
  * free to drift from the one below the moment a third provider or a third country code arrives.
  * `shouldUseTnz` stays private; this is the question a caller is allowed to ask.
+ *
+ * ⚠ [[GTC-274]]: AND IT ASKS THE LIVE SWITCH TOO. A provider that is configured on a machine that
+ * is not live cannot carry the text either — `sendSms` stops it at its last step — so answering
+ * "configured" there would let the door clear a red with nothing sent: the quiet lie above.
  */
 export function smsProviderConfiguredFor(to: string): boolean {
-  return shouldUseTnz(to) ? isTnzEnabled() : isSmsEnabled();
+  return isLiveSendingOn() && (shouldUseTnz(to) ? isTnzEnabled() : isSmsEnabled());
 }
 
 export interface SendSmsParams {
@@ -52,7 +57,7 @@ export interface SendSmsParams {
 }
 
 export type SmsBlockReason =
-  | 'SMS_DISABLED' // Twilio not configured
+  | 'SMS_DISABLED' // The provider is not configured, or live sending is off (GTC-274)
   | 'INVALID_NUMBER' // Not a valid NZ number
   | 'OPTED_OUT' // Recipient opted out from this host
   | 'SEND_FAILED'; // Twilio API error
@@ -139,6 +144,28 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
         error: 'Twilio not configured for non-NZ/AU destination',
       };
     }
+  }
+
+  /*
+   * [[GTC-274]] — THE LIVE SWITCH, the last step before the network (founder ruling, 2026-09-29).
+   *
+   * ⚠ ITS PLACE IS THE RULING, NOT A PREFERENCE. After the opt-out check above (Zone 7 — first and
+   * untouched, so an opted-out number is OPTED_OUT whatever this says) and after the provider's
+   * configuration (so a +64 number with no TNZ token is still SMS_DISABLED in TNZ's words). Moving it
+   * ahead of either changes an outcome callers and suites depend on.
+   *
+   * SMS_DISABLED, NOT A FIFTH REASON: "sending is not enabled here" is what it already means, and the
+   * dispatcher, the board and the resend door already read it that way (withheld, amber, terminal).
+   * Told apart by `LIVE_SENDS_OFF`. Like the configuration refusal above, it writes no InviteEvent —
+   * a stop is never recorded as a send.
+   */
+  if (!isLiveSendingOn()) {
+    console.warn(`[SMS] ${LIVE_SENDS_OFF} — nothing sent to ${to}.`);
+    return {
+      success: false,
+      blocked: 'SMS_DISABLED',
+      error: LIVE_SENDS_OFF,
+    };
   }
 
   // Dispatch to the selected provider

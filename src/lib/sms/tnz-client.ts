@@ -9,6 +9,8 @@
  * Auth:     Authorization: Basic ${TNZ_AUTH_TOKEN}  (token already encoded)
  */
 
+import { isLiveSendingOn, LIVE_SENDS_OFF } from '@/lib/live-sends';
+
 const TNZ_ENDPOINT = 'https://api.tnz.co.nz/api/v2.04/send/sms';
 
 const authToken = process.env.TNZ_AUTH_TOKEN;
@@ -42,6 +44,12 @@ export async function sendViaTnz(params: { to: string; message: string }): Promi
 
   if (!authToken) {
     return { success: false, error: 'TNZ_AUTH_TOKEN not configured' };
+  }
+
+  // [[GTC-274]] — the live switch, after configuration and before the fetch. `sendSms` stops first
+  // on its own gate; this one is what fences a direct caller (`scripts/test-tnz-sms.ts`).
+  if (!isLiveSendingOn()) {
+    return { success: false, error: LIVE_SENDS_OFF };
   }
 
   const payload = {

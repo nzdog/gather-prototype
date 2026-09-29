@@ -45,6 +45,7 @@ import { randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { listUnsubscribeHeaders, withGuestEmailFooter } from '@/lib/email-footer';
 import { unsubscribeUrls } from '@/lib/unsubscribe-token';
+import { isLiveSendingOn, LiveSendsOffError } from '@/lib/live-sends';
 
 /** What every sender in this file returns. Callers decide what it means. */
 export interface SendResult {
@@ -135,9 +136,22 @@ function resultOf(
 // Initialize Resend client lazily to ensure env vars are loaded
 let resendClient: Resend | null = null;
 
+/*
+ * [[GTC-274]] — THE LIVE SWITCH FOR EMAIL. The one door to Resend, so the one place to stop it.
+ *
+ * ⚠ ORDER: the client is built first, so a missing key still throws "Missing API key" as it always
+ * has — the configuration check — and only then does the switch throw `LiveSendsOffError`. Every
+ * sender's `catch` below reports either as `{ success: false, error }` with NO provider code, which
+ * this file's `SendResult` already reads as "the request never left the process". The claim route
+ * (`src/app/api/auth/claim/route.ts`, Zone 2) calls this directly and is covered without an edit.
+ * The delivery poll's reads stop too: a machine that is not live has no accepted send to read.
+ */
 export function getResendClient(): Resend {
   if (!resendClient) {
     resendClient = new Resend(process.env.RESEND_API_KEY);
+  }
+  if (!isLiveSendingOn()) {
+    throw new LiveSendsOffError();
   }
   return resendClient;
 }

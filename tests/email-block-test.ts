@@ -25,6 +25,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { liveBehindTrap } from './helpers/provider-trap';
 import { execSync } from 'child_process';
 import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
@@ -1001,6 +1002,7 @@ async function runStructuralLayer() {
 }
 
 async function main() {
+  liveBehindTrap(); // [[GTC-274]] the gate opened for this process only, behind the trap
   console.log('\n=== GTC-189 slice 8a — the block ===\n');
   await layer('A', runWordsLayer);
   await layer('B', runChooserLayer);

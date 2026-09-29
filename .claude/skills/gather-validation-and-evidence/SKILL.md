@@ -146,13 +146,17 @@ house pattern for pinning auth wiring without spinning up HTTP.
 
 | npm script | File | Requires |
 |---|---|---|
-| `live:tnz-sms` (was `test:tnz-sms`; renamed 2026-09-27 so the `test:*` gate cannot send) | scripts/test-tnz-sms.ts | **SENDS A REAL SMS.** `TNZ_AUTH_TOKEN` + `TEST_SMS_RECIPIENT=+64...`; refuses to run without recipient |
-| (unwired) | tests/sms-validation-test.ts | DB; exercises `sendSms` validation *without* real sends (per its header) |
+| `live:tnz-sms` (was `test:tnz-sms`; renamed 2026-09-27 so the `test:*` gate cannot send) | scripts/test-tnz-sms.ts | **SENDS A REAL SMS.** `TNZ_AUTH_TOKEN` + `TEST_SMS_RECIPIENT=+64...`; refuses to run without recipient. Since GTC-274 it sends only with `GATHER_LIVE_SENDS=on` set for that one process, on the founder's word in chat, to the founder's own number; without it, it refuses |
+| `test:live-switch` | tests/live-switch-test.ts | Sends nothing: fake credentials, every outbound request trapped. Replaces tests/sms-validation-test.ts, retired at GTC-274 — whose header said "without real sends" while it made five real `sendSms` calls against a real event |
 | (unwired) | tests/sms-infrastructure-test.ts | DB; phone/opt-out infrastructure |
 
 Other notes:
-- **No test in `tests/` requires the dev server.** Only `scripts/test-phase-*.ts`
-  (legacy phase-validation scripts) fetch `localhost:3000`.
+- **These suites call the dev server on `localhost:3000`** (as of GTC-274, 2026-09-29):
+  `test:security`, `test:bounce-door`, `test:email-send-result`, `test:gtc280`,
+  `test:gtc280-paid`, `test:glance-actions`, `test:glance-replay`, `test:carried-answer`,
+  `test:assignment-answer`, `test:press`, `test:outbound-dispatch`, `test:outbound-drain`,
+  `test:mini-send`, `test:child-tokens`, `test:chase-channel`. Start it with the provider keys
+  blanked (`GATHER-BUILD-CONSTANTS.md`). The legacy `scripts/test-phase-*.ts` fetch it too.
 - **No test in `tests/` calls the live Anthropic API.** `scripts/test-generate-plan.ts`
   exercises `generatePlan`, which falls back to mock data when
   `ANTHROPIC_API_KEY` is unset (`src/lib/ai/generate.ts`).

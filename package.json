@@ -4,7 +4,7 @@
   "description": "A coordination app for multi-day gatherings (Christmas, reunions, retreats) that ensures everyone knows what they're responsible for without anyone holding the whole plan in their head.",
   "scripts": {
     "dev": "next dev --turbo",
-    "build": "prisma generate && prisma migrate deploy && next build",
+    "build": "node scripts/check-live-sends.mjs && prisma generate && prisma migrate deploy && next build",
     "start": "next start",
     "lint": "next lint",
     "lint:fix": "next lint --fix",
@@ -61,6 +61,7 @@
     "test:wrap-up-dedupe": "tsx tests/wrap-up-double-send-test.ts",
     "test:wrap-up-quiet-hours": "tsx tests/wrap-up-quiet-hours-test.ts",
     "test:nudge-provider-gate": "tsx tests/nudge-provider-gate-test.ts",
+    "test:live-switch": "tsx tests/live-switch-test.ts",
     "test:nudge-clock-origin": "tsx tests/nudge-clock-origin-test.ts",
     "test:nudge-dedup-scope": "tsx tests/nudge-dedup-scope-test.ts",
     "test:nudge-cadence": "tsx tests/nudge-cadence-test.ts",

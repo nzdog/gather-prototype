@@ -31,6 +31,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { liveBehindTrap } from './helpers/provider-trap';
 import fs from 'fs';
 
 const prisma = new PrismaClient();
@@ -103,6 +104,7 @@ const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
 async function main() {
+  liveBehindTrap(); // [[GTC-274]] the gate opened for this process only, behind the trap
   const preExistingOutboundIds = new Set(
     (await prisma.outboundMessage.findMany({ select: { id: true } })).map((r) => r.id)
   );

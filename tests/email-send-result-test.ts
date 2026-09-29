@@ -27,19 +27,21 @@
  *
  * ── NOTHING IS SENT BY THIS SUITE ─────────────────────────────────────────────
  *
- * Layers 1-3 stub `globalThis.fetch`; no request leaves the process.
+ * Layers 1-3 stub `globalThis.fetch`; no request leaves the process. ⚠ [[GTC-274]]: they open
+ * the live switch with `liveBehindTrap()`, which also walls http, https, DNS and sockets.
  *
  * Layer 4 drives the real nudge route over HTTP, because `requireEventRole`
- * reads a session cookie and cannot be driven in process. That server holds a
- * real `RESEND_API_KEY`. Its safety is asserted, not assumed: the suite refuses
- * to run layer 4 unless a read-only probe of `GET /domains` shows the key is
- * rejected. See `assertProviderCannotSend`. ⚠ That is a PRECONDITION, not a
- * control — see GTC-274, which is where the general problem lives.
+ * reads a session cookie and cannot be driven in process. ⚠ [[GTC-274]]: that
+ * server is never live, so it cannot send whatever its key; layer 4 asserts from
+ * the 502's detail that the email stopped inside the server (no key, or the live
+ * switch off). The GTC265_PROBE_KEY request to api.resend.com that this layer
+ * used to make first is retired.
  *
  * Destructive to its own created rows only; cleans up in `finally`.
  */
 
 import { PrismaClient } from '@prisma/client';
+import { liveBehindTrap } from './helpers/provider-trap';
 
 const prisma = new PrismaClient();
 
@@ -168,45 +170,12 @@ async function magicLinkCount(email: string) {
   return prisma.magicLink.count({ where: { email } });
 }
 
-/**
- * ⚠ THE PRECONDITION FOR LAYER 4, AND IT IS MEASURED RATHER THAN ASSUMED.
- *
- * Read-only. `GET /domains` creates nothing and sends nothing. If the key is
- * live this returns 200, layer 4 is skipped as a FAILED assertion rather than a
- * silent pass, and no email is risked. An unrun check must never read as a pass
- * (GTC-267).
- */
-async function assertProviderCannotSend(): Promise<boolean> {
-  const key = process.env.GTC265_PROBE_KEY;
-  if (!key) {
-    // The dev server's key is not visible to `tsx` (it lives in `.env.local`).
-    // The runner passes it in explicitly so this probe can be performed.
-    assert(
-      'layer 4 precondition',
-      'GTC265_PROBE_KEY is supplied so the provider state can be MEASURED before any route that could send is driven',
-      false
-    );
-    return false;
-  }
-  let status = 0;
-  try {
-    const res = await realFetch('https://api.resend.com/domains', {
-      headers: { Authorization: `Bearer ${key}` },
-    });
-    status = res.status;
-  } catch {
-    status = 0;
-  }
-  const rejected = status === 400 || status === 401 || status === 403;
-  assert(
-    'layer 4 precondition',
-    `the provider REJECTS this key (read-only probe returned ${status}) — so no route driven below can send anything`,
-    rejected
-  );
-  return rejected;
-}
-
 async function main() {
+  // [[GTC-274]]: layers 1-3 assert what the senders make of Resend's replies, which is the step
+  // AFTER the live switch, so the switch is opened for this process — only by the helper, behind
+  // walls that stop any request leaving it. Layers 1-3 stub `globalThis.fetch` as before.
+  liveBehindTrap();
+
   // Force the sentinel BEFORE the module is loaded, so the cached client
   // constructs. See the header: an unset key makes the constructor throw and
   // the whole suite passes against unfixed code.
@@ -701,18 +670,11 @@ async function main() {
   // NUDGE_SENT_HOST, and the un-started cooldown. They are only observable
   // through the real route, because the cooldown reads rows the route writes.
 
-  const safe = await assertProviderCannotSend();
-  if (!safe) {
-    console.error(
-      '\x1b[31m✗\x1b[0m [layer 4] NOT RUN — the provider precondition was not met. ' +
-        'Layer 4 drives a route that would send a real email if the key were live. ' +
-        'This is a FAILURE, not a skip: an unrun check must not read as a pass.'
-    );
-    failed++;
-    redAssertions.push('[layer 4] NOT RUN — provider precondition unmet');
-    return;
-  }
-
+  // ⚠ [[GTC-274]] — THE GTC265_PROBE_KEY PRECONDITION IS GONE. It was a raw request from this test
+  // to api.resend.com, made to prove the dev server's key could not send. Under the live switch the
+  // dev server cannot send whatever its key (GATHER-BUILD-CONSTANTS.md: it never runs live), so
+  // this layer instead asserts, from the 502 itself, WHICH in-process stop refused the email. No
+  // request from this suite now leaves the machine.
   let probeStatus = 0;
   try {
     probeStatus = (await fetch(`${BASE}/api/events/none/glance`)).status;
@@ -796,7 +758,21 @@ async function main() {
   const body = JSON.stringify({ template: 'warm', message: 'a nudge that will not be sent' });
 
   const first = await fetch(NUDGE, { method: 'POST', headers, body });
-  const firstJson = (await first.json().catch(() => null)) as { error?: string } | null;
+  const firstJson = (await first.json().catch(() => null)) as {
+    error?: string;
+    detail?: string;
+  } | null;
+
+  // The two stops that mean the request never left the server process: the client could not be
+  // built (no key — the dev server runs with its provider keys blanked), or the live switch is off.
+  const { LIVE_SENDS_OFF } = await import('../src/lib/live-sends');
+  const stoppedInProcess =
+    /Missing API key/.test(firstJson?.detail ?? '') || firstJson?.detail === LIVE_SENDS_OFF;
+  assert(
+    'layer 4',
+    `GTC-274: the email was stopped INSIDE the server — no key, or the live switch off — never at a provider (detail: ${firstJson?.detail ?? 'none'})`,
+    stoppedInProcess
+  );
 
   assert(
     'layer 4',
@@ -805,7 +781,7 @@ async function main() {
   );
   assert(
     'layer 4',
-    'and it reached the provider rather than being refused earlier — a 403 or 400 here would prove a different gate, not this one',
+    'and it reached the sender rather than being refused earlier — a 403 or 400 here would prove a different gate, not this one',
     first.status !== 403 && first.status !== 400 && first.status !== 401
   );
 

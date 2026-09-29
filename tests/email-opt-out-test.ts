@@ -24,6 +24,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { liveBehindTrap } from './helpers/provider-trap';
 
 const prisma = new PrismaClient();
 
@@ -250,6 +251,7 @@ async function runCheckLayer() {
  * fourteen acceptance bullets. Guarded, the RED run names every bullet it fails.
  */
 async function main() {
+  liveBehindTrap(); // [[GTC-274]] the gate opened for this process only, behind the trap
   const layers: Array<[string, () => Promise<void>]> = [
     ['A/B', runTokenAndFooterLayers],
     ['C', runCheckLayer],

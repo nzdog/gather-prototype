@@ -1,9 +1,9 @@
 # GATHER BUILD CONSTANTS
 
 Reference file for AI executors and developers. Keep this file accurate.
-Last updated: 2026-09-27 (Zone 9, email opt-out and block, added on founder ruling
-D7 at GTC-189 slice 8a). Previously 2026-09-19 (Zone 5's standing rule, GTC-289
-phase 3a).
+Last updated: 2026-09-29 (Live sending, GTC-274's one live switch, on founder ruling
+of 2026-09-29). Previously 2026-09-27 (Zone 9, email opt-out and block, added on
+founder ruling D7 at GTC-189 slice 8a).
 CLAUDE.md reviewed: no conflicts or additions found.
 
 ---
@@ -126,28 +126,55 @@ change is gated on **every `test:*` script in `package.json`**, not a chosen
 list. So nothing in that namespace may send a real message: the live TNZ smoke
 send is `npm run live:tnz-sms` (was `test:tnz-sms`), outside it.
 
+### Live sending — one switch, production only
+*(Founder ruling, 2026-09-29, GTC-274.)* **Gather sends a real text or email only
+where `GATHER_LIVE_SENDS` is exactly `on`.** Anywhere else (your Mac, a test, a
+script, the dev server) every send stops at its last step before the provider,
+whatever keys are present, and the tests still run in full.
+- **Production sets it** as a Railway service variable. **The deploy checks it:**
+  `scripts/check-live-sends.mjs` is the first step of `npm run build`. Whenever
+  `RAILWAY_ENVIRONMENT_NAME` is set it prints one line naming the environment
+  and whether live sending is on. On `production` without the setting it refuses
+  the build. Confirm that line in the build log at every deploy.
+- **Only `on` is on.** Unset, empty, `true` and `1` are all off. It is read at
+  every call, never cached.
+- **Where it sits:** after the opt-out checks (Zone 7, first and untouched) and
+  after provider choice and configuration, at the last step before the network:
+  `sendSms`, `sendViaTnz` and `getResendClient`.
+- **What a stop does:** a text returns `SMS_DISABLED` with the words "live
+  sending is off", and writes no InviteEvent. An email returns `success: false`
+  with no provider code. Neither is ever recorded or reported as sent. The nudges
+  cron reports a run that is not live as unhealthy (GTC-214).
+- **No exemptions.** Sign-in links stop too. On the founder's Mac, mail to his
+  own address worked from 2026-09-27 (GTC-247) and now stops at the switch.
+  Local sign-in goes through the founder's own tooling.
+- **A deliberate live run** is one named script, with the setting on for that
+  one process only, to the founder's own number or address, on the founder's word
+  in chat. **Never the dev server, and never a test suite.**
+- **Never set it in `.env` or `.env.local`.** `test:live-switch` fails if either
+  file does (it checks presence only). In tests, only
+  `tests/helpers/provider-trap.ts` may open the gate (`liveBehindTrap`), and only
+  behind walls that stop every request from leaving the process.
+  `test:live-switch` fails if any other file in `tests/` or `scripts/` sets it.
+
 ### Known failures — environment-bound, not regressions
 Each fails identically at an unmodified HEAD, and each waits on something
 outside the code. Confirm a failure is one of these by re-running at HEAD, never
 by assuming.
 
-- `test:email-send-result` — layer 4 waits on `GTC265_PROBE_KEY`, a Resend key
-  whose state the suite measures before driving a route that could send
-  (GTC-265, GTC-247).
 - `test:gtc280-paid` — waits on `GTC280_PAID_SESSION_ID`, a really-paid Stripe
   test-mode checkout session (GTC-280). Run deliberately, never casually.
 - `test:demo-ui` — 1 of 4, *"Participant API identifies demo event by known
   event name"*: the demo event's name drift, GTC-333.
-- `test:nudge-provider-gate` — its positive control needs an SMS provider in the
-  ambient environment, and with one present it would drive the real nudge cron
-  against the real database and text real guests. So it refuses unless
-  `GATHER_ALLOW_LIVE_SMS_TEST=1` is set, and is red either way until **GTC-274**
-  replaces the ambient provider with a stubbed one. ⚠ GTC-274 is a precondition
-  of setting a TNZ token on any machine that runs the tests.
 
-- ⚠ **Do not run `tests/sms-validation-test.ts` until GTC-274 fences it** (2026-09-28). It is in
-  no npm script. It calls the real `sendSms` against a real event, and it writes to
-  `SmsOptOut` and `InviteEvent`.
+*(Retired at GTC-274, 2026-09-29: `test:email-send-result`'s wait on
+`GTC265_PROBE_KEY`, and `test:nudge-provider-gate`'s ambient-provider guard.
+Both suites now run green on any machine, with fake credentials behind the
+switch.)*
+
+- `tests/sms-validation-test.ts` was **retired at GTC-274** (2026-09-29) without
+  being run again. Its five cases are in `test:live-switch`, on a fixture that
+  suite creates and removes by id.
 
 ### `test:security`'s live layer needs the dev server
 *(Founder ruling, 2026-09-28, GTC-337 preflight.)* Without a dev server on
@@ -162,9 +189,10 @@ preconditions (GTC-270):
 
 It never drives `/api/cron/nudges` with a valid secret, and it fails if the
 `InviteEvent` count moves. This is the one approved exception to "no cron
-against `gather_dev`". The wrap-up drive does not itself wait on its
-precondition, so check both counts before starting, and stop if either is
-non-zero.
+against `gather_dev`". Since GTC-274 both drives wait on their own
+preconditions, and the dev server is never live, so it cannot send whatever its
+keys are. The blanked keys stay as a second wall. Still check both counts
+before starting, and stop if either is non-zero.
 
 ---
 
@@ -285,6 +313,7 @@ Actual values are redacted. Copy `.env.example` to `.env` and fill in real value
 | `STRIPE_SECRET_KEY` | Stripe API access | `.env` / deployment env |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signature verification | `.env` / deployment env |
 | `STRIPE_PRICE_ID` | Stripe subscription price ID | `.env` / deployment env |
+| `GATHER_LIVE_SENDS` | **Production only.** Exactly `on` means Gather sends real texts and email; anything else, including unset, stops every send at its last step (GTC-274). Set on Railway production and checked by the build; never in `.env` or `.env.local`. See *Live sending*. | Railway production env only |
 | `TNZ_AUTH_TOKEN` | SMS via TNZ for NZ (+64) and AU (+61) — obtain from TNZ Dashboard → Users → API tab → Auth Token. Required for production NZ delivery (Twilio does not deliver to NZ). | `.env` / deployment env |
 | `TWILIO_ACCOUNT_SID` | SMS via Twilio for non-NZ/AU destinations (OPTIONAL) | `.env` / deployment env |
 | `TWILIO_AUTH_TOKEN` | SMS via Twilio for non-NZ/AU destinations (OPTIONAL) | `.env` / deployment env |

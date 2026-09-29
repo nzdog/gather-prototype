@@ -33,6 +33,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { liveBehindTrap } from './helpers/provider-trap';
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
 import { join } from 'path';
 import { createElement } from 'react';
@@ -926,6 +927,7 @@ async function cleanup() {
 }
 
 async function main() {
+  liveBehindTrap(); // [[GTC-274]] the gate opened for this process only, behind the trap
   console.log('\n=== GTC-337 — Gather’s texts ===\n');
   await layer('A', runWords);
   await layer('B', runLine);

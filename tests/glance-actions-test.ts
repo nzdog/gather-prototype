@@ -936,6 +936,49 @@ async function main() {
         })) === 0
     );
 
+    // ── [[GTC-274]] — THE EMAIL LEG, ASSERTED RATHER THAN AVOIDED ─────────
+    //
+    // Every guest above has a +64 number, so the route's chooser picks SMS and this suite never
+    // reached the email sender. That containment was two coincidences (the fixtures' phones and
+    // an absent TNZ token), and GTC-274 recorded that one email-only guest would have sent a real
+    // email from this server. So here is that guest. The server is never live, so the email stops
+    // inside it; the assertions are what hold that, not the fixtures.
+    const mailOnly = await prisma.person.create({
+      data: {
+        name: `${TAG} MailOnly`,
+        email: `${TAG}-MailOnly-${Date.now()}@example.com`,
+        phoneNumber: null,
+      },
+    });
+    createdPersonIds.push(mailOnly.id);
+    await prisma.personEvent.create({
+      data: {
+        personId: mailOnly.id,
+        eventId: event.id,
+        role: 'PARTICIPANT',
+        teamId: mains.id,
+        householdRole: 'GUEST',
+        sentAt: new Date(now.getTime() - 10 * DAY),
+      },
+    });
+    const mailNudge = await post(
+      NUDGE(mailOnly.id),
+      { template: 'warm', message: 'an email that must not leave' },
+      COOKIE
+    );
+    assert(
+      'GTC-274',
+      "an EMAIL-ONLY guest's remind reaches the email sender and is refused there — 502, never sent",
+      mailNudge.status === 502
+    );
+    assert(
+      'GTC-274',
+      'and nothing claims it sent — no NUDGE_SENT_HOST is logged for the email-only guest',
+      (await prisma.inviteEvent.count({
+        where: { eventId: event.id, personId: mailOnly.id, type: 'NUDGE_SENT_HOST' },
+      })) === 0
+    );
+
     // ══ LAYER 4 — the structural fences ══════════════════════════════════
     let remindScope = '';
     const actionsSrc = code('src/lib/glance/actions.ts');

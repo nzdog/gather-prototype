@@ -34,6 +34,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { liveBehindTrap } from './helpers/provider-trap';
 import * as fs from 'fs';
 
 const prisma = new PrismaClient();
@@ -68,6 +69,7 @@ function code(p: string): string {
 const createdIds = { user: [] as string[], person: [] as string[], magicLink: [] as string[] };
 
 async function main() {
+  liveBehindTrap(); // [[GTC-274]] the gate opened for this process only, behind the trap
   // ══ LAYER 1 — the invariant, and the shape of the change ════════════════════
 
   const eventsRoute = code('src/app/api/events/route.ts');
