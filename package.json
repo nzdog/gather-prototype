@@ -110,6 +110,7 @@
     "test:email-block": "tsx tests/email-block-test.ts",
     "test:chase": "tsx tests/chase-test.ts",
     "test:chase-channel": "tsx tests/chase-channel-test.ts",
+    "test:after-the-press": "tsx --tsconfig tests/tsconfig.json tests/after-the-press-test.tsx",
     "test:board-not-chased": "tsx tests/board-not-chased-test.ts",
     "test:texts": "tsx --tsconfig tests/tsconfig.json tests/texts-test.ts"
   },

@@ -21,6 +21,7 @@ import {
 import { ModalProvider } from '@/contexts/ModalContext';
 import { HostPersonModal } from '@/components/h/HostPersonModal';
 import { useToast } from '@/contexts/ToastContext';
+import { CHASE_DOOR_HOST_VIEW_NOTE, CHASE_DOOR_LINK } from '@/lib/preflight/after-press-words';
 
 interface Item {
   id: string;
@@ -958,11 +959,23 @@ export default function HostView() {
                   </p>
                 </>
               )}
+              {/* [[GTC-329]], ruled 2026-09-29 — after the press, the way back to who is chased (WA,
+                  WB). The same address "Review and send" opens before it, which after the press is
+                  the smaller surface; and the same sign-in caveat, for the same reason. */}
               {data.inviteStatus.sentAt && (
-                <p className="text-xs text-gray-400">
-                  ✓ Invites confirmed sent{' '}
-                  {new Date(data.inviteStatus.sentAt).toLocaleDateString('en-NZ')}
-                </p>
+                <>
+                  <p className="text-xs text-gray-400">
+                    ✓ Invites confirmed sent{' '}
+                    {new Date(data.inviteStatus.sentAt).toLocaleDateString('en-NZ')}
+                  </p>
+                  <a
+                    href={preFlightHref}
+                    className="block w-full mt-3 py-2 text-sm font-medium text-center text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                  >
+                    {CHASE_DOOR_LINK}
+                  </a>
+                  <p className="text-xs text-gray-400 mt-1.5">{CHASE_DOOR_HOST_VIEW_NOTE}</p>
+                </>
               )}
             </div>
           )}

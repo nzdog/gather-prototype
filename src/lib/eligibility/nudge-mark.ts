@@ -73,6 +73,7 @@
  */
 
 import type { NudgeMark } from '@/lib/nudge-cadence';
+import { AFTER_PRESS_HEADING } from '@/lib/preflight/after-press-words';
 
 /**
  * May this person be chased by the automated machinery at all?
@@ -113,6 +114,11 @@ export const DONT_CHASE_SKIP_REASON = "Host marked don't-chase (Moment 4 §10.3)
  * It names where the mark is CHANGED, because Ruling 17 (same day) sealed the glance's
  * grey strips on exactly that ground: "the don't-chase mark is revisited where it is set
  * (the pre-flight), not here."
+ *
+ * [[GTC-329]], ruled 2026-09-29 (WE) — IT NAMES THE PLACE BY THE HEADING SHE WILL SEE. It said
+ * "in the pre-flight", a name the host never sees as a heading, and after the press nothing led
+ * there at all. After the press that address shows `AFTER_PRESS_HEADING`, reached by a link on
+ * the three host surfaces. The heading comes from its one constant, so the two cannot drift.
+ * Words only: no link inside the refusal, by the same ruling.
  */
-export const DONT_CHASE_NOT_ADDRESSABLE_MESSAGE =
-  "This person is marked don't-chase and will not be nudged. Change the mark in the pre-flight first.";
+export const DONT_CHASE_NOT_ADDRESSABLE_MESSAGE = `This person is marked don't-chase and will not be nudged. Change the mark under “${AFTER_PRESS_HEADING}” first.`;

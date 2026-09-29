@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { ReachabilityBar } from './ReachabilityBar';
 import TransitionModal from './TransitionModal';
+import { CHASE_DOOR_LINK } from '@/lib/preflight/after-press-words';
 
 interface PersonStatus {
   id: string;
@@ -670,10 +671,15 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
       )}
 
       {/* Last confirmed timestamp */}
+      {/* [[GTC-329]], ruled 2026-09-29 — after the press, the way back to who is chased (WA). Through
+          goToPreFlight, whose address is the smaller surface once the event is sent. */}
       {sentAt && (
-        <p className="text-xs text-gray-500 pt-2 border-t">
-          Sent: {new Date(sentAt).toLocaleString()}
-        </p>
+        <div className="flex items-center justify-between gap-3 pt-2 border-t">
+          <p className="text-xs text-gray-500">Sent: {new Date(sentAt).toLocaleString()}</p>
+          <button onClick={goToPreFlight} className="text-xs text-sage-600 hover:underline">
+            {CHASE_DOOR_LINK}
+          </button>
+        </div>
       )}
 
       {/* Transition Modal for Freeze */}

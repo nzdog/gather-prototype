@@ -65,6 +65,7 @@ import {
   unassignedDoorHref,
   unassignedDoorText,
 } from './strip';
+import { CHASE_DOOR_LINK, chaseDoorHref } from '@/lib/preflight/after-press-words';
 
 interface GlanceBoardProps {
   glance: EventGlance;
@@ -101,6 +102,18 @@ interface GlanceBoardProps {
    * RULING 36 deleted the switch — "a switch left in the tree is a variant nobody ruled on."
    */
   now?: Date;
+  /**
+   * [[GTC-329]], ruled 2026-09-29 — THE BOARD'S WAY BACK TO WHO IS CHASED, after the press only.
+   *
+   * The don't-chase grey is sealed by GTC-192 Ruling 17, whose second sentence is the reason that
+   * is defensible: *"The don't-chase mark is revisited where it is set (the pre-flight), not
+   * here."* After the press nothing on the board led there, so the sealed strip was a dead end.
+   * This link is the way to that place — not a door on any strip, which stay as Ruling 17 has them.
+   *
+   * A PROP, like `actorRole`: whether the event is sent is read by the page, and the payload stays
+   * as it is. Absent means before the press, so every existing render is unchanged.
+   */
+  afterPress?: boolean;
 }
 
 /**
@@ -330,6 +343,7 @@ export default function GlanceBoard({
   stickyReversals,
   // RULING 34's clock. See `GlanceBoardProps` above.
   now = new Date(),
+  afterPress = false,
 }: GlanceBoardProps) {
   // Ruling 23. A set, so the lookup in `Strip` is one place and one operation at any headcount.
   const sticky: ReadonlySet<string> = new Set(stickyReversals);
@@ -467,6 +481,17 @@ export default function GlanceBoard({
             </div>
           ) : null}
         </div>
+
+        {/* [[GTC-329]] — below the grid, quiet, after the press only. See `afterPress` above. */}
+        {afterPress ? (
+          <a
+            data-chase-door=""
+            href={chaseDoorHref(glance.eventId)}
+            className="mt-4 inline-block text-[12px] text-[#888780] underline underline-offset-2"
+          >
+            {CHASE_DOOR_LINK}
+          </a>
+        ) : null}
       </div>
     </main>
   );

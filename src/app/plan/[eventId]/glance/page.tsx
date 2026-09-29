@@ -161,6 +161,8 @@ export default async function GlancePage({ params }: { params: Promise<{ eventId
         stickyReversals={stickyReversals(replay.steps)}
         /* RULING 34 — the instant the reading panel's nudge day is read against. */
         now={now}
+        /* [[GTC-329]] — the board's way back to who is chased, after the press only. */
+        afterPress={event.sentAt !== null}
       />
       {/*
         Phase 6 slice 6c. The island, BESIDE the board rather than inside it, so `GlanceBoard`
