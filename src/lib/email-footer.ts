@@ -9,8 +9,8 @@
  *     because a body-only unsubscribe misses the users trained to trust the button at the
  *     top of the message.
  *
- * Ruling 7 adds the third thing: Gather's registered postal address, in the footer of
- * every guest-bound email, from ONE constant. The founder named all three together
+ * Ruling 7 adds the third thing: how to contact Gather, as the last line of every
+ * guest-bound email, from ONE constant. The founder named all three together
  * *"so the three do not get quietly removed later by someone tidying the footer."* This
  * module is that one place, and the ticket is the reason to leave it alone.
  *
@@ -18,38 +18,25 @@
  * `sendWelcomeEmail` are exempt by ruling 6 — they are direct responses to something the
  * account holder just did, which is the reading commercial-mail law gives "transactional"
  * mail. A magic link carrying an unsubscribe would offer to switch off the only way back
- * in. `tests/email-opt-out-test.ts` layer G asserts the exemption rather than assuming it.
+ * in. `tests/email-opt-out-test.ts` layer G asserts the exemption rather than assuming it,
+ * and `tests/email-contact-line-test.ts` layer C does for the contact line.
  */
 
 /**
- * ⚠ A PLACEHOLDER. THIS TICKET MAY NOT MERGE WITH A MADE-UP ADDRESS.
+ * [[GTC-296]] RULING 7, RE-RULED 2026-09-29 — A CONTACT EMAIL, NOT A POSTAL ADDRESS.
  *
- * ANCHOR(GTC-296): registered postal address — founder to confirm before merge
+ * UEMA 2007 s10 asks that a commercial electronic message say how the recipient can contact
+ * the sender. It prescribes no postal address; that was the US CAN-SPAM rule, carried into
+ * the ruling at scoping and corrected on 2026-09-27. So the footer gives Gather's address,
+ * and no guest email carries a postal address.
  *
- * Ruling 7 builds to the NZ Unsolicited Electronic Messages Act 2007 whether or not it
- * strictly reaches a friend's invitation sent from Gather's domain, on the ground that its
- * three requirements are almost free to meet. Two of the three are met in code — the
- * functional unsubscribe, and sender identification through *"Alice via Gather"* in the
- * from-line (THE VOICE, 2026-09-13). The third is a fact about the company that the
- * founder holds and the executor does not.
- *
- * An invented address would meet the letter of the requirement and defeat its purpose,
- * which is that a recipient can reach a real sender. So the value states what it is, and
- * `POSTAL_ADDRESS_IS_PLACEHOLDER` below is what a merge gate reads.
+ * The address is here and nowhere else, so changing it is one edit.
+ * [[GTC-341]] ruled the line's words, and its suite pins both.
  */
-export const GATHER_POSTAL_ADDRESS =
-  '[Gather — registered postal address to be confirmed before launch]';
+export const GATHER_CONTACT_EMAIL = 'hello@gatheringtogether.co.nz';
 
-/**
- * Whether the address above is still the placeholder.
- *
- * Kept as a separate exported fact rather than derived by matching on the string, because
- * a test that asserted `GATHER_POSTAL_ADDRESS.includes('to be confirmed')` would go green
- * the day somebody wrote a real address containing those words, and would need editing the
- * day somebody reworded the placeholder. One boolean, flipped in the same edit that
- * supplies the address.
- */
-export const POSTAL_ADDRESS_IS_PLACEHOLDER = true;
+/** The last line of every guest-bound email. Plain text, like the rest of the footer. */
+export const GATHER_CONTACT_LINE = `Contact Gather: ${GATHER_CONTACT_EMAIL}`;
 
 /** The sentence above the link. Plain text — both guest senders send `text`, not `html`. */
 export const UNSUBSCRIBE_INVITATION = "Don't want emails about this event?";
@@ -65,7 +52,7 @@ export const UNSUBSCRIBE_INVITATION = "Don't want emails about this event?";
  * emails and an `<hr>` would arrive as four literal characters.
  */
 export function guestEmailFooter(pageUrl: string): string {
-  return ['', '—', `${UNSUBSCRIBE_INVITATION} ${pageUrl}`, '', GATHER_POSTAL_ADDRESS].join('\n');
+  return ['', '—', `${UNSUBSCRIBE_INVITATION} ${pageUrl}`, '', GATHER_CONTACT_LINE].join('\n');
 }
 
 /** A guest body with its way out attached. One place, so the two senders cannot drift. */

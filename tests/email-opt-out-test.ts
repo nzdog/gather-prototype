@@ -158,24 +158,26 @@ async function runTokenAndFooterLayers() {
     'the footer carries a visible unsubscribe link (ruling 2, the body half)',
     footerText.includes(pageUrl)
   );
+  // [[GTC-341]]: ruling 7 as re-ruled 2026-09-29 — a contact email, not a postal address.
+  // The words were ruled at GTC-341's plan; `tests/email-contact-line-test.ts` pins them.
   assert(
     'B',
-    "the footer carries Gather's postal address from the one constant (ruling 7)",
-    footerText.includes(footer.GATHER_POSTAL_ADDRESS)
+    "the footer's last line is Gather's contact line from the one constant (ruling 7)",
+    footerText.split('\n').at(-1) === footer.GATHER_CONTACT_LINE
   );
   assert(
     'B',
-    'the address is a single config constant, not a literal in the footer text',
-    footerText.split(footer.GATHER_POSTAL_ADDRESS).length === 2
+    'the contact line is a single config constant, not a literal in the footer text',
+    footerText.split(footer.GATHER_CONTACT_LINE).length === 2
   );
 
-  // ⚠ THE PLACEHOLDER IS ASSERTED AS A PLACEHOLDER, NOT AS A VALUE. The founder has
-  // not confirmed the registered address, and this ticket must not merge with a
-  // made-up one. The flag is what the merge gate reads; the string itself will change.
+  // ⚠ THE PLACEHOLDER'S END IS ASSERTED, NOT ONLY THE NEW LINE'S PRESENCE. Until
+  // [[GTC-341]] this asserted the placeholder flag was still set, a state the re-ruling
+  // ends; its successor holds that the placeholder is gone.
   assert(
     'B',
-    'the address is flagged as a placeholder until the founder confirms it',
-    footer.POSTAL_ADDRESS_IS_PLACEHOLDER === true
+    'the footer carries no postal-address placeholder',
+    !footerText.includes('registered postal address') && !footerText.includes('[Gather')
   );
 
   const headers = footer.listUnsubscribeHeaders(oneClickUrl);
@@ -527,8 +529,9 @@ async function runSenderLayer() {
     );
     assert(
       'G',
-      "sendAskEmail's footer carries the postal address (ruling 7, UEMA)",
-      typeof ask.text === 'string' && (ask.text as string).includes(footer.GATHER_POSTAL_ADDRESS)
+      "sendAskEmail's footer ends with the contact line (ruling 7, UEMA, re-ruled)",
+      typeof ask.text === 'string' &&
+        (ask.text as string).split('\n').at(-1) === footer.GATHER_CONTACT_LINE
     );
     assert(
       'G',
@@ -563,9 +566,9 @@ async function runSenderLayer() {
     );
     assert(
       'G',
-      "sendNudgeEmail's footer carries the postal address",
+      "sendNudgeEmail's footer ends with the contact line",
       typeof nudge.text === 'string' &&
-        (nudge.text as string).includes(footer.GATHER_POSTAL_ADDRESS)
+        (nudge.text as string).split('\n').at(-1) === footer.GATHER_CONTACT_LINE
     );
 
     // ⚠ RULING 6 — THE TWO ACCOUNT SENDERS ARE EXEMPT, AND THE EXEMPTION IS
@@ -588,9 +591,10 @@ async function runSenderLayer() {
     );
     assert(
       'G',
-      'ruling 6 — sendMagicLinkEmail composes no postal footer',
+      'ruling 6 — sendMagicLinkEmail composes no contact line and no contact address',
       typeof magic.text === 'string' &&
-        !(magic.text as string).includes(footer.GATHER_POSTAL_ADDRESS)
+        !(magic.text as string).includes(footer.GATHER_CONTACT_LINE) &&
+        !(magic.text as string).includes(footer.GATHER_CONTACT_EMAIL)
     );
 
     // `sendWelcomeEmail` writes a MagicLink row, so it is driven inside the fixture
@@ -621,9 +625,10 @@ async function runSenderLayer() {
       );
       assert(
         'G',
-        'ruling 6 — sendWelcomeEmail composes no postal footer',
+        'ruling 6 — sendWelcomeEmail composes no contact line and no contact address',
         typeof welcome.html === 'string' &&
-          !(welcome.html as string).includes(footer.GATHER_POSTAL_ADDRESS)
+          !(welcome.html as string).includes(footer.GATHER_CONTACT_LINE) &&
+          !(welcome.html as string).includes(footer.GATHER_CONTACT_EMAIL)
       );
     });
   } finally {
@@ -1232,14 +1237,14 @@ async function runStructuralLayer() {
     read('GATHER-BUILD-CONSTANTS.md').includes('UNSUBSCRIBE_TOKEN_SECRET')
   );
 
-  // ⚠ THE PLACEHOLDER CARRIES THE TICKET THAT ENDS IT. A deliberate temporary state
-  // that does not name its end condition is indistinguishable from a permanent one
-  // (BUG-TICKET-TEMPLATE.md, Citations).
+  // ⚠ THE PLACEHOLDER CARRIED THE TICKET THAT ENDED IT, AND [[GTC-341]] ENDED IT. An
+  // anchor outliving its ticket's condition points a reader at a state that is gone
+  // (BUG-TICKET-TEMPLATE.md, Citations: delete it when the ticket that owns it closes).
   const footerSrc = read('src/lib/email-footer.ts');
   assert(
     'M',
-    'the postal-address placeholder carries an ANCHOR naming this ticket',
-    footerSrc.includes('ANCHOR(GTC-296)')
+    "the placeholder's ANCHOR is gone with the placeholder (GTC-341)",
+    !footerSrc.includes('ANCHOR(' + 'GTC-296)')
   );
 }
 
