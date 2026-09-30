@@ -224,6 +224,54 @@ export function deliveryFactFrom(row: DeliveryRowInput | null | undefined): Deli
   return { failure: null };
 }
 
+/** One outbound row with the time the poll last read it — what the rewind needs beside the rest. */
+export interface TimedDeliveryRowInput extends DeliveryRowInput {
+  id: string;
+  deliveryCheckedAt: Date | null;
+}
+
+/**
+ * [[GTC-335]] — ONE ROW AS IT STOOD AT `since`, BY THE TIMES GATHER RECORDED.
+ *
+ * Founder ruling, SCOPED 2026-10-01: *"The first time you open the board after it happened, it plays
+ * as a step, using the time Gather recorded it. After that it's just part of the board."* So each of
+ * the three doors is dropped when it was recorded after `since`, and the row itself when it was made
+ * after `since`. `deliveryFactFrom` then reads the past row exactly as it reads today's.
+ *
+ * ⚠ `deliveryCheckedAt` IS WHEN THE FAILURE WAS READ, AND THAT RESTS ON THE POLL. The poll writes it
+ * on every read, but every state `DELIVERY_STATE_MEANS` calls NOT_DELIVERED is in
+ * `TERMINAL_FOR_POLLING` (`src/lib/email-delivery/delivery-poll.ts`), so the read that found the
+ * failure is the row's last. A failure-mapped state added outside that set would break this.
+ *
+ * ⚠ A STATE WITH NO TIME IS HELD (ruling point 3). Nothing in the poll writes one, but a row that has
+ * one carries no evidence of when it changed, so it stands at `since` as it stands now — the replay's
+ * fail-safe silence.
+ */
+export function deliveryRowAsAt<T extends TimedDeliveryRowInput>(row: T, since: Date): T | null {
+  const t = since.getTime();
+  const after = (at: Date | null) => at !== null && at.getTime() > t;
+  if (row.createdAt.getTime() > t) return null;
+  return {
+    ...row,
+    rejectedAt: after(row.rejectedAt) ? null : row.rejectedAt,
+    withheldAt: after(row.withheldAt) ? null : row.withheldAt,
+    withheldWhy: after(row.withheldAt) ? null : row.withheldWhy,
+    deliveryState: after(row.deliveryCheckedAt) ? null : row.deliveryState,
+  };
+}
+
+/**
+ * [[GTC-335]] point 5 — WHEN THIS ROW'S FAILURE WAS RECORDED, so its step keeps the order things
+ * happened in. Null when the row says nothing failed. The doors are asked in `deliveryFactFrom`'s own
+ * order, so the time is the one belonging to the fact the board shows.
+ */
+export function deliveryFailureRecordedAt(row: TimedDeliveryRowInput): Date | null {
+  if (!deliveryFactFrom(row).failure) return null;
+  if (row.rejectedAt) return row.rejectedAt;
+  if (row.withheldAt && row.withheldWhy) return row.withheldAt;
+  return row.deliveryCheckedAt;
+}
+
 /**
  * THE LATEST ROW PER MEMBERSHIP, AND THIS IS NOT TIDINESS.
  *

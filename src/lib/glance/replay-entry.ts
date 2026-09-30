@@ -32,14 +32,18 @@
  * failing. One definition, two doors, the same shape phase 4 used for `mayHoldRow`.
  */
 
-import { rewindGlanceInputs } from './rewind';
+import { rewindGlanceInputs, rewindGuestFacts } from './rewind';
 import type { RewindDb } from './rewind';
 import { deriveReplay } from './replay';
 import type { GlanceReplay } from './replay';
-import type { EventGlance, GlanceEvent } from './state';
+import type { ChaseFact, DeliveryFact, EventGlance, ExhaustionFact, GlanceEvent } from './state';
+import { carrierOfAsk, deliveryFactFrom } from './delivery-fact';
+import { chaseFactFrom } from './chase-fact';
 import { readAskPreview } from '@/lib/preflight/ask-preview';
 import { exhaustionFor } from '@/lib/chase-exhaustion';
 import { readChaseSpend } from '@/lib/chase-exhaustion-read';
+import { isChildMembership } from '@/lib/eligibility/child-exclusion';
+import { isPaceOff } from '@/lib/eligibility/nudge-pace';
 
 /**
  * SLICE 6d — Ruling 23's overlay, RE-EXPORTED THROUGH THE DOOR RATHER THAN DEFINED BEHIND IT.
@@ -66,22 +70,62 @@ export async function readGlanceReplay(
   now: Date
 ): Promise<GlanceReplay> {
   if (glanceSeenAt === null) return { steps: [] };
-  const [rewound, preview, spend] = await Promise.all([
+  const [rewound, facts, spend] = await Promise.all([
     rewindGlanceInputs(db, eventId, glanceSeenAt),
-    readAskPreview(db, eventId, ''),
+    rewindGuestFacts(db, eventId, glanceSeenAt),
     readChaseSpend(db, eventId),
   ]);
   /*
-   * [[GTC-251]] — the past's exhaustion is the SAME predicate asked as at `since`. Handing the past
-   * nothing would replay AMBER → RED for every quiet guest on every visit (the shape [[GTC-335]]
-   * records for the delivery fact). The chase route is today's, as GTC-305 left the chase fact.
+   * [[GTC-335]] — THE PAST PREVIEW: the chooser's own walk, with the guest facts recorded after
+   * `since` not yet recorded. The host's side (marks, exceptions, the switch's default) is read as it
+   * is now, which is Ruling 22. It replaces the present preview this door used to read for GTC-251's
+   * exhaustion: that, too, is now asked of the route as at `since`.
    */
-  const exhaustionAt = new Map(
-    Object.entries(preview?.chase.byMembership ?? {}).map(
-      ([id, route]) => [id, exhaustionFor(route, spend, glanceSeenAt)] as const
-    )
+  const past = await readAskPreview(db, eventId, '', { discount: facts.later });
+
+  const people = [...glance.households.flatMap((h) => h.members), ...glance.unhoused];
+  // Ruling 22: her marks and her switch, as they are now.
+  const marks = new Map(people.map((p) => [p.personEventId, p.nudgeMark as string | null]));
+  const paceOff = isPaceOff(event.nudgePace);
+
+  const deliveryAt = new Map<string, DeliveryFact | null>();
+  const chaseAt = new Map<string, ChaseFact | null>();
+  const exhaustionAt = new Map<string, ExhaustionFact | null>();
+  const factChangedSince = new Map<string, number>();
+  for (const person of people) {
+    const id = person.personEventId;
+    const child = isChildMembership(person.householdRole);
+    const chaseRoute = past?.chase.byMembership[id];
+    /*
+     * The same translators `readEventGlance` asks, handed the past. A child's delivery fact is the
+     * carrier's the chooser named as at `since` ([[GTC-336]] Q2, ruling point 4); no carrier, none.
+     */
+    const answering = child ? carrierOfAsk(past?.askRoutes[id]) : id;
+    deliveryAt.set(id, answering ? deliveryFactFrom(facts.askRowAt.get(answering)) : null);
+    chaseAt.set(id, chaseFactFrom(chaseRoute, marks, child, paceOff));
+    /*
+     * [[GTC-251]] — the same predicate asked as at `since`. Handing the past nothing would replay
+     * AMBER → RED for every quiet guest on every visit.
+     */
+    exhaustionAt.set(id, exhaustionFor(chaseRoute, spend, glanceSeenAt));
+    // Point 5: a child's facts are its carriers' — the ask's and the chase's.
+    const chaseCarrier = !child
+      ? null
+      : chaseRoute?.kind === 'NONE'
+        ? (chaseRoute.carrierId ?? null)
+        : (chaseRoute?.recipientId ?? null);
+    const moved = [id, answering, chaseCarrier]
+      .map((m) => (m ? facts.movedSince.get(m) : undefined))
+      .filter((t): t is number => typeof t === 'number');
+    if (moved.length > 0) factChangedSince.set(id, Math.max(...moved));
+  }
+  return deriveReplay(
+    glance,
+    { ...rewound, exhaustionAt, deliveryAt, chaseAt, factChangedSince },
+    event,
+    glanceSeenAt,
+    now
   );
-  return deriveReplay(glance, { ...rewound, exhaustionAt }, event, glanceSeenAt, now);
 }
 
 /** The one write's handle — a client or a transaction, the same shape the read half takes. */

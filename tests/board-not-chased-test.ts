@@ -135,6 +135,7 @@ async function main() {
   let AP: any = null;
   let APC: any = null;
   let RP: any = null;
+  let RE: any = null;
   let EBW: any = null;
   try {
     S = await import('../src/lib/glance/state');
@@ -145,6 +146,7 @@ async function main() {
     AP = await import('../src/lib/preflight/ask-preview');
     APC = await import('../src/lib/preflight/ask-preview-compose');
     RP = await import('../src/lib/glance/replay');
+    RE = await import('../src/lib/glance/replay-entry');
     EBW = await import('../src/lib/eligibility/email-block-words');
   } catch (err) {
     console.error(`\x1b[31m!\x1b[0m module load failed: ${(err as Error).message.split('\n')[0]}`);
@@ -658,7 +660,9 @@ async function main() {
           acceptedAt: sentAt,
           provider: 'resend',
           providerMessageId: `${TAG}-${personEventId}`,
-          ...(fate === 'bounced' ? { deliveryState: 'BOUNCED' } : {}),
+          // [[GTC-335]] — the poll records a bounce WITH the time it read it, and the replay rewinds
+          // the bounce by that time. Read at the press here, so it stood before any \`since\` below.
+          ...(fate === 'bounced' ? { deliveryState: 'BOUNCED', deliveryCheckedAt: sentAt } : {}),
         },
       });
     }
@@ -823,6 +827,11 @@ async function main() {
     await askRow(e3, mark.pe.id, 'accepted');
     const markB = await mkMember(e3, 'Mira Itemlessbounced', { items: 0, mark: 'DONT_CHASE' });
     await askRow(e3, markB.pe.id, 'bounced');
+
+    // [[GTC-335]] — every fixture fact is recorded before this instant, so a \`since\` here is a
+    // visit with NOTHING changed since. (The opt-outs and blocks above carry the run's own time.)
+    const fixturesDoneAt = new Date();
+    await new Promise((r) => setTimeout(r, 5));
 
     const glances: Record<string, any> = {};
     const previews: Record<string, any> = {};
@@ -1328,7 +1337,9 @@ async function main() {
     };
     assert(
       'H',
-      'NOTHING CHANGED: no grey and no opted-out person produces a replay step (the chase fact is handed to the past unrewound, like the mark)',
+      // [[GTC-335]]: relabelled. A hand-built rewind with no \`chaseAt\` HOLDS the chase fact as it is
+      // now — the fail-safe silence — which is no longer "handed to the past unrewound".
+      'NOTHING CHANGED: no grey and no opted-out person produces a replay step (a hand-built rewind with no chase fact as at `since` holds today’s)',
       ok(() => {
         const { rewind } = unchangedRewind(board3);
         const steps = RP.deriveReplay(
@@ -1388,29 +1399,42 @@ async function main() {
         ok(() => yvesSteps('YES').length === 0)
       );
     }
-    // Finding 2: the delivery fact is measured, not asserted — reported in Evidence.
-    {
-      try {
-        const { rewind } = unchangedRewind(board3);
-        const steps = RP.deriveReplay(
-          board3,
-          rewind,
-          replayEvent,
-          new Date(Date.now() - HOUR),
-          new Date()
-        ).steps;
-        const bouncedIds = [annB, rayB, hadult, cora].map((m) => m.pe.id);
-        const replayed = steps.filter((s: any) => bouncedIds.includes(s.personEventId));
-        console.log(
-          `\x1b[36mi\x1b[0m [H] MEASURED (Finding 2): with nothing changed, ${replayed.length} of ${bouncedIds.length} NOT_DELIVERED people replay a step: ` +
-            JSON.stringify(replayed.map((s: any) => `${s.from}→${s.to}`))
-        );
-      } catch (err) {
-        console.log(
-          `\x1b[36mi\x1b[0m [H] MEASURED (Finding 2): not measurable — ${(err as Error).message.split('\n')[0]}`
-        );
-      }
+    // Finding 2 was measured here at GTC-305: with nothing changed, 4 of 4 NOT_DELIVERED people
+    // replayed a step, on a hand-built rewind that carried no delivery fact. [[GTC-335]] rewinds the
+    // fact by the time Gather recorded it, so the measurement becomes an assertion, driven through
+    // the whole door on the real rows.
+    const nothingChanged = async () =>
+      (await RE.readGlanceReplay(prisma, e1.ev.id, fixturesDoneAt, board3, replayEvent, new Date()))
+        .steps as any[];
+    let doorSteps: any[] | null = null;
+    try {
+      doorSteps = await nothingChanged();
+    } catch (err) {
+      console.error(
+        `\x1b[31m!\x1b[0m readGlanceReplay threw: ${(err as Error).message.split('\n')[0]}`
+      );
     }
+    assert(
+      'H',
+      'NOTHING CHANGED, THROUGH THE DOOR: no grey and no opted-out person produces a replay step',
+      ok(() => {
+        const quiet = [ann, ray, uma, uki, rita, rik, hoc, moe, annM].map((m) => m.pe.id);
+        return doorSteps !== null && doorSteps.every((s: any) => !quiet.includes(s.personEventId));
+      }),
+      JSON.stringify(doorSteps)
+    );
+    assert(
+      'H',
+      'FINDING 2, FIXED: with nothing changed, 0 of 4 NOT_DELIVERED people replay a step (was 4 of 4)',
+      ok(() => {
+        const bouncedIds = [annB, rayB, hadult, cora].map((m) => m.pe.id);
+        return (
+          doorSteps !== null &&
+          doorSteps.filter((s: any) => bouncedIds.includes(s.personEventId)).length === 0
+        );
+      }),
+      JSON.stringify(doorSteps)
+    );
   } finally {
     await prisma.outboundMessage.deleteMany({ where: { eventId: { in: created.events } } });
     await prisma.emailBlock.deleteMany({ where: { address: { in: created.addresses } } });

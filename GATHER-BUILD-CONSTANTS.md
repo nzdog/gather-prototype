@@ -1,10 +1,11 @@
 # GATHER BUILD CONSTANTS
 
 Reference file for AI executors and developers. Keep this file accurate.
-Last updated: 2026-09-30 (cron health, GTC-339: the sending crons fail per channel, the nudges
-cron only when it cannot queue; outbound-dispatch in the cron table; production's crons are called
-by an outside scheduler; the approved exceptions to "no cron against gather_dev" listed in full).
-Previously 2026-09-30 (the security suite's decide-by precondition widened to phone or
+Last updated: 2026-10-01 (Known failures: `npm run lint` exits 1, recorded at GTC-335 on founder
+instruction). Previously 2026-09-30 (cron health, GTC-339: the sending crons fail per channel, the
+nudges cron only when it cannot queue; outbound-dispatch in the cron table; production's crons are
+called by an outside scheduler; the approved exceptions to "no cron against gather_dev" listed in
+full). Previously 2026-09-30 (the security suite's decide-by precondition widened to phone or
 email on a live event, GTC-251 slice 251b, on founder ruling 4.5). Previously 2026-09-29
 (Live sending, GTC-274's one live switch, on founder ruling of 2026-09-29). Previously
 2026-09-27 (Zone 9, email opt-out and block, added on founder ruling D7 at GTC-189 slice 8a).
@@ -172,6 +173,14 @@ by assuming.
   test-mode checkout session (GTC-280). Run deliberately, never casually.
 - `test:demo-ui` — 1 of 4, *"Participant API identifies demo event by known
   event name"*: the demo event's name drift, GTC-333.
+- `npm run lint` — exits 1 at 86c211e with 57 errors and 42 warnings across 46
+  files, none from recent tickets (recorded at GTC-335, 2026-10-01, on founder
+  instruction; counted then in a scratch worktree at 86c211e). Among the errors
+  is a config one: the rule `@typescript-eslint/no-require-imports` has no
+  definition. `next build` does not run ESLint at all (`ignoreDuringBuilds: true`
+  in `next.config.js`, temporary until GTC-221's findings are cleared), so the
+  build stays green whatever lint says. Compare a ticket's lint run with these
+  counts; a new finding in a file the ticket touched is that ticket's.
 
 *(Retired at GTC-274, 2026-09-29: `test:email-send-result`'s wait on
 `GTC265_PROBE_KEY`, and `test:nudge-provider-gate`'s ambient-provider guard.

@@ -865,8 +865,10 @@ async function main() {
     const bea = await mkMember(e1, 'Bea Blocked');
     await asked(e1, bea.pe.id);
     const beaAddress = bea.p.email!.toLowerCase();
+    // [[GTC-335]] — first seen two hours ago, so layer E's `since = ago(1)` is a visit with nothing
+    // changed, and `since = ago(3)` a visit from before the block.
     await prisma.emailBlock.create({
-      data: { address: beaAddress, reason: 'BOUNCED', eventId: e1.ev.id },
+      data: { address: beaAddress, reason: 'BOUNCED', eventId: e1.ev.id, firstSeenAt: ago(2) },
     });
     created.addresses.push(beaAddress);
     const nia = await mkMember(e1, 'Nia Nochannel');
@@ -1112,10 +1114,12 @@ async function main() {
     let quietStep: any = 'unread';
     let settledStep: any = 'unread';
     let blockedStep: any = 'unread';
+    let blockedWhileAwayStep: any = 'unread';
     try {
       quietStep = await stepFor(ago(60), sam);
       settledStep = await stepFor(ago(1), sam);
       blockedStep = await stepFor(ago(1), bea);
+      blockedWhileAwayStep = await stepFor(ago(3), bea);
     } catch (err) {
       console.error(
         `\x1b[31m!\x1b[0m readGlanceReplay threw: ${(err as Error).message.split('\n')[0]}`
@@ -1135,9 +1139,22 @@ async function main() {
     );
     assert(
       'E',
-      'the Q5 red plays no step when nothing changed (the chase fact is not rewound, as GTC-305 left it)',
+      // [[GTC-335]]: relabelled — the chase fact IS rewound now, by the block's own recorded time.
+      'the Q5 red plays no step when nothing changed (the block was first seen before she looked)',
       blockedStep === null,
       JSON.stringify(blockedStep)
+    );
+    assert(
+      'E',
+      '[[GTC-335]] the Q5 red plays ONCE, AMBER → RED, when the block was first seen while she was away',
+      ok(
+        () =>
+          blockedWhileAwayStep !== null &&
+          blockedWhileAwayStep !== 'unread' &&
+          blockedWhileAwayStep.from === 'AMBER' &&
+          blockedWhileAwayStep.to === 'RED'
+      ),
+      JSON.stringify(blockedWhileAwayStep)
     );
 
     // ══ LAYER S — structure ══════════════════════════════════════════════════════════════

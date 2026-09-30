@@ -52,7 +52,15 @@
 
 import type { Prisma } from '@prisma/client';
 import type { DecideByItem } from '../decide-by';
-import type { ExhaustionFact } from './state';
+import type { ChaseFact, DeliveryFact, ExhaustionFact } from './state';
+import type { LaterFacts } from '@/lib/preflight/ask-preview';
+import { normalizeEmailAddress } from '@/lib/eligibility/email-block';
+import {
+  deliveryFailureRecordedAt,
+  deliveryRowAsAt,
+  latestRowByMembership,
+  type TimedDeliveryRowInput,
+} from './delivery-fact';
 
 /**
  * Accepts a client or a transaction — `Prisma.TransactionClient`, the same handle
@@ -140,6 +148,23 @@ export interface GlanceRewind {
    * A decision, not an instant: nothing dated rides in it.
    */
   exhaustionAt?: Map<string, ExhaustionFact | null>;
+  /**
+   * [[GTC-335]] — each membership's delivery fact AS AT `since` (a child's is its carrier's, ruling
+   * S as GTC-336 ruled it), filled by `readGlanceReplay`. Optional so a rewind built by hand keeps
+   * the meaning it had before: nothing known, no failure.
+   */
+  deliveryAt?: Map<string, DeliveryFact | null>;
+  /**
+   * [[GTC-335]] — each membership's chase fact AS AT `since`: the guest's side rewound by its
+   * recorded times, the host's side as it is now (Ruling 22). A person with no entry is HELD at
+   * today's fact — the fail-safe silence.
+   */
+  chaseAt?: Map<string, ChaseFact | null>;
+  /**
+   * [[GTC-335]] point 5 — when this membership's facts last moved inside the window, beside the
+   * rows' `changedSince`. SERVER-SIDE ONLY, sorted on and discarded, exactly as that one is.
+   */
+  factChangedSince?: Map<string, number>;
 }
 
 /**
@@ -276,4 +301,145 @@ export async function rewindGlanceInputs(
   }
 
   return { responseAt, absentAt, changedSince, clockAt, attendanceAt, ambiguous };
+}
+
+/**
+ * [[GTC-335]] — THE FACTS BESIDE THE ROWS, AS THEY STOOD AT `since`.
+ *
+ * Founder ruling, SCOPED 2026-10-01 (Q1): *"Replay it once. The first time you open the board after
+ * it happened, it plays as a step, using the time Gather recorded it."* This is where those times are
+ * read, and the only place: the preview is handed SETS to subtract (`LaterFacts`) and never a time,
+ * and the pure derivation is handed facts and an ordering number.
+ *
+ * WHAT IS REWOUND — the guest's side, each by its own recorded time:
+ *   - the ask's delivery: `createdAt`, `rejectedAt`, `withheldAt`, `deliveryCheckedAt`;
+ *   - `EmailOptOut.optedOutAt`, `EmailBlock.firstSeenAt`, `SmsOptOut.optedOutAt`,
+ *     `Person.smsOptedOutAt`.
+ * WHAT IS NOT — the host's own acts, which have no history and which Ruling 22 rules are not news to
+ * her: the mark, the reminders switch, the exceptions; and everything else with no history (the
+ * addresses and phones she edits, the households, the rows held), read as they are now.
+ *
+ * ⚠ A FACT WITH NO TIME IS HELD (ruling point 3). `Person.smsOptedOutAt` is nullable; a flag with no
+ * time is never in `later`, so it stands at `since` as it stands now and plays no step.
+ *
+ * ⚠ AND THE TIMES ARE AS HONEST AS THEIR WRITERS. A repeat STOP moves `SmsOptOut.optedOutAt` and
+ * `Person.smsOptedOutAt` forward, so it reads as a new opt-out; its standing is grey and Ruling 26(b)
+ * plays no grey, so the cost is silence. A complaint's upgrade of a block keeps `firstSeenAt`, so the
+ * "reported" half of a block is held as it is now.
+ *
+ * READS ONLY, from Zones 7 and 9 among others. Writes nothing.
+ */
+export interface GuestFactsRewind {
+  /** Each membership's own latest ASK row as at `since`, rewound; absent if it had none then. */
+  askRowAt: Map<string, TimedDeliveryRowInput>;
+  /** The guest facts recorded after `since`, for `readAskPreview` to subtract. */
+  later: LaterFacts;
+  /** Each membership's own facts: the latest recorded time inside the window. Server-side only. */
+  movedSince: Map<string, number>;
+}
+
+export async function rewindGuestFacts(
+  db: RewindDb,
+  eventId: string,
+  since: Date
+): Promise<GuestFactsRewind> {
+  const event = await db.event.findUniqueOrThrow({
+    where: { id: eventId },
+    select: { hostId: true },
+  });
+  const memberships = await db.personEvent.findMany({
+    where: { eventId },
+    select: {
+      id: true,
+      personId: true,
+      person: { select: { email: true, phoneNumber: true, smsOptedOutAt: true } },
+    },
+  });
+  const addresses = [
+    ...new Set(
+      memberships
+        .map((m) => m.person.email)
+        .filter((a): a is string => !!a)
+        .map(normalizeEmailAddress)
+    ),
+  ];
+  const phones = [
+    ...new Set(memberships.map((m) => m.person.phoneNumber).filter((n): n is string => !!n)),
+  ];
+
+  const [asks, optOuts, blocks, smsOptOuts] = await Promise.all([
+    // The board's own filter (`readEventGlance`): the fact is the ask's.
+    db.outboundMessage.findMany({
+      where: { eventId, kind: 'ASK' },
+      select: {
+        id: true,
+        personEventId: true,
+        createdAt: true,
+        rejectedAt: true,
+        withheldAt: true,
+        withheldWhy: true,
+        deliveryState: true,
+        deliveryCheckedAt: true,
+      },
+    }),
+    db.emailOptOut.findMany({
+      where: { eventId, optedOutAt: { gt: since } },
+      select: { personId: true, optedOutAt: true },
+    }),
+    addresses.length === 0
+      ? Promise.resolve([] as Array<{ address: string; firstSeenAt: Date }>)
+      : db.emailBlock.findMany({
+          where: { address: { in: addresses }, firstSeenAt: { gt: since } },
+          select: { address: true, firstSeenAt: true },
+        }),
+    phones.length === 0
+      ? Promise.resolve([] as Array<{ phoneNumber: string; optedOutAt: Date }>)
+      : db.smsOptOut.findMany({
+          where: { hostId: event.hostId, phoneNumber: { in: phones }, optedOutAt: { gt: since } },
+          select: { phoneNumber: true, optedOutAt: true },
+        }),
+  ]);
+
+  const sinceMs = since.getTime();
+
+  // The past row: the latest of those that existed at `since`, then each door as it stood then.
+  const askRowAt = new Map<string, TimedDeliveryRowInput>();
+  const existing = asks.filter((r) => r.createdAt.getTime() <= sinceMs);
+  for (const [membership, row] of latestRowByMembership(existing)) {
+    const then = deliveryRowAsAt(row, since);
+    if (then) askRowAt.set(membership, then);
+  }
+
+  const later: LaterFacts = {
+    emailOptOutPersonIds: new Set(optOuts.map((o) => o.personId)),
+    blockAddresses: new Set(blocks.map((b) => b.address)),
+    smsOptOutNumbers: new Set(smsOptOuts.map((o) => o.phoneNumber)),
+    smsFlagPersonIds: new Set(
+      memberships
+        .filter(
+          (m) => m.person.smsOptedOutAt !== null && m.person.smsOptedOutAt.getTime() > sinceMs
+        )
+        .map((m) => m.personId)
+    ),
+  };
+
+  // Point 5's key. Each time below is already inside the window, or is checked to be.
+  const optOutAt = new Map(optOuts.map((o) => [o.personId, o.optedOutAt.getTime()]));
+  const blockAt = new Map(blocks.map((b) => [b.address, b.firstSeenAt.getTime()]));
+  const smsAt = new Map(smsOptOuts.map((o) => [o.phoneNumber, o.optedOutAt.getTime()]));
+  const latestNow = latestRowByMembership(asks);
+  const movedSince = new Map<string, number>();
+  for (const m of memberships) {
+    const failedAt = latestNow.get(m.id);
+    const times = [
+      optOutAt.get(m.personId),
+      m.person.email ? blockAt.get(normalizeEmailAddress(m.person.email)) : undefined,
+      m.person.phoneNumber ? smsAt.get(m.person.phoneNumber) : undefined,
+      m.person.smsOptedOutAt?.getTime(),
+      failedAt ? deliveryFailureRecordedAt(failedAt)?.getTime() : undefined,
+    ].filter((t): t is number => typeof t === 'number' && t > sinceMs);
+    if (times.length > 0) movedSince.set(m.id, Math.max(...times));
+  }
+
+  return { askRowAt, later, movedSince };
 }

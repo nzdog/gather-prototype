@@ -257,7 +257,8 @@ export function deriveReplay(
     if (!past.attendanceAt.has(person.personEventId)) continue;
 
     const rows: GlanceItemInput[] = [];
-    let order = 0;
+    // [[GTC-335]] point 5 — a fact that moved inside the window orders the step as a row does.
+    let order = past.factChangedSince?.get(person.personEventId) ?? 0;
 
     for (const item of person.items) {
       // Born after she last looked: she held no such row then, which is not the same fact as
@@ -279,16 +280,26 @@ export function deriveReplay(
         isHost: person.isHost,
         // [[GTC-251]] — REWOUND: the same predicate asked as at `since`, so a guest who was
         // already quiet plays no step, and one who went quiet while she was away plays once.
-        // The mark is still not rewound: it is Kate's own decision, and Ruling 22 rules her own
-        // override is not news to her.
+        // [[GTC-335]]: asked of the chase route as at `since`, so the past is one consistent state.
         exhaustion: past.exhaustionAt?.get(person.personEventId) ?? null,
         /*
-         * [[GTC-305]] — THE CHASE FACT, NOT REWOUND, AS THE MARK IS NOT. Without it every grey and
-         * every "opted out" would derive an amber past and replay a step on every visit. ⚠ The cost,
-         * named in GTC-305's Evidence: a guest who opts out while she is away turns red with no
-         * step played, though Ruling 26(b) plays reds. How the replay rewinds facts is filed.
+         * [[GTC-335]] — THE FACTS BESIDE THE ROWS, REWOUND BY THE TIMES GATHER RECORDED THEM.
+         * Founder ruling, SCOPED 2026-10-01: *"The first time you open the board after it happened,
+         * it plays as a step, using the time Gather recorded it. After that it's just part of the
+         * board."* A bounce, a message that could not be sent, an opt-out, an address blocked.
+         *
+         * THE DELIVERY FACT: absent means nothing known, which is what the past was handed before
+         * this ticket; the door always fills it. THE CHASE FACT: absent means HELD at today's — a
+         * fact with no evidence of change stands as it is, the fail-safe silence. The door fills it
+         * with the guest's side rewound and the host's side as it is now.
+         *
+         * ⚠ THE MARK IS STILL NOT REWOUND, NOR THE SWITCH NOR AN EXCEPTION: *"Your own changes ...
+         * still never replay: Ruling 22 says your own decisions aren't news to you."*
          */
-        chase: person.chase,
+        delivery: past.deliveryAt?.get(person.personEventId) ?? null,
+        chase: past.chaseAt?.has(person.personEventId)
+          ? (past.chaseAt.get(person.personEventId) ?? null)
+          : person.chase,
         nudgeMark: person.nudgeMark,
         attendanceAnswer: past.attendanceAt.get(person.personEventId) ?? null,
         items: rows,

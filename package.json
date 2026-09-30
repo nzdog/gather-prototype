@@ -114,6 +114,7 @@
     "test:board-not-chased": "tsx tests/board-not-chased-test.ts",
     "test:carried-child-door": "tsx tests/carried-child-door-test.ts",
     "test:gone-quiet": "tsx tests/gone-quiet-test.ts",
+    "test:replay-facts": "tsx tests/replay-facts-test.ts",
     "test:decide-by-email": "tsx tests/decide-by-email-test.ts",
     "test:hand-back": "tsx tests/hand-back-test.ts",
     "test:texts": "tsx --tsconfig tests/tsconfig.json tests/texts-test.ts",

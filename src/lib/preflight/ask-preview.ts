@@ -365,6 +365,27 @@ function recipientChaseOf(route: ChaseRoute, exception: ChaseWhenNoMobile | null
   };
 }
 
+/**
+ * [[GTC-335]] — THE GUEST FACTS RECORDED AFTER A GIVEN MOMENT, which the arrival replay's past must
+ * not see. Built by `rewindGuestFacts` in `src/lib/glance/rewind.ts`, which is where every recorded
+ * time is read; this module only SUBTRACTS, and learns no time.
+ *
+ * ⚠ THE GUEST'S SIDE ONLY, WHICH IS THE RULING. Founder, SCOPED 2026-10-01: *"Your own changes
+ * (don't-chase marks, the reminders switch, exceptions) still never replay: Ruling 22 says your own
+ * decisions aren't news to you."* So nothing here can reach `nudgeMark`, `chaseException`,
+ * `chaseWhenNoMobileDefault`, a household, an address or a phone: those are read as they are now.
+ */
+export interface LaterFacts {
+  /** `EmailOptOut` rows for this event recorded after the moment, by `personId`. */
+  emailOptOutPersonIds: ReadonlySet<string>;
+  /** `EmailBlock` addresses first seen after the moment, normalised as the block stores them. */
+  blockAddresses: ReadonlySet<string>;
+  /** `SmsOptOut` numbers under this event's host recorded after the moment. */
+  smsOptOutNumbers: ReadonlySet<string>;
+  /** People whose `Person.smsOptedOut` flag was set after the moment. */
+  smsFlagPersonIds: ReadonlySet<string>;
+}
+
 export interface AskPreview {
   event: {
     name: string;
@@ -397,8 +418,15 @@ const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompar
 export async function readAskPreview(
   db: Db,
   eventId: string,
-  baseUrl: string
+  baseUrl: string,
+  /**
+   * [[GTC-335]] — the arrival replay's past: the chooser's answer with these guest facts not yet
+   * recorded. Absent everywhere else, and absent means today's preview, unchanged — the press, the
+   * drain, the chase and the pre-flight never pass it.
+   */
+  options: { discount?: LaterFacts } = {}
 ): Promise<AskPreview | null> {
+  const discount = options.discount ?? null;
   const event = await db.event.findUnique({
     where: { id: eventId },
     select: {
@@ -452,7 +480,7 @@ export async function readAskPreview(
 
   const phones = memberships.map((m) => m.person.phoneNumber).filter((n): n is string => !!n);
   const optedOutNumbers = new Set(
-    phones.length === 0
+    (phones.length === 0
       ? []
       : (
           await db.smsOptOut.findMany({
@@ -460,6 +488,7 @@ export async function readAskPreview(
             select: { phoneNumber: true },
           })
         ).map((o) => o.phoneNumber)
+    ).filter((n) => !discount?.smsOptOutNumbers.has(n))
   );
 
   /*
@@ -472,16 +501,24 @@ export async function readAskPreview(
    * ⚠ AND IT IS SCOPED TO THIS EVENT, WHICH IS RULING 1. A set built for another event would
    * suppress the wrong people — the failure mode a per-host table would have had by design.
    */
-  const emailOptedOutPersonIds = await listEmailOptOutsForEvent(db, eventId);
+  const emailOptedOutPersonIds = new Set(
+    [...(await listEmailOptOutsForEvent(db, eventId))].filter(
+      (id) => !discount?.emailOptOutPersonIds.has(id)
+    )
+  );
 
   /*
    * [[GTC-324]] ruling 2 / [[GTC-189]] slice 8a — THE ADDRESS-WIDE BLOCK, one query per event, the
    * same shape as the two sets above. Keyed on the address, so it reaches this event whichever event
    * the provider's refusal was learned from.
    */
-  const emailBlocks = await listEmailBlocks(
-    db,
-    memberships.map((m) => m.person.email)
+  const emailBlocks = new Map(
+    [
+      ...(await listEmailBlocks(
+        db,
+        memberships.map((m) => m.person.email)
+      )),
+    ].filter(([address]) => !discount?.blockAddresses.has(address))
   );
   const blockStateOf = (email: string | null) => emailBlockStateOf(email, eventId, emailBlocks);
 
@@ -517,7 +554,14 @@ export async function readAskPreview(
         phoneNumber: m.person.phoneNumber,
         // [[GTC-301]] — either fact; see the header and `smsOptedOutFact` above, which is the
         // one definition of the merge and is what the bounce door asks as well.
-        smsOptedOut: smsOptedOutFact(m.person, optedOutNumbers),
+        smsOptedOut: smsOptedOutFact(
+          {
+            phoneNumber: m.person.phoneNumber,
+            // [[GTC-335]] — the flag, less one recorded after the replay's `since`.
+            smsOptedOut: m.person.smsOptedOut && !discount?.smsFlagPersonIds.has(m.personId),
+          },
+          optedOutNumbers
+        ),
         // [[GTC-296]] ruling 1 — per event, and this set is this event's.
         emailOptedOut: emailOptedOutFact(m.personId, emailOptedOutPersonIds),
         // [[GTC-324]] rulings 2 and 1 — the block, and whether THIS event's message was reported.
