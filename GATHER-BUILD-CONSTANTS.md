@@ -1,9 +1,10 @@
 # GATHER BUILD CONSTANTS
 
 Reference file for AI executors and developers. Keep this file accurate.
-Last updated: 2026-09-29 (Live sending, GTC-274's one live switch, on founder ruling
-of 2026-09-29). Previously 2026-09-27 (Zone 9, email opt-out and block, added on
-founder ruling D7 at GTC-189 slice 8a).
+Last updated: 2026-09-30 (the security suite's decide-by precondition widened to phone or
+email on a live event, GTC-251 slice 251b, on founder ruling 4.5). Previously 2026-09-29
+(Live sending, GTC-274's one live switch, on founder ruling of 2026-09-29). Previously
+2026-09-27 (Zone 9, email opt-out and block, added on founder ruling D7 at GTC-189 slice 8a).
 CLAUDE.md reviewed: no conflicts or additions found.
 
 ---
@@ -185,7 +186,9 @@ edit `.env.local`:
 The live layer drives only two cron routes, and only behind asserted
 preconditions (GTC-270):
 - `/api/cron/wrap-up-dispatch`, after zero undispatched `WrapUpLink` rows;
-- `/api/cron/decide-by-followups`, after zero decide-by candidates with a phone.
+- `/api/cron/decide-by-followups`, after zero decide-by candidates: an unstamped maybe with a phone
+  or an email, on a sent and live event (widened at GTC-251 slice 251b, when the follow-up gained
+  its email leg).
 
 It never drives `/api/cron/nudges` with a valid secret, and it fails if the
 `InviteEvent` count moves. This is the one approved exception to "no cron

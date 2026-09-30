@@ -4,6 +4,8 @@ import { SENT_AND_LIVE } from '@/lib/lifecycle';
 import { isMessageableRole, CHILD_SKIP_REASON } from '@/lib/eligibility/child-exclusion';
 import { decideBy, isDecideByFollowupDue } from '@/lib/decide-by';
 import { EMAIL_OPT_OUT_SKIP_REASON, getEmailOptOut } from '@/lib/eligibility/email-opt-out';
+import { readAskPreview, type AskPreview } from '@/lib/preflight/ask-preview';
+import { CHASE_SKIP_REASON } from '@/lib/sms/nudge-eligibility';
 
 /**
  * GTC-175 (D2) — who is due the single decide-by follow-up.
@@ -18,12 +20,28 @@ import { EMAIL_OPT_OUT_SKIP_REASON, getEmailOptOut } from '@/lib/eligibility/ema
  * child rule, Do-Not-Touch zone 7's opt-out, and quiet hours all apply exactly as they
  * do to every other sender. What the ticket exempts D2 from is the cadence, not the
  * eligibility.
+ *
+ * ── [[GTC-251]] SLICE 251b — ONE CHOOSER FOR BOTH LEGS ───────────────────────────────────
+ *
+ * Founder rulings Q4, Q4a and 4.5 (2026-09-29/30): the follow-up is sent the way the chase is
+ * chosen — `readAskPreview`'s `chase.byMembership`, which is `chooseChaseRoute`. A maybe-guest
+ * with no usable mobile is followed up by EMAIL; the chooser's every refusal stops the follow-up
+ * too, so a marked guest (4.5(a)), a handed-over guest (Q4), a text-opted-out guest (Q4a, and the
+ * `Person.smsOptedOut` flag counts, as `smsOptedOutFact` has it) and an unsubscribed, reported or
+ * blocked address (Zone 9) get none. A `+61` number is emailed, as the chase emails it, until
+ * [[GTC-300]] (4.5(b)). The phone is no longer required in SQL: the chooser decides the channel.
  */
 
 export interface DecideByFollowupCandidate {
   personId: string;
   personName: string;
-  phoneNumber: string;
+  /** [[GTC-251]] — the chooser's channel for this guest. */
+  channel: 'TEXT' | 'EMAIL';
+  /** Set for TEXT. */
+  phoneNumber: string | null;
+  /** Set for EMAIL: the address, and where a reply goes (the host's account email, ruling F). */
+  email: string | null;
+  replyTo: string | null;
   eventId: string;
   eventName: string;
   hostId: string;
@@ -48,6 +66,8 @@ export interface DecideByEligibilityResult {
 /** A membership row was expected and is not there. NOT a child — see below. */
 export const NO_MEMBERSHIP_SKIP_REASON = 'No event membership row (fails closed)';
 const NO_PHONE_SKIP_REASON = 'No phone number';
+/** [[GTC-251]] — the dispatcher's `NO_REPLY_TO`, as a recorded skip: no host email to reply to. */
+export const NO_REPLY_TO_SKIP_REASON = 'No reply-to: the host has no account email';
 const OPTED_OUT_SKIP_REASON = 'Opted out';
 const NOT_YET_DUE_SKIP_REASON = 'Decide-by follow-up window not open yet';
 const ALREADY_PASSED_SKIP_REASON = 'Decide-by already passed — not chased';
@@ -82,12 +102,11 @@ export async function findDecideByFollowupCandidates(
       response: 'MAYBE',
       decideByFollowupSentAt: null,
       item: { team: { event: SENT_AND_LIVE(now) } },
-      person: { phoneNumber: { not: null } },
     },
     select: {
       id: true,
       response: true,
-      person: { select: { id: true, name: true, phoneNumber: true } },
+      person: { select: { id: true, name: true, phoneNumber: true, email: true } },
       item: {
         select: {
           name: true,
@@ -154,11 +173,21 @@ export async function findDecideByFollowupCandidates(
 
   const memberships = await prisma.personEvent.findMany({
     where: { OR: pairs.map((p) => ({ personId: p.personId, eventId: p.eventId })) },
-    select: { personId: true, eventId: true, householdRole: true },
+    select: { id: true, personId: true, eventId: true, householdRole: true },
   });
   const roleByPair = new Map(
     memberships.map((m) => [`${m.personId}:${m.eventId}`, m.householdRole])
   );
+  const membershipIdByPair = new Map(memberships.map((m) => [`${m.personId}:${m.eventId}`, m.id]));
+
+  /*
+   * [[GTC-251]] 4.5 — THE CHASE'S CHOOSER, ONCE PER EVENT. The same walk the chase finder, the
+   * pre-flight and the board read, so all four give one answer about who Gather may follow up.
+   */
+  const previews = new Map<string, AskPreview | null>();
+  for (const eventId of new Set(assignments.map((a) => a.item.team.event.id))) {
+    previews.set(eventId, await readAskPreview(prisma, eventId, ''));
+  }
 
   const tokens = await prisma.accessToken.findMany({
     where: {
@@ -169,16 +198,19 @@ export async function findDecideByFollowupCandidates(
   });
   const tokenByPair = new Map(tokens.map((t) => [`${t.personId}:${t.eventId}`, t.token]));
 
-  // Opt-out, batched by host rather than one findUnique per candidate.
-  const optOutRows = await prisma.smsOptOut.findMany({
-    where: {
-      OR: assignments.map((a) => ({
-        phoneNumber: a.person.phoneNumber!,
-        hostId: a.item.team.event.hostId,
-      })),
-    },
-    select: { phoneNumber: true, hostId: true },
-  });
+  // Opt-out, batched by host rather than one findUnique per candidate. Only those with a number.
+  const withPhone = assignments.filter((a) => !!a.person.phoneNumber);
+  const optOutRows = withPhone.length
+    ? await prisma.smsOptOut.findMany({
+        where: {
+          OR: withPhone.map((a) => ({
+            phoneNumber: a.person.phoneNumber!,
+            hostId: a.item.team.event.hostId,
+          })),
+        },
+        select: { phoneNumber: true, hostId: true },
+      })
+    : [];
   const optedOut = new Set(optOutRows.map((r) => `${r.phoneNumber}:${r.hostId}`));
 
   /** One entry per (person, event); the earliest decide-by names the message. */
@@ -199,23 +231,39 @@ export async function findDecideByFollowupCandidates(
       continue;
     }
 
-    // 2. A reachable channel. E.164 validity and provider routing are `sendSms`'s job —
-    //    deliberately not isValidNZNumber, which rejects the +61 numbers send-sms.ts
-    //    routes to TNZ on purpose.
-    if (!person.phoneNumber) {
-      addSkip(NO_PHONE_SKIP_REASON);
-      continue;
-    }
     const token = tokenByPair.get(pair);
     if (!token) {
       addSkip('No participant token');
       continue;
     }
 
-    // 3. Opt-out (Do-Not-Touch zone 7). `sendSms` checks again at send time; this is
-    //    here so the skip is counted rather than showing up as a silent block.
-    if (optedOut.has(`${person.phoneNumber}:${event.hostId}`)) {
-      addSkip(OPTED_OUT_SKIP_REASON);
+    /*
+     * 2. [[GTC-251]] 4.5 — THE CHANNEL IS THE CHOOSER'S. Its refusals are recorded in the chase's
+     *    own words (`CHASE_SKIP_REASON`), so a run report reads the same for both. Its ladder puts
+     *    the text opt-out first (Zone 7), then the email facts (Zone 9), then the mark — the order
+     *    `nudge-mark.ts` requires.
+     */
+    const preview = previews.get(event.id) ?? null;
+    const route = preview?.chase.byMembership[membershipIdByPair.get(pair)!];
+    if (!preview || !route || route.kind !== 'DIRECT') {
+      addSkip(route?.kind === 'NONE' ? CHASE_SKIP_REASON[route.why] : 'Not chased');
+      continue;
+    }
+
+    if (route.channel === 'TEXT') {
+      // 3. ZONE 7, BELT AND BRACES, as the chase finder keeps it: the per-host table re-read
+      //    directly, so a regression in the chooser fails SAFE. `sendSms` checks again at send.
+      if (!person.phoneNumber) {
+        addSkip(NO_PHONE_SKIP_REASON);
+        continue;
+      }
+      if (optedOut.has(`${person.phoneNumber}:${event.hostId}`)) {
+        addSkip(OPTED_OUT_SKIP_REASON);
+        continue;
+      }
+    } else if (!preview.replyTo) {
+      // The email is hers (ruling F): with no address to reply to, it is not sent.
+      addSkip(NO_REPLY_TO_SKIP_REASON);
       continue;
     }
 
@@ -258,7 +306,10 @@ export async function findDecideByFollowupCandidates(
       grouped.set(pair, {
         personId: person.id,
         personName: person.name,
-        phoneNumber: person.phoneNumber,
+        channel: route.channel,
+        phoneNumber: route.channel === 'TEXT' ? person.phoneNumber : null,
+        email: route.channel === 'EMAIL' ? person.email : null,
+        replyTo: route.channel === 'EMAIL' ? preview.replyTo : null,
         eventId: event.id,
         eventName: event.name,
         hostId: event.hostId,

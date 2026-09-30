@@ -113,6 +113,7 @@
     "test:after-the-press": "tsx --tsconfig tests/tsconfig.json tests/after-the-press-test.tsx",
     "test:board-not-chased": "tsx tests/board-not-chased-test.ts",
     "test:gone-quiet": "tsx tests/gone-quiet-test.ts",
+    "test:decide-by-email": "tsx tests/decide-by-email-test.ts",
     "test:texts": "tsx --tsconfig tests/tsconfig.json tests/texts-test.ts"
   },
   "prisma": {

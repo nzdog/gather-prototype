@@ -282,8 +282,20 @@ export async function sendChaseEmail(params: HostVoicedEmail): Promise<SendResul
   return sendHostVoiced('chase', params);
 }
 
+/**
+ * [[GTC-251]] slice 251b — THE DECIDE-BY FOLLOW-UP'S EMAIL LEG (Q4). Her follow-up to her own
+ * invitation, so the same display name, reply-to and way out as the ask and the reminders.
+ *
+ * ⚠ ZONE 9: like `sendChaseEmail`, it does not itself read the opt-out or the block. Its one caller,
+ * `sendDecideByFollowup`, sends only where the chase chooser answered EMAIL (which read both) and
+ * re-reads the block immediately before calling this.
+ */
+export async function sendDecideByEmail(params: HostVoicedEmail): Promise<SendResult> {
+  return sendHostVoiced('decide-by', params);
+}
+
 async function sendHostVoiced(
-  label: 'ask' | 'chase',
+  label: 'ask' | 'chase' | 'decide-by',
   params: HostVoicedEmail
 ): Promise<SendResult> {
   try {

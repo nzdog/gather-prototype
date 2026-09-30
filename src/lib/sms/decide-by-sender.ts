@@ -8,6 +8,13 @@ import {
   getMessageInfo,
 } from '@/lib/sms/nudge-templates';
 import type { DecideByFollowupCandidate } from '@/lib/sms/decide-by-eligibility';
+import { sendDecideByEmail } from '@/lib/email';
+import { composeDecideByEmail } from '@/lib/messages/decide-by-register';
+import {
+  EMAIL_BLOCK_SKIP_REASON,
+  emailBlockStateOf,
+  listEmailBlocks,
+} from '@/lib/eligibility/email-block';
 
 /**
  * GTC-175 (D2) — sending the maybe's one follow-up.
@@ -18,6 +25,10 @@ import type { DecideByFollowupCandidate } from '@/lib/sms/decide-by-eligibility'
  * handler later uses to work out WHICH HOST a guest is opting out from
  * (sms/inbound/route.ts:47-54). A bespoke send path would silently break opt-out
  * attribution.
+ *
+ * [[GTC-251]] slice 251b — AND AN EMAIL LEG (Q4), for the guest the chase chooser emails. It goes
+ * through `sendDecideByEmail`, the host-voiced guest sender, so the way out, the footer and the
+ * reply-to are those of every guest email.
  */
 
 export interface DecideByFollowupResult {
@@ -45,6 +56,17 @@ export async function sendDecideByFollowup(
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
   const link = `${baseUrl}/p/${candidate.participantToken}`;
 
+  const base = {
+    personId: candidate.personId,
+    personName: candidate.personName,
+    eventId: candidate.eventId,
+    assignmentIds: candidate.assignmentIds,
+  };
+
+  if (candidate.channel === 'EMAIL') {
+    return sendByEmail(candidate, link, base, now);
+  }
+
   const message = getDecideByFollowupMessage({
     hostFirstName: candidate.hostName.split(' ')[0],
     itemName: candidate.itemName,
@@ -55,7 +77,7 @@ export async function sendDecideByFollowup(
   const messageInfo = getMessageInfo(message);
 
   const result = await sendSms({
-    to: candidate.phoneNumber,
+    to: candidate.phoneNumber ?? '',
     message,
     eventId: candidate.eventId,
     personId: candidate.personId,
@@ -69,33 +91,72 @@ export async function sendDecideByFollowup(
     },
   });
 
-  const base = {
-    personId: candidate.personId,
-    personName: candidate.personName,
-    eventId: candidate.eventId,
-    assignmentIds: candidate.assignmentIds,
-  };
-
   if (!result.success) {
     return { ...base, success: false, error: result.error || result.blocked };
   }
 
+  await stamp(candidate, now);
+  return { ...base, success: true, messageId: result.messageId };
+}
+
+async function stamp(candidate: DecideByFollowupCandidate, now: Date): Promise<void> {
   await prisma.assignment.updateMany({
     where: { id: { in: candidate.assignmentIds } },
     data: { decideByFollowupSentAt: now },
   });
+}
 
-  return { ...base, success: true, messageId: result.messageId };
+/**
+ * [[GTC-251]] — the email leg. ZONE 9: the chooser read the opt-out and the block when it chose
+ * EMAIL; the block is read AGAIN here, immediately before the send, because a bounce learned
+ * between the finding and the sending must win — the dispatcher's F5 fence, mirrored. A refusal
+ * stamps nothing, as a failed text stamps nothing.
+ */
+async function sendByEmail(
+  candidate: DecideByFollowupCandidate,
+  link: string,
+  base: Omit<DecideByFollowupResult, 'success'>,
+  now: Date
+): Promise<DecideByFollowupResult> {
+  if (!candidate.email || !candidate.replyTo) {
+    return { ...base, success: false, error: 'No address or reply-to' };
+  }
+  const blocks = await listEmailBlocks(prisma, [candidate.email]);
+  if (emailBlockStateOf(candidate.email, candidate.eventId, blocks) !== 'NONE') {
+    return { ...base, success: false, error: EMAIL_BLOCK_SKIP_REASON };
+  }
+
+  const hostFirstName = candidate.hostName.split(' ')[0];
+  const composed = composeDecideByEmail({
+    recipientFirstName: candidate.personName.split(' ')[0],
+    hostFirstName,
+    eventName: candidate.eventName,
+    itemName: candidate.itemName,
+    decideByDay: formatDecideByDay(candidate.decideByAt, now),
+    link,
+  });
+  const result = await sendDecideByEmail({
+    to: candidate.email,
+    subject: composed.subject,
+    body: composed.text,
+    replyTo: candidate.replyTo,
+    fromName: candidate.hostName,
+    personId: candidate.personId,
+    eventId: candidate.eventId,
+  });
+
+  if (!result.success) return { ...base, success: false, error: result.error };
+  await stamp(candidate, now);
+  return { ...base, success: true, messageId: result.providerMessageId };
 }
 
 /**
  * Process every due follow-up.
  *
- * Quiet hours are checked ONCE at the top of the batch and nothing is sent — the house
- * idiom (`dispatchPendingWrapUpMessages` in wrap-up.ts; the text chase used it too until
- * [[GTC-189]] slice 8b moved quiet hours into `drainOnce`, per row and text only). The
- * deferral is implicit and durable: no stamp is written, so the next run after 08:05 NZ
- * picks these candidates up unchanged.
+ * Quiet hours hold the TEXTS only, per candidate — [[GTC-251]] 4.5, the chase's own rule since
+ * [[GTC-189]] slice 8b moved quiet hours into `drainOnce` (per row, text only): an email waits in
+ * an inbox, a text wakes a phone. A held text is logged and nothing is written for it, so the
+ * next run after 08:05 NZ picks it up unchanged.
  *
  * This is also why the follow-up lead has a 12-hour floor (decide-by.ts): a quiet-hours
  * deferral can cost ~11 hours, and a shorter lead could push the message past the very
@@ -113,10 +174,13 @@ export async function processDecideByFollowups(
     return { sent: [], deferred: 0, deferredUntilMinutes: 0 };
   }
 
-  if (isQuietHours(now)) {
-    const minutesUntil = getMinutesUntilQuietEnd(now);
+  const quiet = isQuietHours(now);
+  const minutesUntil = quiet ? getMinutesUntilQuietEnd(now) : 0;
+  const held = quiet ? candidates.filter((c) => c.channel === 'TEXT') : [];
+  const going = quiet ? candidates.filter((c) => c.channel !== 'TEXT') : candidates;
 
-    for (const candidate of candidates) {
+  if (held.length > 0) {
+    for (const candidate of held) {
       await logInviteEvent({
         eventId: candidate.eventId,
         personId: candidate.personId,
@@ -128,20 +192,22 @@ export async function processDecideByFollowups(
         },
       });
     }
-
-    return { sent: [], deferred: candidates.length, deferredUntilMinutes: minutesUntil };
   }
 
   const results: DecideByFollowupResult[] = [];
 
-  for (const candidate of candidates) {
+  for (const candidate of going) {
     results.push(await sendDecideByFollowup(candidate, now));
 
     // Small delay between sends to avoid rate limiting — the house rate.
     await sleep(500);
   }
 
-  return { sent: results, deferred: 0, deferredUntilMinutes: 0 };
+  return {
+    sent: results,
+    deferred: held.length,
+    deferredUntilMinutes: held.length > 0 ? minutesUntil : 0,
+  };
 }
 
 function sleep(ms: number): Promise<void> {

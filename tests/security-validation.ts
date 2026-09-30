@@ -26,7 +26,7 @@
 
 import { prisma } from '../src/lib/prisma';
 import { requireEventRole, requireTokenScope } from '../src/lib/auth/guards';
-import { isSent, isComplete, getEventPhase } from '../src/lib/lifecycle';
+import { isSent, isComplete, getEventPhase, SENT_AND_LIVE } from '../src/lib/lifecycle';
 import { createRevision, restoreFromRevision } from '../src/lib/workflow';
 import { findNudgeCandidates } from '../src/lib/sms/nudge-eligibility';
 import { cleanup, generateFixtures, type Fixtures } from './security-fixtures';
@@ -1787,9 +1787,16 @@ async function testSuite12_CronSecretFailsClosed(_fixtures: Fixtures) {
   //
   // GTC-270's own Reproduce section nominates this route for probing ("USE
   // decide-by-followups OR wrap-up-dispatch FOR THE PROBE, NOT nudges"). The sweep is
-  // inert on this database and that is ASSERTED below, not assumed: the eligibility
-  // query filters `person: { phoneNumber: { not: null } }` in SQL and re-checks it in
-  // JS, so a candidate without a phone cannot reach `sendSms` by either door.
+  // inert on this database and that is ASSERTED below, not assumed.
+  //
+  // ⚠ [[GTC-251]] slice 251b (founder ruling 4.5, 2026-09-30) — WIDENED, NOT LOOSENED. The
+  // follow-up gained an email leg, so a maybe with an email and no phone is now a candidate and
+  // "no phone" no longer proves the sweep sends nothing. The count is now the sweep's own
+  // population — an unstamped MAYBE, with a phone OR an email, on a sent and live event
+  // (`findDecideByFollowupCandidates`'s root query) — which covers every person the old count
+  // covered on a live event, and every email-only maybe as well. What it no longer counts is a
+  // maybe on an event that has ENDED, which the sweep never reaches (`SENT_AND_LIVE` is its root
+  // filter); counting those would stop the live drive for rows that cannot be sent to.
   //
   // /api/cron/nudges is NOT driven with a valid credential anywhere in this suite, by
   // founder instruction. Its copy of the redaction is held by the shared helper and by
@@ -1798,13 +1805,14 @@ async function testSuite12_CronSecretFailsClosed(_fixtures: Fixtures) {
     where: {
       response: 'MAYBE',
       decideByFollowupSentAt: null,
-      person: { phoneNumber: { not: null } },
+      item: { team: { event: SENT_AND_LIVE() } },
+      person: { OR: [{ phoneNumber: { not: null } }, { email: { not: null } }] },
     },
   });
   logTest(
-    'SAFETY PRECONDITION: zero decide-by candidates with a reachable number, so the sweep sends nothing',
+    'SAFETY PRECONDITION: zero decide-by candidates with a phone or an email on a live event, so the sweep sends nothing',
     decideByReachable === 0,
-    `${decideByReachable} candidate(s) with a phone — do not drive this route until that is zero`
+    `${decideByReachable} candidate(s) with a phone or an email — do not drive this route until that is zero`
   );
 
   if (liveProbeOk && serverSecret && decideByReachable === 0) {
@@ -1830,7 +1838,7 @@ async function testSuite12_CronSecretFailsClosed(_fixtures: Fixtures) {
       'LEAK [live]: the 200 body from /api/cron/decide-by-followups carries errorCount and no `errors` key',
       false,
       decideByReachable !== 0
-        ? 'NOT DRIVEN — a decide-by candidate has a reachable number, so driving it could send'
+        ? 'NOT DRIVEN — a decide-by candidate has a phone or an email, so driving it could send'
         : 'NOT DRIVEN — the live canary was admitted, the server is down, or the secret was unreadable'
     );
   }

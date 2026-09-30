@@ -91,8 +91,11 @@ export function stillUnanswered(input: {
  * The recorded skip for each reason the chooser refuses the chase. A `Record`, so a new refusal does
  * not compile until it has a line — the rule every skip on this path has held: a RECORDED skip,
  * never a silent drop. The strings the suites already read are kept verbatim.
+ *
+ * Exported for [[GTC-251]] slice 251b: the decide-by follow-up asks the same chooser, so it records
+ * the same refusal in the same words.
  */
-const CHASE_SKIP_REASON: Record<ChaseNoneWhy, string> = {
+export const CHASE_SKIP_REASON: Record<ChaseNoneWhy, string> = {
   SMS_OPTED_OUT: 'Opted out',
   EMAIL_OPTED_OUT: EMAIL_OPT_OUT_SKIP_REASON,
   EMAIL_REPORTED: EMAIL_OPT_OUT_SKIP_REASON,
