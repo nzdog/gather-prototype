@@ -125,7 +125,10 @@ function setFakeCredentials(opts: { tnz: boolean }) {
   delete process.env.GATHER_LIVE_SENDS;
 }
 
-/** Both providers configured (fakes), switch off: the scheduler run must be reported unhealthy. */
+/**
+ * Both providers configured (fakes), switch off: the scheduler lines its reminder up and reports a
+ * healthy run — sending is the dispatcher's, and so is send health ([[GTC-339]] Q2).
+ */
 async function positiveControl() {
   console.log(
     '\n\x1b[1mPositive control — both providers configured (fake), live switch off\x1b[0m\n'
@@ -197,8 +200,8 @@ async function positiveControl() {
   assert('CONTROL', 'the run reports smsConfigured: true', run.smsConfigured === true);
   assert(
     'CONTROL',
-    'GTC-214 with the switch off: ok is FALSE although a provider is configured — a run that cannot send is not healthy',
-    run.ok === false
+    'GTC-339 Q2 with the switch off: ok is TRUE — it queued its reminder, and sending is the dispatcher’s',
+    run.ok === true
   );
   assert(
     'CONTROL',
@@ -412,53 +415,39 @@ async function main() {
   );
   assert(
     'B',
-    'the run reports ok: false — no provider is configured, so this run cannot do its job',
-    (run as { ok?: boolean }).ok === false
+    'GTC-339 Q2: the run reports ok: true — it queued its reminder with no provider, which is its job',
+    (run as { ok?: boolean }).ok === true
   );
 
-  // ── B2. The health verdict, all four quadrants, without a database or a provider ────
-  // The live cron can only ever show one quadrant per process, because provider config is
-  // captured at module scope. This is the seam where the whole rule is assertable.
-  console.log('\n\x1b[1mB2 — isNudgeRunHealthy\x1b[0m\n');
+  // ── B2. The one way this cron fails: it cannot line reminders up ─────────────────────
+  /*
+   * ⚠ [[GTC-339]] Q2 (founder ruling, 2026-09-30): *"Reports 'failed' only when it can't line
+   * reminders up. Send failures are the sending job's to report, under the per-channel rule."*
+   *
+   * This section held `isNudgeRunHealthy`'s seven quadrants. The predicate is retired (ruling B).
+   * Its send quadrants — every send failed, a partial failure, a quiet-hours deferral, the switch
+   * off — moved with send health to the dispatchers' rule, and are asserted in
+   * `tests/cron-send-health-test.ts` layers U and D. What stays here is this cron's own failure, made
+   * real: an invalid clock makes the finder's query throw, so the run cannot line anything up.
+   * Scoped to an id that does not exist, so nothing could be queued even if it did not throw.
+   */
+  console.log('\n\x1b[1mB2 — the nudges run fails only when it cannot line reminders up\x1b[0m\n');
 
-  const { isNudgeRunHealthy } = await import('../src/lib/sms/nudge-scheduler');
-
-  // [[GTC-274]]: the four quadrants below are all LIVE; the two after them are the switch off.
+  const sched = await import('../src/lib/sms/nudge-scheduler');
+  const queuedBefore = await prisma.outboundMessage.count();
+  const broken = await sched.runNudgeScheduler(new Date(NaN), {
+    eventIds: ['gtc339-no-such-event'],
+  });
   assert(
     'B2',
-    'no provider configured → unhealthy, whatever the counts',
-    isNudgeRunHealthy({ smsConfigured: false, live: true, attempted: 0, succeeded: 0 }) === false &&
-      isNudgeRunHealthy({ smsConfigured: false, live: true, attempted: 3, succeeded: 3 }) === false
+    'a run whose finder throws reports ok: false, with the error carried (and HTTP 500 at the route)',
+    broken.ok === false && broken.errors.length > 0
   );
+  assert('B2', 'and it queued nothing', (await prisma.outboundMessage.count()) === queuedBefore);
   assert(
     'B2',
-    'configured + nothing to send → healthy (an idle cron is a working cron)',
-    isNudgeRunHealthy({ smsConfigured: true, live: true, attempted: 0, succeeded: 0 }) === true
-  );
-  assert(
-    'B2',
-    'configured + every send failed → UNHEALTHY (the Twilio-set/TNZ-absent hole)',
-    isNudgeRunHealthy({ smsConfigured: true, live: true, attempted: 2, succeeded: 0 }) === false
-  );
-  assert(
-    'B2',
-    'configured + partial failure → healthy (one bad number must not flap the alert)',
-    isNudgeRunHealthy({ smsConfigured: true, live: true, attempted: 5, succeeded: 1 }) === true
-  );
-  assert(
-    'B2',
-    'quiet-hours deferral attempts nothing → healthy, not mistaken for total failure',
-    isNudgeRunHealthy({ smsConfigured: true, live: true, attempted: 0, succeeded: 0 }) === true
-  );
-  assert(
-    'B2',
-    'GTC-274: live switch off → unhealthy even when configured and idle (nothing can leave)',
-    isNudgeRunHealthy({ smsConfigured: true, live: false, attempted: 0, succeeded: 0 }) === false
-  );
-  assert(
-    'B2',
-    'GTC-274: live switch off → unhealthy even when every attempt landed',
-    isNudgeRunHealthy({ smsConfigured: true, live: false, attempted: 3, succeeded: 3 }) === false
+    'ruling B: isNudgeRunHealthy is retired — the scheduler no longer exports it',
+    !('isNudgeRunHealthy' in sched)
   );
 
   // ── C. The manual nudge must not reroute a valid NZ mobile to email ─────────────────
@@ -541,8 +530,10 @@ async function main() {
     );
   }
 
-  // ── D. The cron must not report a healthy run when it cannot send ───────────────────
-  console.log('\n\x1b[1mD — /api/cron/nudges must not report success with no provider\x1b[0m\n');
+  // ── D. The cron reports its own job, not a provider's configuration ────────────────
+  // [[GTC-339]] Q2: with no provider configured it still lines reminders up, so it answers 200.
+  // GTC-214's send-health contract moved to the sending crons (tests/cron-send-health-test.ts).
+  console.log('\n\x1b[1mD — /api/cron/nudges reports its own job, with no provider\x1b[0m\n');
 
   // GTC-270: the cron routes now REFUSE when CRON_SECRET is unset, and this process
   // loads `.env` (tsx does not load `.env.local`), so it has none. Set one and supply
@@ -590,13 +581,21 @@ async function main() {
     (await prisma.outboundMessage.count()) === rowsBefore.size
   );
 
-  assert('D', 'cron does NOT return HTTP 200 when no provider is configured', res.status !== 200);
   assert(
     'D',
-    'cron does NOT report success: true when no provider is configured',
-    body.success !== true
+    'GTC-339 Q2: the cron returns HTTP 200 with no provider configured — lining up is its job',
+    res.status === 200
   );
-  assert('D', 'cron surfaces smsConfigured: false in the body', body.smsConfigured === false);
+  assert(
+    'D',
+    'GTC-339 Q2: and reports success: true — a provider’s absence is the sending cron’s to report',
+    body.success === true
+  );
+  assert(
+    'D',
+    'cron still surfaces smsConfigured: false in the body — a report, never a verdict',
+    body.smsConfigured === false
+  );
 
   // ── E. The gate is gone everywhere, not just where the tests look ───────────────────
   console.log('\n\x1b[1mE — structural: no caller-side Twilio gate survives\x1b[0m\n');

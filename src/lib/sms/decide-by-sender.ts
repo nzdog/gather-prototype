@@ -15,6 +15,13 @@ import {
   emailBlockStateOf,
   listEmailBlocks,
 } from '@/lib/eligibility/email-block';
+import {
+  emptyTally,
+  smsRefusalOutcome,
+  tallySend,
+  type SendOutcome,
+  type SendTally,
+} from '@/lib/send-health';
 
 /**
  * GTC-175 (D2) — sending the maybe's one follow-up.
@@ -39,6 +46,9 @@ export interface DecideByFollowupResult {
   success: boolean;
   messageId?: string;
   error?: string;
+  /** [[GTC-339]] — the channel it went by, and what it contributes to the run's health. */
+  channel: 'TEXT' | 'EMAIL';
+  outcome: SendOutcome;
 }
 
 /**
@@ -57,6 +67,7 @@ export async function sendDecideByFollowup(
   const link = `${baseUrl}/p/${candidate.participantToken}`;
 
   const base = {
+    channel: candidate.channel,
     personId: candidate.personId,
     personName: candidate.personName,
     eventId: candidate.eventId,
@@ -92,11 +103,16 @@ export async function sendDecideByFollowup(
   });
 
   if (!result.success) {
-    return { ...base, success: false, error: result.error || result.blocked };
+    return {
+      ...base,
+      success: false,
+      error: result.error || result.blocked,
+      outcome: smsRefusalOutcome(result.blocked),
+    };
   }
 
   await stamp(candidate, now);
-  return { ...base, success: true, messageId: result.messageId };
+  return { ...base, success: true, messageId: result.messageId, outcome: 'GOT_OUT' };
 }
 
 async function stamp(candidate: DecideByFollowupCandidate, now: Date): Promise<void> {
@@ -115,15 +131,16 @@ async function stamp(candidate: DecideByFollowupCandidate, now: Date): Promise<v
 async function sendByEmail(
   candidate: DecideByFollowupCandidate,
   link: string,
-  base: Omit<DecideByFollowupResult, 'success'>,
+  base: Omit<DecideByFollowupResult, 'success' | 'outcome'>,
   now: Date
 ): Promise<DecideByFollowupResult> {
   if (!candidate.email || !candidate.replyTo) {
-    return { ...base, success: false, error: 'No address or reply-to' };
+    // [[GTC-339]]: the guest's address or the host's reply-to — never counted.
+    return { ...base, success: false, error: 'No address or reply-to', outcome: 'NOT_COUNTED' };
   }
   const blocks = await listEmailBlocks(prisma, [candidate.email]);
   if (emailBlockStateOf(candidate.email, candidate.eventId, blocks) !== 'NONE') {
-    return { ...base, success: false, error: EMAIL_BLOCK_SKIP_REASON };
+    return { ...base, success: false, error: EMAIL_BLOCK_SKIP_REASON, outcome: 'NOT_COUNTED' };
   }
 
   const hostFirstName = candidate.hostName.split(' ')[0];
@@ -145,9 +162,10 @@ async function sendByEmail(
     eventId: candidate.eventId,
   });
 
-  if (!result.success) return { ...base, success: false, error: result.error };
+  // [[GTC-339]]: the switch, a missing key or the provider refusing — counted as not got out.
+  if (!result.success) return { ...base, success: false, error: result.error, outcome: 'NOT_OUT' };
   await stamp(candidate, now);
-  return { ...base, success: true, messageId: result.providerMessageId };
+  return { ...base, success: true, messageId: result.providerMessageId, outcome: 'GOT_OUT' };
 }
 
 /**
@@ -169,9 +187,11 @@ export async function processDecideByFollowups(
   sent: DecideByFollowupResult[];
   deferred: number;
   deferredUntilMinutes: number;
+  /** [[GTC-339]] — per channel, for the run's health. A held text is not counted. */
+  tally: SendTally;
 }> {
   if (candidates.length === 0) {
-    return { sent: [], deferred: 0, deferredUntilMinutes: 0 };
+    return { sent: [], deferred: 0, deferredUntilMinutes: 0, tally: emptyTally() };
   }
 
   const quiet = isQuietHours(now);
@@ -195,9 +215,12 @@ export async function processDecideByFollowups(
   }
 
   const results: DecideByFollowupResult[] = [];
+  const tally = emptyTally();
 
   for (const candidate of going) {
-    results.push(await sendDecideByFollowup(candidate, now));
+    const one = await sendDecideByFollowup(candidate, now);
+    results.push(one);
+    tallySend(tally, one.channel === 'EMAIL' ? 'email' : 'text', one.outcome);
 
     // Small delay between sends to avoid rate limiting — the house rate.
     await sleep(500);
@@ -207,6 +230,7 @@ export async function processDecideByFollowups(
     sent: results,
     deferred: held.length,
     deferredUntilMinutes: held.length > 0 ? minutesUntil : 0,
+    tally,
   };
 }
 

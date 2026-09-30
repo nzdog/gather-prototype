@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { runDecideByFollowups } from '@/lib/sms/decide-by-scheduler';
+import { sendRunHealth } from '@/lib/send-health';
 import { cronSecretAccepted, isCronSecretConfigured } from '../cron-secret';
 import { withoutRecipientNames } from '../cron-response';
 
@@ -34,7 +35,7 @@ async function handleRequest(request: NextRequest) {
   }
 
   try {
-    const result = await runDecideByFollowups();
+    const { tally, ...result } = await runDecideByFollowups();
 
     // GTC-270 finding 2: the per-recipient errors carry guest names. They go to the
     // server log; the wire body gets a count. See ../cron-response.ts.
@@ -42,10 +43,19 @@ async function handleRequest(request: NextRequest) {
       console.error('[Cron DecideBy] send failures:', result.errors);
     }
 
-    return NextResponse.json({
-      success: true,
-      ...withoutRecipientNames(result),
-    });
+    // [[GTC-339]] — `success` is derived per channel, never asserted: the run fails when, on either
+    // channel, it had sends to make and none got out (founder ruling Q1). Nothing to send — the
+    // security suite's drive — is healthy.
+    const health = sendRunHealth(tally);
+
+    return NextResponse.json(
+      {
+        success: health.ok,
+        ...withoutRecipientNames(result),
+        health: { ...tally, failedChannels: health.failedChannels },
+      },
+      { status: health.ok ? 200 : 500 }
+    );
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[Cron DecideBy] Error:', errorMessage);

@@ -753,7 +753,12 @@ async function main() {
         'and the reason goes on the wire rather than being swallowed',
       ok(() => {
         const src = stripComments(routeSrc);
-        const around = src.slice(src.indexOf('let poll'), src.indexOf('success: true'));
+        // [[GTC-339]]: anchored on the health call, which replaced the asserted `success: true`.
+        // Both ends must be found — a missing anchor (-1) would silently widen the slice.
+        const start = src.indexOf('let poll');
+        const end = src.indexOf('sendRunHealth(');
+        if (start < 0 || end <= start) return false;
+        const around = src.slice(start, end);
         return /try \{/.test(around) && /catch/.test(around) && /error: message/.test(around);
       })
     );

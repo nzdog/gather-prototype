@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { dispatchPendingWrapUpMessages } from '@/lib/wrap-up';
+import { sendRunHealth } from '@/lib/send-health';
 import { cronSecretAccepted, isCronSecretConfigured } from '../cron-secret';
 import { withoutRecipientNames } from '../cron-response';
 
@@ -35,16 +36,26 @@ async function handleRequest(request: NextRequest) {
   }
 
   try {
-    const result = await dispatchPendingWrapUpMessages();
+    const { tally, ...result } = await dispatchPendingWrapUpMessages();
+
+    // [[GTC-339]] — `success` is derived per channel, never asserted: the run fails when, on either
+    // channel, it had sends to make and none got out (founder ruling Q1). A text that falls back to
+    // an email that goes still fails the text channel. Nothing to send — the security suite's drive —
+    // is healthy.
+    const health = sendRunHealth(tally);
 
     // GTC-270 finding 2: this dispatcher's result carries counts and no recipient
     // names, unlike the two nudge schedulers — verified, not assumed. The redaction is
     // applied anyway so all three cron routes put the same shape on the wire, and so a
     // later `errors` array added to this dispatcher cannot leak by default.
-    return NextResponse.json({
-      success: true,
-      ...withoutRecipientNames(result),
-    });
+    return NextResponse.json(
+      {
+        success: health.ok,
+        ...withoutRecipientNames(result),
+        health: { ...tally, failedChannels: health.failedChannels },
+      },
+      { status: health.ok ? 200 : 500 }
+    );
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[Cron WrapUp] Error:', errorMessage);

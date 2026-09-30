@@ -16,6 +16,7 @@ import {
 } from '@/lib/sms/wrap-up-templates';
 import { isMessageableRole } from '@/lib/eligibility/child-exclusion';
 import { isQuietHours, getMinutesUntilQuietEnd } from '@/lib/sms/quiet-hours';
+import { emptyTally, smsRefusalOutcome, tallySend, type SendTally } from '@/lib/send-health';
 
 const WRAPUP_LINK_EXPIRY_DAYS = 30;
 const DISPATCH_DELAY_MINUTES = 10;
@@ -198,6 +199,12 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
    * guest who simply asked not to be emailed.
    */
   suppressed: number;
+  /**
+   * [[GTC-339]] — per channel, the sends this run had to make and how many got out. A text that fails
+   * and falls back to an email that goes is one text not out and one email out: the channels are read
+   * apart (founder ruling Q1), so broken texting shows even while the thank-you arrives by email.
+   */
+  tally: SendTally;
 }> {
   const cutoff = new Date(now.getTime() - DISPATCH_DELAY_MINUTES * 60 * 1000);
 
@@ -243,12 +250,14 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
       deferred: pendingLinks.length,
       deferredUntilMinutes,
       suppressed: 0,
+      tally: emptyTally(),
     };
   }
 
   let sent = 0;
   let failed = 0;
   let suppressed = 0;
+  const tally = emptyTally();
 
   for (const link of pendingLinks) {
     const hostFirstName = link.event.host.name.split(' ')[0];
@@ -316,6 +325,11 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
         metadata: { type: 'wrapup' },
       });
 
+      tallySend(
+        tally,
+        'text',
+        smsResult.success ? 'GOT_OUT' : smsRefusalOutcome(smsResult.blocked)
+      );
       if (smsResult.success) {
         success = true;
       } else if (link.guestEmail && emailClosed) {
@@ -336,6 +350,7 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
           personId: link.personId,
         });
         success = emailResult.success;
+        tallySend(tally, 'email', success ? 'GOT_OUT' : 'NOT_OUT');
         if (!success) failReason = emailResult.error || 'Email fallback failed';
       } else {
         failReason = smsResult.error || smsResult.blocked || 'SMS failed, no email fallback';
@@ -356,6 +371,7 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
         personId: link.personId,
       });
       success = emailResult.success;
+      tallySend(tally, 'email', success ? 'GOT_OUT' : 'NOT_OUT');
       if (!success) failReason = emailResult.error || 'Email send failed';
     } else {
       failReason = 'No valid contact method';
@@ -410,6 +426,7 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
     deferred: 0,
     deferredUntilMinutes: 0,
     suppressed,
+    tally,
   };
 }
 

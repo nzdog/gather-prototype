@@ -1,7 +1,10 @@
 # GATHER BUILD CONSTANTS
 
 Reference file for AI executors and developers. Keep this file accurate.
-Last updated: 2026-09-30 (the security suite's decide-by precondition widened to phone or
+Last updated: 2026-09-30 (cron health, GTC-339: the sending crons fail per channel, the nudges
+cron only when it cannot queue; outbound-dispatch in the cron table; production's crons are called
+by an outside scheduler; the approved exceptions to "no cron against gather_dev" listed in full).
+Previously 2026-09-30 (the security suite's decide-by precondition widened to phone or
 email on a live event, GTC-251 slice 251b, on founder ruling 4.5). Previously 2026-09-29
 (Live sending, GTC-274's one live switch, on founder ruling of 2026-09-29). Previously
 2026-09-27 (Zone 9, email opt-out and block, added on founder ruling D7 at GTC-189 slice 8a).
@@ -144,8 +147,10 @@ whatever keys are present, and the tests still run in full.
   `sendSms`, `sendViaTnz` and `getResendClient`.
 - **What a stop does:** a text returns `SMS_DISABLED` with the words "live
   sending is off", and writes no InviteEvent. An email returns `success: false`
-  with no provider code. Neither is ever recorded or reported as sent. The nudges
-  cron reports a run that is not live as unhealthy (GTC-214).
+  with no provider code. Neither is ever recorded or reported as sent. A text
+  stopped by the switch counts as not got out on its sending cron's text channel,
+  and a stopped email on its email channel (GTC-339, see *Cron health*). The nudges
+  cron does not read the switch: it sends nothing.
 - **No exemptions.** Sign-in links stop too. On the founder's Mac, mail to his
   own address worked from 2026-09-27 (GTC-247) and now stops at the switch.
   Local sign-in goes through the founder's own tooling.
@@ -191,11 +196,37 @@ preconditions (GTC-270):
   its email leg).
 
 It never drives `/api/cron/nudges` with a valid secret, and it fails if the
-`InviteEvent` count moves. This is the one approved exception to "no cron
-against `gather_dev`". Since GTC-274 both drives wait on their own
+`InviteEvent` count moves. Since GTC-274 both drives wait on their own
 preconditions, and the dev server is never live, so it cannot send whatever its
 keys are. The blanked keys stay as a second wall. Still check both counts
 before starting, and stop if either is non-zero.
+
+### The approved exceptions to "no cron against `gather_dev`"
+*(Listed in full at GTC-339, 2026-09-30, on founder ruling.)* Three drives of a
+cron route, and only these:
+
+1. **`test:security`'s live layer**, over HTTP to the dev server, as above. Its
+   preconditions: zero undispatched `WrapUpLink` rows, and zero decide-by candidates
+   as above. It fails if the `InviteEvent` count moves.
+2. **`tests/nudge-provider-gate-test.ts` layer D**, which imports
+   `/api/cron/nudges`'s `GET` and calls it in process, unscoped. The scheduler only
+   queues, and every row the run wrote is removed and the `OutboundMessage` count
+   asserted restored (founder ruling D1, 2026-09-27).
+3. **`test:cron-health`** (`tests/cron-send-health-test.ts`, GTC-339), which calls
+   the three sending routes' `GET` in process, on its own fixtures, and opens the
+   live gate only through `liveBehindTrap`, behind the trap. Its preconditions,
+   counted outside its fixtures before every drive, must all be zero, or it stops
+   before driving anything:
+   - the drain's rows (`findNeverAttempted`'s and `findDueForRetry`'s where clauses);
+   - late arrivals the mini-send sweep would enrol (`enrolMiniSends`'s own predicate);
+   - the delivery poll's rows (accepted `EMAIL` rows it has not finished with);
+   - undispatched `WrapUpLink` rows, and the decide-by count above.
+   After every case it asserts the `OutboundMessage`, `InviteEvent` and
+   `WrapUpLink` counts are as found, and that every fixture is removed by id.
+
+Suites that call a dispatcher directly (`drainOnce`,
+`dispatchPendingWrapUpMessages`) rather than a route are **not** on this list
+until each is shown to scope or guard its call: GTC-343.
 
 ---
 
@@ -293,11 +324,35 @@ curl "http://localhost:3000/api/cron/nudges?secret=<CRON_SECRET>"
 
 **Cron routes in `src/app/api/cron/`:**
 
+**Production's crons are called by an outside scheduler, not by `vercel.json`:
+Railway does not read that file** (found at GTC-339's scoping, 2026-09-30). GTC-042
+set up cron-job.org for the nudges cron; GTC-220 speaks of EasyCron jobs. What calls
+them today is to be confirmed from the platform logs before the deploy (GTC-270).
+The schedules below are the ones in `vercel.json`, and that outside scheduler must
+match them.
+
 | Route file | Method | HTTP path | Purpose | Intended schedule |
 |------------|--------|-----------|---------|-------------------|
-| `src/app/api/cron/nudges/route.ts` | GET / POST | `/api/cron/nudges` | Runs the nudge scheduler — sends SMS auto-nudges to event participants | Every 15 minutes |
+| `src/app/api/cron/nudges/route.ts` | GET / POST | `/api/cron/nudges` | Runs the nudge scheduler — queues due reminders as `OutboundMessage` rows; the dispatcher sends them (GTC-189 slice 8b) | Every 15 minutes |
+| `src/app/api/cron/outbound-dispatch/route.ts` | GET / POST | `/api/cron/outbound-dispatch` | The press's drain (`drainOnce`): asks, reminders and mini-sends, by text and email; then the delivery poll (GTC-189 slice 5, GTC-289) | Every 2 minutes |
 | `src/app/api/cron/wrap-up-dispatch/route.ts` | GET / POST | `/api/cron/wrap-up-dispatch` | Dispatches pending wrap-up thank-you messages (10 min delay after creation). Sends SMS **and email** — email is the fallback when SMS fails, and the primary channel for `channel: 'email'` links | Every 10 minutes |
-| `src/app/api/cron/decide-by-followups/route.ts` | GET / POST | `/api/cron/decide-by-followups` | Sends the maybe's single decide-by follow-up SMS (GTC-175 / D2) | Every 15 minutes |
+| `src/app/api/cron/decide-by-followups/route.ts` | GET / POST | `/api/cron/decide-by-followups` | Sends the maybe's single decide-by follow-up, by text or email (GTC-175 / D2, GTC-251) | Every 15 minutes |
+
+### Cron health
+*(Founder rulings Q1 and Q2, 2026-09-30, GTC-339.)* A cron's status code and
+`success` are its verdict. A failed run answers **500 with `success: false`**.
+- **The three sending crons** (outbound-dispatch, wrap-up-dispatch,
+  decide-by-followups) fail a run when, **on either channel**, it had sends to make
+  and none of them got out (`sendRunHealth` in `src/lib/send-health.ts`). Nothing to
+  send is healthy, and so is a partial failure. A text withheld `SMS_DISABLED` (no
+  provider, or the live switch off) counts as not got out; a withholding for a reason
+  about the guest or the host never counts. The body's `health` field carries each
+  channel's counts and `failedChannels`. The delivery poll never fails the
+  outbound-dispatch run.
+- **The nudges cron** fails only when it cannot line reminders up. It sends nothing,
+  so it does not read provider configuration or the live switch.
+- The deploy turns on the outside scheduler's failure emails, so a failed run
+  reaches the founder (GTC-189's gathered list).
 
 ---
 

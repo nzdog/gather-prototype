@@ -1417,12 +1417,13 @@ async function testSuite11_DemoSessionScope(fixtures: Fixtures) {
  * server on :3000 has the secret set from `.env.local`, so over HTTP this suite can
  * only ever observe the CONFIGURED quadrant.
  *
- * `isNudgeRunHealthy` in `src/lib/sms/nudge-scheduler.ts` records the same problem
- * and the same answer, for provider configuration rather than this one: "Pure, and
- * exported so both directions can be asserted without a database or a provider —
- * the live cron can only ever demonstrate one quadrant per process, because
- * provider configuration is captured at module scope." That is this problem, solved
- * once already in this tree.
+ * `isNudgeRunHealthy` in `src/lib/sms/nudge-scheduler.ts` ([[GTC-214]]; retired at
+ * [[GTC-339]], when the nudges cron stopped reading provider configuration for its
+ * health) recorded the same problem and the same answer, for provider configuration
+ * rather than this one: "Pure, and exported so both directions can be asserted
+ * without a database or a provider — the live cron can only ever demonstrate one
+ * quadrant per process, because provider configuration is captured at module
+ * scope." That was this problem, solved once already in this tree before this suite.
  *
  * So the quadrants are split deliberately, and each part asserts what it alone can:
  *

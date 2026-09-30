@@ -16,10 +16,11 @@
  * database, no provider and no clock. The REFUSAL stays in the route, where the
  * scanner can still read it.
  *
- * The precedent for a pure exported predicate is `isNudgeRunHealthy` in
- * `src/lib/sms/nudge-scheduler.ts`, which exists for the same reason stated there:
- * configuration captured at module scope can only ever demonstrate one quadrant per
- * process, so the property has to be testable without the process.
+ * The precedent for a pure exported predicate was `isNudgeRunHealthy`, then in
+ * `src/lib/sms/nudge-scheduler.ts` (GTC-214; retired at GTC-339), which existed for the
+ * same reason stated there: configuration captured at module scope can only ever
+ * demonstrate one quadrant per process, so the property has to be testable without the
+ * process.
  */
 
 /**

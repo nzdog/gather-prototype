@@ -67,7 +67,7 @@ table in `GATHER-BUILD-CONSTANTS.md` (~line 200) — with one drift, noted below
 | SMS elsewhere | `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` + `TWILIO_PHONE_NUMBER` via `isSmsEnabled()` (`src/lib/sms/twilio-client.ts`) | Non-+64/+61 numbers sent via Twilio | `blocked: 'SMS_DISABLED'`, console warn suggests email fallback | Optional; NZ-focused product rarely needs it |
 | Email | `RESEND_API_KEY` (`src/lib/email.ts — getResendClient()`, lazy client) | Magic links, nudge emails, welcome emails send | Resend client constructed with `undefined` key → sends fail at call time (no up-front guard) | `EMAIL_FROM` falls back to `'Gather <noreply@gather.app>'` |
 | Stripe | `STRIPE_SECRET_KEY` (`src/lib/stripe.ts` — the module-level guard before the `stripe` export) | Payments work | **Module throws at import time** — any route importing `@/lib/stripe` 500s | Event creation (`POST /api/events`) returns **402** without a paid `stripeSessionId` (`src/app/api/events/route.ts — inside POST(), the missing-stripeSessionId and non-paid guards`). Webhook additionally needs `STRIPE_WEBHOOK_SECRET`; price set by `STRIPE_PRICE_ID` |
-| Cron auth | `CRON_SECRET` (`src/app/api/cron/nudges/route.ts` — the `CRON_SECRET && …` check in `GET()`, same check in `wrap-up-dispatch/route.ts`) | Requests need `?secret=` or `Authorization: Bearer` | **Check is `if (CRON_SECRET && ...)` — unset secret leaves both cron endpoints OPEN to anyone** | Always set in prod. Vercel calls them per `vercel.json`: nudges `*/15 * * * *`, wrap-up-dispatch `*/10 * * * *` |
+| Cron auth | `CRON_SECRET` (`isCronSecretConfigured` / `cronSecretAccepted` in `src/app/api/cron/cron-secret.ts`, the two refusals written out in each of the four cron routes) | Requests need `?secret=` or `Authorization: Bearer` | **Fail-closed since GTC-270: an unset or empty secret refuses every caller with 401** | Always set in prod. Four crons: nudges `*/15`, outbound-dispatch `*/2`, wrap-up-dispatch `*/10`, decide-by-followups `*/15` (in `vercel.json`). **Production does not read `vercel.json` (Railway); an outside scheduler calls them** — confirm which from the platform logs (GTC-270). Health (GTC-339): the three sending crons answer 500 when, on either channel, the run had sends and none got out (`sendRunHealth`); nudges only when it cannot queue |
 | Demo mode | `Event.isDemo` (data flag, `prisma/schema.prisma — Event.isDemo field`, default false) | Token APIs (`/api/h|c|p/[token]`) include `isDemo` in responses; UI shows demo affordances | Normal event | Set only by `prisma/seed.ts` — the `isDemo: true` line in the demo `event.create()`. NOT an env var |
 | Demo DB reset | `NODE_ENV` (`src/app/api/demo/reset/route.ts` — the `NODE_ENV === 'production'` guard in `POST()`) | dev: `POST /api/demo/reset` force-resets DB (`prisma db push --force-reset` + seed), **no auth** | prod: returns 404 | Dev-only escape hatch |
 | Host claim bypass | `NODE_ENV` (`src/app/api/h/[token]/route.ts` — the `authStatus` / `NODE_ENV !== 'development'` block in `GET()`) | Non-dev: host token route computes `authStatus` unclaimed/requires_signin | Dev: always `'authenticated'` (demo convenience) | Explains "why doesn't sign-in gate fire locally" |
@@ -204,7 +204,7 @@ with a ticket.
 | Quiet hours | 21:00–08:00 Pacific/Auckland; deferred sends go out 08:05 | `quiet-hours.ts` (`QUIET_START_HOUR = 21`, `QUIET_END_HOUR = 8`, `DEFER_TO_MINUTE = 5`) |
 | Nudge ladder | 24h then 48h after anchor, one send each, tracked via `nudge24hSentAt`/`nudge48hSentAt` | `nudge-eligibility.ts — inside findNudgeCandidates()` (inline `24 * 60 * 60 * 1000` etc., no named constants) |
 | NOT_SURE forced conversion | RSVP `NOT_SURE` older than 48h gets a follow-up | `nudge-eligibility.ts — findRsvpFollowupCandidates()` |
-| Cron cadence | nudges every 15 min, wrap-up dispatch every 10 min | `vercel.json` |
+| Cron cadence | nudges every 15 min, outbound-dispatch every 2 min, wrap-up dispatch every 10 min, decide-by follow-ups every 15 min | `vercel.json` — production's outside scheduler must match (GTC-339) |
 
 Quiet hours are enforced in the senders (the `isQuietHours()` checks in `nudge-sender.ts — processNudges()` and `processRsvpFollowupNudges()`,
 and in `proxy-nudge-sender.ts — processProxyNudges()`), not in the cron route — the cron fires 24/7 and the
@@ -303,8 +303,8 @@ grep -n "TNZ_COUNTRY_CODES" src/lib/sms/send-sms.ts && grep -n "isTnzEnabled\|is
 # Quiet hours + nudge ladder values
 grep -n "QUIET_START_HOUR\|QUIET_END_HOUR\|DEFER_TO_MINUTE" src/lib/sms/quiet-hours.ts && grep -n "HoursAgo" src/lib/sms/nudge-eligibility.ts
 
-# Cron auth (note the `CRON_SECRET &&` open-when-unset pattern) + schedules
-grep -n "CRON_SECRET" src/app/api/cron/nudges/route.ts src/app/api/cron/wrap-up-dispatch/route.ts && cat vercel.json
+# Cron auth (fail-closed since GTC-270: isCronSecretConfigured / cronSecretAccepted) + schedules
+grep -n "isCronSecretConfigured\|cronSecretAccepted" src/app/api/cron/*/route.ts && cat vercel.json
 
 # Stripe import-time throw + payment gate
 grep -n "STRIPE_SECRET_KEY" src/lib/stripe.ts && grep -n "402" src/app/api/events/route.ts

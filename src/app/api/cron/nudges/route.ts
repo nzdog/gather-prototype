@@ -52,10 +52,13 @@ export async function GET(request: NextRequest) {
     }
 
     // GTC-214: `success` is DERIVED, never asserted. This route used to return
-    // `{ success: true, ...result }` with HTTP 200 even when the run reported
-    // `smsEnabled: false` or its catch had fired — a monitor watching the status code or
-    // `success` saw a healthy cron that had sent nothing. 500 rather than 503 because it
-    // is the status this route's error path already uses, so alerting needs no change.
+    // `{ success: true, ...result }` with HTTP 200 even when its catch had fired. 500 rather
+    // than 503 because it is the status this route's error path already uses, so alerting
+    // needs no change.
+    //
+    // [[GTC-339]] Q2: what `ok` derives FROM changed. Since GTC-189 slice 8b this cron queues
+    // reminders and sends nothing, so it fails only when it cannot line them up — no longer on a
+    // missing provider or the live switch, which are the sending crons' to report, per channel.
     return NextResponse.json(
       { success: result.ok, ...withoutRecipientNames(result) },
       { status: result.ok ? 200 : 500 }

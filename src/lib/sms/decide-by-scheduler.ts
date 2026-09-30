@@ -1,5 +1,6 @@
 import { findDecideByFollowupCandidates } from './decide-by-eligibility';
 import { processDecideByFollowups } from './decide-by-sender';
+import type { SendTally } from '@/lib/send-health';
 
 /**
  * GTC-175 (D2) — the decide-by sweep.
@@ -42,6 +43,8 @@ export interface DecideByRunResult {
     deferredUntilMinutes: number;
   };
   errors: string[];
+  /** [[GTC-339]] — per channel, the sends this run had to make and how many got out. */
+  tally: SendTally;
 }
 
 export async function runDecideByFollowups(now: Date = new Date()): Promise<DecideByRunResult> {
@@ -68,5 +71,6 @@ export async function runDecideByFollowups(now: Date = new Date()): Promise<Deci
       deferredUntilMinutes: processed.deferredUntilMinutes,
     },
     errors,
+    tally: processed.tally,
   };
 }

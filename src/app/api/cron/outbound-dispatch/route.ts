@@ -28,6 +28,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { DRAIN_BATCH, drainOnce, enrolMiniSends } from '@/lib/press/dispatch';
 import { pollOnce } from '@/lib/email-delivery/delivery-poll';
+import { sendRunHealth } from '@/lib/send-health';
 import { cronSecretAccepted, isCronSecretConfigured } from '../cron-secret';
 import { withoutRecipientNames } from '../cron-response';
 
@@ -73,7 +74,8 @@ async function handleRequest(request: NextRequest) {
      * `enrolMiniSends`.
      */
     const enrol = await enrolMiniSends(prisma, DRAIN_BATCH);
-    const result = { ...(await drainOnce(prisma, DRAIN_BATCH)), ...enrol };
+    const { tally, ...drain } = await drainOnce(prisma, DRAIN_BATCH);
+    const result = { ...drain, ...enrol };
 
     /*
      * GTC-289 phase 4 — THE DELIVERY POLL RIDES THIS TICK, AFTER THE DRAIN.
@@ -101,13 +103,28 @@ async function handleRequest(request: NextRequest) {
       poll = { failed: true, error: message };
     }
 
+    /*
+     * [[GTC-339]] — `success` IS DERIVED FROM THE DRAIN, PER CHANNEL, NEVER ASSERTED. This route
+     * answered 200 with `success: true` however many of its sends failed. Founder ruling Q1: the run
+     * fails when, on either channel, it had sends to make and none got out (`sendRunHealth`). 500, as
+     * the nudges route and this route's own error path use, so alerting needs no change.
+     *
+     * ⚠ THE POLL IS NOT AN INPUT, for the reason above its `try`: the verdict reads the drain's tally
+     * alone, so a broken poll cannot fail a working drain.
+     */
+    const health = sendRunHealth(tally);
+
     // GTC-270 finding 2: every cron route puts the same shape on the wire, so a later `errors`
     // array added to this dispatcher cannot leak a recipient by default.
-    return NextResponse.json({
-      success: true,
-      ...withoutRecipientNames(result),
-      poll,
-    });
+    return NextResponse.json(
+      {
+        success: health.ok,
+        ...withoutRecipientNames(result),
+        health: { ...tally, failedChannels: health.failedChannels },
+        poll,
+      },
+      { status: health.ok ? 200 : 500 }
+    );
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[Cron OutboundDispatch] Error:', errorMessage);

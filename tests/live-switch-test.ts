@@ -443,16 +443,47 @@ async function main() {
 
     // ── D. What else reads the switch ───────────────────────────────────────────
     console.log('\n\x1b[1mD — what else reads the switch\x1b[0m\n');
-    const { isNudgeRunHealthy } = await import('../src/lib/sms/nudge-scheduler');
+    /*
+     * [[GTC-339]] — THE SWITCH IS READ WHERE SENDS HAPPEN. GTC-214's contract (a cron that cannot send
+     * must not report a healthy run) lives with the sending crons now, per channel (founder ruling Q1):
+     * a text stopped by the switch counts as not got out. The nudges cron only queues, and no longer
+     * reads the switch at all (ruling Q2) — it used to fail every run with the switch off.
+     */
+    let sendHealth: any = null;
+    try {
+      sendHealth = await import('../src/lib/send-health');
+    } catch {
+      sendHealth = null;
+    }
+    const stopped = await sendSms(on('+64211234567'));
     assert(
       'D',
-      'GTC-214: a nudge run that is not live is unhealthy, even with a provider configured and nothing failed',
-      isNudgeRunHealthy({ smsConfigured: true, live: false, attempted: 0, succeeded: 0 }) === false
+      'GTC-339: a text stopped by the switch counts against its cron’s text channel — the run fails',
+      (() => {
+        try {
+          const t = sendHealth.emptyTally();
+          const counts = sendHealth.SMS_BLOCK_COUNTS[(stopped as any).blocked] === true;
+          sendHealth.tallySend(t, 'text', counts ? 'NOT_OUT' : 'NOT_COUNTED');
+          const v = sendHealth.sendRunHealth(t);
+          return (
+            (stopped as any).error === LIVE_SENDS_OFF &&
+            v.ok === false &&
+            JSON.stringify(v.failedChannels) === '["text"]'
+          );
+        } catch {
+          return false;
+        }
+      })(),
+      JSON.stringify(stopped)
     );
+    const schedulerCode = fs
+      .readFileSync(path.join(REPO, 'src/lib/sms/nudge-scheduler.ts'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/.*$/gm, '$1');
     assert(
       'D',
-      'and the same run, live, is healthy',
-      isNudgeRunHealthy({ smsConfigured: true, live: true, attempted: 0, succeeded: 0 }) === true
+      'GTC-339 Q2: the nudges scheduler no longer reads the switch — it sends nothing',
+      schedulerCode.length > 0 && !schedulerCode.includes('isLiveSendingOn')
     );
     assert(
       'D',

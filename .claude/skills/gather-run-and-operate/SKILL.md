@@ -274,16 +274,32 @@ script reads only the latter.
 
 ## 7. Cron endpoints
 
-Three cron routes, all accepting GET or POST, all authenticated the same way
-(`src/app/api/cron/nudges/route.ts`, `src/app/api/cron/wrap-up-dispatch/route.ts`,
+Four cron routes, all accepting GET or POST, all authenticated the same way and all
+fail-closed since GTC-270 (`src/app/api/cron/nudges/route.ts`,
+`src/app/api/cron/outbound-dispatch/route.ts`, `src/app/api/cron/wrap-up-dispatch/route.ts`,
 `src/app/api/cron/decide-by-followups/route.ts`). The shared predicate is
 `cronSecretAccepted` in `src/app/api/cron/cron-secret.ts`:
 
-| Route | Purpose | Vercel schedule (`vercel.json`) |
+| Route | Purpose | Schedule in `vercel.json` |
 |---|---|---|
-| `/api/cron/nudges` | Runs the SMS nudge scheduler | `*/15 * * * *` |
+| `/api/cron/nudges` | Queues due reminders as `OutboundMessage` rows; sends nothing (GTC-189 slice 8b) | `*/15 * * * *` |
+| `/api/cron/outbound-dispatch` | The press's drain (`drainOnce`): asks, reminders, mini-sends — text and email — then the delivery poll | `*/2 * * * *` |
 | `/api/cron/wrap-up-dispatch` | Dispatches pending wrap-up messages (10-min delay after creation) — SMS **and email** | `*/10 * * * *` |
-| `/api/cron/decide-by-followups` | Sends the maybe's single decide-by follow-up (GTC-175 / D2) | `*/15 * * * *` |
+| `/api/cron/decide-by-followups` | Sends the maybe's single decide-by follow-up, by text or email (GTC-175 / D2, GTC-251) | `*/15 * * * *` |
+
+**Who calls them in production:** an outside scheduler, not `vercel.json` — Railway does
+not read that file (found at GTC-339's scoping, 2026-09-30). GTC-042 set up cron-job.org
+for the nudges cron; GTC-220 speaks of EasyCron jobs. What calls them today is to be
+confirmed from the platform logs before the deploy (GTC-270). `outbound-dispatch` must be
+added to that scheduler at every 2 minutes, with its failure emails on.
+
+**Health (GTC-339):** the three sending crons (outbound-dispatch, wrap-up-dispatch,
+decide-by-followups) answer **500 with `success: false`** when, on either channel, the run
+had sends to make and none got out (`sendRunHealth` in `src/lib/send-health.ts`). A text
+stopped by `SMS_DISABLED` (no provider, or the live switch off) counts; a withholding for
+a reason about the guest or the host never does; nothing to send is 200. The body's
+`health` field carries each channel's counts and `failedChannels`. The nudges cron answers
+500 only when it cannot line reminders up.
 
 Trigger locally (both auth forms work):
 
@@ -335,8 +351,9 @@ zone 4 (real money) — you may exercise it, not refactor it.
 
 ## 9. Deploy story (as of 2026-07-09)
 
-- **Vercel**: `vercel.json` at root defines the two cron schedules (section 7),
-  passing auth as `?secret=${CRON_SECRET}`. `npm run build` =
+- **Vercel**: `vercel.json` at root defines the four cron schedules (section 7),
+  passing auth as `?secret=${CRON_SECRET}`. Railway does not read it; production's crons
+  are called by an outside scheduler (section 7). `npm run build` =
   `prisma generate && prisma migrate deploy && next build`, i.e. migrations apply
   during the platform build.
 - **Railway**: `npm run railway:setup` = `prisma migrate deploy && prisma db seed`.

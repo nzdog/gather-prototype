@@ -16,6 +16,7 @@ import { firstNameOf } from '@/lib/messages/ask-register';
 import { withOptOutLine } from '@/lib/sms/opt-out-line';
 import { readChaseOwed } from '@/lib/sms/nudge-eligibility';
 import { listEmailBlocks, normalizeEmailAddress } from '@/lib/eligibility/email-block';
+import { emptyTally, tallySend, type SendChannel, type SendTally } from '@/lib/send-health';
 
 /**
  * GTC-189 slice 5c, FIRST HALF — the drain's two passes and its two claims.
@@ -366,6 +367,46 @@ export const WITHHELD_WHY_IS_TERMINAL: Record<OutboundWithheldWhy, true> = {
 };
 
 /**
+ * [[GTC-339]] — DOES THIS WITHHOLDING COUNT AGAINST THE RUN'S HEALTH? (`sendRunHealth` in
+ * src/lib/send-health.ts.) Founder ruling Q1: *"A text stopped because texting isn't set up or the
+ * live switch is off counts as not got out. Held back for a reason about the guest or you ... never
+ * counts."* So exactly one member counts: `SMS_DISABLED`, which is configuration or the switch.
+ * Every other member is a fact about the guest, the household or the host, or (`PREDATES_SENDER`)
+ * not the drain's to write at all.
+ *
+ * Keyed on the union like the map above, for the same reason: a new withholding is a compile error
+ * until somebody decides whether it counts.
+ */
+export const WITHHELD_COUNTS_FOR_HEALTH: Record<OutboundWithheldWhy, boolean> = {
+  EMAIL_OPTED_OUT: false,
+  EMAIL_REPORTED: false,
+  EMAIL_REPORTED_SMS_OPTED_OUT: false,
+  EMAIL_BLOCKED: false,
+  EMAIL_BLOCKED_SMS_OPTED_OUT: false,
+  NO_CHANNEL: false,
+  SMS_OPTED_OUT: false,
+  PHONE_UNUSABLE: false,
+  HOST_HOUSEHOLD_CHILD: false,
+  NO_CARRIER: false,
+  HOUSEHOLD_MUTED: false,
+  HOST_OWN_ASK: false,
+  CHILD_WITHOUT_ITEM: false,
+  NOT_THIS_RECIPIENT: false,
+  // Ruling C: a link revoked between the press and the drain is about the guest's access.
+  NO_LINK: false,
+  SMS_DISABLED: true,
+  OPTED_OUT: false,
+  INVALID_NUMBER: false,
+  NO_REPLY_TO: false,
+  MARKED_DONT_CHASE: false,
+  HOST_AS_CARRIER: false,
+  HANDED_TO_HOST: false,
+  ANSWERED: false,
+  PACE_OFF: false,
+  PREDATES_SENDER: false,
+};
+
+/**
  * `sendSms`'s `blocked` reason, classified into the right door.
  *
  * ⚠ RULED 2026-09-19, AND RULED FOR A REASON RATHER THAN MERELY RULED. Three of the four are
@@ -659,6 +700,32 @@ export interface DrainResult {
   withheld: number;
   deferred: number;
   retrying: number;
+  /**
+   * [[GTC-339]] — per channel, the sends this tick had to make and how many got out. The cron route
+   * reads its verdict from this alone; the delivery poll is never an input.
+   */
+  tally: SendTally;
+}
+
+const channelOf = (c: OutboundChannel | null): SendChannel => (c === 'EMAIL' ? 'email' : 'text');
+
+/**
+ * Withhold a row and, when THIS run wrote it, count it — `withheld`, and the health tally by
+ * `WITHHELD_COUNTS_FOR_HEALTH`. A row another run finished is that run's to count.
+ */
+async function withholdAndTally(
+  db: PrismaClient,
+  result: DrainResult,
+  args: { id: string; why: OutboundWithheldWhy; channel: OutboundChannel | null }
+): Promise<void> {
+  const { id, why, channel } = args;
+  if (!(await recordWithholding(db, { id, why }))) return;
+  result.withheld++;
+  tallySend(
+    result.tally,
+    channelOf(channel),
+    WITHHELD_COUNTS_FOR_HEALTH[why] ? 'NOT_OUT' : 'NOT_COUNTED'
+  );
 }
 
 /**
@@ -688,9 +755,10 @@ async function drainChaseRow(
   }
 ) {
   const { db, now, quiet, result, preview, byPe, blocked } = ctx;
-  const withhold = async (why: OutboundWithheldWhy) => {
-    if (await recordWithholding(db, { id: row.id, why })) result.withheld++;
-  };
+  // The row's channel until the chooser re-chooses it below; the tally reads whichever is current.
+  let current: OutboundChannel | null = stored.channel;
+  const withhold = (why: OutboundWithheldWhy) =>
+    withholdAndTally(db, result, { id: row.id, why, channel: current });
   if (!preview) return withhold('NOT_THIS_RECIPIENT');
   /*
    * ⚠ THE HOST'S LIST FIRST, FOR SLICE 5c's REASON, AND THE CHASE SUITE CAUGHT IT MISSING. A guest
@@ -723,6 +791,7 @@ async function drainChaseRow(
   if (!owed.owed) return withhold('ANSWERED');
 
   const channel: OutboundChannel = chase.chasedBy;
+  current = channel;
   if (stored.channel !== channel) {
     await db.outboundMessage.update({ where: { id: row.id }, data: { channel } });
   }
@@ -779,8 +848,11 @@ async function drainChaseRow(
         kind: row.kind,
       });
       result.sent++;
+      tallySend(result.tally, 'email', 'GOT_OUT');
       return;
     }
+    // [[GTC-339]]: a refusal, or a wait to retry, did not get out on this tick.
+    tallySend(result.tally, 'email', 'NOT_OUT');
     const error = sent.error ?? 'Unknown Resend error';
     const code = sent.providerErrorCode;
     const at = isRetryableProviderError({ error, code, status: sent.providerStatusCode })
@@ -820,10 +892,12 @@ async function drainChaseRow(
       kind: row.kind,
     });
     result.sent++;
+    tallySend(result.tally, 'text', 'GOT_OUT');
     return;
   }
   const w = sent.blocked ? blockedToWithheld(sent.blocked) : null;
   if (w) return withhold(w);
+  tallySend(result.tally, 'text', 'NOT_OUT');
   const error = sent.error ?? 'Unknown SMS error';
   const at = isRetryableProviderError({ error }) ? nextBackoffAt(attemptCount, now) : null;
   if (at) {
@@ -871,6 +945,7 @@ export async function drainOnce(
     withheld: 0,
     deferred: 0,
     retrying: 0,
+    tally: emptyTally(),
   };
   if (candidates.length === 0) return result;
 
@@ -891,8 +966,11 @@ export async function drainOnce(
       // The event went away. Cascade should have taken the rows with it (decision 28); if it has
       // not, withholding is the honest end rather than a crash.
       for (const row of rows) {
-        if (await recordWithholding(db, { id: row.id, why: 'NOT_THIS_RECIPIENT' }))
-          result.withheld++;
+        await withholdAndTally(db, result, {
+          id: row.id,
+          why: 'NOT_THIS_RECIPIENT',
+          channel: null,
+        });
       }
       continue;
     }
@@ -945,17 +1023,24 @@ export async function drainOnce(
        */
       const hostList = preview.hostList.find((l) => l.personEventId === row.personEventId);
       if (hostList) {
-        if (await recordWithholding(db, { id: row.id, why: hostList.why })) result.withheld++;
+        await withholdAndTally(db, result, {
+          id: row.id,
+          why: hostList.why,
+          channel: stored.channel,
+        });
         continue;
       }
       const composedRow = byPe.get(row.personEventId);
       if (!composedRow) {
-        if (await recordWithholding(db, { id: row.id, why: 'NOT_THIS_RECIPIENT' }))
-          result.withheld++;
+        await withholdAndTally(db, result, {
+          id: row.id,
+          why: 'NOT_THIS_RECIPIENT',
+          channel: stored.channel,
+        });
         continue;
       }
       if (!composedRow.ask || !composedRow.recipient.link) {
-        if (await recordWithholding(db, { id: row.id, why: 'NO_LINK' })) result.withheld++;
+        await withholdAndTally(db, result, { id: row.id, why: 'NO_LINK', channel: stored.channel });
         continue;
       }
       /*
@@ -970,11 +1055,19 @@ export async function drainOnce(
         stored.personEvent.person.email &&
         blocked.has(normalizeEmailAddress(stored.personEvent.person.email))
       ) {
-        if (await recordWithholding(db, { id: row.id, why: 'EMAIL_BLOCKED' })) result.withheld++;
+        await withholdAndTally(db, result, {
+          id: row.id,
+          why: 'EMAIL_BLOCKED',
+          channel: stored.channel,
+        });
         continue;
       }
       if (!preview.replyTo && stored.channel === 'EMAIL') {
-        if (await recordWithholding(db, { id: row.id, why: 'NO_REPLY_TO' })) result.withheld++;
+        await withholdAndTally(db, result, {
+          id: row.id,
+          why: 'NO_REPLY_TO',
+          channel: stored.channel,
+        });
         continue;
       }
 
@@ -1018,7 +1111,7 @@ export async function drainOnce(
       if (stored.channel === 'EMAIL') {
         const to = stored.personEvent.person.email;
         if (!to) {
-          if (await recordWithholding(db, { id: row.id, why: 'NO_CHANNEL' })) result.withheld++;
+          await withholdAndTally(db, result, { id: row.id, why: 'NO_CHANNEL', channel: 'EMAIL' });
           continue;
         }
         const sent = await sendAskEmail({
@@ -1040,7 +1133,10 @@ export async function drainOnce(
             providerMessageId: sent.providerMessageId,
           });
           result.sent++;
+          tallySend(result.tally, 'email', 'GOT_OUT');
         } else {
+          // [[GTC-339]]: refused, stopped (the switch, a missing key), or waiting to retry — not out.
+          tallySend(result.tally, 'email', 'NOT_OUT');
           const error = sent.error ?? 'Unknown Resend error';
           const at = isRetryableProviderError({
             error,
@@ -1064,7 +1160,7 @@ export async function drainOnce(
 
       const to = stored.personEvent.person.phoneNumber;
       if (!to) {
-        if (await recordWithholding(db, { id: row.id, why: 'NO_CHANNEL' })) result.withheld++;
+        await withholdAndTally(db, result, { id: row.id, why: 'NO_CHANNEL', channel: 'TEXT' });
         continue;
       }
       /*
@@ -1093,13 +1189,15 @@ export async function drainOnce(
           providerMessageId: sent.messageId,
         });
         result.sent++;
+        tallySend(result.tally, 'text', 'GOT_OUT');
         continue;
       }
       const withheld = sent.blocked ? blockedToWithheld(sent.blocked) : null;
       if (withheld) {
-        if (await recordWithholding(db, { id: row.id, why: withheld })) result.withheld++;
+        await withholdAndTally(db, result, { id: row.id, why: withheld, channel: 'TEXT' });
         continue;
       }
+      tallySend(result.tally, 'text', 'NOT_OUT');
       const error = sent.error ?? 'Unknown SMS error';
       /*
        * The message alone: TNZ's result vocabulary arrives on a delivery receipt, not on a submission.
