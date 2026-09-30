@@ -1060,17 +1060,21 @@ async function main() {
      * EXISTED: ruling U's door is the third endpoint this surface may reach. The INVARIANT is
      * unchanged — how many endpoints, and which — which is why the count moves rather than the
      * assertion being deleted.
+     *
+     * ⚠ 3 → 4 AT [[GTC-251]] slice 251c (founder ruling Q3; the route approved 2026-09-30): the
+     * hand-back from "gone quiet". Same invariant, one more endpoint, named.
      */
     assert(
       'no new surface',
-      'the only endpoints the action layer names are the two existing routes and ruling U’s door',
+      'the only endpoints the action layer names are the two existing routes, ruling U’s door and the hand-back (GTC-251 251c)',
       ok(() => {
         const paths = [...actionsSrc.matchAll(/`\/api\/[^`]*`/g)].map((m) => m[0]);
         return (
-          paths.length === 3 &&
+          paths.length === 4 &&
           paths.some((p) => /people\/\$\{[^}]+\}\/nudge/.test(p)) &&
           paths.some((p) => /items\/\$\{[^}]+\}\/assign/.test(p)) &&
-          paths.some((p) => /people\/\$\{[^}]+\}\/resend/.test(p))
+          paths.some((p) => /people\/\$\{[^}]+\}\/resend/.test(p)) &&
+          paths.some((p) => /people\/\$\{[^}]+\}\/hand-back/.test(p))
         );
       })
     );

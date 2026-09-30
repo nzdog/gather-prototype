@@ -11,6 +11,8 @@ import { isPaceOff, PACE_OFF_SKIP_REASON } from '@/lib/eligibility/nudge-pace';
 import { readAskPreview } from '@/lib/preflight/ask-preview';
 import type { ChaseNoneWhy, HostListWhy } from '@/lib/eligibility/channel-chooser';
 import type { Prisma } from '@prisma/client';
+import { handBackLegDue, type ChaseHandBack } from '@/lib/chase-exhaustion';
+import { readChaseSpend } from '@/lib/chase-exhaustion-read';
 
 export interface NudgeCandidate {
   /**
@@ -42,11 +44,15 @@ export interface NudgeCandidate {
   hasResponded: boolean;
   firstNudgeSentAt: Date | null;
   secondNudgeSentAt: Date | null;
+  /** [[GTC-251]] slice 251c — set on a further-reminder candidate: the hand-back it answers. */
+  handBack?: ChaseHandBack | null;
 }
 
 export interface EligibilityResult {
   eligibleFirst: NudgeCandidate[];
   eligibleSecond: NudgeCandidate[];
+  /** [[GTC-251]] slice 251c — a further reminder the host asked for (Q3). */
+  eligibleMore: NudgeCandidate[];
   skipped: {
     reason: string;
     count: number;
@@ -161,6 +167,7 @@ export async function findNudgeCandidates(
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const eligibleFirst: NudgeCandidate[] = [];
   const eligibleSecond: NudgeCandidate[] = [];
+  const eligibleMore: NudgeCandidate[] = [];
   const skipReasons = new Map<string, number>();
   const addSkip = (reason: string) => skipReasons.set(reason, (skipReasons.get(reason) ?? 0) + 1);
 
@@ -218,6 +225,8 @@ export async function findNudgeCandidates(
       ).map((r) => `${r.personEventId}:${r.kind}`)
     );
     const byId = new Map(memberships.map((m) => [m.id, m]));
+    // [[GTC-251]] slice 251c — the same reading of the reminders the board's exhaustion takes.
+    const spend = await readChaseSpend(prisma, event.id);
     const rowsOf = (personId: string) => {
       const mine = assignments.filter((a) => a.personId === personId);
       return { rows: mine.length, pending: mine.filter((a) => a.response === 'PENDING').length };
@@ -314,6 +323,11 @@ export async function findNudgeCandidates(
         eligibleFirst.push(candidate);
       } else if (due.includes(1) && !secondTaken) {
         eligibleSecond.push(candidate);
+      } else if (handBackLegDue(spend.get(m.id), now)) {
+        // [[GTC-251]] Q3 — a further reminder, after every gate above: the chooser (the mark and
+        // every opt-out), Zone 7's belt, pace OFF and an answer each stop it here, and the drain
+        // asks them all again. Still one reminder per person per run (Ruling 7(b)).
+        eligibleMore.push({ ...candidate, handBack: spend.get(m.id)?.handBack ?? null });
       }
     }
   }
@@ -321,6 +335,7 @@ export async function findNudgeCandidates(
   return {
     eligibleFirst,
     eligibleSecond,
+    eligibleMore,
     skipped: Array.from(skipReasons.entries()).map(([reason, count]) => ({ reason, count })),
   };
 }

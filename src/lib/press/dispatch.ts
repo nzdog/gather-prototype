@@ -1,4 +1,5 @@
 import type { OutboundChannel, OutboundKind, PrismaClient } from '@prisma/client';
+import { isPaceOff } from '@/lib/eligibility/nudge-pace';
 import { sendAskEmail } from '@/lib/email';
 import { sendSms, type SmsBlockReason } from '@/lib/sms/send-sms';
 import { isQuietHours } from '@/lib/sms/quiet-hours';
@@ -299,6 +300,11 @@ export type OutboundWithheldWhy =
   | 'HANDED_TO_HOST'
   | 'ANSWERED'
   /*
+   * [[GTC-251]] slice 251c — the event's pace is OFF at the send (4.4: pace OFF wins at queueing and
+   * again at the drain). Only ever on a CHASE row. The host's decision, not a fact about the guest.
+   */
+  | 'PACE_OFF'
+  /*
    * ⚠ [[GTC-322]] — AND IT IS THE ONLY MEMBER OF THIS UNION NO GATE PRODUCES.
    *
    * Founder ruling, 2026-09-19, shape 3: the press predates the sender. `Event.sentAt` has been
@@ -353,6 +359,7 @@ export const WITHHELD_WHY_IS_TERMINAL: Record<OutboundWithheldWhy, true> = {
   HOST_AS_CARRIER: true,
   HANDED_TO_HOST: true,
   ANSWERED: true,
+  PACE_OFF: true,
   // [[GTC-322]]: terminal in the strongest sense of the word — there is no message to retry,
   // because none was ever composed.
   PREDATES_SENDER: true,
@@ -698,6 +705,17 @@ async function drainChaseRow(
   const composedRow = byPe.get(row.personEventId);
   if (!chase || !composedRow) return withhold('NOT_THIS_RECIPIENT');
   if (chase.chasedBy === 'NONE') return withhold(chase.why ?? 'NOT_THIS_RECIPIENT');
+  /*
+   * [[GTC-251]] 4.4 — PACE OFF AT THE SEND, beside the chooser's refusals: a reminder queued before
+   * the host turned reminders off is not sent after it. It reaches every chase kind, not only the
+   * further reminders, for the reason GTC-329 ruled of every change after the press: it applies to
+   * reminders not yet sent.
+   */
+  const pace = await db.event.findUnique({
+    where: { id: row.eventId },
+    select: { nudgePace: true },
+  });
+  if (isPaceOff(pace?.nudgePace)) return withhold('PACE_OFF');
   const link = composedRow.recipient.link;
   if (!link) return withhold('NO_LINK');
 
@@ -725,7 +743,9 @@ async function drainChaseRow(
       : await claimForRetry(db, row.id, now);
   if (!claimed) return;
   const attemptCount = row.attemptCount + 1;
-  const leg = row.kind === 'CHASE_FIRST' ? 'FIRST' : 'SECOND';
+  // [[GTC-251]] slice 251c — CHASE_MORE is a further reminder (W3, W4).
+  const leg =
+    row.kind === 'CHASE_FIRST' ? 'FIRST' : row.kind === 'CHASE_SECOND' ? 'SECOND' : 'MORE';
   // One input for both channels, so the text and the email cannot disagree about what is open.
   const chaseInput: ComposeChaseInput = {
     leg,
@@ -786,7 +806,10 @@ async function drainChaseRow(
     eventId: row.eventId,
     personId: composedRow.recipient.personId,
     // `nudgeType` is the stored vocabulary `InviteEvent.metadata` has always carried (NudgeLeg).
-    metadata: { nudgeType: leg === 'FIRST' ? 'first' : 'second', outboundMessageId: row.id },
+    metadata: {
+      nudgeType: leg === 'FIRST' ? 'first' : leg === 'SECOND' ? 'second' : 'more',
+      outboundMessageId: row.id,
+    },
   });
   if (sent.success) {
     await recordAcceptance(db, {
@@ -905,7 +928,7 @@ export async function drainOnce(
        * slice nothing wrote one, and every row here was composed as the invitation; a reminder falling
        * through would have sent the guest the invitation again.
        */
-      if (row.kind === 'CHASE_FIRST' || row.kind === 'CHASE_SECOND') {
+      if (row.kind === 'CHASE_FIRST' || row.kind === 'CHASE_SECOND' || row.kind === 'CHASE_MORE') {
         await drainChaseRow({ db, now, quiet, result, preview, byPe, blocked }, row, stored);
         continue;
       }

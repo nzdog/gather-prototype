@@ -77,6 +77,8 @@ export const WITHHELD_MEANS_UNREACHABLE: Record<OutboundWithheldWhy, 'UNREACHABL
    * is a decision — the host's, or the guest's answer — and none is a person Gather cannot reach.
    */
   MARKED_DONT_CHASE: null,
+  // [[GTC-251]] slice 251c — the host turned reminders off: her decision, a CHASE row only.
+  PACE_OFF: null,
   HOST_AS_CARRIER: null,
   HANDED_TO_HOST: null,
   ANSWERED: null,

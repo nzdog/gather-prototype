@@ -47,7 +47,7 @@ import { isChildMembership } from '@/lib/eligibility/child-exclusion';
 import { readAskPreview } from '@/lib/preflight/ask-preview';
 import { carrierMembershipFor, deliveryFactFrom, latestRowByMembership } from './delivery-fact';
 import { chaseFactFrom, chaseNoteFor } from './chase-fact';
-import { exhaustionFor } from '@/lib/chase-exhaustion';
+import { exhaustionFor, handBackNextFor } from '@/lib/chase-exhaustion';
 import { readChaseSpend } from '@/lib/chase-exhaustion-read';
 import { isPaceOff } from '@/lib/eligibility/nudge-pace';
 
@@ -330,7 +330,13 @@ export async function readEventGlance(
       nudgeMark: row.nudgeMark,
       state,
       reasons,
-      nextNudgeAt: nextNudgeFor(row.sentAt, row.nudgeMark, glanceEvent, now)?.toISOString() ?? null,
+      // [[GTC-251]] slice 251c — after the cadence, the next further reminder the host asked for:
+      // GTC-192 Ruling 34's "system's own promise about what it will do next".
+      nextNudgeAt:
+        (
+          nextNudgeFor(row.sentAt, row.nudgeMark, glanceEvent, now) ??
+          handBackNextFor(preview?.chase.byMembership[row.id], chaseSpend, now)
+        )?.toISOString() ?? null,
       items: items.map((i) => {
         const derived = deriveItemState(i, glanceEvent, context, now);
         return {

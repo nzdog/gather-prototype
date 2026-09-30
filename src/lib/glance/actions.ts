@@ -503,6 +503,49 @@ export async function remind(
   );
 }
 
+/*
+ * ── [[GTC-251]] SLICE 251c — THE HAND-BACK, FROM "GONE QUIET" ──────────────────────────────
+ *
+ * Founder ruling Q3: from the red, the host hands a guest back to Gather with one, two or three more
+ * reminders. W2, ruled 2026-09-30, is below. Ruling 1's test (4.6): the panel shows no count and no
+ * date for it — only the line, the three choices, and what happened.
+ */
+export const HAND_BACK_LEAD = 'Want me to keep trying?';
+export const HAND_BACK_CHOICES: readonly { reminders: number; label: string }[] = [
+  { reminders: 1, label: '1 more reminder' },
+  { reminders: 2, label: '2 more reminders' },
+  { reminders: 3, label: '3 more reminders' },
+];
+export const HAND_BACK_DONE = "Handed back. I'll send the next one soon.";
+
+/**
+ * Only "gone quiet" is handed back. Keyed on `reasons`, Ruling 23's pattern: the other reds are a
+ * cause Gather cannot remind its way past (nothing arrived, nowhere to send, a guest's no, a row
+ * given back, a maybe run out), and the route re-derives the person before it writes anyway.
+ */
+export function handBackOffered(person: Pick<GlancePerson, 'state' | 'reasons'>): boolean {
+  return person.state === 'RED' && person.reasons.includes('EXHAUSTED_SILENCE');
+}
+
+/** HAND BACK. It moves the board: the red turns amber on the refresh, because Gather has a move. */
+export async function handBack(
+  eventId: string,
+  person: Pick<GlancePerson, 'personId'>,
+  reminders: number,
+  deps: GlanceActionDeps = {}
+): Promise<GlanceActionOutcome> {
+  return ask(
+    {
+      url: `/api/events/${eventId}/people/${person.personId}/hand-back`,
+      method: 'POST',
+      body: { reminders },
+    },
+    HAND_BACK_DONE,
+    true,
+    deps
+  );
+}
+
 /** REASSIGN. */
 export async function reassign(
   eventId: string,

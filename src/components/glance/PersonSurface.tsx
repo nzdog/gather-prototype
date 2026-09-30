@@ -65,6 +65,10 @@ import type { GlanceItem, GlancePerson } from '@/lib/glance/state';
 import type { AssignActorRole } from '@/lib/assignment/same-team';
 import {
   doorOffered,
+  handBack,
+  handBackOffered,
+  HAND_BACK_CHOICES,
+  HAND_BACK_LEAD,
   reassign,
   reassignCandidates,
   readDoorView,
@@ -198,6 +202,43 @@ export default function PersonSurface({
             {busy === 'remind' ? 'Reminding…' : 'Remind them'}
           </button>
         )}
+      </div>
+    );
+  }
+
+  /*
+    ── [[GTC-251]] SLICE 251c — THE HAND-BACK, ON "GONE QUIET" ONLY ────────────────
+
+    Founder ruling Q3: from the red, back to Gather with one, two or three more reminders. W2's
+    words, ruled 2026-09-30. RULING 1's test (4.6): no count of reminders sent, no date, no clock —
+    the line, the three choices, and the outcome below.
+
+    ⚠ THE GUARD IS THE FIRST STATEMENT, AND THE CONTROL LIVES NOWHERE ELSE — Ruling 31's lesson, where
+    a guard that was only CALLED and not obeyed survived a mutation. `tests/hand-back-test.ts`
+    asserts both.
+  */
+  function handBackSection() {
+    if (!handBackOffered(person)) return null;
+    return (
+      <div data-hand-back="" className="mt-4 border-t-[0.5px] border-[#dcdad2] pt-3">
+        <p className="m-0 mb-2 text-[13px]">{HAND_BACK_LEAD}</p>
+        <div className="flex flex-wrap gap-2">
+          {HAND_BACK_CHOICES.map((choice) => (
+            <button
+              key={choice.reminders}
+              type="button"
+              disabled={busy !== null}
+              onClick={() =>
+                run(`hand-back-${choice.reminders}`, () =>
+                  handBack(eventId, person, choice.reminders)
+                )
+              }
+              className="rounded-md border-[0.5px] border-[#dcdad2] px-2.5 py-1.5 text-[13px] disabled:opacity-40"
+            >
+              {choice.label}
+            </button>
+          ))}
+        </div>
       </div>
     );
   }
@@ -511,6 +552,9 @@ export default function PersonSurface({
               be the panel pointing at the thing it has decided not to offer.
             */}
             {remindSection()}
+
+            {/* [[GTC-251]] slice 251c — only on "gone quiet"; see `handBackSection`. */}
+            {handBackSection()}
 
             {/*
               GTC-189 slice 7b — RULING U'S DOOR. It REPLACES the remind on these two reds

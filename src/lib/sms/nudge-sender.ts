@@ -8,10 +8,15 @@ import { NudgeCandidate } from './nudge-eligibility';
  * This value reaches `InviteEvent.metadata.nudgeType` through `sendSms`, so it is a
  * stored vocabulary, not just an internal label. Keep it stable.
  */
-export type NudgeLeg = 'first' | 'second';
+export type NudgeLeg = 'first' | 'second' | 'more';
 
 /** The row kind each leg writes. `OutboundKind`'s docstring maps them one-to-one. */
-export const CHASE_KIND = { first: 'CHASE_FIRST', second: 'CHASE_SECOND' } as const;
+export const CHASE_KIND = {
+  first: 'CHASE_FIRST',
+  second: 'CHASE_SECOND',
+  // [[GTC-251]] slice 251c — a further reminder the host asked for from the red (Q3).
+  more: 'CHASE_MORE',
+} as const;
 
 export interface ChaseQueued {
   personId: string;
@@ -41,22 +46,40 @@ export interface ChaseQueued {
 export async function queueChase(candidates: {
   eligibleFirst: NudgeCandidate[];
   eligibleSecond: NudgeCandidate[];
+  eligibleMore?: NudgeCandidate[];
 }): Promise<ChaseQueued[]> {
   const out: ChaseQueued[] = [];
   const legs: [NudgeLeg, NudgeCandidate[]][] = [
     ['first', candidates.eligibleFirst],
     ['second', candidates.eligibleSecond],
+    ['more', candidates.eligibleMore ?? []],
   ];
   for (const [leg, list] of legs) {
     for (const c of list) {
       const kind = CHASE_KIND[leg];
       const id = await prisma.$transaction(async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${c.personEventId}:${kind}`}))`;
-        const existing = await tx.outboundMessage.findFirst({
-          where: { personEventId: c.personEventId, kind },
-          select: { id: true },
-        });
-        if (existing) return null;
+        /*
+         * [[GTC-251]] slice 251c — "one row per leg" for a further reminder means: none still in
+         * flight, and fewer than the host asked for since her hand-back. Asked under the same lock,
+         * so two ticks cannot both write the same leg.
+         */
+        if (leg === 'more') {
+          const since = c.handBack?.at;
+          if (!since || !c.handBack) return null;
+          const rows = await tx.outboundMessage.findMany({
+            where: { personEventId: c.personEventId, kind, createdAt: { gte: since } },
+            select: { acceptedAt: true, rejectedAt: true, withheldAt: true },
+          });
+          const inFlight = rows.some((r) => !r.acceptedAt && !r.rejectedAt && !r.withheldAt);
+          if (inFlight || rows.length >= c.handBack.reminders) return null;
+        } else {
+          const existing = await tx.outboundMessage.findFirst({
+            where: { personEventId: c.personEventId, kind },
+            select: { id: true },
+          });
+          if (existing) return null;
+        }
         const row = await tx.outboundMessage.create({
           data: { eventId: c.eventId, personEventId: c.personEventId, kind, channel: c.channel },
           select: { id: true },

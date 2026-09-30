@@ -359,16 +359,21 @@ function suite1_HeadShape(head: ScanResult) {
    * ⚠ 109 → 110 FILES AND 140 → 141 HANDLERS AT [[GTC-311]] — one new route file,
    * `pre-flight/chase`, carrying one `PATCH` behind `requireEventRole(HOST, COHOST)`, like its
    * three siblings. ✅ THE GUARD COUNT DID NOT MOVE — 27 stays 27, which is the security fact.
+   *
+   * ⚠ 110 → 111 FILES AND 141 → 142 HANDLERS AT [[GTC-251]] slice 251c (founder ruling, 2026-09-30:
+   * "New route, move the pins") — one new route file, `people/[personId]/hand-back`, carrying one
+   * `POST` behind `requireEventRole(HOST)`, like the resend beside it. ✅ THE GUARD COUNT DID NOT
+   * MOVE — 27 stays 27, which is the security fact, and it is asserted unchanged below.
    */
   logTest(
-    'the scanner discovers exactly 110 route files under src/app/api',
-    head.files.length === 110,
+    'the scanner discovers exactly 111 route files under src/app/api',
+    head.files.length === 111,
     `found ${head.files.length}`
   );
 
   logTest(
-    'the scanner enumerates exactly 141 exported HTTP handlers',
-    head.handlers.length === 141,
+    'the scanner enumerates exactly 142 exported HTTP handlers',
+    head.handlers.length === 142,
     `found ${head.handlers.length}`
   );
 
@@ -392,9 +397,10 @@ function suite1_HeadShape(head: ScanResult) {
   // ⚠ 108/138 → 109/140 with the route above. The denominator note below is unchanged: the
   // inventory now records 82 file-shaped entries and this is still a different unit.
   // ⚠ 109/140 → 110/141 and 82 → 83 at [[GTC-311]]: the chase route, classified SESSION.
+  // ⚠ 110/141 → 111/142 and 83 → 84 at [[GTC-251]] slice 251c: the hand-back route, SESSION.
   logTest(
-    'the surface is larger than the retired inventory could express (83 entries)',
-    head.files.length === 110 && head.handlers.length === 141,
+    'the surface is larger than the retired inventory could express (84 entries)',
+    head.files.length === 111 && head.handlers.length === 142,
     `files ${head.files.length}, handlers ${head.handlers.length}`
   );
 }

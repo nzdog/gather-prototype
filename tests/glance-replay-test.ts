@@ -3212,13 +3212,17 @@ async function main() {
      * stale twice and neither commit ran this suite: f858ae5 ([[GTC-296]]) added the public
      * unsubscribe handler and 0067be3 ([[GTC-311]]) the chase-choice PATCH. Both are named below, so
      * the count cannot be satisfied by a different pair of routes arriving.
+     *
+     * ⚠ 83 → 84 AT [[GTC-251]] slice 251c (founder ruling, 2026-09-30: the new route and its pins):
+     * the hand-back POST, classified SESSION. Named below, as the two before it are.
      */
     assert(
       'layer 4 / inventory',
-      'and the surface is 83 routes — 81 at phase 4, plus GTC-296’s unsubscribe handler and GTC-311’s chase-choice route',
-      classifications.length === 83 &&
+      'and the surface is 84 routes — 81 at phase 4, plus GTC-296’s unsubscribe handler, GTC-311’s chase-choice route and GTC-251’s hand-back',
+      classifications.length === 84 &&
         classifications.some((e: any) => e.apiPath === '/api/unsubscribe/[token]') &&
-        classifications.some((e: any) => e.apiPath === '/api/events/:id/pre-flight/chase')
+        classifications.some((e: any) => e.apiPath === '/api/events/:id/pre-flight/chase') &&
+        classifications.some((e: any) => e.apiPath === '/api/events/:id/people/:personId/hand-back')
     );
 
     // ══ LAYER 4e — THE LIVE ISLAND (SLICE 6e) ════════════════════════════

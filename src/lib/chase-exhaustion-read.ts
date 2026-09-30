@@ -19,7 +19,7 @@ import type { ChaseLeg, ChaseLegKind, ChaseSpend } from '@/lib/chase-exhaustion'
 type Db = Prisma.TransactionClient;
 
 /** The chase's rows. The ask is not one: its failures are the delivery fact's (slice 7a). */
-const CHASE_KINDS = ['CHASE_FIRST', 'CHASE_SECOND'] as const;
+const CHASE_KINDS = ['CHASE_FIRST', 'CHASE_SECOND', 'CHASE_MORE'] as const;
 
 /** Every membership's spend on this event, keyed by `PersonEvent` id. */
 export async function readChaseSpend(db: Db, eventId: string): Promise<Map<string, ChaseSpend>> {
@@ -27,7 +27,14 @@ export async function readChaseSpend(db: Db, eventId: string): Promise<Map<strin
     db.event.findUniqueOrThrow({ where: { id: eventId }, select: { nudgePace: true } }),
     db.personEvent.findMany({
       where: { eventId },
-      select: { id: true, nudgeMark: true, firstNudgeSentAt: true, secondNudgeSentAt: true },
+      select: {
+        id: true,
+        nudgeMark: true,
+        firstNudgeSentAt: true,
+        secondNudgeSentAt: true,
+        handBackReminders: true,
+        handedBackAt: true,
+      },
     }),
     db.outboundMessage.findMany({
       where: { eventId, kind: { in: [...CHASE_KINDS] } },
@@ -69,8 +76,11 @@ export async function readChaseSpend(db: Db, eventId: string): Promise<Map<strin
         event: { nudgePace: event.nudgePace as NudgePace | null },
       }).length,
       legs,
-      // ANCHOR(GTC-251 slice 251c): the hand-back's storage lands with its migration.
-      handBack: null,
+      // [[GTC-251]] 4.1 — the latest hand-back; both columns or neither.
+      handBack:
+        m.handBackReminders !== null && m.handedBackAt !== null
+          ? { reminders: m.handBackReminders, at: m.handedBackAt }
+          : null,
     });
   }
   return spend;

@@ -39,7 +39,7 @@ const HOUR_MS = 60 * 60 * 1000;
  */
 export const GONE_QUIET_AFTER_HOURS = 72;
 
-/** The chase's own kinds. `CHASE_MORE` is the hand-back's (slice 251c); none exist before it. */
+/** The chase's own kinds. `CHASE_MORE` is the hand-back's further reminder (slice 251c). */
 export type ChaseLegKind = 'CHASE_FIRST' | 'CHASE_SECOND' | 'CHASE_MORE';
 
 /** The cadence's legs in order: leg 0 is the first reminder, leg 1 the second. */
@@ -103,6 +103,52 @@ export function isChaseExhausted(spend: ChaseSpend | undefined, now: Date): bool
   // still waits after the later one.
   const last = Math.max(...visible.map((l) => l.spentAt!.getTime()));
   return t > last + GONE_QUIET_AFTER_HOURS * HOUR_MS;
+}
+
+/**
+ * [[GTC-251]] Q3 — WHEN THE NEXT FURTHER REMINDER IS DUE, or null when none is owed.
+ *
+ * *"The first goes out next, the rest three days apart."* So the first is due at the hand-back
+ * itself, and each later one `GONE_QUIET_AFTER_HOURS` after the previous further reminder's own end
+ * instant — the same three days, counted the same way, as the red. Null when there is no hand-back
+ * in force, when every leg asked for exists (the cap), or while a reminder is still in flight: one
+ * move at a time.
+ */
+export function nextHandBackLegAt(spend: ChaseSpend | undefined, now: Date): Date | null {
+  const handBack = spend?.handBack;
+  if (!spend || !handBack) return null;
+  const t = now.getTime();
+  const since = handBack.at.getTime();
+  if (since > t) return null;
+
+  const visible = spend.legs.filter((l) => l.createdAt.getTime() <= t);
+  if (visible.some((l) => l.spentAt === null || l.spentAt.getTime() > t)) return null;
+
+  const more = visible.filter((l) => l.kind === 'CHASE_MORE' && l.createdAt.getTime() >= since);
+  if (more.length >= handBack.reminders) return null;
+  if (more.length === 0) return handBack.at;
+  const last = Math.max(...more.map((l) => l.spentAt!.getTime()));
+  return new Date(last + GONE_QUIET_AFTER_HOURS * HOUR_MS);
+}
+
+/** Is a further reminder due now? The sweep's question (`findNudgeCandidates`). */
+export function handBackLegDue(spend: ChaseSpend | undefined, now: Date): boolean {
+  const next = nextHandBackLegAt(spend, now);
+  return next !== null && next.getTime() <= now.getTime();
+}
+
+/**
+ * The next further reminder for a membership's route, for the reading panel's nudge day (GTC-192
+ * Ruling 34: the system's own promise about what it will do next). Gated on the chooser as
+ * `exhaustionFor` is.
+ */
+export function handBackNextFor(
+  route: ChaseRoute | undefined,
+  spendByRecipient: ReadonlyMap<string, ChaseSpend>,
+  now: Date
+): Date | null {
+  if (!route || route.kind === 'NONE') return null;
+  return nextHandBackLegAt(spendByRecipient.get(route.recipientId), now);
 }
 
 /**

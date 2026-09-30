@@ -296,6 +296,14 @@
     "securityIssues": []
   },
   {
+    "filePath": "src/app/api/events/[id]/people/[personId]/hand-back/route.ts",
+    "apiPath": "/api/events/:id/people/:personId/hand-back",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
     "filePath": "src/app/api/events/[id]/people/[personId]/route.ts",
     "apiPath": "/api/events/:id/people/:personId",
     "methods": ["PATCH", "DELETE"],

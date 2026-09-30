@@ -461,6 +461,13 @@ model PersonEvent {
   /// slice 8's, and the resolver is its own module rather than a branch inside
   /// nudge-cadence.ts.
   chaseException       ChaseWhenNoMobile?
+  /// [[GTC-251]] slice 251c, founder ruling 4.1 (2026-09-30) — the host's LATEST hand-back from
+  /// the "gone quiet" red: how many further reminders (1, 2 or 3; Q3's cap, enforced by the route)
+  /// and from when. NULL means none. A new hand-back overwrites both; the `CHASE_MORE` rows keep
+  /// the history. No lifetime cap, by ruling: each hand-back is the host's own act. Written on the
+  /// membership the chase messages — for a carried child, the carrier.
+  handBackReminders    Int?
+  handedBackAt         DateTime?
   householdId          String?
   household            Household?         @relation("HouseholdMembers", fields: [householdId], references: [id])
   householdRole        HouseholdRole?
@@ -2106,11 +2113,17 @@ enum InviteEventType {
 /// ⚠ The member's EXISTENCE is the ruling's; its SPELLING is the executor's. GTC-299 owns
 /// the message, and which message an itemless coordinator receives is still open there, so
 /// GTC-299 may rename this before anything ever writes it.
+///
+/// CHASE_MORE — [[GTC-251]] slice 251c, founder ruling 4.1 (2026-09-30): a further reminder the
+/// host asked for from the "gone quiet" red (Q3: one, two or three). ONE KIND FOR ALL OF THEM, not
+/// ordinals: the count is the rows written since `PersonEvent.handedBackAt`, so no counter can
+/// drift from what was sent. Added LAST, so no existing member's position moves.
 enum OutboundKind {
   ASK
   CHASE_FIRST
   CHASE_SECOND
   COORDINATOR_BRIEF
+  CHASE_MORE
 }
 
 /// GTC-189 slice 4 — the channel an `OutboundMessage` was, or will be, sent on.

@@ -975,15 +975,16 @@ async function main() {
     );
     assert(
       '⚠ MARKER INVERTED ON SCHEDULE: the action layer named exactly TWO /api/ paths until this ' +
-        'slice; it now names THREE, and the third is the door. The invariant is unchanged — how ' +
-        'many endpoints this surface can reach',
+        'slice; it now names FOUR — the third is the door, and the fourth GTC-251 251c’s hand-back ' +
+        '(ruled 2026-09-30). The invariant is unchanged — how many endpoints this surface can reach',
       ok(() => {
         const paths = [...actionsSrc.matchAll(/`\/api\/[^`]*`/g)].map((m) => m[0]);
         return (
-          paths.length === 3 &&
+          paths.length === 4 &&
           paths.some((p) => /people\/\$\{[^}]+\}\/nudge/.test(p)) &&
           paths.some((p) => /items\/\$\{[^}]+\}\/assign/.test(p)) &&
-          paths.some((p) => /people\/\$\{[^}]+\}\/resend/.test(p))
+          paths.some((p) => /people\/\$\{[^}]+\}\/resend/.test(p)) &&
+          paths.some((p) => /people\/\$\{[^}]+\}\/hand-back/.test(p))
         );
       })
     );

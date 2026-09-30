@@ -19,6 +19,8 @@ export interface NudgeRunResult {
     /** GTC-178 (E1, phase 5): ordinal — the legs are days 4 and 7, and adjustable next. */
     eligibleFirst: number;
     eligibleSecond: number;
+    /** [[GTC-251]] slice 251c — further reminders the host asked for. */
+    eligibleMore: number;
     skipped: { reason: string; count: number }[];
   };
   results: {
@@ -109,6 +111,7 @@ export async function runNudgeScheduler(
       candidates: {
         eligibleFirst: candidates.eligibleFirst.length,
         eligibleSecond: candidates.eligibleSecond.length,
+        eligibleMore: candidates.eligibleMore.length,
         skipped: candidates.skipped,
       },
       results: {
@@ -128,7 +131,7 @@ export async function runNudgeScheduler(
       timestamp,
       ok: false,
       smsConfigured,
-      candidates: { eligibleFirst: 0, eligibleSecond: 0, skipped: [] },
+      candidates: { eligibleFirst: 0, eligibleSecond: 0, eligibleMore: 0, skipped: [] },
       results: { sent: 0, succeeded: 0, failed: 0, deferred: 0 },
       errors: [errorMessage],
     };

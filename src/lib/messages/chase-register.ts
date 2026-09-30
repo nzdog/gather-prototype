@@ -23,7 +23,11 @@ import { withOptOutLine } from '@/lib/sms/opt-out-line';
  * 5); the link ends the message (a URL followed by prose is linkified greedily).
  */
 
-export type ChaseLeg = 'FIRST' | 'SECOND';
+/**
+ * [[GTC-251]] slice 251c — `MORE` is a further reminder the host asked for from the "gone quiet"
+ * red (W3, W4, ruled 2026-09-30): its own opening, and the second leg's words after it.
+ */
+export type ChaseLeg = 'FIRST' | 'SECOND' | 'MORE';
 
 /** One party the reminder is about. See `ChaseParty` in `nudge-eligibility.ts`. */
 export interface ChaseSubjectParty {
@@ -105,6 +109,11 @@ function notHeard(input: ComposeChaseInput): string {
 function opener(input: ComposeChaseInput, eventName: string | null): string {
   if (input.leg === 'FIRST') {
     return `Hi ${input.recipientFirstName} - Gather here again, helping ${input.hostFirstName} with ${eventName ?? 'this one'}.`;
+  }
+  if (input.leg === 'MORE') {
+    return eventName === null
+      ? `Hi ${input.recipientFirstName} - Gather here, checking in again for ${input.hostFirstName}.`
+      : `Hi ${input.recipientFirstName} - Gather here, checking in again for ${input.hostFirstName} about ${eventName}.`;
   }
   return eventName === null
     ? `Hi ${input.recipientFirstName} - Gather here, checking in once more for ${input.hostFirstName}.`
