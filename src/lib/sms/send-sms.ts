@@ -30,10 +30,10 @@ function shouldUseTnz(phone: string): boolean {
  * > loudly; the other is the board lying quietly.
  *
  * ⚠ SO IT IS NOT 5f REVERSED, and the distinction is the ruling rather than a caveat on it.
- * Without the fence, "send to the phone instead" in this environment withholds `SMS_DISABLED`,
- * which slice 7a maps to NOT a red — correctly, because an operator failure must not become a
- * false sentence about a guest — and the person falls from RED to AMBER having been sent
- * nothing. A button that makes a red disappear without reaching a provider is the quiet lie.
+ * Without the fence, "send to the phone instead" in this environment queues a TEXT row the drain
+ * withholds `SMS_DISABLED`: the red clears when the row is queued, having reached no provider, and
+ * comes back after the next drain ([[GTC-340]] reads that withholding NOT_DELIVERED). A button that
+ * makes a red disappear without reaching a provider is the quiet lie, however briefly.
  *
  * ⚠ IT LIVES HERE, BESIDE `sendSms`, BECAUSE IT IS `sendSms`'S OWN BRANCH. The door asking
  * "is TNZ configured" directly would be a second reading of which provider serves which number,
@@ -155,7 +155,8 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
    * ahead of either changes an outcome callers and suites depend on.
    *
    * SMS_DISABLED, NOT A FIFTH REASON: "sending is not enabled here" is what it already means, and the
-   * dispatcher, the board and the resend door already read it that way (withheld, amber, terminal).
+   * dispatcher and the resend door already read it that way (withheld and terminal), and since
+   * [[GTC-340]] the board reads it red, "never got it".
    * Told apart by `LIVE_SENDS_OFF`. Like the configuration refusal above, it writes no InviteEvent —
    * a stop is never recorded as a send.
    */

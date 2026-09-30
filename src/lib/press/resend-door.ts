@@ -113,6 +113,27 @@ export const DOOR_WORDS: Record<DoorReason, Record<ResendAction, string>> = {
 };
 
 /**
+ * [[GTC-340]] plan ruling Q1 (founder, 2026-10-01): *"A text guest with no address sees 'Send to an
+ * email address'."* "Send to a different address" says Gather had one, which is false of a guest
+ * reached only by text — the mirror of the falsehood `UNREACHABLE`'s words avoid. Only on the
+ * `NOT_DELIVERED` door, and only with no address; ruling M's door keeps "Add a way to reach them".
+ */
+export const EDIT_WITH_NO_ADDRESS = 'Send to an email address';
+
+/**
+ * The label the panel shows for one action. `DOOR_WORDS` keyed on the red, except the one case
+ * above, which is keyed on the address the panel already holds (`DoorView.address`).
+ */
+export function doorWordFor(
+  reason: DoorReason,
+  action: ResendAction,
+  address: string | null
+): string {
+  if (reason === 'NOT_DELIVERED' && action === 'EDIT' && !address) return EDIT_WITH_NO_ADDRESS;
+  return DOOR_WORDS[reason][action];
+}
+
+/**
  * WHAT THE SURFACE SAYS WHEN THE ROUTE ACCEPTED IT.
  *
  * ⚠ "QUEUED", NOT "SENT", AND THE WORD IS THE POINT. The door writes a row; the two-minute cron

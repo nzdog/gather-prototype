@@ -77,14 +77,15 @@ function code(rel: string): string {
     .replace(/(^|[^:])\/\/.*$/gm, '$1');
 }
 
-// The ruled words, 2026-09-30, for a carrier named "Kay Carrier". Byte-exact.
+// The ruled words, 2026-09-30, for a carrier named "Kay Carrier". Byte-exact. W1 and W4 say "is in"
+// since [[GTC-340]] Q4 (founder, 2026-10-01): a message Gather's own setup stopped never went out.
 const W1 =
-  "Their ask went in Kay's message, and it didn't arrive. You can send it again from Kay's card.";
+  "Their ask is in Kay's message, and it didn't arrive. You can send it again from Kay's card.";
 const W2 =
   "Kay would pass it on, but I can't reach Kay. You can add a way to reach Kay from Kay's card.";
 const W3 =
   "Their ask is in Kay's message, but I can't email Kay. You can send it another way from Kay's card.";
-const W4 = "Their ask went in your message, and it didn't arrive.";
+const W4 = "Their ask is in your message, and it didn't arrive.";
 const W5 = 'Gather never messages a child, so there is nothing to send them.';
 
 async function main() {

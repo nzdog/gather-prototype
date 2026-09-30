@@ -27,7 +27,10 @@
  */
 
 import { readEmailNotes } from './email-note';
-import { EMAIL_BLOCKED_ASK_HELD_WORDS } from '@/lib/eligibility/email-block-words';
+import {
+  EMAIL_BLOCKED_ASK_HELD_WORDS,
+  EMAIL_BLOCKED_TEXT_FAILED_WORDS,
+} from '@/lib/eligibility/email-block-words';
 import type { Prisma } from '@prisma/client';
 import {
   decideByAtFor,
@@ -198,6 +201,8 @@ export async function readEventGlance(
       select: {
         id: true,
         personEventId: true,
+        // [[GTC-340]] plan ruling Q3 — which channel the failed ask went by, for the person view's line.
+        channel: true,
         createdAt: true,
         rejectedAt: true,
         withheldAt: true,
@@ -261,14 +266,19 @@ export async function readEventGlance(
    * `textable` (ruling S: the carrier's failure is the child's red, so the carrier's reach is its
    * line), and no note of their own — the carrier's surface carries it.
    *
-   * ⚠ ONE CASE REPLACES THE NOTE: an UNREACHABLE red on a blocked, textable adult is an invitation
-   * the dispatcher's fence withheld, and W2 ("so I'll text them instead") would be false of it —
-   * nothing texts it unless the host sends it as a text.
+   * ⚠ TWO CASES REPLACE THE NOTE, and W2 ("so I'll text them instead") would be false of both:
+   *  - an UNREACHABLE red on a blocked, textable adult is an invitation the dispatcher's fence
+   *    withheld — nothing texts it unless the host sends it as a text;
+   *  - [[GTC-340]] plan ruling Q3: a NOT_DELIVERED red on a blocked, textable adult whose failed ask
+   *    row is a TEXT row — Gather tried to text them, and it didn't arrive. ⚠ THE CHANNEL IS THE
+   *    FOUNDER'S CONDITION: a guest whose EMAIL bounced is blocked by that bounce, was never
+   *    texted, and keeps W2.
    */
   function emailFactsFor(
     row: (typeof memberships)[number],
     answering: string | null,
-    failure: string | null
+    failure: string | null,
+    failedChannel: string | null
   ): { emailNote: string | null; textable: boolean } {
     const own = emailNotes.get(row.id);
     if (isChildMembership(row.householdRole)) {
@@ -278,8 +288,17 @@ export async function readEventGlance(
       };
     }
     if (!own) return { emailNote: null, textable: false };
-    const held = failure === 'UNREACHABLE' && own.state === 'BLOCKED' && own.textable;
-    return { emailNote: held ? EMAIL_BLOCKED_ASK_HELD_WORDS : own.note, textable: own.textable };
+    const blockedTextable = own.state === 'BLOCKED' && own.textable;
+    const held = failure === 'UNREACHABLE' && blockedTextable;
+    const textFailed = failure === 'NOT_DELIVERED' && blockedTextable && failedChannel === 'TEXT';
+    return {
+      emailNote: held
+        ? EMAIL_BLOCKED_ASK_HELD_WORDS
+        : textFailed
+          ? EMAIL_BLOCKED_TEXT_FAILED_WORDS
+          : own.note,
+      textable: own.textable,
+    };
   }
 
   function toPerson(row: (typeof memberships)[number]): GlancePerson {
@@ -313,7 +332,12 @@ export async function readEventGlance(
         isPaceOff(event.nudgePace)
       ),
     };
-    const emailFacts = emailFactsFor(row, answeringMembership, context.delivery?.failure ?? null);
+    const emailFacts = emailFactsFor(
+      row,
+      answeringMembership,
+      context.delivery?.failure ?? null,
+      latestOutbound.get(row.id)?.channel ?? null
+    );
     const { state, reasons } = derivePersonState(
       {
         ...context,

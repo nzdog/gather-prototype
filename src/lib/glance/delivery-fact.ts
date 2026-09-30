@@ -25,19 +25,23 @@ import type { DeliveryFact } from './state';
  */
 
 /**
- * WHICH WITHHELD CODES MEAN NOBODY CAN REACH THIS PERSON.
+ * WHAT EACH WITHHELD CODE MEANS ON THE BOARD.
+ *
+ * ⚠ THE NAME IS OLDER THAN ITS SECOND VALUE. Built when a withholding could say only UNREACHABLE or
+ * nothing; [[GTC-340]] gave one code NOT_DELIVERED and kept the name its readers import.
  *
  * ⚠ A `Record` OVER THE PRESS'S OWN UNION, so a fifteenth code does not compile until somebody
  * decides whether it makes a person unreachable. The alternative — an array of the ones that do —
  * silently answers "no" for anything added later, and answering no here means a person whose ask
  * went nowhere reads AMBER, which is the exact falsehood ruling J called wrong.
  *
- * THE TEST APPLIED TO EACH: **is this a fact about the PERSON, or about GATHER?** Ruling M's red says
- * *"Gather is out of moves and this is yours"* — it hands the host a job. A code that describes our
- * own broken configuration hands her a job she cannot do and tells her something false about her
- * guest.
+ * THE TEST APPLIED TO EACH: **is this a fact about the PERSON, or about GATHER?** It decides
+ * UNREACHABLE. Ruling M's red says *"Gather is out of moves and this is yours"* — it hands the host a
+ * job. A code that describes our own broken configuration hands her a job she cannot do and tells her
+ * something false about her guest. [[GTC-340]]: when that configuration stopped a message before it
+ * left, the red is NOT_DELIVERED, which is true of the guest — see `SMS_DISABLED`.
  */
-export const WITHHELD_MEANS_UNREACHABLE: Record<OutboundWithheldWhy, 'UNREACHABLE' | null> = {
+export const WITHHELD_MEANS_UNREACHABLE: Record<OutboundWithheldWhy, DeliveryFact['failure']> = {
   /*
    * ⚠ [[GTC-296]] — null, AND THE null IS A FOUNDER RULING (correction R6, 2026-09-20) RATHER
    * THAN A DEFAULT. It is the one entry in this map that is neither *about the person's
@@ -97,13 +101,19 @@ export const WITHHELD_MEANS_UNREACHABLE: Record<OutboundWithheldWhy, 'UNREACHABL
   /*
    * ── About GATHER, not about the person. None of these is ruling M's red.
    *
-   * ⚠ `SMS_DISABLED` IS THE ONE THAT MATTERS TODAY AND IT IS THE DIFFERENTIAL THE SUITE ASSERTS.
-   * `TNZ_AUTH_TOKEN` is absent from this environment ([[GTC-247]]), so every text recipient is
-   * withheld for it. Reading that as UNREACHABLE would paint them "nowhere to send" — a sentence
-   * about the guest that is false, caused by an operator failure. The person is perfectly reachable
-   * the moment somebody sets a token.
+   * ⚠ `SMS_DISABLED` IS RED, "never got it". Founder ruling [[GTC-340]], 2026-10-01: *"Texts join
+   * emails: red 'never got it', with 'Send it again'. It's true, the host can see who missed out,
+   * and once the setup is fixed she can resend, or send to an email address instead."* Gather's own
+   * setup stopped the text before it left: no provider for the number, or [[GTC-274]]'s live switch
+   * off. An email stopped the same way is a rejection with no provider code, which `deliveryFactFrom`
+   * already reads NOT_DELIVERED; this is its twin.
+   *
+   * ⚠ NEVER UNREACHABLE: "nowhere to send" is false of a guest holding a live number. Amber was false
+   * too: amber means Gather is chasing ([[GTC-305]]), and a text that never left is never chased —
+   * the drain stamps `PersonEvent.sentAt` only on acceptance. The dispatcher still records a
+   * withholding (rule 1 in `dispatch.ts`); the red is this reading's.
    */
-  SMS_DISABLED: null,
+  SMS_DISABLED: 'NOT_DELIVERED',
   // The host's account went away in the window; the person is reachable and Gather lost its sender.
   NO_REPLY_TO: null,
   // Issuance did not produce a link. Reachable, and nothing to send them. ⚠ Arguably its own red and
@@ -134,17 +144,18 @@ export const WITHHELD_MEANS_UNREACHABLE: Record<OutboundWithheldWhy, 'UNREACHABL
    * Entered as null because null is the only value that asserts nothing while it is open.
    *
    * THE TEST THIS MODULE APPLIES — *is this a fact about the PERSON, or about GATHER?* — answers
-   * GATHER, which is `SMS_DISABLED`'s answer and would settle it. ⚠ BUT THIS IS THE CODE THAT
-   * SHOWS THE TEST IS A PROXY. `SMS_DISABLED` is about Gather AND TEMPORARY: *"the person is
-   * perfectly reachable the moment somebody sets a token."* `PREDATES_SENDER` is about Gather and
+   * GATHER, and since [[GTC-340]] that settles nothing: `SMS_DISABLED` is about Gather and reads
+   * NOT_DELIVERED, while the other Gather codes read null. ⚠ AND THIS IS THE CODE THAT SHOWS THE
+   * TEST IS A PROXY. `SMS_DISABLED` is about Gather AND TEMPORARY: once the setup is fixed the host
+   * can send it again. `PREDATES_SENDER` is about Gather and
    * PERMANENT — nothing will ever create an ask row for these people, which is the whole of
    * GTC-322 shape 3 — so ruling M's red is true of them in its own words: *Gather is out of moves
    * and this is yours.* The property the test is reaching for is **has Gather a next move**, and
    * whose fault it is happens to answer that correctly everywhere else.
    *
-   * ⚠ AND THE COLOUR CANNOT BE CHOSEN WITHOUT CHOOSING A MECHANISM, WHICH IS WHY IT IS RULED
-   * RATHER THAN DECIDED HERE. This `Record`'s value type is `'UNREACHABLE' | null`: a withholding
-   * can say *nowhere to send* or say nothing. Three options, and none is free:
+   * ⚠ THE COLOUR IS STILL A RULING, THOUGH ITS MECHANISM NOW EXISTS. Until [[GTC-340]] this
+   * `Record`'s value type was `'UNREACHABLE' | null`; GTC-340 widened it to admit NOT_DELIVERED for
+   * `SMS_DISABLED`, so (c) is now one value here. The options, as they were put, none free:
    *
    *   (a) null, as built — the record is repaired and no strip moves.
    *   (b) 'UNREACHABLE' — red, with the why-line *"nowhere to send"*, which is FALSE of people
@@ -153,12 +164,14 @@ export const WITHHELD_MEANS_UNREACHABLE: Record<OutboundWithheldWhy, 'UNREACHABL
    *   (c) widen this `Record` so a withholding may also mean `NOT_DELIVERED` — red, with
    *       *"never got it"*, which is TRUE of them: 7a named that reason for three mechanisms
    *       because they are *"one fact to the host: it did not arrive"*, and never-sent is a
-   *       fourth of the same kind. It changes the shape of this mapping, which [[GTC-325]]'s
-   *       scope reserves to a ruling.
+   *       fourth of the same kind. It changed the shape of this mapping, which [[GTC-325]]'s
+   *       scope reserved to a ruling; [[GTC-340]]'s ruling made that change, for `SMS_DISABLED`
+   *       only.
    *
    * ⚠ AND (c) HAS A CONSEQUENCE NOBODY HAS SEEN: a `NOT_DELIVERED` strip is a DOOR (slice 7b), so
    * red here puts a one-press "send it again" on 86 people across eight legacy boards — three of
-   * them security-test events and two seeded demo boards. That may be exactly the affordance the
+   * them security-test events and two seeded demo boards (72 rows on five boards in `gather_dev`
+   * on 2026-10-01). That may be exactly the affordance the
    * host wants; it is not a side effect a record repair should acquire unruled.
    */
   PREDATES_SENDER: null,
@@ -205,13 +218,16 @@ export interface DeliveryRowInput {
  * ⚠ A REJECTION AT SUBMISSION IS THE SAME RED AS A BOUNCE. [[GTC-189]]'s own note: *"a rejection at
  * submission is the fourth red at once."* The provider refused to take it; it did not arrive. That is
  * the third of the three mechanisms `NOT_DELIVERED` is named for rather than `BOUNCED`.
+ *
+ * ⚠ AND A STOP BY GATHER'S OWN SETUP IS THE SAME RED ([[GTC-340]]): an email as a rejection with no
+ * provider code, a text as the withholding `SMS_DISABLED`.
  */
 export function deliveryFactFrom(row: DeliveryRowInput | null | undefined): DeliveryFact {
   if (!row) return { failure: null };
   if (row.rejectedAt) return { failure: 'NOT_DELIVERED' };
   if (row.withheldAt && row.withheldWhy) {
     const withheld = (
-      WITHHELD_MEANS_UNREACHABLE as Record<string, 'UNREACHABLE' | null | undefined>
+      WITHHELD_MEANS_UNREACHABLE as Record<string, DeliveryFact['failure'] | undefined>
     )[row.withheldWhy];
     return { failure: withheld ?? null };
   }
@@ -340,16 +356,18 @@ export function carrierOfAsk(route: AskRoute | undefined): string | null {
  * `UNREACHABLE` on whether the carrier is textable, which is what the strip's why-line reads too.
  *
  * ⚠ W3 SAYS "is in", NOT "went in". The founder's change at the ruling: *"Kay's message never went
- * out in this case, so 'went in' isn't true."*
+ * out in this case, so 'went in' isn't true."* ⚠ AND SINCE [[GTC-340]] Q4 SO DO W1 AND W4: a message
+ * Gather's own setup stopped (an email rejected with no code, a text withheld `SMS_DISABLED`) never
+ * went out either, and "is in" is true of a bounced, refused or stopped message alike.
  */
 export const CARRIED_CHILD_WORDS = {
   NOT_DELIVERED: (carrier: string) =>
-    `Their ask went in ${carrier}'s message, and it didn't arrive. You can send it again from ${carrier}'s card.`,
+    `Their ask is in ${carrier}'s message, and it didn't arrive. You can send it again from ${carrier}'s card.`,
   UNREACHABLE: (carrier: string) =>
     `${carrier} would pass it on, but I can't reach ${carrier}. You can add a way to reach ${carrier} from ${carrier}'s card.`,
   UNREACHABLE_TEXTABLE: (carrier: string) =>
     `Their ask is in ${carrier}'s message, but I can't email ${carrier}. You can send it another way from ${carrier}'s card.`,
-  HOST: "Their ask went in your message, and it didn't arrive.",
+  HOST: "Their ask is in your message, and it didn't arrive.",
 } as const;
 
 /**

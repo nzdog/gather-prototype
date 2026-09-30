@@ -78,6 +78,16 @@ export const EMAIL_BLOCKED_ASK_HELD_WORDS =
   "I can't email this address anymore, so their invitation hasn't gone out. You can send it as a text.";
 
 /**
+ * [[GTC-340]] plan ruling Q3 (founder, 2026-10-01) — the person view for a blocked, textable guest
+ * whose ask went by TEXT and did not arrive (Gather's own setup stopped it, or the provider refused
+ * it). W2's "so I'll text them instead" is false of them: Gather tried to, and nothing texts them
+ * again unless the host presses. ⚠ ONLY WHEN THE FAILED ASK ROW IS A TEXT ROW — the founder's
+ * change: a guest whose EMAIL bounced is blocked by that bounce, was never texted, and keeps W2.
+ */
+export const EMAIL_BLOCKED_TEXT_FAILED_WORDS =
+  "I can't email this address anymore, and my text to them didn't arrive.";
+
+/**
  * The two chase refusals, for `CHASE_NONE_WHY`. Both refuse the ASK first, so neither person is
  * ever on group B; kept so no route renders blank, and worded apart from the host-list sentences
  * above, as ruling AN requires. Ruled 2026-09-27 as proposed; unreachable today.

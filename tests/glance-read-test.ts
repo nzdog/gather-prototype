@@ -1427,9 +1427,20 @@ async function main() {
     const dTeam = await prisma.team.create({ data: { eventId: dEvent.id, name: 'Mains' } });
     const dHh = await prisma.household.create({ data: { eventId: dEvent.id } });
 
-    async function dPerson(name: string, role: string, opts: { items?: boolean } = {}) {
+    async function dPerson(
+      name: string,
+      role: string,
+      opts: { items?: boolean; email?: string | null; phone?: string | null } = {}
+    ) {
       const person = await prisma.person.create({
-        data: { name, email: `gtc189s7a+${stamp}+${name.replace(/\W/g, '')}@example.com` },
+        data: {
+          name,
+          email:
+            opts.email !== undefined
+              ? opts.email
+              : `gtc189s7a+${stamp}+${name.replace(/\W/g, '')}@example.com`,
+          phoneNumber: opts.phone ?? null,
+        },
       });
       createdPersonIds.push(person.id);
       const pe = await prisma.personEvent.create({
@@ -1458,8 +1469,10 @@ async function main() {
     const ollie = await dPerson('Ollie Child', 'CHILD');
     // Nina has no way to be reached at all — the chooser said so at the press.
     const nina = await dPerson('Nina Nochannel', 'GUEST');
-    // Tom's text was withheld because GATHER has no SMS provider. Not a fact about Tom.
-    const tom = await dPerson('Tom Smsdisabled', 'GUEST');
+    // Tom's text was stopped by Gather's own setup (no SMS provider, or the live switch off). Not a
+    // fact about Tom. [[GTC-340]]: a text guest — no email, a +64 mobile — so the chooser texts him
+    // and his row is the TEXT row the drain writes, not an email row no drain could write.
+    const tom = await dPerson('Tom Smsdisabled', 'GUEST', { email: null, phone: '+64211340901' });
     // Ida's ask failed once and the second attempt did not. The latest row is the fact.
     const ida = await dPerson('Ida Resent', 'GUEST');
     // Pia holds NOTHING and her message bounced — ruling 16's itemless amber, with no row to carry
@@ -1494,7 +1507,7 @@ async function main() {
       deliveryPollDoneAt: sentAt,
     });
     await askRow(nina.pe.id, { withheldAt: sentAt, withheldWhy: 'NO_CHANNEL' });
-    await askRow(tom.pe.id, { withheldAt: sentAt, withheldWhy: 'SMS_DISABLED' });
+    await askRow(tom.pe.id, { channel: 'TEXT', withheldAt: sentAt, withheldWhy: 'SMS_DISABLED' });
     await askRow(ida.pe.id, {
       createdAt: new Date(sentAt.getTime() - 2 * HOUR),
       attemptedAt: sentAt,
@@ -1572,13 +1585,18 @@ async function main() {
     );
     assert(
       'slice 7a',
-      '⚠ TOM IS NOT RED, AND HE IS THE DIFFERENTIAL THAT MATTERS: his text was withheld because ' +
-        'GATHER HAS NO SMS PROVIDER ([[GTC-247]]), which is an operator failure and not a fact about ' +
-        'Tom. Painting him "nowhere to send" would be the board telling the host a falsehood about her ' +
-        'guest',
+      '⚠ [[GTC-340]] — TOM IS RED, "never got it" (NOT_DELIVERED), AND NEVER UNREACHABLE: his text ' +
+        "was stopped by GATHER's own setup before it left (no SMS provider, or the live switch off). " +
+        'Founder ruling 2026-10-01: texts join emails — he never got it, which is true, and the door ' +
+        'lets the host send it again. Painting him "nowhere to send" would still be a falsehood about ' +
+        'a guest holding a live number',
       ok(() => {
         const r = dRead(tom.person.id);
-        return r.state === 'AMBER' && !r.reasons.includes('UNREACHABLE');
+        return (
+          r.state === 'RED' &&
+          JSON.stringify(r.reasons) === JSON.stringify(['NOT_DELIVERED']) &&
+          !r.reasons.includes('UNREACHABLE')
+        );
       })
     );
     assert(

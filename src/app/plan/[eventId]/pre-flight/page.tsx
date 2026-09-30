@@ -646,15 +646,21 @@ export default function PreFlightPage() {
               • The press writes 38 `OutboundMessage` rows, sets `Event.sentAt`, sets the invite
                 anchors and writes `SEND_PRESSED`. IRREVERSIBLE AT THE MECHANISM LEVEL (Hinge §2,
                 ruled gap #1): no undo, and a second press is refused `ALREADY_SENT`.
-              • When the dispatcher runs, all 37 email rows are REJECTED — `RESEND_API_KEY` does not
-                authenticate here ([[GTC-247]]), and the observed answer is `validation_error` / 401
-                / "API key is invalid", which is terminal on the first attempt. The 1 text row is
-                withheld `SMS_DISABLED` because `TNZ_AUTH_TOKEN` is absent.
-              • ⚠ THE BOARD THEN READS RED, "never got it", FOR 37 PEOPLE WHOSE ADDRESSES ARE FINE
-                (GTC-189 slice 7a's `NOT_DELIVERED`), and the summary says 37 need her.
-              • ⚠ AND THERE IS NO PRODUCT PATH BACK. Ruling U's bounce door is slice 7b and does not
-                exist; the remind is withdrawn on that red; the press cannot be repeated. Those reds
-                are PERMANENT on that board until 7b ships or somebody edits the database.
+              • When the dispatcher runs, nothing reaches a provider: since [[GTC-274]] the live
+                switch is off on every machine but production. All 37 email rows are REJECTED with
+                no provider code — the sender stops before the key is tried (where the switch is on,
+                a key that does not authenticate is refused `validation_error` / 401, terminal on the
+                first attempt, [[GTC-247]]). The 1 text row is withheld `SMS_DISABLED`:
+                `TNZ_AUTH_TOKEN` is absent, and the switch is off.
+              • ⚠ THE BOARD THEN READS RED, "never got it", FOR ALL 38, WHOSE ADDRESSES AND NUMBER
+                ARE FINE (GTC-189 slice 7a's `NOT_DELIVERED`; the text since [[GTC-340]]), and the
+                summary says 38 need her.
+              • ⚠ THE WAY BACK IS SLICE 7b's DOOR, AND HERE IT CANNOT WORK. "Send it again", "Send to
+                a different address" and "Send to an email address" each queue a row the next drain
+                stops the same way, so the red clears while the row waits and comes back after the
+                drain ([[GTC-347]]). "Send it as a text" is not offered while texting is off
+                (founder answer 1's fence). The remind is withdrawn on that red, and the press
+                cannot be repeated.
 
             That is the press behaving exactly as designed against a broken key, which is the state
             founder answer Q7 chose over a fake provider. It is not a defect and it is not a surprise

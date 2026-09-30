@@ -80,7 +80,7 @@ import {
   type GlanceActionOutcome,
   type GlanceAssignable,
 } from '@/lib/glance/actions';
-import { DOOR_WORDS, type DoorView } from '@/lib/press/resend-door';
+import { doorWordFor, type DoorView } from '@/lib/press/resend-door';
 import { GLANCE_REFRESH_EVENT } from '@/lib/glance/live';
 import { whyLineFor } from './strip';
 
@@ -263,7 +263,9 @@ export default function PersonSurface({
 
     ⚠ THE WORDS ARE THE DOOR'S, KEYED ON THE RED. `DOOR_WORDS` is a Record over the two
     reasons: ruling M's red is not a wrong address being corrected, so its one action reads
-    "Add a way to reach them" — the founder's words, 2026-09-19 — and never "edit".
+    "Add a way to reach them" — the founder's words, 2026-09-19 — and never "edit". Read through
+    `doorWordFor`, which adds [[GTC-340]]'s one case: a text guest with no address sees "Send to
+    an email address", never "a different" one.
   */
   function doorSection() {
     if (!doorOffered(person)) return null;
@@ -328,7 +330,7 @@ export default function PersonSurface({
                   }
                   className="rounded-md border-[0.5px] border-[#dcdad2] px-2.5 py-1.5 text-[13px] disabled:opacity-40"
                 >
-                  {DOOR_WORDS[door.reason][action]}
+                  {doorWordFor(door.reason, action, door.address)}
                 </button>
               ))}
             </div>

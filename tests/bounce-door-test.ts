@@ -1012,10 +1012,27 @@ async function main() {
         return body.length > 0 && !/\bemail\b|\bphoneNumber\b|\bphone\b/.test(stripComments(body));
       })
     );
+    /*
+     * [[GTC-340]] plan ruling Q1 — the panel reads its words through `doorWordFor`, which adds one
+     * case ("Send to an email address" for a guest with no address). Founder, approving this edit:
+     * also prove the words still come from the Record — for both reasons and all three actions,
+     * with an address, `doorWordFor` returns exactly `DOOR_WORDS[reason][action]`.
+     */
     assert(
-      'the panel renders the DOOR’s words, from the Record, rather than prose written at the ' +
-        'screen — 5f’s R2 lesson: the screen reads the code',
-      ok(() => surfaceSrc.includes('DOOR_WORDS'))
+      'the panel renders the DOOR’s words, through `doorWordFor` (the Record, plus [[GTC-340]] ' +
+        'Q1’s one case), rather than prose written at the screen — 5f’s R2 lesson: the screen ' +
+        'reads the code; and with an address, every word it gives is the Record’s, exactly',
+      ok(
+        () =>
+          /doorWordFor\(\s*door\.reason\s*,\s*action\s*,\s*door\.address\s*\)/.test(surfaceSrc) &&
+          (['NOT_DELIVERED', 'UNREACHABLE'] as const).every((reason) =>
+            (['AGAIN', 'EDIT', 'PHONE'] as const).every(
+              (action) =>
+                door.doorWordFor(reason, action, 'guest@example.test') ===
+                door.DOOR_WORDS[reason][action]
+            )
+          )
+      )
     );
     /*
      * ⚠ REWRITTEN BECAUSE A MUTATION SURVIVED, AND IT IS 5f's R5 EXACTLY. This read

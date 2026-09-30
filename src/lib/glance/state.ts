@@ -80,7 +80,9 @@ export const RED_REASONS = [
    * ⚠ `NOT_DELIVERED` AND NOT `BOUNCED`, AND THE NAME IS A RULING. It covers THREE mechanisms — a
    * rejection at submission, a bounce after acceptance, and a provider failure — which are one fact
    * to the host: **it did not arrive.** Naming it for one of the three would make the other two read
-   * as a different red, and they are not.
+   * as a different red, and they are not. ⚠ AND A STOP BY GATHER'S OWN SETUP IS THE SAME RED
+   * ([[GTC-340]]): an email as a rejection with no provider code, a text as the withholding
+   * `SMS_DISABLED`.
    *
    * `UNREACHABLE` is ruling M's own word: *"a person nobody can reach"*, red from the press, because
    * *"red already means Gather is out of moves and this is yours."*
