@@ -141,6 +141,8 @@ export const RESEND_NOTES: Record<ResendAction, string> = {
 export type ResendRefusalCode =
   | 'EVENT_NOT_FOUND'
   | 'NOT_ON_THIS_EVENT'
+  // [[GTC-336]] Q1 — a child has no row of their own; the door belongs on their carrier's card.
+  | 'CHILD_NOT_MESSAGED'
   | 'NOT_PRESSED'
   | 'NOTHING_FAILED'
   | 'NO_ADDRESS'
@@ -169,6 +171,9 @@ export type ResendRefusalCode =
 export const RESEND_REFUSAL_WORDS: Record<ResendRefusalCode, string> = {
   EVENT_NOT_FOUND: 'That event is no longer here.',
   NOT_ON_THIS_EVENT: 'They are not on this event any more, so there is nothing to send.',
+  // [[GTC-336]] W5, ruled 2026-09-30. True of every child, carried or not — which is why it names no
+  // carrier: this answers a stale board, where the card that asked may be anybody's child.
+  CHILD_NOT_MESSAGED: 'Gather never messages a child, so there is nothing to send them.',
   NOT_PRESSED: 'This event has not been sent yet, so there is nothing to send again.',
   NOTHING_FAILED: 'Their last message did not fail, so Gather has nothing to try again.',
   NO_ADDRESS: 'There is no address to send to. Add one instead.',

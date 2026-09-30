@@ -598,10 +598,15 @@ async function main() {
       ok(() => deliveredView.ok === false && deliveredView.code === 'NOTHING_FAILED')
     );
     const childView = await view(child.person.id);
+    /*
+     * [[GTC-336]] Q1 (founder, 2026-09-30) — flipped from `NOTHING_FAILED`, whose sentence (*"Their
+     * last message did not fail"*) is false for a child whose carrier's message did fail. A child is
+     * refused as a child, before any row is read.
+     */
     assert(
       '⚠ A CHILD HAS NO DOOR, because a child has no row: ruling S gives them their CARRIER’s ' +
         'red, and the carrier is who you resend to',
-      ok(() => childView.ok === false && childView.code === 'NOTHING_FAILED')
+      ok(() => childView.ok === false && childView.code === 'CHILD_NOT_MESSAGED')
     );
 
     const bouncedView = await view(bounced.person.id);

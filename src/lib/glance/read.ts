@@ -45,7 +45,12 @@ import {
 
 import { isChildMembership } from '@/lib/eligibility/child-exclusion';
 import { readAskPreview } from '@/lib/preflight/ask-preview';
-import { carrierMembershipFor, deliveryFactFrom, latestRowByMembership } from './delivery-fact';
+import {
+  carriedChildNoteFor,
+  carrierOfAsk,
+  deliveryFactFrom,
+  latestRowByMembership,
+} from './delivery-fact';
 import { chaseFactFrom, chaseNoteFor } from './chase-fact';
 import { exhaustionFor, handBackNextFor } from '@/lib/chase-exhaustion';
 import { readChaseSpend } from '@/lib/chase-exhaustion-read';
@@ -156,10 +161,9 @@ export async function readEventGlance(
     }),
     db.household.findMany({
       where: { eventId },
-      // GTC-189 slice 7a, ruling S: `contactPersonEventId` is ONE MORE FIELD on a query that was
-      // already being run, and it is the whole cost of sending a carrier's delivery failure to the
-      // child's rows. See `carrierMembershipFor`.
-      select: { id: true, createdAt: true, contactPersonEventId: true },
+      // [[GTC-336]]: `contactPersonEventId` is no longer read here. Ruling S's carrier is the
+      // chooser's (`carrierOfAsk`), not the household's contact.
+      select: { id: true, createdAt: true },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     }),
     // Named, because a count would not tell her WHICH critical has no owner.
@@ -286,10 +290,11 @@ export async function readEventGlance(
      *
      * Their own, unless they are a CHILD: ruling S sends the CARRIER's failure to the child's rows,
      * because a child is never a recipient and the only message that carried their ask was somebody
-     * else's. `carrierMembershipFor` asks the shared household rule, with no extra query.
+     * else's. [[GTC-336]] Q2: the carrier the CHOOSER names, read off the walk already run above —
+     * no extra query. A child the chooser gives no carrier inherits nothing.
      */
     const answeringMembership = isChildMembership(row.householdRole)
-      ? carrierMembershipFor(row, households, memberships)
+      ? carrierOfAsk(preview?.askRoutes[row.id])
       : row.id;
     const context = {
       isHost,
@@ -308,6 +313,7 @@ export async function readEventGlance(
         isPaceOff(event.nudgePace)
       ),
     };
+    const emailFacts = emailFactsFor(row, answeringMembership, context.delivery?.failure ?? null);
     const { state, reasons } = derivePersonState(
       {
         ...context,
@@ -354,7 +360,7 @@ export async function readEventGlance(
           decideByAt: decideByAtFor(i.response, i.item, glanceEvent),
         };
       }),
-      ...emailFactsFor(row, answeringMembership, context.delivery?.failure ?? null),
+      ...emailFacts,
       chase: context.chase,
       chaseNote: chaseNoteFor({
         state,
@@ -363,7 +369,29 @@ export async function readEventGlance(
         isChild: isChildMembership(row.householdRole),
         carrierName: carrierNameOf(preview?.chase.byMembership[row.id]),
       }),
+      carrierNote: carrierNoteFor(row, answeringMembership, reasons, emailFacts.textable),
     };
+  }
+
+  /**
+   * [[GTC-336]] Q1 — a red child's card names whose message carried the ask. Only for a child: an
+   * adult's answering membership is their own, and their card has the door.
+   */
+  function carrierNoteFor(
+    row: (typeof memberships)[number],
+    answering: string | null,
+    reasons: readonly string[],
+    textable: boolean
+  ): string | null {
+    if (!isChildMembership(row.householdRole) || !answering) return null;
+    const carrier = memberships.find((m) => m.id === answering);
+    if (!carrier) return null;
+    return carriedChildNoteFor({
+      reasons,
+      carrierName: carrier.person.name,
+      carrierIsHost: carrier.personId === event.hostId || carrier.role === 'HOST',
+      textable,
+    });
   }
 
   /** The carrier a child's chase route names, by name — for the ruled carrier sentence. */

@@ -5,6 +5,7 @@ import { readAskPreview, smsOptedOutFact } from '@/lib/preflight/ask-preview';
 import { composePreview } from '@/lib/preflight/ask-preview-compose';
 import { textAskReachOf } from '@/lib/eligibility/channel-chooser';
 import { getEmailOptOut } from '@/lib/eligibility/email-opt-out';
+import { isChildMembership } from '@/lib/eligibility/child-exclusion';
 import { deliveryFactFrom, latestRowByMembership } from '@/lib/glance/delivery-fact';
 import { smsProviderConfiguredFor } from '@/lib/sms/send-sms';
 import { recordChange, type LedgerActor } from '@/lib/ledger';
@@ -148,8 +149,9 @@ interface Subject {
 /**
  * Everything both entry points need, resolved once and identically.
  *
- * ⚠ THE GUARD ORDER IS THE POINT. The event, then the membership, then *has this event been
- * pressed*, then *did this person's last message actually fail*. A door that checked the failure
+ * ⚠ THE GUARD ORDER IS THE POINT. The event, then the membership, then *is this a child*
+ * ([[GTC-336]]), then *has this event been pressed*, then *did this person's last message actually
+ * fail*. A door that checked the failure
  * first would open on an unpressed event for a row that cannot exist.
  */
 async function resolveSubject(
@@ -168,10 +170,20 @@ async function resolveSubject(
     select: {
       id: true,
       personId: true,
+      householdRole: true,
       person: { select: { email: true, phoneNumber: true, smsOptedOut: true } },
     },
   });
   if (!membership) return refuse(404, 'NOT_ON_THIS_EVENT');
+
+  /*
+   * ⚠ [[GTC-336]] Q1 — A CHILD IS REFUSED AS A CHILD, BEFORE ANY ROW IS READ. A child is never a
+   * recipient, so their own ASK rows never exist, and reading them answered `NOTHING_FAILED` — *"Their
+   * last message did not fail"*, false of a child whose carrier's message did fail. The board offers
+   * no door on a child's card (`doorOffered`); this answers a stale board, on GET and POST alike.
+   * Ahead of `NOT_PRESSED` because it is a fact about the person, true on any event.
+   */
+  if (isChildMembership(membership.householdRole)) return refuse(409, 'CHILD_NOT_MESSAGED');
 
   /*
    * ⚠ `sentAt` IS NOT ENOUGH, AND `enrolMiniSends` IS WHERE THAT WAS LEARNED THE HARD WAY.

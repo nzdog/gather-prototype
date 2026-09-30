@@ -442,6 +442,13 @@ export interface GlancePerson {
    * that opens the reading room and for the opted-out red; null everywhere else.
    */
   chaseNote: string | null;
+  /**
+   * [[GTC-336]] Q1 and Q4 — whose message carried a child's ask, on the card of a child whose carrier's
+   * message failed. The child's card offers no door, so this says where the fix is: the carrier's
+   * card. Composed on the server (`carriedChildNoteFor` in `src/lib/glance/delivery-fact.ts`); null
+   * for every adult and for every child not reading one of the door's two reds.
+   */
+  carrierNote: string | null;
 }
 
 /**

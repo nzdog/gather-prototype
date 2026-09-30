@@ -427,6 +427,15 @@ export default function PersonSurface({
                     {person.chaseNote}
                   </p>
                 ) : null}
+                {/*
+                  [[GTC-336]] Q1 — a red child's card has no door, so it says whose message
+                  carried the ask and where the fix is. Grey, as the two notes above.
+                */}
+                {person.carrierNote ? (
+                  <p data-carrier-note="" className="m-0 mt-1 text-[13px] text-[#5c5b57]">
+                    {person.carrierNote}
+                  </p>
+                ) : null}
               </div>
               <button
                 type="button"

@@ -12,7 +12,8 @@
  *     order (Finding 1 and the itemless yes)
  *  C. the red "opted out" — no door, the remind kept (GTC-296 ruling 4, GTC-324 ruling 1)
  *  D. the bounce — a delivery failure still reads red for every one of these people (ruling 2),
- *     and what ruling S's lookup actually does for children (point 3, asserted as BUILT)
+ *     and which children ruling S reaches (point 3: pinned AS BUILT at GTC-305, flipped by
+ *     GTC-336 Q2 — a child inherits only from the carrier the chooser names)
  *  E. the read path — `readEventGlance` over real rows, the board's standing equal to the
  *     chooser's answer for every membership, and correction 1's guest on the host's list
  *  F. the person view — the amended Ruling 32, and every sentence byte-exact
@@ -934,25 +935,26 @@ async function main() {
       reads('e3', yves, 'GREEN', ['ACCEPTED'])
     );
     /*
-     * ⚠ POINT 3 — ASSERTED AS BUILT, NOT AS WANTED. `carrierMembershipFor` follows the household's
-     * CONTACT, not the chooser's ladder, so ruling S's red reaches children the failed message never
-     * carried. Recorded in GTC-305's Evidence and filed on the door-on-a-child ticket; not changed
-     * here. When that ticket lands these three flip, and they should.
+     * POINT 3, FLIPPED BY [[GTC-336]] Q2 (founder, 2026-09-30): *"A child goes red only if their ask
+     * actually went in the message that bounced, worked out the same way Gather chose who to send it
+     * to. The three children above read what they would without the bounce."* These were pinned AS
+     * BUILT here at GTC-305 and flipped by that ruling, as their comment said they should. Each now
+     * reads what layer E asserts for the same child on e3, where nothing bounced.
      */
     assert(
       'D',
-      'AS BUILT (point 3): a host’s-household child whose contact is another adult inherits that adult’s bounce → RED [NOT_DELIVERED], though the item went to the host’s list',
-      reads('e1', hkid, 'RED', ['NOT_DELIVERED'])
+      'GTC-336 Q2 (point 3): a host’s-household child whose contact is another adult does not inherit that adult’s bounce → NOT_CHASED [HOST_HOUSEHOLD_CHILD]; the item went to the host’s list',
+      reads('e1', hkid, 'NOT_CHASED', ['HOST_HOUSEHOLD_CHILD'])
     );
     assert(
       'D',
-      'AS BUILT (point 3): a host’s-household child whose contact is the host inherits her bounced A2 row → RED [NOT_DELIVERED]',
-      reads('e2', h2kid, 'RED', ['NOT_DELIVERED'])
+      'GTC-336 Q2 (point 3): a host’s-household child whose contact is the host does not inherit the bounced A2 row → NOT_CHASED [HOST_HOUSEHOLD_CHILD]',
+      reads('e2', h2kid, 'NOT_CHASED', ['HOST_HOUSEHOLD_CHILD'])
     );
     assert(
       'D',
-      'AS BUILT (point 3): a child with no items inherits the contact’s bounce → RED [NOT_DELIVERED]',
-      reads('e1', cid, 'RED', ['NOT_DELIVERED'])
+      'GTC-336 Q2 (point 3): a child with no items does not inherit the contact’s bounce → NOT_CHASED [CHILD_WITHOUT_ITEM]; nothing was asked of them',
+      reads('e1', cid, 'NOT_CHASED', ['CHILD_WITHOUT_ITEM'])
     );
 
     // ══ LAYER E — the read path ═════════════════════════════════════════════════════════

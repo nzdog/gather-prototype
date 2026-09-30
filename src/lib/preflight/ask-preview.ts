@@ -57,6 +57,7 @@ import type { Prisma } from '@prisma/client';
 import {
   chooseAskRoute,
   chooseChaseRoute,
+  type AskRoute,
   type Channel,
   type ChaseChooserEvent,
   type ChaseNoneWhy,
@@ -381,6 +382,14 @@ export interface AskPreview {
   hostList: HostListLine[];
   /** [[GTC-311]] — the chase, as the screen shows it. Read-only; the ask above does not depend on it. */
   chase: PreviewChase;
+  /**
+   * [[GTC-336]] Q2 — THE CHOOSER'S ASK ANSWER FOR EVERY MEMBERSHIP, keyed by `PersonEvent` id: the
+   * route the walk below already computes, recorded rather than recomputed. The board reads it to
+   * learn whose message carried a child's ask (`carrierOfAsk` in `src/lib/glance/delivery-fact.ts`),
+   * so a child's red comes from the carrier the chooser names — the one the drain would carry the ask
+   * with — and not from the household's contact. Nothing on the send side reads it.
+   */
+  askRoutes: Record<string, AskRoute>;
 }
 
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
@@ -580,10 +589,12 @@ export async function readAskPreview(
   };
 
   const hostList: HostListLine[] = [];
+  const askRoutes: Record<string, AskRoute> = {};
 
   for (const subject of chooserEvent.memberships) {
     const m = byId.get(subject.id)!;
     const route = chooseAskRoute(subject, chooserEvent);
+    askRoutes[subject.id] = route;
 
     if (route.kind === 'NOT_A_RECIPIENT') continue;
 
@@ -680,6 +691,7 @@ export async function readAskPreview(
     replyTo: event.host?.user?.email ?? null,
     recipients: recipientList,
     hostList: hostList.sort(byName),
+    askRoutes,
     chase: {
       stored: event.chaseWhenNoMobileDefault,
       resolved: resolveChaseWhenNoMobile({

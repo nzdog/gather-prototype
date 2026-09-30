@@ -74,6 +74,9 @@
 
 import { mayHoldRow, type AssignActorRole } from '@/lib/assignment/same-team';
 import { isChaseable, DONT_CHASE_NOT_ADDRESSABLE_MESSAGE } from '@/lib/eligibility/nudge-mark';
+// [[GTC-336]] — the "is this a child" FACT, imported for the door alone. GTC-207's fence in that
+// module forbids using it to decide who may hold a row, and reassign here must never come to.
+import { isChildMembership } from '@/lib/eligibility/child-exclusion';
 import { getHostNudgeMessage, type HostNudgeVariant } from '@/lib/sms/nudge-templates';
 /*
  * GTC-189 slice 7b. `resend-door.ts` is the CLIENT-SAFE half of ruling U's door — words, a pure
@@ -283,7 +286,15 @@ const REMIND_WITHDRAWN = [
  * sticky red overlays `state` and deliberately leaves `reasons` alone, so `reasons` is the
  * un-overlaid truth.
  */
-export function doorOffered(person: Pick<GlancePerson, 'reasons'>): boolean {
+/*
+ * ⚠ [[GTC-336]] Q1 (founder, 2026-09-30) — NEVER ON A CHILD'S CARD: *"The child's card stays red but
+ * offers no door. It says whose message carried their ask, and you fix it from that person's card,
+ * where the door already works."* A child is never a recipient, so the door has no row of theirs to
+ * act on — on either reason. `householdRole` is required in the `Pick`, because an omitted field
+ * would read as an adult and offer the door. The card's sentence is `carrierNote`.
+ */
+export function doorOffered(person: Pick<GlancePerson, 'reasons' | 'householdRole'>): boolean {
+  if (isChildMembership(person.householdRole)) return false;
   return DOOR_REASONS.some((reason) => person.reasons.includes(reason));
 }
 

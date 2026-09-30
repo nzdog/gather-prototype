@@ -1,6 +1,7 @@
 import type { OutboundWithheldWhy } from '@/lib/press/dispatch';
 import type { ResendOutcomeKind } from '@/lib/email-delivery/resend-delivery-contract';
-import { resolveHouseholdChannel } from '@/lib/households/channel';
+import type { AskRoute } from '@/lib/eligibility/channel-chooser';
+import { firstNameOf } from '@/lib/messages/ask-register';
 import type { DeliveryFact } from './state';
 
 /**
@@ -253,35 +254,79 @@ export function latestRowByMembership<T extends DeliveryRowInput & { id: string 
 }
 
 /**
- * RULING S — WHOSE FAILURE REACHES A CHILD'S ROWS.
+ * RULING S — WHOSE FAILURE REACHES A CHILD'S ROWS, AS [[GTC-336]] Q2 RULED IT.
  *
  * *"Ollie's strip goes red when the message carrying his ask bounced."* A child is never a recipient,
- * so the only delivery fact they can have belongs to whoever carried the ask.
+ * so the only delivery fact they can have belongs to whoever carried the ask. Founder ruling Q2,
+ * 2026-09-30: *"A child goes red only if their ask actually went in the message that bounced, worked
+ * out the same way Gather chose who to send it to."* So the carrier is the one `chooseAskRoute` names.
  *
- * ⚠ IT ASKS THE SHARED RULE RATHER THAN A SECOND COPY OF IT. `resolveHouseholdChannel` is the
- * function the capture surface, the household routes and the chooser all use to decide who a
- * household's messages go to, and it is PURE — `{ contactPersonEventId, members }`, both of which the
- * board already holds.
+ * ⚠ BOTH ROUTES THAT NAME ONE, AND THE SECOND IS NOT A NICETY. `CARRIED` names its recipient. But
+ * after a bounce the delivery poll blocks the address (Zone 9), and from then on the chooser answers
+ * `HOST_LIST` with `carrierId` for a carrier who holds no usable mobile — the same person, whose
+ * message it was. Reading `CARRIED` alone would drop ruling S's red in its commonest case.
  *
- * ⚠ AND IT DELIBERATELY DOES NOT CALL `resolveCarriedSubjects`, WHICH IS THE OBVIOUS FUNCTION.
- * MEASURED: that wrapper runs FIVE queries per carrier — the event, every membership, every
- * household, every assignment and the opt-out list — so using it would have added five queries times
- * the number of household contacts to a read that runs six in total. The rule it wraps costs nothing.
+ * ⚠ AND NO OTHER ROUTE NAMES A CARRIER, WHICH IS THE RULING. A child of the host's own household, a
+ * child holding nothing, a child of a switched-off household or of one with no adult: no message
+ * carried their ask, so no message's failure is theirs. The household-contact lookup this replaces
+ * (`carrierMembershipFor`, GTC-189 slice 7a) reached all four.
  *
- * ⚠ ITS LIMIT, NAMED: this resolves who the household's messages GO to, not the chooser's full ladder.
- * A child whose household has no messageable contact at all gets no carrier and therefore no fact —
- * see the slice's evidence, where that gap is recorded rather than guessed at.
+ * ⚠ IT STILL DOES NOT CALL `resolveCarriedSubjects`, whose wrapper runs five queries per carrier. The
+ * route comes from `readAskPreview`'s `askRoutes` — the walk the board already runs for the chase
+ * answers (GTC-305), recorded rather than recomputed, so the board pays no query for it.
  */
-export function carrierMembershipFor(
-  child: { householdId: string | null },
-  households: readonly { id: string; contactPersonEventId: string | null }[],
-  memberships: readonly { id: string; householdId: string | null; householdRole: string | null }[]
-): string | null {
-  if (!child.householdId) return null;
-  const household = households.find((h) => h.id === child.householdId);
-  if (!household) return null;
-  return resolveHouseholdChannel({
-    contactPersonEventId: household.contactPersonEventId,
-    members: memberships.filter((m) => m.householdId === household.id),
-  });
+export function carrierOfAsk(route: AskRoute | undefined): string | null {
+  if (!route) return null;
+  if (route.kind === 'CARRIED') return route.recipientId;
+  if (route.kind === 'HOST_LIST') return route.carrierId ?? null;
+  return null;
+}
+
+/**
+ * [[GTC-336]] Q4 — WHAT A CARRIED CHILD'S CARD SAYS, ruled by the founder 2026-09-30, verbatim.
+ *
+ * Q1: *"The child's card stays red but offers no door. It says whose message carried their ask, and
+ * you fix it from that person's card, where the door already works."* So each sentence names the
+ * carrier and points at the carrier's card — except the host's, whose own card is always green and
+ * has no door (plan question 2): that one names no card. Keyed on the red the child reads, and for
+ * `UNREACHABLE` on whether the carrier is textable, which is what the strip's why-line reads too.
+ *
+ * ⚠ W3 SAYS "is in", NOT "went in". The founder's change at the ruling: *"Kay's message never went
+ * out in this case, so 'went in' isn't true."*
+ */
+export const CARRIED_CHILD_WORDS = {
+  NOT_DELIVERED: (carrier: string) =>
+    `Their ask went in ${carrier}'s message, and it didn't arrive. You can send it again from ${carrier}'s card.`,
+  UNREACHABLE: (carrier: string) =>
+    `${carrier} would pass it on, but I can't reach ${carrier}. You can add a way to reach ${carrier} from ${carrier}'s card.`,
+  UNREACHABLE_TEXTABLE: (carrier: string) =>
+    `Their ask is in ${carrier}'s message, but I can't email ${carrier}. You can send it another way from ${carrier}'s card.`,
+  HOST: "Their ask went in your message, and it didn't arrive.",
+} as const;
+
+/**
+ * The sentence for one child's card, or null. Set only when the child reads one of the door's two
+ * reds and a carrier is named; `reasons` is the derivation's, so an answered row or a grey is never
+ * annotated.
+ */
+export function carriedChildNoteFor(input: {
+  reasons: readonly string[];
+  /** The carrier's full name, as stored. Addressed by first name. */
+  carrierName: string | null;
+  carrierIsHost: boolean;
+  /** The carrier's `textable`, as the strip's why-line reads it. */
+  textable: boolean;
+}): string | null {
+  const failure = input.reasons.includes('NOT_DELIVERED')
+    ? 'NOT_DELIVERED'
+    : input.reasons.includes('UNREACHABLE')
+      ? 'UNREACHABLE'
+      : null;
+  if (!failure || !input.carrierName) return null;
+  if (input.carrierIsHost) return CARRIED_CHILD_WORDS.HOST;
+  const carrier = firstNameOf(input.carrierName);
+  if (failure === 'NOT_DELIVERED') return CARRIED_CHILD_WORDS.NOT_DELIVERED(carrier);
+  return input.textable
+    ? CARRIED_CHILD_WORDS.UNREACHABLE_TEXTABLE(carrier)
+    : CARRIED_CHILD_WORDS.UNREACHABLE(carrier);
 }

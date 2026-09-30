@@ -1604,17 +1604,19 @@ async function main() {
     );
     assert(
       'slice 7a',
-      '⚠ AND THE READ DID NOT GROW A QUERY PER CHILD: it calls the SHARED household rule rather than ' +
-        'resolveCarriedSubjects, whose wrapper runs five queries per carrier and hauls the whole ' +
-        'event each time',
+      '⚠ AND THE READ DID NOT GROW A QUERY PER CHILD: it reads the carrier off the chooser walk it ' +
+        'already runs rather than resolveCarriedSubjects, whose wrapper runs five queries per ' +
+        'carrier and hauls the whole event each time',
       ok(() => {
         const factSrc = code('src/lib/glance/delivery-fact.ts');
         return (
           readSrc.length > 0 &&
           factSrc.length > 0 &&
-          // the read asks the translator, and the translator asks the SHARED household rule
-          /carrierMembershipFor/.test(readSrc) &&
-          /resolveHouseholdChannel/.test(factSrc) &&
+          // [[GTC-336]] Q2: the read asks the translator, and the translator reads the route the
+          // preview's walk already recorded (was: the household rule, which is not the chooser's).
+          // The query count itself is measured in `tests/carried-child-door-test.ts` layer E.
+          /carrierOfAsk\(\s*preview\?\.askRoutes\[/.test(readSrc) &&
+          /export function carrierOfAsk/.test(factSrc) &&
           // and neither reaches for the five-query wrapper
           !/resolveCarriedSubjects/.test(readSrc) &&
           !/resolveCarriedSubjects/.test(factSrc)
