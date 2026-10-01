@@ -650,6 +650,38 @@ year."*
   opt-out list blocks our sends to a guest who said STOP, but Gather does
   not learn of it.
 
+### Founder ruling, 2026-10-02 — the dedicated shortcode is on hold (in Cowork)
+
+*Supersedes the 2026-10-01 ruling above. Nothing had been ordered: the
+reply to TNZ was still a draft.*
+
+The founder raised it, verbatim: *"i'm thinking about the cost of
+setting up as dedicated number inside TNZ. It's a lot and monthly. can
+it wait"*. The context given, in summary: $299 setup and $89 a month
+before GST (about $1,370 in the first year), plus 10c a reply on
+Free-to-Text; nothing built depends on the number; what waiting costs
+(H1 below: a STOP that lands with another business, and Gather keeps
+texting; replies can go astray too, which matters for [[GTC-350]]); and
+a free middle path, TNZ's personal opt-out link. Asked, verbatim:
+*"What would you like to do about the dedicated number?"* Three
+options: hold it and ask TNZ about the link (recommended); hold it and
+keep "Reply STOP"; order it now, as decided.
+
+The founder chose, verbatim: *"Hold it, keep "Reply STOP""* — *"Don't
+order yet and change nothing. The rare guest whose STOP lands with
+another business keeps getting Gather's texts. Revisit once texts are
+going out in volume."*
+
+- At launch, texts use TNZ's shared shortcode and "Reply STOP to opt
+  out" ([[GTC-337]] ruling 2) stands. H1 stays open; no handler closes
+  it.
+- The unsent 2026-10-01 reply to TNZ ordered the number. It was
+  redrafted the same day without the order, keeping the questions that
+  still matter: the phishing whitelist, automatic top-up or a
+  low-credit alert, how the opt-out and opt-in words are matched, and
+  whether the received-message webhook says when a reply opted a
+  number out or back in.
+
 ---
 
 ## Hazards the correspondence creates or sharpens
