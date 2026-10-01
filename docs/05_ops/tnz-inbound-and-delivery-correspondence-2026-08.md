@@ -548,6 +548,52 @@ quoting any of this as verbatim.
   received, nothing (Standard) or 10c (Free-to-Text). **Setup takes about
   four weeks**, for all three.
 
+### The opt-out page re-read, 2026-10-01 (Cowork, for [[GTC-288]])
+
+Re-read for [[GTC-288]]'s scoping, twice, through a page-to-text tool;
+the two reads agree. Closer to the page than the summary above, but
+check the page before quoting it as verbatim.
+https://www.tnz.co.nz/Help/unsubscribe-option-for-sms-messages
+
+> When an inbound SMS begins with one of the following keywords, TNZ
+> automatically adds the sender's mobile number to your opt-out list.
+> Keywords are not case-sensitive.
+> `STOP`, `OPTOUT`, `OPT OUT`, `OPT-OUT`, `UNSUB`, `UNSUBSCRIBE`
+>
+> If you try to send an SMS to an opted-out mobile number, TNZ blocks
+> delivery and returns the result "Destination is blacklisted." You are
+> not charged for the blocked SMS.
+>
+> To check whether an inbound message triggered an opt-out or opt-in, go
+> to View Messages > SMS Received. The message's status shows whether
+> the mobile number was opted out or opted back in.
+>
+> By default, opt-outs apply across the account.
+>
+> A recipient can remove their number from the suppression list by
+> replying with one of these opt-in keywords. Keywords are not
+> case-sensitive.
+> `START`, `SUBSCRIBE`, `UNSTOP`, `OPTIN`, `OPT IN`, `OPT-IN`
+>
+> TNZ first treats the inbound SMS as a reply, then applies the opt-in
+> to the last message sent to that mobile number. This means the opt-in
+> applies to the user who sent the last message to the mobile number.
+
+New against the summary above: the opt-in words, and that the
+Dashboard shows when a reply opted a number out or back in (the
+Opt-Out List itself is under Dashboard > Service Settings). Not on the
+page: whether "begins with" means a whole word ("Stopping by at 5");
+how the opt-in words are matched (the page says only *"replying
+with"*); whether the SMS Received webhook says that a reply opted a
+number out or in; anything about shared shortcodes. The founder ruled
+on both word lists at [[GTC-288]]'s scoping the same day (verbatim
+there).
+
+Two questions were proposed to the founder for his 1 Oct reply to TNZ,
+unsent when this was written: how the opt-out and opt-in words are
+matched, with "Stopping by at 5" as the example; and whether the SMS
+Received webhook says when a reply opted a number out or back in.
+
 ### What Thread 3 settles
 
 - **H3, the worse way.** On the shared shortcode, a guest's STOP reaches
