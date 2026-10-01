@@ -195,7 +195,7 @@ export const TNZ_RESULTS = {
     chargeable: false,
     webhookDelivered: true,
     provenance: 'DOC-CODES',
-    note: 'The one Result value seen before the documentation was read. "Mobile number has opted out of receiving your texts and is on your blacklist." ⚠ NOT a dead channel and NOT a §7 bounce. ⚠ And NOT licence to write SmsOptOut: TNZ\'s list is account-wide, SmsOptOut is per-host, and Zone 7 is not written on an inference.',
+    note: 'The one Result value seen before the documentation was read. "Mobile number has opted out of receiving your texts and is on your blacklist." ⚠ NOT a dead channel and NOT a §7 bounce. ⚠ And NOT licence to write SmsOptOut: Zone 7 is written only by a guest\'s own STOP or START (GTC-288\'s reply store), never on an inference from a delivery report.',
   },
   'Rejected-Duplicate': {
     status: 'FAILED',

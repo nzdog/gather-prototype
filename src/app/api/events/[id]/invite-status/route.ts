@@ -174,12 +174,12 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
-    // Get opt-out statuses for people with phones (per-host)
+    // Get opt-out statuses for people with phones — account-wide since [[GTC-288]]
     const phonesInEvent = event.people
       .map((pe: any) => pe.person.phoneNumber)
       .filter((phone: string | null) => !!phone) as string[];
 
-    const optOutStatuses = await getOptOutStatuses(phonesInEvent, event.hostId);
+    const optOutStatuses = await getOptOutStatuses(phonesInEvent);
 
     // Calculate status for each person
     const peopleStatus: PersonInviteStatus[] = event.people.map((personEvent: any) => {

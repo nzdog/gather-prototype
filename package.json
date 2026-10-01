@@ -90,6 +90,7 @@
     "test:setup-entry-stage": "tsx tests/setup-entry-stage-test.ts",
     "test:tnz-delivery-contract": "tsx tests/tnz-delivery-contract-test.ts",
     "test:tnz-webhook": "tsx tests/tnz-webhook-route-test.ts",
+    "test:tnz-reply": "tsx tests/tnz-reply-test.ts",
     "test:channel-chooser": "tsx tests/channel-chooser-test.ts",
     "test:carried-ask": "tsx tests/carried-ask-composition-test.ts",
     "test:item-kind-capture": "tsx tests/item-kind-capture-test.ts",

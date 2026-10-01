@@ -153,7 +153,7 @@ async function main() {
       teamName: 'Drinks',
       phone: '+6421234570',
       smsOptedOut: true,
-    }, // UNTRACKABLE BY TEXT — Zone 7, per host
+    }, // UNTRACKABLE BY TEXT — Zone 7 (account-wide since GTC-288)
     { name: 'Max Henderson', role: 'PARTICIPANT', teamName: 'Kids Zone' }, // UNTRACKABLE (kid)
     {
       name: 'Olivia Henderson',
@@ -353,8 +353,9 @@ async function main() {
         email: (personData as any).email || null,
         phoneNumber: (personData as any).phone || null,
         /*
-         * [[GTC-301]]'s GLOBAL fact. The PER-HOST row goes in below, once the host exists —
-         * `SmsOptOut` keys on `hostId`, so it cannot be written from inside this loop.
+         * [[GTC-301]]'s GLOBAL fact. The table row goes in below, once the host exists — it is
+         * written as a row from before [[GTC-288]] (keyed under the host), which every reader
+         * now reads account-wide.
          * ⚠ BOTH ARE SET FOR AMY DELIBERATELY: the two facts have different writers and
          * different readers, and a seed that set only one would leave whichever reader it
          * missed still untested. GTC-301 is the ticket that says nobody had named that.
@@ -424,12 +425,12 @@ async function main() {
   console.log(`✓ Host account: ${hostUser.email} (and an EventRole on this event)`);
 
   /*
-   * ── ⚠ ZONE 7's PER-HOST OPT-OUT ROW — see Amy Henderson in `peopleData` ─────
+   * ── ⚠ ZONE 7's OPT-OUT ROW — see Amy Henderson in `peopleData` ─────
    *
-   * `SmsOptOut` keys on `[phoneNumber, hostId]`, so it can only be written once the host
-   * Person exists. It held ZERO rows in `gather_dev` and no seed wrote one, so the table
-   * `checkOptOut` refuses on — and the one `readAskPreview` merges through `smsOptedOutFact`
-   * — had never been exercised against data.
+   * Written in the shape of a row from before [[GTC-288]], under this host — `hostId` is kept on
+   * such rows, read by nothing — and read ACCOUNT-WIDE, as every row now is. `SmsOptOut` held ZERO
+   * rows in `gather_dev` and no seed wrote one, so the table `checkOptOut` refuses on — and the one
+   * `readAskPreview` merges through `smsOptedOutFact` — had never been exercised against data.
    *
    * ⚠ THE `rawMessage` IS WHAT A REAL STOP LOOKS LIKE, because a row with a null message is a
    * row nobody can tell from an administrative write.
@@ -442,7 +443,7 @@ async function main() {
       rawMessage: 'STOP',
     },
   });
-  console.log(`✓ Zone 7: one SmsOptOut row for ${amy.name} under this host`);
+  console.log(`✓ Zone 7: one SmsOptOut row for ${amy.name}, in force for every host`);
 
   /*
    * ── ⚠ RULING AC'S REFUSAL NEEDS A POPULATION, AND THIS IS IT ────────────────

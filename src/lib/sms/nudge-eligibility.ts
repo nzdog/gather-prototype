@@ -255,7 +255,7 @@ export async function findNudgeCandidates(
 
       /*
        * ZONE 7, BELT AND BRACES, ON THE TEXT LEG. The chooser already refused an opted-out or unusable
-       * number; this re-checks with the per-host opt-out service directly, as this finder always has,
+       * number; this re-checks with the opt-out service directly (account-wide since [[GTC-288]]), as this finder always has,
        * so a regression in the chooser fails SAFE here — the treatment the child rule gets. Only read.
        */
       if (chase.chasedBy === 'TEXT') {
@@ -264,7 +264,7 @@ export async function findNudgeCandidates(
           addSkip('Invalid/non-NZ phone');
           continue;
         }
-        if (await isOptedOut(phone, event.hostId)) {
+        if (await isOptedOut(phone)) {
           addSkip('Opted out');
           continue;
         }

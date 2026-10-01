@@ -4,6 +4,7 @@ import { emailNoteFor, type EmailBlockState } from '@/lib/eligibility/email-bloc
 import { isMessageableRole } from '@/lib/eligibility/child-exclusion';
 import { smsOptedOutFact } from '@/lib/preflight/ask-preview';
 import { isValidNZNumber } from '@/lib/phone';
+import { SMS_OPT_OUT_IN_FORCE } from '@/lib/sms/opt-out-service';
 
 /**
  * One adult's email facts, for the board. `textable` is the chooser's own sense — a usable mobile
@@ -35,8 +36,7 @@ export interface EmailFacts {
  */
 export async function readEmailNotes(
   db: Prisma.TransactionClient,
-  eventId: string,
-  hostId: string
+  eventId: string
 ): Promise<Map<string, EmailFacts>> {
   const rows = await db.personEvent.findMany({
     where: { eventId, person: { email: { not: null } } },
@@ -61,7 +61,8 @@ export async function readEmailNotes(
       ? []
       : (
           await db.smsOptOut.findMany({
-            where: { hostId, phoneNumber: { in: phones } },
+            // Account-wide since [[GTC-288]]: any row in force for the number.
+            where: { phoneNumber: { in: phones }, ...SMS_OPT_OUT_IN_FORCE },
             select: { phoneNumber: true },
           })
         ).map((o) => o.phoneNumber)

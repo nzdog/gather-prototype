@@ -24,13 +24,13 @@
  * after this slice.
  *
  * THE OPT-OUT FACT PASSED TO THE CHOOSER — [[GTC-301]], which slice 1 answer 6 requires each
- * caller to name: opted out if EITHER `Person.smsOptedOut` is true OR an `SmsOptOut` row exists
- * for the person's number under THIS event's host. The row is read per host because that is what
- * `checkOptOut` in `sendSms` refuses on today; the flag because the manual nudge and the wrap-up
- * read it. So the preview never shows a text that either gate would refuse.
- * PER HOST BY FOUNDER RULING, not inherited (GTC-189 slice 3 answer 1): "GTC-288 rules it
- * account-wide and owns the change; building 288's answer before 288 exists means two places to
- * correct later." The widening is [[GTC-288]]'s, and the suite's `[GTC-301]` assertions move with it.
+ * caller to name: opted out if EITHER `Person.smsOptedOut` is true OR an `SmsOptOut` row is in
+ * force for the person's number. The row is read the way `checkOptOut` in `sendSms` refuses on it;
+ * the flag because the manual nudge and the wrap-up read it. So the preview never shows a text that
+ * either gate would refuse.
+ * ACCOUNT-WIDE SINCE [[GTC-288]] (founder ruling, 2026-09-12): a row in force for the number counts
+ * whichever host's guest it is. It was per host until then, by GTC-189 slice 3 answer 1, which left
+ * the widening to GTC-288; the suite's `[GTC-301]` assertions moved with it.
  *
  * THE LINK, TOLD AS THE PRESS WILL ISSUE IT. `ensureEventTokens` in `src/lib/tokens.ts` issues a
  * PARTICIPANT token to a `role: 'PARTICIPANT'` row and — since [[GTC-294]] — to a
@@ -75,6 +75,7 @@ import { emailNoteFor } from '@/lib/eligibility/email-block-words';
 import { isHostMembership } from '@/lib/eligibility/host-exclusion';
 import { HOST_NAME_FALLBACK, firstNameOf } from '@/lib/messages/ask-register';
 import { buildTokenUrl } from '@/lib/tokens';
+import { SMS_OPT_OUT_IN_FORCE } from '@/lib/sms/opt-out-service';
 
 type Db = Prisma.TransactionClient;
 
@@ -380,7 +381,7 @@ export interface LaterFacts {
   emailOptOutPersonIds: ReadonlySet<string>;
   /** `EmailBlock` addresses first seen after the moment, normalised as the block stores them. */
   blockAddresses: ReadonlySet<string>;
-  /** `SmsOptOut` numbers under this event's host recorded after the moment. */
+  /** `SmsOptOut` numbers in force, any host ([[GTC-288]]), recorded after the moment. */
   smsOptOutNumbers: ReadonlySet<string>;
   /** People whose `Person.smsOptedOut` flag was set after the moment. */
   smsFlagPersonIds: ReadonlySet<string>;
@@ -484,7 +485,7 @@ export async function readAskPreview(
       ? []
       : (
           await db.smsOptOut.findMany({
-            where: { hostId: event.hostId, phoneNumber: { in: phones } },
+            where: { phoneNumber: { in: phones }, ...SMS_OPT_OUT_IN_FORCE },
             select: { phoneNumber: true },
           })
         ).map((o) => o.phoneNumber)

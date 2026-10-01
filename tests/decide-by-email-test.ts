@@ -643,7 +643,7 @@ async function main() {
     );
     assert(
       'S',
-      'ZONE 7 BELT: the text leg still re-checks the per-host opt-out table before sending',
+      'ZONE 7 BELT: the text leg still re-checks the opt-out table before sending',
       /isOptedOut|smsOptOut\.findMany/.test(finder)
     );
     assert(

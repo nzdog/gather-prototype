@@ -211,7 +211,7 @@ export async function readEventGlance(
       },
     }),
     // [[GTC-189]] slice 8a, D3 — sentences only; see `readEmailNotes`.
-    readEmailNotes(db, eventId, event.hostId),
+    readEmailNotes(db, eventId),
     /*
      * [[GTC-305]] — THE CHASE ANSWER, FROM THE ONE PLACE IT LIVES. `readAskPreview` is the walk the
      * pre-flight shows and the chase itself reads (`findNudgeCandidates`), so the board, the

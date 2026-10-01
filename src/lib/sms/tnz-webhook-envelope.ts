@@ -23,7 +23,7 @@
  *   2. then a `Type` switch                  <- here (`classifyEnvelope`)
  *   3. then interpreters that know nothing of each other
  *        - delivery reports -> ./tnz-delivery-contract.ts   (GTC-264)
- *        - replies          -> GTC-288's, not yet written
+ *        - replies          -> ./tnz-reply-contract.ts      (GTC-288)
  *
  * What survives from the old instruction and is still binding: the two payloads
  * MEAN different things. `Status` and `Result` are shared field NAMES carrying

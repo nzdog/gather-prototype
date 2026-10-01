@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { isOptedOut } from '@/lib/sms/opt-out-service';
+import { isOptedOut, SMS_OPT_OUT_IN_FORCE } from '@/lib/sms/opt-out-service';
 import { SENT_AND_LIVE } from '@/lib/lifecycle';
 import { isMessageableRole, CHILD_SKIP_REASON } from '@/lib/eligibility/child-exclusion';
 import { decideBy, isDecideByFollowupDue } from '@/lib/decide-by';
@@ -198,20 +198,19 @@ export async function findDecideByFollowupCandidates(
   });
   const tokenByPair = new Map(tokens.map((t) => [`${t.personId}:${t.eventId}`, t.token]));
 
-  // Opt-out, batched by host rather than one findUnique per candidate. Only those with a number.
+  // Opt-out, batched rather than one query per candidate. Only those with a number. Account-wide
+  // since [[GTC-288]]: a set of numbers with a row in force, whichever host's guest they are.
   const withPhone = assignments.filter((a) => !!a.person.phoneNumber);
   const optOutRows = withPhone.length
     ? await prisma.smsOptOut.findMany({
         where: {
-          OR: withPhone.map((a) => ({
-            phoneNumber: a.person.phoneNumber!,
-            hostId: a.item.team.event.hostId,
-          })),
+          phoneNumber: { in: [...new Set(withPhone.map((a) => a.person.phoneNumber!))] },
+          ...SMS_OPT_OUT_IN_FORCE,
         },
-        select: { phoneNumber: true, hostId: true },
+        select: { phoneNumber: true },
       })
     : [];
-  const optedOut = new Set(optOutRows.map((r) => `${r.phoneNumber}:${r.hostId}`));
+  const optedOut = new Set(optOutRows.map((r) => r.phoneNumber));
 
   /** One entry per (person, event); the earliest decide-by names the message. */
   const grouped = new Map<string, DecideByFollowupCandidate>();
@@ -251,13 +250,13 @@ export async function findDecideByFollowupCandidates(
     }
 
     if (route.channel === 'TEXT') {
-      // 3. ZONE 7, BELT AND BRACES, as the chase finder keeps it: the per-host table re-read
+      // 3. ZONE 7, BELT AND BRACES, as the chase finder keeps it: the opt-out table re-read
       //    directly, so a regression in the chooser fails SAFE. `sendSms` checks again at send.
       if (!person.phoneNumber) {
         addSkip(NO_PHONE_SKIP_REASON);
         continue;
       }
-      if (optedOut.has(`${person.phoneNumber}:${event.hostId}`)) {
+      if (optedOut.has(person.phoneNumber)) {
         addSkip(OPTED_OUT_SKIP_REASON);
         continue;
       }

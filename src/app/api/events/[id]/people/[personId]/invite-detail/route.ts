@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { SMS_OPT_OUT_IN_FORCE } from '@/lib/sms/opt-out-service';
 import { requireEventRole } from '@/lib/auth/guards';
 
 export async function GET(
@@ -123,12 +124,12 @@ export async function GET(
     // Get response type
     const response = respondedAssignment?.response || 'PENDING';
 
-    // Check opt-out (reuse event.hostId fetched above)
+    // Check opt-out — account-wide since [[GTC-288]]: any row in force for the number
     const optOut = person.phoneNumber
       ? await prisma.smsOptOut.findFirst({
           where: {
             phoneNumber: person.phoneNumber,
-            hostId: event?.hostId,
+            ...SMS_OPT_OUT_IN_FORCE,
           },
         })
       : null;

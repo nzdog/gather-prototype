@@ -3,7 +3,7 @@ export default function PrivacyPolicy() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
-        <p className="text-sm text-gray-500 mb-8">Last updated: 3 February 2026</p>
+        <p className="text-sm text-gray-500 mb-8">Last updated: 1 October 2026</p>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 space-y-8">
           {/* Who We Are */}
@@ -49,8 +49,9 @@ export default function PrivacyPolicy() {
               </div>
 
               <div>
-                <strong className="text-gray-900">SMS data:</strong> message delivery status,
-                opt-out preferences
+                <strong className="text-gray-900">Text message data:</strong> whether each text was
+                delivered, whether you have opted out of texts or back in, and any reply you send to
+                one of our texts
               </div>
 
               <div>
@@ -95,7 +96,7 @@ export default function PrivacyPolicy() {
 
             <ul className="space-y-2 text-gray-700 mb-3">
               <li>
-                • <strong>Twilio</strong> — SMS delivery
+                • <strong>TNZ</strong> — text message delivery
               </li>
               <li>
                 • <strong>Resend</strong> — email delivery
@@ -138,9 +139,20 @@ export default function PrivacyPolicy() {
               <li>
                 • Recipients can reply <strong>STOP</strong> at any time to opt out
               </li>
-              <li>• Opt-out is immediate and permanent for that event</li>
+              <li>
+                • Opting out stops all texts from Gather, for every event, whoever invited you.
+                Reply START to get them again.
+              </li>
               <li>• We only send to New Zealand mobile numbers</li>
-              <li>• Recognized opt-out keywords: STOP, STOPALL, UNSUBSCRIBE, CANCEL, END, QUIT</li>
+              <li>
+                • A reply that begins with STOP, OPTOUT, OPT OUT, OPT-OUT, UNSUB or UNSUBSCRIBE opts
+                you out, in capitals or not. A reply of just START, SUBSCRIBE, UNSTOP, OPTIN, OPT IN
+                or OPT-IN opts you back in.
+              </li>
+              <li>
+                • If you reply to one of our texts, we keep your reply with the event it was about,
+                and delete it with that event&apos;s data.
+              </li>
             </ul>
           </section>
 

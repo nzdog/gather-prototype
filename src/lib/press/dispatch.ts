@@ -77,16 +77,15 @@ import { emptyTally, tallySend, type SendChannel, type SendTally } from '@/lib/s
  * `InviteEventType` has no member for an ask being sent, and `sendSms` writes `NUDGE_SENT_AUTO`
  * unconditionally, inside itself. So an accepted ask text logs a row saying a nudge was sent, at
  * the press, before any nudge exists. Ruled 2026-09-19: leave it, record the falsity here, and
- * file the fix — which is [[GTC-288]]'s, because the only thing that row is carrying is the STOP
- * attribution, and TNZ's webhook, `POST /api/sms/tnz-webhook` ([[GTC-264]] / [[GTC-229]], which
- * deleted the Twilio-shaped `/api/sms/inbound`), can read `OutboundMessage.providerMessageId`
- * instead of scanning `InviteEvent.metadata`. That retires the index rather than adding a member
- * to it. ⚠ GTC-264's delivery store, `recordTnzDeliveryReport`, also joins a report to its send
- * through that row's `metadata.messageId`, so retiring the row means moving that join too.
+ * file the fix, then thought to be [[GTC-288]]'s. ⚠ GTC-288 MEASURED IT AND KEPT THE ROW (plan ruling
+ * D6, 2026-10-01): the decide-by follow-up, the wrap-up and the by-hand nudge store their TNZ
+ * MessageID ONLY in this row, so TNZ's webhook (`POST /api/sms/tnz-webhook`) joins both a STOP and
+ * a delivery report (`recordTnzDeliveryReport`) through `metadata.messageId`. Retiring the row
+ * means giving those three paths an `OutboundMessage` first — a dated note on [[GTC-258]].
  * Measured at the ruling: the ask is 231 EMAIL to 1 TEXT, so a press writes ONE false row today;
  * and `NUDGE_SENT_AUTO` has ZERO rows in `gather_dev`, so nothing live depends on it either way.
  * ⚠ DO NOT "FIX" THIS BY ADDING AN ENUM MEMBER. That is a migration bought to feed an index
- * GTC-288 is retiring.
+ * that is to be retired once every text path writes `OutboundMessage`.
  *
  * ⚠ 3. A 401 OR 403 FROM EITHER PROVIDER IS TERMINAL AND LOUD. Ruled 2026-09-19. In this
  * environment every provider answer is an auth failure ([[GTC-247]]), so a policy that retries
@@ -1169,9 +1168,11 @@ export async function drainOnce(
       /*
        * ⚠ `sendSms` WRITES A FALSE `NUDGE_SENT_AUTO` HERE AND IT IS A RULED STOPGAP. See this
        * module's header, rule 2. `InviteEventType` has no member for an ask being sent, and
-       * `sendSms` logs unconditionally inside itself. The fix is [[GTC-288]]'s — the STOP
-       * attribution moves to `OutboundMessage.providerMessageId` and the log row stops carrying
-       * anything. DO NOT add an enum member for it.
+       * `sendSms` logs unconditionally inside itself. [[GTC-288]] was to retire it and could not:
+       * the STOP attribution JOINS ON THIS ROW, because three of the five text paths (the decide-by
+       * follow-up, the wrap-up, the by-hand nudge) store their MessageID nowhere else (plan ruling
+       * D6). Retiring it waits for those paths to write `OutboundMessage` — a dated note on
+       * [[GTC-258]]. DO NOT add an enum member for it.
        *
        * [[GTC-337]] ruling 2 — the line is added HERE, at the text send, and not by `composeAsk`:
        * [[GTC-187]] decision 5 keeps the ask's body one text for both channels. The STORED channel

@@ -56,6 +56,7 @@ import type { Prisma } from '@prisma/client';
 import { chooseAskRoute, type ChooserEvent } from './channel-chooser';
 import { emailOptedOutFact, listEmailOptOutsForEvent } from './email-opt-out';
 import { firstNameOf } from '@/lib/messages/ask-register';
+import { SMS_OPT_OUT_IN_FORCE } from '@/lib/sms/opt-out-service';
 
 type Db = Prisma.TransactionClient;
 
@@ -119,15 +120,14 @@ export async function resolveCarriedSubjects(
 
   const phones = memberships.map((m) => m.person.phoneNumber).filter((n): n is string => !!n);
   // [[GTC-301]], the fact slice 1 answer 6 requires each caller to name: opted out if EITHER
-  // `Person.smsOptedOut` is true OR an `SmsOptOut` row exists for the number under THIS
-  // event's host. Read per host because that is what `checkOptOut` refuses on today; the
-  // widening to account-wide is [[GTC-288]]'s. Same fact `readAskPreview` passes.
+  // `Person.smsOptedOut` is true OR an `SmsOptOut` row is in force for the number — account-wide
+  // since [[GTC-288]], as `checkOptOut` refuses on it. Same fact `readAskPreview` passes.
   const optedOutNumbers = new Set(
     phones.length === 0
       ? []
       : (
           await db.smsOptOut.findMany({
-            where: { hostId: event.hostId, phoneNumber: { in: phones } },
+            where: { phoneNumber: { in: phones }, ...SMS_OPT_OUT_IN_FORCE },
             select: { phoneNumber: true },
           })
         ).map((o) => o.phoneNumber)

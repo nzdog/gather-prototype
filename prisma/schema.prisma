@@ -222,6 +222,10 @@ model Event {
   emailOptOuts               EmailOptOut[]
   /// [[GTC-189]] slice 8a — blocks first learned from this event's messages. SET NULL.
   emailBlocks                EmailBlock[]
+  /// [[GTC-288]] — opt-outs whose STOP answered one of this event's texts. SET NULL.
+  smsOptOuts                 SmsOptOut[]
+  /// [[GTC-288]] — guests' text replies to this event's texts. CASCADE.
+  textReplies                TextReply[]
 }
 
 model Day {
@@ -292,7 +296,12 @@ model Person {
   deliveryReports  SmsDeliveryReport[]
   user             User?               @relation(fields: [userId], references: [id])
   eventMemberships PersonEvent[]
+  /// The host each LEGACY opt-out was recorded under, before [[GTC-288]]. SET NULL.
   receivedOptOuts  SmsOptOut[]         @relation("HostOptOuts")
+  /// [[GTC-288]] — opt-outs whose STOP answered a text to this person. SET NULL.
+  smsOptOuts       SmsOptOut[]         @relation("SmsOptOutPerson")
+  /// [[GTC-288]] — this person's text replies to Gather's texts. CASCADE.
+  textReplies      TextReply[]
   coordinatedTeams Team[]              @relation("TeamCoordinator")
   wrapUpLinks      WrapUpLink[]
   emailOptOuts     EmailOptOut[]
@@ -1135,17 +1144,112 @@ model SmsDeliveryReport {
   @@index([inviteEventId])
 }
 
+/// [[GTC-288]] — A NUMBER THAT HAS SAID STOP TO GATHER. ACCOUNT-WIDE, ON THE PHONE NUMBER.
+///
+/// Founder ruling, 2026-09-12: *"an opt-out is account-wide, on the phone number, not per host. A
+/// STOP that matches no message is still recorded, with its link to a person and event marked
+/// unresolved."* TNZ's block list belongs to the account, so a per-host opt-out would leave every
+/// other host sending texts that are guaranteed to fail while the board reads the guest as
+/// chaseable.
+///
+/// ⚠ ONE ROW PER OPT-OUT, NOT PER NUMBER, AND THE NUMBER IS NOT UNIQUE. A START (2026-10-01, Q4)
+/// closes the row by setting `optedInAt` and keeps it: the history stays. A number may therefore
+/// hold several rows — an opt-out, an opt-in, and a later opt-out; or two rows recorded per host
+/// before this ticket — and every reader asks one question: IS ANY ROW IN FORCE for this number
+/// (`optedInAt IS NULL`)? That predicate is `SMS_OPT_OUT_IN_FORCE` in
+/// `src/lib/sms/opt-out-service.ts`, and readers take it from there.
+///
+/// ⚠ THE SIBLING OF `EmailBlock`, NOT OF `EmailOptOut`: keyed on the address it is about, and it
+/// outlives the host, the person and the event — every link is SET NULL. Deleting a host must
+/// never delete a guest's no.
+///
+/// Do-Not-Touch Zone 7. Written only by `src/lib/sms/tnz-reply-record.ts` (a STOP or a START from
+/// TNZ's webhook) and the two caller-less writers in `src/lib/sms/opt-out-service.ts`.
 model SmsOptOut {
   id          String   @id @default(cuid())
+  /// E.164, exactly as TNZ sent it (`Destination` on a reply) — the form `sendSms` matches `to`
+  /// against. Never normalised.
   phoneNumber String
-  hostId      String
   optedOutAt  DateTime @default(now())
+  /// The STOP's own words, as before.
   rawMessage  String?
-  host        Person   @relation("HostOptOuts", fields: [hostId], references: [id], onDelete: Cascade)
 
-  @@unique([phoneNumber, hostId])
+  /// THE START. NULL means in force. Set, with `optedInReceivedId`, on every in-force row for the
+  /// number when a START arrives; the row is kept.
+  optedInAt         DateTime?
+  /// TNZ's `ReceivedID` on the START that closed this row — so a START delivered twice cannot
+  /// close a later STOP's row.
+  optedInReceivedId String?
+
+  /// HOW THE LINK BELOW WAS MADE. A TS union in `src/lib/sms/tnz-reply-record.ts`, stored as text:
+  ///   'MESSAGE_ID' — the STOP's MessageID named one of Gather's texts, sent to this number;
+  ///   'UNRESOLVED' — it did not (no MessageID, no match, or a different number): the ruling's
+  ///                  "marked unresolved";
+  ///   'MANUAL'     — `manualOptOut`, which has no caller.
+  /// NULL — recorded per host before [[GTC-288]]; `hostId` says under whom.
+  attribution        String?
+  /// TNZ's `MessageID` on the STOP, as received — kept even when it resolved to nothing.
+  providerMessageId  String?
+  /// TNZ's `ReceivedID` on the STOP — so a STOP delivered twice is recorded once.
+  providerReceivedId String?
+
+  /// THE LINK: the event and person whose text the STOP answered. Best effort, SET NULL.
+  eventId       String?
+  event         Event?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  personId      String?
+  person        Person? @relation("SmsOptOutPerson", fields: [personId], references: [id], onDelete: SetNull)
+  /// The `NUDGE_SENT_AUTO` row the MessageID resolved through. A provenance pointer, no relation,
+  /// as on `SmsDeliveryReport`.
+  inviteEventId String?
+
+  /// LEGACY: the host a row recorded before [[GTC-288]] was keyed under. Read by nothing — every
+  /// reader is account-wide — and SET NULL, so a host's deletion never deletes the row.
+  hostId String?
+  host   Person? @relation("HostOptOuts", fields: [hostId], references: [id], onDelete: SetNull)
+
   @@index([phoneNumber])
   @@index([hostId])
+  @@index([providerReceivedId])
+  @@index([optedInReceivedId])
+  @@index([eventId])
+  @@index([personId])
+}
+
+/// [[GTC-288]] — A GUEST'S TEXT REPLY TO ONE OF GATHER'S TEXTS, KEPT.
+///
+/// Founder rulings, 2026-10-01: Q1 *"Show it on the board"* and Q2 *"GTC-288 handles STOP and, in
+/// the same single database change, starts keeping every other reply"*, narrowed at the plan: *"keep
+/// a reply only when you can tie it to a guest and an event by MessageID … An unmatched reply is not
+/// kept, and is logged without its words or number."* [[GTC-350]] shows them; nothing reads them yet.
+///
+/// A STOP or a START is never a row here — those are `SmsOptOut`'s.
+///
+/// ⚠ THE WORDS ARE THE GUEST'S, AND GO WITH THEM: CASCADE on the person and on the event, by
+/// [[GTC-189]] decision 28's precedent. They never reach a log line.
+model TextReply {
+  id                 String   @id @default(cuid())
+  /// 'tnz'. A String, as `SmsDeliveryReport.provider`.
+  provider           String
+  /// The MessageID of Gather's text this answers — TNZ's own answer, never a guess.
+  providerMessageId  String
+  /// TNZ's `ReceivedID` — so a reply delivered twice is kept once. When TNZ send it blank, the
+  /// handler keys on (MessageID, words) instead.
+  providerReceivedId String?
+  /// The guest's words, verbatim.
+  body               String
+  receivedAt         DateTime @default(now())
+
+  eventId       String
+  event         Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  personId      String
+  person        Person  @relation(fields: [personId], references: [id], onDelete: Cascade)
+  /// The `NUDGE_SENT_AUTO` row the MessageID resolved through. A provenance pointer, no relation.
+  inviteEventId String?
+
+  @@index([providerReceivedId])
+  @@index([providerMessageId])
+  @@index([eventId])
+  @@index([personId])
 }
 
 /// [[GTC-296]] — THE EMAIL WAY OUT. A SIBLING OF `SmsOptOut` ABOVE, NOT AN EXTENSION OF IT.

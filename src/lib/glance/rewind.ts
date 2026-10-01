@@ -55,6 +55,7 @@ import type { DecideByItem } from '../decide-by';
 import type { ChaseFact, DeliveryFact, ExhaustionFact } from './state';
 import type { LaterFacts } from '@/lib/preflight/ask-preview';
 import { normalizeEmailAddress } from '@/lib/eligibility/email-block';
+import { SMS_OPT_OUT_IN_FORCE } from '@/lib/sms/opt-out-service';
 import {
   deliveryFailureRecordedAt,
   deliveryRowAsAt,
@@ -322,9 +323,9 @@ export async function rewindGlanceInputs(
  * ⚠ A FACT WITH NO TIME IS HELD (ruling point 3). `Person.smsOptedOutAt` is nullable; a flag with no
  * time is never in `later`, so it stands at `since` as it stands now and plays no step.
  *
- * ⚠ AND THE TIMES ARE AS HONEST AS THEIR WRITERS. A repeat STOP moves `SmsOptOut.optedOutAt` and
- * `Person.smsOptedOutAt` forward, so it reads as a new opt-out; its standing is grey and Ruling 26(b)
- * plays no grey, so the cost is silence. A complaint's upgrade of a block keeps `firstSeenAt`, so the
+ * ⚠ AND THE TIMES ARE AS HONEST AS THEIR WRITERS. Since [[GTC-288]] a repeat STOP writes nothing
+ * (plan ruling D9), so it never reads as a new opt-out; a START closes rows rather than deleting
+ * them, and only rows in force are read here, so a START plays no step (D8). A complaint's upgrade of a block keeps `firstSeenAt`, so the
  * "reported" half of a block is held as it is now.
  *
  * READS ONLY, from Zones 7 and 9 among others. Writes nothing.
@@ -343,10 +344,8 @@ export async function rewindGuestFacts(
   eventId: string,
   since: Date
 ): Promise<GuestFactsRewind> {
-  const event = await db.event.findUniqueOrThrow({
-    where: { id: eventId },
-    select: { hostId: true },
-  });
+  // The event must exist; the opt-outs are read account-wide ([[GTC-288]]), so its host is not.
+  await db.event.findUniqueOrThrow({ where: { id: eventId }, select: { id: true } });
   const memberships = await db.personEvent.findMany({
     where: { eventId },
     select: {
@@ -394,8 +393,14 @@ export async function rewindGuestFacts(
         }),
     phones.length === 0
       ? Promise.resolve([] as Array<{ phoneNumber: string; optedOutAt: Date }>)
-      : db.smsOptOut.findMany({
-          where: { hostId: event.hostId, phoneNumber: { in: phones }, optedOutAt: { gt: since } },
+      : // [[GTC-288]]: account-wide, and only rows in force — a START after `since` plays no
+        // step (plan ruling D8), so a row it closed is not news, and the board reads it as now.
+        db.smsOptOut.findMany({
+          where: {
+            phoneNumber: { in: phones },
+            optedOutAt: { gt: since },
+            ...SMS_OPT_OUT_IN_FORCE,
+          },
           select: { phoneNumber: true, optedOutAt: true },
         }),
   ]);
@@ -426,7 +431,10 @@ export async function rewindGuestFacts(
   // Point 5's key. Each time below is already inside the window, or is checked to be.
   const optOutAt = new Map(optOuts.map((o) => [o.personId, o.optedOutAt.getTime()]));
   const blockAt = new Map(blocks.map((b) => [b.address, b.firstSeenAt.getTime()]));
-  const smsAt = new Map(smsOptOuts.map((o) => [o.phoneNumber, o.optedOutAt.getTime()]));
+  // One number may hold two rows in force (two hosts' rows from before [[GTC-288]]): the latest.
+  const smsAt = new Map<string, number>();
+  for (const o of smsOptOuts)
+    smsAt.set(o.phoneNumber, Math.max(smsAt.get(o.phoneNumber) ?? 0, o.optedOutAt.getTime()));
   const latestNow = latestRowByMembership(asks);
   const movedSince = new Map<string, number>();
   for (const m of memberships) {

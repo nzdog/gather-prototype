@@ -8,6 +8,7 @@ import { getEmailOptOut } from '@/lib/eligibility/email-opt-out';
 import { isChildMembership } from '@/lib/eligibility/child-exclusion';
 import { deliveryFactFrom, latestRowByMembership } from '@/lib/glance/delivery-fact';
 import { smsProviderConfiguredFor } from '@/lib/sms/send-sms';
+import { SMS_OPT_OUT_IN_FORCE } from '@/lib/sms/opt-out-service';
 import { recordChange, type LedgerActor } from '@/lib/ledger';
 import {
   doorActionsFor,
@@ -246,7 +247,8 @@ async function resolveSubject(
 async function optedOut(db: PrismaClient, subject: Subject): Promise<boolean> {
   if (!subject.phoneNumber) return subject.smsOptedOut;
   const rows = await db.smsOptOut.findMany({
-    where: { hostId: subject.hostId, phoneNumber: subject.phoneNumber },
+    // Account-wide since [[GTC-288]]: any row in force for the number.
+    where: { phoneNumber: subject.phoneNumber, ...SMS_OPT_OUT_IN_FORCE },
     select: { phoneNumber: true },
   });
   return smsOptedOutFact(

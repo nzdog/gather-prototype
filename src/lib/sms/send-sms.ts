@@ -3,6 +3,8 @@ import { sendViaTnz, isTnzEnabled } from './tnz-client';
 import { prisma } from '@/lib/prisma';
 import { logInviteEvent } from '@/lib/invite-events';
 import { isLiveSendingOn, LIVE_SENDS_OFF } from '@/lib/live-sends';
+import { isE164 } from '@/lib/phone';
+import { SMS_OPT_OUT_IN_FORCE } from '@/lib/sms/opt-out-service';
 
 /**
  * Country codes routed to TNZ. Twilio does not deliver to NZ (+64); AU (+61)
@@ -10,10 +12,6 @@ import { isLiveSendingOn, LIVE_SENDS_OFF } from '@/lib/live-sends';
  * All other country codes fall through to Twilio.
  */
 const TNZ_COUNTRY_CODES = ['+64', '+61'] as const;
-
-function isE164(phone: string): boolean {
-  return /^\+\d{8,15}$/.test(phone);
-}
 
 function shouldUseTnz(phone: string): boolean {
   return TNZ_COUNTRY_CODES.some((code) => phone.startsWith(code));
@@ -59,7 +57,7 @@ export interface SendSmsParams {
 export type SmsBlockReason =
   | 'SMS_DISABLED' // The provider is not configured, or live sending is off (GTC-274)
   | 'INVALID_NUMBER' // Not a valid NZ number
-  | 'OPTED_OUT' // Recipient opted out from this host
+  | 'OPTED_OUT' // The number has opted out of texts from Gather — every host (GTC-288)
   | 'SEND_FAILED'; // Twilio API error
 
 export interface SendSmsResult {
@@ -102,7 +100,7 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
   // must apply regardless of which provider is configured. Running this
   // before the provider-config check means a missing TNZ_AUTH_TOKEN never
   // masks an OPTED_OUT signal the caller needs for audit/UX.
-  const isOptedOut = await checkOptOut(to, eventId);
+  const isOptedOut = await checkOptOut(to);
 
   if (isOptedOut) {
     await logInviteEvent({
@@ -243,42 +241,28 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
 }
 
 /**
- * Check if a phone number has opted out from a specific host
+ * Has this number opted out of texts from Gather? ACCOUNT-WIDE since [[GTC-288]] (founder ruling,
+ * 2026-09-12): any row in force for the number, whichever host's guest it is. Matched on the exact
+ * E.164 string `to`, which is the form the opt-out is recorded in.
  */
-async function checkOptOut(phoneNumber: string, eventId: string): Promise<boolean> {
-  // Get the event's host
-  const event = await prisma.event.findUnique({
-    where: { id: eventId },
-    select: { hostId: true },
-  });
-
-  if (!event) return false;
-
-  // Check for opt-out record
-  const optOut = await prisma.smsOptOut.findUnique({
-    where: {
-      phoneNumber_hostId: {
-        phoneNumber: phoneNumber,
-        hostId: event.hostId,
-      },
-    },
+async function checkOptOut(phoneNumber: string): Promise<boolean> {
+  const optOut = await prisma.smsOptOut.findFirst({
+    where: { phoneNumber, ...SMS_OPT_OUT_IN_FORCE },
+    select: { id: true },
   });
 
   return !!optOut;
 }
 
 /**
- * Check opt-out status for multiple numbers (batch)
+ * Check opt-out status for multiple numbers (batch), account-wide as `checkOptOut`.
  * More efficient than checking one at a time
  */
-export async function checkOptOutBatch(
-  phoneNumbers: string[],
-  hostId: string
-): Promise<Set<string>> {
+export async function checkOptOutBatch(phoneNumbers: string[]): Promise<Set<string>> {
   const optOuts = await prisma.smsOptOut.findMany({
     where: {
       phoneNumber: { in: phoneNumbers },
-      hostId: hostId,
+      ...SMS_OPT_OUT_IN_FORCE,
     },
     select: { phoneNumber: true },
   });

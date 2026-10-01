@@ -2,6 +2,7 @@ import { listEmailBlocks } from '@/lib/eligibility/email-block';
 import { EMAIL_BLOCK_FIRST } from '@/lib/eligibility/email-block-words';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { SMS_OPT_OUT_IN_FORCE } from '@/lib/sms/opt-out-service';
 import { requireEventRole } from '@/lib/auth/guards';
 import { sendSms } from '@/lib/sms/send-sms';
 import { withOptOutLine } from '@/lib/sms/opt-out-line';
@@ -134,13 +135,11 @@ export async function POST(
 
     if (channel === 'sms') {
       contactMethod = 'sms';
-      // Check per-host opt-out
-      const optOut = await prisma.smsOptOut.findUnique({
+      // Check opt-out — account-wide since [[GTC-288]]: any row in force for the number
+      const optOut = await prisma.smsOptOut.findFirst({
         where: {
-          phoneNumber_hostId: {
-            phoneNumber: person.phoneNumber!,
-            hostId: event.hostId,
-          },
+          phoneNumber: person.phoneNumber!,
+          ...SMS_OPT_OUT_IN_FORCE,
         },
       });
 

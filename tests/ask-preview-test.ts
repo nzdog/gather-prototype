@@ -48,8 +48,8 @@
  *
  * LABELS
  *   [DEFECT GTC-300]      an Australian number reads unusable; changes when that predicate is fixed
- *   [GTC-301]             the opt-out fact this slice passes to the chooser — per host, ruled
- *                         deliberate at slice 3 (answer 1); changes with GTC-288, which owns it
+ *   [GTC-301]             the opt-out fact this slice passes to the chooser — per host until
+ *                         GTC-288, account-wide since (founder ruling 2026-09-12)
  *   [GTC-302 not tidied]  names reach the preview exactly as stored; GTC-302's display helper and
  *                         prompt changes are ordered after this slice
  *   [RULED words]         the screen's words as the founder ruled them at slice 3 — Gather says "I"
@@ -708,9 +708,12 @@ async function main() {
             p.recipients.every((r: any) => r.carried.every((c: any) => c.name !== 'Nell Nguyen'))
         )
       );
+      // ⚠ MOVED BY [[GTC-288]] (founder ruling 2026-09-12, an opt-out is account-wide): Pia's row
+      // under another host now covers her, so she is a line on the host list (layer O). It read
+      // "Sam, Sarah, Ray, Lena, Grace, Pia, Cora, Ivy and the host as carrier".
       assert(
         'A',
-        'the recipients are exactly Sam, Sarah, Ray, Lena, Grace, Pia, Cora, Ivy and the host as carrier',
+        'the recipients are exactly Sam, Sarah, Ray, Lena, Grace, Cora, Ivy and the host as carrier',
         ok(() =>
           sameSet(
             p.recipients.map((r: any) => r.name),
@@ -720,7 +723,6 @@ async function main() {
               'Ray Dalton',
               'Lena Park',
               'Grace Tui',
-              'Pia Moss',
               'Cora Hill',
               'Ivy Chen',
               'Kate Whittaker',
@@ -894,9 +896,12 @@ async function main() {
       // ══ H — the host's list ════════════════════════════════════════════════
       section("Layer H: the host's list — both kinds of line, each with its why");
 
+      // ⚠ MOVED BY [[GTC-288]] (founder ruling 2026-09-12, an opt-out is account-wide): Pia's row
+      // is under another host, and now covers her here. It read "Poppy, Tom, Jack, Ava, Opal, Otto
+      // and Uma".
       assert(
         'H',
-        'the list is exactly Poppy, Tom, Jack, Ava, Opal, Otto and Uma',
+        'the list is exactly Poppy, Tom, Jack, Ava, Opal, Otto, Pia and Uma',
         ok(() =>
           sameSet(
             p.hostList.map((l: any) => l.name),
@@ -907,6 +912,7 @@ async function main() {
               'Ava Park',
               'Opal Reid',
               'Otto Lang',
+              'Pia Moss',
               'Uma Singh',
             ]
           )
@@ -957,10 +963,12 @@ async function main() {
         "[GTC-301] Otto is opted out by the table's row for THIS event's host, with his person flag false",
         ok(() => line('Otto Lang').why === 'SMS_OPTED_OUT')
       );
+      // ⚠ INVERTED BY [[GTC-288]] (founder ruling 2026-09-12): it read "Pia's row is under ANOTHER
+      // host, and she is texted — the table is read per host, as sendSms reads it".
       assert(
         'O',
-        "[GTC-301] Pia's row is under ANOTHER host, and she is texted — the table is read per host, as sendSms reads it",
-        ok(() => rec('Pia Moss').channel === 'TEXT')
+        "[GTC-301] Pia's row is under ANOTHER host, and she is on the host list, SMS_OPTED_OUT — the table is read account-wide, as sendSms reads it",
+        ok(() => !rec('Pia Moss') && line('Pia Moss').why === 'SMS_OPTED_OUT')
       );
 
       // ══ L — links ══════════════════════════════════════════════════════════
@@ -1075,12 +1083,14 @@ async function main() {
       const emailRows = () =>
         view.rows.filter((r: any) => r.recipient.channel === 'EMAIL' && r.ask);
 
+      // ⚠ MOVED BY [[GTC-288]] (founder ruling 2026-09-12): Pia is no longer texted, so Ray is the
+      // one texted recipient. It read `textRows().length === 2`.
       assert(
         'V',
         "every texted recipient shows a segment count, and it is their own message's",
         ok(
           () =>
-            textRows().length === 2 &&
+            textRows().length === 1 &&
             textRows().every(
               (r: any) => typeof r.segments === 'number' && r.segments === r.ask.segments
             )

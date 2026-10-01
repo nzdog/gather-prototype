@@ -7,7 +7,12 @@
 //
 // It replaces `/api/sms/inbound`, a Twilio-shaped handler that checked nothing and wrote
 // `SmsOptOut` and `Person.smsOptedOut` (Zone 7) for any caller. That route was DELETED, not
-// guarded, on founder ruling (GTC-264 / GTC-229 plan, Q2). Nothing here writes Zone 7.
+// guarded, on founder ruling (GTC-264 / GTC-229 plan, Q2).
+//
+// [[GTC-288]]: a reply is interpreted by `@/lib/sms/tnz-reply-contract` and stored by
+// `@/lib/sms/tnz-reply-record` — a STOP recorded account-wide on the guest's number, a START that
+// undoes it for every host, and any other reply kept when TNZ's MessageID ties it to a guest and an
+// event. Zone 7 is written there, after the credential below, and nowhere else in this route.
 //
 // Security: `TNZ_CALLBACK_SECRET` and `TNZ_CALLBACK_SENDER`, checked in BOTH places TNZ present
 // them — the `Authorization` and `X-Sender` headers, then the body's `APIKey` and `Sender`. An
@@ -20,13 +25,16 @@
 //
 // THE RESPONSE CONTRACT. TNZ retry any non-2xx every five minutes for up to 24 hours (D3: "A 200
 // is ideal. A 202 is acceptable too."):
-//   200  a delivery report stored, or TNZ's retry of one already stored (nothing written twice)
-//   202  a reply, an unsolicited inbound, or any other Type: accepted, NOTHING stored (ruling Q4).
-//        Replies are [[GTC-288]]'s, and GTC-288 must land before any deploy carries this route.
+//   200  a delivery report stored; a STOP or START recorded; a reply kept ([[GTC-288]]) — or TNZ's
+//        retry of any of these already stored (nothing written twice)
+//   202  accepted, NOTHING stored: a reply tied to no text of Gather's (or from a number its text
+//        did not go to, or empty), a STOP while one is in force, a START with nothing to undo, or
+//        any Type that is not a delivery report or a reply
 //   401  the credential unset, or wrong or missing in the headers or the body — retried, so a
 //        misconfigured Railway variable or Dashboard value has a day to be fixed before loss
-//   500  credentialed but unreadable — not JSON (an XML Sender default, D2), not an object, or a
-//        report without a usable MessageID, Destination or Status. Retried, by the 2026-09-12
+//   500  credentialed but unreadable — not JSON (an XML Sender default, D2), not an object, a
+//        report without a usable MessageID, Destination or Status, or a STOP or START whose
+//        Destination is not E.164 ([[GTC-288]] plan ruling D10). Retried, by the 2026-09-12
 //        ruling: a contract we got wrong gets 24 hours to be corrected before a report is lost
 //   500  our own error. Retried, and safe to retry: the store is idempotent
 // The credential is checked BEFORE the body is read, so an unauthenticated caller only ever gets
@@ -39,6 +47,8 @@ import { prisma } from '@/lib/prisma';
 import { parseTnzWebhookEnvelope } from '@/lib/sms/tnz-webhook-envelope';
 import { parseTnzDeliveryReport } from '@/lib/sms/tnz-delivery-contract';
 import { recordTnzDeliveryReport } from '@/lib/sms/tnz-delivery-record';
+import { parseTnzReply } from '@/lib/sms/tnz-reply-contract';
+import { recordTnzReply } from '@/lib/sms/tnz-reply-record';
 import { isTnzCallbackConfigured, tnzCallbackAccepted } from '../tnz-callback-auth';
 
 const UNREADABLE = () => NextResponse.json({ error: 'Unreadable' }, { status: 500 });
@@ -108,17 +118,38 @@ export async function POST(request: NextRequest) {
   const messageId = (parsed.envelope.MessageID || '(none)').replace(/[^\w-]/g, '?').slice(0, 64);
 
   try {
-    // ── The `Type` switch. Anything that is not a delivery report is acknowledged and left. ──
-    if (parsed.kind !== 'DELIVERY_STATUS') {
-      // ⚠ A reply is GTC-288's. Until it lands, nothing is stored and Zone 7 is not touched —
-      // including for a STOP, which TNZ's own block list already acts on when it is ours (C1).
-      // The kind and the MessageID are logged; the text is never read here.
+    // ── The `Type` switch. ──
+    if (parsed.kind === 'INBOUND_MESSAGE') {
+      // [[GTC-288]] — a reply. The kind, the outcome and the MessageID are logged; the words and
+      // the number never are, and this route never reads them itself.
+      const reply = parseTnzReply(parsed.envelope);
+      if (!reply.ok) {
+        console.error(`[TNZ webhook] unreadable reply: ${reply.detail}. MessageID=${messageId}`);
+        return UNREADABLE();
+      }
+      const result = await recordTnzReply(prisma, reply.reply);
+      const told =
+        result.outcome === 'NOT_RECORDED'
+          ? `nothing recorded (${result.why})`
+          : result.outcome === 'DUPLICATE'
+            ? 'already stored (TNZ retry); nothing written'
+            : result.outcome === 'OPTED_OUT'
+              ? `opt-out recorded (${result.linked ? 'linked' : 'unresolved'})`
+              : result.outcome === 'OPTED_IN'
+                ? 'opt-in recorded'
+                : 'reply kept';
       console.log(
-        `[TNZ webhook] ${typeForLog(parsed.envelope.Type)} received (${parsed.kind}) — ${
-          parsed.kind === 'INBOUND_MESSAGE'
-            ? 'not processed before GTC-288'
-            : 'not a callback Gather reads'
-        }; nothing recorded. MessageID=${messageId}`
+        `[TNZ webhook] ${typeForLog(parsed.envelope.Type)} received (${parsed.kind}) — ${told}. MessageID=${messageId}`
+      );
+      if (result.outcome === 'NOT_RECORDED')
+        return NextResponse.json({ ok: true, recorded: false }, { status: 202 });
+      if (result.outcome === 'DUPLICATE')
+        return NextResponse.json({ ok: true, recorded: false, duplicate: true }, { status: 200 });
+      return NextResponse.json({ ok: true, recorded: true }, { status: 200 });
+    }
+    if (parsed.kind !== 'DELIVERY_STATUS') {
+      console.log(
+        `[TNZ webhook] ${typeForLog(parsed.envelope.Type)} received (${parsed.kind}) — not a callback Gather reads; nothing recorded. MessageID=${messageId}`
       );
       return NextResponse.json({ ok: true, recorded: false }, { status: 202 });
     }

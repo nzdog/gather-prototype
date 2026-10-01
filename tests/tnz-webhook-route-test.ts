@@ -7,8 +7,9 @@
  * apart by `Type` (their answer D1, 2026-09-15). This suite drives that route IN PROCESS with
  * fabricated payloads and asserts four things: it authenticates both places TNZ present the
  * credential and fails closed when it is unset; it stores every delivery report, matched or not,
- * once; it stores nothing for a reply and never touches Zone 7; and its status codes are the
- * contract the plan ruled, against TNZ's retry of every non-2xx for 24 hours.
+ * once; since [[GTC-288]] it keeps a reply that answers one of Gather's texts and records a STOP
+ * account-wide (layer E; the full reply behaviour is tests/tnz-reply-test.ts); and its status
+ * codes are the contract the plan ruled, against TNZ's retry of every non-2xx for 24 hours.
  *
  * ── NOTHING SENDS, AND NOTHING IS REAL ─────────────────────────────────────────────────────
  *
@@ -168,6 +169,16 @@ async function main() {
     prisma.smsDeliveryReport.findMany({ where: { providerMessageId } });
 
   const start = await counts();
+  // [[GTC-288]]: kept replies. Guarded, so the suite reports rather than crashes before the model
+  // exists.
+  const textReplyCount = async (): Promise<number | null> => {
+    try {
+      return await (prisma as any).textReply.count();
+    } catch {
+      return null;
+    }
+  };
+  const startTextReplies = await textReplyCount();
   const savedSecret = process.env.TNZ_CALLBACK_SECRET;
   const savedSender = process.env.TNZ_CALLBACK_SENDER;
   let fixtureInviteEventId: string | null = null;
@@ -550,7 +561,9 @@ async function main() {
     );
 
     // ───────────────────────────────────────────────────────────────────────────────────────
-    section('Layer E: replies and other Types — acknowledged, nothing stored, Zone 7 untouched');
+    section(
+      'Layer E: replies and other Types — a reply kept, a STOP recorded, the rest acknowledged'
+    );
     // ───────────────────────────────────────────────────────────────────────────────────────
 
     startCapture();
@@ -559,6 +572,7 @@ async function main() {
         APIKey: SECRET,
         Sender: SENDER,
         MessageID: MATCHED,
+        ReceivedID: mid(),
         Destination: DEST,
         Message: REPLY_TEXT,
       })
@@ -568,6 +582,7 @@ async function main() {
         APIKey: SECRET,
         Sender: SENDER,
         MessageID: MATCHED,
+        ReceivedID: mid(),
         Destination: DEST,
         Message: 'STOP',
       })
@@ -583,25 +598,66 @@ async function main() {
       })
     );
     stopCapture();
+    /*
+     * ⚠ MOVED BY [[GTC-288]] — founder rulings 2026-10-01 (Q1/Q2: every other reply is kept, from
+     * this ticket on; narrowed at the plan to a reply tied to a guest and an event by MessageID)
+     * and 2026-09-12 (an opt-out is account-wide, recorded on the number). They read "SMSReply:
+     * 202, and nothing written anywhere" and "an SMSReply reading STOP: 202, and Zone 7 untouched
+     * — opt-outs are GTC-288’s".
+     */
+    let kept: any[] = [];
+    try {
+      kept = await (prisma as any).textReply.findMany({ where: { providerMessageId: MATCHED } });
+    } catch {
+      kept = [];
+    }
     assert(
       'E',
-      'SMSReply: 202, and nothing written anywhere',
-      reply.status === 202 && reply.nothingWritten
+      'a matched SMSReply: 200, kept once, Zone 7 untouched',
+      reply.status === 200 &&
+        reply.nothingWritten &&
+        kept.length === 1 &&
+        kept[0].body === REPLY_TEXT &&
+        kept[0].eventId === member?.eventId &&
+        kept[0].personId === member?.personId
     );
+    let stopRows: any[] = [];
+    let stopLogged = 0;
+    try {
+      stopRows = await prisma.smsOptOut.findMany({
+        where: { phoneNumber: DEST, providerMessageId: MATCHED, optedInAt: null } as any,
+      });
+      stopLogged = await prisma.inviteEvent.count({
+        where: {
+          type: 'SMS_OPT_OUT_RECEIVED',
+          eventId: member?.eventId,
+          metadata: { path: ['providerMessageId'], equals: MATCHED },
+        },
+      });
+    } catch {
+      stopRows = [];
+    }
     assert(
       'E',
-      'an SMSReply reading STOP: 202, and Zone 7 untouched — opt-outs are GTC-288’s',
-      stop.status === 202 && stop.nothingWritten
+      'an SMSReply reading STOP: 200, recorded account-wide, linked by MessageID',
+      stop.status === 200 &&
+        stopRows.length === 1 &&
+        stopRows[0].attribution === 'MESSAGE_ID' &&
+        stopRows[0].eventId === member?.eventId &&
+        stopRows[0].personId === member?.personId &&
+        stopLogged === 1
     );
     assert(
       'E',
       'SMSInbound: 202, and nothing written',
       inbound.status === 202 && inbound.nothingWritten
     );
+    // ⚠ MOVED BY [[GTC-288]] — founder ruling 2026-10-01 (a reply tied to a guest by MessageID is
+    // kept, and answered 200). It read `reply.status === 202`; the label and both log checks stand.
     assert(
       'E',
       'the reply text reaches no log line, while the arrival itself is logged',
-      reply.status === 202 &&
+      reply.status === 200 &&
         captured.some((l) => l.includes('SMSReply received')) &&
         !captured.some((l) => l.includes(REPLY_TEXT))
     );
@@ -633,6 +689,27 @@ async function main() {
     else process.env.TNZ_CALLBACK_SENDER = savedSender;
     await prisma.smsDeliveryReport.deleteMany({
       where: { providerMessageId: { startsWith: RUN } },
+    });
+    // [[GTC-288]]: this suite's own reply, opt-out and its ledger row, each found by this run's ids.
+    try {
+      await (prisma as any).textReply.deleteMany({
+        where: { providerMessageId: { startsWith: RUN } },
+      });
+    } catch {
+      /* the model is absent before GTC-288's migration */
+    }
+    try {
+      await prisma.smsOptOut.deleteMany({
+        where: { phoneNumber: DEST, providerMessageId: { startsWith: RUN } } as any,
+      });
+    } catch {
+      /* the column is absent before GTC-288's migration */
+    }
+    await prisma.inviteEvent.deleteMany({
+      where: {
+        type: 'SMS_OPT_OUT_RECEIVED',
+        metadata: { path: ['providerMessageId'], string_starts_with: RUN },
+      },
     });
     if (fixtureInviteEventId)
       await prisma.inviteEvent.delete({ where: { id: fixtureInviteEventId } });
@@ -747,6 +824,12 @@ async function main() {
     'G',
     'InviteEvent is back to the count found — the fixture is gone',
     end.invites === start.invites
+  );
+  const endTextReplies = await textReplyCount();
+  assert(
+    'G',
+    'TextReply is back to the count found',
+    startTextReplies !== null && endTextReplies === startTextReplies
   );
 
   console.log('\n\x1b[1m\x1b[33m=== Test Summary ===\x1b[0m');
