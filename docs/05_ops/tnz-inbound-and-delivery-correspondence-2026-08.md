@@ -257,7 +257,8 @@ default shortcode is shared.
 
 ## What was asked and not answered
 
-Four gaps at the time of filing. Their state as of 2026-09-12:
+Four gaps at the time of filing. Their state as of 2026-09-12 (gaps 2, 3
+and 4 were answered 2026-09-15 — see *Thread 3*):
 
 1. **The MO payload contract.** Question 2 asked for the Content-Type
    and field names. The answer was a documentation URL.
@@ -375,6 +376,9 @@ the false-stamp corruption described in [[GTC-258]] — see
 
 ## Outstanding with TNZ — asked 2026-09-12
 
+**ANSWERED 2026-09-15** — see *Thread 3* below. The text that follows is
+kept as it stood on 2026-09-12.
+
 Nigel sent a further mail on 2026-09-12. Four questions, none yet
 answered. They are recorded here so the tickets can point at what is
 outstanding and why it matters:
@@ -407,7 +411,13 @@ a product question rather than one for TNZ.
 
 ---
 
-## Drafted for TNZ 2026-09-12 — NOT YET SENT
+## Drafted for TNZ 2026-09-12 — SENT THE SAME EVENING, ANSWERED 2026-09-15
+
+**Sent 2026-09-12 20:41 NZST**, with a correction withdrawing question 2
+of the earlier mail (the documentation had answered it) and a note on
+`PENDING`. **Answered 2026-09-15** — see *Thread 3* below. This heading
+was updated 2026-10-01, when the sent mail was found; the text that
+follows is kept as drafted.
 
 Three further questions, drafted at the close of [[GTC-264]] Phase 0 and
 recorded here before sending so the tickets can point at them. **They are
@@ -436,6 +446,166 @@ The four questions asked on 2026-09-12 remain outstanding, less question
 
 ---
 
+## Thread 3 — attribution, receipts, keywords, shortcode, webhooks
+
+**Source:** the same Gmail thread, *"Re: Inbound SMS (MO) replies —
+capability and webhook contract"*, in `nzdog1@gmail.com`, read through the
+Gmail connector on 2026-10-01. Unlike Threads 1 and 2, no PDF is saved
+beside this file; the mail is the primary source. Quotes marked `>` are
+verbatim, slips included. Signature blocks are omitted.
+
+### Nigel to TNZ, 2026-09-12 19:26 and 20:41 NZST
+
+The four questions in *Outstanding with TNZ* above, plus the blacklisted
+send's response body (gap 3) re-asked; then, 75 minutes later, the three
+questions in *Drafted for TNZ* above, with question 2 of the first mail
+withdrawn and a note that a `PENDING` webhook is treated as possible but
+not relied on.
+
+### TNZ to Nigel, 2026-09-15 15:48 NZST — the four, and gap 3
+
+**C1 — an opt-out attributes to the last message sent, whoever sent it.**
+
+> The opt-out message is attributed to the last sent message. If the last
+> message is not from your client, the opt-out is not attributed to your
+> client. Message sends would continue (as no opt-out has been received).
+
+> We do have our [[STOP]] opt-out link option if you would like the
+> opt-out to be specific. The [[STOP]] command is converted into a short
+> link when sending the message. If the mobile clicks the link to
+> opt-out, we know the exact message their opt-out applies to.
+
+**C2 — receipts are positive as well as negative.**
+
+> Webhooks fire on success and failure.
+
+**C3 — the keyword set is a page, not a list in the mail.**
+
+> A list is here:
+> https://www.tnz.co.nz/Help/unsubscribe-option-for-sms-messages#automatic-opt-outs
+
+**C4 — the dedicated shortcode is priced; its lead time is not in the
+mail.**
+
+> There are a few options, listed here:
+> https://www.tnz.co.nz/Services/SMS/Dedicated-Short-Codes/
+
+> The Free-to-Text 6-digit is the most popular: $299/setup, $89/month,
+> NZD ex GST.
+
+**C5 — a blacklisted send: nothing in the body; the status report is the
+only signal.**
+
+> Correct - the API absorbs the message (the parameters are correct) and
+> puts it in the queue to process. Later in the process, the opt-out list
+> is checked and the message is marked as a failure, firing the status
+> webhook. Its designed this way for speed/resiliency (absorb the request,
+> don’t hold up every request doing prechecks) and housekeeping (most
+> customers want to see error reports of failed submissions; having to
+> track API errors would be a nuisance).
+
+### TNZ to Nigel, 2026-09-15 15:52 NZST — the three webhook questions
+
+**D1 — one URL for status and received messages.**
+
+> The webhooks fire to the same URL. The Type is the correct flag.
+
+**D2 — JSON by default, set at the Dashboard.**
+
+> It’s JSON by default.
+
+> The default is configured in the TNZ Dashboard:
+> https://www.tnz.co.nz/Help/configuring-api-webhooks#configure-default-webhook
+
+**D3 — what our endpoint should answer.**
+
+> A 200 is ideal. A 202 is acceptable too.
+
+**D4 — `PENDING` webhooks are off by default.**
+
+> That’s fair. We can submit pending event webhooks but 99.999% of
+> clients don’t wait it and we disable it by default. The SMS delivery is
+> usually so quick that the pending and success webhooks often coincide
+> and cause mayhem. Its a hangover from the fax days (where faxes often
+> take ~5min to send).
+
+### TNZ's two linked pages, read 2026-10-01
+
+Read through a page summary, not transcribed. Check the pages before
+quoting any of this as verbatim.
+
+- **Automatic opt-outs:** an inbound SMS that *begins with* one of these,
+  in any case, adds the number to the account's opt-out list: `STOP`,
+  `OPTOUT`, `OPT OUT`, `OPT-OUT`, `UNSUB`, `UNSUBSCRIBE`. Opt-outs apply
+  across the account by default, and can be split by SubAccount,
+  Department or User. The page says nothing about shared shortcodes.
+- **The `[[STOP]]` link:** written into the message (the page's example is
+  "Click [[STOP]] to opt out."), and replaced with an individual opt-out
+  link when sent. The page gives no length for the link and does not say
+  whether a reply of STOP still works beside it.
+- **Dedicated shortcodes,** NZD ex GST: 4-digit $599 setup and $299 a
+  month; 5-digit $320 and $99; 6-digit $299 and $89. Sent, 10c per part;
+  received, nothing (Standard) or 10c (Free-to-Text). **Setup takes about
+  four weeks**, for all three.
+
+### What Thread 3 settles
+
+- **H3, the worse way.** On the shared shortcode, a guest's STOP reaches
+  Gather's account only if Gather's message was the last one that number
+  received from any TNZ customer. Otherwise our sends continue and are
+  delivered. That is a compliance exposure, not a reporting gap.
+  [[GTC-229]]'s *"the legal promise is kept by TNZ"* holds only when the
+  STOP attributes to us. TNZ's two remedies: the `[[STOP]]` link (an
+  opt-out tied to the exact message) or a dedicated shortcode (every
+  reply is ours).
+- **Gap 2, the keywords.** TNZ's set differs from Gather's
+  `OPT_OUT_KEYWORDS` in `src/lib/sms/opt-out-keywords.ts` (Twilio-era:
+  `stop`, `stopall`, `unsubscribe`, `cancel`, `end`, `quit`, exact match
+  only). At TNZ, `CANCEL`, `END` and `QUIT` are not opt-outs, and
+  `OPTOUT`, `OPT OUT`, `OPT-OUT`, `UNSUB` and "Stop please" are. Today
+  Gather's list is read only by the Twilio route,
+  `src/app/api/sms/inbound/route.ts`, which receives no TNZ traffic; it
+  bears on [[GTC-288]] when that is built.
+- **Gap 3, the blacklisted body.** Nothing in the body. The status webhook
+  is the only signal ([[GTC-258]]).
+- **Gap 4, the shortcode.** Priced (above). The lead time is the page's,
+  about four weeks, not the mail's.
+- **[[GTC-264]] Phase 3's gates,** all answered: one URL receives both
+  status and received-message webhooks, told apart by `Type`; JSON by
+  default; answer 200 (202 accepted). `PENDING` webhooks are off unless
+  asked for.
+
+### Founder ruling, 2026-10-01 — a dedicated shortcode (in Cowork)
+
+Asked once Thread 3 was read, verbatim: *"TNZ confirmed the worst case:
+on the shared text number, a STOP reply goes to whichever business last
+texted that person, so Gather can keep texting someone who said stop.
+Their fix is a 6-digit number of Gather's own: $299 setup + $89 a month
+(NZD ex GST), about four weeks to set up. What should we do?"* Four
+options: order it now; order it plus TNZ's opt-out link meanwhile; the
+opt-out link only; not yet.
+
+The founder chose, verbatim: *"Order it now (Recommended)"* — *"Ready
+around the end of October, just after the waitlist opens. Then every
+reply reaches Gather, STOP always works, and Gather's texts stop coming
+from a number other businesses also use. Probably no code change
+(Gather's send doesn't name a number; I'd confirm with TNZ). Until it's
+live, texts use the shared number as now. About $1,370 in the first
+year."*
+
+- "Gather's send doesn't name a number": `sendViaTnz` in
+  `src/lib/sms/tnz-client.ts` posts `Message` and `Destinations` only, so
+  the sending number is the account's. To be confirmed with TNZ.
+- "Opt-out link": the `[[STOP]]` option in C1. Not taken; "Reply STOP to
+  opt out" ([[GTC-337]] ruling 2) stands.
+- Not settled by this ruling: Gather still processes no TNZ reply and
+  reads no TNZ delivery report ([[GTC-229]], [[GTC-288]], [[GTC-258]],
+  [[GTC-264]], [[GTC-290]], all open). On a dedicated number TNZ's own
+  opt-out list blocks our sends to a guest who said STOP, but Gather does
+  not learn of it.
+
+---
+
 ## Hazards the correspondence creates or sharpens
 
 ### H1 — cross-customer interception on the shared shortcode
@@ -461,12 +631,17 @@ the wrong one.
 shortcode per host. H2 is structural and is not purchasable away at any
 realistic price.
 
-### H3 — an open question with compliance weight, not yet asked
+### H3 — a question with compliance weight, answered 2026-09-15
 
 A4 says TNZ add the number to *your* Dashboard's Opt-Out list. That is
 per-account. If a guest's STOP attributes to a different TNZ customer
 (H1), does the number reach *our* account's opt-out list, or only
 theirs?
+
+**Answered 2026-09-15, the worse way** (see *Thread 3*): an opt-out
+that attributes to another customer's later message does not reach our
+account, and our sends to that number continue and are delivered. The
+text below is kept as it stood.
 
 **Asked 2026-09-12; not yet answered.** It was not asked in either of
 the threads above. It matters more than anything else open here:
