@@ -15,8 +15,10 @@
  *
  * ── NOTHING LEAVES THE PROCESS, AND NOTHING IS STORED ─────────────────────────
  *
- * No network, no database, no server. Phase 2 parses; Phase 3 receives and
- * Phase 3 is not built. Layer 8 asserts that absence rather than trusting it.
+ * No network, no database, no server. Phase 2 parses; Phase 3 receives, at
+ * `src/app/api/sms/tnz-webhook/route.ts`, and is tested by
+ * tests/tnz-webhook-route-test.ts. Layer 8 asserts these two modules still touch
+ * no database, no network and nothing from Next.
  *
  * ── WHY THERE IS A tsc SUBPROCESS IN LAYER 7 ──────────────────────────────────
  *
@@ -704,17 +706,12 @@ for (const rel of ['src/lib/sms/tnz-webhook-envelope.ts', 'src/lib/sms/tnz-deliv
   );
 }
 
-assert(
-  'L8',
-  'no route was built in this phase',
-  !attempt(() => readFileSync(join(ROOT, 'src/app/api/sms/delivery-status/route.ts'), 'utf-8'))
-);
-
-assert(
-  'L8',
-  'no auth helper was built in this phase',
-  !attempt(() => readFileSync(join(ROOT, 'src/app/api/sms/tnz-callback-auth.ts'), 'utf-8'))
-);
+// ⚠ TWO PHASE-DISCIPLINE ASSERTIONS RETIRED AT PHASE 3, on founder ruling (GTC-264 / GTC-229
+// plan, Q9). "No auth helper was built in this phase" would go red because Phase 3 builds
+// `src/app/api/sms/tnz-callback-auth.ts`. "No route was built in this phase" checked a path Phase 3
+// does not use (`sms/delivery-status`), so it would have stayed green while a route WAS built — the
+// false-positive family Phase 2 finding 2 records. Its job moved to tests/tnz-webhook-route-test.ts
+// layer F: exactly one route under src/app/api reads the TNZ envelope.
 
 // ─────────────────────────────────────────────────────────────────────────────
 section('Layer 9: the fixture factory really does fail typecheck on a rename');

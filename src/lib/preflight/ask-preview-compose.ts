@@ -399,8 +399,9 @@ export const CHASE_NONE_WHY: Record<ChaseNoneWhy, string> = {
  * Where a text reply goes. RULED (GTC-189, slice 3 words, second pass): "It is true today and true
  * after GTC-288, which is exactly what 'yet' was not."
  *
- * ⚠ DO NOT ADD "YET". A text reply does not go nowhere temporarily: the inbound route speaks
- * Twilio's shape and not TNZ's; [[GTC-229]] is unbuilt and blocks [[GTC-288]]; [[GTC-288]] reads a
+ * ⚠ DO NOT ADD "YET". A text reply does not go nowhere temporarily: TNZ's webhook,
+ * `/api/sms/tnz-webhook` ([[GTC-264]] / [[GTC-229]]), receives replies but stores none until
+ * [[GTC-288]]; [[GTC-288]] reads a
  * reply only far enough to catch STOP, and nothing decides whether any other reply is kept; and on
  * a shared shortcode some replies reach a different TNZ customer entirely. "Yet" implied one fix;
  * it is three tickets and a possible shortcode purchase. Why, in full: GTC-189.

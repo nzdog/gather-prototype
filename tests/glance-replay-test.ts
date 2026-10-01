@@ -3215,14 +3215,21 @@ async function main() {
      *
      * ⚠ 83 → 84 AT [[GTC-251]] slice 251c (founder ruling, 2026-09-30: the new route and its pins):
      * the hand-back POST, classified SESSION. Named below, as the two before it are.
+     *
+     * ⚠ 84 → 85 AT [[GTC-264]] Phase 3 / [[GTC-229]] (founder ruling, 2026-10-01): TNZ's webhook
+     * POST, classified CUSTOM. The deleted `sms/inbound` route was never classified, so nothing
+     * leaves. Named below, as the three before it are.
      */
     assert(
       'layer 4 / inventory',
-      'and the surface is 84 routes — 81 at phase 4, plus GTC-296’s unsubscribe handler, GTC-311’s chase-choice route and GTC-251’s hand-back',
-      classifications.length === 84 &&
+      'and the surface is 85 routes — 81 at phase 4, plus GTC-296’s unsubscribe handler, GTC-311’s chase-choice route, GTC-251’s hand-back and GTC-264’s TNZ webhook',
+      classifications.length === 85 &&
         classifications.some((e: any) => e.apiPath === '/api/unsubscribe/[token]') &&
         classifications.some((e: any) => e.apiPath === '/api/events/:id/pre-flight/chase') &&
-        classifications.some((e: any) => e.apiPath === '/api/events/:id/people/:personId/hand-back')
+        classifications.some(
+          (e: any) => e.apiPath === '/api/events/:id/people/:personId/hand-back'
+        ) &&
+        classifications.some((e: any) => e.apiPath === '/api/sms/tnz-webhook')
     );
 
     // ══ LAYER 4e — THE LIVE ISLAND (SLICE 6e) ════════════════════════════

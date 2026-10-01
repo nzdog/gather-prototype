@@ -78,8 +78,11 @@ import { emptyTally, tallySend, type SendChannel, type SendTally } from '@/lib/s
  * unconditionally, inside itself. So an accepted ask text logs a row saying a nudge was sent, at
  * the press, before any nudge exists. Ruled 2026-09-19: leave it, record the falsity here, and
  * file the fix — which is [[GTC-288]]'s, because the only thing that row is carrying is the STOP
- * attribution, and `POST /api/sms/inbound` can read `OutboundMessage.providerMessageId` instead of
- * scanning `InviteEvent.metadata`. That retires the index rather than adding a member to it.
+ * attribution, and TNZ's webhook, `POST /api/sms/tnz-webhook` ([[GTC-264]] / [[GTC-229]], which
+ * deleted the Twilio-shaped `/api/sms/inbound`), can read `OutboundMessage.providerMessageId`
+ * instead of scanning `InviteEvent.metadata`. That retires the index rather than adding a member
+ * to it. ⚠ GTC-264's delivery store, `recordTnzDeliveryReport`, also joins a report to its send
+ * through that row's `metadata.messageId`, so retiring the row means moving that join too.
  * Measured at the ruling: the ask is 231 EMAIL to 1 TEXT, so a press writes ONE false row today;
  * and `NUDGE_SENT_AUTO` has ZERO rows in `gather_dev`, so nothing live depends on it either way.
  * ⚠ DO NOT "FIX" THIS BY ADDING AN ENUM MEMBER. That is a migration bought to feed an index

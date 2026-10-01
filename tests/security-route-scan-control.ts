@@ -206,6 +206,26 @@ const GTC296_ADDED = [
   'POST src/app/api/unsubscribe/[token]/route.ts',
 ] as const;
 
+/*
+ * ⚠ ADDED 2026-10 BY [[GTC-264]] PHASE 3 AND [[GTC-229]], ONE ROUTE FOR BOTH (TNZ's answer D1:
+ * delivery reports and replies arrive at one URL, told apart by `Type`).
+ *
+ * REMOVED: the Twilio-shaped `/api/sms/inbound`. Both handlers had no guard and no credential,
+ * and its `POST` wrote `SmsOptOut` and `Person.smsOptedOut` (Zone 7) for any caller. It is
+ * deleted, not guarded, as [[GTC-208]] did for `/api/sms/test-send`. Both handlers therefore
+ * leave the HEAD set, so the set "closed" since `298b62d` gains them by name.
+ *
+ * ADDED: `/api/sms/tnz-webhook`. Unguarded in this file's precise sense, like the cron routes,
+ * and NOT unauthenticated: three refusals keyed on `TNZ_CALLBACK_SECRET`, all pinned
+ * `SHARED_SECRET:PROVEN` in the verdict table. The "no credential of any kind" count falls by
+ * the two removed handlers and gains nothing.
+ */
+const GTC229_REMOVED = [
+  'GET src/app/api/sms/inbound/route.ts',
+  'POST src/app/api/sms/inbound/route.ts',
+] as const;
+const GTC264_ADDED = ['POST src/app/api/sms/tnz-webhook/route.ts'] as const;
+
 function keys(result: ScanResult): Set<string> {
   return new Set(unguardedHandlers(result).map(handlerKey));
 }
@@ -364,6 +384,10 @@ function suite1_HeadShape(head: ScanResult) {
    * "New route, move the pins") — one new route file, `people/[personId]/hand-back`, carrying one
    * `POST` behind `requireEventRole(HOST)`, like the resend beside it. ✅ THE GUARD COUNT DID NOT
    * MOVE — 27 stays 27, which is the security fact, and it is asserted unchanged below.
+   *
+   * ⚠ 142 → 141 HANDLERS AT [[GTC-264]] PHASE 3 / [[GTC-229]], FILES UNCHANGED AT 111 — one route
+   * file removed (`sms/inbound`, a `GET` and a `POST`) and one added (`sms/tnz-webhook`, a `POST`).
+   * The unguarded count moves 27 → 26 for the same reason; see `GTC229_REMOVED`.
    */
   logTest(
     'the scanner discovers exactly 111 route files under src/app/api',
@@ -372,8 +396,8 @@ function suite1_HeadShape(head: ScanResult) {
   );
 
   logTest(
-    'the scanner enumerates exactly 142 exported HTTP handlers',
-    head.handlers.length === 142,
+    'the scanner enumerates exactly 141 exported HTTP handlers',
+    head.handlers.length === 141,
     `found ${head.handlers.length}`
   );
 
@@ -385,9 +409,10 @@ function suite1_HeadShape(head: ScanResult) {
   );
 
   // ⚠ 25 → 27: [[GTC-296]]'s two public unsubscribe handlers, both named in `GTC296_ADDED`.
+  // ⚠ 27 → 26 at [[GTC-264]] / [[GTC-229]]: two removed, one added. See `GTC229_REMOVED`.
   logTest(
-    'exactly 27 handlers carry no session or token guard at HEAD',
-    keys(head).size === 27,
+    'exactly 26 handlers carry no session or token guard at HEAD',
+    keys(head).size === 26,
     `found ${keys(head).size}: ${[...keys(head)].sort().join(', ')}`
   );
 
@@ -398,9 +423,11 @@ function suite1_HeadShape(head: ScanResult) {
   // inventory now records 82 file-shaped entries and this is still a different unit.
   // ⚠ 109/140 → 110/141 and 82 → 83 at [[GTC-311]]: the chase route, classified SESSION.
   // ⚠ 110/141 → 111/142 and 83 → 84 at [[GTC-251]] slice 251c: the hand-back route, SESSION.
+  // ⚠ 111/142 → 111/141 and 84 → 85 at [[GTC-264]] / [[GTC-229]]: the TNZ webhook, CUSTOM. The
+  // removed `sms/inbound` route was never in the inventory, so nothing leaves it.
   logTest(
-    'the surface is larger than the retired inventory could express (84 entries)',
-    head.files.length === 111 && head.handlers.length === 142,
+    'the surface is larger than the retired inventory could express (85 entries)',
+    head.files.length === 111 && head.handlers.length === 141,
     `files ${head.files.length}, handlers ${head.handlers.length}`
   );
 }
@@ -480,20 +507,33 @@ function suite2_Gtc267Control(head: ScanResult, pre: ScanResult) {
 
   // The set equality is the real assertion: not "at least", but "exactly".
   const closed = sortedDiff(preKeys, headKeys);
-  const expectedClosed = [...GTC267_NINE, GTC267_TENTH, ...GTC273_ALSO_CLOSED].sort();
+  // ⚠ 12 → 14 at [[GTC-264]] / [[GTC-229]]: `sms/inbound` was deleted, not guarded.
+  const expectedClosed = [
+    ...GTC267_NINE,
+    GTC267_TENTH,
+    ...GTC273_ALSO_CLOSED,
+    ...GTC229_REMOVED,
+  ].sort();
   logTest(
-    'the set closed between the two commits is EXACTLY GTC-267’s ten plus GTC-273’s two, ' +
-      'no more and no fewer',
+    'the set closed between the two commits is EXACTLY GTC-267’s ten, GTC-273’s two and ' +
+      'GTC-229’s two removed, no more and no fewer',
     JSON.stringify(closed) === JSON.stringify(expectedClosed),
     `got ${closed.length}: ${closed.join(', ')}`
   );
 
   const opened = sortedDiff(headKeys, preKeys);
   // ⚠ 3 → 5: [[GTC-296]]'s two, added by name for the reason `GTC296_ADDED` records.
-  const expectedOpened = [GTC267_ADDED, ...GTC189_CRON_ADDED, ...GTC296_ADDED].sort();
+  // ⚠ 5 → 6 at [[GTC-264]]: the TNZ webhook, named in `GTC264_ADDED`.
+  const expectedOpened = [
+    GTC267_ADDED,
+    ...GTC189_CRON_ADDED,
+    ...GTC296_ADDED,
+    ...GTC264_ADDED,
+  ].sort();
   logTest(
-    'exactly three handlers became unguarded — clone-source, deliberately public, and the ' +
-      "press's drain, which carries a SHARED_SECRET the verdict table pins as PROVEN",
+    'exactly six handlers became unguarded — clone-source, the press drain, the two ' +
+      'unsubscribe handlers, and the TNZ webhook; the drain and the webhook carry a ' +
+      'SHARED_SECRET the verdict table pins as PROVEN',
     JSON.stringify(opened) === JSON.stringify(expectedOpened),
     `got ${opened.length}: ${opened.join(', ')}`
   );
@@ -507,7 +547,7 @@ function suite2_Gtc267Control(head: ScanResult, pre: ScanResult) {
    * because nothing goes red to tell you. Slice 5c updated both.
    */
   logTest(
-    'the arithmetic closes: 32 - 10 + 3 = 25',
+    'the arithmetic closes: 34 - 14 + 6 = 26',
     preKeys.size - closed.length + opened.length === headKeys.size,
     `${preKeys.size} - ${closed.length} + ${opened.length} !== ${headKeys.size}`
   );
@@ -813,8 +853,10 @@ function suite5_HardCasesAtHead(head: ScanResult) {
     // ⚠ NOTE WHAT THE NOTE ABOVE SAYS THIS NUMBER ALSO CATCHES: two of the thirteen fail-open
     // mutations move it 12 → 14. It now sits at 14, so those two mutations would move it to 16
     // — still a red, still caught, and the incidental property survives the move.
-    'exactly 14 handlers carry no guard and no other credential of any kind',
-    noCredential.length === 14,
+    // ⚠ 14 → 12 AT [[GTC-264]] / [[GTC-229]]: the two `sms/inbound` handlers, which had no
+    // credential at all, are deleted; the TNZ webhook that replaces them carries one.
+    'exactly 12 handlers carry no guard and no other credential of any kind',
+    noCredential.length === 12,
     `found ${noCredential.length}: ${noCredential.map(handlerKey).sort().join(', ')}`
   );
 
@@ -1718,7 +1760,6 @@ const HEAD_VERDICTS: ReadonlyArray<readonly [string, boolean, string]> = [
   ['GET src/app/api/events/[id]/clone-source/route.ts', false, ''],
   ['GET src/app/api/events/[id]/tokens/route.ts', true, 'CREDENTIAL_COLUMN:PROVEN'],
   ['GET src/app/api/gather/[eventId]/directory/route.ts', false, ''],
-  ['GET src/app/api/sms/inbound/route.ts', false, ''],
   ['GET src/app/api/templates/gather/route.ts', false, ''],
   /*
    * [[GTC-296]] — the guest's way out, 2026-09-22. Both rows read `false, ''`: unguarded and no
@@ -1785,7 +1826,13 @@ const HEAD_VERDICTS: ReadonlyArray<readonly [string, boolean, string]> = [
    */
   ['POST src/app/api/events/route.ts', false, 'THIRD_PARTY_RECEIPT:PROVEN'],
   ['POST src/app/api/join/[token]/claim/route.ts', false, 'CREDENTIAL_COLUMN:PROVEN'],
-  ['POST src/app/api/sms/inbound/route.ts', false, ''],
+  [
+    // [[GTC-264]] Phase 3 / [[GTC-229]] — the TNZ webhook. Three refusals, all written out in the
+    // route file: the secret configured, the headers, and the body's echo of them.
+    'POST src/app/api/sms/tnz-webhook/route.ts',
+    false,
+    'SHARED_SECRET:PROVEN+SHARED_SECRET:PROVEN+SHARED_SECRET:PROVEN',
+  ],
   ['POST src/app/api/webhooks/stripe/route.ts', false, 'SIGNATURE:PROVEN'],
 ];
 

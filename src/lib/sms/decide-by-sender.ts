@@ -28,10 +28,11 @@ import {
  *
  * Every send goes through `sendSms`, never TNZ or Twilio directly. That is not tidiness:
  * `sendSms` re-checks opt-out before the provider config (Do-Not-Touch zone 7), routes
- * +64/+61 to TNZ, and writes the `NUDGE_SENT_AUTO` InviteEvent that the inbound STOP
- * handler later uses to work out WHICH HOST a guest is opting out from
- * (sms/inbound/route.ts:47-54). A bespoke send path would silently break opt-out
- * attribution.
+ * +64/+61 to TNZ, and writes the `NUDGE_SENT_AUTO` InviteEvent that carries TNZ's
+ * `MessageID`. [[GTC-264]]'s delivery store joins a delivery report to its send on that
+ * id, and [[GTC-288]]'s STOP attribution will join a reply on it. (The Twilio-shaped
+ * `sms/inbound` route that once read this row was deleted at GTC-264 / GTC-229.) A
+ * bespoke send path would silently break both.
  *
  * [[GTC-251]] slice 251b — AND AN EMAIL LEG (Q4), for the guest the chase chooser emails. It goes
  * through `sendDecideByEmail`, the host-voiced guest sender, so the way out, the footer and the

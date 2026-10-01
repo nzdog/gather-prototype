@@ -624,6 +624,17 @@
     "securityIssues": []
   },
   {
+    "filePath": "src/app/api/sms/tnz-webhook/route.ts",
+    "apiPath": "/api/sms/tnz-webhook",
+    "methods": ["POST"],
+    "authType": "CUSTOM",
+    "authEvidence": [
+      "TNZ webhook shared secret: tnzCallbackAccepted (src/app/api/sms/tnz-callback-auth.ts) on the Authorization and X-Sender headers and on the body's APIKey and Sender",
+      "fails closed: isTnzCallbackConfigured refuses every caller when TNZ_CALLBACK_SECRET or TNZ_CALLBACK_SENDER is unset (GTC-270's shape)"
+    ],
+    "securityIssues": []
+  },
+  {
     "filePath": "src/app/api/templates/[id]/clone/route.ts",
     "apiPath": "/api/templates/:id/clone",
     "methods": ["POST"],

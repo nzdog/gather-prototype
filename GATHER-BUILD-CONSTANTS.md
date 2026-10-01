@@ -1,7 +1,9 @@
 # GATHER BUILD CONSTANTS
 
 Reference file for AI executors and developers. Keep this file accurate.
-Last updated: 2026-10-01 (Known failures: `npm run lint` exits 1, recorded at GTC-335 on founder
+Last updated: 2026-10-01 (GTC-264 / GTC-229: `TNZ_CALLBACK_SECRET` and `TNZ_CALLBACK_SENDER` in
+the environment table; `test:security`'s live layer, 15 → 18 without a server). Previously
+2026-10-01 (Known failures: `npm run lint` exits 1, recorded at GTC-335 on founder
 instruction). Previously 2026-09-30 (cron health, GTC-339: the sending crons fail per channel, the
 nudges cron only when it cannot queue; outbound-dispatch in the cron table; production's crons are
 called by an outside scheduler; the approved exceptions to "no cron against gather_dev" listed in
@@ -193,7 +195,10 @@ switch.)*
 
 ### `test:security`'s live layer needs the dev server
 *(Founder ruling, 2026-09-28, GTC-337 preflight.)* Without a dev server on
-:3000, `test:security` fails its 15 live assertions. That is not a regression.
+:3000, `test:security` fails its 18 live assertions (15 until GTC-264 / GTC-229 added three:
+Suite 15's two refusals at `/api/sms/tnz-webhook` and its 404 at `/api/sms/inbound`; its fourth
+live assertion, that nothing was written, passes with or without a server). That is not a
+regression.
 Start the server with the provider keys blanked for that process only, and never
 edit `.env.local`:
 `RESEND_API_KEY= TWILIO_ACCOUNT_SID= TWILIO_AUTH_TOKEN= TWILIO_PHONE_NUMBER= TNZ_AUTH_TOKEN= npm run dev`.
@@ -203,6 +208,10 @@ preconditions (GTC-270):
 - `/api/cron/decide-by-followups`, after zero decide-by candidates: an unstamped maybe with a phone
   or an email, on a sent and live event (widened at GTC-251 slice 251b, when the follow-up gained
   its email leg).
+
+Since GTC-264 / GTC-229 it also calls `/api/sms/tnz-webhook` twice, with no credential and with
+made-up ones, and `GET /api/sms/inbound` once; none is a cron, all are refused or absent, and it
+asserts no `SmsDeliveryReport` or `SmsOptOut` row was written.
 
 It never drives `/api/cron/nudges` with a valid secret, and it fails if the
 `InviteEvent` count moves. Since GTC-274 both drives wait on their own
@@ -382,6 +391,8 @@ Actual values are redacted. Copy `.env.example` to `.env` and fill in real value
 | `STRIPE_PRICE_ID` | Stripe subscription price ID | `.env` / deployment env |
 | `GATHER_LIVE_SENDS` | **Production only.** Exactly `on` means Gather sends real texts and email; anything else, including unset, stops every send at its last step (GTC-274). Set on Railway production and checked by the build; never in `.env` or `.env.local`. See *Live sending*. | Railway production env only |
 | `TNZ_AUTH_TOKEN` | SMS via TNZ for NZ (+64) and AU (+61) — obtain from TNZ Dashboard → Users → API tab → Auth Token. Required for production NZ delivery (Twilio does not deliver to NZ). | `.env` / deployment env |
+| `TNZ_CALLBACK_SECRET` | Authenticates TNZ's calls to `/api/sms/tnz-webhook`, the one URL for delivery reports and replies (GTC-264, GTC-229). The webhook APIKey set in the TNZ Dashboard (Users → API User → API → Reporting), sent raw in `Authorization` and echoed as the body's `APIKey`; both are checked. Not `TNZ_AUTH_TOKEN`. **Required, not optional** — unset or empty refuses every caller, following `CRON_SECRET`'s precedent, and TNZ retry a refused call every five minutes for 24 hours. | `.env` / deployment env |
+| `TNZ_CALLBACK_SENDER` | The identity half of the same credential: the webhook Sender set on the same Dashboard screen, sent as `X-Sender` and the body's `Sender`; both are checked. **Required, not optional** — refuses every caller when unset, as above. | `.env` / deployment env |
 | `TWILIO_ACCOUNT_SID` | SMS via Twilio for non-NZ/AU destinations (OPTIONAL) | `.env` / deployment env |
 | `TWILIO_AUTH_TOKEN` | SMS via Twilio for non-NZ/AU destinations (OPTIONAL) | `.env` / deployment env |
 | `TWILIO_PHONE_NUMBER` | Twilio sender number (OPTIONAL) | `.env` / deployment env |

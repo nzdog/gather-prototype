@@ -2228,6 +2228,148 @@ async function testSuite14_PaymentIsNotIdentity() {
   );
 }
 
+/**
+ * Suite 15 — [[GTC-264]] Phase 3 / [[GTC-229]]: TNZ's ONE webhook fails closed, and the
+ * Twilio-shaped `/api/sms/inbound` is gone.
+ *
+ * TNZ send delivery reports and replies to one URL (their answer D1, 2026-09-15), so one route,
+ * `POST /api/sms/tnz-webhook`, authenticates both. It replaces `/api/sms/inbound`, which checked
+ * nothing and wrote `SmsOptOut` and `Person.smsOptedOut` (Zone 7) for any caller; that route was
+ * DELETED, not guarded, on founder ruling (plan Q2).
+ *
+ * A. THE PREDICATES, PURE — the GTC-270 shape: no server, no database, no clock.
+ * B. LIVE, against the dev server. Both refusals hold WHETHER OR NOT the server has the secret:
+ *    one presents nothing, the other presents made-up values in both places. The old route is
+ *    driven with `GET` only, so even before the build this suite never posts to a Zone 7 writer.
+ *    The full behaviour — every status, every write — is held in process by
+ *    tests/tnz-webhook-route-test.ts; this suite holds the security contract on the real server.
+ */
+async function testSuite15_TnzWebhookFailsClosed() {
+  logSection(
+    'Test Suite 15: GTC-264 / GTC-229 — the TNZ webhook fails closed; /api/sms/inbound is gone'
+  );
+
+  const BASE = process.env.SECURITY_TEST_BASE_URL ?? 'http://localhost:3000';
+
+  // ── A. THE PREDICATES, PURE ─────────────────────────────────────────────────────
+  let authMod: {
+    isTnzCallbackConfigured: (secret: string | undefined, sender: string | undefined) => boolean;
+    tnzCallbackAccepted: (
+      secret: string | undefined,
+      sender: string | undefined,
+      presentedSecret: string | null | undefined,
+      presentedSender: string | null | undefined
+    ) => boolean;
+  } | null = null;
+  try {
+    authMod = await import('../src/app/api/sms/tnz-callback-auth');
+  } catch {
+    authMod = null;
+  }
+
+  const predicate = (name: string, fn: () => boolean) => {
+    if (!authMod) {
+      logTest(
+        name,
+        false,
+        'src/app/api/sms/tnz-callback-auth.ts does not exist or does not export it'
+      );
+      return;
+    }
+    let ok = false;
+    let err: string | undefined;
+    try {
+      ok = fn();
+    } catch (e: any) {
+      err = e.message;
+    }
+    logTest(name, ok, err);
+  };
+
+  predicate(
+    'PREDICATE: an UNSET TNZ_CALLBACK_SECRET is not configured',
+    () => authMod!.isTnzCallbackConfigured(undefined, 'sender-gtc264') === false
+  );
+  predicate(
+    'PREDICATE: an EMPTY TNZ_CALLBACK_SECRET is unset too',
+    () => authMod!.isTnzCallbackConfigured('', 'sender-gtc264') === false
+  );
+  predicate(
+    'PREDICATE: an EMPTY configured pair is not satisfied by an EMPTY presented pair ("" === "")',
+    () => authMod!.tnzCallbackAccepted('', '', '', '') === false
+  );
+  predicate(
+    'PREDICATE [POSITIVE CONTROL]: the right secret and sender are ACCEPTED',
+    () =>
+      authMod!.tnzCallbackAccepted(
+        's3cret-gtc264',
+        'sender-gtc264',
+        's3cret-gtc264',
+        'sender-gtc264'
+      ) === true
+  );
+
+  // ── B. LIVE ─────────────────────────────────────────────────────────────────────
+  const reportsBefore = await prisma.smsDeliveryReport.count();
+  const optOutsBefore = await prisma.smsOptOut.count();
+
+  const liveStatus = async (method: 'GET' | 'POST', apiPath: string, init: RequestInit = {}) => {
+    try {
+      const res = await fetch(`${BASE}${apiPath}`, { method, ...init });
+      return res.status;
+    } catch {
+      return null;
+    }
+  };
+
+  const bare = await liveStatus('POST', '/api/sms/tnz-webhook', {
+    headers: { 'content-type': 'application/json' },
+    body: '{}',
+  });
+  logTest(
+    'live: POST /api/sms/tnz-webhook with no credential is refused (401)',
+    bare === 401,
+    `status ${bare} — null means the dev server is down`
+  );
+
+  const madeUp = {
+    Sender: 'made-up-gtc264@sender.invalid',
+    APIKey: 'made-up-gtc264-not-the-secret',
+    Type: 'SMS',
+    MessageID: 'gtc264-live-probe',
+    Destination: '+6421000001',
+    Status: 'SUCCESS',
+    Result: 'delivered',
+  };
+  const forged = await liveStatus('POST', '/api/sms/tnz-webhook', {
+    headers: {
+      'content-type': 'application/json',
+      authorization: madeUp.APIKey,
+      'x-sender': madeUp.Sender,
+    },
+    body: JSON.stringify(madeUp),
+  });
+  logTest(
+    'live: POST /api/sms/tnz-webhook with made-up credentials in headers AND body is refused (401)',
+    forged === 401,
+    `status ${forged}`
+  );
+
+  const gone = await liveStatus('GET', '/api/sms/inbound');
+  logTest(
+    'live: GET /api/sms/inbound answers 404 — the Twilio-shaped route is deleted, not guarded',
+    gone === 404,
+    `status ${gone}`
+  );
+
+  logTest(
+    'live: the drives above wrote no SmsDeliveryReport and no SmsOptOut row',
+    (await prisma.smsDeliveryReport.count()) === reportsBefore &&
+      (await prisma.smsOptOut.count()) === optOutsBefore,
+    'a refused or absent route wrote a row'
+  );
+}
+
 async function main() {
   console.log(`${BOLD}${YELLOW}=== Security Validation Test Suite ===${RESET}\n`);
   console.log('Contract under test:');
@@ -2254,6 +2396,7 @@ async function main() {
     await testSuite12_CronSecretFailsClosed(fixtures);
     await testSuite13_EventListSelect(fixtures);
     await testSuite14_PaymentIsNotIdentity();
+    await testSuite15_TnzWebhookFailsClosed();
 
     console.log(`\n${BOLD}${YELLOW}=== Test Summary ===${RESET}`);
     console.log(`Total tests: ${testsRun}`);

@@ -272,8 +272,9 @@ async function runTests() {
   const fs = require('fs');
   const path = require('path');
 
-  const webhookPath = path.join(__dirname, '../src/app/api/sms/inbound/route.ts');
-  assert(fs.existsSync(webhookPath), 'Inbound webhook route.ts exists');
+  // GTC-264 / GTC-229: TNZ's one webhook replaced the Twilio-shaped `sms/inbound` route.
+  const webhookPath = path.join(__dirname, '../src/app/api/sms/tnz-webhook/route.ts');
+  assert(fs.existsSync(webhookPath), 'TNZ webhook route.ts exists');
 
   const inviteStatusPath = path.join(
     __dirname,
