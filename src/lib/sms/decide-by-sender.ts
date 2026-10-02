@@ -34,6 +34,7 @@ import { readAskPreview } from '@/lib/preflight/ask-preview';
 import { getEmailOptOut } from '@/lib/eligibility/email-opt-out';
 import { decideBy } from '@/lib/decide-by';
 import type { OutboundWithheldWhy } from '@/lib/press/dispatch';
+import { readReplyInForce } from '@/lib/chase-reply-read';
 
 /**
  * GTC-175 (D2) — sending the maybe's one follow-up.
@@ -350,6 +351,11 @@ export async function retryUndeliveredFollowups(
     };
     if (maybes.length === 0) {
       await withhold('ANSWERED');
+      continue;
+    }
+    // [[GTC-350]] plan ruling Q-A — a reply in force stops the follow-up's retry as it stops the follow-up.
+    if (await readReplyInForce(prisma, row.eventId, row.personEventId, now)) {
+      await withhold('REPLIED');
       continue;
     }
     // The maybe whose decide-by lands first, of those not yet passed. None left: skip, no row.

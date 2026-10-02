@@ -65,9 +65,11 @@
  * per-strip cost is a name, a word, a weekday and its rows.
  */
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
-import type { ReadingPanel, ReadingRow } from './reading';
+import { GLANCE_REPLIES_EVENT } from '@/lib/glance/live';
+import type { GlanceReply } from '@/lib/glance/state';
+import { REPLIES_HEADING, type ReadingPanel, type ReadingRow } from './reading';
 
 export interface GlancePersonReadingProps {
   /** The narrowed payload. Never a `GlancePerson`; see the header. */
@@ -88,6 +90,22 @@ export default function GlancePersonReading({
   children,
 }: GlancePersonReadingProps) {
   const [open, setOpen] = useState(false);
+
+  /*
+    [[GTC-350]] fix 2 — THE LIVE POLL'S WORDS. This room was built at first paint; a reply that lands
+    while the board is open reaches it through `GLANCE_REPLIES_EVENT`, which the live island fires on
+    every poll. Only this person's list is taken, and the listener goes when the room does.
+  */
+  const [liveReplies, setLiveReplies] = useState<GlanceReply[] | null>(null);
+  useEffect(() => {
+    const onReplies = (e: Event) => {
+      const mine = (e as CustomEvent<Record<string, GlanceReply[]>>).detail?.[personEventId];
+      if (mine) setLiveReplies(mine);
+    };
+    window.addEventListener(GLANCE_REPLIES_EVENT, onReplies);
+    return () => window.removeEventListener(GLANCE_REPLIES_EVENT, onReplies);
+  }, [personEventId]);
+  const replies = liveReplies ?? panel.replies;
 
   return (
     <>
@@ -172,6 +190,24 @@ export default function GlancePersonReading({
                     {note}
                   </p>
                 ))}
+                {/*
+                  [[GTC-350]] Q2 — every text reply they sent, newest first, in their words, with when
+                  each came (R4, R5). Ruling 1's one ruled exception: lines the server wrote, never an
+                  instant, and no count. The live poll keeps them current (fix 2).
+                */}
+                {replies.length > 0 ? (
+                  <div data-replies="" className="mt-3">
+                    <p className="m-0 text-[11px] uppercase tracking-wide text-[#888780]">
+                      {REPLIES_HEADING}
+                    </p>
+                    {replies.map((reply, i) => (
+                      <div key={i} data-reply="" className="mt-1.5 rounded-lg bg-[#f5f4ef] p-2.5">
+                        <p className="m-0 whitespace-pre-wrap text-[13px]">{reply.words}</p>
+                        <p className="m-0 mt-0.5 text-[11px] text-[#888780]">{reply.when}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
               <button
                 type="button"

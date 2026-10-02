@@ -76,7 +76,8 @@ export default async function GlancePage({ params }: { params: Promise<{ eventId
   });
   if (!event) notFound();
 
-  const glance = await readEventGlance(prisma, eventId, now);
+  // [[GTC-350]] plan Q-F — a guest's text replies reach the HOST's board only.
+  const glance = await readEventGlance(prisma, eventId, now, { replies: auth.role === 'HOST' });
 
   /*
     ── Phase 6 — THE MEMORY (6b), AND THE REPLAY IT GUARDS (6c) ────────────────────────

@@ -31,6 +31,7 @@
 import { PrismaClient } from '@prisma/client';
 import {
   BEHAVIOUR_DENYLIST,
+  REPLY_FENCE_DENYLIST,
   REWIND_DENYLIST,
   REWIND_EXEMPT_NAMES,
   collectKeys,
@@ -246,15 +247,19 @@ async function main() {
      * ⚠ 6 → 7, [[GTC-251]] Q5 (founder, 2026-09-29) — the deliberate edit this pin asks for.
      * `CHASE_UNREACHABLE` is a channel lost AFTER the ask. It shares `UNREACHABLE`'s words and not
      * its door, which would answer `NOTHING_FAILED` for an ask that did not fail.
+     *
+     * ⚠ 7 → 8, [[GTC-350]] Q1 (founder, 2026-10-02) — the deliberate edit this pin asks for.
+     * `REPLIED`: a guest's text reply ended Gather's chase, and only the host can read what they said.
      */
     assert(
       'item state',
-      '⚠ THE RED VOCABULARY IS SEVEN — the fourth and fifth reds joined DECIDE_BY_EXPIRED, REVERSAL ' +
-        'and EXHAUSTED_SILENCE, GTC-296 added the sixth, GTC-251 Q5 the seventh, and the count ' +
-        'stays pinned so an eighth is a deliberate edit',
+      '⚠ THE RED VOCABULARY IS EIGHT — the fourth and fifth reds joined DECIDE_BY_EXPIRED, REVERSAL ' +
+        'and EXHAUSTED_SILENCE, GTC-296 added the sixth, GTC-251 Q5 the seventh, GTC-350 the ' +
+        'eighth, and the count stays pinned so a ninth is a deliberate edit',
       ok(
         () =>
-          S.RED_REASONS.length === 7 &&
+          S.RED_REASONS.length === 8 &&
+          S.RED_REASONS.includes('REPLIED') &&
           S.RED_REASONS.includes('NOT_DELIVERED') &&
           S.RED_REASONS.includes('UNREACHABLE') &&
           S.RED_REASONS.includes('EMAIL_OPTED_OUT') &&
@@ -1085,6 +1090,15 @@ async function main() {
         'Ruling 1 source',
         `no glance source names "${banned}" — the fence is on the select, not the render`,
         sourcesExist && !glanceSources.some((src) => re.test(src))
+      );
+    }
+    // [[GTC-350]] Q2 — the fence relaxed for text replies only: a reply crosses as its words and a
+    // written line, and nothing else of it may be named by any glance source (tests/glance-fence.ts).
+    for (const banned of REPLY_FENCE_DENYLIST) {
+      assert(
+        'Ruling 1 source / GTC-350',
+        `no glance source names "${banned}" — a reply crosses as words and a written line, never its row, ids, instants or number`,
+        sourcesExist && !glanceSources.some((src) => new RegExp(`\\b${banned}\\b`).test(src))
       );
     }
     assert(

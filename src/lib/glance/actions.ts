@@ -530,12 +530,44 @@ export const HAND_BACK_CHOICES: readonly { reminders: number; label: string }[] 
 export const HAND_BACK_DONE = "Handed back. I'll send the next one soon.";
 
 /**
- * Only "gone quiet" is handed back. Keyed on `reasons`, Ruling 23's pattern: the other reds are a
- * cause Gather cannot remind its way past (nothing arrived, nowhere to send, a guest's no, a row
- * given back, a maybe run out), and the route re-derives the person before it writes anyway.
+ * [[GTC-350]] plan ruling Q-D (2026-10-02): *"for a guest who replied, the lead reads "Want me to
+ * carry on reminding them?". "Gone quiet" keeps "Want me to keep trying?". The choices and "Handed
+ * back. I'll send the next one soon." stay W2's."*
  */
-export function handBackOffered(person: Pick<GlancePerson, 'state' | 'reasons'>): boolean {
-  return person.state === 'RED' && person.reasons.includes('EXHAUSTED_SILENCE');
+export const HAND_BACK_LEAD_REPLIED = 'Want me to carry on reminding them?';
+
+/**
+ * The reds a hand-back is for: "gone quiet" ([[GTC-251]] Q3) and a text reply ([[GTC-350]] Q1). One
+ * list, read by this surface and by the route (`handBackPerson`), so the two cannot disagree.
+ */
+export const HAND_BACK_REASONS = ['EXHAUSTED_SILENCE', 'REPLIED'] as const;
+
+type HandBackSubject = Pick<GlancePerson, 'state' | 'reasons'> & {
+  handBackChoices?: readonly number[];
+};
+
+/**
+ * Only "gone quiet" and a reply are handed back. Keyed on `reasons`, Ruling 23's pattern: the other
+ * reds are a cause Gather cannot remind its way past (nothing arrived, nowhere to send, a guest's
+ * no, a row given back, a maybe run out), and the route re-derives the person before it writes.
+ *
+ * ⚠ [[GTC-350]] fix 1 — AND ONLY WHERE IT WOULD STILL SEND SOMETHING. The board's `handBackChoices`
+ * is the door; empty means none (reminders off with nothing left to come, or a spent follow-up).
+ */
+export function handBackOffered(person: HandBackSubject): boolean {
+  if (person.state !== 'RED') return false;
+  if (!HAND_BACK_REASONS.some((r) => person.reasons.includes(r))) return false;
+  return person.handBackChoices === undefined || person.handBackChoices.length > 0;
+}
+
+/** The choices this door offers: the board's, or all three where nothing narrowed them. */
+export function handBackChoicesOf(person: HandBackSubject): readonly number[] {
+  return person.handBackChoices ?? [1, 2, 3];
+}
+
+/** The lead line: the replied one for a reply, W2's for "gone quiet" (plan ruling Q-D). */
+export function handBackLeadFor(person: Pick<GlancePerson, 'reasons'>): string {
+  return person.reasons.includes('REPLIED') ? HAND_BACK_LEAD_REPLIED : HAND_BACK_LEAD;
 }
 
 /** HAND BACK. It moves the board: the red turns amber on the refresh, because Gather has a move. */

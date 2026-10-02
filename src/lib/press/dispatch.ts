@@ -15,6 +15,7 @@ import {
 import { firstNameOf } from '@/lib/messages/ask-register';
 import { withOptOutLine } from '@/lib/sms/opt-out-line';
 import { readChaseOwed } from '@/lib/sms/nudge-eligibility';
+import { readReplyInForce } from '@/lib/chase-reply-read';
 import { listEmailBlocks, normalizeEmailAddress } from '@/lib/eligibility/email-block';
 import { applyStoredTnzReports } from '@/lib/sms/tnz-delivery-record';
 import { emptyTally, tallySend, type SendChannel, type SendTally } from '@/lib/send-health';
@@ -304,6 +305,11 @@ export type OutboundWithheldWhy =
    */
   | 'PACE_OFF'
   /*
+   * [[GTC-350]] Q1 — a text reply is in force: the guest is the host's until she hands them back.
+   * Only ever on a CHASE row and on the decide-by follow-up's retry, after ANSWERED.
+   */
+  | 'REPLIED'
+  /*
    * ⚠ [[GTC-322]] — AND IT IS THE ONLY MEMBER OF THIS UNION NO GATE PRODUCES.
    *
    * Founder ruling, 2026-09-19, shape 3: the press predates the sender. `Event.sentAt` has been
@@ -359,6 +365,8 @@ export const WITHHELD_WHY_IS_TERMINAL: Record<OutboundWithheldWhy, true> = {
   HANDED_TO_HOST: true,
   ANSWERED: true,
   PACE_OFF: true,
+  // [[GTC-350]]: terminal. A hand-back starts a new chase with new rows; it never retries this one.
+  REPLIED: true,
   // [[GTC-322]]: terminal in the strongest sense of the word — there is no message to retry,
   // because none was ever composed.
   PREDATES_SENDER: true,
@@ -401,6 +409,7 @@ export const WITHHELD_COUNTS_FOR_HEALTH: Record<OutboundWithheldWhy, boolean> = 
   HANDED_TO_HOST: false,
   ANSWERED: false,
   PACE_OFF: false,
+  REPLIED: false,
   PREDATES_SENDER: false,
 };
 
@@ -805,6 +814,8 @@ async function drainChaseRow(
 
   const owed = await readChaseOwed(db, row.eventId, row.personEventId, chase.carried);
   if (!owed.owed) return withhold('ANSWERED');
+  // [[GTC-350]] Q1 — a reply that landed after this reminder was queued ends the chase at the send.
+  if (await readReplyInForce(db, row.eventId, row.personEventId, now)) return withhold('REPLIED');
 
   const channel: OutboundChannel = chase.chasedBy;
   current = channel;

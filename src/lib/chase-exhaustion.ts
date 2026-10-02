@@ -88,11 +88,19 @@ export function isChaseExhausted(spend: ChaseSpend | undefined, now: Date): bool
   // Anything still in flight is a move Gather has not finished making.
   if (visible.some((l) => !spentBy(l))) return false;
 
-  for (const kind of CADENCE_KINDS.slice(0, spend.cadenceLength)) {
-    if (!visible.some((l) => l.kind === kind)) return false;
+  const handBack = spend.handBack;
+  /*
+   * [[GTC-350]] plan ruling Q-C — WHILE A HAND-BACK IS IN FORCE, ITS COUNT IS ALL GATHER SENDS. A
+   * guest handed back from a reply mid-cadence is sent no first or second reminder after it
+   * (`findNudgeCandidates`), so their silence is spent once the further reminders are. From "gone
+   * quiet" nothing changes: both cadence legs were always sent before that red.
+   */
+  if (!handBackInForce(spend, now)) {
+    for (const kind of CADENCE_KINDS.slice(0, spend.cadenceLength)) {
+      if (!visible.some((l) => l.kind === kind)) return false;
+    }
   }
 
-  const handBack = spend.handBack;
   if (handBack && handBack.at.getTime() <= t) {
     const since = handBack.at.getTime();
     const more = visible.filter((l) => l.kind === 'CHASE_MORE' && l.createdAt.getTime() >= since);
@@ -103,6 +111,17 @@ export function isChaseExhausted(spend: ChaseSpend | undefined, now: Date): bool
   // still waits after the later one.
   const last = Math.max(...visible.map((l) => l.spentAt!.getTime()));
   return t > last + GONE_QUIET_AFTER_HOURS * HOUR_MS;
+}
+
+/**
+ * [[GTC-350]] plan ruling Q-C — is a hand-back in force at `now`? While one is, the sweep sends no
+ * first or second reminder and the board's nudge day is the hand-back's own next leg.
+ */
+export function handBackInForce(
+  spend: Pick<ChaseSpend, 'handBack'> | undefined,
+  now: Date
+): boolean {
+  return !!spend?.handBack && spend.handBack.at.getTime() <= now.getTime();
 }
 
 /**

@@ -1279,11 +1279,13 @@ async function main() {
       );
       assert(
         'W',
-        '[RULED words] the reply-to line names the address, and says a text reply will not reach her',
+        // ⚠ MOVED BY [[GTC-350]] (founder Q4, 2026-10-02). It read: "…and says a text reply will not
+        // reach her", ending "A text reply won't reach you — I have no way to pass it on."
+        '[RULED words] the reply-to line names the address, and says where a text reply goes (GTC-350 Q4)',
         ok(
           () =>
             APC.replyToLine('nigel@mckorbett.co.nz') ===
-            "Replies to an email come to nigel@mckorbett.co.nz. A text reply won't reach you — I have no way to pass it on."
+            'Replies to an email come to nigel@mckorbett.co.nz. A text reply usually comes to your board, and I stop reminding whoever sent it.'
         )
       );
       assert(

@@ -2134,16 +2134,20 @@ async function main() {
     );
     assert(
       'Ruling 32 / payload',
-      'and the panel’s keys are EXACTLY the four ruled, its rows exactly four — an allowlist, because a denylist can only ban what someone thought of',
+      'and the panel’s keys are EXACTLY the six ruled ([[GTC-350]] Q2 adds `replies`, EMPTY for a person with none), its rows exactly four — an allowlist, because a denylist can only ban what someone thought of',
       ok(() => {
         const panel = RD.readingPanelFor(leaky, V_NOW);
         return (
           // ⚠ [[GTC-305]] adds `notes` (Ruling 32 as amended) — and for this GREEN/AMBER person
           // it must be EMPTY, which keeps these panels exactly as ruled.
+          // ⚠ [[GTC-350]] Q2 adds `replies` — every text reply the guest sent, as words and a written
+          // line — and for this person, who sent none, it must be EMPTY.
           JSON.stringify(Object.keys(panel).sort()) ===
-            JSON.stringify(['name', 'notes', 'nudge', 'rows', 'status']) &&
+            JSON.stringify(['name', 'notes', 'nudge', 'replies', 'rows', 'status']) &&
           Array.isArray(panel.notes) &&
           panel.notes.length === 0 &&
+          Array.isArray(panel.replies) &&
+          panel.replies.length === 0 &&
           panel.rows.length === 4 &&
           panel.rows.every(
             (r: any) =>

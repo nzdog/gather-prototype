@@ -82,9 +82,11 @@ import {
   GLANCE_POLL_MS,
   GLANCE_REFRESH_EVENT,
   GLANCE_REPLAY_DONE_EVENT,
+  GLANCE_REPLIES_EVENT,
   diffLive,
   liveStampDecision,
   liveStates,
+  repliesOf,
 } from '@/lib/glance/live';
 import type { EventGlance, GlancePerson, PersonState } from '@/lib/glance/state';
 import type { LiveFlip } from '@/lib/glance/live';
@@ -171,6 +173,8 @@ export default function GlanceLive({
     };
 
     const apply = (glance: EventGlance) => {
+      // [[GTC-350]] fix 2 — every poll hands the open rooms the words it carried (the host's only).
+      window.dispatchEvent(new CustomEvent(GLANCE_REPLIES_EVENT, { detail: repliesOf(glance) }));
       const next = liveStates(glance);
       const previous = baseline.current;
       baseline.current = next;

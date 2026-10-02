@@ -18,7 +18,7 @@
 import type { Prisma } from '@prisma/client';
 import { readEventGlance } from '@/lib/glance/read';
 import { readAskPreview } from '@/lib/preflight/ask-preview';
-import { CATCH_UP_NOTE } from '@/lib/glance/actions';
+import { CATCH_UP_NOTE, HAND_BACK_REASONS } from '@/lib/glance/actions';
 
 type Db = Prisma.TransactionClient;
 
@@ -45,7 +45,16 @@ export async function handBackPerson(
   if (!person) {
     return { ok: false, status: 404, code: 'NOT_ON_EVENT', error: 'Not on this event.' };
   }
-  if (person.state !== 'RED' || !person.reasons.includes('EXHAUSTED_SILENCE')) {
+  /*
+   * [[GTC-350]] — "gone quiet" or a reply (one list with the panel), and only a count the board's own
+   * door offers: plan ruling Q-D (a maybe-only guest gets 1) and fix 1 (with reminders off, only
+   * where something would still be sent). Refused in W2's words, as a stale board is.
+   */
+  if (
+    person.state !== 'RED' ||
+    !HAND_BACK_REASONS.some((r) => person.reasons.includes(r)) ||
+    !person.handBackChoices.includes(input.reminders)
+  ) {
     return { ok: false, status: 409, code: 'NOT_GONE_QUIET', error: CATCH_UP_NOTE };
   }
 

@@ -297,6 +297,9 @@ export function deriveReplay(
          * still never replay: Ruling 22 says your own decisions aren't news to you."*
          */
         delivery: past.deliveryAt?.get(person.personEventId) ?? null,
+        // [[GTC-350]] note 7 — a reply that turned a card red while she was away plays once, AMBER →
+        // RED, ordered by when Gather recorded it (`factChangedSince`).
+        reply: past.replyAt?.get(person.personEventId) ?? null,
         chase: past.chaseAt?.has(person.personEventId)
           ? (past.chaseAt.get(person.personEventId) ?? null)
           : person.chase,

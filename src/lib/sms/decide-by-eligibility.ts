@@ -6,6 +6,8 @@ import { decideBy, isDecideByFollowupDue } from '@/lib/decide-by';
 import { EMAIL_OPT_OUT_SKIP_REASON, getEmailOptOut } from '@/lib/eligibility/email-opt-out';
 import { readAskPreview, type AskPreview } from '@/lib/preflight/ask-preview';
 import { CHASE_SKIP_REASON } from '@/lib/sms/nudge-eligibility';
+import { REPLIED_SKIP_REASON, replyInForce } from '@/lib/chase-reply';
+import { readReplyFacts, type ReplyFacts } from '@/lib/chase-reply-read';
 
 /**
  * GTC-175 (D2) — who is due the single decide-by follow-up.
@@ -185,8 +187,11 @@ export async function findDecideByFollowupCandidates(
    * pre-flight and the board read, so all four give one answer about who Gather may follow up.
    */
   const previews = new Map<string, AskPreview | null>();
+  // [[GTC-350]] — each event's text replies, read once, for the one predicate the chase also asks.
+  const replyFacts = new Map<string, ReplyFacts>();
   for (const eventId of new Set(assignments.map((a) => a.item.team.event.id))) {
     previews.set(eventId, await readAskPreview(prisma, eventId, ''));
+    replyFacts.set(eventId, await readReplyFacts(prisma, eventId, now));
   }
 
   const tokens = await prisma.accessToken.findMany({
@@ -276,6 +281,25 @@ export async function findDecideByFollowupCandidates(
      */
     if (await getEmailOptOut(person.id, event.id)) {
       addSkip(EMAIL_OPT_OUT_SKIP_REASON);
+      continue;
+    }
+
+    /*
+     * 3c. [[GTC-350]] plan ruling Q-A — A REPLY IN FORCE STOPS THE FOLLOW-UP TOO, so the pre-flight's
+     *     Q4 sentence ("I stop reminding whoever sent it") stays true of a maybe. A hand-back after
+     *     the reply lets it go. Counted, never silent.
+     */
+    const facts = replyFacts.get(event.id);
+    const membershipId = membershipIdByPair.get(pair)!;
+    if (
+      facts &&
+      replyInForce(
+        facts.repliedAt.get(membershipId) ?? [],
+        facts.handBackAt.get(membershipId) ?? null,
+        now
+      )
+    ) {
+      addSkip(REPLIED_SKIP_REASON);
       continue;
     }
 

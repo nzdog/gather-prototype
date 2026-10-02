@@ -1184,11 +1184,13 @@ async function main() {
       'ANSWERED',
       'PACE_OFF',
       'PREDATES_SENDER',
+      // [[GTC-350]] — a reply in force: the guest is the host's until she hands them back.
+      'REPLIED',
     ];
     const counts = dispatch.WITHHELD_COUNTS_FOR_HEALTH ?? {};
     assert(
       'U',
-      'WITHHELD_COUNTS_FOR_HEALTH names all 25 withholdings, and only SMS_DISABLED counts',
+      'WITHHELD_COUNTS_FOR_HEALTH names all 26 withholdings, and only SMS_DISABLED counts',
       same(Object.keys(counts).sort(), [...WHY].sort()) &&
         WHY.every((w) => counts[w] === (w === 'SMS_DISABLED')),
       JSON.stringify(counts)

@@ -1143,9 +1143,13 @@ async function main() {
             l.includes(STEM)
         )
     );
-    await check('K', "K10 TEXT_REPLY's words are unchanged", () =>
-      read('src/lib/preflight/ask-preview-compose.ts').includes(
-        'const TEXT_REPLY = "A text reply won\'t reach you — I have no way to pass it on.";'
+    // ⚠ MOVED BY [[GTC-350]] (founder Q4, 2026-10-02): GTC-288 left these words alone, and GTC-350
+    // was the ticket that rewrites them. It read: "K10 TEXT_REPLY's words are unchanged".
+    // The same declaration with any whitespace after "=": Prettier puts the sentence on its own line
+    // at printWidth 100. Still the exact sentence, and still the declaration.
+    await check('K', "K10 TEXT_REPLY is Q4's sentence (GTC-350)", () =>
+      /const TEXT_REPLY =\s*'A text reply usually comes to your board, and I stop reminding whoever sent it\.';/.test(
+        read('src/lib/preflight/ask-preview-compose.ts')
       )
     );
 

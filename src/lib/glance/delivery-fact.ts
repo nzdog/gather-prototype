@@ -85,6 +85,8 @@ export const WITHHELD_MEANS_UNREACHABLE: Record<OutboundWithheldWhy, DeliveryFac
   MARKED_DONT_CHASE: null,
   // [[GTC-251]] slice 251c — the host turned reminders off: her decision, a CHASE row only.
   PACE_OFF: null,
+  // [[GTC-350]] — a chase row's withholding, like ANSWERED: the guest's reply, not a lost channel.
+  REPLIED: null,
   HOST_AS_CARRIER: null,
   HANDED_TO_HOST: null,
   ANSWERED: null,

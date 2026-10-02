@@ -25,7 +25,11 @@
  * The person, their why, what they hold, and the actions. No behaviour — Ruling 1's fence
  * is not relaxed by a tap, and `tests/glance-read-test.ts` carries the denylist over this
  * file. No plan content beyond the row's own name: no quantity, no team name, no
- * drop-off, no notes. No history, no message log, no counts of anything.
+ * drop-off, no notes. No history, no message log, no counts of anything — with ONE
+ * exception, ruled ([[GTC-350]] Q2, 2026-10-02): the guest's own text replies, every
+ * one, newest first, each with when it came, as lines the server wrote. Not the
+ * messages Gather sent them, not when anything was opened or delivered, no count of
+ * replies, and no phone number.
  *
  * ── AN ISLAND, NOT A CLIENT BOARD ─────────────────────────────────────────────
  *
@@ -61,14 +65,15 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
-import type { GlanceItem, GlancePerson } from '@/lib/glance/state';
+import type { GlanceItem, GlancePerson, GlanceReply } from '@/lib/glance/state';
 import type { AssignActorRole } from '@/lib/assignment/same-team';
 import {
   doorOffered,
   handBack,
+  handBackChoicesOf,
+  handBackLeadFor,
   handBackOffered,
   HAND_BACK_CHOICES,
-  HAND_BACK_LEAD,
   reassign,
   reassignCandidates,
   readDoorView,
@@ -81,8 +86,9 @@ import {
   type GlanceAssignable,
 } from '@/lib/glance/actions';
 import { doorWordFor, type DoorView } from '@/lib/press/resend-door';
-import { GLANCE_REFRESH_EVENT } from '@/lib/glance/live';
+import { GLANCE_REFRESH_EVENT, GLANCE_REPLIES_EVENT } from '@/lib/glance/live';
 import { whyLineFor } from './strip';
+import { REPLIES_HEADING } from './reading';
 
 export interface PersonSurfaceProps {
   person: GlancePerson;
@@ -124,6 +130,22 @@ export default function PersonSurface({
   const [door, setDoor] = useState<DoorView | null>(null);
   const [doorError, setDoorError] = useState<string | null>(null);
   const [address, setAddress] = useState('');
+
+  /*
+    [[GTC-350]] fix 2 — THE LIVE POLL'S WORDS. This room was built at first paint; a reply that lands
+    while the board is open reaches it through `GLANCE_REPLIES_EVENT`, which the live island fires on
+    every poll. Only this person's list is taken, and the listener goes when the room does.
+  */
+  const [liveReplies, setLiveReplies] = useState<GlanceReply[] | null>(null);
+  useEffect(() => {
+    const onReplies = (e: Event) => {
+      const mine = (e as CustomEvent<Record<string, GlanceReply[]>>).detail?.[person.personEventId];
+      if (mine) setLiveReplies(mine);
+    };
+    window.addEventListener(GLANCE_REPLIES_EVENT, onReplies);
+    return () => window.removeEventListener(GLANCE_REPLIES_EVENT, onReplies);
+  }, [person.personEventId]);
+  const replies = liveReplies ?? person.replies ?? [];
 
   /*
     ── GTC-189 SLICE 7b — RULING U'S DOOR, FETCHED WHEN IT OPENS ─────────────────
@@ -221,9 +243,13 @@ export default function PersonSurface({
     if (!handBackOffered(person)) return null;
     return (
       <div data-hand-back="" className="mt-4 border-t-[0.5px] border-[#dcdad2] pt-3">
-        <p className="m-0 mb-2 text-[13px]">{HAND_BACK_LEAD}</p>
+        {/* [[GTC-350]] Q-D — the replied lead for a reply, W2's for "gone quiet". */}
+        <p className="m-0 mb-2 text-[13px]">{handBackLeadFor(person)}</p>
         <div className="flex flex-wrap gap-2">
-          {HAND_BACK_CHOICES.map((choice) => (
+          {/* [[GTC-350]] Q-D and fix 1 — only the choices that would still send something. */}
+          {HAND_BACK_CHOICES.filter((choice) =>
+            handBackChoicesOf(person).includes(choice.reminders)
+          ).map((choice) => (
             <button
               key={choice.reminders}
               type="button"
@@ -446,6 +472,24 @@ export default function PersonSurface({
                   <p data-carrier-note="" className="m-0 mt-1 text-[13px] text-[#5c5b57]">
                     {person.carrierNote}
                   </p>
+                ) : null}
+                {/*
+                  [[GTC-350]] Q2 — every text reply they sent, newest first, in their words, with when
+                  each came (R4, R5). Ruling 1's one ruled exception: lines the server wrote, never an
+                  instant, and no count. The live poll keeps them current (fix 2).
+                */}
+                {replies.length > 0 ? (
+                  <div data-replies="" className="mt-3">
+                    <p className="m-0 text-[11px] uppercase tracking-wide text-[#888780]">
+                      {REPLIES_HEADING}
+                    </p>
+                    {replies.map((reply, i) => (
+                      <div key={i} data-reply="" className="mt-1.5 rounded-lg bg-[#f5f4ef] p-2.5">
+                        <p className="m-0 whitespace-pre-wrap text-[13px]">{reply.words}</p>
+                        <p className="m-0 mt-0.5 text-[11px] text-[#888780]">{reply.when}</p>
+                      </div>
+                    ))}
+                  </div>
                 ) : null}
               </div>
               <button

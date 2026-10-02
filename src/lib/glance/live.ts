@@ -34,7 +34,7 @@
  */
 
 import { isSparkTransition } from './replay';
-import type { EventGlance, PersonState } from './state';
+import type { EventGlance, GlanceReply, PersonState } from './state';
 
 /**
  * RULING 10, TAKEN LITERALLY: "polling, roughly every 20 seconds."
@@ -72,6 +72,26 @@ export const GLANCE_REFRESH_EVENT = 'gather:glance-refresh';
  * not reached yet. "Completed and stamped" is two things and this fires after both.
  */
 export const GLANCE_REPLAY_DONE_EVENT = 'gather:glance-replay-done';
+
+/**
+ * [[GTC-350]] plan fix 2 — A POLL HANDS THE ROOMS THE REPLIES IT CARRIED. Founder: *"When the poll
+ * turns a strip red for a reply, the host's room must have the words"*; built as chosen, *"the words
+ * travel in the poll, for the host only. A co-host's poll never carries them."*
+ *
+ * The rooms are islands built at first paint; this event is the seam to them, as
+ * `GLANCE_REFRESH_EVENT` is the seam from them. Its detail is `repliesOf(glance)`: every person on the
+ * polled board, keyed by `personEventId`. On a co-host's poll every list is empty, as on her board.
+ */
+export const GLANCE_REPLIES_EVENT = 'gather:glance-replies';
+
+/** Each person's replies on a polled board, housed and unhoused, keyed by `personEventId`. */
+export function repliesOf(glance: EventGlance): Record<string, GlanceReply[]> {
+  const out: Record<string, GlanceReply[]> = {};
+  for (const person of [...glance.households.flatMap((h) => h.members), ...glance.unhoused]) {
+    out[person.personEventId] = person.replies ?? [];
+  }
+  return out;
+}
 
 /**
  * One person's live movement.

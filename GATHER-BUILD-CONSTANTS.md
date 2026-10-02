@@ -259,6 +259,9 @@ Suites that call a dispatcher directly (`drainOnce`,
 `dispatchPendingWrapUpMessages`) rather than a route are **not** on this list
 until each is shown to scope or guard its call: GTC-343.
 
+Shown so far (founder ruling Q-J, GTC-350, 2026-10-02):
+- `test:reply-board` (`tests/text-reply-board-test.ts`, GTC-350) calls `drainOnce` — guarded. Precondition: before the drive it counts the drain's rows (never attempted and not withheld, or due for retry) on every event but its own, and drives nothing unless that count is zero. It runs behind `liveBehindTrap` with no text provider configured, and removes every row it wrote by id.
+
 **The TNZ status poll (GTC-290) is not on this list, and no suite drives it.**
 `/api/cron/tnz-status-poll` is only ever called with a wrong or missing secret
 (`test:security` suite 12; `test:tnz-status-poll` F3 and F4). `test:tnz-status-poll`

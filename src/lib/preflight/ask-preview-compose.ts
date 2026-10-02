@@ -396,16 +396,14 @@ export const CHASE_NONE_WHY: Record<ChaseNoneWhy, string> = {
 };
 
 /**
- * Where a text reply goes. RULED (GTC-189, slice 3 words, second pass): "It is true today and true
- * after GTC-288, which is exactly what 'yet' was not."
- *
- * ⚠ DO NOT ADD "YET". Since [[GTC-288]] TNZ's webhook, `/api/sms/tnz-webhook` ([[GTC-264]] /
- * [[GTC-229]]), KEEPS a reply it can tie to a guest by MessageID — but nothing shows one to the host,
- * so this sentence is still true. [[GTC-350]] shows them, and rewrites it (founder ruling,
- * 2026-10-01: GTC-288 does not change these words). On a shared shortcode some replies still reach
- * a different TNZ customer entirely. Why, in full: GTC-189.
+ * Where a text reply goes. [[GTC-350]] Q4, founder 2026-10-02, verbatim as chosen: *"Usually;
+ * reminders stop (Recommended)"* — *"It says "usually" because a few replies go to another business
+ * on TNZ's shared number. That keeps the sentence true, which is why you chose the current wording."*
+ * A kept reply shows on the host's board (Q2), and it ends Gather's reminders to that guest (Q1).
+ * Replaces GTC-189 slice 3's sentence.
  */
-const TEXT_REPLY = "A text reply won't reach you — I have no way to pass it on.";
+const TEXT_REPLY =
+  'A text reply usually comes to your board, and I stop reminding whoever sent it.';
 
 /** The reply-to line (ruling F, and slice 3 words answer 3, change 4). */
 export function replyToLine(replyTo: string): string {

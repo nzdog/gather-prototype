@@ -553,8 +553,14 @@ async function main() {
     );
     assert(
       'B',
-      'RED_REASONS gains exactly one, CHASE_UNREACHABLE — seven',
-      ok(() => S.RED_REASONS.length === 7 && S.RED_REASONS.includes('CHASE_UNREACHABLE'))
+      // ⚠ 7 → 8 at [[GTC-350]] (founder Q1, 2026-10-02): REPLIED is the eighth. CHASE_UNREACHABLE stays.
+      'RED_REASONS gained exactly one here, CHASE_UNREACHABLE — eight since GTC-350 added REPLIED',
+      ok(
+        () =>
+          S.RED_REASONS.length === 8 &&
+          S.RED_REASONS.includes('CHASE_UNREACHABLE') &&
+          S.RED_REASONS.includes('REPLIED')
+      )
     );
 
     // chase-fact: the map and the pace.

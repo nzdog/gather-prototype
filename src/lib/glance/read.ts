@@ -56,9 +56,17 @@ import {
   latestRowByMembership,
 } from './delivery-fact';
 import { chaseFactFrom, chaseNoteFor } from './chase-fact';
-import { exhaustionFor, handBackNextFor } from '@/lib/chase-exhaustion';
+import { exhaustionFor, handBackInForce, handBackNextFor } from '@/lib/chase-exhaustion';
 import { readChaseSpend } from '@/lib/chase-exhaustion-read';
 import { isPaceOff } from '@/lib/eligibility/nudge-pace';
+import {
+  carriedChildReplyNoteFor,
+  handBackChoicesFor,
+  replyFactFor,
+  replyNoDoorNoteFor,
+} from '@/lib/chase-reply';
+import { readReplyFacts } from '@/lib/chase-reply-read';
+import { stillUnanswered } from '@/lib/sms/nudge-eligibility';
 
 /** Accepts a client or a transaction, the shape `createHostHousehold` already takes. */
 type Db = Prisma.TransactionClient;
@@ -124,7 +132,13 @@ const ASSIGNMENT_SELECT = {
 export async function readEventGlance(
   db: Db,
   eventId: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  /**
+   * [[GTC-350]] plan Q-F and fix 2 — `replies: true` puts each guest's text replies on the board. The
+   * page and the poll pass it for the HOST only: Q5 tells a guest their reply is shown to the person
+   * who invited them. Off by default, so every other reader carries no words.
+   */
+  opts: { replies?: boolean } = {}
 ): Promise<EventGlance> {
   const event = await db.event.findUniqueOrThrow({
     where: { id: eventId },
@@ -157,6 +171,7 @@ export async function readEventGlance(
     emailNotes,
     preview,
     chaseSpend,
+    replyFacts,
   ] = await Promise.all([
     db.personEvent.findMany({ where: { eventId }, select: PERSON_EVENT_SELECT }),
     db.assignment.findMany({
@@ -228,6 +243,12 @@ export async function readEventGlance(
      * the decision `tests/glance-fence.ts` asks the board to take instead of telemetry.
      */
     readChaseSpend(db, eventId),
+    /*
+     * [[GTC-350]] — EACH GUEST'S TEXT REPLIES, read outside this module for `readChaseSpend`'s reason:
+     * the reply row and its instant stay behind `readReplyFacts`, and only the decision
+     * (`replyFactFor`) and the words with a written line reach the board (Ruling 1's fence, Q2).
+     */
+    readReplyFacts(db, eventId, now),
   ]);
 
   const markOf = new Map(memberships.map((m) => [m.id, m.nudgeMark as string | null]));
@@ -332,6 +353,13 @@ export async function readEventGlance(
         isChildMembership(row.householdRole),
         isPaceOff(event.nudgePace)
       ),
+      // [[GTC-350]] — gated on the chooser; a child's is its carrier's, as exhaustion is.
+      reply: replyFactFor(
+        preview?.chase.byMembership[row.id],
+        replyFacts.repliedAt,
+        chaseSpend,
+        now
+      ),
     };
     const emailFacts = emailFactsFor(
       row,
@@ -339,6 +367,13 @@ export async function readEventGlance(
       context.delivery?.failure ?? null,
       latestOutbound.get(row.id)?.channel ?? null
     );
+    /*
+     * [[GTC-350]] — THE HAND-BACK'S DOOR, decided here once for the panel and the route. It is the
+     * RECIPIENT's: the chase messages them, and for a carried child that is the carrier.
+     */
+    const route = preview?.chase.byMembership[row.id];
+    const recipientId = route && route.kind !== 'NONE' ? route.recipientId : null;
+    const paceOff = isPaceOff(event.nudgePace);
     const { state, reasons } = derivePersonState(
       {
         ...context,
@@ -349,6 +384,13 @@ export async function readEventGlance(
       glanceEvent,
       now
     );
+    const choices = handBackChoicesFor({
+      state,
+      reasons,
+      paceOff,
+      unanswered: !!recipientId && recipientUnanswered(recipientId),
+      followUpOwed: !!recipientId && replyFacts.followUpOwed.has(recipientId),
+    });
 
     return {
       personEventId: row.id,
@@ -363,10 +405,14 @@ export async function readEventGlance(
       reasons,
       // [[GTC-251]] slice 251c — after the cadence, the next further reminder the host asked for:
       // GTC-192 Ruling 34's "system's own promise about what it will do next".
+      //
+      // [[GTC-350]] plan ruling Q-C — while a hand-back is in force its own next leg is the promise:
+      // no cadence leg goes after it.
       nextNudgeAt:
-        (
-          nextNudgeFor(row.sentAt, row.nudgeMark, glanceEvent, now) ??
-          handBackNextFor(preview?.chase.byMembership[row.id], chaseSpend, now)
+        (recipientId && handBackInForce(chaseSpend.get(recipientId), now)
+          ? handBackNextFor(route, chaseSpend, now)
+          : (nextNudgeFor(row.sentAt, row.nudgeMark, glanceEvent, now) ??
+            handBackNextFor(route, chaseSpend, now))
         )?.toISOString() ?? null,
       items: items.map((i) => {
         const derived = deriveItemState(i, glanceEvent, context, now);
@@ -394,15 +440,52 @@ export async function readEventGlance(
             ? textNoteFor(latestOutbound.get(row.id)?.deliveryState)
             : null,
       chase: context.chase,
-      chaseNote: chaseNoteFor({
-        state,
-        reasons,
-        route: preview?.chase.byMembership[row.id],
-        isChild: isChildMembership(row.householdRole),
-        carrierName: carrierNameOf(preview?.chase.byMembership[row.id]),
-      }),
-      carrierNote: carrierNoteFor(row, answeringMembership, reasons, emailFacts.textable),
+      chaseNote:
+        replyNoDoorNoteFor({
+          state,
+          reasons,
+          choices,
+          paceOff,
+          followUpSpent: !!recipientId && replyFacts.followUpSpent.has(recipientId),
+        }) ??
+        chaseNoteFor({
+          state,
+          reasons,
+          route: preview?.chase.byMembership[row.id],
+          isChild: isChildMembership(row.householdRole),
+          carrierName: carrierNameOf(preview?.chase.byMembership[row.id]),
+        }),
+      carrierNote:
+        carrierNoteFor(row, answeringMembership, reasons, emailFacts.textable) ??
+        (isChildMembership(row.householdRole)
+          ? carriedChildReplyNoteFor({ reasons, carrierName: carrierNameOf(route) })
+          : null),
+      // [[GTC-350]] Q2 — the host's board only (`opts.replies`); a child's are on its carrier's card.
+      replies: opts.replies ? (replyFacts.board.get(row.personId) ?? []) : [],
+      handBackChoices: choices,
     };
+  }
+
+  /**
+   * [[GTC-350]] — does the recipient still owe an answer the chase reminds about? The sweep's own
+   * rule (`stillUnanswered`), over the recipient's rows and the children it carries.
+   */
+  function recipientUnanswered(recipientId: string): boolean {
+    const recipient = memberships.find((m) => m.id === recipientId);
+    if (!recipient) return false;
+    const rowsOf = (personId: string) => heldBy.get(personId) ?? [];
+    const own = rowsOf(recipient.personId);
+    const carried = (preview?.chase.byRecipient[recipientId]?.carried ?? [])
+      .map((id) => memberships.find((m) => m.id === id))
+      .filter((m): m is (typeof memberships)[number] => !!m)
+      .flatMap((m) => rowsOf(m.personId));
+    return stillUnanswered({
+      attendanceAnswer: recipient.attendanceAnswer,
+      ownRows: own.length,
+      ownPending: own.filter((r) => r.response === 'PENDING').length,
+      carriedRows: carried.length,
+      carriedPending: carried.filter((r) => r.response === 'PENDING').length,
+    });
   }
 
   /**

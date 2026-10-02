@@ -11,8 +11,10 @@ import { isPaceOff, PACE_OFF_SKIP_REASON } from '@/lib/eligibility/nudge-pace';
 import { readAskPreview } from '@/lib/preflight/ask-preview';
 import type { ChaseNoneWhy, HostListWhy } from '@/lib/eligibility/channel-chooser';
 import type { Prisma } from '@prisma/client';
-import { handBackLegDue, type ChaseHandBack } from '@/lib/chase-exhaustion';
+import { handBackInForce, handBackLegDue, type ChaseHandBack } from '@/lib/chase-exhaustion';
 import { readChaseSpend } from '@/lib/chase-exhaustion-read';
+import { REPLIED_SKIP_REASON, replyInForce } from '@/lib/chase-reply';
+import { readReplyFacts } from '@/lib/chase-reply-read';
 
 export interface NudgeCandidate {
   /**
@@ -227,6 +229,8 @@ export async function findNudgeCandidates(
     const byId = new Map(memberships.map((m) => [m.id, m]));
     // [[GTC-251]] slice 251c — the same reading of the reminders the board's exhaustion takes.
     const spend = await readChaseSpend(prisma, event.id);
+    // [[GTC-350]] — each recipient's text replies, for the one predicate the board also asks.
+    const replies = await readReplyFacts(prisma, event.id, now);
     const rowsOf = (personId: string) => {
       const mine = assignments.filter((a) => a.personId === personId);
       return { rows: mine.length, pending: mine.filter((a) => a.response === 'PENDING').length };
@@ -311,17 +315,31 @@ export async function findNudgeCandidates(
         continue;
       }
 
+      /*
+       * [[GTC-350]] Q1 — A REPLY IN FORCE ENDS THE CHASE: *"Gather stops reminding them."* After the
+       * answer, which is the stronger fact (the drain keeps the same order). Every leg, the further
+       * ones included; a hand-back after the reply starts a new chase, which only a later reply ends.
+       */
+      if (replyInForce(replies.repliedAt.get(m.id) ?? [], spend.get(m.id)?.handBack ?? null, now)) {
+        addSkip(REPLIED_SKIP_REASON);
+        continue;
+      }
+
       // Per membership, because both of §10.3's layers are per-row (GTC-179 Ruling 4, quieter wins).
       const offsetDays = resolveNudgeOffsetDays({ person: m, event });
       const due = dueNudgeIndices(candidate.anchorAt, now, offsetDays);
       const firstTaken = !!m.firstNudgeSentAt || taken.has(`${m.id}:CHASE_FIRST`);
       const secondTaken = !!m.secondNudgeSentAt || taken.has(`${m.id}:CHASE_SECOND`);
 
+      // [[GTC-350]] plan ruling Q-C — while a hand-back is in force its count is all Gather sends:
+      // no first or second reminder goes after it. From "gone quiet" both were already taken.
+      const handedBack = handBackInForce(spend.get(m.id), now);
+
       // GTC-179 Ruling 7(b): AT MOST ONE REMINDER PER PERSON PER RUN — earliest due leg only; the
       // next tick takes the rest. Deferred, never dropped.
-      if (due.includes(0) && !firstTaken) {
+      if (!handedBack && due.includes(0) && !firstTaken) {
         eligibleFirst.push(candidate);
-      } else if (due.includes(1) && !secondTaken) {
+      } else if (!handedBack && due.includes(1) && !secondTaken) {
         eligibleSecond.push(candidate);
       } else if (handBackLegDue(spend.get(m.id), now)) {
         // [[GTC-251]] Q3 — a further reminder, after every gate above: the chooser (the mark and

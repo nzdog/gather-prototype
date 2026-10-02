@@ -2774,6 +2774,10 @@ async function main() {
       'src/lib/glance/state.ts',
       'src/lib/glance/actions.ts',
       PAINT,
+      // [[GTC-350]] fix 2 — the reading room now names live.ts (the replies event), so it joins the
+      // list every guard below reads: it may not reach the DB-bound half, the replay module or the
+      // diff, start an interval or a timeout, refresh itself, or open a socket.
+      'src/components/glance/GlancePersonReading.tsx',
     ];
     const liveSrc = code(LIVE_ISLAND);
     const paintSrc = code(PAINT);
@@ -2807,6 +2811,15 @@ async function main() {
     //   and:  this is NOT a held-back guard. It is a widening the slice earns; a later slice
     //         that wants a third reader of either module is making a design change, not a
     //         narrowing, and this assertion is where it has to argue for it.
+    //
+    // ⚠ WIDENED AT [[GTC-350]] (plan fix 2, founder approval 2026-10-02), and argued here as the
+    // note above asks. The poll carries a guest's text replies for the host, and the two rooms must
+    // show them, so each takes the replies EVENT's name from live.ts:
+    //   was:  the person surface takes ONE name from live.ts (GLANCE_REFRESH_EVENT)
+    //   now:  an exact allowlist per file, one import each, every name an event's: the person
+    //         surface GLANCE_REFRESH_EVENT and GLANCE_REPLIES_EVENT; the reading room
+    //         GLANCE_REPLIES_EVENT; the arrival island GLANCE_REPLAY_DONE_EVENT. The reading room
+    //         joins `componentSurfaces`, so the replay-module and diff-reader guards read it too.
     assert(
       'layer 4 / no UI',
       'EXACTLY ONE component reaches the PURE REPLAY module — the arrival island, and nothing else on the board',
@@ -2837,22 +2850,31 @@ async function main() {
     );
     assert(
       'layer 4 / no UI',
-      'and the two components that DO name the live module take ONE name each, and it is an event’s — not a decision',
+      'and the components that DO name the live module take an EXACT ALLOWLIST of names each, in one import, and every name is an event’s — not a decision (widened at GTC-350)',
       liveIslandBuilt &&
         ok(() =>
-          [
-            ['src/components/glance/PersonSurface.tsx', 'GLANCE_REFRESH_EVENT'],
-            [ISLAND, 'GLANCE_REPLAY_DONE_EVENT'],
-          ].every(([file, name]) => {
-            const imported = code(file).match(
-              /import\s*\{([^}]*)\}\s*from\s*'@\/lib\/glance\/live'/
-            );
-            if (imported === null) return false;
-            const names = imported[1]
+          (
+            [
+              [
+                'src/components/glance/PersonSurface.tsx',
+                ['GLANCE_REFRESH_EVENT', 'GLANCE_REPLIES_EVENT'],
+              ],
+              ['src/components/glance/GlancePersonReading.tsx', ['GLANCE_REPLIES_EVENT']],
+              [ISLAND, ['GLANCE_REPLAY_DONE_EVENT']],
+            ] as const
+          ).every(([file, allowed]) => {
+            const src = code(file);
+            const imports = [
+              ...src.matchAll(/import\s*\{([^}]*)\}\s*from\s*'@\/lib\/glance\/live'/g),
+            ];
+            if (imports.length !== 1) return false;
+            if ((src.match(/from\s*'@\/lib\/glance\/live'/g) ?? []).length !== 1) return false;
+            const names = imports[0][1]
               .split(',')
               .map((s) => s.trim())
-              .filter(Boolean);
-            return names.length === 1 && names[0] === name;
+              .filter(Boolean)
+              .sort();
+            return JSON.stringify(names) === JSON.stringify([...allowed].sort());
           })
         )
     );

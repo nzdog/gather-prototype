@@ -15,6 +15,7 @@
  * palette living beside that screen costs nothing and reverts cleanly.
  */
 
+import { isChildMembership } from '@/lib/eligibility/child-exclusion';
 import {
   greyOpensReading,
   type GlancePerson,
@@ -145,6 +146,8 @@ export const WHY_PRECEDENCE = [
   // [[GTC-296]], beside the two delivery reasons and for their reason: the three below presume
   // the ask landed and was answered or not. This one says the person declined to be asked.
   'EMAIL_OPTED_OUT',
+  // [[GTC-350]] plan Q-I — before "handed it back": what they wrote probably explains it.
+  'REPLIED',
   'REVERSAL',
   'DECIDE_BY_EXPIRED',
   'EXHAUSTED_SILENCE',
@@ -264,6 +267,10 @@ const WHY_LINES: Record<(typeof WHY_PRECEDENCE)[number], (person: GlancePerson) 
    * `src/lib/glance/chase-fact.ts`. The words written ahead of it were used unchanged.
    */
   EMAIL_OPTED_OUT: () => 'opted out',
+  // [[GTC-350]] R1 and R2, ruled 2026-10-02. A child is never texted, so "replied by text" would be
+  // false of one: the reply is its carrier's, and R3 on the child's card says whose.
+  REPLIED: (person) =>
+    isChildMembership(person.householdRole) ? 'reply came in' : 'replied by text',
   REVERSAL: (person) => {
     const handedBack = person.items.filter((i) => i.reason === 'REVERSAL').length;
     return handedBack > 1 ? `handed ${handedBack} back` : 'handed it back';
@@ -424,10 +431,24 @@ export type GlancePanel = 'acting' | 'reading';
  * It takes the PERSON rather than the state because the two greys are one state told apart by their
  * reason. Still one argument.
  */
-export function panelFor(person: Pick<GlancePerson, 'state' | 'reasons'>): GlancePanel | null {
+export type PanelSubject = Pick<GlancePerson, 'state' | 'reasons'> & {
+  replies?: readonly unknown[];
+};
+
+export function panelFor(person: PanelSubject): GlancePanel | null {
   if (person.state === 'RED') return 'acting';
   if (person.state === 'GREEN' || person.state === 'AMBER') return 'reading';
   if (person.state === 'NOT_CHASED' && greyOpensReading(person.reasons)) return 'reading';
+  /*
+   * [[GTC-350]] plan ruling Q-G — an OUT strip and a don't-chase strip open the reading room when,
+   * and only when, they carry replies: Q2 puts every reply on the board, and a sealed strip would
+   * hide them. Without replies both stay sealed (Rulings 7, 17 and 32).
+   */
+  const hasReplies = (person.replies?.length ?? 0) > 0;
+  if (hasReplies && person.state === 'OUT') return 'reading';
+  if (hasReplies && person.state === 'NOT_CHASED' && person.reasons.includes('DONT_CHASE')) {
+    return 'reading';
+  }
   return null;
 }
 
@@ -480,7 +501,7 @@ export const DOOR_CHEVRON_CLASS =
   'pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[12px] leading-none opacity-60';
 
 /** RULING 35: does this strip wear the promise? Exactly when it has something to open. */
-export function doorTreatmentReaches(person: Pick<GlancePerson, 'state' | 'reasons'>): boolean {
+export function doorTreatmentReaches(person: PanelSubject): boolean {
   return panelFor(person) !== null;
 }
 
@@ -491,8 +512,11 @@ export function doorTreatmentReaches(person: Pick<GlancePerson, 'state' | 'reaso
  * its own, which is what keeps the treatment out of the element branch: an acting door, a
  * reading door and a sealed strip are handed the same string by the same rule.
  */
-export function doorTreatmentFor(person: Pick<GlancePerson, 'state' | 'reasons'>): string {
+export function doorTreatmentFor(person: PanelSubject): string {
   if (!doorTreatmentReaches(person)) return '';
+  // [[GTC-350]] — an OUT strip opened by its replies keeps Ruling 7's "no border": the chevron, the
+  // hover and the cursor, and nothing that makes a ghost look present.
+  if (person.state === 'OUT') return DOOR_TREATMENT_CLASS;
   /*
    * [[GTC-305]] — THE HAZARD `DOOR_BORDER_CLASS` WAS HELD APART FOR HAS NOW ARRIVED. Ruling 32 as
    * amended treats a NOT_CHASED strip, whose tone already carries Ruling 7's hairline, and two

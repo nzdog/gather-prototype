@@ -36,7 +36,14 @@ import { rewindGlanceInputs, rewindGuestFacts } from './rewind';
 import type { RewindDb } from './rewind';
 import { deriveReplay } from './replay';
 import type { GlanceReplay } from './replay';
-import type { ChaseFact, DeliveryFact, EventGlance, ExhaustionFact, GlanceEvent } from './state';
+import type {
+  ChaseFact,
+  DeliveryFact,
+  EventGlance,
+  ExhaustionFact,
+  GlanceEvent,
+  ReplyFact,
+} from './state';
 import { carrierOfAsk, deliveryFactFrom } from './delivery-fact';
 import { chaseFactFrom } from './chase-fact';
 import { readAskPreview } from '@/lib/preflight/ask-preview';
@@ -44,6 +51,8 @@ import { exhaustionFor } from '@/lib/chase-exhaustion';
 import { readChaseSpend } from '@/lib/chase-exhaustion-read';
 import { isChildMembership } from '@/lib/eligibility/child-exclusion';
 import { isPaceOff } from '@/lib/eligibility/nudge-pace';
+import { replyFactFor, replyMovedSince } from '@/lib/chase-reply';
+import { readReplyFacts } from '@/lib/chase-reply-read';
 
 /**
  * SLICE 6d — Ruling 23's overlay, RE-EXPORTED THROUGH THE DOOR RATHER THAN DEFINED BEHIND IT.
@@ -70,10 +79,11 @@ export async function readGlanceReplay(
   now: Date
 ): Promise<GlanceReplay> {
   if (glanceSeenAt === null) return { steps: [] };
-  const [rewound, facts, spend] = await Promise.all([
+  const [rewound, facts, spend, replies] = await Promise.all([
     rewindGlanceInputs(db, eventId, glanceSeenAt),
     rewindGuestFacts(db, eventId, glanceSeenAt),
     readChaseSpend(db, eventId),
+    readReplyFacts(db, eventId, now),
   ]);
   /*
    * [[GTC-335]] — THE PAST PREVIEW: the chooser's own walk, with the guest facts recorded after
@@ -91,6 +101,7 @@ export async function readGlanceReplay(
   const deliveryAt = new Map<string, DeliveryFact | null>();
   const chaseAt = new Map<string, ChaseFact | null>();
   const exhaustionAt = new Map<string, ExhaustionFact | null>();
+  const replyAt = new Map<string, ReplyFact | null>();
   const factChangedSince = new Map<string, number>();
   for (const person of people) {
     const id = person.personEventId;
@@ -108,20 +119,25 @@ export async function readGlanceReplay(
      * AMBER → RED for every quiet guest on every visit.
      */
     exhaustionAt.set(id, exhaustionFor(chaseRoute, spend, glanceSeenAt));
+    // [[GTC-350]] note 7 — the same predicate the board asks, as at `since`.
+    replyAt.set(id, replyFactFor(chaseRoute, replies.repliedAt, spend, glanceSeenAt));
     // Point 5: a child's facts are its carriers' — the ask's and the chase's.
     const chaseCarrier = !child
       ? null
       : chaseRoute?.kind === 'NONE'
         ? (chaseRoute.carrierId ?? null)
         : (chaseRoute?.recipientId ?? null);
-    const moved = [id, answering, chaseCarrier]
-      .map((m) => (m ? facts.movedSince.get(m) : undefined))
-      .filter((t): t is number => typeof t === 'number');
+    // [[GTC-350]] — a reply orders the step by when Gather recorded it; a child's is its carrier's.
+    const replier = child ? chaseCarrier : id;
+    const moved = [
+      ...[id, answering, chaseCarrier].map((m) => (m ? facts.movedSince.get(m) : undefined)),
+      replier ? replyMovedSince(replies.repliedAt.get(replier) ?? [], glanceSeenAt) : undefined,
+    ].filter((t): t is number => typeof t === 'number');
     if (moved.length > 0) factChangedSince.set(id, Math.max(...moved));
   }
   return deriveReplay(
     glance,
-    { ...rewound, exhaustionAt, deliveryAt, chaseAt, factChangedSince },
+    { ...rewound, exhaustionAt, deliveryAt, chaseAt, replyAt, factChangedSince },
     event,
     glanceSeenAt,
     now

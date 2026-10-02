@@ -34,7 +34,11 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
   if (auth instanceof NextResponse) return auth;
 
   try {
-    const glance = await readEventGlance(prisma, eventId);
+    // [[GTC-350]] fix 2 — the poll carries a guest's text replies for the HOST only (Q5's "the
+    // person who invited you"). A co-host's poll never carries them.
+    const glance = await readEventGlance(prisma, eventId, new Date(), {
+      replies: auth.role === 'HOST',
+    });
     return NextResponse.json(glance);
   } catch (error) {
     // `readEventGlance` uses findUniqueOrThrow for the event, so a bad id lands here

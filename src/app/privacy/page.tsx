@@ -3,7 +3,7 @@ export default function PrivacyPolicy() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
-        <p className="text-sm text-gray-500 mb-8">Last updated: 1 October 2026</p>
+        <p className="text-sm text-gray-500 mb-8">Last updated: 2 October 2026</p>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 space-y-8">
           {/* Who We Are */}
@@ -150,8 +150,8 @@ export default function PrivacyPolicy() {
                 or OPT-IN opts you back in.
               </li>
               <li>
-                • If you reply to one of our texts, we keep your reply with the event it was about,
-                and delete it with that event&apos;s data.
+                • If you reply to one of our texts, we show your reply to the person who invited
+                you, keep it with the event it was about, and delete it with that event&apos;s data.
               </li>
             </ul>
           </section>

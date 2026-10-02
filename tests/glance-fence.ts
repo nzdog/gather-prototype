@@ -91,6 +91,37 @@ export const REWIND_DENYLIST = BEHAVIOUR_DENYLIST.filter(
   (n) => n !== 'auditEntry' && n !== 'AuditEntry'
 );
 
+/**
+ * [[GTC-350]] Q2 — RULING 1's FENCE, RELAXED FOR A GUEST'S TEXT REPLIES, AND FOR NOTHING ELSE.
+ * Founder, 2026-10-02: "Every reply on the board" — "Tap their red card and you see every reply
+ * they've sent, newest first, with when each came."
+ *
+ * WHAT CROSSES: each reply's words, and when it came as a line already written (`GlanceReply`:
+ * `words`, `when`), composed by `src/lib/chase-reply-read.ts`, outside this fence as
+ * `chase-exhaustion-read.ts` is. Only the host's board carries it: her first paint and her poll
+ * (plan fix 2). WHAT DOES NOT, named so no glance source can name it: the reply row and TNZ's
+ * ids; the instant and every delivery instant; the number.
+ *
+ * ⚠ NOT ADDED TO `BEHAVIOUR_DENYLIST`, because `REWIND_DENYLIST` derives from it and the rewind
+ * reads phone numbers for [[GTC-335]]'s opt-out rewind. Scanned over the glance sources and the
+ * payloads; the rewind stays held to `BEHAVIOUR_DENYLIST` exactly as before.
+ */
+export const REPLY_FENCE_DENYLIST = [
+  'textReply',
+  'TextReply',
+  'providerMessageId',
+  'providerReceivedId',
+  'inviteEventId',
+  'receivedAt',
+  'acceptedAt',
+  'deliveredAt',
+  'attemptedAt',
+  'deliveryCheckedAt',
+  'phoneNumber',
+  'sender',
+  'destination',
+];
+
 /** Every key appearing anywhere in a payload, at any depth. */
 export function collectKeys(value: unknown, into: Set<string> = new Set()): Set<string> {
   if (Array.isArray(value)) {

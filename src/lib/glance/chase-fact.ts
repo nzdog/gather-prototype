@@ -110,6 +110,15 @@ export function chaseFactFrom(
 export const PACE_OFF_CHASE_NOTE = "Reminders are off for this event, so I won't chase them.";
 
 /**
+ * [[GTC-350]], ruled 2026-10-02 (*"Say why (Recommended)"*): a maybe whose one follow-up has gone,
+ * who then replied. Gather has nothing left to send them, so the red has no door; this says why —
+ * and it is the sentence shown where reminders are also off (`replyNoDoorNoteFor` in
+ * `src/lib/chase-reply.ts`).
+ */
+export const FOLLOW_UP_SPENT_CHASE_NOTE =
+  "I've already asked them once to decide, so I won't chase them again.";
+
+/**
  * THE PERSON VIEW'S SENTENCE — the ruled why-map, never new words.
  *
  * Set only for a grey that opens the reading room (Ruling 32 as amended) and for the opted-out red;

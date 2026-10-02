@@ -25,6 +25,10 @@
  * replay and applied here from birth, because a payload that already carries the field
  * only needs somebody to render it. The same test carries the denylist.
  *
+ * ⚠ ONE RULED EXCEPTION, [[GTC-350]] Q2 (2026-10-02): a guest's own text replies, every one, with
+ * when each came — as words and a line the server wrote (`GlanceReply`), never the instant, the
+ * reply row, TNZ's ids or the number. `REPLY_FENCE_DENYLIST` in `tests/glance-fence.ts` holds the rest.
+ *
  * A RATE. Ruling 2: whole numbers of people, never rates, never proportions — a percentage
  * would grade her family and crosses into §3's refused analytics.
  *
@@ -127,6 +131,13 @@ export const RED_REASONS = [
    * keeps Q5's "nothing new to approve".
    */
   'CHASE_UNREACHABLE',
+  /*
+   * [[GTC-350]] Q1 (founder, 2026-10-02) — A GUEST'S TEXT REPLY ENDED GATHER'S CHASE: *"Their card
+   * turns red and shows their words and when they came, because only you can read what they said."*
+   * Its producer is `replyFactFor` in `src/lib/chase-reply.ts`. Below the door reds and
+   * CHASE_UNREACHABLE, above "gone quiet", which is false of somebody who replied (note 4; plan Q-I).
+   */
+  'REPLIED',
 ] as const;
 export type RedReason = (typeof RED_REASONS)[number];
 
@@ -277,6 +288,25 @@ export interface DeliveryFact {
   failure: 'NOT_DELIVERED' | 'UNREACHABLE' | null;
 }
 
+/**
+ * [[GTC-350]] — IS A TEXT REPLY IN FORCE, ENDING GATHER'S CHASE? A decision handed in, the shape
+ * `ExhaustionFact` has, from `replyFactFor` (`src/lib/chase-reply.ts`); the reply's instant never
+ * reaches this module. Null claims nothing.
+ */
+export interface ReplyFact {
+  ended: boolean;
+}
+
+/**
+ * [[GTC-350]] Q2 — one text reply as the board shows it: the guest's words, and when it came as a
+ * line the server wrote (R5, "Fri 2 Oct, 2:14pm"). TWO FIELDS AND NO MORE: no instant, no reply id,
+ * no TNZ id, no number.
+ */
+export interface GlanceReply {
+  words: string;
+  when: string;
+}
+
 /** A row as the derivation needs it. Structural, so a narrow `select` works. */
 export interface GlanceItemInput {
   itemId: string;
@@ -345,6 +375,11 @@ export interface GlancePersonContext {
    * by hand goes on meaning *"nothing known about the chase"*.
    */
   chase?: ChaseFact | null;
+  /**
+   * [[GTC-350]]. Optional for `delivery`'s reason: a context built by hand goes on meaning *"no reply
+   * in force"*. For a child it is the carrier's (the reminder carrying the child's ask is the carrier's).
+   */
+  reply?: ReplyFact | null;
 }
 
 export interface GlancePersonInput extends GlancePersonContext {
@@ -457,6 +492,17 @@ export interface GlancePerson {
    * for every adult and for every child not reading one of the door's two reds.
    */
   carrierNote: string | null;
+  /**
+   * [[GTC-350]] Q2 — every text reply this person sent on this event, newest first. Filled only on
+   * the HOST's board, first paint and poll (plan Q-F, fix 2): Q5 tells the guest their reply is shown
+   * to the person who invited them. Empty for everyone else, and on a co-host's board.
+   */
+  replies: GlanceReply[];
+  /**
+   * [[GTC-251]] Q3 and [[GTC-350]] — the hand-back's choices this red offers (`handBackChoicesFor` in
+   * `src/lib/chase-reply.ts`). Empty means no door: a hand-back that would send nothing is not offered.
+   */
+  handBackChoices: number[];
 }
 
 /**
@@ -605,6 +651,9 @@ export function deriveItemState(
     if (context.chase?.standing === 'CHASE_UNREACHABLE') {
       return { state: 'RED', reason: 'CHASE_UNREACHABLE' };
     }
+    // [[GTC-350]] plan Q-A — a reply in force stops the maybe's follow-up too, so amber would promise
+    // a message that will not come.
+    if (context.reply?.ended) return { state: 'RED', reason: 'REPLIED' };
     return { state: 'AMBER', reason: 'MAYBE_LIVE' };
   }
 
@@ -648,6 +697,13 @@ export function deriveItemState(
   if (context.chase?.standing === 'CHASE_UNREACHABLE') {
     return { state: 'RED', reason: 'CHASE_UNREACHABLE' };
   }
+
+  /*
+   * [[GTC-350]] Q1 — A REPLY IN FORCE: Gather's chase is over and the guest is the host's. Below the
+   * delivery failure (its door can still act on the ask) and CHASE_UNREACHABLE (a hand-back there
+   * would be a dead door); above exhaustion, because "gone quiet" is false of somebody who replied.
+   */
+  if (context.reply?.ended) return { state: 'RED', reason: 'REPLIED' };
 
   // [[GTC-251]] Q2 — the exhaustion door, with its producer (`exhaustionFor`).
   if (context.exhaustion?.exhausted) return { state: 'RED', reason: 'EXHAUSTED_SILENCE' };
@@ -742,6 +798,8 @@ export function derivePersonState(
     if (person.chase?.standing === 'CHASE_UNREACHABLE') {
       return { state: 'RED', reasons: ['CHASE_UNREACHABLE'] };
     }
+    // [[GTC-350]] — in the rows' order: Ruling 16's ask is chased like any other, so a reply ends it.
+    if (person.reply?.ended) return { state: 'RED', reasons: ['REPLIED'] };
     if (person.exhaustion?.exhausted) return { state: 'RED', reasons: ['EXHAUSTED_SILENCE'] };
     if (grey) return { state: 'NOT_CHASED', reasons: [grey] };
     return { state: 'AMBER', reasons: ['AWAITING_REPLY'] };

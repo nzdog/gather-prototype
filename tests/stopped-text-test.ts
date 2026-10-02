@@ -200,11 +200,12 @@ async function main() {
     );
     assert(
       'M',
+      // ⚠ 25 → 26 at [[GTC-350]]: REPLIED, a chase row's withholding, null like ANSWERED.
       'every other code keeps its value: the same seven UNREACHABLE (so bounce-door’s property ' +
-        'still counts 7), the other seventeen null, twenty-five keys in all',
+        'still counts 7), the other eighteen null, twenty-six keys in all',
       ok(() => {
         const keys = Object.keys(MAP);
-        if (keys.length !== 25) return false;
+        if (keys.length !== 26) return false;
         return keys
           .filter((k) => k !== 'SMS_DISABLED')
           .every((k) => MAP[k] === (UNREACHABLE_CODES.includes(k) ? 'UNREACHABLE' : null));

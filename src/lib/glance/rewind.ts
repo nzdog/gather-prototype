@@ -52,7 +52,7 @@
 
 import type { Prisma } from '@prisma/client';
 import type { DecideByItem } from '../decide-by';
-import type { ChaseFact, DeliveryFact, ExhaustionFact } from './state';
+import type { ChaseFact, DeliveryFact, ExhaustionFact, ReplyFact } from './state';
 import type { LaterFacts } from '@/lib/preflight/ask-preview';
 import { normalizeEmailAddress } from '@/lib/eligibility/email-block';
 import { SMS_OPT_OUT_IN_FORCE } from '@/lib/sms/opt-out-service';
@@ -161,6 +161,12 @@ export interface GlanceRewind {
    * today's fact — the fail-safe silence.
    */
   chaseAt?: Map<string, ChaseFact | null>;
+  /**
+   * [[GTC-350]] note 7 — each membership's reply fact AS AT `since` (a child's is its carrier's),
+   * filled by `readGlanceReplay` from the predicate the board uses. Optional so a rewind built by
+   * hand keeps the meaning it had: no reply in force.
+   */
+  replyAt?: Map<string, ReplyFact | null>;
   /**
    * [[GTC-335]] point 5 — when this membership's facts last moved inside the window, beside the
    * rows' `changedSince`. SERVER-SIDE ONLY, sorted on and discarded, exactly as that one is.
