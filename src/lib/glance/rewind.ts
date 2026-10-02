@@ -366,7 +366,7 @@ export async function rewindGuestFacts(
     ...new Set(memberships.map((m) => m.person.phoneNumber).filter((n): n is string => !!n)),
   ];
 
-  const [asks, optOuts, blocks, smsOptOuts] = await Promise.all([
+  const [asks, optOuts, blocks, smsOptOuts, textBlocks] = await Promise.all([
     // The board's own filter (`readEventGlance`): the fact is the ask's.
     db.outboundMessage.findMany({
       where: { eventId, kind: 'ASK' },
@@ -403,6 +403,14 @@ export async function rewindGuestFacts(
           },
           select: { phoneNumber: true, optedOutAt: true },
         }),
+    phones.length === 0
+      ? Promise.resolve([] as Array<{ phoneNumber: string; firstSeenAt: Date }>)
+      : // [[GTC-258]]: a number TNZ reported dead or on their list, first seen after `since` and
+        // still in force — the twin of the EmailBlock read above.
+        db.textBlock.findMany({
+          where: { phoneNumber: { in: phones }, firstSeenAt: { gt: since }, liftedAt: null },
+          select: { phoneNumber: true, firstSeenAt: true },
+        }),
   ]);
 
   const sinceMs = since.getTime();
@@ -426,6 +434,7 @@ export async function rewindGuestFacts(
         )
         .map((m) => m.personId)
     ),
+    textBlockNumbers: new Set(textBlocks.map((b) => b.phoneNumber)),
   };
 
   // Point 5's key. Each time below is already inside the window, or is checked to be.
@@ -435,6 +444,7 @@ export async function rewindGuestFacts(
   const smsAt = new Map<string, number>();
   for (const o of smsOptOuts)
     smsAt.set(o.phoneNumber, Math.max(smsAt.get(o.phoneNumber) ?? 0, o.optedOutAt.getTime()));
+  const textBlockAt = new Map(textBlocks.map((b) => [b.phoneNumber, b.firstSeenAt.getTime()]));
   const latestNow = latestRowByMembership(asks);
   const movedSince = new Map<string, number>();
   for (const m of memberships) {
@@ -443,6 +453,7 @@ export async function rewindGuestFacts(
       optOutAt.get(m.personId),
       m.person.email ? blockAt.get(normalizeEmailAddress(m.person.email)) : undefined,
       m.person.phoneNumber ? smsAt.get(m.person.phoneNumber) : undefined,
+      m.person.phoneNumber ? textBlockAt.get(m.person.phoneNumber) : undefined,
       m.person.smsOptedOutAt?.getTime(),
       failedAt ? deliveryFailureRecordedAt(failedAt)?.getTime() : undefined,
     ].filter((t): t is number => typeof t === 'number' && t > sinceMs);

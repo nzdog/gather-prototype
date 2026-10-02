@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { emailBlockStateOf, listEmailBlocks } from '@/lib/eligibility/email-block';
 import { emailNoteFor, type EmailBlockState } from '@/lib/eligibility/email-block-words';
+import { listTextBlocks, numberDeadOf, tnzOptedOutOf } from '@/lib/eligibility/text-block';
 import { isMessageableRole } from '@/lib/eligibility/child-exclusion';
 import { smsOptedOutFact } from '@/lib/preflight/ask-preview';
 import { isValidNZNumber } from '@/lib/phone';
@@ -68,15 +69,28 @@ export async function readEmailNotes(
         ).map((o) => o.phoneNumber)
   );
 
+  // [[GTC-258]] — the number-wide block from TNZ's reports: a TNZ opt-out joins the opt-out fact
+  // (plan ruling Q1), and a dead number is not textable.
+  const textBlocks = await listTextBlocks(db, phones);
+  for (const n of phones) if (tnzOptedOutOf(n, textBlocks)) optedOutNumbers.add(n);
+
   for (const r of rows) {
     if (!isMessageableRole(r.householdRole)) continue;
     const state = emailBlockStateOf(r.person.email, eventId, blocks);
     if (state === 'NONE') continue;
     // [[GTC-301]]'s two facts, through their one definition; Zone 7 is only read.
     const smsOptedOut = smsOptedOutFact(r.person, optedOutNumbers);
+    const numberDead = numberDeadOf(r.person.phoneNumber, textBlocks);
     const textable =
-      !smsOptedOut && !!r.person.phoneNumber && isValidNZNumber(r.person.phoneNumber);
-    notes.set(r.id, { state, textable, note: emailNoteFor({ state, textable, smsOptedOut }) });
+      !smsOptedOut &&
+      !numberDead &&
+      !!r.person.phoneNumber &&
+      isValidNZNumber(r.person.phoneNumber);
+    notes.set(r.id, {
+      state,
+      textable,
+      note: emailNoteFor({ state, textable, smsOptedOut, numberDead }),
+    });
   }
   return notes;
 }

@@ -84,6 +84,8 @@ export const SMS_BLOCK_COUNTS: Record<SmsBlockReason, boolean> = {
   SEND_FAILED: true,
   OPTED_OUT: false,
   INVALID_NUMBER: false,
+  // [[GTC-258]] — TNZ said the number cannot receive: a fact about the guest.
+  NUMBER_DEAD: false,
 };
 
 /** A text `sendSms` refused, as an outcome. */

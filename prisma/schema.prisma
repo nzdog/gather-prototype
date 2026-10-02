@@ -226,6 +226,8 @@ model Event {
   smsOptOuts                 SmsOptOut[]
   /// [[GTC-288]] — guests' text replies to this event's texts. CASCADE.
   textReplies                TextReply[]
+  /// [[GTC-258]] — numbers first blocked by a report on this event's texts. SET NULL.
+  textBlocks                 TextBlock[]
 }
 
 model Day {
@@ -1022,6 +1024,29 @@ model OutboundMessage {
   /// [[GTC-189]] slice 8a — the block this message's outcome produced, if any. SET NULL.
   emailBlocks EmailBlock[]
 
+  /// [[GTC-258]] — THE NUMBER A TEXT ROW WAS HANDED TO THE PROVIDER WITH, E.164, exactly as `sendSms`
+  /// was given it, written at the attempt. NULL on an EMAIL row and on a row never attempted.
+  ///
+  /// ⚠ IT EXISTS FOR THE REPLY JOIN. [[GTC-288]] links a STOP or a reply to a send only when the send
+  /// went to the number the reply came from, and that number used to live in the metadata of the
+  /// `NUDGE_SENT_AUTO` InviteEvent this ticket retires. `Person.phoneNumber` is not a substitute: the
+  /// host can edit it between the send and the reply.
+  destination String?
+
+  /// [[GTC-258]] — THE ONE RETRY. Set on an EMAIL row that re-sends a "please decide" follow-up or a
+  /// thank-you whose TEXT TNZ reported did not arrive (founder ruling Q2, 2026-10-02): it points at
+  /// the failed text.
+  ///
+  /// ⚠ UNIQUE, AND THE UNIQUE IS THE RULING'S "ONCE". Inserting the retry row is the claim, before
+  /// the send — the drain's rule — so two overlapping runs cannot both send: the second insert fails.
+  /// SET NULL, never cascade: a retry that went out stays a record of a message sent.
+  retryOfId String?           @unique
+  retryOf   OutboundMessage?  @relation("TextRetry", fields: [retryOfId], references: [id], onDelete: SetNull)
+  retries   OutboundMessage[] @relation("TextRetry")
+
+  /// [[GTC-258]] — the number blocks this message's TNZ report produced, if any. SET NULL.
+  textBlocks TextBlock[]
+
   /// ⚠ NO @@unique, AND @@unique([personEventId, kind]) IS THE ONE THAT LOOKS RIGHT AND IS
   /// WRONG. It would make the press idempotent at the row level — and then ruling U's
   /// "send again to the same address" and "let the host edit the address and send", each
@@ -1356,6 +1381,51 @@ model EmailBlock {
   /// The message whose outcome produced this row, and its event. SET NULL, never cascade: the
   /// block outlives both. `eventId` is what decides where ruling 3's middle sentence may be shown
   /// (D4 — "your invitation" means that invitation).
+  outboundMessageId String?
+  outboundMessage   OutboundMessage? @relation(fields: [outboundMessageId], references: [id], onDelete: SetNull)
+
+  eventId String?
+  event   Event?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  @@index([eventId])
+  @@index([outboundMessageId])
+}
+
+/// [[GTC-258]] — A NUMBER GATHER WILL NOT TEXT AGAIN, FOR ANY HOST. The text twin of `EmailBlock`.
+///
+/// Founder ruling Q2, 2026-10-02: *"A number that doesn't work is never texted again, and later
+/// messages go by email. A number on TNZ's opt-out list isn't shown red, but isn't texted again."*
+/// And plan ruling Q1: a number on TNZ's opt-out list is the guest's own STOP, so ruling O applies.
+///
+/// ⚠ THIS IS NOT ZONE 7. A delivery report is not licence to write the opt-out table or the person's
+/// flag (`tnz-delivery-contract.ts`: Zone 7 is written only by a guest's own STOP or START). So the
+/// fact lives here, and the readers merge it: `smsOptedOutFact` for an OPTED_OUT row, the chooser's
+/// `numberDead` for a DEAD_CHANNEL row, and a last fence in `sendSms` for both.
+///
+/// ⚠ KEYED ON THE NUMBER, WITH NO FOREIGN KEY TO `Person`, FOR EMAIL_BLOCK'S THREE REASONS: TNZ's
+/// list is about a number; the block must outlive the guest and the event; and two people can share
+/// a number.
+///
+/// Written only from a TNZ delivery report (`src/lib/sms/tnz-delivery-record.ts`), through
+/// `recordTextBlock` in `src/lib/eligibility/text-block.ts`. First write wins; a lifted row is re-armed
+/// by the next blocking report. Only a START lifts a row, and only an OPTED_OUT one (plan ruling
+/// Q11): TNZ's page says a START takes the number off their list. Nothing lifts a dead number.
+model TextBlock {
+  id String @id @default(cuid())
+
+  /// E.164, exactly as the send was given it (or as TNZ reported it, when that is E.164 and no send
+  /// record had the MessageID yet). The unique is the idempotency: TNZ retry a report for 24 hours.
+  phoneNumber String @unique
+
+  /// DEAD_CHANNEL or OPTED_OUT — a `TextBlockReason`. A String, on `EmailBlock.reason`'s reason.
+  reason String
+
+  firstSeenAt DateTime @default(now())
+
+  /// Set by a START from the number, on an OPTED_OUT row only. NULL means the block is in force.
+  liftedAt DateTime?
+
+  /// The message whose report produced this row, and its event. SET NULL, never cascade.
   outboundMessageId String?
   outboundMessage   OutboundMessage? @relation(fields: [outboundMessageId], references: [id], onDelete: SetNull)
 
@@ -2222,12 +2292,21 @@ enum InviteEventType {
 /// host asked for from the "gone quiet" red (Q3: one, two or three). ONE KIND FOR ALL OF THEM, not
 /// ordinals: the count is the rows written since `PersonEvent.handedBackAt`, so no counter can
 /// drift from what was sent. Added LAST, so no existing member's position moves.
+///
+/// DECIDE_BY_FOLLOWUP, THANK_YOU and HOST_NUDGE — [[GTC-258]], founder ruling Q5 (2026-10-02). The three
+/// text paths outside the dispatcher (the "please decide" follow-up, the thank-you, the host's own
+/// nudge) record their sends here, so a TNZ delivery report can reach every text alike and the
+/// ask's false `NUDGE_SENT_AUTO` can be retired. ⚠ THESE ROWS ARE RECORDS, NOT QUEUE ENTRIES: each is
+/// born with `attemptedAt` set, so the drain never selects one. Added LAST, so no member moves.
 enum OutboundKind {
   ASK
   CHASE_FIRST
   CHASE_SECOND
   COORDINATOR_BRIEF
   CHASE_MORE
+  DECIDE_BY_FOLLOWUP
+  THANK_YOU
+  HOST_NUDGE
 }
 
 /// GTC-189 slice 4 — the channel an `OutboundMessage` was, or will be, sent on.

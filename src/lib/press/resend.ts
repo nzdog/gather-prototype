@@ -1,4 +1,10 @@
 import { emailBlockStateOf, listEmailBlocks } from '@/lib/eligibility/email-block';
+import {
+  listTextBlocks,
+  numberDeadOf,
+  tnzOptedOutOf,
+  type TextBlockFact,
+} from '@/lib/eligibility/text-block';
 import type { EmailBlockState } from '@/lib/eligibility/email-block-words';
 import type { OutboundChannel, PrismaClient } from '@prisma/client';
 import { readAskPreview, smsOptedOutFact } from '@/lib/preflight/ask-preview';
@@ -244,28 +250,38 @@ async function resolveSubject(
  * The pre-flight reads every number on the event in a single query; this reads one. The RULE is
  * shared and the fetch is not — see `smsOptedOutFact`.
  */
-async function optedOut(db: PrismaClient, subject: Subject): Promise<boolean> {
+async function optedOut(
+  db: PrismaClient,
+  subject: Subject,
+  textBlocks: ReadonlyMap<string, TextBlockFact>
+): Promise<boolean> {
   if (!subject.phoneNumber) return subject.smsOptedOut;
   const rows = await db.smsOptOut.findMany({
     // Account-wide since [[GTC-288]]: any row in force for the number.
     where: { phoneNumber: subject.phoneNumber, ...SMS_OPT_OUT_IN_FORCE },
     select: { phoneNumber: true },
   });
+  const numbers = new Set(rows.map((r) => r.phoneNumber));
+  // [[GTC-258]] plan ruling Q1: a number on TNZ's opt-out list is the guest's own STOP.
+  if (tnzOptedOutOf(subject.phoneNumber, textBlocks)) numbers.add(subject.phoneNumber);
   return smsOptedOutFact(
     { smsOptedOut: subject.smsOptedOut, phoneNumber: subject.phoneNumber },
-    new Set(rows.map((r) => r.phoneNumber))
+    numbers
   );
 }
 
 async function factsFor(db: PrismaClient, subject: Subject, deps: ResendDeps) {
   const configured = deps.textingConfiguredFor ?? smsProviderConfiguredFor;
+  const textBlocks = await listTextBlocks(db, [subject.phoneNumber]);
   const person = {
     email: subject.email,
     phoneNumber: subject.phoneNumber,
-    smsOptedOut: await optedOut(db, subject),
+    smsOptedOut: await optedOut(db, subject, textBlocks),
     emailOptedOut: subject.emailOptedOut,
     emailBlocked: subject.emailBlock !== 'NONE',
     emailReported: subject.emailBlock === 'REPORTED',
+    // [[GTC-258]] — a number TNZ reported dead: "Send it as a text" is not offered for it.
+    numberDead: numberDeadOf(subject.phoneNumber, textBlocks),
   };
   return {
     reason: subject.reason,

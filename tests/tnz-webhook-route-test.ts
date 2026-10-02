@@ -89,7 +89,9 @@ const SENDER = 'gtc264-made-up@sender.invalid';
 const RUN = `gtc264t-${Date.now().toString(36)}`;
 let seq = 0;
 const mid = () => `${RUN}-${++seq}`;
-const DEST = '+6421000001';
+// [[GTC-258]]: unique to the run. A delivery report now blocks the number it names (TextBlock), and a
+// fixed number could be a real guest's in gather_dev. It read '+6421000001'.
+const DEST = `+6421${String(Date.now()).slice(-7)}`;
 const REPLY_TEXT = 'gtc264-reply-text-that-must-never-reach-a-log';
 
 type AuthModule = typeof import('../src/app/api/sms/tnz-callback-auth');
@@ -181,7 +183,8 @@ async function main() {
   const startTextReplies = await textReplyCount();
   const savedSecret = process.env.TNZ_CALLBACK_SECRET;
   const savedSender = process.env.TNZ_CALLBACK_SENDER;
-  let fixtureInviteEventId: string | null = null;
+  let fixtureEventId: string | null = null;
+  const fixturePersonIds: string[] = [];
 
   // Console capture for layer E: every line the route writes while replies are posted.
   const captured: string[] = [];
@@ -358,22 +361,49 @@ async function main() {
     section('Layer D: delivery reports');
     // ───────────────────────────────────────────────────────────────────────────────────────
 
-    // The fixture send: an existing event and member, and the NUDGE_SENT_AUTO row sendSms writes.
+    /*
+     * The fixture send. ⚠ MOVED BY [[GTC-258]] (M3, approved 2026-10-02): it was a NUDGE_SENT_AUTO
+     * InviteEvent on the first membership found in gather_dev, because that row held every text's
+     * MessageID. GTC-258 retires it: every text path records its send on an OutboundMessage, and both
+     * joins read that. So the suite makes its own event, guest and accepted TEXT row, removed by id.
+     */
     const MATCHED = mid();
-    const member = await prisma.personEvent.findFirst({
-      select: { eventId: true, personId: true },
-    });
-    if (member) {
-      const fixture = await prisma.inviteEvent.create({
+    let member: { eventId: string; personId: string } | null = null;
+    try {
+      const host = await prisma.person.create({ data: { name: `GTC-264 Host ${RUN}` } });
+      fixturePersonIds.push(host.id);
+      const ev = await prisma.event.create({
         data: {
-          eventId: member.eventId,
-          personId: member.personId,
-          type: 'NUDGE_SENT_AUTO',
-          metadata: { messageId: MATCHED, provider: 'tnz', phoneNumber: DEST, gtc264Fixture: RUN },
+          name: `GTC-264 webhook ${RUN}`,
+          startDate: new Date('2026-12-23T00:00:00.000Z'),
+          endDate: new Date('2026-12-23T00:00:00.000Z'),
+          hostId: host.id,
+          status: 'CONFIRMING',
         },
-        select: { id: true },
       });
-      fixtureInviteEventId = fixture.id;
+      fixtureEventId = ev.id;
+      const guestP = await prisma.person.create({ data: { name: `GTC-264 Guest ${RUN}` } });
+      fixturePersonIds.push(guestP.id);
+      const pe = await prisma.personEvent.create({
+        data: { personId: guestP.id, eventId: ev.id, role: 'PARTICIPANT' },
+      });
+      await (prisma as any).outboundMessage.create({
+        data: {
+          eventId: ev.id,
+          personEventId: pe.id,
+          kind: 'ASK',
+          channel: 'TEXT',
+          attemptedAt: new Date(),
+          attemptCount: 1,
+          acceptedAt: new Date(),
+          provider: 'tnz',
+          providerMessageId: MATCHED,
+          destination: DEST,
+        },
+      });
+      member = { eventId: ev.id, personId: guestP.id };
+    } catch (e) {
+      console.error(`fixture failed: ${e instanceof Error ? e.message.split('\n')[0] : e}`);
     }
 
     const matchedEnvelope = buildTnzDeliveryEnvelope({
@@ -404,12 +434,15 @@ async function main() {
         row?.providerSentAt?.toISOString() === '2025-06-03T21:16:55.000Z' &&
         row?.receivedAt instanceof Date
     );
+    // ⚠ MOVED BY [[GTC-258]] (M3): it read "… — inviteEventId, eventId and personId", with
+    // `row?.inviteEventId === fixtureInviteEventId`. The join is the send record now, and the
+    // InviteEvent pointer is written null from GTC-258 on: the record of rows before it.
     assert(
       'D',
-      'that row is linked to its send — inviteEventId, eventId and personId',
+      "that row is linked to its send's event and guest, through the send record — inviteEventId null",
       first?.status === 200 &&
-        fixtureInviteEventId !== null &&
-        row?.inviteEventId === fixtureInviteEventId &&
+        member !== null &&
+        row?.inviteEventId === null &&
         row?.eventId === member?.eventId &&
         row?.personId === member?.personId
     );
@@ -436,7 +469,9 @@ async function main() {
         blRows[0].result === 'Destination is blacklisted' &&
         afterBl.optOuts === start.optOuts &&
         afterBl.optedOut === start.optedOut &&
-        afterBl.invites === start.invites + (fixtureInviteEventId ? 1 : 0)
+        // ⚠ MOVED BY [[GTC-258]] (M3): it read `start.invites + (fixtureInviteEventId ? 1 : 0)`; the
+        // +1 counted the fixture InviteEvent, which is gone.
+        afterBl.invites === start.invites
     );
 
     const unmatched = mid();
@@ -711,8 +746,21 @@ async function main() {
         metadata: { path: ['providerMessageId'], string_starts_with: RUN },
       },
     });
-    if (fixtureInviteEventId)
-      await prisma.inviteEvent.delete({ where: { id: fixtureInviteEventId } });
+    // [[GTC-258]]: the fixture's own event, guest and send record, and any block on the run's number.
+    if (fixtureEventId) {
+      await prisma.smsDeliveryReport.deleteMany({ where: { eventId: fixtureEventId } });
+      await (prisma as any).outboundMessage.deleteMany({ where: { eventId: fixtureEventId } });
+      await prisma.inviteEvent.deleteMany({ where: { eventId: fixtureEventId } });
+      await prisma.personEvent.deleteMany({ where: { eventId: fixtureEventId } });
+      await prisma.event.delete({ where: { id: fixtureEventId } }).catch(() => {});
+    }
+    if (fixturePersonIds.length)
+      await prisma.person.deleteMany({ where: { id: { in: fixturePersonIds } } });
+    try {
+      await (prisma as any).textBlock.deleteMany({ where: { phoneNumber: DEST } });
+    } catch {
+      /* the table is GTC-258's migration's */
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────────────────

@@ -6,6 +6,8 @@ import { SMS_OPT_OUT_IN_FORCE } from '@/lib/sms/opt-out-service';
 import { requireEventRole } from '@/lib/auth/guards';
 import { sendSms } from '@/lib/sms/send-sms';
 import { withOptOutLine } from '@/lib/sms/opt-out-line';
+import { closeTextSend, openTextSend } from '@/lib/sms/text-send-record';
+import { NUDGE_NUMBER_DEAD_NO_EMAIL } from '@/lib/sms/text-failure-words';
 import { sendNudgeEmail } from '@/lib/email';
 import { logInviteEvent } from '@/lib/invite-events';
 import {
@@ -176,15 +178,25 @@ export async function POST(
       } else {
         // Ruling 4: it sends, and it says what it is overriding.
         if (emailOptedOut) overrideNotice = EMAIL_OPT_OUT_OVERRIDE_MESSAGE;
+        // [[GTC-258]] — the send's record, opened before it and closed after: TNZ's report and any
+        // reply join here by MessageID (plan ruling Q5).
+        const record = await openTextSend(prisma, {
+          eventId,
+          personId,
+          kind: 'HOST_NUDGE',
+          destination: person.phoneNumber,
+        });
         // [[GTC-337]] ruling 2 — her words, then the line. Appended here, never in her textarea, so
         // she cannot send a text without it; `NudgeComposer` shows it under a text before she sends.
-        sendResult = await sendSms({
+        const smsResult = await sendSms({
           to: person.phoneNumber!,
           message: withOptOutLine(message.trim()),
           eventId,
           personId,
           metadata: { source: 'host_nudge', template },
         });
+        await closeTextSend(prisma, record, smsResult);
+        sendResult = smsResult;
       }
     } else if (channel === 'email') {
       // Ruling 4: the only channel left is the one they closed. Refused, not sent.
@@ -206,6 +218,12 @@ export async function POST(
     } else if (person.email && emailBlocked) {
       return NextResponse.json(
         { error: EMAIL_BLOCK_FIRST, reason: 'EMAIL_BLOCKED' },
+        { status: 400 }
+      );
+    } else if (person.numberDead && !person.email) {
+      // [[GTC-258]] W9 — TNZ reported the number cannot receive, and there is no email.
+      return NextResponse.json(
+        { error: NUDGE_NUMBER_DEAD_NO_EMAIL, reason: 'NUMBER_DEAD' },
         { status: 400 }
       );
     } else {

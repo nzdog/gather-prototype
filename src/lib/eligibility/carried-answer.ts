@@ -52,6 +52,7 @@
  */
 
 import { emailBlockStateOf, listEmailBlocks } from '@/lib/eligibility/email-block';
+import { listTextBlocks, numberDeadOf, tnzOptedOutOf } from '@/lib/eligibility/text-block';
 import type { Prisma } from '@prisma/client';
 import { chooseAskRoute, type ChooserEvent } from './channel-chooser';
 import { emailOptedOutFact, listEmailOptOutsForEvent } from './email-opt-out';
@@ -144,6 +145,8 @@ export async function resolveCarriedSubjects(
     db,
     memberships.map((m) => m.person.email)
   );
+  // [[GTC-258]] — the number-wide block from TNZ's reports, the same set `readAskPreview` loads.
+  const textBlocks = await listTextBlocks(db, phones);
 
   const chooserEvent: ChooserEvent = {
     hostId: event.hostId,
@@ -163,11 +166,14 @@ export async function resolveCarriedSubjects(
         phoneNumber: m.person.phoneNumber,
         smsOptedOut:
           m.person.smsOptedOut ||
-          (!!m.person.phoneNumber && optedOutNumbers.has(m.person.phoneNumber)),
+          (!!m.person.phoneNumber && optedOutNumbers.has(m.person.phoneNumber)) ||
+          // [[GTC-258]] plan ruling Q1: TNZ's opt-out list is the guest's own STOP.
+          tnzOptedOutOf(m.person.phoneNumber, textBlocks),
         // [[GTC-296]] ruling 1 — per event, and this set is this event's.
         emailOptedOut: emailOptedOutFact(m.personId, emailOptedOutPersonIds),
         emailBlocked: emailBlockStateOf(m.person.email, eventId, emailBlocks) !== 'NONE',
         emailReported: emailBlockStateOf(m.person.email, eventId, emailBlocks) === 'REPORTED',
+        numberDead: numberDeadOf(m.person.phoneNumber, textBlocks),
       },
     })),
   };

@@ -1448,6 +1448,7 @@ async function testSuite12_CronSecretFailsClosed(_fixtures: Fixtures) {
 
   const BASE = process.env.SECURITY_TEST_BASE_URL ?? 'http://localhost:3000';
   const inviteEventsBefore = await prisma.inviteEvent.count();
+  const outboundBefore = await prisma.outboundMessage.count();
 
   // ── A. THE PREDICATE, PURE ──────────────────────────────────────────────────────
   //
@@ -1538,6 +1539,31 @@ async function testSuite12_CronSecretFailsClosed(_fixtures: Fixtures) {
     'SAFETY PRECONDITION: zero undispatched WrapUpLink rows, so the canary route sends nothing even if admitted',
     pendingWrapUps === 0,
     `${pendingWrapUps} undispatched row(s) — do not run this suite until that is zero`
+  );
+
+  // [[GTC-258]] — the follow-up and thank-you crons now also send one
+  // email retry for a text TNZ reported failed. Zero, or do not drive.
+  // The retryable outcomes, listed here rather than imported: either kind, so a superset of what
+  // either sweep takes (`TEXT_OUTCOME_RETRIES` in src/lib/sms/text-outcome.ts).
+  const TEXT_RETRYABLE = [
+    'TEXT_DEAD_CHANNEL',
+    'TEXT_OPTED_OUT',
+    'TEXT_OUR_FAULT',
+    'TEXT_UNDELIVERED',
+    'TEXT_FAILED_UNRECOGNISED',
+  ] as const;
+  const textRetries = await (prisma as any).outboundMessage.count({
+    where: {
+      kind: { in: ['DECIDE_BY_FOLLOWUP', 'THANK_YOU'] },
+      channel: 'TEXT',
+      deliveryState: { in: [...TEXT_RETRYABLE] },
+      retries: { none: {} },
+    },
+  });
+  logTest(
+    'SAFETY PRECONDITION: zero text retries waiting, so neither sweep emails',
+    textRetries === 0,
+    `${textRetries} retry candidate(s) — do not drive until that is zero`
   );
 
   type Handler = (req: NextRequest) => Promise<Response>;
@@ -1671,7 +1697,7 @@ async function testSuite12_CronSecretFailsClosed(_fixtures: Fixtures) {
   // `dispatchPendingWrapUpMessages` would text or email that guest. The precondition was asserted in
   // section B but not waited on here; it had to be checked by hand before every run.
   let queryChannelBody: any = null;
-  if (liveProbeOk && serverSecret && pendingWrapUps === 0) {
+  if (liveProbeOk && serverSecret && pendingWrapUps === 0 && textRetries === 0) {
     try {
       const res = await fetch(
         `${BASE}/api/cron/wrap-up-dispatch?secret=${encodeURIComponent(serverSecret)}`
@@ -1816,7 +1842,7 @@ async function testSuite12_CronSecretFailsClosed(_fixtures: Fixtures) {
     `${decideByReachable} candidate(s) with a phone or an email — do not drive this route until that is zero`
   );
 
-  if (liveProbeOk && serverSecret && decideByReachable === 0) {
+  if (liveProbeOk && serverSecret && decideByReachable === 0 && textRetries === 0) {
     try {
       const res = await fetch(
         `${BASE}/api/cron/decide-by-followups?secret=${encodeURIComponent(serverSecret)}`
@@ -1858,7 +1884,8 @@ async function testSuite12_CronSecretFailsClosed(_fixtures: Fixtures) {
   const inviteEventsAfter = await prisma.inviteEvent.count();
   logTest(
     'NO SEND: InviteEvent row count is unchanged across this suite',
-    inviteEventsAfter === inviteEventsBefore,
+    inviteEventsAfter === inviteEventsBefore &&
+      (await prisma.outboundMessage.count()) === outboundBefore,
     `${inviteEventsBefore} before → ${inviteEventsAfter} after; a send ATTEMPT of any kind writes one`
   );
   console.log(

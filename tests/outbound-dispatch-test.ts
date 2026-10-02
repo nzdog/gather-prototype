@@ -506,11 +506,17 @@ async function main() {
         'whichever branch got written first. Named in the module before anything can write it',
       read(DISPATCH).includes('SMS_DISABLED')
     );
+    /*
+     * ⚠ MOVED BY [[GTC-258]] (M2, approved 2026-10-02). It read "⚠ THE ASK'S TEXT SEND WILL WRITE A
+     * FALSE NUDGE_SENT_AUTO, ruled as a stopgap with the fix filed on GTC-288 …", with
+     * `read(DISPATCH).includes('NUDGE_SENT_AUTO') && read(DISPATCH).includes('GTC-288')`. That
+     * condition would have stayed green by text while its label became false: GTC-258 retires the row.
+     */
     assert(
-      "⚠ THE ASK'S TEXT SEND WILL WRITE A FALSE NUDGE_SENT_AUTO, ruled as a stopgap with the " +
-        'fix filed on GTC-288. Recorded at the place the send will go, so the second half meets ' +
-        'it rather than discovers it',
-      read(DISPATCH).includes('NUDGE_SENT_AUTO') && read(DISPATCH).includes('GTC-288')
+      "⚠ THE ASK'S FALSE NUDGE_SENT_AUTO IS RETIRED (GTC-258): sendSms writes none, and the " +
+        "dispatcher's header says which ticket retired it",
+      !/type:\s*'NUDGE_SENT_AUTO'/.test(read('src/lib/sms/send-sms.ts')) &&
+        read(DISPATCH).includes('GTC-258')
     );
     assert(
       '⚠ 401 AND 403 ARE TERMINAL AND LOUD, because in this environment every provider answer ' +

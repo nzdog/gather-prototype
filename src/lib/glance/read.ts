@@ -27,6 +27,7 @@
  */
 
 import { readEmailNotes } from './email-note';
+import { textNoteFor } from './text-note';
 import {
   EMAIL_BLOCKED_ASK_HELD_WORDS,
   EMAIL_BLOCKED_TEXT_FAILED_WORDS,
@@ -385,6 +386,13 @@ export async function readEventGlance(
         };
       }),
       ...emailFacts,
+      // [[GTC-258]] — their OWN text invitation's failure, in W1 to W3; the email note speaks first.
+      textNote:
+        emailFacts.emailNote || isChildMembership(row.householdRole)
+          ? null
+          : latestOutbound.get(row.id)?.channel === 'TEXT'
+            ? textNoteFor(latestOutbound.get(row.id)?.deliveryState)
+            : null,
       chase: context.chase,
       chaseNote: chaseNoteFor({
         state,

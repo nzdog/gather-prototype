@@ -98,6 +98,13 @@ export const EMAIL_BLOCKED_CHASE_WORDS =
   "I can't email them anymore and have no mobile to chase them by.";
 
 /**
+ * [[GTC-258]] W4 (founder ruling Q8, 2026-10-02) — a blocked address AND a number TNZ reported dead.
+ * `EMAIL_BLOCKED_WORDS` would say "Text them, or I'll put them on your list", false of a dead number.
+ */
+export const EMAIL_BLOCKED_NUMBER_DEAD_WORDS =
+  "I can't email this address anymore, and texts to their number don't arrive.";
+
+/**
  * Where a person stands, for the words. Resolved by `emailBlockStateOf` in `email-block.ts`.
  *   NONE      — Gather may email this address.
  *   BLOCKED   — the provider will not deliver to it (ruling 2), for any host.
@@ -119,11 +126,15 @@ export function emailNoteFor(input: {
   state: EmailBlockState;
   textable: boolean;
   smsOptedOut: boolean;
+  /** [[GTC-258]] — TNZ reported the number cannot receive. Absent means no. */
+  numberDead?: boolean;
 }): string | null {
   if (input.state === 'NONE') return null;
   if (input.state === 'REPORTED') {
     return input.smsOptedOut ? EMAIL_REPORTED_SMS_OPTED_OUT_WORDS : EMAIL_REPORTED_WORDS;
   }
   if (input.smsOptedOut) return EMAIL_BLOCKED_SMS_OPTED_OUT_WORDS;
+  // [[GTC-258]] W4 — not "Text them": the texts don't arrive either.
+  if (input.numberDead) return EMAIL_BLOCKED_NUMBER_DEAD_WORDS;
   return input.textable ? EMAIL_BLOCKED_TEXTING_WORDS : EMAIL_BLOCKED_WORDS;
 }

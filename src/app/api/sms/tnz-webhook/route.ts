@@ -49,6 +49,7 @@ import { parseTnzDeliveryReport } from '@/lib/sms/tnz-delivery-contract';
 import { recordTnzDeliveryReport } from '@/lib/sms/tnz-delivery-record';
 import { parseTnzReply } from '@/lib/sms/tnz-reply-contract';
 import { recordTnzReply } from '@/lib/sms/tnz-reply-record';
+import { liftTextOptOutBlock } from '@/lib/eligibility/text-block';
 import { isTnzCallbackConfigured, tnzCallbackAccepted } from '../tnz-callback-auth';
 
 const UNREADABLE = () => NextResponse.json({ error: 'Unreadable' }, { status: 500 });
@@ -128,6 +129,11 @@ export async function POST(request: NextRequest) {
         return UNREADABLE();
       }
       const result = await recordTnzReply(prisma, reply.reply);
+      // [[GTC-258]] plan ruling Q11 — a START also lifts a block for a number TNZ held on their
+      // opt-out list, whether or not Gather had its own opt-out in force. Beside the reply store,
+      // not inside it: Zone 7's writer is not edited for this.
+      const lifted =
+        reply.reply.intent === 'OPT_IN' ? await liftTextOptOutBlock(prisma, reply.reply.sender) : 0;
       const told =
         result.outcome === 'NOT_RECORDED'
           ? `nothing recorded (${result.why})`
@@ -139,10 +145,12 @@ export async function POST(request: NextRequest) {
                 ? 'opt-in recorded'
                 : 'reply kept';
       console.log(
-        `[TNZ webhook] ${typeForLog(parsed.envelope.Type)} received (${parsed.kind}) — ${told}. MessageID=${messageId}`
+        `[TNZ webhook] ${typeForLog(parsed.envelope.Type)} received (${parsed.kind}) — ${told}${lifted > 0 ? '; a TNZ opt-out block lifted' : ''}. MessageID=${messageId}`
       );
-      if (result.outcome === 'NOT_RECORDED')
+      if (result.outcome === 'NOT_RECORDED' && lifted === 0)
         return NextResponse.json({ ok: true, recorded: false }, { status: 202 });
+      if (result.outcome === 'NOT_RECORDED')
+        return NextResponse.json({ ok: true, recorded: true }, { status: 200 });
       if (result.outcome === 'DUPLICATE')
         return NextResponse.json({ ok: true, recorded: false, duplicate: true }, { status: 200 });
       return NextResponse.json({ ok: true, recorded: true }, { status: 200 });

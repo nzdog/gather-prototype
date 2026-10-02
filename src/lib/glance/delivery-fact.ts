@@ -1,5 +1,6 @@
 import type { OutboundWithheldWhy } from '@/lib/press/dispatch';
 import type { ResendOutcomeKind } from '@/lib/email-delivery/resend-delivery-contract';
+import type { TextOutcomeKind } from '@/lib/sms/text-outcome';
 import type { AskRoute } from '@/lib/eligibility/channel-chooser';
 import { firstNameOf } from '@/lib/messages/ask-register';
 import type { DeliveryFact } from './state';
@@ -202,6 +203,30 @@ export const DELIVERY_STATE_MEANS: Record<ResendOutcomeKind, 'NOT_DELIVERED' | n
   UNRECOGNISED: null,
 };
 
+/**
+ * [[GTC-258]] — WHICH TEXT OUTCOMES MEAN THE TEXT DID NOT ARRIVE: the failed-text red. Founder rulings
+ * of 2026-10-02 (SCOPED Q2 and Q3, plan rulings Q2 to Q4), verbatim in GTC-258. A text that failed
+ * reads exactly as a bounced email does — `NOT_DELIVERED`, "never got it", with the door.
+ *
+ * ⚠ TEXT_REACHED_NETWORK IS SENT (Q3): the phone was off or out of coverage, and the text often arrives
+ * later. ⚠ TEXT_OPTED_OUT IS NOT RED (Q2): a number on TNZ's opt-out list is the guest's own STOP
+ * (plan ruling Q1), and reads as one — grey, never chased — through the chooser, not through here.
+ *
+ * A `Record` over the text kinds, beside Resend's map and for its reason: a new kind is a compile
+ * error until somebody decides. The two vocabularies share `deliveryState`, kept apart by TEXT_.
+ */
+export const TEXT_DELIVERY_STATE_MEANS: Record<TextOutcomeKind, 'NOT_DELIVERED' | null> = {
+  TEXT_ARRIVED: null,
+  TEXT_REACHED_NETWORK: null,
+  TEXT_DEAD_CHANNEL: 'NOT_DELIVERED',
+  TEXT_OPTED_OUT: null,
+  TEXT_OUR_FAULT: 'NOT_DELIVERED',
+  TEXT_UNDELIVERED: 'NOT_DELIVERED',
+  TEXT_CANCELLED: 'NOT_DELIVERED',
+  TEXT_FAILED_UNRECOGNISED: 'NOT_DELIVERED',
+  TEXT_UNRECOGNISED: null,
+};
+
 /** One outbound row, as this translation needs it. Structural, so a narrow `select` works. */
 export interface DeliveryRowInput {
   personEventId: string;
@@ -232,9 +257,14 @@ export function deliveryFactFrom(row: DeliveryRowInput | null | undefined): Deli
     return { failure: withheld ?? null };
   }
   if (row.deliveryState) {
-    const state = (DELIVERY_STATE_MEANS as Record<string, 'NOT_DELIVERED' | null | undefined>)[
-      row.deliveryState
-    ];
+    // Resend's kinds, then — [[GTC-258]] — TNZ's. Disjoint by the TEXT_ prefix.
+    const state =
+      (DELIVERY_STATE_MEANS as Record<string, 'NOT_DELIVERED' | null | undefined>)[
+        row.deliveryState
+      ] ??
+      (TEXT_DELIVERY_STATE_MEANS as Record<string, 'NOT_DELIVERED' | null | undefined>)[
+        row.deliveryState
+      ];
     return { failure: state ?? null };
   }
   return { failure: null };
@@ -258,6 +288,8 @@ export interface TimedDeliveryRowInput extends DeliveryRowInput {
  * on every read, but every state `DELIVERY_STATE_MEANS` calls NOT_DELIVERED is in
  * `TERMINAL_FOR_POLLING` (`src/lib/email-delivery/delivery-poll.ts`), so the read that found the
  * failure is the row's last. A failure-mapped state added outside that set would break this.
+ * [[GTC-258]]: a TEXT row's outcome is written once, final, by `applyTextOutcome`, which sets
+ * `deliveryCheckedAt` to the instant Gather recorded it — so a text failure plays the same way.
  *
  * ⚠ A STATE WITH NO TIME IS HELD (ruling point 3). Nothing in the poll writes one, but a row that has
  * one carries no evidence of when it changed, so it stands at `since` as it stands now — the replay's

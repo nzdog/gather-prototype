@@ -17,6 +17,11 @@ import {
 } from 'lucide-react';
 import { formatPhoneForDisplay } from '@/lib/phone';
 import { NudgeComposer } from './NudgeComposer';
+import {
+  FIRST_REMINDER_DID_NOT_ARRIVE,
+  NUDGE_DID_NOT_ARRIVE,
+  SECOND_REMINDER_DID_NOT_ARRIVE,
+} from '@/lib/sms/text-failure-words';
 
 interface PersonDetail {
   id: string;
@@ -40,6 +45,10 @@ interface PersonDetail {
   firstNudgeSentAt: string | null;
   secondNudgeSentAt: string | null;
   lastHostNudgeAt: string | null;
+  /** [[GTC-258]] — TNZ reported the text did not arrive. Absent on an older response: no. */
+  firstNudgeFailed?: boolean;
+  secondNudgeFailed?: boolean;
+  lastHostNudgeFailed?: boolean;
   claimedAt: string | null;
   eventName: string | null;
   eventDate: string | null;
@@ -227,7 +236,11 @@ export function PersonInviteDetailModal({ eventId, personId, onClose, onUpdate }
                 {person.firstNudgeSentAt && (
                   <div className="flex items-center gap-2 text-sm">
                     <Bell className="w-4 h-4 text-yellow-600" />
-                    <span>First auto-reminder sent</span>
+                    <span>
+                      {person.firstNudgeFailed
+                        ? FIRST_REMINDER_DID_NOT_ARRIVE
+                        : 'First auto-reminder sent'}
+                    </span>
                     <span className="text-gray-500">
                       {new Date(person.firstNudgeSentAt).toLocaleString()}
                     </span>
@@ -236,7 +249,11 @@ export function PersonInviteDetailModal({ eventId, personId, onClose, onUpdate }
                 {person.secondNudgeSentAt && (
                   <div className="flex items-center gap-2 text-sm">
                     <Bell className="w-4 h-4 text-amber-600" />
-                    <span>Second auto-reminder sent</span>
+                    <span>
+                      {person.secondNudgeFailed
+                        ? SECOND_REMINDER_DID_NOT_ARRIVE
+                        : 'Second auto-reminder sent'}
+                    </span>
                     <span className="text-gray-500">
                       {new Date(person.secondNudgeSentAt).toLocaleString()}
                     </span>
@@ -245,7 +262,7 @@ export function PersonInviteDetailModal({ eventId, personId, onClose, onUpdate }
                 {person.lastHostNudgeAt && (
                   <div className="flex items-center gap-2 text-sm">
                     <MessageSquare className="w-4 h-4 text-sage-600" />
-                    <span>Nudged</span>
+                    <span>{person.lastHostNudgeFailed ? NUDGE_DID_NOT_ARRIVE : 'Nudged'}</span>
                     <span className="text-gray-500">
                       {new Date(person.lastHostNudgeAt).toLocaleString()}
                     </span>

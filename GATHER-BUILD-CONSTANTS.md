@@ -1,7 +1,9 @@
 # GATHER BUILD CONSTANTS
 
 Reference file for AI executors and developers. Keep this file accurate.
-Last updated: 2026-10-01 (GTC-264 / GTC-229: `TNZ_CALLBACK_SECRET` and `TNZ_CALLBACK_SENDER` in
+Last updated: 2026-10-02 (GTC-258: `test:security`'s live layer and `test:cron-health` wait on zero
+text retries waiting, and the live layer's no-send count includes `OutboundMessage`). Previously
+2026-10-01 (GTC-264 / GTC-229: `TNZ_CALLBACK_SECRET` and `TNZ_CALLBACK_SENDER` in
 the environment table; `test:security`'s live layer, 15 → 18 without a server). Previously
 2026-10-01 (Known failures: `npm run lint` exits 1, recorded at GTC-335 on founder
 instruction). Previously 2026-09-30 (cron health, GTC-339: the sending crons fail per channel, the
@@ -208,13 +210,17 @@ preconditions (GTC-270):
 - `/api/cron/decide-by-followups`, after zero decide-by candidates: an unstamped maybe with a phone
   or an email, on a sent and live event (widened at GTC-251 slice 251b, when the follow-up gained
   its email leg).
+- Both, since GTC-258, also after zero text retries waiting: a "please decide" follow-up or a
+  thank-you whose text TNZ reported did not arrive and that has no email retry yet. Both crons now
+  send that one retry, so the live layer counts it before driving either.
 
 Since GTC-264 / GTC-229 it also calls `/api/sms/tnz-webhook` twice, with no credential and with
 made-up ones, and `GET /api/sms/inbound` once; none is a cron, all are refused or absent, and it
 asserts no `SmsDeliveryReport` or `SmsOptOut` row was written.
 
 It never drives `/api/cron/nudges` with a valid secret, and it fails if the
-`InviteEvent` count moves. Since GTC-274 both drives wait on their own
+`InviteEvent` count or (since GTC-258, when a text's record became an `OutboundMessage`) the
+`OutboundMessage` count moves. Since GTC-274 both drives wait on their own
 preconditions, and the dev server is never live, so it cannot send whatever its
 keys are. The blanked keys stay as a second wall. Still check both counts
 before starting, and stop if either is non-zero.
@@ -224,8 +230,9 @@ before starting, and stop if either is non-zero.
 cron route, and only these:
 
 1. **`test:security`'s live layer**, over HTTP to the dev server, as above. Its
-   preconditions: zero undispatched `WrapUpLink` rows, and zero decide-by candidates
-   as above. It fails if the `InviteEvent` count moves.
+   preconditions: zero undispatched `WrapUpLink` rows, zero decide-by candidates
+   and zero text retries waiting, as above. It fails if the `InviteEvent` or
+   `OutboundMessage` count moves.
 2. **`tests/nudge-provider-gate-test.ts` layer D**, which imports
    `/api/cron/nudges`'s `GET` and calls it in process, unscoped. The scheduler only
    queues, and every row the run wrote is removed and the `OutboundMessage` count
@@ -238,7 +245,9 @@ cron route, and only these:
    - the drain's rows (`findNeverAttempted`'s and `findDueForRetry`'s where clauses);
    - late arrivals the mini-send sweep would enrol (`enrolMiniSends`'s own predicate);
    - the delivery poll's rows (accepted `EMAIL` rows it has not finished with);
-   - undispatched `WrapUpLink` rows, and the decide-by count above.
+   - undispatched `WrapUpLink` rows, and the decide-by count above;
+   - text retries waiting (GTC-258): follow-up or thank-you texts TNZ reported failed, not yet
+     retried by email.
    After every case it asserts the `OutboundMessage`, `InviteEvent` and
    `WrapUpLink` counts are as found, and that every fixture is removed by id.
 

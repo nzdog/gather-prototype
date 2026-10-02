@@ -5,6 +5,7 @@ import { logInviteEvent } from '@/lib/invite-events';
 import { isLiveSendingOn, LIVE_SENDS_OFF } from '@/lib/live-sends';
 import { isE164 } from '@/lib/phone';
 import { SMS_OPT_OUT_IN_FORCE } from '@/lib/sms/opt-out-service';
+import { listTextBlocks } from '@/lib/eligibility/text-block';
 
 /**
  * Country codes routed to TNZ. Twilio does not deliver to NZ (+64); AU (+61)
@@ -57,18 +58,34 @@ export interface SendSmsParams {
 export type SmsBlockReason =
   | 'SMS_DISABLED' // The provider is not configured, or live sending is off (GTC-274)
   | 'INVALID_NUMBER' // Not a valid NZ number
-  | 'OPTED_OUT' // The number has opted out of texts from Gather — every host (GTC-288)
+  | 'OPTED_OUT' // The number has opted out of texts from Gather — every host (GTC-288), or TNZ hold it on their opt-out list (GTC-258)
+  | 'NUMBER_DEAD' // TNZ reported the number cannot receive; never texted again (GTC-258)
   | 'SEND_FAILED'; // Twilio API error
 
 export interface SendSmsResult {
+  /**
+   * ⚠ [[GTC-258]]: THE PROVIDER ACCEPTED IT — NOT THAT IT ARRIVED. TNZ answer 200 on acceptance and
+   * report the outcome later, on their webhook ("you should be working from delivery results and not
+   * assuming the API accepting a message means successful delivery"). The outcome lands on the
+   * caller's `OutboundMessage` row (`src/lib/sms/tnz-delivery-record.ts`).
+   */
   success: boolean;
-  messageId?: string; // Twilio message SID
+  messageId?: string; // TNZ's MessageID, or Twilio's message SID — the delivery join key
+  /** [[GTC-258]] — which provider took it, for the caller's send record. Set when `success`. */
+  provider?: 'tnz' | 'twilio';
   blocked?: SmsBlockReason;
   error?: string;
 }
 
 /**
- * Send an SMS message with full validation and logging
+ * Send an SMS message with full validation and logging.
+ *
+ * ⚠ [[GTC-258]] — IT RECORDS NO SEND OF ITS OWN. It wrote a `NUDGE_SENT_AUTO` InviteEvent on every
+ * accepted text, which made the ask's text claim a nudge was sent (a ruled stopgap, rule 2 in
+ * `src/lib/press/dispatch.ts`) and was the only store of every text's MessageID. Every caller now
+ * records its send on an `OutboundMessage` (the dispatcher's rows; `openTextSend`/`closeTextSend`
+ * in `./text-send-record.ts` for the other three paths), which is the record that can carry TNZ's
+ * report. The refusals below still log as before.
  */
 export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
   const { to, message, eventId, personId, metadata = {} } = params;
@@ -118,6 +135,32 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
       blocked: 'OPTED_OUT',
       error: 'Recipient has opted out',
     };
+  }
+
+  /*
+   * [[GTC-258]] — NOT TEXTED AGAIN, AND THIS IS THE LAST FENCE. Founder ruling Q2, 2026-10-02: a
+   * number TNZ said cannot receive is never texted again, and a number on TNZ's opt-out list isn't
+   * texted again. The chooser reads the same fact first (`numberDead`, and the opt-out fact); this
+   * catches a row queued before the report came, and every path alike.
+   *
+   * ⚠ AFTER ZONE 7's CHECK ABOVE, WHICH STAYS FIRST AND UNTOUCHED, and before the provider's
+   * configuration, because it is a fact about the number, not about this environment. It writes no
+   * InviteEvent: a stop is never recorded as a send. And it is not Zone 7 — `TextBlock` is a separate
+   * fact, written only from TNZ's delivery reports.
+   */
+  const textBlock = (await listTextBlocks(prisma, [to])).get(to);
+  if (textBlock) {
+    return textBlock.reason === 'DEAD_CHANNEL'
+      ? {
+          success: false,
+          blocked: 'NUMBER_DEAD',
+          error: 'TNZ reported this number cannot receive texts',
+        }
+      : {
+          success: false,
+          blocked: 'OPTED_OUT',
+          error: "The number is on TNZ's opt-out list",
+        };
   }
 
   // Check configuration for the selected provider. If the destination is
@@ -196,23 +239,11 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
       messageId = result.sid;
     }
 
-    // Log success
-    await logInviteEvent({
-      eventId,
-      personId,
-      type: 'NUDGE_SENT_AUTO',
-      metadata: {
-        messageId,
-        provider,
-        phoneNumber: to,
-        messageLength: message.length,
-        ...metadata,
-      },
-    });
-
+    // [[GTC-258]]: accepted, and recorded by the caller — see the header.
     return {
       success: true,
       messageId,
+      provider,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

@@ -16,6 +16,7 @@ import { firstNameOf } from '@/lib/messages/ask-register';
 import { withOptOutLine } from '@/lib/sms/opt-out-line';
 import { readChaseOwed } from '@/lib/sms/nudge-eligibility';
 import { listEmailBlocks, normalizeEmailAddress } from '@/lib/eligibility/email-block';
+import { applyStoredTnzReports } from '@/lib/sms/tnz-delivery-record';
 import { emptyTally, tallySend, type SendChannel, type SendTally } from '@/lib/send-health';
 
 /**
@@ -73,19 +74,14 @@ import { emptyTally, tallySend, type SendChannel, type SendTally } from '@/lib/s
  * ruled:** ruling AN separated the two outcome doors precisely so this could not be settled by
  * whichever branch happened to get written first, and this is the case that would have settled it.
  *
- * ⚠ 2. THE ASK'S TEXT SEND WILL WRITE A FALSE `NUDGE_SENT_AUTO`, AND THAT IS A RULED STOPGAP.
- * `InviteEventType` has no member for an ask being sent, and `sendSms` writes `NUDGE_SENT_AUTO`
- * unconditionally, inside itself. So an accepted ask text logs a row saying a nudge was sent, at
- * the press, before any nudge exists. Ruled 2026-09-19: leave it, record the falsity here, and
- * file the fix, then thought to be [[GTC-288]]'s. ⚠ GTC-288 MEASURED IT AND KEPT THE ROW (plan ruling
- * D6, 2026-10-01): the decide-by follow-up, the wrap-up and the by-hand nudge store their TNZ
- * MessageID ONLY in this row, so TNZ's webhook (`POST /api/sms/tnz-webhook`) joins both a STOP and
- * a delivery report (`recordTnzDeliveryReport`) through `metadata.messageId`. Retiring the row
- * means giving those three paths an `OutboundMessage` first — a dated note on [[GTC-258]].
- * Measured at the ruling: the ask is 231 EMAIL to 1 TEXT, so a press writes ONE false row today;
- * and `NUDGE_SENT_AUTO` has ZERO rows in `gather_dev`, so nothing live depends on it either way.
- * ⚠ DO NOT "FIX" THIS BY ADDING AN ENUM MEMBER. That is a migration bought to feed an index
- * that is to be retired once every text path writes `OutboundMessage`.
+ * ✅ 2. THE ASK'S FALSE `NUDGE_SENT_AUTO` IS RETIRED — [[GTC-258]], plan ruling Q5 (2026-10-02).
+ * `sendSms` wrote that row on every accepted text, so an accepted ask text logged a nudge before any
+ * nudge existed. It was ruled a stopgap on 2026-09-19, thought then to be [[GTC-288]]'s to fix;
+ * GTC-288 measured that it could not (plan ruling D6): the decide-by follow-up, the wrap-up and the
+ * by-hand nudge stored their TNZ MessageID only in that row. GTC-258 gave those three paths an
+ * `OutboundMessage` each (`openTextSend`/`closeTextSend`), moved both joins — the delivery report and
+ * the reply — onto `OutboundMessage.providerMessageId`, and stopped `sendSms` writing the row.
+ * ⚠ AND STILL NO ENUM MEMBER FOR AN ASK BEING SENT: the record of a send is this table's row.
  *
  * ⚠ 3. A 401 OR 403 FROM EITHER PROVIDER IS TERMINAL AND LOUD. Ruled 2026-09-19. In this
  * environment every provider answer is an auth failure ([[GTC-247]]), so a policy that retries
@@ -429,6 +425,13 @@ export function blockedToWithheld(blocked: SmsBlockReason): OutboundWithheldWhy 
       return 'OPTED_OUT';
     case 'INVALID_NUMBER':
       return 'INVALID_NUMBER';
+    /*
+     * [[GTC-258]] — TNZ said the number cannot receive, and `sendSms`'s fence refused it before any
+     * provider call. The chooser's own word for "a number nothing can send to" — it would answer the
+     * same for this person now — so no new withholding code.
+     */
+    case 'NUMBER_DEAD':
+      return 'PHONE_UNUSABLE';
     case 'SEND_FAILED':
       return null;
   }
@@ -555,6 +558,8 @@ export async function recordAcceptance(
     providerMessageId?: string;
     /** [[GTC-189]] slice 8b — a chase leg also stamps its column. Omitted means ASK. */
     kind?: OutboundKind;
+    /** [[GTC-258]] — a TEXT row's number, for the reply join (`OutboundMessage.destination`). */
+    destination?: string;
   }
 ): Promise<void> {
   const acceptedAt = new Date();
@@ -564,6 +569,7 @@ export async function recordAcceptance(
       data: {
         acceptedAt,
         provider: args.provider,
+        ...(args.destination ? { destination: args.destination } : {}),
         // ⚠ NEVER A PLACEHOLDER. Slice 6 joins on this value, so a stand-in would match nothing and
         // read as a LOST BOUNCE rather than as a send with no id. Slice 4b pins the same rule on
         // the sender's return.
@@ -605,6 +611,14 @@ export async function recordAcceptance(
       });
     }
   });
+  /*
+   * [[GTC-258]] note 7 — A REPORT THAT CAME FIRST. TNZ can report before this MessageID was written,
+   * and the report was stored unmatched; now that the row holds it (committed above), link and apply
+   * it. AFTER the commit, deliberately: see `src/lib/sms/tnz-delivery-record.ts`, decision 3.
+   */
+  if (args.provider === 'tnz' && args.providerMessageId) {
+    await applyStoredTnzReports(db, args.providerMessageId);
+  }
 }
 
 /**
@@ -892,6 +906,7 @@ async function drainChaseRow(
       provider: 'tnz',
       providerMessageId: sent.messageId,
       kind: row.kind,
+      destination: to,
     });
     result.sent++;
     tallySend(result.tally, 'text', 'GOT_OUT');
@@ -1166,13 +1181,8 @@ export async function drainOnce(
         continue;
       }
       /*
-       * ⚠ `sendSms` WRITES A FALSE `NUDGE_SENT_AUTO` HERE AND IT IS A RULED STOPGAP. See this
-       * module's header, rule 2. `InviteEventType` has no member for an ask being sent, and
-       * `sendSms` logs unconditionally inside itself. [[GTC-288]] was to retire it and could not:
-       * the STOP attribution JOINS ON THIS ROW, because three of the five text paths (the decide-by
-       * follow-up, the wrap-up, the by-hand nudge) store their MessageID nowhere else (plan ruling
-       * D6). Retiring it waits for those paths to write `OutboundMessage` — a dated note on
-       * [[GTC-258]]. DO NOT add an enum member for it.
+       * [[GTC-258]] — this row is the send's only record: `sendSms` writes no `NUDGE_SENT_AUTO` now
+       * (this module's header, rule 2), and TNZ's report and any reply join here by MessageID.
        *
        * [[GTC-337]] ruling 2 — the line is added HERE, at the text send, and not by `composeAsk`:
        * [[GTC-187]] decision 5 keeps the ask's body one text for both channels. The STORED channel
@@ -1191,6 +1201,7 @@ export async function drainOnce(
           personEventId: row.personEventId,
           provider: 'tnz',
           providerMessageId: sent.messageId,
+          destination: to,
         });
         result.sent++;
         tallySend(result.tally, 'text', 'GOT_OUT');

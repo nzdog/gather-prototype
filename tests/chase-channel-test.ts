@@ -823,7 +823,8 @@ function runTypeProbes() {
   };
 
   // [[GTC-189]] slice 8a added two required facts to the chooser person ([[GTC-324]]).
-  const PERSON = `person: { email: null, phoneNumber: null, smsOptedOut: false, emailOptedOut: false, emailBlocked: false, emailReported: false }`;
+  // [[GTC-258]] (M5, approved 2026-10-02): and `numberDead`.
+  const PERSON = `person: { email: null, phoneNumber: null, smsOptedOut: false, emailOptedOut: false, emailBlocked: false, emailReported: false, numberDead: false }`;
   const ROW = `id: 'a', personId: 'p', role: 'PARTICIPANT', householdId: null, householdRole: null, holdsItems: true, nudgeMark: null, ${PERSON}`;
   const head = `import type { ChaseChooserMembership, ChaseChooserEvent } from '${CHOOSER_IMPORT}';\n`;
 

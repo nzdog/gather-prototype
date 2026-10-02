@@ -23,13 +23,14 @@
  * event by MessageID … An unmatched reply is not kept."* Never a guess: a wrong guess would show one
  * host's guest's words to another host.
  *
- * ── THE JOIN — MessageID to the `NUDGE_SENT_AUTO` row `sendSms` writes ────────────────────────
- * The only store that holds every text's id: the dispatcher's ask and chase write it to
- * `OutboundMessage.providerMessageId` too, but the decide-by follow-up, the wrap-up and the by-hand
- * nudge write it nowhere else (plan ruling D6). The same query `recordTnzDeliveryReport` runs. No
- * newest-wins fallback by number (D5): that index is the one [[GTC-258]] corrupts. A link is made
- * only when the send went to the number the reply came from — TNZ contradicting itself is
- * unresolved, never resolved by us.
+ * ── THE JOIN — MessageID to the text's send record ─────────────────────────────────────────────
+ * ⚠ MOVED BY [[GTC-258]] (plan ruling Q5, 2026-10-02). It was the `NUDGE_SENT_AUTO` InviteEvent
+ * `sendSms` wrote, the only store that then held every text's id (plan ruling D6). Every text path
+ * now records its send on an `OutboundMessage` with `providerMessageId` and `destination`, and
+ * `sendSms` writes no `NUDGE_SENT_AUTO`; so the join is the TEXT row, the same lookup
+ * `recordTnzDeliveryReport` makes. The `inviteEventId` pointers below are written null from then on.
+ * No newest-wins fallback by number (D5). A link is made only when the send went to the number the
+ * reply came from — TNZ contradicting itself is unresolved, never resolved by us.
  *
  * ── RETRIES ─────────────────────────────────────────────────────────────────────────────────────
  * TNZ retry any non-2xx every five minutes for 24 hours. Each write set is one transaction, so a
@@ -70,7 +71,8 @@ export type TnzReplyRecordResult =
     };
 
 interface ResolvedSend {
-  readonly inviteEventId: string;
+  /** [[GTC-258]]: always null — the send is an `OutboundMessage` now, not an InviteEvent. */
+  readonly inviteEventId: null;
   readonly eventId: string;
   readonly personId: string | null;
   readonly sentTo: string | null;
@@ -78,18 +80,17 @@ interface ResolvedSend {
 
 async function findSend(db: PrismaClient, messageId: string | null): Promise<ResolvedSend | null> {
   if (messageId === null) return null;
-  const send = await db.inviteEvent.findFirst({
-    where: { type: 'NUDGE_SENT_AUTO', metadata: { path: ['messageId'], equals: messageId } },
+  const send = await db.outboundMessage.findFirst({
+    where: { providerMessageId: messageId, channel: 'TEXT' },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, eventId: true, personId: true, metadata: true },
+    select: { eventId: true, destination: true, personEvent: { select: { personId: true } } },
   });
   if (!send) return null;
-  const sentTo = (send.metadata as { phoneNumber?: unknown } | null)?.phoneNumber;
   return {
-    inviteEventId: send.id,
+    inviteEventId: null,
     eventId: send.eventId,
-    personId: send.personId,
-    sentTo: typeof sentTo === 'string' ? sentTo : null,
+    personId: send.personEvent.personId,
+    sentTo: send.destination,
   };
 }
 

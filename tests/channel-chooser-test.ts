@@ -860,7 +860,10 @@ function tscProbe(name: string, rowFields: string): { ok: boolean; output: strin
 // [[GTC-296]]: the chooser person gained `emailOptedOut`, so a "complete" row gained a field.
 // [[GTC-189]] slice 8a: and `emailBlocked` and `emailReported` ([[GTC-324]]), for the same reason.
 const BLOCK = `emailBlocked: false, emailReported: false`;
-const PERSON = `person: { email: null, phoneNumber: null, smsOptedOut: false, emailOptedOut: false, ${BLOCK} }`;
+// [[GTC-258]] (M5, approved 2026-10-02): and `numberDead` — TNZ reported the number does not work.
+const DEAD = `numberDead: false`;
+const PERSON = `person: { email: null, phoneNumber: null, smsOptedOut: false, emailOptedOut: false, ${BLOCK}, ${DEAD} }`;
+const PERSON_NO_DEAD = `person: { email: null, phoneNumber: null, smsOptedOut: false, emailOptedOut: false, ${BLOCK} }`;
 const PERSON_NO_OPT_OUT = `person: { email: null, phoneNumber: null, emailOptedOut: false, ${BLOCK} }`;
 const PERSON_NO_EMAIL_OPT_OUT = `person: { email: null, phoneNumber: null, smsOptedOut: false, ${BLOCK} }`;
 const PERSON_NO_BLOCK = `person: { email: null, phoneNumber: null, smsOptedOut: false, emailOptedOut: false, emailReported: false }`;
@@ -912,6 +915,15 @@ try {
     'T',
     'a person without emailBlocked does not typecheck, and the error names it',
     !noBlock.ok && /emailBlocked/.test(noBlock.output)
+  );
+
+  // [[GTC-258]] — the same property for a dead number: a forgetful caller would read "not dead" and
+  // go on texting a number TNZ has said does not work.
+  const noDead = tscProbe('no-dead', `${ROW}, nudgeMark: null, ${PERSON_NO_DEAD}`);
+  assert(
+    'T',
+    'a person without numberDead does not typecheck, and the error names it',
+    !noDead.ok && /numberDead/.test(noDead.output)
   );
 } finally {
   rmSync(probeDir, { recursive: true, force: true });

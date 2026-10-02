@@ -230,7 +230,29 @@ async function main() {
         person: { OR: [{ phoneNumber: { not: null } }, { email: { not: null } }] },
       },
     });
-    return { drain, miniSend, poll, wrapUps, decideBy };
+    /*
+     * [[GTC-258]] (M6, approved 2026-10-02) — the follow-up and thank-you crons now also send one
+     * email retry for a text TNZ reported failed. Every retryable outcome, either kind, not yet
+     * retried: a superset of what either sweep would take, which is the safe side of a precondition.
+     */
+    const textRetries = await (prisma as any).outboundMessage.count({
+      where: {
+        kind: { in: ['DECIDE_BY_FOLLOWUP', 'THANK_YOU'] },
+        channel: 'TEXT',
+        deliveryState: {
+          in: [
+            'TEXT_DEAD_CHANNEL',
+            'TEXT_OPTED_OUT',
+            'TEXT_OUR_FAULT',
+            'TEXT_UNDELIVERED',
+            'TEXT_FAILED_UNRECOGNISED',
+          ],
+        },
+        retries: { none: {} },
+        eventId: notFx,
+      },
+    });
+    return { drain, miniSend, poll, wrapUps, decideBy, textRetries };
   }
   const nonZero = (c: Record<string, number>) =>
     Object.entries(c)
@@ -1116,13 +1138,22 @@ async function main() {
     );
     assert(
       'U',
-      'SMS_BLOCK_COUNTS: SMS_DISABLED and SEND_FAILED count; OPTED_OUT and INVALID_NUMBER do not',
+      // ⚠ MOVED BY [[GTC-258]] (M8, approved 2026-10-02): it read "… OPTED_OUT and INVALID_NUMBER do
+      // not" over four entries. `sendSms` gained NUMBER_DEAD — TNZ reported the number cannot receive,
+      // a fact about the guest — so the exact match gains it, still exact.
+      'SMS_BLOCK_COUNTS: SMS_DISABLED and SEND_FAILED count; OPTED_OUT, INVALID_NUMBER and NUMBER_DEAD (GTC-258) do not',
       ok(() =>
         same(
           Object.entries(health.SMS_BLOCK_COUNTS)
             .sort()
             .map(([k, v]) => `${k}=${v}`),
-          ['INVALID_NUMBER=false', 'OPTED_OUT=false', 'SEND_FAILED=true', 'SMS_DISABLED=true']
+          [
+            'INVALID_NUMBER=false',
+            'NUMBER_DEAD=false',
+            'OPTED_OUT=false',
+            'SEND_FAILED=true',
+            'SMS_DISABLED=true',
+          ]
         )
       ),
       JSON.stringify(health?.SMS_BLOCK_COUNTS)

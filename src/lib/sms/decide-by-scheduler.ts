@@ -1,5 +1,5 @@
 import { findDecideByFollowupCandidates } from './decide-by-eligibility';
-import { processDecideByFollowups } from './decide-by-sender';
+import { processDecideByFollowups, retryUndeliveredFollowups } from './decide-by-sender';
 import type { SendTally } from '@/lib/send-health';
 
 /**
@@ -41,6 +41,8 @@ export interface DecideByRunResult {
     failed: number;
     deferred: number;
     deferredUntilMinutes: number;
+    /** [[GTC-258]] — follow-ups re-sent by email after TNZ reported their text did not arrive. */
+    retried: number;
   };
   errors: string[];
   /** [[GTC-339]] — per channel, the sends this run had to make and how many got out. */
@@ -52,6 +54,10 @@ export async function runDecideByFollowups(now: Date = new Date()): Promise<Deci
 
   const candidates = await findDecideByFollowupCandidates(now);
   const processed = await processDecideByFollowups(candidates.eligible, now);
+  // [[GTC-258]] — the one retry, on this cron: a follow-up whose text TNZ said did not arrive.
+  const retry = await retryUndeliveredFollowups(now);
+  processed.tally.email.toSend += retry.tally.email.toSend;
+  processed.tally.email.gotOut += retry.tally.email.gotOut;
 
   processed.sent
     .filter((r) => !r.success)
@@ -69,6 +75,7 @@ export async function runDecideByFollowups(now: Date = new Date()): Promise<Deci
       failed: processed.sent.filter((r) => !r.success).length,
       deferred: processed.deferred,
       deferredUntilMinutes: processed.deferredUntilMinutes,
+      retried: retry.sent,
     },
     errors,
     tally: processed.tally,

@@ -38,6 +38,14 @@ export interface TnzSendResult {
  * Returns `{ success: true, messageId }` on HTTP 2xx. On any non-2xx response
  * or network failure, returns `{ success: false, error }` with a best-effort
  * description. Callers are responsible for opt-out checks and logging.
+ *
+ * ⚠ [[GTC-258]]: `success` MEANS TNZ ACCEPTED THE TEXT, NOT THAT IT ARRIVED. TNZ
+ * answer 200 even for a number on their opt-out list, and report what happened
+ * later, on their status webhook (TNZ, 2026-08-31: "you should be working from
+ * delivery results and not assuming the API accepting a message means
+ * successful delivery"). The `messageId` is the join key that report comes back
+ * on. The field keeps its name (plan ruling Q13): renaming it would touch the
+ * live-send script.
  */
 export async function sendViaTnz(params: { to: string; message: string }): Promise<TnzSendResult> {
   const { to, message } = params;

@@ -55,6 +55,7 @@ import { Conflict, ConflictType } from '@prisma/client';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 import SetupChecklistBanner from '@/components/plan/SetupChecklistBanner';
 import { useEventSetupProgress } from '@/hooks/useEventSetupProgress';
+import { THANK_YOU_SENT_BY_EMAIL } from '@/lib/sms/text-failure-words';
 
 // Moment 2 plan view mappers ────────────────────────────────────────────────
 interface Event {
@@ -288,6 +289,8 @@ export default function PlanEditorPage() {
       dispatched: boolean;
       failed: boolean;
       failReason: string | null;
+      /** [[GTC-258]] — re-sent by email after the text did not arrive. */
+      sentByEmail?: boolean;
     }>;
   } | null>(null);
   const [wrapUpRetrying, setWrapUpRetrying] = useState(false);
@@ -3294,7 +3297,9 @@ export default function PlanEditorPage() {
                                   Failed
                                 </span>
                               ) : g.dispatched ? (
-                                <span className="text-xs text-green-600">Sent</span>
+                                <span className="text-xs text-green-600">
+                                  {g.sentByEmail ? THANK_YOU_SENT_BY_EMAIL : 'Sent'}
+                                </span>
                               ) : (
                                 <span className="text-xs text-blue-600">Queued</span>
                               )}

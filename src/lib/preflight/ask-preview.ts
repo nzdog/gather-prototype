@@ -71,6 +71,7 @@ import {
 import { isMessageableRole } from '@/lib/eligibility/child-exclusion';
 import { emailOptedOutFact, listEmailOptOutsForEvent } from '@/lib/eligibility/email-opt-out';
 import { emailBlockStateOf, listEmailBlocks } from '@/lib/eligibility/email-block';
+import { listTextBlocks, numberDeadOf, tnzOptedOutOf } from '@/lib/eligibility/text-block';
 import { emailNoteFor } from '@/lib/eligibility/email-block-words';
 import { isHostMembership } from '@/lib/eligibility/host-exclusion';
 import { HOST_NAME_FALLBACK, firstNameOf } from '@/lib/messages/ask-register';
@@ -385,6 +386,11 @@ export interface LaterFacts {
   smsOptOutNumbers: ReadonlySet<string>;
   /** People whose `Person.smsOptedOut` flag was set after the moment. */
   smsFlagPersonIds: ReadonlySet<string>;
+  /**
+   * [[GTC-258]] — numbers whose `TextBlock` (dead, or on TNZ's opt-out list) was first seen after the
+   * moment. The twin of `blockAddresses`.
+   */
+  textBlockNumbers: ReadonlySet<string>;
 }
 
 export interface AskPreview {
@@ -493,6 +499,17 @@ export async function readAskPreview(
   );
 
   /*
+   * [[GTC-258]] — THE NUMBER-WIDE BLOCK FROM TNZ'S REPORTS, one query per event, the same shape as the
+   * two sets around it. Two readings of it, both ruled 2026-10-02: a DEAD number is one Gather cannot
+   * text (`numberDead`); a number on TNZ's opt-out list is the guest's own STOP, so it joins the
+   * opt-out fact below (plan ruling Q1) — without writing Zone 7, which a report may never do.
+   */
+  const textBlocks = new Map(
+    [...(await listTextBlocks(db, phones))].filter(([n]) => !discount?.textBlockNumbers?.has(n))
+  );
+  for (const n of phones) if (tnzOptedOutOf(n, textBlocks)) optedOutNumbers.add(n);
+
+  /*
    * [[GTC-296]] — THE EMAIL WAY OUT, LOADED ONCE PER EVENT.
    *
    * ⚠ THE SAME SHAPE AS THE SMS SET DIRECTLY ABOVE, AND FOR THE SAME REASON. This walk is the
@@ -568,6 +585,8 @@ export async function readAskPreview(
         // [[GTC-324]] rulings 2 and 1 — the block, and whether THIS event's message was reported.
         emailBlocked: blockStateOf(m.person.email) !== 'NONE',
         emailReported: blockStateOf(m.person.email) === 'REPORTED',
+        // [[GTC-258]] — TNZ reported the number cannot receive.
+        numberDead: numberDeadOf(m.person.phoneNumber, textBlocks),
       },
     })),
   };

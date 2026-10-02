@@ -17,6 +17,15 @@ import {
 import { isMessageableRole } from '@/lib/eligibility/child-exclusion';
 import { isQuietHours, getMinutesUntilQuietEnd } from '@/lib/sms/quiet-hours';
 import { emptyTally, smsRefusalOutcome, tallySend, type SendTally } from '@/lib/send-health';
+import { listTextBlocks } from '@/lib/eligibility/text-block';
+import {
+  claimTextRetry,
+  closeTextRetry,
+  closeTextSend,
+  openTextSend,
+} from '@/lib/sms/text-send-record';
+import { retryableFor } from '@/lib/sms/text-outcome';
+import { TEXT_DID_NOT_ARRIVE } from '@/lib/sms/text-failure-words';
 
 const WRAPUP_LINK_EXPIRY_DAYS = 30;
 const DISPATCH_DELAY_MINUTES = 10;
@@ -132,6 +141,12 @@ export async function generateWrapUpLinks(
     select: { personId: true },
   });
   const linkedPersonIds = new Set(existingLinks.map((l) => l.personId));
+  // [[GTC-258]] — a number TNZ reported dead, or on their opt-out list, is not texted: the thank-you
+  // goes by email, as it already does for a guest who has opted out of texts.
+  const textBlocks = await listTextBlocks(
+    prisma,
+    guests.map((g) => g.person.phoneNumber)
+  );
 
   for (const guest of guests) {
     const { person } = guest;
@@ -148,7 +163,7 @@ export async function generateWrapUpLinks(
 
     // Determine channel
     let channel: string;
-    if (phone && !person.smsOptedOut) {
+    if (phone && !person.smsOptedOut && !textBlocks.has(phone)) {
       channel = 'sms';
     } else if (email) {
       channel = 'email';
@@ -205,6 +220,8 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
    * apart (founder ruling Q1), so broken texting shows even while the thank-you arrives by email.
    */
   tally: SendTally;
+  /** [[GTC-258]] — thank-yous re-sent by email after TNZ reported their text did not arrive. */
+  retried?: number;
 }> {
   const cutoff = new Date(now.getTime() - DISPATCH_DELAY_MINUTES * 60 * 1000);
 
@@ -317,6 +334,13 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
       emailOptedOut || (await listEmailBlocks(prisma, [link.guestEmail])).size > 0;
 
     if (link.channel === 'sms' && link.guestPhone) {
+      // [[GTC-258]] — the text's record, which TNZ's report and any reply join to (plan ruling Q5).
+      const record = await openTextSend(prisma, {
+        eventId: link.eventId,
+        personId: link.personId,
+        kind: 'THANK_YOU',
+        destination: link.guestPhone,
+      });
       const smsResult = await sendSms({
         to: link.guestPhone,
         message: buildSmsWrapUpMessage(templateParams),
@@ -324,6 +348,7 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
         personId: link.personId,
         metadata: { type: 'wrapup' },
       });
+      await closeTextSend(prisma, record, smsResult);
 
       tallySend(
         tally,
@@ -419,6 +444,11 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
     }
   }
 
+  // [[GTC-258]] — the one retry, after this run's own sends: a thank-you whose text did not arrive.
+  const retry = await retryUndeliveredThankYous(now);
+  tally.email.toSend += retry.tally.email.toSend;
+  tally.email.gotOut += retry.tally.email.gotOut;
+
   return {
     sent,
     failed,
@@ -427,7 +457,121 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
     deferredUntilMinutes: 0,
     suppressed,
     tally,
+    retried: retry.sent,
   };
+}
+
+/**
+ * [[GTC-258]] — A THANK-YOU WHOSE TEXT DID NOT ARRIVE GOES ONCE BY EMAIL.
+ *
+ * Founder ruling Q2, 2026-10-02: *"the 'please decide' follow-up and the thank-you only ever go once,
+ * so if their text didn't arrive they're re-sent by email."* Every failed outcome
+ * `retryableFor('THANK_YOU')` names — TNZ's opt-out list included, since a guest who has opted out of
+ * texts already gets their thank-you by email; a cancel excluded (plan ruling Q3).
+ *
+ * ⚠ IT WAITS OUT QUIET HOURS, EMAIL AS IT IS — plan ruling Q10: this dispatcher holds its whole batch
+ * from 21:00 to 08:00 NZ, and the retry is a thank-you like the rest.
+ *
+ * The same email the SMS-failure fallback sends, under the same rules: an email opt-out for the event
+ * or a blocked address closes the email leg (ruling 5, [[GTC-324]]) — a suppression, not a failure,
+ * so the link is left as it is. No address, or a refused email, marks the link failed with W8, and
+ * the panel's own "Retry" applies. Once: the retry row's `retryOfId` is unique.
+ *
+ * `scope` narrows it to some events — for a suite, which must never sweep `gather_dev` unscoped.
+ */
+export async function retryUndeliveredThankYous(
+  now: Date = new Date(),
+  scope?: { eventIds: string[] }
+): Promise<{
+  sent: number;
+  withheld: number;
+  refused: number;
+  deferred: number;
+  tally: SendTally;
+}> {
+  const out = { sent: 0, withheld: 0, refused: 0, deferred: 0, tally: emptyTally() };
+  const failed = await prisma.outboundMessage.findMany({
+    where: {
+      kind: 'THANK_YOU',
+      channel: 'TEXT',
+      deliveryState: { in: retryableFor('THANK_YOU') },
+      retries: { none: {} },
+      ...(scope ? { eventId: { in: scope.eventIds } } : {}),
+    },
+    orderBy: { acceptedAt: 'asc' },
+    select: {
+      id: true,
+      eventId: true,
+      personEventId: true,
+      personEvent: { select: { personId: true } },
+    },
+  });
+  if (failed.length === 0) return out;
+  if (isQuietHours(now)) {
+    out.deferred = failed.length;
+    return out;
+  }
+
+  for (const row of failed) {
+    const target = { ...row, kind: 'THANK_YOU' as const };
+    const link = await prisma.wrapUpLink.findFirst({
+      where: { eventId: row.eventId, personId: row.personEvent.personId },
+      include: { event: { include: { host: true } } },
+    });
+    const markFailed = async () => {
+      if (link) {
+        await prisma.wrapUpLink.update({
+          where: { id: link.id },
+          data: { failed: true, failReason: TEXT_DID_NOT_ARRIVE },
+        });
+      }
+    };
+    if (!link || !link.guestEmail) {
+      if (await claimTextRetry(prisma, target, 'NO_CHANNEL')) {
+        out.withheld++;
+        await markFailed();
+      }
+      continue;
+    }
+    if (await getEmailOptOut(link.personId, link.eventId)) {
+      if (await claimTextRetry(prisma, target, 'EMAIL_OPTED_OUT')) out.withheld++;
+      continue;
+    }
+    if ((await listEmailBlocks(prisma, [link.guestEmail])).size > 0) {
+      if (await claimTextRetry(prisma, target, 'EMAIL_BLOCKED')) out.withheld++;
+      continue;
+    }
+
+    const claimed = await claimTextRetry(prisma, target);
+    if (!claimed) continue;
+    const assignments = await prisma.assignment.findMany({
+      where: { personId: link.personId, item: { team: { eventId: link.eventId } } },
+      include: { item: true },
+    });
+    const emailMsg = buildEmailWrapUpMessage({
+      guestFirstName: link.guestName.split(' ')[0],
+      eventName: link.event.name,
+      hostFirstName: link.event.host.name.split(' ')[0],
+      guestTaskItem: resolveGuestTaskItem(
+        assignments.map((a) => ({ item: { name: a.item.name }, response: a.response }))
+      ),
+    });
+    const result = await sendNudgeEmail({
+      to: link.guestEmail,
+      subject: emailMsg.subject,
+      body: emailMsg.body,
+      eventId: link.eventId,
+      personId: link.personId,
+    });
+    await closeTextRetry(prisma, claimed, result);
+    tallySend(out.tally, 'email', result.success ? 'GOT_OUT' : 'NOT_OUT');
+    if (result.success) out.sent++;
+    else {
+      out.refused++;
+      await markFailed();
+    }
+  }
+  return out;
 }
 
 // ── Dispatch summary ─────────────────────────────────────────────────
@@ -446,6 +590,8 @@ export interface DispatchSummary {
     dispatched: boolean;
     failed: boolean;
     failReason: string | null;
+    /** [[GTC-258]] — the text did not arrive, and the thank-you went by email instead (W7). */
+    sentByEmail: boolean;
   }>;
 }
 
@@ -454,6 +600,21 @@ export async function getDispatchSummary(eventId: string): Promise<DispatchSumma
     where: { eventId },
     orderBy: { createdAt: 'asc' },
   });
+  // [[GTC-258]] — who got their thank-you by email after the text did not arrive.
+  const retriedByEmail = new Set(
+    (
+      await prisma.outboundMessage.findMany({
+        where: {
+          eventId,
+          kind: 'THANK_YOU',
+          channel: 'EMAIL',
+          retryOfId: { not: null },
+          acceptedAt: { not: null },
+        },
+        select: { personEvent: { select: { personId: true } } },
+      })
+    ).map((r) => r.personEvent.personId)
+  );
 
   const sent = links.filter((l) => l.dispatched && !l.failed && l.channel !== 'skipped').length;
   const failed = links.filter((l) => l.dispatched && l.failed).length;
@@ -486,6 +647,7 @@ export async function getDispatchSummary(eventId: string): Promise<DispatchSumma
       dispatched: l.dispatched,
       failed: l.failed,
       failReason: l.failReason,
+      sentByEmail: retriedByEmail.has(l.personId),
     })),
   };
 }

@@ -121,7 +121,8 @@
     "test:hand-back": "tsx tests/hand-back-test.ts",
     "test:texts": "tsx --tsconfig tests/tsconfig.json tests/texts-test.ts",
     "test:cron-health": "tsx tests/cron-send-health-test.ts",
-    "test:stopped-text": "tsx tests/stopped-text-test.ts"
+    "test:stopped-text": "tsx tests/stopped-text-test.ts",
+    "test:text-outcome": "tsx tests/text-outcome-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

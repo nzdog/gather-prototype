@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { readTextFailures } from '@/lib/sms/text-send-record';
 import { SMS_OPT_OUT_IN_FORCE } from '@/lib/sms/opt-out-service';
 import { requireEventRole } from '@/lib/auth/guards';
 
@@ -91,8 +92,10 @@ export async function GET(
     // per-event nudge history, which renders as "none sent" rather than throwing.
     const personEvent = await prisma.personEvent.findUnique({
       where: { personId_eventId: { personId, eventId } },
-      select: { firstNudgeSentAt: true, secondNudgeSentAt: true },
+      select: { id: true, firstNudgeSentAt: true, secondNudgeSentAt: true },
     });
+    // [[GTC-258]] — whether TNZ reported a reminder's or her nudge's text did not arrive (W5, W6).
+    const textFailures = personEvent ? await readTextFailures(prisma, personEvent.id) : null;
 
     // Fetch most recent host nudge for this person+event
     const lastHostNudge = await prisma.inviteEvent.findFirst({
@@ -151,6 +154,9 @@ export async function GET(
       firstNudgeSentAt: personEvent?.firstNudgeSentAt?.toISOString() || null,
       secondNudgeSentAt: personEvent?.secondNudgeSentAt?.toISOString() || null,
       lastHostNudgeAt: lastHostNudge?.createdAt?.toISOString() || null,
+      firstNudgeFailed: textFailures?.firstReminder ?? false,
+      secondNudgeFailed: textFailures?.secondReminder ?? false,
+      lastHostNudgeFailed: textFailures?.hostNudge ?? false,
       eventName: event?.name || null,
       eventDate: event?.startDate?.toISOString() || null,
       assignments: person.assignments.map((a: any) => ({

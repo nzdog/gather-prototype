@@ -92,6 +92,17 @@ export interface ChooserPerson {
    * ruling 3's middle sentence; the behaviour is the opt-out's, chase-wide. Required, as above.
    */
   emailReported: boolean;
+  /**
+   * [[GTC-258]] — TNZ REPORTED THIS NUMBER CANNOT RECEIVE (a `TextBlock`, DEAD_CHANNEL), for any host.
+   * Founder ruling Q2, 2026-10-02: *"A number that doesn't work is never texted again, and later
+   * messages go by email."* Read exactly as a number Gather cannot text — what PHONE_UNUSABLE already
+   * means — so the ask and the chase fall to email, and with no email the person is the host's.
+   *
+   * ⚠ REQUIRED, FOR `emailBlocked`'s REASON ABOVE: a narrow select that left it out would read "not
+   * dead" and go on texting a number TNZ have said does not work. (A number on TNZ's opt-out list is
+   * not this field: it is the guest's own STOP, and joins `smsOptedOut` — plan ruling Q1.)
+   */
+  numberDead: boolean;
 }
 
 /** One membership of the event, as little of it as the decision needs. */
@@ -301,7 +312,8 @@ function askChannelOf(person: ChooserPerson): Reached | Refusal<AskRefusalWhy> {
   }
   // GTC-189 slice 1 answer 2, a founder ruling: a text that will be rejected is worse than saying
   // plainly that Gather cannot reach him. That `isValidNZNumber` rejects +61 is [[GTC-300]].
-  if (!isValidNZNumber(person.phoneNumber)) {
+  // [[GTC-258]]: a number TNZ reported dead is one Gather cannot text, in the same words.
+  if (!isValidNZNumber(person.phoneNumber) || person.numberDead) {
     return { ok: false, why: blocked ? 'EMAIL_BLOCKED' : 'PHONE_UNUSABLE' };
   }
   return { ok: true, channel: 'TEXT' };
@@ -374,7 +386,8 @@ function chaseChannelOf(
   if (!isChaseable(membership.nudgeMark)) return { ok: false, why: 'MARKED_DONT_CHASE' };
 
   // 4. A mobile the chase can use. The exception is about people it CANNOT text, so it is not read.
-  if (person.phoneNumber && isValidNZNumber(person.phoneNumber)) {
+  // [[GTC-258]]: not one TNZ reported dead — that is "no mobile it can text", and falls to 5.
+  if (person.phoneNumber && isValidNZNumber(person.phoneNumber) && !person.numberDead) {
     return { ok: true, channel: 'TEXT' };
   }
 

@@ -425,6 +425,12 @@ export interface GlancePerson {
    */
   emailNote: string | null;
   /**
+   * [[GTC-258]] — why this person's TEXT invitation didn't arrive, when TNZ reported it failed: W1 to
+   * W3 (`textNoteFor` in `src/lib/glance/text-note.ts`). A SENTENCE, NEVER THE NUMBER. Null when the
+   * invitation went by email, arrived, or an `emailNote` already says it.
+   */
+  textNote: string | null;
+  /**
    * [[GTC-189]] slice 8a — MAY GATHER TEXT THIS PERSON? A usable mobile not opted out of texts; for a
    * child, their carrier's (ruling S). A BOOLEAN DERIVED ON THE SERVER, NEVER THE NUMBER. It exists for
    * one reader: the strip's UNREACHABLE line, which says "nowhere to send" and is false of somebody

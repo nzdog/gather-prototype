@@ -3,6 +3,7 @@ import { isMessageableRole } from '@/lib/eligibility/child-exclusion';
 import { isHostMembership, HOST_NOT_ADDRESSABLE_MESSAGE } from '@/lib/eligibility/host-exclusion';
 import { isChaseable, DONT_CHASE_NOT_ADDRESSABLE_MESSAGE } from '@/lib/eligibility/nudge-mark';
 import { isValidNZNumber } from '@/lib/phone';
+import { listTextBlocks, numberDeadOf, tnzOptedOutOf } from '@/lib/eligibility/text-block';
 
 /**
  * THE host-triggered nudge recipient decision (GTC-172 / C1).
@@ -30,7 +31,10 @@ export interface ManualNudgePerson {
   name: string;
   email: string | null;
   phoneNumber: string | null;
+  /** Zone 7's flag — and, since [[GTC-258]] (plan ruling Q1), a number on TNZ's opt-out list. */
   smsOptedOut: boolean;
+  /** [[GTC-258]] — TNZ reported the number cannot receive. */
+  numberDead: boolean;
 }
 
 export type ManualNudgeRecipient =
@@ -154,7 +158,20 @@ export async function resolveManualNudgeRecipient(
     };
   }
 
-  return { ok: true, person };
+  /*
+   * [[GTC-258]] — TNZ's reports, read here so the channel choice below sees them. A number on TNZ's
+   * opt-out list is the guest's own STOP (plan ruling Q1), so it reads as `smsOptedOut`; a dead number
+   * is `numberDead`. Zone 7 itself is only read, and not here: the route checks the opt-out table.
+   */
+  const blocks = await listTextBlocks(prisma, [person.phoneNumber]);
+  return {
+    ok: true,
+    person: {
+      ...person,
+      smsOptedOut: person.smsOptedOut || tnzOptedOutOf(person.phoneNumber, blocks),
+      numberDead: numberDeadOf(person.phoneNumber, blocks),
+    },
+  };
 }
 
 /**
@@ -183,10 +200,21 @@ export function chooseManualNudgeChannel(person: {
    * forgot it would read "not blocked" and email an address that accepts and never delivers.
    */
   emailBlocked: boolean;
+  /**
+   * [[GTC-258]] — TNZ reported the number cannot receive: for the by-hand nudge too it is no number.
+   * Optional, unlike `emailBlocked`, because a caller with no block lookup is the route's own
+   * `resolveManualNudgeRecipient`, which always sets it.
+   */
+  numberDead?: boolean;
 }): ManualNudgeChannel {
   // `smsOptedOut` is Do-Not-Touch zone 7 — it outranks the phone number in both
   // directions, asserted in tests/nudge-provider-gate-test.ts case C. Only READ here.
-  if (person.phoneNumber && isValidNZNumber(person.phoneNumber) && !person.smsOptedOut) {
+  if (
+    person.phoneNumber &&
+    isValidNZNumber(person.phoneNumber) &&
+    !person.smsOptedOut &&
+    !person.numberDead
+  ) {
     return 'sms';
   }
   if (person.email && !person.emailBlocked) return 'email';

@@ -287,22 +287,37 @@ async function main() {
       await prisma.assignment.create({ data: { itemId: item.id, personId: p.id } });
       return p;
     };
+    /*
+     * ⚠ MOVED BY [[GTC-258]] (M4, approved 2026-10-02): a send was a NUDGE_SENT_AUTO InviteEvent
+     * carrying the MessageID and the number in its metadata. GTC-258 retires that row; every text
+     * path records its send on an OutboundMessage (accepted, the MessageID, the number it went to),
+     * and the reply join reads that. Same arguments, same meaning.
+     */
     const sent = async (
       eventId: string,
       personId: string,
       phoneNumber: string,
       messageId: string,
       createdAt?: Date
-    ) =>
-      prisma.inviteEvent.create({
+    ) => {
+      const pe = await prisma.personEvent.findFirstOrThrow({ where: { eventId, personId } });
+      const at = createdAt ?? new Date();
+      return (prisma as Any).outboundMessage.create({
         data: {
           eventId,
-          personId,
-          type: 'NUDGE_SENT_AUTO',
-          metadata: { messageId, provider: 'tnz', phoneNumber, gtc288Fixture: RUN },
-          ...(createdAt ? { createdAt } : {}),
+          personEventId: pe.id,
+          kind: 'ASK',
+          channel: 'TEXT',
+          createdAt: at,
+          attemptedAt: at,
+          attemptCount: 1,
+          acceptedAt: at,
+          provider: 'tnz',
+          providerMessageId: messageId,
+          destination: phoneNumber,
         },
       });
+    };
 
     const hostA = await newPerson({ name: 'Ana Host' });
     const hostB = await newPerson({ name: 'Ben Host' });
@@ -417,7 +432,10 @@ async function main() {
           rows[0].attribution === 'MESSAGE_ID' &&
           rows[0].eventId === EA.id &&
           rows[0].personId === gA.id &&
-          rows[0].inviteEventId === sendA.id &&
+          // ⚠ MOVED BY [[GTC-258]] (M4): it read `rows[0].inviteEventId === sendA.id`. The link is
+          // made through the send record now; the InviteEvent pointer is written null.
+          sendA.id !== null &&
+          rows[0].inviteEventId === null &&
           rows[0].providerReceivedId === R1 &&
           rows[0].hostId === null &&
           logged === 1
@@ -765,7 +783,7 @@ async function main() {
       }
     );
 
-    // GTC-258's disagreement: an earlier genuine send, and a LATER false NUDGE_SENT_AUTO.
+    // GTC-258's disagreement: an earlier genuine send, and a LATER send record for the same number.
     const gGenuineA = await guest(EA, 'Gem Genuine', N.genuine);
     const gGenuineB = await guest(EB, 'Gem Again', N.genuine);
     const MID_GENUINE = id('mid');
@@ -777,7 +795,8 @@ async function main() {
     );
     await check(
       'S',
-      'S8 the STOP links to the send its MessageID names, not to a later NUDGE_SENT_AUTO for the number',
+      // ⚠ MOVED BY [[GTC-258]] (M4): the label read "… not to a later NUDGE_SENT_AUTO for the number".
+      'S8 the STOP links to the send its MessageID names, not to a later send record for the number',
       async () => {
         const rows = await inForce(N.genuine);
         return (
@@ -1025,7 +1044,9 @@ async function main() {
           rows[0].body === SALAD &&
           rows[0].eventId === EA.id &&
           rows[0].personId === gKept.id &&
-          rows[0].inviteEventId === sendKept.id &&
+          // ⚠ MOVED BY [[GTC-258]] (M4): it read `rows[0].inviteEventId === sendKept.id`.
+          sendKept.id !== null &&
+          rows[0].inviteEventId === null &&
           rows[0].providerReceivedId === R_SALAD &&
           (await rowsFor(N.kept)).length === 0 &&
           p?.smsOptedOut === false

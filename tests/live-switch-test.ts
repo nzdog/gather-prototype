@@ -399,10 +399,19 @@ async function main() {
         (cTnz.result as any).success === true,
       `${cTnz.where} ${JSON.stringify(cTnz.result)}`
     );
+    /*
+     * ⚠ MOVED BY [[GTC-258]] (M1, approved 2026-10-02). It read "so "nothing recorded as sent" in A
+     * is a real zero: the recording path works (NUDGE_SENT_AUTO = 1)", with
+     * `rowsOnFixture(['NUDGE_SENT_AUTO']) === 1`. `sendSms` no longer records a send of its own: the
+     * ask's NUDGE_SENT_AUTO was false, and every path now records its send on an OutboundMessage. So
+     * the accepted send here is recorded by nobody, and A's real zero is proven where a caller does
+     * record one — test:text-outcome F1 to F3.
+     */
     assert(
       'C',
-      'so "nothing recorded as sent" in A is a real zero: the recording path works (NUDGE_SENT_AUTO = 1)',
-      (await rowsOnFixture(['NUDGE_SENT_AUTO'])) === 1
+      'sendSms records no send of its own; its caller does (GTC-258) — accepted, with the MessageID, and no NUDGE_SENT_AUTO',
+      (await rowsOnFixture(['NUDGE_SENT_AUTO'])) === 0 &&
+        (cTnz.result as any).messageId === 'gtc274-fake-id'
     );
     const cTw = await reached(() => sendSms(on('+12025550123')));
     assert(
