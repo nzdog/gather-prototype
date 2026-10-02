@@ -284,9 +284,11 @@ export interface FollowupRetryResult {
  *
  * WHICH TEXTS: kind DECIDE_BY_FOLLOWUP, an outcome `retryableFor('DECIDE_BY_FOLLOWUP')` names — not a
  * TNZ opt-out (a text opt-out stops the follow-up, Q4a) and not a cancel (plan ruling Q3) — not yet
- * retried, and accepted within `TEXT_RETRY_WINDOW_MS`. Founder-approved 2026-10-02: the sweep looks
- * only at texts accepted in the last 48 hours and SKIPS one whose decide-by has passed, writing no row
- * and using no new withheld code.
+ * retried, and whose failure Gather recorded within `TEXT_RETRY_WINDOW_MS`. Founder-approved
+ * 2026-10-02: the sweep SKIPS one whose decide-by has passed, writing no row and using no new
+ * withheld code. ⚠ [[GTC-290]] plan ruling Q4 moved the window from acceptance to when the failure was
+ * recorded (`deliveryCheckedAt`): a text held for credit turns red 48 hours after acceptance, and
+ * would otherwise never be retried.
  *
  * WHEN A RETRY IS SPENT WITHOUT AN EMAIL, its row says why (the dispatcher's own codes): the guest no
  * longer holds a maybe this follow-up stamped (ANSWERED); the chase chooser now refuses them (its own
@@ -306,7 +308,7 @@ export async function retryUndeliveredFollowups(
       channel: 'TEXT',
       deliveryState: { in: retryableFor('DECIDE_BY_FOLLOWUP') },
       retries: { none: {} },
-      acceptedAt: { gte: new Date(now.getTime() - TEXT_RETRY_WINDOW_MS) },
+      deliveryCheckedAt: { gte: new Date(now.getTime() - TEXT_RETRY_WINDOW_MS) },
       ...(scope ? { eventId: { in: scope.eventIds } } : {}),
     },
     orderBy: { acceptedAt: 'asc' },

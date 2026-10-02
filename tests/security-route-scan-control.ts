@@ -226,6 +226,18 @@ const GTC229_REMOVED = [
 ] as const;
 const GTC264_ADDED = ['POST src/app/api/sms/tnz-webhook/route.ts'] as const;
 
+/*
+ * ⚠ ADDED 2026-10-02 BY [[GTC-290]] (founder approval of the plan, Zone 6): the TNZ status poll's
+ * cron route, `src/app/api/cron/tnz-status-poll/route.ts`. Unguarded in this file's precise sense,
+ * like the other cron routes, and NOT unauthenticated: both refusals keyed on `CRON_SECRET` are
+ * written out in the route file and pinned `SHARED_SECRET:PROVEN` in the verdict table. The "no
+ * credential of any kind" count does not move off 12. Named, as the additions above are.
+ */
+const GTC290_ADDED = [
+  'GET src/app/api/cron/tnz-status-poll/route.ts',
+  'POST src/app/api/cron/tnz-status-poll/route.ts',
+] as const;
+
 function keys(result: ScanResult): Set<string> {
   return new Set(unguardedHandlers(result).map(handlerKey));
 }
@@ -388,16 +400,20 @@ function suite1_HeadShape(head: ScanResult) {
    * ⚠ 142 → 141 HANDLERS AT [[GTC-264]] PHASE 3 / [[GTC-229]], FILES UNCHANGED AT 111 — one route
    * file removed (`sms/inbound`, a `GET` and a `POST`) and one added (`sms/tnz-webhook`, a `POST`).
    * The unguarded count moves 27 → 26 for the same reason; see `GTC229_REMOVED`.
+   *
+   * ⚠ 111 → 112 FILES AND 141 → 143 HANDLERS AT [[GTC-290]] (2026-10-02) — one new cron route,
+   * `tnz-status-poll`, carrying `GET` and `POST`. The unguarded count moves 26 → 28 by those two,
+   * named in `GTC290_ADDED`; both carry the cron secret, so the "no credential" count stays 12.
    */
   logTest(
-    'the scanner discovers exactly 111 route files under src/app/api',
-    head.files.length === 111,
+    'the scanner discovers exactly 112 route files under src/app/api',
+    head.files.length === 112,
     `found ${head.files.length}`
   );
 
   logTest(
-    'the scanner enumerates exactly 141 exported HTTP handlers',
-    head.handlers.length === 141,
+    'the scanner enumerates exactly 143 exported HTTP handlers',
+    head.handlers.length === 143,
     `found ${head.handlers.length}`
   );
 
@@ -410,9 +426,10 @@ function suite1_HeadShape(head: ScanResult) {
 
   // ⚠ 25 → 27: [[GTC-296]]'s two public unsubscribe handlers, both named in `GTC296_ADDED`.
   // ⚠ 27 → 26 at [[GTC-264]] / [[GTC-229]]: two removed, one added. See `GTC229_REMOVED`.
+  // ⚠ 26 → 28 at [[GTC-290]]: the TNZ status poll's two cron handlers, named in `GTC290_ADDED`.
   logTest(
-    'exactly 26 handlers carry no session or token guard at HEAD',
-    keys(head).size === 26,
+    'exactly 28 handlers carry no session or token guard at HEAD',
+    keys(head).size === 28,
     `found ${keys(head).size}: ${[...keys(head)].sort().join(', ')}`
   );
 
@@ -425,9 +442,11 @@ function suite1_HeadShape(head: ScanResult) {
   // ⚠ 110/141 → 111/142 and 83 → 84 at [[GTC-251]] slice 251c: the hand-back route, SESSION.
   // ⚠ 111/142 → 111/141 and 84 → 85 at [[GTC-264]] / [[GTC-229]]: the TNZ webhook, CUSTOM. The
   // removed `sms/inbound` route was never in the inventory, so nothing leaves it.
+  // ⚠ 111/141 → 112/143 and 85 → 86 at [[GTC-290]]: the TNZ status poll, classified CUSTOM — the
+  // first cron route in the inventory (the other four are GTC-354's).
   logTest(
-    'the surface is larger than the retired inventory could express (85 entries)',
-    head.files.length === 111 && head.handlers.length === 141,
+    'the surface is larger than the retired inventory could express (86 entries)',
+    head.files.length === 112 && head.handlers.length === 143,
     `files ${head.files.length}, handlers ${head.handlers.length}`
   );
 }
@@ -524,16 +543,18 @@ function suite2_Gtc267Control(head: ScanResult, pre: ScanResult) {
   const opened = sortedDiff(headKeys, preKeys);
   // ⚠ 3 → 5: [[GTC-296]]'s two, added by name for the reason `GTC296_ADDED` records.
   // ⚠ 5 → 6 at [[GTC-264]]: the TNZ webhook, named in `GTC264_ADDED`.
+  // ⚠ 6 → 8 at [[GTC-290]]: the TNZ status poll's two, named in `GTC290_ADDED`.
   const expectedOpened = [
     GTC267_ADDED,
     ...GTC189_CRON_ADDED,
     ...GTC296_ADDED,
     ...GTC264_ADDED,
+    ...GTC290_ADDED,
   ].sort();
   logTest(
-    'exactly six handlers became unguarded — clone-source, the press drain, the two ' +
-      'unsubscribe handlers, and the TNZ webhook; the drain and the webhook carry a ' +
-      'SHARED_SECRET the verdict table pins as PROVEN',
+    'exactly eight handlers became unguarded — clone-source, the press drain, the two ' +
+      'unsubscribe handlers, the TNZ webhook and the TNZ status poll’s two; the drain, the ' +
+      'webhook and the poll carry a SHARED_SECRET the verdict table pins as PROVEN',
     JSON.stringify(opened) === JSON.stringify(expectedOpened),
     `got ${opened.length}: ${opened.join(', ')}`
   );
@@ -547,7 +568,7 @@ function suite2_Gtc267Control(head: ScanResult, pre: ScanResult) {
    * because nothing goes red to tell you. Slice 5c updated both.
    */
   logTest(
-    'the arithmetic closes: 34 - 14 + 6 = 26',
+    'the arithmetic closes: 34 - 14 + 8 = 28',
     preKeys.size - closed.length + opened.length === headKeys.size,
     `${preKeys.size} - ${closed.length} + ${opened.length} !== ${headKeys.size}`
   );
@@ -1744,6 +1765,12 @@ const HEAD_VERDICTS: ReadonlyArray<readonly [string, boolean, string]> = [
   ],
   ['GET src/app/api/cron/nudges/route.ts', false, 'SHARED_SECRET:PROVEN+SHARED_SECRET:PROVEN'],
   [
+    // [[GTC-290]] — the TNZ status poll. Both refusing ifs written out in the route file.
+    'GET src/app/api/cron/tnz-status-poll/route.ts',
+    false,
+    'SHARED_SECRET:PROVEN+SHARED_SECRET:PROVEN',
+  ],
+  [
     // GTC-189 slice 5c — the press's drain. Same shape as its three siblings, deliberately:
     // both refusing ifs written out in the route file, because GTC-268's scanner reads the
     // conditions inside a handler and does not follow imports.
@@ -1785,6 +1812,12 @@ const HEAD_VERDICTS: ReadonlyArray<readonly [string, boolean, string]> = [
     'SHARED_SECRET:PROVEN+SHARED_SECRET:PROVEN',
   ],
   ['POST src/app/api/cron/nudges/route.ts', false, 'SHARED_SECRET:PROVEN+SHARED_SECRET:PROVEN'],
+  [
+    // [[GTC-290]] — the TNZ status poll. Same shape as its siblings.
+    'POST src/app/api/cron/tnz-status-poll/route.ts',
+    false,
+    'SHARED_SECRET:PROVEN+SHARED_SECRET:PROVEN',
+  ],
   [
     'POST src/app/api/cron/outbound-dispatch/route.ts',
     false,

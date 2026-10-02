@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/outbound-dispatch?secret=${CRON_SECRET}",
       "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/cron/tnz-status-poll?secret=${CRON_SECRET}",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

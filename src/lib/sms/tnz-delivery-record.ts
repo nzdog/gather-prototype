@@ -60,6 +60,9 @@ export async function recordTnzDeliveryReport(
 ): Promise<TnzDeliveryRecordResult> {
   const existing = await db.smsDeliveryReport.findFirst({
     where: {
+      // [[GTC-290]]: a report is a duplicate of one from the same source. The status poll stores its
+      // own rows ('tnz-poll'), and a webhook report after a poll must still be kept as its own.
+      provider: report.provider,
       providerMessageId: report.providerMessageId,
       destination: report.destination,
       status: report.status,
@@ -164,6 +167,43 @@ async function linkAndApply(
     }
     return { matched: true, warnings };
   });
+}
+
+/**
+ * [[GTC-290]] — A FINISHED RECIPIENT READ BY THE STATUS POLL, stored and applied the webhook's way.
+ *
+ * Plan ruling Q10: the poll's answer is an `SmsDeliveryReport` row with provider `'tnz-poll'`, so a
+ * polled result is told from a pushed one by the row itself. It is then linked and applied by
+ * `linkAndApply` above — the same outcome, the same number block, the same transaction, Zone 7
+ * untouched — so the two channels cannot drift apart. TNZ's GET carries no `Detail`.
+ */
+export async function recordPolledTnzResult(
+  db: PrismaClient,
+  args: {
+    providerMessageId: string;
+    destination: string;
+    status: string;
+    result: string | null;
+    providerJobNumber: string | null;
+    providerSentAt: Date | null;
+  }
+): Promise<{ id: string; matched: boolean }> {
+  const row = await db.smsDeliveryReport.create({
+    data: {
+      provider: 'tnz-poll',
+      providerMessageId: args.providerMessageId,
+      destination: args.destination,
+      status: args.status,
+      result: args.result,
+      detail: null,
+      providerJobNumber: args.providerJobNumber,
+      providerSentAt: args.providerSentAt,
+      inviteEventId: null,
+    },
+    select: { id: true },
+  });
+  const applied = await linkAndApply(db, row.id);
+  return { id: row.id, matched: applied.matched };
 }
 
 /**

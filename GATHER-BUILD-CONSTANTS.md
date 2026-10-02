@@ -1,7 +1,9 @@
 # GATHER BUILD CONSTANTS
 
 Reference file for AI executors and developers. Keep this file accurate.
-Last updated: 2026-10-02 (GTC-258: `test:security`'s live layer and `test:cron-health` wait on zero
+Last updated: 2026-10-02 (GTC-290: the TNZ status poll — a fifth cron route, `GATHER_ALERT_EMAIL`,
+`test:security` 172 with 20 live assertions, and the poll never driven against `gather_dev`).
+Previously 2026-10-02 (GTC-258: `test:security`'s live layer and `test:cron-health` wait on zero
 text retries waiting, and the live layer's no-send count includes `OutboundMessage`). Previously
 2026-10-01 (GTC-264 / GTC-229: `TNZ_CALLBACK_SECRET` and `TNZ_CALLBACK_SENDER` in
 the environment table; `test:security`'s live layer, 15 → 18 without a server). Previously
@@ -197,10 +199,12 @@ switch.)*
 
 ### `test:security`'s live layer needs the dev server
 *(Founder ruling, 2026-09-28, GTC-337 preflight.)* Without a dev server on
-:3000, `test:security` fails its 18 live assertions (15 until GTC-264 / GTC-229 added three:
+:3000, `test:security` fails its 20 live assertions (15 until GTC-264 / GTC-229 added three:
 Suite 15's two refusals at `/api/sms/tnz-webhook` and its 404 at `/api/sms/inbound`; its fourth
-live assertion, that nothing was written, passes with or without a server). That is not a
-regression.
+live assertion, that nothing was written, passes with or without a server; 18 until GTC-290 added
+suite 12's two wrong-secret refusals at `/api/cron/tnz-status-poll`). That is not a regression.
+With the server, the suite is 172/172 (168 at GTC-258; GTC-290 added four refusals of the new
+route: two in process with the secret unset, two live with a wrong one).
 Start the server with the provider keys blanked for that process only, and never
 edit `.env.local`:
 `RESEND_API_KEY= TWILIO_ACCOUNT_SID= TWILIO_AUTH_TOKEN= TWILIO_PHONE_NUMBER= TNZ_AUTH_TOKEN= npm run dev`.
@@ -254,6 +258,13 @@ cron route, and only these:
 Suites that call a dispatcher directly (`drainOnce`,
 `dispatchPendingWrapUpMessages`) rather than a route are **not** on this list
 until each is shown to scope or guard its call: GTC-343.
+
+**The TNZ status poll (GTC-290) is not on this list, and no suite drives it.**
+`/api/cron/tnz-status-poll` is only ever called with a wrong or missing secret
+(`test:security` suite 12; `test:tnz-status-poll` F3 and F4). `test:tnz-status-poll`
+calls `pollTextStatusOnce` directly, always scoped to its own events, behind
+`liveBehindTrap` with its own fetch stub, so it never reaches TNZ or Resend. Never
+run the poll unscoped against `gather_dev`: it asks TNZ about real MessageIDs.
 
 ---
 
@@ -364,6 +375,7 @@ match them.
 | `src/app/api/cron/outbound-dispatch/route.ts` | GET / POST | `/api/cron/outbound-dispatch` | The press's drain (`drainOnce`): asks, reminders and mini-sends, by text and email; then the delivery poll (GTC-189 slice 5, GTC-289) | Every 2 minutes |
 | `src/app/api/cron/wrap-up-dispatch/route.ts` | GET / POST | `/api/cron/wrap-up-dispatch` | Dispatches pending wrap-up thank-you messages (10 min delay after creation). Sends SMS **and email** — email is the fallback when SMS fails, and the primary channel for `channel: 'email'` links | Every 10 minutes |
 | `src/app/api/cron/decide-by-followups/route.ts` | GET / POST | `/api/cron/decide-by-followups` | Sends the maybe's single decide-by follow-up, by text or email (GTC-175 / D2, GTC-251) | Every 15 minutes |
+| `src/app/api/cron/tnz-status-poll/route.ts` | GET / POST | `/api/cron/tnz-status-poll` | Asks TNZ about texts TNZ never report on — a credit hold, a blocked link, Pending, Delayed, Unknown — at 15 min, 1 h, 6 h, 24 h and 48 h after acceptance; emails the founder once per episode of a credit hold or a blocked link (GTC-290) | Every 15 minutes |
 
 ### Cron health
 *(Founder rulings Q1 and Q2, 2026-09-30, GTC-339.)* A cron's status code and
@@ -378,6 +390,10 @@ match them.
   outbound-dispatch run.
 - **The nudges cron** fails only when it cannot line reminders up. It sends nothing,
   so it does not read provider configuration or the live switch.
+- **The TNZ status poll** (GTC-290) fails a run when it had texts to ask about and
+  could read none of TNZ's answers (the live switch off counts as not read), or when
+  an email it owed the founder did not go (`pollRunHealth` in
+  `src/lib/sms/tnz-status-poll.ts`). Its body carries counts only.
 - The deploy turns on the outside scheduler's failure emails, so a failed run
   reaches the founder (GTC-189's gathered list).
 
@@ -406,6 +422,7 @@ Actual values are redacted. Copy `.env.example` to `.env` and fill in real value
 | `TWILIO_AUTH_TOKEN` | SMS via Twilio for non-NZ/AU destinations (OPTIONAL) | `.env` / deployment env |
 | `TWILIO_PHONE_NUMBER` | Twilio sender number (OPTIONAL) | `.env` / deployment env |
 | `UNSUBSCRIBE_TOKEN_SECRET` | Signs the per-event email unsubscribe links (GTC-296). **Required, not optional** — fails closed when unset, following `CRON_SECRET`'s precedent: reading a token returns null (404) and minting one throws, so no guest email is sent at all rather than one with no way out. Changing it invalidates links already in mailboxes. | `.env` / deployment env |
+| `GATHER_ALERT_EMAIL` | **Production.** The founder's address for the TNZ account alert: one email per episode of a credit hold or a blocked link (GTC-290). Unset means no email is sent and the poll run fails (500), so the scheduler's failure email is the fallback. Never logged. | Railway production env |
 | `CRON_SECRET` | Authenticates cron-job HTTP requests. **Required, not optional** — since GTC-270 an unset or empty value refuses every caller rather than admitting them | `.env` / deployment env |
 
 Template: `.env.example` at repo root.

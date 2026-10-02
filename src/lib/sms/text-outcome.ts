@@ -38,6 +38,20 @@ export type TextOutcomeKind =
   | 'TEXT_UNRECOGNISED';
 
 /**
+ * [[GTC-290]] — WHAT THE STATUS POLL WRITES ON A TEXT ROW THAT IS NOT AN OUTCOME. Kept apart from
+ * `TextOutcomeKind` on purpose: none is a result, none is in any `Record` above, and so no reader
+ * turns one red — the board, the note, the modal, the retries and the replay all read it as sent.
+ *
+ *   TEXT_HELD_FOR_CREDIT   TNZ hold it: the account is out of credit   sent; red if still held at 48h
+ *   TEXT_IN_FLIGHT         Pending, Delayed, Unknown, or not yet done  sent (plan ruling Q5)
+ *   TEXT_STOPPED_CHECKING  48 hours and still not finished             sent; finished, and a TNZ
+ *                                                                      report can still land
+ *
+ * TNZ's own word stays beside it in `providerLastEvent`. See `src/lib/sms/tnz-status-poll.ts`.
+ */
+export type TextPollStateKind = 'TEXT_HELD_FOR_CREDIT' | 'TEXT_IN_FLIGHT' | 'TEXT_STOPPED_CHECKING';
+
+/**
  * TNZ's verdict as an outcome, or null while TNZ are not finished (PENDING) or when the envelope was
  * never a delivery outcome. Only a FINAL report has an outcome, which is what lets the replay read
  * `deliveryCheckedAt` as the instant the failure was learned.
@@ -131,6 +145,11 @@ export function retryableFor(kind: RetriedKind): TextOutcomeKind[] {
  * `deliveryPollDoneAt IS NULL`, the email poll's own "we have stopped asking", so a second final
  * report for the same message (or TNZ's retry of the first) changes nothing.
  *
+ * ⚠ [[GTC-290]] — ONE EXCEPTION: a row the status poll gave up on (`TEXT_STOPPED_CHECKING`) is
+ * finished but has no outcome. Stopping is our giving up, not TNZ's result, so a report that arrives
+ * after the stop still lands (plan ruling Q5). A 48-hour `TEXT_OUR_FAULT` is an outcome: a later
+ * report does not move it (plan ruling Q6).
+ *
  * `deliveryCheckedAt` is the instant GATHER recorded it — which is what [[GTC-335]]'s replay plays the
  * step at, as it does for a bounce. Shaped so [[GTC-290]]'s status poll can feed it unchanged.
  */
@@ -145,7 +164,11 @@ export async function applyTextOutcome(
 ): Promise<boolean> {
   const now = args.now ?? new Date();
   const { count } = await tx.outboundMessage.updateMany({
-    where: { id: args.outboundMessageId, channel: 'TEXT', deliveryPollDoneAt: null },
+    where: {
+      id: args.outboundMessageId,
+      channel: 'TEXT',
+      OR: [{ deliveryPollDoneAt: null }, { deliveryState: 'TEXT_STOPPED_CHECKING' }],
+    },
     data: {
       deliveryState: args.outcome,
       providerLastEvent: args.providerLastEvent,

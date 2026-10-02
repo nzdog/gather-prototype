@@ -3219,11 +3219,15 @@ async function main() {
      * ⚠ 84 → 85 AT [[GTC-264]] Phase 3 / [[GTC-229]] (founder ruling, 2026-10-01): TNZ's webhook
      * POST, classified CUSTOM. The deleted `sms/inbound` route was never classified, so nothing
      * leaves. Named below, as the three before it are.
+     *
+     * ⚠ 85 → 86 AT [[GTC-290]] (founder approval, 2026-10-02): the TNZ status poll's cron route,
+     * classified CUSTOM — the first cron route in the inventory. Named below, as the four before it are.
      */
     assert(
       'layer 4 / inventory',
-      'and the surface is 85 routes — 81 at phase 4, plus GTC-296’s unsubscribe handler, GTC-311’s chase-choice route, GTC-251’s hand-back and GTC-264’s TNZ webhook',
-      classifications.length === 85 &&
+      'and the surface is 86 routes — 81 at phase 4, plus GTC-296’s unsubscribe handler, GTC-311’s chase-choice route, GTC-251’s hand-back, GTC-264’s TNZ webhook and GTC-290’s TNZ status poll',
+      classifications.length === 86 &&
+        classifications.some((e: any) => e.apiPath === '/api/cron/tnz-status-poll') &&
         classifications.some((e: any) => e.apiPath === '/api/unsubscribe/[token]') &&
         classifications.some((e: any) => e.apiPath === '/api/events/:id/pre-flight/chase') &&
         classifications.some(

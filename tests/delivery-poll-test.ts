@@ -766,14 +766,32 @@ async function main() {
       'and its counts go through withoutRecipientNames like every other cron result (GTC-270)',
       /withoutRecipientNames\(await pollOnce/.test(routeSrc)
     );
+    /*
+     * ⚠ MOVED AT [[GTC-290]] (founder approval, 2026-10-02). It pinned four cron directories. GTC-290
+     * added a fifth, the TNZ status poll, which is a different provider's poll on its own route; the
+     * email poll still added none. The set is now named, so a sixth still fails here.
+     */
     assert(
-      '⚠ AND NO SECOND CRON ROUTE WAS ADDED — four cron directories, unchanged, which is why the ' +
-        'pinned route counts are untouched: ' +
+      '⚠ AND THE EMAIL POLL ADDED NO CRON ROUTE OF ITS OWN — the cron directories are exactly the ' +
+        'five named (the fifth is GTC-290’s TNZ status poll): ' +
         'GTC-270’s auth block has to be written out per file because GTC-268’s scanner does not ' +
         'follow imports, so a second route means a second copy of the refusals',
       ok(() => {
         const files = fs.readdirSync('src/app/api/cron', { withFileTypes: true });
-        return files.filter((f) => f.isDirectory()).length === 4;
+        const dirs = files
+          .filter((f) => f.isDirectory())
+          .map((f) => f.name)
+          .sort();
+        return (
+          JSON.stringify(dirs) ===
+          JSON.stringify([
+            'decide-by-followups',
+            'nudges',
+            'outbound-dispatch',
+            'tnz-status-poll',
+            'wrap-up-dispatch',
+          ])
+        );
       })
     );
   } finally {

@@ -685,5 +685,16 @@
     "authType": "PUBLIC",
     "authEvidence": ["webhook endpoint"],
     "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/cron/tnz-status-poll/route.ts",
+    "apiPath": "/api/cron/tnz-status-poll",
+    "methods": ["GET", "POST"],
+    "authType": "CUSTOM",
+    "authEvidence": [
+      "CRON_SECRET shared secret: cronSecretAccepted (src/app/api/cron/cron-secret.ts) on Authorization: Bearer or ?secret=",
+      "fails closed: isCronSecretConfigured refuses every caller when CRON_SECRET is unset or empty (GTC-270)"
+    ],
+    "securityIssues": []
   }
 ]

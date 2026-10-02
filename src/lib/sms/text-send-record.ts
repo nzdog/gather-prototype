@@ -99,10 +99,10 @@ export async function closeTextSend(
 // ─── The one retry ────────────────────────────────────────────────────────────────────────────
 
 /**
- * How long after the text's acceptance a retry is still looked for. TNZ retry a report for 24 hours,
- * so a failure is known within a day; 48 hours is that with a margin. Founder-approved 2026-10-02:
- * the follow-up's sweep "looks only at texts accepted in the last 48 hours and skips one whose
- * decide-by has passed, with no new withheld code".
+ * How long after Gather recorded a text's failure a retry is still looked for. Founder-approved
+ * 2026-10-02 as "texts accepted in the last 48 hours"; ⚠ [[GTC-290]] plan ruling Q4 moved it from
+ * acceptance to when the failure was recorded (`deliveryCheckedAt`), because the status poll records
+ * a credit hold's failure 48 hours after acceptance. For a webhook report the two are minutes apart.
  */
 export const TEXT_RETRY_WINDOW_MS = 48 * 60 * 60 * 1000;
 

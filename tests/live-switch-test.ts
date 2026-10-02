@@ -154,7 +154,8 @@ async function childNoTnz() {
 async function main() {
   const { prisma } = await import('../src/lib/prisma');
   const { sendSms, smsProviderConfiguredFor } = await import('../src/lib/sms/send-sms');
-  const { sendViaTnz } = await import('../src/lib/sms/tnz-client');
+  const tnzClient: any = await import('../src/lib/sms/tnz-client');
+  const { sendViaTnz } = tnzClient;
   const email = await import('../src/lib/email');
   const { LIVE_SENDS_OFF, LiveSendsOffError, isLiveSendingOn } = await liveSends();
 
@@ -322,6 +323,18 @@ async function main() {
     );
     assert('A', 'getResendClient: reached no provider', client.hits === 0, client.where);
 
+    // [[GTC-290]] — the status poll is a door to TNZ too, and it stops at the same switch.
+    const tnzStatus = await reached(() => tnzClient.getTnzMessageStatus('gtc290-probe'));
+    assert(
+      'A',
+      "getTnzMessageStatus (GTC-290's status poll): stopped in the switch's words, and reached no provider",
+      typeof tnzClient.getTnzMessageStatus === 'function' &&
+        (tnzStatus.result as any).reached === false &&
+        (tnzStatus.result as any).error === LIVE_SENDS_OFF &&
+        tnzStatus.hits === 0,
+      `${tnzStatus.where} ${JSON.stringify(tnzStatus.result)}`
+    );
+
     assert(
       'A',
       'nothing on the fixture is recorded as sent — and a stop writes no InviteEvent at all',
@@ -424,6 +437,14 @@ async function main() {
       sendViaTnz({ to: '+64211234567', message: 'GTC-274 probe' })
     );
     assert('C', 'sendViaTnz reaches TNZ exactly once', cDirect.hits === 1, cDirect.where);
+    // [[GTC-290]]
+    const cStatus = await reached(() => tnzClient.getTnzMessageStatus('gtc290-probe'));
+    assert(
+      'C',
+      'getTnzMessageStatus reaches TNZ exactly once, at the status URL',
+      cStatus.hits === 1 && /api\.tnz\.co\.nz\/api\/v2\.04\/get\/status\//.test(cStatus.where),
+      cStatus.where
+    );
     const cMail = await reached(() =>
       email.sendMagicLinkEmail('gtc274@example.invalid', 'fake-token')
     );
@@ -687,7 +708,8 @@ async function main() {
   only(
     /api\.tnz\.co\.nz/,
     ['src/lib/sms/tnz-client.ts'],
-    "the TNZ endpoint appears only in src/lib/sms/tnz-client.ts, behind sendViaTnz's gate"
+    // [[GTC-290]]: label only — the status poll's URL lives in the same file, behind its own gate.
+    'the TNZ address appears only in src/lib/sms/tnz-client.ts, behind the gates of sendViaTnz and getTnzMessageStatus'
   );
   only(
     /sendViaTnz\(/,

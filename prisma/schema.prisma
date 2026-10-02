@@ -1047,6 +1047,9 @@ model OutboundMessage {
   /// [[GTC-258]] — the number blocks this message's TNZ report produced, if any. SET NULL.
   textBlocks TextBlock[]
 
+  /// [[GTC-290]] — the founder's TNZ alert episodes this text started, if any. SET NULL.
+  tnzAlerts TnzAccountAlert[]
+
   /// ⚠ NO @@unique, AND @@unique([personEventId, kind]) IS THE ONE THAT LOOKS RIGHT AND IS
   /// WRONG. It would make the press idempotent at the row level — and then ruling U's
   /// "send again to the same address" and "let the host edit the address and send", each
@@ -1433,6 +1436,41 @@ model TextBlock {
   event   Event?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
 
   @@index([eventId])
+  @@index([outboundMessageId])
+}
+
+/// [[GTC-290]] — ONE EPISODE OF A TNZ ACCOUNT PROBLEM THE FOUNDER IS EMAILED ABOUT: a credit hold, or a
+/// link TNZ will not carry. Founder ruling SCOPED Q1, 2026-10-02: Gather emails the founder, once,
+/// the first time its status poll finds either. Plan ruling Q1: a credit-hold episode ends as soon as
+/// no text is held; a blocked-link episode ends after 48 hours with no new sighting.
+///
+/// Account-wide, so no event and no person: it names no guest. The writer is
+/// `src/lib/sms/tnz-account-alert.ts`, and nothing else writes it.
+model TnzAccountAlert {
+  id String @id @default(cuid())
+
+  /// CREDIT_HOLD or LINK_NOT_PERMITTED — a `TnzAlertKind`. A String, on `TextBlock.reason`'s reason.
+  kind String
+
+  /// ⚠ THE "ONCE". The kind while the episode is open, NULL once it closes. UNIQUE, so at most one
+  /// open episode per kind: inserting the row is the claim, as `OutboundMessage.retryOfId` is, and
+  /// two overlapping runs cannot both open one — so they cannot both email. Postgres lets any number
+  /// of NULLs share a unique column, so closed episodes keep their rows.
+  openKind String? @unique
+
+  firstSeenAt DateTime  @default(now())
+  /// The latest sighting; a blocked-link episode closes 48 hours after it.
+  lastSeenAt  DateTime
+  closedAt    DateTime?
+
+  /// The one attempt (plan ruling Q3): when the email went, or why it did not. Never the address.
+  emailedAt  DateTime?
+  emailError String?
+
+  /// The text whose answer opened the episode. SET NULL, never cascade.
+  outboundMessageId String?
+  outboundMessage   OutboundMessage? @relation(fields: [outboundMessageId], references: [id], onDelete: SetNull)
+
   @@index([outboundMessageId])
 }
 

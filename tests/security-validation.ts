@@ -1614,6 +1614,9 @@ async function testSuite12_CronSecretFailsClosed(_fixtures: Fixtures) {
     ['../src/app/api/cron/decide-by-followups/route', '/api/cron/decide-by-followups', 'POST'],
     ['../src/app/api/cron/nudges/route', '/api/cron/nudges', 'GET'],
     ['../src/app/api/cron/nudges/route', '/api/cron/nudges', 'POST'],
+    // [[GTC-290]] (founder approval, Zone 6): the TNZ status poll. A refusal only — it runs nothing.
+    ['../src/app/api/cron/tnz-status-poll/route', '/api/cron/tnz-status-poll', 'GET'],
+    ['../src/app/api/cron/tnz-status-poll/route', '/api/cron/tnz-status-poll', 'POST'],
   ];
 
   for (const [modPath, apiPath, method] of drivenBehindCanary) {
@@ -1674,6 +1677,9 @@ async function testSuite12_CronSecretFailsClosed(_fixtures: Fixtures) {
     ['/api/cron/decide-by-followups', 'POST'],
     ['/api/cron/nudges', 'GET'],
     ['/api/cron/nudges', 'POST'],
+    // [[GTC-290]] (founder approval, Zone 6): refused with a wrong secret; never driven with the right one.
+    ['/api/cron/tnz-status-poll', 'GET'],
+    ['/api/cron/tnz-status-poll', 'POST'],
   ];
 
   for (const [apiPath, method] of liveRefusals) {

@@ -106,3 +106,58 @@ export async function sendViaTnz(params: { to: string; message: string }): Promi
     return { success: false, error: `TNZ network error: ${errorMessage}` };
   }
 }
+
+// ─── [[GTC-290]] — the status poll's one door to TNZ ─────────────────────────────────────────
+
+/** TNZ's GET status URL; the MessageID is appended, encoded. Documented in the REST API v2.04. */
+const TNZ_STATUS_ENDPOINT = 'https://api.tnz.co.nz/api/v2.04/get/status/';
+
+/** Both documented as `application/json; encoding='utf-8'` for the GET status call. */
+const TNZ_STATUS_JSON = "application/json; encoding='utf-8'";
+
+/** How long one status call may take before it counts as not reached. */
+export const TNZ_STATUS_TIMEOUT_MS = 5_000;
+
+export type TnzStatusFetch =
+  | { reached: true; httpStatus: number; bodyText: string }
+  | { reached: false; error: string };
+
+/**
+ * Ask TNZ what happened to one message. [[GTC-290]].
+ *
+ * It sends nothing, but it is a call to the production account, so it sits behind the same live
+ * switch as `sendViaTnz`, in the same order: the token, then the switch, then the network. On a
+ * machine that is not live it returns `reached: false` with the switch's words and makes no request.
+ * It authenticates with the existing `TNZ_AUTH_TOKEN` — no new credential.
+ *
+ * It never throws, and it does not read the answer: that is `parseTnzStatusResponse` in
+ * `./tnz-status-contract.ts`, the second wire shape's own boundary.
+ */
+export async function getTnzMessageStatus(
+  messageId: string,
+  options: { timeoutMs?: number } = {}
+): Promise<TnzStatusFetch> {
+  if (!authToken) {
+    return { reached: false, error: 'TNZ_AUTH_TOKEN not configured' };
+  }
+
+  if (!isLiveSendingOn()) {
+    return { reached: false, error: LIVE_SENDS_OFF };
+  }
+
+  try {
+    const response = await fetch(`${TNZ_STATUS_ENDPOINT}${encodeURIComponent(messageId)}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': TNZ_STATUS_JSON,
+        Accept: TNZ_STATUS_JSON,
+        Authorization: `Basic ${authToken}`,
+      },
+      signal: AbortSignal.timeout(options.timeoutMs ?? TNZ_STATUS_TIMEOUT_MS),
+    });
+    return { reached: true, httpStatus: response.status, bodyText: await response.text() };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return { reached: false, error: `TNZ network error: ${errorMessage}` };
+  }
+}
