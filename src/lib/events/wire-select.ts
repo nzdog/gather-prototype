@@ -80,7 +80,9 @@ export const EVENT_WIRE_SELECT = {
   aiCallsUsed: true,
   // V2 signal: events that entered the Moment flow have an EventSetup row.
   // The dashboard uses its presence to suppress V1-pipeline actions (GTC-148).
-  setup: { select: { id: true } },
+  // GTC-355: the setup flow's entry rule reads `planApprovedAt` to open an approved plan at
+  // Moment 3. A column of EventSetup, not of Event, so none of the contract's forbidden columns.
+  setup: { select: { id: true, planApprovedAt: true } },
 } as const;
 
 /**

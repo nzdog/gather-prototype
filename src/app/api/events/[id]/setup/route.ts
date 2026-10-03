@@ -49,6 +49,12 @@ interface EventSetupBody {
   setUpData?: OtherJobsAccordionData;
   cleanUpData?: OtherJobsAccordionData;
   otherJobsOtherData?: OtherJobsAccordionData;
+  /**
+   * [[GTC-355]] Q4 — "Plan looks good →" sends `true`. The route stamps
+   * `EventSetup.planApprovedAt` the first time and keeps it after, so the entry rule opens
+   * an approved plan at Moment 3. Only `true` is accepted; there is no un-approve.
+   */
+  planApproved?: unknown;
 }
 
 const OTHER_JOBS_FIELDS = ['setUpData', 'cleanUpData', 'otherJobsOtherData'] as const;
@@ -187,8 +193,19 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       }
     }
 
+    if ('planApproved' in body && body.planApproved !== true) {
+      return NextResponse.json({ error: 'planApproved must be true' }, { status: 400 });
+    }
+
     // Build update data — only include fields present in the request body
     const data: Record<string, unknown> = {};
+    if (body.planApproved === true) {
+      const existing = await prisma.eventSetup.findUnique({
+        where: { eventId },
+        select: { planApprovedAt: true },
+      });
+      data.planApprovedAt = existing?.planApprovedAt ?? new Date();
+    }
     if ('eventType' in body) data.eventType = body.eventType;
     if ('eventTypeOther' in body) data.eventTypeOther = body.eventTypeOther;
     if ('mainsData' in body) data.mainsData = body.mainsData;

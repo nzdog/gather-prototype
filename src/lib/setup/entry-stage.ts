@@ -18,7 +18,7 @@
  * inside the component. Every future Moment reads this.
  */
 
-export type SetupStage = 'opening' | 'moment1' | 'moment2-step1' | 'plan';
+export type SetupStage = 'opening' | 'moment1' | 'moment2-step1' | 'plan' | 'moment3';
 
 /**
  * "Already generated" means ITEMS, not teams.
@@ -43,19 +43,29 @@ export function hasGeneratedPlan(items: Array<{ source?: string | null }>): bool
  * changes nothing for V1, and the case is named here rather than fallen through.
  *
  * ⚠ NOT A HISTORY. This answers "where is this plan up to", not "where was she last".
- * Approving the plan is the one beat in the flow that stores nothing — it writes no
- * column, no status and no ledger row — so it is not an input here and must not become
- * one by accident. It does not need to be: approving keeps her on the plan view, so
- * `plan` is the right answer either side of it.
+ *
+ * ⚠ [[GTC-355]] CHANGED ONE SENTENCE OF THIS, DELIBERATELY. It used to say approving the plan
+ * was the one beat that stores nothing, and must not become an input "by accident" — true
+ * while approving kept her on the plan view. Approving now opens Moment 3, so "where is this
+ * plan up to" has a new answer after it, and the beat stores one column to say so:
+ * `EventSetup.planApprovedAt` (founder ruling Q4, 2026-10-03). It is an input on purpose.
+ *
+ * `planApproved` IS OPTIONAL, AND ABSENT MEANS TODAY'S ANSWER. Every event approved before the
+ * column existed reads NULL and opens where it always did, so there is no backfill. An
+ * approved plan opens at Moment 3 WITH OR WITHOUT ITEMS: Moment 2 lets her approve an empty
+ * plan and go on, and Moment 3 has its own empty state for it. V1 is untouched — the
+ * EventSetup check comes first.
  */
 export function resolveSetupStage(input: {
   items: Array<{ source?: string | null }>;
   hasSetup: boolean;
   householdCount: number;
+  planApproved?: boolean;
 }): SetupStage {
   if (!input.hasSetup) {
     return input.householdCount > 0 ? 'moment1' : 'opening';
   }
+  if (input.planApproved === true) return 'moment3';
   if (hasGeneratedPlan(input.items)) return 'plan';
   return 'moment2-step1';
 }

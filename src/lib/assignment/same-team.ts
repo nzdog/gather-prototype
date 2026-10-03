@@ -65,6 +65,28 @@
  * matching `auth.user.id` against `Event.host.userId`, was rejected because `Person.userId`
  * is null on every host of a pre-phase-2 event, which would make the exemption silently dead
  * exactly where the backfill (phase 5) will need it.
+ *
+ * ── EXCEPTION 3: A PERSON ON NO TEAM, PLACED BY HOST AUTHORITY (GTC-355, founder ruling Q1) ──
+ *
+ * Moment 1 creates every guest's membership with `teamId: null`, so before this exception the
+ * route refused every Moment 1 guest every dish — "Dave, ribs" answered 400 — and Moment 3,
+ * which assigns items directly to people, could not work. The founder's ruling, verbatim:
+ * "A person on no team may hold any row when the host or a co-host places them. Teamed guests
+ * and coordinators unchanged."
+ *
+ * It follows from the rule's purpose, the same way the first two do: the fence is around a
+ * coordinator's team, and a person on no team is inside nobody's fence. So:
+ *
+ *   - a guest ON a team is still fenced to it, whoever is placing them;
+ *   - a COORDINATOR gains nothing — this opens only for host authority (HOST or COHOST, the
+ *     same pair `isHostSelfPick` counts, for the reason given there);
+ *   - the coordinator token route gates on its own `teamId` comparison and is untouched.
+ *
+ * ⚠ IT MOVES THE BOARD'S PICKER, AND THE RULING ACCEPTS THAT. `reassignCandidates` in
+ * src/lib/glance/actions.ts asks this function, so the board now offers a host or co-host
+ * every guest on no team. Its code does not change; the names it offers do — which is the
+ * board's own rule holding: its picker "cannot offer a name the route will refuse, and cannot
+ * hide one it would accept".
  */
 
 /** A membership row, as little of it as the decision needs. */
@@ -129,6 +151,9 @@ export function mayHoldRow(
 
   // Exception 2 — GTC-256 phase 4. The host is on no team, by design.
   if (isHostSelfPick(subject, actorRole, hostPersonId)) return true;
+
+  // Exception 3 — GTC-355 Q1. A person on no team, placed by host authority.
+  if (subject.teamId === null && (actorRole === 'HOST' || actorRole === 'COHOST')) return true;
 
   return subject.teamId === item.teamId;
 }

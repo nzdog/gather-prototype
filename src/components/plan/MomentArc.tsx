@@ -8,7 +8,7 @@ interface MomentArcProps {
 const moments = [
   { number: 1, label: "Who's coming?" },
   { number: 2, label: "What's the plan?" },
-  { number: 3, label: "Who's bringing what?" },
+  { number: 3, label: "Who's on what?" },
   { number: 4, label: 'Is everyone sorted?' },
 ] as const;
 

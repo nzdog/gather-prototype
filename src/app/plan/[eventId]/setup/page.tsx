@@ -23,6 +23,12 @@ import Moment2PlanView, {
   PlanCategory as Moment2PlanCategory,
   PlanItem as Moment2PlanItem,
 } from '@/components/plan/Moment2PlanView';
+import Moment3AssignView, {
+  Moment3Category,
+  Moment3Holder,
+} from '@/components/plan/Moment3AssignView';
+import type { PanelHouseholdInput } from '@/lib/moment3/people';
+import { M3_WORDS } from '@/lib/moment3/words';
 
 const MOMENT2_CATEGORY_EMOJIS: Record<string, string> = {
   mains: '🍖',
@@ -60,6 +66,61 @@ type PlanApiItem = {
   displayOrder: number | null;
   team: { id: string; name: string; displayOrder?: number };
 };
+
+/**
+ * GTC-355: Moment 3's view of the plan — the same rows, in the plan view's order, each with
+ * its kind, its quantity and unit, and who holds it. Built from `GET /api/events/[id]/items`,
+ * which already carries `kind` and `assignment.person`.
+ */
+type Moment3ApiItem = PlanApiItem & {
+  kind?: string;
+  assignment: { person: { id: string; name: string } } | null;
+};
+
+function mapItemsToMoment3(items: Moment3ApiItem[]): {
+  categories: Moment3Category[];
+  holders: Record<string, Moment3Holder | null>;
+} {
+  const teams = new Map<string, { id: string; name: string; displayOrder: number }>();
+  for (const item of items) {
+    teams.set(item.team.id, {
+      id: item.team.id,
+      name: item.team.name,
+      displayOrder: item.team.displayOrder ?? 0,
+    });
+  }
+  const holders: Record<string, Moment3Holder | null> = {};
+  const categories = [...teams.values()]
+    .sort((a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name))
+    .map((team) => ({
+      id: team.id,
+      name: team.name,
+      emoji: emojiForCategoryName(team.name),
+      items: items
+        .filter((i) => i.team.id === team.id)
+        .sort(
+          (a, b) =>
+            (a.displayOrder ?? Number.MAX_SAFE_INTEGER) -
+            (b.displayOrder ?? Number.MAX_SAFE_INTEGER)
+        )
+        .map((item) => {
+          holders[item.id] = item.assignment
+            ? { personId: item.assignment.person.id, name: item.assignment.person.name }
+            : null;
+          const kind = item.kind ?? 'ITEM';
+          const amountAndUnit = [item.quantityAmount ?? '', mapItemUnitToDisplay(item)]
+            .filter((x) => x !== '')
+            .join(' ');
+          return {
+            id: item.id,
+            name: item.name,
+            kind,
+            detail: kind === 'TASK' ? '' : amountAndUnit || (item.quantityText ?? ''),
+          };
+        }),
+    }));
+  return { categories, holders };
+}
 
 type PlanApiTeam = {
   id: string;
@@ -164,7 +225,12 @@ interface SetupEvent extends SerialisedEvent {
    * on the wire — `EVENT_WIRE_SELECT` names it so the events list can route on it —
    * so reading it here costs no extra request.
    */
-  setup: { id: string } | null;
+  setup: { id: string; planApprovedAt?: string | null } | null;
+  /**
+   * GTC-355: Moment 3's conflict recheck fires only once a check has been run, the old
+   * dashboard's guard. Already on the wire (`EVENT_WIRE_SELECT`).
+   */
+  lastCheckPlanAt?: string | null;
 }
 
 /**
@@ -231,6 +297,14 @@ export default function EventSetupPage() {
   const [moment2Plan, setMoment2Plan] = useState<Moment2Plan | null>(null);
   const [showMoment2PlanView, setShowMoment2PlanView] = useState(false);
   const [moment2PlanCategories, setMoment2PlanCategories] = useState<Moment2PlanCategory[]>([]);
+  // GTC-355: Moment 3, the fifth stage, and what it shows.
+  const [showMoment3, setShowMoment3] = useState(false);
+  const [moment3Data, setMoment3Data] = useState<{
+    categories: Moment3Category[];
+    holders: Record<string, Moment3Holder | null>;
+    households: PanelHouseholdInput[];
+    headcount: number;
+  } | null>(null);
   const [households, setHouseholds] = useState<SavedHousehold[]>([]);
   const [channelCandidates, setChannelCandidates] = useState<ChannelCandidateOption[]>([]);
   const [editingHousehold, setEditingHousehold] = useState<SavedHousehold | null>(null);
@@ -251,6 +325,7 @@ export default function EventSetupPage() {
     setShowMoment2Step1(stage === 'moment2-step1');
     setShowMoment2Step2Skeleton(false);
     setShowMoment2PlanView(stage === 'plan');
+    setShowMoment3(stage === 'moment3');
   }, []);
 
   useEffect(() => {
@@ -287,11 +362,16 @@ export default function EventSetupPage() {
           items: loadedItems,
           hasSetup: Boolean(loadedEvent.setup),
           householdCount,
+          // GTC-355: an approved plan opens at Moment 3, so a returning host lands there.
+          planApproved: Boolean(loadedEvent.setup?.planApprovedAt),
         });
-        applyStage(stage);
         if (stage === 'plan') {
           setMoment2PlanCategories(await loadMoment2PlanCategories());
         }
+        if (stage === 'moment3') {
+          setMoment3Data(await loadMoment3Data());
+        }
+        applyStage(stage);
       } catch (err: any) {
         if (!cancelled) setError(err?.message ?? 'Failed to load this event');
       } finally {
@@ -454,6 +534,29 @@ export default function EventSetupPage() {
     const teamsData = await teamsRes.json();
     const itemsData = await itemsRes.json();
     return mapTeamsAndItemsToPlanCategories(teamsData.teams ?? [], itemsData.items ?? []);
+  };
+
+  /**
+   * GTC-355: what Moment 3 reads — the plan's rows with their holders, and Moment 1's
+   * households with every membership column (`justAttending` among them). Two reads the
+   * flow already makes; no new route. The headcount is Moment 1's ("X people coming"):
+   * every member plus each household's kids without jobs.
+   */
+  const loadMoment3Data = async () => {
+    const [itemsRes, householdsRes] = await Promise.all([
+      fetch(`/api/events/${eventId}/items`),
+      fetch(`/api/events/${eventId}/households`),
+    ]);
+    if (!itemsRes.ok || !householdsRes.ok) {
+      throw new Error('Failed to load plan data');
+    }
+    const items = ((await itemsRes.json()).items ?? []) as Moment3ApiItem[];
+    const households = ((await householdsRes.json()).households ?? []) as PanelHouseholdInput[];
+    const headcount = households.reduce(
+      (sum, h) => sum + h.members.length + (h.littleCount ?? 0),
+      0
+    );
+    return { ...mapItemsToMoment3(items), households, headcount };
   };
 
   const handleRegenerate = async (scope: 'plan' | 'category', categoryKey?: string) => {
@@ -748,6 +851,39 @@ export default function EventSetupPage() {
     );
   }
 
+  if (showMoment3 && event && moment3Data) {
+    return (
+      <>
+        {/* GTC-202: this branch returns early, so the why prompt is rendered here too —
+            after the press, each Moment 3 change asks it (the route's T1). */}
+        {reasonPrompt}
+        <Moment3AssignView
+          eventId={event.id}
+          event={event}
+          hostPersonId={event.hostId}
+          headcount={moment3Data.headcount}
+          categories={moment3Data.categories}
+          initialHolders={moment3Data.holders}
+          households={moment3Data.households}
+          askForReason={askForReason}
+          onBack={async () => {
+            // "← Back to the plan" (ruling Q14). Her approval stays: "Plan looks good →"
+            // brings her straight back, and a reload opens Moment 3.
+            await loadItems();
+            setMoment2PlanCategories(await loadMoment2PlanCategories());
+            setShowMoment3(false);
+            setMoment3Data(null);
+            setShowMoment2PlanView(true);
+          }}
+          onMoveOn={() => {
+            // "Move on →" goes to the pre-flight (ruling Q5): the Hinge sits between 3 and 4.
+            window.location.href = `/plan/${eventId}/pre-flight`;
+          }}
+        />
+      </>
+    );
+  }
+
   if (showMoment2PlanView && event) {
     // Canonical headcount: aggregate from households using the same formula as
     // Moment1Summary ("X people coming"). Fall back to event.guestCount only if
@@ -921,14 +1057,24 @@ export default function EventSetupPage() {
             ]);
           }}
           onApprove={async () => {
-            // GTC-233: V2 owns the experience end to end, so approving no longer falls
-            // through to the V1 dashboard. There is no V2 surface after the plan yet
-            // (invites/people/nudges are still V1-only), so the host stays here on a
-            // refreshed plan.
+            // GTC-355: approving opens Moment 3 straight away, with no button between
+            // (acceptance 1). It stamps `EventSetup.planApprovedAt` first, so a reload — or a
+            // host coming back tomorrow — lands in Moment 3 too (ruling Q4). GTC-233's rule
+            // stands: approving never falls through to the V1 dashboard.
+            const res = await fetch(`/api/events/${eventId}/setup`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ planApproved: true }),
+            });
+            if (!res.ok) {
+              toast.error(M3_WORDS.SAVE_FAILED);
+              return;
+            }
             await loadEvent();
             await loadItems();
-            setMoment2PlanCategories(await loadMoment2PlanCategories());
+            setMoment3Data(await loadMoment3Data());
             setMoment2Plan(null);
+            applyStage('moment3');
             toast.success('Plan approved.');
           }}
           onBack={() => {

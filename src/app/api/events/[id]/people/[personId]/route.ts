@@ -22,6 +22,16 @@ export async function PATCH(
     const body = await request.json();
     const { role, teamId, name, email, phoneNumber } = body;
 
+    /*
+     * [[GTC-355]] Q2/Q3 — Moment 3's "Just attending" mark, per event, on the membership. It
+     * changes Moment 3's unplaced count and Gather's suggestions and nothing else: no reader in
+     * the press, the chooser, the reminders or the board. Moment 3 sends this key ALONE, so the
+     * team branch below (which deletes a person's assignments) is never entered by it.
+     */
+    if ('justAttending' in body && typeof body.justAttending !== 'boolean') {
+      return NextResponse.json({ error: 'justAttending must be true or false' }, { status: 400 });
+    }
+
     // Find the PersonEvent record
     const personEvent = await prisma.personEvent.findUnique({
       where: {
@@ -204,6 +214,7 @@ export async function PATCH(
       data: {
         role: finalRole,
         teamId: finalTeamId,
+        ...('justAttending' in body ? { justAttending: body.justAttending as boolean } : {}),
       },
       include: {
         person: {

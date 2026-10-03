@@ -77,9 +77,19 @@ async function main() {
         'coordinators, which is what it is for',
       mayHoldRow(guestOnMains, dessertItem, 'HOST', HOST) === false
     );
+    // ⚠ INVERTED 2026-10-03 BY [[GTC-355]], NOT DELETED. This line read "GTC-171 SURVIVES: a guest
+    // on NO team may still hold nothing" and asserted `=== false`. The founder's ruling Q1 (GTC-355
+    // PLAN RULINGS), verbatim: "A person on no team may hold any row when the host or a co-host
+    // places them. Teamed guests and coordinators unchanged." Moment 1 puts every guest on no team,
+    // so the old line would have kept Moment 3 from giving anyone a dish. The fence it guarded is
+    // pinned by the companion below: a coordinator still cannot place a guest on no team.
     assert(
-      'GTC-171 SURVIVES: a guest on NO team may still hold nothing',
-      mayHoldRow(guestNoTeam, mainsItem, 'HOST', HOST) === false
+      'GTC-355 Q1: a guest on NO team may hold a dish when the host places them',
+      mayHoldRow(guestNoTeam, mainsItem, 'HOST', HOST) === true
+    );
+    assert(
+      'and still nothing when a coordinator places them',
+      mayHoldRow(guestNoTeam, mainsItem, 'COORDINATOR', HOST) === false
     );
     assert(
       'GTC-171 SURVIVES: task rows are exempt for everybody — a task team can never have ' +

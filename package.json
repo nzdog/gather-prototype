@@ -124,7 +124,8 @@
     "test:stopped-text": "tsx tests/stopped-text-test.ts",
     "test:text-outcome": "tsx tests/text-outcome-test.ts",
     "test:tnz-status-poll": "tsx tests/tnz-status-poll-test.ts",
-    "test:reply-board": "tsx tests/text-reply-board-test.ts"
+    "test:reply-board": "tsx tests/text-reply-board-test.ts",
+    "test:moment-three": "tsx tests/moment-three-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

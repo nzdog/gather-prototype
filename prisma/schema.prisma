@@ -489,6 +489,16 @@ model PersonEvent {
   /// on reload. Setting this true never grants messageability, and setting it false
   /// never removes it — read it for layout, never for a send decision.
   isYoungPerson        Boolean            @default(false)
+  /// [[GTC-355]] Q2 — "Just attending": the host's Moment 3 mark that this person is coming to
+  /// eat and needs nothing to bring. It takes them out of Moment 3's unplaced count and out of
+  /// Gather's suggestions, and NOTHING ELSE. It is never read by the press, the chooser, the
+  /// reminders or the board: an adult with no item still gets the itemless ask, as before.
+  ///
+  /// ON PersonEvent, NOT Person — a per-EVENT hosting judgement, for the reason `nudgeMark`
+  /// argues above. GTC-104's objection (membership ids churned on a household edit) was fixed
+  /// by GTC-159: `reconcileMembers` updates members in place. Written by
+  /// `PATCH /api/events/[id]/people/[personId]`.
+  justAttending        Boolean            @default(false)
   event                Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
   person               Person             @relation(fields: [personId], references: [id], onDelete: Cascade)
   proxy                PersonEvent?       @relation("ProxyRelation", fields: [proxyPersonEventId], references: [id])
@@ -2420,6 +2430,14 @@ model EventSetup {
   // GTC-133: keyed by config category (entree_starters, drinks_alcoholic, etc.) for the 9 categories
   // without dedicated columns. Shape: { [categoryKey]: { selections: OptionTreeSelections, stillDeciding?: boolean } }
   extendedCategoriesData Json?
+
+  /// [[GTC-355]] Q4 — when the host first pressed "Plan looks good →". The entry rule
+  /// (`resolveSetupStage` in src/lib/setup/entry-stage.ts) opens an approved plan at Moment 3,
+  /// so a returning host lands where she was. Before this column approving stored nothing, and a
+  /// reload put her back on the plan. NULL means not yet approved, which is every event approved
+  /// before the column existed: they open where they always did, so there is no backfill.
+  /// Stamped once, by `POST /api/events/[id]/setup`, and never cleared.
+  planApprovedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
