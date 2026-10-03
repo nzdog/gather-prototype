@@ -14,6 +14,16 @@
 export const CHASE_DOOR_LINK = 'Change who I chase';
 
 /**
+ * [[GTC-357]] — right after the press, under the threshold lines. Founder, PLAN RULINGS 2026-10-03,
+ * Q2: *"Lines, link, then board (Recommended)"* — *"The lines show with "See the board →" under
+ * them. After about 8 seconds, roughly the time it takes to read them, the page moves to the board
+ * by itself; the link lets you go sooner."* Q3 approved the words.
+ */
+export const SEE_THE_BOARD_LINK = 'See the board →';
+/** Q2: 8 seconds, not the plan's 6. */
+export const BOARD_MOVE_AFTER_MS = 8000;
+
+/**
  * WB — under the link on the host-token page. That page is the host MAGIC-LINK view and its reader
  * may hold no session, while the pre-flight is session-gated: the second sentence is the caveat
  * "Review and send" already carries there, for the same reason.

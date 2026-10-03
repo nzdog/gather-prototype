@@ -1,13 +1,11 @@
 /**
- * GTC-192 (J1, phase 2) — where the glance lives, for now.
+ * GTC-192 (J1, phase 2) — where the glance lives.
  *
- * `/plan/[eventId]/glance`. URL-ONLY: nothing links to it. The V1 dashboard
- * (`src/app/plan/[eventId]/page.tsx`) is explicitly out of this phase's scope and is not
- * touched, so the entry point is a URL a host is given rather than a tab she finds.
- *
- * ⚠ THIS IS STILL NOT AN ANSWER TO "WHERE THE SCREEN LIVES". That decision is recorded as
- * open on GTC-192 and stays open: this is the address phase 2 needs in order to be looked
- * at, chosen for being unmistakably outside V1 rather than for being right.
+ * `/plan/[eventId]/glance`. ⚠ NO LONGER URL-ONLY: [[GTC-357]] R1 (2026-10-03) settled GTC-192's
+ * open decision 4, "Where the screen lives" — a sent Moment-flow event's home is this board. Your
+ * Events opens it (`eventHomeHref`, `src/lib/events/home-href.ts`), the pre-flight moves here after
+ * the press, and Moment 3's "Move on →" comes here once the invitations have gone. The address is
+ * kept. From here the host reaches Moment 3, "Who I chase" and the old dashboard (`GlanceBoard`).
  *
  * ── SERVER COMPONENT, READING THE MODULE — the question phase 1 left open ──────
  *

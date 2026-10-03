@@ -66,6 +66,7 @@ import {
   unassignedDoorText,
 } from './strip';
 import { CHASE_DOOR_LINK, chaseDoorHref } from '@/lib/preflight/after-press-words';
+import { BACK_ROOM_LINK, PLAN_DOOR_LINK, backRoomHref, planDoorHref } from '@/lib/events/home-href';
 
 interface GlanceBoardProps {
   glance: EventGlance;
@@ -492,6 +493,29 @@ export default function GlanceBoard({
             {CHASE_DOOR_LINK}
           </a>
         ) : null}
+
+        {/*
+          [[GTC-357]] R1 — the board's ways out: "The plan, Moment 3 and "Who I chase" are reached
+          from there." Beside GTC-329's door, quiet, below the grid (plan Q4), and before the press
+          as well as after. Plain links, so the board keeps its no-hooks property; navigation, not
+          an action on a strip (Moment 4 spec: the surface shows states, the tap holds actions).
+        */}
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+          <a
+            data-plan-door=""
+            href={planDoorHref(glance.eventId)}
+            className="inline-block text-[12px] text-[#888780] underline underline-offset-2"
+          >
+            {PLAN_DOOR_LINK}
+          </a>
+          <a
+            data-back-room-door=""
+            href={backRoomHref(glance.eventId)}
+            className="inline-block text-[12px] text-[#888780] underline underline-offset-2"
+          >
+            {BACK_ROOM_LINK}
+          </a>
+        </div>
       </div>
     </main>
   );

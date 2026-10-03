@@ -69,6 +69,8 @@ import { OPT_OUT_LINE } from '@/lib/sms/opt-out-line';
 // [[GTC-329]] — moved unchanged, so the post-press surface shows the same row as step 3.
 import { MarkRows, Pill, cadenceSentence, type Member } from '@/components/preflight/mark-rows';
 import AfterThePress from '@/components/preflight/AfterThePress';
+import { BOARD_MOVE_AFTER_MS, SEE_THE_BOARD_LINK } from '@/lib/preflight/after-press-words';
+import { boardHref } from '@/lib/events/home-href';
 
 // ─── Wire shapes (mirror /api/events/[id]/pre-flight) ────────────────────────
 
@@ -335,6 +337,19 @@ export default function PreFlightPage() {
       setPressing(false);
     }
   }, [eventId, pressing, pressed]);
+
+  /*
+   * [[GTC-357]] — AFTER THE PRESS, THE BOARD. Founder, PLAN RULINGS 2026-10-03, Q2: *"Lines, link,
+   * then board (Recommended)"* — the threshold lines show with "See the board →" under them, and
+   * after about 8 seconds, roughly the time it takes to read them, the page moves to the board by
+   * itself. Outside `press`, so the press handler and its dependency list are untouched; before the
+   * after-the-press return below, so the hook order never changes.
+   */
+  useEffect(() => {
+    if (!pressed) return;
+    const timer = setTimeout(() => window.location.assign(boardHref(eventId)), BOARD_MOVE_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [pressed, eventId]);
 
   if (error && !data) {
     return <div className="max-w-3xl mx-auto px-6 py-16 text-gray-600">{error}</div>;
@@ -706,6 +721,14 @@ export default function PreFlightPage() {
                   {line}
                 </p>
               ))}
+              {/* [[GTC-357]] Q2 — one link to the board, not a roadmap door: the board is where the
+                  page goes by itself after BOARD_MOVE_AFTER_MS, and this lets her go sooner. */}
+              <a
+                href={boardHref(eventId)}
+                className="mt-3 inline-block text-sm font-medium text-gray-900 underline underline-offset-2"
+              >
+                {SEE_THE_BOARD_LINK}
+              </a>
             </div>
           )}
 

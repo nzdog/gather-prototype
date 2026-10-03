@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Calendar, Users, ListTodo, ChevronRight, Archive, Trash2 } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
+import { eventHomeHref } from '@/lib/events/home-href';
 
 interface Event {
   id: string;
@@ -21,6 +22,10 @@ interface Event {
   };
   /** GTC-233: present on V2 events; drives the row link to V2's own route. */
   setup: { id: string } | null;
+  /** [[GTC-357]]: set by the press. A sent Moment-flow event opens on the board. */
+  sentAt: string | null;
+  /** The viewer's own role(s) on this event — the list route filters them to her. */
+  eventRoles?: { role: string }[];
 }
 
 export default function EventsPage() {
@@ -227,7 +232,8 @@ export default function EventsPage() {
               <div
                 key={event.id}
                 onClick={() =>
-                  router.push(event.setup ? `/plan/${event.id}/setup` : `/plan/${event.id}`)
+                  // [[GTC-357]] R1 — where the event opens: `eventHomeHref` is the one rule.
+                  router.push(eventHomeHref({ ...event, role: event.eventRoles?.[0]?.role }))
                 }
                 className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition cursor-pointer"
               >

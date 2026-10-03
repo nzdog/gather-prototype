@@ -1662,15 +1662,17 @@ export default function PlanEditorPage() {
 
         <div className="max-w-7xl mx-auto px-4 py-8">
           {/* Event Stage Progress - Hide when checklist is visible */}
-          {!(event.status === 'DRAFT' && !checklistDismissed) && (
+          {!(!event.setup && event.status === 'DRAFT' && !checklistDismissed) && (
             <EventStageProgress
               phase={getEventPhaseJson(event)}
               onSendClick={() => handleExpandSection('planstatus')}
             />
           )}
 
-          {/* Setup Checklist Banner - Only show in DRAFT status and not dismissed */}
-          {event.status === 'DRAFT' && !checklistDismissed && (
+          {/* Setup Checklist Banner - Only show in DRAFT status and not dismissed.
+              [[GTC-357]] R2: never on a Moment-flow event (an EventSetup row), whose Moment flow now
+              covers those steps; V1 events unchanged. */}
+          {!event.setup && event.status === 'DRAFT' && !checklistDismissed && (
             <SetupChecklistBanner
               progress={setupProgress}
               onDismiss={handleChecklistDismiss}
@@ -1696,8 +1698,10 @@ export default function PlanEditorPage() {
             </div>
           )}
 
-          {/* Next Step CTA — shown when unassigned items exist, session-dismissible */}
-          {!nextStepDismissed &&
+          {/* Next Step CTA — shown when unassigned items exist, session-dismissible.
+              [[GTC-357]] R2: never on a Moment-flow event; Moment 3 is where items are given out. */}
+          {!event.setup &&
+            !nextStepDismissed &&
             !isGenerating &&
             !isRegenerating &&
             teams.length > 0 &&

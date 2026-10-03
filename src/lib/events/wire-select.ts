@@ -136,5 +136,8 @@ export const EVENT_LIST_WIRE_SELECT = {
   // same EventSetup signal the dashboard uses to hide V1 controls (GTC-148/149).
   // `setup` is a relation, so it is absent unless named here.
   setup: { select: { id: true } },
+  // [[GTC-357]] R1: a sent Moment-flow event opens on the board, so the list needs the press's own
+  // fact. `status` cannot tell it: an event is CONFIRMING before the press as well as after.
+  sentAt: true,
   _count: { select: { teams: true, days: true } },
 } as const;

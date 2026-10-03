@@ -29,6 +29,7 @@ import Moment3AssignView, {
 } from '@/components/plan/Moment3AssignView';
 import type { PanelHouseholdInput } from '@/lib/moment3/people';
 import { M3_WORDS } from '@/lib/moment3/words';
+import { boardHref } from '@/lib/events/home-href';
 
 const MOMENT2_CATEGORY_EMOJIS: Record<string, string> = {
   mains: '🍖',
@@ -877,7 +878,10 @@ export default function EventSetupPage() {
           }}
           onMoveOn={() => {
             // "Move on →" goes to the pre-flight (ruling Q5): the Hinge sits between 3 and 4.
-            window.location.href = `/plan/${eventId}/pre-flight`;
+            // [[GTC-357]] Q5: once the invitations have gone, the board is the event's home.
+            window.location.href = event.sentAt
+              ? boardHref(eventId)
+              : `/plan/${eventId}/pre-flight`;
           }}
         />
       </>
