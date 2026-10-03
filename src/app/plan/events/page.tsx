@@ -237,7 +237,8 @@ export default function EventsPage() {
                 }
                 className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition cursor-pointer"
               >
-                <div className="flex items-start justify-between">
+                {/* [[GTC-358]] R2: on a phone the buttons go under the title; from 640px, as before. */}
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <h2 className="text-xl font-semibold text-gray-900">{event.name}</h2>
@@ -271,7 +272,7 @@ export default function EventsPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 flex-shrink-0">
+                  <div className="flex flex-wrap items-center gap-3 flex-shrink-0">
                     {/* GTC-235: the second door.
                         The row click routes a V2 event to `/plan/[id]/setup` and a V1
                         event to `/plan/[id]` — one destination each, so a V2 event could

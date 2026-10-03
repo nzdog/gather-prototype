@@ -1553,7 +1553,8 @@ export default function PlanEditorPage() {
         {/* Header */}
         <div className="bg-white border-b">
           <div className="max-w-7xl mx-auto px-4 py-6">
-            <div className="flex items-center justify-between">
+            {/* [[GTC-358]] R2: the header's buttons wrap on a phone; on a computer, as before. */}
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">{event.name}</h1>
                 <div className="mt-2 flex items-center gap-4 text-sm text-gray-600">
@@ -1564,7 +1565,7 @@ export default function PlanEditorPage() {
                   {event.guestCount && <span>{event.guestCount} guests</span>}
                 </div>
               </div>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3">
                 <button
                   onClick={() => {
                     // Find the HOST token from invite links
