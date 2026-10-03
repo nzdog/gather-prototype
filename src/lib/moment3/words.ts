@@ -27,6 +27,18 @@ export const M3_WORDS = {
   // W7 — accessible names with no variable part.
   DISMISS_LABEL: 'Dismiss',
   NOT_JUST_ATTENDING_LABEL: 'Not just attending',
+  // [[GTC-360]] — holding the plan at "Move on →". W1 to W6 and the two links, approved with the
+  // founder's fixes (PLAN RULINGS 2026-10-03 in docs/tickets/GTC-360.md).
+  HOLDING: 'Holding the plan…',
+  HOLD_FAILED: "That didn't hold. Try again.",
+  HOLD_CLASH:
+    'Before I hold the plan, a serious clash in it needs settling. You can settle it in Plan Status.',
+  HOLD_QUANTITY:
+    'Before I hold the plan, an important item needs a quantity. You can set it in Items & Quantities.',
+  HOLD_EMPTY: "There's nothing in the plan to hold yet. Go back to the plan and add what's needed.",
+  HOLD_NOT_HOST: 'Only the host can hold the plan and send it.',
+  OPEN_PLAN_STATUS: 'Open Plan Status',
+  OPEN_ITEMS_AND_QUANTITIES: 'Open Items & Quantities',
 } as const;
 
 /** The document's counter: "[X] of [Y] items assigned." — as written, for every count. */

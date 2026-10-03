@@ -1662,8 +1662,10 @@ export default function PlanEditorPage() {
         </div>
 
         <div className="max-w-7xl mx-auto px-4 py-8">
-          {/* Event Stage Progress - Hide when checklist is visible */}
-          {!(!event.setup && event.status === 'DRAFT' && !checklistDismissed) && (
+          {/* Event Stage Progress - Hide when checklist is visible.
+              [[GTC-360]] Q6: never on a Moment-flow event — its words describe the V1 flow, and the
+              Moment flow holds the plan at Moment 3's "Move on". */}
+          {!event.setup && !(event.status === 'DRAFT' && !checklistDismissed) && (
             <EventStageProgress
               phase={getEventPhaseJson(event)}
               onSendClick={() => handleExpandSection('planstatus')}
@@ -2226,7 +2228,9 @@ export default function PlanEditorPage() {
           {/* Send readiness — a hunt for absence, not a verdict. Hinge §1: "Gather
               sweeps for gaps, and each 'no holes here' is weight down." Warnings only;
               nothing here can block, and nothing scores her (Moment 4 §2). */}
-          {event && event.status === 'CONFIRMING' && !isSentJson(event) && (
+          {/* [[GTC-360]] Q6: not on a Moment-flow event — its "Freeze Plan" asks for a transition the
+              plan has already made at Moment 3, and the pre-flight is where she sends. */}
+          {event && !event.setup && event.status === 'CONFIRMING' && !isSentJson(event) && (
             <div className="border-t border-gray-200 pt-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Before you send</h3>
               <FreezeCheck

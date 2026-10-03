@@ -30,6 +30,7 @@ import Moment3AssignView, {
 import type { PanelHouseholdInput } from '@/lib/moment3/people';
 import { M3_WORDS } from '@/lib/moment3/words';
 import { boardHref } from '@/lib/events/home-href';
+import { holdNotice, holdThePlan, type HoldNotice } from '@/lib/moment3/hold';
 
 const MOMENT2_CATEGORY_EMOJIS: Record<string, string> = {
   mains: '🍖',
@@ -306,6 +307,32 @@ export default function EventSetupPage() {
     households: PanelHouseholdInput[];
     headcount: number;
   } | null>(null);
+  // [[GTC-360]] — "Move on →" holds the plan; while it works, and what it says if it cannot.
+  const [holding, setHolding] = useState(false);
+  const [holdNoticeShown, setHoldNoticeShown] = useState<HoldNotice | null>(null);
+
+  /**
+   * [[GTC-360]] — "MOVE ON →" HOLDS THE PLAN, THEN GOES ON. Founder: *"On "Move on" from Moment 3
+   * (Recommended)"*. A sent event goes straight to `target` (the board, [[GTC-357]]); an unsent one is
+   * held first by `holdThePlan` — a held but unsent one is not held twice — and only then opened on
+   * the pre-flight. Anything that keeps her in Moment 3 is said in the completion panel.
+   */
+  const moveOn = async (target: string) => {
+    if (!event) return;
+    if (event.sentAt) {
+      window.location.href = target;
+      return;
+    }
+    setHolding(true);
+    setHoldNoticeShown(null);
+    const outcome = await holdThePlan({ eventId, status: event.status });
+    if (outcome.kind === 'GO') {
+      window.location.href = target;
+      return;
+    }
+    setHolding(false);
+    setHoldNoticeShown(holdNotice(outcome, eventId));
+  };
   const [households, setHouseholds] = useState<SavedHousehold[]>([]);
   const [channelCandidates, setChannelCandidates] = useState<ChannelCandidateOption[]>([]);
   const [editingHousehold, setEditingHousehold] = useState<SavedHousehold | null>(null);
@@ -879,10 +906,11 @@ export default function EventSetupPage() {
           onMoveOn={() => {
             // "Move on →" goes to the pre-flight (ruling Q5): the Hinge sits between 3 and 4.
             // [[GTC-357]] Q5: once the invitations have gone, the board is the event's home.
-            window.location.href = event.sentAt
-              ? boardHref(eventId)
-              : `/plan/${eventId}/pre-flight`;
+            // [[GTC-360]]: before the press, the plan is held first (`moveOn`).
+            void moveOn(event.sentAt ? boardHref(eventId) : `/plan/${eventId}/pre-flight`);
           }}
+          holding={holding}
+          holdNotice={holdNoticeShown}
         />
       </>
     );

@@ -52,7 +52,12 @@ export const PRESS_REFUSAL_WORDS: Record<PressRefusalCode, string> = {
    */
   ALREADY_SENT: 'This one has already gone out. Nothing was sent again.',
 
-  NOT_CONFIRMING: 'This event is not ready to send yet. Finish the plan first and come back.',
+  /*
+   * [[GTC-360]] W7, approved 2026-10-03: a Moment-flow plan is held at Moment 3's "Move on →", so the
+   * refusal names where to go and what to press.
+   */
+  NOT_CONFIRMING:
+    'This plan isn\'t held yet. Go back to "Who\'s on what?" and press "Move on →" first.',
 
   /*
    * RULING AC. Her replies would have nowhere to go, so the press refuses rather than sending mail

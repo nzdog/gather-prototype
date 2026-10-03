@@ -38,6 +38,7 @@ import {
 } from '@/lib/moment3/people';
 import { suggestAssignments, type Suggestion } from '@/lib/moment3/suggest';
 import { completionPanel } from '@/lib/moment3/completion';
+import type { HoldNotice } from '@/lib/moment3/hold';
 
 export interface Moment3Item {
   id: string;
@@ -72,6 +73,10 @@ interface Moment3AssignViewProps {
   askForReason: (change: PendingChange, event: SerialisedEvent) => Promise<ReasonAnswer>;
   onBack: () => void;
   onMoveOn: () => void;
+  /** [[GTC-360]] — the plan is being held ("Move on →" reads W1 and waits). */
+  holding?: boolean;
+  /** [[GTC-360]] — what keeps her in Moment 3, said in the completion panel. */
+  holdNotice?: HoldNotice | null;
 }
 
 type Selection = { kind: 'item'; id: string } | { kind: 'person'; id: string } | null;
@@ -110,6 +115,8 @@ export default function Moment3AssignView({
   askForReason,
   onBack,
   onMoveOn,
+  holding = false,
+  holdNotice = null,
 }: Moment3AssignViewProps) {
   const toast = useToast();
   const [holders, setHolders] = useState<Record<string, Moment3Holder | null>>(initialHolders);
@@ -521,6 +528,20 @@ export default function Moment3AssignView({
                 {line}
               </p>
             ))}
+            {/* [[GTC-360]] — what keeps her here: a block, a co-host, a failure (W2 to W6). */}
+            {holdNotice && (
+              <div data-m3="hold-notice" role="alert" className="mt-2 text-sm text-red-700">
+                <p>{holdNotice.text}</p>
+                {holdNotice.link && (
+                  <a
+                    href={holdNotice.link.href}
+                    className="mt-1 inline-block font-medium underline underline-offset-2"
+                  >
+                    {holdNotice.link.label}
+                  </a>
+                )}
+              </div>
+            )}
             <div className="mt-3 flex items-center justify-end gap-3">
               <button
                 type="button"
@@ -532,9 +553,10 @@ export default function Moment3AssignView({
               <button
                 type="button"
                 onClick={onMoveOn}
-                className="px-5 py-2 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-dark"
+                disabled={holding}
+                className="px-5 py-2 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-dark disabled:opacity-60 disabled:cursor-wait"
               >
-                {panel.moveOn}
+                {holding ? M3_WORDS.HOLDING : panel.moveOn}
               </button>
             </div>
           </div>
