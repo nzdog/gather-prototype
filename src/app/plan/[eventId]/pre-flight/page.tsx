@@ -53,6 +53,7 @@ import {
   HOST_LIST_NOT_CHASED_HEADING,
   NOT_MESSAGED_WHY,
   NO_REPLY_TO_LINE,
+  TOLD_ABOUT_LABEL,
   chasePersonPills,
   composePreview,
   hostListReason,
@@ -61,6 +62,7 @@ import {
   messageRows,
   notMessagedRows,
   replyToLine,
+  toldAboutValue,
 } from '@/lib/preflight/ask-preview-compose';
 import type { AskPreview, NotMessagedLinkState } from '@/lib/preflight/ask-preview';
 import { OPT_OUT_LINE } from '@/lib/sms/opt-out-line';
@@ -1289,6 +1291,13 @@ function MessageStep({ eventId }: { eventId: string }) {
                 <dd className="text-gray-800">{rowsInBrief(k)}</dd>
               </div>
             ))}
+            {/* [[GTC-356]] W5 — whose asks her message tells her about. The lines are in the message below. */}
+            {current.recipient.household.length > 0 && (
+              <div className="flex gap-2">
+                <dt className="w-24 shrink-0 text-gray-400">{TOLD_ABOUT_LABEL}</dt>
+                <dd className="text-gray-800">{toldAboutValue(current.recipient.household)}</dd>
+              </div>
+            )}
             {current.replyTo !== null && (
               <div className="flex gap-2">
                 <dt className="w-24 shrink-0 text-gray-400">Reply-to</dt>

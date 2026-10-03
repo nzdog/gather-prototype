@@ -57,6 +57,7 @@ import type { Prisma } from '@prisma/client';
 import {
   chooseAskRoute,
   chooseChaseRoute,
+  chooseHouseholdListRoute,
   type AskRoute,
   type Channel,
   type ChaseChooserEvent,
@@ -228,6 +229,18 @@ export interface PreviewCarried {
   jobNames: string[];
 }
 
+/**
+ * [[GTC-356]] — another adult of a household this recipient is the contact of, and their rows.
+ * Told, not asked: see `HouseholdAsk` in `ask-register.ts`. No answer, ever (S2).
+ */
+export interface PreviewHouseholdAdult {
+  personEventId: string;
+  name: string;
+  firstName: string;
+  itemNames: string[];
+  jobNames: string[];
+}
+
 export interface PreviewRecipient {
   personEventId: string;
   personId: string;
@@ -239,6 +252,12 @@ export interface PreviewRecipient {
   itemNames: string[];
   jobNames: string[];
   carried: PreviewCarried[];
+  /**
+   * [[GTC-356]] — the other adults of each household whose list `chooseHouseholdListRoute` sends
+   * to this recipient, by name; `[]` for almost everybody. Always empty for the host as carrier:
+   * a household whose contact is the host has no list (ruling A2's carrier gets no message).
+   */
+  household: PreviewHouseholdAdult[];
   link: string | null;
   linkState: LinkState;
   /**
@@ -638,6 +657,7 @@ export async function readAskPreview(
       itemNames: [],
       jobNames: [],
       carried: [],
+      household: [],
       ...linkOf(m, hostAsCarrier),
       emailNote:
         channel === 'TEXT' && blockStateOf(m.person.email) !== 'NONE'
@@ -690,8 +710,37 @@ export async function readAskPreview(
     });
   }
 
+  /*
+   * [[GTC-356]] — THE HOUSEHOLD LIST, one chooser call per household, built in memory from rows this
+   * walk already holds: no query is added, because `tests/carried-child-door-test.ts` layer E counts
+   * the queries the board's read makes, and this walk is part of it.
+   *
+   * The list goes only to a recipient the walk above already made — the contact reached DIRECT —
+   * and never to the host as carrier, whom the route already refuses (HOST_AS_CONTACT). A host
+   * identity reached by `isHost`'s third path is not named on anybody's list.
+   */
+  for (const h of households) {
+    const route = chooseHouseholdListRoute(h.id, chooserEvent);
+    if (route.kind !== 'TO_CONTACT') continue;
+    const contact = recipients.get(route.recipientId);
+    if (!contact || contact.hostAsCarrier) continue;
+    for (const id of route.memberIds) {
+      const m = byId.get(id);
+      if (!m || isHost(m)) continue;
+      contact.household.push({
+        personEventId: m.id,
+        name: m.person.name,
+        firstName: firstNameOf(m.person.name),
+        ...rowsOf(m.personId),
+      });
+    }
+  }
+
   const recipientList = [...recipients.values()].sort(byName);
-  for (const r of recipientList) r.carried.sort(byName);
+  for (const r of recipientList) {
+    r.carried.sort(byName);
+    r.household.sort(byName);
+  }
 
   /*
    * [[GTC-311]] — THE CHASE, READ BESIDE THE ASK AND NEVER THROUGH IT.

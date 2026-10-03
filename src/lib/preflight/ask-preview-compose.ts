@@ -39,6 +39,7 @@ import type {
   HostListLine,
   NotChasedLine,
   NotMessagedLinkState,
+  PreviewHouseholdAdult,
   PreviewRecipient,
 } from './ask-preview';
 import { pressWillMessage } from './ask-preview';
@@ -114,6 +115,12 @@ export function composePreview(
           childFirstName: c.firstName,
           itemNames: c.itemNames,
           jobNames: c.jobNames,
+        })),
+        // [[GTC-356]] — the household list, in the same message on both channels, never cut.
+        household: recipient.household.map((h) => ({
+          firstName: h.firstName,
+          itemNames: h.itemNames,
+          jobNames: h.jobNames,
         })),
         link:
           recipient.linkState === 'READY' && recipient.link
@@ -221,6 +228,17 @@ export function messageCountLine(messages: number, emailed: number, texted: numb
 // preview is the voice the guest's message already uses — "I'll check back if I haven't heard from
 // you" — talking to the host instead, and "we" implies a team behind it that there isn't. A reason
 // that names Gather says "I" as well. The page renders these and keeps no copy of its own.
+
+/**
+ * [[GTC-356]] W5 — the recipient fact that her message tells her about other adults in her household,
+ * approved as written (PLAN RULINGS 2026-10-03). The value is their first names, in the list's order.
+ */
+export const TOLD_ABOUT_LABEL = 'Told about';
+export function toldAboutValue(
+  household: readonly Pick<PreviewHouseholdAdult, 'firstName'>[]
+): string {
+  return household.map((h) => h.firstName).join(', ');
+}
 
 /** The host's list. "It names nobody, so it needs no voice." Kept as the founder ruled it. */
 export const HOST_LIST_HEADING = 'Yours to handle';

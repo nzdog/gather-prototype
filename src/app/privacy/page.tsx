@@ -3,7 +3,7 @@ export default function PrivacyPolicy() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
-        <p className="text-sm text-gray-500 mb-8">Last updated: 2 October 2026</p>
+        <p className="text-sm text-gray-500 mb-8">Last updated: 3 October 2026</p>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 space-y-8">
           {/* Who We Are */}
@@ -81,6 +81,10 @@ export default function PrivacyPolicy() {
             <h2 className="text-xl font-bold text-gray-900 mb-3">How We Use It</h2>
             <ul className="space-y-2 text-gray-700">
               <li>• To coordinate events between hosts and invitees</li>
+              <li>
+                • If you&apos;re part of a household, Gather tells its contact person what
+                you&apos;ve been asked to bring.
+              </li>
               <li>• To send SMS nudges and email invitations</li>
               <li>• To process payments via Stripe</li>
               <li>• To improve the service</li>

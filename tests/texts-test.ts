@@ -263,6 +263,8 @@ function gatherTexts(): { name: string; text: string | null }[] {
       itemNames: ['pavlova', 'salad'],
       jobNames: [],
       carried: [],
+      // [[GTC-356]] — required since the household list; empty, so the message is unchanged.
+      household: [],
       link: LINK,
     },
     storedAuthorLine: null,

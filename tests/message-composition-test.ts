@@ -85,6 +85,8 @@ function ask(itemNames: string[], firstName = 'Finn', storedAuthorLine: string |
       itemNames,
       jobNames: [],
       carried: [],
+      // [[GTC-356]] — required since the household list; empty, so the message is unchanged.
+      household: [],
       link: 'https://gather.test/p/tok123',
     },
     storedAuthorLine,
@@ -119,6 +121,8 @@ function itemlessEndsWithLink(): boolean {
       itemNames: [],
       jobNames: [],
       carried: [],
+      // [[GTC-356]] — required since the household list; empty, so the message is unchanged.
+      household: [],
       link: 'https://gather.test/p/tok123',
     },
   })
@@ -377,6 +381,8 @@ function main() {
       itemNames: ['Pavlova'],
       jobNames: [],
       carried: [],
+      // [[GTC-356]] — required since the household list; empty, so the message is unchanged.
+      household: [],
       link: 'https://gather.test/p/t',
     },
   });

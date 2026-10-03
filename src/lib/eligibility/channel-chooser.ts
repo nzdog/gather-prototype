@@ -238,7 +238,22 @@ function resolveCarrier<M extends ChooserMembership>(
   | Refusal<'CHILD_WITHOUT_ITEM' | 'HOST_HOUSEHOLD_CHILD' | 'NO_CARRIER' | 'HOUSEHOLD_MUTED'> {
   if (!child.holdsItems) return { ok: false, why: 'CHILD_WITHOUT_ITEM' };
 
-  const household = event.households.find((h) => h.id === child.householdId);
+  const found = resolveHouseholdContact(child.householdId, event);
+  return found.ok ? { ok: true, carrier: found.contact } : found;
+}
+
+/**
+ * The household half of `resolveCarrier`, shared since [[GTC-356]] so that a child's ask and the
+ * household list reach the same person by one rule: who this household's messages go to, or why
+ * they go nowhere. The order is the carrier's, unchanged.
+ */
+function resolveHouseholdContact<M extends ChooserMembership>(
+  householdId: string | null,
+  event: Omit<ChooserEvent, 'memberships'> & { memberships: readonly M[] }
+):
+  | { ok: true; contact: M; members: M[] }
+  | Refusal<'HOST_HOUSEHOLD_CHILD' | 'NO_CARRIER' | 'HOUSEHOLD_MUTED'> {
+  const household = event.households.find((h) => h.id === householdId);
   if (!household) return { ok: false, why: 'NO_CARRIER' };
   const members = event.memberships.filter((m) => m.householdId === household.id);
 
@@ -260,14 +275,15 @@ function resolveCarrier<M extends ChooserMembership>(
     return { ok: false, why: 'NO_CARRIER' };
   }
 
-  // Since the founder ruling, "household messages" means carried child asks and nothing else. A
-  // switched-off household closes the carrier route, and when the carrier route is closed the
-  // item comes to the host (GTC-189 slice 1 answer 5 — the same shape as ruling A).
+  // Since the founder ruling, "household messages" means carried child asks — and, since
+  // [[GTC-356]], the household list, which travels in the same message. A switched-off household
+  // closes the carrier route, and when the carrier route is closed the item comes to the host
+  // (GTC-189 slice 1 answer 5 — the same shape as ruling A); the list goes nowhere.
   if (resolveHouseholdMuted({ messagesMuted: household.messagesMuted, members }, event.hostId)) {
     return { ok: false, why: 'HOUSEHOLD_MUTED' };
   }
 
-  return { ok: true, carrier };
+  return { ok: true, contact: carrier, members };
 }
 
 /** THE ASK: email first, text if they have no email. */
@@ -505,4 +521,60 @@ export function chooseChaseRoute(
   return reach.ok
     ? { kind: 'DIRECT', channel: reach.channel, recipientId: subject.id }
     : { kind: 'NONE', why: reach.why };
+}
+
+/** Why a household's list reaches nobody ([[GTC-356]]). Never a withholding: no row is written. */
+export type HouseholdListNoneWhy =
+  | 'NO_CARRIER'
+  | 'HOST_HOUSEHOLD'
+  | 'HOUSEHOLD_MUTED'
+  | 'HOST_AS_CONTACT'
+  | 'NOBODY_TO_LIST'
+  | AskRefusalWhy;
+
+export type HouseholdListRoute =
+  | { kind: 'TO_CONTACT'; recipientId: string; channel: Channel; memberIds: string[] }
+  | { kind: 'NONE'; why: HouseholdListNoneWhy };
+
+/**
+ * [[GTC-356]] — WHO IS TOLD WHAT THIS HOUSEHOLD HAS BEEN ASKED TO BRING, AND ABOUT WHOM.
+ *
+ * The founder's ruling: *"If Mum knows that her partner Ross has to bring some cabbage, she can
+ * follow him up irl."* The lead is TOLD, not asked: this decides nothing about who is asked,
+ * reminded or chased — `chooseAskRoute` and `chooseChaseRoute` are untouched by it.
+ *
+ * The household's contact is resolved exactly as a child's carrier is (`resolveHouseholdContact`),
+ * so the list goes where the household's children's asks go: nowhere for the host's own household
+ * (ruling A, as corrected — and the host is never messaged), nowhere for a switched-off one, and
+ * nowhere when the contact is the host (ruling A2's carrier gets no message, so no list). The
+ * contact must be reachable for her own ask; one Gather cannot reach is told nothing, and the host
+ * is shown nothing new (plan Q9).
+ *
+ * Who is on it (plan Q6): every other ADULT of the household holding at least one row of either
+ * kind — whatever their own reachability (S6: an adult on the host's list is still on Mum's) and
+ * whatever their answer. Children are never on it: their asks are carried in her message already.
+ */
+export function chooseHouseholdListRoute(
+  householdId: string,
+  event: ChooserEvent
+): HouseholdListRoute {
+  const found = resolveHouseholdContact(householdId, event);
+  if (!found.ok) {
+    return {
+      kind: 'NONE',
+      why: found.why === 'HOST_HOUSEHOLD_CHILD' ? 'HOST_HOUSEHOLD' : found.why,
+    };
+  }
+  const { contact, members } = found;
+  if (isHostMembership(contact, event.hostId)) return { kind: 'NONE', why: 'HOST_AS_CONTACT' };
+
+  const reach = askChannelOf(contact.person);
+  if (!reach.ok) return { kind: 'NONE', why: reach.why };
+
+  const memberIds = members
+    .filter((m) => m.id !== contact.id && isMessageableRole(m.householdRole) && m.holdsItems)
+    .map((m) => m.id);
+  if (memberIds.length === 0) return { kind: 'NONE', why: 'NOBODY_TO_LIST' };
+
+  return { kind: 'TO_CONTACT', recipientId: contact.id, channel: reach.channel, memberIds };
 }

@@ -103,6 +103,24 @@ export interface CarriedChildAsk {
   jobNames: readonly string[];
 }
 
+/**
+ * [[GTC-356]] — another ADULT of a household this recipient is the contact of, and what they have
+ * been asked to bring. TOLD, NOT ASKED: the founder's ruling (*"If Mum knows that her partner Ross
+ * has to bring some cabbage, she can follow him up irl"*) and option 1, *"Kept in the loop"*. So
+ * this is not a `CarriedChildAsk`: nobody answers it, and decision 1 is not widened — the only
+ * other owner a message can ASK about is still a child.
+ *
+ * Names only, for decision 1's reason. No answer field, and none may be added: the list says what
+ * each adult was asked to bring, never their answers (S2, settling open item 3).
+ */
+export interface HouseholdAsk {
+  firstName: string;
+  /** Their items — `Item.kind` ITEM, brought. */
+  itemNames: readonly string[];
+  /** Their jobs — `Item.kind` TASK, done and not brought. */
+  jobNames: readonly string[];
+}
+
 /** One recipient's ask. `itemNames` is names ONLY — decision 1 keeps logistics off the
  *  message and on the tap page, and there is deliberately no field here to put them in. */
 export interface AskRecipient {
@@ -128,6 +146,12 @@ export interface AskRecipient {
    * routes — see `readAskPreview` in `src/lib/preflight/ask-preview.ts`.
    */
   carried: readonly CarriedChildAsk[];
+  /**
+   * [[GTC-356]] — the other adults of the household (or households) whose contact this recipient
+   * is, `[]` when none. REQUIRED for `carried`'s reason: a caller that left it out would tell the
+   * contact nothing, silently. Filled by `readAskPreview` from `chooseHouseholdListRoute`.
+   */
+  household: readonly HouseholdAsk[];
   /** The guest's tap link. Supplied by the caller; token issuance is `ensureEventTokens`'s
    *  and routing is GTC-189's. */
   link: string;
@@ -280,22 +304,72 @@ export function askSystemVoice(recipient: AskRecipient, hostFirstName: string): 
   const hasOwn = recipient.itemNames.length > 0 || recipient.jobNames.length > 0;
   const carried = recipient.carried.filter((c) => c.itemNames.length > 0 || c.jobNames.length > 0);
 
-  if (!hasOwn && carried.length === 0) {
-    return [
-      speaker,
-      `Nothing for you to bring.`,
-      checkBack,
-      `One tap to say whether you can make it: ${recipient.link}`,
-    ].join(' ');
-  }
-
-  return [
-    speaker,
-    ...(hasOwn ? [`Would you ${whatIsAsked(recipient.itemNames, recipient.jobNames)}?`] : []),
-    ...carriedAskSentences(carried, hasOwn),
+  const asks =
+    !hasOwn && carried.length === 0
+      ? [speaker, `Nothing for you to bring.`]
+      : [
+          speaker,
+          ...(hasOwn ? [`Would you ${whatIsAsked(recipient.itemNames, recipient.jobNames)}?`] : []),
+          ...carriedAskSentences(carried, hasOwn),
+        ];
+  const close = [
     checkBack,
-    `One tap to say yes, no or maybe - the details are on the page: ${recipient.link}`,
-  ].join(' ');
+    !hasOwn && carried.length === 0
+      ? `One tap to say whether you can make it: ${recipient.link}`
+      : `One tap to say yes, no or maybe - the details are on the page: ${recipient.link}`,
+  ];
+
+  const told = householdLines(recipient.household);
+  if (told.length === 0) return [...asks, ...close].join(' ');
+  return [
+    asks.join(' '),
+    HOUSEHOLD_LIST_HEADING,
+    ...told,
+    HOUSEHOLD_LIST_CLOSING,
+    close.join(' '),
+  ].join('\n');
+}
+
+/*
+ * ── [[GTC-356]] — THE HOUSEHOLD LIST. W1, W2 and W3, approved as written ("Approve as written
+ * (Recommended)", PLAN RULINGS 2026-10-03). ────────────────────────────────────────────────────
+ *
+ * IN GATHER'S MOVEMENT, after her own ask and her children's and before the check-back, so the link
+ * still ends the message (S1: "Her usual message gets one more part"). Each line on its own line,
+ * because a list run together as one sentence is the "form field" the register refuses, read the
+ * other way. AN EMPTY LIST CHANGES NOTHING: the movement is byte-identical to the message before
+ * this ticket, and `tests/household-list-test.ts` pins it.
+ *
+ * ONE BODY FOR BOTH CHANNELS, AND NEVER CUT — founder, PLAN RULINGS 2026-10-03: *"Never cut it
+ * (Recommended)"*. GTC-187 decisions 5 and 6 stand unchanged; a long list costs text parts, which
+ * the pre-flight shows, and S3's "a very long list is cut short" is withdrawn.
+ *
+ * PASSIVE, NOT "I'VE ASKED": an adult Gather cannot reach is on the list too (S6) and Gather has
+ * asked them nothing — the host will. "Have been asked" is true of everyone on it, as "Ollie has
+ * been asked to" is of a child. No "answer for" anywhere (the slice 2 ruling), and nothing asks her
+ * to do anything: W3 says it is just so she knows.
+ */
+
+/** W1, the list's heading. */
+export const HOUSEHOLD_LIST_HEADING = 'Others in your household have been asked too:';
+
+/** W3, the line after the list. */
+export const HOUSEHOLD_LIST_CLOSING = "That's just so you know.";
+
+/**
+ * W2 — one adult: "Ross: bring the cabbage", "Sam: do the dishes", "Ana: bring the ham and the
+ * rolls, and do the dishes". `whatIsAsked`'s ruled phrase, so a job is done and not brought here as
+ * in every other sentence, and decision 22's comma holds.
+ */
+export function householdLine(adult: HouseholdAsk): string {
+  return `${adult.firstName}: ${whatIsAsked(adult.itemNames, adult.jobNames)}`;
+}
+
+/** The lines, in the order given — `readAskPreview` orders them by name. An empty-handed adult has none. */
+function householdLines(household: readonly HouseholdAsk[]): string[] {
+  return household
+    .filter((h) => h.itemNames.length > 0 || h.jobNames.length > 0)
+    .map(householdLine);
 }
 
 /**

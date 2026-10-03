@@ -130,6 +130,8 @@ function compose(
       itemNames: own,
       jobNames: jobs,
       carried,
+      // [[GTC-356]] — required since the household list; empty, so the message is unchanged.
+      household: [],
       link: LINK,
     }),
     storedAuthorLine,
@@ -755,11 +757,14 @@ function fieldsOf(src: string, iface: string): string[] | null {
 }
 
 const moduleSrc = readFileSync(join(ROOT, MODULE_REL), 'utf-8');
+// [[GTC-356]], founder ruling Q12 (2026-10-03): `household` added, a conscious edit to this layer.
+// The household list names ADULTS by first name, told and not asked; it carries no ask, so decision
+// 1 is still not widened: `carried` is still the only owner a recipient's ask can name.
 assert(
   'T',
-  "AskRecipient's fields are exactly firstName, itemNames, jobNames, carried and link",
+  "AskRecipient's fields are exactly firstName, itemNames, jobNames, carried, household and link",
   JSON.stringify(fieldsOf(moduleSrc, 'AskRecipient')) ===
-    JSON.stringify(['carried', 'firstName', 'itemNames', 'jobNames', 'link']),
+    JSON.stringify(['carried', 'firstName', 'household', 'itemNames', 'jobNames', 'link']),
   JSON.stringify(fieldsOf(moduleSrc, 'AskRecipient'))
 );
 assert(
@@ -776,7 +781,7 @@ const PROBES: Record<string, string> = {
   control:
     `export const r: AskRecipient = { firstName: 'Sarah', itemNames: ['pavlova'], ` +
     `jobNames: ['dishes'], carried: [{ childFirstName: 'Ollie', itemNames: [], ` +
-    `jobNames: ['bins'] }], link: 'x' };`,
+    `jobNames: ['bins'] }], household: [], link: 'x' };`,
   'no-carried':
     `export const r: AskRecipient = { firstName: 'Sarah', itemNames: ['pavlova'], ` +
     `jobNames: [], link: 'x' };`,

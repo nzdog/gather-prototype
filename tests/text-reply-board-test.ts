@@ -472,12 +472,16 @@ async function main() {
       .replace(/&apos;/g, "'")
       .replace(/\s+/g, ' ');
     assert('C', 'C10 Q5 byte-exact on the privacy page', privacy.includes(Q5_BULLET));
+    // [[GTC-356]], founder ruling Q12 (2026-10-03): the page moved on again (S5), so the date is
+    // pinned as "not before 2 October 2026" — still proving Q5's update reached the page.
+    const updated = /Last updated: (\d{1,2} \w+ \d{4})/.exec(privacy)?.[1];
     assert(
       'C',
-      'C11 Q5: the old bullet is gone, and "Last updated: 2 October 2026"',
+      'C11 Q5: the old bullet is gone, and "Last updated" is not before 2 October 2026',
       privacy.length > 0 &&
         !privacy.includes('we keep your reply with the event it was about') &&
-        privacy.includes('Last updated: 2 October 2026')
+        !!updated &&
+        new Date(`${updated} 00:00 UTC`).getTime() >= Date.UTC(2026, 9, 2)
     );
     const withReplies = [{ words: 'x', when: 'Fri 2 Oct, 2:14pm' }];
     assert(

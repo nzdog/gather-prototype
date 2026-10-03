@@ -104,6 +104,8 @@ async function main() {
           itemNames: ['pavlova'],
           jobNames: [],
           carried: [],
+          // [[GTC-356]] — required since the household list; empty, so the message is unchanged.
+          household: [],
           link: 'https://x/p/t',
         },
         storedAuthorLine: stored,
