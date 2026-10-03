@@ -9,7 +9,6 @@ import {
   Send,
   Eye,
   CheckCircle,
-  Lock,
   Users,
   Home,
   Grid3x3,
@@ -19,10 +18,10 @@ import {
   Maximize2,
   Minimize2,
 } from 'lucide-react';
-import TransitionModal from '@/components/plan/TransitionModal';
 import { ModalProvider } from '@/contexts/ModalContext';
 import { HostPersonModal } from '@/components/h/HostPersonModal';
 import { useToast } from '@/contexts/ToastContext';
+import { CHASE_DOOR_HOST_VIEW_NOTE, CHASE_DOOR_LINK } from '@/lib/preflight/after-press-words';
 
 interface Item {
   id: string;
@@ -40,7 +39,7 @@ interface Item {
   day: { id: string; name: string; date: string } | null;
   assignment: {
     id: string;
-    response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+    response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE';
     person: { id: string; name: string };
   } | null;
 }
@@ -64,8 +63,9 @@ type PersonSummary = {
   id: string;
   name: string;
   status: 'NOT_SENT' | 'SENT' | 'OPENED' | 'RESPONDED';
-  response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
-  rsvpStatus: string;
+  response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE';
+  /** GTC-174 (D1): derived server-side — see src/lib/attendance.ts. Replaces rsvpStatus. */
+  attendance: 'PENDING' | 'YES' | 'NO' | 'UNKNOWN';
 };
 
 interface HostData {
@@ -92,7 +92,7 @@ interface HostData {
     sent: number;
     opened: number;
     responded: number;
-    inviteSendConfirmedAt: string | null;
+    sentAt: string | null;
   } | null;
   people: PersonSummary[] | null;
 }
@@ -103,7 +103,7 @@ interface PlanData {
   people: {
     name: string;
     items: string[];
-    status: 'confirmed' | 'pending' | 'declined';
+    status: 'confirmed' | 'pending' | 'declined' | 'maybe';
     phone?: string;
     email?: string;
   }[];
@@ -122,6 +122,18 @@ function formatPlanAsText(data: PlanData): string {
   if (confirmed.length > 0) {
     lines.push('✓ CONFIRMED:');
     confirmed.forEach((p) => {
+      lines.push(`  ${p.name}: ${p.items.join(', ')}`);
+    });
+    lines.push('');
+  }
+
+  // GTC-174 (D1): maybes get their own section rather than vanishing between the
+  // filters. Their wording is deliberately not "needs reassignment" — Hinge §8 holds
+  // the item softly, and Kate reassigning it is her call (D3), not the sheet's advice.
+  const maybe = data.people.filter((p) => p.status === 'maybe');
+  if (maybe.length > 0) {
+    lines.push('~ MAYBE (still deciding):');
+    maybe.forEach((p) => {
       lines.push(`  ${p.name}: ${p.items.join(', ')}`);
     });
     lines.push('');
@@ -181,6 +193,14 @@ function ResponseBadge({ response }: { response: string }) {
           Declined
         </span>
       );
+    // GTC-174 (D1): amber, never red. Hinge §8 — a maybe is a surfaced decision the
+    // system can work, not a gap. "Jake said maybe" is information, not fiction fuel.
+    case 'MAYBE':
+      return (
+        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+          Maybe
+        </span>
+      );
     default:
       return (
         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
@@ -207,9 +227,7 @@ export default function HostView() {
   const [claimEmail, setClaimEmail] = useState('');
   const [claimSubmitted, setClaimSubmitted] = useState(false);
   const [claimSubmitting, setClaimSubmitting] = useState(false);
-  const [showFreezeModal, setShowFreezeModal] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<PersonSummary | null>(null);
-  const [confirmingSent, setConfirmingSent] = useState(false);
   const [showAllPeople, setShowAllPeople] = useState(false);
   const [copyState, setCopyState] = useState<'idle' | 'copying' | 'copied'>('idle');
 
@@ -261,72 +279,14 @@ export default function HostView() {
     }
   };
 
-  const handleStatusChange = async (newStatus: string) => {
-    if (!data) return;
-
-    // Use TransitionModal for freezing
-    if (data.event.status === 'CONFIRMING' && newStatus === 'FROZEN') {
-      setShowFreezeModal(true);
-      return;
-    }
-
-    let unfreezeReason: string | null = null;
-
-    // Confirmation for FROZEN → COMPLETE (final state)
-    if (data.event.status === 'FROZEN' && newStatus === 'COMPLETE') {
-      const confirmed = window.confirm(
-        'Mark event as COMPLETE?\n\n' +
-          'This is a final action and cannot be undone. ' +
-          'Once complete, no further changes can be made to the event.\n\n' +
-          'Are you sure you want to continue?'
-      );
-      if (!confirmed) {
-        return;
-      }
-    }
-
-    // Prompt for reason when unfreezing
-    if (data.event.status === 'FROZEN' && newStatus === 'CONFIRMING') {
-      unfreezeReason = window.prompt(
-        'Unfreezing Event\n\n' +
-          'Please provide a reason for unfreezing this event.\n' +
-          'This will be logged in the audit trail.'
-      );
-
-      if (unfreezeReason === null) {
-        return;
-      }
-
-      if (unfreezeReason.trim() === '') {
-        toast.warning('A reason is required to unfreeze the event.');
-        return;
-      }
-    }
-
-    setUpdating(true);
-    try {
-      const response = await fetch(`/api/h/${token}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: newStatus,
-          unfreezeReason: unfreezeReason || undefined,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to update status');
-      }
-
-      await fetchData();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update status');
-    } finally {
-      setUpdating(false);
-    }
-  };
+  // GTC-198 (A3d): the only authored transition left is DRAFT → CONFIRMING, and the
+  // host token view does not drive it — that is a plan-building act on the dashboard.
+  //
+  // Deleted with the rest: the CONFIRMING → FROZEN freeze, the FROZEN → COMPLETE
+  // "final action and cannot be undone" confirm (COMPLETE is the calendar's, not a
+  // declaration — Moment 4 §10.1), and the unfreeze prompt that demanded a reason
+  // (Hinge §2: no recall at the mechanism level). The route's status branch went in
+  // A3a; this removes the caller.
 
   const handleEditGuestCount = () => {
     setGuestCountValue(data?.event.guestCount?.toString() || '');
@@ -421,15 +381,23 @@ export default function HostView() {
     }
   };
 
-  const handleConfirmSent = async () => {
-    setConfirmingSent(true);
-    try {
-      await fetch(`/api/h/${token}/confirm-invites-sent`, { method: 'POST' });
-      await fetchData();
-    } finally {
-      setConfirmingSent(false);
-    }
-  };
+  /*
+   * ⚠ THIS BUTTON USED TO PRESS SEND. GTC-189 slice 5c, founder ruling of 2026-09-19 — OPTION D.
+   * It is a link now. See the twin note in `src/components/plan/InviteStatusSection.tsx` for why,
+   * and [[GTC-321]] for the workflow this deliberately does not foreclose.
+   *
+   * ⚠ AND THIS SURFACE HAS A PROBLEM THE OTHER ONE DOES NOT, WHICH IS WHY IT IS A LINK WITH A
+   * CAVEAT RATHER THAN A `router.push`. This page is the host MAGIC-LINK view: it authenticates by
+   * token and the reader may hold NO SESSION. The pre-flight is session-gated — its data route is
+   * `requireEventRole` — and `middleware.ts` does not match `/plan/*`, so it issues no redirect to
+   * sign-in. A signed-out host sent straight there gets the page shell and then 401s on every
+   * fetch: a broken screen rather than a door.
+   *
+   * So the destination is named and the sign-in requirement is said out loud. Reported rather than
+   * papered over, because "navigate to the pre-flight" is the ruling and a 401 is not what it
+   * meant.
+   */
+  const preFlightHref = `/plan/${data?.event.id ?? ''}/pre-flight`;
 
   const handleCopyPlan = async () => {
     setCopyState('copying');
@@ -455,23 +423,6 @@ export default function HostView() {
       timeZone: 'Pacific/Auckland',
     });
     return `${formatter.format(start)}-${formatter.format(end).split(' ')[1]}`;
-  };
-
-  const getNextStatus = (currentStatus: string): string | null => {
-    switch (currentStatus) {
-      case 'DRAFT':
-        return 'CONFIRMING';
-      case 'CONFIRMING':
-        return 'FROZEN';
-      case 'FROZEN':
-        return 'COMPLETE';
-      default:
-        return null;
-    }
-  };
-
-  const canUnfreeze = (currentStatus: string): boolean => {
-    return currentStatus === 'FROZEN';
   };
 
   if (loading) {
@@ -554,7 +505,6 @@ export default function HostView() {
     );
   }
 
-  const nextStatus = getNextStatus(data.event.status);
   const totalGaps = data.teams.reduce((sum, t) => sum + t.unassignedCount, 0);
 
   // Sort teams alphabetically by name for stable ordering
@@ -576,6 +526,10 @@ export default function HostView() {
   const outcomesPending = data.people
     ? data.people.filter((p) => p.response === 'PENDING').length
     : 0;
+  // GTC-174 (D1): a maybe is its own outcome — counted, not folded into pending. The
+  // bar's segments must still sum to the total, and Hinge §8's whole point is that a
+  // maybe is a DECISION the host can see, not an absence.
+  const outcomesMaybe = data.people ? data.people.filter((p) => p.response === 'MAYBE').length : 0;
 
   return (
     <ModalProvider>
@@ -660,15 +614,6 @@ export default function HostView() {
             <span className="text-xs uppercase tracking-wide text-gray-500 bg-gray-100 px-2 py-1 rounded">
               {data.event.status}
             </span>
-            {canUnfreeze(data.event.status) && (
-              <button
-                onClick={() => handleStatusChange('CONFIRMING')}
-                disabled={updating}
-                className="text-xs px-2 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:bg-gray-300"
-              >
-                Unfreeze
-              </button>
-            )}
           </div>
         </div>
 
@@ -973,7 +918,11 @@ export default function HostView() {
                       style={{ width: `${(outcomesDeclined / outcomesTotal) * 100}%` }}
                     />
                     <div
-                      className="bg-amber-400"
+                      className="bg-amber-500"
+                      style={{ width: `${(outcomesMaybe / outcomesTotal) * 100}%` }}
+                    />
+                    <div
+                      className="bg-gray-300"
                       style={{ width: `${(outcomesPending / outcomesTotal) * 100}%` }}
                     />
                   </div>
@@ -986,26 +935,47 @@ export default function HostView() {
                     {outcomesDeclined > 0 && (
                       <span className="text-red-600 font-medium">{outcomesDeclined} declined</span>
                     )}
+                    {outcomesMaybe > 0 && (
+                      <span className="text-amber-600 font-medium">{outcomesMaybe} maybe</span>
+                    )}
                     {outcomesPending > 0 && <span>{outcomesPending} pending</span>}
                   </div>
                 </>
               )}
 
-              {/* Confirm sent button */}
-              {!data.inviteStatus.inviteSendConfirmedAt && (
-                <button
-                  onClick={handleConfirmSent}
-                  disabled={confirmingSent}
-                  className="w-full py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-50 transition-colors"
-                >
-                  {confirmingSent ? 'Confirming...' : "I've sent the invites"}
-                </button>
+              {/* GTC-189 slice 5c, option D — this no longer presses. See handleConfirmSent's
+                  replacement above, and [[GTC-321]]. */}
+              {!data.inviteStatus.sentAt && (
+                <>
+                  <a
+                    href={preFlightHref}
+                    className="block w-full py-2 text-sm font-medium text-center text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                  >
+                    Review and send
+                  </a>
+                  <p className="text-xs text-gray-400 mt-1.5">
+                    Opens the pre-flight, where you can see exactly what each person will get. You
+                    will need to be signed in.
+                  </p>
+                </>
               )}
-              {data.inviteStatus.inviteSendConfirmedAt && (
-                <p className="text-xs text-gray-400">
-                  ✓ Invites confirmed sent{' '}
-                  {new Date(data.inviteStatus.inviteSendConfirmedAt).toLocaleDateString('en-NZ')}
-                </p>
+              {/* [[GTC-329]], ruled 2026-09-29 — after the press, the way back to who is chased (WA,
+                  WB). The same address "Review and send" opens before it, which after the press is
+                  the smaller surface; and the same sign-in caveat, for the same reason. */}
+              {data.inviteStatus.sentAt && (
+                <>
+                  <p className="text-xs text-gray-400">
+                    ✓ Invites confirmed sent{' '}
+                    {new Date(data.inviteStatus.sentAt).toLocaleDateString('en-NZ')}
+                  </p>
+                  <a
+                    href={preFlightHref}
+                    className="block w-full mt-3 py-2 text-sm font-medium text-center text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                  >
+                    {CHASE_DOOR_LINK}
+                  </a>
+                  <p className="text-xs text-gray-400 mt-1.5">{CHASE_DOOR_HOST_VIEW_NOTE}</p>
+                </>
               )}
             </div>
           )}
@@ -1043,50 +1013,11 @@ export default function HostView() {
           )}
         </div>
 
-        {/* Bottom Action Bar */}
-        {data.event.status !== 'COMPLETE' && nextStatus && (
-          <div className="bg-white border-t border-gray-200 px-6 py-4">
-            <button
-              onClick={() => handleStatusChange(nextStatus)}
-              disabled={updating || (nextStatus === 'FROZEN' && !data.freezeAllowed)}
-              className={`w-full h-14 rounded-lg font-semibold transition-all ${
-                updating || (nextStatus === 'FROZEN' && !data.freezeAllowed)
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-accent text-white hover:bg-accent-dark'
-              }`}
-            >
-              {updating ? (
-                'Updating...'
-              ) : nextStatus === 'FROZEN' ? (
-                <span className="flex items-center justify-center gap-2">
-                  <Lock className="size-5" />
-                  Freeze Event
-                </span>
-              ) : (
-                `${nextStatus === 'COMPLETE' ? 'Mark as ' : ''}${nextStatus}`
-              )}
-            </button>
-            {nextStatus === 'FROZEN' && !data.freezeAllowed && (
-              <p className="text-center text-sm text-red-600 mt-2">
-                Cannot freeze: {data.criticalGapCount} critical{' '}
-                {data.criticalGapCount === 1 ? 'gap' : 'gaps'}
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Freeze Modal */}
-        {showFreezeModal && data && (
-          <TransitionModal
-            eventId={data.event.id}
-            currentStatus="CONFIRMING"
-            onClose={() => setShowFreezeModal(false)}
-            onSuccess={() => {
-              setShowFreezeModal(false);
-              fetchData();
-            }}
-          />
-        )}
+        {/* GTC-198 (A3d): the bottom action bar is DELETED. It offered "Freeze Event",
+            disabled below a critical-gap threshold with the verdict "Cannot freeze: N
+            critical gaps" — a hard block AND a readiness judgement, refused by
+            Moment 4 §2 and §7. There is no freeze to offer, and the send is pressed
+            from the pre-flight (GTC-188 / I1), not from a status bar. */}
 
         {/* Person Detail Modal */}
         {selectedPerson && (

@@ -1,275 +1,100 @@
 import { prisma } from '@/lib/prisma';
-import { sendSms } from './send-sms';
-import { logInviteEvent } from '@/lib/invite-events';
-import { isQuietHours, getMinutesUntilQuietEnd } from './quiet-hours';
-import {
-  get24hNudgeMessage,
-  get48hNudgeMessage,
-  getRsvpFollowupMessage,
-  getMessageInfo,
-} from './nudge-templates';
-import { NudgeCandidate, RsvpFollowupCandidate } from './nudge-eligibility';
+import { NudgeCandidate } from './nudge-eligibility';
 
-export interface NudgeSendResult {
+/**
+ * GTC-178 (E1, phase 5): ORDINAL. Was `'24h' | '48h'`. The legs are days 4 and 7 now and
+ * GTC-179 (E2) makes even that adjustable, so the type says WHICH nudge, never when.
+ *
+ * This value reaches `InviteEvent.metadata.nudgeType` through `sendSms`, so it is a
+ * stored vocabulary, not just an internal label. Keep it stable.
+ */
+export type NudgeLeg = 'first' | 'second' | 'more';
+
+/** The row kind each leg writes. `OutboundKind`'s docstring maps them one-to-one. */
+export const CHASE_KIND = {
+  first: 'CHASE_FIRST',
+  second: 'CHASE_SECOND',
+  // [[GTC-251]] slice 251c — a further reminder the host asked for from the red (Q3).
+  more: 'CHASE_MORE',
+} as const;
+
+export interface ChaseQueued {
   personId: string;
   personName: string;
-  nudgeType: '24h' | '48h';
-  success: boolean;
-  messageId?: string;
-  error?: string;
-  deferred?: boolean;
-  deferredUntil?: Date;
-}
-
-export interface RsvpFollowupSendResult {
-  personEventId: string;
-  personId: string;
-  personName: string;
-  success: boolean;
-  messageId?: string;
-  error?: string;
-  deferred?: boolean;
-  deferredUntil?: Date;
+  nudgeType: NudgeLeg;
+  channel: 'EMAIL' | 'TEXT';
+  /** False only when a concurrent tick had already queued this leg. */
+  queued: boolean;
+  outboundMessageId?: string;
 }
 
 /**
- * Send a single nudge to a person
+ * [[GTC-189]] SLICE 8b, FOUNDER RULING D2 — THE CHASE WRITES ROWS AND THE DISPATCHER SENDS THEM.
+ *
+ * ⚠ THIS FUNCTION SENDS NOTHING. It used to be `processNudges`, which called `sendSms` itself: no
+ * claim, so two overlapping ticks could both send; no row, so a chase email's bounce or complaint
+ * could never be read back; and quiet hours deferred the whole run by logging and skipping. Now each
+ * reminder is ONE `OutboundMessage` row of kind CHASE_FIRST or CHASE_SECOND, and `drainOnce` in
+ * `src/lib/press/dispatch.ts` does the rest — the chooser re-run, the gates, quiet hours (text only),
+ * the claim, the real senders, and the retry. There is no second send path.
+ *
+ * ⚠ ONE ROW PER LEG, AND THE LOCK IS WHAT MAKES "ONE" TRUE UNDER TWO TICKS. The schema refuses a
+ * unique on (membership, kind) because ruling U's resend needs two ASK rows; so the check and the
+ * create run under a transaction-scoped advisory lock keyed on the membership and the leg. A second
+ * tick that races the first waits, finds the row, and writes nothing.
  */
-export async function sendNudge(
-  candidate: NudgeCandidate,
-  nudgeType: '24h' | '48h'
-): Promise<NudgeSendResult> {
-  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
-  const link = `${baseUrl}/p/${candidate.participantToken}`;
-
-  // Get message template
-  const message =
-    nudgeType === '24h'
-      ? get24hNudgeMessage({
-          hostName: candidate.hostName,
-          eventName: candidate.eventName,
-          link,
-        })
-      : get48hNudgeMessage({
-          hostName: candidate.hostName,
-          eventName: candidate.eventName,
-          link,
+export async function queueChase(candidates: {
+  eligibleFirst: NudgeCandidate[];
+  eligibleSecond: NudgeCandidate[];
+  eligibleMore?: NudgeCandidate[];
+}): Promise<ChaseQueued[]> {
+  const out: ChaseQueued[] = [];
+  const legs: [NudgeLeg, NudgeCandidate[]][] = [
+    ['first', candidates.eligibleFirst],
+    ['second', candidates.eligibleSecond],
+    ['more', candidates.eligibleMore ?? []],
+  ];
+  for (const [leg, list] of legs) {
+    for (const c of list) {
+      const kind = CHASE_KIND[leg];
+      const id = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${c.personEventId}:${kind}`}))`;
+        /*
+         * [[GTC-251]] slice 251c — "one row per leg" for a further reminder means: none still in
+         * flight, and fewer than the host asked for since her hand-back. Asked under the same lock,
+         * so two ticks cannot both write the same leg.
+         */
+        if (leg === 'more') {
+          const since = c.handBack?.at;
+          if (!since || !c.handBack) return null;
+          const rows = await tx.outboundMessage.findMany({
+            where: { personEventId: c.personEventId, kind, createdAt: { gte: since } },
+            select: { acceptedAt: true, rejectedAt: true, withheldAt: true },
+          });
+          const inFlight = rows.some((r) => !r.acceptedAt && !r.rejectedAt && !r.withheldAt);
+          if (inFlight || rows.length >= c.handBack.reminders) return null;
+        } else {
+          const existing = await tx.outboundMessage.findFirst({
+            where: { personEventId: c.personEventId, kind },
+            select: { id: true },
+          });
+          if (existing) return null;
+        }
+        const row = await tx.outboundMessage.create({
+          data: { eventId: c.eventId, personEventId: c.personEventId, kind, channel: c.channel },
+          select: { id: true },
         });
-
-  const messageInfo = getMessageInfo(message);
-
-  // Send SMS
-  const result = await sendSms({
-    to: candidate.phoneNumber,
-    message,
-    eventId: candidate.eventId,
-    personId: candidate.personId,
-    metadata: {
-      nudgeType,
-      messageLength: messageInfo.length,
-      messageSegments: messageInfo.segments,
-    },
-  });
-
-  if (result.success) {
-    // Update person record to mark nudge as sent
-    const updateData =
-      nudgeType === '24h' ? { nudge24hSentAt: new Date() } : { nudge48hSentAt: new Date() };
-
-    await prisma.person.update({
-      where: { id: candidate.personId },
-      data: updateData,
-    });
-
-    return {
-      personId: candidate.personId,
-      personName: candidate.personName,
-      nudgeType,
-      success: true,
-      messageId: result.messageId,
-    };
-  } else {
-    return {
-      personId: candidate.personId,
-      personName: candidate.personName,
-      nudgeType,
-      success: false,
-      error: result.error,
-    };
-  }
-}
-
-/**
- * Process all eligible nudges
- * Returns summary of what was sent/skipped
- */
-export async function processNudges(candidates: {
-  eligible24h: NudgeCandidate[];
-  eligible48h: NudgeCandidate[];
-}): Promise<{
-  sent: NudgeSendResult[];
-  deferred: number;
-  deferredUntilMinutes: number;
-}> {
-  // Check quiet hours
-  if (isQuietHours()) {
-    const minutesUntil = getMinutesUntilQuietEnd();
-
-    // Log deferral for each candidate
-    const allCandidates = [...candidates.eligible24h, ...candidates.eligible48h];
-
-    for (const candidate of allCandidates) {
-      await logInviteEvent({
-        eventId: candidate.eventId,
-        personId: candidate.personId,
-        type: 'NUDGE_DEFERRED_QUIET',
-        metadata: {
-          deferredMinutes: minutesUntil,
-          phoneNumber: candidate.phoneNumber,
-        },
+        return row.id;
+      });
+      out.push({
+        personId: c.personId,
+        personName: c.personName,
+        nudgeType: leg,
+        channel: c.channel,
+        queued: id !== null,
+        ...(id ? { outboundMessageId: id } : {}),
       });
     }
-
-    return {
-      sent: [],
-      deferred: allCandidates.length,
-      deferredUntilMinutes: minutesUntil,
-    };
   }
-
-  const results: NudgeSendResult[] = [];
-
-  // Send 24h nudges
-  for (const candidate of candidates.eligible24h) {
-    const result = await sendNudge(candidate, '24h');
-    results.push(result);
-
-    // Small delay between sends to avoid rate limiting
-    await sleep(500);
-  }
-
-  // Send 48h nudges
-  for (const candidate of candidates.eligible48h) {
-    const result = await sendNudge(candidate, '48h');
-    results.push(result);
-
-    await sleep(500);
-  }
-
-  return {
-    sent: results,
-    deferred: 0,
-    deferredUntilMinutes: 0,
-  };
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * Send RSVP followup nudge to force conversion from NOT_SURE to YES/NO
- */
-export async function sendRsvpFollowupNudge(
-  candidate: RsvpFollowupCandidate
-): Promise<RsvpFollowupSendResult> {
-  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
-  const link = `${baseUrl}/p/${candidate.participantToken}`;
-
-  // Get message template
-  const message = getRsvpFollowupMessage({
-    hostName: candidate.hostName,
-    eventName: candidate.eventName,
-    link,
-  });
-
-  const messageInfo = getMessageInfo(message);
-
-  // Send SMS
-  const result = await sendSms({
-    to: candidate.phoneNumber,
-    message,
-    eventId: candidate.eventId,
-    personId: candidate.personId,
-    metadata: {
-      nudgeType: 'rsvp_followup',
-      messageLength: messageInfo.length,
-      messageSegments: messageInfo.segments,
-    },
-  });
-
-  if (result.success) {
-    // Update PersonEvent record to mark followup as sent
-    await prisma.personEvent.update({
-      where: { id: candidate.personEventId },
-      data: { rsvpFollowupSentAt: new Date() },
-    });
-
-    return {
-      personEventId: candidate.personEventId,
-      personId: candidate.personId,
-      personName: candidate.personName,
-      success: true,
-      messageId: result.messageId,
-    };
-  } else {
-    return {
-      personEventId: candidate.personEventId,
-      personId: candidate.personId,
-      personName: candidate.personName,
-      success: false,
-      error: result.error,
-    };
-  }
-}
-
-/**
- * Process all eligible RSVP followup nudges
- */
-export async function processRsvpFollowupNudges(candidates: RsvpFollowupCandidate[]): Promise<{
-  sent: RsvpFollowupSendResult[];
-  deferred: number;
-  deferredUntilMinutes: number;
-}> {
-  // Check quiet hours
-  if (isQuietHours()) {
-    const minutesUntil = getMinutesUntilQuietEnd();
-
-    // Log deferral for each candidate
-    for (const candidate of candidates) {
-      await logInviteEvent({
-        eventId: candidate.eventId,
-        personId: candidate.personId,
-        type: 'NUDGE_DEFERRED_QUIET',
-        metadata: {
-          deferredMinutes: minutesUntil,
-          phoneNumber: candidate.phoneNumber,
-          nudgeType: 'rsvp_followup',
-        },
-      });
-    }
-
-    return {
-      sent: [],
-      deferred: candidates.length,
-      deferredUntilMinutes: minutesUntil,
-    };
-  }
-
-  const results: RsvpFollowupSendResult[] = [];
-
-  // Send RSVP followup nudges
-  for (const candidate of candidates) {
-    const result = await sendRsvpFollowupNudge(candidate);
-    results.push(result);
-
-    // Small delay between sends to avoid rate limiting
-    await sleep(500);
-  }
-
-  return {
-    sent: results,
-    deferred: 0,
-    deferredUntilMinutes: 0,
-  };
+  return out;
 }

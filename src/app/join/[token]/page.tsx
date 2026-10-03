@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { notFound } from 'next/navigation';
+import { isSent } from '@/lib/lifecycle';
 import { NameSelectionClient } from './NameSelectionClient';
 
 interface Props {
@@ -19,6 +20,8 @@ export default async function SharedLinkPage({ params }: Props) {
       id: true,
       name: true,
       status: true,
+      sentAt: true,
+      endDate: true,
       hostId: true,
       host: {
         select: { name: true },
@@ -59,8 +62,9 @@ export default async function SharedLinkPage({ params }: Props) {
     notFound();
   }
 
-  // Check event status
-  if (event.status !== 'CONFIRMING' && event.status !== 'FROZEN') {
+  // Responses are accepted once the plan is built and stay open through the send —
+  // someone claiming a name post-send becomes a mini-send (Hinge §2, gap #5).
+  if (event.status !== 'CONFIRMING' && !isSent(event)) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-lg shadow-lg p-8 max-w-md text-center">

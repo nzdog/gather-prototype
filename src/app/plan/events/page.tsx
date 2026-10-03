@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Calendar, Users, ListTodo, ChevronRight, Archive, Trash2 } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
+import { eventHomeHref } from '@/lib/events/home-href';
 
 interface Event {
   id: string;
@@ -19,6 +20,12 @@ interface Event {
     teams: number;
     days: number;
   };
+  /** GTC-233: present on V2 events; drives the row link to V2's own route. */
+  setup: { id: string } | null;
+  /** [[GTC-357]]: set by the press. A sent Moment-flow event opens on the board. */
+  sentAt: string | null;
+  /** The viewer's own role(s) on this event — the list route filters them to her. */
+  eventRoles?: { role: string }[];
 }
 
 export default function EventsPage() {
@@ -57,6 +64,7 @@ export default function EventsPage() {
     const styles = {
       DRAFT: 'bg-gray-100 text-gray-800',
       CONFIRMING: 'bg-sage-100 text-sage-800',
+      // Legacy enum key, shown as SENT (GTC-197). GTC-199 drops the value itself.
       FROZEN: 'bg-sage-100 text-sage-800',
       COMPLETE: 'bg-green-100 text-green-800',
     };
@@ -223,10 +231,14 @@ export default function EventsPage() {
             {filteredEvents.map((event) => (
               <div
                 key={event.id}
-                onClick={() => router.push(`/plan/${event.id}`)}
+                onClick={() =>
+                  // [[GTC-357]] R1 — where the event opens: `eventHomeHref` is the one rule.
+                  router.push(eventHomeHref({ ...event, role: event.eventRoles?.[0]?.role }))
+                }
                 className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition cursor-pointer"
               >
-                <div className="flex items-start justify-between">
+                {/* [[GTC-358]] R2: on a phone the buttons go under the title; from 640px, as before. */}
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <h2 className="text-xl font-semibold text-gray-900">{event.name}</h2>
@@ -260,7 +272,26 @@ export default function EventsPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 flex-shrink-0">
+                  <div className="flex flex-wrap items-center gap-3 flex-shrink-0">
+                    {/* GTC-235: the second door.
+                        The row click routes a V2 event to `/plan/[id]/setup` and a V1
+                        event to `/plan/[id]` — one destination each, so a V2 event could
+                        not be reached from this list at all. Everything after the plan
+                        (invites, people, nudges, conflicts, share links) still lives only
+                        on `/plan/[id]`, and GTC-233 deliberately stopped V2 falling
+                        through to it, which left this list a one-way door. */}
+                    {event.setup && !event.archived && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/plan/${event.id}`);
+                        }}
+                        className="px-3 py-2 text-sm text-gray-700 border border-gray-300 rounded hover:bg-gray-50"
+                        title="Invites, people and reminders"
+                      >
+                        Invites &amp; people
+                      </button>
+                    )}
                     {event.archived ? (
                       <>
                         <button

@@ -1,4 +1,19 @@
-# GTC-081 Spike Findings
+---
+ticket: GTC-081-spike-findings
+title: "GTC-081 Spike Findings"
+status: closed
+branch: 
+commit: 
+moment: null
+type: build
+depends_on: []
+blocks: []
+tags:
+  - spike
+  - contacts-import
+---
+
+# [[GTC-081]] Spike Findings
 
 **Filed:** 2026-04-10
 **Status:** Investigation complete — no code changes

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth/session';
+import { recordBulkPlanChange } from '@/lib/ledger';
+import { itemNameForStorage } from '@/lib/items/name';
 
 /**
  * POST /api/templates/[id]/clone
@@ -179,7 +181,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
       await prisma.item.create({
         data: {
-          name: itemData.name,
+          name: itemNameForStorage(itemData.name) ?? itemData.name, // GTC-302
           description: itemData.description,
           critical: itemData.critical,
           criticalReason: itemData.criticalReason,
@@ -208,6 +210,18 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       },
     });
   }
+
+  // The clone populated a whole plan. One step, like a generation.
+  //
+  // NOTE for GTC-195 (K1): cloning's first act must become a mandatory people-review
+  // — "the guest list never copies silently" (Moment 4 §10.10). This entry gives that
+  // review something to anchor to.
+  await recordBulkPlanChange(prisma, {
+    eventId: event.id,
+    actor: { id: hostId, kind: 'HOST', name: null },
+    action: 'GENERATE_PLAN',
+    after: { clonedFromTemplateId: template.id, scalingApplied: applyQuantityScaling },
+  });
 
   return NextResponse.json({
     eventId: event.id,

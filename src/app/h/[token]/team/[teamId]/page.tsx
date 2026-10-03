@@ -13,11 +13,9 @@ import {
   List,
   Maximize2,
   Minimize2,
-  Edit,
 } from 'lucide-react';
 import ItemStatusBadges from '@/components/plan/ItemStatusBadges';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
-import FrozenEditModal from '@/components/plan/FrozenEditModal';
 import { ModalProvider } from '@/contexts/ModalContext';
 
 interface Item {
@@ -40,7 +38,7 @@ interface Item {
   } | null;
   assignment: {
     id: string;
-    response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+    response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE';
     person: {
       id: string;
       name: string;
@@ -87,8 +85,6 @@ export default function HostTeamView() {
   const [collapsedItems, setCollapsedItems] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const isInitialLoad = useRef(true);
-  const [editingItem, setEditingItem] = useState<Item | null>(null);
-  const [showEditModal, setShowEditModal] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -145,17 +141,6 @@ export default function HostTeamView() {
     }
   };
 
-  const handleEditItem = (item: Item) => {
-    setEditingItem(item);
-    setShowEditModal(true);
-  };
-
-  const handleEditSuccess = () => {
-    setShowEditModal(false);
-    setEditingItem(null);
-    fetchData(); // Refresh data
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -172,13 +157,7 @@ export default function HostTeamView() {
     );
   }
 
-  const sortedItems = [...data.items].sort((a, b) => {
-    if (!a.assignment && b.assignment) return -1;
-    if (a.assignment && !b.assignment) return 1;
-    if (a.critical && !b.critical) return -1;
-    if (!a.critical && b.critical) return 1;
-    return a.name.localeCompare(b.name);
-  });
+  const sortedItems = data.items;
 
   return (
     <ModalProvider>
@@ -205,8 +184,7 @@ export default function HostTeamView() {
         <div className="flex-1 overflow-y-auto p-4 md:p-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm uppercase tracking-wide text-gray-500">
-              Team Items{' '}
-              {data.event.status === 'FROZEN' ? '(Frozen - Limited Edits)' : '(Read Only)'}
+              Team Items (Read Only)
             </h2>
             <div className="flex items-center gap-2">
               {data && data.items.length > 0 && (
@@ -371,6 +349,11 @@ export default function HostTeamView() {
                                   <AlertCircle className="size-4" />
                                   Declined
                                 </div>
+                              ) : /* GTC-174 (D1): amber, not red — Hinge §8 holds the item softly. */
+                              item.assignment.response === 'MAYBE' ? (
+                                <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full text-sm font-semibold">
+                                  Maybe
+                                </div>
                               ) : (
                                 <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full text-sm font-semibold">
                                   <AlertCircle className="size-4" />
@@ -386,18 +369,13 @@ export default function HostTeamView() {
                         )}
                       </div>
 
-                      {/* Frozen Edit Button - Only show when FROZEN */}
-                      {data.event.status === 'FROZEN' && (
-                        <div className="mt-3 pt-3 border-t border-gray-200">
-                          <button
-                            onClick={() => handleEditItem(item)}
-                            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-yellow-600 text-white text-sm rounded-md hover:bg-yellow-700 transition-colors"
-                          >
-                            <Edit className="size-4" />
-                            Edit (Surgical Change)
-                          </button>
-                        </div>
-                      )}
+                      {/* GTC-198 (A3d): the "Edit (Surgical Change)" button is DELETED
+                          with FrozenEditModal and the frozen-edit route behind it
+                          (deleted in GTC-196). A "surgical change" was the narrow
+                          exception carved out of a wall; there is no wall now, so
+                          there is no exception to make. Ordinary editing on this
+                          surface is GTC-192 (J1)'s to design — the coordinator and
+                          host dashboard surfaces already have it. */}
                     </div>
                   )}
                 </div>
@@ -405,24 +383,6 @@ export default function HostTeamView() {
             </div>
           )}
         </div>
-
-        {/* Frozen Edit Modal */}
-        {showEditModal && editingItem && data && (
-          <FrozenEditModal
-            isOpen={showEditModal}
-            onClose={() => {
-              setShowEditModal(false);
-              setEditingItem(null);
-            }}
-            onSuccess={handleEditSuccess}
-            item={{
-              ...editingItem,
-              team: data.team,
-            }}
-            eventId={data.event.id}
-            people={data.people || []}
-          />
-        )}
       </div>
     </ModalProvider>
   );

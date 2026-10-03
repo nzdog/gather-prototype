@@ -69,3 +69,13 @@ export function formatPhoneForDisplay(phone: string): string {
 
   return phone;
 }
+
+/**
+ * Is this an E.164 number: a '+' and 8 to 15 digits? The form `sendSms` requires of `to` before
+ * anything else, and therefore the form an opt-out must be recorded in to match a send.
+ * Moved here unchanged from src/lib/sms/send-sms.ts at [[GTC-288]], so the reply interpreter can
+ * ask the same question without importing a sending module.
+ */
+export function isE164(phone: string): boolean {
+  return /^\+\d{8,15}$/.test(phone);
+}

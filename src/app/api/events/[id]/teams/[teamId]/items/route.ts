@@ -3,6 +3,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordChange } from '@/lib/ledger';
+import { itemNameForStorage } from '@/lib/items/name';
+import { KIND_ERROR, kindFields, readSubmittedKind } from '@/lib/items/row-kind';
 
 export async function GET(
   _request: NextRequest,
@@ -45,7 +49,7 @@ export async function GET(
         },
         day: true,
       },
-      orderBy: [{ critical: 'desc' }, { name: 'asc' }],
+      orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
     });
 
     return NextResponse.json({ items });
@@ -73,11 +77,31 @@ export async function POST(
     if (auth instanceof NextResponse) return auth;
     const body = await request.json();
 
-    const { name, description, quantityAmount, quantityUnit, critical, dietaryTags } = body;
+    const {
+      description,
+      quantityAmount,
+      quantityUnit,
+      quantityUnitCustom,
+      quantityText,
+      critical,
+      dietaryTags,
+    } = body;
 
+    // GTC-302: the name as stored — trimmed, one leading article stripped, case untouched. Checked
+    // after tidying, so a blank name is refused rather than stored.
+    const name = itemNameForStorage(body.name);
     if (!name) {
       return NextResponse.json({ error: 'name is required' }, { status: 400 });
     }
+
+    // GTC-302: brought or done. Before this no route that creates a row read a kind, so a job typed
+    // here was stored as a dish and the ask said "bring" of it. Absent is a dish; anything
+    // unreadable is refused, never defaulted.
+    const submittedKind = readSubmittedKind(body.kind);
+    if (!submittedKind.ok) {
+      return NextResponse.json({ error: KIND_ERROR }, { status: 400 });
+    }
+    const kind = submittedKind.kind ?? 'ITEM';
 
     // Verify team exists and belongs to event
     const team = await prisma.team.findUnique({
@@ -96,6 +120,7 @@ export async function POST(
     // Create item
     const itemData: any = {
       name,
+      ...kindFields(kind),
       description: description || null,
       critical: critical || false,
       criticalSource: critical ? 'HOST' : null,
@@ -104,11 +129,20 @@ export async function POST(
       teamId,
     };
 
-    // Add quantity if provided
-    if (quantityAmount && quantityUnit) {
-      itemData.quantityAmount = quantityAmount;
-      itemData.quantityUnit = quantityUnit;
-      itemData.quantityState = 'SPECIFIED';
+    // Add quantity if provided — a dish's only. A job carries no quantity: kindFields has given it
+    // quantityState NA, the shape a generated job has (GTC-171).
+    if (kind === 'ITEM') {
+      if (quantityAmount && quantityUnit) {
+        itemData.quantityAmount = quantityAmount;
+        itemData.quantityUnit = quantityUnit;
+        itemData.quantityState = 'SPECIFIED';
+      }
+      if (quantityUnitCustom !== undefined) {
+        itemData.quantityUnitCustom = quantityUnitCustom;
+      }
+      if (quantityText !== undefined) {
+        itemData.quantityText = quantityText;
+      }
     }
 
     // Add dietary tags if provided
@@ -121,6 +155,13 @@ export async function POST(
       if (dietaryTags.includes('dairyFree')) itemData.dairyFree = true;
     }
 
+    // Append to end of category: displayOrder = max(displayOrder) + 1.
+    const maxOrder = await prisma.item.aggregate({
+      where: { teamId },
+      _max: { displayOrder: true },
+    });
+    itemData.displayOrder = (maxOrder._max.displayOrder ?? 0) + 1;
+
     const item = await prisma.item.create({
       data: itemData,
       include: {
@@ -132,6 +173,29 @@ export async function POST(
         },
       },
     });
+
+    // Versioned, never interrogated: nobody has been asked for this yet.
+    const itemActor = await ledgerActorForUser(auth.user, auth.role);
+    await prisma.$transaction((tx) =>
+      recordChange(tx, {
+        eventId,
+        actor: itemActor,
+        changes: [
+          {
+            action: 'CREATE_ITEM',
+            targetType: 'Item',
+            targetId: item.id,
+            before: null,
+            after: {
+              name: item.name,
+              kind: item.kind,
+              quantity: item.quantity,
+              teamId: item.teamId,
+            },
+          },
+        ],
+      })
+    );
 
     return NextResponse.json({ item }, { status: 201 });
   } catch (error) {
