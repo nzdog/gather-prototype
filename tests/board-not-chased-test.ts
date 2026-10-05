@@ -435,7 +435,7 @@ async function main() {
     );
     assert(
       'B',
-      'the summary counts NOT_CHASED in none of its three — they leave "Gather is on N"',
+      'the summary counts NOT_CHASED in none of its three — they leave "I’m looking after N"',
       ok(() => {
         const s = S.summarisePeople(['NOT_CHASED', 'AMBER']);
         return s.withGather === 1 && s.needYou === 0 && s.settled === 0;

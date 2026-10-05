@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import MomentArc from './MomentArc';
 import { normalizePhoneNumber, isInternationalNumber } from '@/lib/phone';
 import { SavedHousehold } from './HouseholdCardList';
+import { HOUSEHOLD_CONTACT_LINE } from '@/lib/households/contact-line';
 
 export interface Moment1PersonInput {
   primaryContact: {
@@ -616,9 +617,12 @@ export default function Moment1InputForm({
             </p>
           </>
         ) : (
+          /* GTC-363 (item 15, W3): one entry is one household, and a household can be one person. */
           <p className="text-lg text-gray-600 mb-2">
-            Who&rsquo;s coming to {eventName}? Add them here — just a name and how to reach them.
-            You can sort out what they&rsquo;re bringing later.
+            Who&rsquo;s coming to {eventName}? Add one household at a time: start with its main
+            contact, then anyone else in it. Someone coming on their own is a household of one. Just
+            a name and how to reach each person — you can sort out what they&rsquo;re bringing
+            later.
           </p>
         )}
 
@@ -739,7 +743,7 @@ export default function Moment1InputForm({
           {/* Household members section */}
           <div className={`border-t border-gray-200 pt-6 mb-6 ${hostingAlone ? 'hidden' : ''}`}>
             <p className="text-sm text-gray-500 mb-4">
-              {hostMode ? 'Anyone else in your household?' : 'Anyone else in this group?'}
+              {hostMode ? 'Anyone else in your household?' : 'Anyone else in this household?'}
             </p>
 
             <div className="flex flex-wrap gap-3 mb-4">
@@ -1124,10 +1128,12 @@ export default function Moment1InputForm({
                       </option>
                     ))}
                 </select>
-                <p className="text-xs text-gray-400 mt-1">
-                  Everything for this household goes to one person. Leave it on the main contact
-                  unless someone else is the better ear.
-                </p>
+                {/* GTC-363 (item 6, W1). Not for the host's own household opened from the list
+                    (the founder's fix): there her children are hers and there is no household
+                    list, so the line would be untrue. Whether the picker shows there is unchanged. */}
+                {!isHostHouseholdForm && (
+                  <p className="text-xs text-gray-400 mt-1">{HOUSEHOLD_CONTACT_LINE}</p>
+                )}
               </div>
             )}
           </div>
@@ -1222,7 +1228,7 @@ export default function Moment1InputForm({
                 disabled={saving}
                 className="w-full py-3 text-accent font-medium border-2 border-dashed border-accent/30 rounded-lg hover:bg-accent/5 transition-colors disabled:opacity-50 mb-4"
               >
-                {saving ? 'Saving…' : 'Save & add another'}
+                {saving ? 'Saving…' : 'Save & add another household'}
               </button>
 
               <button

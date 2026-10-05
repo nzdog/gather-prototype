@@ -129,7 +129,8 @@
     "test:household-list": "tsx tests/household-list-test.ts",
     "test:board-door": "NODE_OPTIONS=--experimental-websocket tsx tests/board-door-test.ts",
     "test:phone-menu": "NODE_OPTIONS=--experimental-websocket tsx tests/phone-menu-test.ts",
-    "test:hold-the-plan": "NODE_OPTIONS=--experimental-websocket tsx tests/hold-the-plan-test.ts"
+    "test:hold-the-plan": "NODE_OPTIONS=--experimental-websocket tsx tests/hold-the-plan-test.ts",
+    "test:walkthrough-batch1": "tsx --tsconfig tests/tsconfig.json tests/walkthrough-batch1-test.tsx"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

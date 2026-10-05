@@ -28,6 +28,12 @@ interface ConfigOccasion {
   label: string;
   nzNotes: string;
   defaultCategories: string[];
+  /**
+   * GTC-363 (item 26): categories Moment 2 shows up front beside the defaults, WITHOUT making
+   * them defaults. A default is always planned (`buildPlanGenerationInput`); one of these is
+   * planned only when the host picks something in it, exactly as under "Show more".
+   */
+  upFrontCategories?: string[];
   categories: Record<string, ConfigCategory>;
 }
 
@@ -58,6 +64,17 @@ const EVENT_TYPE_TO_CONFIG_KEY: Record<string, string> = {
 export const LEGACY_EVENT_TYPE_MAP: Record<string, string> = {
   BBQ: 'Casual BBQ',
   'Kids party': 'Birthday (Kids)',
+};
+
+/**
+ * GTC-363 (item 22) — option words renamed in the config, old → new. Stored choices
+ * (`EventSetup.mainsData` / `extendedCategoriesData`) keep the words the host picked, so a
+ * renamed option is read through this map wherever stored choices are read: Moment 2 shows the
+ * pick ticked under its new words (and saves them next time), and plan generation sends the new
+ * words. No stored row is rewritten (plan ruling Q3).
+ */
+const LEGACY_OPTION_MAP: Record<string, string> = {
+  'Classic pavlova with cream and kiwifruit': 'Classic pavlova with cream',
 };
 
 /** Config category key → accordion section ID */
@@ -189,6 +206,37 @@ export function getDefaultCategories(eventType: string): string[] {
   const configKey = getConfigKey(eventType);
   if (!configKey || !(configKey in config)) return [];
   return config[configKey].defaultCategories ?? [];
+}
+
+/**
+ * GTC-363 (item 26): the categories Moment 2 shows up front — the defaults, then the occasion's
+ * `upFrontCategories`. Display only: what is always planned is still `getDefaultCategories`.
+ */
+export function getUpFrontCategories(eventType: string): string[] {
+  const configKey = getConfigKey(eventType);
+  if (!configKey || !(configKey in config)) return [];
+  const defaults = config[configKey].defaultCategories ?? [];
+  const extra = (config[configKey].upFrontCategories ?? []).filter((k) => !defaults.includes(k));
+  return [...defaults, ...extra];
+}
+
+/** GTC-363 (item 22): one stored option, read as today's words. */
+export function readStoredOption(option: string): string {
+  return LEGACY_OPTION_MAP[option] ?? option;
+}
+
+/** GTC-363 (item 22): a category's stored selections, every option read as today's words. */
+export function readStoredSelections<
+  S extends Record<string | number, { options: string[]; freeText: string }>,
+>(selections: S): S {
+  const out: Record<string | number, { options: string[]; freeText: string }> = {};
+  for (const [level, sel] of Object.entries(selections)) {
+    out[level] =
+      sel && Array.isArray(sel.options)
+        ? { ...sel, options: sel.options.map(readStoredOption) }
+        : sel;
+  }
+  return out as S;
 }
 
 /** Resolve OptionTree-shaped levels for one category of an event type. */

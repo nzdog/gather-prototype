@@ -219,11 +219,11 @@ async function main() {
     // ── Ruling 2: the summary sentence, whole numbers only ────────────────
     assert(
       'Ruling 2',
-      'the reference sentence, verbatim — "3 need you. Gather is on 9. 28 settled."',
+      'the reference sentence, verbatim — "3 need you. I’m looking after 9. 28 settled." (GTC-363 W2)',
       ok(
         () =>
           SP.summarySentence({ needYou: 3, withGather: 9, settled: 28 }) ===
-          '3 need you. Gather is on 9. 28 settled.'
+          '3 need you. I’m looking after 9. 28 settled.'
       )
     );
     assert(
@@ -231,7 +231,7 @@ async function main() {
       'the ZERO case is worded, not counted — "Nothing needs you", never "0 need you"',
       ok(() => {
         const s = SP.summarySentence({ needYou: 0, withGather: 9, settled: 28 });
-        return s === 'Nothing needs you. Gather is on 9. 28 settled.' && !s.includes('0 need');
+        return s === 'Nothing needs you. I’m looking after 9. 28 settled.' && !s.includes('0 need');
       })
     );
     assert(
@@ -248,10 +248,10 @@ async function main() {
     );
     assert(
       'Ruling 2',
-      'zero clauses are dropped, never rendered as "Gather is on 0"',
+      'zero clauses are dropped, never rendered as "I’m looking after 0"',
       ok(() => {
         const s = SP.summarySentence({ needYou: 2, withGather: 0, settled: 5 });
-        return s === '2 need you. 5 settled.' && !s.includes('on 0');
+        return s === '2 need you. 5 settled.' && !s.includes('after 0');
       })
     );
     assert(
@@ -662,7 +662,7 @@ async function main() {
       'Ruling 2',
       'the summary sentence is on the surface, ABOVE the grid — it is the four-second answer',
       ok(() => {
-        const at = html.indexOf('data-summary="2 need you. Gather is on 1. 2 settled."');
+        const at = html.indexOf('data-summary="2 need you. I’m looking after 1. 2 settled."');
         const grid = html.indexOf('data-household-card');
         return at >= 0 && grid >= 0 && at < grid;
       })
@@ -1049,7 +1049,7 @@ async function main() {
     assert(
       'Ruling 2',
       'the summary sentence is UNCHANGED by the strip — it counts people, and a loose item is not one',
-      ok(() => html.includes('data-summary="2 need you. Gather is on 1. 2 settled."'))
+      ok(() => html.includes('data-summary="2 need you. I’m looking after 1. 2 settled."'))
     );
 
     const noCriticals = { ...mixed, unassignedCritical: [], unassignedOrdinaryCount: 9 };

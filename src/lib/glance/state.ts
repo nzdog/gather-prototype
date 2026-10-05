@@ -528,7 +528,7 @@ export interface GlanceHousehold {
  * Ruling 2's sentence, as three whole numbers of people.
  *
  * NOT_CHASED and OUT are counted in none of the three, so these need not sum to the
- * headcount — "3 need you. Gather is on 9. 28 settled." is three facts, not a partition.
+ * headcount — "3 need you. I’m looking after 9. 28 settled." is three facts, not a partition.
  */
 export interface GlanceSummary {
   needYou: number;

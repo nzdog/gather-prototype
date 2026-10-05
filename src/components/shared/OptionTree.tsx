@@ -1,6 +1,6 @@
 'use client';
 
-import { ChangeEvent } from 'react';
+import { ChangeEvent, useId } from 'react';
 
 /**
  * Field names mirror `src/lib/ai/plan-option-tree-config.json`. Do not rename
@@ -106,6 +106,9 @@ export default function OptionTree({
   onChange,
   disabled = false,
 }: OptionTreeProps) {
+  // GTC-363 (item 20): ties each "Other" label to its box, unique per tree on the page.
+  const idBase = useId();
+
   function toggleOption(levelIndex: number, option: string, multiSelect: boolean) {
     const lvlSel = readLevel(selections, levelIndex);
     const alreadySelected = lvlSel.options.includes(option);
@@ -203,8 +206,19 @@ export default function OptionTree({
               </div>
             )}
 
+            {/* GTC-363 (item 20, W12): every type-your-own box reads as "Other". The
+                placeholder still comes from the config. */}
+            {level.freeText && (
+              <label
+                htmlFor={`${idBase}-other-${levelIndex}`}
+                className="block text-xs font-medium text-gray-500 mb-1"
+              >
+                Other
+              </label>
+            )}
             {level.freeText && (
               <textarea
+                id={`${idBase}-other-${levelIndex}`}
                 value={lvlSel.freeText}
                 disabled={disabled}
                 onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>

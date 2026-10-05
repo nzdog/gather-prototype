@@ -71,6 +71,7 @@ import { MarkRows, Pill, cadenceSentence, type Member } from '@/components/prefl
 import AfterThePress from '@/components/preflight/AfterThePress';
 import { BOARD_MOVE_AFTER_MS, SEE_THE_BOARD_LINK } from '@/lib/preflight/after-press-words';
 import { boardHref } from '@/lib/events/home-href';
+import { HOUSEHOLD_CONTACT_LINE } from '@/lib/households/contact-line';
 
 // ─── Wire shapes (mirror /api/events/[id]/pre-flight) ────────────────────────
 
@@ -81,6 +82,8 @@ interface HouseholdView {
   contactPersonEventId: string | null;
   resolvedContactPersonEventId: string | null;
   members: Member[];
+  /** GTC-363 (item 6): optional, so a view built without it shows the line. */
+  isHostHousehold?: boolean;
 }
 
 interface PreFlightData {
@@ -600,6 +603,10 @@ export default function PreFlightPage() {
                         </option>
                       ))}
                   </select>
+                  {/* GTC-363 (item 6, W1) — not for the host's own household, where it is untrue. */}
+                  {!h.isHostHousehold && (
+                    <p className="text-xs text-gray-400 -mt-2 mb-3">{HOUSEHOLD_CONTACT_LINE}</p>
+                  )}
 
                   <MarkRows
                     members={h.members}

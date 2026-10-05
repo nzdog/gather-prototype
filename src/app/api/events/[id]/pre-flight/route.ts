@@ -175,6 +175,11 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
           members: members.map((m) => ({ id: m.id, householdRole: m.householdRole })),
         }),
         members: members.map(memberView),
+        // GTC-363 (item 6): the host's own household, by the host rule `markable` uses. The
+        // screen leaves out the household-contact line there, where it would be untrue.
+        isHostHousehold: h.members.some(
+          (m) => !isAddressable({ personId: m.personId, role: m.role }, event.hostId)
+        ),
       };
     });
 

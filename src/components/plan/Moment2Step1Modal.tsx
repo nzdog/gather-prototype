@@ -5,9 +5,10 @@ import { X } from 'lucide-react';
 import {
   getAccordionDefaults,
   getCategoryLevels,
-  getDefaultCategories,
+  getUpFrontCategories,
   CONFIG_EVENT_TYPES,
   LEGACY_EVENT_TYPE_MAP,
+  readStoredSelections,
 } from '@/lib/ai/config-loader';
 import OptionTree, {
   type OptionTreeLevel,
@@ -109,7 +110,7 @@ function readExtendedEntry(raw: unknown): ExtendedCategoryEntry {
     const r = raw as { selections?: unknown; stillDeciding?: unknown };
     const selections =
       r.selections && typeof r.selections === 'object' && !Array.isArray(r.selections)
-        ? (r.selections as OptionTreeSelections)
+        ? readStoredSelections(r.selections as OptionTreeSelections)
         : {};
     return {
       selections,
@@ -239,7 +240,7 @@ export default function Moment2Step1Modal({
               : fallback.items;
             const selections =
               raw.selections && typeof raw.selections === 'object' && !Array.isArray(raw.selections)
-                ? (raw.selections as OptionTreeSelections)
+                ? readStoredSelections(raw.selections as OptionTreeSelections)
                 : undefined;
             return {
               items,
@@ -444,22 +445,22 @@ export default function Moment2Step1Modal({
   }, [onGenerate, saveToApi]);
 
   // Canonical food categories to render: intersection of OPTION_TREE_FOOD_CATEGORIES
-  // and the occasion's defaultCategories. Non-default categories are deferred to
-  // sub-commit (h)'s "Show more" mechanic.
+  // and the occasion's up-front categories — its defaultCategories, plus any it shows up
+  // front without always planning them (GTC-363 item 26: Christmas's Entrée & Starters).
+  // The rest are deferred to sub-commit (h)'s "Show more" mechanic.
   const renderableFoodCategories = useMemo<OptionTreeFoodKey[]>(() => {
     if (!state.eventType) return [];
-    const defaults = new Set(getDefaultCategories(state.eventType));
-    return OPTION_TREE_FOOD_CATEGORIES.filter((k) => defaults.has(k));
+    const upFront = new Set(getUpFrontCategories(state.eventType));
+    return OPTION_TREE_FOOD_CATEGORIES.filter((k) => upFront.has(k));
   }, [state.eventType]);
 
-  // Non-default OptionTree food categories that exist in the config for the
-  // current occasion but aren't surfaced by default. Revealed via the
-  // "Show more categories" toggle.
+  // OptionTree food categories that exist in the config for the current occasion
+  // but aren't shown up front. Revealed via the "Show more categories" toggle.
   const additionalFoodCategories = useMemo<OptionTreeFoodKey[]>(() => {
     if (!state.eventType) return [];
-    const defaults = new Set(getDefaultCategories(state.eventType));
+    const upFront = new Set(getUpFrontCategories(state.eventType));
     return OPTION_TREE_FOOD_CATEGORIES.filter((k) => {
-      if (defaults.has(k)) return false;
+      if (upFront.has(k)) return false;
       const levels = getCategoryLevels(state.eventType!, k);
       return !!levels && levels.length > 0;
     });
@@ -547,8 +548,17 @@ export default function Moment2Step1Modal({
               data={state.dietaryData}
               onChange={(d) => updateState((prev) => ({ ...prev, dietaryData: d }))}
             />
-            {/* Canonical OptionTree food categories from defaultCategories.
-                Non-default categories are deferred to sub-commit (h)'s "Show more". */}
+            {/* GTC-363 (item 25): the notes box, lifted to just after Dietary and renamed.
+                Still `otherNotes`, under the same id, so what the AI reads is unchanged. */}
+            <NotesAccordion
+              id="other"
+              openAccordion={openAccordion}
+              onToggle={handleAccordionToggle}
+              value={state.otherNotes}
+              onChange={(v) => updateState((prev) => ({ ...prev, otherNotes: v }))}
+            />
+            {/* Canonical OptionTree food categories shown up front (GTC-363: the defaults,
+                plus any shown up front only). The rest are deferred to "Show more". */}
             {state.eventType &&
               renderableFoodCategories.map((catKey) => {
                 const meta = OPTION_TREE_CATEGORY_META[catKey];
@@ -629,15 +639,6 @@ export default function Moment2Step1Modal({
                   />
                 );
               })}
-            {/* Other (food) */}
-            <OtherAccordion
-              id="other"
-              openAccordion={openAccordion}
-              onToggle={handleAccordionToggle}
-              value={state.otherNotes}
-              onChange={(v) => updateState((prev) => ({ ...prev, otherNotes: v }))}
-            />
-
             {/* Show more food categories toggle (sub-commit h) */}
             {additionalFoodCategories.length > 0 && (
               <button
@@ -947,9 +948,9 @@ function DietaryAccordion({
   );
 }
 
-// ─── Other accordion ─────────────────────────────────────────────────────────
+// ─── Notes accordion (GTC-363 item 25; "📝 Other" until then) ─────────────────
 
-function OtherAccordion({
+function NotesAccordion({
   id,
   openAccordion,
   onToggle,
@@ -965,14 +966,14 @@ function OtherAccordion({
   return (
     <AccordionShell
       id={id}
-      label="📝 Other"
+      label="📝 Notes"
       openAccordion={openAccordion}
       onToggle={onToggle}
       stillDeciding={false}
       onStillDecidingToggle={() => {}}
     >
       <textarea
-        placeholder="Anything else Gather should know about? Music, decorations, specific equipment, venue notes..."
+        placeholder="Anything else Gather should know? For example, you’d like leftovers for 6 people tomorrow."
         value={value}
         onChange={(e) => onChange(e.target.value)}
         rows={4}

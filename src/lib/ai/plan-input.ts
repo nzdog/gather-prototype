@@ -9,6 +9,7 @@ import {
   getCategoryLevels,
   getDefaultCategories,
   getSectionReferenceItems,
+  readStoredOption,
 } from '@/lib/ai/config-loader';
 import { readDietaryData } from '@/lib/dietary';
 import {
@@ -56,7 +57,8 @@ function flattenSelections(selections: OptionTreeSelections | undefined | null):
   const seen = new Set<string>();
   const out: string[] = [];
   for (const lvl of Object.values(selections)) {
-    for (const opt of lvl?.options ?? []) {
+    // GTC-363 (item 22): a renamed option goes to the AI under its new words.
+    for (const opt of (lvl?.options ?? []).map(readStoredOption)) {
       if (opt && !seen.has(opt)) {
         seen.add(opt);
         out.push(opt);

@@ -301,9 +301,9 @@ export function whyLineFor(person: GlancePerson): string | null {
  *
  * THE ZERO CASE IS WORDED, NOT COUNTED. "Nothing needs you" rather than "0 need you": the
  * lead clause is the four-second answer and it should read as relief, not as a tally at
- * zero. The other two clauses are DROPPED at zero rather than reworded, because "Gather is
- * on 0" and "0 settled" are noise — a clause that says nothing should not be there. The
- * lead clause is never dropped: absent it, an empty board would say nothing at all.
+ * zero. The other two clauses are DROPPED at zero rather than reworded, because "I’m looking
+ * after 0" and "0 settled" are noise — a clause that says nothing should not be there. The lead
+ * clause is never dropped: absent it, an empty board would say nothing at all.
  */
 export function summaryClauses(summary: GlanceSummary): { lead: string; rest: string } {
   const lead =
@@ -314,7 +314,8 @@ export function summaryClauses(summary: GlanceSummary): { lead: string; rest: st
         : `${summary.needYou} need you.`;
 
   const rest: string[] = [];
-  if (summary.withGather > 0) rest.push(`Gather is on ${summary.withGather}.`);
+  // GTC-363 (item 7, W2): the founder's words replace GTC-192's "Gather is on N".
+  if (summary.withGather > 0) rest.push(`I’m looking after ${summary.withGather}.`);
   if (summary.settled > 0) rest.push(`${summary.settled} settled.`);
 
   return { lead, rest: rest.join(' ') };

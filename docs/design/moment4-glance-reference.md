@@ -11,6 +11,7 @@ A grid of neutral household cards. Each card carries the household name and one 
 - Card: neutral surface, small radius, household name as a muted 12px label.
 - Strip: one per person, full card width, ~28px tall, tinted background with matching dark text. Red = yours, amber = with Gather, green = settled, neutral outline = not chased.
 - Summary sentence above the grid is the four-second answer: "3 need you. Gather is on 9. 28 settled."
+  *2026-10-05, [[GTC-363]]: the middle clause's words changed by founder ruling (W2) — the screen now reads "3 need you. I’m looking after 9. 28 settled." The rest of this reference is as chosen on 30 August.*
 - Unassigned critical items sit in their own alert strip above the grid (they have no person, so person-primary gives them no home).
 
 ## Why this won

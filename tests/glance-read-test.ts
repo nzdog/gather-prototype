@@ -525,7 +525,7 @@ async function main() {
     // ── The summary sentence (Ruling 2) ───────────────────────────────────
     assert(
       'summary',
-      'three counts of PEOPLE — "3 need you. Gather is on 9. 28 settled."',
+      'three counts of PEOPLE — "3 need you. I’m looking after 9. 28 settled."',
       ok(() => {
         const s = S.summarisePeople(['RED', 'RED', 'AMBER', 'GREEN', 'GREEN', 'GREEN']);
         return (
