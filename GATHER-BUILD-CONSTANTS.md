@@ -1,9 +1,10 @@
 # GATHER BUILD CONSTANTS
 
 Reference file for AI executors and developers. Keep this file accurate.
-Last updated: 2026-10-02 (GTC-290: the TNZ status poll — a fifth cron route, `GATHER_ALERT_EMAIL`,
-`test:security` 172 with 20 live assertions, and the poll never driven against `gather_dev`).
-Previously 2026-10-02 (GTC-258: `test:security`'s live layer and `test:cron-health` wait on zero
+Last updated: 2026-10-05 (GTC-364: looking on screen — three safeguards, after a look while
+planning pressed "Generate plan →" twice). Previously 2026-10-02 (GTC-290: the TNZ status poll — a
+fifth cron route, `GATHER_ALERT_EMAIL`, `test:security` 172 with 20 live assertions, and the poll
+never driven against `gather_dev`). Previously 2026-10-02 (GTC-258: `test:security`'s live layer and `test:cron-health` wait on zero
 text retries waiting, and the live layer's no-send count includes `OutboundMessage`). Previously
 2026-10-01 (GTC-264 / GTC-229: `TNZ_CALLBACK_SECRET` and `TNZ_CALLBACK_SENDER` in
 the environment table; `test:security`'s live layer, 15 → 18 without a server). Previously
@@ -268,6 +269,31 @@ Shown so far (founder ruling Q-J, GTC-350, 2026-10-02):
 calls `pollTextStatusOnce` directly, always scoped to its own events, behind
 `liveBehindTrap` with its own fetch stub, so it never reaches TNZ or Resend. Never
 run the poll unscoped against `gather_dev`: it asks TNZ about real MessageIDs.
+
+### Looking on screen — three safeguards
+*(Founder ruling, 2026-10-05, GTC-364.)* **Why:** planning GTC-364, a scripted look at
+Moment 2's questions clicked the middle of a section's title row that sat behind the fixed
+bar at the bottom of the screen, and pressed "Generate plan →" — twice, once per width.
+`.env.local` holds the AI key, so each press made a real AI call on the scratch event.
+Nothing was sent, but "nothing generated" was broken. So any look on screen — a planning
+look, a screenshot walk, any headless or driven browser on the dev server — runs behind all
+three of these, every time:
+1. **The AI key off.** Start the dev server with `ANTHROPIC_API_KEY=` blanked as well as the
+   provider keys, for that process only, never by editing `.env.local`:
+   `ANTHROPIC_API_KEY= RESEND_API_KEY= TWILIO_ACCOUNT_SID= TWILIO_AUTH_TOKEN= TWILIO_PHONE_NUMBER= TNZ_AUTH_TOKEN= npm run dev`.
+   Next.js keeps a variable that is set, even to nothing, rather than filling it from `.env.local`.
+2. **The plan-making requests blocked in the browser.** Before the first page loads, the
+   browser fails every request to `finalize-plan`, `regenerate-plan`, `/generate` and
+   `/regenerate` before it leaves the page (DevTools `Fetch.enable` with those URL patterns,
+   answered by `Fetch.failRequest`). Prove the block on a probe URL no route answers: it must
+   fail in the browser and never appear in the dev log.
+3. **Every click checked.** Scroll the target to mid-screen, then click only if the element at
+   that point is inside the target and not inside a fixed bar; otherwise refuse and log it.
+   Never click a control whose words are a press, a send, a hold, a generate or a new event.
+
+**After the look:** show the dev log has no `finalize-plan`, `regenerate-plan`, `/generate` or
+`/regenerate` request, and the fixture's `aiCallsUsed` is 0; count the fixture's rows while it
+exists, remove it by id, and stop the server.
 
 ---
 
