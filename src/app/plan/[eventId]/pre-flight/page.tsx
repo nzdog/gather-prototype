@@ -221,9 +221,10 @@ export default function PreFlightPage() {
   // since only the press has anything to anchor it to.
   const [checked, setChecked] = useState<Record<number, boolean>>({});
 
-  // Which household row is expanded. Null = all collapsed, which is the landing state:
-  // step 3 is a list to scan first and open second.
-  const [openHousehold, setOpenHousehold] = useState<string | null>(null);
+  // Which household rows are expanded. Empty = all collapsed, which is the landing state:
+  // step 3 is a list to scan first and open second. GTC-364 (Q2): several may be open at
+  // once, as on Moment 2, so opening one never shuts another above it.
+  const [openHouseholds, setOpenHouseholds] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/events/${eventId}/pre-flight`);
@@ -538,7 +539,7 @@ export default function PreFlightPage() {
           )}
 
           {/*
-            One collapsed row per household, single-open, using the same AccordionShell
+            One collapsed row per household, several open at once, using the same AccordionShell
             Moment 2's sections use. The collapsed row carries the household name and the
             channel, because those are what Kate scans this list for: whose ear Gather has
             for each household. Everything she can CHANGE — the picker and the marks —
@@ -552,8 +553,12 @@ export default function PreFlightPage() {
                   key={h.id}
                   id={h.id}
                   label={`${h.label}’s household`}
-                  openAccordion={openHousehold}
-                  onToggle={setOpenHousehold}
+                  open={openHouseholds.includes(h.id)}
+                  onToggle={() =>
+                    setOpenHouseholds((prev) =>
+                      prev.includes(h.id) ? prev.filter((x) => x !== h.id) : [...prev, h.id]
+                    )
+                  }
                   headerHint={
                     <span className="text-sm text-gray-500">
                       {channel ? (

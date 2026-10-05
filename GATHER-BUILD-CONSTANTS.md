@@ -1,7 +1,8 @@
 # GATHER BUILD CONSTANTS
 
 Reference file for AI executors and developers. Keep this file accurate.
-Last updated: 2026-10-05 (GTC-364: looking on screen — three safeguards, after a look while
+Last updated: 2026-10-06 (GTC-364, ruling Q7: the standing dev-server line blanks the AI key too).
+Previously 2026-10-05 (GTC-364: looking on screen — three safeguards, after a look while
 planning pressed "Generate plan →" twice). Previously 2026-10-02 (GTC-290: the TNZ status poll — a
 fifth cron route, `GATHER_ALERT_EMAIL`, `test:security` 172 with 20 live assertions, and the poll
 never driven against `gather_dev`). Previously 2026-10-02 (GTC-258: `test:security`'s live layer and `test:cron-health` wait on zero
@@ -206,9 +207,10 @@ live assertion, that nothing was written, passes with or without a server; 18 un
 suite 12's two wrong-secret refusals at `/api/cron/tnz-status-poll`). That is not a regression.
 With the server, the suite is 172/172 (168 at GTC-258; GTC-290 added four refusals of the new
 route: two in process with the secret unset, two live with a wrong one).
-Start the server with the provider keys blanked for that process only, and never
-edit `.env.local`:
-`RESEND_API_KEY= TWILIO_ACCOUNT_SID= TWILIO_AUTH_TOKEN= TWILIO_PHONE_NUMBER= TNZ_AUTH_TOKEN= npm run dev`.
+Start the server with the provider keys and the AI key blanked for that process only, and
+never edit `.env.local` (the AI key since GTC-364, founder ruling Q7, 2026-10-06: no suite needs
+it on the server, and a press of "Generate plan →" must never reach the AI):
+`ANTHROPIC_API_KEY= RESEND_API_KEY= TWILIO_ACCOUNT_SID= TWILIO_AUTH_TOKEN= TWILIO_PHONE_NUMBER= TNZ_AUTH_TOKEN= npm run dev`.
 The live layer drives only two cron routes, and only behind asserted
 preconditions (GTC-270):
 - `/api/cron/wrap-up-dispatch`, after zero undispatched `WrapUpLink` rows;
@@ -283,17 +285,20 @@ three of these, every time:
    `ANTHROPIC_API_KEY= RESEND_API_KEY= TWILIO_ACCOUNT_SID= TWILIO_AUTH_TOKEN= TWILIO_PHONE_NUMBER= TNZ_AUTH_TOKEN= npm run dev`.
    Next.js keeps a variable that is set, even to nothing, rather than filling it from `.env.local`.
 2. **The plan-making requests blocked in the browser.** Before the first page loads, the
-   browser fails every request to `finalize-plan`, `regenerate-plan`, `/generate` and
-   `/regenerate` before it leaves the page (DevTools `Fetch.enable` with those URL patterns,
-   answered by `Fetch.failRequest`). Prove the block on a probe URL no route answers: it must
-   fail in the browser and never appear in the dev log.
+   browser fails every request to `finalize-plan`, `regenerate-plan`, `/generate`,
+   `/regenerate` and `suggest-resolution` (which calls the AI too; added 2026-10-06 on founder
+   instruction) before it leaves the page (DevTools `Fetch.enable` with those URL patterns,
+   answered by `Fetch.failRequest`; `blockPlanMaking()` in `tests/helpers/headless.ts`).
+   Prove the block on a probe URL no route answers: it must fail in the browser and never
+   appear in the dev log.
 3. **Every click checked.** Scroll the target to mid-screen, then click only if the element at
-   that point is inside the target and not inside a fixed bar; otherwise refuse and log it.
+   that point is inside the target and not inside a fixed bar; otherwise refuse and log it
+   (`clickGuarded()` in `tests/helpers/headless.ts` logs every refusal).
    Never click a control whose words are a press, a send, a hold, a generate or a new event.
 
-**After the look:** show the dev log has no `finalize-plan`, `regenerate-plan`, `/generate` or
-`/regenerate` request, and the fixture's `aiCallsUsed` is 0; count the fixture's rows while it
-exists, remove it by id, and stop the server.
+**After the look:** show the dev log has no `finalize-plan`, `regenerate-plan`, `/generate`,
+`/regenerate` or `suggest-resolution` request, and the fixture's `aiCallsUsed` is 0; count the
+fixture's rows while it exists, remove it by id, and stop the server.
 
 ---
 

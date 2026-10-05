@@ -10,6 +10,8 @@ import {
   getDefaultCategories,
   getSectionReferenceItems,
   readStoredOption,
+  readStoredSelections,
+  withoutOrphanedChoices,
 } from '@/lib/ai/config-loader';
 import { readDietaryData } from '@/lib/dietary';
 import {
@@ -172,13 +174,20 @@ export async function buildPlanGenerationInput(
     const isDefault = defaults.has(key);
     const entry = key === 'mains' ? mainsData : extended[key];
     const stillDeciding = Boolean(entry?.stillDeciding);
-    const selections = flattenSelections(entry?.selections);
+    const levels = getCategoryLevels(eventType, key);
+    // GTC-364 (Q5): the saved picks, read as today's words, less any choice under a style that is
+    // no longer ticked — worked out once, here, and used for everything below. A category whose
+    // only picks were such choices counts as not picked, as it looks on screen.
+    const saved =
+      entry?.selections && levels
+        ? withoutOrphanedChoices(levels, readStoredSelections(entry.selections))
+        : entry?.selections;
+    const selections = flattenSelections(saved);
 
     // Skip entirely if not a default and Kate didn't engage it.
-    if (!isDefault && !hasAnySelection(entry?.selections) && !stillDeciding) continue;
+    if (!isDefault && !hasAnySelection(saved) && !stillDeciding) continue;
 
     // Skip if config has no levels for this event type / category combo.
-    const levels = getCategoryLevels(eventType, key);
     if (!levels || levels.length === 0) continue;
 
     // Reference items pulled from the section family (mains/sides/desserts/drinks).

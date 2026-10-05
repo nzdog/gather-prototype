@@ -27,6 +27,23 @@ export interface Headless {
   evaluate<T = unknown>(expression: string): Promise<T>;
   /** A real mouse click at the centre of the first element matching `selector`. */
   click(selector: string): Promise<boolean>;
+  /**
+   * [[GTC-364]] — the click a look on screen uses (GATHER-BUILD-CONSTANTS.md, "Looking on screen —
+   * three safeguards"). Scrolls the target to mid-screen and clicks only if the element at that point
+   * is inside the target; refuses a control whose words are a press, a send, a hold or a generate.
+   * Every refusal is logged. Resolves to null when it clicked, or the reason it refused.
+   */
+  clickGuarded(selector: string): Promise<string | null>;
+  /**
+   * [[GTC-364]] — fails every request to a route that calls the AI (`finalize-plan`,
+   * `regenerate-plan`, `/generate`, `/regenerate`, `suggest-resolution`) before it leaves the page.
+   * Call before the first navigation.
+   */
+  blockPlanMaking(): Promise<void>;
+  /** Every request `blockPlanMaking` failed, as "METHOD url". */
+  planMakingBlocked(): string[];
+  /** Types `text` into whatever has focus, as a keyboard would. */
+  insertText(text: string): Promise<void>;
   pressKey(key: 'Escape'): Promise<void>;
   screenshot(
     file: string,
@@ -80,6 +97,7 @@ export async function openHeadless(opts: {
   let id = 0;
   const pending = new Map<number, (m: any) => void>();
   const hosts = new Set<string>();
+  const blocked: string[] = [];
   ws.addEventListener('message', (e: { data: string }) => {
     const m = JSON.parse(e.data);
     if (m.id && pending.has(m.id)) {
@@ -92,6 +110,16 @@ export async function openHeadless(opts: {
       } catch {
         // data: and blob: URLs have no host worth recording
       }
+    }
+    if (m.method === 'Fetch.requestPaused') {
+      blocked.push(`${m.params.request.method} ${m.params.request.url}`);
+      ws.send(
+        JSON.stringify({
+          id: ++id,
+          method: 'Fetch.failRequest',
+          params: { requestId: m.params.requestId, errorReason: 'BlockedByClient' },
+        })
+      );
     }
   });
   const send = (method: string, params: Record<string, unknown> = {}) =>
@@ -149,6 +177,50 @@ export async function openHeadless(opts: {
       }
       await sleep(400);
       return true;
+    },
+    async clickGuarded(selector) {
+      const at = await evaluate<{ x: number; y: number } | { why: string } | null>(
+        `(() => { const t = document.querySelector(${JSON.stringify(selector)}); if (!t) return { why: 'no target' };
+          if (/\\b(generate|regenerate|new event|hold|send|press|move on)\\b/i.test(t.innerText || '')) return { why: 'refused by its words' };
+          t.scrollIntoView({ block: 'center', inline: 'nearest' });
+          const r = t.getBoundingClientRect(); const x = r.left + r.width / 2; const y = r.top + r.height / 2;
+          const hit = document.elementFromPoint(x, y);
+          return hit && t.contains(hit) ? { x, y } : { why: 'the point is not inside the target' }; })()`
+      );
+      const refused = !at ? 'no answer' : 'why' in at ? at.why : null;
+      if (refused || !at || 'why' in at) {
+        console.log(`  clickGuarded REFUSED ${selector}: ${refused}`);
+        return refused ?? 'no answer';
+      }
+      for (const type of ['mousePressed', 'mouseReleased']) {
+        await send('Input.dispatchMouseEvent', {
+          type,
+          x: at.x,
+          y: at.y,
+          button: 'left',
+          clickCount: 1,
+        });
+      }
+      await sleep(400);
+      return null;
+    },
+    async blockPlanMaking() {
+      await send('Fetch.enable', {
+        patterns: [
+          '*finalize-plan*',
+          '*regenerate-plan*',
+          '*/generate',
+          '*/generate?*',
+          '*/regenerate',
+          '*/regenerate?*',
+          '*suggest-resolution*',
+        ].map((urlPattern) => ({ urlPattern, requestStage: 'Request' })),
+      });
+    },
+    planMakingBlocked: () => [...blocked],
+    async insertText(text) {
+      await send('Input.insertText', { text });
+      await sleep(200);
     },
     async pressKey(key) {
       for (const type of ['keyDown', 'keyUp']) {

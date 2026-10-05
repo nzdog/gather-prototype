@@ -14,7 +14,12 @@ import OptionTree, {
   type OptionTreeLevel,
   type OptionTreeSelections,
 } from '@/components/shared/OptionTree';
-import { readDietaryData, DIETARY_OPTIONS, type DietaryStatus } from '@/lib/dietary';
+import {
+  readDietaryData,
+  dietaryTitleSummary,
+  DIETARY_OPTIONS,
+  type DietaryStatus,
+} from '@/lib/dietary';
 import AccordionShell from '@/components/plan/AccordionShell';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -186,7 +191,9 @@ export default function Moment2Step1Modal({
   onCancel,
 }: Moment2Step1ModalProps) {
   const [state, setState] = useState<Step1State>(INITIAL_STATE);
-  const [openAccordion, setOpenAccordion] = useState<string | null>(null);
+  // GTC-364 (item 3, Q1): the sections open now. Several may be open at once, so opening one
+  // never shuts another above it and the row just tapped stays where it was.
+  const [openSections, setOpenSections] = useState<string[]>([]);
   const [showAdditionalCategories, setShowAdditionalCategories] = useState(false);
   const [peopleCount, setPeopleCount] = useState<number>(0);
   const [loaded, setLoaded] = useState(false);
@@ -375,11 +382,11 @@ export default function Moment2Step1Modal({
   // are persisted via the debounced save flow only; the single finalize-plan
   // call (on Generate) reads the persisted state.
   const handleAccordionToggle = useCallback(
-    (id: string | null) => {
-      const previouslyOpen = openAccordion;
-      setOpenAccordion(id);
+    (id: string) => {
+      const closing = openSections.includes(id);
+      setOpenSections((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
-      if (previouslyOpen && previouslyOpen !== id && pendingRef.current) {
+      if (closing && pendingRef.current) {
         const pending = pendingRef.current;
         if (debounceRef.current) {
           clearTimeout(debounceRef.current);
@@ -389,7 +396,7 @@ export default function Moment2Step1Modal({
         saveToApi(pending);
       }
     },
-    [openAccordion, saveToApi]
+    [openSections, saveToApi]
   );
 
   // Select event type — when switching, reset OptionTree-driven state since the
@@ -543,7 +550,7 @@ export default function Moment2Step1Modal({
             {/* Dietary requirements — first so food sections have context */}
             <DietaryAccordion
               id="dietary"
-              openAccordion={openAccordion}
+              openSections={openSections}
               onToggle={handleAccordionToggle}
               data={state.dietaryData}
               onChange={(d) => updateState((prev) => ({ ...prev, dietaryData: d }))}
@@ -552,7 +559,7 @@ export default function Moment2Step1Modal({
                 Still `otherNotes`, under the same id, so what the AI reads is unchanged. */}
             <NotesAccordion
               id="other"
-              openAccordion={openAccordion}
+              openSections={openSections}
               onToggle={handleAccordionToggle}
               value={state.otherNotes}
               onChange={(v) => updateState((prev) => ({ ...prev, otherNotes: v }))}
@@ -574,12 +581,13 @@ export default function Moment2Step1Modal({
                       levels={levels}
                       selections={data.selections ?? {}}
                       stillDeciding={data.stillDeciding}
-                      openAccordion={openAccordion}
+                      openSections={openSections}
                       onToggle={handleAccordionToggle}
                       onSelectionsChange={(next) =>
                         updateState((prev) => ({
                           ...prev,
-                          mainsData: { ...prev.mainsData, selections: next },
+                          // GTC-364 (item 18): a choice made here ends "still deciding".
+                          mainsData: { ...prev.mainsData, selections: next, stillDeciding: false },
                         }))
                       }
                       onStillDecidingToggle={() =>
@@ -606,18 +614,15 @@ export default function Moment2Step1Modal({
                     levels={levels}
                     selections={entry.selections}
                     stillDeciding={entry.stillDeciding}
-                    openAccordion={openAccordion}
+                    openSections={openSections}
                     onToggle={handleAccordionToggle}
                     onSelectionsChange={(next) =>
                       updateState((prev) => ({
                         ...prev,
                         extendedCategoriesData: {
                           ...prev.extendedCategoriesData,
-                          [catKey]: {
-                            selections: next,
-                            stillDeciding:
-                              prev.extendedCategoriesData[catKey]?.stillDeciding ?? false,
-                          },
+                          // GTC-364 (item 18): a choice made here ends "still deciding".
+                          [catKey]: { selections: next, stillDeciding: false },
                         },
                       }))
                     }
@@ -670,18 +675,15 @@ export default function Moment2Step1Modal({
                     levels={levels}
                     selections={entry.selections}
                     stillDeciding={entry.stillDeciding}
-                    openAccordion={openAccordion}
+                    openSections={openSections}
                     onToggle={handleAccordionToggle}
                     onSelectionsChange={(next) =>
                       updateState((prev) => ({
                         ...prev,
                         extendedCategoriesData: {
                           ...prev.extendedCategoriesData,
-                          [catKey]: {
-                            selections: next,
-                            stillDeciding:
-                              prev.extendedCategoriesData[catKey]?.stillDeciding ?? false,
-                          },
+                          // GTC-364 (item 18): a choice made here ends "still deciding".
+                          [catKey]: { selections: next, stillDeciding: false },
                         },
                       }))
                     }
@@ -713,7 +715,7 @@ export default function Moment2Step1Modal({
               label="🛠️ Set up"
               placeholder="What needs setting up before guests arrive? E.g. tables, chairs, decorations..."
               data={state.setUpData}
-              openAccordion={openAccordion}
+              openSections={openSections}
               onToggle={handleAccordionToggle}
               onChange={(d) => updateState((prev) => ({ ...prev, setUpData: d }))}
             />
@@ -722,7 +724,7 @@ export default function Moment2Step1Modal({
               label="🧹 Clean up"
               placeholder="What needs cleaning up afterwards? E.g. dishes, rubbish, areas to tidy..."
               data={state.cleanUpData}
-              openAccordion={openAccordion}
+              openSections={openSections}
               onToggle={handleAccordionToggle}
               onChange={(d) => updateState((prev) => ({ ...prev, cleanUpData: d }))}
             />
@@ -731,7 +733,7 @@ export default function Moment2Step1Modal({
               label="📋 Other"
               placeholder="Anything else that needs organising? E.g. transport, gifts, music..."
               data={state.otherJobsOtherData}
-              openAccordion={openAccordion}
+              openSections={openSections}
               onToggle={handleAccordionToggle}
               onChange={(d) => updateState((prev) => ({ ...prev, otherJobsOtherData: d }))}
             />
@@ -769,7 +771,7 @@ function FoodOptionTreeAccordion({
   levels,
   selections,
   stillDeciding,
-  openAccordion,
+  openSections,
   onToggle,
   onSelectionsChange,
   onStillDecidingToggle,
@@ -779,8 +781,8 @@ function FoodOptionTreeAccordion({
   levels: OptionTreeLevel[];
   selections: OptionTreeSelections;
   stillDeciding: boolean;
-  openAccordion: string | null;
-  onToggle: (id: string | null) => void;
+  openSections: string[];
+  onToggle: (id: string) => void;
   onSelectionsChange: (next: OptionTreeSelections) => void;
   onStillDecidingToggle: () => void;
 }) {
@@ -788,17 +790,12 @@ function FoodOptionTreeAccordion({
     <AccordionShell
       id={id}
       label={label}
-      openAccordion={openAccordion}
-      onToggle={onToggle}
+      open={openSections.includes(id)}
+      onToggle={() => onToggle(id)}
       stillDeciding={stillDeciding}
       onStillDecidingToggle={onStillDecidingToggle}
     >
-      <OptionTree
-        levels={levels}
-        selections={selections}
-        onChange={onSelectionsChange}
-        disabled={stillDeciding}
-      />
+      <OptionTree levels={levels} selections={selections} onChange={onSelectionsChange} />
     </AccordionShell>
   );
 }
@@ -810,7 +807,7 @@ function FreeTextAccordion({
   label,
   placeholder,
   data,
-  openAccordion,
+  openSections,
   onToggle,
   onChange,
 }: {
@@ -818,23 +815,24 @@ function FreeTextAccordion({
   label: string;
   placeholder: string;
   data: OtherJobsAccordionData;
-  openAccordion: string | null;
-  onToggle: (id: string | null) => void;
+  openSections: string[];
+  onToggle: (id: string) => void;
   onChange: (d: OtherJobsAccordionData) => void;
 }) {
   return (
     <AccordionShell
       id={id}
       label={label}
-      openAccordion={openAccordion}
-      onToggle={onToggle}
+      open={openSections.includes(id)}
+      onToggle={() => onToggle(id)}
       stillDeciding={data.stillDeciding}
       onStillDecidingToggle={() => onChange({ ...data, stillDeciding: !data.stillDeciding })}
     >
       <textarea
         placeholder={placeholder}
         value={data.freeText}
-        onChange={(e) => onChange({ ...data, freeText: e.target.value })}
+        // GTC-364 (item 18): typing here ends "still deciding".
+        onChange={(e) => onChange({ ...data, freeText: e.target.value, stillDeciding: false })}
         rows={5}
         className="w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 resize-y"
       />
@@ -846,14 +844,14 @@ function FreeTextAccordion({
 
 function DietaryAccordion({
   id,
-  openAccordion,
+  openSections,
   onToggle,
   data,
   onChange,
 }: {
   id: string;
-  openAccordion: string | null;
-  onToggle: (id: string | null) => void;
+  openSections: string[];
+  onToggle: (id: string) => void;
   data: DietaryData;
   onChange: (d: DietaryData) => void;
 }) {
@@ -896,15 +894,23 @@ function DietaryAccordion({
     <AccordionShell
       id={id}
       label="⚠️ Dietary requirements"
-      openAccordion={openAccordion}
-      onToggle={onToggle}
+      open={openSections.includes(id)}
+      onToggle={() => onToggle(id)}
       headerHint={
+        // GTC-364 (item 28, W4 to W7): the row says what was answered, open or closed.
         data.status === 'unanswered' ? (
           <span className="flex items-center gap-1.5 text-xs text-amber-600">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500" aria-hidden="true" />
-            Needs confirmation
+            {dietaryTitleSummary(data)}
           </span>
-        ) : undefined
+        ) : (
+          <span
+            className="block max-w-full truncate text-xs text-gray-500"
+            title={dietaryTitleSummary(data)}
+          >
+            {dietaryTitleSummary(data)}
+          </span>
+        )
       }
     >
       <div className="space-y-2">
@@ -952,14 +958,14 @@ function DietaryAccordion({
 
 function NotesAccordion({
   id,
-  openAccordion,
+  openSections,
   onToggle,
   value,
   onChange,
 }: {
   id: string;
-  openAccordion: string | null;
-  onToggle: (id: string | null) => void;
+  openSections: string[];
+  onToggle: (id: string) => void;
   value: string;
   onChange: (v: string) => void;
 }) {
@@ -967,10 +973,8 @@ function NotesAccordion({
     <AccordionShell
       id={id}
       label="📝 Notes"
-      openAccordion={openAccordion}
-      onToggle={onToggle}
-      stillDeciding={false}
-      onStillDecidingToggle={() => {}}
+      open={openSections.includes(id)}
+      onToggle={() => onToggle(id)}
     >
       <textarea
         placeholder="Anything else Gather should know? For example, you’d like leftovers for 6 people tomorrow."

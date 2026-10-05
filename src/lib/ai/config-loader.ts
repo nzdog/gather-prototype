@@ -239,6 +239,29 @@ export function readStoredSelections<
   return out as S;
 }
 
+/**
+ * GTC-364 (Q5, the founder's change): unticking a style unticks its choices. A choice on a level
+ * that depends on the styles (`dependsOn`) is kept only while a ticked style still lists it, so a
+ * choice under two styles ("Roast potatoes") stays while either is ticked. A choice in no list at
+ * all is under no style to untick, and stays. Typed text and every other level are left alone.
+ * Judges today's words: read stored selections through `readStoredSelections` first.
+ */
+export function withoutOrphanedChoices<
+  S extends Record<string | number, { options: string[]; freeText: string }>,
+>(levels: OptionTreeLevel[], selections: S): S {
+  const ticked = selections[0]?.options ?? [];
+  const out: Record<string | number, { options: string[]; freeText: string }> = { ...selections };
+  levels.forEach((level, i) => {
+    const sel = selections[i];
+    if (i === 0 || !level.dependsOn || !sel || !Array.isArray(sel.options)) return;
+    const listed = new Set(Object.values(level.dependsOn).flat());
+    const live = new Set(ticked.flatMap((style) => level.dependsOn![style] ?? []));
+    const options = sel.options.filter((o) => !listed.has(o) || live.has(o));
+    if (options.length !== sel.options.length) out[i] = { ...sel, options };
+  });
+  return out as S;
+}
+
 /** Resolve OptionTree-shaped levels for one category of an event type. */
 export function getCategoryLevels(
   eventType: string,

@@ -29,6 +29,23 @@ export const DIETARY_OPTIONS = [
   'Nut allergy',
 ] as const;
 
+/**
+ * GTC-364 (item 28, W4 to W7) — what the Dietary section's title row says once it is closed.
+ * Not answered: "Needs confirmation". None: "No dietary needs". Otherwise the ticked needs in
+ * the list's order (anything stored outside the list after them), then the typed note as typed,
+ * all joined with commas: "Vegetarian, Gluten-free, no shellfish".
+ */
+export function dietaryTitleSummary(d: DietaryData): string {
+  if (d.status === 'unanswered') return 'Needs confirmation';
+  if (d.status === 'confirmed_none') return 'No dietary needs';
+  const listed = (DIETARY_OPTIONS as readonly string[]).filter((o) => d.requirements.includes(o));
+  const unlisted = d.requirements.filter(
+    (r) => !(DIETARY_OPTIONS as readonly string[]).includes(r)
+  );
+  const note = (d.other ?? '').trim();
+  return [...listed, ...unlisted, ...(note ? [note] : [])].join(', ');
+}
+
 export const DIETARY_STATUSES: DietaryStatus[] = [
   'unanswered',
   'confirmed_none',
