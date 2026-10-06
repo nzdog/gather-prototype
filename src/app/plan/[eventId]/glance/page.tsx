@@ -37,6 +37,8 @@ import { readGlanceReplay, stampGlanceSeen, stickyReversals } from '@/lib/glance
 import GlanceBoard from '@/components/glance/GlanceBoard';
 import GlanceReplay from '@/components/glance/GlanceReplay';
 import GlanceLive from '@/components/glance/GlanceLive';
+import { answersByDay, daysToGoLine } from '@/lib/events/event-dates';
+import { printEventDate } from '@/lib/print/item-list';
 
 /*
   ⚠ RULING 36 (2026-09-11) — THE `?variant=` SWITCH IS DELETED, AND `searchParams` WITH IT.
@@ -139,6 +141,10 @@ export default async function GlancePage({ params }: { params: Promise<{ eventId
           deliberately carries no plan content and a date on the board would be a countdown
           §3 refuses. Same locale and shape `PersonInviteDetailModal` already uses, so the
           two doors into the same nudge route read alike.
+          ⚠ 2026-10-06, [[GTC-366]] (item 8): the founder's ruling lets two EVENT dates onto the
+          board — when answers are due, and the days to the event behind a button. Both are
+          worked out here and handed down as written lines below, like this one; the payload
+          stays without a date.
         */
         eventDate={event.startDate.toLocaleDateString('en-NZ', {
           weekday: 'long',
@@ -162,6 +168,14 @@ export default async function GlancePage({ params }: { params: Promise<{ eventId
         now={now}
         /* [[GTC-329]] — the board's way back to who is chased, after the press only. */
         afterPress={event.sentAt !== null}
+        /*
+          [[GTC-366]] (item 8) — when answers are due, after the press only and until that NZ day
+          has passed (Q5 to Q7); and what "Days to go" shows, until the start day has passed (Q8).
+        */
+        answersBy={answersByDay(event, now)}
+        daysToGo={daysToGoLine(event.startDate, now)}
+        /* [[GTC-366]] (item 11) — the event's date as the print for the fridge shows it. */
+        printDate={printEventDate(event.startDate)}
       />
       {/*
         Phase 6 slice 6c. The island, BESIDE the board rather than inside it, so `GlanceBoard`

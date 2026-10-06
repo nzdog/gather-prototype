@@ -776,10 +776,42 @@ async function main() {
     );
 
     // Refusals — §3's list plus Ruling 1's general test.
+    /*
+      ⚠ AMENDED BY [[GTC-366]] (item 8), ON THE FOUNDER'S RULING, AND ONLY AS FAR AS IT REACHES.
+      At the walkthrough sort (GTC-189's Fourth ruling, 2026-10-05), in his words: *"Days to teh
+      event as a button the host can click to see if htey want"*; the plan's Q9, ruled 2026-10-06,
+      amends this pin at its site. It read: no countdown reaches the surface, over `board(mixed)`.
+      STILL PROTECTED: a board given no days says none of it, exactly as before; "days left" and
+      "countdown" never appear; and the days to the event never reach the surface outside the
+      "Days to go" button — a closed native disclosure, closed on every visit, that she chooses to
+      press. Dates for people stay fenced (the reading panel's no-digit and no-timestamp pins below
+      are unchanged).
+    */
+    const withDays = (() => {
+      try {
+        return renderToStaticMarkup(
+          createElement(GB.default, {
+            glance: mixed,
+            eventName: 'Henderson family Christmas',
+            actorRole: 'HOST',
+            eventDate: 'Thursday 25 December',
+            daysToGo: '12 days to go.',
+          })
+        );
+      } catch {
+        return '';
+      }
+    })();
     assert(
       'refusals',
-      'no countdown reaches the surface — §3 refuses it, and the MOCKUP carries one',
-      ok(() => html.length > 0 && !/days to go|days left|countdown/i.test(html))
+      'no countdown reaches the surface — §3 refused it, and the MOCKUP carries one; the founder’s ruling of 2026-10-05 ([[GTC-366]] item 8) lets the days to the event sit behind a button she chooses to press, closed on every visit, and nowhere else',
+      ok(() => {
+        if (html.length === 0 || /days to go|days left|countdown/i.test(html)) return false;
+        const el = /<details data-days-to-go=""([^>]*)>([\s\S]*?)<\/details>/.exec(withDays);
+        if (!el || /\bopen\b/.test(el[1])) return false;
+        if ((el[2].match(/12 days to go\./g) ?? []).length !== 1) return false;
+        return !/days to go|days left|countdown/i.test(withDays.replace(el[0], ''));
+      })
     );
     assert(
       'refusals',

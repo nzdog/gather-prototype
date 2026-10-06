@@ -56,6 +56,7 @@ import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 import SetupChecklistBanner from '@/components/plan/SetupChecklistBanner';
 import { useEventSetupProgress } from '@/hooks/useEventSetupProgress';
 import { THANK_YOU_SENT_BY_EMAIL } from '@/lib/sms/text-failure-words';
+import { itemListHtml, printEventDate, toPrintItems, writePage } from '@/lib/print/item-list';
 
 // Moment 2 plan view mappers ────────────────────────────────────────────────
 interface Event {
@@ -2259,81 +2260,19 @@ export default function PlanEditorPage() {
               {items.length > 0 && (
                 <button
                   onClick={() => {
+                    // [[GTC-366]] (item 11, Q12) — one print, shared with "Print the list": every
+                    // name escaped, the amounts in plain words (W17). Opened in the tap itself.
                     const printWindow = window.open('', '_blank');
                     if (!printWindow) return;
-
-                    // Build sorted categories matching accordion order
-                    const grouped = items.reduce<Record<string, Item[]>>((acc, item) => {
-                      const key = item.team.name;
-                      if (!acc[key]) acc[key] = [];
-                      acc[key].push(item);
-                      return acc;
-                    }, {});
-                    const hasOrder = items.some((i) => i.team.displayOrder > 0);
-                    const cats = Object.keys(grouped).sort((a, b) => {
-                      if (hasOrder) {
-                        const oA = grouped[a][0]?.team.displayOrder ?? 0;
-                        const oB = grouped[b][0]?.team.displayOrder ?? 0;
-                        if (oA !== oB) return oA - oB;
-                      }
-                      return a.localeCompare(b);
-                    });
-
-                    const eventName = event?.name || 'Event';
-                    const eventDate = event?.startDate
-                      ? new Date(event.startDate).toLocaleDateString('en-NZ', {
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric',
-                        })
-                      : '';
-
-                    const gatherLogo = `<svg viewBox="0 0 240 40" fill="none" xmlns="http://www.w3.org/2000/svg" style="height:32px;width:auto;"><circle cx="7" cy="7" r="2.5" fill="#6b7c6f"/><circle cx="15" cy="7" r="2.5" fill="#6b7c6f"/><circle cx="23" cy="7" r="2.5" fill="#6b7c6f"/><circle cx="31" cy="7" r="2.5" fill="#6b7c6f"/><circle cx="7" cy="15" r="2.5" fill="#6b7c6f"/><circle cx="15" cy="15" r="2.5" fill="#6b7c6f"/><circle cx="23" cy="15" r="2.5" fill="rgba(107,124,111,0.3)"/><circle cx="31" cy="15" r="2.5" fill="rgba(107,124,111,0.3)"/><circle cx="7" cy="23" r="2.5" fill="#6b7c6f"/><circle cx="15" cy="23" r="2.5" fill="#6b7c6f"/><circle cx="23" cy="23" r="2.5" fill="#6b7c6f"/><circle cx="31" cy="23" r="2.5" fill="#6b7c6f"/><circle cx="7" cy="31" r="2.5" fill="#6b7c6f"/><circle cx="15" cy="31" r="2.5" fill="#6b7c6f"/><circle cx="23" cy="31" r="2.5" fill="#6b7c6f"/><circle cx="31" cy="31" r="2.5" fill="#6b7c6f"/><text x="56" y="29" fill="#6b7c6f" style="font-family:'Source Serif 4',Georgia,serif;font-size:28px;font-weight:400;letter-spacing:-0.01em;">Gather</text></svg>`;
-
-                    let html = `<!DOCTYPE html><html><head><title>${eventName} — Items</title>
-                      <style>
-                        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 800px; margin: 0 auto; padding: 24px; color: #111; }
-                        .logo { margin-bottom: 16px; }
-                        h1 { font-size: 20px; margin-bottom: 2px; }
-                        .date { font-size: 14px; color: #666; margin-bottom: 24px; }
-                        h2 { font-size: 16px; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin-top: 20px; }
-                        table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-                        th, td { text-align: left; padding: 6px 8px; font-size: 13px; border-bottom: 1px solid #eee; }
-                        th { font-weight: 600; color: #555; font-size: 11px; text-transform: uppercase; }
-                        .qty { color: #555; }
-                        .status-confirmed { color: #16a34a; }
-                        .status-declined { color: #dc2626; }
-                        .status-pending { color: #d97706; }
-                        .status-unassigned { color: #999; font-style: italic; }
-                        @media print { body { padding: 0; } .logo svg text { fill: #333; } }
-                      </style></head><body>`;
-                    html += `<div class="logo">${gatherLogo}</div>`;
-                    html += `<h1>${eventName}</h1>`;
-                    if (eventDate) html += `<div class="date">${eventDate}</div>`;
-
-                    for (const cat of cats) {
-                      const catItems = grouped[cat];
-                      html += `<h2>${cat}</h2><table><thead><tr><th>Item</th><th>Qty</th><th>Assigned To</th><th>Status</th></tr></thead><tbody>`;
-                      for (const item of catItems) {
-                        const qty =
-                          item.quantityAmount && item.quantityUnit
-                            ? `${item.quantityAmount} ${item.quantityUnit}`
-                            : item.quantityText || '—';
-                        const assignee =
-                          item.assignment?.person?.name ||
-                          '<span class="status-unassigned">Unassigned</span>';
-                        const status = item.assignment
-                          ? `<span class="status-${item.assignment.response === 'ACCEPTED' ? 'confirmed' : item.assignment.response === 'DECLINED' ? 'declined' : 'pending'}">${item.assignment.response === 'ACCEPTED' ? 'Confirmed' : item.assignment.response === 'DECLINED' ? 'Declined' : item.assignment.response === 'MAYBE' ? 'Maybe' : 'Pending'}</span>`
-                          : '';
-                        html += `<tr><td>${item.name}</td><td class="qty">${qty}</td><td>${assignee}</td><td>${status}</td></tr>`;
-                      }
-                      html += `</tbody></table>`;
-                    }
-
-                    html += `</body></html>`;
-                    printWindow.document.write(html);
-                    printWindow.document.close();
-                    printWindow.print();
+                    writePage(
+                      printWindow,
+                      itemListHtml({
+                        eventName: event?.name || 'Event',
+                        eventDate: printEventDate(event?.startDate),
+                        items: toPrintItems(items),
+                      }),
+                      true
+                    );
                   }}
                   className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition"
                 >

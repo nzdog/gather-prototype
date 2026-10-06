@@ -47,6 +47,23 @@ export const STRIP_TONE: Record<PersonState, StripTone> = {
 };
 
 /**
+ * [[GTC-366]] (item 9) — THE KEY TO THE COLOURS, in the board's own voice. W7 to W12, ruled
+ * 2026-10-06; Q10, A: behind "What the colours mean", below the households and above the doors.
+ *
+ * Here, beside the tones, because a row of the key wears its state's tone (Q11) and the words say
+ * what that tone means: one place for both. ⚠ THE BOARD MAY NEVER SAY "REMIND" (the closed surface
+ * shows state only, `tests/glance-grid-test.tsx`), so the grey says "follow them up".
+ */
+export const COLOUR_KEY_BUTTON = 'What the colours mean';
+export const COLOUR_KEY: ReadonlyArray<{ state: PersonState; words: string }> = [
+  { state: 'RED', words: 'Needs you. Tap it for what to do.' },
+  { state: 'AMBER', words: 'I’m looking after them: I’ve asked, and I’ll follow up.' },
+  { state: 'GREEN', words: 'Settled. Nothing more needed from them.' },
+  { state: 'NOT_CHASED', words: 'Not chased. I won’t follow them up.' },
+  { state: 'OUT', words: 'Out. Not coming.' },
+];
+
+/**
  * The hexes a state's tint is actually made of, read back out of its own class string.
  *
  * GTC-192 phase 6 slice 6c. The replay's spark throws "~18 particles per flip in the

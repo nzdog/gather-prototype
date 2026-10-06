@@ -42,7 +42,13 @@ export interface Headless {
    * Call before the first navigation.
    */
   blockPlanMaking(): Promise<void>;
-  /** Every request `blockPlanMaking` failed, as "METHOD url". */
+  /**
+   * [[GTC-366]] Q17 — a fourth wall: fails every request to a door that sends (the press, the
+   * host-token send, a nudge, "Send it again", trigger-nudges, the wrap-up, any cron) before it
+   * leaves the page. Additive: the plan-making block stays as it is, and both can be on at once.
+   */
+  blockSends(): Promise<void>;
+  /** Every request `blockPlanMaking` or `blockSends` failed, as "METHOD url". */
   planMakingBlocked(): string[];
   /** Types `text` into whatever has focus, as a keyboard would. */
   insertText(text: string): Promise<void>;
@@ -133,6 +139,14 @@ export async function openHeadless(opts: {
   await send('Network.enable');
   await send('Page.enable');
 
+  // One Fetch.enable carries every pattern: a second call REPLACES the first's patterns, so the
+  // two blocks share this list rather than each enabling their own ([[GTC-366]] Q17).
+  const blockedPatterns: string[] = [];
+  const enableBlocks = () =>
+    send('Fetch.enable', {
+      patterns: blockedPatterns.map((urlPattern) => ({ urlPattern, requestStage: 'Request' })),
+    });
+
   const evaluate = async <T>(expression: string): Promise<T> =>
     (await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })).result
       ?.result?.value as T;
@@ -207,17 +221,32 @@ export async function openHeadless(opts: {
       return null;
     },
     async blockPlanMaking() {
-      await send('Fetch.enable', {
-        patterns: [
-          '*finalize-plan*',
-          '*regenerate-plan*',
-          '*/generate',
-          '*/generate?*',
-          '*/regenerate',
-          '*/regenerate?*',
-          '*suggest-resolution*',
-        ].map((urlPattern) => ({ urlPattern, requestStage: 'Request' })),
-      });
+      blockedPatterns.push(
+        '*finalize-plan*',
+        '*regenerate-plan*',
+        '*/generate',
+        '*/generate?*',
+        '*/regenerate',
+        '*/regenerate?*',
+        '*suggest-resolution*'
+      );
+      await enableBlocks();
+    },
+    async blockSends() {
+      blockedPatterns.push(
+        '*/send',
+        '*/send?*',
+        '*/nudge',
+        '*/nudge?*',
+        '*/resend',
+        '*/resend?*',
+        '*/trigger-nudges*',
+        '*/wrap-up',
+        '*/wrap-up?*',
+        '*/wrap-up/retry*',
+        '*/api/cron/*'
+      );
+      await enableBlocks();
     },
     planMakingBlocked: () => [...blocked],
     async insertText(text) {

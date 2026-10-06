@@ -39,6 +39,18 @@
  * Moment 4 §3 refuses a countdown outright, and Ruling 1's general test — "anything that
  * would make the host lean in does not belong on this screen" — is the reason to drop it
  * rather than inherit it. The mockup is the picture, not the specification, on that line.
+ *
+ * ⚠ 2026-10-06, [[GTC-366]] (item 8) — RELAXED FOR TWO EVENT FACTS, ON THE FOUNDER'S RULING, AND
+ * FOR NOTHING ELSE. At the walkthrough sort (GTC-189's Fourth ruling, 2026-10-05): *"When answers
+ * are due (“Answers by Fri 18 Dec”)"*, and *"Days to teh event as a button the host can click to
+ * see if htey want"*. So the top line says when answers are due once the invitations have gone,
+ * and the days to the event sit behind "Days to go", a native disclosure closed on every visit —
+ * no hook, no timer. Both are the PAGE's props, worked out by `src/lib/events/event-dates.ts`;
+ * neither is in the glance payload, and dates for people stay fenced.
+ *
+ * [[GTC-366]] also adds, below the households, the key to the colours (item 9, behind "What the
+ * colours mean") and, among the doors, "Print the list" (item 11) — an island of its own,
+ * `PrintListDoor`, so this file still holds no hook and no fetch.
  */
 
 import type { EventGlance, GlanceHousehold, GlancePerson } from '@/lib/glance/state';
@@ -48,7 +60,10 @@ import { assistantMessage, findCriticalRedHits } from './assistant';
 import PersonSurface, { type PersonSurfaceProps } from './PersonSurface';
 import GlancePersonReading from './GlancePersonReading';
 import { readingPanelFor } from './reading';
+import PrintListDoor from './PrintListDoor';
 import {
+  COLOUR_KEY,
+  COLOUR_KEY_BUTTON,
   criticalStripClauses,
   criticalStripText,
   DOOR_CHEVRON,
@@ -67,6 +82,7 @@ import {
 } from './strip';
 import { CHASE_DOOR_LINK, chaseDoorHref } from '@/lib/preflight/after-press-words';
 import { BACK_ROOM_LINK, PLAN_DOOR_LINK, backRoomHref, planDoorHref } from '@/lib/events/home-href';
+import { ANSWERS_BY, DAYS_TO_GO_BUTTON } from '@/lib/events/event-dates';
 
 interface GlanceBoardProps {
   glance: EventGlance;
@@ -115,6 +131,15 @@ interface GlanceBoardProps {
    * as it is. Absent means before the press, so every existing render is unchanged.
    */
   afterPress?: boolean;
+  /**
+   * [[GTC-366]] (item 8, Q5 to Q7) — when answers are due, already written ("Fri 18 Dec"). The page
+   * passes it after the press only, until that day has passed. Absent means nothing is said.
+   */
+  answersBy?: string | null;
+  /** [[GTC-366]] (item 8, Q8) — what "Days to go" shows ("12 days to go."). Absent means no button. */
+  daysToGo?: string | null;
+  /** [[GTC-366]] (item 11) — the event's date as the print shows it, for "Print the list". */
+  printDate?: string;
 }
 
 /**
@@ -345,6 +370,9 @@ export default function GlanceBoard({
   // RULING 34's clock. See `GlanceBoardProps` above.
   now = new Date(),
   afterPress = false,
+  answersBy = null,
+  daysToGo = null,
+  printDate = '',
 }: GlanceBoardProps) {
   // Ruling 23. A set, so the lookup in `Strip` is one place and one operation at any headcount.
   const sticky: ReadonlySet<string> = new Set(stickyReversals);
@@ -367,10 +395,25 @@ export default function GlanceBoard({
   return (
     <main className="mx-auto w-full max-w-[960px] px-4 py-8">
       <div className="rounded-xl border-[0.5px] border-[#dcdad2] bg-[#ffffff] p-5">
-        <p className="m-0 text-[13px] text-[#888780]">
-          {eventName}
-          {` · ${glance.households.length} households`}
-        </p>
+        {/*
+          [[GTC-366]] (item 8) — W2 on the top line, and W3's button beside it: a native disclosure,
+          closed on every visit, so the days to the event show only when she asks (Q8).
+        */}
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <p className="m-0 text-[13px] text-[#888780]">
+            {eventName}
+            {` · ${glance.households.length} households`}
+            {answersBy ? ` · ${ANSWERS_BY} ${answersBy}` : null}
+          </p>
+          {daysToGo ? (
+            <details data-days-to-go="" className="text-[13px]">
+              <summary className="cursor-pointer list-none text-[12px] text-[#888780] underline underline-offset-2 [&::-webkit-details-marker]:hidden">
+                {DAYS_TO_GO_BUTTON}
+              </summary>
+              <p className="m-0 mt-0.5 text-[#2c2c2a]">{daysToGo}</p>
+            </details>
+          ) : null}
+        </div>
 
         {/*
           Ruling 2. The whole sentence also rides on `data-summary` so a screen reader and
@@ -483,6 +526,28 @@ export default function GlanceBoard({
           ) : null}
         </div>
 
+        {/*
+          [[GTC-366]] (item 9) — the key, Q10 A: behind "What the colours mean", below the households
+          and above the doors. Each row wears its state's own tone (Q11) and is not a strip: no
+          `data-strip-state`, no person, no door, so the replay, the poll and the counts never meet it.
+        */}
+        <details data-colour-key="" className="mt-4">
+          <summary className="inline-block cursor-pointer list-none text-[12px] text-[#888780] underline underline-offset-2 [&::-webkit-details-marker]:hidden">
+            {COLOUR_KEY_BUTTON}
+          </summary>
+          <div className="mt-2 flex max-w-[420px] flex-col gap-1">
+            {COLOUR_KEY.map((row) => (
+              <p
+                key={row.state}
+                data-colour-key-row={row.state}
+                className={`m-0 rounded-md px-2.5 py-1.5 text-[13px] leading-snug ${STRIP_TONE[row.state].className}`}
+              >
+                {row.words}
+              </p>
+            ))}
+          </div>
+        </details>
+
         {/* [[GTC-329]] — below the grid, quiet, after the press only. See `afterPress` above. */}
         {afterPress ? (
           <a
@@ -515,6 +580,13 @@ export default function GlanceBoard({
           >
             {BACK_ROOM_LINK}
           </a>
+          {/* [[GTC-366]] (item 11, Q12) — the print for the fridge, in one tap. */}
+          <PrintListDoor
+            eventId={glance.eventId}
+            eventName={eventName}
+            printDate={printDate}
+            className="inline-block cursor-pointer text-[12px] text-[#888780] underline underline-offset-2"
+          />
         </div>
       </div>
     </main>

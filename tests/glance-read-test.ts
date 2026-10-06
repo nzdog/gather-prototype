@@ -1057,6 +1057,11 @@ async function main() {
     // NOTHING: `nextNudgeAt` was never on the denylist, because `PersonEvent.sentAt` — the
     // anchor it counts from — records when GATHER SENT and not what the guest did.
     const readingModelSrc = code('src/components/glance/reading.ts');
+    // [[GTC-366]] Q15, ruled 2026-10-06 — THE PRINT DOOR JOINS, and the count moves 19 → 20 on that
+    // ruling. The board renders it and it ships to a browser; it reads the item list the old
+    // dashboard reads, and keeps only what is printed. Ruling 1's fence follows it UNCHANGED: a
+    // file the board renders and the fence does not scan is the hole 6e closed.
+    const printDoorSrc = code('src/components/glance/PrintListDoor.tsx');
     const glanceSources = [
       stateSrc,
       readSrc,
@@ -1077,12 +1082,13 @@ async function main() {
       previewSrc,
       readingSrc,
       readingModelSrc,
+      printDoorSrc,
     ];
     const sourcesExist = glanceSources.every((src) => src.length > 0);
     assert(
       'Ruling 1 source',
-      'EVERY GLANCE SOURCE EXISTS — the modules, the route, the page, the view, the actions, both islands, the painters, the preview, the reading panel and its model; the gate and the scan are ONE list, so neither can be widened without the other',
-      sourcesExist && glanceSources.length === 19
+      'EVERY GLANCE SOURCE EXISTS — the modules, the route, the page, the view, the actions, both islands, the painters, the preview, the reading panel and its model, and the print door; the gate and the scan are ONE list, so neither can be widened without the other',
+      sourcesExist && glanceSources.length === 20
     );
     for (const banned of BEHAVIOUR_DENYLIST) {
       const re = new RegExp(`\\b${banned}\\b`);

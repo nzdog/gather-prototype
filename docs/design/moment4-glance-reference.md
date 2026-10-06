@@ -12,6 +12,7 @@ A grid of neutral household cards. Each card carries the household name and one 
 - Strip: one per person, full card width, ~28px tall, tinted background with matching dark text. Red = yours, amber = with Gather, green = settled, neutral outline = not chased.
 - Summary sentence above the grid is the four-second answer: "3 need you. Gather is on 9. 28 settled."
   *2026-10-05, [[GTC-363]]: the middle clause's words changed by founder ruling (W2) — the screen now reads "3 need you. I’m looking after 9. 28 settled." The rest of this reference is as chosen on 30 August.*
+  *2026-10-06, [[GTC-366]]: by founder ruling (the walkthrough sort, 2026-10-05) the line above the summary — the mockup's meta line, whose "12 days to go" the build dropped — now says when answers are due ("· Answers by Fri 18 Dec", after the press), and the days to the event sit behind a "Days to go" button, closed on every visit. Below the households, a key to the colours sits behind "What the colours mean" (each row in its strip's tint, none of them a strip), and "Print the list" joins the doors. The rest of this reference is as chosen on 30 August.*
 - Unassigned critical items sit in their own alert strip above the grid (they have no person, so person-primary gives them no home).
 
 ## Why this won

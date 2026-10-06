@@ -132,7 +132,8 @@
     "test:hold-the-plan": "NODE_OPTIONS=--experimental-websocket tsx tests/hold-the-plan-test.ts",
     "test:walkthrough-batch1": "tsx --tsconfig tests/tsconfig.json tests/walkthrough-batch1-test.tsx",
     "test:walkthrough-batch2": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/walkthrough-batch2-test.tsx",
-    "test:walkthrough-batch3": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/walkthrough-batch3-test.tsx"
+    "test:walkthrough-batch3": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/walkthrough-batch3-test.tsx",
+    "test:walkthrough-batch4": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/walkthrough-batch4-test.tsx"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -72,6 +72,7 @@ import AfterThePress from '@/components/preflight/AfterThePress';
 import { BOARD_MOVE_AFTER_MS, SEE_THE_BOARD_LINK } from '@/lib/preflight/after-press-words';
 import { boardHref } from '@/lib/events/home-href';
 import { HOUSEHOLD_CONTACT_LINE } from '@/lib/households/contact-line';
+import { PREFLIGHT_STEP_TITLES, firstUnticked, goToStepLine } from '@/lib/preflight/next-check';
 
 // ─── Wire shapes (mirror /api/events/[id]/pre-flight) ────────────────────────
 
@@ -151,6 +152,9 @@ function channelFor(
   return m ? { name: m.name, elsewhere: null } : null;
 }
 
+/** [[GTC-366]] (item 32) — the sage ring on the box W1's line arrives at, for two seconds. */
+const ARRIVAL_RING = ['ring-2', 'ring-accent', 'ring-offset-4', 'rounded-md'];
+
 const PACE_LABELS: Record<NudgePace, string> = {
   STANDARD: 'Standard',
   RELAXED: 'Relaxed',
@@ -182,7 +186,13 @@ function Step({
   children: React.ReactNode;
 }) {
   return (
-    <section className="mb-8 border border-gray-200 rounded-lg bg-white">
+    // [[GTC-366]] (item 32): `id` and `data-step` are where W1's line takes her; `scroll-mt-4` keeps
+    // the step's top just clear of the top of the screen when it arrives there.
+    <section
+      id={`step-${n}`}
+      data-step={n}
+      className="mb-8 border border-gray-200 rounded-lg bg-white scroll-mt-4"
+    >
       <header className="px-5 pt-5 pb-3 border-b border-gray-100">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -381,6 +391,26 @@ export default function PreFlightPage() {
   const { coverage, dietary, households, unhoused, channelCandidates } = data;
   const pace = data.event.nudgePace;
 
+  /*
+   * [[GTC-366]] (item 32) — THE WAY FROM THE GREYED SEND TO THE FIRST STEP NOT YET TICKED. Ruled
+   * 2026-10-06 (Q1 to Q4): one tap scrolls that step to the top of the screen, puts the focus on its
+   * box and rings it for two seconds. It ticks nothing and presses nothing. A plain function, not a
+   * hook: nothing here may add a hook after the after-the-press return above.
+   */
+  const nextStep = firstUnticked(checked);
+  const goToStep = (n: number) => {
+    const section = document.getElementById(`step-${n}`);
+    if (!section) return;
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const box = section.querySelector<HTMLInputElement>('header input[type="checkbox"]');
+    if (!box) return;
+    box.focus({ preventScroll: true });
+    const ring = box.closest('label');
+    if (!ring) return;
+    ring.classList.add(...ARRIVAL_RING);
+    window.setTimeout(() => ring.classList.remove(...ARRIVAL_RING), 2000);
+  };
+
   return (
     <div className="min-h-screen bg-warm-white">
       <div className="max-w-3xl mx-auto px-6 py-10">
@@ -397,7 +427,7 @@ export default function PreFlightPage() {
         {/* ── 1. Coverage ─────────────────────────────────────────────────── */}
         <Step
           n={1}
-          title="What is still loose"
+          title={PREFLIGHT_STEP_TITLES[0]}
           blurb="Everything that has no owner yet. None of it blocks you."
           checked={!!checked[1]}
           onCheck={(v) => setChecked((c) => ({ ...c, 1: v }))}
@@ -493,7 +523,7 @@ export default function PreFlightPage() {
         {/* ── 2. Dietary ──────────────────────────────────────────────────── */}
         <Step
           n={2}
-          title="Dietary needs"
+          title={PREFLIGHT_STEP_TITLES[1]}
           blurb="Event-level, not by name. The last check before people eat."
           checked={!!checked[2]}
           onCheck={(v) => setChecked((c) => ({ ...c, 2: v }))}
@@ -504,7 +534,7 @@ export default function PreFlightPage() {
         {/* ── 3. Who Gather talks to, and how often ───────────────────────── */}
         <Step
           n={3}
-          title="Who Gather talks to"
+          title={PREFLIGHT_STEP_TITLES[2]}
           blurb="One channel per household, and how hard the system chases."
           checked={!!checked[3]}
           onCheck={(v) => setChecked((c) => ({ ...c, 3: v }))}
@@ -645,7 +675,7 @@ export default function PreFlightPage() {
         {/* ── 4. The message, shown ───────────────────────────────────────── */}
         <Step
           n={4}
-          title="The message, shown"
+          title={PREFLIGHT_STEP_TITLES[3]}
           blurb="Exactly what each person will receive, and who I'll chase."
           checked={!!checked[4]}
           onCheck={(v) => setChecked((c) => ({ ...c, 4: v }))}
@@ -657,7 +687,7 @@ export default function PreFlightPage() {
         {/* ── 5. The end ──────────────────────────────────────────────────── */}
         <Step
           n={5}
-          title="Ready"
+          title={PREFLIGHT_STEP_TITLES[4]}
           blurb="The last look is done."
           checked={!!checked[5]}
           onCheck={(v) => setChecked((c) => ({ ...c, 5: v }))}
@@ -716,6 +746,18 @@ export default function PreFlightPage() {
                 ? 'Sending…'
                 : `Send${allChecked ? '' : ' — finish the five checks first'}`}
           </button>
+
+          {/* [[GTC-366]] (item 32) — W1, under the greyed Send. Send itself is unchanged (Q1, Q4). */}
+          {nextStep !== null && !pressing && !pressed ? (
+            <button
+              type="button"
+              data-go-to-step=""
+              onClick={() => goToStep(nextStep)}
+              className="mt-3 mx-auto block px-2 py-1 text-sm text-gray-700 underline underline-offset-2 hover:text-gray-900"
+            >
+              {goToStepLine(nextStep)}
+            </button>
+          ) : null}
 
           {/*
             THE TWO-SENTENCE THRESHOLD SCRIPT, at the moment of commitment (Hinge §2). Verbatim, from
