@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { DRAFT_WORDS } from '@/lib/households/draft';
 
 export interface SavedHousehold {
   id: string;
@@ -40,6 +41,17 @@ interface HouseholdCardListProps {
   onEdit: (householdId: string) => void;
   onDelete?: (householdId: string) => Promise<void>;
   editingHouseholdId?: string | null;
+  /**
+   * [[GTC-365]] item 16 — what the form holds now, not saved yet (`householdDraft`). While a saved
+   * household is being edited it shows in that household's own card (W3); otherwise as a card of
+   * its own (W1). Nothing here is written anywhere.
+   */
+  draft?: SavedHousehold | null;
+  /**
+   * [[GTC-365]] Q2 — where a new household's card sits: at the end on a computer, where it lands
+   * once saved; first on a phone, just under the Save buttons.
+   */
+  draftAt?: 'start' | 'end';
 }
 
 export default function HouseholdCardList({
@@ -47,21 +59,47 @@ export default function HouseholdCardList({
   onEdit,
   onDelete,
   editingHouseholdId,
+  draft = null,
+  draftAt = 'end',
 }: HouseholdCardListProps) {
-  if (households.length === 0) return null;
+  if (households.length === 0 && !draft) return null;
+
+  const editing = !!editingHouseholdId && households.some((h) => h.id === editingHouseholdId);
+  const newCard =
+    draft && !editing ? (
+      <HouseholdCard
+        key="draft"
+        household={draft}
+        onEdit={onEdit}
+        isEditing={false}
+        draftLabel={DRAFT_WORDS.NOT_SAVED_YET}
+      />
+    ) : null;
 
   return (
     <div className="space-y-3">
       <p className="text-sm font-medium text-gray-500 mb-3">Ducks in a row so far</p>
-      {households.map((household) => (
-        <HouseholdCard
-          key={household.id}
-          household={household}
-          onEdit={onEdit}
-          onDelete={onDelete}
-          isEditing={editingHouseholdId === household.id}
-        />
-      ))}
+      {draftAt === 'start' && newCard}
+      {households.map((household) =>
+        draft && editingHouseholdId === household.id ? (
+          <HouseholdCard
+            key={household.id}
+            household={{ ...draft, id: household.id, isHostHousehold: household.isHostHousehold }}
+            onEdit={onEdit}
+            isEditing
+            draftLabel={DRAFT_WORDS.EDITING}
+          />
+        ) : (
+          <HouseholdCard
+            key={household.id}
+            household={household}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            isEditing={editingHouseholdId === household.id}
+          />
+        )
+      )}
+      {draftAt === 'end' && newCard}
     </div>
   );
 }
@@ -71,11 +109,14 @@ function HouseholdCard({
   onEdit,
   onDelete,
   isEditing,
+  draftLabel,
 }: {
   household: SavedHousehold;
   onEdit: (householdId: string) => void;
   onDelete?: (householdId: string) => Promise<void>;
   isEditing: boolean;
+  /** [[GTC-365]] — set when the card shows what is typed, not what is saved: W1 or W3. */
+  draftLabel?: string;
 }) {
   const [visible, setVisible] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -166,10 +207,16 @@ function HouseholdCard({
   return (
     <div
       ref={cardRef}
-      className="border border-gray-200 rounded-lg px-4 py-3 bg-white transition-opacity duration-200"
+      data-draft-card={draftLabel ? '' : undefined}
+      className={`border rounded-lg px-4 py-3 bg-white transition-opacity duration-200 ${
+        draftLabel ? 'border-dashed border-gray-400' : 'border-gray-200'
+      }`}
       style={{ opacity: visible ? 1 : 0 }}
       onClick={clearError}
     >
+      {/* [[GTC-365]] — W1 or W3: what this card shows is not saved yet. */}
+      {draftLabel && <p className="text-xs text-gray-500 mb-1">{draftLabel}</p>}
+
       {/* Error message */}
       {error && <p className="text-red-600 text-sm mb-1">{error}</p>}
 
@@ -206,8 +253,8 @@ function HouseholdCard({
         </div>
       )}
 
-      {/* Action links */}
-      <div className="flex justify-end gap-3 mt-1">
+      {/* Action links — none on a card that shows what is typed: the form is where it changes. */}
+      <div className={`flex justify-end gap-3 mt-1${draftLabel ? ' hidden' : ''}`}>
         <button
           type="button"
           onClick={() => {

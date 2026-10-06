@@ -5,6 +5,7 @@ import MomentArc from './MomentArc';
 import { normalizePhoneNumber, isInternationalNumber } from '@/lib/phone';
 import { SavedHousehold } from './HouseholdCardList';
 import { HOUSEHOLD_CONTACT_LINE } from '@/lib/households/contact-line';
+import { householdDraft } from '@/lib/households/draft';
 
 export interface Moment1PersonInput {
   primaryContact: {
@@ -98,6 +99,11 @@ interface Moment1InputFormProps {
    */
   hostMode?: { name: string; email: string | null; phone: string | null };
   onSaveHostHousehold?: (payload: HostHouseholdPayload) => Promise<void>;
+  /**
+   * [[GTC-365]] item 16 — told what is typed so far (`householdDraft`), or null, on every change, so
+   * the column can show the household before Save. Never called in `hostMode`. Nothing is saved.
+   */
+  onDraftChange?: (draft: SavedHousehold | null) => void;
 }
 
 interface GuestForm {
@@ -131,6 +137,7 @@ export default function Moment1InputForm({
   channelCandidates = [],
   hostMode,
   onSaveHostHousehold,
+  onDraftChange,
 }: Moment1InputFormProps) {
   // Primary contact
   const [name, setName] = useState('');
@@ -305,6 +312,36 @@ export default function Moment1InputForm({
 
     nameInputRef.current?.focus();
   }, [editingHousehold]);
+
+  // [[GTC-365]] item 16: what is typed, for the column — before Save, and written nowhere.
+  const editingId = editingHousehold?.id;
+  useEffect(() => {
+    if (!onDraftChange || hostMode) return;
+    onDraftChange(
+      householdDraft(
+        {
+          name,
+          partnerName: showPartner ? partnerName : null,
+          helperNames: helpers.map((h) => h.name),
+          littleCount: showLittles ? littleCount : 0,
+          guestNames: guests.map((g) => g.name),
+        },
+        editingId ?? 'draft'
+      )
+    );
+  }, [
+    onDraftChange,
+    hostMode,
+    name,
+    showPartner,
+    partnerName,
+    helpers,
+    showLittles,
+    littleCount,
+    guests,
+    editingId,
+  ]);
+  useEffect(() => () => onDraftChange?.(null), [onDraftChange]);
 
   // Warn on navigate away with unsaved input
   useEffect(() => {

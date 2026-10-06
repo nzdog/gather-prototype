@@ -32,8 +32,10 @@ export interface Headless {
    * three safeguards"). Scrolls the target to mid-screen and clicks only if the element at that point
    * is inside the target; refuses a control whose words are a press, a send, a hold or a generate.
    * Every refusal is logged. Resolves to null when it clicked, or the reason it refused.
+   * [[GTC-365]] Q13: `settleMs` is the wait after the click (400 unless given), so a suite can make
+   * two taps closer together than a save takes.
    */
-  clickGuarded(selector: string): Promise<string | null>;
+  clickGuarded(selector: string, settleMs?: number): Promise<string | null>;
   /**
    * [[GTC-364]] — fails every request to a route that calls the AI (`finalize-plan`,
    * `regenerate-plan`, `/generate`, `/regenerate`, `suggest-resolution`) before it leaves the page.
@@ -178,7 +180,7 @@ export async function openHeadless(opts: {
       await sleep(400);
       return true;
     },
-    async clickGuarded(selector) {
+    async clickGuarded(selector, settleMs = 400) {
       const at = await evaluate<{ x: number; y: number } | { why: string } | null>(
         `(() => { const t = document.querySelector(${JSON.stringify(selector)}); if (!t) return { why: 'no target' };
           if (/\\b(generate|regenerate|new event|hold|send|press|move on)\\b/i.test(t.innerText || '')) return { why: 'refused by its words' };
@@ -201,7 +203,7 @@ export async function openHeadless(opts: {
           clickCount: 1,
         });
       }
-      await sleep(400);
+      await sleep(settleMs);
       return null;
     },
     async blockPlanMaking() {

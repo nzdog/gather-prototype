@@ -39,6 +39,9 @@ export const M3_WORDS = {
   HOLD_NOT_HOST: 'Only the host can hold the plan and send it.',
   OPEN_PLAN_STATUS: 'Open Plan Status',
   OPEN_ITEMS_AND_QUANTITIES: 'Open Items & Quantities',
+  // [[GTC-365]] — W5 and W8, approved 2026-10-06 (PLAN RULINGS in docs/tickets/GTC-365.md).
+  ACCEPTING: 'Accepting…',
+  DONE: 'Done',
 } as const;
 
 /** The document's counter: "[X] of [Y] items assigned." — as written, for every count. */
@@ -78,4 +81,24 @@ export function removeLabel(name: string): string {
 /** W7 — ✓ on a suggestion. */
 export function giveLabel(item: string, name: string): string {
   return `Give ${item} to ${name}`;
+}
+
+/**
+ * [[GTC-365]] W4 — one tap accepts the suggestions on screen. Approved 2026-10-06.
+ */
+export function acceptAllLabel(count: number): string {
+  return count === 1 ? '✓ Accept 1 suggestion' : `✓ Accept all ${count} suggestions`;
+}
+
+/**
+ * [[GTC-365]] W6 — Accept all, when some of its saves fail. Not GTC-355's W6 (SAVE_FAILED), which
+ * is still what a single failed save says.
+ */
+export function acceptAllFailed(failed: number, count: number): string {
+  return `${failed} of ${count} didn't save. Tap ✓ to try again.`;
+}
+
+/** [[GTC-365]] W7, with the founder's fix (no "Picked:") — at the foot while a person is picked. */
+export function giveToLine(name: string): string {
+  return `Tap items to give them to ${name}.`;
 }

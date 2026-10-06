@@ -474,25 +474,30 @@ function CategorySection({
                 onCancel={onCancelAddItem}
               />
             ) : (
-              <div className="flex items-center gap-3">
+              /* [[GTC-365]] item 27 (Q5): "+ Add item" is the same full-width dashed button as
+                 "+ Add category", and "↻ Regenerate this category" — a paid AI call — sits on its
+                 own line below it as a small link, so the two are never mistaken for each other. */
+              <div className="space-y-2">
                 <button
                   type="button"
                   onClick={onStartAddItem}
-                  className="text-sm text-gray-600 hover:text-gray-900 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+                  className="w-full text-sm text-gray-600 hover:text-gray-900 border border-dashed border-gray-300 rounded-lg py-3 px-4 hover:border-gray-400 transition-colors"
                 >
                   + Add item
                 </button>
                 {categoryKey !== null && (
-                  <button
-                    type="button"
-                    onClick={() => onRegenerateCategory(categoryKey)}
-                    disabled={regeneratingScope !== null}
-                    className="text-sm text-gray-600 hover:text-gray-900 px-2 py-1 rounded hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {regeneratingScope === categoryKey
-                      ? 'Regenerating…'
-                      : '↻ Regenerate this category'}
-                  </button>
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => onRegenerateCategory(categoryKey)}
+                      disabled={regeneratingScope !== null}
+                      className="text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2 px-1 py-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
+                    >
+                      {regeneratingScope === categoryKey
+                        ? 'Regenerating…'
+                        : '↻ Regenerate this category'}
+                    </button>
+                  </div>
                 )}
               </div>
             )}
@@ -534,9 +539,12 @@ function ItemRow({
   const markedStrike = isSelected ? 'line-through text-gray-400' : '';
 
   return (
-    <div className={`flex items-center gap-2 py-2 px-2 rounded ${rowBg}`}>
+    /* [[GTC-365]] — a phone: the name takes its own line and the amount and buttons wrap under it
+       (they squeezed it to a column one letter wide). From 640px up the row is as it was: no wrap,
+       and the name's basis back to 0, so nothing changes on a computer. */
+    <div className={`flex flex-wrap sm:flex-nowrap items-center gap-2 py-2 px-2 rounded ${rowBg}`}>
       {/* Name + serving size (stacked) */}
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="basis-full sm:basis-0 flex-1 min-w-0 flex flex-col">
         <button
           type="button"
           onClick={onOpenEdit}

@@ -337,6 +337,21 @@ export default function EventSetupPage() {
   const [channelCandidates, setChannelCandidates] = useState<ChannelCandidateOption[]>([]);
   const [editingHousehold, setEditingHousehold] = useState<SavedHousehold | null>(null);
   const moment1FormRef = useRef<HTMLDivElement>(null);
+  // [[GTC-365]] item 16: the household being typed in Moment 1, shown in the column before Save.
+  // It lives only here; nothing is written until she presses Save.
+  const [moment1Draft, setMoment1Draft] = useState<SavedHousehold | null>(null);
+  const desktopColumnRef = useRef<HTMLDivElement>(null);
+  // [[GTC-365]] Q2: on a computer the column keeps that card in view by scrolling itself, never the
+  // page. (On a phone the column sits below the form, so nothing above the form grows.)
+  useEffect(() => {
+    const col = desktopColumnRef.current;
+    const card = col?.querySelector<HTMLElement>('[data-draft-card]');
+    if (!col || !card) return;
+    const top = card.offsetTop;
+    const bottom = top + card.offsetHeight;
+    if (bottom > col.scrollTop + col.clientHeight) col.scrollTop = bottom - col.clientHeight;
+    else if (top < col.scrollTop) col.scrollTop = top;
+  }, [moment1Draft]);
   // GTC-236: 'plan', a categoryKey, or null when no regeneration is running.
   const [regeneratingScope, setRegeneratingScope] = useState<'plan' | string | null>(null);
 
@@ -834,16 +849,6 @@ export default function EventSetupPage() {
             ← Your events
           </a>
           <div className="flex flex-col md:flex-row md:gap-8">
-            {/* Mobile: cards above form */}
-            <div className="md:hidden mb-6">
-              <HouseholdCardList
-                households={households}
-                onEdit={handleEdit}
-                onDelete={handleDeleteHousehold}
-                editingHouseholdId={editingHousehold?.id}
-              />
-            </div>
-
             {/* Left column: input form */}
             <div ref={moment1FormRef} className="flex-1 min-w-0">
               <Moment1InputForm
@@ -859,17 +864,36 @@ export default function EventSetupPage() {
                 onCancelEdit={() => setEditingHousehold(null)}
                 totalPeopleCount={totalPeopleCount}
                 channelCandidates={channelCandidates}
+                onDraftChange={setMoment1Draft}
+              />
+            </div>
+
+            {/* [[GTC-365]] Q1 — a phone: the cards sit BELOW the form (they sat above it), so nothing
+                above the form grows while she types, and the household being typed shows first,
+                just under the Save buttons (Q2). */}
+            <div className="md:hidden mt-8">
+              <HouseholdCardList
+                households={households}
+                onEdit={handleEdit}
+                onDelete={handleDeleteHousehold}
+                editingHouseholdId={editingHousehold?.id}
+                draft={moment1Draft}
+                draftAt="start"
               />
             </div>
 
             {/* Right column: card list (desktop only) */}
             <div className="hidden md:block w-80 flex-shrink-0">
-              <div className="sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto">
+              <div
+                ref={desktopColumnRef}
+                className="sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto"
+              >
                 <HouseholdCardList
                   households={households}
                   onEdit={handleEdit}
                   onDelete={handleDeleteHousehold}
                   editingHouseholdId={editingHousehold?.id}
+                  draft={moment1Draft}
                 />
               </div>
             </div>
@@ -894,6 +918,7 @@ export default function EventSetupPage() {
           initialHolders={moment3Data.holders}
           households={moment3Data.households}
           askForReason={askForReason}
+          askForBatchReason={askForBatchReason}
           onBack={async () => {
             // "← Back to the plan" (ruling Q14). Her approval stays: "Plan looks good →"
             // brings her straight back, and a reload opens Moment 3.
