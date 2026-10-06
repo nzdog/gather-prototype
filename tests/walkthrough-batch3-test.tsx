@@ -4,7 +4,7 @@
  * The founder walked the Moment flow himself and sorted what he found (GTC-189's Fourth ruling).
  * This suite pins batch 3 to the words he ruled on the plan (GTC-365, PLAN RULINGS 2026-10-06, W1 to
  * W8, with his fix to W7) and to the behaviour he chose (Q1 to Q14, with his change to Q7), plus the
- * phone plan screen he found in the planning screenshots:
+ * phone plan screen, found by Cowork in the planning screenshots and added on his ruling:
  *
  *   16  the household being entered shows in the column before Save (W1 to W3, Q1 to Q4); on a phone
  *       the column sits below the form, so nothing above it grows while she types
