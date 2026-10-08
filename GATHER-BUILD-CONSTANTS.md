@@ -220,6 +220,7 @@ Start the server with the provider keys and the AI key blanked for that process 
 never edit `.env.local` (the AI key since GTC-364, founder ruling Q7, 2026-10-06: no suite needs
 it on the server, and a press of "Generate plan →" must never reach the AI):
 `ANTHROPIC_API_KEY= RESEND_API_KEY= TWILIO_ACCOUNT_SID= TWILIO_AUTH_TOKEN= TWILIO_PHONE_NUMBER= TNZ_AUTH_TOKEN= npm run dev`.
+`test:sign-in-hole` (GTC-369, ruling Q12) needs the same server, started the same way: it calls `POST /api/auth/verify` over HTTP (it sends nothing) and calls the claim route only in process, with the live switch never opened and the provider trap's walls up.
 The live layer drives only two cron routes, and only behind asserted
 preconditions (GTC-270):
 - `/api/cron/wrap-up-dispatch`, after zero undispatched `WrapUpLink` rows;

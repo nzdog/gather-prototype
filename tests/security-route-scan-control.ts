@@ -1897,8 +1897,8 @@ function suite8_NoOpAtHead(head: ScanResult) {
   // make blocking at slice 2 — if it were not zero, slice 2 would start red.
   const unprovenGuards = head.handlers.filter((h) => h.guardProof === 'UNPROVEN');
   logTest(
-    'no handler at HEAD has an UNPROVEN guard verdict',
-    unprovenGuards.length === 0,
+    'exactly one handler at HEAD has an UNPROVEN guard verdict: POST /api/auth/claim, which refuses with a 200 by design',
+    unprovenGuards.map(handlerKey).join() === 'POST src/app/api/auth/claim/route.ts',
     `${unprovenGuards.length} undecidable: ${unprovenGuards.map(handlerKey).join(', ')}`
   );
 

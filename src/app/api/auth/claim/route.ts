@@ -2,6 +2,7 @@
 import { prisma } from '@/lib/prisma';
 import { getResendClient } from '@/lib/email';
 import { randomBytes } from 'crypto';
+import { resolveToken } from '@/lib/auth';
 
 export async function POST(req: Request) {
   try {
@@ -11,15 +12,14 @@ export async function POST(req: Request) {
       return Response.json({ ok: false, error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Verify person exists and has no userId yet
-    const person = await prisma.person.findUnique({
-      where: { id: personId },
-    });
-
-    if (!person) {
-      // Return success to prevent enumeration
+    // [[GTC-369]] ruling point 4: a claim email needs the host's own link. The host page posts
+    // its own token, so a host always passes; anyone else gets the same answer as every other
+    // path and nothing is written or sent.
+    const host = await resolveToken(String(returnToken));
+    if (!host || host.scope !== 'HOST' || host.person.id !== personId) {
       return Response.json({ ok: true });
     }
+    const person = host.person;
 
     if (person.userId) {
       // Return success to prevent enumeration (don't reveal account is already claimed)
@@ -43,18 +43,21 @@ export async function POST(req: Request) {
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
+    // [[GTC-369]] ruling point 1: the person is recorded on the link's row, worked out above from
+    // the host link, so the link itself carries only its token.
     await prisma.magicLink.create({
       data: {
         email,
         token,
         expiresAt,
+        personId: person.id,
       },
     });
 
-    // Send email with return URL that includes personId and returnToken
+    // Send email with a return URL back to her host page
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     const returnUrl = `/h/${returnToken}?claimed=true`;
-    const link = `${baseUrl}/auth/verify?token=${token}&personId=${personId}&returnUrl=${encodeURIComponent(returnUrl)}`;
+    const link = `${baseUrl}/auth/verify?token=${token}&returnUrl=${encodeURIComponent(returnUrl)}`;
 
     // Send custom email for claim flow.
     //

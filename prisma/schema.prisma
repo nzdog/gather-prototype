@@ -295,6 +295,7 @@ model Person {
   hostedEvents     Event[]             @relation("EventHost")
   hostMemory       HostMemory?
   inviteEvents     InviteEvent[]
+  magicLinks       MagicLink[]
   deliveryReports  SmsDeliveryReport[]
   user             User?               @relation(fields: [userId], references: [id])
   eventMemberships PersonEvent[]
@@ -1558,10 +1559,16 @@ model MagicLink {
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
+  /// [[GTC-369]], founder ruling Q1/Q2 (2026-10-08): the sign-in check must never take the person
+  /// from the link. The claim route records here the person it worked out from the host's own
+  /// link, so the link itself carries only its token. Null on every link that claims no one.
+  personId  String?
+  person    Person?   @relation(fields: [personId], references: [id], onDelete: SetNull)
 
   @@index([token])
   @@index([email])
   @@index([expiresAt])
+  @@index([personId])
 }
 
 model EventRole {
