@@ -1,7 +1,8 @@
 # GATHER BUILD CONSTANTS
 
 Reference file for AI executors and developers. Keep this file accurate.
-Last updated: 2026-10-06 (GTC-364, ruling Q7: the standing dev-server line blanks the AI key too).
+Last updated: 2026-10-08 (GTC-367, founder ruling L1: `npm run lint`'s known count is 62 errors).
+Previously 2026-10-06 (GTC-364, ruling Q7: the standing dev-server line blanks the AI key too).
 Previously 2026-10-05 (GTC-364: looking on screen — three safeguards, after a look while
 planning pressed "Generate plan →" twice). Previously 2026-10-02 (GTC-290: the TNZ status poll — a
 fifth cron route, `GATHER_ALERT_EMAIL`, `test:security` 172 with 20 live assertions, and the poll
@@ -189,6 +190,14 @@ by assuming.
   in `next.config.js`, temporary until GTC-221's findings are cleared), so the
   build stays green whatever lint says. Compare a ticket's lint run with these
   counts; a new finding in a file the ticket touched is that ticket's.
+  **Since GTC-367 (`2c6e3da`, 2026-10-08): 62 errors and 42 warnings across 50
+  files.** The five new errors are GTC-367's, all `@next/next/no-html-link-for-pages`
+  on its plain "← Your events" links to `/plan/events` (her own household's step
+  in the setup page, `Moment1Summary.tsx`, `Moment2Opening.tsx`,
+  `Moment2Step1Modal.tsx`, `SetupOpeningScreen.tsx`), kept on founder ruling L1:
+  *"Keep them, record 62 (Recommended)"*. A plain link reloads the page, so
+  Moment 1's "leave site?" warning still catches unsaved typing; the same link on
+  Moment 1's form was already one of the 57.
 
 *(Retired at GTC-274, 2026-09-29: `test:email-send-result`'s wait on
 `GTC265_PROBE_KEY`, and `test:nudge-provider-gate`'s ambient-provider guard.
