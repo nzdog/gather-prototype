@@ -33,8 +33,9 @@ export default function VerifyPage() {
         const data = await res.json();
 
         if (data.success) {
-          // Redirect on success
-          router.push(data.redirectUrl);
+          // Redirect on success. [[GTC-362]]: replace, so the used link never stays in the tab's
+          // history, and Back (or a trackpad swipe) never lands on "Link Already Used".
+          router.replace(data.redirectUrl);
         } else {
           setError(data.error || 'unknown');
           setIsVerifying(false);

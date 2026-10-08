@@ -71,6 +71,8 @@ import { MarkRows, Pill, cadenceSentence, type Member } from '@/components/prefl
 import AfterThePress from '@/components/preflight/AfterThePress';
 import { BOARD_MOVE_AFTER_MS, SEE_THE_BOARD_LINK } from '@/lib/preflight/after-press-words';
 import { boardHref } from '@/lib/events/home-href';
+import MomentArc from '@/components/plan/MomentArc';
+import { AT_PEOPLE, AT_PLAN, STRIP_WORDS, setupHref } from '@/lib/moments/strip';
 import { HOUSEHOLD_CONTACT_LINE } from '@/lib/households/contact-line';
 import { PREFLIGHT_STEP_TITLES, firstUnticked, goToStepLine } from '@/lib/preflight/next-check';
 
@@ -415,6 +417,29 @@ export default function PreFlightPage() {
     <div className="min-h-screen bg-warm-white">
       <div className="max-w-3xl mx-auto px-6 py-10">
         <header className="mb-8">
+          {/*
+            [[GTC-367]] (items 2 and 31) — before the press: the way back to Moment 3 (W4), and the
+            strip, Moments 1 to 3 done and 4 current (plan Q4). Each tap opens the setup page at that
+            Moment by its address; Moment 3 is where the setup page opens by itself. Plain links: no
+            hook is added after the after-the-press return above.
+          */}
+          <a
+            href={`/plan/${eventId}/setup`}
+            className="mb-4 inline-block text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
+          >
+            {STRIP_WORDS.BACK_TO_WHOS_ON_WHAT}
+          </a>
+          <div className="mb-6">
+            <MomentArc
+              currentMoment={4}
+              completedMoments={[1, 2, 3]}
+              doors={{
+                1: { href: setupHref(eventId, AT_PEOPLE) },
+                2: { href: setupHref(eventId, AT_PLAN) },
+                3: { href: setupHref(eventId) },
+              }}
+            />
+          </div>
           <p className="text-sm text-gray-400 mb-1">{data.event.name}</p>
           <h1 className="text-2xl font-medium text-gray-900">Before you send</h1>
           <p className="text-gray-600 mt-2">

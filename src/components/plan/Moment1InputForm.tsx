@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import MomentArc from './MomentArc';
+import MomentArc, { type ArcDoor } from './MomentArc';
 import { normalizePhoneNumber, isInternationalNumber } from '@/lib/phone';
 import { SavedHousehold } from './HouseholdCardList';
 import { HOUSEHOLD_CONTACT_LINE } from '@/lib/households/contact-line';
@@ -104,6 +104,8 @@ interface Moment1InputFormProps {
    * the column can show the household before Save. Never called in `hostMode`. Nothing is saved.
    */
   onDraftChange?: (draft: SavedHousehold | null) => void;
+  /** [[GTC-367]] (item 2): the Moments strip's doors (`stripDoors`, src/lib/moments/strip.ts). */
+  stripDoors?: Partial<Record<1 | 2 | 3 | 4, ArcDoor>>;
 }
 
 interface GuestForm {
@@ -138,6 +140,7 @@ export default function Moment1InputForm({
   hostMode,
   onSaveHostHousehold,
   onDraftChange,
+  stripDoors,
 }: Moment1InputFormProps) {
   // Primary contact
   const [name, setName] = useState('');
@@ -637,7 +640,7 @@ export default function Moment1InputForm({
       <div className="max-w-[640px]">
         {/* MomentArc */}
         <div className="mb-8">
-          <MomentArc currentMoment={1} />
+          <MomentArc currentMoment={1} doors={stripDoors} />
         </div>
 
         {/* Assistant line */}

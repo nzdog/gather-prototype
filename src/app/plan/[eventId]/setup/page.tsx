@@ -31,6 +31,14 @@ import type { PanelHouseholdInput } from '@/lib/moment3/people';
 import { M3_WORDS } from '@/lib/moment3/words';
 import { boardHref } from '@/lib/events/home-href';
 import { holdNotice, holdThePlan, type HoldNotice } from '@/lib/moment3/hold';
+import type { ArcDoor } from '@/components/plan/MomentArc';
+import {
+  STRIP_WORDS,
+  requestedStage,
+  stripDoors,
+  type MomentNumber,
+  type StripTarget,
+} from '@/lib/moments/strip';
 
 const MOMENT2_CATEGORY_EMOJIS: Record<string, string> = {
   mains: '🍖',
@@ -361,10 +369,11 @@ export default function EventSetupPage() {
    * Every flag is cleared first, so this is the only place that decides which surface is
    * live and there is no arrangement of calls that leaves two of them true.
    */
-  const applyStage = useCallback((stage: SetupStage) => {
+  const applyStage = useCallback((stage: SetupStage | 'moment2-opening') => {
     setShowSetup(stage === 'opening');
     setShowMoment1(stage === 'moment1');
-    setShowMoment2Opening(false);
+    // [[GTC-367]]: the strip can open Moment 2's opening too, so it is one of the stages here.
+    setShowMoment2Opening(stage === 'moment2-opening');
     setShowMoment2Step1(stage === 'moment2-step1');
     setShowMoment2Step2Skeleton(false);
     setShowMoment2PlanView(stage === 'plan');
@@ -401,13 +410,25 @@ export default function EventSetupPage() {
         }
         if (cancelled) return;
 
-        const stage = resolveSetupStage({
+        let stage: SetupStage = resolveSetupStage({
           items: loadedItems,
           hasSetup: Boolean(loadedEvent.setup),
           householdCount,
           // GTC-355: an approved plan opens at Moment 3, so a returning host lands there.
           planApproved: Boolean(loadedEvent.setup?.planApprovedAt),
         });
+        /*
+         * [[GTC-367]] (item 2) — a strip tap from another page (the pre-flight) asks for a Moment by
+         * the address: `?at=people` or `?at=plan`. Read once, here; anything else leaves the entry
+         * rule's answer. The address is then put back to this page's own, so a reload follows the
+         * stored state as it always has. This page reads no `useSearchParams` (KB-003).
+         */
+        const at = new URLSearchParams(window.location.search).get('at');
+        const asked = requestedStage(at, { hasPlan: hasGeneratedPlan(loadedItems) });
+        if (asked) stage = asked;
+        if (at !== null) {
+          window.history.replaceState(window.history.state, '', window.location.pathname);
+        }
         if (stage === 'plan') {
           setMoment2PlanCategories(await loadMoment2PlanCategories());
         }
@@ -641,6 +662,66 @@ export default function EventSetupPage() {
     }
   };
 
+  /*
+   * [[GTC-367]] (item 2) — THE STRIP'S TAPS. One rule says which Moments open (`stripDoors`); this
+   * turns a door into a stage. A tap never approves, holds or sends: Moment 3 opens only once the
+   * plan is approved, the pre-flight only once it is held, and the board only once it is sent.
+   */
+  const hostSaved = Boolean(event?.setup) || households.some((h) => h.isHostHousehold);
+  const goToMoment = async (target: StripTarget) => {
+    if (target === 'preflight') {
+      window.location.href = `/plan/${eventId}/pre-flight`;
+      return;
+    }
+    if (target === 'board') {
+      window.location.href = boardHref(eventId);
+      return;
+    }
+    if (target === 'moment1') {
+      setEditingHousehold(null);
+      setMoment1Phase(hostSaved ? 'input' : 'host');
+      applyStage('moment1');
+      return;
+    }
+    if (target === 'moment3') {
+      await loadItems();
+      setMoment3Data(await loadMoment3Data());
+      applyStage('moment3');
+      return;
+    }
+    // Moment 2: the plan view when there is a plan, else Moment 2's opening — "On to the plan →"'s
+    // rule (GTC-235). Read fresh: after a first generation `items` has not been reloaded.
+    const fresh = await loadItems();
+    if (hasGeneratedPlan(fresh)) {
+      setMoment2PlanCategories(await loadMoment2PlanCategories());
+      applyStage('plan');
+      return;
+    }
+    applyStage('moment2-opening');
+  };
+  /** The strip's doors for a screen; `blocked` keeps her where she is (W9, W9b) with its line. */
+  const doorsFor = (
+    current: MomentNumber,
+    blocked: string | null = null
+  ): Partial<Record<MomentNumber, ArcDoor>> => {
+    const all = stripDoors({
+      hostSaved,
+      hasPlan: hasGeneratedPlan(items),
+      planApproved: Boolean(event?.setup?.planApprovedAt),
+      held: Boolean(event && event.status !== 'DRAFT'),
+      sent: Boolean(event?.sentAt),
+    });
+    const doors: Partial<Record<MomentNumber, ArcDoor>> = {};
+    for (const n of [1, 2, 3, 4] as const) {
+      if (n === current) continue;
+      const door = all[n];
+      if (door.kind === 'locked') doors[n] = { locked: door.line };
+      else if (blocked) doors[n] = { locked: blocked };
+      else doors[n] = { onGo: () => void goToMoment(door.target) };
+    }
+    return doors;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -673,6 +754,7 @@ export default function EventSetupPage() {
           setShowSetup(false);
           setShowMoment1(true);
         }}
+        doors={doorsFor(1)}
       />
     );
   }
@@ -685,6 +767,7 @@ export default function EventSetupPage() {
           eventId={event.id}
           eventName={event.name}
           households={households}
+          doors={doorsFor(2)}
           onContinue={async () => {
             setMoment1Phase('input');
             /**
@@ -696,15 +779,12 @@ export default function EventSetupPage() {
              * of "there is a plan here" rather than two that can drift apart. Sending a
              * returning host to Moment 2's opening would walk her at the Generate button
              * she has no reason to press.
+             *
+             * [[GTC-367]]: the strip's "What's the plan?" goes by the same rule, so both go
+             * through `goToMoment`, which reads the items fresh (after a first generation the
+             * page's `items` were never reloaded, and this sent her to the opening).
              */
-            if (hasGeneratedPlan(items)) {
-              setShowMoment1(false);
-              setMoment2PlanCategories(await loadMoment2PlanCategories());
-              setShowMoment2PlanView(true);
-              return;
-            }
-            setShowMoment1(false);
-            setShowMoment2Opening(true);
+            await goToMoment('plan');
           }}
           onBackToEditing={() => {
             setMoment1Phase('input');
@@ -751,10 +831,18 @@ export default function EventSetupPage() {
       return (
         <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
           <div className="max-w-5xl mx-auto px-6 py-8">
+            {/* [[GTC-367]] (item 31, W1; correction C1): her own household's step had no way out. */}
+            <a
+              href="/plan/events"
+              className="inline-block mb-4 text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
+            >
+              {STRIP_WORDS.YOUR_EVENTS}
+            </a>
             <div className="max-w-[640px]">
               <Moment1InputForm
                 eventId={event.id}
                 eventName={event.name}
+                stripDoors={doorsFor(1)}
                 onComplete={() => setMoment1Phase('input')}
                 onAddPerson={async () => {}}
                 hostMode={hostStep.host}
@@ -846,7 +934,7 @@ export default function EventSetupPage() {
             href="/plan/events"
             className="inline-block mb-4 text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
           >
-            ← Your events
+            {STRIP_WORDS.YOUR_EVENTS}
           </a>
           <div className="flex flex-col md:flex-row md:gap-8">
             {/* Left column: input form */}
@@ -865,6 +953,15 @@ export default function EventSetupPage() {
                 totalPeopleCount={totalPeopleCount}
                 channelCandidates={channelCandidates}
                 onDraftChange={setMoment1Draft}
+                stripDoors={doorsFor(
+                  1,
+                  // [[GTC-367]] (Q9): a household typed or being changed keeps her here.
+                  editingHousehold
+                    ? STRIP_WORDS.SAVE_CHANGES
+                    : moment1Draft
+                      ? STRIP_WORDS.SAVE_NEW_HOUSEHOLD
+                      : null
+                )}
               />
             </div>
 
@@ -936,6 +1033,7 @@ export default function EventSetupPage() {
           }}
           holding={holding}
           holdNotice={holdNoticeShown}
+          stripDoors={doorsFor(3)}
         />
       </>
     );
@@ -1152,6 +1250,7 @@ export default function EventSetupPage() {
             // different route and V2's stages are full-viewport overlays over it.
             window.location.href = `/plan/${eventId}`;
           }}
+          stripDoors={doorsFor(2)}
         />
       </>
     );
@@ -1219,10 +1318,8 @@ export default function EventSetupPage() {
             setShowMoment2Step2Skeleton(false);
           }
         }}
-        onCancel={() => {
-          setShowMoment2Step1(false);
-          setShowMoment2Opening(true);
-        }}
+        onBack={() => void goToMoment('moment1')}
+        doors={doorsFor(2)}
       />
     );
   }
@@ -1235,6 +1332,8 @@ export default function EventSetupPage() {
           setShowMoment2Opening(false);
           setShowMoment2Step1(true);
         }}
+        onBack={() => void goToMoment('moment1')}
+        doors={doorsFor(2)}
       />
     );
   }

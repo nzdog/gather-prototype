@@ -29,7 +29,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import MomentArc from './MomentArc';
+import MomentArc, { type ArcDoor } from './MomentArc';
 import type { PendingChange } from '@/lib/ledger';
 import type { SerialisedEvent } from '@/lib/lifecycle';
 import type { ReasonAnswer } from './ReasonPrompt';
@@ -101,6 +101,8 @@ interface Moment3AssignViewProps {
   holding?: boolean;
   /** [[GTC-360]] — what keeps her in Moment 3, said in the completion panel. */
   holdNotice?: HoldNotice | null;
+  /** [[GTC-367]] (item 2): the Moments strip's doors (`stripDoors`, src/lib/moments/strip.ts). */
+  stripDoors?: Partial<Record<1 | 2 | 3 | 4, ArcDoor>>;
 }
 
 const RECHECK_DEBOUNCE_MS = 1000;
@@ -147,6 +149,7 @@ export default function Moment3AssignView({
   onMoveOn,
   holding = false,
   holdNotice = null,
+  stripDoors,
 }: Moment3AssignViewProps) {
   const toast = useToast();
   const [holders, setHolders] = useState<Record<string, Moment3Holder | null>>(initialHolders);
@@ -403,7 +406,12 @@ export default function Moment3AssignView({
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-5xl mx-auto px-6 py-6 pb-40">
         <div className="mb-6">
-          <MomentArc currentMoment={3} completedMoments={[1, 2]} />
+          <MomentArc
+            currentMoment={3}
+            completedMoments={[1, 2]}
+            doors={stripDoors}
+            disabled={holding}
+          />
         </div>
 
         <h1 className="text-xl font-semibold text-gray-900 mb-6">{M3_WORDS.SENTENCE}</h1>

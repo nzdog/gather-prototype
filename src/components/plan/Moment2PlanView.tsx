@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import MomentArc from './MomentArc';
+import MomentArc, { type ArcDoor } from './MomentArc';
+import { STRIP_WORDS } from '@/lib/moments/strip';
 import { useToast } from '@/contexts/ToastContext';
 import { CATEGORY_LABELS } from '@/lib/ai/plan-categories';
 import RowKindToggle from './RowKindToggle';
@@ -73,6 +74,8 @@ interface Moment2PlanViewProps {
    * people and nudges still live only on that dashboard.
    */
   onGoToDashboard: () => void;
+  /** [[GTC-367]] (item 2): the Moments strip's doors (`stripDoors`, src/lib/moments/strip.ts). */
+  stripDoors?: Partial<Record<1 | 2 | 3 | 4, ArcDoor>>;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -122,6 +125,7 @@ export default function Moment2PlanView({
   regeneratingScope,
   onEditGuests,
   onGoToDashboard,
+  stripDoors,
 }: Moment2PlanViewProps) {
   const toast = useToast();
 
@@ -218,7 +222,12 @@ export default function Moment2PlanView({
       <div className="max-w-2xl mx-auto px-6 py-6 pb-32">
         {/* MomentArc */}
         <div className="mb-6">
-          <MomentArc currentMoment={2} completedMoments={[1]} />
+          <MomentArc
+            currentMoment={2}
+            completedMoments={[1]}
+            doors={stripDoors}
+            disabled={regeneratingScope !== null}
+          />
         </div>
 
         {/* Title + summary */}
@@ -335,7 +344,8 @@ export default function Moment2PlanView({
             disabled={regeneratingScope !== null}
             className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            ← Back to event setup
+            {/* [[GTC-367]] (item 31, W3): it opens the questions, so it says so (plan Q8). */}
+            {STRIP_WORDS.BACK_TO_QUESTIONS}
           </button>
           <button
             type="button"

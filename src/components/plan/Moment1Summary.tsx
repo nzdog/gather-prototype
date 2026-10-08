@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import MomentArc from '@/components/plan/MomentArc';
+import MomentArc, { type ArcDoor } from '@/components/plan/MomentArc';
+import { STRIP_WORDS } from '@/lib/moments/strip';
 import { SavedHousehold } from '@/components/plan/HouseholdCardList';
 
 interface Moment1SummaryProps {
@@ -10,6 +11,8 @@ interface Moment1SummaryProps {
   households: SavedHousehold[];
   onContinue: () => void;
   onBackToEditing: () => void;
+  /** [[GTC-367]] (item 2): the strip's doors. */
+  doors?: Partial<Record<1 | 2 | 3 | 4, ArcDoor>>;
 }
 
 interface MissingPerson {
@@ -25,6 +28,7 @@ export default function Moment1Summary({
   households,
   onContinue,
   onBackToEditing,
+  doors,
 }: Moment1SummaryProps) {
   const [skippedNames, setSkippedNames] = useState<Set<string>>(new Set());
   const [expandedPerson, setExpandedPerson] = useState<string | null>(null);
@@ -195,8 +199,16 @@ export default function Moment1Summary({
   return (
     <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
       <div className="max-w-2xl mx-auto px-6 py-8">
+        {/* [[GTC-367]] (item 31, W1): an overlay over the menu bar, so its own way out. */}
+        <a
+          href="/plan/events"
+          className="mb-4 inline-block text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
+        >
+          {STRIP_WORDS.YOUR_EVENTS}
+        </a>
+
         {/* MomentArc */}
-        <MomentArc currentMoment={2} completedMoments={[1]} />
+        <MomentArc currentMoment={2} completedMoments={[1]} doors={doors} />
 
         {/* Headline stats */}
         <div className="mt-10">

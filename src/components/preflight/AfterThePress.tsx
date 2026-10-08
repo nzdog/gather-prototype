@@ -46,6 +46,8 @@ import {
 } from '@/lib/preflight/ask-preview-compose';
 import { AFTER_PRESS_HEADING, afterPressLead } from '@/lib/preflight/after-press-words';
 import { MarkRows, Pill, type Member } from '@/components/preflight/mark-rows';
+import { boardHref } from '@/lib/events/home-href';
+import { STRIP_WORDS } from '@/lib/moments/strip';
 
 // ─── Wire shapes (the parts of /pre-flight and /pre-flight/message this reads) ───
 
@@ -63,6 +65,8 @@ interface ChaseView {
 }
 
 export interface AfterThePressViewProps {
+  /** [[GTC-367]] (item 31, W5): for the way back to the board. Absent, no link is drawn. */
+  eventId?: string;
   eventName: string;
   /** `Event.sentAt`, as the route sends it. */
   sentAt: string;
@@ -138,6 +142,7 @@ function ExceptionRows({
 }
 
 export function AfterThePressView({
+  eventId,
   eventName,
   sentAt,
   pace,
@@ -154,6 +159,15 @@ export function AfterThePressView({
     <div className="min-h-screen bg-warm-white">
       <div className="max-w-3xl mx-auto px-6 py-10">
         <header className="mb-8">
+          {/* [[GTC-367]] (item 31, W5) — the board sent her here ("Change who I chase"); this goes back. */}
+          {eventId && (
+            <a
+              href={boardHref(eventId)}
+              className="mb-4 inline-block text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
+            >
+              {STRIP_WORDS.BACK_TO_BOARD}
+            </a>
+          )}
           <p className="text-sm text-gray-400 mb-1">{eventName}</p>
           <h1 className="text-2xl font-medium text-gray-900">{AFTER_PRESS_HEADING}</h1>
           <p className="text-gray-600 mt-2">{afterPressLead(new Date(sentAt))}</p>
@@ -298,6 +312,7 @@ export default function AfterThePress({ eventId }: { eventId: string }) {
 
   return (
     <AfterThePressView
+      eventId={eventId}
       eventName={data.event.name}
       sentAt={data.event.sentAt}
       pace={data.event.nudgePace}

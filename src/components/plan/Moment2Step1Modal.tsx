@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { X } from 'lucide-react';
 import {
   getAccordionDefaults,
   getCategoryLevels,
@@ -21,6 +20,8 @@ import {
   type DietaryStatus,
 } from '@/lib/dietary';
 import AccordionShell from '@/components/plan/AccordionShell';
+import MomentArc, { type ArcDoor } from '@/components/plan/MomentArc';
+import { STRIP_WORDS } from '@/lib/moments/strip';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -33,7 +34,13 @@ interface Moment2Step1ModalProps {
   eventId: string;
   eventName: string;
   onGenerate: () => void;
-  onCancel: () => void;
+  /**
+   * [[GTC-367]] (item 1, W2): back to Moment 1. Was `onCancel`, the × that opened Moment 2's
+   * opening, whose only button opened these questions again: a loop with no way out (plan Q7).
+   */
+  onBack: () => void;
+  /** [[GTC-367]] (item 2): the strip's doors. Every door that opens is wrapped in `leave`. */
+  doors?: Partial<Record<1 | 2 | 3 | 4, ArcDoor>>;
 }
 
 interface FoodItem {
@@ -188,7 +195,8 @@ function readOtherJobs(raw: unknown): OtherJobsAccordionData {
 export default function Moment2Step1Modal({
   eventId,
   onGenerate,
-  onCancel,
+  onBack,
+  doors,
 }: Moment2Step1ModalProps) {
   const [state, setState] = useState<Step1State>(INITIAL_STATE);
   // GTC-364 (item 3, Q1): the sections open now. Several may be open at once, so opening one
@@ -451,6 +459,38 @@ export default function Moment2Step1Modal({
     onGenerate();
   }, [onGenerate, saveToApi]);
 
+  /**
+   * [[GTC-367]] (Q7) — EVERY WAY OUT SAVES FIRST. The questions save half a second after each
+   * change; a page change inside that half second would drop the last one. So W1, W2 and the strip
+   * all flush the pending save, as Generate does, and stay put if it fails (the failure is already
+   * said in the footer, through saveError).
+   */
+  const leave = useCallback(
+    async (go: () => void) => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      if (pendingRef.current) {
+        const saved = await saveToApi(pendingRef.current);
+        pendingRef.current = null;
+        if (!saved) return;
+      }
+      go();
+    },
+    [saveToApi]
+  );
+  const leavingDoors = useMemo(() => {
+    if (!doors) return undefined;
+    const wrapped: Partial<Record<1 | 2 | 3 | 4, ArcDoor>> = {};
+    for (const n of [1, 2, 3, 4] as const) {
+      const door = doors[n];
+      if (!door) continue;
+      wrapped[n] = 'onGo' in door ? { onGo: () => void leave(door.onGo) } : door;
+    }
+    return wrapped;
+  }, [doors, leave]);
+
   // Canonical food categories to render: intersection of OPTION_TREE_FOOD_CATEGORIES
   // and the occasion's up-front categories — its defaultCategories, plus any it shows up
   // front without always planning them (GTC-363 item 26: Christmas's Entrée & Starters).
@@ -489,15 +529,25 @@ export default function Moment2Step1Modal({
   return (
     <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
       <div className="max-w-2xl mx-auto px-6 py-8 pb-32">
-        {/* Close button */}
-        <button
-          type="button"
-          onClick={onCancel}
-          className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 transition-colors"
-          aria-label="Close"
+        {/*
+          [[GTC-367]] (items 1, 2 and 31) — the way out (W1) and the strip, where the × was. This
+          screen covers the menu bar, so it carries its own way out; it saves first (Q7).
+        */}
+        <a
+          href="/plan/events"
+          onClick={(e) => {
+            e.preventDefault();
+            void leave(() => {
+              window.location.href = '/plan/events';
+            });
+          }}
+          className="inline-block mb-4 text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
         >
-          <X size={24} />
-        </button>
+          {STRIP_WORDS.YOUR_EVENTS}
+        </a>
+        <div className="mb-8">
+          <MomentArc currentMoment={2} completedMoments={[1]} doors={leavingDoors} />
+        </div>
 
         {/* Event type selector */}
         <div className="mb-8">
@@ -749,14 +799,26 @@ export default function Moment2Step1Modal({
               {saveError}
             </p>
           )}
-          <button
-            type="button"
-            disabled={!state.eventType || saving}
-            onClick={handleGenerate}
-            className="w-full px-6 py-3 bg-accent text-white font-medium rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Generate plan &rarr;
-          </button>
+          {/* [[GTC-367]] (item 1, W2) — the way back to Moment 1, as the plan view's footer has its. */}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => void leave(onBack)}
+              className="shrink-0 text-sm text-gray-600 hover:text-gray-900 px-3 py-2"
+            >
+              {STRIP_WORDS.BACK_TO_PEOPLE}
+            </button>
+            <div className="flex-1">
+              <button
+                type="button"
+                disabled={!state.eventType || saving}
+                onClick={handleGenerate}
+                className="w-full px-6 py-3 bg-accent text-white font-medium rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Generate plan &rarr;
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
