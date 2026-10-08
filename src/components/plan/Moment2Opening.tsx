@@ -2,6 +2,8 @@
 
 import MomentArc, { type ArcDoor } from '@/components/plan/MomentArc';
 import { STRIP_WORDS } from '@/lib/moments/strip';
+import EventDetails, { type EventDetailsFacts } from '@/components/shared/EventDetails';
+import MomentWords from '@/components/plan/MomentWords';
 
 interface Moment2OpeningProps {
   eventName: string;
@@ -10,26 +12,31 @@ interface Moment2OpeningProps {
   onBack?: () => void;
   /** [[GTC-367]] (item 2): the strip's doors. */
   doors?: Partial<Record<1 | 2 | 3 | 4, ArcDoor>>;
+  /** [[GTC-368]] (item 17): the event's name and its details (W10, top right). */
+  details?: EventDetailsFacts;
 }
 
-export default function Moment2Opening({ onStart, onBack, doors }: Moment2OpeningProps) {
+export default function Moment2Opening({ onStart, onBack, doors, details }: Moment2OpeningProps) {
   return (
     <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
-      {/* [[GTC-367]] (item 31, W1): an overlay over the menu bar, so its own way out. */}
-      <a
-        href="/plan/events"
-        className="absolute top-6 left-6 inline-block text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
-      >
-        {STRIP_WORDS.YOUR_EVENTS}
-      </a>
+      {/* [[GTC-367]] (item 31, W1): an overlay over the menu bar, so its own way out.
+          [[GTC-368]] (item 17, Q1): the event's name across from it. */}
+      <div className="absolute top-6 inset-x-6 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <a
+          href="/plan/events"
+          className="inline-block text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
+        >
+          {STRIP_WORDS.YOUR_EVENTS}
+        </a>
+        {details && <EventDetails facts={details} />}
+      </div>
       <div className="max-w-2xl mx-auto px-6 py-8 flex flex-col items-center justify-center min-h-screen">
         {/* MomentArc */}
         <MomentArc currentMoment={2} completedMoments={[1]} doors={doors} />
 
-        {/* Assistant line */}
-        <p className="mt-10 text-2xl font-semibold text-gray-900 text-center">
-          Let&rsquo;s get this plan out of your head and onto the page.
-        </p>
+        {/* [[GTC-368]] (item 5, Q10's A): where Moment 2 starts, the founder's "What this does",
+            in place of the line that said nearly the same (R2, removed: Q11). */}
+        <MomentWords moment={2} part="does" className="mt-10 max-w-xl" />
 
         {/* Primary action */}
         <div className="mt-8">

@@ -32,6 +32,7 @@ import { M3_WORDS } from '@/lib/moment3/words';
 import { boardHref } from '@/lib/events/home-href';
 import { holdNotice, holdThePlan, type HoldNotice } from '@/lib/moment3/hold';
 import type { ArcDoor } from '@/components/plan/MomentArc';
+import EventDetails, { type EventDetailsFacts } from '@/components/shared/EventDetails';
 import {
   STRIP_WORDS,
   requestedStage,
@@ -235,7 +236,19 @@ interface SetupEvent extends SerialisedEvent {
    * on the wire — `EVENT_WIRE_SELECT` names it so the events list can route on it —
    * so reading it here costs no extra request.
    */
-  setup: { id: string; planApprovedAt?: string | null } | null;
+  setup: {
+    id: string;
+    planApprovedAt?: string | null;
+    /** [[GTC-368]] (Q14): Moment 2's answer, the details' Occasion (on the wire, `EVENT_WIRE_SELECT`). */
+    eventType?: string | null;
+    eventTypeOther?: string | null;
+  } | null;
+  /** [[GTC-368]] (item 17): the rest of the details, already on the wire (`EVENT_WIRE_SELECT`). */
+  startDate: string;
+  venueName?: string | null;
+  venueTimingStart?: string | null;
+  venueTimingEnd?: string | null;
+  occasionDescription?: string | null;
   /**
    * GTC-355: Moment 3's conflict recheck fires only once a check has been run, the old
    * dashboard's guard. Already on the wire (`EVENT_WIRE_SELECT`).
@@ -362,6 +375,14 @@ export default function EventSetupPage() {
   }, [moment1Draft]);
   // GTC-236: 'plan', a categoryKey, or null when no regeneration is running.
   const [regeneratingScope, setRegeneratingScope] = useState<'plan' | string | null>(null);
+  /**
+   * [[GTC-368]] (C5): her answer on Moment 2's questions, as she gives it. The page read the event
+   * once, so without this the details would show the occasion as it was when the page opened.
+   */
+  const [liveOccasion, setLiveOccasion] = useState<{
+    eventType: string | null;
+    eventTypeOther: string | null;
+  } | null>(null);
 
   /**
    * GTC-235: show exactly one stage, chosen by the entry rule.
@@ -722,6 +743,24 @@ export default function EventSetupPage() {
     return doors;
   };
 
+  /** [[GTC-368]] (item 17): the event's name and its details, for every screen of the flow. */
+  const details: EventDetailsFacts | undefined = event
+    ? {
+        id: event.id,
+        name: event.name,
+        startDate: event.startDate,
+        endDate: event.endDate,
+        venueName: event.venueName,
+        venueTimingStart: event.venueTimingStart,
+        venueTimingEnd: event.venueTimingEnd,
+        occasionDescription: event.occasionDescription,
+        eventType: liveOccasion ? liveOccasion.eventType : (event.setup?.eventType ?? null),
+        eventTypeOther: liveOccasion
+          ? liveOccasion.eventTypeOther
+          : (event.setup?.eventTypeOther ?? null),
+      }
+    : undefined;
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -755,6 +794,7 @@ export default function EventSetupPage() {
           setShowMoment1(true);
         }}
         doors={doorsFor(1)}
+        details={details}
       />
     );
   }
@@ -768,6 +808,7 @@ export default function EventSetupPage() {
           eventName={event.name}
           households={households}
           doors={doorsFor(2)}
+          details={details}
           onContinue={async () => {
             setMoment1Phase('input');
             /**
@@ -831,13 +872,17 @@ export default function EventSetupPage() {
       return (
         <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
           <div className="max-w-5xl mx-auto px-6 py-8">
-            {/* [[GTC-367]] (item 31, W1; correction C1): her own household's step had no way out. */}
-            <a
-              href="/plan/events"
-              className="inline-block mb-4 text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
-            >
-              {STRIP_WORDS.YOUR_EVENTS}
-            </a>
+            {/* [[GTC-367]] (item 31, W1; correction C1): her own household's step had no way out.
+                [[GTC-368]] (item 17, Q1): the event's name across from it. */}
+            <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <a
+                href="/plan/events"
+                className="inline-block text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
+              >
+                {STRIP_WORDS.YOUR_EVENTS}
+              </a>
+              {details && <EventDetails facts={details} />}
+            </div>
             <div className="max-w-[640px]">
               <Moment1InputForm
                 eventId={event.id}
@@ -930,12 +975,16 @@ export default function EventSetupPage() {
               now HOLDS a half-finished host here across a reload rather than returning
               her to an opening screen she could leave. Without this she has the URL bar
               and nothing else. */}
-          <a
-            href="/plan/events"
-            className="inline-block mb-4 text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
-          >
-            {STRIP_WORDS.YOUR_EVENTS}
-          </a>
+          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <a
+              href="/plan/events"
+              className="inline-block text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
+            >
+              {STRIP_WORDS.YOUR_EVENTS}
+            </a>
+            {/* [[GTC-368]] (item 17, Q1): the event's name across from the way out. */}
+            {details && <EventDetails facts={details} />}
+          </div>
           <div className="flex flex-col md:flex-row md:gap-8">
             {/* Left column: input form */}
             <div ref={moment1FormRef} className="flex-1 min-w-0">
@@ -1034,6 +1083,7 @@ export default function EventSetupPage() {
           holding={holding}
           holdNotice={holdNoticeShown}
           stripDoors={doorsFor(3)}
+          details={details}
         />
       </>
     );
@@ -1251,6 +1301,7 @@ export default function EventSetupPage() {
             window.location.href = `/plan/${eventId}`;
           }}
           stripDoors={doorsFor(2)}
+          details={details}
         />
       </>
     );
@@ -1320,6 +1371,8 @@ export default function EventSetupPage() {
         }}
         onBack={() => void goToMoment('moment1')}
         doors={doorsFor(2)}
+        details={details}
+        onOccasionChange={setLiveOccasion}
       />
     );
   }
@@ -1334,6 +1387,7 @@ export default function EventSetupPage() {
         }}
         onBack={() => void goToMoment('moment1')}
         doors={doorsFor(2)}
+        details={details}
       />
     );
   }

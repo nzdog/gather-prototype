@@ -13,6 +13,7 @@ import OptionTree, {
   type OptionTreeLevel,
   type OptionTreeSelections,
 } from '@/components/shared/OptionTree';
+import EventDetails, { type EventDetailsFacts } from '@/components/shared/EventDetails';
 import {
   readDietaryData,
   dietaryTitleSummary,
@@ -41,6 +42,16 @@ interface Moment2Step1ModalProps {
   onBack: () => void;
   /** [[GTC-367]] (item 2): the strip's doors. Every door that opens is wrapped in `leave`. */
   doors?: Partial<Record<1 | 2 | 3 | 4, ArcDoor>>;
+  /**
+   * [[GTC-368]] (item 17): the event's details (W10). The occasion shown is her answer here, as she
+   * gives it (C5), and "Change these details" saves first like every other way out (Q8).
+   */
+  details?: EventDetailsFacts;
+  /** [[GTC-368]] (C5): tells the page her answer as it changes, so the plan view's details agree. */
+  onOccasionChange?: (occasion: {
+    eventType: string | null;
+    eventTypeOther: string | null;
+  }) => void;
 }
 
 interface FoodItem {
@@ -197,6 +208,8 @@ export default function Moment2Step1Modal({
   onGenerate,
   onBack,
   doors,
+  details,
+  onOccasionChange,
 }: Moment2Step1ModalProps) {
   const [state, setState] = useState<Step1State>(INITIAL_STATE);
   // GTC-364 (item 3, Q1): the sections open now. Several may be open at once, so opening one
@@ -491,6 +504,23 @@ export default function Moment2Step1Modal({
     return wrapped;
   }, [doors, leave]);
 
+  // [[GTC-368]] (C5): her answer, as the details say it, here and (through the page) on the plan view.
+  // `onOccasionChange` is the page's state setter, the same function on every render.
+  useEffect(() => {
+    if (!loaded) return;
+    onOccasionChange?.({
+      eventType: state.eventType || null,
+      eventTypeOther: state.eventTypeOther || null,
+    });
+  }, [loaded, state.eventType, state.eventTypeOther, onOccasionChange]);
+  const liveDetails = details
+    ? {
+        ...details,
+        eventType: state.eventType || null,
+        eventTypeOther: state.eventTypeOther || null,
+      }
+    : undefined;
+
   // Canonical food categories to render: intersection of OPTION_TREE_FOOD_CATEGORIES
   // and the occasion's up-front categories — its defaultCategories, plus any it shows up
   // front without always planning them (GTC-363 item 26: Christmas's Entrée & Starters).
@@ -533,18 +563,31 @@ export default function Moment2Step1Modal({
           [[GTC-367]] (items 1, 2 and 31) — the way out (W1) and the strip, where the × was. This
           screen covers the menu bar, so it carries its own way out; it saves first (Q7).
         */}
-        <a
-          href="/plan/events"
-          onClick={(e) => {
-            e.preventDefault();
-            void leave(() => {
-              window.location.href = '/plan/events';
-            });
-          }}
-          className="inline-block mb-4 text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
-        >
-          {STRIP_WORDS.YOUR_EVENTS}
-        </a>
+        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <a
+            href="/plan/events"
+            onClick={(e) => {
+              e.preventDefault();
+              void leave(() => {
+                window.location.href = '/plan/events';
+              });
+            }}
+            className="inline-block text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
+          >
+            {STRIP_WORDS.YOUR_EVENTS}
+          </a>
+          {/* [[GTC-368]] (item 17, Q1, Q8): the event's name; its "Change these details" saves first. */}
+          {liveDetails && (
+            <EventDetails
+              facts={liveDetails}
+              onChangeDetails={(href) =>
+                void leave(() => {
+                  window.location.href = href;
+                })
+              }
+            />
+          )}
+        </div>
         <div className="mb-8">
           <MomentArc currentMoment={2} completedMoments={[1]} doors={leavingDoors} />
         </div>

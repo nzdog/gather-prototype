@@ -744,6 +744,7 @@ async function runLive() {
   let whileExists = '';
   try {
     chrome = await openHeadless({ fetchImpl: realFetch, port: 9376 });
+    chrome.answerLeaveDialogs(true); // [[GTC-368]] F2: a "Leave site?" on the way out is answered "Leave"
     await chrome.blockPlanMaking();
     await chrome.setSessionCookie(token);
     const c = chrome;

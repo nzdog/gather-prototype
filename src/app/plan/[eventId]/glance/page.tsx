@@ -72,6 +72,12 @@ export default async function GlancePage({ params }: { params: Promise<{ eventId
       endDate: true,
       decideByOffsetHours: true,
       nudgePace: true,
+      // [[GTC-368]] (item 17, Q14, C2): the event's details, behind the top line.
+      venueName: true,
+      venueTimingStart: true,
+      venueTimingEnd: true,
+      occasionDescription: true,
+      setup: { select: { eventType: true, eventTypeOther: true } },
     },
   });
   if (!event) notFound();
@@ -176,6 +182,22 @@ export default async function GlancePage({ params }: { params: Promise<{ eventId
         daysToGo={daysToGoLine(event.startDate, now)}
         /* [[GTC-366]] (item 11) — the event's date as the print for the fridge shows it. */
         printDate={printEventDate(event.startDate)}
+        /*
+          [[GTC-368]] (item 17, Q15) — the event's details, behind the whole top line. Written lines
+          only, worked out from the event's own facts; the glance payload is untouched.
+        */
+        details={{
+          id: eventId,
+          name: event.name,
+          startDate: event.startDate.toISOString(),
+          endDate: event.endDate.toISOString(),
+          venueName: event.venueName,
+          venueTimingStart: event.venueTimingStart,
+          venueTimingEnd: event.venueTimingEnd,
+          occasionDescription: event.occasionDescription,
+          eventType: event.setup?.eventType ?? null,
+          eventTypeOther: event.setup?.eventTypeOther ?? null,
+        }}
       />
       {/*
         Phase 6 slice 6c. The island, BESIDE the board rather than inside it, so `GlanceBoard`

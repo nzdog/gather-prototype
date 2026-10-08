@@ -4,6 +4,8 @@ import { useState } from 'react';
 import MomentArc, { type ArcDoor } from '@/components/plan/MomentArc';
 import { STRIP_WORDS } from '@/lib/moments/strip';
 import { SavedHousehold } from '@/components/plan/HouseholdCardList';
+import EventDetails, { type EventDetailsFacts } from '@/components/shared/EventDetails';
+import MomentWords from '@/components/plan/MomentWords';
 
 interface Moment1SummaryProps {
   eventId: string;
@@ -13,6 +15,8 @@ interface Moment1SummaryProps {
   onBackToEditing: () => void;
   /** [[GTC-367]] (item 2): the strip's doors. */
   doors?: Partial<Record<1 | 2 | 3 | 4, ArcDoor>>;
+  /** [[GTC-368]] (item 17): the event's name and its details (W10, top right). */
+  details?: EventDetailsFacts;
 }
 
 interface MissingPerson {
@@ -29,6 +33,7 @@ export default function Moment1Summary({
   onContinue,
   onBackToEditing,
   doors,
+  details,
 }: Moment1SummaryProps) {
   const [skippedNames, setSkippedNames] = useState<Set<string>>(new Set());
   const [expandedPerson, setExpandedPerson] = useState<string | null>(null);
@@ -199,13 +204,17 @@ export default function Moment1Summary({
   return (
     <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
       <div className="max-w-2xl mx-auto px-6 py-8">
-        {/* [[GTC-367]] (item 31, W1): an overlay over the menu bar, so its own way out. */}
-        <a
-          href="/plan/events"
-          className="mb-4 inline-block text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
-        >
-          {STRIP_WORDS.YOUR_EVENTS}
-        </a>
+        {/* [[GTC-367]] (item 31, W1): an overlay over the menu bar, so its own way out.
+            [[GTC-368]] (item 17, Q1): the event's name across from it. */}
+        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <a
+            href="/plan/events"
+            className="inline-block text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
+          >
+            {STRIP_WORDS.YOUR_EVENTS}
+          </a>
+          {details && <EventDetails facts={details} />}
+        </div>
 
         {/* MomentArc */}
         <MomentArc currentMoment={2} completedMoments={[1]} doors={doors} />
@@ -220,13 +229,9 @@ export default function Moment1Summary({
           )}
         </div>
 
-        {/* Completion sentence */}
-        {hasPeople && (
-          <p className="mt-6 text-base text-gray-600 italic">
-            Thanks. You&rsquo;ve done most of the hard work. I&rsquo;ll manage the invites and
-            chase-ups from here.
-          </p>
-        )}
+        {/* [[GTC-368]] (item 5, Q10's A): where Moment 1 finishes, the founder's "When it’s done",
+            in place of the line that said nearly the same (R1, removed: Q11), on its condition (Q10). */}
+        {hasPeople && <MomentWords moment={1} part="done" className="mt-6" />}
 
         {/* Missing contacts section */}
         {visibleMissing.length > 0 && (

@@ -51,6 +51,12 @@
  * [[GTC-366]] also adds, below the households, the key to the colours (item 9, behind "What the
  * colours mean") and, among the doors, "Print the list" (item 11) — an island of its own,
  * `PrintListDoor`, so this file still holds no hook and no fetch.
+ *
+ * [[GTC-368]] — the event's name opens its details (item 17): the WHOLE top line is the button,
+ * so its words stay one run (Q15), and the details' panel sits after the doors, so the first link
+ * to the old dashboard is still "Invites & people". Both are islands (`EventDetails`), so this file
+ * still holds no hook. And what Moment 4 does, in the founder's words (item 5), behind a closed
+ * "What this does" above the key, for Ruling 1: nothing here makes her lean in unless she asks.
  */
 
 import type { EventGlance, GlanceHousehold, GlancePerson } from '@/lib/glance/state';
@@ -83,6 +89,12 @@ import {
 import { CHASE_DOOR_LINK, chaseDoorHref } from '@/lib/preflight/after-press-words';
 import { BACK_ROOM_LINK, PLAN_DOOR_LINK, backRoomHref, planDoorHref } from '@/lib/events/home-href';
 import { ANSWERS_BY, DAYS_TO_GO_BUTTON } from '@/lib/events/event-dates';
+import {
+  EventDetailsButton,
+  EventDetailsPanel,
+  type EventDetailsFacts,
+} from '@/components/shared/EventDetails';
+import { MOMENT_HEADINGS, MOMENT_WORDS } from '@/lib/moments/moment-words';
 
 interface GlanceBoardProps {
   glance: EventGlance;
@@ -140,6 +152,11 @@ interface GlanceBoardProps {
   daysToGo?: string | null;
   /** [[GTC-366]] (item 11) — the event's date as the print shows it, for "Print the list". */
   printDate?: string;
+  /**
+   * [[GTC-368]] (item 17) — the event's own facts, for its details. A prop, like the two dates
+   * above: the page reads them, and the payload stays as it is. Absent, the top line is plain.
+   */
+  details?: EventDetailsFacts;
 }
 
 /**
@@ -373,6 +390,7 @@ export default function GlanceBoard({
   answersBy = null,
   daysToGo = null,
   printDate = '',
+  details,
 }: GlanceBoardProps) {
   // Ruling 23. A set, so the lookup in `Strip` is one place and one operation at any headcount.
   const sticky: ReadonlySet<string> = new Set(stickyReversals);
@@ -400,11 +418,22 @@ export default function GlanceBoard({
           closed on every visit, so the days to the event show only when she asks (Q8).
         */}
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-          <p className="m-0 text-[13px] text-[#888780]">
-            {eventName}
-            {` · ${glance.households.length} households`}
-            {answersBy ? ` · ${ANSWERS_BY} ${answersBy}` : null}
-          </p>
+          {details ? (
+            <EventDetailsButton
+              facts={details}
+              className="m-0 border-0 bg-transparent p-0 text-left text-[13px] text-[#888780] cursor-pointer hover:text-[#2c2c2a]"
+            >
+              {eventName}
+              {` · ${glance.households.length} households`}
+              {answersBy ? ` · ${ANSWERS_BY} ${answersBy}` : null}
+            </EventDetailsButton>
+          ) : (
+            <p className="m-0 text-[13px] text-[#888780]">
+              {eventName}
+              {` · ${glance.households.length} households`}
+              {answersBy ? ` · ${ANSWERS_BY} ${answersBy}` : null}
+            </p>
+          )}
           {daysToGo ? (
             <details data-days-to-go="" className="text-[13px]">
               <summary className="cursor-pointer list-none text-[12px] text-[#888780] underline underline-offset-2 [&::-webkit-details-marker]:hidden">
@@ -531,6 +560,20 @@ export default function GlanceBoard({
           and above the doors. Each row wears its state's own tone (Q11) and is not a strip: no
           `data-strip-state`, no person, no door, so the replay, the poll and the counts never meet it.
         */}
+        {/*
+          [[GTC-368]] (item 5, Q10's A) — Moment 4's words, closed on every visit, above the key.
+        */}
+        <details data-moment-words="" className="mt-4">
+          <summary className="inline-block cursor-pointer list-none text-[12px] text-[#888780] underline underline-offset-2 [&::-webkit-details-marker]:hidden">
+            {MOMENT_HEADINGS.DOES}
+          </summary>
+          <div className="mt-2 max-w-[520px] text-[13px] leading-snug text-[#2c2c2a]">
+            <p className="m-0 mb-2">{MOMENT_WORDS[4].does}</p>
+            <p className="m-0 text-[12px] text-[#888780]">{MOMENT_HEADINGS.DONE}</p>
+            <p className="m-0 mt-0.5">{MOMENT_WORDS[4].done}</p>
+          </div>
+        </details>
+
         <details data-colour-key="" className="mt-4">
           <summary className="inline-block cursor-pointer list-none text-[12px] text-[#888780] underline underline-offset-2 [&::-webkit-details-marker]:hidden">
             {COLOUR_KEY_BUTTON}
@@ -588,6 +631,9 @@ export default function GlanceBoard({
             className="inline-block cursor-pointer text-[12px] text-[#888780] underline underline-offset-2"
           />
         </div>
+
+        {/* [[GTC-368]] (item 17, Q15) — the details, after the doors (board-door C4). */}
+        {details ? <EventDetailsPanel facts={details} /> : null}
       </div>
     </main>
   );

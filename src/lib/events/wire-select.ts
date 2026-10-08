@@ -82,7 +82,9 @@ export const EVENT_WIRE_SELECT = {
   // The dashboard uses its presence to suppress V1-pipeline actions (GTC-148).
   // GTC-355: the setup flow's entry rule reads `planApprovedAt` to open an approved plan at
   // Moment 3. A column of EventSetup, not of Event, so none of the contract's forbidden columns.
-  setup: { select: { id: true, planApprovedAt: true } },
+  // [[GTC-368]] (Q14, C2): Moment 2's answer, the event details' Occasion. Columns of EventSetup, so
+  // none of the contract's forbidden columns either.
+  setup: { select: { id: true, planApprovedAt: true, eventType: true, eventTypeOther: true } },
 } as const;
 
 /**

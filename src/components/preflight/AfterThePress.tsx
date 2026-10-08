@@ -48,6 +48,7 @@ import { AFTER_PRESS_HEADING, afterPressLead } from '@/lib/preflight/after-press
 import { MarkRows, Pill, type Member } from '@/components/preflight/mark-rows';
 import { boardHref } from '@/lib/events/home-href';
 import { STRIP_WORDS } from '@/lib/moments/strip';
+import EventDetails, { type EventDetailsFacts } from '@/components/shared/EventDetails';
 
 // ─── Wire shapes (the parts of /pre-flight and /pre-flight/message this reads) ───
 
@@ -81,6 +82,8 @@ export interface AfterThePressViewProps {
   onMark: (personEventId: string, mark: NudgeMark | null) => void;
   onException: (personEventId: string, exception: ChaseWhenNoMobile | null) => void;
   onDefault: (value: ChaseWhenNoMobile) => void;
+  /** [[GTC-368]] (item 17): the event's name and its details, in the name line's place (W10, Q1). */
+  details?: EventDetailsFacts;
 }
 
 // ─── The view ────────────────────────────────────────────────────────────────
@@ -154,6 +157,7 @@ export function AfterThePressView({
   onMark,
   onException,
   onDefault,
+  details,
 }: AfterThePressViewProps) {
   return (
     <div className="min-h-screen bg-warm-white">
@@ -168,7 +172,16 @@ export function AfterThePressView({
               {STRIP_WORDS.BACK_TO_BOARD}
             </a>
           )}
-          <p className="text-sm text-gray-400 mb-1">{eventName}</p>
+          {details ? (
+            <div className="mb-1">
+              <EventDetails
+                facts={details}
+                className="text-sm text-gray-400 hover:text-gray-700 text-left"
+              />
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 mb-1">{eventName}</p>
+          )}
           <h1 className="text-2xl font-medium text-gray-900">{AFTER_PRESS_HEADING}</h1>
           <p className="text-gray-600 mt-2">{afterPressLead(new Date(sentAt))}</p>
           {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
@@ -247,7 +260,21 @@ export function AfterThePressView({
 // ─── The container ───────────────────────────────────────────────────────────
 
 interface PreFlightWire {
-  event: { name: string; sentAt: string | null; nudgePace: NudgePace | null };
+  event: {
+    id: string;
+    name: string;
+    sentAt: string | null;
+    nudgePace: NudgePace | null;
+    /** [[GTC-368]] (C2): the details' facts, from the route's widened read. */
+    startDate: string;
+    endDate: string;
+    venueName: string | null;
+    venueTimingStart: string | null;
+    venueTimingEnd: string | null;
+    occasionDescription: string | null;
+    eventType: string | null;
+    eventTypeOther: string | null;
+  };
   households: HouseholdView[];
   unhoused: Member[];
 }
@@ -326,6 +353,7 @@ export default function AfterThePress({ eventId }: { eventId: string }) {
         patch('chase', { personEventId, chaseException })
       }
       onDefault={(v) => patch('chase', { chaseWhenNoMobileDefault: v })}
+      details={{ ...data.event, id: eventId }}
     />
   );
 }

@@ -69,6 +69,7 @@ import { OPT_OUT_LINE } from '@/lib/sms/opt-out-line';
 // [[GTC-329]] — moved unchanged, so the post-press surface shows the same row as step 3.
 import { MarkRows, Pill, cadenceSentence, type Member } from '@/components/preflight/mark-rows';
 import AfterThePress from '@/components/preflight/AfterThePress';
+import EventDetails from '@/components/shared/EventDetails';
 import { BOARD_MOVE_AFTER_MS, SEE_THE_BOARD_LINK } from '@/lib/preflight/after-press-words';
 import { boardHref } from '@/lib/events/home-href';
 import MomentArc from '@/components/plan/MomentArc';
@@ -96,6 +97,14 @@ interface PreFlightData {
     startDate: string | null;
     sentAt: string | null;
     nudgePace: NudgePace | null;
+    /** [[GTC-368]] (item 17, C2): the details' facts, from the route's widened read. */
+    endDate: string | null;
+    venueName: string | null;
+    venueTimingStart: string | null;
+    venueTimingEnd: string | null;
+    occasionDescription: string | null;
+    eventType: string | null;
+    eventTypeOther: string | null;
   };
   coverage: {
     unassignedItems: Array<{
@@ -440,7 +449,18 @@ export default function PreFlightPage() {
               }}
             />
           </div>
-          <p className="text-sm text-gray-400 mb-1">{data.event.name}</p>
+          {/* [[GTC-368]] (item 17, Q1): the small name line is the event's name and its details. */}
+          <div className="mb-1">
+            <EventDetails
+              facts={{
+                ...data.event,
+                id: eventId,
+                startDate: data.event.startDate ?? '',
+                endDate: data.event.endDate ?? data.event.startDate ?? '',
+              }}
+              className="text-sm text-gray-400 hover:text-gray-700 text-left"
+            />
+          </div>
           <h1 className="text-2xl font-medium text-gray-900">Before you send</h1>
           <p className="text-gray-600 mt-2">
             Five things to go through. Nothing goes out until you press at the end.

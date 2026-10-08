@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import MomentArc, { type ArcDoor } from './MomentArc';
 import { STRIP_WORDS } from '@/lib/moments/strip';
+import EventDetails, { type EventDetailsFacts } from '@/components/shared/EventDetails';
+import MomentWords from './MomentWords';
 import { useToast } from '@/contexts/ToastContext';
 import { CATEGORY_LABELS } from '@/lib/ai/plan-categories';
 import RowKindToggle from './RowKindToggle';
@@ -76,6 +78,8 @@ interface Moment2PlanViewProps {
   onGoToDashboard: () => void;
   /** [[GTC-367]] (item 2): the Moments strip's doors (`stripDoors`, src/lib/moments/strip.ts). */
   stripDoors?: Partial<Record<1 | 2 | 3 | 4, ArcDoor>>;
+  /** [[GTC-368]] (item 17): the event's name and its details (W10, a row of its own, Q1). */
+  details?: EventDetailsFacts;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -126,6 +130,7 @@ export default function Moment2PlanView({
   onEditGuests,
   onGoToDashboard,
   stripDoors,
+  details,
 }: Moment2PlanViewProps) {
   const toast = useToast();
 
@@ -220,6 +225,12 @@ export default function Moment2PlanView({
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-2xl mx-auto px-6 py-6 pb-32">
+        {/* [[GTC-368]] (item 17, Q1): the menu bar shows here, so the name has a row of its own. */}
+        {details && (
+          <div className="mb-3 flex justify-end">
+            <EventDetails facts={details} />
+          </div>
+        )}
         {/* MomentArc */}
         <div className="mb-6">
           <MomentArc
@@ -313,6 +324,9 @@ export default function Moment2PlanView({
             </button>
           )}
         </div>
+
+        {/* [[GTC-368]] (item 5, Q10's A): where Moment 2 finishes, under "+ Add category". */}
+        <MomentWords moment={2} part="done" className="mt-8" />
       </div>
 
       {/* Floating bulk-action button */}

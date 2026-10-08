@@ -6,6 +6,7 @@ import { normalizePhoneNumber, isInternationalNumber } from '@/lib/phone';
 import { SavedHousehold } from './HouseholdCardList';
 import { HOUSEHOLD_CONTACT_LINE } from '@/lib/households/contact-line';
 import { householdDraft } from '@/lib/households/draft';
+import MomentWords from './MomentWords';
 
 export interface Moment1PersonInput {
   primaryContact: {
@@ -119,6 +120,39 @@ interface GuestForm {
   adultRoled?: boolean;
 }
 
+/**
+ * [[GTC-368]] — the founder's ruling on the false "Leave site?": *"Warn only when something has
+ * actually been typed or changed. Real typing is still caught, which your L1 ruling relied on."*
+ * Everything she can type or choose in the form, as one string, so the form can be compared with
+ * what it opened with: blank for a new household, her own household's prefill, or the saved
+ * household being changed. Trimmed, so a space typed and taken away is no change.
+ */
+function formSnapshot(f: {
+  name: string;
+  email: string;
+  phone: string;
+  partner: { name: string; email: string; phone: string } | null;
+  helpers: GuestForm[];
+  littles: number;
+  guests: GuestForm[];
+  contactPersonEventId: string | null;
+  hostingAlone: boolean;
+  messagesMuted: boolean;
+}): string {
+  const person = (p: { name: string; email: string; phone: string }) =>
+    [p.name, p.email, p.phone].map((v) => v.trim());
+  return JSON.stringify([
+    person(f),
+    f.partner ? person(f.partner) : null,
+    f.helpers.map((h) => [...person(h), Boolean(h.adultRoled)]),
+    f.littles,
+    f.guests.map(person),
+    f.contactPersonEventId,
+    f.hostingAlone,
+    f.messagesMuted,
+  ]);
+}
+
 let formIdCounter = 0;
 const emptyGuest = (): GuestForm => ({
   id: `f-${++formIdCounter}`,
@@ -215,8 +249,32 @@ export default function Moment1InputForm({
    */
   const isHostHouseholdForm = !!hostMode || !!editingHousehold?.isHostHousehold;
 
-  // Track unsaved input for beforeunload
-  const hasUnsavedInput = name.trim().length > 0;
+  /**
+   * [[GTC-368]] — unsaved input is a DIFFERENCE from what the form opened with, not a name in the
+   * box: her own household's step opens with her name in it, and a saved household reopened is full
+   * of names. `opened` is taken after each opening settles (`reopened` counts the openings: the
+   * prefill, a household put in the form to change, and a reset after a save or Cancel).
+   */
+  const snapshot = formSnapshot({
+    name,
+    email,
+    phone,
+    partner: showPartner ? { name: partnerName, email: partnerEmail, phone: partnerPhone } : null,
+    helpers,
+    littles: showLittles ? littleCount : 0,
+    guests,
+    contactPersonEventId,
+    hostingAlone,
+    messagesMuted,
+  });
+  const [opened, setOpened] = useState<string | null>(null);
+  const [reopened, setReopened] = useState(0);
+  useEffect(() => {
+    setOpened(snapshot);
+    // Only an opening moves the baseline; typing must not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reopened]);
+  const hasUnsavedInput = opened !== null && snapshot !== opened;
 
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -233,6 +291,7 @@ export default function Moment1InputForm({
     setName(hostMode.name ?? '');
     setEmail(hostMode.email ?? '');
     setPhone(hostMode.phone ?? '');
+    setReopened((n) => n + 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hostMode?.name, hostMode?.email, hostMode?.phone]);
 
@@ -312,6 +371,7 @@ export default function Moment1InputForm({
     setMessagesMuted(editingHousehold.messagesMuted ?? true);
 
     setMemberOrder(editOrder);
+    setReopened((n) => n + 1);
 
     nameInputRef.current?.focus();
   }, [editingHousehold]);
@@ -395,6 +455,7 @@ export default function Moment1InputForm({
     setGuests([]);
     setGuestErrors([]);
     setMemberOrder([]);
+    setReopened((n) => n + 1);
     nameInputRef.current?.focus();
   }, []);
 
@@ -642,6 +703,9 @@ export default function Moment1InputForm({
         <div className="mb-8">
           <MomentArc currentMoment={1} doors={stripDoors} />
         </div>
+
+        {/* [[GTC-368]] (item 5, Q10's A): where Moment 1 starts, both steps. */}
+        <MomentWords moment={1} part="does" className="mb-4" />
 
         {/* Assistant line */}
         {hostMode ? (

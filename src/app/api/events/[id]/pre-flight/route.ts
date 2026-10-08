@@ -43,6 +43,12 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         sentAt: true,
         nudgePace: true,
         hostId: true,
+        // [[GTC-368]] (item 17, C2): the event's details, on the pre-flight and "Who I chase".
+        endDate: true,
+        venueName: true,
+        venueTimingStart: true,
+        venueTimingEnd: true,
+        occasionDescription: true,
       },
     });
     if (!event) {
@@ -52,7 +58,8 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     const [setup, readiness, unassignedItems, households, people] = await Promise.all([
       prisma.eventSetup.findUnique({
         where: { eventId },
-        select: { dietaryData: true },
+        // [[GTC-368]] (Q14, C2): Moment 2's answer, the details' Occasion.
+        select: { dietaryData: true, eventType: true, eventTypeOther: true },
       }),
       // A1's artifact, reused rather than rebuilt — GTC-188's Context asks the question
       // and GTC-169 already renamed this for the pre-flight. Warnings only; nothing here
@@ -196,7 +203,11 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
       }));
 
     return NextResponse.json({
-      event,
+      event: {
+        ...event,
+        eventType: setup?.eventType ?? null,
+        eventTypeOther: setup?.eventTypeOther ?? null,
+      },
       coverage: {
         unassignedItems: unassignedItems.map((i) => ({
           id: i.id,

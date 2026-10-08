@@ -58,6 +58,19 @@ export interface Headless {
     clip?: { x: number; y: number; width: number; height: number }
   ): Promise<void>;
   hostsRequested(): string[];
+  /** [[GTC-368]] — every page dialog that opened, by type ("beforeunload", "alert", …), in order. */
+  dialogs(): string[];
+  /**
+   * [[GTC-368]] — how a "leave site?" (beforeunload) dialog is answered: true leaves, false stays.
+   * null, the default, leaves it unanswered, as before (and the page waits on it). Leaving writes
+   * nothing; it only lets the browser go where it was sent.
+   */
+  answerLeaveDialogs(accept: boolean | null): void;
+  /** [[GTC-368]] — a script run in every new document before the page's own scripts. */
+  addInitScript(source: string): Promise<string>;
+  removeInitScript(identifier: string): Promise<void>;
+  /** [[GTC-368]] — what is on screen now, fixed bars included (no captureBeyondViewport). */
+  screenshotViewport(file: string): Promise<void>;
   close(): void;
 }
 
@@ -106,6 +119,8 @@ export async function openHeadless(opts: {
   const pending = new Map<number, (m: any) => void>();
   const hosts = new Set<string>();
   const blocked: string[] = [];
+  const dialogs: string[] = [];
+  let leaveAnswer: boolean | null = null;
   ws.addEventListener('message', (e: { data: string }) => {
     const m = JSON.parse(e.data);
     if (m.id && pending.has(m.id)) {
@@ -117,6 +132,18 @@ export async function openHeadless(opts: {
         hosts.add(new URL(m.params.request.url).host);
       } catch {
         // data: and blob: URLs have no host worth recording
+      }
+    }
+    if (m.method === 'Page.javascriptDialogOpening') {
+      dialogs.push(m.params.type);
+      if (m.params.type === 'beforeunload' && leaveAnswer !== null) {
+        ws.send(
+          JSON.stringify({
+            id: ++id,
+            method: 'Page.handleJavaScriptDialog',
+            params: { accept: leaveAnswer },
+          })
+        );
       }
     }
     if (m.method === 'Fetch.requestPaused') {
@@ -269,6 +296,22 @@ export async function openHeadless(opts: {
       writeFileSync(file, Buffer.from(shot.result.data, 'base64'));
     },
     hostsRequested: () => [...hosts],
+    dialogs: () => [...dialogs],
+    answerLeaveDialogs(accept) {
+      leaveAnswer = accept;
+    },
+    async addInitScript(source) {
+      const r = await send('Page.addScriptToEvaluateOnNewDocument', { source });
+      return r.result?.identifier as string;
+    },
+    async removeInitScript(identifier) {
+      await send('Page.removeScriptToEvaluateOnNewDocument', { identifier });
+    },
+    async screenshotViewport(file) {
+      const { writeFileSync } = await import('node:fs');
+      const shot = await send('Page.captureScreenshot', { format: 'png' });
+      writeFileSync(file, Buffer.from(shot.result.data, 'base64'));
+    },
     close() {
       try {
         ws.close();

@@ -1062,6 +1062,12 @@ async function main() {
     // dashboard reads, and keeps only what is printed. Ruling 1's fence follows it UNCHANGED: a
     // file the board renders and the fence does not scan is the hole 6e closed.
     const printDoorSrc = code('src/components/glance/PrintListDoor.tsx');
+    // [[GTC-368]] Q16 (ruled at GTC-367's plan, 2026-10-08) — THE EVENT'S DETAILS AND THE MOMENT
+    // WORDS JOIN, and the count moves 20 → 22 on that ruling. The board renders both and the details
+    // ship to a browser as an island; they read the event's own facts, never a guest's behaviour.
+    // Ruling 1's fence follows them UNCHANGED.
+    const detailsSrc = code('src/components/shared/EventDetails.tsx');
+    const momentWordsSrc = code('src/lib/moments/moment-words.ts');
     const glanceSources = [
       stateSrc,
       readSrc,
@@ -1083,12 +1089,14 @@ async function main() {
       readingSrc,
       readingModelSrc,
       printDoorSrc,
+      detailsSrc,
+      momentWordsSrc,
     ];
     const sourcesExist = glanceSources.every((src) => src.length > 0);
     assert(
       'Ruling 1 source',
-      'EVERY GLANCE SOURCE EXISTS — the modules, the route, the page, the view, the actions, both islands, the painters, the preview, the reading panel and its model, and the print door; the gate and the scan are ONE list, so neither can be widened without the other',
-      sourcesExist && glanceSources.length === 20
+      'EVERY GLANCE SOURCE EXISTS — the modules, the route, the page, the view, the actions, both islands, the painters, the preview, the reading panel and its model, the print door, the event’s details and the Moment words; the gate and the scan are ONE list, so neither can be widened without the other',
+      sourcesExist && glanceSources.length === 22
     );
     for (const banned of BEHAVIOUR_DENYLIST) {
       const re = new RegExp(`\\b${banned}\\b`);

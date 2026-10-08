@@ -30,6 +30,8 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import MomentArc, { type ArcDoor } from './MomentArc';
+import MomentWords from './MomentWords';
+import EventDetails, { type EventDetailsFacts } from '@/components/shared/EventDetails';
 import type { PendingChange } from '@/lib/ledger';
 import type { SerialisedEvent } from '@/lib/lifecycle';
 import type { ReasonAnswer } from './ReasonPrompt';
@@ -103,6 +105,8 @@ interface Moment3AssignViewProps {
   holdNotice?: HoldNotice | null;
   /** [[GTC-367]] (item 2): the Moments strip's doors (`stripDoors`, src/lib/moments/strip.ts). */
   stripDoors?: Partial<Record<1 | 2 | 3 | 4, ArcDoor>>;
+  /** [[GTC-368]] (item 17): the event's name and its details (W10, a row of its own, Q1). */
+  details?: EventDetailsFacts;
 }
 
 const RECHECK_DEBOUNCE_MS = 1000;
@@ -150,6 +154,7 @@ export default function Moment3AssignView({
   holding = false,
   holdNotice = null,
   stripDoors,
+  details,
 }: Moment3AssignViewProps) {
   const toast = useToast();
   const [holders, setHolders] = useState<Record<string, Moment3Holder | null>>(initialHolders);
@@ -402,9 +407,19 @@ export default function Moment3AssignView({
       </div>
     ) : null;
 
+  // [[GTC-368]] (item 5, Q9): "When it’s done" says every job has an owner, so it shows only then.
+  const doneWords =
+    unassigned === 0 ? <MomentWords moment={3} part="done" compact className="mb-2" /> : null;
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-5xl mx-auto px-6 py-6 pb-40">
+        {/* [[GTC-368]] (item 17, Q1): the menu bar shows here, so the name has a row of its own. */}
+        {details && (
+          <div className="mb-3 flex justify-end">
+            <EventDetails facts={details} />
+          </div>
+        )}
         <div className="mb-6">
           <MomentArc
             currentMoment={3}
@@ -414,6 +429,8 @@ export default function Moment3AssignView({
           />
         </div>
 
+        {/* [[GTC-368]] (item 5, Q10's A): where Moment 3 starts. */}
+        <MomentWords moment={3} part="does" className="mb-3" />
         <h1 className="text-xl font-semibold text-gray-900 mb-6">{M3_WORDS.SENTENCE}</h1>
 
         {allItems.length === 0 ? (
@@ -673,6 +690,7 @@ export default function Moment3AssignView({
                 {line}
               </p>
             ))}
+            {doneWords}
             {/* [[GTC-360]] — what keeps her here: a block, a co-host, a failure (W2 to W6). */}
             {holdNotice && (
               <div data-m3="hold-notice" role="alert" className="mt-2 text-sm text-red-700">
