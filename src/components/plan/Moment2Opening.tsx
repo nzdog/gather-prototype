@@ -22,6 +22,8 @@ interface Moment2OpeningProps {
   onInvitesOnly?: () => void;
   /** [[GTC-374]] — W3 while it works, W4 if it fails, W5 for a co-host. */
   invitesOnlyState?: InvitesOnlyState;
+  /** [[GTC-375]] W2 — a plan is put away, and "Let’s do this →" brings it back. */
+  planWaiting?: boolean;
 }
 
 export default function Moment2Opening({
@@ -31,6 +33,7 @@ export default function Moment2Opening({
   details,
   onInvitesOnly,
   invitesOnlyState = 'idle',
+  planWaiting = false,
 }: Moment2OpeningProps) {
   const working = invitesOnlyState === 'working';
   return (
@@ -65,6 +68,13 @@ export default function Moment2Opening({
             Let&rsquo;s do this &rarr;
           </button>
         </div>
+
+        {/* [[GTC-375]] W2: what "Let’s do this →" does while her plan is put away. */}
+        {planWaiting && (
+          <p data-plan-waiting="" className="mt-3 max-w-md text-center text-sm text-gray-600">
+            {INVITES_ONLY_WORDS.PLAN_WAITING}
+          </p>
+        )}
 
         {/* [[GTC-374]] (item 14) — the second, quieter choice: no plan, invites only (W1, W2). */}
         {onInvitesOnly && (

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Users, Calendar, Loader2 } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
+import { whenLine } from '@/components/shared/EventDetails';
 
 interface Person {
   id: string;
@@ -82,19 +83,6 @@ export default function DirectoryPage() {
     }
   };
 
-  const formatDateRange = (startDate: string, endDate: string) => {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const formatter = new Intl.DateTimeFormat('en-NZ', {
-      month: 'short',
-      day: 'numeric',
-      timeZone: 'Pacific/Auckland',
-    });
-    const startFormatted = formatter.format(start);
-    const endDay = formatter.format(end).split(' ')[1];
-    return `${startFormatted}-${endDay}`;
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -134,7 +122,8 @@ export default function DirectoryPage() {
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4" />
                 <span className="text-sm sm:text-base">
-                  {formatDateRange(data.event.startDate, data.event.endDate)}
+                  {/* [[GTC-319]] (W10): the details card's rule, dates only (unauthenticated). */}
+                  {whenLine(data.event.startDate, data.event.endDate)}
                 </span>
               </div>
               {data.event.occasionType && (

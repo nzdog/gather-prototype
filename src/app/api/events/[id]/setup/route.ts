@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
 import { validateDietaryData, type DietaryData } from '@/lib/dietary';
 import { CONFIG_EVENT_TYPES } from '@/lib/ai/config-loader';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { bringBackPlan, putAwayPlan, waitingPlanRevisionId } from '@/lib/workflow';
 
 interface SectionData {
   items: string[];
@@ -57,8 +59,9 @@ interface EventSetupBody {
   planApproved?: unknown;
   /**
    * [[GTC-374]] — invites only, either way until the press. The host's alone (plan Q4: only the host
-   * holds and sends), refused after the press (it is fixed then), and refused on an event with any
-   * item until [[GTC-375]] rules what happens to a plan already made (Q13).
+   * holds and sends), refused after the press (it is fixed then). [[GTC-375]]: `true` on an event
+   * with a plan puts the plan away, and `false` brings a put-away plan back, each in one transaction
+   * with the flag (plan Q5).
    */
   invitesOnly?: unknown;
 }
@@ -111,8 +114,12 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     const setup = await prisma.eventSetup.findUnique({
       where: { eventId },
     });
+    // [[GTC-375]] (W2): whether a plan is put away, waiting for "Let’s do this →" to bring it back.
+    const planPutAway = setup?.invitesOnly
+      ? (await waitingPlanRevisionId(prisma, eventId)) !== null
+      : false;
 
-    return NextResponse.json({ setup: setup ?? null });
+    return NextResponse.json({ setup: setup ?? null, planPutAway });
   } catch (error) {
     return NextResponse.json(
       {
@@ -203,7 +210,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       return NextResponse.json({ error: 'planApproved must be true' }, { status: 400 });
     }
 
-    // [[GTC-374]] — invites only: the host's, before the press, and never on an event with an item.
+    // [[GTC-374]] — invites only: the host's, and before the press.
     if ('invitesOnly' in body) {
       if (typeof body.invitesOnly !== 'boolean') {
         return NextResponse.json({ error: 'invitesOnly must be a boolean' }, { status: 400 });
@@ -219,15 +226,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           { error: 'The invitations have gone, so invites only is fixed' },
           { status: 409 }
         );
-      }
-      if (body.invitesOnly) {
-        const itemCount = await prisma.item.count({ where: { team: { eventId } } });
-        if (itemCount > 0) {
-          return NextResponse.json(
-            { error: 'This event has a plan; invites only for it is not built yet (GTC-375)' },
-            { status: 409 }
-          );
-        }
       }
     }
 
@@ -255,13 +253,36 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     if ('otherJobsOtherData' in body) data.otherJobsOtherData = body.otherJobsOtherData;
     if ('invitesOnly' in body) data.invitesOnly = body.invitesOnly;
 
-    const setup = await prisma.eventSetup.upsert({
-      where: { eventId },
-      create: { eventId, ...data },
-      update: data,
-    });
+    const upsert = { where: { eventId }, create: { eventId, ...data }, update: data };
 
-    return NextResponse.json({ setup });
+    if (!('invitesOnly' in body)) {
+      const setup = await prisma.eventSetup.upsert(upsert);
+      return NextResponse.json({ setup });
+    }
+
+    /*
+     * [[GTC-375]] — the plan put away with the flag set, or brought back with it cleared, in one
+     * transaction, so neither can half-happen. The revision and its audit entry name the acting
+     * Person (AuditEntry.actorId references Person, C10). No AccessToken is written (plan Q10).
+     */
+    const actor = await ledgerActorForUser(auth.user, auth.role);
+    if (!actor.id) {
+      // An authenticated host always resolves to a Person; the guard narrows the type.
+      return NextResponse.json({ error: 'Could not resolve acting person' }, { status: 500 });
+    }
+    const actorId = actor.id;
+    const result = await prisma.$transaction(
+      async (tx) => {
+        const moved =
+          body.invitesOnly === true
+            ? { putAway: await putAwayPlan(tx, eventId, actorId) }
+            : await bringBackPlan(tx, eventId, actorId);
+        return { setup: await tx.eventSetup.upsert(upsert), ...moved };
+      },
+      { timeout: 30000 }
+    );
+
+    return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(
       {

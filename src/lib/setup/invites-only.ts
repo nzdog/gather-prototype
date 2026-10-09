@@ -33,7 +33,29 @@ export const INVITES_ONLY_WORDS = {
   GUEST_LINE: 'Just let us know if you’ll be there.',
   /** W14 — the guest page's yes, in place of "Yes, still coming". */
   GUEST_YES: 'Yes, I’ll be there',
+  /**
+   * [[GTC-375]] W1 — the foot of Moment 2's plan, a quiet link beside "Invites, people and
+   * reminders →": the plan is put away, the event held, the pre-flight opened. While it works, if it
+   * fails, and for a co-host: W3, W4 and W5 above, unchanged (plan rulings, 2026-10-09).
+   */
+  PUT_AWAY: 'Put the plan away: invites only',
+  /** [[GTC-375]] W2 — Moment 2's opening, under "Let’s do this →", only while a plan is put away. */
+  PLAN_WAITING: 'Your plan is put away. “Let’s do this →” brings it back as you left it.',
+  /** [[GTC-375]] W3, as ruled — the pre-flight, under W10, only while a plan is put away. */
+  PREFLIGHT_WAITING: 'Your plan is put away. Go back to “What’s the plan?” to bring it back.',
+  /** [[GTC-375]] W4 — when the plan comes back. */
+  BROUGHT_BACK: 'Your plan is back, as you left it.',
 } as const;
+
+/**
+ * [[GTC-375]] W5 — when something held by someone no longer on the event could not come back with
+ * the plan (it comes back with nobody holding it, plan Q9).
+ */
+export function notBroughtBackLine(n: number): string {
+  return n === 1
+    ? 'Your plan is back. 1 thing was with someone no longer on this event, so nobody has it now.'
+    : `Your plan is back. ${n} things were with people no longer on this event, so nobody has them now.`;
+}
 
 /** Where the choice is up to on Moment 2's opening. */
 export type InvitesOnlyState = 'idle' | 'working' | 'failed' | 'not-host';

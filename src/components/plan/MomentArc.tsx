@@ -82,10 +82,21 @@ export default function MomentArc({
                   : isCurrent
                     ? 'text-gray-900 font-medium'
                     : 'text-gray-500'
-              }${opens ? ' underline underline-offset-4' : ''}`}
+              }`}
             >
-              {moment.label}
-              {isCompleted && ' ✓'}
+              {/* [[GTC-375]]: a door that opens underlines its label's own words, so "· not
+                  needed" beside them is never underlined with them (GTC-374's screenshots). */}
+              {opens ? (
+                <span className="underline underline-offset-4">
+                  {moment.label}
+                  {isCompleted && ' ✓'}
+                </span>
+              ) : (
+                <>
+                  {moment.label}
+                  {isCompleted && ' ✓'}
+                </>
+              )}
               {isNotNeeded && (
                 <span data-not-needed="" className="text-sm italic text-gray-400 no-underline">
                   {' · '}

@@ -828,80 +828,96 @@ export async function createRevision(
   actorId: string,
   reason?: string
 ): Promise<string> {
-  return await prisma.$transaction(async (tx) => {
-    // Get current revision number
-    const latestRevision = await tx.planRevision.findFirst({
-      where: { eventId },
-      orderBy: { revisionNumber: 'desc' },
-      select: { revisionNumber: true },
-    });
+  return await prisma.$transaction((tx) => snapshotPlan(tx, eventId, actorId, reason));
+}
 
-    const revisionNumber = (latestRevision?.revisionNumber ?? 0) + 1;
+/**
+ * [[GTC-375]] (C6) — `createRevision`'s body, taking the transaction, so putting a plan away can save
+ * it and clear it in one step that cannot half-happen. `createRevision` is this in a transaction of
+ * its own, exactly as before.
+ *
+ * Each team carries its members' ids too (GTC-375 Q12): only a bring-back reads them, to put a
+ * membership back on the new team of the same name. The old dashboard's restore never reads them.
+ */
+async function snapshotPlan(
+  tx: Tx,
+  eventId: string,
+  actorId: string,
+  reason?: string
+): Promise<string> {
+  // Get current revision number
+  const latestRevision = await tx.planRevision.findFirst({
+    where: { eventId },
+    orderBy: { revisionNumber: 'desc' },
+    select: { revisionNumber: true },
+  });
 
-    // Capture current state
-    const teams = await tx.team.findMany({
-      where: { eventId },
-      include: {
-        coordinator: { select: { id: true, name: true } },
-        items: {
-          include: {
-            assignment: {
-              include: {
-                person: { select: { id: true, name: true } },
-              },
+  const revisionNumber = (latestRevision?.revisionNumber ?? 0) + 1;
+
+  // Capture current state
+  const teams = await tx.team.findMany({
+    where: { eventId },
+    include: {
+      coordinator: { select: { id: true, name: true } },
+      members: { select: { personId: true } },
+      items: {
+        include: {
+          assignment: {
+            include: {
+              person: { select: { id: true, name: true } },
             },
-            day: { select: { id: true, name: true, date: true } },
           },
+          day: { select: { id: true, name: true, date: true } },
         },
       },
-    });
-
-    const days = await tx.day.findMany({
-      where: { eventId },
-    });
-
-    const conflicts = await tx.conflict.findMany({
-      where: { eventId },
-    });
-
-    const acknowledgements = await tx.acknowledgement.findMany({
-      where: { eventId },
-    });
-
-    // Create revision
-    const revision = await tx.planRevision.create({
-      data: {
-        eventId,
-        revisionNumber,
-        createdAt: new Date(),
-        createdBy: actorId,
-        reason: reason || 'Manual revision',
-        teams: teams as any,
-        items: teams.flatMap((t) => t.items) as any,
-        days: days as any,
-        conflicts: conflicts as any,
-        acknowledgements: acknowledgements as any,
-      },
-    });
-
-    // Update event's currentRevisionId
-    await tx.event.update({
-      where: { id: eventId },
-      data: { currentRevisionId: revision.id },
-    });
-
-    // Log audit entry
-    await logAudit(tx, {
-      eventId,
-      actorId,
-      actionType: 'CREATE_REVISION',
-      targetType: 'PlanRevision',
-      targetId: revision.id,
-      details: `Created revision #${revisionNumber}: ${reason || 'Manual revision'}`,
-    });
-
-    return revision.id;
+    },
   });
+
+  const days = await tx.day.findMany({
+    where: { eventId },
+  });
+
+  const conflicts = await tx.conflict.findMany({
+    where: { eventId },
+  });
+
+  const acknowledgements = await tx.acknowledgement.findMany({
+    where: { eventId },
+  });
+
+  // Create revision
+  const revision = await tx.planRevision.create({
+    data: {
+      eventId,
+      revisionNumber,
+      createdAt: new Date(),
+      createdBy: actorId,
+      reason: reason || 'Manual revision',
+      teams: teams as any,
+      items: teams.flatMap((t) => t.items) as any,
+      days: days as any,
+      conflicts: conflicts as any,
+      acknowledgements: acknowledgements as any,
+    },
+  });
+
+  // Update event's currentRevisionId
+  await tx.event.update({
+    where: { id: eventId },
+    data: { currentRevisionId: revision.id },
+  });
+
+  // Log audit entry
+  await logAudit(tx, {
+    eventId,
+    actorId,
+    actionType: 'CREATE_REVISION',
+    targetType: 'PlanRevision',
+    targetId: revision.id,
+    details: `Created revision #${revisionNumber}: ${reason || 'Manual revision'}`,
+  });
+
+  return revision.id;
 }
 
 /**
@@ -952,185 +968,321 @@ export async function restoreFromRevision(
     await createRevision(eventId, actorId, 'Checkpoint before restore');
   }
 
-  await prisma.$transaction(async (tx) => {
-    // Get the revision
-    const revision = await tx.planRevision.findUnique({
-      where: { id: revisionId },
+  await prisma.$transaction((tx) => rebuildPlan(tx, eventId, revisionId, actorId, opts));
+}
+
+/**
+ * [[GTC-375]] (C6) — `restoreFromRevision`'s transaction, taking the transaction, so a bring-back can
+ * put a plan back and clear the invites-only flag in one step. For the old dashboard's restore it does
+ * exactly what it did, apart from carrying the five columns C2 found dropped.
+ *
+ * `bringBack` (GTC-375 Q9, Q12) — only `bringBackPlan` sets it. Someone no longer on the event gets
+ * nothing back: an item they held comes back with nobody holding it (counted, for W5), and a team
+ * they looked after comes back with no coordinator, so no link is ever minted for them. Members still
+ * on the event are put back on the new team of the same name, where they are on no team now. Roles
+ * are never touched, and no AccessToken row is written (Q10).
+ */
+async function rebuildPlan(
+  tx: Tx,
+  eventId: string,
+  revisionId: string,
+  actorId: string,
+  opts: { actorKind?: ActorKind; reason?: string | null; bringBack?: boolean }
+): Promise<{ notBroughtBack: number }> {
+  // Get the revision
+  const revision = await tx.planRevision.findUnique({
+    where: { id: revisionId },
+  });
+
+  if (!revision) {
+    throw new Error('Revision not found');
+  }
+
+  if (revision.eventId !== eventId) {
+    throw new Error('Revision does not belong to this event');
+  }
+
+  const onEvent = opts.bringBack
+    ? new Set(
+        (await tx.personEvent.findMany({ where: { eventId }, select: { personId: true } })).map(
+          (pe) => pe.personId
+        )
+      )
+    : null;
+  /** Always true for a plain restore; in a bring-back, whether they are still on the event. */
+  const stillHere = (personId: string | null | undefined) =>
+    !onEvent || (!!personId && onEvent.has(personId));
+  let notBroughtBack = 0;
+
+  // Delete current items (assignments cascade)
+  await tx.item.deleteMany({
+    where: { team: { eventId } },
+  });
+
+  // Delete current teams
+  await tx.team.deleteMany({
+    where: { eventId },
+  });
+
+  // Delete current days
+  await tx.day.deleteMany({
+    where: { eventId },
+  });
+
+  // Clear conflicts (will be re-detected on next Check Plan)
+  await tx.conflict.deleteMany({
+    where: { eventId },
+  });
+
+  // Restore days from revision
+  const days = revision.days as any[];
+  const dayIdMap = new Map<string, string>(); // old ID -> new ID
+
+  for (const dayData of days) {
+    const newDay = await tx.day.create({
+      data: {
+        name: dayData.name,
+        date: new Date(dayData.date),
+        eventId,
+      },
     });
+    dayIdMap.set(dayData.id, newDay.id);
+  }
 
-    if (!revision) {
-      throw new Error('Revision not found');
-    }
+  // Restore teams from revision
+  const teams = revision.teams as any[];
+  const teamIdMap = new Map<string, string>(); // old ID -> new ID
+  // TODO: Revision system - person ID mapping for restored team memberships (Section 9 of build spec)
+  // Will need: const personIdMap = new Map<string, string>(); when implementing person restoration
 
-    if (revision.eventId !== eventId) {
-      throw new Error('Revision does not belong to this event');
-    }
-
-    // Delete current items (assignments cascade)
-    await tx.item.deleteMany({
-      where: { team: { eventId } },
+  for (const teamData of teams) {
+    const newTeam = await tx.team.create({
+      data: {
+        name: teamData.name,
+        scope: teamData.scope,
+        domain: teamData.domain,
+        domainConfidence: teamData.domainConfidence,
+        displayOrder: teamData.displayOrder,
+        source: teamData.source,
+        isProtected: teamData.isProtected,
+        eventId,
+        coordinatorId: stillHere(teamData.coordinatorId) ? teamData.coordinatorId : null,
+      },
     });
+    teamIdMap.set(teamData.id, newTeam.id);
 
-    // Delete current teams
-    await tx.team.deleteMany({
-      where: { eventId },
-    });
-
-    // Delete current days
-    await tx.day.deleteMany({
-      where: { eventId },
-    });
-
-    // Clear conflicts (will be re-detected on next Check Plan)
-    await tx.conflict.deleteMany({
-      where: { eventId },
-    });
-
-    // Restore days from revision
-    const days = revision.days as any[];
-    const dayIdMap = new Map<string, string>(); // old ID -> new ID
-
-    for (const dayData of days) {
-      const newDay = await tx.day.create({
-        data: {
-          name: dayData.name,
-          date: new Date(dayData.date),
-          eventId,
-        },
-      });
-      dayIdMap.set(dayData.id, newDay.id);
-    }
-
-    // Restore teams from revision
-    const teams = revision.teams as any[];
-    const teamIdMap = new Map<string, string>(); // old ID -> new ID
-    // TODO: Revision system - person ID mapping for restored team memberships (Section 9 of build spec)
-    // Will need: const personIdMap = new Map<string, string>(); when implementing person restoration
-
-    for (const teamData of teams) {
-      const newTeam = await tx.team.create({
-        data: {
-          name: teamData.name,
-          scope: teamData.scope,
-          domain: teamData.domain,
-          domainConfidence: teamData.domainConfidence,
-          displayOrder: teamData.displayOrder,
-          source: teamData.source,
-          isProtected: teamData.isProtected,
-          eventId,
-          coordinatorId: teamData.coordinatorId,
-        },
-      });
-      teamIdMap.set(teamData.id, newTeam.id);
-
-      // Restore items for this team
-      const teamItems = teamData.items || [];
-      for (const itemData of teamItems) {
-        const newItem = await tx.item.create({
-          data: {
-            name: itemData.name,
-            // GTC-171 (B2): this list is explicit, so an omitted column silently falls
-            // back to its schema default — `kind` would restore every task row as an item.
-            kind: itemData.kind ?? 'ITEM',
-            quantity: itemData.quantity,
-            description: itemData.description,
-            critical: itemData.critical,
-            status: itemData.status,
-            previouslyAssignedTo: itemData.previouslyAssignedTo,
-            quantityAmount: itemData.quantityAmount,
-            quantityUnit: itemData.quantityUnit,
-            quantityUnitCustom: itemData.quantityUnitCustom,
-            quantityText: itemData.quantityText,
-            quantityState: itemData.quantityState,
-            quantityLabel: itemData.quantityLabel,
-            quantitySource: itemData.quantitySource,
-            quantityDerivedFromTemplate: itemData.quantityDerivedFromTemplate,
-            placeholderAcknowledged: itemData.placeholderAcknowledged,
-            quantityDeferredTo: itemData.quantityDeferredTo,
-            criticalReason: itemData.criticalReason,
-            criticalSource: itemData.criticalSource,
-            criticalOverride: itemData.criticalOverride,
-            glutenFree: itemData.glutenFree,
-            dairyFree: itemData.dairyFree,
-            vegetarian: itemData.vegetarian,
-            dietaryTags: itemData.dietaryTags,
-            equipmentNeeds: itemData.equipmentNeeds,
-            equipmentLoad: itemData.equipmentLoad,
-            durationMinutes: itemData.durationMinutes,
-            notes: itemData.notes,
-            prepStartTime: itemData.prepStartTime,
-            prepEndTime: itemData.prepEndTime,
-            serveTime: itemData.serveTime,
-            dropOffAt: itemData.dropOffAt ? new Date(itemData.dropOffAt) : null,
-            // GTC-175 (D2): omit this and a plan restore silently resets Kate's per-item
-            // decide-by override to the event default — the exact failure the GTC-171
-            // note above warns about.
-            decideByOffsetHours: itemData.decideByOffsetHours ?? null,
-            dropOffLocation: itemData.dropOffLocation,
-            dropOffNote: itemData.dropOffNote,
-            source: itemData.source,
-            isProtected: itemData.isProtected,
-            lastEditedBy: itemData.lastEditedBy,
-            teamId: newTeam.id,
-            dayId: itemData.dayId ? dayIdMap.get(itemData.dayId) : null,
-          },
+    if (opts.bringBack) {
+      for (const member of (teamData.members ?? []) as Array<{ personId: string }>) {
+        if (!stillHere(member.personId)) continue;
+        await tx.personEvent.updateMany({
+          where: { eventId, personId: member.personId, teamId: null },
+          data: { teamId: newTeam.id },
         });
-
-        // Restore assignment if it existed
-        if (itemData.assignment) {
-          await tx.assignment.create({
-            data: {
-              itemId: newItem.id,
-              personId: itemData.assignment.personId,
-              response: itemData.assignment.response,
-              createdAt: new Date(itemData.assignment.createdAt),
-              // GTC-175 (D2): the follow-up sent-stamp MUST survive a restore. This
-              // block runs after `item.deleteMany` above, so every Assignment row is
-              // destroyed and rebuilt with a fresh id — omit the stamp and the restored
-              // MAYBEs all read "never followed up", and the next sweep texts every one
-              // of them a second time. "Exactly one follow-up" is only true if it
-              // survives the revision machinery.
-              decideByFollowupSentAt: itemData.assignment.decideByFollowupSentAt
-                ? new Date(itemData.assignment.decideByFollowupSentAt)
-                : null,
-            },
-          });
-        }
       }
     }
 
-    // Update event's currentRevisionId
-    await tx.event.update({
-      where: { id: eventId },
-      data: { currentRevisionId: revisionId },
-    });
-
-    // Log audit entry
-    await logAudit(tx, {
-      eventId,
-      actorId,
-      actionType: 'RESTORE_REVISION',
-      targetType: 'PlanRevision',
-      targetId: revisionId,
-      details: `Restored event to revision #${revision.revisionNumber}`,
-    });
-
-    // The restore itself, as one recorded step. It is a bulk change — the whole plan
-    // moved — so it lands as a single changeSet carrying the why, exactly like a
-    // post-send regenerate. Pre-send it is versioned and never interrogated.
-    await recordChange(tx, {
-      eventId,
-      actor: { id: actorId, kind: opts.actorKind ?? 'HOST', name: null },
-      reason: opts.reason ?? null,
-      changes: [
-        {
-          action: 'REGENERATE_PLAN',
-          targetType: 'Event',
-          targetId: eventId,
-          before: { restoredFrom: 'current plan' },
-          after: { revisionId, revisionNumber: revision.revisionNumber },
+    // Restore items for this team
+    const teamItems = teamData.items || [];
+    for (const itemData of teamItems) {
+      const held = Boolean(itemData.assignment) && stillHere(itemData.assignment?.personId);
+      if (itemData.assignment && !held) notBroughtBack++;
+      const newItem = await tx.item.create({
+        data: {
+          name: itemData.name,
+          // GTC-171 (B2): this list is explicit, so an omitted column silently falls
+          // back to its schema default — `kind` would restore every task row as an item.
+          kind: itemData.kind ?? 'ITEM',
+          quantity: itemData.quantity,
+          description: itemData.description,
+          critical: itemData.critical,
+          status: itemData.assignment && !held ? 'UNASSIGNED' : itemData.status,
+          previouslyAssignedTo: itemData.previouslyAssignedTo,
+          quantityAmount: itemData.quantityAmount,
+          quantityUnit: itemData.quantityUnit,
+          quantityUnitCustom: itemData.quantityUnitCustom,
+          quantityText: itemData.quantityText,
+          quantityState: itemData.quantityState,
+          quantityLabel: itemData.quantityLabel,
+          quantitySource: itemData.quantitySource,
+          quantityDerivedFromTemplate: itemData.quantityDerivedFromTemplate,
+          placeholderAcknowledged: itemData.placeholderAcknowledged,
+          quantityDeferredTo: itemData.quantityDeferredTo,
+          criticalReason: itemData.criticalReason,
+          criticalSource: itemData.criticalSource,
+          criticalOverride: itemData.criticalOverride,
+          glutenFree: itemData.glutenFree,
+          dairyFree: itemData.dairyFree,
+          vegetarian: itemData.vegetarian,
+          dietaryTags: itemData.dietaryTags,
+          equipmentNeeds: itemData.equipmentNeeds,
+          equipmentLoad: itemData.equipmentLoad,
+          durationMinutes: itemData.durationMinutes,
+          notes: itemData.notes,
+          prepStartTime: itemData.prepStartTime,
+          prepEndTime: itemData.prepEndTime,
+          serveTime: itemData.serveTime,
+          dropOffAt: itemData.dropOffAt ? new Date(itemData.dropOffAt) : null,
+          // GTC-175 (D2): omit this and a plan restore silently resets Kate's per-item
+          // decide-by override to the event default — the exact failure the GTC-171
+          // note above warns about.
+          decideByOffsetHours: itemData.decideByOffsetHours ?? null,
+          dropOffLocation: itemData.dropOffLocation,
+          dropOffNote: itemData.dropOffNote,
+          source: itemData.source,
+          isProtected: itemData.isProtected,
+          lastEditedBy: itemData.lastEditedBy,
+          // GTC-375 (C2): this list is explicit, so these five fell back to their defaults and a
+          // restored plan came back out of order. The snapshot is a whole row; carry them.
+          displayOrder: itemData.displayOrder ?? null,
+          aiGenerated: itemData.aiGenerated ?? false,
+          userConfirmed: itemData.userConfirmed ?? false,
+          generatedBatchId: itemData.generatedBatchId ?? null,
+          ...(itemData.createdAt ? { createdAt: new Date(itemData.createdAt) } : {}),
+          teamId: newTeam.id,
+          dayId: itemData.dayId ? dayIdMap.get(itemData.dayId) : null,
         },
-      ],
-    });
+      });
+
+      // Restore assignment if it existed (and, in a bring-back, its holder is still here)
+      if (held) {
+        await tx.assignment.create({
+          data: {
+            itemId: newItem.id,
+            personId: itemData.assignment.personId,
+            response: itemData.assignment.response,
+            createdAt: new Date(itemData.assignment.createdAt),
+            // GTC-175 (D2): the follow-up sent-stamp MUST survive a restore. This
+            // block runs after `item.deleteMany` above, so every Assignment row is
+            // destroyed and rebuilt with a fresh id — omit the stamp and the restored
+            // MAYBEs all read "never followed up", and the next sweep texts every one
+            // of them a second time. "Exactly one follow-up" is only true if it
+            // survives the revision machinery.
+            decideByFollowupSentAt: itemData.assignment.decideByFollowupSentAt
+              ? new Date(itemData.assignment.decideByFollowupSentAt)
+              : null,
+          },
+        });
+      }
+    }
+  }
+
+  // Update event's currentRevisionId
+  await tx.event.update({
+    where: { id: eventId },
+    data: { currentRevisionId: revisionId },
   });
+
+  // Log audit entry
+  await logAudit(tx, {
+    eventId,
+    actorId,
+    actionType: 'RESTORE_REVISION',
+    targetType: 'PlanRevision',
+    targetId: revisionId,
+    details: `Restored event to revision #${revision.revisionNumber}`,
+  });
+
+  // The restore itself, as one recorded step. It is a bulk change — the whole plan
+  // moved — so it lands as a single changeSet carrying the why, exactly like a
+  // post-send regenerate. Pre-send it is versioned and never interrogated.
+  await recordChange(tx, {
+    eventId,
+    actor: { id: actorId, kind: opts.actorKind ?? 'HOST', name: null },
+    reason: opts.reason ?? null,
+    changes: [
+      {
+        action: 'REGENERATE_PLAN',
+        targetType: 'Event',
+        targetId: eventId,
+        before: { restoredFrom: 'current plan' },
+        after: { revisionId, revisionNumber: revision.revisionNumber },
+      },
+    ],
+  });
+
+  return { notBroughtBack };
+}
+
+/**
+ * ============================================
+ * [[GTC-375]]: INVITES ONLY ONCE A PLAN EXISTS
+ * ============================================
+ *
+ * The founder at scoping (2026-10-09): *"Put it away, bring it back (Recommended)": "Gather saves her
+ * plan exactly as it is, then clears it, so the invitations only ask whether people can come. If she
+ * switches back before Send, her plan comes back as she left it. It reuses the save-and-restore the
+ * old dashboard already has, rather than new machinery."* Both run inside the setup route's own
+ * transaction, with the flag, so neither can half-happen (Q5). Nothing here writes an AccessToken
+ * (Q10): a coordinator's link loses its team with the team, and `ensureEventTokens` replaces it at the
+ * next hold or Send.
+ */
+
+/** The reason a put-away revision carries: how a waiting plan is found (Q6). */
+export const PUT_AWAY_REASON = 'Put away: invites only';
+
+/**
+ * Puts the plan away: saves it (the same snapshot as `createRevision`), then clears it: every team
+ * (its rows, jobs included, and their assignments go with it), the days and the conflicts (their
+ * acknowledgements with them; C1). People, households, roles, "Just attending" marks, Moment 2's
+ * answers, `planApprovedAt` and `aiCallsUsed` stay. Nothing to put away writes nothing: an event
+ * with no row and no team keeps its conflicts, so a flagged event's clash still holds it back.
+ * Answers whether anything was put away.
+ */
+export async function putAwayPlan(tx: Tx, eventId: string, actorId: string): Promise<boolean> {
+  const [rows, teams] = await Promise.all([
+    tx.item.count({ where: { team: { eventId } } }),
+    tx.team.count({ where: { eventId } }),
+  ]);
+  if (rows === 0 && teams === 0) return false;
+  await snapshotPlan(tx, eventId, actorId, PUT_AWAY_REASON);
+  await tx.item.deleteMany({ where: { team: { eventId } } });
+  await tx.team.deleteMany({ where: { eventId } });
+  await tx.day.deleteMany({ where: { eventId } });
+  await tx.conflict.deleteMany({ where: { eventId } });
+  return true;
+}
+
+/**
+ * The plan waiting to come back: the latest put-away revision not yet restored (Q6). A bring-back's
+ * restore writes RESTORE_REVISION against it, so a plan comes back once. No column, no migration.
+ */
+export async function waitingPlanRevisionId(
+  db: Tx | typeof prisma,
+  eventId: string
+): Promise<string | null> {
+  const latest = await db.planRevision.findFirst({
+    where: { eventId, reason: PUT_AWAY_REASON },
+    orderBy: { revisionNumber: 'desc' },
+    select: { id: true },
+  });
+  if (!latest) return null;
+  const restored = await db.auditEntry.count({
+    where: { eventId, actionType: 'RESTORE_REVISION', targetId: latest.id },
+  });
+  return restored > 0 ? null : latest.id;
+}
+
+/**
+ * Brings the waiting plan back, as she left it (Q8, Q9). Anything on the event now (only the old
+ * dashboard can add it while the plan is away) is saved first, so nothing is lost by the restore's
+ * clear. With nothing waiting it does nothing.
+ */
+export async function bringBackPlan(
+  tx: Tx,
+  eventId: string,
+  actorId: string
+): Promise<{ broughtBack: boolean; notBroughtBack: number }> {
+  const revisionId = await waitingPlanRevisionId(tx, eventId);
+  if (!revisionId) return { broughtBack: false, notBroughtBack: 0 };
+  const [rows, teams] = await Promise.all([
+    tx.item.count({ where: { team: { eventId } } }),
+    tx.team.count({ where: { eventId } }),
+  ]);
+  if (rows > 0 || teams > 0) {
+    await snapshotPlan(tx, eventId, actorId, 'Checkpoint before bringing the plan back');
+  }
+  const { notBroughtBack } = await rebuildPlan(tx, eventId, revisionId, actorId, {
+    bringBack: true,
+  });
+  return { broughtBack: true, notBroughtBack };
 }

@@ -113,6 +113,8 @@ interface PreFlightData {
     eventTypeOther: string | null;
     /** [[GTC-374]]: invites only — steps 1 and 2 settled, W9 and W10, Moments 2 and 3 not needed. */
     invitesOnly?: boolean;
+    /** [[GTC-375]] (W3): a plan put away, waiting to come back. */
+    planPutAway?: boolean;
   };
   coverage: {
     unassignedItems: Array<{
@@ -513,6 +515,12 @@ export default function PreFlightPage() {
               className="mt-3 rounded-md border border-sage-200 bg-sage-50 px-3 py-2 text-sm text-gray-700"
             >
               {INVITES_ONLY_WORDS.PREFLIGHT_LINE}
+              {/* [[GTC-375]] (W3): where her plan went, and how to bring it back. */}
+              {data.event.planPutAway === true && (
+                <span data-plan-waiting="" className="mt-1 block">
+                  {INVITES_ONLY_WORDS.PREFLIGHT_WAITING}
+                </span>
+              )}
             </p>
           ) : null}
           {error && <p className="text-sm text-red-600 mt-3">{error}</p>}

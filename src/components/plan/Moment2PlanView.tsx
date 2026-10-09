@@ -9,6 +9,7 @@ import { useToast } from '@/contexts/ToastContext';
 import { CATEGORY_LABELS } from '@/lib/ai/plan-categories';
 import RowKindToggle from './RowKindToggle';
 import { JOB_NAME_LEAD, JOB_NAME_PLACEHOLDER, type RowKindValue } from '@/lib/items/row-kind';
+import { INVITES_ONLY_WORDS, type InvitesOnlyState } from '@/lib/setup/invites-only';
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -80,6 +81,13 @@ interface Moment2PlanViewProps {
   stripDoors?: Partial<Record<1 | 2 | 3 | 4, ArcDoor>>;
   /** [[GTC-368]] (item 17): the event's name and its details (W10, a row of its own, Q1). */
   details?: EventDetailsFacts;
+  /**
+   * [[GTC-375]] W1 — put the plan away and go invites only: a quiet link beside the exit, "One place:
+   * the foot of Moment 2's plan" (founder, at scoping). Absent, it is not offered (after the press).
+   */
+  onInvitesOnly?: () => void;
+  /** [[GTC-375]] — while it works, if it fails, a co-host: GTC-374's W3, W4 and W5. */
+  invitesOnlyState?: InvitesOnlyState;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -131,6 +139,8 @@ export default function Moment2PlanView({
   onGoToDashboard,
   stripDoors,
   details,
+  onInvitesOnly,
+  invitesOnlyState = 'idle',
 }: Moment2PlanViewProps) {
   const toast = useToast();
 
@@ -373,7 +383,7 @@ export default function Moment2PlanView({
         {/* GTC-235: the exit. Named for what is behind it rather than for the surface,
             because "dashboard" is a word for the thing she wants, not the thing she
             wants to do. */}
-        <div className="max-w-2xl mx-auto pt-2 text-center">
+        <div className="max-w-2xl mx-auto pt-2 flex flex-wrap items-baseline justify-center gap-x-4 gap-y-1 text-center">
           <button
             type="button"
             onClick={onGoToDashboard}
@@ -382,7 +392,34 @@ export default function Moment2PlanView({
           >
             Invites, people and reminders →
           </button>
+          {/* [[GTC-375]] W1: beside the exit, as quiet as it (founder: "a quiet link"). */}
+          {onInvitesOnly && (
+            <button
+              type="button"
+              data-invites-only=""
+              onClick={onInvitesOnly}
+              disabled={regeneratingScope !== null || invitesOnlyState === 'working'}
+              className="text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2 disabled:no-underline disabled:opacity-50"
+            >
+              {INVITES_ONLY_WORDS.PUT_AWAY}
+            </button>
+          )}
         </div>
+        {onInvitesOnly && invitesOnlyState !== 'idle' && (
+          <p
+            data-invites-only-state={invitesOnlyState}
+            role="status"
+            className={`max-w-2xl mx-auto pt-1 text-center text-xs ${
+              invitesOnlyState === 'working' ? 'text-gray-500' : 'text-amber-800'
+            }`}
+          >
+            {invitesOnlyState === 'working'
+              ? INVITES_ONLY_WORDS.WORKING
+              : invitesOnlyState === 'not-host'
+                ? INVITES_ONLY_WORDS.NOT_HOST
+                : INVITES_ONLY_WORDS.FAILED}
+          </p>
+        )}
       </div>
     </div>
   );

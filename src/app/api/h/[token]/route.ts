@@ -211,6 +211,9 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ to
       name: resolvedContext.event.name,
       startDate: resolvedContext.event.startDate,
       endDate: resolvedContext.event.endDate,
+      // [[GTC-319]] / [[GTC-375]] (W9): the times she typed, for the page's date line.
+      venueTimingStart: resolvedContext.event.venueTimingStart,
+      venueTimingEnd: resolvedContext.event.venueTimingEnd,
       status: resolvedContext.event.status,
       // GTC-198 (A3d): the token pages use the SAME lifecycle predicates as the
       // server, so they need the same inputs. A screen that decides "sent" its own

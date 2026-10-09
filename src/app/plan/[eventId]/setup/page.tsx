@@ -31,7 +31,11 @@ import type { PanelHouseholdInput } from '@/lib/moment3/people';
 import { M3_WORDS } from '@/lib/moment3/words';
 import { boardHref } from '@/lib/events/home-href';
 import { holdNotice, holdThePlan, type HoldNotice } from '@/lib/moment3/hold';
-import type { InvitesOnlyState } from '@/lib/setup/invites-only';
+import {
+  INVITES_ONLY_WORDS,
+  notBroughtBackLine,
+  type InvitesOnlyState,
+} from '@/lib/setup/invites-only';
 import type { ArcDoor } from '@/components/plan/MomentArc';
 import EventDetails, { type EventDetailsFacts } from '@/components/shared/EventDetails';
 import {
@@ -335,6 +339,8 @@ export default function EventSetupPage() {
   const [holding, setHolding] = useState(false);
   // [[GTC-374]] — the invites-only choice on Moment 2's opening: W3 while it works, W4, W5.
   const [invitesOnlyState, setInvitesOnlyState] = useState<InvitesOnlyState>('idle');
+  // [[GTC-375]] (W2): a plan put away, waiting for "Let’s do this →" to bring it back.
+  const [planWaiting, setPlanWaiting] = useState(false);
   const [holdNoticeShown, setHoldNoticeShown] = useState<HoldNotice | null>(null);
 
   /**
@@ -358,6 +364,52 @@ export default function EventSetupPage() {
     }
     setHolding(false);
     setHoldNoticeShown(holdNotice(outcome, eventId));
+  };
+
+  /**
+   * [[GTC-374]] / [[GTC-375]] — the flag, through the setup route. `true` on an event with a plan puts
+   * the plan away; `false` brings a put-away plan back (what came back is the route's answer). A
+   * co-host is refused, and told W5.
+   */
+  const setInvitesOnly = async (
+    value: boolean
+  ): Promise<{ broughtBack?: boolean; notBroughtBack?: number } | null> => {
+    setInvitesOnlyState('working');
+    try {
+      const res = await fetch(`/api/events/${eventId}/setup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invitesOnly: value }),
+      });
+      if (!res.ok) {
+        setInvitesOnlyState(res.status === 403 ? 'not-host' : 'failed');
+        return null;
+      }
+      const data = await res.json().catch(() => ({}));
+      setEvent((e) => (e && e.setup ? { ...e, setup: { ...e.setup, invitesOnly: value } } : e));
+      return data;
+    } catch {
+      setInvitesOnlyState('failed');
+      return null;
+    }
+  };
+  /*
+   * [[GTC-374]] — GTC-374's W1 on Moment 2's opening, and [[GTC-375]]'s W1 at the foot of the plan:
+   * the choice is stored (a plan, if there is one, put away with it), then the event is held through
+   * the hold Moment 3 uses (`holdThePlan`: the transition, its gate lifted for an invites-only event
+   * alone), then the pre-flight opens. No "are you sure" (GTC-374 Q2, GTC-375 Q3): nothing is sent
+   * until she presses Send there, and nothing put away is lost.
+   */
+  const chooseInvitesOnly = async () => {
+    if (!event || invitesOnlyState === 'working') return;
+    if (!(await setInvitesOnly(true))) return;
+    setInvitesOnlyState('working');
+    const outcome = await holdThePlan({ eventId, status: event.status });
+    if (outcome.kind === 'GO') {
+      window.location.href = `/plan/${eventId}/pre-flight`;
+      return;
+    }
+    setInvitesOnlyState(outcome.kind === 'NOT_HOST' ? 'not-host' : 'failed');
   };
   const [households, setHouseholds] = useState<SavedHousehold[]>([]);
   const [channelCandidates, setChannelCandidates] = useState<ChannelCandidateOption[]>([]);
@@ -478,6 +530,11 @@ export default function EventSetupPage() {
         }
         if (stage === 'moment3') {
           setMoment3Data(await loadMoment3Data());
+        }
+        // [[GTC-375]] (W2): on an invites-only event's opening, whether a plan is put away.
+        if (stage === 'moment2-opening' && loadedEvent.setup?.invitesOnly) {
+          const res = await fetch(`/api/events/${eventId}/setup`);
+          if (res.ok) setPlanWaiting((await res.json()).planPutAway === true);
         }
         applyStage(stage);
       } catch (err: any) {
@@ -1328,6 +1385,9 @@ export default function EventSetupPage() {
           }}
           stripDoors={doorsFor(2)}
           details={details}
+          // [[GTC-375]] W1: before the press only; after it, invites only is fixed.
+          onInvitesOnly={event.sentAt ? undefined : () => void chooseInvitesOnly()}
+          invitesOnlyState={invitesOnlyState}
         />
       </>
     );
@@ -1409,59 +1469,58 @@ export default function EventSetupPage() {
      * (founder: *"if she changes her mind, tapping one starts a plan"*): the flag is cleared first,
      * through the setup route, then the questions open. The event stays held if it was: nothing
      * un-holds (plan Q5). A co-host is refused, and told W5.
+     *
+     * [[GTC-375]] — with a plan put away, clearing the flag brings it back, and she lands where the
+     * entry rule says, as if she had never left (plan Q8), told W4, or W5 if something held by someone
+     * no longer on the event came back with nobody holding it (Q9).
      */
     const invitesOnly = Boolean(event.setup?.invitesOnly);
-    const setInvitesOnly = async (value: boolean): Promise<boolean> => {
-      setInvitesOnlyState('working');
-      try {
-        const res = await fetch(`/api/events/${eventId}/setup`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ invitesOnly: value }),
-        });
-        if (!res.ok) {
-          setInvitesOnlyState(res.status === 403 ? 'not-host' : 'failed');
-          return false;
-        }
-        setEvent((e) => (e && e.setup ? { ...e, setup: { ...e.setup, invitesOnly: value } } : e));
-        return true;
-      } catch {
-        setInvitesOnlyState('failed');
-        return false;
-      }
-    };
-    /*
-     * [[GTC-374]] — W1: the choice is stored, then the event is held through the hold Moment 3 uses
-     * (`holdThePlan`: the transition, its gate lifted for an invites-only event alone), then the
-     * pre-flight opens. No "are you sure" (plan Q2): nothing is sent until she presses Send there.
-     */
-    const chooseInvitesOnly = async () => {
-      if (invitesOnlyState === 'working') return;
-      if (!(await setInvitesOnly(true))) return;
-      setInvitesOnlyState('working');
-      const outcome = await holdThePlan({ eventId, status: event.status });
-      if (outcome.kind === 'GO') {
-        window.location.href = `/plan/${eventId}/pre-flight`;
+    const start = async () => {
+      if (!invitesOnly) {
+        setShowMoment2Opening(false);
+        setShowMoment2Step1(true);
         return;
       }
-      setInvitesOnlyState(outcome.kind === 'NOT_HOST' ? 'not-host' : 'failed');
+      const answer = await setInvitesOnly(false);
+      if (!answer) return;
+      setInvitesOnlyState('idle');
+      setPlanWaiting(false);
+      if (!answer.broughtBack) {
+        setShowMoment2Opening(false);
+        setShowMoment2Step1(true);
+        return;
+      }
+      const [loadedEvent, loadedItems] = await Promise.all([loadEvent(), loadItems()]);
+      const stage = resolveSetupStage({
+        items: loadedItems,
+        hasSetup: true,
+        householdCount: 0,
+        planApproved: Boolean(loadedEvent?.setup?.planApprovedAt),
+        invitesOnly: false,
+      });
+      if (stage === 'plan') setMoment2PlanCategories(await loadMoment2PlanCategories());
+      if (stage === 'moment3') setMoment3Data(await loadMoment3Data());
+      applyStage(stage);
+      toast.success(
+        answer.notBroughtBack
+          ? notBroughtBackLine(answer.notBroughtBack)
+          : INVITES_ONLY_WORDS.BROUGHT_BACK,
+        { duration: 6000 }
+      );
     };
-    // Until [[GTC-375]], never offered for an event with any item (plan Q13), nor after the press.
-    const offerInvitesOnly = items.length === 0 && !event.sentAt;
+    // [[GTC-375]] Q4: offered before the press on every opening, an event whose only items were added
+    // by hand included (they are put away the same way). After the press it is fixed.
+    const offerInvitesOnly = !event.sentAt;
     return (
       <Moment2Opening
         eventName={event.name}
-        onStart={async () => {
-          if (invitesOnly && !(await setInvitesOnly(false))) return;
-          setInvitesOnlyState('idle');
-          setShowMoment2Opening(false);
-          setShowMoment2Step1(true);
-        }}
+        onStart={() => void start()}
         onBack={() => void goToMoment('moment1')}
         doors={doorsFor(2)}
         details={details}
         onInvitesOnly={offerInvitesOnly ? () => void chooseInvitesOnly() : undefined}
         invitesOnlyState={invitesOnlyState}
+        planWaiting={invitesOnly && planWaiting}
       />
     );
   }

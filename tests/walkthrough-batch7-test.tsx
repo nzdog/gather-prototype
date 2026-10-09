@@ -971,8 +971,8 @@ async function runLive() {
   const r3 = await setFlag(dC, kate.token, true);
   assert(
     'D',
-    'D3 Q13: an event with an item is refused 409 until GTC-375, and the column stays false',
-    r3.status === 409 && (await flagOf(dC)) === false,
+    'D3 GTC-375: an event with an item: the plan is put away, 200, and the column true',
+    r3.status === 200 && (await flagOf(dC)) === true,
     String(r3.status)
   );
   const r4 = await setFlag(dD, kate.token, true);
@@ -1228,11 +1228,11 @@ async function runLive() {
       same(hits, ['Kate Lowe: Confirmed', 'Jo Lowe: Confirmed', 'Ross Lowe: No answer yet']);
     detail.C7 = `flagged ${boardFlagged}, tap ${t7}, doors ${JSON.stringify(doorsSeen)}, hits ${JSON.stringify(hits)}`;
 
-    // C11 — an event with an item: Moment 2's opening shows, without W1 and W2 (until GTC-375).
+    // C11 — an event whose only item was added by hand: Moment 2's opening offers W1 and W2 (GTC-375 Q4).
     await c.navigate(`/plan/${cC}/setup`, 8000);
     const t11 = await tap(stripDoor("What's the plan?"), 2500);
     const b11 = await body();
-    r.C11 = t11 === null && b11.includes(LETS_DO_THIS) && !b11.includes(W1) && !b11.includes(W2);
+    r.C11 = t11 === null && b11.includes(LETS_DO_THIS) && b11.includes(W1) && b11.includes(W2);
     detail.C11 = `tap ${t11}`;
 
     // C8 — the pre-flight at 390.
@@ -1296,7 +1296,7 @@ async function runLive() {
   );
   assert(
     'C',
-    'C11 CONTROL: an event with an item — Moment 2’s opening shows, without W1 and W2',
+    'C11 GTC-375 Q4: an event whose only item was added by hand — Moment 2’s opening offers W1 and W2',
     r.C11 === true,
     detail.C11
   );

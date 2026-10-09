@@ -21,7 +21,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
-import { checkSendReadiness } from '@/lib/workflow';
+import { checkSendReadiness, waitingPlanRevisionId } from '@/lib/workflow';
 import { readDietaryData } from '@/lib/dietary';
 import { resolveHouseholdChannel } from '@/lib/households/channel';
 import { isMessageableRole } from '@/lib/eligibility/child-exclusion';
@@ -193,6 +193,10 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 
     // Cross-household by design (§10.7): Grandma's channel may live in her daughter's
     // household, so the candidate list spans the whole event. Children are not offered.
+    // [[GTC-375]] (W3): a plan put away, waiting to come back. Read after the event's own reads.
+    const planPutAway =
+      setup?.invitesOnly === true && (await waitingPlanRevisionId(prisma, eventId)) !== null;
+
     const householdLabelById = new Map(householdViews.map((h) => [h.id, h.label]));
     const channelCandidates = people
       .filter((p) => isMessageableRole(p.householdRole))
@@ -209,6 +213,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         eventType: setup?.eventType ?? null,
         eventTypeOther: setup?.eventTypeOther ?? null,
         invitesOnly: setup?.invitesOnly === true,
+        planPutAway,
       },
       coverage: {
         unassignedItems: unassignedItems.map((i) => ({

@@ -14,6 +14,8 @@ import {
 import ItemStatusBadges from '@/components/plan/ItemStatusBadges';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 import { INVITES_ONLY_WORDS } from '@/lib/setup/invites-only';
+import { whenLine } from '@/components/shared/EventDetails';
+import { askHostLine } from '@/lib/guest/questions-line';
 
 interface HostPreviewData {
   isHostPreview: true;
@@ -87,6 +89,9 @@ interface ParticipantData {
     status: string;
     guestCount: number | null;
     venueName: string | null;
+    /** [[GTC-319]] / [[GTC-375]] (W8): the times she typed, for the date line. */
+    venueTimingStart?: string | null;
+    venueTimingEnd?: string | null;
     /** GTC-191 word 1 — the attribution. See the header line for what it replaced. */
     hostFirstName: string;
   };
@@ -251,17 +256,6 @@ export default function ParticipantView() {
     }
   };
 
-  const formatDateRange = (startDate: string, endDate: string) => {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const formatter = new Intl.DateTimeFormat('en-NZ', {
-      month: 'short',
-      day: 'numeric',
-      timeZone: 'Pacific/Auckland',
-    });
-    return `${formatter.format(start)}-${formatter.format(end).split(' ')[1]}`;
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -362,7 +356,13 @@ export default function ParticipantView() {
               `askSubject` already used in the subject she opened — "from Kate". */}
           <p className="text-sm text-gray-600 mt-1">from {data.event.hostFirstName}</p>
           <div className="text-sm text-gray-500 mt-1">
-            {formatDateRange(data.event.startDate, data.event.endDate)}
+            {/* [[GTC-319]] (W8): the details card's rule, with the times she typed. */}
+            {whenLine(
+              data.event.startDate,
+              data.event.endDate,
+              data.event.venueTimingStart,
+              data.event.venueTimingEnd
+            )}
             {data.event.guestCount && ` · ${data.event.guestCount} guests`}
           </div>
           {data.event.venueName && (
@@ -575,10 +575,15 @@ export default function ParticipantView() {
 
         {/* Footer */}
         <div className="bg-white border-t border-gray-200 rounded-b-xl px-6 py-4">
+          {/* [[GTC-375]] (W6, W7): with nobody to name, the host, by her first name. */}
           <p className="text-center text-sm text-gray-500">
-            Questions? Contact your coordinator
-            {data.team && data.team.coordinator && (
-              <span className="text-accent"> {data.team.coordinator.name}</span>
+            {data.team && data.team.coordinator ? (
+              <>
+                Questions? Contact your coordinator
+                <span className="text-accent"> {data.team.coordinator.name}</span>
+              </>
+            ) : (
+              askHostLine(data.event.hostFirstName ?? '')
             )}
           </p>
           <p className="text-center text-sm text-gray-400 mt-2">

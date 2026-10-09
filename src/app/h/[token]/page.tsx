@@ -22,6 +22,7 @@ import { ModalProvider } from '@/contexts/ModalContext';
 import { HostPersonModal } from '@/components/h/HostPersonModal';
 import { useToast } from '@/contexts/ToastContext';
 import { CHASE_DOOR_HOST_VIEW_NOTE, CHASE_DOOR_LINK } from '@/lib/preflight/after-press-words';
+import { whenLine } from '@/components/shared/EventDetails';
 
 interface Item {
   id: string;
@@ -79,6 +80,9 @@ interface HostData {
     name: string;
     startDate: string;
     endDate: string;
+    /** [[GTC-319]] / [[GTC-375]] (W9): the times she typed, for the date line. */
+    venueTimingStart?: string | null;
+    venueTimingEnd?: string | null;
     status: string;
     guestCount: number | null;
   };
@@ -414,17 +418,6 @@ export default function HostView() {
     }
   };
 
-  const formatDateRange = (startDate: string, endDate: string) => {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const formatter = new Intl.DateTimeFormat('en-NZ', {
-      month: 'short',
-      day: 'numeric',
-      timeZone: 'Pacific/Auckland',
-    });
-    return `${formatter.format(start)}-${formatter.format(end).split(' ')[1]}`;
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -572,7 +565,13 @@ export default function HostView() {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-500">
-              {formatDateRange(data.event.startDate, data.event.endDate)}
+              {/* [[GTC-319]] (W9): the details card's rule, with the times she typed. */}
+              {whenLine(
+                data.event.startDate,
+                data.event.endDate,
+                data.event.venueTimingStart,
+                data.event.venueTimingEnd
+              )}
             </span>
             <span className="text-gray-300">·</span>
             {editingGuestCount ? (

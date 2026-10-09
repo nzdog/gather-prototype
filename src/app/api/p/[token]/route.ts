@@ -224,6 +224,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ tok
       status: resolvedContext.event.status,
       guestCount: resolvedContext.event.guestCount,
       venueName: resolvedContext.event.venueName,
+      // [[GTC-319]] / [[GTC-375]] (W8): the times she typed, for the page's date line.
+      venueTimingStart: resolvedContext.event.venueTimingStart,
+      venueTimingEnd: resolvedContext.event.venueTimingEnd,
       // GTC-191 word 1 — the attribution. See the read above for why it is a name and not a line.
       hostFirstName: firstNameOf(host?.name ?? ''),
     },
