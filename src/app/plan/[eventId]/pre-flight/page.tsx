@@ -34,7 +34,12 @@ import {
   resolveNudgeOffsetDays,
   type NudgePace,
 } from '@/lib/nudge-cadence';
-import { DIETARY_OPTIONS, type DietaryData, type DietaryStatus } from '@/lib/dietary';
+import {
+  DIETARY_OPTIONS,
+  dietaryTitleSummary,
+  type DietaryData,
+  type DietaryStatus,
+} from '@/lib/dietary';
 import AccordionShell from '@/components/plan/AccordionShell';
 import { draftAuthorLine } from '@/lib/messages/ask-register';
 import { PRESS_REFUSAL_WORDS, THRESHOLD_SCRIPT } from '@/lib/press/press-words';
@@ -79,8 +84,12 @@ import {
   PREFLIGHT_STEP_TITLES,
   firstUnticked,
   goToStepLine,
+  looseLine,
   settledSteps,
+  talkLine,
 } from '@/lib/preflight/next-check';
+// [[GTC-377]] (Q1): the step, moved out of this page so a suite can render it.
+import Step from '@/components/preflight/PreflightStep';
 import { INVITES_ONLY_WORDS } from '@/lib/setup/invites-only';
 
 // ─── Wire shapes (mirror /api/events/[id]/pre-flight) ────────────────────────
@@ -176,75 +185,14 @@ function channelFor(
 /** [[GTC-366]] (item 32) — the sage ring on the box W1's line arrives at, for two seconds. */
 const ARRIVAL_RING = ['ring-2', 'ring-accent', 'ring-offset-4', 'rounded-md'];
 
+/** [[GTC-377]] (Q6) — how long the line waits for a step to open before taking her there. */
+const STEP_OPEN_WAIT_MS = 220;
+
 const PACE_LABELS: Record<NudgePace, string> = {
   STANDARD: 'Standard',
   RELAXED: 'Relaxed',
   OFF: 'Off',
 };
-
-// ─── Small building blocks ───────────────────────────────────────────────────
-
-function Step({
-  n,
-  title,
-  blurb,
-  checked,
-  onCheck,
-  checkLabel = 'Checked',
-  settled = false,
-  children,
-}: {
-  n: number;
-  title: string;
-  blurb: string;
-  checked: boolean;
-  onCheck: (v: boolean) => void;
-  /**
-   * [[GTC-311]] SCOPED ruling 7: no check may claim she LOOKED AT what she CHOSE. Step 4 now carries
-   * decisions, so its box reads "Settled" — true of what she read and of what she decided (W9,
-   * ruled 2026-09-27). The other four steps are still things she looks at, and keep "Checked".
-   */
-  checkLabel?: string;
-  /**
-   * [[GTC-374]] (Q8, Q9) — a step an invites-only event does not need: it stays in its place, says
-   * W11, and is ticked for her and greyed; what it would have shown is left out.
-   */
-  settled?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    // [[GTC-366]] (item 32): `id` and `data-step` are where W1's line takes her; `scroll-mt-4` keeps
-    // the step's top just clear of the top of the screen when it arrives there.
-    <section
-      id={`step-${n}`}
-      data-step={n}
-      className={`mb-8 border border-gray-200 rounded-lg bg-white scroll-mt-4${settled ? ' opacity-75' : ''}`}
-    >
-      <header className="px-5 pt-5 pb-3 border-b border-gray-100">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">Step {n} of 5</p>
-            <h2 className="text-lg font-medium text-gray-900">{title}</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              {settled ? INVITES_ONLY_WORDS.STEP_NOT_NEEDED : blurb}
-            </p>
-          </div>
-          <label className="flex items-center gap-2 shrink-0 cursor-pointer text-sm text-gray-600">
-            <input
-              type="checkbox"
-              checked={checked || settled}
-              disabled={settled}
-              onChange={(e) => onCheck(e.target.checked)}
-              className="rounded border-gray-300 text-accent focus:ring-accent/40"
-            />
-            {checkLabel}
-          </label>
-        </div>
-      </header>
-      {settled ? null : <div className="px-5 py-5">{children}</div>}
-    </section>
-  );
-}
 
 // ─── The screen ──────────────────────────────────────────────────────────────
 
@@ -265,6 +213,11 @@ export default function PreFlightPage() {
   // step 3 is a list to scan first and open second. GTC-364 (Q2): several may be open at
   // once, as on Moment 2, so opening one never shuts another above it.
   const [openHouseholds, setOpenHouseholds] = useState<string[]>([]);
+
+  // [[GTC-377]] — which of steps 1 to 4 are open. Empty on every visit: the steps start closed and
+  // nothing remembers them (ruled at scoping). Several may be open at once, as on Moment 2, and
+  // opening one never shuts another. Ready never folds.
+  const [openSteps, setOpenSteps] = useState<number[]>([]);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/events/${eventId}/pre-flight`);
@@ -435,18 +388,34 @@ export default function PreFlightPage() {
    * hook: nothing here may add a hook after the after-the-press return above.
    */
   const nextStep = firstUnticked({ ...checked, ...settled });
+  const toggleStep = (n: number) =>
+    setOpenSteps((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]));
+  /*
+   * [[GTC-377]] (Q6) — the line opens the step it names, then takes her there. The order matters:
+   * with the steps closed the page is too short to bring a step to the top of the screen until it
+   * has opened, so the scroll waits for the fold. It never closes a step; Ready never folds.
+   */
   const goToStep = (n: number) => {
     const section = document.getElementById(`step-${n}`);
     if (!section) return;
-    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    const box = section.querySelector<HTMLInputElement>('header input[type="checkbox"]');
-    if (!box) return;
-    box.focus({ preventScroll: true });
-    const ring = box.closest('label');
-    if (!ring) return;
-    ring.classList.add(...ARRIVAL_RING);
-    window.setTimeout(() => ring.classList.remove(...ARRIVAL_RING), 2000);
+    const opening = n <= 4 && !settled[n] && !openSteps.includes(n);
+    if (opening) setOpenSteps((prev) => (prev.includes(n) ? prev : [...prev, n]));
+    const arrive = () => {
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const box = section.querySelector<HTMLInputElement>('header input[type="checkbox"]');
+      if (!box) return;
+      box.focus({ preventScroll: true });
+      const ring = box.closest('label');
+      if (!ring) return;
+      ring.classList.add(...ARRIVAL_RING);
+      window.setTimeout(() => ring.classList.remove(...ARRIVAL_RING), 2000);
+    };
+    if (opening) window.setTimeout(arrive, STEP_OPEN_WAIT_MS);
+    else arrive();
   };
+  // [[GTC-377]] (W1 to W3) — what a closed row says when something inside needs her.
+  const loose = looseLine(coverage.criticalUnassignedCount);
+  const talk = talkLine(households.filter((h) => channelFor(h, channelCandidates) === null).length);
 
   return (
     <div className="min-h-screen bg-warm-white">
@@ -535,6 +504,9 @@ export default function PreFlightPage() {
           settled={!!settled[1]}
           checked={!!checked[1]}
           onCheck={(v) => setChecked((c) => ({ ...c, 1: v }))}
+          open={openSteps.includes(1)}
+          onToggle={() => toggleStep(1)}
+          line={loose ? { text: loose, amber: true } : null}
         >
           <div className="flex gap-6 mb-4">
             <div>
@@ -632,6 +604,12 @@ export default function PreFlightPage() {
           settled={!!settled[2]}
           checked={!!checked[2]}
           onCheck={(v) => setChecked((c) => ({ ...c, 2: v }))}
+          open={openSteps.includes(2)}
+          onToggle={() => toggleStep(2)}
+          line={{
+            text: dietaryTitleSummary(dietary),
+            amber: dietary.status === 'unanswered',
+          }}
         >
           <DietarySection value={dietary} onSave={saveDietary} />
         </Step>
@@ -643,6 +621,9 @@ export default function PreFlightPage() {
           blurb="One channel per household, and how hard the system chases."
           checked={!!checked[3]}
           onCheck={(v) => setChecked((c) => ({ ...c, 3: v }))}
+          open={openSteps.includes(3)}
+          onToggle={() => toggleStep(3)}
+          line={talk ? { text: talk, amber: true } : null}
         >
           {/* The per-EVENT pace (Moment 4 §10.3). */}
           <div className="mb-6 pb-6 border-b border-gray-100">
@@ -785,6 +766,8 @@ export default function PreFlightPage() {
           checked={!!checked[4]}
           onCheck={(v) => setChecked((c) => ({ ...c, 4: v }))}
           checkLabel="Settled"
+          open={openSteps.includes(4)}
+          onToggle={() => toggleStep(4)}
         >
           <MessageStep eventId={eventId} />
         </Step>

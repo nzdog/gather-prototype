@@ -822,6 +822,13 @@ async function runLive() {
     ] as [string, number, number, boolean][]) {
       await c.setViewport(w, h, mobile);
       await go(`/plan/${pf.id}/pre-flight`);
+      // [[GTC-377]] (Q10): step 3 starts closed, so open it before looking inside. At a HEAD where
+      // the steps do not fold there is no such row, and nothing is tapped.
+      const step3 = `document.querySelector('#step-3 header button[aria-expanded="false"]')`;
+      if (await ev<boolean>(`!!${step3}`)) {
+        await tap(step3);
+        await sleep(500);
+      }
       if (tag.startsWith('C6')) {
         // Measured before Gus's row is opened: at HEAD, opening Gus's closes Jo's.
         await ensure('Jo B2', true);

@@ -38,3 +38,22 @@ export function goToStepLine(n: number): string {
 export function settledSteps(invitesOnly: boolean): Record<number, boolean> {
   return invitesOnly ? { 1: true, 2: true } : {};
 }
+
+/**
+ * [[GTC-377]] (W1, ruled 2026-10-09) — step 1's closed row, only when a critical thing has no
+ * owner: a step can be ticked without being opened, so the row warns her first.
+ */
+export function looseLine(criticalUnowned: number): string | null {
+  if (criticalUnowned <= 0) return null;
+  return criticalUnowned === 1
+    ? '1 critical thing has no owner yet.'
+    : `${criticalUnowned} critical things have no owner yet.`;
+}
+
+/** [[GTC-377]] (W3) — step 3's closed row, only when a household has no one to talk to. */
+export function talkLine(householdsWithNoOne: number): string | null {
+  if (householdsWithNoOne <= 0) return null;
+  return householdsWithNoOne === 1
+    ? '1 household has no one to talk to.'
+    : `${householdsWithNoOne} households have no one to talk to.`;
+}

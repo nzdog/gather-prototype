@@ -25,6 +25,43 @@ export const STILL_DECIDING_ASK = 'Still deciding?';
 export const STILL_DECIDING_WAY_OUT =
   '✓ Still deciding. Tap here, or pick something, to include it in the plan.';
 
+/**
+ * [[GTC-377]] (Q1) — the ▾ and the fold, shared with the pre-flight's steps, so every fold-out row
+ * in Gather turns and opens the same way. The steps keep their own frame because their row carries
+ * a tick box, which cannot sit inside this shell's one-button title row. The shell renders exactly
+ * as it did before these were split out.
+ */
+export function FoldChevron({ open, className }: { open: boolean; className?: string }) {
+  return (
+    <span
+      className={`shrink-0 text-gray-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}${className ? ` ${className}` : ''}`}
+    >
+      ▾
+    </span>
+  );
+}
+
+/** The open box is never measured: a grid row moves between 0fr and 1fr (GTC-364). */
+export function FoldBody({
+  open,
+  id,
+  children,
+}: {
+  open: boolean;
+  id?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      id={id}
+      className="grid transition-all duration-200"
+      style={{ gridTemplateRows: open ? '1fr' : '0fr', opacity: open ? 1 : 0 }}
+    >
+      <div className="overflow-hidden min-h-0">{children}</div>
+    </div>
+  );
+}
+
 export default function AccordionShell({
   id,
   label,
@@ -66,33 +103,24 @@ export default function AccordionShell({
           {headerHint}
           {stillDeciding && <span className="text-xs text-gray-500">{STILL_DECIDING_HINT}</span>}
         </span>
-        <span
-          className={`shrink-0 text-gray-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-        >
-          ▾
-        </span>
+        <FoldChevron open={open} />
       </button>
-      <div
-        className="grid transition-all duration-200"
-        style={{ gridTemplateRows: open ? '1fr' : '0fr', opacity: open ? 1 : 0 }}
-      >
-        <div className="overflow-hidden min-h-0">
-          <div className="px-4 pb-4">
-            <div className={stillDeciding ? 'opacity-50' : ''}>{children}</div>
-            {onStillDecidingToggle && (
-              <button
-                type="button"
-                onClick={onStillDecidingToggle}
-                className={`block text-xs mt-3 text-left transition-colors ${
-                  stillDeciding ? 'text-accent font-medium' : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                {stillDeciding ? STILL_DECIDING_WAY_OUT : STILL_DECIDING_ASK}
-              </button>
-            )}
-          </div>
+      <FoldBody open={open}>
+        <div className="px-4 pb-4">
+          <div className={stillDeciding ? 'opacity-50' : ''}>{children}</div>
+          {onStillDecidingToggle && (
+            <button
+              type="button"
+              onClick={onStillDecidingToggle}
+              className={`block text-xs mt-3 text-left transition-colors ${
+                stillDeciding ? 'text-accent font-medium' : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              {stillDeciding ? STILL_DECIDING_WAY_OUT : STILL_DECIDING_ASK}
+            </button>
+          )}
         </div>
-      </div>
+      </FoldBody>
     </div>
   );
 }
