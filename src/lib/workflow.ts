@@ -521,13 +521,25 @@ export async function runGateCheck(eventId: string): Promise<GateCheckResult> {
     });
   }
 
+  // [[GTC-374]] (item 14) — INVITES ONLY: an event she chose to send with no plan holds with no team
+  // and no item. These two structural checks, and only these, are lifted, and only for an event
+  // whose `EventSetup.invitesOnly` is set; checks 1, 2 and 5 stand for every event. A V1 event has no
+  // EventSetup, so it reads false and is checked as before.
+  const invitesOnly =
+    (
+      await prisma.eventSetup.findUnique({
+        where: { eventId },
+        select: { invitesOnly: true },
+      })
+    )?.invitesOnly === true;
+
   // Check 3: STRUCTURAL_MINIMUM_TEAMS
   // At least 1 team must exist
   const teamCount = await prisma.team.count({
     where: { eventId },
   });
 
-  if (teamCount < 1) {
+  if (teamCount < 1 && !invitesOnly) {
     blocks.push({
       code: 'STRUCTURAL_MINIMUM_TEAMS',
       reason: 'At least 1 team must exist before transitioning',
@@ -547,7 +559,7 @@ export async function runGateCheck(eventId: string): Promise<GateCheckResult> {
     },
   });
 
-  if (itemCount < 1) {
+  if (itemCount < 1 && !invitesOnly) {
     blocks.push({
       code: 'STRUCTURAL_MINIMUM_ITEMS',
       reason: 'At least 1 item must exist before transitioning',

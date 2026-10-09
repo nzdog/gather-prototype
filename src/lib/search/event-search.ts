@@ -43,6 +43,15 @@ export const EVENT_WORDS = {
   nothing: (typed: string) => `Nobody and nothing on this event matches “${typed}”.`,
   /** W10, as on the menu. */
   more: (n: number) => `${n} more. Keep typing to narrow it.`,
+  /** [[GTC-374]] W15 — the button on an invites-only board: there is nothing to find but people. */
+  BUTTON_INVITES_ONLY: 'Find someone',
+  /** [[GTC-374]] W16 — the box's label there. */
+  LABEL_INVITES_ONLY: 'A name',
+  /** [[GTC-374]] W17 — a person's answer there, the board's own words (`readingStatusWord`). */
+  CONFIRMED: 'Confirmed',
+  NO_ANSWER_YET: 'No answer yet',
+  /** [[GTC-374]] W18 — nothing found there. */
+  nothingInvitesOnly: (typed: string) => `Nobody on this event matches “${typed}”.`,
 } as const;
 
 /** How many results show before W10. */
@@ -96,7 +105,13 @@ export function narrowItems(raw: unknown[]): SearchItem[] {
 export function findInEvent(
   people: readonly SearchPerson[],
   items: readonly SearchItem[],
-  query: string
+  query: string,
+  /**
+   * [[GTC-374]] (Q15) — an invites-only event: nobody brings anything, so a person's answer is
+   * whether they're coming (W17): a yes (green) "Confirmed", a no "Not coming", anyone else "No
+   * answer yet". Absent is a planned event, answered as batch 6 ruled.
+   */
+  opts: { invitesOnly?: boolean } = {}
 ): EventHit[] {
   const terms = searchTerms(query);
   if (!terms) return [];
@@ -116,8 +131,13 @@ export function findInEvent(
   for (const person of people) {
     if (!matchesAll(person.name, terms)) continue;
     const held = items.filter((item) => item.holderId === person.personId);
-    const answer =
-      person.state === 'OUT'
+    const answer = opts.invitesOnly
+      ? person.state === 'OUT'
+        ? EVENT_WORDS.NOT_COMING
+        : person.state === 'GREEN'
+          ? EVENT_WORDS.CONFIRMED
+          : EVENT_WORDS.NO_ANSWER_YET
+      : person.state === 'OUT'
         ? EVENT_WORDS.NOT_COMING
         : held.length > 0
           ? held

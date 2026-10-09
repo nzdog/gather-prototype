@@ -59,7 +59,8 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
       prisma.eventSetup.findUnique({
         where: { eventId },
         // [[GTC-368]] (Q14, C2): Moment 2's answer, the details' Occasion.
-        select: { dietaryData: true, eventType: true, eventTypeOther: true },
+        // [[GTC-374]]: invites only, for the pre-flight's settled steps, W9 and W10.
+        select: { dietaryData: true, eventType: true, eventTypeOther: true, invitesOnly: true },
       }),
       // A1's artifact, reused rather than rebuilt — GTC-188's Context asks the question
       // and GTC-169 already renamed this for the pre-flight. Warnings only; nothing here
@@ -207,6 +208,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         ...event,
         eventType: setup?.eventType ?? null,
         eventTypeOther: setup?.eventTypeOther ?? null,
+        invitesOnly: setup?.invitesOnly === true,
       },
       coverage: {
         unassignedItems: unassignedItems.map((i) => ({

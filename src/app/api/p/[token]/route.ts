@@ -187,6 +187,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ tok
     select: { name: true },
   });
 
+  // [[GTC-374]] (W13, W14) — an invites-only event asks its guests only whether they can come.
+  const setup = await prisma.eventSetup.findUnique({
+    where: { eventId: resolvedContext.event.id },
+    select: { invitesOnly: true },
+  });
+
   // Get team info (participant belongs to one team)
   const personEvent = await prisma.personEvent.findFirst({
     where: {
@@ -240,6 +246,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ tok
     attendance: deriveAttendance(assignments, personEvent?.attendanceAnswer ?? null),
     attendanceAnswer: personEvent?.attendanceAnswer ?? null,
     attendanceAskable: isAttendanceAskable(assignments),
+    invitesOnly: setup?.invitesOnly === true,
     assignments: assignments.map(wireAssignment),
     /*
      * GTC-191 (a): one entry per child, each with their own rows. NOT merged into

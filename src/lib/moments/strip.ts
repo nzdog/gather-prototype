@@ -39,6 +39,12 @@ export const STRIP_WORDS = {
   SAVE_NEW_HOUSEHOLD: 'Save this household first, or clear what you’ve typed.',
   /** W9b — a saved household being changed and not saved (it has Cancel). */
   SAVE_CHANGES: 'Save your changes first, or press Cancel.',
+  /** [[GTC-374]] W6 — after the label of Moments 2 and 3 on an invites-only event. */
+  NOT_NEEDED: 'not needed',
+  /** [[GTC-374]] W8 — a tap on a not-needed Moment after the press: invites only is fixed then. */
+  NOT_NEEDED_AFTER_PRESS: 'The invitations have gone as invites only, so there’s no plan to make.',
+  /** [[GTC-374]] W9 — the pre-flight's way back on an invites-only event, to Moment 2's opening. */
+  BACK_TO_WHATS_THE_PLAN: '← Back to “What’s the plan?”',
 } as const;
 
 export type MomentNumber = 1 | 2 | 3 | 4;
@@ -52,7 +58,16 @@ export type StripTarget =
   | 'preflight'
   | 'board';
 
-export type StripDoor = { kind: 'go'; target: StripTarget } | { kind: 'locked'; line: string };
+export type StripDoor =
+  | { kind: 'go'; target: StripTarget }
+  | { kind: 'locked'; line: string }
+  /**
+   * [[GTC-374]] — Moments 2 and 3 on an invites-only event (founder: *"Shown as not needed"*). Before
+   * the press a tap opens Moment 2's opening, where "Let’s do this →" starts a plan; the tap itself
+   * writes nothing (plan Q6). After the press it says W8 and goes nowhere (Q7).
+   */
+  | { kind: 'not-needed'; target: 'moment2-opening' }
+  | { kind: 'not-needed'; line: string };
 
 export interface StripFacts {
   /** Her own household is saved (GTC-256: it comes first, so Moment 2 waits for it). */
@@ -65,10 +80,27 @@ export interface StripFacts {
   held: boolean;
   /** `Event.sentAt` is set: the invitations have gone. */
   sent: boolean;
+  /** [[GTC-374]] — `EventSetup.invitesOnly`. Optional: absent is a planned event, as before. */
+  invitesOnly?: boolean;
 }
 
 /** Each Moment's door, for these facts. Moment 1 is never locked; nothing opens the questions. */
 export function stripDoors(f: StripFacts): Record<MomentNumber, StripDoor> {
+  if (f.invitesOnly) {
+    const notNeeded: StripDoor = f.sent
+      ? { kind: 'not-needed', line: STRIP_WORDS.NOT_NEEDED_AFTER_PRESS }
+      : { kind: 'not-needed', target: 'moment2-opening' };
+    return {
+      1: { kind: 'go', target: 'moment1' },
+      2: notNeeded,
+      3: notNeeded,
+      4: f.sent
+        ? { kind: 'go', target: 'board' }
+        : f.held
+          ? { kind: 'go', target: 'preflight' }
+          : { kind: 'locked', line: STRIP_WORDS.LOCKED_SORTED },
+    };
+  }
   return {
     1: { kind: 'go', target: 'moment1' },
     2:
@@ -92,9 +124,15 @@ export function stripDoors(f: StripFacts): Record<MomentNumber, StripDoor> {
  * and only when there is one. Anything else is null: the entry rule (`resolveSetupStage`) decides,
  * as it does for every other arrival.
  */
-export type RequestedStage = 'moment1' | 'plan';
+export type RequestedStage = 'moment1' | 'plan' | 'moment2-opening';
 export const AT_PEOPLE = 'people';
 export const AT_PLAN = 'plan';
+/**
+ * [[GTC-374]] — Moment 2's opening, from the pre-flight of an invites-only event (W9 and the strip's
+ * not-needed Moments). Without it `?at=plan` with no plan falls to the entry rule, which sends an
+ * invites-only event straight back to the pre-flight. Only while there is no plan.
+ */
+export const AT_OPENING = 'opening';
 
 export function requestedStage(
   at: string | null | undefined,
@@ -102,10 +140,14 @@ export function requestedStage(
 ): RequestedStage | null {
   if (at === AT_PEOPLE) return 'moment1';
   if (at === AT_PLAN && facts.hasPlan) return 'plan';
+  if (at === AT_OPENING && !facts.hasPlan) return 'moment2-opening';
   return null;
 }
 
 /** The setup page's address for a Moment, from another page. Moment 3 needs none: it opens there. */
-export function setupHref(eventId: string, at?: typeof AT_PEOPLE | typeof AT_PLAN): string {
+export function setupHref(
+  eventId: string,
+  at?: typeof AT_PEOPLE | typeof AT_PLAN | typeof AT_OPENING
+): string {
   return at ? `/plan/${eventId}/setup?at=${at}` : `/plan/${eventId}/setup`;
 }

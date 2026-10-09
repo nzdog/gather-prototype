@@ -137,6 +137,7 @@
     "test:walkthrough-batch5": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/walkthrough-batch5-test.tsx",
     "test:walkthrough-batch5-words": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/walkthrough-batch5-words-test.tsx",
     "test:walkthrough-batch6": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/walkthrough-batch6-test.tsx",
+    "test:walkthrough-batch7": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/walkthrough-batch7-test.tsx",
     "test:sign-in-hole": "tsx tests/sign-in-hole-test.ts"
   },
   "prisma": {

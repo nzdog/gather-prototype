@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { STRIP_WORDS } from '@/lib/moments/strip';
 
 /**
  * [[GTC-367]] (item 2) — a door on one Moment of the strip. The founder: *"Both now: show it and make
@@ -9,7 +10,10 @@ import { useState } from 'react';
  * under the strip and goes nowhere (plan ruling Q5). Which door each Moment gets is
  * `stripDoors` (src/lib/moments/strip.ts), so every screen reads one rule.
  */
-export type ArcDoor = { onGo: () => void } | { href: string } | { locked: string };
+export type ArcDoor = ({ onGo: () => void } | { href: string } | { locked: string }) & {
+  /** [[GTC-374]] — the door of a Moment an invites-only event does not need: shown "not needed". */
+  notNeeded?: boolean;
+};
 
 interface MomentArcProps {
   currentMoment: 1 | 2 | 3 | 4;
@@ -18,6 +22,13 @@ interface MomentArcProps {
   doors?: Partial<Record<1 | 2 | 3 | 4, ArcDoor>>;
   /** While a plan regenerates or is being held, the strip waits, as the back buttons do. */
   disabled?: boolean;
+  /**
+   * [[GTC-374]] — the Moments an invites-only event does not need (2 and 3). Each reads its label
+   * then "· not needed" (W6), greyed, with no ✓ even where `completedMoments` names it: the
+   * pre-flight keeps its literal `completedMoments={[1, 2, 3]}` (walkthrough-batch5 R11). Its door, if
+   * any, is the caller's (`stripDoors`).
+   */
+  notNeeded?: number[];
 }
 
 const moments = [
@@ -32,6 +43,7 @@ export default function MomentArc({
   completedMoments = [],
   doors,
   disabled = false,
+  notNeeded = [],
 }: MomentArcProps) {
   const [note, setNote] = useState<string | null>(null);
 
@@ -39,8 +51,10 @@ export default function MomentArc({
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-center gap-3 sm:gap-6">
       {moments.map((moment) => {
         const isCurrent = moment.number === currentMoment;
-        const isCompleted = completedMoments.includes(moment.number);
         const door = isCurrent ? undefined : doors?.[moment.number];
+        const isNotNeeded =
+          !isCurrent && (notNeeded.includes(moment.number) || door?.notNeeded === true);
+        const isCompleted = !isNotNeeded && completedMoments.includes(moment.number);
         const opens = door !== undefined && !('locked' in door);
 
         const cellClass = `flex items-center gap-2 transition-opacity ${
@@ -54,10 +68,12 @@ export default function MomentArc({
                   ? 'bg-green-600 text-white'
                   : isCurrent
                     ? 'bg-accent text-white'
-                    : 'bg-gray-200 text-gray-500'
+                    : isNotNeeded
+                      ? 'bg-gray-100 text-gray-400 border border-dashed border-gray-300'
+                      : 'bg-gray-200 text-gray-500'
               }`}
             >
-              {isCompleted ? '✓' : moment.number}
+              {isCompleted ? '✓' : isNotNeeded ? '–' : moment.number}
             </span>
             <span
               className={`text-base ${
@@ -70,6 +86,12 @@ export default function MomentArc({
             >
               {moment.label}
               {isCompleted && ' ✓'}
+              {isNotNeeded && (
+                <span data-not-needed="" className="text-sm italic text-gray-400 no-underline">
+                  {' · '}
+                  {STRIP_WORDS.NOT_NEEDED}
+                </span>
+              )}
             </span>
           </>
         );

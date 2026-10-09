@@ -298,7 +298,17 @@ export function askHandover(): string {
  * asked." Every question in this register says would, so it speaks in one voice. Do not
  * add a could.
  */
-export function askSystemVoice(recipient: AskRecipient, hostFirstName: string): string {
+export function askSystemVoice(
+  recipient: AskRecipient,
+  hostFirstName: string,
+  /**
+   * [[GTC-374]] (W12, ruled 2026-10-09) — an invites-only event: the empty-handed guest is asked
+   * only whether they can come, so "Nothing for you to bring." is left out; nothing else moves. A
+   * parameter, not a field of `AskRecipient` (whose fields carried-ask Layer T pins): it is the
+   * event's fact, not the guest's. Absent is a planned event, where the line stays word for word.
+   */
+  invitesOnly = false
+): string {
   const speaker = `Hi - Gather here, helping ${hostFirstName} with this one.`;
   const checkBack = `I'll check back if I haven't heard from you.`;
   const hasOwn = recipient.itemNames.length > 0 || recipient.jobNames.length > 0;
@@ -306,7 +316,9 @@ export function askSystemVoice(recipient: AskRecipient, hostFirstName: string): 
 
   const asks =
     !hasOwn && carried.length === 0
-      ? [speaker, `Nothing for you to bring.`]
+      ? invitesOnly
+        ? [speaker]
+        : [speaker, `Nothing for you to bring.`]
       : [
           speaker,
           ...(hasOwn ? [`Would you ${whatIsAsked(recipient.itemNames, recipient.jobNames)}?`] : []),
@@ -494,6 +506,8 @@ export interface ComposeAskInput {
    * to speak. `Event.askAuthorLine` stores all three; the write path preserves `''`.
    */
   storedAuthorLine?: string | null;
+  /** [[GTC-374]] — `EventSetup.invitesOnly`, for `askSystemVoice` (W12). Absent is a planned event. */
+  invitesOnly?: boolean;
 }
 
 /**
@@ -511,7 +525,7 @@ export function composeAsk(input: ComposeAskInput): ComposedAsk {
       input.storedAuthorLine ?? draftAuthorLine(input.event)
     ),
     handover: askHandover(),
-    systemVoice: askSystemVoice(input.recipient, hostFirstName),
+    systemVoice: askSystemVoice(input.recipient, hostFirstName, input.invitesOnly === true),
   };
 
   const text = composeMessage(content, ASK_REGISTER);

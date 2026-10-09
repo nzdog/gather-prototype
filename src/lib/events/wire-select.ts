@@ -84,7 +84,16 @@ export const EVENT_WIRE_SELECT = {
   // Moment 3. A column of EventSetup, not of Event, so none of the contract's forbidden columns.
   // [[GTC-368]] (Q14, C2): Moment 2's answer, the event details' Occasion. Columns of EventSetup, so
   // none of the contract's forbidden columns either.
-  setup: { select: { id: true, planApprovedAt: true, eventType: true, eventTypeOther: true } },
+  // [[GTC-374]]: invites only, for the entry rule and the strip. A column of EventSetup too.
+  setup: {
+    select: {
+      id: true,
+      planApprovedAt: true,
+      eventType: true,
+      eventTypeOther: true,
+      invitesOnly: true,
+    },
+  },
 } as const;
 
 /**

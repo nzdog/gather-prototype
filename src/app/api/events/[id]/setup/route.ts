@@ -55,6 +55,12 @@ interface EventSetupBody {
    * an approved plan at Moment 3. Only `true` is accepted; there is no un-approve.
    */
   planApproved?: unknown;
+  /**
+   * [[GTC-374]] — invites only, either way until the press. The host's alone (plan Q4: only the host
+   * holds and sends), refused after the press (it is fixed then), and refused on an event with any
+   * item until [[GTC-375]] rules what happens to a plan already made (Q13).
+   */
+  invitesOnly?: unknown;
 }
 
 const OTHER_JOBS_FIELDS = ['setUpData', 'cleanUpData', 'otherJobsOtherData'] as const;
@@ -197,6 +203,34 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       return NextResponse.json({ error: 'planApproved must be true' }, { status: 400 });
     }
 
+    // [[GTC-374]] — invites only: the host's, before the press, and never on an event with an item.
+    if ('invitesOnly' in body) {
+      if (typeof body.invitesOnly !== 'boolean') {
+        return NextResponse.json({ error: 'invitesOnly must be a boolean' }, { status: 400 });
+      }
+      if (auth.role !== 'HOST') {
+        return NextResponse.json(
+          { error: 'Only the host can choose invites only' },
+          { status: 403 }
+        );
+      }
+      if (event.sentAt) {
+        return NextResponse.json(
+          { error: 'The invitations have gone, so invites only is fixed' },
+          { status: 409 }
+        );
+      }
+      if (body.invitesOnly) {
+        const itemCount = await prisma.item.count({ where: { team: { eventId } } });
+        if (itemCount > 0) {
+          return NextResponse.json(
+            { error: 'This event has a plan; invites only for it is not built yet (GTC-375)' },
+            { status: 409 }
+          );
+        }
+      }
+    }
+
     // Build update data — only include fields present in the request body
     const data: Record<string, unknown> = {};
     if (body.planApproved === true) {
@@ -219,6 +253,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     if ('setUpData' in body) data.setUpData = body.setUpData;
     if ('cleanUpData' in body) data.cleanUpData = body.cleanUpData;
     if ('otherJobsOtherData' in body) data.otherJobsOtherData = body.otherJobsOtherData;
+    if ('invitesOnly' in body) data.invitesOnly = body.invitesOnly;
 
     const setup = await prisma.eventSetup.upsert({
       where: { eventId },

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import ItemStatusBadges from '@/components/plan/ItemStatusBadges';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
+import { INVITES_ONLY_WORDS } from '@/lib/setup/invites-only';
 
 interface HostPreviewData {
   isHostPreview: true;
@@ -105,6 +106,8 @@ interface ParticipantData {
   attendance: 'PENDING' | 'YES' | 'NO' | 'UNKNOWN';
   attendanceAnswer: 'YES' | 'NO' | null;
   attendanceAskable: boolean;
+  /** [[GTC-374]]: an invites-only event (W13, W14). Absent from the host's preview. */
+  invitesOnly?: boolean;
   /** HER OWN rows. All three fields above derive from these and from nothing else. */
   assignments: Assignment[];
   carried: CarriedChild[];
@@ -412,16 +415,20 @@ export default function ParticipantView() {
                 {data.assignments.length === 0 ? 'Are you coming?' : 'No worries — still coming?'}
               </h2>
               <p className="text-gray-600 mb-4">
-                {data.assignments.length === 0
-                  ? "There's nothing for you to bring — just let us know if you'll be there."
-                  : "That's all good. We just need to know whether to expect you."}
+                {/* [[GTC-374]] (W13): an invites-only guest was never going to bring anything. */}
+                {data.invitesOnly
+                  ? INVITES_ONLY_WORDS.GUEST_LINE
+                  : data.assignments.length === 0
+                    ? "There's nothing for you to bring — just let us know if you'll be there."
+                    : "That's all good. We just need to know whether to expect you."}
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
                   onClick={() => handleAttendanceAnswer(true)}
                   className="py-3 rounded-lg font-medium bg-sage-600 text-white hover:bg-sage-700 transition-all"
                 >
-                  Yes, still coming
+                  {/* [[GTC-374]] (W14): a first ask, so not "still". */}
+                  {data.invitesOnly ? INVITES_ONLY_WORDS.GUEST_YES : 'Yes, still coming'}
                 </button>
                 <button
                   onClick={() => handleAttendanceAnswer(false)}

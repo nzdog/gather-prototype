@@ -29,6 +29,8 @@ interface EventSearchProps {
   eventId: string;
   /** Everyone on the board, in its order, from the board's own payload. */
   people: SearchPerson[];
+  /** [[GTC-374]] — an invites-only event: W15, W16, W17 and W18 in place of W13, W14, W19 and W24. */
+  invitesOnly?: boolean;
 }
 
 /** Q19 — the person's strip, brought to the middle of the screen and ringed for two seconds. */
@@ -49,7 +51,7 @@ function goToStrip(personEventId: string) {
 const NAME_BUTTON =
   'cursor-pointer border-0 bg-transparent p-0 text-left text-[13px] text-[#2c2c2a] underline underline-offset-2';
 
-export default function EventSearch({ eventId, people }: EventSearchProps) {
+export default function EventSearch({ eventId, people, invitesOnly = false }: EventSearchProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [items, setItems] = useState<SearchItem[] | 'loading' | 'failed'>('loading');
@@ -75,7 +77,9 @@ export default function EventSearch({ eventId, people }: EventSearchProps) {
       .catch(() => setItems('failed'));
   };
 
-  const found: EventHit[] = Array.isArray(items) ? findInEvent(people, items, query) : [];
+  const found: EventHit[] = Array.isArray(items)
+    ? findInEvent(people, items, query, { invitesOnly })
+    : [];
   const shown = found.slice(0, EVENT_SHOWN);
   const more = found.length - shown.length;
   const nothing = Array.isArray(items) && query.trim().length >= 2 && found.length === 0;
@@ -103,12 +107,12 @@ export default function EventSearch({ eventId, people }: EventSearchProps) {
         onClick={toggle}
         className="inline-block cursor-pointer border-0 bg-transparent p-0 text-left text-[12px] text-[#888780] underline underline-offset-2"
       >
-        {EVENT_WORDS.BUTTON}
+        {invitesOnly ? EVENT_WORDS.BUTTON_INVITES_ONLY : EVENT_WORDS.BUTTON}
       </button>
       {open ? (
         <div className="mt-2 max-w-[520px]">
           <label htmlFor={id} className="mb-1 block text-[12px] text-[#888780]">
-            {EVENT_WORDS.LABEL}
+            {invitesOnly ? EVENT_WORDS.LABEL_INVITES_ONLY : EVENT_WORDS.LABEL}
           </label>
           <input
             ref={box}
@@ -161,7 +165,9 @@ export default function EventSearch({ eventId, people }: EventSearchProps) {
           ) : null}
           {nothing ? (
             <p className="m-0 mt-2 text-[13px] text-[#5f5e5a]">
-              {EVENT_WORDS.nothing(query.trim())}
+              {invitesOnly
+                ? EVENT_WORDS.nothingInvitesOnly(query.trim())
+                : EVENT_WORDS.nothing(query.trim())}
             </p>
           ) : null}
         </div>

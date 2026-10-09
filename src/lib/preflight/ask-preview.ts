@@ -418,6 +418,12 @@ export interface AskPreview {
     startDate: Date;
     venueName: string | null;
     occasionDescription: string | null;
+    /**
+     * [[GTC-374]] — `EventSetup.invitesOnly`, so the message an invites-only guest reads (W12) is the
+     * same on the pre-flight and at the send: both compose through `composePreview`. Optional, so a
+     * preview built by hand without it is a planned event's, as before.
+     */
+    invitesOnly?: boolean;
   };
   hostName: string;
   /** False on events that predate [[GTC-256]] phase 2 and keep no host membership row. */
@@ -464,6 +470,8 @@ export async function readAskPreview(
       askAuthorLine: true,
       chaseWhenNoMobileDefault: true,
       host: { select: { name: true, userId: true, user: { select: { email: true } } } },
+      // [[GTC-374]]: in this read, so the preview adds no query (carried-child-door E).
+      setup: { select: { invitesOnly: true } },
     },
   });
   if (!event) return null;
@@ -797,6 +805,7 @@ export async function readAskPreview(
       startDate: event.startDate,
       venueName: event.venueName,
       occasionDescription: event.occasionDescription,
+      invitesOnly: event.setup?.invitesOnly === true,
     },
     hostName: event.host?.name?.trim() || HOST_NAME_FALLBACK,
     hostIdentityResolved: memberships.some(isHost),

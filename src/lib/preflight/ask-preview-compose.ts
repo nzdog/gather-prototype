@@ -130,6 +130,8 @@ export function composePreview(
               : LINK_NONE,
       },
       storedAuthorLine: authorLine,
+      // [[GTC-374]] (W12): the event's own fact, so the pre-flight and the send cannot differ.
+      invitesOnly: preview.event.invitesOnly === true,
     });
     const texted = recipient.channel === 'TEXT';
     const textAsSent = texted ? withOptOutLine(ask.text) : null;

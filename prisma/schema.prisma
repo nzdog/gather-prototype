@@ -2446,6 +2446,15 @@ model EventSetup {
   /// Stamped once, by `POST /api/events/[id]/setup`, and never cleared.
   planApprovedAt DateTime?
 
+  /// [[GTC-374]] — invites only: no plan, nobody asked to bring anything; guests are asked only
+  /// whether they can come. Chosen at the start of Moment 2 ("Skip the plan: invites only"), and
+  /// switchable either way until the press, then fixed (founder rulings at scoping, 2026-10-09).
+  /// A state, not a moment, so a boolean. False for every event that existed before it, so no
+  /// backfill. Written only by `POST /api/events/[id]/setup`, by the host; refused after the press,
+  /// and on an event with any item until [[GTC-375]]. `runGateCheck` lifts its two structural
+  /// checks (a team, an item) for it, and nothing else.
+  invitesOnly Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

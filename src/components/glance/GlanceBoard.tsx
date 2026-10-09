@@ -168,6 +168,12 @@ interface GlanceBoardProps {
    * reads as marked.
    */
   justAttendingIds?: readonly string[];
+  /**
+   * [[GTC-374]] (Q14, Q15) — an invites-only event. A prop, like the dates: the page reads it, and the
+   * payload stays as it is. The search answers whether people are coming, and the two doors about a
+   * plan ("Print the list", "Change who’s on what") are left out. Absent is a planned event.
+   */
+  invitesOnly?: boolean;
 }
 
 /**
@@ -418,6 +424,7 @@ export default function GlanceBoard({
   printDate = '',
   details,
   justAttendingIds = [],
+  invitesOnly = false,
 }: GlanceBoardProps) {
   // Ruling 23. A set, so the lookup in `Strip` is one place and one operation at any headcount.
   const sticky: ReadonlySet<string> = new Set(stickyReversals);
@@ -591,7 +598,11 @@ export default function GlanceBoard({
           [[GTC-373]] (item 13, Q11) — "Find someone or something", the first of the closed buttons,
           below the households. An island, so this file still holds no hook and no fetch.
         */}
-        <EventSearch eventId={glance.eventId} people={searchablePeople(glance, justAttendingIds)} />
+        <EventSearch
+          eventId={glance.eventId}
+          people={searchablePeople(glance, justAttendingIds)}
+          invitesOnly={invitesOnly}
+        />
 
         {/*
           [[GTC-368]] (item 5, Q10's A) — Moment 4's words, closed on every visit, above the key.
@@ -642,13 +653,16 @@ export default function GlanceBoard({
           an action on a strip (Moment 4 spec: the surface shows states, the tap holds actions).
         */}
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-          <a
-            data-plan-door=""
-            href={planDoorHref(glance.eventId)}
-            className="inline-block text-[12px] text-[#888780] underline underline-offset-2"
-          >
-            {PLAN_DOOR_LINK}
-          </a>
+          {/* [[GTC-374]] (Q14): an invites-only event has no plan, so neither door about one. */}
+          {invitesOnly ? null : (
+            <a
+              data-plan-door=""
+              href={planDoorHref(glance.eventId)}
+              className="inline-block text-[12px] text-[#888780] underline underline-offset-2"
+            >
+              {PLAN_DOOR_LINK}
+            </a>
+          )}
           <a
             data-back-room-door=""
             href={backRoomHref(glance.eventId)}
@@ -657,12 +671,14 @@ export default function GlanceBoard({
             {BACK_ROOM_LINK}
           </a>
           {/* [[GTC-366]] (item 11, Q12) — the print for the fridge, in one tap. */}
-          <PrintListDoor
-            eventId={glance.eventId}
-            eventName={eventName}
-            printDate={printDate}
-            className="inline-block cursor-pointer text-[12px] text-[#888780] underline underline-offset-2"
-          />
+          {invitesOnly ? null : (
+            <PrintListDoor
+              eventId={glance.eventId}
+              eventName={eventName}
+              printDate={printDate}
+              className="inline-block cursor-pointer text-[12px] text-[#888780] underline underline-offset-2"
+            />
+          )}
         </div>
 
         {/* [[GTC-368]] (item 17, Q15) — the details, after the doors (board-door C4). */}

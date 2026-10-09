@@ -73,9 +73,15 @@ import EventDetails from '@/components/shared/EventDetails';
 import { BOARD_MOVE_AFTER_MS, SEE_THE_BOARD_LINK } from '@/lib/preflight/after-press-words';
 import { boardHref } from '@/lib/events/home-href';
 import MomentArc from '@/components/plan/MomentArc';
-import { AT_PEOPLE, AT_PLAN, STRIP_WORDS, setupHref } from '@/lib/moments/strip';
+import { AT_OPENING, AT_PEOPLE, AT_PLAN, STRIP_WORDS, setupHref } from '@/lib/moments/strip';
 import { HOUSEHOLD_CONTACT_LINE } from '@/lib/households/contact-line';
-import { PREFLIGHT_STEP_TITLES, firstUnticked, goToStepLine } from '@/lib/preflight/next-check';
+import {
+  PREFLIGHT_STEP_TITLES,
+  firstUnticked,
+  goToStepLine,
+  settledSteps,
+} from '@/lib/preflight/next-check';
+import { INVITES_ONLY_WORDS } from '@/lib/setup/invites-only';
 
 // ─── Wire shapes (mirror /api/events/[id]/pre-flight) ────────────────────────
 
@@ -105,6 +111,8 @@ interface PreFlightData {
     occasionDescription: string | null;
     eventType: string | null;
     eventTypeOther: string | null;
+    /** [[GTC-374]]: invites only — steps 1 and 2 settled, W9 and W10, Moments 2 and 3 not needed. */
+    invitesOnly?: boolean;
   };
   coverage: {
     unassignedItems: Array<{
@@ -181,6 +189,7 @@ function Step({
   checked,
   onCheck,
   checkLabel = 'Checked',
+  settled = false,
   children,
 }: {
   n: number;
@@ -194,6 +203,11 @@ function Step({
    * ruled 2026-09-27). The other four steps are still things she looks at, and keep "Checked".
    */
   checkLabel?: string;
+  /**
+   * [[GTC-374]] (Q8, Q9) — a step an invites-only event does not need: it stays in its place, says
+   * W11, and is ticked for her and greyed; what it would have shown is left out.
+   */
+  settled?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -202,19 +216,22 @@ function Step({
     <section
       id={`step-${n}`}
       data-step={n}
-      className="mb-8 border border-gray-200 rounded-lg bg-white scroll-mt-4"
+      className={`mb-8 border border-gray-200 rounded-lg bg-white scroll-mt-4${settled ? ' opacity-75' : ''}`}
     >
       <header className="px-5 pt-5 pb-3 border-b border-gray-100">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">Step {n} of 5</p>
             <h2 className="text-lg font-medium text-gray-900">{title}</h2>
-            <p className="text-sm text-gray-500 mt-1">{blurb}</p>
+            <p className="text-sm text-gray-500 mt-1">
+              {settled ? INVITES_ONLY_WORDS.STEP_NOT_NEEDED : blurb}
+            </p>
           </div>
           <label className="flex items-center gap-2 shrink-0 cursor-pointer text-sm text-gray-600">
             <input
               type="checkbox"
-              checked={checked}
+              checked={checked || settled}
+              disabled={settled}
               onChange={(e) => onCheck(e.target.checked)}
               className="rounded border-gray-300 text-accent focus:ring-accent/40"
             />
@@ -222,7 +239,7 @@ function Step({
           </label>
         </div>
       </header>
-      <div className="px-5 py-5">{children}</div>
+      {settled ? null : <div className="px-5 py-5">{children}</div>}
     </section>
   );
 }
@@ -310,7 +327,11 @@ export default function PreFlightPage() {
     await load();
   };
 
-  const allChecked = useMemo(() => [1, 2, 3, 4, 5].every((n) => checked[n]), [checked]);
+  // [[GTC-374]] (Q8): an invites-only event's steps 1 and 2 are ticked for her.
+  const allChecked = useMemo(() => {
+    const settled = settledSteps(data?.event.invitesOnly === true);
+    return [1, 2, 3, 4, 5].every((n) => checked[n] || settled[n]);
+  }, [checked, data]);
 
   /*
    * ── GTC-189 SLICE 5f — THE PRESS, CALLED ONCE ───────────────────────────────
@@ -401,6 +422,9 @@ export default function PreFlightPage() {
 
   const { coverage, dietary, households, unhoused, channelCandidates } = data;
   const pace = data.event.nudgePace;
+  // [[GTC-374]] (item 14): invites only. Plain values, not hooks (after the after-the-press return).
+  const invitesOnly = data.event.invitesOnly === true;
+  const settled = settledSteps(invitesOnly);
 
   /*
    * [[GTC-366]] (item 32) — THE WAY FROM THE GREYED SEND TO THE FIRST STEP NOT YET TICKED. Ruled
@@ -408,7 +432,7 @@ export default function PreFlightPage() {
    * box and rings it for two seconds. It ticks nothing and presses nothing. A plain function, not a
    * hook: nothing here may add a hook after the after-the-press return above.
    */
-  const nextStep = firstUnticked(checked);
+  const nextStep = firstUnticked({ ...checked, ...settled });
   const goToStep = (n: number) => {
     const section = document.getElementById(`step-${n}`);
     if (!section) return;
@@ -432,20 +456,37 @@ export default function PreFlightPage() {
             Moment by its address; Moment 3 is where the setup page opens by itself. Plain links: no
             hook is added after the after-the-press return above.
           */}
-          <a
-            href={`/plan/${eventId}/setup`}
-            className="mb-4 inline-block text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
-          >
-            {STRIP_WORDS.BACK_TO_WHOS_ON_WHAT}
-          </a>
+          {/*
+            [[GTC-374]] (W9): an invites-only event goes back to Moment 2's opening, where she chose
+            it and where "Let’s do this →" starts a plan; Moments 2 and 3 read "not needed" and
+            open the same place (Q6). The planned event's link and strip are as they were.
+          */}
+          {invitesOnly ? (
+            <a
+              href={setupHref(eventId, AT_OPENING)}
+              className="mb-4 inline-block text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
+            >
+              {STRIP_WORDS.BACK_TO_WHATS_THE_PLAN}
+            </a>
+          ) : (
+            <a
+              href={`/plan/${eventId}/setup`}
+              className="mb-4 inline-block text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
+            >
+              {STRIP_WORDS.BACK_TO_WHOS_ON_WHAT}
+            </a>
+          )}
           <div className="mb-6">
             <MomentArc
               currentMoment={4}
               completedMoments={[1, 2, 3]}
+              notNeeded={invitesOnly ? [2, 3] : undefined}
               doors={{
                 1: { href: setupHref(eventId, AT_PEOPLE) },
-                2: { href: setupHref(eventId, AT_PLAN) },
-                3: { href: setupHref(eventId) },
+                2: {
+                  href: invitesOnly ? setupHref(eventId, AT_OPENING) : setupHref(eventId, AT_PLAN),
+                },
+                3: { href: invitesOnly ? setupHref(eventId, AT_OPENING) : setupHref(eventId) },
               }}
             />
           </div>
@@ -465,6 +506,15 @@ export default function PreFlightPage() {
           <p className="text-gray-600 mt-2">
             Five things to go through. Nothing goes out until you press at the end.
           </p>
+          {/* [[GTC-374]] (W10). */}
+          {invitesOnly ? (
+            <p
+              data-invites-only-line=""
+              className="mt-3 rounded-md border border-sage-200 bg-sage-50 px-3 py-2 text-sm text-gray-700"
+            >
+              {INVITES_ONLY_WORDS.PREFLIGHT_LINE}
+            </p>
+          ) : null}
           {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
           {saving && <p className="text-sm text-gray-400 mt-3">Saving…</p>}
         </header>
@@ -474,6 +524,7 @@ export default function PreFlightPage() {
           n={1}
           title={PREFLIGHT_STEP_TITLES[0]}
           blurb="Everything that has no owner yet. None of it blocks you."
+          settled={!!settled[1]}
           checked={!!checked[1]}
           onCheck={(v) => setChecked((c) => ({ ...c, 1: v }))}
         >
@@ -570,6 +621,7 @@ export default function PreFlightPage() {
           n={2}
           title={PREFLIGHT_STEP_TITLES[1]}
           blurb="Event-level, not by name. The last check before people eat."
+          settled={!!settled[2]}
           checked={!!checked[2]}
           onCheck={(v) => setChecked((c) => ({ ...c, 2: v }))}
         >

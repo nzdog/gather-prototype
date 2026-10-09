@@ -31,6 +31,7 @@ import type { PanelHouseholdInput } from '@/lib/moment3/people';
 import { M3_WORDS } from '@/lib/moment3/words';
 import { boardHref } from '@/lib/events/home-href';
 import { holdNotice, holdThePlan, type HoldNotice } from '@/lib/moment3/hold';
+import type { InvitesOnlyState } from '@/lib/setup/invites-only';
 import type { ArcDoor } from '@/components/plan/MomentArc';
 import EventDetails, { type EventDetailsFacts } from '@/components/shared/EventDetails';
 import {
@@ -242,6 +243,8 @@ interface SetupEvent extends SerialisedEvent {
     /** [[GTC-368]] (Q14): Moment 2's answer, the details' Occasion (on the wire, `EVENT_WIRE_SELECT`). */
     eventType?: string | null;
     eventTypeOther?: string | null;
+    /** [[GTC-374]]: invites only, on the wire (`EVENT_WIRE_SELECT`). */
+    invitesOnly?: boolean;
   } | null;
   /** [[GTC-368]] (item 17): the rest of the details, already on the wire (`EVENT_WIRE_SELECT`). */
   startDate: string;
@@ -330,6 +333,8 @@ export default function EventSetupPage() {
   } | null>(null);
   // [[GTC-360]] — "Move on →" holds the plan; while it works, and what it says if it cannot.
   const [holding, setHolding] = useState(false);
+  // [[GTC-374]] — the invites-only choice on Moment 2's opening: W3 while it works, W4, W5.
+  const [invitesOnlyState, setInvitesOnlyState] = useState<InvitesOnlyState>('idle');
   const [holdNoticeShown, setHoldNoticeShown] = useState<HoldNotice | null>(null);
 
   /**
@@ -431,12 +436,14 @@ export default function EventSetupPage() {
         }
         if (cancelled) return;
 
-        let stage: SetupStage = resolveSetupStage({
+        let stage: SetupStage | 'moment2-opening' = resolveSetupStage({
           items: loadedItems,
           hasSetup: Boolean(loadedEvent.setup),
           householdCount,
           // GTC-355: an approved plan opens at Moment 3, so a returning host lands there.
           planApproved: Boolean(loadedEvent.setup?.planApprovedAt),
+          // [[GTC-374]]: an invites-only event has no plan to open.
+          invitesOnly: Boolean(loadedEvent.setup?.invitesOnly),
         });
         /*
          * [[GTC-367]] (item 2) — a strip tap from another page (the pre-flight) asks for a Moment by
@@ -449,6 +456,22 @@ export default function EventSetupPage() {
         if (asked) stage = asked;
         if (at !== null) {
           window.history.replaceState(window.history.state, '', window.location.pathname);
+        }
+        /*
+         * [[GTC-374]] — where an invites-only event is up to: the board once the invitations have
+         * gone, the pre-flight once it is held, else Moment 2's opening (her choice stored and the
+         * hold not yet made, so she can press it again). Taps from another page (`?at=`) win above.
+         */
+        if (stage === 'invites-only') {
+          if (loadedEvent.sentAt) {
+            window.location.replace(boardHref(eventId));
+            return;
+          }
+          if (loadedEvent.status !== 'DRAFT') {
+            window.location.replace(`/plan/${eventId}/pre-flight`);
+            return;
+          }
+          stage = 'moment2-opening';
         }
         if (stage === 'plan') {
           setMoment2PlanCategories(await loadMoment2PlanCategories());
@@ -731,14 +754,17 @@ export default function EventSetupPage() {
       planApproved: Boolean(event?.setup?.planApprovedAt),
       held: Boolean(event && event.status !== 'DRAFT'),
       sent: Boolean(event?.sentAt),
+      invitesOnly: Boolean(event?.setup?.invitesOnly),
     });
     const doors: Partial<Record<MomentNumber, ArcDoor>> = {};
     for (const n of [1, 2, 3, 4] as const) {
       if (n === current) continue;
       const door = all[n];
-      if (door.kind === 'locked') doors[n] = { locked: door.line };
-      else if (blocked) doors[n] = { locked: blocked };
-      else doors[n] = { onGo: () => void goToMoment(door.target) };
+      // [[GTC-374]]: a not-needed Moment says so on the strip, and its door is the rule's.
+      const notNeeded = door.kind === 'not-needed' ? { notNeeded: true as const } : {};
+      if ('line' in door) doors[n] = { locked: door.line, ...notNeeded };
+      else if (blocked) doors[n] = { locked: blocked, ...notNeeded };
+      else doors[n] = { onGo: () => void goToMoment(door.target), ...notNeeded };
     }
     return doors;
   };
@@ -1378,16 +1404,64 @@ export default function EventSetupPage() {
   }
 
   if (showMoment2Opening && event) {
+    /*
+     * [[GTC-374]] (item 14) — "Let’s do this →" on an invites-only event is her change of mind
+     * (founder: *"if she changes her mind, tapping one starts a plan"*): the flag is cleared first,
+     * through the setup route, then the questions open. The event stays held if it was: nothing
+     * un-holds (plan Q5). A co-host is refused, and told W5.
+     */
+    const invitesOnly = Boolean(event.setup?.invitesOnly);
+    const setInvitesOnly = async (value: boolean): Promise<boolean> => {
+      setInvitesOnlyState('working');
+      try {
+        const res = await fetch(`/api/events/${eventId}/setup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ invitesOnly: value }),
+        });
+        if (!res.ok) {
+          setInvitesOnlyState(res.status === 403 ? 'not-host' : 'failed');
+          return false;
+        }
+        setEvent((e) => (e && e.setup ? { ...e, setup: { ...e.setup, invitesOnly: value } } : e));
+        return true;
+      } catch {
+        setInvitesOnlyState('failed');
+        return false;
+      }
+    };
+    /*
+     * [[GTC-374]] — W1: the choice is stored, then the event is held through the hold Moment 3 uses
+     * (`holdThePlan`: the transition, its gate lifted for an invites-only event alone), then the
+     * pre-flight opens. No "are you sure" (plan Q2): nothing is sent until she presses Send there.
+     */
+    const chooseInvitesOnly = async () => {
+      if (invitesOnlyState === 'working') return;
+      if (!(await setInvitesOnly(true))) return;
+      setInvitesOnlyState('working');
+      const outcome = await holdThePlan({ eventId, status: event.status });
+      if (outcome.kind === 'GO') {
+        window.location.href = `/plan/${eventId}/pre-flight`;
+        return;
+      }
+      setInvitesOnlyState(outcome.kind === 'NOT_HOST' ? 'not-host' : 'failed');
+    };
+    // Until [[GTC-375]], never offered for an event with any item (plan Q13), nor after the press.
+    const offerInvitesOnly = items.length === 0 && !event.sentAt;
     return (
       <Moment2Opening
         eventName={event.name}
-        onStart={() => {
+        onStart={async () => {
+          if (invitesOnly && !(await setInvitesOnly(false))) return;
+          setInvitesOnlyState('idle');
           setShowMoment2Opening(false);
           setShowMoment2Step1(true);
         }}
         onBack={() => void goToMoment('moment1')}
         doors={doorsFor(2)}
         details={details}
+        onInvitesOnly={offerInvitesOnly ? () => void chooseInvitesOnly() : undefined}
+        invitesOnlyState={invitesOnlyState}
       />
     );
   }

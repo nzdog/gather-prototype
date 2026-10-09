@@ -4,6 +4,7 @@ import MomentArc, { type ArcDoor } from '@/components/plan/MomentArc';
 import { STRIP_WORDS } from '@/lib/moments/strip';
 import EventDetails, { type EventDetailsFacts } from '@/components/shared/EventDetails';
 import MomentWords from '@/components/plan/MomentWords';
+import { INVITES_ONLY_WORDS, type InvitesOnlyState } from '@/lib/setup/invites-only';
 
 interface Moment2OpeningProps {
   eventName: string;
@@ -14,9 +15,24 @@ interface Moment2OpeningProps {
   doors?: Partial<Record<1 | 2 | 3 | 4, ArcDoor>>;
   /** [[GTC-368]] (item 17): the event's name and its details (W10, top right). */
   details?: EventDetailsFacts;
+  /**
+   * [[GTC-374]] (item 14) — the quieter choice, W1 with W2 under it. Absent, it is not offered: the
+   * page leaves it out for an event with any item until [[GTC-375]] (plan ruling, Q13).
+   */
+  onInvitesOnly?: () => void;
+  /** [[GTC-374]] — W3 while it works, W4 if it fails, W5 for a co-host. */
+  invitesOnlyState?: InvitesOnlyState;
 }
 
-export default function Moment2Opening({ onStart, onBack, doors, details }: Moment2OpeningProps) {
+export default function Moment2Opening({
+  onStart,
+  onBack,
+  doors,
+  details,
+  onInvitesOnly,
+  invitesOnlyState = 'idle',
+}: Moment2OpeningProps) {
+  const working = invitesOnlyState === 'working';
   return (
     <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
       {/* [[GTC-367]] (item 31, W1): an overlay over the menu bar, so its own way out.
@@ -43,11 +59,41 @@ export default function Moment2Opening({ onStart, onBack, doors, details }: Mome
           <button
             type="button"
             onClick={onStart}
-            className="px-6 py-3 bg-accent text-white font-medium rounded-lg hover:bg-accent-dark transition-colors"
+            disabled={working}
+            className="px-6 py-3 bg-accent text-white font-medium rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-60"
           >
             Let&rsquo;s do this &rarr;
           </button>
         </div>
+
+        {/* [[GTC-374]] (item 14) — the second, quieter choice: no plan, invites only (W1, W2). */}
+        {onInvitesOnly && (
+          <div className="mt-4 flex max-w-md flex-col items-center text-center">
+            <button
+              type="button"
+              data-invites-only=""
+              onClick={onInvitesOnly}
+              disabled={working}
+              className="px-3 py-2 text-base text-gray-700 underline underline-offset-4 hover:text-gray-900 disabled:opacity-60"
+            >
+              {INVITES_ONLY_WORDS.CHOOSE}
+            </button>
+            <p className="mt-1 text-sm leading-snug text-gray-500">{INVITES_ONLY_WORDS.EXPLAIN}</p>
+            {invitesOnlyState !== 'idle' && (
+              <p
+                data-invites-only-state={invitesOnlyState}
+                role="status"
+                className={`mt-2 text-sm ${working ? 'text-gray-500' : 'text-amber-800'}`}
+              >
+                {working
+                  ? INVITES_ONLY_WORDS.WORKING
+                  : invitesOnlyState === 'not-host'
+                    ? INVITES_ONLY_WORDS.NOT_HOST
+                    : INVITES_ONLY_WORDS.FAILED}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* [[GTC-367]] (items 1 and 31, W2): this screen's way back, to Moment 1. */}
         {onBack && (

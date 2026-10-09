@@ -18,7 +18,14 @@
  * inside the component. Every future Moment reads this.
  */
 
-export type SetupStage = 'opening' | 'moment1' | 'moment2-step1' | 'plan' | 'moment3';
+export type SetupStage =
+  | 'opening'
+  | 'moment1'
+  | 'moment2-step1'
+  | 'plan'
+  | 'moment3'
+  /** [[GTC-374]] — an event she chose to send invitations for, with no plan. */
+  | 'invites-only';
 
 /**
  * "Already generated" means ITEMS, not teams.
@@ -61,10 +68,18 @@ export function resolveSetupStage(input: {
   hasSetup: boolean;
   householdCount: number;
   planApproved?: boolean;
+  /**
+   * [[GTC-374]] — `EventSetup.invitesOnly`. Optional, and absent means today's answer. Read after the
+   * EventSetup check, so a V1 event (no EventSetup) is untouched, and before everything else: an
+   * invites-only event has no plan to open. Where the page then goes (the board once sent, the
+   * pre-flight once held, else Moment 2's opening) is the page's, from the event's own facts.
+   */
+  invitesOnly?: boolean;
 }): SetupStage {
   if (!input.hasSetup) {
     return input.householdCount > 0 ? 'moment1' : 'opening';
   }
+  if (input.invitesOnly === true) return 'invites-only';
   if (input.planApproved === true) return 'moment3';
   if (hasGeneratedPlan(input.items)) return 'plan';
   return 'moment2-step1';

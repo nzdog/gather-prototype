@@ -92,6 +92,16 @@ export default async function GlancePage({ params }: { params: Promise<{ eventId
     select: { id: true },
   });
 
+  // [[GTC-374]] (Q14, Q15) — invites only, for the search's words and the board's doors. Its own small
+  // read, so the event read above stays as batch 5 left it (founder ruling A, 2026-10-09).
+  const invitesOnly =
+    (
+      await prisma.eventSetup.findUnique({
+        where: { eventId },
+        select: { invitesOnly: true },
+      })
+    )?.invitesOnly === true;
+
   /*
     ── Phase 6 — THE MEMORY (6b), AND THE REPLAY IT GUARDS (6c) ────────────────────────
 
@@ -207,6 +217,8 @@ export default async function GlancePage({ params }: { params: Promise<{ eventId
         }}
         /* [[GTC-373]] (Q16) — for "Find someone or something"'s "Just attending". */
         justAttendingIds={justAttending.map((row) => row.id)}
+        /* [[GTC-374]] (Q14, Q15) — the search's words and the doors of an invites-only event. */
+        invitesOnly={invitesOnly}
       />
       {/*
         Phase 6 slice 6c. The island, BESIDE the board rather than inside it, so `GlanceBoard`

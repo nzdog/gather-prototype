@@ -29,3 +29,12 @@ export function firstUnticked(checked: Record<number, boolean>): number | null {
 export function goToStepLine(n: number): string {
   return `Go to step ${n}: ${PREFLIGHT_STEP_TITLES[n - 1]} ↑`;
 }
+
+/**
+ * [[GTC-374]] (item 14, plan Q8 and Q9) — on an invites-only event the plan's two steps, "What is
+ * still loose" and "Dietary needs", are not needed: they stay where they are, ticked for her and
+ * greyed (W11), so nothing is renumbered, Send keeps its words, and W1's line above starts at step 3.
+ */
+export function settledSteps(invitesOnly: boolean): Record<number, boolean> {
+  return invitesOnly ? { 1: true, 2: true } : {};
+}
