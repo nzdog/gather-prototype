@@ -85,6 +85,13 @@ export default async function GlancePage({ params }: { params: Promise<{ eventId
   // [[GTC-350]] plan Q-F — a guest's text replies reach the HOST's board only.
   const glance = await readEventGlance(prisma, eventId, now, { replies: auth.role === 'HOST' });
 
+  // [[GTC-373]] (Q16) — who Moment 3 marked "Just attending", for the search's W20 only: the board's
+  // first reader of the mark, ids alone. The glance payload is untouched.
+  const justAttending = await prisma.personEvent.findMany({
+    where: { eventId, justAttending: true },
+    select: { id: true },
+  });
+
   /*
     ── Phase 6 — THE MEMORY (6b), AND THE REPLAY IT GUARDS (6c) ────────────────────────
 
@@ -198,6 +205,8 @@ export default async function GlancePage({ params }: { params: Promise<{ eventId
           eventType: event.setup?.eventType ?? null,
           eventTypeOther: event.setup?.eventTypeOther ?? null,
         }}
+        /* [[GTC-373]] (Q16) — for "Find someone or something"'s "Just attending". */
+        justAttendingIds={justAttending.map((row) => row.id)}
       />
       {/*
         Phase 6 slice 6c. The island, BESIDE the board rather than inside it, so `GlanceBoard`

@@ -57,6 +57,9 @@
  * to the old dashboard is still "Invites & people". Both are islands (`EventDetails`), so this file
  * still holds no hook. And what Moment 4 does, in the founder's words (item 5), behind a closed
  * "What this does" above the key, for Ruling 1: nothing here makes her lean in unless she asks.
+ *
+ * [[GTC-373]] — "Find someone or something" (item 13), the first of the closed buttons: an island
+ * (`EventSearch`) that reads the print door's list when opened, and only finds.
  */
 
 import type { EventGlance, GlanceHousehold, GlancePerson } from '@/lib/glance/state';
@@ -67,6 +70,8 @@ import PersonSurface, { type PersonSurfaceProps } from './PersonSurface';
 import GlancePersonReading from './GlancePersonReading';
 import { readingPanelFor } from './reading';
 import PrintListDoor from './PrintListDoor';
+import EventSearch from './EventSearch';
+import type { SearchPerson } from '@/lib/search/event-search';
 import {
   COLOUR_KEY,
   COLOUR_KEY_BUTTON,
@@ -157,6 +162,12 @@ interface GlanceBoardProps {
    * above: the page reads them, and the payload stays as it is. Absent, the top line is plain.
    */
   details?: EventDetailsFacts;
+  /**
+   * [[GTC-373]] (Q16) — the `personEventId`s Moment 3 marked "Just attending", for the search's
+   * W20. A prop, like the dates: the page reads it, and the payload stays as it is. Absent, nobody
+   * reads as marked.
+   */
+  justAttendingIds?: readonly string[];
 }
 
 /**
@@ -179,6 +190,21 @@ function assignablePool(glance: EventGlance): GlanceAssignable[] {
     // Ruling 18 reads this, and only for OUT. Carried here rather than filtered here so the
     // decision stays in one place, next to the same-team rule it sits above.
     state: p.state,
+  }));
+}
+
+/**
+ * [[GTC-373]] (Q13, Q14) — everyone on the board, in its order, as the search needs them: the same
+ * people the cards show, never a second read. The households first, then the people with none.
+ */
+function searchablePeople(board: EventGlance, marked: readonly string[]): SearchPerson[] {
+  const just = new Set(marked);
+  return [...board.households.flatMap((h) => h.members), ...board.unhoused].map((p) => ({
+    personEventId: p.personEventId,
+    personId: p.personId,
+    name: p.name,
+    state: p.state,
+    justAttending: just.has(p.personEventId),
   }));
 }
 
@@ -391,6 +417,7 @@ export default function GlanceBoard({
   daysToGo = null,
   printDate = '',
   details,
+  justAttendingIds = [],
 }: GlanceBoardProps) {
   // Ruling 23. A set, so the lookup in `Strip` is one place and one operation at any headcount.
   const sticky: ReadonlySet<string> = new Set(stickyReversals);
@@ -560,6 +587,12 @@ export default function GlanceBoard({
           and above the doors. Each row wears its state's own tone (Q11) and is not a strip: no
           `data-strip-state`, no person, no door, so the replay, the poll and the counts never meet it.
         */}
+        {/*
+          [[GTC-373]] (item 13, Q11) — "Find someone or something", the first of the closed buttons,
+          below the households. An island, so this file still holds no hook and no fetch.
+        */}
+        <EventSearch eventId={glance.eventId} people={searchablePeople(glance, justAttendingIds)} />
+
         {/*
           [[GTC-368]] (item 5, Q10's A) — Moment 4's words, closed on every visit, above the key.
         */}

@@ -23,6 +23,13 @@ import {
 import AccordionShell from '@/components/plan/AccordionShell';
 import MomentArc, { type ArcDoor } from '@/components/plan/MomentArc';
 import { STRIP_WORDS } from '@/lib/moments/strip';
+import MenuSearch, { MENU_ARRIVAL_RING } from '@/components/plan/MenuSearch';
+import {
+  buildMenuIndex,
+  dietaryFromSearch,
+  tickFromSearch,
+  type MenuRow,
+} from '@/lib/moments/menu-search';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -543,6 +550,108 @@ export default function Moment2Step1Modal({
     });
   }, [state.eventType]);
 
+  /*
+    [[GTC-373]] (item 23) — "Find a dish". Its rows are the kind's whole menu in the questions' own
+    order: the sections up front, then those behind "Show more" (Q1). Empty for "Other" or no kind,
+    and then the box is not shown (Q2).
+  */
+  const menuRows = useMemo(
+    () =>
+      buildMenuIndex(state.eventType, [...renderableFoodCategories, ...additionalFoodCategories]),
+    [state.eventType, renderableFoodCategories, additionalFoodCategories]
+  );
+  const menuTicked = (row: MenuRow): boolean => {
+    if (row.kind === 'dietary') return state.dietaryData.requirements.includes(row.words);
+    if (row.kind === 'section' || !row.section) return false;
+    const selections =
+      row.section === 'mains'
+        ? (state.mainsData.selections ?? {})
+        : (state.extendedCategoriesData[row.section]?.selections ?? {});
+    return (selections[row.level]?.options ?? []).includes(row.words);
+  };
+
+  /*
+    [[GTC-373]] (Q9) — where a found row lands: its section open, then (once the box has grown, a
+    beat after it opens) the row in the middle of the screen, its box focused and ringed for two
+    seconds. Only a tap on a result sets this; nothing else here scrolls.
+  */
+  const [arrival, setArrival] = useState<{ section: string; option: string | null } | null>(null);
+  useEffect(() => {
+    if (!arrival) return;
+    const timer = window.setTimeout(() => {
+      const box = document.querySelector<HTMLElement>(
+        `[data-accordion="${CSS.escape(arrival.section)}"]`
+      );
+      const target = arrival.option
+        ? box?.querySelector<HTMLElement>(`[data-option="${CSS.escape(arrival.option)}"]`)
+        : box?.querySelector<HTMLElement>('button');
+      if (!target) return;
+      target.scrollIntoView({ block: 'center' });
+      (target.querySelector('input') ?? target).focus({ preventScroll: true });
+      target.classList.add(...MENU_ARRIVAL_RING);
+      window.setTimeout(() => target.classList.remove(...MENU_ARRIVAL_RING), 2000);
+    }, 260);
+    return () => window.clearTimeout(timer);
+  }, [arrival]);
+
+  /*
+    [[GTC-373]] (Q5 to Q8) — a tap on a found row. A dish or style is ticked through the same state
+    and the same half-second save as a tick in the section, and the section stops being still
+    deciding, as any pick there does; a row already ticked changes nothing and saves nothing (Q6).
+  */
+  const pickFromMenu = (row: MenuRow) => {
+    const changeIfNeeded = (updater: (prev: Step1State) => Step1State) =>
+      setState((prev) => {
+        const next = updater(prev);
+        if (next !== prev) scheduleSave(next);
+        return next;
+      });
+    let section = 'dietary';
+    if (row.kind === 'dietary') {
+      changeIfNeeded((prev) => {
+        const dietaryData = dietaryFromSearch(prev.dietaryData, row.words);
+        return dietaryData === prev.dietaryData ? prev : { ...prev, dietaryData };
+      });
+    } else if (row.section && state.eventType) {
+      const key = row.section;
+      section = key;
+      const levels = getCategoryLevels(state.eventType, key) ?? [];
+      changeIfNeeded((prev) => {
+        if (key === 'mains') {
+          const current = prev.mainsData.selections ?? {};
+          const selections = tickFromSearch(levels, current, row);
+          return selections === current
+            ? prev
+            : { ...prev, mainsData: { ...prev.mainsData, selections, stillDeciding: false } };
+        }
+        const entry = prev.extendedCategoriesData[key] ?? { selections: {}, stillDeciding: false };
+        const selections = tickFromSearch(levels, entry.selections, row);
+        return selections === entry.selections
+          ? prev
+          : {
+              ...prev,
+              extendedCategoriesData: {
+                ...prev.extendedCategoriesData,
+                [key]: { selections, stillDeciding: false },
+              },
+            };
+      });
+      if ((additionalFoodCategories as readonly string[]).includes(key)) {
+        setShowAdditionalCategories(true);
+      }
+    }
+    setOpenSections((prev) => (prev.includes(section) ? prev : [...prev, section]));
+    setArrival({
+      section,
+      option:
+        row.kind === 'section'
+          ? null
+          : row.kind === 'dietary'
+            ? `dietary:${row.words}`
+            : `${row.level}:${row.words}`,
+    });
+  };
+
   // Feedback line
   const feedbackLine = state.eventType
     ? (FEEDBACK_LINES[state.eventType] ?? FEEDBACK_LINES.Other).replace('[X]', String(peopleCount))
@@ -632,6 +741,16 @@ export default function Moment2Step1Modal({
           {/* Feedback line */}
           {feedbackLine && <p className="mt-4 text-base text-gray-600 italic">{feedbackLine}</p>}
         </div>
+
+        {/* [[GTC-373]] (item 23, Q3) — "Find a dish", in the flow above "Food", never fixed. */}
+        {menuRows.length > 0 && (
+          <MenuSearch
+            rows={menuRows}
+            isTicked={menuTicked}
+            dietaryNone={state.dietaryData.status === 'confirmed_none'}
+            onPick={pickFromMenu}
+          />
+        )}
 
         {/* Accordions — only show after event type selected */}
         {state.eventType && (
@@ -1032,6 +1151,7 @@ function DietaryAccordion({
         {DIETARY_OPTIONS.map((opt) => (
           <label
             key={opt}
+            data-option={`dietary:${opt}`}
             className={`flex items-center gap-2 ${isNone ? 'opacity-50' : 'cursor-pointer'}`}
           >
             <input

@@ -110,9 +110,11 @@ export default function OptionTree({
     const level = levels[levelIndex];
     const multiSelect = level.multiSelect !== false;
     const selected = readLevel(selections, levelIndex).options.includes(option);
+    // [[GTC-373]] (Q10): `data-option` is how "Find a dish" finds the row it ticked, by level and words.
     return (
       <label
         key={option}
+        data-option={`${levelIndex}:${option}`}
         className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg border transition-colors ${
           disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
         } ${

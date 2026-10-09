@@ -1068,6 +1068,11 @@ async function main() {
     // Ruling 1's fence follows them UNCHANGED.
     const detailsSrc = code('src/components/shared/EventDetails.tsx');
     const momentWordsSrc = code('src/lib/moments/moment-words.ts');
+    // [[GTC-373]] Q22, ruled 2026-10-08 — THE BOARD'S SEARCH JOINS, and the count moves 22 → 23 on
+    // that ruling, once the island exists. The board renders it and it ships to a browser; it reads
+    // the item list the print door reads and keeps three facts of each row. Ruling 1's fence follows
+    // it UNCHANGED.
+    const eventSearchSrc = code('src/components/glance/EventSearch.tsx');
     const glanceSources = [
       stateSrc,
       readSrc,
@@ -1091,12 +1096,13 @@ async function main() {
       printDoorSrc,
       detailsSrc,
       momentWordsSrc,
+      eventSearchSrc,
     ];
     const sourcesExist = glanceSources.every((src) => src.length > 0);
     assert(
       'Ruling 1 source',
-      'EVERY GLANCE SOURCE EXISTS — the modules, the route, the page, the view, the actions, both islands, the painters, the preview, the reading panel and its model, the print door, the event’s details and the Moment words; the gate and the scan are ONE list, so neither can be widened without the other',
-      sourcesExist && glanceSources.length === 22
+      'EVERY GLANCE SOURCE EXISTS — the modules, the route, the page, the view, the actions, both islands, the painters, the preview, the reading panel and its model, the print door, the event’s details, the Moment words and the board’s search; the gate and the scan are ONE list, so neither can be widened without the other',
+      sourcesExist && glanceSources.length === 23
     );
     for (const banned of BEHAVIOUR_DENYLIST) {
       const re = new RegExp(`\\b${banned}\\b`);
