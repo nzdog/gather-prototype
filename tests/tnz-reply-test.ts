@@ -1148,7 +1148,7 @@ async function main() {
     // The same declaration with any whitespace after "=": Prettier puts the sentence on its own line
     // at printWidth 100. Still the exact sentence, and still the declaration.
     await check('K', "K10 TEXT_REPLY is Q4's sentence (GTC-350)", () =>
-      /const TEXT_REPLY =\s*'A text reply usually comes to your board, and I stop reminding whoever sent it\.';/.test(
+      /const TEXT_REPLY =\s*'A text reply usually comes to your board, and I stop nudging whoever sent it\.';/.test(
         read('src/lib/preflight/ask-preview-compose.ts')
       )
     );

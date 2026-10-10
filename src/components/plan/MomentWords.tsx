@@ -9,22 +9,17 @@ export default function MomentWords({
   moment,
   part,
   className = '',
-  compact = false,
 }: {
   moment: 1 | 2 | 3 | 4;
   part: 'does' | 'done';
   className?: string;
-  /** Smaller type, for a panel (Moment 3's after "All sorted →"). */
-  compact?: boolean;
 }) {
   return (
     <div data-moment-words={`${moment}-${part}`} className={className}>
       <p className="m-0 mb-1 text-xs font-semibold uppercase tracking-wide text-accent">
         {part === 'does' ? MOMENT_HEADINGS.DOES : MOMENT_HEADINGS.DONE}
       </p>
-      <p className={`m-0 leading-relaxed text-gray-600 ${compact ? 'text-sm' : 'text-base'}`}>
-        {MOMENT_WORDS[moment][part]}
-      </p>
+      <p className="m-0 leading-relaxed text-gray-600 text-base">{MOMENT_WORDS[moment][part]}</p>
     </div>
   );
 }

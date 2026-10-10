@@ -193,7 +193,7 @@ async function run(
     ['W5 Moment 3', `/plan/${ev.moment3.id}/setup`],
     ['W6 the pre-flight', `/plan/${ev.moment3.id}/pre-flight`],
     ['W7 the board', `/plan/${ev.sent.id}/glance`],
-    ['W8 "Who I chase"', `/plan/${ev.sent.id}/pre-flight`],
+    ['W8 "Who I nudge"', `/plan/${ev.sent.id}/pre-flight`],
     ['W9 Your Events', '/plan/events'],
     ['W10 the old dashboard', `/plan/${ev.sent.id}`],
     ['W11 home', '/'],

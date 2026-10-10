@@ -391,7 +391,7 @@ async function runInMemory() {
   );
   assert(
     'R',
-    'R10 "Who I chase" has W5, to the board',
+    'R10 "Who I nudge" has W5, to the board',
     new RegExp(`<a [^>]*href="/plan/e1/glance"[^>]*>${W5}</a>`).test(chaseView)
   );
   const preflight = codeOnly(read('src/app/plan/[eventId]/pre-flight/page.tsx'));
@@ -824,10 +824,16 @@ async function runLive() {
         select: { planApprovedAt: true },
       })
     )?.planApprovedAt;
+    // [[GTC-378]] — C8 went red once (an intermittent): the detail says which of its three it was.
+    const plan8 = await isPlanView();
+    const kept8 = approvedAfter?.getTime() === stamped.getTime();
+    const path8 = await path();
+    const text8 = (await body()).replace(/\s+/g, ' ').slice(0, 80);
     assert(
       'C',
       'C8 from Moment 3, “What’s the plan?” opens the plan view; the approval is unchanged',
-      t8 === null && (await isPlanView()) && approvedAfter?.getTime() === stamped.getTime()
+      t8 === null && plan8 && kept8,
+      `tap ${JSON.stringify(t8)}, plan view ${plan8}, approval unchanged ${kept8}, path ${path8}, text "${text8}"`
     );
 
     // ── Held, not sent: the pre-flight ────────────────────────────────────────────
@@ -876,11 +882,11 @@ async function runLive() {
       t10b === null && (await isPlanView())
     );
     await c.navigate(`/plan/${evSent.id}/pre-flight`, 8000);
-    const onChase = (await body()).includes('Who I chase');
+    const onChase = (await body()).includes('Who I nudge');
     const t11 = await tap(link(W5), 8000);
     assert(
       'C',
-      'C11 “Who I chase” has W5, and it opens the board',
+      'C11 “Who I nudge” has W5, and it opens the board',
       onChase && t11 === null && (await path()) === `/plan/${evSent.id}/glance`
     );
 

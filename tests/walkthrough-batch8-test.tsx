@@ -138,7 +138,7 @@ const GTC374_W5 = 'Only the host can choose this, and send the invitations.';
 const GTC374_W10 = 'Invites only: nobody’s asked to bring anything, just whether they can come.';
 /** As they stand at HEAD, for the controls. */
 const LETS_DO_THIS = 'Let’s do this →';
-const EXIT = 'Invites, people and reminders →';
+const EXIT = 'Invites, people and nudges →';
 const COORDINATOR_LINE = 'Questions? Contact your coordinator';
 
 /** The dates of the guest-page fixture: Fri 18 to Sun 20 Dec 2026, NZ, 12:00 to 16:00. */
@@ -333,7 +333,7 @@ async function runInMemory() {
   const exitAt = planWith.indexOf(`>${EXIT}</button>`);
   assert(
     'R',
-    'R3 the plan’s footer: W1 a button beside "Invites, people and reminders →", after it',
+    'R3 the plan’s footer: W1 a button beside "Invites, people and nudges →", after it',
     exitAt > 0 && planWith.indexOf(`>${W1}</button>`) > exitAt
   );
   const planWithout = render(
@@ -1109,7 +1109,7 @@ async function runLive() {
     JSON.stringify(probes)
   );
   const C_LABELS: Record<string, string> = {
-    C1: 'C1 the plan’s footer at 1280: W1 beside "Invites, people and reminders →"',
+    C1: 'C1 the plan’s footer at 1280: W1 beside "Invites, people and nudges →"',
     C2: 'C2 the plan’s footer at 390: W1 shown, and the page no wider than the screen',
     C3: 'C3 W1 pressed (the fixture’s own): the plan put away, held, and the pre-flight opens',
     C4: 'C4 the pre-flight: W3 under GTC-374’s W10',

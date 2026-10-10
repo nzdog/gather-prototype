@@ -76,7 +76,7 @@ function code(rel: string): string {
 
 // The ruled words, typed here so a changed constant fails rather than agreeing with itself.
 const W2_LEAD = 'Want me to keep trying?';
-const W2_CHOICES = ['1 more reminder', '2 more reminders', '3 more reminders'];
+const W2_CHOICES = ['1 more nudge', '2 more nudges', '3 more nudges'];
 const W2_DONE = "Handed back. I'll send the next one soon.";
 const W2_REFUSED = 'The board is catching up.';
 

@@ -205,7 +205,7 @@ async function main() {
     assert(
       'Ruling 14',
       'and the refusal SAYS WHY — the host is told the mark, not given a dead button',
-      ok(() => /chase/i.test(A.remindRefusal(person({ nudgeMark: 'DONT_CHASE' }))))
+      ok(() => /don't-nudge/i.test(A.remindRefusal(person({ nudgeMark: 'DONT_CHASE' }))))
     );
     assert(
       'Ruling 14',
@@ -551,7 +551,7 @@ async function main() {
       ok(
         () =>
           sentOutcome.ok === true &&
-          sentOutcome.note === 'Reminded. Nothing here changes until they reply.'
+          sentOutcome.note === 'Nudged. Nothing here changes until they reply.'
       )
     );
 
@@ -885,7 +885,7 @@ async function main() {
     assert(
       'Ruling 19',
       'the ROUTE refuses a marked person — 403, whichever surface pressed the button',
-      markedNudge.status === 403 && /chase/i.test(markedNudge.json?.error ?? '')
+      markedNudge.status === 403 && /don't-nudge/i.test(markedNudge.json?.error ?? '')
     );
     assert(
       'before the provider',
@@ -1144,12 +1144,12 @@ async function main() {
     );
     assert(
       'Ruling 31',
-      'AND THE LABEL AND THE ACTION LIVE NOWHERE BUT BEHIND IT — "Remind them" and the `remind(` call each appear exactly once in the file, and both inside that function’s body',
+      'AND THE LABEL AND THE ACTION LIVE NOWHERE BUT BEHIND IT — "Nudge them" and the `remind(` call each appear exactly once in the file, and both inside that function’s body',
       sourcesExist &&
         remindBody &&
-        (surfaceSrc.match(/Remind them/g) ?? []).length === 1 &&
+        (surfaceSrc.match(/Nudge them/g) ?? []).length === 1 &&
         (surfaceSrc.match(/\bremind\(eventId/g) ?? []).length === 1 &&
-        (remindScope.match(/Remind them/g) ?? []).length === 1 &&
+        (remindScope.match(/Nudge them/g) ?? []).length === 1 &&
         (remindScope.match(/\bremind\(eventId/g) ?? []).length === 1
     );
     assert(

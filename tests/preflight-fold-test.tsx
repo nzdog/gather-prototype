@@ -125,10 +125,12 @@ const STEP_TITLES = [
 const BLURBS = [
   'Everything that has no owner yet. None of it blocks you.',
   'Event-level, not by name. The last check before people eat.',
-  'One channel per household, and how hard the system chases.',
-  "Exactly what each person will receive, and who I'll chase.",
+  'Everyone with an email or mobile hears from me. Pick who takes the kids’ asks, and how hard I nudge.',
+  "Exactly what each person will receive, and who I'll nudge.",
   'The last look is done.',
 ];
+/** [[GTC-378]] W8 — step 3's line on an invites-only event (ruling 3). */
+const STEP3_INVITES_ONLY = 'Everyone with an email or mobile hears from me. Pick how hard I nudge.';
 const GO_TO = (n: number) => `Go to step ${n}: ${STEP_TITLES[n - 1]} ↑`;
 
 /** Send's element exactly as it stands at `0a689ca` — ruled 2: "Send stays exactly where it is". */
@@ -420,6 +422,7 @@ async function runInMemory() {
     'S',
     'S6 CONTROL: the blurbs, checkLabel="Settled" and "Five things to go through." are still literal in the page (chase-channel W8, W9)',
     BLURBS.every((b) => raw.includes(b)) &&
+      raw.includes(STEP3_INVITES_ONLY) &&
       /checkLabel="Settled"/.test(raw) &&
       raw.includes('Five things to go through.')
   );

@@ -506,7 +506,7 @@ export async function remind(
   }
   return ask(
     remindRequest(eventId, person, context),
-    'Reminded. Nothing here changes until they reply.',
+    'Nudged. Nothing here changes until they reply.',
     // A nudge changes no state, so there is nothing for the board to catch up to. Refreshing
     // for it would repaint an identical board — and would say, wrongly, that something moved.
     false,
@@ -523,9 +523,9 @@ export async function remind(
  */
 export const HAND_BACK_LEAD = 'Want me to keep trying?';
 export const HAND_BACK_CHOICES: readonly { reminders: number; label: string }[] = [
-  { reminders: 1, label: '1 more reminder' },
-  { reminders: 2, label: '2 more reminders' },
-  { reminders: 3, label: '3 more reminders' },
+  { reminders: 1, label: '1 more nudge' },
+  { reminders: 2, label: '2 more nudges' },
+  { reminders: 3, label: '3 more nudges' },
 ];
 export const HAND_BACK_DONE = "Handed back. I'll send the next one soon.";
 
@@ -534,7 +534,7 @@ export const HAND_BACK_DONE = "Handed back. I'll send the next one soon.";
  * carry on reminding them?". "Gone quiet" keeps "Want me to keep trying?". The choices and "Handed
  * back. I'll send the next one soon." stay W2's."*
  */
-export const HAND_BACK_LEAD_REPLIED = 'Want me to carry on reminding them?';
+export const HAND_BACK_LEAD_REPLIED = 'Want me to carry on nudging them?';
 
 /**
  * The reds a hand-back is for: "gone quiet" ([[GTC-251]] Q3) and a text reply ([[GTC-350]] Q1). One

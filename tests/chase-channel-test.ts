@@ -500,19 +500,19 @@ async function main() {
     'D',
     'RULING AM, VERBATIM — the opted-out reason line',
     map?.SMS_OPTED_OUT,
-    "They've opted out of texts — so I won't chase them at all."
+    "They've opted out of texts — so I won't nudge them at all."
   );
   expectEq(
     'D',
     'RULING AM, VERBATIM — where the control would be',
     compose?.CHASE_OPTED_OUT_PLACEHOLDER,
-    "[can't be chased — opted out]"
+    "[can't be nudged — opted out]"
   );
   expectEq(
     'D',
     'W7 — HANDED_TO_HOST',
     map?.HANDED_TO_HOST,
-    "You're handling them yourself, so I won't chase them."
+    "You're handling them yourself, so I won't nudge them."
   );
 
   // RULING AN: no sentence from the ask-refusal maps may appear on a chase-refusal row.
@@ -548,7 +548,7 @@ async function main() {
     attempt(() =>
       compose?.notChasedReason({ why: 'HANDED_TO_HOST', child: true, carrierName: 'Sarah Jones' })
     ),
-    "Sarah gets it, but I won't chase Sarah."
+    "Sarah gets it, but I won't nudge Sarah."
   );
   expectEq(
     'D',
@@ -556,13 +556,13 @@ async function main() {
     attempt(() =>
       compose?.notChasedReason({ why: 'SMS_OPTED_OUT', child: false, carrierName: null })
     ),
-    "They've opted out of texts — so I won't chase them at all."
+    "They've opted out of texts — so I won't nudge them at all."
   );
   expectEq(
     'D',
     'W1 — the default ON',
     compose?.CHASE_DEFAULT_SENTENCE?.BY_EMAIL,
-    "When someone hasn't answered and has no mobile I can text, I'll chase them by email."
+    "When someone hasn't answered and has no mobile I can text, I'll nudge them by email."
   );
   expectEq(
     'D',
@@ -571,7 +571,7 @@ async function main() {
     "When someone hasn't answered and has no mobile I can text, I'll leave them to you."
   );
   expectEq('D', 'W3 — the switch pills', compose?.CHASE_DEFAULT_PILLS, {
-    BY_EMAIL: 'Chase them by email',
+    BY_EMAIL: 'Nudge them by email',
     HAND_TO_HOST: 'Leave them to me',
   });
   expectEq(
@@ -580,14 +580,14 @@ async function main() {
     compose?.DEFAULT_SUFFIX,
     ' (the default)'
   );
-  expectEq('D', 'W4 — the row label', compose?.CHASED_BY_LABEL, 'Chased by');
+  expectEq('D', 'W4 — the row label', compose?.CHASED_BY_LABEL, 'Nudges by');
   expectEq('D', 'W4 — its values', compose?.CHASED_BY_VALUE, {
     TEXT: 'Text',
     EMAIL: 'Email',
-    NONE: 'Not chased — yours',
+    NONE: 'No nudges — yours',
   });
   expectEq('D', 'W5 — the per-person pills', compose?.CHASE_PERSON_PILLS, {
-    BY_EMAIL: 'Chase by email',
+    BY_EMAIL: 'Nudge by email',
     HAND_TO_HOST: 'Hand this one to me',
   });
   expectEq(
@@ -600,7 +600,7 @@ async function main() {
     'D',
     'W6 — group B heading',
     compose?.HOST_LIST_NOT_CHASED_HEADING,
-    "I'll ask, but won't chase"
+    "I'll ask, but won't nudge"
   );
   expectEq(
     'D',
@@ -623,7 +623,7 @@ async function main() {
     'RULING 2026-09-27 — per-person pills mark the default while no exception is stored',
     attempt(() => compose?.chasePersonPills({ exception: null, eventDefault: null })),
     [
-      { value: 'BY_EMAIL', label: 'Chase by email (the default)', active: true, writes: null },
+      { value: 'BY_EMAIL', label: 'Nudge by email (the default)', active: true, writes: null },
       {
         value: 'HAND_TO_HOST',
         label: 'Hand this one to me',
@@ -637,7 +637,7 @@ async function main() {
     'and once an exception is stored, no pill carries the suffix',
     attempt(() => compose?.chasePersonPills({ exception: 'HAND_TO_HOST', eventDefault: null })),
     [
-      { value: 'BY_EMAIL', label: 'Chase by email', active: false, writes: null },
+      { value: 'BY_EMAIL', label: 'Nudge by email', active: false, writes: null },
       { value: 'HAND_TO_HOST', label: 'Hand this one to me', active: true, writes: 'HAND_TO_HOST' },
     ]
   );
@@ -646,7 +646,7 @@ async function main() {
     'default OFF: the marked pill moves with the switch, and picking BY_EMAIL writes the exception',
     attempt(() => compose?.chasePersonPills({ exception: null, eventDefault: 'HAND_TO_HOST' })),
     [
-      { value: 'BY_EMAIL', label: 'Chase by email', active: false, writes: 'BY_EMAIL' },
+      { value: 'BY_EMAIL', label: 'Nudge by email', active: false, writes: 'BY_EMAIL' },
       {
         value: 'HAND_TO_HOST',
         label: 'Hand this one to me (the default)',
@@ -660,7 +660,7 @@ async function main() {
   assert(
     'D',
     'W8 — step 4 blurb',
-    page.includes("Exactly what each person will receive, and who I'll chase.")
+    page.includes("Exactly what each person will receive, and who I'll nudge.")
   );
   assert('D', 'W9 — step 4 check reads "Settled"', /checkLabel="Settled"/.test(page));
   assert(
@@ -675,7 +675,7 @@ async function main() {
       page.includes('chasePersonPills') &&
       page.includes('CHASE_OPTED_OUT_PLACEHOLDER') &&
       page.includes('notChasedReason') &&
-      !page.includes("can't be chased — opted out")
+      !page.includes("can't be nudged — opted out")
   );
 
   // ───────────────────────────────────────────────────────────────────────────

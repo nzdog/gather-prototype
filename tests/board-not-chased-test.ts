@@ -118,12 +118,12 @@ const OPENING = ['HANDED_TO_HOST', 'SMS_OPTED_OUT', 'HOST_AS_CARRIER', 'HOST_HOU
 
 // The ruled sentences, typed here rather than imported, so a changed constant fails rather than
 // agreeing with itself.
-const W_HANDED = "You're handling them yourself, so I won't chase them.";
-const W_SMS = "They've opted out of texts — so I won't chase them at all.";
+const W_HANDED = "You're handling them yourself, so I won't nudge them.";
+const W_SMS = "They've opted out of texts — so I won't nudge them at all.";
 const W_UNSUB =
-  "They unsubscribed from email for this event, so I won't chase them on any channel.";
-const W_HOST_CARRIER = "It's with you — I don't chase you.";
-const W_HOST_HOUSEHOLD = "They're in your own household, so I won't chase them.";
+  "They unsubscribed from email for this event, so I won't nudge them on any channel.";
+const W_HOST_CARRIER = "It's with you — I don't nudge you.";
+const W_HOST_HOUSEHOLD = "They're in your own household, so I won't nudge them.";
 
 async function main() {
   let S: any = null;
@@ -1190,7 +1190,7 @@ async function main() {
     );
     assert(
       'F',
-      'HOST_AS_CARRIER reads "It’s with you — I don’t chase you." and NEVER "… gets it, but I won’t chase …"',
+      'HOST_AS_CARRIER reads "It’s with you — I don’t nudge you." and NEVER "… gets it, but I won’t nudge …"',
       ok(() => {
         const n = P('e1', hoc).chaseNote;
         return (
@@ -1227,7 +1227,7 @@ async function main() {
     assert(
       'F',
       'her carried child carries the ruled carrier sentence, naming her',
-      ok(() => P('e1', uki).chaseNote === "Uma gets it, but I won't chase Uma.")
+      ok(() => P('e1', uki).chaseNote === "Uma gets it, but I won't nudge Uma.")
     );
     assert(
       'F',

@@ -221,7 +221,7 @@ export default function PersonSurface({
             onClick={() => run('remind', () => remind(eventId, person, { eventName, eventDate }))}
             className="rounded-md border-[0.5px] border-[#dcdad2] px-2.5 py-1.5 text-[13px] disabled:opacity-40"
           >
-            {busy === 'remind' ? 'Reminding…' : 'Remind them'}
+            {busy === 'remind' ? 'Nudging…' : 'Nudge them'}
           </button>
         )}
       </div>

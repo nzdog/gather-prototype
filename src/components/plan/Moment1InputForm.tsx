@@ -704,8 +704,10 @@ export default function Moment1InputForm({
           <MomentArc currentMoment={1} doors={stripDoors} />
         </div>
 
-        {/* [[GTC-368]] (item 5, Q10's A): where Moment 1 starts, both steps. */}
-        <MomentWords moment={1} part="does" className="mb-4" />
+        {/* [[GTC-368]] (item 5, Q10's A): where Moment 1 starts, both steps. [[GTC-378]] (item 39):
+            "When it’s done" moved here from the summary, directly under it. */}
+        <MomentWords moment={1} part="does" className="mb-3" />
+        <MomentWords moment={1} part="done" className="mb-4" />
 
         {/* Assistant line */}
         {hostMode ? (
@@ -730,9 +732,9 @@ export default function Moment1InputForm({
           </p>
         )}
 
-        {/* Progress counter */}
+        {/* Progress counter. [[GTC-378]] (item 38, ruling 4): bigger, bolder, darker. */}
         {!hostMode && totalPeopleAdded > 0 && (
-          <p className="text-sm text-gray-400 mb-6">
+          <p className="text-base font-semibold text-gray-800 mb-6">
             {totalPeopleAdded} {totalPeopleAdded === 1 ? 'person' : 'people'} added.
           </p>
         )}
@@ -1265,7 +1267,7 @@ export default function Moment1InputForm({
                     </span>
                     <span className="block text-xs text-gray-400 mt-0.5">
                       Gather talks to one person per household, and for yours that&rsquo;s you.
-                      Leave this off and it won&rsquo;t chase you about the people at your own
+                      Leave this off and it won&rsquo;t nudge you about the people at your own
                       table.
                     </span>
                   </span>
@@ -1277,7 +1279,7 @@ export default function Moment1InputForm({
                    the same rule at read time, so adding a partner and then removing them
                    again cannot leave a stored "send" behind. */
                 <p className="text-xs text-gray-400">
-                  There&rsquo;s nobody in your household for Gather to chase yet, so it won&rsquo;t
+                  There&rsquo;s nobody in your household for Gather to nudge yet, so it won&rsquo;t
                   message you about it. Add someone above and you can choose.
                 </p>
               )}

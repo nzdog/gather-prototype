@@ -105,13 +105,13 @@ const BOARD = 'src/components/glance/GlanceBoard.tsx';
 const BOARD_PAGE = 'src/app/plan/[eventId]/glance/page.tsx';
 
 // The ruled words, 2026-09-29, verbatim.
-const WA = 'Change who I chase';
-const WB = 'Opens the page where you can change who I chase. You will need to be signed in.';
-const WC = 'Who I chase';
+const WA = 'Change who I nudge';
+const WB = 'Opens the page where you can change who I nudge. You will need to be signed in.';
+const WC = 'Who I nudge';
 const WD_27_SEP =
-  "The invitations went out on 27 September. Changes here apply to reminders I haven't sent yet.";
+  "The invitations went out on 27 September. Changes here apply to nudges I haven't sent yet.";
 const WE =
-  "This person is marked don't-chase and will not be nudged. Change the mark under “Who I chase” first.";
+  "This person is marked don't-nudge and will not be nudged. Change the mark under “Who I nudge” first.";
 
 // ─── Pure props for the post-press view ──────────────────────────────────────
 
@@ -233,7 +233,7 @@ async function main() {
   assert(
     'A',
     `the heading is WC, "${WC}", as an h1`,
-    rendered && /<h1[^>]*>Who I chase<\/h1>/.test(html)
+    rendered && /<h1[^>]*>Who I nudge<\/h1>/.test(html)
   );
   assert(
     'A',
@@ -256,7 +256,7 @@ async function main() {
   assert(
     'A',
     'the mark row is offered to each markable adult — four "Normal nudge" pills: Tama, Erin, Dora, Olly',
-    rendered && count(html, '>Normal nudge<') === 4 && count(html, '>Don&#x27;t chase<') === 4
+    rendered && count(html, '>Normal nudge<') === 4 && count(html, '>Don&#x27;t nudge<') === 4
   );
   assert(
     'A',

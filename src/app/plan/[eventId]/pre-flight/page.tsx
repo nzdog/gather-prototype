@@ -615,10 +615,15 @@ export default function PreFlightPage() {
         </Step>
 
         {/* ── 3. Who Gather talks to, and how often ───────────────────────── */}
+        {/* [[GTC-378]] item 47: W7 as ruled at scoping; W8 on an invites-only event (ruling 3). */}
         <Step
           n={3}
           title={PREFLIGHT_STEP_TITLES[2]}
-          blurb="One channel per household, and how hard the system chases."
+          blurb={
+            invitesOnly
+              ? 'Everyone with an email or mobile hears from me. Pick how hard I nudge.'
+              : 'Everyone with an email or mobile hears from me. Pick who takes the kids’ asks, and how hard I nudge.'
+          }
           checked={!!checked[3]}
           onCheck={(v) => setChecked((c) => ({ ...c, 3: v }))}
           open={openSteps.includes(3)}
@@ -762,7 +767,7 @@ export default function PreFlightPage() {
         <Step
           n={4}
           title={PREFLIGHT_STEP_TITLES[3]}
-          blurb="Exactly what each person will receive, and who I'll chase."
+          blurb="Exactly what each person will receive, and who I'll nudge."
           checked={!!checked[4]}
           onCheck={(v) => setChecked((c) => ({ ...c, 4: v }))}
           checkLabel="Settled"

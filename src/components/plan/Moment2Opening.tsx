@@ -54,8 +54,10 @@ export default function Moment2Opening({
         <MomentArc currentMoment={2} completedMoments={[1]} doors={doors} />
 
         {/* [[GTC-368]] (item 5, Q10's A): where Moment 2 starts, the founder's "What this does",
-            in place of the line that said nearly the same (R2, removed: Q11). */}
+            in place of the line that said nearly the same (R2, removed: Q11). [[GTC-378]] (item 45,
+            ruling 5): "When it’s done" moved here from the foot of the plan, directly under it. */}
         <MomentWords moment={2} part="does" className="mt-10 max-w-xl" />
+        <MomentWords moment={2} part="done" className="mt-4 max-w-xl" />
 
         {/* Primary action */}
         <div className="mt-8">

@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 import MomentArc, { type ArcDoor } from './MomentArc';
 import { STRIP_WORDS } from '@/lib/moments/strip';
 import EventDetails, { type EventDetailsFacts } from '@/components/shared/EventDetails';
-import MomentWords from './MomentWords';
 import { useToast } from '@/contexts/ToastContext';
 import { CATEGORY_LABELS } from '@/lib/ai/plan-categories';
 import RowKindToggle from './RowKindToggle';
@@ -334,9 +333,6 @@ export default function Moment2PlanView({
             </button>
           )}
         </div>
-
-        {/* [[GTC-368]] (item 5, Q10's A): where Moment 2 finishes, under "+ Add category". */}
-        <MomentWords moment={2} part="done" className="mt-8" />
       </div>
 
       {/* Floating bulk-action button */}
@@ -390,7 +386,7 @@ export default function Moment2PlanView({
             disabled={regeneratingScope !== null}
             className="text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2 disabled:no-underline disabled:opacity-50"
           >
-            Invites, people and reminders →
+            Invites, people and nudges →
           </button>
           {/* [[GTC-375]] W1: beside the exit, as quiet as it (founder: "a quiet link"). */}
           {onInvitesOnly && (

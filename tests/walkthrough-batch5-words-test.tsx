@@ -121,7 +121,7 @@ const words = (h: string) =>
 const M = {
   1: {
     does: 'Gets everyone who’s coming out of your head and into one list. Names, how to reach them, and who’s in each household.',
-    done: 'You won’t need to remember who you’ve asked. I’ve got the list, and I’ll handle the invites and chase-ups from here.',
+    done: 'You won’t need to remember who you’ve asked. I’ve got the list, and I’ll handle the invites and nudges from here.', // GTC-378 W1
   },
   2: {
     does: 'Gets the plan out of your head and onto the page. Tell me about the event and any dietary needs, and I’ll draft the full list of what’s needed: food, drinks and everything else. You decide what stays.',
@@ -132,7 +132,7 @@ const M = {
     done: 'Every job has an owner, and you’re not carrying the plan anymore. I’ll ask each person and follow up, so you don’t have to.',
   },
   4: {
-    does: 'Shows you where everything stands on one screen: who’s said yes, what’s covered, and what’s still open. I chase anyone who hasn’t replied and flag anything that needs you.',
+    does: 'Shows you where everything stands on one screen: who’s said yes, what’s covered, and what’s still open. I nudge anyone who hasn’t replied and flag anything that needs you.', // GTC-378 W2
     done: 'You stop wondering. Every job is confirmed, and you know your event is sorted.',
   },
 } as const;
@@ -462,10 +462,11 @@ async function runInMemory() {
   );
   assert(
     'R',
-    'R6 Moment 1’s summary: W10, "When it’s done" with Moment 1’s line, and R1 gone',
+    // [[GTC-378]] ruling (item 39): Moment 1's "When it’s done" moved to the form, under "What this does".
+    'R6 Moment 1’s summary: W10, R1 gone, and no "When it’s done" (moved to the form, GTC-378)',
     !!nameButton(summary) &&
-      summary.includes(W15_DONE) &&
-      summary.includes(M[1].done) &&
+      !summary.includes(W15_DONE) &&
+      !summary.includes(M[1].done) &&
       !summary.includes(R1)
   );
   const m2open = render(
@@ -478,10 +479,12 @@ async function runInMemory() {
   );
   assert(
     'R',
-    'R7 Moment 2’s opening: W10, "What this does" with Moment 2’s line, and R2 gone',
+    'R7 Moment 2’s opening: W10, "What this does" with Moment 2’s line, "When it’s done" directly under it (GTC-378), and R2 gone',
     !!nameButton(m2open) &&
       m2open.includes(W15_DOES) &&
       m2open.includes(M[2].does) &&
+      m2open.includes(M[2].done) &&
+      m2open.includes(`${M[2].does}</p></div><div data-moment-words="2-done"`) &&
       !m2open.includes(R2)
   );
   const planProps = {
@@ -511,8 +514,12 @@ async function runInMemory() {
   const addAt = planView.indexOf('+ Add category');
   assert(
     'R',
-    'R8 the plan view: W10, and Moment 2’s "When it’s done" under "+ Add category"',
-    !!nameButton(planView) && addAt > 0 && planView.indexOf(M[2].done) > addAt
+    // [[GTC-378]] ruling 5 (item 45): Moment 2's "When it’s done" is on its opening only.
+    'R8 the plan view: W10, "+ Add category", and no "When it’s done" (on the opening only, GTC-378)',
+    !!nameButton(planView) &&
+      addAt > 0 &&
+      !planView.includes(M[2].done) &&
+      !planView.includes(W15_DONE)
   );
   const formProps = {
     eventId: 'e1',
@@ -531,12 +538,14 @@ async function runInMemory() {
   );
   assert(
     'R',
-    'R9 Moment 1’s form, both steps: "What this does" with Moment 1’s line, before her line',
+    'R9 Moment 1’s form, both steps: "What this does" with Moment 1’s line, "When it’s done" directly under it (GTC-378), both before her line',
     [guestForm, hostForm].every(
       (h) =>
         h.includes(W15_DOES) &&
         h.includes(M[1].does) &&
-        h.indexOf(M[1].does) <
+        h.includes(M[1].done) &&
+        h.includes(`${M[1].does}</p></div><div data-moment-words="1-done"`) &&
+        h.indexOf(M[1].done) <
           Math.max(h.indexOf('Who’s coming to'), h.indexOf('First — you’re at'))
     )
   );
@@ -563,8 +572,13 @@ async function runInMemory() {
   const m3At = m3.indexOf(M3_SENTENCE.replace(/'/g, '&#x27;'));
   assert(
     'R',
-    'R10 Moment 3: W10, and "What this does" with Moment 3’s line before "Now. Who’s on what."',
-    !!nameButton(m3) && m3At > 0 && m3.indexOf(M[3].does) > 0 && m3.indexOf(M[3].does) < m3At
+    'R10 Moment 3: W10, "What this does" with Moment 3’s line, "When it’s done" directly under it (GTC-378), before "Now. Who’s on what."',
+    !!nameButton(m3) &&
+      m3At > 0 &&
+      m3.indexOf(M[3].does) > 0 &&
+      m3.includes(`${M[3].does}</p></div><div data-moment-words="3-done"`) &&
+      m3.indexOf(M[3].done) > 0 &&
+      m3.indexOf(M[3].done) < m3At
   );
   const after = await load('../src/components/preflight/AfterThePress');
   const chaseProps = {
@@ -586,7 +600,7 @@ async function runInMemory() {
     : '';
   assert(
     'R',
-    'R11 "Who I chase": W10 in the small name line’s place',
+    'R11 "Who I nudge": W10 in the small name line’s place',
     !!nameButton(chase) && !chase.includes('<p class="text-sm text-gray-400 mb-1">Boxing Day</p>')
   );
 
@@ -1064,7 +1078,7 @@ async function runLive() {
       },
       {
         key: 'C1i',
-        label: '“Who I chase”',
+        label: '“Who I nudge”',
         id: evSent.id,
         name: 'GTC-368 w — sent',
         go: () => c.navigate(`/plan/${evSent.id}/pre-flight`, 8000),
@@ -1198,24 +1212,32 @@ async function runLive() {
       `${landed} ${savedFarewell}`
     );
 
-    // ── C8 — Moment 3's "When it’s done", only once every job has a name (Q9) ─────
+    // ── C8 — Moment 3's "When it’s done": always at the top, under "What this does", and never in
+    // the panel after "All sorted →" ([[GTC-378]] ruling 6, replacing GTC-368's Q9) ──────────────
+    const topDone = () =>
+      ev<string>(`document.querySelector('[data-moment-words="3-done"]')?.textContent ?? ''`);
     const panelWords = async () =>
       ev<string>(
         `(() => { const k = [...document.querySelectorAll('button')].find(b => b.innerText.trim() === 'Keep going'); return k ? k.closest('.shadow-lg')?.innerText ?? '' : ''; })()`
       );
     await c.navigate(setupOf(evM3.id), 8000);
+    const unassignedTop = await topDone();
     await tap(`document.querySelector('[data-m3="all-sorted"]')`, 600);
     const unassignedPanel = await panelWords();
     await c.navigate(setupOf(evM3done.id), 8000);
+    const givenTop = await topDone();
     await tap(`document.querySelector('[data-m3="all-sorted"]')`, 600);
     const givenPanel = await panelWords();
     assert(
       'C',
-      'C8 Moment 3’s panel after "All sorted →": no "When it’s done" while a job is unassigned; Moment 3’s line once every job has a name',
+      'C8 Moment 3’s line is at the top whether or not a job is unassigned, and never in the panel after "All sorted →" (GTC-378)',
       unassignedPanel.length > 0 &&
+        givenPanel.length > 0 &&
+        unassignedTop.includes(M[3].done) &&
+        givenTop.includes(M[3].done) &&
         !unassignedPanel.includes(M[3].done) &&
-        givenPanel.includes(M[3].done),
-      `${unassignedPanel.slice(0, 60)} | ${givenPanel.slice(0, 160)}`
+        !givenPanel.includes(M[3].done),
+      `${unassignedTop.slice(0, 40)} | ${givenTop.slice(0, 40)} | ${givenPanel.slice(0, 120)}`
     );
 
     // ── C9 — the board's "What this does": closed on every visit, opens on a tap ──

@@ -93,9 +93,9 @@ export const EMAIL_BLOCKED_TEXT_FAILED_WORDS =
  * above, as ruling AN requires. Ruled 2026-09-27 as proposed; unreachable today.
  */
 export const EMAIL_REPORTED_CHASE_WORDS =
-  "Their email reported your invitation as spam, so I won't chase them.";
+  "Their email reported your invitation as spam, so I won't nudge them.";
 export const EMAIL_BLOCKED_CHASE_WORDS =
-  "I can't email them anymore and have no mobile to chase them by.";
+  "I can't email them anymore and have no mobile to nudge them by.";
 
 /**
  * [[GTC-258]] W4 (founder ruling Q8, 2026-10-02) — a blocked address AND a number TNZ reported dead.

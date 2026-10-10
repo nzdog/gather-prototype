@@ -5,7 +5,6 @@ import MomentArc, { type ArcDoor } from '@/components/plan/MomentArc';
 import { STRIP_WORDS } from '@/lib/moments/strip';
 import { SavedHousehold } from '@/components/plan/HouseholdCardList';
 import EventDetails, { type EventDetailsFacts } from '@/components/shared/EventDetails';
-import MomentWords from '@/components/plan/MomentWords';
 
 interface Moment1SummaryProps {
   eventId: string;
@@ -199,8 +198,6 @@ export default function Moment1Summary({
     }
   };
 
-  const hasPeople = totalPeople > 0;
-
   return (
     <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
       <div className="max-w-2xl mx-auto px-6 py-8">
@@ -228,10 +225,6 @@ export default function Moment1Summary({
             <p className="mt-1 text-base text-gray-500">{statsSegments.join(' \u00B7 ')}</p>
           )}
         </div>
-
-        {/* [[GTC-368]] (item 5, Q10's A): where Moment 1 finishes, the founder's "When it’s done",
-            in place of the line that said nearly the same (R1, removed: Q11), on its condition (Q10). */}
-        {hasPeople && <MomentWords moment={1} part="done" className="mt-6" />}
 
         {/* Missing contacts section */}
         {visibleMissing.length > 0 && (

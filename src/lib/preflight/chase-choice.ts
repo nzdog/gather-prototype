@@ -108,7 +108,7 @@ export async function writeChaseChoice(
         body: {
           error: 'CHASE_EXCEPTION_OPTED_OUT',
           message:
-            'This person has opted out of texts, so they are not chased at all and the ' +
+            'This person has opted out of texts, so they are not nudged at all and the ' +
             'exception is not offered (GTC-189 ruling AI).',
         },
       };
@@ -119,8 +119,8 @@ export async function writeChaseChoice(
         body: {
           error: 'CHASE_EXCEPTION_NOT_OFFERED',
           message:
-            'The exception applies only to someone the chase cannot text who has an email. This ' +
-            "person is chased by text, marked don't-chase, the host, or carried by someone else.",
+            "The exception applies only to someone I can't text who has an email. This " +
+            "person is nudged by text, marked don't-nudge, the host, or carried by someone else.",
         },
       };
     }

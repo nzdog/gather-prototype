@@ -44,7 +44,7 @@ export function cadenceSentence(days: readonly number[]): string {
 
 export const MARK_LABELS: Record<NudgeMark, string> = {
   GENTLE: 'Go gentle',
-  DONT_CHASE: "Don't chase",
+  DONT_CHASE: "Don't nudge",
 };
 
 export function Pill({

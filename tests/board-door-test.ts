@@ -271,8 +271,8 @@ async function runLive() {
   );
   assert(
     'C',
-    'C5 CONTROL: GTC-329\'s "Change who I chase" is still on the board after the press',
-    anchor(`/plan/${sentEv.id}/pre-flight`) === 'Change who I chase'
+    'C5 CONTROL: GTC-329\'s link, "Change who I nudge" since GTC-378 (W26), is still on the board after the press',
+    anchor(`/plan/${sentEv.id}/pre-flight`) === 'Change who I nudge'
   );
 
   // ── F — the old dashboard, as a browser renders it.

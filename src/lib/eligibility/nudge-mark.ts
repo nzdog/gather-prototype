@@ -121,4 +121,4 @@ export const DONT_CHASE_SKIP_REASON = "Host marked don't-chase (Moment 4 §10.3)
  * the three host surfaces. The heading comes from its one constant, so the two cannot drift.
  * Words only: no link inside the refusal, by the same ruling.
  */
-export const DONT_CHASE_NOT_ADDRESSABLE_MESSAGE = `This person is marked don't-chase and will not be nudged. Change the mark under “${AFTER_PRESS_HEADING}” first.`;
+export const DONT_CHASE_NOT_ADDRESSABLE_MESSAGE = `This person is marked don't-nudge and will not be nudged. Change the mark under “${AFTER_PRESS_HEADING}” first.`;

@@ -407,10 +407,6 @@ export default function Moment3AssignView({
       </div>
     ) : null;
 
-  // [[GTC-368]] (item 5, Q9): "When it’s done" says every job has an owner, so it shows only then.
-  const doneWords =
-    unassigned === 0 ? <MomentWords moment={3} part="done" compact className="mb-2" /> : null;
-
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-5xl mx-auto px-6 py-6 pb-40">
@@ -429,8 +425,11 @@ export default function Moment3AssignView({
           />
         </div>
 
-        {/* [[GTC-368]] (item 5, Q10's A): where Moment 3 starts. */}
+        {/* [[GTC-368]] (item 5, Q10's A): where Moment 3 starts. [[GTC-378]] (item 45, ruling 6):
+            "When it’s done" moved here from the panel after "All sorted →", directly under it, and
+            always shown (GTC-368's Q9 condition lifted). */}
         <MomentWords moment={3} part="does" className="mb-3" />
+        <MomentWords moment={3} part="done" className="mb-3" />
         <h1 className="text-xl font-semibold text-gray-900 mb-6">{M3_WORDS.SENTENCE}</h1>
 
         {allItems.length === 0 ? (
@@ -690,7 +689,6 @@ export default function Moment3AssignView({
                 {line}
               </p>
             ))}
-            {doneWords}
             {/* [[GTC-360]] — what keeps her here: a block, a co-host, a failure (W2 to W6). */}
             {holdNotice && (
               <div data-m3="hold-notice" role="alert" className="mt-2 text-sm text-red-700">

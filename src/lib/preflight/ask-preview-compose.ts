@@ -267,7 +267,7 @@ export const HOST_LIST_EMPTY = 'Nobody.';
 /** Group A — the people Gather does not ask at all. W6. */
 export const HOST_LIST_NOT_ASKED_HEADING = "I won't message them";
 /** Group B — asked, and taken off the chase. W6. */
-export const HOST_LIST_NOT_CHASED_HEADING = "I'll ask, but won't chase";
+export const HOST_LIST_NOT_CHASED_HEADING = "I'll ask, but won't nudge";
 /** W6. True of a carried child too: the child's ask goes out, through the carrier. */
 export const HOST_LIST_NOT_CHASED_BLURB =
   "Their asks go out, and I won't follow up on them. If they haven't answered, they're yours.";
@@ -280,20 +280,20 @@ export const HOST_LIST_NOT_CHASED_BLURB =
  * (flag A, ruled 2026-09-27) — the London cousin has a mobile, and I can't text it.
  */
 export const CHASE_DEFAULT_SENTENCE: Record<ChaseWhenNoMobile, string> = {
-  BY_EMAIL: "When someone hasn't answered and has no mobile I can text, I'll chase them by email.",
+  BY_EMAIL: "When someone hasn't answered and has no mobile I can text, I'll nudge them by email.",
   HAND_TO_HOST:
     "When someone hasn't answered and has no mobile I can text, I'll leave them to you.",
 };
 
 /** The event switch. W3. */
 export const CHASE_DEFAULT_PILLS: Record<ChaseWhenNoMobile, string> = {
-  BY_EMAIL: 'Chase them by email',
+  BY_EMAIL: 'Nudge them by email',
   HAND_TO_HOST: 'Leave them to me',
 };
 
 /** The per-person control. W5 — the second is ruling AH's own phrase. */
 export const CHASE_PERSON_PILLS: Record<ChaseWhenNoMobile, string> = {
-  BY_EMAIL: 'Chase by email',
+  BY_EMAIL: 'Nudge by email',
   HAND_TO_HOST: 'Hand this one to me',
 };
 
@@ -301,11 +301,11 @@ export const CHASE_PERSON_PILLS: Record<ChaseWhenNoMobile, string> = {
 export const DEFAULT_SUFFIX = ' (the default)';
 
 /** The row under "Sent by" in a recipient's facts. W4. */
-export const CHASED_BY_LABEL = 'Chased by';
+export const CHASED_BY_LABEL = 'Nudges by';
 export const CHASED_BY_VALUE: Record<'TEXT' | 'EMAIL' | 'NONE', string> = {
   TEXT: 'Text',
   EMAIL: 'Email',
-  NONE: 'Not chased — yours',
+  NONE: 'No nudges — yours',
 };
 
 /**
@@ -313,7 +313,7 @@ export const CHASED_BY_VALUE: Record<'TEXT' | 'EMAIL' | 'NONE', string> = {
  * simply having no switch. `LINK_NONE` is the precedent and the founder's ground is the same:
  * *"Honest beats a promise that never arrives."*
  */
-export const CHASE_OPTED_OUT_PLACEHOLDER = "[can't be chased — opted out]";
+export const CHASE_OPTED_OUT_PLACEHOLDER = "[can't be nudged — opted out]";
 
 export interface ChasePill {
   value: ChaseWhenNoMobile;
@@ -367,7 +367,7 @@ export function notChasedReason(
 ): string {
   if (line.child && line.carrierName) {
     const carrier = firstNameOf(line.carrierName);
-    return `${carrier} gets it, but I won't chase ${carrier}.`;
+    return `${carrier} gets it, but I won't nudge ${carrier}.`;
   }
   return CHASE_NONE_WHY[line.why];
 }
@@ -398,21 +398,21 @@ export const CHASE_NONE_WHY: Record<ChaseNoneWhy, string> = {
   // [[GTC-189]] slice 8a — proposed, and marked so in `email-block-words.ts`.
   EMAIL_REPORTED: EMAIL_REPORTED_CHASE_WORDS, // unreachable today
   EMAIL_BLOCKED: EMAIL_BLOCKED_CHASE_WORDS, // unreachable today
-  SMS_OPTED_OUT: "They've opted out of texts — so I won't chase them at all.",
-  HANDED_TO_HOST: "You're handling them yourself, so I won't chase them.",
+  SMS_OPTED_OUT: "They've opted out of texts — so I won't nudge them at all.",
+  HANDED_TO_HOST: "You're handling them yourself, so I won't nudge them.",
   EMAIL_OPTED_OUT:
-    "They unsubscribed from email for this event, so I won't chase them on any channel.", // unreachable today
-  MARKED_DONT_CHASE: "You marked them don't-chase.", // unreachable today
-  PHONE_UNUSABLE: "I can't text their number and have no email to chase them by.", // unreachable today
-  NO_CHANNEL: 'I have nothing to chase them by.', // unreachable today
-  HOST_AS_CARRIER: "It's with you — I don't chase you.", // unreachable today
-  HOST_OWN_ASK: "Your own — I don't chase you.", // unreachable today
+    "They unsubscribed from email for this event, so I won't nudge them on any channel.", // unreachable today
+  MARKED_DONT_CHASE: "You marked them don't-nudge.", // unreachable today
+  PHONE_UNUSABLE: "I can't text their number and have no email to nudge them by.", // unreachable today
+  NO_CHANNEL: 'I have no way to nudge them.', // unreachable today
+  HOST_AS_CARRIER: "It's with you — I don't nudge you.", // unreachable today
+  HOST_OWN_ASK: "Your own — I don't nudge you.", // unreachable today
   // [[GTC-305]] R6, ruled 2026-09-28 — reworded as a whole sentence because the board's person view
   // now shows it. Still unreachable on group B, which refuses the carried ask first.
-  HOST_HOUSEHOLD_CHILD: "They're in your own household, so I won't chase them.", // unreachable today
-  NO_CARRIER: 'No one to chase for them.', // unreachable today
-  HOUSEHOLD_MUTED: "Messages to their household are switched off, so I won't chase.", // unreachable today
-  CHILD_WITHOUT_ITEM: "They hold nothing, so there's nothing to chase.", // unreachable today
+  HOST_HOUSEHOLD_CHILD: "They're in your own household, so I won't nudge them.", // unreachable today
+  NO_CARRIER: 'No one to nudge on their behalf.', // unreachable today
+  HOUSEHOLD_MUTED: "Messages to their household are switched off, so I won't nudge them.", // unreachable today
+  CHILD_WITHOUT_ITEM: "They hold nothing, so there's nothing to nudge them about.", // unreachable today
 };
 
 /**
@@ -422,8 +422,7 @@ export const CHASE_NONE_WHY: Record<ChaseNoneWhy, string> = {
  * A kept reply shows on the host's board (Q2), and it ends Gather's reminders to that guest (Q1).
  * Replaces GTC-189 slice 3's sentence.
  */
-const TEXT_REPLY =
-  'A text reply usually comes to your board, and I stop reminding whoever sent it.';
+const TEXT_REPLY = 'A text reply usually comes to your board, and I stop nudging whoever sent it.';
 
 /** The reply-to line (ruling F, and slice 3 words answer 3, change 4). */
 export function replyToLine(replyTo: string): string {
@@ -490,7 +489,7 @@ const ADULT_WHY: Record<HostListLine['why'], string> = {
    * half of ruling 3 a reader would not guess from the word "email".
    */
   EMAIL_OPTED_OUT:
-    "They chose not to receive email about this event, so I won't chase them on any channel.",
+    "They chose not to receive email about this event, so I won't nudge them on any channel.",
   NO_CHANNEL: 'No email or mobile number.',
   SMS_OPTED_OUT: 'No email, and has opted out of texts.',
   PHONE_UNUSABLE: "No email, and I can't text that number.",

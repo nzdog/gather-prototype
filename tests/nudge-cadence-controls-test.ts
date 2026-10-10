@@ -86,6 +86,8 @@ function code(rel: string): string {
 
 /** Mechanism-agnostic: the reason must NAME don't-chase, whatever string is chosen. */
 const NAMES_DONT_CHASE = /don'?t[- ]?chase/i;
+/** [[GTC-378]] W28 — the host's refusal names the mark as she reads it now: don't-nudge. */
+const NAMES_DONT_NUDGE = /don'?t[- ]?nudge/i;
 
 /** Likewise for the pace. Both paths must report the same fact the same way. */
 const NAMES_OFF = /pace is off|nudge pace.*off|paused for this event/i;
@@ -442,7 +444,7 @@ async function main() {
     assert(
       'layer8 ruling19',
       'MANUAL: and the refusal NAMES the mark, so the host knows which of her own settings did it',
-      manualMarked.ok === false && NAMES_DONT_CHASE.test(manualMarked.error)
+      manualMarked.ok === false && NAMES_DONT_NUDGE.test(manualMarked.error)
     );
     assert(
       'layer8 ruling19',

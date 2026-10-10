@@ -1040,6 +1040,18 @@ async function runLive() {
         if (!box || !ul) return false; const b = box.getBoundingClientRect(); const u = ul.getBoundingClientRect();
         const scroller = box.closest('.overflow-y-auto');
         return b.left >= 0 && b.right <= 390 && u.right <= 390 && !!scroller && scroller.scrollWidth <= 390; })()`));
+    // [[GTC-378]] — LM9 went red once in the gate: say what it saw, read after the check, nothing
+    // clicked. A page that had not loaded (no Mains) reads apart from a width problem.
+    detail.LM9 = `typed ${typed9}, ${await ev<string>(`JSON.stringify((() => {
+        const box = document.querySelector('[data-menu-search]'); const ul = box && box.querySelector('ul');
+        const input = document.querySelector(${JSON.stringify(MENU_IN)});
+        const b = box ? box.getBoundingClientRect() : null; const u = ul ? ul.getBoundingClientRect() : null;
+        const scroller = box && box.closest('.overflow-y-auto');
+        return { value: input ? input.value : null, box: !!box, list: !!ul,
+          boxLeft: b && b.left, boxRight: b && b.right, listRight: u && u.right,
+          scrollWidth: scroller ? scroller.scrollWidth : null, clientWidth: scroller ? scroller.clientWidth : null,
+          innerWidth: window.innerWidth, mains: !!document.querySelector('[data-accordion="mains"]') };
+      })())`)}`;
     await c.setViewport(1280, 900, false);
 
     // ── Layer LB — the board, live ───────────────────────────────────────────

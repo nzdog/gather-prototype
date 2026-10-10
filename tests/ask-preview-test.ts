@@ -1285,7 +1285,7 @@ async function main() {
         ok(
           () =>
             APC.replyToLine('nigel@mckorbett.co.nz') ===
-            'Replies to an email come to nigel@mckorbett.co.nz. A text reply usually comes to your board, and I stop reminding whoever sent it.'
+            'Replies to an email come to nigel@mckorbett.co.nz. A text reply usually comes to your board, and I stop nudging whoever sent it.'
         )
       );
       assert(

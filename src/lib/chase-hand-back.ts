@@ -35,7 +35,7 @@ export async function handBackPerson(
 ): Promise<HandBackOutcome> {
   const now = input.now ?? new Date();
   if (typeof input.reminders !== 'number' || !HAND_BACK_COUNTS.includes(input.reminders)) {
-    return { ok: false, status: 400, code: 'BAD_COUNT', error: 'Choose 1, 2 or 3 more reminders.' };
+    return { ok: false, status: 400, code: 'BAD_COUNT', error: 'Choose 1, 2 or 3 more nudges.' };
   }
 
   const glance = await readEventGlance(db, input.eventId, now);

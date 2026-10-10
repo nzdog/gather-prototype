@@ -287,7 +287,7 @@ export default function EventsPage() {
                           router.push(`/plan/${event.id}`);
                         }}
                         className="px-3 py-2 text-sm text-gray-700 border border-gray-300 rounded hover:bg-gray-50"
-                        title="Invites, people and reminders"
+                        title="Invites, people and nudges"
                       >
                         Invites &amp; people
                       </button>

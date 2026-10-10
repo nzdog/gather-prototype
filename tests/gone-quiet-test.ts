@@ -78,9 +78,9 @@ function code(rel: string): string {
 // The ruled words, typed here rather than imported, so a changed constant fails rather than
 // agreeing with itself.
 const W1_GONE_QUIET = 'gone quiet';
-const W6_PACE_OFF = "Reminders are off for this event, so I won't chase them.";
-const W_HANDED = "You're handling them yourself, so I won't chase them.";
-const W_SMS = "They've opted out of texts — so I won't chase them at all.";
+const W6_PACE_OFF = "Nudges are off for this event, so I won't follow them up.";
+const W_HANDED = "You're handling them yourself, so I won't nudge them.";
+const W_SMS = "They've opted out of texts — so I won't nudge them at all.";
 
 async function main() {
   let S: any = null;

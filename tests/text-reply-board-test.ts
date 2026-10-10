@@ -95,14 +95,14 @@ const R4 = 'Their replies';
 const R6_OUT = 'Not coming';
 const R6_DONT_CHASE = "You're handling them";
 const W2_LEAD = 'Want me to keep trying?';
-const LEAD_REPLIED = 'Want me to carry on reminding them?';
+const LEAD_REPLIED = 'Want me to carry on nudging them?';
 const W2_REFUSED = 'The board is catching up.';
-const PACE_OFF_WORDS = "Reminders are off for this event, so I won't chase them.";
+const PACE_OFF_WORDS = "Nudges are off for this event, so I won't follow them up.";
 // The founder's ruling on the RED report, 2026-10-02 ("Say why").
 const FOLLOW_UP_SPENT_WORDS =
-  "I've already asked them once to decide, so I won't chase them again.";
+  "I've already asked them once to decide, so I won't nudge them again.";
 const Q4_LINE =
-  'Replies to an email come to you@example.com. A text reply usually comes to your board, and I stop reminding whoever sent it.';
+  'Replies to an email come to you@example.com. A text reply usually comes to your board, and I stop nudging whoever sent it.';
 const Q5_BULLET =
   "• If you reply to one of our texts, we show your reply to the person who invited you, keep it with the event it was about, and delete it with that event's data.";
 
@@ -514,7 +514,7 @@ async function main() {
     );
     assert(
       'C',
-      'C14 (Q-D) the leads: "gone quiet" keeps W2\'s, a reply reads "Want me to carry on reminding them?"',
+      'C14 (Q-D) the leads: "gone quiet" keeps W2\'s, a reply reads "Want me to carry on nudging them?"',
       ok(
         () =>
           AC.HAND_BACK_LEAD === W2_LEAD &&
@@ -1139,7 +1139,7 @@ async function main() {
     const maxRed = ok(() => Mx.state === 'RED' && Mx.reasons.includes('REPLIED'));
     assert(
       'P',
-      'P4 Max, a maybe, replied, reminders off: RED, and the door offers "1 more reminder" only — his follow-up still comes',
+      'P4 Max, a maybe, replied, reminders off: RED, and the door offers "1 more nudge" only — his follow-up still comes',
       maxRed &&
         ok(() => JSON.stringify(Mx.handBackChoices) === '[1]' && AC.handBackOffered(Mx) === true)
     );

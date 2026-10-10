@@ -59,7 +59,7 @@ export const COLOUR_KEY: ReadonlyArray<{ state: PersonState; words: string }> = 
   { state: 'RED', words: 'Needs you. Tap it for what to do.' },
   { state: 'AMBER', words: 'I’m looking after them: I’ve asked, and I’ll follow up.' },
   { state: 'GREEN', words: 'Settled. Nothing more needed from them.' },
-  { state: 'NOT_CHASED', words: 'Not chased. I won’t follow them up.' },
+  { state: 'NOT_CHASED', words: 'No nudges. I won’t follow them up.' },
   { state: 'OUT', words: 'Out. Not coming.' },
 ];
 

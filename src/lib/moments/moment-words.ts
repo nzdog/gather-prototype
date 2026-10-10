@@ -20,7 +20,7 @@ export const MOMENT_HEADINGS = {
 export const MOMENT_WORDS = {
   1: {
     does: 'Gets everyone who’s coming out of your head and into one list. Names, how to reach them, and who’s in each household.',
-    done: 'You won’t need to remember who you’ve asked. I’ve got the list, and I’ll handle the invites and chase-ups from here.',
+    done: 'You won’t need to remember who you’ve asked. I’ve got the list, and I’ll handle the invites and nudges from here.',
   },
   2: {
     does: 'Gets the plan out of your head and onto the page. Tell me about the event and any dietary needs, and I’ll draft the full list of what’s needed: food, drinks and everything else. You decide what stays.',
@@ -31,7 +31,7 @@ export const MOMENT_WORDS = {
     done: 'Every job has an owner, and you’re not carrying the plan anymore. I’ll ask each person and follow up, so you don’t have to.',
   },
   4: {
-    does: 'Shows you where everything stands on one screen: who’s said yes, what’s covered, and what’s still open. I chase anyone who hasn’t replied and flag anything that needs you.',
+    does: 'Shows you where everything stands on one screen: who’s said yes, what’s covered, and what’s still open. I nudge anyone who hasn’t replied and flag anything that needs you.',
     done: 'You stop wondering. Every job is confirmed, and you know your event is sorted.',
   },
 } as const;

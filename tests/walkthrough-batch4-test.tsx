@@ -111,7 +111,7 @@ const KEY: Array<[string, string]> = [
   ['RED', 'Needs you. Tap it for what to do.'], // W8
   ['AMBER', 'I’m looking after them: I’ve asked, and I’ll follow up.'], // W9
   ['GREEN', 'Settled. Nothing more needed from them.'], // W10
-  ['NOT_CHASED', 'Not chased. I won’t follow them up.'], // W11
+  ['NOT_CHASED', 'No nudges. I won’t follow them up.'], // W11, GTC-378 W37
   ['OUT', 'Out. Not coming.'], // W12
 ];
 const W13 = 'Print the list';

@@ -107,7 +107,7 @@ export function chaseFactFrom(
 }
 
 /** W6, ruled 2026-09-30 ([[GTC-251]]): why nobody on an OFF event is being chased. */
-export const PACE_OFF_CHASE_NOTE = "Reminders are off for this event, so I won't chase them.";
+export const PACE_OFF_CHASE_NOTE = "Nudges are off for this event, so I won't follow them up.";
 
 /**
  * [[GTC-350]], ruled 2026-10-02 (*"Say why (Recommended)"*): a maybe whose one follow-up has gone,
@@ -116,7 +116,7 @@ export const PACE_OFF_CHASE_NOTE = "Reminders are off for this event, so I won't
  * `src/lib/chase-reply.ts`).
  */
 export const FOLLOW_UP_SPENT_CHASE_NOTE =
-  "I've already asked them once to decide, so I won't chase them again.";
+  "I've already asked them once to decide, so I won't nudge them again.";
 
 /**
  * THE PERSON VIEW'S SENTENCE — the ruled why-map, never new words.

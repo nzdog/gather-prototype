@@ -11,7 +11,7 @@
  */
 
 /** WA — the link, on the host-token page, `InviteStatusSection` and the board, after the press only. */
-export const CHASE_DOOR_LINK = 'Change who I chase';
+export const CHASE_DOOR_LINK = 'Change who I nudge';
 
 /**
  * [[GTC-357]] — right after the press, under the threshold lines. Founder, PLAN RULINGS 2026-10-03,
@@ -29,13 +29,13 @@ export const BOARD_MOVE_AFTER_MS = 8000;
  * "Review and send" already carries there, for the same reason.
  */
 export const CHASE_DOOR_HOST_VIEW_NOTE =
-  'Opens the page where you can change who I chase. You will need to be signed in.';
+  'Opens the page where you can change who I nudge. You will need to be signed in.';
 
 /**
  * WC — the post-press surface's heading. `DONT_CHASE_NOT_ADDRESSABLE_MESSAGE` names it, so the
  * refusal sends the host to a place she will see called by that name.
  */
-export const AFTER_PRESS_HEADING = 'Who I chase';
+export const AFTER_PRESS_HEADING = 'Who I nudge';
 
 /**
  * WD — the post-press lead. Its second sentence is Unknown 1's answer, ruled: a change here reaches
@@ -44,7 +44,7 @@ export const AFTER_PRESS_HEADING = 'Who I chase';
  */
 export function afterPressLead(sentAt: Date): string {
   const date = sentAt.toLocaleDateString('en-NZ', { day: 'numeric', month: 'long' });
-  return `The invitations went out on ${date}. Changes here apply to reminders I haven't sent yet.`;
+  return `The invitations went out on ${date}. Changes here apply to nudges I haven't sent yet.`;
 }
 
 /**

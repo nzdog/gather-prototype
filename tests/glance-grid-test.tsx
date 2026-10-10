@@ -899,7 +899,8 @@ async function main() {
       ok(
         () =>
           html.includes('data-strip-door') &&
-          !/Remind|Move to|I’ll do it|Take over|Reassign/i.test(html)
+          !/Remind|Move to|I’ll do it|Take over|Reassign/i.test(html) &&
+          !/Nudge them/.test(html)
       )
     );
     /*
@@ -2282,7 +2283,8 @@ async function main() {
           src.length > 0 &&
           !/from '@\/lib\/glance\/actions'/.test(src) &&
           !/reassign|takeOver|remind|GLANCE_REFRESH_EVENT/i.test(src) &&
-          !/Move to|I’ll do it|Remind them|Take over/i.test(src)
+          !/Move to|I’ll do it|Remind them|Take over/i.test(src) &&
+          !/Nudge them/.test(src)
         );
       })
     );

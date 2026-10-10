@@ -82,8 +82,8 @@ const REPORTED_OPTED_OUT =
   "I can't email this address anymore. Their email reported your invitation as spam. They've opted out of texts too, so I'll put them on your list.";
 const REPORTED_CHILD =
   "Their household's contact can't be emailed anymore. That email reported your invitation as spam.";
-const CHASE_REPORTED = "Their email reported your invitation as spam, so I won't chase them.";
-const CHASE_BLOCKED = "I can't email them anymore and have no mobile to chase them by.";
+const CHASE_REPORTED = "Their email reported your invitation as spam, so I won't nudge them.";
+const CHASE_BLOCKED = "I can't email them anymore and have no mobile to nudge them by.";
 
 const created = {
   users: [] as string[],
