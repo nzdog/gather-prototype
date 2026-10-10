@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 
-type ErrorType = 'invalid' | 'expired' | 'used' | 'unknown';
+type ErrorType = 'invalid' | 'expired' | 'used' | 'claimed' | 'unknown';
 
 export default function VerifyPage() {
   const searchParams = useSearchParams();
@@ -15,7 +15,6 @@ export default function VerifyPage() {
   useEffect(() => {
     const token = searchParams.get('token');
     const returnUrl = searchParams.get('returnUrl') || '/plan/events';
-    const personId = searchParams.get('personId');
 
     if (!token) {
       setError('invalid');
@@ -27,14 +26,15 @@ export default function VerifyPage() {
     fetch('/api/auth/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, returnUrl, personId }),
+      body: JSON.stringify({ token, returnUrl }),
     })
       .then(async (res) => {
         const data = await res.json();
 
         if (data.success) {
-          // Redirect on success
-          router.push(data.redirectUrl);
+          // Redirect on success. [[GTC-362]]: replace, so the used link never stays in the tab's
+          // history, and Back (or a trackpad swipe) never lands on "Link Already Used".
+          router.replace(data.redirectUrl);
         } else {
           setError(data.error || 'unknown');
           setIsVerifying(false);
@@ -80,7 +80,7 @@ export default function VerifyPage() {
 }
 
 function ErrorDisplay({ error }: { error: ErrorType }) {
-  const errorMessages = {
+  const errorMessages: Record<ErrorType, { title: string; message: string; action?: string }> = {
     invalid: {
       title: 'Invalid Link',
       message: 'Invalid or expired link. Request a new one.',
@@ -93,13 +93,20 @@ function ErrorDisplay({ error }: { error: ErrorType }) {
       title: 'Link Already Used',
       message: 'This link has already been used. Request a new one.',
     },
+    // [[GTC-369]] W1–W3, founder ruling 2026-10-08: "Approve as written".
+    claimed: {
+      title: 'Already Claimed',
+      message:
+        'This host account is already linked to a different email address. Sign in with that address instead.',
+      action: 'Sign in',
+    },
     unknown: {
       title: 'Something Went Wrong',
       message: 'Please try requesting a new link.',
     },
   };
 
-  const { title, message } = errorMessages[error];
+  const { title, message, action = 'Request New Link' } = errorMessages[error];
 
   return (
     <div className="text-center">
@@ -129,7 +136,7 @@ function ErrorDisplay({ error }: { error: ErrorType }) {
           href="/auth/signin"
           className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent"
         >
-          Request New Link
+          {action}
         </a>
       </div>
     </div>

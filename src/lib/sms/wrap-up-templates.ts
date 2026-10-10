@@ -1,3 +1,5 @@
+import { withOptOutLine } from './opt-out-line';
+
 // Wrap-up message templates for GTC-FM2
 // Personalised post-event messages sent to guests when host completes event
 
@@ -8,13 +10,22 @@ export interface WrapUpTemplateParams {
   guestTaskItem: string;
 }
 
+/**
+ * [[GTC-337]] ruling 2 — the thank-you ends with the opt-out line, and its dash is ` - `, the
+ * register's standing form: the em dash was the one non-GSM-7 character in it ([[GTC-257]]).
+ * The email below keeps its dash; an email has no segments.
+ */
 export function buildSmsWrapUpMessage(params: WrapUpTemplateParams): string {
   const { guestFirstName, eventName, hostFirstName, guestTaskItem } = params;
   const isFallback = guestTaskItem === 'what you brought';
   if (isFallback) {
-    return `Hi ${guestFirstName}, ${hostFirstName} asked me (Gather \u2014 the app they used to organise ${eventName}) to pass on a thanks for being part of it. Much appreciated.`;
+    return withOptOutLine(
+      `Hi ${guestFirstName}, ${hostFirstName} asked me (Gather - the app they used to organise ${eventName}) to pass on a thanks for being part of it. Much appreciated.`
+    );
   }
-  return `Hi ${guestFirstName}, ${hostFirstName} asked me (Gather \u2014 the app they used to organise ${eventName}) to pass on a thanks for bringing ${guestTaskItem}. Much appreciated.`;
+  return withOptOutLine(
+    `Hi ${guestFirstName}, ${hostFirstName} asked me (Gather - the app they used to organise ${eventName}) to pass on a thanks for bringing ${guestTaskItem}. Much appreciated.`
+  );
 }
 
 export function buildEmailWrapUpMessage(params: WrapUpTemplateParams): {

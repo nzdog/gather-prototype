@@ -3,19 +3,35 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  try {
-    const { id: eventId } = await context.params;
+  const { id: eventId } = await context.params;
 
+  // GTC-267: unauthenticated before this. Outside the try/catch so an auth failure
+  // answers 401/403 rather than falling through to a 500.
+  const auth = await requireEventRole(eventId, ['HOST', 'COHOST']);
+  if (auth instanceof NextResponse) return auth;
+
+  try {
     // Get team count
     const teamCount = await prisma.team.count({
       where: { eventId },
     });
 
     // Get item counts
+    // GTC-171 (B2): itemCount is host-facing ("23 items") and must not silently inflate
+    // when day-of task rows land in the same table. Tasks are reported separately.
     const itemCount = await prisma.item.count({
       where: {
+        kind: 'ITEM',
+        team: { eventId },
+      },
+    });
+
+    const taskCount = await prisma.item.count({
+      where: {
+        kind: 'TASK',
         team: { eventId },
       },
     });
@@ -61,6 +77,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     return NextResponse.json({
       teamCount,
       itemCount,
+      taskCount,
       criticalItemCount,
       criticalAssignedCount,
       criticalUnassignedCount,

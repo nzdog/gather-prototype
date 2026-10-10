@@ -61,8 +61,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ tok
       targetId: entry.targetId,
       details: entry.details,
       actor: {
-        id: entry.actor.id,
-        name: entry.actor.name,
+        id: entry.actor?.id ?? null,
+        name: entry.actor?.name ?? entry.actorName ?? 'Unknown',
       },
     })),
     actionTypes: actionTypes.map((at) => at.actionType).sort(),

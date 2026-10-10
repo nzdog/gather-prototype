@@ -35,7 +35,15 @@ export async function POST(req: Request) {
       data: { email, token, expiresAt },
     });
 
-    // Send magic link email
+    // Send magic link email.
+    //
+    // GTC-265: `sendMagicLinkEmail` now returns its result and records a
+    // failure server-side. This caller deliberately does NOT act on it — the
+    // route answers `{ ok: true }` on every path, including the rate-limit and
+    // error paths above, so that the response cannot be used to learn which
+    // addresses exist. Ignoring the result here is the decision, not an
+    // oversight; the sender's header explains why the sender must not make it
+    // for us.
     await sendMagicLinkEmail(email, token);
 
     return Response.json({ ok: true });

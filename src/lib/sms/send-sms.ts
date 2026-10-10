@@ -2,6 +2,10 @@ import { getTwilioClient, isSmsEnabled, getSendingNumber } from './twilio-client
 import { sendViaTnz, isTnzEnabled } from './tnz-client';
 import { prisma } from '@/lib/prisma';
 import { logInviteEvent } from '@/lib/invite-events';
+import { isLiveSendingOn, LIVE_SENDS_OFF } from '@/lib/live-sends';
+import { isE164 } from '@/lib/phone';
+import { SMS_OPT_OUT_IN_FORCE } from '@/lib/sms/opt-out-service';
+import { listTextBlocks } from '@/lib/eligibility/text-block';
 
 /**
  * Country codes routed to TNZ. Twilio does not deliver to NZ (+64); AU (+61)
@@ -10,12 +14,37 @@ import { logInviteEvent } from '@/lib/invite-events';
  */
 const TNZ_COUNTRY_CODES = ['+64', '+61'] as const;
 
-function isE164(phone: string): boolean {
-  return /^\+\d{8,15}$/.test(phone);
-}
-
 function shouldUseTnz(phone: string): boolean {
   return TNZ_COUNTRY_CODES.some((code) => phone.startsWith(code));
+}
+
+/**
+ * IS THERE A PROVIDER CONFIGURED THAT COULD CARRY A TEXT TO THIS NUMBER?
+ *
+ * GTC-189 slice 7b, founder answer 1 of 2026-09-19 — ruling U's third action is FENCED on this:
+ *
+ * > 5f's fence would have hidden a true failure — the board going red for a broken key — and
+ * > that was the state worth seeing. This fence prevents a FALSE improvement: the red clearing
+ * > when nothing was sent and no provider was reached. One is the environment telling the truth
+ * > loudly; the other is the board lying quietly.
+ *
+ * ⚠ SO IT IS NOT 5f REVERSED, and the distinction is the ruling rather than a caveat on it.
+ * Without the fence, "send to the phone instead" in this environment queues a TEXT row the drain
+ * withholds `SMS_DISABLED`: the red clears when the row is queued, having reached no provider, and
+ * comes back after the next drain ([[GTC-340]] reads that withholding NOT_DELIVERED). A button that
+ * makes a red disappear without reaching a provider is the quiet lie, however briefly.
+ *
+ * ⚠ IT LIVES HERE, BESIDE `sendSms`, BECAUSE IT IS `sendSms`'S OWN BRANCH. The door asking
+ * "is TNZ configured" directly would be a second reading of which provider serves which number,
+ * free to drift from the one below the moment a third provider or a third country code arrives.
+ * `shouldUseTnz` stays private; this is the question a caller is allowed to ask.
+ *
+ * ⚠ [[GTC-274]]: AND IT ASKS THE LIVE SWITCH TOO. A provider that is configured on a machine that
+ * is not live cannot carry the text either — `sendSms` stops it at its last step — so answering
+ * "configured" there would let the door clear a red with nothing sent: the quiet lie above.
+ */
+export function smsProviderConfiguredFor(to: string): boolean {
+  return isLiveSendingOn() && (shouldUseTnz(to) ? isTnzEnabled() : isSmsEnabled());
 }
 
 export interface SendSmsParams {
@@ -27,20 +56,36 @@ export interface SendSmsParams {
 }
 
 export type SmsBlockReason =
-  | 'SMS_DISABLED' // Twilio not configured
+  | 'SMS_DISABLED' // The provider is not configured, or live sending is off (GTC-274)
   | 'INVALID_NUMBER' // Not a valid NZ number
-  | 'OPTED_OUT' // Recipient opted out from this host
+  | 'OPTED_OUT' // The number has opted out of texts from Gather — every host (GTC-288), or TNZ hold it on their opt-out list (GTC-258)
+  | 'NUMBER_DEAD' // TNZ reported the number cannot receive; never texted again (GTC-258)
   | 'SEND_FAILED'; // Twilio API error
 
 export interface SendSmsResult {
+  /**
+   * ⚠ [[GTC-258]]: THE PROVIDER ACCEPTED IT — NOT THAT IT ARRIVED. TNZ answer 200 on acceptance and
+   * report the outcome later, on their webhook ("you should be working from delivery results and not
+   * assuming the API accepting a message means successful delivery"). The outcome lands on the
+   * caller's `OutboundMessage` row (`src/lib/sms/tnz-delivery-record.ts`).
+   */
   success: boolean;
-  messageId?: string; // Twilio message SID
+  messageId?: string; // TNZ's MessageID, or Twilio's message SID — the delivery join key
+  /** [[GTC-258]] — which provider took it, for the caller's send record. Set when `success`. */
+  provider?: 'tnz' | 'twilio';
   blocked?: SmsBlockReason;
   error?: string;
 }
 
 /**
- * Send an SMS message with full validation and logging
+ * Send an SMS message with full validation and logging.
+ *
+ * ⚠ [[GTC-258]] — IT RECORDS NO SEND OF ITS OWN. It wrote a `NUDGE_SENT_AUTO` InviteEvent on every
+ * accepted text, which made the ask's text claim a nudge was sent (a ruled stopgap, rule 2 in
+ * `src/lib/press/dispatch.ts`) and was the only store of every text's MessageID. Every caller now
+ * records its send on an `OutboundMessage` (the dispatcher's rows; `openTextSend`/`closeTextSend`
+ * in `./text-send-record.ts` for the other three paths), which is the record that can carry TNZ's
+ * report. The refusals below still log as before.
  */
 export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
   const { to, message, eventId, personId, metadata = {} } = params;
@@ -72,7 +117,7 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
   // must apply regardless of which provider is configured. Running this
   // before the provider-config check means a missing TNZ_AUTH_TOKEN never
   // masks an OPTED_OUT signal the caller needs for audit/UX.
-  const isOptedOut = await checkOptOut(to, eventId);
+  const isOptedOut = await checkOptOut(to);
 
   if (isOptedOut) {
     await logInviteEvent({
@@ -90,6 +135,32 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
       blocked: 'OPTED_OUT',
       error: 'Recipient has opted out',
     };
+  }
+
+  /*
+   * [[GTC-258]] — NOT TEXTED AGAIN, AND THIS IS THE LAST FENCE. Founder ruling Q2, 2026-10-02: a
+   * number TNZ said cannot receive is never texted again, and a number on TNZ's opt-out list isn't
+   * texted again. The chooser reads the same fact first (`numberDead`, and the opt-out fact); this
+   * catches a row queued before the report came, and every path alike.
+   *
+   * ⚠ AFTER ZONE 7's CHECK ABOVE, WHICH STAYS FIRST AND UNTOUCHED, and before the provider's
+   * configuration, because it is a fact about the number, not about this environment. It writes no
+   * InviteEvent: a stop is never recorded as a send. And it is not Zone 7 — `TextBlock` is a separate
+   * fact, written only from TNZ's delivery reports.
+   */
+  const textBlock = (await listTextBlocks(prisma, [to])).get(to);
+  if (textBlock) {
+    return textBlock.reason === 'DEAD_CHANNEL'
+      ? {
+          success: false,
+          blocked: 'NUMBER_DEAD',
+          error: 'TNZ reported this number cannot receive texts',
+        }
+      : {
+          success: false,
+          blocked: 'OPTED_OUT',
+          error: "The number is on TNZ's opt-out list",
+        };
   }
 
   // Check configuration for the selected provider. If the destination is
@@ -114,6 +185,29 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
         error: 'Twilio not configured for non-NZ/AU destination',
       };
     }
+  }
+
+  /*
+   * [[GTC-274]] — THE LIVE SWITCH, the last step before the network (founder ruling, 2026-09-29).
+   *
+   * ⚠ ITS PLACE IS THE RULING, NOT A PREFERENCE. After the opt-out check above (Zone 7 — first and
+   * untouched, so an opted-out number is OPTED_OUT whatever this says) and after the provider's
+   * configuration (so a +64 number with no TNZ token is still SMS_DISABLED in TNZ's words). Moving it
+   * ahead of either changes an outcome callers and suites depend on.
+   *
+   * SMS_DISABLED, NOT A FIFTH REASON: "sending is not enabled here" is what it already means, and the
+   * dispatcher and the resend door already read it that way (withheld and terminal), and since
+   * [[GTC-340]] the board reads it red, "never got it".
+   * Told apart by `LIVE_SENDS_OFF`. Like the configuration refusal above, it writes no InviteEvent —
+   * a stop is never recorded as a send.
+   */
+  if (!isLiveSendingOn()) {
+    console.warn(`[SMS] ${LIVE_SENDS_OFF} — nothing sent to ${to}.`);
+    return {
+      success: false,
+      blocked: 'SMS_DISABLED',
+      error: LIVE_SENDS_OFF,
+    };
   }
 
   // Dispatch to the selected provider
@@ -145,23 +239,11 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
       messageId = result.sid;
     }
 
-    // Log success
-    await logInviteEvent({
-      eventId,
-      personId,
-      type: 'NUDGE_SENT_AUTO',
-      metadata: {
-        messageId,
-        provider,
-        phoneNumber: to,
-        messageLength: message.length,
-        ...metadata,
-      },
-    });
-
+    // [[GTC-258]]: accepted, and recorded by the caller — see the header.
     return {
       success: true,
       messageId,
+      provider,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -190,42 +272,28 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
 }
 
 /**
- * Check if a phone number has opted out from a specific host
+ * Has this number opted out of texts from Gather? ACCOUNT-WIDE since [[GTC-288]] (founder ruling,
+ * 2026-09-12): any row in force for the number, whichever host's guest it is. Matched on the exact
+ * E.164 string `to`, which is the form the opt-out is recorded in.
  */
-async function checkOptOut(phoneNumber: string, eventId: string): Promise<boolean> {
-  // Get the event's host
-  const event = await prisma.event.findUnique({
-    where: { id: eventId },
-    select: { hostId: true },
-  });
-
-  if (!event) return false;
-
-  // Check for opt-out record
-  const optOut = await prisma.smsOptOut.findUnique({
-    where: {
-      phoneNumber_hostId: {
-        phoneNumber: phoneNumber,
-        hostId: event.hostId,
-      },
-    },
+async function checkOptOut(phoneNumber: string): Promise<boolean> {
+  const optOut = await prisma.smsOptOut.findFirst({
+    where: { phoneNumber, ...SMS_OPT_OUT_IN_FORCE },
+    select: { id: true },
   });
 
   return !!optOut;
 }
 
 /**
- * Check opt-out status for multiple numbers (batch)
+ * Check opt-out status for multiple numbers (batch), account-wide as `checkOptOut`.
  * More efficient than checking one at a time
  */
-export async function checkOptOutBatch(
-  phoneNumbers: string[],
-  hostId: string
-): Promise<Set<string>> {
+export async function checkOptOutBatch(phoneNumbers: string[]): Promise<Set<string>> {
   const optOuts = await prisma.smsOptOut.findMany({
     where: {
       phoneNumber: { in: phoneNumbers },
-      hostId: hostId,
+      ...SMS_OPT_OUT_IN_FORCE,
     },
     select: { phoneNumber: true },
   });

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Users, Calendar, Loader2 } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
+import { whenLine } from '@/components/shared/EventDetails';
 
 interface Person {
   id: string;
@@ -56,21 +57,30 @@ export default function DirectoryPage() {
       const prefix = person.tokenPrefix || 'p';
       router.push(`/${prefix}/${person.token}`);
     } else {
-      toast.warning('This person does not have access yet. Please contact the host.');
+      /*
+       * GTC-262 — this branch is now reachable on purpose, so the wording had to change.
+       *
+       * It used to say "This person does not have access yet", which was already wrong for
+       * one population and is now wrong for the one that meets it most. Two kinds of person
+       * land here and the payload cannot tell them apart:
+       *
+       *   - a coordinator, whose credential this endpoint deliberately no longer publishes
+       *     (they DO have access, through a link the host sends them individually);
+       *   - a guest whose PARTICIPANT token has not been issued yet — GTC-189 records 155
+       *     of 232 recipients in `gather_dev` holding none, because the press is where they
+       *     get one.
+       *
+       * ⚠ AND IT STAYS UNABLE TO TELL THEM APART, DELIBERATELY. Marking coordinators in the
+       * response would let an unauthenticated caller enumerate who holds write access to
+       * this event's teams — a smaller disclosure than the token, and still one nobody has
+       * asked for. So the copy is written to be true of both rather than precise about
+       * either.
+       */
+      toast.warning(
+        `No link for ${person.name} in this directory. Coordinators get theirs from the ` +
+          `host directly — and so does anyone added since invitations went out.`
+      );
     }
-  };
-
-  const formatDateRange = (startDate: string, endDate: string) => {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const formatter = new Intl.DateTimeFormat('en-NZ', {
-      month: 'short',
-      day: 'numeric',
-      timeZone: 'Pacific/Auckland',
-    });
-    const startFormatted = formatter.format(start);
-    const endDay = formatter.format(end).split(' ')[1];
-    return `${startFormatted}-${endDay}`;
   };
 
   if (loading) {
@@ -112,7 +122,8 @@ export default function DirectoryPage() {
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4" />
                 <span className="text-sm sm:text-base">
-                  {formatDateRange(data.event.startDate, data.event.endDate)}
+                  {/* [[GTC-319]] (W10): the details card's rule, dates only (unauthenticated). */}
+                  {whenLine(data.event.startDate, data.event.endDate)}
                 </span>
               </div>
               {data.event.occasionType && (

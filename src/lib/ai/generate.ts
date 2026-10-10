@@ -7,11 +7,9 @@ import { callClaudeForJSON, isClaudeAvailable } from './claude';
 import {
   PLAN_GENERATION_SYSTEM_PROMPT,
   PLAN_REGENERATION_SYSTEM_PROMPT,
-  EXPLANATION_SYSTEM_PROMPT,
   SELECTIVE_REGENERATION_SYSTEM_PROMPT,
   buildGenerationPrompt,
   buildRegenerationPrompt,
-  buildExplanationPrompt,
   buildSelectiveRegenerationPrompt,
 } from './prompts';
 
@@ -38,13 +36,6 @@ export interface AIPlanResponse {
   teams: AITeam[];
   items: AIItem[];
   reasoning: string;
-}
-
-export interface AIExplanationResponse {
-  source: string;
-  confidence: 'high' | 'medium' | 'low';
-  reasoning: string;
-  suggestions?: string[];
 }
 
 export interface AISelectiveRegenerationResponse {
@@ -117,6 +108,7 @@ export async function generatePlan(
     const response = await callClaudeForJSON<AIPlanResponse>(systemPrompt, userPrompt, {
       maxTokens: 16384,
       temperature: 1.0,
+      callSiteLabel: 'plan-generation',
     });
 
     // Validate response structure
@@ -148,6 +140,7 @@ export async function regeneratePlan(params: RegenerationParams): Promise<AIPlan
     const response = await callClaudeForJSON<AIPlanResponse>(systemPrompt, userPrompt, {
       maxTokens: 16384,
       temperature: 1.0,
+      callSiteLabel: 'plan-regeneration',
     });
 
     // Validate response structure
@@ -158,41 +151,6 @@ export async function regeneratePlan(params: RegenerationParams): Promise<AIPlan
     console.error('[AI Regenerate] Error regenerating plan with Claude:', error);
     console.warn('[AI Regenerate] Falling back to mock data');
     return generateMockPlanWithModifier(params);
-  }
-}
-
-/**
- * Generate explanation using Claude AI
- */
-export async function generateExplanation(conflict: {
-  type: string;
-  severity: string;
-  claimType: string;
-  description: string;
-  metadata?: any;
-}): Promise<AIExplanationResponse> {
-  // Check if Claude is available
-  if (!isClaudeAvailable()) {
-    console.warn('[AI Explain] Claude API not available, using fallback');
-    return generateMockExplanation(conflict);
-  }
-
-  try {
-    // Build prompts
-    const systemPrompt = EXPLANATION_SYSTEM_PROMPT;
-    const userPrompt = buildExplanationPrompt(conflict);
-
-    // Call Claude and parse response
-    const response = await callClaudeForJSON<AIExplanationResponse>(systemPrompt, userPrompt, {
-      maxTokens: 1024,
-      temperature: 0.7, // Lower temperature for more consistent explanations
-    });
-
-    return response;
-  } catch (error) {
-    console.error('[AI Explain] Error generating explanation with Claude:', error);
-    console.warn('[AI Explain] Falling back to mock explanation');
-    return generateMockExplanation(conflict);
   }
 }
 
@@ -282,6 +240,7 @@ export async function generateSelectiveItems(
       {
         maxTokens: 2048,
         temperature: 1.0,
+        callSiteLabel: 'selective-regeneration',
       }
     );
 
@@ -460,26 +419,6 @@ function generateMockPlanWithModifier(params: RegenerationParams): AIPlanRespons
   mockPlan.reasoning = `Mock plan with modifier "${params.modifier}". This is fallback data because Claude API is not available.`;
 
   return mockPlan;
-}
-
-/**
- * Fallback: Generate mock explanation
- */
-function generateMockExplanation(conflict: any): AIExplanationResponse {
-  const confidenceMap: Record<string, 'high' | 'medium' | 'low'> = {
-    CONSTRAINT: 'high',
-    RISK: 'medium',
-    PATTERN: 'medium',
-    PREFERENCE: 'low',
-    ASSUMPTION: 'low',
-  };
-
-  return {
-    source: `Mock explanation for ${conflict.type}. This is fallback data because Claude API is not available.`,
-    confidence: confidenceMap[conflict.claimType] || 'medium',
-    reasoning: conflict.description,
-    suggestions: ['This is a mock suggestion', 'Consider reviewing the plan'],
-  };
 }
 
 /**

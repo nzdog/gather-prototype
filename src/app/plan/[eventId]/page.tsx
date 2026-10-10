@@ -17,15 +17,16 @@ import {
   CheckCircle,
   Eye,
   Send,
-  Lock,
   Download,
   Gift,
 } from 'lucide-react';
 import ConflictList from '@/components/plan/ConflictList';
 import GateCheck from '@/components/plan/GateCheck';
 import FreezeCheck from '@/components/plan/FreezeCheck';
+import { isSentJson, isCompleteJson, getEventPhaseJson } from '@/lib/lifecycle';
+import { useReasonPrompt } from '@/components/plan/ReasonPrompt';
+import { ASK_FIELDS, fieldChanges, type PendingChange } from '@/lib/ledger';
 import TransitionModal from '@/components/plan/TransitionModal';
-import UnfreezeSection from '@/components/plan/UnfreezeSection';
 import EventStageProgress from '@/components/plan/EventStageProgress';
 import SaveTemplateModal from '@/components/templates/SaveTemplateModal';
 import AddTeamModal, { TeamFormData } from '@/components/plan/AddTeamModal';
@@ -54,11 +55,26 @@ import { Conflict, ConflictType } from '@prisma/client';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 import SetupChecklistBanner from '@/components/plan/SetupChecklistBanner';
 import { useEventSetupProgress } from '@/hooks/useEventSetupProgress';
+import { THANK_YOU_SENT_BY_EMAIL } from '@/lib/sms/text-failure-words';
+import { itemListHtml, printEventDate, toPrintItems, writePage } from '@/lib/print/item-list';
 
+// Moment 2 plan view mappers ────────────────────────────────────────────────
 interface Event {
   id: string;
   name: string;
   status: string;
+  /** GTC-197: the send is a timestamp, not a status. Drives isSentJson/isCompleteJson. */
+  sentAt: string | null;
+  /**
+   * GTC-209: "the thank-you was actioned" — not a phase, which is why it is not on
+   * `LifecycleEvent`.
+   *
+   * GTC-267: it used to be serialised by accident, because GET /api/events/[id]
+   * returned the whole row. That route now has an explicit `EVENT_WIRE_SELECT` and
+   * this interface is half of what defines it — a field added here must be added
+   * there too, or it arrives undefined.
+   */
+  wrappedAt: string | null;
   occasionType: string | null;
   occasionDescription: string | null;
   guestCount: number | null;
@@ -87,6 +103,9 @@ interface Event {
   isDemo: boolean;
   clonedFromId: string | null;
   aiCallsUsed: number;
+  // Present when the event entered the V2 Moment flow (EventSetup row exists).
+  // V1-pipeline actions (e.g. Regenerate) are hidden when set (GTC-148).
+  setup: { id: string } | null;
 }
 
 interface Team {
@@ -128,7 +147,7 @@ interface Item {
     displayOrder: number;
   };
   assignment: {
-    response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+    response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE';
     person: {
       id: string;
       name: string;
@@ -167,7 +186,6 @@ type SectionId =
   | 'people'
   | 'teams'
   | 'planstatus'
-  | 'unfreeze'
   | 'invites'
   | 'history'
   | 'wrapup';
@@ -178,7 +196,6 @@ const validSectionIds: SectionId[] = [
   'people',
   'teams',
   'planstatus',
-  'unfreeze',
   'invites',
   'history',
   'wrapup',
@@ -218,6 +235,13 @@ export default function PlanEditorPage() {
   const [loadingTeamItems, setLoadingTeamItems] = useState<Set<string>>(new Set());
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [gateCheckRefresh, setGateCheckRefresh] = useState(0);
+  // GTC-202 (A3c-2): the flow that asks for the why. Fires only where the why-scope
+  // rule fires — the same predicate the server applies — and never blocks (plan §13.1).
+  const {
+    ask: askForReason,
+    askForBatch: askForBatchReason,
+    element: reasonPrompt,
+  } = useReasonPrompt();
   const [showTransitionModal, setShowTransitionModal] = useState(false);
   const [transitionLoading, setTransitionLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -266,6 +290,8 @@ export default function PlanEditorPage() {
       dispatched: boolean;
       failed: boolean;
       failReason: string | null;
+      /** [[GTC-258]] — re-sent by email after the text did not arrive. */
+      sentByEmail?: boolean;
     }>;
   } | null>(null);
   const [wrapUpRetrying, setWrapUpRetrying] = useState(false);
@@ -326,7 +352,7 @@ export default function PlanEditorPage() {
 
   // Load invite links when event status is CONFIRMING or later
   useEffect(() => {
-    if (event && ['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status)) {
+    if (event && (event.status === 'CONFIRMING' || isSentJson(event))) {
       loadInviteLinks();
     }
   }, [event?.status]);
@@ -377,8 +403,16 @@ export default function PlanEditorPage() {
       // Fetch source event data for overlay summary
       const fetchSourceData = async () => {
         try {
+          // GTC-267: the source event is fetched from `/clone-source`, not from
+          // `/api/events/[id]`. The source of a GATHER_CURATED clone can belong to
+          // someone else, and that route now requires a role on the event it names.
+          //
+          // The `/people` fetch beside it is deliberately left pointing at the guarded
+          // route: it already answered 401 for an unowned source before this ticket,
+          // and the overlay already handles that — `sourcePeople` falls back to `[]`
+          // and the summary simply carries no guest names.
           const [eventRes, peopleRes] = await Promise.all([
-            fetch(`/api/events/${event.clonedFromId}`),
+            fetch(`/api/events/${event.clonedFromId}/clone-source`),
             fetch(`/api/events/${event.clonedFromId}/people`),
           ]);
           const eventData = await eventRes.json();
@@ -414,16 +448,6 @@ export default function PlanEditorPage() {
       router.replace(`/plan/${eventId}`, { scroll: false });
     }
   }, [event?.clonedFromId, searchParams, teams.length, items.length]);
-
-  // Auto-open Edit Event wizard after post-payment redirect
-  useEffect(() => {
-    if (searchParams.get('setup') === 'true') {
-      setChecklistStepContext('Step 1 of 3: Event Basics');
-      setIsPostPayment(true);
-      setEditEventModalOpen(true);
-      router.replace(`/plan/${eventId}`, { scroll: false });
-    }
-  }, [searchParams, eventId]);
 
   // Load checklist dismissed state from localStorage
   useEffect(() => {
@@ -539,9 +563,10 @@ export default function PlanEditorPage() {
     try {
       if (!event) return;
 
-      // Use hostId query param for authentication
-      // This allows the Plan page to fetch tokens without requiring a stored token
-      const response = await fetch(`/api/events/${eventId}/tokens?hostId=${event.hostId}`);
+      // GTC-267: the `?hostId=` this used to send is gone. It was never a credential —
+      // it came from `GET /api/events/[id]`, which served it to anyone. Both routes now
+      // authenticate the session this page already holds.
+      const response = await fetch(`/api/events/${eventId}/tokens`);
 
       if (!response.ok) {
         console.error('Failed to load invite links:', response.status);
@@ -556,9 +581,7 @@ export default function PlanEditorPage() {
       // Also fetch invite status if in CONFIRMING status
       if (event.status === 'CONFIRMING') {
         try {
-          const statusResponse = await fetch(
-            `/api/events/${eventId}/invite-status?hostId=${event.hostId}`
-          );
+          const statusResponse = await fetch(`/api/events/${eventId}/invite-status`);
           if (statusResponse.ok) {
             const statusData = await statusResponse.json();
             const statusMap = new Map<string, any>();
@@ -664,6 +687,7 @@ export default function PlanEditorPage() {
       <ModalTabBar
         activeTab={currentTab}
         eventStatus={event.status}
+        hiddenTabs={event.setup ? ['history'] : undefined}
         onNavigate={(tabId) => handleModalTabNavigate(tabId, currentTab)}
         onCloseToDashboard={() => {
           if (currentTab === 'details') {
@@ -1142,6 +1166,20 @@ export default function PlanEditorPage() {
     const entries = Object.entries(pendingAssignments);
     if (entries.length === 0) return;
 
+    // GTC-202: T1 — asked ONCE for the whole save, not once per assignment. A save that
+    // moves eight asks is one act to her; eight dialogs would be interrogation by volume.
+    const answer = await askForBatchReason(
+      entries.map(
+        ([itemId, { personId }]): PendingChange => ({
+          action: personId ? 'CREATE_ASSIGNMENT' : 'DELETE_ASSIGNMENT',
+          targetType: 'Assignment',
+          targetId: itemId,
+        })
+      ),
+      event
+    );
+    if (!answer.proceed) return;
+
     setSavingAssignments(true);
     try {
       for (const [itemId, { personId }] of entries) {
@@ -1149,7 +1187,7 @@ export default function PlanEditorPage() {
           const response = await fetch(`/api/events/${eventId}/items/${itemId}/assign`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ personId }),
+            body: JSON.stringify({ personId, reason: answer.reason }),
           });
           if (!response.ok) {
             const error = await response.json();
@@ -1158,6 +1196,8 @@ export default function PlanEditorPage() {
         } else {
           const response = await fetch(`/api/events/${eventId}/items/${itemId}/assign`, {
             method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: answer.reason }),
           });
           if (!response.ok) {
             const error = await response.json();
@@ -1204,11 +1244,38 @@ export default function PlanEditorPage() {
 
   const handleSaveEditItem = async (itemId: string, data: any) => {
     const item = editingItem; // Store reference before clearing
+    // GTC-202: T4 — only where an ASK_FIELD actually MOVED on an item someone has
+    // already answered. fieldChanges() is the server's own differ, so a submitted-but-
+    // unchanged field asks nothing, and a typo fix on a PENDING ask is never
+    // interrogated (the whole point of the T1/T4 asymmetry).
+    // EditItemModal asks for itself (it can fire T1 and T4 in one save) and passes the
+    // answer down on `data.reason`. Only ask here when nobody has already — otherwise
+    // one save would raise two dialogs.
+    let reason: string | null = data?.reason ?? null;
+    if (!('reason' in (data ?? {}))) {
+      const askAnswer = await askForBatchReason(
+        fieldChanges(
+          {
+            action: 'EDIT_ITEM',
+            targetType: 'Item',
+            targetId: itemId,
+            context: { assignmentResponse: item?.assignment?.response ?? null },
+          },
+          (item ?? {}) as Record<string, unknown>,
+          data as Record<string, unknown>,
+          ASK_FIELDS
+        ),
+        event
+      );
+      if (!askAnswer.proceed) return;
+      reason = askAnswer.reason;
+    }
+
     try {
       const response = await fetch(`/api/events/${eventId}/items/${itemId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, reason }),
       });
 
       if (!response.ok) throw new Error('Failed to update item');
@@ -1237,9 +1304,23 @@ export default function PlanEditorPage() {
   const handleDeleteItem = async (item: Item) => {
     if (!confirm(`Delete "${item.name}"? This cannot be undone.`)) return;
 
+    // GTC-202: T3 — deleting an item someone is holding makes their ask disappear.
+    const answer = await askForReason(
+      {
+        action: 'DELETE_ITEM',
+        targetType: 'Item',
+        targetId: item.id,
+        context: { assignmentResponse: item.assignment?.response ?? null },
+      },
+      event
+    );
+    if (!answer.proceed) return;
+
     try {
       const response = await fetch(`/api/events/${eventId}/items/${item.id}`, {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: answer.reason }),
       });
 
       if (!response.ok) throw new Error('Failed to delete item');
@@ -1329,7 +1410,7 @@ export default function PlanEditorPage() {
       await loadTeams();
       setGateCheckRefresh((prev) => prev + 1);
       // Reload invite links if event is in CONFIRMING or later status
-      if (event && ['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status)) {
+      if (event && (event.status === 'CONFIRMING' || isSentJson(event))) {
         loadInviteLinks();
       }
       autoRecheck();
@@ -1349,19 +1430,16 @@ export default function PlanEditorPage() {
 
   const handleChecklistOpenAddPerson = () => {
     setChecklistStepContext('Step 3 of 5: Add people');
-    // Strip `setup` before navigating — if the user arrived via post-payment
-    // (?setup=true), window.history.replaceState clears the visible URL but
-    // Next.js searchParams still carries setup=true. Carrying it into the
-    // expand URL re-triggers the setup effect and opens EditEventModal instead.
     const params = new URLSearchParams(searchParams.toString());
-    params.delete('setup');
     params.set('expand', 'people');
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
   const handleChecklistOpenCreatePlan = () => {
     setChecklistStepContext(null);
-    if (teams.length === 0) {
+    // V2 events never enter the V1 generate pipeline — offer manual team
+    // creation instead (GTC-149).
+    if (teams.length === 0 && !event?.setup) {
       setHostDescriptionModalOpen(true);
     } else {
       setAddTeamModalOpen(true);
@@ -1458,6 +1536,10 @@ export default function PlanEditorPage() {
 
   return (
     <ModalProvider>
+      {/* GTC-202: the why-scope prompt. Rendered once for the whole dashboard — it is
+          driven imperatively by askForReason/askForBatchReason and renders nothing
+          until a change actually trips the rule. */}
+      {reasonPrompt}
       <div className="min-h-screen bg-gray-50">
         {/* Demo back-link */}
         {event.isDemo && (
@@ -1472,7 +1554,8 @@ export default function PlanEditorPage() {
         {/* Header */}
         <div className="bg-white border-b">
           <div className="max-w-7xl mx-auto px-4 py-6">
-            <div className="flex items-center justify-between">
+            {/* [[GTC-358]] R2: the header's buttons wrap on a phone; on a computer, as before. */}
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">{event.name}</h1>
                 <div className="mt-2 flex items-center gap-4 text-sm text-gray-600">
@@ -1483,7 +1566,7 @@ export default function PlanEditorPage() {
                   {event.guestCount && <span>{event.guestCount} guests</span>}
                 </div>
               </div>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3">
                 <button
                   onClick={() => {
                     // Find the HOST token from invite links
@@ -1507,7 +1590,8 @@ export default function PlanEditorPage() {
                     Failed to load host link — try refreshing.
                   </span>
                 )}
-                {event.status === 'DRAFT' && teams.length === 0 && (
+                {/* V1 generate entry — hidden on V2 events (GTC-149) */}
+                {!event.setup && event.status === 'DRAFT' && teams.length === 0 && (
                   <button
                     onClick={() => setHostDescriptionModalOpen(true)}
                     disabled={isGenerating || event.aiCallsUsed >= 10}
@@ -1527,7 +1611,11 @@ export default function PlanEditorPage() {
                     )}
                   </button>
                 )}
+                {/* V2 events (EventSetup present) must not expose the V1 regenerate
+                    pipeline — it reads different persistence and different prompts
+                    than the plan was generated with (GTC-148). */}
                 {!event.isDemo &&
+                  !event.setup &&
                   (event.status === 'DRAFT' || event.status === 'CONFIRMING') &&
                   teams.length > 0 && (
                     <button
@@ -1560,9 +1648,7 @@ export default function PlanEditorPage() {
                     Your event includes 10 AI calls. You have {10 - event.aiCallsUsed} remaining.
                   </span>
                 )}
-                {(event.status === 'CONFIRMING' ||
-                  event.status === 'FROZEN' ||
-                  event.status === 'COMPLETE') && (
+                {(event.status === 'CONFIRMING' || isSentJson(event)) && (
                   <button
                     onClick={() => setSaveTemplateModalOpen(true)}
                     className="px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark flex items-center gap-2"
@@ -1577,16 +1663,20 @@ export default function PlanEditorPage() {
         </div>
 
         <div className="max-w-7xl mx-auto px-4 py-8">
-          {/* Event Stage Progress - Hide when checklist is visible */}
-          {!(event.status === 'DRAFT' && !checklistDismissed) && (
+          {/* Event Stage Progress - Hide when checklist is visible.
+              [[GTC-360]] Q6: never on a Moment-flow event — its words describe the V1 flow, and the
+              Moment flow holds the plan at Moment 3's "Move on". */}
+          {!event.setup && !(event.status === 'DRAFT' && !checklistDismissed) && (
             <EventStageProgress
-              currentStatus={event.status as any}
-              onFreezeClick={() => handleExpandSection('planstatus')}
+              phase={getEventPhaseJson(event)}
+              onSendClick={() => handleExpandSection('planstatus')}
             />
           )}
 
-          {/* Setup Checklist Banner - Only show in DRAFT status and not dismissed */}
-          {event.status === 'DRAFT' && !checklistDismissed && (
+          {/* Setup Checklist Banner - Only show in DRAFT status and not dismissed.
+              [[GTC-357]] R2: never on a Moment-flow event (an EventSetup row), whose Moment flow now
+              covers those steps; V1 events unchanged. */}
+          {!event.setup && event.status === 'DRAFT' && !checklistDismissed && (
             <SetupChecklistBanner
               progress={setupProgress}
               onDismiss={handleChecklistDismiss}
@@ -1612,8 +1702,10 @@ export default function PlanEditorPage() {
             </div>
           )}
 
-          {/* Next Step CTA — shown when unassigned items exist, session-dismissible */}
-          {!nextStepDismissed &&
+          {/* Next Step CTA — shown when unassigned items exist, session-dismissible.
+              [[GTC-357]] R2: never on a Moment-flow event; Moment 3 is where items are given out. */}
+          {!event.setup &&
+            !nextStepDismissed &&
             !isGenerating &&
             !isRegenerating &&
             teams.length > 0 &&
@@ -1656,38 +1748,44 @@ export default function PlanEditorPage() {
                   />
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {/* Plan Frozen Card - Only show for FROZEN */}
-                  {event.status === 'FROZEN' && (
-                    <div
-                      onClick={() => handleExpandSection('unfreeze')}
-                      className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group border-2 border-yellow-300"
-                    >
+                  {/* THE THRESHOLD SCRIPT — Hinge §2's two sentences, verbatim.
+                      "What the threshold says — the complete script, two sentences."
+                      Sentence 2 is deliberate in what it OMITS: it leads with what
+                      she'll watch and never mentions chasing, because behaviours seen
+                      in advance are pre-worry material. Do not add a third sentence. */}
+                  {isSentJson(event) && !isCompleteJson(event) && (
+                    <div className="bg-gradient-to-br from-sage-50 to-white rounded-lg shadow-md p-6 h-64 flex flex-col border-2 border-sage-200">
                       <div className="flex items-center gap-4 mb-4">
-                        <div className="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center ring-4 ring-amber-200/50">
-                          <CheckCircle className="w-8 h-8 text-amber-600" />
+                        <div className="w-14 h-14 bg-sage-100 rounded-full flex items-center justify-center ring-4 ring-sage-200/50">
+                          <CheckCircle className="w-8 h-8 text-sage-600" />
                         </div>
-                        <h2 className="text-xl font-semibold text-gray-900">
-                          Everything&apos;s in place
-                        </h2>
+                        <h2 className="text-xl font-semibold text-gray-900">It&apos;s away</h2>
                       </div>
-                      <div className="flex-1">
+                      <div className="flex-1 space-y-3">
                         <p className="text-sm text-gray-700 leading-relaxed">
-                          Your guests know what they&apos;re bringing. Nothing left to do but show
-                          up.
+                          You can still change anything — I&apos;ll just keep the history.
                         </p>
-                      </div>
-                      <div className="text-xs text-amber-500/70 group-hover:text-amber-600 transition-colors">
-                        Click to unfreeze →
+                        <p className="text-sm text-gray-700 leading-relaxed">
+                          You&apos;ll start to see replies coming in. I&apos;ll track them and flag
+                          anything that needs you.
+                        </p>
                       </div>
                     </div>
                   )}
 
-                  {/* Complete Event Card - Show for FROZEN (not yet complete) and COMPLETE (show status) */}
-                  {(event.status === 'FROZEN' || event.status === 'COMPLETE') && (
+                  {/* GTC-197 (A3c): the "Plan Frozen" card is DELETED. There is no freeze
+                      to announce, and its only affordance was "Click to unfreeze" —
+                      which Hinge §2 rules out at the mechanism level. What replaces it
+                      is the threshold script below, shown once the plan is sent. */}
+
+                  {/* Wrap-up card. Shown once the plan is sent; the calendar decides
+                      whether the event is past (Moment 4 §10.1), so nothing here offers
+                      a "mark complete" action — there is nothing to declare. */}
+                  {isSentJson(event) && (
                     <div
                       onClick={() => handleExpandSection('wrapup')}
                       className={`bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group ${
-                        event.status === 'COMPLETE'
+                        isCompleteJson(event)
                           ? 'border-2 border-green-300'
                           : 'border-2 border-accent/30'
                       }`}
@@ -1695,19 +1793,19 @@ export default function PlanEditorPage() {
                       <div className="flex items-center gap-3 mb-4">
                         <div
                           className={`w-12 h-12 rounded-lg flex items-center justify-center group-hover:opacity-80 transition-colors ${
-                            event.status === 'COMPLETE' ? 'bg-green-100' : 'bg-accent-light/20'
+                            isCompleteJson(event) ? 'bg-green-100' : 'bg-accent-light/20'
                           }`}
                         >
                           <Gift
-                            className={`w-6 h-6 ${event.status === 'COMPLETE' ? 'text-green-600' : 'text-accent'}`}
+                            className={`w-6 h-6 ${isCompleteJson(event) ? 'text-green-600' : 'text-accent'}`}
                           />
                         </div>
                         <h2 className="text-xl font-semibold text-gray-900">
-                          {event.status === 'COMPLETE' ? 'Event Complete' : 'Complete Event'}
+                          {isCompleteJson(event) ? 'Event past' : 'Wrap up'}
                         </h2>
                       </div>
                       <div className="flex-1">
-                        {event.status === 'COMPLETE' ? (
+                        {isCompleteJson(event) ? (
                           <p className="text-sm text-gray-600">
                             Thank-you messages sent. Click to view dispatch status.
                           </p>
@@ -1719,10 +1817,10 @@ export default function PlanEditorPage() {
                       </div>
                       <div
                         className={`text-sm font-medium ${
-                          event.status === 'COMPLETE' ? 'text-green-600' : 'text-accent'
+                          isCompleteJson(event) ? 'text-green-600' : 'text-accent'
                         }`}
                       >
-                        {event.status === 'COMPLETE' ? 'View status →' : 'Complete event →'}
+                        {isCompleteJson(event) ? 'View status →' : 'Send thank-yous →'}
                       </div>
                     </div>
                   )}
@@ -1829,20 +1927,18 @@ export default function PlanEditorPage() {
                           ? '0 conflicts'
                           : `${conflicts.length} conflict${conflicts.length > 1 ? 's' : ''}`}
                         {' · '}
-                        {event.status === 'FROZEN'
-                          ? 'Plan frozen'
-                          : event.status === 'COMPLETE'
-                            ? 'Complete'
-                            : items.filter((i) => !i.assignment).length === 0
-                              ? 'Ready to freeze'
-                              : `${items.filter((i) => !i.assignment).length} unassigned`}
+                        {isCompleteJson(event)
+                          ? 'Event past'
+                          : isSentJson(event)
+                            ? 'Sent'
+                            : `${items.filter((i) => !i.assignment).length} unassigned`}
                       </p>
                     </div>
                     <div className="text-sm text-accent font-medium">Click to expand →</div>
                   </div>
 
                   {/* Invite Links Card */}
-                  {['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status) &&
+                  {(event.status === 'CONFIRMING' || isSentJson(event)) &&
                     inviteLinks.length > 0 && (
                       <div
                         onClick={() => handleExpandSection('invites')}
@@ -1868,22 +1964,25 @@ export default function PlanEditorPage() {
                       </div>
                     )}
 
-                  {/* Revision History Card */}
-                  <div
-                    onClick={() => handleExpandSection('history')}
-                    className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
-                  >
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
-                        <Clock className="w-6 h-6 text-accent" />
+                  {/* Revision History Card — V1-shape snapshot/restore system,
+                      hidden on V2 events (GTC-149) */}
+                  {!event.setup && (
+                    <div
+                      onClick={() => handleExpandSection('history')}
+                      className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all h-64 flex flex-col group"
+                    >
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-12 h-12 bg-accent-light/20 rounded-lg flex items-center justify-center group-hover:bg-accent-light/30 transition-colors">
+                          <Clock className="w-6 h-6 text-accent" />
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-900">Revision History</h2>
                       </div>
-                      <h2 className="text-xl font-semibold text-gray-900">Revision History</h2>
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-600">View all changes and updates</p>
+                      </div>
+                      <div className="text-sm text-accent font-medium">Click to expand →</div>
                     </div>
-                    <div className="flex-1">
-                      <p className="text-sm text-gray-600">View all changes and updates</p>
-                    </div>
-                    <div className="text-sm text-accent font-medium">Click to expand →</div>
-                  </div>
+                  )}
                 </div>
               </div>
             </>
@@ -1907,20 +2006,21 @@ export default function PlanEditorPage() {
           <PeopleSection
             eventId={eventId}
             hostId={event?.hostId}
+            event={event}
             teams={teams}
             people={people}
             onPeopleChanged={() => {
               loadPeople();
               loadTeams();
               setGateCheckRefresh((prev) => prev + 1);
-              if (event && ['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status)) {
+              if (event && (event.status === 'CONFIRMING' || isSentJson(event))) {
                 loadInviteLinks();
               }
               autoRecheck();
             }}
             onMovePerson={handleMovePerson}
             onExpand={() => handleExpandSection('people')}
-            onGeneratePlan={() => setHostDescriptionModalOpen(true)}
+            onGeneratePlan={event?.setup ? undefined : () => setHostDescriptionModalOpen(true)}
             stepLabel={undefined}
           />
           <GateCheck
@@ -1943,21 +2043,14 @@ export default function PlanEditorPage() {
             }}
             onExpand={() => handleExpandSection('planstatus')}
           />
-          {event?.status === 'FROZEN' && (
-            <UnfreezeSection
+          {/* V1-shape snapshot/restore system — hidden on V2 events (GTC-149) */}
+          {!event?.setup && (
+            <RevisionHistory
               eventId={eventId}
-              onUnfreezeComplete={() => {
-                loadEvent();
-                loadTeams();
-              }}
-              onExpand={() => handleExpandSection('unfreeze')}
+              actorId={event?.hostId ?? ''}
+              onExpand={() => handleExpandSection('history')}
             />
           )}
-          <RevisionHistory
-            eventId={eventId}
-            actorId={event?.hostId ?? ''}
-            onExpand={() => handleExpandSection('history')}
-          />
         </div>
 
         {/* Save Template Modal */}
@@ -1998,11 +2091,12 @@ export default function PlanEditorPage() {
           isOpen={!!editingItem}
           onClose={() => setEditingItem(null)}
           onSave={handleSaveEditItem}
-          eventStatus={event?.status}
+          event={event}
           item={editingItem}
           days={days}
           eventId={eventId}
           people={people}
+          hostId={event?.hostId}
         />
 
         {/* Regenerate Modal */}
@@ -2013,11 +2107,13 @@ export default function PlanEditorPage() {
           manualTeamCount={manualTeamCount}
           manualItemCount={manualItemCount}
           eventId={eventId}
+          isSent={event ? isSentJson(event) : false}
         />
 
-        {/* Host Description Modal */}
+        {/* Host Description Modal — choke point for every V1 generate entry;
+            never opens on V2 events regardless of caller (GTC-149) */}
         <HostDescriptionModal
-          isOpen={hostDescriptionModalOpen}
+          isOpen={hostDescriptionModalOpen && !event?.setup}
           onClose={() => setHostDescriptionModalOpen(false)}
           onGenerate={handleGeneratePlan}
           onSkip={() => handleGeneratePlan()}
@@ -2099,7 +2195,7 @@ export default function PlanEditorPage() {
                   <p className="text-sm text-gray-500 mb-4">
                     Generate a plan to check for conflicts
                   </p>
-                  {event?.status === 'DRAFT' && (
+                  {event?.status === 'DRAFT' && !event?.setup && (
                     <button
                       onClick={() => {
                         pendingModalAction.current = 'generate';
@@ -2130,10 +2226,14 @@ export default function PlanEditorPage() {
             )}
           </div>
 
-          {/* Freeze Readiness section — only visible in CONFIRMING */}
-          {event && event.status === 'CONFIRMING' && (
+          {/* Send readiness — a hunt for absence, not a verdict. Hinge §1: "Gather
+              sweeps for gaps, and each 'no holes here' is weight down." Warnings only;
+              nothing here can block, and nothing scores her (Moment 4 §2). */}
+          {/* [[GTC-360]] Q6: not on a Moment-flow event — its "Freeze Plan" asks for a transition the
+              plan has already made at Moment 3, and the pre-flight is where she sends. */}
+          {event && !event.setup && event.status === 'CONFIRMING' && !isSentJson(event) && (
             <div className="border-t border-gray-200 pt-8">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Freeze Readiness</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Before you send</h3>
               <FreezeCheck
                 eventId={eventId}
                 currentStatus={event?.status as any}
@@ -2160,81 +2260,19 @@ export default function PlanEditorPage() {
               {items.length > 0 && (
                 <button
                   onClick={() => {
+                    // [[GTC-366]] (item 11, Q12) — one print, shared with "Print the list": every
+                    // name escaped, the amounts in plain words (W17). Opened in the tap itself.
                     const printWindow = window.open('', '_blank');
                     if (!printWindow) return;
-
-                    // Build sorted categories matching accordion order
-                    const grouped = items.reduce<Record<string, Item[]>>((acc, item) => {
-                      const key = item.team.name;
-                      if (!acc[key]) acc[key] = [];
-                      acc[key].push(item);
-                      return acc;
-                    }, {});
-                    const hasOrder = items.some((i) => i.team.displayOrder > 0);
-                    const cats = Object.keys(grouped).sort((a, b) => {
-                      if (hasOrder) {
-                        const oA = grouped[a][0]?.team.displayOrder ?? 0;
-                        const oB = grouped[b][0]?.team.displayOrder ?? 0;
-                        if (oA !== oB) return oA - oB;
-                      }
-                      return a.localeCompare(b);
-                    });
-
-                    const eventName = event?.name || 'Event';
-                    const eventDate = event?.startDate
-                      ? new Date(event.startDate).toLocaleDateString('en-NZ', {
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric',
-                        })
-                      : '';
-
-                    const gatherLogo = `<svg viewBox="0 0 240 40" fill="none" xmlns="http://www.w3.org/2000/svg" style="height:32px;width:auto;"><circle cx="7" cy="7" r="2.5" fill="#6b7c6f"/><circle cx="15" cy="7" r="2.5" fill="#6b7c6f"/><circle cx="23" cy="7" r="2.5" fill="#6b7c6f"/><circle cx="31" cy="7" r="2.5" fill="#6b7c6f"/><circle cx="7" cy="15" r="2.5" fill="#6b7c6f"/><circle cx="15" cy="15" r="2.5" fill="#6b7c6f"/><circle cx="23" cy="15" r="2.5" fill="rgba(107,124,111,0.3)"/><circle cx="31" cy="15" r="2.5" fill="rgba(107,124,111,0.3)"/><circle cx="7" cy="23" r="2.5" fill="#6b7c6f"/><circle cx="15" cy="23" r="2.5" fill="#6b7c6f"/><circle cx="23" cy="23" r="2.5" fill="#6b7c6f"/><circle cx="31" cy="23" r="2.5" fill="#6b7c6f"/><circle cx="7" cy="31" r="2.5" fill="#6b7c6f"/><circle cx="15" cy="31" r="2.5" fill="#6b7c6f"/><circle cx="23" cy="31" r="2.5" fill="#6b7c6f"/><circle cx="31" cy="31" r="2.5" fill="#6b7c6f"/><text x="56" y="29" fill="#6b7c6f" style="font-family:'Source Serif 4',Georgia,serif;font-size:28px;font-weight:400;letter-spacing:-0.01em;">Gather</text></svg>`;
-
-                    let html = `<!DOCTYPE html><html><head><title>${eventName} — Items</title>
-                      <style>
-                        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 800px; margin: 0 auto; padding: 24px; color: #111; }
-                        .logo { margin-bottom: 16px; }
-                        h1 { font-size: 20px; margin-bottom: 2px; }
-                        .date { font-size: 14px; color: #666; margin-bottom: 24px; }
-                        h2 { font-size: 16px; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin-top: 20px; }
-                        table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-                        th, td { text-align: left; padding: 6px 8px; font-size: 13px; border-bottom: 1px solid #eee; }
-                        th { font-weight: 600; color: #555; font-size: 11px; text-transform: uppercase; }
-                        .qty { color: #555; }
-                        .status-confirmed { color: #16a34a; }
-                        .status-declined { color: #dc2626; }
-                        .status-pending { color: #d97706; }
-                        .status-unassigned { color: #999; font-style: italic; }
-                        @media print { body { padding: 0; } .logo svg text { fill: #333; } }
-                      </style></head><body>`;
-                    html += `<div class="logo">${gatherLogo}</div>`;
-                    html += `<h1>${eventName}</h1>`;
-                    if (eventDate) html += `<div class="date">${eventDate}</div>`;
-
-                    for (const cat of cats) {
-                      const catItems = grouped[cat];
-                      html += `<h2>${cat}</h2><table><thead><tr><th>Item</th><th>Qty</th><th>Assigned To</th><th>Status</th></tr></thead><tbody>`;
-                      for (const item of catItems) {
-                        const qty =
-                          item.quantityAmount && item.quantityUnit
-                            ? `${item.quantityAmount} ${item.quantityUnit}`
-                            : item.quantityText || '—';
-                        const assignee =
-                          item.assignment?.person?.name ||
-                          '<span class="status-unassigned">Unassigned</span>';
-                        const status = item.assignment
-                          ? `<span class="status-${item.assignment.response === 'ACCEPTED' ? 'confirmed' : item.assignment.response === 'DECLINED' ? 'declined' : 'pending'}">${item.assignment.response === 'ACCEPTED' ? 'Confirmed' : item.assignment.response === 'DECLINED' ? 'Declined' : 'Pending'}</span>`
-                          : '';
-                        html += `<tr><td>${item.name}</td><td class="qty">${qty}</td><td>${assignee}</td><td>${status}</td></tr>`;
-                      }
-                      html += `</tbody></table>`;
-                    }
-
-                    html += `</body></html>`;
-                    printWindow.document.write(html);
-                    printWindow.document.close();
-                    printWindow.print();
+                    writePage(
+                      printWindow,
+                      itemListHtml({
+                        eventName: event?.name || 'Event',
+                        eventDate: printEventDate(event?.startDate),
+                        items: toPrintItems(items),
+                      }),
+                      true
+                    );
                   }}
                   className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition"
                 >
@@ -2264,7 +2302,7 @@ export default function PlanEditorPage() {
                 No items yet. Generate a plan or add items manually.
               </p>
               <div className="flex items-center justify-center gap-3">
-                {event?.status === 'DRAFT' && (
+                {event?.status === 'DRAFT' && !event?.setup && (
                   <button
                     onClick={() => {
                       pendingModalAction.current = 'generate';
@@ -2416,11 +2454,16 @@ export default function PlanEditorPage() {
                                                   : 'bg-amber-100 text-amber-800'
                                             }`}
                                           >
+                                            {/* GTC-174 (D1): a maybe surfaces as itself —
+                                                amber alongside pending, never 'Pending'.
+                                                Hinge §8: decisions surface. */}
                                             {item.assignment.response === 'ACCEPTED'
                                               ? 'Confirmed'
                                               : item.assignment.response === 'DECLINED'
                                                 ? 'Declined'
-                                                : 'Pending'}
+                                                : item.assignment.response === 'MAYBE'
+                                                  ? 'Maybe'
+                                                  : 'Pending'}
                                             <span className="text-xs text-inherit opacity-70">
                                               — {item.assignment.person.name}
                                             </span>
@@ -2471,20 +2514,21 @@ export default function PlanEditorPage() {
           <PeopleSection
             eventId={eventId}
             hostId={event?.hostId}
+            event={event}
             teams={teams}
             people={people}
             onPeopleChanged={() => {
               loadPeople();
               loadTeams();
               setGateCheckRefresh((prev) => prev + 1);
-              if (event && ['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status)) {
+              if (event && (event.status === 'CONFIRMING' || isSentJson(event))) {
                 loadInviteLinks();
               }
               setChecklistStepContext(null);
               autoRecheck();
             }}
             onMovePerson={handleMovePerson}
-            onGeneratePlan={() => setHostDescriptionModalOpen(true)}
+            onGeneratePlan={event?.setup ? undefined : () => setHostDescriptionModalOpen(true)}
             stepLabel={checklistStepContext || undefined}
             initialView={peopleInitialView}
             onReassignItems={(teamId) => {
@@ -2510,7 +2554,7 @@ export default function PlanEditorPage() {
                 No teams yet. Generate a plan to create teams automatically.
               </p>
               <div className="flex items-center justify-center gap-3">
-                {event?.status === 'DRAFT' && (
+                {event?.status === 'DRAFT' && !event?.setup && (
                   <button
                     onClick={() => {
                       pendingModalAction.current = 'generate';
@@ -2805,26 +2849,8 @@ export default function PlanEditorPage() {
           </div>
         )}
 
-        {/* Unfreeze Expansion */}
-        {event && event.status === 'FROZEN' && (
-          <SectionExpandModal
-            isOpen={expandedSection === 'unfreeze'}
-            onClose={handleCloseExpansion}
-            title="Unfreeze Plan"
-            icon={<Lock className="w-6 h-6" />}
-          >
-            <UnfreezeSection
-              eventId={eventId}
-              onUnfreezeComplete={() => {
-                loadEvent();
-                loadTeams();
-              }}
-            />
-          </SectionExpandModal>
-        )}
-
         {/* Invite Links Expansion */}
-        {event && ['CONFIRMING', 'FROZEN', 'COMPLETE'].includes(event.status) && (
+        {event && (event.status === 'CONFIRMING' || isSentJson(event)) && (
           <SectionExpandModal
             isOpen={expandedSection === 'invites'}
             onClose={handleCloseExpansion}
@@ -2832,9 +2858,12 @@ export default function PlanEditorPage() {
             icon={<LinkIcon className="w-6 h-6" />}
             tabBar={buildTabBar('invites')}
           >
-            {/* Shared Link Section - Show in CONFIRMING and FROZEN */}
+            {/* Shared Link Section — available from CONFIRMING onward, through the send */}
             <div className="mb-6">
-              <SharedLinkSection eventId={eventId} eventStatus={event.status} />
+              <SharedLinkSection
+                eventId={eventId}
+                available={event.status === 'CONFIRMING' || isSentJson(event)}
+              />
             </div>
 
             {/* Invite Status Section - Only show in CONFIRMING */}
@@ -2874,6 +2903,8 @@ export default function PlanEditorPage() {
                     status: p.status,
                     hasPhone: p.hasPhone,
                     lastAction: p.response,
+                    // GTC-256 (phase 3), Ruling 5: the host is never missing.
+                    isHost: p.isHost,
                     daysSinceAnchor: p.inviteAnchorAt
                       ? Math.floor(
                           (Date.now() - new Date(p.inviteAnchorAt).getTime()) /
@@ -2904,6 +2935,44 @@ export default function PlanEditorPage() {
                   <p className="text-sm text-gray-700 mb-3">
                     Share this single link with your whole family. Everyone can click their name to
                     access their personal page.
+                  </p>
+                  {/*
+                    GTC-262 wrote this sentence and GTC-294 made half of it false. Founder
+                    ruling, 2026-09-18: the replacement ships, and the REASONING is recorded
+                    here because it is the better half of the change.
+
+                    GTC-262's version said a coordinator's link "opens their team's plan, so it
+                    isn't in the shared directory". That was true when a coordinator held exactly
+                    one token. Since GTC-294 they hold two, and the two go different ways:
+
+                      /p/ — the ask. Now IS in this directory, under their own name, because
+                            GTC-262 ruling 1 is that "they reach their own ask from the
+                            directory, which is what the directory is for".
+                      /c/ — the job. Still is NOT, and for the reason GTC-262 gave: "the
+                            no-verification bargain was struck about the ask. It was never
+                            struck about write access to a team's plan."
+
+                    ⚠ SO THE CARD'S ORIGINAL PROMISE — "everyone can click their name" — IS TRUE
+                    AGAIN FOR THE FIRST TIME. GTC-262 had to qualify it; GTC-294 restores it. And
+                    that changes what kind of sentence belongs here: what needed saying stopped
+                    being an EXCEPTION to the promise and became an EXTRA beside it. The job link
+                    is not a carve-out from the directory any more, it is a separate thing the
+                    host sends herself.
+
+                    ⚠ AND NAMING COORDINATORS IS SAFE HERE, WHICH IS THE DISTINCTION GTC-262'S OWN
+                    COPY COULD NOT MAKE. On the directory page that ticket had to write a sentence
+                    true of two populations it could not tell apart, because a marker saying which
+                    would let an unauthenticated caller enumerate who holds write access to this
+                    event's teams. THE READER OF THIS CARD IS THE HOST. She already knows who her
+                    coordinators are — she appointed them — so naming them discloses nothing and
+                    is simply the clearer sentence. Same fact, different reader, different
+                    constraint.
+                  */}
+                  <p className="text-sm text-gray-600 mb-3">
+                    Coordinators are in there too — their name opens their own ask, like everyone
+                    else&apos;s. What the directory doesn&apos;t carry is the link to their
+                    team&apos;s plan: that one gives write access, so you send it yourself from the
+                    list below.
                   </p>
                   <div className="bg-white rounded-md p-3 mb-3 border border-sage-200">
                     <p className="text-xs text-gray-500 font-mono break-all">
@@ -3018,14 +3087,17 @@ export default function PlanEditorPage() {
         )}
 
         {/* Complete Event Expansion */}
-        {event && (event.status === 'FROZEN' || event.status === 'COMPLETE') && (
+        {event && isSentJson(event) && (
           <SectionExpandModal
             isOpen={expandedSection === 'wrapup'}
             onClose={handleCloseExpansion}
             title="Event Complete"
             icon={<Gift className="w-6 h-6" />}
           >
-            {event.status === 'FROZEN' && !wrapUpResult?.success && (
+            {/* GTC-209: `wrapUpResult` is React state, so a reload or a second tab
+                re-offered the button and the second press sent every guest a second
+                thank-you. `wrappedAt` is the durable fact and outlives both. */}
+            {isCompleteJson(event) && !event.wrappedAt && !wrapUpResult?.success && (
               <div className="space-y-6">
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">
@@ -3071,7 +3143,7 @@ export default function PlanEditorPage() {
               </div>
             )}
 
-            {(event.status === 'COMPLETE' || wrapUpResult?.success) && (
+            {(isCompleteJson(event) || wrapUpResult?.success) && (
               <div className="space-y-6">
                 {wrapUpResult?.success && (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-4">
@@ -3173,7 +3245,9 @@ export default function PlanEditorPage() {
                                   Failed
                                 </span>
                               ) : g.dispatched ? (
-                                <span className="text-xs text-green-600">Sent</span>
+                                <span className="text-xs text-green-600">
+                                  {g.sentByEmail ? THANK_YOU_SENT_BY_EMAIL : 'Sent'}
+                                </span>
                               ) : (
                                 <span className="text-xs text-blue-600">Queued</span>
                               )}
@@ -3218,9 +3292,10 @@ export default function PlanEditorPage() {
           </SectionExpandModal>
         )}
 
-        {/* Revision History Expansion */}
+        {/* Revision History Expansion — gated so even a ?expand=history
+            deep link shows nothing on V2 events (GTC-149) */}
         <SectionExpandModal
-          isOpen={expandedSection === 'history'}
+          isOpen={expandedSection === 'history' && !event?.setup}
           onClose={handleCloseExpansion}
           title="Revision History"
           icon={<Clock className="w-6 h-6" />}

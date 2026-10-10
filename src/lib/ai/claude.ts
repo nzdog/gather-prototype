@@ -20,6 +20,7 @@ export interface ClaudeConfig {
   maxTokens?: number;
   temperature?: number;
   timeout?: number;
+  callSiteLabel?: string;
 }
 
 export interface ClaudeResponse {
@@ -107,14 +108,15 @@ export async function callClaude(
  * Parse JSON response from Claude
  * Handles cases where Claude might wrap JSON in markdown code blocks
  */
-export function parseClaudeJSON<T>(response: ClaudeResponse): T {
+export function parseClaudeJSON<T>(response: ClaudeResponse, callSiteLabel?: string): T {
   if (response.stopReason === 'max_tokens') {
+    const labelSuffix = callSiteLabel ? ` (${callSiteLabel})` : '';
     console.error(
-      '[Claude API] AI response truncated - max_tokens reached. Response length:',
+      `[Claude API] AI response truncated${labelSuffix} - max_tokens reached. Response length:`,
       response.content.length
     );
     throw new Error(
-      'AI response truncated at token limit - increase maxTokens or reduce prompt complexity'
+      `AI response truncated at token limit${labelSuffix} - increase maxTokens or reduce prompt complexity`
     );
   }
 
@@ -146,7 +148,7 @@ export async function callClaudeForJSON<T>(
   config: ClaudeConfig = {}
 ): Promise<T> {
   const response = await callClaude(systemPrompt, userPrompt, config);
-  return parseClaudeJSON<T>(response);
+  return parseClaudeJSON<T>(response, config.callSiteLabel);
 }
 
 /**
