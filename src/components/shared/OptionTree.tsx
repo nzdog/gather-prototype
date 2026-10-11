@@ -37,6 +37,68 @@ function readLevel(selections: OptionTreeSelections, levelIndex: number): Option
 }
 
 /**
+ * The choices a dependent level shows under one ticked option of the first: its own list, less any
+ * choice an earlier ticked option already shows (a choice shows once, under the first; GTC-364).
+ */
+export function shownUnder(
+  levels: OptionTreeLevel[],
+  selections: OptionTreeSelections,
+  levelIndex: number,
+  option: string
+): string[] {
+  const dependsOn = levels[levelIndex]?.dependsOn;
+  const own = dependsOn?.[option];
+  if (!own) return [];
+  const ticked = (levels[0]?.options ?? []).filter((o) =>
+    readLevel(selections, 0).options.includes(o)
+  );
+  if (!ticked.includes(option)) return [];
+  const earlier = new Set(
+    ticked.slice(0, ticked.indexOf(option)).flatMap((o) => dependsOn?.[o] ?? [])
+  );
+  return own.filter((c) => !earlier.has(c));
+}
+
+/**
+ * GTC-379 (item 43): "Select all" — ticks every choice the level shows under `option`, after what
+ * is already ticked. The option itself, the level's other choices and its "Other" text are kept.
+ * A list drawn as radio buttons is returned unchanged.
+ */
+export function selectAll(
+  levels: OptionTreeLevel[],
+  selections: OptionTreeSelections,
+  levelIndex: number,
+  option: string
+): OptionTreeSelections {
+  if (levels[levelIndex]?.multiSelect === false) return selections;
+  const lvlSel = readLevel(selections, levelIndex);
+  const missing = shownUnder(levels, selections, levelIndex, option).filter(
+    (c) => !lvlSel.options.includes(c)
+  );
+  if (missing.length === 0) return selections;
+  return {
+    ...selections,
+    [levelIndex]: { ...lvlSel, options: [...lvlSel.options, ...missing] },
+  };
+}
+
+/** GTC-379 (item 43): "Unselect all" — unticks the choices the level shows under `option` only. */
+export function unselectAll(
+  levels: OptionTreeLevel[],
+  selections: OptionTreeSelections,
+  levelIndex: number,
+  option: string
+): OptionTreeSelections {
+  const shown = new Set(shownUnder(levels, selections, levelIndex, option));
+  const lvlSel = readLevel(selections, levelIndex);
+  if (!lvlSel.options.some((c) => shown.has(c))) return selections;
+  return {
+    ...selections,
+    [levelIndex]: { ...lvlSel, options: lvlSel.options.filter((c) => !shown.has(c)) },
+  };
+}
+
+/**
  * Reusable, fully-controlled option-tree renderer for one category — designed to
  * slot into an accordion panel (one panel per category).
  *
@@ -138,6 +200,33 @@ export default function OptionTree({
     );
   }
 
+  // GTC-379 (item 43, ruling 3): one control heads each ticked option's list of choices, in the
+  // row with its question. It reads "Unselect all" once every choice in that list is ticked. None
+  // on a list drawn as radio buttons, nor while the tree is disabled.
+  function renderSelectAll(levelIndex: number, option: string, choices: string[]) {
+    if (disabled || levels[levelIndex].multiSelect === false || choices.length === 0) return null;
+    const tickedHere = readLevel(selections, levelIndex).options;
+    const allTicked = choices.every((c) => tickedHere.includes(c));
+    const verb = allTicked ? 'Unselect all' : 'Select all';
+    return (
+      <button
+        type="button"
+        data-select-all
+        aria-label={`${verb} under “${option}”`}
+        onClick={() =>
+          emit(
+            allTicked
+              ? unselectAll(levels, selections, levelIndex, option)
+              : selectAll(levels, selections, levelIndex, option)
+          )
+        }
+        className="shrink-0 -my-1 -mr-2 px-2 py-1 rounded text-sm font-medium text-accent hover:underline focus:outline-none focus-visible:underline"
+      >
+        {verb}
+      </button>
+    );
+  }
+
   // GTC-363 (item 20, W12): every type-your-own box reads as "Other". The placeholder
   // still comes from the config.
   function renderOther(levelIndex: number) {
@@ -178,14 +267,10 @@ export default function OptionTree({
   const nested = new Map<string, Map<number, string[]>>();
   const otherUnder = new Map<number, string>();
   for (const i of dependent) {
-    const shown = new Set<string>();
     for (const option of ticked) {
-      const mapped = levels[i].dependsOn?.[option];
-      if (!mapped) continue;
-      const own = mapped.filter((c) => !shown.has(c));
-      own.forEach((c) => shown.add(c));
+      if (!levels[i].dependsOn?.[option]) continue;
       if (!nested.has(option)) nested.set(option, new Map());
-      nested.get(option)!.set(i, own);
+      nested.get(option)!.set(i, shownUnder(levels, selections, i, option));
       otherUnder.set(i, option);
     }
   }
@@ -206,9 +291,10 @@ export default function OptionTree({
                   >
                     {choices.length > 0 && (
                       <>
-                        <p className="text-sm text-gray-700 font-medium mb-2">
-                          {levels[i].question}
-                        </p>
+                        <div className="flex items-baseline justify-between gap-3 mb-2">
+                          <p className="text-sm text-gray-700 font-medium">{levels[i].question}</p>
+                          {renderSelectAll(i, option, choices)}
+                        </div>
                         {choices.map((choice) => renderOption(i, choice))}
                       </>
                     )}

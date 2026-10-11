@@ -45,6 +45,7 @@ import {
   withoutOrphanedChoices,
 } from '../src/lib/ai/config-loader';
 import GlanceBoard from '../src/components/glance/GlanceBoard';
+import { FOOD_CATEGORY_ORDER } from '../src/lib/ai/plan-categories';
 
 const realFetch = globalThis.fetch;
 installProviderTrap();
@@ -121,10 +122,13 @@ const W11 = (q: string) =>
   `Nothing on the menu matches “${q}”. You can add your own in any section’s “Other” box.`;
 const W13 = 'Find someone or something';
 
-/** The food sections Moment 2 shows, in its own order (Moment2Step1Modal's list). */
+/**
+ * The food sections Moment 2 shows, in its own order (Moment2Step1Modal's list). GTC-379 (item 42):
+ * Entrée & Starters first; M6 checks this copy against FOOD_CATEGORY_ORDER (ruling 6).
+ */
 const FOOD = [
-  'mains',
   'entree_starters',
+  'mains',
   'sides_salads',
   'dessert',
   'cake',
@@ -215,17 +219,18 @@ async function runInMemory() {
   );
   assert(
     'M',
-    'M6 "roast": 15 found in on-screen order; 8 show, then W10 for the 7 more',
+    'M6 "roast": 15 found in on-screen order (Entrée & Starters first, GTC-379); 8 show, then W10 for the 7 more; FOOD is the code’s FOOD_CATEGORY_ORDER (ruling 6)',
     ok(
       () =>
+        same(FOOD, [...FOOD_CATEGORY_ORDER]) &&
         find('roast').length === 15 &&
         same(words(find('roast')).slice(0, 6), [
+          'Roasted beetroot and goat cheese',
           'Traditional roast',
           'Roast lamb',
           'Roast chicken',
           'Roast beef',
           'Roast pork',
-          'Roast turkey',
         ]) &&
         MS.MENU_SHOWN === 8 &&
         MS.MENU_WORDS.more(7) === W10(7)

@@ -2224,6 +2224,7 @@
       "furniture_equipment",
       "cleanup"
     ],
+    "upFrontCategories": ["entree_starters"],
     "categories": {
       "mains": {
         "label": "Mains",
@@ -5191,6 +5192,7 @@
       "table_snacks",
       "cleanup"
     ],
+    "upFrontCategories": ["entree_starters"],
     "categories": {
       "mains": {
         "label": "Mains",
@@ -6672,6 +6674,7 @@
       "cake",
       "cleanup"
     ],
+    "upFrontCategories": ["entree_starters"],
     "categories": {
       "table_snacks": {
         "label": "Table Snacks",

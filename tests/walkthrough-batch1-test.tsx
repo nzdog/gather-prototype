@@ -608,7 +608,7 @@ async function main() {
   })();
   assert(
     '26',
-    '26c Moment 2, Christmas: starters second (after Mains); "Show more" holds two — Cake, Breakfast & brunch',
+    '26c Moment 2, Christmas: starters first (above Mains); "Show more" holds two — Cake, Breakfast & brunch (GTC-379 item 42)',
     ok(() => {
       const shown = new Set(upFront('Christmas'));
       const up = order.filter((k) => shown.has(k));
@@ -616,21 +616,27 @@ async function main() {
         (k) => !shown.has(k) && !!CL.getCategoryLevels('Christmas', k)?.length
       );
       return (
-        up[0] === 'mains' &&
-        up[1] === 'entree_starters' &&
+        up[0] === 'entree_starters' &&
+        up[1] === 'mains' &&
         JSON.stringify(more) === JSON.stringify(['cake', 'breakfast_brunch'])
       );
     })
   );
+  // GTC-379 (ruling 1): Casual BBQ, Easter and Farewell show Entrée & Starters up front too.
+  const STARTERS_UP_FRONT = ['Casual BBQ', 'Easter', 'Farewell'];
   assert(
     '26',
-    '26d every other event type shows up front exactly its defaults, as before',
+    '26d Casual BBQ, Easter and Farewell show their defaults then Entrée & Starters; the other six exactly their defaults (GTC-379 ruling 1)',
     ok(() => {
       const types = CL.CONFIG_EVENT_TYPES.filter((t) => t !== 'Christmas' && t !== 'Other');
       return (
         types.length === 9 &&
-        types.every(
-          (t) => JSON.stringify(upFront(t)) === JSON.stringify(CL.getDefaultCategories(t))
+        STARTERS_UP_FRONT.every((t) => types.includes(t)) &&
+        types.every((t) =>
+          STARTERS_UP_FRONT.includes(t)
+            ? JSON.stringify(upFront(t)) ===
+              JSON.stringify([...CL.getDefaultCategories(t), 'entree_starters'])
+            : JSON.stringify(upFront(t)) === JSON.stringify(CL.getDefaultCategories(t))
         )
       );
     })
@@ -681,14 +687,27 @@ async function main() {
       !modalSrc.includes('label="📝 Other"') &&
       !modalSrc.includes('Music, decorations, specific equipment, venue notes')
   );
+  // GTC-379 (item 41): Notes moves to the very bottom, after "📋 Other".
   assert(
     '25',
-    '25b it sits just after Dietary requirements and before the first food section',
+    '25b it sits last, after 📋 Other: Dietary, then the food sections, then 📋 Other, then Notes, and no box after it (GTC-379 item 41)',
     ok(() => {
       const diet = modalSrc.indexOf('<DietaryAccordion');
-      const notes = modalSrc.indexOf('<NotesAccordion');
       const food = modalSrc.indexOf('renderableFoodCategories.map');
-      return diet >= 0 && notes > diet && food > notes;
+      const other = modalSrc.indexOf('id="otherJobsOther"');
+      const notes = modalSrc.indexOf('<NotesAccordion');
+      const end = modalSrc.indexOf('function FoodOptionTreeAccordion');
+      const after = modalSrc.slice(notes + 1, end);
+      return (
+        diet >= 0 &&
+        food > diet &&
+        other > food &&
+        notes > other &&
+        end > notes &&
+        !/<(NotesAccordion|DietaryAccordion|FreeTextAccordion|FoodOptionTreeAccordion|AccordionShell)\b/.test(
+          after
+        )
+      );
     })
   );
   assert(

@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { CATEGORY_EMOJIS, CATEGORY_LABELS } from '@/lib/ai/plan-categories';
+import { CATEGORY_EMOJIS, CATEGORY_LABELS, FOOD_CATEGORY_ORDER } from '@/lib/ai/plan-categories';
 import type { SectionResponse } from '@/lib/ai/plan-input';
 import { itemNameForStorage } from '@/lib/items/name';
 
@@ -80,6 +80,23 @@ export function disposableItemWhere(args: {
   };
 }
 
+/**
+ * GTC-379 (item 42, Q4) — the AI's sections in the questions' order (`FOOD_CATEGORY_ORDER`), so a
+ * new plan reads Entrée & Starters before Mains however the AI ordered them. A key the order does
+ * not know, or none, goes last, in the AI's order. A new array: the input is left as it was.
+ */
+export function sectionsInPlanOrder<S extends { key?: string }>(sections: S[]): S[] {
+  const order: readonly string[] = FOOD_CATEGORY_ORDER;
+  const rank = (s: S) => {
+    const i = order.indexOf(s.key ?? '');
+    return i === -1 ? order.length : i;
+  };
+  return sections
+    .map((section, i) => ({ section, i }))
+    .sort((a, b) => rank(a.section) - rank(b.section) || a.i - b.i)
+    .map(({ section }) => section);
+}
+
 export async function applyPlanSections(
   tx: Tx,
   args: {
@@ -102,7 +119,9 @@ export async function applyPlanSections(
   const replaced = del.count;
 
   let created = 0;
-  for (const section of sections) {
+  // GTC-379: a new team is created in the questions' order. A team found by name keeps its place,
+  // so a plan already drafted keeps its order, even on a full redraft (ruling 2).
+  for (const section of sectionsInPlanOrder(sections)) {
     const label = planCategoryLabel(section);
 
     // Find OR create. The team usually still stands, because the delete above took its

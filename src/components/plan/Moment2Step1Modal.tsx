@@ -30,6 +30,7 @@ import {
   tickFromSearch,
   type MenuRow,
 } from '@/lib/moments/menu-search';
+import { PICKS_WORDS, picksSummary } from '@/lib/moments/picks-summary';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -109,9 +110,10 @@ interface Step1State {
 
 // Canonical food categories rendered as OptionTree accordions, in render order
 // when present in the occasion's defaultCategories.
+// GTC-379 (item 42): Entrée & Starters first, above Mains, as `FOOD_CATEGORY_ORDER` is.
 const OPTION_TREE_FOOD_CATEGORIES = [
-  'mains',
   'entree_starters',
+  'mains',
   'sides_salads',
   'dessert',
   'cake',
@@ -550,6 +552,28 @@ export default function Moment2Step1Modal({
     });
   }, [state.eventType]);
 
+  // GTC-379 (item 44): the summary's lines, from the screen's own state and its own two lists, so
+  // it reads the sections in the order the questions show them, "Show more" ones included.
+  const picksLines = useMemo(
+    () =>
+      state.eventType
+        ? picksSummary({
+            eventType: state.eventType,
+            sections: [...renderableFoodCategories, ...additionalFoodCategories],
+            picks: { ...state.extendedCategoriesData, mains: state.mainsData },
+            dietary: state.dietaryData,
+          })
+        : [],
+    [
+      state.eventType,
+      renderableFoodCategories,
+      additionalFoodCategories,
+      state.extendedCategoriesData,
+      state.mainsData,
+      state.dietaryData,
+    ]
+  );
+
   /*
     [[GTC-373]] (item 23) — "Find a dish". Its rows are the kind's whole menu in the questions' own
     order: the sections up front, then those behind "Show more" (Q1). Empty for "Other" or no kind,
@@ -767,15 +791,6 @@ export default function Moment2Step1Modal({
               data={state.dietaryData}
               onChange={(d) => updateState((prev) => ({ ...prev, dietaryData: d }))}
             />
-            {/* GTC-363 (item 25): the notes box, lifted to just after Dietary and renamed.
-                Still `otherNotes`, under the same id, so what the AI reads is unchanged. */}
-            <NotesAccordion
-              id="other"
-              openSections={openSections}
-              onToggle={handleAccordionToggle}
-              value={state.otherNotes}
-              onChange={(v) => updateState((prev) => ({ ...prev, otherNotes: v }))}
-            />
             {/* Canonical OptionTree food categories shown up front (GTC-363: the defaults,
                 plus any shown up front only). The rest are deferred to "Show more". */}
             {state.eventType &&
@@ -949,6 +964,27 @@ export default function Moment2Step1Modal({
               onToggle={handleAccordionToggle}
               onChange={(d) => updateState((prev) => ({ ...prev, otherJobsOtherData: d }))}
             />
+            {/* GTC-379 (item 41, ruling 4): the notes box last, under a thin line and some space,
+                no words. Still `otherNotes`, under the same id (GTC-363 item 25), so what the AI
+                reads is unchanged. */}
+            <div className="border-t border-gray-200 mt-6 pt-4" aria-hidden="true" />
+            <NotesAccordion
+              id="other"
+              openSections={openSections}
+              onToggle={handleAccordionToggle}
+              value={state.otherNotes}
+              onChange={(v) => updateState((prev) => ({ ...prev, otherNotes: v }))}
+            />
+            {/* GTC-379 (item 44, W4 to W9): what she has picked, under Notes and above the bar.
+                It grows with the page; nothing is added to the bar. */}
+            <div className="mt-6 rounded-lg bg-gray-50 px-4 py-3">
+              <h3 className="text-sm font-medium text-gray-900 mb-2">{PICKS_WORDS.HEADING}</h3>
+              <ul className="space-y-1 text-sm text-gray-700 break-words">
+                {picksLines.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </div>
           </div>
         )}
       </div>

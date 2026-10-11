@@ -28,10 +28,11 @@ export const CATEGORY_LABELS: Record<string, string> = {
   other: 'Other',
 };
 
-// Order in which food categories appear in the modal (and so in the plan).
+// Order in which food categories appear in the modal (and so in the plan). GTC-379 (item 42):
+// Entrée & Starters first, above Mains.
 export const FOOD_CATEGORY_ORDER = [
-  'mains',
   'entree_starters',
+  'mains',
   'sides_salads',
   'dessert',
   'cake',

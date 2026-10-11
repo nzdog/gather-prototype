@@ -17,6 +17,7 @@ import {
   disposableItemWhere,
   planCategoryEmoji,
   planCategoryLabel,
+  sectionsInPlanOrder,
   sweepEmptyGeneratedTeams,
 } from '@/lib/ai/plan-write';
 
@@ -83,8 +84,10 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
     // GTC-237: the sections actually written, filtered once and shared by the
     // write phase and the response — so the preview names what the database
     // holds rather than a parallel mapping of the same payload.
-    const writtenSections = sections.filter(
-      (s) => s && Array.isArray(s.items) && s.items.length > 0
+    // GTC-379 (Q4): in the questions' order, as the plan is written, so the screen just after
+    // Generate shows the order the plan view will.
+    const writtenSections = sectionsInPlanOrder(
+      sections.filter((s) => s && Array.isArray(s.items) && s.items.length > 0)
     );
 
     // Map model response → response shape consumed by Moment2Step2Skeleton.

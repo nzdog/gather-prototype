@@ -109,9 +109,10 @@ async function main() {
   // food keys and which the live route therefore never generates. Iterating the raw
   // defaults here would put two non-food sections into the plan that production never
   // produces — and would inflate the item count with rows that are really jobs.
+  // GTC-379 (Q14): Entrée & Starters first, as the route's order now is.
   const FOOD_CATEGORY_ORDER = [
-    'mains',
     'entree_starters',
+    'mains',
     'sides_salads',
     'dessert',
     'cake',
