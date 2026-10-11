@@ -12,9 +12,17 @@
  *
  * Ready, which holds Send, is given no `onToggle` and never folds (ruling 2 at scoping, Q3); nor
  * does a step an invites-only event does not need (Q4).
+ *
+ * [[GTC-380]] (item 48, PLAN RULINGS 2026-10-11) — A STEP THAT FOLDS SHOWS IT CAN. Its toggle wears
+ * "Show" or "Hide" beside a drawn chevron (`FoldCue`; W1, W2, rulings 3 and 5), at the right of the
+ * row on a desktop and under its text on a phone (ruling 4). The whole title row, tick box
+ * included, shades under a pointer that can hover, closed or open, and never the open contents
+ * (ruling 1); a keyboard sees a sage ring inside the toggle. The tick box sits in a fixed-width
+ * slot, wide enough for the wider of its two words ("Checked"), so every step's cue ends the same
+ * distance from the box's right edge. Ready and the settled steps are as they were.
  */
 
-import { FoldBody, FoldChevron } from '@/components/plan/AccordionShell';
+import { FOLD_ROW_RING, FOLD_ROW_SHADE, FoldBody, FoldCue } from '@/components/plan/AccordionShell';
 import { INVITES_ONLY_WORDS } from '@/lib/setup/invites-only';
 
 /** A closed row's line (W1 to W3): amber, with Moment 2's dot, when something needs her. */
@@ -96,7 +104,11 @@ export default function PreflightStep({
       data-step={n}
       className={`mb-8 border border-gray-200 rounded-lg bg-white scroll-mt-4${settled ? ' opacity-75' : ''}`}
     >
-      <header className={`px-5 pt-5 pb-3${folds && !open ? '' : ' border-b border-gray-100'}`}>
+      <header
+        className={`px-5 pt-5 pb-3${folds && !open ? '' : ' border-b border-gray-100'}${
+          folds ? ` ${open ? 'rounded-t-[7px]' : 'rounded-[7px]'} ${FOLD_ROW_SHADE}` : ''
+        }`}
+      >
         <div className="flex items-start justify-between gap-4">
           {folds ? (
             <h2 className="min-w-0 flex-1">
@@ -105,7 +117,7 @@ export default function PreflightStep({
                 aria-expanded={open}
                 aria-controls={`step-${n}-body`}
                 onClick={onToggle}
-                className="w-full flex items-start justify-between gap-3 text-left"
+                className={`w-full flex flex-col items-start gap-2 rounded text-left sm:flex-row sm:justify-between sm:gap-3 ${FOLD_ROW_RING}`}
               >
                 <span className="block min-w-0">
                   <span className="block text-xs uppercase tracking-wide text-gray-400 mb-1">
@@ -115,7 +127,7 @@ export default function PreflightStep({
                   <span className="block text-sm text-gray-500 mt-1">{blurb}</span>
                   {rowLine}
                 </span>
-                <FoldChevron open={open} className="self-center" />
+                <FoldCue open={open} className="sm:self-center" />
               </button>
             </h2>
           ) : (
@@ -128,7 +140,13 @@ export default function PreflightStep({
               {rowLine}
             </div>
           )}
-          {box}
+          {folds ? (
+            <div data-tick-slot="" className="flex w-[5.25rem] shrink-0 justify-end">
+              {box}
+            </div>
+          ) : (
+            box
+          )}
         </div>
       </header>
       {settled ? null : folds ? (

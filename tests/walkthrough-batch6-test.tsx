@@ -480,18 +480,24 @@ async function runInMemory() {
   assert(
     'E',
     'E1 W15 — an item someone holds: "Roast turkey: Gus Henderson", tappable to his card',
-    same(lines('turkey'), ['Roast turkey: Gus Henderson']) && hits('turkey')[0]?.target === 'pe-gus'
+    same(lines('turkey'), ['Roast turkey: Gus Henderson']) &&
+      hits('turkey')[0]?.target === 'pe-gus' &&
+      // [[GTC-380]] (Q9): the item's own name is a door to the item.
+      hits('turkey')[0]?.itemId === 'i-Roast turkey'
   );
   assert(
     'E',
-    'E2 W16 — an item nobody holds: "Gravy: Nobody yet", not tappable (Q20)',
-    same(lines('gravy'), ['Gravy: Nobody yet']) && hits('gravy')[0]?.target === null
+    'E2 W16 — an item nobody holds: "Gravy: Nobody yet", its name a door to the item (GTC-380 Q9, replacing GTC-373 Q20)',
+    same(lines('gravy'), ['Gravy: Nobody yet']) &&
+      hits('gravy')[0]?.target === null &&
+      hits('gravy')[0]?.itemId === 'i-Gravy'
   );
   assert(
     'E',
     'E3 W17 — an item handed back: "Classic pavlova with cream: Nobody yet (Josie Walker handed it back)"',
     same(lines('pav'), ['Classic pavlova with cream: Nobody yet (Josie Walker handed it back)']) &&
-      hits('pav')[0]?.target === null
+      hits('pav')[0]?.target === null &&
+      hits('pav')[0]?.itemId === 'i-Classic pavlova with cream'
   );
   assert(
     'E',
@@ -534,9 +540,11 @@ async function runInMemory() {
   );
   assert(
     'E',
-    'E9 a raw …/items row is narrowed to name, holder and handed-back, with no other key (Q13; decideByFollowupSentAt never kept)',
+    'E9 a raw …/items row is narrowed to four facts, its id, name, holder and handed-back, with no other key (GTC-380 Q9, replacing Q13’s "no other field"; decideByFollowupSentAt never kept)',
     items.length === 6 &&
-      items.every((i: any) => same(Object.keys(i).sort(), ['handedBack', 'holderId', 'name'])) &&
+      items.every((i: any) =>
+        same(Object.keys(i).sort(), ['handedBack', 'holderId', 'id', 'name'])
+      ) &&
       !JSON.stringify(items).includes('decideByFollowupSentAt')
   );
 
@@ -621,7 +629,7 @@ async function runInMemory() {
   const fetches = island.match(/\bfetch\(/g) ?? [];
   assert(
     'B',
-    'B4 the island’s source: a client file whose one fetch is a GET of …/items; no method, popovertarget, setInterval, data-strip-/data-person-event-id attribute written, or <a> (Q13, Q19)',
+    'B4 the island’s source: a client file whose one fetch is a GET of …/items; no method, popovertarget, setInterval or data-strip-/data-person-event-id attribute written; its one <a> is the item door (Q13; GTC-380 Q9, replacing Q19’s "no door opens")',
     island.length > 0 &&
       /^\s*['"]use client['"]/.test(read('src/components/glance/EventSearch.tsx')) &&
       fetches.length === 1 &&
@@ -630,7 +638,8 @@ async function runInMemory() {
       !/popovertarget/i.test(island) &&
       !/setInterval/.test(island) &&
       !/data-(strip-[a-z-]+|person-event-id)=\{/.test(island) &&
-      !/<a\b/.test(island)
+      (island.match(/<a\b/g) ?? []).length === 1 &&
+      /<a\b[\s\S]{0,300}?href=\{itemDoorHref\(/.test(island)
   );
 }
 
@@ -1100,26 +1109,71 @@ async function runLive() {
       ]);
     detail.LB3 = JSON.stringify(said);
 
-    // LB4 — a tap on Gus: his strip centred and ringed, the ring gone after, no door opened.
+    // LB4 — [[GTC-380]] (Q7, replacing GTC-373 Q19): a tap on Gus, whose strip has a panel, opens
+    // that panel as a tap on his row does: his strip centred and focused, his reading panel showing,
+    // the search still open with its words and results. The panel is closed with its own Close
+    // button, which acts on nothing, and the search is as it was.
     const typedG = await typeInto(IN, 'gus');
+    const resultsG = typedG ? await results() : [];
     const tapG = typedG
       ? await tap(
           `document.querySelector('[data-event-search] [data-search-target="${gus}"]')`,
           1000
         )
       : 'absent';
-    const ringed =
-      await ev<boolean>(`(() => { const s = document.querySelector('[data-person-event-id="${gus}"]'); if (!s) return false;
+    const opened = await ev<{ centred: boolean; focused: boolean; panel: boolean }>(`(() => {
+      const s = document.querySelector('[data-person-event-id="${gus}"]'); if (!s) return { centred: false, focused: false, panel: false };
       const b = s.getBoundingClientRect(); const cy = b.top + b.height / 2; const h = window.innerHeight;
-      return cy > h * 0.2 && cy < h * 0.8 && s.style.outline !== '' && ![...document.querySelectorAll('[role="dialog"]')].some(d => d.checkVisibility()); })()`);
-    await sleep(2500);
-    const unringed = await ev<boolean>(
-      `document.querySelector('[data-person-event-id="${gus}"]')?.style.outline === ''`
-    );
+      const p = document.querySelector('[data-reading-panel="Gus Henderson"]');
+      return { centred: cy > h * 0.2 && cy < h * 0.8, focused: document.activeElement === s, panel: !!p && p.checkVisibility() }; })()`);
+    const keptG =
+      (await ev<string>(`document.querySelector('${IN}')?.value ?? ''`)) === 'gus' &&
+      resultsG.length > 0 &&
+      same(await results(), resultsG);
+    const closeG = opened.panel
+      ? await tap(
+          `document.querySelector('[data-reading-panel="Gus Henderson"] button[aria-label="Close"]')`,
+          600
+        )
+      : 'absent';
+    const afterG =
+      !(await ev<boolean>(
+        `[...document.querySelectorAll('[role="dialog"]')].some(d => d.checkVisibility())`
+      )) &&
+      (await ev<string>(`document.querySelector('${IN}')?.value ?? ''`)) === 'gus' &&
+      same(await results(), resultsG);
     r.LB4 =
       tapG === null &&
-      ringed &&
-      unringed &&
+      opened.centred &&
+      opened.focused &&
+      opened.panel &&
+      keptG &&
+      closeG === null &&
+      afterG;
+    detail.LB4 = JSON.stringify({ tapG, opened, keptG, closeG, afterG, resultsG });
+
+    // LB4b — [[GTC-380]] (Q7): a strip that opens nothing (Rewi, not coming) keeps Q19's ring:
+    // centred and ringed, the ring gone after 2.5 s, no dialog showing.
+    const rewi = pe[`${evB.id}:Rewi Tane`];
+    const typedR = await typeInto(IN, 'rewi');
+    const tapR = typedR
+      ? await tap(
+          `document.querySelector('[data-event-search] [data-search-target="${rewi}"]')`,
+          1000
+        )
+      : 'absent';
+    const ringedR =
+      await ev<boolean>(`(() => { const s = document.querySelector('[data-person-event-id="${rewi}"]'); if (!s) return false;
+      const b = s.getBoundingClientRect(); const cy = b.top + b.height / 2; const h = window.innerHeight;
+      return s.tagName === 'DIV' && cy > h * 0.2 && cy < h * 0.8 && s.style.outline !== '' && ![...document.querySelectorAll('[role="dialog"]')].some(d => d.checkVisibility()); })()`);
+    await sleep(2500);
+    const unringedR = await ev<boolean>(
+      `document.querySelector('[data-person-event-id="${rewi}"]')?.style.outline === ''`
+    );
+    r.LB4b =
+      tapR === null &&
+      ringedR &&
+      unringedR &&
       !(await ev<boolean>(
         `!![...document.querySelectorAll('[role="dialog"]')].some(d => d.checkVisibility())`
       ));
@@ -1207,7 +1261,11 @@ async function runLive() {
     ['LB3', 'LB3 turkey, gravy, pav and henderson read as W15 to W18 and W20'],
     [
       'LB4',
-      'LB4 a tap on Gus: his strip centred and ringed, the ring gone after 2.5 s, no door opened (Q19)',
+      'LB4 a tap on Gus opens his panel as a tap on his row does: his strip centred and focused, the panel showing, the search kept; closed, the search as it was (GTC-380 Q7, replacing Q19)',
+    ],
+    [
+      'LB4b',
+      'LB4b a tap on Rewi (not coming, a sealed strip): centred and ringed, the ring gone after 2.5 s, no dialog showing (Q19’s ring, kept where a row opens nothing)',
     ],
     [
       'LB5',

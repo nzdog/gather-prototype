@@ -29,7 +29,7 @@ import Moment3AssignView, {
 } from '@/components/plan/Moment3AssignView';
 import type { PanelHouseholdInput } from '@/lib/moment3/people';
 import { M3_WORDS } from '@/lib/moment3/words';
-import { boardHref } from '@/lib/events/home-href';
+import { ITEM_PARAM, boardHref } from '@/lib/events/home-href';
 import { holdNotice, holdThePlan, type HoldNotice } from '@/lib/moment3/hold';
 import {
   INVITES_ONLY_WORDS,
@@ -342,6 +342,8 @@ export default function EventSetupPage() {
   // [[GTC-375]] (W2): a plan put away, waiting for "Let’s do this →" to bring it back.
   const [planWaiting, setPlanWaiting] = useState(false);
   const [holdNoticeShown, setHoldNoticeShown] = useState<HoldNotice | null>(null);
+  // [[GTC-380]] (item 50, Q10) — the item the board's search asked for, for Moment 3, once.
+  const [arriveAtItem, setArriveAtItem] = useState<string | null>(null);
 
   /**
    * [[GTC-360]] — "MOVE ON →" HOLDS THE PLAN, THEN GOES ON. Founder: *"On "Move on" from Moment 3
@@ -504,9 +506,11 @@ export default function EventSetupPage() {
          * stored state as it always has. This page reads no `useSearchParams` (KB-003).
          */
         const at = new URLSearchParams(window.location.search).get('at');
+        // [[GTC-380]] (Q10): the board's search asks for one item the same way, read once here.
+        const askedItem = new URLSearchParams(window.location.search).get(ITEM_PARAM);
         const asked = requestedStage(at, { hasPlan: hasGeneratedPlan(loadedItems) });
         if (asked) stage = asked;
-        if (at !== null) {
+        if (at !== null || askedItem !== null) {
           window.history.replaceState(window.history.state, '', window.location.pathname);
         }
         /*
@@ -530,6 +534,8 @@ export default function EventSetupPage() {
         }
         if (stage === 'moment3') {
           setMoment3Data(await loadMoment3Data());
+          // [[GTC-380]] (Q10): only when the page opens on Moment 3.
+          if (askedItem) setArriveAtItem(askedItem);
         }
         // [[GTC-375]] (W2): on an invites-only event's opening, whether a plan is put away.
         if (stage === 'moment2-opening' && loadedEvent.setup?.invitesOnly) {
@@ -843,6 +849,15 @@ export default function EventSetupPage() {
           : (event.setup?.eventTypeOther ?? null),
       }
     : undefined;
+
+  /*
+   * [[GTC-380]] (Q10) — the item is handed to Moment 3 once. By the time this runs Moment 3 is on
+   * screen and its own arrival has used it (a child's effects run before its parent's), so a later
+   * visit to Moment 3 does not bring it back.
+   */
+  useEffect(() => {
+    if (!loading && showMoment3 && moment3Data && arriveAtItem) setArriveAtItem(null);
+  }, [loading, showMoment3, moment3Data, arriveAtItem]);
 
   if (loading) {
     return (
@@ -1167,6 +1182,7 @@ export default function EventSetupPage() {
           holdNotice={holdNoticeShown}
           stripDoors={doorsFor(3)}
           details={details}
+          arriveAtItem={arriveAtItem}
         />
       </>
     );

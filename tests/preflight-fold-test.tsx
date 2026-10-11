@@ -225,11 +225,20 @@ async function runInMemory() {
       : '';
   const buttons = (h: string) => [...h.matchAll(/<button[^>]*>([\s\S]*?)<\/button>/g)];
   const toggle = (h: string) => buttons(h).find((m) => /aria-expanded=/.test(m[0]));
+  /*
+   * [[GTC-380]] (W1, W2; rulings 1, 3 and 5's Q5) — the cue: "Show" or "Hide" beside a drawn
+   * chevron, inside the toggle, both hidden from screen readers; the shade on the whole title row
+   * (the header, tick box included), for a pointer that can hover only.
+   */
+  const cueTag = (h: string) => h.match(/<span([^>]*\bdata-fold-cue="[^"]*"[^>]*)>/)?.[1] ?? '';
+  const SHADE = /\[@media\(hover:hover\)\]:hover:bg-/;
+  const PLAIN_HOVER_BG = /(^|[\s"])hover:bg-/;
+  const headerClass = (h: string) => h.match(/<header[^>]*class="([^"]*)"/)?.[1] ?? '';
   const closed = step({ open: false, onToggle: () => {} });
   const open = step({ open: true, onToggle: () => {} });
   assert(
     'R',
-    'R1 a closed step: section step-2, one toggle (aria-expanded false) holding "Step 2 of 5", the title and the blurb; the fold shut (0fr); the ▾ unturned; its content still there',
+    'R1 a closed step: section step-2, one toggle (aria-expanded false) holding "Step 2 of 5", the title and the blurb; the fold shut (0fr); the cue "Show" beside the drawn chevron, unturned, both hidden from screen readers (GTC-380 W1, rulings 3 and 5); its content still there',
     ok(() => {
       const t = toggle(closed);
       const words = t ? text(t[1]) : '';
@@ -241,7 +250,11 @@ async function runInMemory() {
         words.includes('Step 2 of 5') &&
         words.includes('Dietary needs') &&
         words.includes('BLURB-X') &&
-        t[1].includes('▾') &&
+        /aria-hidden="true"/.test(cueTag(t[1])) &&
+        />Show</.test(t[1]) &&
+        !/>Hide</.test(t[1]) &&
+        /<svg\b/.test(t[1]) &&
+        !t[1].includes('▾') &&
         !t[1].includes('rotate-180') &&
         /grid-template-rows:\s*0fr/.test(closed) &&
         closed.includes('INSIDE-X')
@@ -250,13 +263,16 @@ async function runInMemory() {
   );
   assert(
     'R',
-    'R2 an open step: aria-expanded true, the fold open (1fr), the ▾ turned',
+    'R2 an open step: aria-expanded true, the fold open (1fr), the cue "Hide" and the chevron turned (GTC-380 W2, ruling 3)',
     ok(() => {
       const t = toggle(open);
       return (
         !!t &&
         /aria-expanded="true"/.test(t[0]) &&
-        t[1].includes('rotate-180') &&
+        /aria-hidden="true"/.test(cueTag(t[1])) &&
+        />Hide</.test(t[1]) &&
+        !/>Show</.test(t[1]) &&
+        /<svg[^>]*rotate-180/.test(t[1]) &&
         /grid-template-rows:\s*1fr/.test(open) &&
         open.includes('INSIDE-X')
       );
@@ -264,7 +280,7 @@ async function runInMemory() {
   );
   assert(
     'R',
-    'R3 the tick box sits in the header, outside every button, labelled "Checked" (or "Settled" when given)',
+    'R3 the tick box sits in the header, outside every button, labelled "Checked" (or "Settled" when given); the header, tick box and all, is the shaded title row, for a pointer that can hover only, closed and open, and the open contents never shade (GTC-380 ruling 1)',
     ok(() => {
       const settledLabel = step({ open: false, onToggle: () => {}, checkLabel: 'Settled' });
       const header = closed.match(/<header[\s\S]*?<\/header>/)?.[0] ?? '';
@@ -276,13 +292,18 @@ async function runInMemory() {
         ) &&
         /<label[^>]*>[\s\S]*?<input[^>]*type="checkbox"[\s\S]*?Settled[\s\S]*?<\/label>/.test(
           settledLabel
-        )
+        ) &&
+        SHADE.test(headerClass(closed)) &&
+        !PLAIN_HOVER_BG.test(headerClass(closed)) &&
+        SHADE.test(headerClass(open)) &&
+        open.indexOf('id="step-2-body"') > open.indexOf('</header>') &&
+        !/hover:bg-/.test(open.slice(open.indexOf('id="step-2-body"')))
       );
     })
   );
   assert(
     'R',
-    'R4 a settled step (invites only): no toggle, W11 in place of the blurb, the box ticked and disabled, nothing inside',
+    'R4 a settled step (invites only): no toggle, W11 in place of the blurb, the box ticked and disabled, nothing inside; no cue, no chevron, no shade (GTC-380 ruling 1)',
     ok(() => {
       const s = step({ settled: true, open: false, onToggle: () => {} });
       return (
@@ -293,13 +314,17 @@ async function runInMemory() {
         /<input[^>]*type="checkbox"[^>]*checked=""[^>]*disabled=""|<input[^>]*type="checkbox"[^>]*disabled=""[^>]*checked=""/.test(
           s
         ) &&
-        !s.includes('INSIDE-X')
+        !s.includes('INSIDE-X') &&
+        !/data-fold-cue/.test(s) &&
+        !/>(Show|Hide)</.test(s) &&
+        !/<svg\b/.test(s) &&
+        !/hover:bg-/.test(s)
       );
     })
   );
   assert(
     'R',
-    'R5 Ready (no onToggle): no toggle, no ▾, its content shown, no fold',
+    'R5 Ready (no onToggle): no toggle, no ▾, its content shown, no fold; no cue, no chevron, no shade (GTC-380 ruling 1)',
     ok(() => {
       const r = step({ n: 5, title: 'Ready', blurb: BLURBS[4] });
       return (
@@ -308,7 +333,11 @@ async function runInMemory() {
         !/aria-expanded/.test(r) &&
         !r.includes('▾') &&
         r.includes('INSIDE-X') &&
-        !/grid-template-rows/.test(r)
+        !/grid-template-rows/.test(r) &&
+        !/data-fold-cue/.test(r) &&
+        !/>(Show|Hide)</.test(r) &&
+        !/<svg\b/.test(r) &&
+        !/hover:bg-/.test(r)
       );
     })
   );
@@ -356,20 +385,23 @@ async function runInMemory() {
   const asSrc = codeOnly(read('src/components/plan/AccordionShell.tsx'));
   assert(
     'R',
-    'R8 the step’s ▾ and fold are AccordionShell’s own: FoldChevron and FoldBody, exported there, used by both (Q1)',
+    'R8 the step’s cue and fold are AccordionShell’s own: FoldCue and FoldBody, exported there and used by the steps; the shell keeps FoldChevron on its default path and wears FoldCue when opted in (GTC-380 Q6, replacing GTC-377 Q1 for the pre-flight)',
     psSrc.length > 0 &&
       /import\s*\{[^}]*\bFoldBody\b[^}]*\}\s*from\s*'@\/components\/plan\/AccordionShell'/.test(
         psSrc
       ) &&
-      /import\s*\{[^}]*\bFoldChevron\b[^}]*\}\s*from\s*'@\/components\/plan\/AccordionShell'/.test(
+      /import\s*\{[^}]*\bFoldCue\b[^}]*\}\s*from\s*'@\/components\/plan\/AccordionShell'/.test(
         psSrc
       ) &&
       /<FoldBody\b/.test(psSrc) &&
-      /<FoldChevron\b/.test(psSrc) &&
+      /<FoldCue\b/.test(psSrc) &&
+      !/<FoldChevron\b/.test(psSrc) &&
       /export function FoldChevron\b/.test(asSrc) &&
       /export function FoldBody\b/.test(asSrc) &&
+      /export function FoldCue\b/.test(asSrc) &&
       /<FoldBody\b/.test(asSrc) &&
-      /<FoldChevron\b/.test(asSrc)
+      /<FoldChevron\b/.test(asSrc) &&
+      /<FoldCue\b/.test(asSrc)
   );
 
   // ── S — the page's source ──────────────────────────────────────────────────

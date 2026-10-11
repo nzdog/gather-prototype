@@ -1,5 +1,7 @@
 'use client';
 
+import { ChevronDown } from 'lucide-react';
+
 /**
  * The accordion shell.
  *
@@ -41,6 +43,39 @@ export function FoldChevron({ open, className }: { open: boolean; className?: st
   );
 }
 
+/** [[GTC-380]] W1 and W2 — the cue's words, closed and open. */
+export const FOLD_WORDS = { SHOW: 'Show', HIDE: 'Hide' } as const;
+
+/**
+ * [[GTC-380]] (item 48; rulings 3 and 5) — the pre-flight's cue that a box opens: "Show" or "Hide"
+ * beside a drawn chevron (lucide's ChevronDown, 20px, dark grey), turned when open. Both are for
+ * the eye only (`aria-hidden`): the row's own name is read, and `aria-expanded` says whether it is
+ * open (Q5). Moment 2's boxes keep `FoldChevron` (Q6).
+ */
+export function FoldCue({ open, className }: { open: boolean; className?: string }) {
+  return (
+    <span
+      data-fold-cue=""
+      aria-hidden="true"
+      className={`flex shrink-0 items-center gap-1 text-sm font-medium text-gray-700${className ? ` ${className}` : ''}`}
+    >
+      <span>{open ? FOLD_WORDS.HIDE : FOLD_WORDS.SHOW}</span>
+      <ChevronDown
+        strokeWidth={2.25}
+        className={`h-5 w-5 transition-transform duration-200${open ? ' rotate-180' : ''}`}
+      />
+    </span>
+  );
+}
+
+/**
+ * [[GTC-380]] (ruling 1, C4) — a fold-out row's shade, only where a pointer can hover, so a touch
+ * screen never keeps a tapped row grey; and the sage ring a keyboard sees inside it (Q4).
+ */
+export const FOLD_ROW_SHADE = '[@media(hover:hover)]:hover:bg-gray-100';
+export const FOLD_ROW_RING =
+  'focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent';
+
 /** The open box is never measured: a grid row moves between 0fr and 1fr (GTC-364). */
 export function FoldBody({
   open,
@@ -70,6 +105,7 @@ export default function AccordionShell({
   stillDeciding = false,
   onStillDecidingToggle,
   headerHint,
+  showHide = false,
   children,
 }: {
   id: string;
@@ -81,6 +117,11 @@ export default function AccordionShell({
   onStillDecidingToggle?: () => void;
   /** Optional indicator rendered beside the label (e.g. "Needs confirmation") */
   headerHint?: React.ReactNode;
+  /**
+   * [[GTC-380]] (Q6) — the pre-flight's household rows: the cue, the shade and the ring. Left out
+   * (Moment 2), the shell renders exactly as before.
+   */
+  showHide?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -94,7 +135,11 @@ export default function AccordionShell({
         type="button"
         aria-expanded={open}
         onClick={onToggle}
-        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
+        className={
+          showHide
+            ? `w-full flex items-center justify-between gap-3 px-4 py-3 text-left ${open ? 'rounded-t-[7px]' : 'rounded-[7px]'} ${FOLD_ROW_SHADE} ${FOLD_ROW_RING}`
+            : 'w-full flex items-center justify-between gap-3 px-4 py-3 text-left'
+        }
       >
         <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
           <span className={`font-medium ${stillDeciding ? 'text-gray-400' : 'text-gray-900'}`}>
@@ -103,7 +148,7 @@ export default function AccordionShell({
           {headerHint}
           {stillDeciding && <span className="text-xs text-gray-500">{STILL_DECIDING_HINT}</span>}
         </span>
-        <FoldChevron open={open} />
+        {showHide ? <FoldCue open={open} /> : <FoldChevron open={open} />}
       </button>
       <FoldBody open={open}>
         <div className="px-4 pb-4">

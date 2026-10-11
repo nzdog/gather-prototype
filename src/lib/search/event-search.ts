@@ -9,7 +9,8 @@
  * moment it arrives to each item's name, its holder's person id and whether they handed it back
  * (`narrowItems`), so no other field of the row stays in the page; and the people from the board's
  * own payload. Outside Ruling 1's fence, as the print's `src/lib/print/item-list.ts` is; the island
- * that uses it, `EventSearch.tsx`, is inside it.
+ * that uses it, `EventSearch.tsx`, is inside it. [[GTC-380]] (Q9) adds a fourth fact, the item's
+ * id, for its door to Moment 3.
  *
  * WHAT EACH RESULT SAYS (Q14 to Q18): items first, then people, in plan and board order. An item
  * names who holds it (W15), "Nobody yet" (W16), or who handed it back (W17); a person names what they
@@ -68,8 +69,9 @@ export interface SearchPerson {
   justAttending: boolean;
 }
 
-/** All the search keeps of an item (Q13). */
+/** All the search keeps of an item (Q13; [[GTC-380]] Q9 adds its id, for its door). */
 export interface SearchItem {
+  id: string;
   name: string;
   holderId: string | null;
   handedBack: boolean;
@@ -84,16 +86,32 @@ export interface EventHit {
   answer: string;
   /** The strip a tap goes to (Q19); null when nobody holds the item (Q20). */
   target: string | null;
+  /** [[GTC-380]] (Q9) — an item row: the item its name is a door to, whoever holds it. */
+  itemId?: string;
+  /**
+   * [[GTC-380]] (ruling 2) — a person holding items: `answer` in pieces, each item's name with its
+   * id (a door), the ", " between and " (handed it back)" with none. Joined, exactly `answer`.
+   */
+  parts?: AnswerPart[];
+}
+
+export interface AnswerPart {
+  text: string;
+  itemId?: string;
 }
 
 const text = (v: unknown): string | null => (typeof v === 'string' ? v : null);
 
-/** Q13 — the item list, down to the three facts the search shows, the moment it arrives. */
+/**
+ * Q13 — the item list, down to the four facts the search keeps (its id, name, holder and
+ * handed-back; [[GTC-380]] added the id), the moment it arrives.
+ */
 export function narrowItems(raw: unknown[]): SearchItem[] {
   return raw.map((r) => {
     const row = (r ?? {}) as Record<string, any>;
     const held = (row.assignment ?? null) as Record<string, any> | null;
     return {
+      id: text(row.id) ?? '',
       name: text(row.name) ?? '',
       holderId: held ? (text(held.person?.id) ?? text(held.personId)) : null,
       handedBack: held?.response === 'DECLINED',
@@ -126,11 +144,19 @@ export function findInEvent(
         ? `${EVENT_WORDS.NOBODY_YET} (${holder.name} ${EVENT_WORDS.HANDED_BACK})`
         : holder.name;
     const target = holder && !item.handedBack ? holder.personEventId : null;
-    hits.push({ kind: 'item', key: `item:${i}`, words: item.name, answer, target });
+    hits.push({
+      kind: 'item',
+      key: `item:${i}`,
+      words: item.name,
+      answer,
+      target,
+      itemId: item.id,
+    });
   });
   for (const person of people) {
     if (!matchesAll(person.name, terms)) continue;
     const held = items.filter((item) => item.holderId === person.personId);
+    const listsItems = !opts.invitesOnly && person.state !== 'OUT' && held.length > 0;
     const answer = opts.invitesOnly
       ? person.state === 'OUT'
         ? EVENT_WORDS.NOT_COMING
@@ -154,9 +180,24 @@ export function findInEvent(
       words: person.name,
       answer,
       target: person.personEventId,
+      ...(listsItems ? { parts: heldParts(held) } : {}),
     });
   }
   return hits;
+}
+
+/**
+ * [[GTC-380]] (ruling 2) — the held items' line in pieces; joined, it is the answer letter for
+ * letter.
+ */
+function heldParts(held: readonly SearchItem[]): AnswerPart[] {
+  const parts: AnswerPart[] = [];
+  held.forEach((item, i) => {
+    if (i > 0) parts.push({ text: ', ' });
+    parts.push({ text: item.name, itemId: item.id });
+    if (item.handedBack) parts.push({ text: ` (${EVENT_WORDS.HANDED_BACK})` });
+  });
+  return parts;
 }
 
 /** A result as one line: "Roast turkey: Gus Henderson". */

@@ -510,7 +510,7 @@ const created = {
 const HELPERS = `
 window.__hdr = (label) => [...document.querySelectorAll('div.rounded-lg > button')].find((b) => b.innerText.includes(label));
 window.__box = (label) => { const b = window.__hdr(label); return b ? b.parentElement : null; };
-window.__isOpen = (label) => window.__box(label).getBoundingClientRect().height > 70;
+window.__isOpen = (label) => window.__hdr(label)?.getAttribute('aria-expanded') === 'true';
 window.__tag = (el, name) => { document.querySelectorAll('[data-t="' + name + '"]').forEach((e) => e.removeAttribute('data-t')); if (!el) return false; el.setAttribute('data-t', name); return true; };
 window.__within = (label, sel, text) => [...window.__box(label).querySelectorAll(sel)].find((e) => (e.innerText || '').trim() === text || e.getAttribute('placeholder') === text);
 window.__hidden = (box) => { const r = box.getBoundingClientRect(); let worst = 0;
@@ -838,12 +838,20 @@ async function runLive() {
           (await ev<number>(`window.__hidden(window.__box('Jo B2'))`)) <= 1
         );
       }
+      // [[GTC-380]] (C9): Jo's row must really be open before the jump. The helper used to call a
+      // row open when it was taller than 70px, so a closed row that wraps to two lines read as
+      // open; it now reads the row's own aria-expanded (ruling 6), the same flag the check below
+      // reads.
+      await ensure('Jo B2', true);
+      const joOpen = await ev<boolean>(
+        `window.__hdr('Jo B2')?.getAttribute('aria-expanded') === 'true'`
+      );
       const r = await jump('Jo B2', 'Gus B2');
       assert(
         'C',
         `${tag}: pre-flight, with Jo's household open, opening Gus's leaves its title row where it was`,
-        r.why === null && r.moved <= 2,
-        JSON.stringify(r)
+        joOpen && r.why === null && r.moved <= 2,
+        JSON.stringify({ joOpen, ...r })
       );
     }
 

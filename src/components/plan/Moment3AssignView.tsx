@@ -63,6 +63,8 @@ import {
   type Selection,
 } from '@/lib/moment3/assigning';
 import type { HoldNotice } from '@/lib/moment3/hold';
+import { boardHref } from '@/lib/events/home-href';
+import { STRIP_WORDS } from '@/lib/moments/strip';
 
 export interface Moment3Item {
   id: string;
@@ -107,9 +109,35 @@ interface Moment3AssignViewProps {
   stripDoors?: Partial<Record<1 | 2 | 3 | 4, ArcDoor>>;
   /** [[GTC-368]] (item 17): the event's name and its details (W10, a row of its own, Q1). */
   details?: EventDetailsFacts;
+  /**
+   * [[GTC-380]] (item 50, Q10) — the item the board's search asked for, handed over once on
+   * arrival: brought to the middle and outlined, nothing picked.
+   */
+  arriveAtItem?: string | null;
 }
 
 const RECHECK_DEBOUNCE_MS = 1000;
+
+/** [[GTC-380]] (Q10) — how long the arriving item stays outlined, as the search rings a strip. */
+const ARRIVAL_OUTLINE_MS = 2000;
+
+/**
+ * [[GTC-380]] (item 50, Q10, founder ruling 1 at scoping) — the item the board's search opened,
+ * brought to the middle of the screen and outlined for a couple of seconds, the way the board
+ * rings a person's strip. Nothing is picked, saved, focused or asked: she taps it herself if she
+ * wants to give it to someone else.
+ */
+function bringItemIntoView(itemId: string) {
+  const row = document.querySelector<HTMLElement>(`[data-m3-item="${CSS.escape(itemId)}"]`);
+  if (!row) return;
+  row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  row.style.outline = '2px solid #2c2c2a';
+  row.style.outlineOffset = '2px';
+  window.setTimeout(() => {
+    row.style.outline = '';
+    row.style.outlineOffset = '';
+  }, ARRIVAL_OUTLINE_MS);
+}
 
 /** A copy of `map` without `key`. */
 function without<T>(map: Record<string, T>, key: string): Record<string, T> {
@@ -155,6 +183,7 @@ export default function Moment3AssignView({
   holdNotice = null,
   stripDoors,
   details,
+  arriveAtItem = null,
 }: Moment3AssignViewProps) {
   const toast = useToast();
   const [holders, setHolders] = useState<Record<string, Moment3Holder | null>>(initialHolders);
@@ -184,6 +213,12 @@ export default function Moment3AssignView({
     },
     []
   );
+
+  // [[GTC-380]] (Q10) — on arrival from the board's search, once: the item it asked for.
+  useEffect(() => {
+    if (arriveAtItem) bringItemIntoView(arriveAtItem);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // [[GTC-365]] Q8 — Escape unpicks a picked person wherever the focus is.
   useEffect(() => {
@@ -407,6 +442,39 @@ export default function Moment3AssignView({
       </div>
     ) : null;
 
+  /*
+   * [[GTC-380]] (item 51, Q11, W3, ruling 4) — once the invitations have gone, "← Back to the
+   * board" beside "← Back to the plan" (stacked at the left on a phone, with less padding, so the
+   * bar stays under the completion panel's 96px). A plain link: nothing is saved, held or asked.
+   * Before the press the bar is exactly as it was. Worked out here, above the return, so the bar's
+   * own markup holds no condition (moment-three F11).
+   */
+  const barBack = event.sentAt ? (
+    <div className="flex flex-col items-start sm:flex-row sm:items-center sm:gap-1">
+      <button
+        type="button"
+        onClick={onBack}
+        className="text-sm text-gray-600 hover:text-gray-900 px-3 py-1 sm:py-2"
+      >
+        {M3_WORDS.BACK_TO_PLAN}
+      </button>
+      <a
+        href={boardHref(eventId)}
+        className="text-sm text-gray-600 hover:text-gray-900 px-3 py-1 sm:py-2"
+      >
+        {STRIP_WORDS.BACK_TO_BOARD}
+      </a>
+    </div>
+  ) : (
+    <button
+      type="button"
+      onClick={onBack}
+      className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2"
+    >
+      {M3_WORDS.BACK_TO_PLAN}
+    </button>
+  );
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-5xl mx-auto px-6 py-6 pb-40">
@@ -497,6 +565,7 @@ export default function Moment3AssignView({
                         return (
                           <li
                             key={item.id}
+                            data-m3-item={item.id}
                             aria-busy={isPending || undefined}
                             // Q12, A: a given item is the soft blue (GIVEN_ROW), never the board's green.
                             style={
@@ -662,13 +731,7 @@ export default function Moment3AssignView({
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4">
         {pickedRow}
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={onBack}
-            className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2"
-          >
-            {M3_WORDS.BACK_TO_PLAN}
-          </button>
+          {barBack}
           <button
             type="button"
             data-m3="all-sorted"

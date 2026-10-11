@@ -46,6 +46,16 @@ export function planDoorHref(eventId: string): string {
   return `/plan/${eventId}/setup`;
 }
 
+/**
+ * [[GTC-380]] (item 50, Q9, Q10) — the board search's door to one item: Moment 3, with the item
+ * brought to the middle and outlined. The setup page reads `ITEM_PARAM` once on arrival and puts
+ * the address back; it asks for nothing else, and nothing is written.
+ */
+export const ITEM_PARAM = 'item';
+export function itemDoorHref(eventId: string, itemId: string): string {
+  return `/plan/${eventId}/setup?${ITEM_PARAM}=${encodeURIComponent(itemId)}`;
+}
+
 /** To the old dashboard, the back room for what only it has (R2). */
 export const BACK_ROOM_LINK = 'Invites & people';
 export function backRoomHref(eventId: string): string {

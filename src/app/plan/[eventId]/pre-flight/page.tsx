@@ -136,7 +136,6 @@ interface PreFlightData {
     criticalUnassignedCount: number;
     complianceRate: number;
     criticalGaps: Array<{ itemId: string; itemName: string }>;
-    warnings: Array<{ type: string; message: string; details: string[] }>;
   };
   dietary: DietaryData;
   households: HouseholdView[];
@@ -579,21 +578,8 @@ export default function PreFlightPage() {
               </p>
             </>
           )}
-
-          {coverage.warnings.length > 0 && (
-            <details className="mt-4 text-sm">
-              <summary className="cursor-pointer text-gray-500">
-                The sweep&rsquo;s own wording ({coverage.warnings.length})
-              </summary>
-              <ul className="mt-2 space-y-2">
-                {coverage.warnings.map((w) => (
-                  <li key={w.type} className="text-gray-600">
-                    {w.message}
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
+          {/* [[GTC-380]] (item 46, Q1): step 1's own numbers say it; the route still sends the
+              readiness check's lines, and nothing on this page reads them. */}
         </Step>
 
         {/* ── 2. Dietary ──────────────────────────────────────────────────── */}
@@ -674,6 +660,7 @@ export default function PreFlightPage() {
                   key={h.id}
                   id={h.id}
                   label={`${h.label}’s household`}
+                  showHide
                   open={openHouseholds.includes(h.id)}
                   onToggle={() =>
                     setOpenHouseholds((prev) =>

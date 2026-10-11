@@ -141,6 +141,7 @@
     "test:walkthrough-batch8": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/walkthrough-batch8-test.tsx",
     "test:walkthrough-batch9": "tsx --tsconfig tests/tsconfig.json tests/walkthrough-batch9-test.tsx",
     "test:walkthrough-batch10": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/walkthrough-batch10-test.tsx",
+    "test:walkthrough-batch11": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/walkthrough-batch11-test.tsx",
     "test:preflight-fold": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/preflight-fold-test.tsx",
     "test:sign-in-hole": "tsx tests/sign-in-hole-test.ts"
   },

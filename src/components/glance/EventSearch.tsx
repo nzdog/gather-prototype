@@ -8,18 +8,27 @@
  * visit, with the other closed buttons (Ruling 1: nothing here makes her lean in unless she asks).
  *
  * IT ONLY FINDS. Its one request is the print door's read, `GET /api/events/[id]/items`, made on each
- * opening and narrowed at once (`narrowItems`, Q13). A tap on a name scrolls that person's strip to
- * the middle of the screen and rings it for two seconds (Q19): an outline set here, never a class, so
- * the live poll's repaint never meets it; no focus moves, so no door opens. One of the glance sources
- * Ruling 1's fence scans (`tests/glance-read-test.ts`, Q22).
+ * opening and narrowed at once (`narrowItems`, Q13). One of the glance sources Ruling 1's fence scans
+ * (`tests/glance-read-test.ts`, Q22).
+ *
+ * [[GTC-380]] (item 50, PLAN RULINGS 2026-10-11) — FROM A RESULT, GO TO THE PERSON OR THE ITEM.
+ * A person's name, and a holder's name in an item row, opens that person's panel when their strip
+ * has one, exactly as a tap on the row opens it (Q7, replacing GTC-373 Q19): the strip is brought to
+ * the middle, focused and pressed. The element on the page decides, never `panelFor`: the live poll
+ * never turns a sealed strip into a door, so a strip it turned red after loading still rings, as a
+ * tap on its row opens nothing. Every item name is a real link to Moment 3 at that item, in the same
+ * tab (Q9, ruling 2), in item rows and inside a person's row; the line reads as it did. Following
+ * it writes nothing.
  */
 
 import { useEffect, useId, useRef, useState } from 'react';
+import { itemDoorHref } from '@/lib/events/home-href';
 import {
   EVENT_SHOWN,
   EVENT_WORDS,
   findInEvent,
   narrowItems,
+  type AnswerPart,
   type EventHit,
   type SearchItem,
   type SearchPerson,
@@ -33,13 +42,22 @@ interface EventSearchProps {
   invitesOnly?: boolean;
 }
 
-/** Q19 — the person's strip, brought to the middle of the screen and ringed for two seconds. */
+/**
+ * [[GTC-380]] (Q7) — the person's strip, brought to the middle of the screen. A strip that is a
+ * door (a `<button>`) is focused and pressed, so its panel opens as a tap on the row opens it and
+ * the keyboard lands where a row tap leaves it; any other strip is ringed for two seconds (Q19).
+ */
 function goToStrip(personEventId: string) {
   const strip = document.querySelector<HTMLElement>(
     `[data-person-event-id="${CSS.escape(personEventId)}"]`
   );
   if (!strip) return;
   strip.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  if (strip instanceof HTMLButtonElement) {
+    strip.focus({ preventScroll: true });
+    strip.click();
+    return;
+  }
   strip.style.outline = '2px solid #2c2c2a';
   strip.style.outlineOffset = '2px';
   window.setTimeout(() => {
@@ -50,6 +68,7 @@ function goToStrip(personEventId: string) {
 
 const NAME_BUTTON =
   'cursor-pointer border-0 bg-transparent p-0 text-left text-[13px] text-[#2c2c2a] underline underline-offset-2';
+const ITEM_LINK = 'text-[#2c2c2a] underline underline-offset-2';
 
 export default function EventSearch({ eventId, people, invitesOnly = false }: EventSearchProps) {
   const [open, setOpen] = useState(false);
@@ -83,6 +102,20 @@ export default function EventSearch({ eventId, people, invitesOnly = false }: Ev
   const shown = found.slice(0, EVENT_SHOWN);
   const more = found.length - shown.length;
   const nothing = Array.isArray(items) && query.trim().length >= 2 && found.length === 0;
+
+  /** [[GTC-380]] (Q9, ruling 2) — an item's name, a door to Moment 3 at that item. */
+  const itemDoor = (itemId: string, words: string, key?: string) => (
+    <a key={key} href={itemDoorHref(eventId, itemId)} className={ITEM_LINK}>
+      {words}
+    </a>
+  );
+  /** A person's answer: the held items' names as doors, the words between them as they read. */
+  const answerOf = (hit: EventHit) =>
+    hit.parts
+      ? hit.parts.map((part: AnswerPart, i) =>
+          part.itemId ? itemDoor(part.itemId, part.text, String(i)) : part.text
+        )
+      : hit.answer;
 
   const name = (hit: EventHit, words: string) =>
     hit.target ? (
@@ -148,11 +181,11 @@ export default function EventSearch({ eventId, people, invitesOnly = false }: Ev
                   {hit.kind === 'person' ? (
                     <>
                       {name(hit, hit.words)}
-                      <span className="text-[#5f5e5a]">: {hit.answer}</span>
+                      <span className="text-[#5f5e5a]">: {answerOf(hit)}</span>
                     </>
                   ) : (
                     <>
-                      <span>{hit.words}</span>
+                      <span>{hit.itemId ? itemDoor(hit.itemId, hit.words) : hit.words}</span>
                       <span className="text-[#5f5e5a]">: {name(hit, hit.answer)}</span>
                     </>
                   )}
