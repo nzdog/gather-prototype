@@ -37,8 +37,8 @@ export default function Moment2Opening({
 }: Moment2OpeningProps) {
   const working = invitesOnlyState === 'working';
   return (
-    <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
-      {/* [[GTC-367]] (item 31, W1): an overlay over the menu bar, so its own way out.
+    <div className="fixed inset-0 top-[65px] z-50 bg-white overflow-y-auto">
+      {/* [[GTC-367]] (item 31, W1): its own way out. [[GTC-381]] (ruling 2, Q7): below the menu bar.
           [[GTC-368]] (item 17, Q1): the event's name across from it. */}
       <div className="absolute top-6 inset-x-6 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <a
@@ -49,7 +49,7 @@ export default function Moment2Opening({
         </a>
         {details && <EventDetails facts={details} />}
       </div>
-      <div className="max-w-2xl mx-auto px-6 py-8 flex flex-col items-center justify-center min-h-screen">
+      <div className="max-w-2xl mx-auto px-6 py-8 flex flex-col items-center justify-center min-h-full">
         {/* MomentArc */}
         <MomentArc currentMoment={2} completedMoments={[1]} doors={doors} />
 

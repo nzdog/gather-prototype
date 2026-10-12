@@ -6,7 +6,12 @@ import { ASK_FIELDS, fieldChanges } from '@/lib/ledger';
 import type { SerialisedEvent } from '@/lib/lifecycle';
 import { useReasonPrompt } from '@/components/plan/ReasonPrompt';
 import { CATEGORY_LABELS } from '@/lib/ai/plan-categories';
-import { hasGeneratedPlan, resolveSetupStage, type SetupStage } from '@/lib/setup/entry-stage';
+import {
+  hasGeneratedPlan,
+  momentTwoBegun,
+  resolveSetupStage,
+  type SetupStage,
+} from '@/lib/setup/entry-stage';
 import { useToast } from '@/contexts/ToastContext';
 import SetupOpeningScreen from '@/components/plan/SetupOpeningScreen';
 import Moment1InputForm, {
@@ -478,13 +483,14 @@ export default function EventSetupPage() {
         if (cancelled || !loadedEvent) return;
 
         /**
-         * The third input, fetched ONLY when it can change the answer. With an
-         * `EventSetup` row the rule never reads the household count, and GTC-233
-         * verified this route makes exactly two mount requests — a third one on every
-         * load would undo that for the common case.
+         * The third input, fetched ONLY when it can change the answer. Once Moment 2 has
+         * begun the rule never reads the household count, and GTC-233 verified this route
+         * makes exactly two mount requests — a third one on every load would undo that for
+         * the common case. [[GTC-381]] (Q1): an empty record (every new event has one) has
+         * not begun, so it reads households as no record does.
          */
         let householdCount = 0;
-        if (!loadedEvent.setup) {
+        if (!momentTwoBegun(loadedEvent.setup)) {
           const res = await fetch(`/api/events/${eventId}/households`);
           if (res.ok) householdCount = ((await res.json()).households ?? []).length;
         }
@@ -498,6 +504,8 @@ export default function EventSetupPage() {
           planApproved: Boolean(loadedEvent.setup?.planApprovedAt),
           // [[GTC-374]]: an invites-only event has no plan to open.
           invitesOnly: Boolean(loadedEvent.setup?.invitesOnly),
+          // [[GTC-381]] (Q1): a kind, invites only or an approval; an empty record opens Moment 1.
+          momentTwoBegun: momentTwoBegun(loadedEvent.setup),
         });
         /*
          * [[GTC-367]] (item 2) — a strip tap from another page (the pre-flight) asks for a Moment by
@@ -774,7 +782,8 @@ export default function EventSetupPage() {
    * turns a door into a stage. A tap never approves, holds or sends: Moment 3 opens only once the
    * plan is approved, the pre-flight only once it is held, and the board only once it is sent.
    */
-  const hostSaved = Boolean(event?.setup) || households.some((h) => h.isHostHousehold);
+  // [[GTC-381]] (Q1): an empty record is not "saved"; it waits for her own household as none does.
+  const hostSaved = momentTwoBegun(event?.setup) || households.some((h) => h.isHostHousehold);
   const goToMoment = async (target: StripTarget) => {
     if (target === 'preflight') {
       window.location.href = `/plan/${eventId}/pre-flight`;
@@ -944,7 +953,7 @@ export default function EventSetupPage() {
     if (moment1Phase === 'host') {
       if (hostStep.loading || !hostStep.host) {
         return (
-          <div className="fixed inset-0 z-50 bg-white flex items-center justify-center">
+          <div className="fixed inset-0 top-[65px] z-50 bg-white flex items-center justify-center">
             <div className="text-gray-600">
               {hostStep.loading ? 'Loading…' : 'Could not load your details. Please reload.'}
             </div>
@@ -968,7 +977,7 @@ export default function EventSetupPage() {
       };
 
       return (
-        <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
+        <div className="fixed inset-0 top-[65px] z-50 bg-white overflow-y-auto">
           <div className="max-w-5xl mx-auto px-6 py-8">
             {/* [[GTC-367]] (item 31, W1; correction C1): her own household's step had no way out.
                 [[GTC-368]] (item 17, Q1): the event's name across from it. */}
@@ -1066,10 +1075,11 @@ export default function EventSetupPage() {
     }, 0);
 
     return (
-      <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
+      <div className="fixed inset-0 top-[65px] z-50 bg-white overflow-y-auto">
         <div className="max-w-5xl mx-auto px-6 py-8">
-          {/* GTC-235: the way out of the longest-dwell overlay. Every Moment 1 screen is
-              `fixed inset-0 z-50` and so covers the global navigation, and the entry rule
+          {/* GTC-235: the way out of the longest-dwell overlay. Every Moment 1 screen was a
+              full-screen layer and so covered the global navigation ([[GTC-381]], Q7: it now
+              starts below the menu bar, and this link stays, ruling 2), and the entry rule
               now HOLDS a half-finished host here across a reload rather than returning
               her to an opening screen she could leave. Without this she has the URL bar
               and nothing else. */}
@@ -1130,7 +1140,7 @@ export default function EventSetupPage() {
             <div className="hidden md:block w-80 flex-shrink-0">
               <div
                 ref={desktopColumnRef}
-                className="sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto"
+                className="sticky top-8 max-h-[calc(100vh-4rem-65px)] overflow-y-auto"
               >
                 <HouseholdCardList
                   households={households}

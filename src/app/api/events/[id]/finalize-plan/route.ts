@@ -43,7 +43,9 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
     }
 
     const setup = await prisma.eventSetup.findUnique({ where: { eventId } });
-    if (!setup) {
+    // [[GTC-381]] (Q3): an empty record (no event type, as every new event starts) is refused as
+    // no record is, so no AI call starts from an event that never answered Moment 2.
+    if (!setup || !setup.eventType) {
       return NextResponse.json({ error: 'No event setup found' }, { status: 404 });
     }
 

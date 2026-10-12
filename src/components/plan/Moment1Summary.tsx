@@ -199,9 +199,9 @@ export default function Moment1Summary({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
+    <div className="fixed inset-0 top-[65px] z-50 bg-white overflow-y-auto">
       <div className="max-w-2xl mx-auto px-6 py-8">
-        {/* [[GTC-367]] (item 31, W1): an overlay over the menu bar, so its own way out.
+        {/* [[GTC-367]] (item 31, W1): its own way out. [[GTC-381]] (ruling 2, Q7): below the menu bar.
             [[GTC-368]] (item 17, Q1): the event's name across from it. */}
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
           <a

@@ -7,10 +7,12 @@
  *      pre-flight, the board, "Who I chase", Your Events, and the old dashboard, home, Past Events
  *      and Billing besides — with long names, so the fixture is not kinder than a real event
  *   M  R1: on a phone the bar is the logo and a three-line menu button, its label "Open menu" /
- *      "Close menu"; the panel holds the five links, the email and Sign Out (Sign In when signed
- *      out); it closes on Escape (focus back on the button), on a link, and on a tap outside
- *   K  the width it changes at (Q9): the menu below 1280px; from 1280px the bar exactly as it was,
- *      pinned to geometry measured before any change
+ *      "Close menu"; the panel holds the links, the email and Sign Out (Sign In when signed
+ *      out); it closes on Escape (focus back on the button), on a link, and on a tap outside.
+ *      [[GTC-381]] ruling 2: the links are Your Events and New Event, then the email, Billing and
+ *      Sign Out; Home and Past Events have gone
+ *   K  the width it changes at (Q9): the menu below 1280px; from 1280px the bar, pinned to geometry
+ *      measured before any change, as GTC-381 trims it (two links; the email opens the rest)
  *   Z  every fixture removed by id; the OutboundMessage and InviteEvent totals as found
  *
  * NOTHING SENDS: nothing is pressed or drained; `installProviderTrap` walls this process and the
@@ -44,22 +46,26 @@ function assert(phase: string, label: string, condition: boolean, detail?: strin
 }
 
 /**
- * The bar at 1280px on /plan/events, measured 2026-10-03 at `c6e7b3a`, before any GTC-358 change:
- * [left, top, width, height]. The links' positions do not depend on the email, which sits on the
- * right; the fixture's email is short, so nothing is squeezed.
+ * The bar at 1280px on /plan/events: [left, top, width, height]. Measured 2026-10-03 at `c6e7b3a`,
+ * before any GTC-358 change, as Home [240, 14, 95, 36], Your Events [339, 14, 134, 36], Past Events
+ * [477, 14, 133, 36], New Event [614, 14, 126, 36], Billing [744, 14, 96, 36], and Sign Out's right
+ * edge at 1264. [[GTC-381]] (ruling 2, item 36: "Your Events and New Event stay. Home goes …
+ * Billing and Sign Out move under your email. Past Events" is hidden) trims the list to two, with
+ * each link's size unchanged: Your Events moves to where Home started (240) and New Event follows it
+ * after the same 4px gap (240 + 134 + 4 = 378); the email, now the button that opens Billing and Sign
+ * Out (Q6), ends where Sign Out ended (1264).
  */
 const BAR_1280 = {
   nav: [0, 0, 1280, 65],
   links: {
-    Home: [240, 14, 95, 36],
-    'Your Events': [339, 14, 134, 36],
-    'Past Events': [477, 14, 133, 36],
-    'New Event': [614, 14, 126, 36],
-    Billing: [744, 14, 96, 36],
+    'Your Events': [240, 14, 134, 36],
+    'New Event': [378, 14, 126, 36],
   } as Record<string, number[]>,
-  signOutRight: 1264,
+  accountRight: 1264,
 };
-const LINKS = ['Home', 'Your Events', 'Past Events', 'New Event', 'Billing'];
+/** [[GTC-381]] ruling 2: the bar's two links; these four leave the bar (Billing, Sign Out: under the email). */
+const LINKS = ['Your Events', 'New Event'];
+const GONE = ['Home', 'Past Events', 'Billing', 'Sign Out'];
 
 const created = { users: [] as string[], people: [] as string[], events: [] as string[] };
 
@@ -217,6 +223,7 @@ async function run(
       panel: boolean;
       panelText: string;
       barLinks: number;
+      barTexts: string[];
       focused: boolean;
       path: string;
     }>(
@@ -224,8 +231,10 @@ async function run(
         const visible = (el) => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
         const panel = document.getElementById('site-menu');
         const barLinks = [...document.querySelectorAll('nav a')].filter((a) => !panel?.contains(a) && visible(a) && ${JSON.stringify(LINKS)}.includes(a.innerText.trim())).length;
+        const account = document.getElementById('account-menu');
+        const barTexts = [...document.querySelectorAll('nav a, nav button')].filter((e) => !panel?.contains(e) && !account?.contains(e) && visible(e)).map((e) => e.innerText.trim()).filter(Boolean);
         return { button: visible(b), label: b?.getAttribute('aria-label') ?? null, expanded: b?.getAttribute('aria-expanded') ?? null,
-          panel: visible(panel), panelText: visible(panel) ? panel.innerText : '', barLinks, focused: !!b && document.activeElement === b, path: location.pathname }; })()`
+          panel: visible(panel), panelText: visible(panel) ? panel.innerText : '', barLinks, barTexts, focused: !!b && document.activeElement === b, path: location.pathname }; })()`
     );
   const closed = await state();
   assert(
@@ -236,7 +245,7 @@ async function run(
   );
   assert(
     'M',
-    'M2 and none of the five links shows in the bar until it is opened',
+    'M2 and none of the links shows in the bar until it is opened',
     closed.barLinks === 0 && !closed.panel,
     JSON.stringify(closed)
   );
@@ -244,13 +253,16 @@ async function run(
   const open = await state();
   assert(
     'M',
-    'M3 tapping it opens the five links, the email and Sign Out; the button reads "Close menu"',
+    'M3 tapping it opens Your Events and New Event, then the email, Billing and Sign Out, and neither Home nor Past Events; the button reads "Close menu" (GTC-381 ruling 2, Q6)',
     open.panel &&
       open.expanded === 'true' &&
       open.label === 'Close menu' &&
       LINKS.every((l) => open.panelText.includes(l)) &&
       open.panelText.includes(email) &&
-      open.panelText.includes('Sign Out'),
+      open.panelText.includes('Billing') &&
+      open.panelText.includes('Sign Out') &&
+      open.panelText.indexOf('Billing') > open.panelText.indexOf(email) &&
+      !/\bHome\b|Past Events/.test(open.panelText),
     JSON.stringify(open)
   );
   await chrome.pressKey('Escape');
@@ -273,14 +285,17 @@ async function run(
     !outside.panel && outside.expanded === 'false',
     JSON.stringify(outside)
   );
+  // [[GTC-381]] ruling 2: Past Events has left the menu, so the link tapped is Your Events, from
+  // another page (Billing), as the panel's links are reached there.
+  await chrome.navigate('/billing', 6000);
   await chrome.click('nav button[aria-controls="site-menu"]');
-  await chrome.click('#site-menu a[href="/plan/templates"]');
+  await chrome.click('#site-menu a[href="/plan/events"]');
   await new Promise((r) => setTimeout(r, 5000));
   const went = await state();
   assert(
     'M',
     'M6 tapping a link in the panel goes there, and the panel is closed when it arrives',
-    went.path === '/plan/templates' && !went.panel,
+    went.path === '/plan/events' && !went.panel,
     JSON.stringify(went)
   );
   await chrome.clearCookies();
@@ -310,28 +325,31 @@ async function run(
   const at1280 = await state();
   assert(
     'K',
-    'K2 CONTROL: from 1280px no menu button, and the five links in the bar',
-    !at1280.button && at1280.barLinks === 5,
+    'K2 from 1280px no menu button; the bar’s links are Your Events and New Event, and Home, Past Events, Billing and Sign Out are not in it (GTC-381 ruling 2)',
+    !at1280.button && at1280.barLinks === 2 && !at1280.barTexts.some((t) => GONE.includes(t)),
     JSON.stringify(at1280)
   );
   const geo = await chrome.evaluate<{
     nav: number[];
     links: Record<string, number[]>;
-    signOutRight: number;
+    accountRight: number;
+    signOut: boolean;
     width: number;
   }>(
     `(() => { const box = (el) => { const b = el.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)]; };
       const nav = document.querySelector('nav'); const links = {};
       for (const a of nav.querySelectorAll('a')) { const t = a.innerText.trim(); if (${JSON.stringify(LINKS)}.includes(t) && a.getClientRects().length) links[t] = box(a); }
-      const so = [...nav.querySelectorAll('button')].find((b) => b.innerText.trim() === 'Sign Out' && b.getClientRects().length);
-      return { nav: box(nav), links, signOutRight: so ? Math.round(so.getBoundingClientRect().right) : -1, width: document.documentElement.scrollWidth }; })()`
+      const acc = nav.querySelector('button[aria-controls="account-menu"]');
+      const so = [...nav.querySelectorAll('button')].some((b) => b.innerText.trim() === 'Sign Out' && b.getClientRects().length);
+      return { nav: box(nav), links, accountRight: acc && acc.getClientRects().length ? Math.round(acc.getBoundingClientRect().right) : -1, signOut: so, width: document.documentElement.scrollWidth }; })()`
   );
   assert(
     'K',
-    "K3 CONTROL: the computer's bar is exactly as measured before GTC-358 — the bar, each link and Sign Out",
+    "K3 the computer's bar: the bar as measured before GTC-358; Your Events and New Event each the size it was, starting where Home started; the email's button ending where Sign Out ended, and no Sign Out in the bar (GTC-381 ruling 2, Q6)",
     JSON.stringify(geo?.nav) === JSON.stringify(BAR_1280.nav) &&
       LINKS.every((l) => JSON.stringify(geo?.links?.[l]) === JSON.stringify(BAR_1280.links[l])) &&
-      geo?.signOutRight === BAR_1280.signOutRight,
+      geo?.accountRight === BAR_1280.accountRight &&
+      geo?.signOut === false,
     JSON.stringify(geo)
   );
   assert(

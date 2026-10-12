@@ -683,18 +683,19 @@ export default function Moment2Step1Modal({
 
   if (!loaded) {
     return (
-      <div className="fixed inset-0 z-50 bg-white flex items-center justify-center">
+      <div className="fixed inset-0 top-[65px] z-50 bg-white flex items-center justify-center">
         <div className="animate-pulse text-gray-400">Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
+    <div className="fixed inset-0 top-[65px] z-50 bg-white overflow-y-auto">
       <div className="max-w-2xl mx-auto px-6 py-8 pb-32">
         {/*
           [[GTC-367]] (items 1, 2 and 31) — the way out (W1) and the strip, where the × was. This
-          screen covers the menu bar, so it carries its own way out; it saves first (Q7).
+          screen carries its own way out; it saves first (Q7). [[GTC-381]] (ruling 2, Q7): it starts
+          below the menu bar now, and the way out stays.
         */}
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
           <a

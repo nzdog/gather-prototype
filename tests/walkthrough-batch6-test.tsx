@@ -937,7 +937,15 @@ async function runLive() {
         return cy > h * 0.2 && cy < h * 0.75 && l.className.includes('ring-2') && document.activeElement === box && box.checked; })()`);
 
     // ── Layer LM — the menu, live ────────────────────────────────────────────
-    await c.navigate(`/plan/${evNoKind.id}/setup`, 7000);
+    // [[GTC-381]] (Q1): an empty record no longer means Moment 2 has begun, so `evNoKind` opens on
+    // Moment 1. The questions with no kind are reached as a host reaches them: Moment 2's opening
+    // (`?at=opening`, read once by the setup page), then "Let’s do this →", which on a planned event
+    // only opens the questions and writes nothing.
+    await c.navigate(`/plan/${evNoKind.id}/setup?at=opening`, 7000);
+    await tap(
+      `[...document.querySelectorAll('button')].find(b => b.innerText.trim().startsWith('Let’s do this'))`,
+      2500
+    );
     const noKind =
       (await ev<boolean>(
         `document.body.innerText.includes('What kind of event are you planning?')`

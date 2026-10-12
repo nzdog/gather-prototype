@@ -384,16 +384,16 @@ export function unassignedDoorText(ordinaryCount: number): string | null {
 }
 
 /**
- * Where the door goes: the plan's Teams section.
+ * Where the door goes: Moment 3, "Who's on what?".
  *
- * THE HOUSE DESTINATION, NOT A NEW ONE. `?expand=teams` is a live contract the plan page
- * already honours, and the pre-flight already sends the host there for exactly this errand.
- * Reusing it means the glance hands off rather than growing a second place to fix coverage —
- * which is Ruling 8's own sentence: ordinary unassigned items stay the plan's and
- * pre-flight's business.
+ * THE HOUSE DESTINATION, NOT A NEW ONE. The glance hands off rather than growing a second place to
+ * fix coverage — which is Ruling 8's own sentence: ordinary unassigned items stay the plan's and
+ * pre-flight's business. [[GTC-381]] (ruling 4): it was the old dashboard's Teams section
+ * (`?expand=teams`); it is now the setup flow, which opens on Moment 3 once the plan is approved,
+ * in the same tab, with "← Back to the board" as the way back.
  */
 export function unassignedDoorHref(eventId: string): string {
-  return `/plan/${eventId}?expand=teams`;
+  return `/plan/${eventId}/setup`;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════

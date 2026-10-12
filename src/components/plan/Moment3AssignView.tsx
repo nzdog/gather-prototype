@@ -475,13 +475,35 @@ export default function Moment3AssignView({
     </button>
   );
 
+  /*
+   * [[GTC-381]] (Q12, Q15, W10; C21) — before the press, the way back to Moment 2's plan at the left
+   * of the top row: the same `onBack` as "← Back to the plan" in the bar, so her approval stays and
+   * nothing new is asked. Once the invitations have gone it is not drawn: "← Back to the board" in
+   * the bar is the way back. The bottom bar is as it was (batch11 R7).
+   */
+  const topBack = event.sentAt ? null : (
+    <button
+      type="button"
+      onClick={onBack}
+      className="text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
+    >
+      {STRIP_WORDS.BACK_TO_WHATS_THE_PLAN}
+    </button>
+  );
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-5xl mx-auto px-6 py-6 pb-40">
-        {/* [[GTC-368]] (item 17, Q1): the menu bar shows here, so the name has a row of its own. */}
-        {details && (
-          <div className="mb-3 flex justify-end">
-            <EventDetails facts={details} />
+        {/* [[GTC-368]] (item 17, Q1): the menu bar shows here, so the name has a row of its own.
+            [[GTC-381]]: before the press, W10 at its left; after it, the row as it was. */}
+        {(topBack || details) && (
+          <div
+            className={`mb-3 flex ${
+              topBack ? 'flex-wrap items-baseline justify-between gap-x-3 gap-y-1' : 'justify-end'
+            }`}
+          >
+            {topBack}
+            {details && <EventDetails facts={details} />}
           </div>
         )}
         <div className="mb-6">

@@ -25,11 +25,12 @@ export default function SetupOpeningScreen({ onStart, doors, details }: SetupOpe
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center bg-white transition-opacity duration-400 ${
+      className={`fixed inset-0 top-[65px] z-50 flex items-center justify-center bg-white overflow-y-auto transition-opacity duration-400 ${
         fading ? 'opacity-0' : 'opacity-100'
       }`}
     >
-      {/* [[GTC-367]] (item 31, W1): this screen covers the menu bar, so it carries its own way out.
+      {/* [[GTC-367]] (item 31, W1): its own way out. [[GTC-381]] (ruling 2, Q7): it starts below the
+          menu bar now, and the way out stays.
           [[GTC-368]] (item 17, Q1): the event's name across from it, the same row on every overlay. */}
       <div className="absolute top-6 inset-x-6 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <a

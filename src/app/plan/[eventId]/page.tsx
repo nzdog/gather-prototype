@@ -57,6 +57,8 @@ import SetupChecklistBanner from '@/components/plan/SetupChecklistBanner';
 import { useEventSetupProgress } from '@/hooks/useEventSetupProgress';
 import { THANK_YOU_SENT_BY_EMAIL } from '@/lib/sms/text-failure-words';
 import { itemListHtml, printEventDate, toPrintItems, writePage } from '@/lib/print/item-list';
+import { whenLine, occasionLabel } from '@/components/shared/EventDetails';
+import { wayBack, hostsAndGuests } from '@/lib/moments/way-back';
 
 // Moment 2 plan view mappers ────────────────────────────────────────────────
 interface Event {
@@ -105,7 +107,15 @@ interface Event {
   aiCallsUsed: number;
   // Present when the event entered the V2 Moment flow (EventSetup row exists).
   // V1-pipeline actions (e.g. Regenerate) are hidden when set (GTC-148).
-  setup: { id: string } | null;
+  // [[GTC-381]]: the fields the wire already carries (`EVENT_WIRE_SELECT`), for the way back and
+  // the Event Details card's occasion; no wire change.
+  setup: {
+    id: string;
+    planApprovedAt?: string | null;
+    eventType?: string | null;
+    eventTypeOther?: string | null;
+    invitesOnly?: boolean;
+  } | null;
 }
 
 interface Team {
@@ -141,6 +151,8 @@ interface Item {
   dropOffAt: string | null;
   dropOffNote: string | null;
   createdAt: string; // For checking if item is newly regenerated
+  // [[GTC-381]]: on the wire already (the items route returns every column); the way back reads it.
+  source?: string | null;
   team: {
     id: string;
     name: string;
@@ -1534,6 +1546,13 @@ export default function PlanEditorPage() {
     );
   }
 
+  /*
+   * [[GTC-381]] (the founder's note, Q10, Q11) — the way back to the Moment the event is at, on a
+   * Moment-flow event only, at every stage. One rule names the Moment and where it is
+   * (`wayBack`); an old-style event (no record) has none, and its page is unchanged.
+   */
+  const back = wayBack({ ...event, items });
+
   return (
     <ModalProvider>
       {/* GTC-202: the why-scope prompt. Rendered once for the whole dashboard — it is
@@ -1541,6 +1560,20 @@ export default function PlanEditorPage() {
           until a change actually trips the rule. */}
       {reasonPrompt}
       <div className="min-h-screen bg-gray-50">
+        {/* [[GTC-381]]: directly under the menu bar, above the event's name; full width on a phone.
+            A plain link, a full page load: nothing is saved, held or asked. */}
+        {back && (
+          <div className="bg-sage-50 border-b border-sage-100">
+            <div className="max-w-7xl mx-auto px-4 py-3.5">
+              <a
+                href={back.href}
+                className="flex w-full sm:inline-flex sm:w-auto items-center justify-center min-h-12 px-5 py-3 rounded-lg bg-accent text-white text-base font-semibold shadow-sm hover:bg-accent-dark transition-colors"
+              >
+                {back.words}
+              </a>
+            </div>
+          </div>
+        )}
         {/* Demo back-link */}
         {event.isDemo && (
           <div className="bg-indigo-50 border-b border-indigo-100">
@@ -1559,33 +1592,39 @@ export default function PlanEditorPage() {
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">{event.name}</h1>
                 <div className="mt-2 flex items-center gap-4 text-sm text-gray-600">
-                  <span className="px-2 py-1 bg-sage-100 text-sage-800 rounded">
-                    {event.status}
-                  </span>
+                  {/* [[GTC-381]] (ruling 3): no raw status on a Moment-flow event. */}
+                  {!event.setup && (
+                    <span className="px-2 py-1 bg-sage-100 text-sage-800 rounded">
+                      {event.status}
+                    </span>
+                  )}
                   <span>{event.occasionType}</span>
                   {event.guestCount && <span>{event.guestCount} guests</span>}
                 </div>
               </div>
               <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={() => {
-                    // Find the HOST token from invite links
-                    const hostLink = inviteLinks.find((link) => link.scope === 'HOST');
-                    if (hostLink) {
-                      window.open(`/h/${hostLink.token}?expand=all`, '_blank');
-                    } else if (event.status === 'DRAFT') {
-                      toast.warning(
-                        'Host view is not available yet. Please transition to CONFIRMING status first.'
-                      );
-                    } else {
-                      toast.error('Host link unavailable — try refreshing the page.');
-                    }
-                  }}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
-                >
-                  View as Host
-                </button>
-                {inviteLinksError && (
+                {/* [[GTC-381]] (ruling 3, Q8): "View as Host" and its error line, old-style only. */}
+                {!event.setup && (
+                  <button
+                    onClick={() => {
+                      // Find the HOST token from invite links
+                      const hostLink = inviteLinks.find((link) => link.scope === 'HOST');
+                      if (hostLink) {
+                        window.open(`/h/${hostLink.token}?expand=all`, '_blank');
+                      } else if (event.status === 'DRAFT') {
+                        toast.warning(
+                          'Host view is not available yet. Please transition to CONFIRMING status first.'
+                        );
+                      } else {
+                        toast.error('Host link unavailable — try refreshing the page.');
+                      }
+                    }}
+                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                  >
+                    View as Host
+                  </button>
+                )}
+                {!event.setup && inviteLinksError && (
                   <span className="self-center text-sm text-red-600">
                     Failed to load host link — try refreshing.
                   </span>
@@ -1648,7 +1687,8 @@ export default function PlanEditorPage() {
                     Your event includes 10 AI calls. You have {10 - event.aiCallsUsed} remaining.
                   </span>
                 )}
-                {(event.status === 'CONFIRMING' || isSentJson(event)) && (
+                {/* [[GTC-381]] (ruling 3): "Save as Template", old-style only. */}
+                {!event.setup && (event.status === 'CONFIRMING' || isSentJson(event)) && (
                   <button
                     onClick={() => setSaveTemplateModalOpen(true)}
                     className="px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-dark flex items-center gap-2"
@@ -1837,12 +1877,27 @@ export default function PlanEditorPage() {
                       <h2 className="text-xl font-semibold text-gray-900">Event Details</h2>
                     </div>
                     <div className="flex-1">
+                      {/* [[GTC-381]] (ruling 3, Q8): on a Moment-flow event, Moment 2's answer, no
+                          empty "guests" line, and the date as Event Details writes it. */}
                       <p className="text-sm text-gray-600 mb-2">
-                        <span className="font-medium">{event.occasionType}</span>
+                        <span className="font-medium">
+                          {event.setup
+                            ? occasionLabel(event.setup.eventType, event.setup.eventTypeOther)
+                            : event.occasionType}
+                        </span>
                       </p>
-                      <p className="text-sm text-gray-600">{event.guestCount} guests</p>
+                      {(!event.setup || event.guestCount != null) && (
+                        <p className="text-sm text-gray-600">{event.guestCount} guests</p>
+                      )}
                       <p className="text-xs text-gray-500 mt-2">
-                        {new Date(event.startDate).toLocaleDateString()}
+                        {event.setup
+                          ? whenLine(
+                              event.startDate,
+                              event.endDate,
+                              event.venueTimingStart,
+                              event.venueTimingEnd
+                            )
+                          : new Date(event.startDate).toLocaleDateString()}
                       </p>
                     </div>
                     <div className="text-sm text-accent font-medium">Click to edit →</div>
@@ -1861,9 +1916,16 @@ export default function PlanEditorPage() {
                     </div>
                     <div className="flex-1">
                       <p className="text-3xl font-bold text-gray-900 mb-2">{people.length}</p>
+                      {/* [[GTC-381]] (ruling 3, Q19): hosts and guests on a Moment-flow event (W1). */}
                       <p className="text-sm text-gray-600">
-                        {people.filter((p) => p.role === 'COORDINATOR').length} coordinators,{' '}
-                        {people.filter((p) => p.role === 'PARTICIPANT').length} participants
+                        {event.setup ? (
+                          hostsAndGuests(people)
+                        ) : (
+                          <>
+                            {people.filter((p) => p.role === 'COORDINATOR').length} coordinators,{' '}
+                            {people.filter((p) => p.role === 'PARTICIPANT').length} participants
+                          </>
+                        )}
                       </p>
                     </div>
                     <div className="text-sm text-accent font-medium">Click to expand →</div>

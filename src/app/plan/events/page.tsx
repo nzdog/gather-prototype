@@ -242,13 +242,16 @@ export default function EventsPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <h2 className="text-xl font-semibold text-gray-900">{event.name}</h2>
-                      <span
-                        className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusBadge(
-                          event.status
-                        )}`}
-                      >
-                        {event.status}
-                      </span>
+                      {/* [[GTC-381]] (Q18): no raw status on a Moment-flow event's row. */}
+                      {!event.setup && (
+                        <span
+                          className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusBadge(
+                            event.status
+                          )}`}
+                        >
+                          {event.status}
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-600 mb-3">
@@ -256,10 +259,13 @@ export default function EventsPage() {
                         <Calendar className="w-4 h-4" />
                         <span>{formatDateRange(event.startDate, event.endDate)}</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Users className="w-4 h-4" />
-                        <span>{event.guestCount} guests</span>
-                      </div>
+                      {/* [[GTC-381]] (Q18): and no empty "guests" line there. */}
+                      {(!event.setup || event.guestCount != null) && (
+                        <div className="flex items-center gap-2">
+                          <Users className="w-4 h-4" />
+                          <span>{event.guestCount} guests</span>
+                        </div>
+                      )}
                       <div className="flex items-center gap-2">
                         <ListTodo className="w-4 h-4" />
                         <span>{event._count.teams} teams</span>

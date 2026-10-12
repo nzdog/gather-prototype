@@ -1071,12 +1071,18 @@ async function main() {
     );
     assert(
       'Ruling 8',
-      'the door reports the right N and hands off to the plan’s Teams section',
+      // [[GTC-381]] ruling 4: the door's destination moves from the old dashboard's Teams section
+      // (`?expand=teams`) to "Change who's on what" (Moment 3); its words and N are as they were.
+      'the door reports the right N and hands off to "Change who’s on what" (GTC-381 ruling 4)',
       ok(() => {
         const at = html.indexOf('data-unassigned-door');
         if (at < 0) return false;
         const el = html.slice(Math.max(0, at - 200), at + 200);
-        return el.includes('and 4 more unassigned') && el.includes('?expand=teams');
+        return (
+          el.includes('and 4 more unassigned') &&
+          el.includes('href="/plan/e1/setup"') &&
+          !el.includes('?expand=teams')
+        );
       })
     );
     assert(

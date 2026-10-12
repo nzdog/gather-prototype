@@ -82,9 +82,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     const setup = await prisma.eventSetup.findUnique({ where: { eventId } });
-    if (!setup) {
+    if (!setup || !setup.eventType) {
       // V2-only by construction: no EventSetup means a V1 event, which keeps its own
       // regenerate pipeline. No V2-awareness is added to V1 code for this (GTC-233).
+      // [[GTC-381]] (Q3): an empty record (no event type, as every new event starts) is refused
+      // the same way, so no AI call starts from an event that never answered Moment 2.
       return NextResponse.json({ error: 'No event setup found' }, { status: 404 });
     }
 

@@ -199,8 +199,10 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      // [[GTC-381]] (item 35, ruling 1, Q2): every new event is made with its empty EventSetup
+      // record, in the event's own create, so it is a Moment-flow event from the start.
       const event = await tx.event.create({
-        data: { ...eventData, hostId: person.id },
+        data: { ...eventData, hostId: person.id, setup: { create: {} } },
       });
 
       await tx.eventRole.create({

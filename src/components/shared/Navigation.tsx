@@ -1,8 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { FileText, Plus, Home, Calendar, CreditCard, LogOut, LogIn, Menu, X } from 'lucide-react';
+import { Plus, Calendar, CreditCard, LogOut, LogIn, Menu, X, ChevronDown } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 
@@ -35,10 +34,44 @@ export default function Navigation({ user }: NavigationProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const navRef = useRef<HTMLElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  /*
+   * [[GTC-381]] (item 36, ruling 2, Q6) — ON A COMPUTER, THE EMAIL OPENS BILLING AND SIGN OUT. The
+   * email is the button's name, with a chevron that turns; the panel under it holds the two. The
+   * same disclosure as the phone's menu, and it closes the same ways. Both panels sit at z-[60], so
+   * they open over the Moment screens (z-50); the bar itself keeps no z-index, so an ordinary page's
+   * modal backdrop still covers it (C9).
+   */
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
+  const accountButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     setMenuOpen(false);
+    setAccountOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!accountOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setAccountOpen(false);
+        accountButtonRef.current?.focus();
+      }
+    };
+    const onOutside = (e: MouseEvent | TouchEvent) => {
+      if (accountRef.current && !accountRef.current.contains(e.target as Node)) {
+        setAccountOpen(false);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onOutside);
+    document.addEventListener('touchstart', onOutside);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onOutside);
+      document.removeEventListener('touchstart', onOutside);
+    };
+  }, [accountOpen]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -82,24 +115,26 @@ export default function Navigation({ user }: NavigationProps) {
     }
   };
 
-  // Use /demo as home if we're on demo page
-  const isDemo = pathname === '/demo';
-  const homeHref = isDemo ? '/demo' : '/';
-
+  /*
+   * [[GTC-381]] (item 36, ruling 2) — the bar is Your Events, New Event and her email. Home has gone
+   * (for a signed-in host it opened the front page); Past Events waits for item 10; Billing and Sign
+   * Out are under the email. Q5: every link here is a plain <a>, a full page load, so Moment 1's
+   * "Leave site?" warning catches unsaved typing as the screens' own "← Your events" links do.
+   */
   const navItems = [
-    { href: homeHref, label: 'Home', icon: Home },
     { href: '/plan/events', label: 'Your Events', icon: Calendar },
-    { href: '/plan/templates', label: 'Past Events', icon: FileText },
     { href: '/plan/new', label: 'New Event', icon: Plus },
-    { href: '/billing', label: 'Billing', icon: CreditCard },
   ];
+  const billing = { href: '/billing', label: 'Billing', icon: CreditCard };
+  const signIn = { href: '/auth/signin', label: 'Sign In' };
+  const billingActive = pathname === billing.href || pathname?.startsWith(billing.href + '/');
 
   return (
     <nav ref={navRef} className="relative bg-white border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-8">
-            <Link href="/" className="flex items-center gap-2">
+            <a href="/" className="flex items-center gap-2">
               <Image
                 src="/brand/gather_lockup_horizontal_mono-black.svg"
                 alt="Gather"
@@ -107,7 +142,7 @@ export default function Navigation({ user }: NavigationProps) {
                 height={32}
                 className="h-8 w-auto"
               />
-            </Link>
+            </a>
 
             <div className="hidden xl:flex items-center gap-1">
               {navItems.map((item) => {
@@ -115,7 +150,7 @@ export default function Navigation({ user }: NavigationProps) {
                 const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
 
                 return (
-                  <Link
+                  <a
                     key={item.href}
                     href={item.href}
                     className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -126,7 +161,7 @@ export default function Navigation({ user }: NavigationProps) {
                   >
                     <Icon className="w-4 h-4" />
                     {item.label}
-                  </Link>
+                  </a>
                 );
               })}
             </div>
@@ -135,25 +170,58 @@ export default function Navigation({ user }: NavigationProps) {
           {/* Auth section */}
           <div className="hidden xl:flex items-center gap-3">
             {user ? (
-              <>
-                <span className="text-sm text-gray-600">{user.email}</span>
+              <div ref={accountRef} className="relative">
                 <button
-                  onClick={handleSignOut}
-                  disabled={isSigningOut}
-                  className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  ref={accountButtonRef}
+                  type="button"
+                  onClick={() => setAccountOpen((open) => !open)}
+                  aria-expanded={accountOpen}
+                  aria-controls="account-menu"
+                  className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    accountOpen
+                      ? 'bg-gray-50 text-gray-900'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
                 >
-                  <LogOut className="w-4 h-4" />
-                  {isSigningOut ? 'Signing out...' : 'Sign Out'}
+                  {user.email}
+                  <ChevronDown
+                    className={`w-4 h-4 transition-transform ${accountOpen ? 'rotate-180' : ''}`}
+                    aria-hidden="true"
+                  />
                 </button>
-              </>
+                {accountOpen && (
+                  <div
+                    id="account-menu"
+                    className="absolute right-0 top-full mt-1.5 z-[60] min-w-[200px] bg-white border border-gray-200 rounded-lg shadow-md p-1.5"
+                  >
+                    <a
+                      href={billing.href}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium ${
+                        billingActive ? 'bg-sage-50 text-accent' : 'text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <billing.icon className="w-4 h-4" />
+                      {billing.label}
+                    </a>
+                    <button
+                      onClick={handleSignOut}
+                      disabled={isSigningOut}
+                      className="flex w-full items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      {isSigningOut ? 'Signing out...' : 'Sign Out'}
+                    </button>
+                  </div>
+                )}
+              </div>
             ) : (
-              <Link
-                href="/auth/signin"
+              <a
+                href={signIn.href}
                 className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-accent text-white hover:bg-accent-dark transition-colors"
               >
                 <LogIn className="w-4 h-4" />
-                Sign In
-              </Link>
+                {signIn.label}
+              </a>
             )}
           </div>
 
@@ -175,14 +243,14 @@ export default function Navigation({ user }: NavigationProps) {
       {menuOpen && (
         <div
           id="site-menu"
-          className="xl:hidden absolute left-0 right-0 top-full z-40 bg-white border-b border-gray-200 shadow-md"
+          className="xl:hidden absolute left-0 right-0 top-full z-[60] bg-white border-b border-gray-200 shadow-md"
         >
           <div className="px-4 py-2">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
               return (
-                <Link
+                <a
                   key={item.href}
                   href={item.href}
                   onClick={() => setMenuOpen(false)}
@@ -192,7 +260,7 @@ export default function Navigation({ user }: NavigationProps) {
                 >
                   <Icon className="w-5 h-5" />
                   {item.label}
-                </Link>
+                </a>
               );
             })}
           </div>
@@ -200,6 +268,16 @@ export default function Navigation({ user }: NavigationProps) {
             {user ? (
               <>
                 <p className="px-3 pb-2 text-sm text-gray-600 break-all">{user.email}</p>
+                <a
+                  href={billing.href}
+                  onClick={() => setMenuOpen(false)}
+                  className={`flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium ${
+                    billingActive ? 'bg-sage-50 text-accent' : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <billing.icon className="w-5 h-5" />
+                  {billing.label}
+                </a>
                 <button
                   onClick={handleSignOut}
                   disabled={isSigningOut}
@@ -210,14 +288,14 @@ export default function Navigation({ user }: NavigationProps) {
                 </button>
               </>
             ) : (
-              <Link
-                href="/auth/signin"
+              <a
+                href={signIn.href}
                 onClick={() => setMenuOpen(false)}
                 className="flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium bg-accent text-white hover:bg-accent-dark"
               >
                 <LogIn className="w-5 h-5" />
-                Sign In
-              </Link>
+                {signIn.label}
+              </a>
             )}
           </div>
         </div>

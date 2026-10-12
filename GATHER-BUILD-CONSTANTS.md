@@ -1,7 +1,8 @@
 # GATHER BUILD CONSTANTS
 
 Reference file for AI executors and developers. Keep this file accurate.
-Last updated: 2026-10-08 (GTC-367, founder ruling L1: `npm run lint`'s known count is 62 errors).
+Last updated: 2026-10-12 (GTC-381, plan ruling Q5: `npm run lint`'s known count is 63 errors).
+Previously 2026-10-08 (GTC-367, founder ruling L1: `npm run lint`'s known count is 62 errors).
 Previously 2026-10-06 (GTC-364, ruling Q7: the standing dev-server line blanks the AI key too).
 Previously 2026-10-05 (GTC-364: looking on screen — three safeguards, after a look while
 planning pressed "Generate plan →" twice). Previously 2026-10-02 (GTC-290: the TNZ status poll — a
@@ -198,6 +199,12 @@ by assuming.
   *"Keep them, record 62 (Recommended)"*. A plain link reloads the page, so
   Moment 1's "leave site?" warning still catches unsaved typing; the same link on
   Moment 1's form was already one of the 57.
+  **Since GTC-381 (2026-10-12): 63 errors and 42 warnings across 51 files.** The
+  one new error is GTC-381's, `@next/next/no-html-link-for-pages` on the menu bar's
+  logo in `Navigation.tsx`, now a plain link to `/` (plan ruling Q5: *"Full page
+  loads, so the warning works (Recommended)"*; the bar's links and the logo are
+  full page loads, so Moment 1's "leave site?" warning catches unsaved typing from
+  the bar too).
 
 *(Retired at GTC-274, 2026-09-29: `test:email-send-result`'s wait on
 `GTC265_PROBE_KEY`, and `test:nudge-provider-gate`'s ambient-provider guard.

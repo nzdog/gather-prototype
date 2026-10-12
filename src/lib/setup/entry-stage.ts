@@ -63,6 +63,25 @@ export function hasGeneratedPlan(items: Array<{ source?: string | null }>): bool
  * plan and go on, and Moment 3 has its own empty state for it. V1 is untouched — the
  * EventSetup check comes first.
  */
+/**
+ * [[GTC-381]] (item 35, Q1) — "Moment 2 has begun": a kind chosen, invites only chosen, or the plan
+ * approved. Since every new event is made with its empty record (ruling 1), a record alone no longer
+ * says so. No record, or an empty one, has not begun.
+ */
+export function momentTwoBegun(
+  setup:
+    | {
+        eventType?: string | null;
+        invitesOnly?: boolean | null;
+        planApprovedAt?: Date | string | null;
+      }
+    | null
+    | undefined
+): boolean {
+  if (!setup) return false;
+  return Boolean(setup.eventType) || setup.invitesOnly === true || setup.planApprovedAt != null;
+}
+
 export function resolveSetupStage(input: {
   items: Array<{ source?: string | null }>;
   hasSetup: boolean;
@@ -75,6 +94,12 @@ export function resolveSetupStage(input: {
    * pre-flight once held, else Moment 2's opening) is the page's, from the event's own facts.
    */
   invitesOnly?: boolean;
+  /**
+   * [[GTC-381]] (Q1) — `momentTwoBegun(setup)`. Optional, and absent means today's answer. Read after
+   * the plan checks, so an event with a plan, an approval or invites only opens where it does; when
+   * false, an empty record opens as no record does: households → Moment 1, none → the opening.
+   */
+  momentTwoBegun?: boolean;
 }): SetupStage {
   if (!input.hasSetup) {
     return input.householdCount > 0 ? 'moment1' : 'opening';
@@ -82,5 +107,8 @@ export function resolveSetupStage(input: {
   if (input.invitesOnly === true) return 'invites-only';
   if (input.planApproved === true) return 'moment3';
   if (hasGeneratedPlan(input.items)) return 'plan';
+  if (input.momentTwoBegun === false) {
+    return input.householdCount > 0 ? 'moment1' : 'opening';
+  }
   return 'moment2-step1';
 }

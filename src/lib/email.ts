@@ -406,7 +406,8 @@ export async function sendWelcomeEmail(
   });
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  const magicLinkUrl = `${baseUrl}/auth/verify?token=${token}&returnUrl=${encodeURIComponent(`/plan/${eventId}`)}`;
+  // [[GTC-381]] (Q4): she lands on the Moment flow, where the entry rule picks her screen.
+  const magicLinkUrl = `${baseUrl}/auth/verify?token=${token}&returnUrl=${encodeURIComponent(`/plan/${eventId}/setup`)}`;
 
   try {
     const resend = getResendClient();

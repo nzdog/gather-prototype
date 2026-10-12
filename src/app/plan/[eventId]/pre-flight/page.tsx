@@ -76,7 +76,7 @@ import { MarkRows, Pill, cadenceSentence, type Member } from '@/components/prefl
 import AfterThePress from '@/components/preflight/AfterThePress';
 import EventDetails from '@/components/shared/EventDetails';
 import { BOARD_MOVE_AFTER_MS, SEE_THE_BOARD_LINK } from '@/lib/preflight/after-press-words';
-import { boardHref } from '@/lib/events/home-href';
+import { boardHref, itemDoorHref } from '@/lib/events/home-href';
 import MomentArc from '@/components/plan/MomentArc';
 import { AT_OPENING, AT_PEOPLE, AT_PLAN, STRIP_WORDS, setupHref } from '@/lib/moments/strip';
 import { HOUSEHOLD_CONTACT_LINE } from '@/lib/households/contact-line';
@@ -540,21 +540,10 @@ export default function PreFlightPage() {
                         critical
                       </span>
                     )}
-                    {/*
-                      THE LINK GOES TO THE TEAMS SECTION, NOT TO THE ITEM. There is no
-                      per-item deep link on the plan page and no URL-addressable way to
-                      open one team: `?expand=<section>` is the only param the page reads
-                      for this (its `initialExpandedTeam` is internal state, set by the
-                      Reassign-Items flow, never from the URL). Making one would mean
-                      editing the god file, which the reconciliation campaign's Phase 3
-                      owns. So every row here points at the same place, deliberately, and
-                      the note underneath says so rather than letting the link imply more
-                      than it does.
-                    */}
+                    {/* [[GTC-381]] (ruling 4): each item opens Moment 3 with that item brought
+                        to the middle and outlined (GTC-380's arrival), in the same tab. */}
                     <a
-                      href={`/plan/${eventId}?expand=teams`}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      href={itemDoorHref(eventId, i.id)}
                       className="text-gray-700 underline decoration-gray-300 underline-offset-2 hover:decoration-gray-600"
                     >
                       {i.name}
@@ -563,18 +552,17 @@ export default function PreFlightPage() {
                   </li>
                 ))}
               </ul>
+              {/* [[GTC-381]] (Q16, Q17): W11, then "Refresh this list" on its own (W12). */}
               <p className="text-xs text-gray-400 mt-3">
-                Each one opens the plan&rsquo;s Teams section in a new tab — the pre-flight stays
-                where it is. There is no link straight to a single item yet, so you&rsquo;ll need to
-                find it under its team.{' '}
+                Each one opens &ldquo;Who&rsquo;s on what?&rdquo; at that item. Come back here with
+                &ldquo;Is everyone sorted?&rdquo; at the top.{' '}
                 <button
                   type="button"
                   onClick={load}
                   className="underline decoration-gray-300 underline-offset-2 hover:text-gray-600"
                 >
                   Refresh this list
-                </button>{' '}
-                when you come back.
+                </button>
               </p>
             </>
           )}
