@@ -1260,14 +1260,26 @@ async function runLive() {
       ai.every((e) => (e.aiCallsUsed ?? 0) === 0) &&
       (await prisma.team.count({ where: evIn })) === fixtureTeams
   );
+  const onFixtureEvents = [
+    ...new Set(
+      (await prisma.personEvent.findMany({ where: evIn, select: { personId: true } })).map(
+        (m) => m.personId
+      )
+    ),
+  ];
+  const madeByApp = onFixtureEvents.filter((id) => !created.people.includes(id));
+  console.log(`  people made by the app on the fixture events: ${madeByApp.join(', ')}`);
   await cleanup();
   const after = await totals();
+  const left = await prisma.person.count({ where: { id: { in: onFixtureEvents } } });
   assert(
     'Z',
-    `Z1 every fixture row removed by id (${whileExists} while it existed), and the totals as found (${before.invite}/${before.outbound} -> ${after.invite}/${after.outbound})`,
+    `Z1 every fixture row removed by id (${whileExists} while it existed; ${madeByApp.length} people made by the app, ${left} left), and the totals as found (${before.invite}/${before.outbound} -> ${after.invite}/${after.outbound})`,
     (await rows()) === '0,0,0,0,0,0,0,0,0,0,0,0,0,0' &&
+      left === 0 &&
       after.invite === before.invite &&
-      after.outbound === before.outbound
+      after.outbound === before.outbound,
+    JSON.stringify({ madeByApp, left })
   );
 }
 
@@ -1279,6 +1291,32 @@ async function cleanup() {
       console.error('cleanup:', (e as Error).message.split('\n')[0]);
     }
   };
+  // GTC-383: the 16p press makes people through the app, so they are on the fixture events but not
+  // in created.people. Adopt one only if it has no userId, hosts or co-hosts no event, and every
+  // membership is on a fixture event; anyone else is logged and left, and Z1 goes red on them.
+  await del(async () => {
+    const found = await prisma.person.findMany({
+      where: {
+        id: { notIn: created.people },
+        eventMemberships: { some: { eventId: { in: created.events } } },
+      },
+      select: {
+        id: true,
+        userId: true,
+        eventMemberships: { select: { eventId: true } },
+        _count: { select: { hostedEvents: true, cohostedEvents: true } },
+      },
+    });
+    for (const p of found) {
+      const safe =
+        !p.userId &&
+        p._count.hostedEvents === 0 &&
+        p._count.cohostedEvents === 0 &&
+        p.eventMemberships.every((m) => created.events.includes(m.eventId));
+      if (safe) created.people.push(p.id);
+      else console.error('cleanup:', `left ${p.id}, it is not only a fixture event's guest`);
+    }
+  });
   await del(() => prisma.session.deleteMany({ where: { id: { in: created.sessions } } }));
   await del(() => prisma.event.deleteMany({ where: { id: { in: created.events } } }));
   await del(() => prisma.person.deleteMany({ where: { id: { in: created.people } } }));
