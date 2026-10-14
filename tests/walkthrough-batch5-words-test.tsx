@@ -536,18 +536,17 @@ async function runInMemory() {
       onSaveHostHousehold: async () => {},
     })
   );
+  // [[GTC-384]] item 54 (2026-10-14): Moment 1's two lines moved from the form to the herd-of-cats
+  // screen (a move, not a copy, as GTC-378's items 39 and 45 were).
   assert(
     'R',
-    'R9 Moment 1’s form, both steps: "What this does" with Moment 1’s line, "When it’s done" directly under it (GTC-378), both before her line',
-    [guestForm, hostForm].every(
-      (h) =>
-        h.includes(W15_DOES) &&
-        h.includes(M[1].does) &&
-        h.includes(M[1].done) &&
-        h.includes(`${M[1].does}</p></div><div data-moment-words="1-done"`) &&
-        h.indexOf(M[1].done) <
-          Math.max(h.indexOf('Who’s coming to'), h.indexOf('First — you’re at'))
-    )
+    'R9 the herd-of-cats screen: "What this does" with Moment 1’s line, "When it’s done" directly under it, before the button (GTC-384 item 54); Moment 1’s form, both steps, carries neither',
+    opening.includes(W15_DOES) &&
+      opening.includes(M[1].does) &&
+      opening.includes(M[1].done) &&
+      opening.includes(`${M[1].does}</p></div><div data-moment-words="1-done"`) &&
+      opening.indexOf(M[1].done) < opening.indexOf('Ready to start herding') &&
+      [guestForm, hostForm].every((h) => h.includes('m1-name') && !h.includes('data-moment-words'))
   );
   const m3 = render(
     createElement(

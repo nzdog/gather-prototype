@@ -114,6 +114,7 @@ const BLUE = { background: '#EEF4FB', border: '#B7CCE6', text: '#1F3A5F' };
 const BOARD_COLOURS = ['#EAF3DE', '#FAEEDA', '#FCEBEB'];
 
 const html = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+// [[GTC-384]] Q6: the heading carries a count after these words, so it is found by startsWith.
 const COLUMN_HEADING = 'Ducks in a row so far';
 
 const josie = {
@@ -512,7 +513,7 @@ window.__vis = (el) => !!el && el.getClientRects().length > 0;
 window.__tag = (el, t) => { document.querySelectorAll('[data-t]').forEach((e) => e.removeAttribute('data-t')); if (!el) return false; el.setAttribute('data-t', t); return true; };
 window.__btn = (text, root) => [...(root || document).querySelectorAll('button')].filter(window.__vis).find((b) => b.innerText.trim() === text) || null;
 window.__btnStarts = (text, root) => [...(root || document).querySelectorAll('button')].filter(window.__vis).find((b) => b.innerText.trim().startsWith(text)) || null;
-window.__col = () => [...document.querySelectorAll('p')].filter(window.__vis).find((p) => p.innerText.trim() === ${JSON.stringify(COLUMN_HEADING)})?.parentElement || null;
+window.__col = () => [...document.querySelectorAll('p')].filter(window.__vis).find((p) => p.innerText.trim().startsWith(${JSON.stringify(COLUMN_HEADING)}))?.parentElement || null;
 window.__draft = () => [...document.querySelectorAll('[data-draft-card]')].find(window.__vis) || null;
 window.__item = (name) => [...document.querySelectorAll('section button[data-m3-row]')].find((b) => b.innerText.includes(name)) || null;
 window.__person = (name) => [...document.querySelectorAll('.md\\\\:w-80 button[data-m3-row]')].find((b) => b.innerText.includes(name)) || null;

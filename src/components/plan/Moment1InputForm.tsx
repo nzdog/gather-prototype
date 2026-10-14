@@ -4,9 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import MomentArc, { type ArcDoor } from './MomentArc';
 import { normalizePhoneNumber, isInternationalNumber } from '@/lib/phone';
 import { SavedHousehold } from './HouseholdCardList';
-import { HOUSEHOLD_CONTACT_LINE } from '@/lib/households/contact-line';
+import { HOUSEHOLD_CONTACT_LINE, OWN_HOUSEHOLD_LINE } from '@/lib/households/contact-line';
 import { householdDraft } from '@/lib/households/draft';
-import MomentWords from './MomentWords';
 
 export interface Moment1PersonInput {
   primaryContact: {
@@ -242,10 +241,9 @@ export default function Moment1InputForm({
   const isEditing = !!editingHousehold;
 
   /**
-   * GTC-256 (Ruling 6): the switch belongs to the host's own household, and she must be
-   * able to CHANGE HER MIND — a choice she could only make once, at capture, would not be
-   * the control the ruling describes. So it renders both while capturing her household
-   * (`hostMode`) and whenever she later edits it from the card list.
+   * The host's own household, while capturing it (`hostMode`) or when she later edits it from the
+   * card list. GTC-256 (Ruling 6) put its message switch here; [[GTC-384]] (Q5) replaced the switch
+   * with one true line, and (Q4) hides the contact picker here.
    */
   const isHostHouseholdForm = !!hostMode || !!editingHousehold?.isHostHousehold;
 
@@ -667,17 +665,6 @@ export default function Moment1InputForm({
     }
   };
 
-  /**
-   * GTC-256 (Ruling 6): does she have anyone in her household for Gather to talk to her
-   * ABOUT? Counted on named members and never on `littleCount` — kids without jobs have
-   * no PersonEvent, so they are not people a household nudge could be about, and
-   * resolveHouseholdMuted counts member rows for exactly the same reason.
-   */
-  const hostHasOtherMembers =
-    (showPartner && partnerName.trim().length > 0) ||
-    helpers.some((h) => h.name.trim().length > 0) ||
-    guests.some((g) => g.name.trim().length > 0);
-
   const addGuest = () => {
     const g = emptyGuest();
     setGuests((prev) => [g, ...prev]);
@@ -704,10 +691,8 @@ export default function Moment1InputForm({
           <MomentArc currentMoment={1} doors={stripDoors} />
         </div>
 
-        {/* [[GTC-368]] (item 5, Q10's A): where Moment 1 starts, both steps. [[GTC-378]] (item 39):
-            "When it’s done" moved here from the summary, directly under it. */}
-        <MomentWords moment={1} part="does" className="mb-3" />
-        <MomentWords moment={1} part="done" className="mb-4" />
+        {/* [[GTC-384]] (item 54): Moment 1's "What this does" and "When it’s done" moved from here
+            to the herd-of-cats screen (SetupOpeningScreen), a move, not a copy. */}
 
         {/* Assistant line */}
         {hostMode ? (
@@ -848,9 +833,10 @@ export default function Moment1InputForm({
 
           {/* Household members section */}
           <div className={`border-t border-gray-200 pt-6 mb-6 ${hostingAlone ? 'hidden' : ''}`}>
-            <p className="text-sm text-gray-500 mb-4">
+            {/* [[GTC-384]] (item 56): a heading, in the counter's style. */}
+            <h3 className="text-base font-semibold text-gray-800 mb-4">
               {hostMode ? 'Anyone else in your household?' : 'Anyone else in this household?'}
-            </p>
+            </h3>
 
             <div className="flex flex-wrap gap-3 mb-4">
               {!showPartner && (
@@ -1209,13 +1195,15 @@ export default function Moment1InputForm({
               cross-household capable, so the options span the whole event — Grandma's
               channel may live in her daughter's household. Children are not offered.
             */}
-            {!hostMode && channelCandidates.length > 0 && (
+            {/* [[GTC-384]] (Q4): not on the host's own household, opened from the list either:
+                there her children are hers whoever is picked, so the question is untrue. */}
+            {!isHostHouseholdForm && channelCandidates.length > 0 && (
               <div className="border-l-4 border-gray-300 pl-4 py-3 mb-4 bg-gray-50 rounded-r-md">
                 <label
                   htmlFor="household-channel"
                   className="block text-sm font-medium text-gray-600 mb-1"
                 >
-                  Who should Gather talk to for this household?
+                  Who should Gather talk to for the kids in this household?
                 </label>
                 <select
                   id="household-channel"
@@ -1234,55 +1222,20 @@ export default function Moment1InputForm({
                       </option>
                     ))}
                 </select>
-                {/* GTC-363 (item 6, W1). Not for the host's own household opened from the list
-                    (the founder's fix): there her children are hers and there is no household
-                    list, so the line would be untrue. Whether the picker shows there is unchanged. */}
-                {!isHostHouseholdForm && (
-                  <p className="text-xs text-gray-400 mt-1">{HOUSEHOLD_CONTACT_LINE}</p>
-                )}
+                {/* GTC-363 (item 6, W1), darker since [[GTC-384]] (item 63). */}
+                <p className="text-sm text-gray-600 mt-1">{HOUSEHOLD_CONTACT_LINE}</p>
               </div>
             )}
           </div>
 
-          {/* GTC-256 (Ruling 6) — THE HOUSEHOLD MESSAGE SWITCH.
-              "The host may be her household's contact, AND CHOOSES WHETHER THOSE MESSAGES
-              SEND." Separate from Ruling 5, which suppresses her own ask because of what
-              she IS; this is a setting she controls about her household.
-              It ships here rather than later because Ruling 7 makes her her household's
-              proxy channel by default (a null pick resolves to the PRIMARY_CONTACT), so
-              without it the send path is live on her from the first event — Ruling 11. */}
+          {/* [[GTC-384]] (item 55, Q5) — GTC-256's Ruling 6 switch, "Message me about my own
+              household", is gone: it changed nothing Gather sends (her children are hers whoever is
+              picked, and the adults in her household with an email or mobile are asked directly).
+              One true line in its place, for a household of one too. `messagesMuted` is still sent
+              as it was loaded (or MUTED for a new household), so nothing stored changes. */}
           {isHostHouseholdForm && !hostingAlone && (
             <div className="border-t border-gray-200 pt-6">
-              {hostHasOtherMembers ? (
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={!messagesMuted}
-                    onChange={(e) => setMessagesMuted(!e.target.checked)}
-                    className="mt-1 h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
-                  />
-                  <span>
-                    <span className="text-sm font-medium text-gray-700">
-                      Message me about my own household
-                    </span>
-                    <span className="block text-xs text-gray-400 mt-0.5">
-                      Gather talks to one person per household, and for yours that&rsquo;s you.
-                      Leave this off and it won&rsquo;t nudge you about the people at your own
-                      table.
-                    </span>
-                  </span>
-                </label>
-              ) : (
-                /* The founder's Ruling-6 safety, said plainly rather than shown as a
-                   control that would do nothing: a household of one has no household
-                   messages, only messages about herself. resolveHouseholdMuted enforces
-                   the same rule at read time, so adding a partner and then removing them
-                   again cannot leave a stored "send" behind. */
-                <p className="text-xs text-gray-400">
-                  There&rsquo;s nobody in your household for Gather to nudge yet, so it won&rsquo;t
-                  message you about it. Add someone above and you can choose.
-                </p>
-              )}
+              <p className="text-sm text-gray-600">{OWN_HOUSEHOLD_LINE}</p>
             </div>
           )}
         </div>

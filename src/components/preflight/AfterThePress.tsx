@@ -144,6 +144,10 @@ function ExceptionRows({
   );
 }
 
+/** [[GTC-384]] (item 71, Q8): the "Write the list myself" outline (Moment2Opening), sized to its words. */
+const BACK_TO_BOARD_CLASS =
+  'inline-block px-5 py-2.5 rounded-lg border-2 border-accent bg-white text-accent-dark font-medium hover:bg-gray-50 transition-colors';
+
 export function AfterThePressView({
   eventId,
   eventName,
@@ -163,12 +167,10 @@ export function AfterThePressView({
     <div className="min-h-screen bg-warm-white">
       <div className="max-w-3xl mx-auto px-6 py-10">
         <header className="mb-8">
-          {/* [[GTC-367]] (item 31, W5) — the board sent her here ("Change who I chase"); this goes back. */}
+          {/* [[GTC-367]] (item 31, W5) — the board sent her here ("Change who I chase"); this goes back.
+              [[GTC-384]] (item 71, Q8): outlined, like "Write the list myself", and again at the foot. */}
           {eventId && (
-            <a
-              href={boardHref(eventId)}
-              className="mb-4 inline-block text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
-            >
+            <a href={boardHref(eventId)} className={`mb-6 ${BACK_TO_BOARD_CLASS}`}>
               {STRIP_WORDS.BACK_TO_BOARD}
             </a>
           )}
@@ -252,6 +254,15 @@ export function AfterThePressView({
             </section>
           )}
         </div>
+
+        {/* [[GTC-384]] (item 71, Q8): the same way back below the last card. */}
+        {eventId && (
+          <div className="mt-8">
+            <a href={boardHref(eventId)} className={BACK_TO_BOARD_CLASS}>
+              {STRIP_WORDS.BACK_TO_BOARD}
+            </a>
+          </div>
+        )}
       </div>
     </div>
   );

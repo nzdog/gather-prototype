@@ -446,7 +446,9 @@ export default function PreFlightPage() {
               {STRIP_WORDS.BACK_TO_WHOS_ON_WHAT}
             </a>
           )}
-          <div className="mb-6">
+          {/* [[GTC-384]] (item 61, Q7): more room for the strip and more space above and below,
+              here only, so each Moment's label and its tick sit on one line. MomentArc is untouched. */}
+          <div className="mt-2 mb-8 lg:-mx-16">
             <MomentArc
               currentMoment={4}
               completedMoments={[1, 2, 3]}
@@ -676,37 +678,42 @@ export default function PreFlightPage() {
                     </p>
                   )}
 
-                  <label className="block text-sm text-gray-600 mb-1">
-                    Who should Gather talk to for this household?
-                  </label>
-                  <select
-                    value={h.contactPersonEventId ?? ''}
-                    onChange={(e) => patchChannel(h.id, e.target.value || null)}
-                    className="w-full mb-3 px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-accent"
-                  >
-                    {/* value="" is "not picked", which resolves to the primary contact. */}
-                    <option value="">{h.label} (main contact)</option>
-                    {channelCandidates
-                      .filter(
-                        (c) =>
-                          c.personEventId !==
-                          h.members.find((m) => m.householdRole === 'PRIMARY_CONTACT')
-                            ?.personEventId
-                      )
-                      .map((c) => (
-                        <option key={c.personEventId} value={c.personEventId}>
-                          {c.name}
-                          {c.householdId === h.id
-                            ? ''
-                            : c.householdLabel
-                              ? ` — ${c.householdLabel}’s household`
-                              : ' — not in a household'}
-                        </option>
-                      ))}
-                  </select>
-                  {/* GTC-363 (item 6, W1) — not for the host's own household, where it is untrue. */}
+                  {/* [[GTC-384]] (Q4): the picker, its question (item 63's words) and its line only
+                      where they are true: not on the host's own household, where her children are
+                      hers whoever is picked. Nothing stored changes. */}
                   {!h.isHostHousehold && (
-                    <p className="text-xs text-gray-400 -mt-2 mb-3">{HOUSEHOLD_CONTACT_LINE}</p>
+                    <>
+                      <label className="block text-sm text-gray-600 mb-1">
+                        Who should Gather talk to for the kids in this household?
+                      </label>
+                      <select
+                        value={h.contactPersonEventId ?? ''}
+                        onChange={(e) => patchChannel(h.id, e.target.value || null)}
+                        className="w-full mb-3 px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                      >
+                        {/* value="" is "not picked", which resolves to the primary contact. */}
+                        <option value="">{h.label} (main contact)</option>
+                        {channelCandidates
+                          .filter(
+                            (c) =>
+                              c.personEventId !==
+                              h.members.find((m) => m.householdRole === 'PRIMARY_CONTACT')
+                                ?.personEventId
+                          )
+                          .map((c) => (
+                            <option key={c.personEventId} value={c.personEventId}>
+                              {c.name}
+                              {c.householdId === h.id
+                                ? ''
+                                : c.householdLabel
+                                  ? ` — ${c.householdLabel}’s household`
+                                  : ' — not in a household'}
+                            </option>
+                          ))}
+                      </select>
+                      {/* GTC-363 (item 6, W1), darker since [[GTC-384]] (item 63). */}
+                      <p className="text-sm text-gray-600 -mt-2 mb-3">{HOUSEHOLD_CONTACT_LINE}</p>
+                    </>
                   )}
 
                   <MarkRows

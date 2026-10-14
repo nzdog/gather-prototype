@@ -145,7 +145,7 @@ export default function DemoLandingPage() {
               isOpen={openStep === 1}
               onToggle={() => toggleStep(1)}
             >
-              <p className="text-gray-600 mb-2">Sarah paid $12 and entered the basics:</p>
+              <p className="text-gray-600 mb-2">Sarah paid $25 and entered the basics:</p>
               <ul className="text-gray-600 space-y-1 pl-4">
                 <li className="before:content-['•'] before:mr-2">
                   &ldquo;Henderson Family Christmas 2025&rdquo;
@@ -434,7 +434,7 @@ export default function DemoLandingPage() {
             Ready to coordinate your own event?
           </h2>
           <p className="text-gray-600 mb-4">
-            Your event is waiting. Set it up free — pay $12 when you&rsquo;re ready to invite your
+            Your event is waiting. Set it up free — pay $25 when you&rsquo;re ready to invite your
             people.
           </p>
           <p className="text-gray-500 text-sm mb-6">

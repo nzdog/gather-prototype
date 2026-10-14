@@ -347,10 +347,13 @@ function main() {
       ![one, four, itemless].some((a) => /\bcould\b/i.test(a.text))
   );
 
+  // [[GTC-384]] item 65, ruled 2026-10-14 (Q2): the founder's own words name Gather twice
+  // ("... helping me put it together - I'll let Gather take it from here."). Hinge §5's
+  // "one name" budget gave way to his wording on purpose; this used to assert once.
   assert(
     'hinge',
-    'the handover vouches, names Gather once, and says what happens next',
-    /Gather/.test(askHandover()) && askHandover().split('Gather').length === 2
+    'the handover vouches, names Gather twice (the founder’s words, GTC-384), and says what happens next',
+    /Gather/.test(askHandover()) && askHandover().split('Gather').length === 3
   );
 
   assert(

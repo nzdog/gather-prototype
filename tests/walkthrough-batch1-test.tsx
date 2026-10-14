@@ -211,7 +211,8 @@ async function main() {
     hostMode: { name: 'Kate', email: 'kate@example.com', phone: null },
     channelCandidates: [],
   });
-  const PICKER = 'Who should Gather talk to for this household?';
+  // [[GTC-384]] item 63, ruled 2026-10-14: the founder's 10 Oct words (was "…for this household?").
+  const PICKER = 'Who should Gather talk to for the kids in this household?';
 
   let CLINE: any = null;
   try {
@@ -242,8 +243,8 @@ async function main() {
   );
   assert(
     '6',
-    '6d Moment 1, the host’s own household opened from the list: the picker still shows (unchanged)',
-    ownForm.includes(PICKER)
+    '6d Moment 1, the host’s own household opened from the list: no picker (GTC-384 Q4, hidden where it is untrue)',
+    ownForm.length > 0 && !ownForm.includes('Who should Gather talk to')
   );
   assert(
     '6',
@@ -260,9 +261,11 @@ async function main() {
   const routeSrc = codeOnly(read('src/app/api/events/[id]/pre-flight/route.ts'));
   assert(
     '6',
-    '6g pre-flight step 3: W1 rendered from the module, under the question, off the host’s household',
+    '6g pre-flight step 3: W1 rendered from the module, under the question; both off the host’s household (GTC-384 Q4)',
     /HOUSEHOLD_CONTACT_LINE/.test(pageSrc) &&
-      /!h\.isHostHousehold\s*&&[\s\S]{0,200}HOUSEHOLD_CONTACT_LINE/.test(pageSrc) &&
+      /!h\.isHostHousehold\s*&&\s*\(\s*<>[\s\S]{0,200}Who should Gather talk to for the kids[\s\S]*?<\/select>\s*<p[^>]*>\{HOUSEHOLD_CONTACT_LINE\}/.test(
+        pageSrc
+      ) &&
       pageSrc.indexOf(PICKER) >= 0 &&
       pageSrc.indexOf('HOUSEHOLD_CONTACT_LINE}') > pageSrc.indexOf(PICKER)
   );

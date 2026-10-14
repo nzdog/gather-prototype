@@ -394,7 +394,8 @@ async function runInMemory() {
   };
   const M1 =
     "Hi Jo - We're doing Birthday drinks on Sunday, 8 November, at Kate’s place. Would love to have you there.";
-  const M2 = "I've got Gather helping me put it together - I'll let it take it from here.";
+  // [[GTC-384]] item 65, ruled 2026-10-14 (Q2): the founder's words, Gather named twice.
+  const M2 = "I've got Gather helping me put it together - I'll let Gather take it from here.";
   const BODY = `${M1}\n\n${M2}\n\n${W12('Kate', 'https://x.test/p/tok')}`;
   const composed = (() => {
     try {

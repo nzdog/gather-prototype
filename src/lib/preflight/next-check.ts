@@ -12,7 +12,7 @@
 
 /** The five steps' titles, in order. The pre-flight's `<Step>`s read them from here. */
 export const PREFLIGHT_STEP_TITLES = [
-  'What is still loose',
+  'Are we all sorted?', // [[GTC-384]] item 62, the founder's words (was "What is still loose")
   'Dietary needs',
   'Who Gather talks to',
   'The message, shown',
@@ -31,8 +31,8 @@ export function goToStepLine(n: number): string {
 }
 
 /**
- * [[GTC-374]] (item 14, plan Q8 and Q9) — on an invites-only event the plan's two steps, "What is
- * still loose" and "Dietary needs", are not needed: they stay where they are, ticked for her and
+ * [[GTC-374]] (item 14, plan Q8 and Q9) — on an invites-only event the plan's two steps, "Are we all
+ * sorted?" and "Dietary needs", are not needed: they stay where they are, ticked for her and
  * greyed (W11), so nothing is renumbered, Send keeps its words, and W1's line above starts at step 3.
  */
 export function settledSteps(invitesOnly: boolean): Record<number, boolean> {

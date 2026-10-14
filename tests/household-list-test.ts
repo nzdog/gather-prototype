@@ -138,7 +138,8 @@ const EVENT = {
 const LINK = 'https://gather.example/p/AbC123xYz';
 const M1 =
   "Hi Jo - We're doing Christmas at Kate's on Friday, 25 December, at 12 Rata Street. Would love to have you there.";
-const M2 = "I've got Gather helping me put it together - I'll let it take it from here.";
+// [[GTC-384]] item 65, ruled 2026-10-14 (Q2): the founder's words, Gather named twice.
+const M2 = "I've got Gather helping me put it together - I'll let Gather take it from here.";
 const SPEAKER = 'Hi - Gather here, helping Kate with this one.';
 const CHECK = "I'll check back if I haven't heard from you.";
 const TAP = `One tap to say yes, no or maybe - the details are on the page: ${LINK}`;

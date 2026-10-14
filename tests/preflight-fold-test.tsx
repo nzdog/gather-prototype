@@ -116,7 +116,7 @@ const NO_DIETARY_NEEDS = 'No dietary needs';
 /** As they stand at HEAD, for the controls. */
 const W11 = 'Not needed: this event is invites only.';
 const STEP_TITLES = [
-  'What is still loose',
+  'Are we all sorted?', // [[GTC-384]] item 62, ruled 2026-10-14 (was 'What is still loose')
   'Dietary needs',
   'Who Gather talks to',
   'The message, shown',

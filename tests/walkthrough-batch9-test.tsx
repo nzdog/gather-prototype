@@ -31,6 +31,7 @@ import { installProviderTrap } from './helpers/provider-trap';
 import { ToastProvider } from '../src/contexts/ToastContext';
 import Moment1Summary from '../src/components/plan/Moment1Summary';
 import Moment1InputForm from '../src/components/plan/Moment1InputForm';
+import SetupOpeningScreen from '../src/components/plan/SetupOpeningScreen';
 import Moment2Opening from '../src/components/plan/Moment2Opening';
 import Moment2PlanView from '../src/components/plan/Moment2PlanView';
 import Moment3AssignView from '../src/components/plan/Moment3AssignView';
@@ -138,10 +139,13 @@ const M = {
     done: 'You stop wondering. Every job is confirmed, and you know your event is sorted.',
   },
 } as const;
+/**
+ * [[GTC-384]] item 55, ruled 2026-10-14 (Q5): the switch changed nothing it said, so it went, and
+ * one true line took its place, for a household of one too. W3 and W4 are that one line now.
+ */
 const W3 =
-  'Gather talks to one person per household, and for yours that’s you. Leave this off and it won’t nudge you about the people at your own table.';
-const W4 =
-  'There’s nobody in your household for Gather to nudge yet, so it won’t message you about it. Add someone above and you can choose.';
+  'Gather doesn’t message you about your own household: your children’s jobs are yours to sort. Anyone else in it with their own email or mobile hears from Gather themselves.';
+const W4 = W3;
 const W5 = 'Invites, people and nudges →';
 const W6 = 'Invites, people and nudges';
 const W7 =
@@ -463,18 +467,17 @@ async function main() {
   );
   const pair = (n: 1 | 2 | 3) => `${M[n].does}</p></div><div data-moment-words="${n}-done"`;
   const once = (h: string, s: string) => h.split(s).length - 1 === 1;
+  // [[GTC-384]] item 54 (2026-10-14): Moment 1's two lines MOVED from the form to the herd-of-cats
+  // screen, as items 39 and 45 moved theirs: directly under each other there, on neither step here.
+  const openingScreen = render(createElement(SetupOpeningScreen as any, { onStart: () => {} }));
   assert(
     'R',
-    'R1 Moment 1’s form, both steps: "When it’s done" directly under "What this does", once each, before her line',
-    [guestForm, hostForm].every(
-      (h) =>
-        h.includes(pair(1)) &&
-        h.includes(M[1].done) &&
-        once(h, 'data-moment-words="1-does"') &&
-        once(h, 'data-moment-words="1-done"') &&
-        h.indexOf(M[1].done) <
-          Math.max(h.indexOf('Who’s coming to'), h.indexOf('First — you’re at'))
-    )
+    'R1 Moment 1’s two lines are on the herd-of-cats screen (GTC-384 item 54): "When it’s done" directly under "What this does", once each, before the button; the form, both steps, carries neither',
+    openingScreen.includes(pair(1)) &&
+      once(openingScreen, 'data-moment-words="1-does"') &&
+      once(openingScreen, 'data-moment-words="1-done"') &&
+      openingScreen.indexOf(M[1].done) < openingScreen.indexOf('Ready to start herding') &&
+      [guestForm, hostForm].every((h) => h.includes('m1-name') && !h.includes('data-moment-words'))
   );
   const households = [
     {
@@ -605,13 +608,29 @@ async function main() {
       !/MomentWords|doneWords/.test(panelSrc) &&
       !/compact/.test(read('src/components/plan/MomentWords.tsx'))
   );
-  assert('R', 'R8 W4 her own household of one', words(hostForm).includes(W4));
+  assert('R', 'R8 her own household of one: the line (GTC-384 Q5)', words(hostForm).includes(W4));
+  const ownForm = render(
+    createElement(Moment1InputForm as any, {
+      ...formProps,
+      editingHousehold: {
+        id: 'hk',
+        primaryContact: { name: 'Kate', email: 'kate@example.com' },
+        partner: { name: 'Dan', email: 'dan@example.com' },
+        helpers: [],
+        littleCount: 0,
+        guests: [],
+        isHostHousehold: true,
+        messagesMuted: null,
+      },
+    })
+  );
   assert(
     'R',
-    'R9 W3 her own household’s choice (shown once someone is added)',
-    textsOf('src/components/plan/Moment1InputForm.tsx')
-      .map((t) => t.replace(/&rsquo;/g, '’'))
-      .includes(W3)
+    'R9 her own household with someone in it: the same line, and no switch left (GTC-384 Q5)',
+    words(ownForm).includes(W3) &&
+      !textsOf('src/components/plan/Moment1InputForm.tsx')
+        .map((t) => t.replace(/&rsquo;/g, '’'))
+        .some((t) => t.includes('Message me about my own household'))
   );
 
   // ── T — the running total (item 38) ────────────────────────────────────────────────────────────

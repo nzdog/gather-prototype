@@ -95,7 +95,7 @@ async function load(rel: string): Promise<any> {
 // ── The ruled words, verbatim (GTC-366, PLAN RULINGS 2026-10-06) ─────────────
 const W1 = (n: number, title: string) => `Go to step ${n}: ${title} ↑`;
 const STEP_TITLES = [
-  'What is still loose',
+  'Are we all sorted?', // [[GTC-384]] item 62, ruled 2026-10-14 (was 'What is still loose')
   'Dietary needs',
   'Who Gather talks to',
   'The message, shown',

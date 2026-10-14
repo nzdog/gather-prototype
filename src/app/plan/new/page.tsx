@@ -404,7 +404,7 @@ export default function NewPlanPage() {
             ← Back to Home
           </button>
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Create Your Event</h1>
-          <p className="text-gray-600">Enter your event details and pay $12 to get started.</p>
+          <p className="text-gray-600">Enter your event details and pay $25 to get started.</p>
         </div>
 
         {/* Expired Link Notice */}
@@ -548,7 +548,7 @@ export default function NewPlanPage() {
             disabled={loading}
             className="w-full px-6 py-4 bg-accent text-white rounded-lg font-semibold hover:bg-accent-dark disabled:opacity-50 disabled:cursor-not-allowed text-lg"
           >
-            {loading ? 'Redirecting to payment...' : 'Pay & Create — $12'}
+            {loading ? 'Redirecting to payment...' : 'Pay & Create — $25'}
           </button>
 
           <p className="text-sm text-gray-500 text-center">

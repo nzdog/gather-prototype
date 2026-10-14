@@ -54,6 +54,20 @@ interface HouseholdCardListProps {
   draftAt?: 'start' | 'end';
 }
 
+/**
+ * [[GTC-384]] (item 57, Q6) — the column's count: saved households only (what is typed and not saved
+ * is not counted), and the people in them by the same sum as Moment 1's "N people added." (the setup
+ * page's `totalPeopleCount`): each household 1 + partner + helpers + kids without jobs + guests.
+ */
+function countLine(households: SavedHousehold[]): string {
+  const people = households.reduce(
+    (sum, h) => sum + 1 + (h.partner ? 1 : 0) + h.helpers.length + h.littleCount + h.guests.length,
+    0
+  );
+  const n = households.length;
+  return `${people} ${people === 1 ? 'person' : 'people'} in ${n} ${n === 1 ? 'household' : 'households'}`;
+}
+
 export default function HouseholdCardList({
   households,
   onEdit,
@@ -78,7 +92,10 @@ export default function HouseholdCardList({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm font-medium text-gray-500 mb-3">Ducks in a row so far</p>
+      <p className="text-sm font-medium text-gray-500 mb-3">
+        Ducks in a row so far
+        {households.length > 0 && ` — ${countLine(households)}`}
+      </p>
       {draftAt === 'start' && newCard}
       {households.map((household) =>
         draft && editingHouseholdId === household.id ? (

@@ -250,13 +250,15 @@ export function authorLineFor(recipientFirstName: string, line: string | null): 
  * makes movement 1 the authored one — "hers to write, or hers to wave through" — and says
  * nothing about movement 2 being editable, so it stays the register's words in the host's voice.
  *
- * To §5's introduction budget exactly: "Kate's vouching, one name, what-happens-next", and
- * no more. "The moment the message describes the product, it stops being a personal ask" —
+ * To §5's introduction budget: "Kate's vouching, one name, what-happens-next", and no more,
+ * except that the founder's own words name Gather twice ([[GTC-384]] item 65, ruled 2026-10-14:
+ * "...I'll let Gather take it from here."), on purpose. Straight apostrophes and a hyphen, so the
+ * text stays GSM-7. "The moment the message describes the product, it stops being a personal ask" —
  * so this never says what Gather is. The hand-off is immediate because movement 3 follows it
  * in the same message; that is the seam, and it is meant to be audible.
  */
 export function askHandover(): string {
-  return `I've got Gather helping me put it together - I'll let it take it from here.`;
+  return `I've got Gather helping me put it together - I'll let Gather take it from here.`;
 }
 
 /**

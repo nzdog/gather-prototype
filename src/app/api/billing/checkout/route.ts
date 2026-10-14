@@ -1,5 +1,5 @@
 // src/app/api/billing/checkout/route.ts
-// Per-event payment: $12 one-time payment (not subscription)
+// Per-event payment: $25 one-time payment (not subscription) — [[GTC-384]], ruled 2026-10-14
 import { NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
         {
           price_data: {
             currency: 'nzd',
-            unit_amount: 1200, // $12.00 NZD
+            unit_amount: 2500, // $25.00 NZD
             product_data: {
               name: 'Gather Event',
               description: eventName || 'Event coordination',
