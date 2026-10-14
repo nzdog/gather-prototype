@@ -72,7 +72,10 @@ export type StripDoor =
 export interface StripFacts {
   /** Her own household is saved (GTC-256: it comes first, so Moment 2 waits for it). */
   hostSaved: boolean;
-  /** A generated plan exists (`hasGeneratedPlan`, the entry rule's own predicate). */
+  /**
+   * A plan exists: on an event with a record, any section or item ([[GTC-382]] Q1, `hasAnyPlan`, her
+   * own plan included); on an old-style event a generated one (`hasGeneratedPlan`), as before.
+   */
   hasPlan: boolean;
   /** `EventSetup.planApprovedAt` is set: she has said "Plan looks good →". */
   planApproved: boolean;

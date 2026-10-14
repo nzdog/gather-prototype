@@ -1551,7 +1551,8 @@ export default function PlanEditorPage() {
    * Moment-flow event only, at every stage. One rule names the Moment and where it is
    * (`wayBack`); an old-style event (no record) has none, and its page is unchanged.
    */
-  const back = wayBack({ ...event, items });
+  // [[GTC-382]] (Q1): her own plan's sections count, so a hand-made plan reads W5.
+  const back = wayBack({ ...event, items, teams });
 
   return (
     <ModalProvider>

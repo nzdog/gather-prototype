@@ -5,6 +5,7 @@ import { STRIP_WORDS } from '@/lib/moments/strip';
 import EventDetails, { type EventDetailsFacts } from '@/components/shared/EventDetails';
 import MomentWords from '@/components/plan/MomentWords';
 import { INVITES_ONLY_WORDS, type InvitesOnlyState } from '@/lib/setup/invites-only';
+import { OWN_PLAN_WORDS, type OwnPlanState } from '@/lib/setup/own-plan';
 
 interface Moment2OpeningProps {
   eventName: string;
@@ -24,6 +25,16 @@ interface Moment2OpeningProps {
   invitesOnlyState?: InvitesOnlyState;
   /** [[GTC-375]] W2 — a plan is put away, and "Let’s do this →" brings it back. */
   planWaiting?: boolean;
+  /**
+   * [[GTC-382]] (item 40) — the third choice, W1, an outlined button directly under "Let’s do this →"
+   * with W2 beneath (scoping Q3). Absent, it is not offered: an old-style event, after the press, and
+   * never while a plan is put away (Q2, below).
+   */
+  onOwnPlan?: () => void;
+  /** [[GTC-382]] — W4 for a co-host (Q5), W5 if the press fails. */
+  ownPlanState?: OwnPlanState;
+  /** [[GTC-382]] (Q3) — her list already exists: W3 stands in for W2, and W1 goes back to it. */
+  ownPlanExists?: boolean;
 }
 
 export default function Moment2Opening({
@@ -34,13 +45,20 @@ export default function Moment2Opening({
   onInvitesOnly,
   invitesOnlyState = 'idle',
   planWaiting = false,
+  onOwnPlan,
+  ownPlanState = 'idle',
+  ownPlanExists = false,
 }: Moment2OpeningProps) {
-  const working = invitesOnlyState === 'working';
+  const working = invitesOnlyState === 'working' || ownPlanState === 'working';
+  // [[GTC-382]] Q2: while a plan is put away, "Let’s do this →" is the way back (GTC-375's W2).
+  const offerOwnPlan = Boolean(onOwnPlan) && !planWaiting;
   return (
     <div className="fixed inset-0 top-[65px] z-50 bg-white overflow-y-auto">
       {/* [[GTC-367]] (item 31, W1): its own way out. [[GTC-381]] (ruling 2, Q7): below the menu bar.
           [[GTC-368]] (item 17, Q1): the event's name across from it. */}
-      <div className="absolute top-6 inset-x-6 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+      {/* [[GTC-382]] (Q9): on a phone the row takes its own room above the column, so "← Your events"
+          never sits on the strip; from sm up it is placed as before. */}
+      <div className="relative px-6 pt-6 sm:absolute sm:top-6 sm:inset-x-6 sm:p-0 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <a
           href="/plan/events"
           className="inline-block text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
@@ -59,17 +77,52 @@ export default function Moment2Opening({
         <MomentWords moment={2} part="does" className="mt-10 max-w-xl" />
         <MomentWords moment={2} part="done" className="mt-4 max-w-xl" />
 
-        {/* Primary action */}
-        <div className="mt-8">
-          <button
-            type="button"
-            onClick={onStart}
-            disabled={working}
-            className="px-6 py-3 bg-accent text-white font-medium rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-60"
-          >
-            Let&rsquo;s do this &rarr;
-          </button>
-        </div>
+        {/* Primary action. [[GTC-382]] (scoping Q3): with the third choice offered, the two buttons
+            stand in one column, the same size; W1 outlined, directly under, with W2 (or W3) beneath. */}
+        {offerOwnPlan ? (
+          <div className="mt-8 flex w-full max-w-xs flex-col items-stretch">
+            <button
+              type="button"
+              onClick={onStart}
+              disabled={working}
+              className="w-full px-6 py-3 rounded-lg border-2 border-accent bg-accent text-white font-medium hover:bg-accent-dark hover:border-accent-dark transition-colors disabled:opacity-60"
+            >
+              Let&rsquo;s do this &rarr;
+            </button>
+            <button
+              type="button"
+              data-own-plan=""
+              onClick={onOwnPlan}
+              disabled={working}
+              className="mt-3 w-full px-6 py-3 rounded-lg border-2 border-accent bg-white text-accent-dark font-medium hover:bg-gray-50 transition-colors disabled:opacity-60"
+            >
+              {OWN_PLAN_WORDS.CHOOSE}
+            </button>
+            <p className="mt-2 text-center text-sm leading-snug text-gray-500">
+              {ownPlanExists ? OWN_PLAN_WORDS.WAITING : OWN_PLAN_WORDS.EXPLAIN}
+            </p>
+            {(ownPlanState === 'failed' || ownPlanState === 'not-host') && (
+              <p
+                data-own-plan-state={ownPlanState}
+                role="status"
+                className="mt-2 text-center text-sm text-amber-800"
+              >
+                {ownPlanState === 'not-host' ? OWN_PLAN_WORDS.NOT_HOST : OWN_PLAN_WORDS.FAILED}
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="mt-8">
+            <button
+              type="button"
+              onClick={onStart}
+              disabled={working}
+              className="px-6 py-3 bg-accent text-white font-medium rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-60"
+            >
+              Let&rsquo;s do this &rarr;
+            </button>
+          </div>
+        )}
 
         {/* [[GTC-375]] W2: what "Let’s do this →" does while her plan is put away. */}
         {planWaiting && (

@@ -7,11 +7,13 @@ import type { SerialisedEvent } from '@/lib/lifecycle';
 import { useReasonPrompt } from '@/components/plan/ReasonPrompt';
 import { CATEGORY_LABELS } from '@/lib/ai/plan-categories';
 import {
+  hasAnyPlan,
   hasGeneratedPlan,
   momentTwoBegun,
   resolveSetupStage,
   type SetupStage,
 } from '@/lib/setup/entry-stage';
+import type { OwnPlanState } from '@/lib/setup/own-plan';
 import { useToast } from '@/contexts/ToastContext';
 import SetupOpeningScreen from '@/components/plan/SetupOpeningScreen';
 import Moment1InputForm, {
@@ -346,6 +348,13 @@ export default function EventSetupPage() {
   const [invitesOnlyState, setInvitesOnlyState] = useState<InvitesOnlyState>('idle');
   // [[GTC-375]] (W2): a plan put away, waiting for "Let’s do this →" to bring it back.
   const [planWaiting, setPlanWaiting] = useState(false);
+  // [[GTC-382]] — "Write the list myself" on Moment 2's opening: W4 for a co-host, W5 if it fails.
+  const [ownPlanState, setOwnPlanState] = useState<OwnPlanState>('idle');
+  /**
+   * [[GTC-382]] (Q1) — how many sections the event has. On an event with a record, any section is a
+   * plan (`hasAnyPlan`): her own plan is eight empty sections. Read when it can change the answer.
+   */
+  const [teamCount, setTeamCount] = useState(0);
   const [holdNoticeShown, setHoldNoticeShown] = useState<HoldNotice | null>(null);
   // [[GTC-380]] (item 50, Q10) — the item the board's search asked for, for Moment 3, once.
   const [arriveAtItem, setArriveAtItem] = useState<string | null>(null);
@@ -494,6 +503,20 @@ export default function EventSetupPage() {
           const res = await fetch(`/api/events/${eventId}/households`);
           if (res.ok) householdCount = ((await res.json()).households ?? []).length;
         }
+        /**
+         * [[GTC-382]] (Q1) — the section count, fetched ONLY when it can change the answer: a record,
+         * not invites only, not approved, and no row at all (any row already makes a plan). An
+         * old-style event (no record) never reads it.
+         */
+        let sections = 0;
+        if (
+          loadedEvent.setup &&
+          !loadedEvent.setup.invitesOnly &&
+          !loadedEvent.setup.planApprovedAt &&
+          loadedItems.length === 0
+        ) {
+          sections = await loadTeamCount();
+        }
         if (cancelled) return;
 
         let stage: SetupStage | 'moment2-opening' = resolveSetupStage({
@@ -506,6 +529,8 @@ export default function EventSetupPage() {
           invitesOnly: Boolean(loadedEvent.setup?.invitesOnly),
           // [[GTC-381]] (Q1): a kind, invites only or an approval; an empty record opens Moment 1.
           momentTwoBegun: momentTwoBegun(loadedEvent.setup),
+          // [[GTC-382]] (Q1): any section or any item is a plan (read only with a record).
+          teamCount: sections,
         });
         /*
          * [[GTC-367]] (item 2) — a strip tap from another page (the pre-flight) asks for a Moment by
@@ -516,7 +541,12 @@ export default function EventSetupPage() {
         const at = new URLSearchParams(window.location.search).get('at');
         // [[GTC-380]] (Q10): the board's search asks for one item the same way, read once here.
         const askedItem = new URLSearchParams(window.location.search).get(ITEM_PARAM);
-        const asked = requestedStage(at, { hasPlan: hasGeneratedPlan(loadedItems) });
+        // [[GTC-382]] (Q1): her own plan counts as a plan here too; an old-style event as before.
+        const asked = requestedStage(at, {
+          hasPlan: loadedEvent.setup
+            ? hasAnyPlan(loadedItems, sections)
+            : hasGeneratedPlan(loadedItems),
+        });
         if (asked) stage = asked;
         if (at !== null || askedItem !== null) {
           window.history.replaceState(window.history.state, '', window.location.pathname);
@@ -712,7 +742,22 @@ export default function EventSetupPage() {
     }
     const teamsData = await teamsRes.json();
     const itemsData = await itemsRes.json();
+    // [[GTC-382]]: the section count the strip and the opening read, kept with the plan.
+    setTeamCount((teamsData.teams ?? []).length);
     return mapTeamsAndItemsToPlanCategories(teamsData.teams ?? [], itemsData.items ?? []);
+  };
+
+  /** [[GTC-382]] (Q1) — the event's section count, fresh. 0 if it cannot be read. */
+  const loadTeamCount = async (): Promise<number> => {
+    try {
+      const res = await fetch(`/api/events/${eventId}/teams`);
+      if (!res.ok) return 0;
+      const n = ((await res.json()).teams ?? []).length as number;
+      setTeamCount(n);
+      return n;
+    } catch {
+      return 0;
+    }
   };
 
   /**
@@ -807,8 +852,12 @@ export default function EventSetupPage() {
     }
     // Moment 2: the plan view when there is a plan, else Moment 2's opening — "On to the plan →"'s
     // rule (GTC-235). Read fresh: after a first generation `items` has not been reloaded.
+    // [[GTC-382]] (Q1): on an event with a record, her own plan (any section or item) is a plan.
     const fresh = await loadItems();
-    if (hasGeneratedPlan(fresh)) {
+    const isPlan = event?.setup
+      ? hasAnyPlan(fresh, fresh.length > 0 ? 0 : await loadTeamCount())
+      : hasGeneratedPlan(fresh);
+    if (isPlan) {
       setMoment2PlanCategories(await loadMoment2PlanCategories());
       applyStage('plan');
       return;
@@ -822,7 +871,8 @@ export default function EventSetupPage() {
   ): Partial<Record<MomentNumber, ArcDoor>> => {
     const all = stripDoors({
       hostSaved,
-      hasPlan: hasGeneratedPlan(items),
+      // [[GTC-382]] (Q1): her own plan opens the plan view from the strip; an old-style event as before.
+      hasPlan: event?.setup ? hasAnyPlan(items, teamCount) : hasGeneratedPlan(items),
       planApproved: Boolean(event?.setup?.planApprovedAt),
       held: Boolean(event && event.status !== 'DRAFT'),
       sent: Boolean(event?.sentAt),
@@ -1208,6 +1258,9 @@ export default function EventSetupPage() {
       0
     );
     const planGuestCount = householdsHeadcount > 0 ? householdsHeadcount : (event.guestCount ?? 0);
+    // [[GTC-382]] (scoping Q2): her own plan, with no drafted row. An old-style event never reaches
+    // this view without one (`?at=plan` asks for a drafted row there).
+    const ownPlan = !hasGeneratedPlan(items);
     return (
       <>
         {/* GTC-202: this branch returns early, so the prompt is rendered here too —
@@ -1218,6 +1271,7 @@ export default function EventSetupPage() {
           eventName={event.name}
           guestCount={planGuestCount}
           categories={moment2PlanCategories}
+          ownPlan={ownPlan}
           onRegeneratePlan={() => handleRegenerate('plan')}
           onRegenerateCategory={(categoryKey) => handleRegenerate('category', categoryKey)}
           regeneratingScope={regeneratingScope}
@@ -1392,6 +1446,12 @@ export default function EventSetupPage() {
             toast.success('Plan approved.');
           }}
           onBack={() => {
+            // [[GTC-382]] (Q3): her own plan's back (W10) goes to Moment 2's opening, where W3 says her
+            // list is waiting and "Let’s do this →" can still draft into it.
+            if (ownPlan) {
+              applyStage('moment2-opening');
+              return;
+            }
             setShowMoment2PlanView(false);
             setMoment2PlanCategories([]);
             setShowMoment2Step1(true);
@@ -1427,6 +1487,8 @@ export default function EventSetupPage() {
         onReady={async () => {
           try {
             const categories = await loadMoment2PlanCategories();
+            // [[GTC-382]]: the drafted rows, so a draft over her own plan shows the drafted view.
+            await loadItems();
             setMoment2PlanCategories(categories);
             setShowMoment2Step2Skeleton(false);
             setShowMoment2PlanView(true);
@@ -1516,13 +1578,19 @@ export default function EventSetupPage() {
         setShowMoment2Step1(true);
         return;
       }
-      const [loadedEvent, loadedItems] = await Promise.all([loadEvent(), loadItems()]);
+      const [loadedEvent, loadedItems, loadedTeamCount] = await Promise.all([
+        loadEvent(),
+        loadItems(),
+        loadTeamCount(),
+      ]);
+      // [[GTC-382]] (Q1): a hand-made plan that comes back opens as her plan, not the questions.
       const stage = resolveSetupStage({
         items: loadedItems,
         hasSetup: true,
         householdCount: 0,
         planApproved: Boolean(loadedEvent?.setup?.planApprovedAt),
         invitesOnly: false,
+        teamCount: loadedTeamCount,
       });
       if (stage === 'plan') setMoment2PlanCategories(await loadMoment2PlanCategories());
       if (stage === 'moment3') setMoment3Data(await loadMoment3Data());
@@ -1537,6 +1605,54 @@ export default function EventSetupPage() {
     // [[GTC-375]] Q4: offered before the press on every opening, an event whose only items were added
     // by hand included (they are put away the same way). After the press it is fixed.
     const offerInvitesOnly = !event.sentAt;
+    /*
+     * [[GTC-382]] (item 40) — "Write the list myself" (W1): offered where the quiet link is, before the
+     * press, on an event with a record only (an old-style event reads as it did), and not while a plan
+     * is put away (Q2; the opening hides it). With her list already there it goes back to it and makes
+     * nothing (Q3, W3). Otherwise the setup route makes the eight (Q4) — from an invites-only event in
+     * the same call that clears the flag — and the plan view opens. A co-host is told W4, a failure W5.
+     */
+    const listExists = hasAnyPlan(items, teamCount);
+    const writeOwnList = async () => {
+      if (ownPlanState === 'working') return;
+      if (listExists && !invitesOnly) {
+        setMoment2PlanCategories(await loadMoment2PlanCategories());
+        applyStage('plan');
+        return;
+      }
+      setOwnPlanState('working');
+      try {
+        const res = await fetch(`/api/events/${eventId}/setup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(
+            invitesOnly ? { invitesOnly: false, ownPlan: true } : { ownPlan: true }
+          ),
+        });
+        if (!res.ok) {
+          setOwnPlanState(res.status === 403 ? 'not-host' : 'failed');
+          return;
+        }
+        // The rows too: the plan view reads them to know the plan is her own.
+        const [loadedEvent, , categories] = await Promise.all([
+          loadEvent(),
+          loadItems(),
+          loadMoment2PlanCategories(),
+        ]);
+        setInvitesOnlyState('idle');
+        setPlanWaiting(false);
+        setOwnPlanState('idle');
+        if (loadedEvent?.setup?.planApprovedAt) {
+          setMoment3Data(await loadMoment3Data());
+          applyStage('moment3');
+          return;
+        }
+        setMoment2PlanCategories(categories);
+        applyStage('plan');
+      } catch {
+        setOwnPlanState('failed');
+      }
+    };
     return (
       <Moment2Opening
         eventName={event.name}
@@ -1547,6 +1663,9 @@ export default function EventSetupPage() {
         onInvitesOnly={offerInvitesOnly ? () => void chooseInvitesOnly() : undefined}
         invitesOnlyState={invitesOnlyState}
         planWaiting={invitesOnly && planWaiting}
+        onOwnPlan={offerInvitesOnly && event.setup ? () => void writeOwnList() : undefined}
+        ownPlanState={ownPlanState}
+        ownPlanExists={listExists && !invitesOnly}
       />
     );
   }

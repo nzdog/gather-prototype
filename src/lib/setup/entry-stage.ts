@@ -40,6 +40,16 @@ export function hasGeneratedPlan(items: Array<{ source?: string | null }>): bool
 }
 
 /**
+ * [[GTC-382]] (item 40, Q1) — "a plan", drafted or her own: any section or any item. Teams ARE the
+ * test here, on purpose: "Write the list myself" makes eight empty sections and nothing else, and they
+ * are her plan. Only for an event with an `EventSetup` record — V1 events have teams too, and keep
+ * reading `hasGeneratedPlan` (every caller checks the record first; `resolveSetupStage` does).
+ */
+export function hasAnyPlan(items: Array<{ source?: string | null }>, teamCount: number): boolean {
+  return hasGeneratedPlan(items) || items.length > 0 || teamCount > 0;
+}
+
+/**
  * The entry rule.
  *
  * `EventSetup` IS THE V1/V2 DISCRIMINATOR, and it is load-bearing in the first line.
@@ -100,6 +110,13 @@ export function resolveSetupStage(input: {
    * false, an empty record opens as no record does: households → Moment 1, none → the opening.
    */
   momentTwoBegun?: boolean;
+  /**
+   * [[GTC-382]] (Q1) — how many sections the event has. Optional, and absent means today's answer.
+   * Present, a record with any section or any item opens the plan view (`hasAnyPlan`), so her own
+   * plan, which chooses no kind, is not read as "Moment 2 has not begun". Read after the record,
+   * invites only and approval, before `momentTwoBegun`.
+   */
+  teamCount?: number;
 }): SetupStage {
   if (!input.hasSetup) {
     return input.householdCount > 0 ? 'moment1' : 'opening';
@@ -107,6 +124,7 @@ export function resolveSetupStage(input: {
   if (input.invitesOnly === true) return 'invites-only';
   if (input.planApproved === true) return 'moment3';
   if (hasGeneratedPlan(input.items)) return 'plan';
+  if (input.teamCount !== undefined && hasAnyPlan(input.items, input.teamCount)) return 'plan';
   if (input.momentTwoBegun === false) {
     return input.householdCount > 0 ? 'moment1' : 'opening';
   }

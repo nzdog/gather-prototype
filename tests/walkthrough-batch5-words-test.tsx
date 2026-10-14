@@ -124,7 +124,7 @@ const M = {
     done: 'You won’t need to remember who you’ve asked. I’ve got the list, and I’ll handle the invites and nudges from here.', // GTC-378 W1
   },
   2: {
-    does: 'Gets the plan out of your head and onto the page. Tell me about the event and any dietary needs, and I’ll draft the full list of what’s needed: food, drinks and everything else. You decide what stays.',
+    does: 'Gets the plan out of your head and onto the page. You can either plan the menu yourself, or tell me about the event and any dietary needs, and I’ll draft the full list of what’s needed: food, drinks, quantities and everything else. You’re welcome to edit as much as you like.', // GTC-382 W11
     done: 'You won’t need to worry you’ve forgotten something. The whole plan is in one place, it’s yours, and it’s ready to hand out.',
   },
   3: {

@@ -11,7 +11,7 @@
  *   otherwise the setup flow, where the entry rule picks the screen, named for it:
  *     invites only            → W5 (STRIP_WORDS.BACK_TO_WHATS_THE_PLAN, reused)
  *     approved                → W6
- *     begun, or a plan        → W5
+ *     begun, or a plan        → W5 ([[GTC-382]] Q1: her own plan too — any section or any item)
  *     else (opening, Moment 1)→ W4
  * An old-style event (no `EventSetup` record) has no Moment to go back to: null, and its page is
  * unchanged.
@@ -23,7 +23,7 @@
 
 import { STRIP_WORDS } from './strip';
 import { boardHref } from '@/lib/events/home-href';
-import { hasGeneratedPlan, momentTwoBegun } from '@/lib/setup/entry-stage';
+import { hasAnyPlan, momentTwoBegun } from '@/lib/setup/entry-stage';
 
 export const WAY_BACK_WORDS = {
   /** W4 — the opening screen or Moment 1. */
@@ -49,6 +49,8 @@ export interface WayBackFacts {
   status: string;
   sentAt: Date | string | null;
   items?: Array<{ source?: string | null }>;
+  /** [[GTC-382]] (Q1) — the event's sections: "Write the list myself" makes eight, with no item. */
+  teams?: unknown[];
 }
 
 export function wayBack(facts: WayBackFacts): { href: string; words: string } | null {
@@ -60,7 +62,7 @@ export function wayBack(facts: WayBackFacts): { href: string; words: string } | 
   const href = `/plan/${facts.id}/setup`;
   if (facts.setup.invitesOnly === true) return { href, words: WAY_BACK_WORDS.TO_WHATS_THE_PLAN };
   if (facts.setup.planApprovedAt != null) return { href, words: WAY_BACK_WORDS.TO_WHOS_ON_WHAT };
-  if (momentTwoBegun(facts.setup) || hasGeneratedPlan(facts.items ?? [])) {
+  if (momentTwoBegun(facts.setup) || hasAnyPlan(facts.items ?? [], facts.teams?.length ?? 0)) {
     return { href, words: WAY_BACK_WORDS.TO_WHATS_THE_PLAN };
   }
   return { href, words: WAY_BACK_WORDS.TO_WHOS_COMING };

@@ -9,6 +9,7 @@ import { CATEGORY_LABELS } from '@/lib/ai/plan-categories';
 import RowKindToggle from './RowKindToggle';
 import { JOB_NAME_LEAD, JOB_NAME_PLACEHOLDER, type RowKindValue } from '@/lib/items/row-kind';
 import { INVITES_ONLY_WORDS, type InvitesOnlyState } from '@/lib/setup/invites-only';
+import { OWN_PLAN_WORDS, ownPlanHeading } from '@/lib/setup/own-plan';
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -87,6 +88,12 @@ interface Moment2PlanViewProps {
   onInvitesOnly?: () => void;
   /** [[GTC-375]] — while it works, if it fails, a co-host: GTC-374's W3, W4 and W5. */
   invitesOnlyState?: InvitesOnlyState;
+  /**
+   * [[GTC-382]] (scoping Q2) — her own plan, written by hand, with no drafted row. Absent, today's
+   * view. True: W6 for the heading, "for" in the count line (Q6), no Regenerate anywhere (each a paid
+   * AI call with no questions answered), W8 while every section is empty, and W10 for the back.
+   */
+  ownPlan?: boolean;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -140,6 +147,7 @@ export default function Moment2PlanView({
   details,
   onInvitesOnly,
   invitesOnlyState = 'idle',
+  ownPlan = false,
 }: Moment2PlanViewProps) {
   const toast = useToast();
 
@@ -152,6 +160,8 @@ export default function Moment2PlanView({
   const [bulkRemoving, setBulkRemoving] = useState(false);
 
   const totalItems = categories.reduce((sum, c) => sum + c.items.length, 0);
+  // [[GTC-382]] W8 — her own plan with nothing in it yet.
+  const firstTime = ownPlan && totalItems === 0;
 
   // Ruling Q2 (GTC-236): regenerate clears marks — they are staging state, and after a
   // regenerate the marked GENERATED rows no longer exist anyway.
@@ -252,11 +262,15 @@ export default function Moment2PlanView({
 
         {/* Title + summary */}
         <h1 className="text-xl font-semibold text-gray-900 mb-1">
-          Here&rsquo;s what I&rsquo;d suggest for {eventName}.
+          {ownPlan ? (
+            ownPlanHeading(eventName)
+          ) : (
+            <>Here&rsquo;s what I&rsquo;d suggest for {eventName}.</>
+          )}
         </h1>
-        <p className="text-sm text-gray-500 mb-6">
+        <p className={`text-sm text-gray-500 ${firstTime ? 'mb-2' : 'mb-6'}`}>
           {totalItems} {totalItems === 1 ? 'item' : 'items'} across {categories.length}{' '}
-          {categories.length === 1 ? 'category' : 'categories'}, based on{' '}
+          {categories.length === 1 ? 'category' : 'categories'}, {ownPlan ? 'for' : 'based on'}{' '}
           {/* GTC-235: the headcount IS the Moment 1 fact, so it is the way back to
               Moment 1. No new chrome, and the control sits on the thing it changes. */}
           <button
@@ -269,16 +283,21 @@ export default function Moment2PlanView({
           </button>
           .
         </p>
-        <button
-          type="button"
-          onClick={onRegeneratePlan}
-          disabled={regeneratingScope !== null}
-          className="-mt-4 mb-6 text-sm text-gray-600 hover:text-gray-900 underline underline-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
-        >
-          {regeneratingScope === 'plan'
-            ? 'Regenerating the plan…'
-            : 'Not quite right? Regenerate the plan'}
-        </button>
+        {/* [[GTC-382]] W8: her own plan, every section still empty. */}
+        {firstTime && <p className="text-sm text-gray-600 mb-6">{OWN_PLAN_WORDS.FIRST_TIME}</p>}
+        {/* [[GTC-382]] (scoping Q2): no Regenerate on her own plan. */}
+        {!ownPlan && (
+          <button
+            type="button"
+            onClick={onRegeneratePlan}
+            disabled={regeneratingScope !== null}
+            className="-mt-4 mb-6 text-sm text-gray-600 hover:text-gray-900 underline underline-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
+          >
+            {regeneratingScope === 'plan'
+              ? 'Regenerating the plan…'
+              : 'Not quite right? Regenerate the plan'}
+          </button>
+        )}
 
         {/* Category sections */}
         <div className="space-y-6">
@@ -312,7 +331,7 @@ export default function Moment2PlanView({
               onAddItem={handleAdd}
               selectedItemIds={selectedItemIds}
               onToggleSelection={toggleSelection}
-              categoryKey={LABEL_TO_KEY[category.name] ?? null}
+              categoryKey={ownPlan ? null : (LABEL_TO_KEY[category.name] ?? null)}
               regeneratingScope={regeneratingScope}
               onRegenerateCategory={onRegenerateCategory}
             />
@@ -364,8 +383,9 @@ export default function Moment2PlanView({
             disabled={regeneratingScope !== null}
             className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {/* [[GTC-367]] (item 31, W3): it opens the questions, so it says so (plan Q8). */}
-            {STRIP_WORDS.BACK_TO_QUESTIONS}
+            {/* [[GTC-367]] (item 31, W3): it opens the questions, so it says so (plan Q8).
+                [[GTC-382]] (Q3): her own plan's back goes to Moment 2's opening, and says W10. */}
+            {ownPlan ? OWN_PLAN_WORDS.BACK : STRIP_WORDS.BACK_TO_QUESTIONS}
           </button>
           <button
             type="button"

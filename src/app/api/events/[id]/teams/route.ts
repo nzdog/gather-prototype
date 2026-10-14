@@ -126,10 +126,25 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // Verify event exists
     const event = await prisma.event.findUnique({
       where: { id: eventId },
+      include: { setup: { select: { id: true } } },
     });
 
     if (!event) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
+
+    /*
+     * [[GTC-382]] (Q8) — "+ Add category" on a Moment-flow event puts the new section after the last
+     * one, so it keeps its place on a reload (the plan view sorts by displayOrder). An old-style event
+     * (no EventSetup record) stores the default, 0, exactly as before.
+     */
+    let displayOrder: number | undefined;
+    if (event.setup) {
+      const last = await prisma.team.aggregate({
+        where: { eventId },
+        _max: { displayOrder: true },
+      });
+      displayOrder = (last._max.displayOrder ?? 0) + 1;
     }
 
     // Create team with sanitized inputs
@@ -142,6 +157,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         source: 'MANUAL',
         eventId,
         coordinatorId: coordinatorId.trim(),
+        ...(displayOrder !== undefined ? { displayOrder } : {}),
       },
       include: {
         coordinator: {

@@ -5,6 +5,8 @@ import { validateDietaryData, type DietaryData } from '@/lib/dietary';
 import { CONFIG_EVENT_TYPES } from '@/lib/ai/config-loader';
 import { ledgerActorForUser } from '@/lib/auth/actor';
 import { bringBackPlan, putAwayPlan, waitingPlanRevisionId } from '@/lib/workflow';
+import { recordChange } from '@/lib/ledger';
+import { OWN_PLAN_SECTIONS } from '@/lib/setup/own-plan';
 
 interface SectionData {
   items: string[];
@@ -64,6 +66,14 @@ interface EventSetupBody {
    * with the flag (plan Q5).
    */
   invitesOnly?: unknown;
+  /**
+   * [[GTC-382]] (item 40) — "Write the list myself" sends `true`: the everyday eight, empty, made here
+   * and nowhere else (plan Q4), the host's alone (Q5). Once only: under a per-event lock, and only
+   * when the event has no section, so a second press, two at once or a stale tab make nothing. Sent
+   * with `invitesOnly: false` from an invites-only event's opening, the bring-back runs first, in the
+   * same transaction, and the eight only if nothing came back. No AI call; `aiCallsUsed` untouched.
+   */
+  ownPlan?: unknown;
 }
 
 const OTHER_JOBS_FIELDS = ['setUpData', 'cleanUpData', 'otherJobsOtherData'] as const;
@@ -229,6 +239,22 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       }
     }
 
+    // [[GTC-382]] — Write the list myself: the host's, and never with invites only chosen in the same call.
+    if ('ownPlan' in body) {
+      if (body.ownPlan !== true) {
+        return NextResponse.json({ error: 'ownPlan must be true' }, { status: 400 });
+      }
+      if (body.invitesOnly === true) {
+        return NextResponse.json(
+          { error: 'ownPlan cannot be sent with invitesOnly: true' },
+          { status: 400 }
+        );
+      }
+      if (auth.role !== 'HOST') {
+        return NextResponse.json({ error: 'Only the host can write the list' }, { status: 403 });
+      }
+    }
+
     // Build update data — only include fields present in the request body
     const data: Record<string, unknown> = {};
     if (body.planApproved === true) {
@@ -254,6 +280,59 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     if ('invitesOnly' in body) data.invitesOnly = body.invitesOnly;
 
     const upsert = { where: { eventId }, create: { eventId, ...data }, update: data };
+
+    /*
+     * [[GTC-382]] (Q4) — the eight, in one transaction under a per-event lock (the nudge sender's
+     * pattern), only when the event has no section: in scoping Q1's order, MANUAL, no coordinator (so
+     * the hold mints no coordinator link for them), one CREATE_TEAM ledger entry each, as
+     * POST /teams records. `made` says whether this call made them.
+     */
+    if ('ownPlan' in body) {
+      const actor = await ledgerActorForUser(auth.user, auth.role);
+      if (!actor.id) {
+        return NextResponse.json({ error: 'Could not resolve acting person' }, { status: 500 });
+      }
+      const actorId = actor.id;
+      const result = await prisma.$transaction(
+        async (tx) => {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`own-plan:${eventId}`}))`;
+          const moved = 'invitesOnly' in body ? await bringBackPlan(tx, eventId, actorId) : {};
+          const setup = await tx.eventSetup.upsert(upsert);
+          if ((await tx.team.count({ where: { eventId } })) > 0) {
+            return { setup, ...moved, ownPlan: { made: false } };
+          }
+          const teams = [];
+          for (const [i, section] of OWN_PLAN_SECTIONS.entries()) {
+            teams.push(
+              await tx.team.create({
+                data: {
+                  name: section.name,
+                  domain: section.domain,
+                  domainConfidence: section.domain ? 'HIGH' : 'MEDIUM',
+                  source: 'MANUAL',
+                  displayOrder: i + 1,
+                  eventId,
+                },
+              })
+            );
+          }
+          await recordChange(tx, {
+            eventId,
+            actor,
+            changes: teams.map((team) => ({
+              action: 'CREATE_TEAM' as const,
+              targetType: 'Team' as const,
+              targetId: team.id,
+              before: null,
+              after: { name: team.name },
+            })),
+          });
+          return { setup, ...moved, ownPlan: { made: true } };
+        },
+        { timeout: 30000 }
+      );
+      return NextResponse.json(result);
+    }
 
     if (!('invitesOnly' in body)) {
       const setup = await prisma.eventSetup.upsert(upsert);
