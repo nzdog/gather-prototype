@@ -45,6 +45,7 @@ import {
 } from '@/lib/setup/invites-only';
 import type { ArcDoor } from '@/components/plan/MomentArc';
 import EventDetails, { type EventDetailsFacts } from '@/components/shared/EventDetails';
+import { shownMarks } from '@/lib/items/dish-marks';
 import {
   STRIP_WORDS,
   requestedStage,
@@ -87,6 +88,8 @@ type PlanApiItem = {
   notes: string | null;
   dietaryTags: unknown;
   displayOrder: number | null;
+  /** [[GTC-385]] (item 59): 'ITEM' or 'TASK', which the items route already sends. */
+  kind?: string;
   team: { id: string; name: string; displayOrder?: number };
 };
 
@@ -139,6 +142,8 @@ function mapItemsToMoment3(items: Moment3ApiItem[]): {
             name: item.name,
             kind,
             detail: kind === 'TASK' ? '' : amountAndUnit || (item.quantityText ?? ''),
+            // [[GTC-385]] (item 59, Q8): Moment 3 shows the same marks as the plan.
+            marks: shownMarks(team.name, kind, item.dietaryTags),
           };
         }),
     }));
@@ -183,6 +188,7 @@ function mapTeamsAndItemsToPlanCategories(
     notes?: string;
     dietaryFlags?: string[];
     displayOrder?: number;
+    kind?: string;
   }>;
 }> {
   const itemsByTeamId = new Map<string, PlanApiItem[]>();
@@ -223,6 +229,8 @@ function mapTeamsAndItemsToPlanCategories(
           notes: item.notes ?? undefined,
           dietaryFlags,
           displayOrder: item.displayOrder ?? undefined,
+          // [[GTC-385]] (item 59): a job carries no marks and no ticks.
+          kind: item.kind,
         };
       }),
   }));
@@ -1285,6 +1293,9 @@ export default function EventSetupPage() {
             }
             if (updates.servingSize !== undefined) body.quantityText = updates.servingSize;
             if (updates.notes !== undefined) body.notes = updates.notes;
+            // [[GTC-385]] (item 59, Q9): the ticks, through the item PATCH that already takes the
+            // tags (a changed row becomes HOST_EDITED, so a regenerate keeps it).
+            if (updates.dietaryFlags !== undefined) body.dietaryTags = updates.dietaryFlags;
             // GTC-202: T4. PlanItem carries no assignment, so the response comes from
             // `items` — loaded on mount for every path that can reach this view, so the
             // lookup is reliable rather than best-effort.
@@ -1325,6 +1336,9 @@ export default function EventSetupPage() {
                           ? { servingSize: updates.servingSize }
                           : {}),
                         ...(updates.notes !== undefined ? { notes: updates.notes } : {}),
+                        ...(updates.dietaryFlags !== undefined
+                          ? { dietaryFlags: updates.dietaryFlags }
+                          : {}),
                       }
                     : it
                 ),
@@ -1374,6 +1388,8 @@ export default function EventSetupPage() {
                       quantityText: newItem.servingSize || undefined,
                     }),
                 description: newItem.notes,
+                // [[GTC-385]] (item 59, Q9): the ticks, on a food dish only.
+                ...(newItem.dietaryTags ? { dietaryTags: newItem.dietaryTags } : {}),
               }),
             });
             if (!res.ok) throw new Error('Failed to add item');
@@ -1395,6 +1411,8 @@ export default function EventSetupPage() {
               servingSize: createdItem.quantityText ?? newItem.servingSize,
               displayOrder: createdItem.displayOrder ?? undefined,
               notes: createdItem.notes ?? newItem.notes,
+              kind: newItem.kind,
+              dietaryFlags: newItem.dietaryTags,
             };
             setMoment2PlanCategories((prev) =>
               prev.map((cat) =>
@@ -1531,6 +1549,8 @@ export default function EventSetupPage() {
               await loadEvent();
               toast.error("You've used all 10 AI calls for this event.");
               setShowMoment2Step2Skeleton(false);
+              // [[GTC-385]] (item 58, Q4): back to the questions, her answers as she left them.
+              setShowMoment2Step1(true);
               return;
             }
             if (!res.ok) {
@@ -1541,6 +1561,7 @@ export default function EventSetupPage() {
           } catch {
             toast.error('Failed to generate plan. Please try again.');
             setShowMoment2Step2Skeleton(false);
+            setShowMoment2Step1(true);
           }
         }}
         onBack={() => void goToMoment('moment1')}

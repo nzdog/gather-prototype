@@ -65,6 +65,8 @@ import {
 import type { HoldNotice } from '@/lib/moment3/hold';
 import { boardHref } from '@/lib/events/home-href';
 import { STRIP_WORDS } from '@/lib/moments/strip';
+import { DISH_MARKS_GUESS_M3, DISH_MARKS_KEY, type DishMark } from '@/lib/items/dish-marks';
+import { DishMarkTags, DishMarksKey } from './DishMarks';
 
 export interface Moment3Item {
   id: string;
@@ -73,6 +75,8 @@ export interface Moment3Item {
   kind: string;
   /** Quantity and unit, or '' for a job. */
   detail: string;
+  /** [[GTC-385]] (item 59): the dish's marks (none in drinks, none on a job). */
+  marks?: DishMark[];
 }
 
 export interface Moment3Category {
@@ -231,6 +235,8 @@ export default function Moment3AssignView({
   }, [selection]);
 
   const allItems = useMemo(() => categories.flatMap((c) => c.items), [categories]);
+  // [[GTC-385]] (item 59, Q11): the key shows only when a dish is marked; here without "tap a dish".
+  const anyMarks = allItems.some((i) => (i.marks?.length ?? 0) > 0);
   const panelItems: PanelItemInput[] = useMemo(
     () =>
       allItems.map((i) => ({
@@ -564,6 +570,12 @@ export default function Moment3AssignView({
                   </button>
                 )
               )}
+              {anyMarks && (
+                <DishMarksKey
+                  words={`${DISH_MARKS_KEY} ${DISH_MARKS_GUESS_M3}`}
+                  className="mt-3 text-xs text-gray-500"
+                />
+              )}
               <div className="mt-4 space-y-6">
                 {categories.map((category) => (
                   <section key={category.id}>
@@ -613,10 +625,18 @@ export default function Moment3AssignView({
                               aria-pressed={selected}
                               className="flex-1 min-w-0 flex items-baseline justify-between gap-3 text-left"
                             >
-                              <span className="truncate">
+                              {/* [[GTC-385]] Q13 ("let every name wrap"): never cut to "…" — the
+                                  name, its marks and its amount wrap onto further lines, a long
+                                  word too (break-words, as the plan view's dish names). Q14: the
+                                  amount moves to the next line whole (inline-block), and a free-
+                                  text one longer than a line wraps inside itself (max-w-full). */}
+                              <span className="min-w-0 break-words">
                                 <span>{item.name}</span>
+                                <DishMarkTags marks={item.marks ?? []} />
                                 {item.detail && (
-                                  <span className="ml-2 text-gray-400">{item.detail}</span>
+                                  <span className="ml-2 inline-block max-w-full text-gray-400">
+                                    {item.detail}
+                                  </span>
                                 )}
                               </span>
                               <span

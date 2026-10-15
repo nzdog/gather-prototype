@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { planWaitPercent, planWaitStage } from '@/lib/setup/plan-wait';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -57,6 +58,39 @@ const SKELETON_CATEGORIES = [
   { name: 'Setup & Cleanup', emoji: '🧹', placeholderCount: 2 },
 ];
 
+// ─── The wait ───────────────────────────────────────────────────────────────
+
+/**
+ * [[GTC-385]] (item 58) — the bar under "Putting your plan together...", and the stage words under
+ * it. An estimate (src/lib/setup/plan-wait.ts): it never passes 95 before the plan has arrived and
+ * never goes back; 100 once it has. The stage words change on the clock (Q3).
+ */
+export function PlanWaitBar({ percent, stage }: { percent: number; stage: string | null }) {
+  const p = Math.max(0, Math.min(100, Math.round(percent)));
+  return (
+    <div data-plan-wait className="-mt-4 mb-6">
+      <div
+        role="progressbar"
+        aria-label="Putting your plan together"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={p}
+        className="h-2 w-full overflow-hidden rounded-full bg-gray-200"
+      >
+        <div
+          className="h-2 rounded-full bg-accent transition-[width] duration-300 ease-out"
+          style={{ width: `${p}%` }}
+        />
+      </div>
+      {stage && (
+        <p className="mt-2 text-xs text-gray-500" aria-live="polite">
+          {stage}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function Moment2Step2Skeleton({
@@ -69,6 +103,18 @@ export default function Moment2Step2Skeleton({
   const [revealedCategories, setRevealedCategories] = useState<number>(0);
   const [showConsider, setShowConsider] = useState(false);
   const [fullyRendered, setFullyRendered] = useState(false);
+  // [[GTC-385]] (item 58): time since the press, kept only while the plan is awaited, never less
+  // than it was (so the bar cannot go back).
+  const [elapsedMs, setElapsedMs] = useState(0);
+
+  useEffect(() => {
+    if (plan) return;
+    const start = Date.now();
+    const timer = setInterval(() => {
+      setElapsedMs((prev) => Math.max(prev, Date.now() - start));
+    }, 250);
+    return () => clearInterval(timer);
+  }, [plan]);
 
   // Notify parent once streaming animation completes so it can transition to
   // the editable plan view. Skeleton handles loading/streaming; plan view
@@ -132,6 +178,12 @@ export default function Moment2Step2Skeleton({
         )}
         {isLoading && (
           <p className="text-sm text-gray-400 mb-6 animate-pulse">Putting your plan together...</p>
+        )}
+        {!fullyRendered && (
+          <PlanWaitBar
+            percent={planWaitPercent(elapsedMs, !!plan)}
+            stage={plan ? null : planWaitStage(elapsedMs)}
+          />
         )}
 
         {/* Category sections */}

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth/session';
 import { requireEventRole } from '@/lib/auth/guards';
+import { DATE_WORDS, endBeforeStart } from '@/lib/events/date-pair';
 import { canEditEvent } from '@/lib/entitlements';
 import { ledgerActorForUser } from '@/lib/auth/actor';
 import { recordChange, fieldChanges, onMaterialChange, MATERIAL_EVENT_FIELDS } from '@/lib/ledger';
@@ -109,6 +110,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         { error: 'decideByOffsetHours must be a non-negative integer number of hours, or null' },
         { status: 400 }
       );
+    }
+
+    // [[GTC-385]] (item 53, Q2): the pair this PATCH would store — the body's date, else the stored
+    // one — may not run backwards, a PATCH moving only the start past the stored end included.
+    // Refused before any write: nothing is stored and nothing reaches the ledger.
+    const nextStart = body.startDate ? body.startDate : existingEvent.startDate;
+    const nextEnd = body.endDate ? body.endDate : existingEvent.endDate;
+    if (endBeforeStart(nextStart, nextEnd)) {
+      return NextResponse.json({ error: DATE_WORDS.BACKWARDS }, { status: 400 });
     }
 
     // GTC-196 (A3b): THE T5 SITE. This is the only route that writes startDate,

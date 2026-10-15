@@ -7,6 +7,13 @@ import { useToast } from '@/contexts/ToastContext';
 import { useReasonPrompt } from './ReasonPrompt';
 import { isSentJson } from '@/lib/lifecycle';
 import { MATERIAL_EVENT_FIELDS, fieldChanges } from '@/lib/ledger';
+import EventDateFields from './EventDateFields';
+import {
+  datePairFrom,
+  datePairProblem,
+  datePairToSend,
+  type DatePairValue,
+} from '@/lib/events/date-pair';
 
 interface Event {
   id: string;
@@ -131,9 +138,18 @@ export default function EditEventModal({
     venueTimingEnd: '',
     venueNotes: '',
   });
+  // [[GTC-385]] (item 53, Q1): an event that runs over more than one day (or is stored backwards)
+  // opens with both dates showing; a one-day event opens with one.
+  const [moreDays, setMoreDays] = useState(false);
+  const dates: DatePairValue = { first: formData.startDate, last: formData.endDate, moreDays };
+  const setDates = (next: DatePairValue) => {
+    setMoreDays(next.moreDays);
+    setFormData({ ...formData, startDate: next.first, endDate: next.last });
+  };
 
   useEffect(() => {
     if (event) {
+      setMoreDays(datePairFrom(event.startDate, event.endDate).moreDays);
       setFormData({
         name: event.name || '',
         startDate: event.startDate ? event.startDate.split('T')[0] : '',
@@ -174,9 +190,14 @@ export default function EditEventModal({
     setIsSubmitting(true);
 
     try {
+      // [[GTC-385]] (item 53, Q1): a backwards pair is said, not saved; one date saves end = start.
+      const problem = datePairProblem(dates);
+      if (problem) throw new Error(problem);
+
       // Convert to proper types
       const payload = {
         ...formData,
+        ...datePairToSend(dates),
         guestCount: formData.guestCount ? parseInt(formData.guestCount) : null,
         guestCountMin: formData.guestCountMin ? parseInt(formData.guestCountMin) : null,
         guestCountMax: formData.guestCountMax ? parseInt(formData.guestCountMax) : null,
@@ -319,32 +340,15 @@ export default function EditEventModal({
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Start Date *
-                    </label>
-                    <input
-                      type="date"
-                      value={formData.startDate}
-                      onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      End Date *
-                    </label>
-                    <input
-                      type="date"
-                      value={formData.endDate}
-                      onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      required
-                    />
-                  </div>
-                </div>
+                <EventDateFields
+                  value={dates}
+                  onChange={setDates}
+                  star
+                  layout="grid"
+                  idPrefix="edit-event-"
+                  labelClassName="block text-sm font-medium text-gray-700 mb-1"
+                  inputClassName="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">

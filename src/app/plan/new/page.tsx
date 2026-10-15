@@ -3,6 +3,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Calendar } from 'lucide-react';
+import EventDateFields from '@/components/plan/EventDateFields';
+import {
+  datePairFrom,
+  datePairProblem,
+  datePairToSend,
+  type DatePairValue,
+} from '@/lib/events/date-pair';
 
 type PageState = 'form' | 'creating' | 'canceled' | 'error' | 'emailed';
 
@@ -33,6 +40,9 @@ export default function NewPlanPage() {
     email: '',
     phone: '',
   });
+  // [[GTC-385]] (item 53, Q1): one date unless she opens "more days"; a restored draft with two
+  // different dates opens with both showing.
+  const [moreDays, setMoreDays] = useState(false);
   /*
    * GTC-280 — the `ref` referral token is NOT captured any more, and that is a
    * deletion of dead code rather than a loss of a feature.
@@ -83,7 +93,9 @@ export default function NewPlanPage() {
       const saved = sessionStorage.getItem('gather_new_event');
       if (saved) {
         try {
-          setFormData(JSON.parse(saved));
+          const data = JSON.parse(saved);
+          setFormData(data);
+          setMoreDays(datePairFrom(data.startDate ?? '', data.endDate ?? '').moreDays);
         } catch {}
       }
     }
@@ -102,6 +114,7 @@ export default function NewPlanPage() {
         try {
           const data = JSON.parse(saved);
           setFormData(data);
+          setMoreDays(datePairFrom(data.startDate ?? '', data.endDate ?? '').moreDays);
         } catch (err) {
           console.error('Failed to restore form data:', err);
         }
@@ -194,6 +207,16 @@ export default function NewPlanPage() {
     }
   };
 
+  const dates: DatePairValue = {
+    first: formData.startDate,
+    last: formData.endDate,
+    moreDays,
+  };
+  const setDates = (next: DatePairValue) => {
+    setMoreDays(next.moreDays);
+    setFormData({ ...formData, startDate: next.first, endDate: next.last });
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
       ...formData,
@@ -248,10 +271,13 @@ export default function NewPlanPage() {
       // GTC-280: the email is the identity the event binds to, so it can no
       // longer be the one optional field on the form.
       if (!formData.email) throw new Error('Email is required');
-      if (!formData.startDate) throw new Error('Start date is required');
-      if (!formData.endDate) throw new Error('End date is required');
+      if (!formData.startDate) throw new Error('Date is required');
+      // [[GTC-385]] (item 53): never backwards, and never an empty end — one date sends end =
+      // start, because the post-payment route refuses an empty end after she has paid.
+      const problem = datePairProblem(dates);
+      if (problem) throw new Error(problem);
 
-      await startCheckout(formData);
+      await startCheckout({ ...formData, ...datePairToSend(dates) });
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Connection failed. Check your internet and try again.'
@@ -509,38 +535,14 @@ export default function NewPlanPage() {
             />
           </div>
 
-          {/* Date Range */}
-          <div>
-            <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-2">
-              <Calendar className="inline w-4 h-4 mr-1" />
-              Start Date
-            </label>
-            <input
-              type="date"
-              id="startDate"
-              name="startDate"
-              required
-              value={formData.startDate}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent text-lg"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 mb-2">
-              <Calendar className="inline w-4 h-4 mr-1" />
-              End Date
-            </label>
-            <input
-              type="date"
-              id="endDate"
-              name="endDate"
-              required
-              value={formData.endDate}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent text-lg"
-            />
-          </div>
+          {/* [[GTC-385]] (item 53, Q1): one date, with a link for more days. */}
+          <EventDateFields
+            value={dates}
+            onChange={setDates}
+            icon={<Calendar className="inline w-4 h-4 mr-1" />}
+            labelClassName="block text-sm font-medium text-gray-700 mb-2"
+            inputClassName="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent text-lg"
+          />
 
           {/* Submit Button */}
           <button

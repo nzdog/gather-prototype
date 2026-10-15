@@ -10,6 +10,18 @@ import RowKindToggle from './RowKindToggle';
 import { JOB_NAME_LEAD, JOB_NAME_PLACEHOLDER, type RowKindValue } from '@/lib/items/row-kind';
 import { INVITES_ONLY_WORDS, type InvitesOnlyState } from '@/lib/setup/invites-only';
 import { OWN_PLAN_WORDS, ownPlanHeading } from '@/lib/setup/own-plan';
+import {
+  DISH_MARKS,
+  DISH_MARKS_GUESS_PLAN,
+  DISH_MARKS_KEY,
+  dishMarks,
+  marksApply,
+  sameMarks,
+  shownMarks,
+  withMarks,
+  type DishMark,
+} from '@/lib/items/dish-marks';
+import { DishMarkTags, DishMarksKey } from './DishMarks';
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -22,6 +34,8 @@ export interface PlanItem {
   notes?: string;
   dietaryFlags?: string[];
   displayOrder?: number;
+  /** [[GTC-385]] (item 59): 'ITEM' or 'TASK'; a job carries no marks and no ticks. */
+  kind?: string;
 }
 
 export interface PlanCategory {
@@ -39,6 +53,8 @@ export interface NewPlanItem {
   unit: string;
   servingSize: string;
   notes?: string;
+  /** [[GTC-385]] (item 59, Q9): the ticks from "+ Add item", as the AI writes them. */
+  dietaryTags?: string[];
 }
 
 interface Moment2PlanViewProps {
@@ -160,6 +176,10 @@ export default function Moment2PlanView({
   const [bulkRemoving, setBulkRemoving] = useState(false);
 
   const totalItems = categories.reduce((sum, c) => sum + c.items.length, 0);
+  // [[GTC-385]] (item 59, Q10): the key shows only when at least one dish is marked.
+  const anyMarks = categories.some((c) =>
+    c.items.some((i) => shownMarks(c.name, i.kind, i.dietaryFlags).length > 0)
+  );
   // [[GTC-382]] W8 — her own plan with nothing in it yet.
   const firstTime = ownPlan && totalItems === 0;
 
@@ -297,6 +317,13 @@ export default function Moment2PlanView({
               ? 'Regenerating the plan…'
               : 'Not quite right? Regenerate the plan'}
           </button>
+        )}
+
+        {anyMarks && (
+          <DishMarksKey
+            words={`${DISH_MARKS_KEY} ${DISH_MARKS_GUESS_PLAN}`}
+            className="text-xs text-gray-500 mb-4"
+          />
         )}
 
         {/* Category sections */}
@@ -491,6 +518,8 @@ function CategorySection({
   onRegenerateCategory,
 }: CategorySectionProps) {
   const itemCount = category.items.length;
+  // [[GTC-385]] (item 59, Q7, Q12): no marks and no ticks in the two drinks sections or on a job.
+  const foodSection = marksApply(category.name);
   const isRegenerating =
     regeneratingScope === 'plan' || (categoryKey !== null && regeneratingScope === categoryKey);
 
@@ -523,6 +552,7 @@ function CategorySection({
             <div key={item.id}>
               <ItemRow
                 item={item}
+                marks={shownMarks(category.name, item.kind, item.dietaryFlags)}
                 isEditing={editingItemId === item.id}
                 isEditingQuantity={quantityEditId === item.id}
                 isSelected={selectedItemIds.has(item.id)}
@@ -536,6 +566,7 @@ function CategorySection({
               {editingItemId === item.id && (
                 <ItemEditForm
                   item={item}
+                  showMarks={marksApply(category.name, item.kind)}
                   onSave={(updates) => onSaveEdit(item.id, updates)}
                   onCancel={onCancelEdit}
                   onRemove={() => onRemoveItem(item.id)}
@@ -547,6 +578,7 @@ function CategorySection({
           <div className="pt-2">
             {isAddingItem ? (
               <AddItemForm
+                marksAllowed={foodSection}
                 onAdd={(item) => onAddItem(category.id, item)}
                 onCancel={onCancelAddItem}
               />
@@ -589,6 +621,8 @@ function CategorySection({
 
 interface ItemRowProps {
   item: PlanItem;
+  /** [[GTC-385]] (item 59): the marks this row shows (none in drinks, none on a job). */
+  marks: DishMark[];
   isEditing: boolean;
   isEditingQuantity: boolean;
   isSelected: boolean;
@@ -602,6 +636,7 @@ interface ItemRowProps {
 
 function ItemRow({
   item,
+  marks,
   isEditing,
   isEditingQuantity,
   isSelected,
@@ -622,13 +657,28 @@ function ItemRow({
     <div className={`flex flex-wrap sm:flex-nowrap items-center gap-2 py-2 px-2 rounded ${rowBg}`}>
       {/* Name + serving size (stacked) */}
       <div className="basis-full sm:basis-0 flex-1 min-w-0 flex flex-col">
-        <button
-          type="button"
-          onClick={onOpenEdit}
-          className={`text-left text-sm text-gray-800 hover:text-gray-900 break-words ${markedStrike}`}
-        >
-          {item.name}
-        </button>
+        {/* [[GTC-385]] (item 59): the marks sit after the name, outside its button, and only a
+            marked row is wrapped, so an unmarked row is drawn as it was. */}
+        {marks.length > 0 ? (
+          <div className="flex flex-wrap items-center">
+            <button
+              type="button"
+              onClick={onOpenEdit}
+              className={`text-left text-sm text-gray-800 hover:text-gray-900 break-words ${markedStrike}`}
+            >
+              {item.name}
+            </button>
+            <DishMarkTags marks={marks} />
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={onOpenEdit}
+            className={`text-left text-sm text-gray-800 hover:text-gray-900 break-words ${markedStrike}`}
+          >
+            {item.name}
+          </button>
+        )}
         {item.servingSize && (
           <span className={`text-xs text-gray-500 break-words ${markedStrike}`}>
             {item.servingSize}
@@ -750,17 +800,26 @@ function InlineQuantityEdit({ initialQuantity, unit, onSave, onCancel }: InlineQ
 
 interface ItemEditFormProps {
   item: PlanItem;
+  /** [[GTC-385]] (item 59, Q9, Q12): the five ticks, on a food dish only. */
+  showMarks?: boolean;
   onSave: (updates: Partial<PlanItem>) => Promise<void>;
   onCancel: () => void;
   onRemove: () => Promise<void>;
 }
 
-function ItemEditForm({ item, onSave, onCancel, onRemove }: ItemEditFormProps) {
+export function ItemEditForm({
+  item,
+  showMarks = false,
+  onSave,
+  onCancel,
+  onRemove,
+}: ItemEditFormProps) {
   const [name, setName] = useState(item.name);
   const [quantity, setQuantity] = useState(String(item.quantity));
   const [unit, setUnit] = useState(item.unit);
   const [serves, setServes] = useState(item.servingSize);
   const [notes, setNotes] = useState(item.notes ?? '');
+  const [marks, setMarks] = useState<DishMark[]>(dishMarks(item.dietaryFlags));
   const [saving, setSaving] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
 
@@ -779,6 +838,10 @@ function ItemEditForm({ item, onSave, onCancel, onRemove }: ItemEditFormProps) {
         unit: unit.trim(),
         servingSize: serves.trim(),
         notes: notes.trim() || undefined,
+        // [[GTC-385]] (item 59, Q9): the tags go only when the ticks changed; the other tags stay.
+        ...(showMarks && !sameMarks(dishMarks(item.dietaryFlags), marks)
+          ? { dietaryFlags: withMarks(item.dietaryFlags, marks) }
+          : {}),
       });
     } finally {
       setSaving(false);
@@ -839,6 +902,8 @@ function ItemEditForm({ item, onSave, onCancel, onRemove }: ItemEditFormProps) {
         />
       </FormField>
 
+      {showMarks && <DishTicks marks={marks} onChange={setMarks} />}
+
       <div className="flex items-center justify-between pt-1">
         <div className="flex items-center gap-2">
           <button
@@ -874,12 +939,15 @@ function ItemEditForm({ item, onSave, onCancel, onRemove }: ItemEditFormProps) {
 // ─── Add item form ───────────────────────────────────────────────────────────
 
 interface AddItemFormProps {
+  /** [[GTC-385]] (item 59, Q9, Q12): the five ticks, in a food section, for a dish (not a job). */
+  marksAllowed?: boolean;
   onAdd: (item: NewPlanItem) => Promise<void>;
   onCancel: () => void;
 }
 
-function AddItemForm({ onAdd, onCancel }: AddItemFormProps) {
+export function AddItemForm({ marksAllowed = false, onAdd, onCancel }: AddItemFormProps) {
   const [name, setName] = useState('');
+  const [marks, setMarks] = useState<DishMark[]>([]);
   const [kind, setKind] = useState<RowKindValue>('ITEM');
   const [quantity, setQuantity] = useState('1');
   const [unit, setUnit] = useState('pieces');
@@ -905,6 +973,9 @@ function AddItemForm({ onAdd, onCancel }: AddItemFormProps) {
         quantity: parsedQuantity,
         unit: kind === 'TASK' ? '' : unit.trim() || 'pieces',
         servingSize: kind === 'TASK' ? '' : serves.trim(),
+        ...(marksAllowed && kind === 'ITEM' && marks.length > 0
+          ? { dietaryTags: withMarks([], marks) }
+          : {}),
       });
     } finally {
       setSaving(false);
@@ -977,6 +1048,8 @@ function AddItemForm({ onAdd, onCancel }: AddItemFormProps) {
               className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
             />
           </FormField>
+
+          {marksAllowed && <DishTicks marks={marks} onChange={setMarks} />}
         </>
       )}
 
@@ -1077,6 +1150,37 @@ function AddCategoryForm({ onAdd, onCancel }: AddCategoryFormProps) {
 }
 
 // ─── Shared form helpers ─────────────────────────────────────────────────────
+
+/** [[GTC-385]] (item 59, Q9): the five ticks, V VG GF DF NF, in the editor and "+ Add item". */
+function DishTicks({
+  marks,
+  onChange,
+}: {
+  marks: DishMark[];
+  onChange: (next: DishMark[]) => void;
+}) {
+  return (
+    <fieldset data-dish-ticks>
+      <legend className="block text-xs font-medium text-gray-600 mb-1">Marks</legend>
+      <div className="flex flex-wrap gap-x-4 gap-y-1">
+        {DISH_MARKS.map((d) => (
+          <label key={d.mark} className="inline-flex items-center gap-1.5 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              value={d.mark}
+              checked={marks.includes(d.mark)}
+              onChange={(e) =>
+                onChange(e.target.checked ? [...marks, d.mark] : marks.filter((m) => m !== d.mark))
+              }
+              className="rounded border-gray-300 text-accent focus:ring-accent"
+            />
+            {d.word}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
 
 function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return (

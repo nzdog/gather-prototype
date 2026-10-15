@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth/session';
 import { recordBulkPlanChange } from '@/lib/ledger';
 import { itemNameForStorage } from '@/lib/items/name';
+import { DATE_WORDS, endBeforeStart } from '@/lib/events/date-pair';
 
 /**
  * POST /api/templates/[id]/clone
@@ -46,6 +47,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
   if (endDate && isNaN(Date.parse(endDate))) {
     return NextResponse.json({ error: 'Invalid end date' }, { status: 400 });
+  }
+
+  // [[GTC-385]] (item 53, Q2): a backwards pair is refused before any template is read.
+  if (endBeforeStart(startDate, endDate)) {
+    return NextResponse.json({ error: DATE_WORDS.BACKWARDS }, { status: 400 });
   }
 
   // SECURITY: Fetch only ownership fields before authorization check

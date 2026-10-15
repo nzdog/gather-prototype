@@ -18,6 +18,7 @@
  */
 
 import { quantityLabel } from '@/components/glance/reading';
+import { DISH_MARKS_PRINT, shownMarks, type DishMark } from '@/lib/items/dish-marks';
 
 /** W13 to W16, ruled 2026-10-06 (W16 with the founder's fix). */
 export const PRINT_WORDS = {
@@ -36,6 +37,8 @@ export interface PrintItem {
   quantityText: string | null;
   team: { name: string; displayOrder: number };
   assignment: { response: string; person: { name: string } | null } | null;
+  /** [[GTC-385]] (item 59, Q8): the dish's marks (none in drinks, none on a job). */
+  marks: DishMark[];
 }
 
 /** Text made safe to write into HTML: `< > & " '`. */
@@ -63,6 +66,7 @@ export function toPrintItems(raw: unknown[]): PrintItem[] {
       quantityUnitCustom: str(item.quantityUnitCustom),
       quantityText: str(item.quantityText),
       team: { name: str(item.team?.name) ?? '', displayOrder: num(item.team?.displayOrder) ?? 0 },
+      marks: shownMarks(str(item.team?.name) ?? '', str(item.kind), item.dietaryTags),
       assignment: a
         ? {
             response: str(a.response) ?? 'PENDING',
@@ -145,6 +149,11 @@ export function itemListHtml({
   html += `<div class="logo">${gatherLogo}</div>`;
   html += `<h1>${escapeHtml(eventName)}</h1>`;
   if (eventDate) html += `<div class="date">${escapeHtml(eventDate)}</div>`;
+  // [[GTC-385]] (item 59, Q10): the note only when a dish is marked, so an unmarked list prints as
+  // it always has (inline styles, so the head of the page is unchanged too).
+  if (items.some((i) => i.marks.length > 0)) {
+    html += `<div style="font-size:12px;color:#666;margin:-16px 0 24px;">${escapeHtml(DISH_MARKS_PRINT)}</div>`;
+  }
 
   for (const cat of cats) {
     const catItems = grouped[cat];
@@ -158,7 +167,10 @@ export function itemListHtml({
       const status = item.assignment
         ? `<span class="status-${r === 'ACCEPTED' ? 'confirmed' : r === 'DECLINED' ? 'declined' : 'pending'}">${r === 'ACCEPTED' ? 'Confirmed' : r === 'DECLINED' ? 'Declined' : r === 'MAYBE' ? 'Maybe' : 'Pending'}</span>`
         : '';
-      html += `<tr><td>${escapeHtml(item.name)}</td><td class="qty">${qty}</td><td>${assignee}</td><td>${status}</td></tr>`;
+      const marks = item.marks.length
+        ? ` <span style="font-size:11px;font-weight:600;color:#555;">${item.marks.join(' ')}</span>`
+        : '';
+      html += `<tr><td>${escapeHtml(item.name)}${marks}</td><td class="qty">${qty}</td><td>${assignee}</td><td>${status}</td></tr>`;
     }
     html += `</tbody></table>`;
   }
