@@ -279,9 +279,11 @@ async function main() {
   );
   assert(
     'A',
-    'the event switch: its sentence for the resolved default, both pills, the default suffixed',
+    // [[GTC-386]] Q3, ruled 2026-10-15: both screens ask one question (was the statement for the
+    // resolved default, CHASE_DEFAULT_SENTENCE.BY_EMAIL).
+    'the event switch: the question, both pills, the default suffixed',
     rendered &&
-      html.includes(esc(compose.CHASE_DEFAULT_SENTENCE.BY_EMAIL)) &&
+      ok(() => html.includes(esc((compose as any).CHASE_DEFAULT_QUESTION))) &&
       html.includes(`>${compose.CHASE_DEFAULT_PILLS.BY_EMAIL}${compose.DEFAULT_SUFFIX}<`) &&
       html.includes(`>${compose.CHASE_DEFAULT_PILLS.HAND_TO_HOST}<`)
   );

@@ -1271,9 +1271,11 @@ async function main() {
         '[RULED words] the heading, the line under it, and the empty state',
         ok(
           () =>
-            APC.HOST_LIST_HEADING === 'Yours to handle' &&
+            // [[GTC-386]] Q1b and Q2, ruled 2026-10-15: the heading is part 3's label (was "Yours to
+            // handle"), and the line drops "Gather will not message these people.", false of group B.
+            APC.HOST_LIST_HEADING === 'People I’ll leave to you' &&
             APC.HOST_LIST_BLURB ===
-              'Gather will not message these people. Each is named with what they have been asked for, and why it comes to you.' &&
+              'Each is named with what they have been asked for, and why it comes to you.' &&
             APC.HOST_LIST_EMPTY === 'Nobody.'
         )
       );

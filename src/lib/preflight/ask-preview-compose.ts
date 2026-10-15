@@ -242,15 +242,30 @@ export function toldAboutValue(
   return household.map((h) => h.firstName).join(', ');
 }
 
-/** The host's list. "It names nobody, so it needs no voice." Kept as the founder ruled it. */
-export const HOST_LIST_HEADING = 'Yours to handle';
 /**
- * ⚠ SINCE [[GTC-311]] THIS SITS UNDER GROUP A ONLY — the people Gather does not ask — because it is
- * exactly true of them and false of group B, whose asks DO go out (SCOPED ruling 6: no heading or
- * line may be false of anyone listed under it). Kept word for word, as ruled at slice 3.
+ * The host's list, and since [[GTC-386]] (item 66, plan ruling Q1b, 2026-10-15) the label of step 4's
+ * third part. It was "Yours to handle"; item 66 first ruled "Gather will not message these people",
+ * which is false of group B below, whose asks DO go out (GTC-311 SCOPED ruling 6), so Nigel ruled
+ * these words instead. They are true of both groups: Gather leaves every one of them to her.
+ */
+export const HOST_LIST_HEADING = 'People I’ll leave to you';
+/**
+ * [[GTC-386]] — step 4's three parts, in order (item 66, plan rulings Q1b and Q4). The third is the
+ * list's own heading, one spelling. The page draws them; it keeps no copy of its own.
+ */
+export const MESSAGE_STEP_PARTS = [
+  'What guests will receive',
+  'How I nudge',
+  HOST_LIST_HEADING,
+] as const;
+/**
+ * ⚠ SINCE [[GTC-311]] THIS SITS UNDER GROUP A ONLY — the people Gather does not ask — and group B,
+ * whose asks DO go out, keeps its own line (SCOPED ruling 6: no heading or line may be false of
+ * anyone listed under it). [[GTC-386]] Q2 dropped its first sentence, "Gather will not message these
+ * people.", which said the part's label over again.
  */
 export const HOST_LIST_BLURB =
-  'Gather will not message these people. Each is named with what they have been asked for, and why it comes to you.';
+  'Each is named with what they have been asked for, and why it comes to you.';
 /** Shown only when BOTH groups are empty. An empty group is hidden rather than saying "Nobody." twice. */
 export const HOST_LIST_EMPTY = 'Nobody.';
 
@@ -273,17 +288,17 @@ export const HOST_LIST_NOT_CHASED_BLURB =
   "Their asks go out, and I won't follow up on them. If they haven't answered, they're yours.";
 
 /**
- * The default's own sentence — unknown 3b, ruled. W1 and W2. Stated ONCE on the screen, not per
- * row (acceptance: "states the default once, in one sentence").
+ * The event switch's question, asked ONCE on the screen, not per row (acceptance: "states the
+ * default once, in one sentence"). [[GTC-386]] (item 66, plan ruling Q3, 2026-10-15): it was a
+ * statement that changed with the choice, W1 "…I'll nudge them by email." and W2 "…I'll leave them
+ * to you."; now one question, on step 4 and after the press, and the pill that is on says the
+ * answer (`Pill`'s aria-pressed tells a screen reader too).
  *
  * "No mobile I can text" rather than "no mobile", because an unusable number is in the population
  * (flag A, ruled 2026-09-27) — the London cousin has a mobile, and I can't text it.
  */
-export const CHASE_DEFAULT_SENTENCE: Record<ChaseWhenNoMobile, string> = {
-  BY_EMAIL: "When someone hasn't answered and has no mobile I can text, I'll nudge them by email.",
-  HAND_TO_HOST:
-    "When someone hasn't answered and has no mobile I can text, I'll leave them to you.",
-};
+export const CHASE_DEFAULT_QUESTION =
+  'When someone hasn’t answered and has no mobile I can text, how do you want to handle it?';
 
 /** The event switch. W3. */
 export const CHASE_DEFAULT_PILLS: Record<ChaseWhenNoMobile, string> = {

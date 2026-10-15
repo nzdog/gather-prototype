@@ -27,7 +27,7 @@
  * are not edited. Do not re-derive the Moment 1 placement from them.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import {
   NUDGE_PACE_OFFSET_DAYS,
@@ -47,7 +47,7 @@ import {
   CHASED_BY_LABEL,
   CHASED_BY_VALUE,
   CHASE_DEFAULT_PILLS,
-  CHASE_DEFAULT_SENTENCE,
+  CHASE_DEFAULT_QUESTION,
   CHASE_OPTED_OUT_PLACEHOLDER,
   DEFAULT_SUFFIX,
   HOST_LIST_BLURB,
@@ -56,6 +56,7 @@ import {
   HOST_LIST_NOT_ASKED_HEADING,
   HOST_LIST_NOT_CHASED_BLURB,
   HOST_LIST_NOT_CHASED_HEADING,
+  MESSAGE_STEP_PARTS,
   NOT_MESSAGED_WHY,
   NO_REPLY_TO_LINE,
   TOLD_ABOUT_LABEL,
@@ -91,6 +92,21 @@ import {
 // [[GTC-377]] (Q1): the step, moved out of this page so a suite can render it.
 import Step from '@/components/preflight/PreflightStep';
 import { INVITES_ONLY_WORDS } from '@/lib/setup/invites-only';
+// [[GTC-386]] (item 68): the five ticks, remembered in this browser.
+import {
+  READY_PRINT,
+  browserStore,
+  forgetTicks,
+  preflightPrints,
+  printOf,
+  readTicks,
+  settleStepFour,
+  standingTicks,
+  tickKey,
+  writeTicks,
+  type TickPrints,
+  type TickStep,
+} from '@/lib/preflight/tick-memory';
 
 // ─── Wire shapes (mirror /api/events/[id]/pre-flight) ────────────────────────
 
@@ -106,6 +122,8 @@ interface HouseholdView {
 }
 
 interface PreFlightData {
+  /** [[GTC-386]] (Q8): who is looking, so each person's ticks are kept apart. */
+  viewerId?: string;
   event: {
     id: string;
     name: string;
@@ -181,6 +199,19 @@ function channelFor(
   return m ? { name: m.name, elsewhere: null } : null;
 }
 
+/**
+ * [[GTC-386]] (Q7) — her own change on this page keeps a ticked step ticked: it takes the step's new
+ * fingerprint. Only what changed somewhere else, found on arrival, drops a tick.
+ */
+function restamp(ticks: TickPrints, prints: Partial<Record<1 | 2 | 3 | 4, string>>): TickPrints {
+  const out = { ...ticks };
+  for (const n of [1, 2, 3, 4] as const) {
+    const now = prints[n];
+    if (out[n] !== undefined && now !== undefined) out[n] = now;
+  }
+  return out;
+}
+
 /** [[GTC-366]] (item 32) — the sage ring on the box W1's line arrives at, for two seconds. */
 const ARRIVAL_RING = ['ring-2', 'ring-accent', 'ring-offset-4', 'rounded-md'];
 
@@ -203,10 +234,25 @@ export default function PreFlightPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // The acknowledgements are CLIENT STATE ONLY — nothing persists them. They exist so the
-  // flow has an end; whether a pre-flight check should be recorded is GTC-189's question,
-  // since only the press has anything to anchor it to.
-  const [checked, setChecked] = useState<Record<number, boolean>>({});
+  /*
+   * The acknowledgements exist so the flow has an end. [[GTC-386]] (item 68, ruled 2026-10-15) —
+   * REMEMBERED IN THIS BROWSER, PER EVENT AND PER PERSON (Q8), and nowhere else: each ticked step
+   * holds the fingerprint of what it showed when she ticked it (`tick-memory.ts`), no names. Until
+   * this ticket they were lost on a reload. A tick goes when its step has changed somewhere other
+   * than this page, Ready with any of steps 1 to 4 (Q7); a settled step is the event's, never stored.
+   */
+  const [ticks, setTicks] = useState<TickPrints>({});
+  const checked = useMemo<Record<number, boolean>>(
+    () => ({ 1: !!ticks[1], 2: !!ticks[2], 3: !!ticks[3], 4: !!ticks[4], 5: !!ticks[5] }),
+    [ticks]
+  );
+  // Step 4's fingerprint comes from its own read, a moment after the page's. Until it has been
+  // checked, a remembered step 4 is drawn but does not count towards Send.
+  const [messagePrint, setMessagePrint] = useState<string | null>(null);
+  const [fourPending, setFourPending] = useState(false);
+  // The first arrival of a visit compares what was stored; every later one follows her own change.
+  const arrived = useRef(false);
+  const fourArrived = useRef(false);
 
   // Which household rows are expanded. Empty = all collapsed, which is the landing state:
   // step 3 is a list to scan first and open second. GTC-364 (Q2): several may be open at
@@ -224,13 +270,52 @@ export default function PreFlightPage() {
       setError(`Could not load the pre-flight (${res.status})`);
       return;
     }
-    setData(await res.json());
+    const fresh: PreFlightData = await res.json();
+    // [[GTC-386]] — set in the same pass as the data, so the steps are drawn ticked from their first
+    // frame. No viewer, no memory: the ticks are for this visit, as before.
+    const key = fresh.viewerId ? tickKey(eventId, fresh.viewerId) : null;
+    const prints = preflightPrints(fresh);
+    if (key && fresh.event.sentAt) {
+      forgetTicks(browserStore(), key);
+    } else if (key && !arrived.current) {
+      const kept = standingTicks(
+        readTicks(browserStore(), key),
+        prints,
+        settledSteps(fresh.event.invitesOnly === true)
+      );
+      setTicks(kept);
+      setFourPending(kept[4] !== undefined);
+    } else {
+      setTicks((t) => restamp(t, prints));
+    }
+    arrived.current = true;
+    setData(fresh);
     setError(null);
   }, [eventId]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // [[GTC-386]] — every change to the ticks is kept, once the visit's first read has compared.
+  const tickStoreKey = data?.viewerId ? tickKey(eventId, data.viewerId) : null;
+  const sent = !!data?.event.sentAt;
+  useEffect(() => {
+    if (!tickStoreKey || !arrived.current || sent) return;
+    writeTicks(browserStore(), tickStoreKey, ticks);
+  }, [ticks, tickStoreKey, sent]);
+
+  /** [[GTC-386]] — step 4's fingerprint, from its message: checked on arrival, kept on her changes. */
+  const onMessagePrint = useCallback((print: string) => {
+    setMessagePrint(print);
+    if (!fourArrived.current) {
+      fourArrived.current = true;
+      setTicks((t) => (t[4] === '' ? { ...t, 4: print } : settleStepFour(t, print)));
+      setFourPending(false);
+    } else {
+      setTicks((t) => (t[4] !== undefined ? { ...t, 4: print } : t));
+    }
+  }, []);
 
   // ── writes ────────────────────────────────────────────────────────────────
 
@@ -282,10 +367,11 @@ export default function PreFlightPage() {
   };
 
   // [[GTC-374]] (Q8): an invites-only event's steps 1 and 2 are ticked for her.
+  // [[GTC-386]]: a remembered step 4 counts once its message has been checked.
   const allChecked = useMemo(() => {
     const settled = settledSteps(data?.event.invitesOnly === true);
-    return [1, 2, 3, 4, 5].every((n) => checked[n] || settled[n]);
-  }, [checked, data]);
+    return !fourPending && [1, 2, 3, 4, 5].every((n) => checked[n] || settled[n]);
+  }, [checked, data, fourPending]);
 
   /*
    * ── GTC-189 SLICE 5f — THE PRESS, CALLED ONCE ───────────────────────────────
@@ -351,6 +437,11 @@ export default function PreFlightPage() {
     return () => clearTimeout(timer);
   }, [pressed, eventId]);
 
+  // [[GTC-386]] — after the press the ticks have done their work: this event's are forgotten.
+  useEffect(() => {
+    if (pressed && tickStoreKey) forgetTicks(browserStore(), tickStoreKey);
+  }, [pressed, tickStoreKey]);
+
   if (error && !data) {
     return <div className="max-w-3xl mx-auto px-6 py-16 text-gray-600">{error}</div>;
   }
@@ -387,6 +478,20 @@ export default function PreFlightPage() {
    * hook: nothing here may add a hook after the after-the-press return above.
    */
   const nextStep = firstUnticked({ ...checked, ...settled });
+  /*
+   * [[GTC-386]] — one tick for all five boxes: it stamps the step with what it shows now. A plain
+   * function, like the others here, after the after-the-press return.
+   */
+  const stepPrints = preflightPrints(data);
+  const tick = (n: TickStep, v: boolean) => {
+    if (n === 4) setFourPending(false);
+    setTicks((t) => {
+      const next = { ...t };
+      if (!v) delete next[n];
+      else next[n] = n === 5 ? READY_PRINT : n === 4 ? (messagePrint ?? '') : stepPrints[n];
+      return next;
+    });
+  };
   const toggleStep = (n: number) =>
     setOpenSteps((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]));
   /*
@@ -504,7 +609,7 @@ export default function PreFlightPage() {
           blurb="Everything that has no owner yet. None of it blocks you."
           settled={!!settled[1]}
           checked={!!checked[1]}
-          onCheck={(v) => setChecked((c) => ({ ...c, 1: v }))}
+          onCheck={(v) => tick(1, v)}
           open={openSteps.includes(1)}
           onToggle={() => toggleStep(1)}
           line={loose ? { text: loose, amber: true } : null}
@@ -579,7 +684,7 @@ export default function PreFlightPage() {
           blurb="Event-level, not by name. The last check before people eat."
           settled={!!settled[2]}
           checked={!!checked[2]}
-          onCheck={(v) => setChecked((c) => ({ ...c, 2: v }))}
+          onCheck={(v) => tick(2, v)}
           open={openSteps.includes(2)}
           onToggle={() => toggleStep(2)}
           line={{
@@ -601,7 +706,7 @@ export default function PreFlightPage() {
               : 'Everyone with an email or mobile hears from me. Pick who takes the kids’ asks, and how hard I nudge.'
           }
           checked={!!checked[3]}
-          onCheck={(v) => setChecked((c) => ({ ...c, 3: v }))}
+          onCheck={(v) => tick(3, v)}
           open={openSteps.includes(3)}
           onToggle={() => toggleStep(3)}
           line={talk ? { text: talk, amber: true } : null}
@@ -749,14 +854,14 @@ export default function PreFlightPage() {
         <Step
           n={4}
           title={PREFLIGHT_STEP_TITLES[3]}
-          blurb="Exactly what each person will receive, and who I'll nudge."
+          blurb="Exactly what each person will receive, how I nudge, and who I’ll leave to you."
           checked={!!checked[4]}
-          onCheck={(v) => setChecked((c) => ({ ...c, 4: v }))}
+          onCheck={(v) => tick(4, v)}
           checkLabel="Settled"
           open={openSteps.includes(4)}
           onToggle={() => toggleStep(4)}
         >
-          <MessageStep eventId={eventId} />
+          <MessageStep eventId={eventId} onPrint={onMessagePrint} />
         </Step>
 
         {/* ── 5. The end ──────────────────────────────────────────────────── */}
@@ -765,7 +870,7 @@ export default function PreFlightPage() {
           title={PREFLIGHT_STEP_TITLES[4]}
           blurb="The last look is done."
           checked={!!checked[5]}
-          onCheck={(v) => setChecked((c) => ({ ...c, 5: v }))}
+          onCheck={(v) => tick(5, v)}
         >
           {/*
             ── GTC-189 SLICE 5f — THE PRESS. ONE ACT, NO RECALL ────────────────────────
@@ -1035,7 +1140,14 @@ function rowsInBrief(x: { itemNames: readonly string[]; jobNames: readonly strin
  * Hinge §5's design is that "the guest can tell whose words are whose" — and the threshold's
  * check is "coverage and voice", so the voice has to be visible to be checked.
  */
-function MessageStep({ eventId }: { eventId: string }) {
+function MessageStep({
+  eventId,
+  onPrint,
+}: {
+  eventId: string;
+  /** [[GTC-386]] (item 68) — the fingerprint of what this step shows, each time it arrives. */
+  onPrint: (print: string) => void;
+}) {
   const [data, setData] = useState<MessageData | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -1098,6 +1210,12 @@ function MessageStep({ eventId }: { eventId: string }) {
       live = false;
     };
   }, [eventId]);
+
+  // [[GTC-386]] — step 4's tick is checked against what it shows: her line as stored, the switch and
+  // its exceptions, who gets a message by which way and what it carries, and both lists.
+  useEffect(() => {
+    if (data) onPrint(printOf(data));
+  }, [data, onPrint]);
 
   const facts = useMemo(
     () =>
@@ -1208,94 +1326,105 @@ function MessageStep({ eventId }: { eventId: string }) {
   const texted = messages.length - emailed;
   const linksAtPress = messages.some((c) => c.recipient.linkState === 'AT_PRESS');
 
+  /*
+   * [[GTC-386]] (item 66, PLAN RULINGS 2026-10-15) — THREE LABELLED PARTS, in this order: what guests
+   * will receive (Q4: her line, the notes, "Read it as" with each person's own nudge choice, and the
+   * message, as they were), how I nudge (the question and its two choices, Q3), and the people I'll
+   * leave to her (group A, then group B, each under its own heading, Q1 and Q2). The labels wear
+   * Moment 2's quiet small-capitals divider (Q6); the first has no rule, the step's own line is above it.
+   */
   return (
     <div>
-      {/* Movement 1 — hers. */}
-      <label className="block text-sm font-medium text-gray-900 mb-1">Your line</label>
-      <p className="text-xs text-gray-500 mb-2">
-        A starting point built from the event — change it to whatever you would actually say. It
-        goes first, in your words, to everyone.
-      </p>
-      <textarea
-        value={authorLine}
-        onChange={(e) => setEdited(e.target.value)}
-        rows={3}
-        className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:ring-accent/40 focus:border-accent"
-      />
-      <div className="flex flex-wrap items-center gap-3 mt-2 mb-5">
-        <button
-          type="button"
-          onClick={() => saveAuthorLine(authorLine)}
-          disabled={!dirty || saving}
-          className="text-xs px-3 py-1 rounded-md bg-accent text-white disabled:bg-gray-200 disabled:text-gray-400"
-        >
-          {saving ? 'Saving…' : 'Save my line'}
-        </button>
-        <button
-          type="button"
-          onClick={revertToDraft}
-          disabled={saving || (edited === null && data.storedAuthorLine === null)}
-          className="text-xs text-gray-500 underline disabled:no-underline disabled:text-gray-300"
-        >
-          Put the draft back
-        </button>
-        <button
-          type="button"
-          onClick={sendWithoutLine}
-          disabled={saving || (edited === null && data.storedAuthorLine === '')}
-          className="text-xs text-gray-500 underline disabled:no-underline disabled:text-gray-300"
-        >
-          Send without a line from me
-        </button>
-        {/*
+      <section data-message-part="1">
+        <h3 className="text-xs uppercase tracking-wider text-gray-500 mb-2">
+          {MESSAGE_STEP_PARTS[0]}
+        </h3>
+        {/* Movement 1 — hers. */}
+        <label className="block text-sm font-medium text-gray-900 mb-1">Your line</label>
+        <p className="text-xs text-gray-500 mb-2">
+          A starting point built from the event — change it to whatever you would actually say. It
+          goes first, in your words, to everyone.
+        </p>
+        <textarea
+          value={authorLine}
+          onChange={(e) => setEdited(e.target.value)}
+          rows={3}
+          className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:ring-accent/40 focus:border-accent"
+        />
+        <div className="flex flex-wrap items-center gap-3 mt-2 mb-5">
+          <button
+            type="button"
+            onClick={() => saveAuthorLine(authorLine)}
+            disabled={!dirty || saving}
+            className="text-xs px-3 py-1 rounded-md bg-accent text-white disabled:bg-gray-200 disabled:text-gray-400"
+          >
+            {saving ? 'Saving…' : 'Save my line'}
+          </button>
+          <button
+            type="button"
+            onClick={revertToDraft}
+            disabled={saving || (edited === null && data.storedAuthorLine === null)}
+            className="text-xs text-gray-500 underline disabled:no-underline disabled:text-gray-300"
+          >
+            Put the draft back
+          </button>
+          <button
+            type="button"
+            onClick={sendWithoutLine}
+            disabled={saving || (edited === null && data.storedAuthorLine === '')}
+            className="text-xs text-gray-500 underline disabled:no-underline disabled:text-gray-300"
+          >
+            Send without a line from me
+          </button>
+          {/*
           THE THREE STATES, SAID PLAINLY. Kate cannot see which one she is in from the box
           alone — an empty box is "no line from me" and a box full of the draft is "Gather
           speaks for me", and those look nothing alike but read the same if nothing says so.
         */}
-        {saveError ? (
-          <p className="text-xs text-red-600">{saveError}</p>
-        ) : dirty ? (
-          <p className="text-xs text-amber-700">Not saved yet.</p>
-        ) : data.storedAuthorLine === '' ? (
-          <p className="text-xs text-gray-500">
-            No line from you. Guests get the greeting and then the handover — the preview below is
-            exactly what they will read.
-          </p>
-        ) : data.storedAuthorLine !== null ? (
-          <p className="text-xs text-gray-500">
-            Saved. Everyone gets this line, including anyone you add later.
-          </p>
-        ) : (
-          <p className="text-xs text-gray-500">
-            This is the draft, in your voice. Save it to make it yours, or send without a line from
-            you.
-          </p>
-        )}
-      </div>
+          {saveError ? (
+            <p className="text-xs text-red-600">{saveError}</p>
+          ) : dirty ? (
+            <p className="text-xs text-amber-700">Not saved yet.</p>
+          ) : data.storedAuthorLine === '' ? (
+            <p className="text-xs text-gray-500">
+              No line from you. Guests get the greeting and then the handover — the preview below is
+              exactly what they will read.
+            </p>
+          ) : data.storedAuthorLine !== null ? (
+            <p className="text-xs text-gray-500">
+              Saved. Everyone gets this line, including anyone you add later.
+            </p>
+          ) : (
+            <p className="text-xs text-gray-500">
+              This is the draft, in your voice. Save it to make it yours, or send without a line
+              from you.
+            </p>
+          )}
+        </div>
 
-      {/* GTC-256, CLOSED 2026-08-29. Stated, not hidden.
+        {/* GTC-256, CLOSED 2026-08-29. Stated, not hidden.
           Still correct, and now permanent for these events rather than pending: phase 2
           gives every NEW event a host membership row, and Ruling 12 rules no backfill for
           the ones that predate it. So this banner fires only on pre-phase-2 events, and
           what it describes is not going to be repaired — it is reseeded. */}
-      {!data.hostIdentityResolved && (
-        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-4">
-          <strong>The name on this message is provisional.</strong> This event has no host
-          membership row, so &ldquo;{data.hostName}&rdquo; is taken from the account that owns the
-          event rather than from the person you captured as yourself. If you are in the guest list
-          below, that is the same problem: you would be sent your own invitation. This event
-          predates the fix (GTC-256); newer events capture you properly.
-        </p>
-      )}
+        {!data.hostIdentityResolved && (
+          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-4">
+            <strong>The name on this message is provisional.</strong> This event has no host
+            membership row, so &ldquo;{data.hostName}&rdquo; is taken from the account that owns the
+            event rather than from the person you captured as yourself. If you are in the guest list
+            below, that is the same problem: you would be sent your own invitation. This event
+            predates the fix (GTC-256); newer events capture you properly.
+          </p>
+        )}
 
-      {linksAtPress && (
-        <p className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded px-3 py-2 mb-4">
-          Some guests have no link yet — links are issued at the press. Those messages show a
-          stand-in where the link will go.
-        </p>
-      )}
+        {linksAtPress && (
+          <p className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded px-3 py-2 mb-4">
+            Some guests have no link yet — links are issued at the press. Those messages show a
+            stand-in where the link will go.
+          </p>
+        )}
 
-      {/* GTC-294. What stood here said "Coordinators are not given a guest link, at the press or
+        {/* GTC-294. What stood here said "Coordinators are not given a guest link, at the press or
           before it", which this ticket made false: a coordinator now gets the same link as any
           other adult.
 
@@ -1305,82 +1434,82 @@ function MessageStep({ eventId }: { eventId: string }) {
           sentence has to say what it means WITHOUT naming a population, which is the same
           constraint GTC-262's directory copy was written under and the opposite of the Family
           Directory card's, where the reader is the host. Founder ruling, 2026-09-18: ships. */}
-      {/* ⚠ GTC-189 slice 5b — THIS NAMES EVERY RECIPIENT THE PRESS WILL NOT MESSAGE, NOT JUST
+        {/* ⚠ GTC-189 slice 5b — THIS NAMES EVERY RECIPIENT THE PRESS WILL NOT MESSAGE, NOT JUST
           `NONE_NOT_ISSUED`. It filtered that one state alone, so the host as carrier was counted
           as a message AND went unnamed — the two halves of the same defect. The reason comes
           from `NOT_MESSAGED_WHY`, keyed so a state with no words is a compile error. Its two
           sentences are PROPOSED and carry an anchor; every other word here was ruled. */}
-      {notMessaged.length > 0 && (
-        <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-4">
-          <strong>
-            {notMessaged.length === 1
-              ? 'One person gets no message'
-              : `${notMessaged.length} people get no message`}
-            .
-          </strong>{' '}
-          They stay on this screen, and the count below does not include them.
-          <ul className="mt-1.5 space-y-1">
-            {notMessaged.map((c) => (
-              <li key={c.recipient.personEventId}>
-                <span className="font-medium">{c.recipient.name}</span> —{' '}
-                {NOT_MESSAGED_WHY[c.recipient.linkState as NotMessagedLinkState]}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* The words are the view module's, ruled at slice 3 — Gather says "I". */}
-      <p className="text-xs text-gray-500 mb-3">
-        {data.replyTo ? (
-          replyToLine(data.replyTo)
-        ) : (
-          <span className="text-amber-700">{NO_REPLY_TO_LINE}</span>
-        )}
-      </p>
-
-      {/* Who is sent what. */}
-      {current && (
-        <>
-          <div className="flex items-baseline justify-between gap-4 mb-2">
-            <label className="block text-sm font-medium text-gray-900">Read it as</label>
-            <p className="text-xs text-gray-500">
-              {messageCountLine(messages.length, emailed, texted)}
-              {composed.longestText !== null &&
-                ` · the longest text runs to ${composed.longestText} ${
-                  composed.longestText === 1 ? 'text' : 'texts'
-                }`}
-            </p>
+        {notMessaged.length > 0 && (
+          <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-4">
+            <strong>
+              {notMessaged.length === 1
+                ? 'One person gets no message'
+                : `${notMessaged.length} people get no message`}
+              .
+            </strong>{' '}
+            They stay on this screen, and the count below does not include them.
+            <ul className="mt-1.5 space-y-1">
+              {notMessaged.map((c) => (
+                <li key={c.recipient.personEventId}>
+                  <span className="font-medium">{c.recipient.name}</span> —{' '}
+                  {NOT_MESSAGED_WHY[c.recipient.linkState as NotMessagedLinkState]}
+                </li>
+              ))}
+            </ul>
           </div>
-          <select
-            value={current.recipient.personEventId}
-            onChange={(e) => setSelected(e.target.value)}
-            className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 mb-4"
-          >
-            {rows.map((c) => (
-              <option key={c.recipient.personEventId} value={c.recipient.personEventId}>
-                {c.recipient.name} · by {c.recipient.channel === 'EMAIL' ? 'email' : 'text'}
-                {c.recipient.carried.length > 0 &&
-                  ` · with ${c.recipient.carried.map((k) => k.firstName).join(', ')}`}
-              </option>
-            ))}
-          </select>
+        )}
 
-          {/* What this person's message carries, before the words. */}
-          <dl className="text-sm mb-3 space-y-1">
-            <div className="flex gap-2">
-              <dt className="w-24 shrink-0 text-gray-400">Sent by</dt>
-              <dd className="text-gray-800">
-                {current.recipient.channel === 'EMAIL' ? 'Email' : 'Text'}
-                {/* GTC-189 slice 8a, W2 — why a person with an address is sent a text. */}
-                {current.recipient.emailNote ? (
-                  <span data-email-note="" className="block text-xs text-gray-500">
-                    {current.recipient.emailNote}
-                  </span>
-                ) : null}
-              </dd>
+        {/* The words are the view module's, ruled at slice 3 — Gather says "I". */}
+        <p className="text-xs text-gray-500 mb-3">
+          {data.replyTo ? (
+            replyToLine(data.replyTo)
+          ) : (
+            <span className="text-amber-700">{NO_REPLY_TO_LINE}</span>
+          )}
+        </p>
+
+        {/* Who is sent what. */}
+        {current && (
+          <>
+            <div className="flex items-baseline justify-between gap-4 mb-2">
+              <label className="block text-sm font-medium text-gray-900">Read it as</label>
+              <p className="text-xs text-gray-500">
+                {messageCountLine(messages.length, emailed, texted)}
+                {composed.longestText !== null &&
+                  ` · the longest text runs to ${composed.longestText} ${
+                    composed.longestText === 1 ? 'text' : 'texts'
+                  }`}
+              </p>
             </div>
-            {/*
+            <select
+              value={current.recipient.personEventId}
+              onChange={(e) => setSelected(e.target.value)}
+              className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 mb-4"
+            >
+              {rows.map((c) => (
+                <option key={c.recipient.personEventId} value={c.recipient.personEventId}>
+                  {c.recipient.name} · by {c.recipient.channel === 'EMAIL' ? 'email' : 'text'}
+                  {c.recipient.carried.length > 0 &&
+                    ` · with ${c.recipient.carried.map((k) => k.firstName).join(', ')}`}
+                </option>
+              ))}
+            </select>
+
+            {/* What this person's message carries, before the words. */}
+            <dl className="text-sm mb-3 space-y-1">
+              <div className="flex gap-2">
+                <dt className="w-24 shrink-0 text-gray-400">Sent by</dt>
+                <dd className="text-gray-800">
+                  {current.recipient.channel === 'EMAIL' ? 'Email' : 'Text'}
+                  {/* GTC-189 slice 8a, W2 — why a person with an address is sent a text. */}
+                  {current.recipient.emailNote ? (
+                    <span data-email-note="" className="block text-xs text-gray-500">
+                      {current.recipient.emailNote}
+                    </span>
+                  ) : null}
+                </dd>
+              </div>
+              {/*
               [[GTC-311]] — HOW THEY ARE CHASED, AND THE ONE PLACE SHE MAY TAKE THEM OFF IT.
 
               The per-person control lives on the recipient she is reading, not on a list of every
@@ -1391,134 +1520,141 @@ function MessageStep({ eventId }: { eventId: string }) {
               An opted-out row is refused the control and says so IN ITS PLACE (ruling AI; ruling AM's
               words, from the module) rather than simply having no switch.
             */}
-            {(() => {
-              const rc = data.chase.byRecipient[current.recipient.personEventId];
-              if (!rc) return null;
-              return (
+              {(() => {
+                const rc = data.chase.byRecipient[current.recipient.personEventId];
+                if (!rc) return null;
+                return (
+                  <div className="flex gap-2">
+                    <dt className="w-24 shrink-0 text-gray-400">{CHASED_BY_LABEL}</dt>
+                    <dd className="text-gray-800">
+                      {CHASED_BY_VALUE[rc.chasedBy]}
+                      {rc.control === 'REFUSED_OPTED_OUT' && (
+                        <span className="block text-xs text-gray-500 mt-1">
+                          {CHASE_OPTED_OUT_PLACEHOLDER}
+                        </span>
+                      )}
+                      {rc.control === 'OFFERED' && (
+                        <span className="flex flex-wrap gap-2 mt-1">
+                          {chasePersonPills({
+                            exception: rc.exception,
+                            eventDefault: data.chase.stored,
+                          }).map((p) => (
+                            <Pill
+                              key={p.value}
+                              active={p.active}
+                              onClick={() =>
+                                !chaseSaving &&
+                                !p.active &&
+                                patchChase({
+                                  personEventId: current.recipient.personEventId,
+                                  chaseException: p.writes,
+                                })
+                              }
+                            >
+                              {p.label}
+                            </Pill>
+                          ))}
+                        </span>
+                      )}
+                    </dd>
+                  </div>
+                );
+              })()}
+              {!current.recipient.hostAsCarrier && (
                 <div className="flex gap-2">
-                  <dt className="w-24 shrink-0 text-gray-400">{CHASED_BY_LABEL}</dt>
-                  <dd className="text-gray-800">
-                    {CHASED_BY_VALUE[rc.chasedBy]}
-                    {rc.control === 'REFUSED_OPTED_OUT' && (
-                      <span className="block text-xs text-gray-500 mt-1">
-                        {CHASE_OPTED_OUT_PLACEHOLDER}
-                      </span>
-                    )}
-                    {rc.control === 'OFFERED' && (
-                      <span className="flex flex-wrap gap-2 mt-1">
-                        {chasePersonPills({
-                          exception: rc.exception,
-                          eventDefault: data.chase.stored,
-                        }).map((p) => (
-                          <Pill
-                            key={p.value}
-                            active={p.active}
-                            onClick={() =>
-                              !chaseSaving &&
-                              !p.active &&
-                              patchChase({
-                                personEventId: current.recipient.personEventId,
-                                chaseException: p.writes,
-                              })
-                            }
-                          >
-                            {p.label}
-                          </Pill>
-                        ))}
-                      </span>
-                    )}
-                  </dd>
+                  <dt className="w-24 shrink-0 text-gray-400">Theirs</dt>
+                  <dd className="text-gray-800">{rowsInBrief(current.recipient)}</dd>
                 </div>
-              );
-            })()}
-            {!current.recipient.hostAsCarrier && (
-              <div className="flex gap-2">
-                <dt className="w-24 shrink-0 text-gray-400">Theirs</dt>
-                <dd className="text-gray-800">{rowsInBrief(current.recipient)}</dd>
-              </div>
-            )}
-            {current.recipient.carried.map((k) => (
-              <div key={k.personEventId} className="flex gap-2">
-                <dt className="w-24 shrink-0 text-gray-400">For {k.firstName}</dt>
-                <dd className="text-gray-800">{rowsInBrief(k)}</dd>
-              </div>
-            ))}
-            {/* [[GTC-356]] W5 — whose asks her message tells her about. The lines are in the message below. */}
-            {current.recipient.household.length > 0 && (
-              <div className="flex gap-2">
-                <dt className="w-24 shrink-0 text-gray-400">{TOLD_ABOUT_LABEL}</dt>
-                <dd className="text-gray-800">{toldAboutValue(current.recipient.household)}</dd>
-              </div>
-            )}
-            {current.replyTo !== null && (
-              <div className="flex gap-2">
-                <dt className="w-24 shrink-0 text-gray-400">Reply-to</dt>
-                <dd className="text-gray-800">{current.replyTo}</dd>
-              </div>
-            )}
-          </dl>
+              )}
+              {current.recipient.carried.map((k) => (
+                <div key={k.personEventId} className="flex gap-2">
+                  <dt className="w-24 shrink-0 text-gray-400">For {k.firstName}</dt>
+                  <dd className="text-gray-800">{rowsInBrief(k)}</dd>
+                </div>
+              ))}
+              {/* [[GTC-356]] W5 — whose asks her message tells her about. The lines are in the message below. */}
+              {current.recipient.household.length > 0 && (
+                <div className="flex gap-2">
+                  <dt className="w-24 shrink-0 text-gray-400">{TOLD_ABOUT_LABEL}</dt>
+                  <dd className="text-gray-800">{toldAboutValue(current.recipient.household)}</dd>
+                </div>
+              )}
+              {current.replyTo !== null && (
+                <div className="flex gap-2">
+                  <dt className="w-24 shrink-0 text-gray-400">Reply-to</dt>
+                  <dd className="text-gray-800">{current.replyTo}</dd>
+                </div>
+              )}
+            </dl>
 
-          {current.ask === null ? (
-            /* Ruling A2 — the host as carrier. Movements 1 and 2 are voiced as her, so which voice
+            {current.ask === null ? (
+              /* Ruling A2 — the host as carrier. Movements 1 and 2 are voiced as her, so which voice
                a message TO her is in is decision 20, unruled; her link is GTC-297. Not composed. */
-            <p className="text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-md px-4 py-3">
-              This goes to you, because another household picked you as its contact. It carries only
-              their child&rsquo;s ask &mdash; nothing of yours. Its wording is not settled yet
-              (GTC-189 decision 20) and neither is the link you would answer it from (GTC-297), so
-              it is not shown.
-            </p>
-          ) : (
-            <>
-              {/* The message itself, seam visible. */}
-              <div className="border border-gray-200 rounded-md bg-white overflow-hidden">
-                {current.subject !== null && (
-                  <div className="px-4 py-2 border-b border-gray-100 bg-gray-50">
-                    <p className="text-[11px] uppercase tracking-wide text-gray-400">Subject</p>
-                    <p className="text-sm text-gray-800">{current.subject}</p>
-                  </div>
-                )}
-                {current.ask.movements.map((m) => (
-                  <div key={m.slot} className="px-4 py-3 border-b border-gray-100 last:border-0">
-                    <p className="text-[11px] uppercase tracking-wide text-gray-400 mb-1">
-                      {m.voice === 'HOST' ? 'Your voice' : 'Gather'}
-                    </p>
-                    <p className="text-sm text-gray-900 whitespace-pre-wrap">{m.text}</p>
-                  </div>
-                ))}
-                {/* [[GTC-337]] ruling 2 — Gather ends every text with this line; the count below
-                    includes it. An email carries none. */}
-                {current.textAsSent !== null && (
-                  <div className="px-4 py-3 border-b border-gray-100 last:border-0">
-                    <p className="text-[11px] uppercase tracking-wide text-gray-400 mb-1">Gather</p>
-                    <p className="text-sm text-gray-900">{OPT_OUT_LINE}</p>
-                  </div>
-                )}
-              </div>
-              <p className="text-xs text-gray-500 mt-2">
-                {current.segments !== null && current.textAsSent !== null ? (
-                  <>
-                    {current.textAsSent.length} characters · {current.segments}{' '}
-                    {current.segments === 1 ? 'text' : 'texts'}
-                    {current.segments > 1 && ' — long is fine, it just costs more to send'}.
-                    {current.narrowSegments &&
-                      ' Counted at 70 characters a text rather than 160, because the wording uses punctuation plain SMS cannot carry.'}
-                  </>
-                ) : (
-                  'Sent by email, so there is no text count.'
-                )}
+              <p className="text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-md px-4 py-3">
+                This goes to you, because another household picked you as its contact. It carries
+                only their child&rsquo;s ask &mdash; nothing of yours. Its wording is not settled
+                yet (GTC-189 decision 20) and neither is the link you would answer it from
+                (GTC-297), so it is not shown.
               </p>
-            </>
-          )}
-        </>
-      )}
+            ) : (
+              <>
+                {/* The message itself, seam visible. */}
+                <div className="border border-gray-200 rounded-md bg-white overflow-hidden">
+                  {current.subject !== null && (
+                    <div className="px-4 py-2 border-b border-gray-100 bg-gray-50">
+                      <p className="text-[11px] uppercase tracking-wide text-gray-400">Subject</p>
+                      <p className="text-sm text-gray-800">{current.subject}</p>
+                    </div>
+                  )}
+                  {current.ask.movements.map((m) => (
+                    <div key={m.slot} className="px-4 py-3 border-b border-gray-100 last:border-0">
+                      <p className="text-[11px] uppercase tracking-wide text-gray-400 mb-1">
+                        {m.voice === 'HOST' ? 'Your voice' : 'Gather'}
+                      </p>
+                      <p className="text-sm text-gray-900 whitespace-pre-wrap">{m.text}</p>
+                    </div>
+                  ))}
+                  {/* [[GTC-337]] ruling 2 — Gather ends every text with this line; the count below
+                    includes it. An email carries none. */}
+                  {current.textAsSent !== null && (
+                    <div className="px-4 py-3 border-b border-gray-100 last:border-0">
+                      <p className="text-[11px] uppercase tracking-wide text-gray-400 mb-1">
+                        Gather
+                      </p>
+                      <p className="text-sm text-gray-900">{OPT_OUT_LINE}</p>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  {current.segments !== null && current.textAsSent !== null ? (
+                    <>
+                      {current.textAsSent.length} characters · {current.segments}{' '}
+                      {current.segments === 1 ? 'text' : 'texts'}
+                      {current.segments > 1 && ' — long is fine, it just costs more to send'}.
+                      {current.narrowSegments &&
+                        ' Counted at 70 characters a text rather than 160, because the wording uses punctuation plain SMS cannot carry.'}
+                    </>
+                  ) : (
+                    'Sent by email, so there is no text count.'
+                  )}
+                </p>
+              </>
+            )}
+          </>
+        )}
+      </section>
 
       {/*
-        [[GTC-311]] — THE DEFAULT, STATED ONCE (acceptance: "in one sentence, rather than per row").
+        [[GTC-311]] — THE DEFAULT, ASKED ONCE (acceptance: "in one sentence, rather than per row").
         It sits above the list because it decides who is on the second half of it. The switch is the
-        event's; the per-person exception is on each recipient above. Words: W1–W3, ruled 2026-09-27.
+        event's; the per-person exception is on each recipient above. Words: W3, ruled 2026-09-27;
+        [[GTC-386]] Q3 made W1 and W2's statement a question, and the pill that is on says the answer.
       */}
-      <div className="mt-6 pt-5 border-t border-gray-100">
-        <p className="text-sm text-gray-800 mb-2">{CHASE_DEFAULT_SENTENCE[data.chase.resolved]}</p>
+      <section data-message-part="2">
+        <h3 className="text-xs uppercase tracking-wider text-gray-500 mt-6 mb-2 border-t border-gray-200 pt-4">
+          {MESSAGE_STEP_PARTS[1]}
+        </h3>
+        <p className="text-sm text-gray-800 mb-2">{CHASE_DEFAULT_QUESTION}</p>
         <div className="flex flex-wrap gap-2">
           {(['BY_EMAIL', 'HAND_TO_HOST'] as const).map((v) => (
             <Pill
@@ -1537,7 +1673,7 @@ function MessageStep({ eventId }: { eventId: string }) {
         </div>
         {chaseSaving && <p className="text-xs text-gray-400 mt-2">Saving…</p>}
         {chaseError && <p className="text-xs text-red-600 mt-2">{chaseError}</p>}
-      </div>
+      </section>
 
       {/* The host's list — ruling A as corrected: adults Gather cannot reach, and children whose
           route is closed. Each named with what they were asked for, and why it is hers.
@@ -1547,8 +1683,10 @@ function MessageStep({ eventId }: { eventId: string }) {
           them and stays with them. Group B is who Gather asks and will not chase, which the blurb
           would be false of. Each half comes from its own field and its own words map — group B's
           reasons are ruling AN's `CHASE_NONE_WHY`, never `ADULT_WHY`. */}
-      <div className="mt-6 pt-5 border-t border-gray-100">
-        <h3 className="text-sm font-medium text-gray-900 mb-1">{HOST_LIST_HEADING}</h3>
+      <section data-message-part="3">
+        <h3 className="text-xs uppercase tracking-wider text-gray-500 mt-6 mb-2 border-t border-gray-200 pt-4">
+          {HOST_LIST_HEADING}
+        </h3>
         {data.hostList.length === 0 && data.chase.notChased.length === 0 ? (
           <p className="text-sm text-gray-600">{HOST_LIST_EMPTY}</p>
         ) : (
@@ -1585,7 +1723,7 @@ function MessageStep({ eventId }: { eventId: string }) {
             )}
           </>
         )}
-      </div>
+      </section>
     </div>
   );
 }

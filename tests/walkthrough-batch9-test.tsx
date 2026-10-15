@@ -152,11 +152,15 @@ const W7 =
   'Everyone with an email or mobile hears from me. Pick who takes the kids’ asks, and how hard I nudge.';
 const W8 = 'Everyone with an email or mobile hears from me. Pick how hard I nudge.';
 const W9 = "Don't nudge";
-const W10 = "Exactly what each person will receive, and who I'll nudge.";
+// [[GTC-386]] Q5, ruled 2026-10-15 (was "Exactly what each person will receive, and who I'll nudge.").
+const W10 = 'Exactly what each person will receive, how I nudge, and who I’ll leave to you.';
 const W11 =
   'Replies to an email come to kate@example.com. A text reply usually comes to your board, and I stop nudging whoever sent it.';
 const W12 = "I'll ask, but won't nudge";
-const W13 = "When someone hasn't answered and has no mobile I can text, I'll nudge them by email.";
+// [[GTC-386]] Q3, ruled 2026-10-15: a question on both screens (was the statement, "…I'll nudge them by
+// email.").
+const W13 =
+  'When someone hasn’t answered and has no mobile I can text, how do you want to handle it?';
 const W14 = 'Nudge them by email';
 const W15 = 'Nudge by email';
 const W16 = 'Nudges by';
@@ -305,8 +309,8 @@ async function main() {
   );
   assert(
     'W',
-    'W13 the default’s sentence',
-    ok(() => APC.CHASE_DEFAULT_SENTENCE.BY_EMAIL === W13)
+    'W13 the default’s question',
+    ok(() => (APC as any).CHASE_DEFAULT_QUESTION === W13)
   );
   assert(
     'W',

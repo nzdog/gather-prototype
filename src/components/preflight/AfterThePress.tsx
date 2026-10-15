@@ -39,7 +39,7 @@ import {
   CHASED_BY_LABEL,
   CHASED_BY_VALUE,
   CHASE_DEFAULT_PILLS,
-  CHASE_DEFAULT_SENTENCE,
+  CHASE_DEFAULT_QUESTION,
   CHASE_OPTED_OUT_PLACEHOLDER,
   DEFAULT_SUFFIX,
   chasePersonPills,
@@ -190,10 +190,10 @@ export function AfterThePressView({
           {saving && <p className="text-sm text-gray-400 mt-3">Saving…</p>}
         </header>
 
-        {/* The event switch — GTC-311's W1 to W3, as on step 4. */}
+        {/* The event switch — GTC-311's W3, as on step 4, under [[GTC-386]]'s question (Q3). */}
         {chase && (
           <section className="bg-white border border-gray-200 rounded-lg p-5 mb-6">
-            <p className="text-sm text-gray-800 mb-2">{CHASE_DEFAULT_SENTENCE[chase.resolved]}</p>
+            <p className="text-sm text-gray-800 mb-2">{CHASE_DEFAULT_QUESTION}</p>
             <div className="flex flex-wrap gap-2">
               {(['BY_EMAIL', 'HAND_TO_HOST'] as const).map((v) => (
                 <Pill

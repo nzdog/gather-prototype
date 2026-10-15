@@ -558,17 +558,19 @@ async function main() {
     ),
     "They've opted out of texts — so I won't nudge them at all."
   );
+  // [[GTC-386]] Q3, ruled 2026-10-15: W1 and W2, the two statements, became one question on both
+  // screens. W1 read "…I'll nudge them by email." and W2 "…I'll leave them to you."
   expectEq(
     'D',
-    'W1 — the default ON',
-    compose?.CHASE_DEFAULT_SENTENCE?.BY_EMAIL,
-    "When someone hasn't answered and has no mobile I can text, I'll nudge them by email."
+    'W1 — the question (GTC-386 Q3)',
+    (compose as any)?.CHASE_DEFAULT_QUESTION,
+    'When someone hasn’t answered and has no mobile I can text, how do you want to handle it?'
   );
   expectEq(
     'D',
-    'W2 — the default OFF',
-    compose?.CHASE_DEFAULT_SENTENCE?.HAND_TO_HOST,
-    "When someone hasn't answered and has no mobile I can text, I'll leave them to you."
+    'W2 — the two statements are gone (GTC-386 Q3)',
+    (compose as any)?.CHASE_DEFAULT_SENTENCE,
+    undefined
   );
   expectEq('D', 'W3 — the switch pills', compose?.CHASE_DEFAULT_PILLS, {
     BY_EMAIL: 'Nudge them by email',
@@ -608,12 +610,19 @@ async function main() {
     compose?.HOST_LIST_NOT_CHASED_BLURB,
     "Their asks go out, and I won't follow up on them. If they haven't answered, they're yours."
   );
-  expectEq('D', 'KEPT — the ruled heading', compose?.HOST_LIST_HEADING, 'Yours to handle');
+  // [[GTC-386]] Q1b and Q2, ruled 2026-10-15: the heading is part 3's label (was "Yours to handle"),
+  // and group A's line drops its first sentence, "Gather will not message these people."
   expectEq(
     'D',
-    'KEPT — the ruled blurb, now under group A, of whom it is exactly true',
+    'the ruled heading (GTC-386 Q1b)',
+    compose?.HOST_LIST_HEADING,
+    'People I’ll leave to you'
+  );
+  expectEq(
+    'D',
+    'the ruled blurb, under group A, without its first sentence (GTC-386 Q2)',
     compose?.HOST_LIST_BLURB,
-    'Gather will not message these people. Each is named with what they have been asked for, and why it comes to you.'
+    'Each is named with what they have been asked for, and why it comes to you.'
   );
   expectEq('D', 'KEPT — the empty state', compose?.HOST_LIST_EMPTY, 'Nobody.');
 
@@ -659,8 +668,8 @@ async function main() {
   const page = read(PAGE_REL);
   assert(
     'D',
-    'W8 — step 4 blurb',
-    page.includes("Exactly what each person will receive, and who I'll nudge.")
+    'W8 — step 4 blurb (GTC-386 Q5)',
+    page.includes('Exactly what each person will receive, how I nudge, and who I’ll leave to you.')
   );
   assert('D', 'W9 — step 4 check reads "Settled"', /checkLabel="Settled"/.test(page));
   assert(
@@ -671,7 +680,7 @@ async function main() {
   assert(
     'D',
     'the page renders the words from the module and keeps no copy of its own',
-    page.includes('CHASE_DEFAULT_SENTENCE') &&
+    page.includes('CHASE_DEFAULT_QUESTION') &&
       page.includes('chasePersonPills') &&
       page.includes('CHASE_OPTED_OUT_PLACEHOLDER') &&
       page.includes('notChasedReason') &&

@@ -65,7 +65,14 @@ export function Pill({
       : 'bg-accent text-white border-accent';
   const off = 'bg-white text-gray-600 border-gray-300 hover:border-gray-400';
   return (
-    <button type="button" onClick={onClick} className={`${base} ${active ? on : off}`}>
+    // [[GTC-386]] (item 66): which choice is on, for a screen reader as well as by colour. Step 4's
+    // switch is a question now, so the words no longer say it.
+    <button
+      type="button"
+      onClick={onClick}
+      className={`${base} ${active ? on : off}`}
+      aria-pressed={active}
+    >
       {children}
     </button>
   );

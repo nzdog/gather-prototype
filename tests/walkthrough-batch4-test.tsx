@@ -899,6 +899,11 @@ async function runLive() {
       [390, 844, true, 'phone'],
     ] as const) {
       await c.setViewport(w, h, mobile);
+      // [[GTC-386]] (item 68): the ticks are remembered in this browser now, so each width's visit is
+      // made a first visit again: the suite forgets what its own earlier pass ticked.
+      await ev(
+        `(() => { try { for (const k of Object.keys(localStorage)) if (k.startsWith('gather:preflight-ticks:')) localStorage.removeItem(k); } catch (e) {} return true; })()`
+      );
       await c.navigate(`/plan/${pre}/pre-flight`, 9000);
       const ids =
         tag === 'desktop'

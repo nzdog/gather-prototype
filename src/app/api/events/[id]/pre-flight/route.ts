@@ -208,6 +208,8 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
       }));
 
     return NextResponse.json({
+      // [[GTC-386]] (item 68, Q8): who is looking, so the page keeps each person's ticks apart.
+      viewerId: auth.user.id,
       event: {
         ...event,
         eventType: setup?.eventType ?? null,

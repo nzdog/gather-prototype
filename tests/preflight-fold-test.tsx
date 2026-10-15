@@ -126,7 +126,8 @@ const BLURBS = [
   'Everything that has no owner yet. None of it blocks you.',
   'Event-level, not by name. The last check before people eat.',
   'Everyone with an email or mobile hears from me. Pick who takes the kids’ asks, and how hard I nudge.',
-  "Exactly what each person will receive, and who I'll nudge.",
+  // [[GTC-386]] Q5, ruled 2026-10-15 (was "Exactly what each person will receive, and who I'll nudge.")
+  'Exactly what each person will receive, how I nudge, and who I’ll leave to you.',
   'The last look is done.',
 ];
 /** [[GTC-378]] W8 — step 3's line on an invites-only event (ruling 3). */
@@ -661,6 +662,11 @@ async function runLive() {
     ] as const) {
       const k = (id: string) => (tag === 'desktop' ? id : `${id}p`);
       await c.setViewport(w, h, mobile);
+      // [[GTC-386]] (item 68): the ticks are remembered in this browser now, so each width's visit is
+      // made a first visit again: the suite forgets what its own earlier pass ticked.
+      await ev(
+        `(() => { try { for (const k of Object.keys(localStorage)) if (k.startsWith('gather:preflight-ticks:')) localStorage.removeItem(k); } catch (e) {} return true; })()`
+      );
       await c.navigate(`/plan/${evA}/pre-flight`, 9000);
 
       // C1 — the landing: steps 1 to 4 closed, Ready open, Send shown and greyed (C4 as ruled).
