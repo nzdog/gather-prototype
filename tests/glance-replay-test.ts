@@ -2780,6 +2780,10 @@ async function main() {
       // list every guard below reads: it may not reach the DB-bound half, the replay module or the
       // diff, start an interval or a timeout, refresh itself, or open a socket.
       'src/components/glance/GlancePersonReading.tsx',
+      // [[GTC-388]] Q23, ruled 2026-10-16 — the board's two pop-ups ("See menu", "See assignments")
+      // join before the island exists, so every guard below reads it: no DB-bound half, no replay
+      // module, no diff, no interval or timeout, no self-refresh, no socket.
+      'src/components/glance/PlanLists.tsx',
     ];
     const liveSrc = code(LIVE_ISLAND);
     const paintSrc = code(PAINT);

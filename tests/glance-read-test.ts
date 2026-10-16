@@ -1073,6 +1073,13 @@ async function main() {
     // the item list the print door reads and keeps three facts of each row. Ruling 1's fence follows
     // it UNCHANGED.
     const eventSearchSrc = code('src/components/glance/EventSearch.tsx');
+    // [[GTC-388]] Q23, ruled 2026-10-16 — "SEE MENU" AND "SEE ASSIGNMENTS" JOIN, the island and its
+    // pure module, and the count moves 23 → 25 on that ruling, before the files exist (as GTC-368
+    // Q12 did). The board renders the island and it ships to a browser; it reads the item list the
+    // print door reads, and keeps only what the two pop-ups show. Ruling 1's fence follows both
+    // UNCHANGED.
+    const planListsSrc = code('src/components/glance/PlanLists.tsx');
+    const planListsModelSrc = code('src/lib/print/plan-lists.ts');
     const glanceSources = [
       stateSrc,
       readSrc,
@@ -1097,12 +1104,14 @@ async function main() {
       detailsSrc,
       momentWordsSrc,
       eventSearchSrc,
+      planListsSrc,
+      planListsModelSrc,
     ];
     const sourcesExist = glanceSources.every((src) => src.length > 0);
     assert(
       'Ruling 1 source',
-      'EVERY GLANCE SOURCE EXISTS — the modules, the route, the page, the view, the actions, both islands, the painters, the preview, the reading panel and its model, the print door, the event’s details, the Moment words and the board’s search; the gate and the scan are ONE list, so neither can be widened without the other',
-      sourcesExist && glanceSources.length === 23
+      'EVERY GLANCE SOURCE EXISTS — the modules, the route, the page, the view, the actions, both islands, the painters, the preview, the reading panel and its model, the print door, the event’s details, the Moment words, the board’s search and its two pop-ups with their model; the gate and the scan are ONE list, so neither can be widened without the other',
+      sourcesExist && glanceSources.length === 25
     );
     for (const banned of BEHAVIOUR_DENYLIST) {
       const re = new RegExp(`\\b${banned}\\b`);

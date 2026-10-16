@@ -210,6 +210,9 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     return NextResponse.json({
       // [[GTC-386]] (item 68, Q8): who is looking, so the page keeps each person's ticks apart.
       viewerId: auth.user.id,
+      // [[GTC-388]] Q24 — the signed-in person's OWN account address, from the same guard, for
+      // step 4's test email (W2). Never the host's when a co-host looks, never anyone else's.
+      viewerEmail: auth.user.email,
       event: {
         ...event,
         eventType: setup?.eventType ?? null,

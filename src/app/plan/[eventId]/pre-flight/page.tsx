@@ -41,7 +41,15 @@ import {
   type DietaryStatus,
 } from '@/lib/dietary';
 import AccordionShell from '@/components/plan/AccordionShell';
-import { draftAuthorLine } from '@/lib/messages/ask-register';
+import { draftAuthorLine, firstNameOf } from '@/lib/messages/ask-register';
+import {
+  TEST_EMAIL_OUTCOMES,
+  TEST_EMAIL_WORDS,
+  testEmailLead,
+  testEmailOutcomeLine,
+  testEmailTextNote,
+  type TestEmailOutcome,
+} from '@/lib/preflight/test-email';
 import { PRESS_REFUSAL_WORDS, THRESHOLD_SCRIPT } from '@/lib/press/press-words';
 import {
   CHASED_BY_LABEL,
@@ -132,6 +140,8 @@ interface HouseholdView {
 interface PreFlightData {
   /** [[GTC-386]] (Q8): who is looking, so each person's ticks are kept apart. */
   viewerId?: string;
+  /** [[GTC-388]] Q24: their own account address, where step 4's test email goes (W2). */
+  viewerEmail?: string | null;
   event: {
     id: string;
     name: string;
@@ -869,7 +879,11 @@ export default function PreFlightPage() {
           open={openSteps.includes(4)}
           onToggle={() => toggleStep(4)}
         >
-          <MessageStep eventId={eventId} onPrint={onMessagePrint} />
+          <MessageStep
+            eventId={eventId}
+            onPrint={onMessagePrint}
+            viewerEmail={data?.viewerEmail ?? null}
+          />
         </Step>
 
         {/* ── 5. The end ──────────────────────────────────────────────────── */}
@@ -1151,10 +1165,13 @@ function rowsInBrief(x: { itemNames: readonly string[]; jobNames: readonly strin
 function MessageStep({
   eventId,
   onPrint,
+  viewerEmail,
 }: {
   eventId: string;
   /** [[GTC-386]] (item 68) — the fingerprint of what this step shows, each time it arrives. */
   onPrint: (print: string) => void;
+  /** [[GTC-388]] Q24 — the signed-in person's own address, the only place her test can go. */
+  viewerEmail: string | null;
 }) {
   const [data, setData] = useState<MessageData | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -1320,6 +1337,40 @@ function MessageStep({
     () => (data ? composePreview(data, authorLine) : { rows: [], longestText: null }),
     [data, authorLine]
   );
+
+  /*
+   * [[GTC-388]] (item 64) — "Send me a test email". One email to her own address (Q1), holding the
+   * message of whoever she is reading as (Q3), composed by the server from her STORED line (Q5), so
+   * the button waits while the box holds an unsaved change. The answer is an outcome code and the
+   * words are the module's. A test changes nothing on this step, so its tick stays (Q13). What the
+   * last test came to is cleared once she reads as someone else or changes her line.
+   */
+  const [testing, setTesting] = useState(false);
+  const [testOutcome, setTestOutcome] = useState<TestEmailOutcome | null>(null);
+  useEffect(() => {
+    setTestOutcome(null);
+  }, [selected, authorLine]);
+  const sendTest = async (personEventId: string) => {
+    setTesting(true);
+    setTestOutcome(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/pre-flight/message`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ testEmail: { personEventId } }),
+      });
+      const answer = (await res.json().catch(() => ({}))) as { outcome?: TestEmailOutcome };
+      setTestOutcome(
+        res.ok && answer.outcome && TEST_EMAIL_OUTCOMES.includes(answer.outcome)
+          ? answer.outcome
+          : 'NOT_SENT'
+      );
+    } catch {
+      setTestOutcome('NOT_SENT');
+    } finally {
+      setTesting(false);
+    }
+  };
 
   /**
    * Stores movement 1. GTC-187 decision 2 makes the line reusable across sends — the point
@@ -1715,6 +1766,39 @@ function MessageStep({
                     'Sent by email, so there is no text count.'
                   )}
                 </p>
+
+                {/* [[GTC-388]] (item 64, Q14) — her test of this person's message, under it. Only
+                  for someone the press will message (W14's case has no button). */}
+                {messages.includes(current) && (
+                  <div data-test-email="" className="mt-3">
+                    <button
+                      type="button"
+                      data-test-email-button=""
+                      onClick={() => sendTest(current.recipient.personEventId)}
+                      disabled={dirty || testing || !viewerEmail}
+                      className="text-xs px-3 py-1 rounded-md border border-gray-300 bg-white text-gray-700 disabled:border-gray-200 disabled:text-gray-300"
+                    >
+                      {testing ? TEST_EMAIL_WORDS.SENDING : TEST_EMAIL_WORDS.BUTTON}
+                    </button>
+                    <p data-test-email-lead="" className="text-xs text-gray-500 mt-1.5">
+                      {dirty
+                        ? TEST_EMAIL_WORDS.SAVE_FIRST
+                        : !viewerEmail
+                          ? TEST_EMAIL_WORDS.NO_ADDRESS
+                          : current.recipient.channel === 'TEXT'
+                            ? `${testEmailLead(firstNameOf(current.recipient.name), viewerEmail)} ${testEmailTextNote(firstNameOf(current.recipient.name))}`
+                            : testEmailLead(firstNameOf(current.recipient.name), viewerEmail)}
+                    </p>
+                    {testOutcome && viewerEmail ? (
+                      <p
+                        data-test-email-outcome={testOutcome === 'SENT' ? 'sent' : 'not-sent'}
+                        className={`text-xs mt-1 ${testOutcome === 'SENT' ? 'text-gray-700' : 'text-amber-700'}`}
+                      >
+                        {testEmailOutcomeLine(testOutcome, viewerEmail)}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
               </>
             )}
           </>

@@ -71,6 +71,7 @@ import GlancePersonReading from './GlancePersonReading';
 import { readingPanelFor, type ReadingPlace } from './reading';
 import PrintListDoor from './PrintListDoor';
 import EventSearch from './EventSearch';
+import PlanLists from './PlanLists';
 import type { SearchPerson } from '@/lib/search/event-search';
 import {
   COLOUR_KEY,
@@ -663,6 +664,16 @@ export default function GlanceBoard({
           an action on a strip (Moment 4 spec: the surface shows states, the tap holds actions).
         */}
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+          {/*
+            [[GTC-388]] (item 72, Q18, Q19) — "See menu" and "See assignments", first in the row; an
+            island, so this file still holds no hook and no fetch. No plan on invites-only, so none.
+          */}
+          {invitesOnly ? null : (
+            <PlanLists
+              eventId={glance.eventId}
+              className="inline-block cursor-pointer text-[12px] text-[#888780] underline underline-offset-2"
+            />
+          )}
           {/* [[GTC-374]] (Q14): an invites-only event has no plan, so neither door about one. */}
           {invitesOnly ? null : (
             <a

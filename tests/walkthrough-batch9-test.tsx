@@ -243,6 +243,10 @@ const HOST_FILES = [
   'src/lib/glance/actions.ts',
   'src/lib/glance/chase-fact.ts',
   'src/lib/chase-hand-back.ts',
+  // [[GTC-388]] Q23 — the test email's words and the board's two pop-ups, before they exist.
+  'src/lib/preflight/test-email.ts',
+  'src/components/glance/PlanLists.tsx',
+  'src/lib/print/plan-lists.ts',
 ];
 const REMIND_OR_CHASE = /\b(remind\w*|chas(e|ed|es|ing)|chase-ups?)\b/i;
 /**

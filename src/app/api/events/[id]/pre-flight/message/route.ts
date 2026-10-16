@@ -1,5 +1,5 @@
 // GET   /api/events/[id]/pre-flight/message — the ingredients for step 4
-// PATCH /api/events/[id]/pre-flight/message — stores the host's movement 1
+// PATCH /api/events/[id]/pre-flight/message — stores the host's movement 1, or sends her test
 //
 // GTC-187 (H2) — the ingredients for step 4 of the pre-flight, "the message, shown".
 // GTC-260 — the read and the write of `Event.askAuthorLine`, the column GTC-259 added
@@ -17,14 +17,21 @@
 // server-rendered picture of it, and so the host's edit to movement 1 re-composes live
 // through the same function the dispatch path (GTC-189) will call.
 //
-// NOTHING HERE SENDS, and nothing here issues a token. `ensureEventTokens` runs at the
-// transition to CONFIRMING (`transitionToConfirming` in src/lib/workflow.ts) and again at
+// NOTHING HERE SENDS TO A GUEST, and nothing here issues a token. `ensureEventTokens` runs at
+// the transition to CONFIRMING (`transitionToConfirming` in src/lib/workflow.ts) and again at
 // the press, which is GTC-189's.
+//
+// [[GTC-388]] (item 64, Q9) — THE ONE THING IT SENDS: the host's test, to her own account
+// address. A second request shape on the existing PATCH, `{ testEmail: { personEventId } }`,
+// read after the same guard; it goes to `sendTestEmailFor` in src/lib/preflight/test-email-send.ts,
+// which checks, composes from the stored line with the links as stand-ins, sends one email to
+// the signed-in person and writes nothing. It answers `{ outcome }`, and the page says the words.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
 import { readAskPreview } from '@/lib/preflight/ask-preview';
+import { sendTestEmailFor } from '@/lib/preflight/test-email-send';
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id: eventId } = await context.params;
@@ -96,6 +103,21 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
   try {
     const body = await request.json().catch(() => null);
+
+    // [[GTC-388]] — the test shape, after the guard. To the signed-in person's own address only.
+    if (body && typeof body === 'object' && 'testEmail' in body) {
+      const test = (body as { testEmail: unknown }).testEmail as { personEventId?: unknown } | null;
+      if (!test || typeof test.personEventId !== 'string' || !test.personEventId) {
+        return NextResponse.json({ error: 'testEmail.personEventId is required' }, { status: 400 });
+      }
+      const outcome = await sendTestEmailFor(prisma, {
+        eventId,
+        personEventId: test.personEventId,
+        viewer: { id: auth.user.id, email: auth.user.email },
+        baseUrl: process.env.NEXT_PUBLIC_APP_URL || '',
+      });
+      return NextResponse.json({ outcome });
+    }
 
     if (!body || typeof body !== 'object' || !('askAuthorLine' in body)) {
       return NextResponse.json({ error: 'askAuthorLine is required' }, { status: 400 });

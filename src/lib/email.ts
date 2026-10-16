@@ -300,14 +300,9 @@ async function sendHostVoiced(
 ): Promise<SendResult> {
   try {
     const resend = getResendClient();
-    const configured = process.env.EMAIL_FROM || 'Gather <noreply@gather.app>';
-    // The configured value may be "Name <addr>" or a bare address; the host's name replaces
-    // the display part and the address is always ours.
-    const match = configured.match(/<([^>]+)>/);
-    const address = match ? match[1] : configured;
     const { text, headers } = guestEmailParts(params.body, params.personId, params.eventId);
     const response = await resend.emails.send({
-      from: `${params.fromName} <${address}>`,
+      from: hostVoicedFrom(params.fromName),
       to: params.to,
       replyTo: params.replyTo,
       subject: params.subject,
@@ -318,6 +313,61 @@ async function sendHostVoiced(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error(`[Email] Failed to send ${label} to ${params.to}:`, errorMessage);
+    return { success: false, error: errorMessage };
+  }
+}
+
+/**
+ * Her name, our address (ruling F) — the one from-address rule, for the guests' emails above and
+ * for her own test below, so the test arrives from exactly what the guest will see.
+ */
+function hostVoicedFrom(fromName: string): string {
+  const configured = process.env.EMAIL_FROM || 'Gather <noreply@gather.app>';
+  // The configured value may be "Name <addr>" or a bare address; the host's name replaces
+  // the display part and the address is always ours.
+  const match = configured.match(/<([^>]+)>/);
+  const address = match ? match[1] : configured;
+  return `${fromName} <${address}>`;
+}
+
+/** The host's test of one guest's message, to her own address. [[GTC-388]] (item 64). */
+interface HostTestEmail {
+  /** Her own account address (Q1) — never one typed in, never a guest's. */
+  to: string;
+  subject: string;
+  body: string;
+  /** The event host's `User.email`, as the guest's email has it; null on an event without one. */
+  replyTo: string | null;
+  /** The host's name, as the guest's email has it. */
+  fromName: string;
+}
+
+/**
+ * [[GTC-388]] (item 64, Q6) — THE TEST, AND IT CANNOT CARRY A WAY OUT.
+ *
+ * It takes no person and no event, so it cannot mint the guest's unsubscribe link or the
+ * one-click header: built with a guest's ids they would opt THAT GUEST out, built with hers they
+ * would opt her out of her own event. The body arrives composed, the stand-ins already in place
+ * (`composeTestEmail`). From and reply-to are the guest's own; only the "to" differs.
+ *
+ * ⚠ ZONE 9: like the guest senders, it does not itself read the block or the opt-out. Its one
+ * caller, `sendTestEmailFor`, reads both first and refuses (Q7). It goes through
+ * `getResendClient`, so the live switch stops it everywhere but production.
+ */
+export async function sendHostTestEmail(params: HostTestEmail): Promise<SendResult> {
+  try {
+    const resend = getResendClient();
+    const response = await resend.emails.send({
+      from: hostVoicedFrom(params.fromName),
+      to: params.to,
+      ...(params.replyTo ? { replyTo: params.replyTo } : {}),
+      subject: params.subject,
+      text: params.body,
+    });
+    return resultOf('host test', params.to, response);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`[Email] host test to ${params.to} could not be attempted:`, errorMessage);
     return { success: false, error: errorMessage };
   }
 }

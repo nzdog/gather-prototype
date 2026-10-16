@@ -573,7 +573,10 @@ function main() {
 
   assert(
     'structural',
-    'nothing in the composition path sends — no sendSms, no resend, no fetch',
+    // [[GTC-388]] Q11, ruled 2026-10-16: the label reworded, the condition untouched. The message
+    // route's one send is the host's test to her own address (`sendTestEmailFor`), pinned in
+    // `tests/walkthrough-batch18-test.tsx`; nothing here sends to a guest.
+    'nothing in the composition path sends to a guest — no sendSms, no resend, no dispatch; the route’s one send is the test to her own address',
     !/sendSms|sendNudgeEmail|resend|dispatch/i.test(composeSrc + askSrc + routeSrc)
   );
 
