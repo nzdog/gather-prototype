@@ -118,6 +118,11 @@ interface Moment3AssignViewProps {
    * arrival: brought to the middle and outlined, nothing picked.
    */
   arriveAtItem?: string | null;
+  /**
+   * [[GTC-387]] (item 70, Q12) — the person the board's "Give them a job" opened, handed over once
+   * on arrival: picked, as if she had tapped them, so the next item she taps is theirs.
+   */
+  arriveAtPerson?: string | null;
 }
 
 const RECHECK_DEBOUNCE_MS = 1000;
@@ -188,6 +193,7 @@ export default function Moment3AssignView({
   stripDoors,
   details,
   arriveAtItem = null,
+  arriveAtPerson = null,
 }: Moment3AssignViewProps) {
   const toast = useToast();
   const [holders, setHolders] = useState<Record<string, Moment3Holder | null>>(initialHolders);
@@ -221,6 +227,17 @@ export default function Moment3AssignView({
   // [[GTC-380]] (Q10) — on arrival from the board's search, once: the item it asked for.
   useEffect(() => {
     if (arriveAtItem) bringItemIntoView(arriveAtItem);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // [[GTC-387]] (Q12) — on arrival from the board's "Give them a job", once: that person, picked.
+  useEffect(() => {
+    if (
+      arriveAtPerson &&
+      households.some((h) => h.members.some((m) => m.personId === arriveAtPerson))
+    ) {
+      setSelection({ kind: 'person', id: arriveAtPerson });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

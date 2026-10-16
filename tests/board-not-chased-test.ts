@@ -1105,26 +1105,28 @@ async function main() {
         )
       );
     }
+    // [[GTC-387]] Q11 (Nigel, 2026-10-16): "Yes, open them with the arrow (Recommended)" — the
+    // mark and a child holding nothing now open the reading room too, on purpose.
     for (const r of ['DONT_CHASE', 'CHILD_WITHOUT_ITEM']) {
       assert(
         'F',
-        `NOT_CHASED [${r}] stays SEALED, with no chevron`,
+        `GTC-387 Q11: NOT_CHASED [${r}] opens the READING room and wears the chevron`,
         ok(
           () =>
-            SP.panelFor(pf('NOT_CHASED', [r])) === null &&
-            SP.doorTreatmentFor(pf('NOT_CHASED', [r])) === ''
+            SP.panelFor(pf('NOT_CHASED', [r])) === 'reading' &&
+            SP.doorTreatmentFor(pf('NOT_CHASED', [r])) !== ''
         )
       );
     }
     assert(
       'F',
-      'the unchanged rooms: RED acting, GREEN and AMBER reading, OUT sealed',
+      'the other rooms: RED acting, GREEN and AMBER reading, and since GTC-387 Q11 OUT reading',
       ok(
         () =>
           SP.panelFor(pf('RED', ['REVERSAL'])) === 'acting' &&
           SP.panelFor(pf('GREEN', ['ACCEPTED'])) === 'reading' &&
           SP.panelFor(pf('AMBER', ['AWAITING_REPLY'])) === 'reading' &&
-          SP.panelFor(pf('OUT', ['ATTENDANCE_NO'])) === null
+          SP.panelFor(pf('OUT', ['ATTENDANCE_NO'])) === 'reading'
       )
     );
     const borderWidths = (cls: string) =>
@@ -1152,7 +1154,7 @@ async function main() {
     );
     assert(
       'F',
-      'readingStatusWord: "No answer yet" for an opening grey; still throws for NOT_CHASED with no reason and for DONT_CHASE',
+      'readingStatusWord: "No answer yet" for an opening grey; since GTC-387 Q11 "You\'re handling them" for DONT_CHASE; still throws for NOT_CHASED with no reason',
       ok(() => {
         const word = RD.readingStatusWord('NOT_CHASED', ['HANDED_TO_HOST']) === 'No answer yet';
         const throws = (f: () => unknown) => {
@@ -1166,7 +1168,7 @@ async function main() {
         return (
           word &&
           throws(() => RD.readingStatusWord('NOT_CHASED')) &&
-          throws(() => RD.readingStatusWord('NOT_CHASED', ['DONT_CHASE']))
+          RD.readingStatusWord('NOT_CHASED', ['DONT_CHASE']) === "You're handling them"
         );
       })
     );
@@ -1211,7 +1213,7 @@ async function main() {
     );
     assert(
       'F',
-      'CHILD_WITHOUT_ITEM: no chaseNote — the strip is sealed and its sentence is never shown',
+      'CHILD_WITHOUT_ITEM: no chaseNote — its pop-up sentence is the reading room’s own (GTC-387), never the chase note',
       ok(() => P('e3', cy).chaseNote === null)
     );
     assert(

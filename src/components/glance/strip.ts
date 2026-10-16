@@ -458,13 +458,18 @@ export function panelFor(person: PanelSubject): GlancePanel | null {
   if (person.state === 'GREEN' || person.state === 'AMBER') return 'reading';
   if (person.state === 'NOT_CHASED' && greyOpensReading(person.reasons)) return 'reading';
   /*
-   * [[GTC-350]] plan ruling Q-G — an OUT strip and a don't-chase strip open the reading room when,
-   * and only when, they carry replies: Q2 puts every reply on the board, and a sealed strip would
-   * hide them. Without replies both stay sealed (Rulings 7, 17 and 32).
+   * [[GTC-387]] Q11 (Nigel, 2026-10-16): "Yes, open them with the arrow (Recommended)". Not coming,
+   * the don't-nudge mark and a child holding nothing open the reading room, with or without
+   * replies, superseding Rulings 7 (OUT keeps its fade and gets no border), 17's second sentence,
+   * 31 and 32, and [[GTC-350]] Q-G on purpose. ⚠ SUPERSEDED, NOT DELETED: until then an OUT strip
+   * and a don't-chase strip opened only when they carried replies, and both stayed sealed without.
+   * Any other grey still seals by default.
    */
-  const hasReplies = (person.replies?.length ?? 0) > 0;
-  if (hasReplies && person.state === 'OUT') return 'reading';
-  if (hasReplies && person.state === 'NOT_CHASED' && person.reasons.includes('DONT_CHASE')) {
+  if (person.state === 'OUT') return 'reading';
+  if (
+    person.state === 'NOT_CHASED' &&
+    (person.reasons.includes('DONT_CHASE') || person.reasons.includes('CHILD_WITHOUT_ITEM'))
+  ) {
     return 'reading';
   }
   return null;

@@ -32,6 +32,8 @@ import {
   type PersonReason,
   type PersonState,
 } from '@/lib/glance/state';
+import { personDoorHref } from '@/lib/events/home-href';
+import { CHASE_DOOR_LINK, chaseDoorHref } from '@/lib/preflight/after-press-words';
 
 export interface ReadingRow {
   itemId: string;
@@ -61,6 +63,52 @@ export interface ReadingPanel {
    * never an instant. Empty on a co-host's board and for anyone who sent none.
    */
   replies: GlanceReply[];
+  /**
+   * [[GTC-387]] (item 70) — the way to where this grey is changed, as a link styled as a button:
+   * "Give them a job" for a child holding nothing (Moment 3, the child picked; none on an
+   * invites-only event, Q13), "Change who I nudge" for the don't-nudge mark (the pre-flight, before
+   * the press as well as after, Q14). NULL for everyone else, and always present.
+   */
+  door: { label: string; href: string } | null;
+}
+
+/** Where the board is: what the reading room's door needs to name an address. */
+export interface ReadingPlace {
+  eventId: string;
+  /** No plan, so no jobs: the child's door is not drawn (Q13). */
+  invitesOnly: boolean;
+}
+
+/** [[GTC-387]] W25 — the status word for a child holding nothing. */
+export const CHILD_NO_JOB_STATUS = 'No job yet';
+/** [[GTC-350]] R6 — the status word for not coming. */
+export const NOT_COMING_STATUS = 'Not coming';
+/** [[GTC-387]] W27 — the child's door (ruled). */
+export const GIVE_JOB_DOOR = 'Give them a job';
+
+/** The three greys [[GTC-387]] Q11 opens, by the one reason each is told apart by. */
+export type OpenedGrey = 'CHILD_WITHOUT_ITEM' | 'DONT_CHASE' | 'OUT';
+
+/** [[GTC-387]] W26, W29 and W32 — each grey's one sentence, in its pop-up. */
+export const GREY_NOTES: Record<OpenedGrey, string> = {
+  CHILD_WITHOUT_ITEM: 'I haven’t asked anyone about them, so there’s nothing to follow up.',
+  DONT_CHASE: 'You marked them don’t-nudge, so I won’t follow them up.',
+  OUT: 'They told me they can’t come, so I won’t nudge them.',
+};
+
+/**
+ * Which of the three a strip is, or null. [[GTC-305]]'s four greys are asked first, as the status
+ * word always has, so a grey that already opened keeps its own room.
+ */
+export function openedGreyOf(
+  state: PersonState,
+  reasons: readonly PersonReason[]
+): OpenedGrey | null {
+  if (state === 'OUT') return 'OUT';
+  if (state !== 'NOT_CHASED' || greyOpensReading(reasons)) return null;
+  if (reasons.includes('DONT_CHASE')) return 'DONT_CHASE';
+  if (reasons.includes('CHILD_WITHOUT_ITEM')) return 'CHILD_WITHOUT_ITEM';
+  return null;
 }
 
 /** [[GTC-350]] R4, ruled 2026-10-02 — the heading over the replies, in both rooms. Never a count. */
@@ -76,19 +124,22 @@ export const REPLIES_HEADING = 'Their replies';
  */
 export function readingStatusWord(
   state: PersonState,
-  reasons: readonly PersonReason[] = [],
-  hasReplies: boolean = false
+  reasons: readonly PersonReason[] = []
 ): string {
   if (state === 'GREEN') return 'Confirmed';
   if (state === 'AMBER') return 'No answer yet';
   // [[GTC-305]] — Ruling 32 as amended opens this room for four greys. They have not answered, so
   // amber's own word is the true one; the grey already says nobody is chasing them.
   if (state === 'NOT_CHASED' && greyOpensReading(reasons)) return 'No answer yet';
-  // [[GTC-350]] R6, ruled 2026-10-02 — the two strips their replies open (plan Q-G), and only then.
-  if (hasReplies && state === 'OUT') return 'Not coming';
-  if (hasReplies && state === 'NOT_CHASED' && reasons.includes('DONT_CHASE')) {
-    return "You're handling them";
-  }
+  /*
+   * [[GTC-350]] R6, ruled 2026-10-02 — the words for not coming and the mark. Until [[GTC-387]] they
+   * were said only when replies opened the strip (plan Q-G); Q11 opens both with or without replies,
+   * so the same R6 words, always. And W25 for a child holding nothing.
+   */
+  const grey = openedGreyOf(state, reasons);
+  if (grey === 'OUT') return NOT_COMING_STATUS;
+  if (grey === 'DONT_CHASE') return "You're handling them";
+  if (grey === 'CHILD_WITHOUT_ITEM') return CHILD_NO_JOB_STATUS;
   throw new Error(`readingStatusWord: no word for ${state} — panelFor does not open it`);
 }
 
@@ -203,16 +254,24 @@ export function quantityLabel(
  * edit from being rendered. Here they never arrive — the only date-derived thing that crosses
  * is `nudge`, and it is a WEEKDAY WORD with no digit in it.
  */
-export function readingPanelFor(person: GlancePerson, now: Date): ReadingPanel {
+export function readingPanelFor(
+  person: GlancePerson,
+  now: Date,
+  place?: ReadingPlace
+): ReadingPanel {
+  const grey = openedGreyOf(person.state, person.reasons);
   return {
     name: person.name,
-    status: readingStatusWord(person.state, person.reasons, (person.replies?.length ?? 0) > 0),
+    status: readingStatusWord(person.state, person.reasons),
     nudge: nudgeDayFor(person, now),
     notes:
       person.state === 'NOT_CHASED' && greyOpensReading(person.reasons)
         ? [person.chaseNote, person.emailNote].filter((n): n is string => !!n)
-        : [],
+        : grey
+          ? [GREY_NOTES[grey]]
+          : [],
     replies: person.replies ?? [],
+    door: readingDoorFor(grey, person.personId, place),
     rows: person.items.map((row) => ({
       itemId: row.itemId,
       name: row.name,
@@ -220,4 +279,18 @@ export function readingPanelFor(person: GlancePerson, now: Date): ReadingPanel {
       critical: row.critical,
     })),
   };
+}
+
+/** [[GTC-387]] — the pop-up's one link, or none. */
+function readingDoorFor(
+  grey: OpenedGrey | null,
+  personId: string,
+  place: ReadingPlace | undefined
+): ReadingPanel['door'] {
+  if (!place) return null;
+  if (grey === 'CHILD_WITHOUT_ITEM' && !place.invitesOnly) {
+    return { label: GIVE_JOB_DOOR, href: personDoorHref(place.eventId, personId) };
+  }
+  if (grey === 'DONT_CHASE') return { label: CHASE_DOOR_LINK, href: chaseDoorHref(place.eventId) };
+  return null;
 }

@@ -51,6 +51,12 @@
  * The founder's ruling: "A link that drops her into the full item list to hunt is a detour,
  * not a door." So this panel has no way out but closing.
  *
+ * ⚠ SUPERSEDED IN PART, NOT DELETED — [[GTC-387]] Q11 (Nigel, 2026-10-16). Two of the three greys
+ * that now open this room carry ONE link each, styled as a button, to where that grey is changed:
+ * "Give them a job" (Moment 3 with the child already picked, Q12, which answers the founder's
+ * reason above: it is a door to one person, not a list to hunt) and "Change who I nudge" (the
+ * pre-flight, where the mark is set). Drawn only from `panel.door`, and only when open.
+ *
  * ⚠ AND GTC-198's OWN NOTE POINTS AT THE SAME GAP, which is why this is a later ticket rather
  * than an omission. Deleting that button, it recorded: *"Ordinary editing on this surface is
  * GTC-192 (J1)'s to design — the coordinator and host dashboard surfaces already have it."*
@@ -69,7 +75,13 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { GLANCE_REPLIES_EVENT } from '@/lib/glance/live';
 import type { GlanceReply } from '@/lib/glance/state';
-import { REPLIES_HEADING, type ReadingPanel, type ReadingRow } from './reading';
+import {
+  CHILD_NO_JOB_STATUS,
+  NOT_COMING_STATUS,
+  REPLIES_HEADING,
+  type ReadingPanel,
+  type ReadingRow,
+} from './reading';
 
 export interface GlancePersonReadingProps {
   /** The narrowed payload. Never a `GlancePerson`; see the header. */
@@ -208,6 +220,19 @@ export default function GlancePersonReading({
                     ))}
                   </div>
                 ) : null}
+                {/*
+                  [[GTC-387]] — the one way to where this grey is changed, or nothing. A link, so
+                  it goes to a page and changes nothing here.
+                */}
+                {panel.door ? (
+                  <a
+                    data-reading-door=""
+                    href={panel.door.href}
+                    className="mt-3 inline-block rounded-md bg-[#2c2c2a] px-3 py-1.5 text-[13px] font-medium text-[#ffffff] no-underline"
+                  >
+                    {panel.door.label}
+                  </a>
+                ) : null}
               </div>
               <button
                 type="button"
@@ -220,7 +245,10 @@ export default function GlancePersonReading({
             </div>
 
             <div className="mt-4 flex flex-col gap-2">
-              {panel.rows.length === 0 ? (
+              {/* [[GTC-387]] Q16 and Q22 — a child holding nothing, and somebody not coming, are
+                  told so in the status and the sentence; no "Bringing nothing." under them. */}
+              {panel.rows.length === 0 &&
+              ![CHILD_NO_JOB_STATUS, NOT_COMING_STATUS].includes(panel.status) ? (
                 /*
                   The itemless case is REAL on both states this panel opens for: Ruling 16's
                   attendance-only amber holds nothing and is still being asked, and a host or a

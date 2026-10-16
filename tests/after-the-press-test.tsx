@@ -415,8 +415,8 @@ async function main() {
   );
   assert(
     'C',
-    "RULING 17 — the don't-chase grey is still sealed: panelFor returns null",
-    strip.panelFor({ state: 'NOT_CHASED', reasons: ['DONT_CHASE'] } as any) === null
+    "GTC-387 Q11 — the don't-chase grey opens the reading room (Ruling 17's second sentence superseded on purpose)",
+    strip.panelFor({ state: 'NOT_CHASED', reasons: ['DONT_CHASE'] } as any) === 'reading'
   );
 
   const SENT_GATED = (src: string, gate: RegExp, word: string) => {

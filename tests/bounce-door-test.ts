@@ -1066,7 +1066,8 @@ async function main() {
     );
     assert(
       '⚠ AND IT IS NOT A COMPOSER. §3 refuses messaging on this surface: the message is SHOWN, ' +
-        'and the only editable field on the panel is the address',
+        'and the only editable fields on the panel are contact details (the address; since ' +
+        'GTC-387, the email and mobile boxes on the nowhere-to-send door)',
       ok(() => (surfaceSrc.match(/<textarea/g) ?? []).length === 0)
     );
     assert(

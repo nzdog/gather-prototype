@@ -75,7 +75,8 @@ const W1_WHOLE =
 const W1_NEUTRAL = "I can't email this address anymore. Text them, or I'll put them on your list.";
 const W2 = "I can't email this address anymore, so I'll text them instead.";
 const W3 = "I can't email this address anymore, and they've opted out of texts.";
-const W5 = "Gather can't email this address anymore.";
+// [[GTC-387]] Q1 and W18 (Nigel, 2026-10-16): the door's refusals speak as "I" now.
+const W5 = 'I can’t email that address anymore.';
 const MIDDLE = 'Their email reported your invitation as spam.';
 // Ruled 2026-09-27 at the 8a hold.
 const REPORTED_OPTED_OUT =

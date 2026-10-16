@@ -68,7 +68,7 @@ import type { GlanceAssignable } from '@/lib/glance/actions';
 import { assistantMessage, findCriticalRedHits } from './assistant';
 import PersonSurface, { type PersonSurfaceProps } from './PersonSurface';
 import GlancePersonReading from './GlancePersonReading';
-import { readingPanelFor } from './reading';
+import { readingPanelFor, type ReadingPlace } from './reading';
 import PrintListDoor from './PrintListDoor';
 import EventSearch from './EventSearch';
 import type { SearchPerson } from '@/lib/search/event-search';
@@ -278,11 +278,14 @@ function Strip({
   action,
   sticky,
   now,
+  place,
 }: {
   person: GlancePerson;
   action: Omit<PersonSurfaceProps, 'person' | 'className' | 'children'>;
   sticky: ReadonlySet<string>;
   now: Date;
+  /** [[GTC-387]] — where the board is, for the reading room's one link. */
+  place: ReadingPlace;
 }) {
   /*
     RULING 23's OVERLAY, APPLIED ONCE AND HERE.
@@ -354,7 +357,7 @@ function Strip({
   if (panel === 'reading') {
     return (
       <GlancePersonReading
-        panel={readingPanelFor(person, now)}
+        panel={readingPanelFor(person, now, place)}
         personEventId={person.personEventId}
         state={person.state}
         className={className}
@@ -384,11 +387,13 @@ function HouseholdCard({
   action,
   sticky,
   now,
+  place,
 }: {
   household: GlanceHousehold;
   action: Omit<PersonSurfaceProps, 'person' | 'className' | 'children'>;
   sticky: ReadonlySet<string>;
   now: Date;
+  place: ReadingPlace;
 }) {
   return (
     <div data-household-card={household.householdId} className="rounded-lg bg-[#f5f4ef] p-2.5">
@@ -403,6 +408,7 @@ function HouseholdCard({
             action={action}
             sticky={sticky}
             now={now}
+            place={place}
           />
         ))}
       </div>
@@ -428,6 +434,8 @@ export default function GlanceBoard({
 }: GlanceBoardProps) {
   // Ruling 23. A set, so the lookup in `Strip` is one place and one operation at any headcount.
   const sticky: ReadonlySet<string> = new Set(stickyReversals);
+  // [[GTC-387]] — the reading room's link names this event, and none for a child on invites-only.
+  const place: ReadingPlace = { eventId: glance.eventId, invitesOnly };
   // Everything a red strip's door needs, assembled once. The pool is the same array for
   // every island; see PersonSurface's header for the trade that buys.
   const action = {
@@ -560,6 +568,7 @@ export default function GlanceBoard({
               action={action}
               sticky={sticky}
               now={now}
+              place={place}
             />
           ))}
 
@@ -582,6 +591,7 @@ export default function GlanceBoard({
                     action={action}
                     sticky={sticky}
                     now={now}
+                    place={place}
                   />
                 ))}
               </div>

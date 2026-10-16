@@ -56,6 +56,15 @@ export function itemDoorHref(eventId: string, itemId: string): string {
   return `/plan/${eventId}/setup?${ITEM_PARAM}=${encodeURIComponent(itemId)}`;
 }
 
+/**
+ * [[GTC-387]] (item 70, Q12) — the reading room's door to one person: Moment 3, with that person
+ * already picked. Read once on arrival like `ITEM_PARAM`, and the address put back.
+ */
+export const PERSON_PARAM = 'person';
+export function personDoorHref(eventId: string, personId: string): string {
+  return `/plan/${eventId}/setup?${PERSON_PARAM}=${encodeURIComponent(personId)}`;
+}
+
 /** To the old dashboard, the back room for what only it has (R2). */
 export const BACK_ROOM_LINK = 'Invites & people';
 export function backRoomHref(eventId: string): string {

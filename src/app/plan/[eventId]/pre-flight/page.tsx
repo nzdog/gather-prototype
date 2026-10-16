@@ -78,6 +78,14 @@ import AfterThePress from '@/components/preflight/AfterThePress';
 import EventDetails from '@/components/shared/EventDetails';
 import { BOARD_MOVE_AFTER_MS, SEE_THE_BOARD_LINK } from '@/lib/preflight/after-press-words';
 import { boardHref, itemDoorHref } from '@/lib/events/home-href';
+import {
+  CONTACT_BOX_WORDS,
+  boxRefusalLine,
+  contactLineOffer,
+  nameLabel,
+  savedPreflightLine,
+} from '@/lib/contact/contact-box';
+import { formatPhoneForDisplay } from '@/lib/phone';
 import MomentArc from '@/components/plan/MomentArc';
 import { AT_OPENING, AT_PEOPLE, AT_PLAN, STRIP_WORDS, setupHref } from '@/lib/moments/strip';
 import { HOUSEHOLD_CONTACT_LINE } from '@/lib/households/contact-line';
@@ -1163,6 +1171,75 @@ function MessageStep({
   const [chaseSaving, setChaseSaving] = useState(false);
   const [chaseError, setChaseError] = useState<string | null>(null);
 
+  /*
+   * [[GTC-387]] (item 67) — "People I’ll leave to you": a name opens a fold under its line with an
+   * Email and a Mobile box, only where new details could fix it (`contactLineOffer`, ruling 2, Q6,
+   * Q10). Its current values come from the existing people read when it opens (Q5); Save goes to
+   * the pre-flight's own channel route, saves only, and the step is read again, so the person
+   * moves into the messages above (W12). One fold at a time.
+   */
+  const [contactFor, setContactFor] = useState<string | null>(null);
+  const contactForRef = useRef<string | null>(null);
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactMobile, setContactMobile] = useState('');
+  const [contactBusy, setContactBusy] = useState(false);
+  const [contactError, setContactError] = useState<string | null>(null);
+  const [contactSaved, setContactSaved] = useState<string | null>(null);
+
+  const openContact = async (personEventId: string) => {
+    setContactError(null);
+    setContactSaved(null);
+    const next = contactFor === personEventId ? null : personEventId;
+    contactForRef.current = next;
+    setContactFor(next);
+    setContactEmail('');
+    setContactMobile('');
+    if (!next) return;
+    try {
+      const res = await fetch(`/api/events/${eventId}/people`);
+      if (!res.ok) return;
+      const body = (await res.json()) as {
+        people?: { id: string; email: string | null; phone: string | null }[];
+      };
+      const held = body.people?.find((p) => p.id === next);
+      if (!held || contactForRef.current !== next) return;
+      setContactEmail(held.email ?? '');
+      setContactMobile(held.phone ? formatPhoneForDisplay(held.phone) : '');
+    } catch {
+      /* the boxes start empty */
+    }
+  };
+
+  const saveContactFor = async (line: { personEventId: string; name: string }) => {
+    setContactBusy(true);
+    setContactError(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/pre-flight/channel`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          personEventId: line.personEventId,
+          email: contactEmail,
+          mobile: contactMobile,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setContactError(boxRefusalLine(err.code, err.error ?? 'That did not save.'));
+        return;
+      }
+      const fresh = await fetch(`/api/events/${eventId}/pre-flight/message`);
+      if (fresh.ok) setData(await fresh.json());
+      contactForRef.current = null;
+      setContactFor(null);
+      setContactSaved(savedPreflightLine(line.name));
+    } catch {
+      setContactError(boxRefusalLine(undefined, 'That did not save.'));
+    } finally {
+      setContactBusy(false);
+    }
+  };
+
   /**
    * [[GTC-311]] — the chase channel's two writes, the switch and one person's exception.
    *
@@ -1687,22 +1764,106 @@ function MessageStep({
         <h3 className="text-xs uppercase tracking-wider text-gray-500 mt-6 mb-2 border-t border-gray-200 pt-4">
           {HOST_LIST_HEADING}
         </h3>
+        {/* [[GTC-387]] W12 — after a save, the person has moved into the messages above. */}
+        {contactSaved ? (
+          <p data-contact-saved="" className="text-sm text-green-700 mb-2">
+            {contactSaved}
+          </p>
+        ) : null}
         {data.hostList.length === 0 && data.chase.notChased.length === 0 ? (
           <p className="text-sm text-gray-600">{HOST_LIST_EMPTY}</p>
         ) : (
           <>
             {data.hostList.length > 0 && (
-              <div className="mt-3">
+              <div data-host-list-a="" className="mt-3">
                 <h4 className="text-sm text-gray-800 mb-1">{HOST_LIST_NOT_ASKED_HEADING}</h4>
                 <p className="text-xs text-gray-500 mb-3">{HOST_LIST_BLURB}</p>
                 <ul className="space-y-2">
-                  {data.hostList.map((l) => (
-                    <li key={l.personEventId} className="text-sm">
-                      <span className="text-gray-900">{l.name}</span>
-                      <span className="text-gray-500"> — {rowsInBrief(l)}</span>
-                      <p className="text-xs text-gray-500">{hostListReason(l)}</p>
-                    </li>
-                  ))}
+                  {data.hostList.map((l) => {
+                    const offer = contactLineOffer(l);
+                    const open = offer !== null && contactFor === l.personEventId;
+                    return (
+                      <li key={l.personEventId} className="text-sm">
+                        {offer ? (
+                          <button
+                            type="button"
+                            data-contact-name={l.personEventId}
+                            aria-label={nameLabel(l.name)}
+                            aria-expanded={open}
+                            onClick={() => openContact(l.personEventId)}
+                            className="text-gray-900 underline decoration-dotted underline-offset-2 hover:decoration-solid"
+                          >
+                            {l.name}
+                          </button>
+                        ) : (
+                          <span className="text-gray-900">{l.name}</span>
+                        )}
+                        <span className="text-gray-500"> — {rowsInBrief(l)}</span>
+                        <p className="text-xs text-gray-500">{hostListReason(l)}</p>
+                        {open ? (
+                          <div
+                            data-contact-fold=""
+                            className="mt-2 rounded-md border border-gray-200 bg-gray-50 p-3"
+                          >
+                            <p data-contact-lead="" className="text-xs text-gray-600">
+                              {offer.mobile
+                                ? CONTACT_BOX_WORDS.leadBoth
+                                : CONTACT_BOX_WORDS.leadEmail}
+                            </p>
+                            <label
+                              htmlFor={`contact-email-${l.personEventId}`}
+                              data-contact-email-label=""
+                              className="mt-2 block text-xs text-gray-700"
+                            >
+                              {CONTACT_BOX_WORDS.email}
+                            </label>
+                            <input
+                              id={`contact-email-${l.personEventId}`}
+                              type="email"
+                              data-contact-email=""
+                              value={contactEmail}
+                              onChange={(e) => setContactEmail(e.target.value)}
+                              className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                            />
+                            {offer.mobile ? (
+                              <>
+                                <label
+                                  htmlFor={`contact-mobile-${l.personEventId}`}
+                                  data-contact-mobile-label=""
+                                  className="mt-2 block text-xs text-gray-700"
+                                >
+                                  {CONTACT_BOX_WORDS.mobile}
+                                </label>
+                                <input
+                                  id={`contact-mobile-${l.personEventId}`}
+                                  type="tel"
+                                  data-contact-mobile=""
+                                  value={contactMobile}
+                                  placeholder={CONTACT_BOX_WORDS.mobileHint}
+                                  onChange={(e) => setContactMobile(e.target.value)}
+                                  className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                                />
+                              </>
+                            ) : null}
+                            {contactError ? (
+                              <p data-contact-error="" className="mt-2 text-xs text-red-700">
+                                {contactError}
+                              </p>
+                            ) : null}
+                            <button
+                              type="button"
+                              data-contact-save=""
+                              disabled={contactBusy}
+                              onClick={() => saveContactFor(l)}
+                              className="mt-2 rounded bg-gray-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+                            >
+                              {contactBusy ? CONTACT_BOX_WORDS.saving : CONTACT_BOX_WORDS.save}
+                            </button>
+                          </div>
+                        ) : null}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}

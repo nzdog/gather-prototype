@@ -85,6 +85,7 @@ import { getHostNudgeMessage, type HostNudgeVariant } from '@/lib/sms/nudge-temp
  * file must never reach it.
  */
 import { RESEND_NOTES, type DoorView, type ResendAction } from '@/lib/press/resend-door';
+import { boxRefusalLine, CONTACT_BOX_WORDS } from '@/lib/contact/contact-box';
 import type { GlanceItem, GlancePerson, PersonState } from './state';
 
 /** One request to one existing route. Built purely, so it can be asserted without a network. */
@@ -680,6 +681,67 @@ export async function resendAsk(
     true,
     deps
   );
+}
+
+/** [[GTC-387]] W7's first sentence: a contact-box save that queued their invitation. */
+export const SAVED_AND_SENDING = 'Saved, and sending their invitation.';
+
+/**
+ * [[GTC-387]] — THE CONTACT BOX ON RULING M'S RED: the door's EDIT, carrying an email and a
+ * mobile. The same endpoint as the look and the other presses (`doorPath`), so the surface still
+ * reaches one door.
+ *
+ * Its own call rather than `ask`, because the answer decides the words: the route says whether
+ * an invitation was queued (Q2 b). Queued, W7 and the board moves; a mobile saved with texting off,
+ * W33 and nothing moves (Ruling 25: only an action that moved the board asks for the refresh). A
+ * refusal is the route's sentence, then "Nothing was saved." unless nothing was typed (Q3).
+ */
+export async function saveContact(
+  eventId: string,
+  personId: string,
+  contact: { email: string; mobile: string },
+  deps: GlanceActionDeps = {}
+): Promise<GlanceActionOutcome> {
+  const call = deps.fetchImpl ?? fetch;
+  let response: Response;
+  try {
+    response = await call(doorPath(eventId, personId), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'EDIT', email: contact.email, mobile: contact.mobile }),
+    });
+  } catch {
+    return {
+      ok: false,
+      refusedAtSurface: false,
+      status: null,
+      error: `Could not reach Gather. ${CONTACT_BOX_WORDS.nothingSaved}`,
+    };
+  }
+  let body: { error?: string; code?: string; queued?: boolean } = {};
+  try {
+    body = await response.json();
+  } catch {
+    /* some refusals have no body */
+  }
+  if (!response.ok) {
+    const words =
+      typeof body.error === 'string' && body.error.length > 0
+        ? body.error
+        : 'Something went wrong.';
+    return {
+      ok: false,
+      refusedAtSurface: false,
+      status: response.status,
+      error: boxRefusalLine(body.code, words),
+    };
+  }
+  const queued = body.queued !== false;
+  return {
+    ok: true,
+    note: queued ? `${SAVED_AND_SENDING} ${CATCH_UP_NOTE}` : CONTACT_BOX_WORDS.savedNoText,
+    movedBoard: queued,
+  };
 }
 
 /** TAKE OVER — the same route, the host as the assignee. */

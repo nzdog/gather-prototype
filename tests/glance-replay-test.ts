@@ -2421,12 +2421,14 @@ async function main() {
     );
     assert(
       'layer 3 / Ruling 23',
-      'and the settled strip is a plain <div> again — no door, because the state underneath is OUT and Ruling 17 seals it',
-      // Gated on the door having been there. At RED there is no door on any reversal, so
-      // "there is no door now" was trivially true.
+      'and the settled strip is no ACTING door — since GTC-387 Q11 the state underneath, OUT, opens the READING room',
+      // Gated on the acting door having been there. At RED there is no door on any reversal, so
+      // "there is no acting door now" was trivially true.
       /^<button/.test(hostStripBefore) &&
+        /data-strip-door/.test(hostStripBefore) &&
         bothRenderedAfter &&
-        /^<div/.test(hostStripAfter) &&
+        /^<button/.test(hostStripAfter) &&
+        /data-strip-reading/.test(hostStripAfter) &&
         !/data-strip-door/.test(hostStripAfter)
     );
     assert(

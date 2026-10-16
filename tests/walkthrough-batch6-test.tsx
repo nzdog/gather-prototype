@@ -1160,8 +1160,8 @@ async function runLive() {
       afterG;
     detail.LB4 = JSON.stringify({ tapG, opened, keptG, closeG, afterG, resultsG });
 
-    // LB4b — [[GTC-380]] (Q7): a strip that opens nothing (Rewi, not coming) keeps Q19's ring:
-    // centred and ringed, the ring gone after 2.5 s, no dialog showing.
+    // LB4b — [[GTC-387]] Q11: Rewi (not coming) is no longer sealed, so a tap opens his reading
+    // room as LB4's tap opens Gus's: his strip centred, his panel showing. Closed with its own Close.
     const rewi = pe[`${evB.id}:Rewi Tane`];
     const typedR = await typeInto(IN, 'rewi');
     const tapR = typedR
@@ -1170,18 +1170,21 @@ async function runLive() {
           1000
         )
       : 'absent';
-    const ringedR =
+    const openedR =
       await ev<boolean>(`(() => { const s = document.querySelector('[data-person-event-id="${rewi}"]'); if (!s) return false;
       const b = s.getBoundingClientRect(); const cy = b.top + b.height / 2; const h = window.innerHeight;
-      return s.tagName === 'DIV' && cy > h * 0.2 && cy < h * 0.8 && s.style.outline !== '' && ![...document.querySelectorAll('[role="dialog"]')].some(d => d.checkVisibility()); })()`);
-    await sleep(2500);
-    const unringedR = await ev<boolean>(
-      `document.querySelector('[data-person-event-id="${rewi}"]')?.style.outline === ''`
-    );
+      const p = document.querySelector('[data-reading-panel="Rewi Tane"]');
+      return s.tagName === 'BUTTON' && cy > h * 0.2 && cy < h * 0.8 && !!p && p.checkVisibility(); })()`);
+    const closeR = openedR
+      ? await tap(
+          `document.querySelector('[data-reading-panel="Rewi Tane"] button[aria-label="Close"]')`,
+          600
+        )
+      : 'absent';
     r.LB4b =
       tapR === null &&
-      ringedR &&
-      unringedR &&
+      openedR &&
+      closeR === null &&
       !(await ev<boolean>(
         `!![...document.querySelectorAll('[role="dialog"]')].some(d => d.checkVisibility())`
       ));
@@ -1273,7 +1276,7 @@ async function runLive() {
     ],
     [
       'LB4b',
-      'LB4b a tap on Rewi (not coming, a sealed strip): centred and ringed, the ring gone after 2.5 s, no dialog showing (Q19’s ring, kept where a row opens nothing)',
+      'LB4b (GTC-387 Q11) a tap on Rewi (not coming) opens his reading room as a tap on Gus does: his strip centred, his panel showing; closed, no dialog showing',
     ],
     [
       'LB5',

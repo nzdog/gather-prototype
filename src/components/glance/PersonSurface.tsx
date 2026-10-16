@@ -63,7 +63,7 @@
  * something moved.
  */
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import type { GlanceItem, GlancePerson, GlanceReply } from '@/lib/glance/state';
 import type { AssignActorRole } from '@/lib/assignment/same-team';
@@ -81,11 +81,13 @@ import {
   remindOffered,
   remindRefusal,
   resendAsk,
+  saveContact,
   takeOver,
   type GlanceActionOutcome,
   type GlanceAssignable,
 } from '@/lib/glance/actions';
-import { doorWordFor, type DoorView } from '@/lib/press/resend-door';
+import { DOOR_WORDS, doorWordFor, type DoorView } from '@/lib/press/resend-door';
+import { CONTACT_BOX_WORDS } from '@/lib/contact/contact-box';
 import { GLANCE_REFRESH_EVENT, GLANCE_REPLIES_EVENT } from '@/lib/glance/live';
 import { whyLineFor } from './strip';
 import { REPLIES_HEADING } from './reading';
@@ -130,6 +132,17 @@ export default function PersonSurface({
   const [door, setDoor] = useState<DoorView | null>(null);
   const [doorError, setDoorError] = useState<string | null>(null);
   const [address, setAddress] = useState('');
+  /*
+    [[GTC-387]] — THE CONTACT BOX on ruling M's red: its two boxes, its own outcome (drawn inside
+    the box, above its button), and whether it has saved. After a save the boxes are read-only,
+    Save reads Close, and opening the panel again shows the same saved state rather than fetching
+    a door that has since cleared ("Their last message did not fail").
+  */
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactMobile, setContactMobile] = useState('');
+  const [contactOutcome, setContactOutcome] = useState<GlanceActionOutcome | null>(null);
+  const [saved, setSaved] = useState(false);
+  const boxId = useId();
 
   /*
     [[GTC-350]] fix 2 — THE LIVE POLL'S WORDS. This room was built at first paint; a reply that lands
@@ -162,13 +175,16 @@ export default function PersonSurface({
     pulled out is not fetched for, and neither is anybody else.
   */
   useEffect(() => {
-    if (!open || !doorOffered(person)) return;
+    if (!open || !doorOffered(person) || saved) return;
     let live = true;
     readDoorView(eventId, person.personId).then((result) => {
       if (!live) return;
       if (result.ok) {
         setDoor(result.view);
         setAddress(result.view.address ?? '');
+        // [[GTC-387]] Q5 — both boxes start with what Gather holds, fetched as the address is.
+        setContactEmail(result.view.address ?? '');
+        setContactMobile(result.view.mobile ?? '');
       } else {
         setDoorError(result.error);
       }
@@ -176,7 +192,7 @@ export default function PersonSurface({
     return () => {
       live = false;
     };
-  }, [open, eventId, person]);
+  }, [open, eventId, person, saved]);
 
   const why = whyLineFor(person);
   const refusal = remindRefusal(person);
@@ -293,6 +309,112 @@ export default function PersonSurface({
     `doorWordFor`, which adds [[GTC-340]]'s one case: a text guest with no address sees "Send to
     an email address", never "a different" one.
   */
+  /*
+    ── [[GTC-387]] ITEM 69 — "ADD A WAY TO REACH THEM", NOW A BOX ─────────────────
+
+    On ruling M's red the EDIT button becomes the box: the founder's words of 2026-09-19 as its
+    heading (W6), an Email box, a Mobile box where a mobile may be added (else W9, Q4), and one
+    Save that becomes Close (W8). Which boxes is the route's answer (`door.offer`, the chooser's
+    reason through the offer table), never decided here. The save is the door's own EDIT, on the
+    same endpoint (`saveContact`). W34 says why there is no text button for a saved mobile.
+  */
+  function contactBox(view: DoorView) {
+    const offer = view.offer;
+    if (!offer || (!offer.email && !offer.mobile)) return null;
+    return (
+      <div data-contact-box="">
+        <p
+          data-contact-heading=""
+          className="m-0 text-[11px] uppercase tracking-wide text-[#888780]"
+        >
+          {DOOR_WORDS.UNREACHABLE.EDIT}
+        </p>
+        {view.mobileHeld ? (
+          <p data-contact-held="" className="m-0 mt-1.5 text-[13px] text-[#5c5b57]">
+            {CONTACT_BOX_WORDS.mobileHeld}
+          </p>
+        ) : null}
+        <label
+          htmlFor={`${boxId}-email`}
+          data-contact-email-label=""
+          className="m-0 mt-2 block text-[13px]"
+        >
+          {CONTACT_BOX_WORDS.email}
+        </label>
+        <input
+          id={`${boxId}-email`}
+          type="email"
+          data-contact-email=""
+          value={contactEmail}
+          readOnly={saved}
+          onChange={(e) => setContactEmail(e.target.value)}
+          className="mt-1 w-full rounded-md border-[0.5px] border-[#dcdad2] bg-[#ffffff] px-2 py-1.5 text-[13px] read-only:text-[#5c5b57]"
+        />
+        {offer.mobile ? (
+          <>
+            <label
+              htmlFor={`${boxId}-mobile`}
+              data-contact-mobile-label=""
+              className="m-0 mt-2 block text-[13px]"
+            >
+              {CONTACT_BOX_WORDS.mobile}
+            </label>
+            <input
+              id={`${boxId}-mobile`}
+              type="tel"
+              data-contact-mobile=""
+              value={contactMobile}
+              readOnly={saved}
+              placeholder={CONTACT_BOX_WORDS.mobileHint}
+              onChange={(e) => setContactMobile(e.target.value)}
+              className="mt-1 w-full rounded-md border-[0.5px] border-[#dcdad2] bg-[#ffffff] px-2 py-1.5 text-[13px] read-only:text-[#5c5b57]"
+            />
+          </>
+        ) : (
+          <p data-contact-no-mobile="" className="m-0 mt-2 text-[13px] text-[#5c5b57]">
+            {CONTACT_BOX_WORDS.noMobile}
+          </p>
+        )}
+        {contactOutcome ? (
+          <p
+            data-action-outcome={contactOutcome.ok ? 'ok' : 'failed'}
+            className={`m-0 mt-2 text-[13px] ${contactOutcome.ok ? 'text-[#3B6D11]' : 'text-[#A32D2D]'}`}
+          >
+            {contactOutcome.ok ? contactOutcome.note : contactOutcome.error}
+          </p>
+        ) : null}
+        <button
+          type="button"
+          data-contact-save=""
+          disabled={busy !== null}
+          onClick={() =>
+            saved
+              ? setOpen(false)
+              : run(
+                  'contact',
+                  async () => {
+                    const result = await saveContact(eventId, person.personId, {
+                      email: contactEmail,
+                      mobile: contactMobile,
+                    });
+                    if (result.ok) setSaved(true);
+                    return result;
+                  },
+                  setContactOutcome
+                )
+          }
+          className="mt-2 rounded-md bg-[#2c2c2a] px-3 py-1.5 text-[13px] font-medium text-[#ffffff] disabled:opacity-40"
+        >
+          {busy === 'contact'
+            ? CONTACT_BOX_WORDS.saving
+            : saved
+              ? CONTACT_BOX_WORDS.close
+              : CONTACT_BOX_WORDS.save}
+        </button>
+      </div>
+    );
+  }
+
   function doorSection() {
     if (!doorOffered(person)) return null;
     return (
@@ -307,20 +429,27 @@ export default function PersonSurface({
           <>
             {/*
               THE LAST LOOK, HALF ONE — the address it will send to. Null on ruling M's red,
-              where there has never been one, and the field below is how she supplies it.
+              where there has never been one. [[GTC-387]]: on that red the contact box above
+              replaces this field; it stays on the other red, unchanged.
             */}
-            <label className="m-0 block text-[11px] uppercase tracking-wide text-[#888780]">
-              Send to
-            </label>
-            <input
-              type="email"
-              aria-label="Address to send to"
-              data-door-address=""
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder={door.address ?? 'No address'}
-              className="mt-1 w-full rounded-md border-[0.5px] border-[#dcdad2] bg-[#ffffff] px-2 py-1.5 text-[13px]"
-            />
+            {door.reason === 'UNREACHABLE' ? (
+              contactBox(door)
+            ) : (
+              <>
+                <label className="m-0 block text-[11px] uppercase tracking-wide text-[#888780]">
+                  Send to
+                </label>
+                <input
+                  type="email"
+                  aria-label="Address to send to"
+                  data-door-address=""
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder={door.address ?? 'No address'}
+                  className="mt-1 w-full rounded-md border-[0.5px] border-[#dcdad2] bg-[#ffffff] px-2 py-1.5 text-[13px]"
+                />
+              </>
+            )}
 
             {/*
               THE LAST LOOK, HALF TWO — the message it will send, composed by the same walk the
@@ -339,26 +468,32 @@ export default function PersonSurface({
             ) : null}
 
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              {door.actions.map((action) => (
-                <button
-                  key={action}
-                  type="button"
-                  disabled={busy !== null}
-                  onClick={() =>
-                    run(`door-${action}`, () =>
-                      resendAsk(
-                        eventId,
-                        person.personId,
-                        action,
-                        action === 'EDIT' ? address : null
+              {/* [[GTC-387]] — on ruling M's red the box is the EDIT, and after a save the door
+                  has changed, so the other actions go with it. */}
+              {door.actions
+                .filter((action) =>
+                  door.reason === 'UNREACHABLE' ? action !== 'EDIT' && !saved : true
+                )
+                .map((action) => (
+                  <button
+                    key={action}
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() =>
+                      run(`door-${action}`, () =>
+                        resendAsk(
+                          eventId,
+                          person.personId,
+                          action,
+                          action === 'EDIT' ? address : null
+                        )
                       )
-                    )
-                  }
-                  className="rounded-md border-[0.5px] border-[#dcdad2] px-2.5 py-1.5 text-[13px] disabled:opacity-40"
-                >
-                  {doorWordFor(door.reason, action, door.address)}
-                </button>
-              ))}
+                    }
+                    className="rounded-md border-[0.5px] border-[#dcdad2] px-2.5 py-1.5 text-[13px] disabled:opacity-40"
+                  >
+                    {doorWordFor(door.reason, action, door.address)}
+                  </button>
+                ))}
             </div>
           </>
         ) : null}
@@ -366,12 +501,17 @@ export default function PersonSurface({
     );
   }
 
-  async function run(key: string, action: () => Promise<GlanceActionOutcome>) {
+  async function run(
+    key: string,
+    action: () => Promise<GlanceActionOutcome>,
+    // [[GTC-387]] — the contact box shows its outcome inside the box; everything else, below.
+    show: (outcome: GlanceActionOutcome | null) => void = setOutcome
+  ) {
     setBusy(key);
-    setOutcome(null);
+    show(null);
     try {
       const result = await action();
-      setOutcome(result);
+      show(result);
       // RULING 25. Only an action that actually moved the board asks for the refresh, and only
       // when the route accepted it — a refused reassign changed nothing to catch up to.
       if (result.ok && result.movedBoard) {

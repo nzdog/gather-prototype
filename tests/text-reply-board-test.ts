@@ -445,15 +445,12 @@ async function main() {
     );
     assert(
       'C',
-      'C7b CONTROL: without replies the status word still throws for OUT and the mark',
-      ['OUT', 'NOT_CHASED'].every((st) => {
-        try {
-          RD.readingStatusWord(st, st === 'OUT' ? ['ATTENDANCE_NO'] : ['DONT_CHASE']);
-          return false;
-        } catch {
-          return true;
-        }
-      })
+      'C7b (GTC-387 Q11) without replies the status words are the same R6 words for OUT and the mark',
+      ok(
+        () =>
+          RD.readingStatusWord('OUT', ['ATTENDANCE_NO']) === R6_OUT &&
+          RD.readingStatusWord('NOT_CHASED', ['DONT_CHASE']) === R6_DONT_CHASE
+      )
     );
     assert(
       'C',
@@ -495,8 +492,8 @@ async function main() {
     );
     assert(
       'C',
-      'C12b CONTROL: an OUT strip without replies stays sealed (Rulings 7 and 32)',
-      ok(() => SP.panelFor({ state: 'OUT', reasons: ['ATTENDANCE_NO'], replies: [] }) === null)
+      'C12b (GTC-387 Q11) an OUT strip without replies opens the reading room too',
+      ok(() => SP.panelFor({ state: 'OUT', reasons: ['ATTENDANCE_NO'], replies: [] }) === 'reading')
     );
     assert(
       'C',
@@ -509,8 +506,11 @@ async function main() {
     );
     assert(
       'C',
-      "C13b CONTROL: a don't-chase strip without replies stays sealed (Ruling 17)",
-      ok(() => SP.panelFor({ state: 'NOT_CHASED', reasons: ['DONT_CHASE'], replies: [] }) === null)
+      "C13b (GTC-387 Q11) a don't-chase strip without replies opens the reading room too",
+      ok(
+        () =>
+          SP.panelFor({ state: 'NOT_CHASED', reasons: ['DONT_CHASE'], replies: [] }) === 'reading'
+      )
     );
     assert(
       'C',

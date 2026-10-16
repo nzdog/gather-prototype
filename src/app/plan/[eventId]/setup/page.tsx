@@ -36,7 +36,7 @@ import Moment3AssignView, {
 } from '@/components/plan/Moment3AssignView';
 import type { PanelHouseholdInput } from '@/lib/moment3/people';
 import { M3_WORDS } from '@/lib/moment3/words';
-import { ITEM_PARAM, boardHref } from '@/lib/events/home-href';
+import { ITEM_PARAM, PERSON_PARAM, boardHref } from '@/lib/events/home-href';
 import { holdNotice, holdThePlan, type HoldNotice } from '@/lib/moment3/hold';
 import {
   INVITES_ONLY_WORDS,
@@ -366,6 +366,8 @@ export default function EventSetupPage() {
   const [holdNoticeShown, setHoldNoticeShown] = useState<HoldNotice | null>(null);
   // [[GTC-380]] (item 50, Q10) — the item the board's search asked for, for Moment 3, once.
   const [arriveAtItem, setArriveAtItem] = useState<string | null>(null);
+  // [[GTC-387]] (item 70, Q12) — the person the board's "Give them a job" asked for, once.
+  const [arriveAtPerson, setArriveAtPerson] = useState<string | null>(null);
 
   /**
    * [[GTC-360]] — "MOVE ON →" HOLDS THE PLAN, THEN GOES ON. Founder: *"On "Move on" from Moment 3
@@ -549,6 +551,8 @@ export default function EventSetupPage() {
         const at = new URLSearchParams(window.location.search).get('at');
         // [[GTC-380]] (Q10): the board's search asks for one item the same way, read once here.
         const askedItem = new URLSearchParams(window.location.search).get(ITEM_PARAM);
+        // [[GTC-387]] (Q12): the board's "Give them a job" asks for one person the same way.
+        const askedPerson = new URLSearchParams(window.location.search).get(PERSON_PARAM);
         // [[GTC-382]] (Q1): her own plan counts as a plan here too; an old-style event as before.
         const asked = requestedStage(at, {
           hasPlan: loadedEvent.setup
@@ -556,7 +560,7 @@ export default function EventSetupPage() {
             : hasGeneratedPlan(loadedItems),
         });
         if (asked) stage = asked;
-        if (at !== null || askedItem !== null) {
+        if (at !== null || askedItem !== null || askedPerson !== null) {
           window.history.replaceState(window.history.state, '', window.location.pathname);
         }
         /*
@@ -582,6 +586,7 @@ export default function EventSetupPage() {
           setMoment3Data(await loadMoment3Data());
           // [[GTC-380]] (Q10): only when the page opens on Moment 3.
           if (askedItem) setArriveAtItem(askedItem);
+          if (askedPerson) setArriveAtPerson(askedPerson);
         }
         // [[GTC-375]] (W2): on an invites-only event's opening, whether a plan is put away.
         if (stage === 'moment2-opening' && loadedEvent.setup?.invitesOnly) {
@@ -924,7 +929,9 @@ export default function EventSetupPage() {
    */
   useEffect(() => {
     if (!loading && showMoment3 && moment3Data && arriveAtItem) setArriveAtItem(null);
-  }, [loading, showMoment3, moment3Data, arriveAtItem]);
+    // [[GTC-387]] (Q12) — the person, the same way.
+    if (!loading && showMoment3 && moment3Data && arriveAtPerson) setArriveAtPerson(null);
+  }, [loading, showMoment3, moment3Data, arriveAtItem, arriveAtPerson]);
 
   if (loading) {
     return (
@@ -1251,6 +1258,7 @@ export default function EventSetupPage() {
           stripDoors={doorsFor(3)}
           details={details}
           arriveAtItem={arriveAtItem}
+          arriveAtPerson={arriveAtPerson}
         />
       </>
     );

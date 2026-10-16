@@ -173,7 +173,13 @@ export type ResendRefusalCode =
   | 'NO_PHONE'
   | 'PHONE_OPTED_OUT'
   | 'PHONE_UNUSABLE'
-  | 'TEXTING_UNAVAILABLE';
+  | 'TEXTING_UNAVAILABLE'
+  // [[GTC-387]] — the contact box on the "nowhere to send" door: the four refusals about what was
+  // typed, or about a guest's own no, that the door's EDIT never needed while it took an address.
+  | 'NOTHING_TO_SAVE'
+  | 'EMAIL_UNREADABLE'
+  | 'EMAIL_OPTED_OUT'
+  | 'MOBILE_UNREADABLE';
 
 /**
  * A sentence a host can read for every one of them — a `Record` over the union, so a twelfth
@@ -202,12 +208,40 @@ export const RESEND_REFUSAL_WORDS: Record<ResendRefusalCode, string> = {
   ADDRESS_TAKEN: 'Somebody else already has that address, so Gather cannot move them onto it.',
   // [[GTC-189]] slice 8a, W5 — ruled 2026-09-27. Here with the door's other refusals, and not in
   // `email-block-words.ts`, so this module keeps its fence: every import `import type`.
-  ADDRESS_BLOCKED: "Gather can't email this address anymore.",
+  // [[GTC-387]] Q1 (a): the four the contact box shares are in "I", W18 to W21, everywhere they show.
+  ADDRESS_BLOCKED: 'I can’t email that address anymore.',
   NO_PHONE: 'They have no mobile number, so there is nothing to text.',
-  PHONE_OPTED_OUT: 'They have opted out of texts, so Gather will not send one.',
-  PHONE_UNUSABLE: 'Gather cannot text that number.',
-  TEXTING_UNAVAILABLE: 'Gather cannot send texts at the moment.',
+  PHONE_OPTED_OUT: 'They’ve opted out of texts, so I won’t text them.',
+  PHONE_UNUSABLE: 'I can’t text that number.',
+  TEXTING_UNAVAILABLE: 'I can’t send texts at the moment.',
+  // [[GTC-387]] W14 to W17, ruled 2026-10-16.
+  NOTHING_TO_SAVE: 'Type an email or a mobile number first.',
+  EMAIL_UNREADABLE: 'That doesn’t look like an email address.',
+  EMAIL_OPTED_OUT: 'They chose not to receive email about this event, so I won’t email them.',
+  MOBILE_UNREADABLE: 'I can’t read that as a New Zealand mobile number.',
 };
+
+/**
+ * [[GTC-387]] — the refusals the contact box can give: the four above about what was typed or a
+ * guest's own no, and the three the chooser gives a new email or mobile. A subset of the door's
+ * family, so the route and the panel read one sentence for each (`RESEND_REFUSAL_WORDS`).
+ */
+export type ContactRefusalCode = Extract<
+  ResendRefusalCode,
+  | 'NOTHING_TO_SAVE'
+  | 'EMAIL_UNREADABLE'
+  | 'EMAIL_OPTED_OUT'
+  | 'MOBILE_UNREADABLE'
+  | 'ADDRESS_BLOCKED'
+  | 'PHONE_OPTED_OUT'
+  | 'PHONE_UNUSABLE'
+>;
+
+/** [[GTC-387]] — which of the contact box's two boxes a screen draws (ruling 2, Q4). */
+export interface ContactOffer {
+  email: boolean;
+  mobile: boolean;
+}
 
 /** What the panel needs when it opens: the two facts of the last look, and what it may offer. */
 export interface DoorView {
@@ -227,4 +261,16 @@ export interface DoorView {
    */
   message: { subject: string | null; text: string } | null;
   actions: ResendAction[];
+  /**
+   * [[GTC-387]] Q5 — the mobile Gather holds, in display form, for the contact box on ruling M's
+   * red. Fetched when the door opens, exactly as `address` is; null on the other red.
+   */
+  mobile: string | null;
+  /** [[GTC-387]] — which boxes the "nowhere to send" door draws; null on the other red. */
+  offer: ContactOffer | null;
+  /**
+   * [[GTC-387]] Q2 (b), W34 — they have a mobile the chooser would text, and texting is off, so
+   * their invitation has not gone. Only on ruling M's red.
+   */
+  mobileHeld: boolean;
 }

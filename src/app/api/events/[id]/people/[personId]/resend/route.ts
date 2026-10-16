@@ -88,6 +88,7 @@ export async function POST(
     const body = (await request.json().catch(() => ({}))) as {
       action?: string;
       email?: string | null;
+      mobile?: string | null;
     };
     /*
      * A body that names no action of ours is a malformed request rather than a state refusal,
@@ -106,6 +107,8 @@ export async function POST(
       actor,
       action: body.action as ResendAction,
       email: body.email ?? null,
+      // [[GTC-387]] — the contact box's Mobile, read on ruling M's red only.
+      mobile: body.mobile ?? null,
     });
 
     if (!outcome.ok) {
@@ -121,6 +124,8 @@ export async function POST(
       success: true,
       action: outcome.action,
       channel: outcome.channel,
+      // [[GTC-387]] Q2 (b): false when a mobile was saved and texting is off, so nothing went.
+      queued: outcome.queued,
     });
   } catch (error) {
     console.error('Error sending again:', error);

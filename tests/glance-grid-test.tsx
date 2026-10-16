@@ -871,25 +871,22 @@ async function main() {
       asserted immediately above, on `data-strip-door`, which is the attribute `PersonSurface`
       alone writes.
     */
+    /*
+      ⚠ [[GTC-387]] Q11 (Nigel, 2026-10-16): "Yes, open them with the arrow (Recommended)". It
+      supersedes Ruling 17's second sentence here, on purpose: the two greys now open the READING
+      room. What still holds, and is asserted: neither grey is an ACTING door — only a red is.
+    */
     assert(
-      'Ruling 17 successor',
-      'the two GREYS are doors of NEITHER kind — no button, no handler, no link on either of them',
+      'Ruling 17 successor / GTC-387 Q11',
+      'the two GREYS are READING doors and never ACTING ones — a <button data-strip-reading> each, no data-strip-door on either',
       ok(() => {
-        const others = ['OUT', 'NOT_CHASED'].flatMap((state) =>
-          html.split(`data-strip-state="${state}"`).slice(1)
-        );
-        // GATED ON THE POSITIVE CASE. "Nothing here is a door" is trivially true of a board
-        // with no doors at all, so this cannot go green until both kinds exist on the board.
+        const greys = ['Ray Dalton', 'Aoife Dalton'].map((n) => stripFor(html, n));
+        // GATED ON THE POSITIVE CASE: an acting door exists on this board, so "no acting door
+        // on a grey" is a refusal rather than a board with no doors at all.
         return (
           html.includes('data-strip-door') &&
-          html.includes('data-strip-reading') &&
-          others.length === 2 &&
-          others.every((chunk) => {
-            const el = chunk.slice(0, chunk.indexOf('</div>'));
-            return !/<button|<a |onclick|role="button"|data-strip-door|data-strip-reading/i.test(
-              el
-            );
-          })
+          greys.every((el) => el.startsWith('<button')) &&
+          greys.every((el) => /data-strip-reading/.test(el) && !/data-strip-door/.test(el))
         );
       })
     );
@@ -951,17 +948,28 @@ async function main() {
     );
     assert(
       'Ruling 35',
-      'and in the RENDER: the two sealed states wear nothing — no border, no chevron, no cursor, no hover, which is the ruling’s own second sentence',
+      'and in the RENDER, since [[GTC-387]] Q11: the two greys now open something, so they wear the promise — cursor, hover and the chevron — and OUT keeps Ruling 7’s fade with no door border',
       ok(() => {
-        const sealed = ['OUT', 'NOT_CHASED'].map((st) =>
-          stripFor(html, st === 'OUT' ? 'Ray Dalton' : 'Aoife Dalton')
-        );
+        // One strip's whole element, refused if the nearest <button> before the name is closed
+        // before it (that would be another strip's button, not this one's).
+        const whole = (name: string) => {
+          const at = html.indexOf(`<span>${name}</span>`);
+          const start = html.lastIndexOf('<button', at);
+          const end = html.indexOf('</button>', at);
+          return at > 0 && start >= 0 && end > at && !html.slice(start, at).includes('</button>')
+            ? html.slice(start, end)
+            : '';
+        };
+        const ray = whole('Ray Dalton');
+        const aoife = whole('Aoife Dalton');
         return (
-          sealed.every((el) => el.length > 0) &&
-          sealed.every((el) => !/hover:|cursor-|data-strip-chevron/.test(el)) &&
-          // The control: the treatment IS on the board, so the absence above is a refusal
-          // rather than a board that has no treatment anywhere.
-          /cursor-pointer/.test(html)
+          ray.length > 0 &&
+          aoife.length > 0 &&
+          [ray, aoife].every(
+            (el) => /cursor-pointer/.test(el) && /hover:/.test(el) && /data-strip-chevron/.test(el)
+          ) &&
+          /opacity-50/.test(ray) &&
+          ![ray, aoife].some((el) => el.includes(SP.DOOR_BORDER_CLASS))
         );
       })
     );
@@ -1614,12 +1622,15 @@ async function main() {
     );
     assert(
       '6d / Ruling 7',
-      'WITH NO OVERLAY HE IS OUT — faded, "— out", a plain div and no door: Ruling 7’s ghost, untouched',
+      'WITH NO OVERLAY HE IS OUT — faded, "— out", and since [[GTC-387]] Q11 a READING door, never an acting one: Ruling 7’s ghost keeps its fade',
       overlayRendered &&
         /data-strip-state="OUT"/.test(raySettled) &&
         /— out</.test(raySettled) &&
         !/was in, now out/.test(raySettled) &&
-        raySettled.startsWith('<div')
+        raySettled.startsWith('<button') &&
+        /data-strip-reading/.test(raySettled) &&
+        !/data-strip-door/.test(raySettled) &&
+        /opacity-50/.test(raySettled)
     );
     assert(
       '6d / Ruling 6',
@@ -2031,31 +2042,36 @@ async function main() {
       )
     );
     assert(
-      'Ruling 17',
-      '⭐ AND OUT AND NOT_CHASED OPEN NOTHING — Ruling 17’s second sentence, untouched by every ruling in this phase: the mark is revisited at the pre-flight, not here',
-      // ⚠ [[GTC-305]] narrows this to the MARK: Ruling 32 as amended opens four other greys onto
-      // the reading room (asserted in `test:board-not-chased`); the don't-chase grey stays sealed.
+      'Ruling 17 / GTC-387 Q11',
+      '⭐ OUT, THE DON’T-NUDGE MARK AND A CHILD HOLDING NOTHING OPEN THE READING ROOM — [[GTC-387]] Q11 supersedes Ruling 17’s second sentence on purpose — and a grey with no ruled reason still seals, untreated',
+      // ⚠ [[GTC-305]] opened four greys; [[GTC-387]] Q11 (2026-10-16) opens the last three. A
+      // NOT_CHASED with no reason is the unit-level sealed strip: a grey added later seals until
+      // it is ruled, and wears nothing.
       ok(
         () =>
-          SP.panelFor({ state: 'OUT', reasons: ['ATTENDANCE_NO'] }) === null &&
-          SP.panelFor({ state: 'NOT_CHASED', reasons: ['DONT_CHASE'] }) === null
+          SP.panelFor({ state: 'OUT', reasons: ['ATTENDANCE_NO'] }) === 'reading' &&
+          SP.panelFor({ state: 'NOT_CHASED', reasons: ['DONT_CHASE'] }) === 'reading' &&
+          SP.panelFor({ state: 'NOT_CHASED', reasons: ['CHILD_WITHOUT_ITEM'] }) === 'reading' &&
+          SP.panelFor({ state: 'NOT_CHASED', reasons: [] }) === null &&
+          SP.doorTreatmentFor({ state: 'NOT_CHASED', reasons: [] }) === ''
       )
     );
     assert(
       'Ruling 32 / routing',
-      'IN THE RENDER: reds are acting doors, greens and ambers are reading doors, the two greys are plain `<div>`s, and no strip is both kinds',
+      'IN THE RENDER: reds are acting doors; greens, ambers and since [[GTC-387]] Q11 the two greys are reading doors; no strip on this board is sealed, and none is both kinds',
       ok(() => {
         const all = strips(html);
         const acting = all.filter((x) => x.door);
         const reading = all.filter((x) => x.reading);
-        const sealed = all.filter((x) => x.state === 'OUT' || x.state === 'NOT_CHASED');
+        const greys = all.filter((x) => x.state === 'OUT' || x.state === 'NOT_CHASED');
         return (
           acting.length === 2 &&
           acting.every((x) => x.state === 'RED') &&
-          reading.length === 4 &&
-          reading.every((x) => x.state === 'GREEN' || x.state === 'AMBER') &&
-          sealed.length === 2 &&
-          sealed.every((x) => x.tag === 'div') &&
+          reading.length === 6 &&
+          reading.every((x) => ['GREEN', 'AMBER', 'OUT', 'NOT_CHASED'].includes(x.state)) &&
+          greys.length === 2 &&
+          greys.every((x) => x.tag === 'button' && x.reading) &&
+          all.every((x) => x.door || x.reading) &&
           all.every((x) => !(x.door && x.reading))
         );
       })
@@ -2173,7 +2189,7 @@ async function main() {
     );
     assert(
       'Ruling 32 / payload',
-      'and the panel’s keys are EXACTLY the six ruled ([[GTC-350]] Q2 adds `replies`, EMPTY for a person with none), its rows exactly four — an allowlist, because a denylist can only ban what someone thought of',
+      'and the panel’s keys are EXACTLY the seven ruled ([[GTC-350]] Q2 adds `replies`, EMPTY for a person with none; [[GTC-387]] adds `door`, NULL here), its rows exactly four — an allowlist, because a denylist can only ban what someone thought of',
       ok(() => {
         const panel = RD.readingPanelFor(leaky, V_NOW);
         return (
@@ -2181,8 +2197,11 @@ async function main() {
           // it must be EMPTY, which keeps these panels exactly as ruled.
           // ⚠ [[GTC-350]] Q2 adds `replies` — every text reply the guest sent, as words and a written
           // line — and for this person, who sent none, it must be EMPTY.
+          // ⚠ [[GTC-387]] adds `door` — the way to where a grey is changed — and for this
+          // GREEN/AMBER person it must be NULL.
           JSON.stringify(Object.keys(panel).sort()) ===
-            JSON.stringify(['name', 'notes', 'nudge', 'replies', 'rows', 'status']) &&
+            JSON.stringify(['door', 'name', 'notes', 'nudge', 'replies', 'rows', 'status']) &&
+          panel.door === null &&
           Array.isArray(panel.notes) &&
           panel.notes.length === 0 &&
           Array.isArray(panel.replies) &&
@@ -2198,10 +2217,12 @@ async function main() {
     );
     assert(
       'Ruling 32 / status',
-      'the status word exists for GREEN and AMBER and THROWS for every other state — no plausible default for a case `panelFor` cannot deliver',
+      'the status word exists for GREEN, AMBER and since [[GTC-387]] Q11 OUT, and THROWS for RED and a NOT_CHASED with no ruled reason — no plausible default for a case `panelFor` cannot deliver',
       ok(() => {
-        const fine = ['GREEN', 'AMBER'].every((st) => typeof RD.readingStatusWord(st) === 'string');
-        const throws = ['RED', 'OUT', 'NOT_CHASED'].every((st) => {
+        const fine = ['GREEN', 'AMBER', 'OUT'].every(
+          (st) => typeof RD.readingStatusWord(st) === 'string'
+        );
+        const throws = ['RED', 'NOT_CHASED'].every((st) => {
           try {
             RD.readingStatusWord(st);
             return false;
@@ -2296,13 +2317,16 @@ async function main() {
     );
     assert(
       'Ruling 31',
-      'and the only `<button>`s in it are the door and the close — nothing else is pressable, and there is no way out but closing',
+      'and the only `<button>`s in it are the door and the close, and since [[GTC-387]] Q11 its one link is the ruled way to where a grey is changed, drawn only from `panel.door` (it supersedes "no way out but closing" on purpose)',
       ok(() => {
         const src = code('src/components/glance/GlancePersonReading.tsx');
         return (
           src.length > 0 &&
           (src.match(/<button/g) ?? []).length === 2 &&
-          !/<a |href=|useRouter|router\.push|next\/link/i.test(src)
+          (src.match(/<a\s/g) ?? []).length === 1 &&
+          /<a\s+data-reading-door=""\s+href=\{panel\.door\.href\}/.test(src) &&
+          (src.match(/href=/g) ?? []).length === 1 &&
+          !/useRouter|router\.push|next\/link/i.test(src)
         );
       })
     );

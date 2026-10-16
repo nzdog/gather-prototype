@@ -1100,7 +1100,8 @@ async function runLive() {
         land7?.mid?.picked === false;
       detail[`C7${k}`] = JSON.stringify({ door7, tap7, land7 });
 
-      // C8 — CONTROL: a sealed strip (Rewi, not coming) keeps the ring; no dialog.
+      // C8 — [[GTC-387]] Q11: Rewi (not coming) is no longer sealed. His strip is a reading door,
+      // so the search's tap opens his reading room as it opens any strip's panel.
       await c.navigate(`/plan/${evS}/glance`, 8000);
       const typed8 = await openSearch('rewi');
       const tap8 = typed8
@@ -1109,17 +1110,13 @@ async function runLive() {
             1000
           )
         : 'absent';
-      const ring8 =
+      const open8 =
         await ev<boolean>(`(() => { const s = document.querySelector('[data-person-event-id="${rewi}"]'); if (!s) return false;
         const b = s.getBoundingClientRect(); const cy = b.top + b.height / 2; const h = window.innerHeight;
-        return cy > h * 0.2 && cy < h * 0.8 && s.style.outline !== ''; })()`);
-      const noDialog8 = !(await dialogShowing());
-      await sleep(2500);
-      const gone8 = await ev<boolean>(
-        `document.querySelector('[data-person-event-id="${rewi}"]')?.style.outline === ''`
-      );
-      r[`C8${k}`] = tap8 === null && ring8 && noDialog8 && gone8;
-      detail[`C8${k}`] = JSON.stringify({ typed8, tap8, ring8, noDialog8, gone8 });
+        return s.tagName === 'BUTTON' && s.hasAttribute('data-strip-reading') && cy > h * 0.2 && cy < h * 0.8; })()`);
+      const panel8 = await dialogShowing();
+      r[`C8${k}`] = tap8 === null && open8 && panel8;
+      detail[`C8${k}`] = JSON.stringify({ typed8, tap8, open8, panel8 });
 
       // C9 — an item row's name: "Bread rolls" (nobody yet) at 1280, "Roast turkey" (held) at 390.
       const [q9, name9] = mobile ? ['turkey', 'Roast turkey'] : ['bread', 'Bread rolls'];
@@ -1205,7 +1202,7 @@ async function runLive() {
     C5: 'the four steps’ cues end the same distance from the box’s right edge, within 1px (the addition)',
     C6: 'a person’s name with a panel (Ross): his panel, his strip focused, the search kept; closed, the search as it was (Q7)',
     C7: '"Brownies" in "Ross Walker: Brownies" is a door to that item, the line as it was; a tap lands on Moment 3 at it, centred, nothing picked (ruling 2)',
-    C8: 'CONTROL: a sealed strip (Rewi, not coming): the ring, no dialog, the ring gone after 2.5 s (Q7)',
+    C8: 'GTC-387 Q11: Rewi (not coming) is a reading door now: the tap centres his strip and opens his reading room',
     C9: 'an item row’s name (Bread rolls at 1280, Roast turkey at 390): Moment 3 at that item, no query left, centred and outlined, the outline gone after 2.5 s, nothing picked (Q9, Q10)',
     C10: 'after the press: "← Back to the board" beside "← Back to the plan" (under it on a phone), and a tap lands on the board (W3, Q11, ruling 4)',
     C11: 'CONTROL: before the press, "← Back to the plan" and no "← Back to the board" (Q11)',

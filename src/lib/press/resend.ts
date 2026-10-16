@@ -1,21 +1,23 @@
 import { emailBlockStateOf, listEmailBlocks } from '@/lib/eligibility/email-block';
-import {
-  listTextBlocks,
-  numberDeadOf,
-  tnzOptedOutOf,
-  type TextBlockFact,
-} from '@/lib/eligibility/text-block';
+import { listTextBlocks, numberDeadOf } from '@/lib/eligibility/text-block';
 import type { EmailBlockState } from '@/lib/eligibility/email-block-words';
 import type { OutboundChannel, PrismaClient } from '@prisma/client';
-import { readAskPreview, smsOptedOutFact } from '@/lib/preflight/ask-preview';
+import { readAskPreview } from '@/lib/preflight/ask-preview';
 import { composePreview } from '@/lib/preflight/ask-preview-compose';
 import { textAskReachOf } from '@/lib/eligibility/channel-chooser';
 import { getEmailOptOut } from '@/lib/eligibility/email-opt-out';
 import { isChildMembership } from '@/lib/eligibility/child-exclusion';
 import { deliveryFactFrom, latestRowByMembership } from '@/lib/glance/delivery-fact';
 import { smsProviderConfiguredFor } from '@/lib/sms/send-sms';
-import { SMS_OPT_OUT_IN_FORCE } from '@/lib/sms/opt-out-service';
 import { recordChange, type LedgerActor } from '@/lib/ledger';
+import { formatPhoneForDisplay } from '@/lib/phone';
+import {
+  checkContactChange,
+  optedOutOf,
+  writeContactChange,
+  type ContactSubject,
+} from '@/lib/contact/contact-fix';
+import { contactFixOffer } from '@/lib/contact/contact-box';
 import {
   doorActionsFor,
   type DoorReason,
@@ -107,7 +109,13 @@ export interface ResendDone {
   ok: true;
   action: ResendAction;
   channel: OutboundChannel;
-  outboundMessageId: string;
+  /**
+   * [[GTC-387]] Q2 (b) — false only when the contact box saved a mobile and texting is off: the
+   * number is kept, nothing is queued, and the panel says so (W33). True for every other press.
+   */
+  queued: boolean;
+  /** Null exactly when `queued` is false. */
+  outboundMessageId: string | null;
 }
 
 const refuse = (status: 400 | 404 | 409, code: ResendRefusalCode): ResendRefusal => ({
@@ -133,6 +141,10 @@ interface Subject {
   personId: string;
   eventId: string;
   hostId: string;
+  /** [[GTC-387]] — the membership as the chooser needs it, for the contact box. */
+  role: string;
+  householdId: string | null;
+  householdRole: string | null;
   email: string | null;
   phoneNumber: string | null;
   smsOptedOut: boolean;
@@ -177,6 +189,8 @@ async function resolveSubject(
     select: {
       id: true,
       personId: true,
+      role: true,
+      householdId: true,
       householdRole: true,
       person: { select: { email: true, phoneNumber: true, smsOptedOut: true } },
     },
@@ -231,6 +245,9 @@ async function resolveSubject(
     personId: membership.personId,
     eventId,
     hostId: event.hostId,
+    role: membership.role,
+    householdId: membership.householdId,
+    householdRole: membership.householdRole,
     email: membership.person.email,
     phoneNumber: membership.person.phoneNumber,
     smsOptedOut: membership.person.smsOptedOut,
@@ -244,30 +261,27 @@ async function resolveSubject(
   };
 }
 
-/**
+/*
  * [[GTC-301]]'s two opt-out facts, for ONE number, through the one definition of the merge.
- *
- * The pre-flight reads every number on the event in a single query; this reads one. The RULE is
- * shared and the fetch is not — see `smsOptedOutFact`.
+ * MOVED at [[GTC-387]] to `@/lib/contact/contact-fix` as `optedOutOf`, not copied: the door and
+ * the contact box read one reading. The pre-flight reads every number on the event in a single
+ * query; this reads one. The RULE is shared and the fetch is not — see `smsOptedOutFact`.
  */
-async function optedOut(
-  db: PrismaClient,
-  subject: Subject,
-  textBlocks: ReadonlyMap<string, TextBlockFact>
-): Promise<boolean> {
-  if (!subject.phoneNumber) return subject.smsOptedOut;
-  const rows = await db.smsOptOut.findMany({
-    // Account-wide since [[GTC-288]]: any row in force for the number.
-    where: { phoneNumber: subject.phoneNumber, ...SMS_OPT_OUT_IN_FORCE },
-    select: { phoneNumber: true },
-  });
-  const numbers = new Set(rows.map((r) => r.phoneNumber));
-  // [[GTC-258]] plan ruling Q1: a number on TNZ's opt-out list is the guest's own STOP.
-  if (tnzOptedOutOf(subject.phoneNumber, textBlocks)) numbers.add(subject.phoneNumber);
-  return smsOptedOutFact(
-    { smsOptedOut: subject.smsOptedOut, phoneNumber: subject.phoneNumber },
-    numbers
-  );
+
+/** [[GTC-387]] — the subject as the contact box needs it. */
+function contactSubjectOf(subject: Subject): ContactSubject {
+  return {
+    eventId: subject.eventId,
+    hostId: subject.hostId,
+    personEventId: subject.personEventId,
+    personId: subject.personId,
+    role: subject.role,
+    householdId: subject.householdId,
+    householdRole: subject.householdRole,
+    email: subject.email,
+    phoneNumber: subject.phoneNumber,
+    smsOptedOut: subject.smsOptedOut,
+  };
 }
 
 async function factsFor(db: PrismaClient, subject: Subject, deps: ResendDeps) {
@@ -276,7 +290,11 @@ async function factsFor(db: PrismaClient, subject: Subject, deps: ResendDeps) {
   const person = {
     email: subject.email,
     phoneNumber: subject.phoneNumber,
-    smsOptedOut: await optedOut(db, subject, textBlocks),
+    smsOptedOut: await optedOutOf(
+      db,
+      { smsOptedOut: subject.smsOptedOut, phoneNumber: subject.phoneNumber },
+      textBlocks
+    ),
     emailOptedOut: subject.emailOptedOut,
     emailBlocked: subject.emailBlock !== 'NONE',
     emailReported: subject.emailBlock === 'REPORTED',
@@ -334,6 +352,12 @@ export async function readDoor(
     if (row?.ask) message = { subject: row.subject, text: row.ask.text };
   }
 
+  /*
+   * [[GTC-387]] — the contact box on ruling M's red. Which boxes come from the chooser's own
+   * refusal of a text (`textReach`), through the offer table; a mobile it would text leaves both
+   * boxes open. `mobileHeld` is W34: a mobile the chooser would text, and texting off.
+   */
+  const unreachable = subject.reason === 'UNREACHABLE';
   return {
     ok: true,
     view: {
@@ -341,6 +365,15 @@ export async function readDoor(
       address: subject.email,
       message,
       actions: doorActionsFor(facts),
+      mobile:
+        unreachable && subject.phoneNumber ? formatPhoneForDisplay(subject.phoneNumber) : null,
+      offer: unreachable
+        ? facts.textReach.ok
+          ? { email: true, mobile: true }
+          : (contactFixOffer(facts.textReach.why) ?? { email: false, mobile: false })
+        : null,
+      mobileHeld:
+        unreachable && !!subject.phoneNumber && facts.textReach.ok && !facts.textingConfigured,
     },
   };
 }
@@ -362,6 +395,8 @@ export async function resendToPerson(
     actor: LedgerActor;
     action: ResendAction;
     email?: string | null;
+    /** [[GTC-387]] — the contact box's Mobile, on ruling M's red only. */
+    mobile?: string | null;
   },
   deps: ResendDeps = {}
 ): Promise<ResendDone | ResendRefusal> {
@@ -369,6 +404,7 @@ export async function resendToPerson(
   if ('ok' in subject) return subject;
 
   const facts = await factsFor(db, subject, deps);
+  const configured = deps.textingConfiguredFor ?? smsProviderConfiguredFor;
 
   try {
     return await db.$transaction(async (tx) => {
@@ -385,7 +421,31 @@ export async function resendToPerson(
         if (facts.addressBlocked) throw new ResendRefused(refuse(409, 'ADDRESS_BLOCKED'));
       }
 
-      if (args.action === 'EDIT') {
+      /*
+       * [[GTC-387]] — RULING M'S RED: THE CONTACT BOX. Save, then send (ruling 1), all or nothing
+       * (Q3): the check asks the chooser with the person as they would be after the save, and only
+       * then is anything written. The invitation goes on the chooser's channel; a text needs the
+       * fence. Q2 (b): with texting off a mobile is still saved, and nothing is queued (W33).
+       */
+      if (args.action === 'EDIT' && subject.reason === 'UNREACHABLE') {
+        const contact = contactSubjectOf(subject);
+        const check = await checkContactChange(tx, contact, {
+          email: args.email,
+          mobile: args.mobile,
+        });
+        if (!check.ok) throw new ResendRefused(refuse(check.status, check.code));
+        await writeContactChange(tx, contact, check.writes, args.actor);
+        channel = check.channel;
+        if (channel === 'TEXT' && !(check.number && configured(check.number))) {
+          return {
+            ok: true as const,
+            action: args.action,
+            channel,
+            queued: false,
+            outboundMessageId: null,
+          };
+        }
+      } else if (args.action === 'EDIT') {
         const address = (args.email ?? '').trim();
         /*
          * ⚠ THE THINNEST CHECK THAT IS TRUE. An address with no `@` cannot be sent to and the
@@ -520,7 +580,13 @@ export async function resendToPerson(
        * and the row is waiting for the two-minute cron — and it is recorded here because a host
        * who presses and watches will draw a conclusion from what she sees change.
        */
-      return { ok: true as const, action: args.action, channel, outboundMessageId: row.id };
+      return {
+        ok: true as const,
+        action: args.action,
+        channel,
+        queued: true,
+        outboundMessageId: row.id,
+      };
     });
   } catch (e) {
     if (e instanceof ResendRefused) return e.refusal;
