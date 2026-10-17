@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
 
 /**
  * GET /api/events/[id]/revisions/[revisionId]
@@ -11,9 +12,14 @@ export async function GET(
   _request: NextRequest,
   context: { params: Promise<{ id: string; revisionId: string }> }
 ) {
-  try {
-    const { id: eventId, revisionId } = await context.params;
+  const { id: eventId, revisionId } = await context.params;
 
+  // GTC-267: unauthenticated before this — it served a full plan snapshot, and its
+  // sibling list route served the host's own edit reasons, to anyone with an event id.
+  const auth = await requireEventRole(eventId, ['HOST', 'COHOST']);
+  if (auth instanceof NextResponse) return auth;
+
+  try {
     // Get the revision
     const revision = await prisma.planRevision.findUnique({
       where: { id: revisionId },

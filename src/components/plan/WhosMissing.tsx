@@ -10,6 +10,8 @@ interface MissingPerson {
   hasPhone: boolean;
   lastAction: string | null;
   daysSinceAnchor: number | null;
+  /** GTC-256 (phase 3), Ruling 5 — see the filter below. */
+  isHost?: boolean;
 }
 
 interface Props {
@@ -20,8 +22,17 @@ interface Props {
 export function WhosMissing({ people, onPersonClick }: Props) {
   const [expanded, setExpanded] = useState(false);
 
-  // Filter to people who haven't confirmed
-  const missing = people.filter((p) => p.lastAction !== 'ACCEPTED');
+  /*
+   * GTC-256 (phase 3), RULING 5 — THE HOST IS NEVER MISSING.
+   *
+   * Two reasons, and either alone is sufficient. She was never asked, so "hasn't
+   * confirmed" is not a fact about her — she would sit in this list permanently, because
+   * nothing will ever move her out of it. And every row here is a button opening
+   * PersonInviteDetailModal -> HostNudgeSection -> the nudge route, which now refuses her
+   * with 403; suppressing that affordance in InviteStatusSection and leaving this second
+   * door open would be the same mistake the claim endpoint made, in UI form.
+   */
+  const missing = people.filter((p) => !p.isHost && p.lastAction !== 'ACCEPTED');
 
   if (missing.length === 0) {
     return (

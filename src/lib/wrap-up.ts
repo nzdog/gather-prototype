@@ -5,6 +5,8 @@ import { randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { sendSms } from '@/lib/sms/send-sms';
 import { sendNudgeEmail } from '@/lib/email';
+import { getEmailOptOut } from '@/lib/eligibility/email-opt-out';
+import { listEmailBlocks } from '@/lib/eligibility/email-block';
 import { logInviteEvent } from '@/lib/invite-events';
 import {
   buildSmsWrapUpMessage,
@@ -12,6 +14,18 @@ import {
   resolveGuestTaskItem,
   type WrapUpTemplateParams,
 } from '@/lib/sms/wrap-up-templates';
+import { isMessageableRole } from '@/lib/eligibility/child-exclusion';
+import { isQuietHours, getMinutesUntilQuietEnd } from '@/lib/sms/quiet-hours';
+import { emptyTally, smsRefusalOutcome, tallySend, type SendTally } from '@/lib/send-health';
+import { listTextBlocks } from '@/lib/eligibility/text-block';
+import {
+  claimTextRetry,
+  closeTextRetry,
+  closeTextSend,
+  openTextSend,
+} from '@/lib/sms/text-send-record';
+import { retryableFor } from '@/lib/sms/text-outcome';
+import { TEXT_DID_NOT_ARRIVE } from '@/lib/sms/text-failure-words';
 
 const WRAPUP_LINK_EXPIRY_DAYS = 30;
 const DISPATCH_DELAY_MINUTES = 10;
@@ -37,34 +51,119 @@ export function generateLinkToken(): string {
   return randomBytes(24).toString('base64url');
 }
 
-interface GuestForWrapUp {
+export interface GuestForWrapUp {
   person: {
     id: string;
     name: string;
     email: string | null;
-    phone: string | null;
+    // GTC-312: the legacy `phone` field is gone from both shapes here. It was written
+    // by `selectWrapUpRecipients` and read by nothing — the wrap-up sender has always
+    // used `phoneNumber`. A dead field carrying the column nothing reads.
     phoneNumber: string | null;
     smsOptedOut: boolean;
   };
   assignments: Array<{ item: { name: string }; response: string }>;
 }
 
+/**
+ * A PersonEvent row as the wrap-up route loads it. Prisma's `include` returns every
+ * scalar on the row, so `householdRole` arrives without the query asking for it.
+ */
+export interface WrapUpCandidate {
+  personId: string;
+  householdRole: string | null;
+  person: {
+    id: string;
+    name: string;
+    email: string | null;
+    phoneNumber: string | null;
+    smsOptedOut: boolean;
+    assignments: Array<{ item: { name: string }; response: string }>;
+  };
+}
+
+/**
+ * THE wrap-up recipient decision (GTC-172 / C1).
+ *
+ * Extracted from POST /api/events/[id]/wrap-up so it can be exercised by a DB-level
+ * test without the requireEventRole cookie context — the same reason and the same
+ * pattern as reconcileHouseholdMembers (GTC-159).
+ *
+ * This has to be the gate rather than dispatch: `WrapUpLink` denormalises
+ * `guestPhone`/`guestEmail` at creation, so by the time dispatchPendingWrapUpMessages
+ * runs there is no role left to check. A thank-you is a system message, and §10.6 is
+ * absolute about who may receive one.
+ */
+export function selectWrapUpRecipients(
+  people: WrapUpCandidate[],
+  hostId: string
+): GuestForWrapUp[] {
+  return people
+    .filter((pe) => pe.personId !== hostId) // exclude host
+    .filter((pe) => isMessageableRole(pe.householdRole)) // GTC-172 (C1): §10.6
+    .map((pe) => ({
+      person: {
+        id: pe.person.id,
+        name: pe.person.name,
+        email: pe.person.email,
+        phoneNumber: pe.person.phoneNumber,
+        smsOptedOut: pe.person.smsOptedOut,
+      },
+      assignments: pe.person.assignments.map((a) => ({
+        item: { name: a.item.name },
+        response: a.response,
+      })),
+    }));
+}
+
 export async function generateWrapUpLinks(
   eventId: string,
   guests: GuestForWrapUp[]
-): Promise<{ created: number; skipped: number }> {
+): Promise<{ created: number; skipped: number; alreadyLinked: number }> {
   const expiresAt = new Date(Date.now() + WRAPUP_LINK_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
   let created = 0;
   let skipped = 0;
+  let alreadyLinked = 0;
+
+  // GTC-209: one link per (event, person), forever.
+  //
+  // The route guard above stops a second press; this stops the narrower case it cannot
+  // — two presses racing before either writes `wrappedAt`, and any future caller that
+  // reaches here by another door. The dispatcher iterates ROWS, not people (:182), so a
+  // duplicate row is a duplicate thank-you text, not a harmless extra record.
+  //
+  // Keyed on (event, person) rather than on the event, deliberately: a guest added
+  // AFTER the press must still get their link. That is the mini-send model (Hinge §2,
+  // gap #5) and it is what GTC-186 (H1) builds on — an event-level "already done" check
+  // would pass every duplicate test and silently strip late guests instead.
+  const existingLinks = await prisma.wrapUpLink.findMany({
+    where: { eventId },
+    select: { personId: true },
+  });
+  const linkedPersonIds = new Set(existingLinks.map((l) => l.personId));
+  // [[GTC-258]] — a number TNZ reported dead, or on their opt-out list, is not texted: the thank-you
+  // goes by email, as it already does for a guest who has opted out of texts.
+  const textBlocks = await listTextBlocks(
+    prisma,
+    guests.map((g) => g.person.phoneNumber)
+  );
 
   for (const guest of guests) {
     const { person } = guest;
-    const phone = person.phoneNumber || person.phone || null;
+
+    if (linkedPersonIds.has(person.id)) {
+      alreadyLinked++;
+      continue;
+    }
+    // GTC-312: `|| person.phone` removed. This is a CHANNEL choice, not a display —
+    // a thank-you went by SMS on the strength of a column no sender reads, so the
+    // channel could be chosen as 'sms' for a number `sendSms` would never see.
+    const phone = person.phoneNumber || null;
     const email = person.email || null;
 
     // Determine channel
     let channel: string;
-    if (phone && !person.smsOptedOut) {
+    if (phone && !person.smsOptedOut && !textBlocks.has(phone)) {
       channel = 'sms';
     } else if (email) {
       channel = 'email';
@@ -88,6 +187,8 @@ export async function generateWrapUpLinks(
       },
     });
 
+    linkedPersonIds.add(person.id);
+
     if (channel === 'skipped') {
       skipped++;
     } else {
@@ -95,17 +196,34 @@ export async function generateWrapUpLinks(
     }
   }
 
-  return { created, skipped };
+  return { created, skipped, alreadyLinked };
 }
 
 // ── Dispatch ─────────────────────────────────────────────────────────
 
-export async function dispatchPendingWrapUpMessages(): Promise<{
+export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Promise<{
   sent: number;
   failed: number;
   total: number;
+  deferred: number;
+  deferredUntilMinutes: number;
+  /**
+   * ⚠ [[GTC-296]] — links closed out because the guest unsubscribed from email for this event.
+   * NOT `failed`, and the separation is the point: nothing failed. A suppression counted as a
+   * failure would put a retry affordance and an alarming number in front of a host about a
+   * guest who simply asked not to be emailed.
+   */
+  suppressed: number;
+  /**
+   * [[GTC-339]] — per channel, the sends this run had to make and how many got out. A text that fails
+   * and falls back to an email that goes is one text not out and one email out: the channels are read
+   * apart (founder ruling Q1), so broken texting shows even while the thank-you arrives by email.
+   */
+  tally: SendTally;
+  /** [[GTC-258]] — thank-yous re-sent by email after TNZ reported their text did not arrive. */
+  retried?: number;
 }> {
-  const cutoff = new Date(Date.now() - DISPATCH_DELAY_MINUTES * 60 * 1000);
+  const cutoff = new Date(now.getTime() - DISPATCH_DELAY_MINUTES * 60 * 1000);
 
   const pendingLinks = await prisma.wrapUpLink.findMany({
     where: {
@@ -122,8 +240,41 @@ export async function dispatchPendingWrapUpMessages(): Promise<{
     },
   });
 
+  // GTC-210: quiet hours (21:00–08:00 NZ) apply to the thank-you too.
+  //
+  // This path had no time-of-day guard at all — `DISPATCH_DELAY_MINUTES` is an AGE
+  // filter, not a window, and the cron runs */10 around the clock. A host confirming
+  // wrap-up at 23:00 NZ texted every guest at ~23:10.
+  //
+  // Same shape as the batch guards the text chase used before [[GTC-189]] slice 8b moved quiet
+  // hours into `drainOnce` (per row, text only): check once at the top of the batch, send nothing,
+  // return. The deferral is implicit and durable — no scheduler, no timer. The rows
+  // stay `dispatched: false` and the next run after 08:05 picks them up unchanged.
+  //
+  // Unlike those two this does NOT write an InviteEvent row per deferral:
+  // `InviteEventType` has no wrap-up equivalent of NUDGE_DEFERRED_QUIET, and adding one
+  // is an enum migration. Deliberately deferred to keep this fix schema-free — the
+  // deferral is still observable in the cron's JSON response below.
+  if (isQuietHours(now)) {
+    const deferredUntilMinutes = getMinutesUntilQuietEnd(now);
+    console.warn(
+      `[WrapUp] Quiet hours — deferring ${pendingLinks.length} message(s), ~${deferredUntilMinutes} min until send window`
+    );
+    return {
+      sent: 0,
+      failed: 0,
+      total: pendingLinks.length,
+      deferred: pendingLinks.length,
+      deferredUntilMinutes,
+      suppressed: 0,
+      tally: emptyTally(),
+    };
+  }
+
   let sent = 0;
   let failed = 0;
+  let suppressed = 0;
+  const tally = emptyTally();
 
   for (const link of pendingLinks) {
     const hostFirstName = link.event.host.name.split(' ')[0];
@@ -151,8 +302,45 @@ export async function dispatchPendingWrapUpMessages(): Promise<{
 
     let success = false;
     let failReason: string | undefined;
+    // [[GTC-296]]: this link ended because the guest unsubscribed, not because anything
+    // happened to a message. It is neither `sent` nor `failed`, and it logs nothing.
+    let wasSuppressed = false;
+
+    /*
+     * ⚠ [[GTC-296]] RULING 5, AND ITS PREMISE WAS WRONG — READ CORRECTION R3 BEFORE EDITING.
+     *
+     * Ruling 5 was made on the belief that the wrap-up thank-you is *"automatic and
+     * email-only"*. It is not: `generateWrapUpLinks` above picks `channel: 'sms'` for anybody
+     * with a usable phone who is not SMS-opted-out, which was 47 of 333 people in `gather_dev`
+     * on the day this was built. The ruling was re-made on the corrected premise:
+     *
+     *   **An email opt-out stops every EMAIL leg of the thank-you** — the primary email send,
+     *   and the SMS-failure email fallback below — **and leaves the primary text send alone.**
+     *
+     * Ruling 5's *"no fallback"* stands as ruled: it means no text channel is MANUFACTURED to
+     * keep an email send alive (the *"silently keeps sending"* pattern named on [[GTC-324]]).
+     * It does not mean an email no kills a text thank-you the person never objected to.
+     *
+     * ⚠ ONE QUERY PER LINK, AND THIS LOOP ALREADY SLEEPS 500ms BETWEEN SENDS, so the read is
+     * free beside what it sits in. The set-shaped reader is for the roster walks.
+     */
+    const emailOptedOut = (await getEmailOptOut(link.personId, link.eventId)) !== null;
+    /*
+     * [[GTC-189]] slice 8a — [[GTC-324]] ruling 2 ("anywhere"): an address the provider will not
+     * deliver to closes the email legs exactly as the opt-out does, and for ruling 5's reason no
+     * text is manufactured to replace them. The primary text send is untouched.
+     */
+    const emailClosed =
+      emailOptedOut || (await listEmailBlocks(prisma, [link.guestEmail])).size > 0;
 
     if (link.channel === 'sms' && link.guestPhone) {
+      // [[GTC-258]] — the text's record, which TNZ's report and any reply join to (plan ruling Q5).
+      const record = await openTextSend(prisma, {
+        eventId: link.eventId,
+        personId: link.personId,
+        kind: 'THANK_YOU',
+        destination: link.guestPhone,
+      });
       const smsResult = await sendSms({
         to: link.guestPhone,
         message: buildSmsWrapUpMessage(templateParams),
@@ -160,8 +348,21 @@ export async function dispatchPendingWrapUpMessages(): Promise<{
         personId: link.personId,
         metadata: { type: 'wrapup' },
       });
+      await closeTextSend(prisma, record, smsResult);
 
+      tallySend(
+        tally,
+        'text',
+        smsResult.success ? 'GOT_OUT' : smsRefusalOutcome(smsResult.blocked)
+      );
       if (smsResult.success) {
+        success = true;
+      } else if (link.guestEmail && emailClosed) {
+        // ⚠ THE FALLBACK IS THE LEG RULING 5 IS REALLY ABOUT. The text failed and email is the
+        // channel they closed, so the thank-you ends here rather than arriving by the one route
+        // they asked Gather not to use.
+        suppressed++;
+        wasSuppressed = true;
         success = true;
       } else if (link.guestEmail) {
         // SMS failed — fall back to email
@@ -174,10 +375,17 @@ export async function dispatchPendingWrapUpMessages(): Promise<{
           personId: link.personId,
         });
         success = emailResult.success;
+        tallySend(tally, 'email', success ? 'GOT_OUT' : 'NOT_OUT');
         if (!success) failReason = emailResult.error || 'Email fallback failed';
       } else {
         failReason = smsResult.error || smsResult.blocked || 'SMS failed, no email fallback';
       }
+    } else if (link.channel === 'email' && emailClosed) {
+      // Ruling 5: the thank-you is email for this person, and they said no to email. It stops.
+      // No text version is built to keep it alive, which is the whole of *"no fallback"*.
+      suppressed++;
+      wasSuppressed = true;
+      success = true;
     } else if (link.channel === 'email' && link.guestEmail) {
       const emailMsg = buildEmailWrapUpMessage(templateParams);
       const emailResult = await sendNudgeEmail({
@@ -188,6 +396,7 @@ export async function dispatchPendingWrapUpMessages(): Promise<{
         personId: link.personId,
       });
       success = emailResult.success;
+      tallySend(tally, 'email', success ? 'GOT_OUT' : 'NOT_OUT');
       if (!success) failReason = emailResult.error || 'Email send failed';
     } else {
       failReason = 'No valid contact method';
@@ -203,18 +412,30 @@ export async function dispatchPendingWrapUpMessages(): Promise<{
       },
     });
 
-    await logInviteEvent({
-      eventId: link.eventId,
-      personId: link.personId,
-      type: success ? 'WRAPUP_MESSAGE_SENT' : 'WRAPUP_MESSAGE_FAILED',
-      metadata: {
-        channel: link.channel,
-        wrapUpLinkId: link.id,
-        ...(failReason ? { failReason } : {}),
-      },
-    });
+    /*
+     * ⚠ A SUPPRESSED LINK LOGS NOTHING, AND THE ABSENCE IS NAMED RATHER THAN HIDDEN.
+     * `InviteEventType` has no member for a suppression, and adding one is an enum migration
+     * this ticket does not own — the same reason GTC-210's quiet-hours deferral above logs
+     * nothing. The fact IS recorded: the count comes back in this function's return and the
+     * cron route reports it. What is missing is a per-person row, and [[GTC-327]] is where the
+     * board-side visibility of this suppression is decided.
+     */
+    if (!wasSuppressed) {
+      await logInviteEvent({
+        eventId: link.eventId,
+        personId: link.personId,
+        type: success ? 'WRAPUP_MESSAGE_SENT' : 'WRAPUP_MESSAGE_FAILED',
+        metadata: {
+          channel: link.channel,
+          wrapUpLinkId: link.id,
+          ...(failReason ? { failReason } : {}),
+        },
+      });
+    }
 
-    if (success) sent++;
+    if (wasSuppressed) {
+      // Neither sent nor failed. Counted on its own line above.
+    } else if (success) sent++;
     else failed++;
 
     // 500ms delay between sends to avoid rate limiting
@@ -223,7 +444,134 @@ export async function dispatchPendingWrapUpMessages(): Promise<{
     }
   }
 
-  return { sent, failed, total: pendingLinks.length };
+  // [[GTC-258]] — the one retry, after this run's own sends: a thank-you whose text did not arrive.
+  const retry = await retryUndeliveredThankYous(now);
+  tally.email.toSend += retry.tally.email.toSend;
+  tally.email.gotOut += retry.tally.email.gotOut;
+
+  return {
+    sent,
+    failed,
+    total: pendingLinks.length,
+    deferred: 0,
+    deferredUntilMinutes: 0,
+    suppressed,
+    tally,
+    retried: retry.sent,
+  };
+}
+
+/**
+ * [[GTC-258]] — A THANK-YOU WHOSE TEXT DID NOT ARRIVE GOES ONCE BY EMAIL.
+ *
+ * Founder ruling Q2, 2026-10-02: *"the 'please decide' follow-up and the thank-you only ever go once,
+ * so if their text didn't arrive they're re-sent by email."* Every failed outcome
+ * `retryableFor('THANK_YOU')` names — TNZ's opt-out list included, since a guest who has opted out of
+ * texts already gets their thank-you by email; a cancel excluded (plan ruling Q3).
+ *
+ * ⚠ IT WAITS OUT QUIET HOURS, EMAIL AS IT IS — plan ruling Q10: this dispatcher holds its whole batch
+ * from 21:00 to 08:00 NZ, and the retry is a thank-you like the rest.
+ *
+ * The same email the SMS-failure fallback sends, under the same rules: an email opt-out for the event
+ * or a blocked address closes the email leg (ruling 5, [[GTC-324]]) — a suppression, not a failure,
+ * so the link is left as it is. No address, or a refused email, marks the link failed with W8, and
+ * the panel's own "Retry" applies. Once: the retry row's `retryOfId` is unique.
+ *
+ * `scope` narrows it to some events — for a suite, which must never sweep `gather_dev` unscoped.
+ */
+export async function retryUndeliveredThankYous(
+  now: Date = new Date(),
+  scope?: { eventIds: string[] }
+): Promise<{
+  sent: number;
+  withheld: number;
+  refused: number;
+  deferred: number;
+  tally: SendTally;
+}> {
+  const out = { sent: 0, withheld: 0, refused: 0, deferred: 0, tally: emptyTally() };
+  const failed = await prisma.outboundMessage.findMany({
+    where: {
+      kind: 'THANK_YOU',
+      channel: 'TEXT',
+      deliveryState: { in: retryableFor('THANK_YOU') },
+      retries: { none: {} },
+      ...(scope ? { eventId: { in: scope.eventIds } } : {}),
+    },
+    orderBy: { acceptedAt: 'asc' },
+    select: {
+      id: true,
+      eventId: true,
+      personEventId: true,
+      personEvent: { select: { personId: true } },
+    },
+  });
+  if (failed.length === 0) return out;
+  if (isQuietHours(now)) {
+    out.deferred = failed.length;
+    return out;
+  }
+
+  for (const row of failed) {
+    const target = { ...row, kind: 'THANK_YOU' as const };
+    const link = await prisma.wrapUpLink.findFirst({
+      where: { eventId: row.eventId, personId: row.personEvent.personId },
+      include: { event: { include: { host: true } } },
+    });
+    const markFailed = async () => {
+      if (link) {
+        await prisma.wrapUpLink.update({
+          where: { id: link.id },
+          data: { failed: true, failReason: TEXT_DID_NOT_ARRIVE },
+        });
+      }
+    };
+    if (!link || !link.guestEmail) {
+      if (await claimTextRetry(prisma, target, 'NO_CHANNEL')) {
+        out.withheld++;
+        await markFailed();
+      }
+      continue;
+    }
+    if (await getEmailOptOut(link.personId, link.eventId)) {
+      if (await claimTextRetry(prisma, target, 'EMAIL_OPTED_OUT')) out.withheld++;
+      continue;
+    }
+    if ((await listEmailBlocks(prisma, [link.guestEmail])).size > 0) {
+      if (await claimTextRetry(prisma, target, 'EMAIL_BLOCKED')) out.withheld++;
+      continue;
+    }
+
+    const claimed = await claimTextRetry(prisma, target);
+    if (!claimed) continue;
+    const assignments = await prisma.assignment.findMany({
+      where: { personId: link.personId, item: { team: { eventId: link.eventId } } },
+      include: { item: true },
+    });
+    const emailMsg = buildEmailWrapUpMessage({
+      guestFirstName: link.guestName.split(' ')[0],
+      eventName: link.event.name,
+      hostFirstName: link.event.host.name.split(' ')[0],
+      guestTaskItem: resolveGuestTaskItem(
+        assignments.map((a) => ({ item: { name: a.item.name }, response: a.response }))
+      ),
+    });
+    const result = await sendNudgeEmail({
+      to: link.guestEmail,
+      subject: emailMsg.subject,
+      body: emailMsg.body,
+      eventId: link.eventId,
+      personId: link.personId,
+    });
+    await closeTextRetry(prisma, claimed, result);
+    tallySend(out.tally, 'email', result.success ? 'GOT_OUT' : 'NOT_OUT');
+    if (result.success) out.sent++;
+    else {
+      out.refused++;
+      await markFailed();
+    }
+  }
+  return out;
 }
 
 // ── Dispatch summary ─────────────────────────────────────────────────
@@ -242,6 +590,8 @@ export interface DispatchSummary {
     dispatched: boolean;
     failed: boolean;
     failReason: string | null;
+    /** [[GTC-258]] — the text did not arrive, and the thank-you went by email instead (W7). */
+    sentByEmail: boolean;
   }>;
 }
 
@@ -250,6 +600,21 @@ export async function getDispatchSummary(eventId: string): Promise<DispatchSumma
     where: { eventId },
     orderBy: { createdAt: 'asc' },
   });
+  // [[GTC-258]] — who got their thank-you by email after the text did not arrive.
+  const retriedByEmail = new Set(
+    (
+      await prisma.outboundMessage.findMany({
+        where: {
+          eventId,
+          kind: 'THANK_YOU',
+          channel: 'EMAIL',
+          retryOfId: { not: null },
+          acceptedAt: { not: null },
+        },
+        select: { personEvent: { select: { personId: true } } },
+      })
+    ).map((r) => r.personEvent.personId)
+  );
 
   const sent = links.filter((l) => l.dispatched && !l.failed && l.channel !== 'skipped').length;
   const failed = links.filter((l) => l.dispatched && l.failed).length;
@@ -282,6 +647,7 @@ export async function getDispatchSummary(eventId: string): Promise<DispatchSumma
       dispatched: l.dispatched,
       failed: l.failed,
       failReason: l.failReason,
+      sentByEmail: retriedByEmail.has(l.personId),
     })),
   };
 }

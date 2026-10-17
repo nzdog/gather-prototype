@@ -1,22 +1,25 @@
-import { findNudgeCandidates, findRsvpFollowupCandidates } from './nudge-eligibility';
-import { processNudges, processRsvpFollowupNudges } from './nudge-sender';
-import { findProxyNudgeCandidates } from './proxy-nudge-eligibility';
-import { processProxyNudges } from './proxy-nudge-sender';
+import { findNudgeCandidates } from './nudge-eligibility';
+import { queueChase } from './nudge-sender';
 import { isSmsEnabled } from './twilio-client';
+import { isTnzEnabled } from './tnz-client';
 
 export interface NudgeRunResult {
   timestamp: Date;
-  smsEnabled: boolean;
+  /**
+   * Did this run do its own job — line reminders up? False only when the catch below fires.
+   * `GET` in cron/nudges/route.ts derives its `success` and its status code from this (GTC-214's
+   * shape). [[GTC-339]] Q2: it no longer reads provider configuration or the live switch, because
+   * this run sends nothing; send health is the sending crons' (`sendRunHealth`).
+   */
+  ok: boolean;
+  /** Any provider at all — TNZ or Twilio. A report, never a gate; see runNudgeScheduler. */
+  smsConfigured: boolean;
   candidates: {
-    eligible24h: number;
-    eligible48h: number;
-    eligibleRsvpFollowup?: number;
-    skipped: { reason: string; count: number }[];
-  };
-  proxyCandidates?: {
-    eligible24h: number;
-    eligible48h: number;
-    eligibleEscalation: number;
+    /** GTC-178 (E1, phase 5): ordinal — the legs are days 4 and 7, and adjustable next. */
+    eligibleFirst: number;
+    eligibleSecond: number;
+    /** [[GTC-251]] slice 251c — further reminders the host asked for. */
+    eligibleMore: number;
     skipped: { reason: string; count: number }[];
   };
   results: {
@@ -25,122 +28,61 @@ export interface NudgeRunResult {
     failed: number;
     deferred: number;
   };
-  rsvpFollowupResults?: {
-    sent: number;
-    succeeded: number;
-    failed: number;
-    deferred: number;
-  };
-  proxyResults?: {
-    sent: number;
-    succeeded: number;
-    failed: number;
-    escalated: number;
-    deferred: number;
-  };
   errors: string[];
 }
 
 /**
- * Run the nudge scheduler
- * This should be called periodically (e.g., every 15 minutes)
+ * Run the nudge scheduler — every 15 minutes.
+ *
+ * ⚠ [[GTC-189]] SLICE 8b: IT QUEUES AND SENDS NOTHING (founder ruling D2). Each due reminder becomes
+ * one `OutboundMessage` row; the dispatcher (`/api/cron/outbound-dispatch`, `drainOnce`) sends it.
+ * So `results.sent` counts rows QUEUED, and `succeeded`/`failed` are about queueing, not delivery.
+ *
+ * ⚠ RULINGS V AND AE — THE HOUSEHOLD PROXY REMINDER IS RETIRED HERE. It texted a household's contact
+ * about its unconfirmed members, adults included, which THE ASK ruled the household is not; it ran
+ * on `PersonEvent.contactMethod`, the column ruling C measured as wrong; and its replacement is a
+ * different object the host chooses to send ([[GTC-298]]). A carried child's ask is chased through
+ * the chase itself (ruling R). Nothing calls the proxy finder now.
+ *
+ * ⚠ ITS HEALTH IS ITS OWN JOB — [[GTC-339]] Q2, founder ruling 2026-09-30, verbatim as chosen:
+ * *"Reports 'failed' only when it can't line reminders up. Send failures are the sending job's to
+ * report, under the per-channel rule you just chose. Removes an alarm that would fire every 15
+ * minutes if production ever had no text provider set up. cron-job.org switches a job off after more
+ * than 25 failures in a row (about six hours here), which would stop every reminder, email ones
+ * included."* So `ok` is false only when the catch fires. `isNudgeRunHealthy` (GTC-214, extended by
+ * GTC-274 to read the live switch) is retired; its send quadrants live in `sendRunHealth`
+ * (src/lib/send-health.ts), where the sends are. `smsConfigured` stays, as a report.
  */
-export async function runNudgeScheduler(): Promise<NudgeRunResult> {
-  const timestamp = new Date();
+export async function runNudgeScheduler(
+  now: Date = new Date(),
+  scope: { eventIds?: string[] } = {}
+): Promise<NudgeRunResult> {
+  const timestamp = now;
   const errors: string[] = [];
 
-  // Check if SMS is enabled
-  if (!isSmsEnabled()) {
-    return {
-      timestamp,
-      smsEnabled: false,
-      candidates: { eligible24h: 0, eligible48h: 0, skipped: [] },
-      results: { sent: 0, succeeded: 0, failed: 0, deferred: 0 },
-      errors: ['SMS not configured'],
-    };
-  }
+  // GTC-214: this is a REPORT, NOT A GATE. Do not restore a gate here in any form.
+  const smsConfigured = isTnzEnabled() || isSmsEnabled();
 
   try {
-    // Find eligible candidates for direct nudges
-    const candidates = await findNudgeCandidates();
-
-    // Process direct nudges
-    const processResult = await processNudges(candidates);
-
-    const succeeded = processResult.sent.filter((r) => r.success).length;
-    const failed = processResult.sent.filter((r) => !r.success).length;
-
-    // Collect errors
-    processResult.sent
-      .filter((r) => !r.success)
-      .forEach((r) => errors.push(`${r.personName}: ${r.error}`));
-
-    // Find eligible candidates for RSVP followup
-    const rsvpFollowupResult = await findRsvpFollowupCandidates();
-
-    // Process RSVP followup nudges
-    const rsvpFollowupProcessResult = await processRsvpFollowupNudges(rsvpFollowupResult.eligible);
-
-    const rsvpFollowupSucceeded = rsvpFollowupProcessResult.sent.filter((r) => r.success).length;
-    const rsvpFollowupFailed = rsvpFollowupProcessResult.sent.filter((r) => !r.success).length;
-
-    // Collect RSVP followup errors
-    rsvpFollowupProcessResult.sent
-      .filter((r) => !r.success)
-      .forEach((r) => errors.push(`RSVP followup ${r.personName}: ${r.error}`));
-
-    // Find eligible candidates for proxy nudges
-    const proxyCandidates = await findProxyNudgeCandidates();
-
-    // Process proxy nudges
-    const proxyProcessResult = await processProxyNudges(proxyCandidates);
-
-    const proxySucceeded = proxyProcessResult.sent.filter((r) => r.success).length;
-    const proxyFailed = proxyProcessResult.sent.filter((r) => !r.success).length;
-    const escalated = proxyProcessResult.escalated.filter((r) => r.success).length;
-
-    // Collect proxy errors
-    proxyProcessResult.sent
-      .filter((r) => !r.success)
-      .forEach((r) => errors.push(`Proxy ${r.proxyName}: ${r.error}`));
-
-    proxyProcessResult.escalated
-      .filter((r) => !r.success)
-      .forEach((r) => errors.push(`Escalation ${r.proxyName}: ${r.error}`));
+    const candidates = await findNudgeCandidates(now, scope);
+    const queued = await queueChase(candidates);
+    const written = queued.filter((q) => q.queued).length;
 
     return {
       timestamp,
-      smsEnabled: true,
+      ok: true,
+      smsConfigured,
       candidates: {
-        eligible24h: candidates.eligible24h.length,
-        eligible48h: candidates.eligible48h.length,
-        eligibleRsvpFollowup: rsvpFollowupResult.eligible.length,
+        eligibleFirst: candidates.eligibleFirst.length,
+        eligibleSecond: candidates.eligibleSecond.length,
+        eligibleMore: candidates.eligibleMore.length,
         skipped: candidates.skipped,
       },
-      proxyCandidates: {
-        eligible24h: proxyCandidates.eligible24h.length,
-        eligible48h: proxyCandidates.eligible48h.length,
-        eligibleEscalation: proxyCandidates.eligibleEscalation.length,
-        skipped: proxyCandidates.skipped,
-      },
       results: {
-        sent: processResult.sent.length,
-        succeeded,
-        failed,
-        deferred: processResult.deferred,
-      },
-      rsvpFollowupResults: {
-        sent: rsvpFollowupProcessResult.sent.length,
-        succeeded: rsvpFollowupSucceeded,
-        failed: rsvpFollowupFailed,
-        deferred: rsvpFollowupProcessResult.deferred,
-      },
-      proxyResults: {
-        sent: proxyProcessResult.sent.length,
-        succeeded: proxySucceeded,
-        failed: proxyFailed,
-        escalated,
-        deferred: proxyProcessResult.deferred,
+        sent: written,
+        succeeded: written,
+        failed: 0,
+        deferred: 0,
       },
       errors,
     };
@@ -148,10 +90,12 @@ export async function runNudgeScheduler(): Promise<NudgeRunResult> {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[Nudge Scheduler] Error:', errorMessage);
 
+    // A caught run-level exception is not a healthy run either.
     return {
       timestamp,
-      smsEnabled: true,
-      candidates: { eligible24h: 0, eligible48h: 0, skipped: [] },
+      ok: false,
+      smsConfigured,
+      candidates: { eligibleFirst: 0, eligibleSecond: 0, eligibleMore: 0, skipped: [] },
       results: { sent: 0, succeeded: 0, failed: 0, deferred: 0 },
       errors: [errorMessage],
     };

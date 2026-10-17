@@ -1,9 +1,15 @@
 interface ItemStatusBadgesProps {
   assignment?: {
-    response: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+    response: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE';
   } | null;
 }
 
+/**
+ * GTC-174 (D1): MAYBE renders AMBER, never red. Hinge §8 — "colour: yellow. The system
+ * can work a maybe — just not with the silence machinery." A maybe is a surfaced
+ * decision, not a gap; showing it red would say the item is loose when it is still the
+ * guest's.
+ */
 export default function ItemStatusBadges({ assignment }: ItemStatusBadgesProps) {
   const isAssigned = !!assignment;
 
@@ -21,7 +27,9 @@ export default function ItemStatusBadges({ assignment }: ItemStatusBadgesProps) 
       ? 'Confirmed'
       : assignment.response === 'DECLINED'
         ? 'Declined'
-        : 'Pending';
+        : assignment.response === 'MAYBE'
+          ? 'Maybe'
+          : 'Pending';
 
   return (
     <div className="flex gap-2">

@@ -1,4 +1,21 @@
-# GTC-FM2 — Post-event guest wrap-up message with host conversion CTA
+---
+ticket: GTC-FM2
+title: "Post-event guest wrap-up message with host conversion CTA"
+status: closed
+branch: 
+commit: 02244d2
+moment: null
+type: build
+depends_on: []
+blocks: []
+tags:
+  - build
+  - wrap-up
+  - sms
+  - email
+---
+
+# [[GTC-FM2]] — Post-event guest wrap-up message with host conversion CTA
 
 ## Evidence Package (Executor-Completed)
 

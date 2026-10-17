@@ -48,7 +48,7 @@ const sms = buildSmsWrapUpMessage(baseParams);
 assert(
   'SMS with-item matches approved copy exactly',
   sms ===
-    'Hi Emma, Sarah asked me (Gather \u2014 the app they used to organise Richardson Christmas BBQ) to pass on a thanks for bringing the pavlova. Much appreciated.'
+    'Hi Emma, Sarah asked me (Gather - the app they used to organise Richardson Christmas BBQ) to pass on a thanks for bringing the pavlova. Much appreciated.\nReply STOP to opt out'
 );
 
 console.log('\n\x1b[33mSuite 1b: SMS/WhatsApp template — fallback\x1b[0m');
@@ -57,7 +57,7 @@ const smsFallback = buildSmsWrapUpMessage(fallbackParams);
 assert(
   'SMS fallback matches approved copy exactly',
   smsFallback ===
-    'Hi Emma, Sarah asked me (Gather \u2014 the app they used to organise Richardson Christmas BBQ) to pass on a thanks for being part of it. Much appreciated.'
+    'Hi Emma, Sarah asked me (Gather - the app they used to organise Richardson Christmas BBQ) to pass on a thanks for being part of it. Much appreciated.\nReply STOP to opt out'
 );
 
 // ── Suite 2: Email template ──────────────────────────────────────────

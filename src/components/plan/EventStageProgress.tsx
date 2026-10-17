@@ -1,33 +1,33 @@
 'use client';
 
 import { Check } from 'lucide-react';
-import { STATUS_LABELS } from '@/lib/workflow';
+import type { EventPhase } from '@/lib/lifecycle';
 
-type EventStatus = 'DRAFT' | 'CONFIRMING' | 'FROZEN' | 'COMPLETE';
-
+/**
+ * GTC-198 (A3d): this takes a PHASE, not a status.
+ *
+ * It used to key its steps off EventStatus, which meant the stepper carried its own
+ * opinion about what FROZEN meant — the exact drift the send-lock reconciliation
+ * exists to end. `getEventPhase` is the single definition; this renders it.
+ *
+ * Four phases, and only two of them are steps she takes: DRAFT and CONFIRMING are
+ * authored, SENT is stamped by the press, and COMPLETE is the calendar's
+ * (Moment 4 §10.1). Nothing here is clickable except the send.
+ */
 interface EventStageProgressProps {
-  currentStatus: EventStatus;
-  onFreezeClick?: () => void;
+  phase: EventPhase;
+  onSendClick?: () => void;
 }
 
-const stages: { status: EventStatus; label: string; icon: string }[] = [
-  { status: 'DRAFT', label: STATUS_LABELS.DRAFT, icon: '📝' },
-  { status: 'CONFIRMING', label: STATUS_LABELS.CONFIRMING, icon: '👥' },
-  { status: 'FROZEN', label: STATUS_LABELS.FROZEN, icon: '🧊' },
-  { status: 'COMPLETE', label: STATUS_LABELS.COMPLETE, icon: '✅' },
+const stages: { phase: EventPhase; label: string; icon: string }[] = [
+  { phase: 'DRAFT', label: 'DRAFT', icon: '📝' },
+  { phase: 'CONFIRMING', label: 'CONFIRMING', icon: '👥' },
+  { phase: 'SENT', label: 'Sent', icon: '📤' },
+  { phase: 'COMPLETE', label: 'PAST', icon: '✅' },
 ];
 
-function getFrozenStepLabel(currentStatus: EventStatus): string {
-  if (currentStatus === 'CONFIRMING') return 'Freeze Event';
-  if (currentStatus === 'FROZEN' || currentStatus === 'COMPLETE') return 'Frozen';
-  return STATUS_LABELS.FROZEN;
-}
-
-export default function EventStageProgress({
-  currentStatus,
-  onFreezeClick,
-}: EventStageProgressProps) {
-  const currentIndex = stages.findIndex((s) => s.status === currentStatus);
+export default function EventStageProgress({ phase, onSendClick }: EventStageProgressProps) {
+  const currentIndex = stages.findIndex((s) => s.phase === phase);
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -37,17 +37,16 @@ export default function EventStageProgress({
           const isCurrent = index === currentIndex;
           const isLast = index === stages.length - 1;
 
-          const isFrozenStep = stage.status === 'FROZEN';
-          const isClickableFreezeStep =
-            isFrozenStep && currentStatus === 'CONFIRMING' && onFreezeClick;
-          const displayLabel = isFrozenStep ? getFrozenStepLabel(currentStatus) : stage.label;
+          const isSendStep = stage.phase === 'SENT';
+          const isClickableFreezeStep = isSendStep && phase === 'CONFIRMING' && onSendClick;
+          const displayLabel = isSendStep && phase === 'CONFIRMING' ? 'Send' : stage.label;
 
           return (
-            <div key={stage.status} className="flex items-center flex-1">
+            <div key={stage.phase} className="flex items-center flex-1">
               {/* Stage Circle */}
               <div
                 className={`flex flex-col items-center${isClickableFreezeStep ? ' cursor-pointer group' : ''}`}
-                onClick={isClickableFreezeStep ? onFreezeClick : undefined}
+                onClick={isClickableFreezeStep ? onSendClick : undefined}
                 role={isClickableFreezeStep ? 'button' : undefined}
                 tabIndex={isClickableFreezeStep ? 0 : undefined}
                 onKeyDown={
@@ -55,7 +54,7 @@ export default function EventStageProgress({
                     ? (e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
-                          onFreezeClick();
+                          onSendClick();
                         }
                       }
                     : undefined
@@ -111,7 +110,7 @@ export default function EventStageProgress({
 
       {/* Stage Description */}
       <div className="mt-6 pt-4 border-t">
-        {currentStatus === 'DRAFT' && (
+        {phase === 'DRAFT' && (
           <div className="text-sm text-gray-600">
             <p className="font-medium text-gray-900 mb-1">DRAFT</p>
             <p>
@@ -120,32 +119,32 @@ export default function EventStageProgress({
             </p>
           </div>
         )}
-        {currentStatus === 'CONFIRMING' && (
+        {phase === 'CONFIRMING' && (
           <div className="text-sm text-gray-600">
             <p className="font-medium text-gray-900 mb-1">CONFIRMING</p>
             <p>
               Share invite links with your team and assign all items to people. Once all items are
-              assigned, you can transition to FROZEN to lock the plan for execution.
+              assigned, you can send the plan to your guests.
             </p>
             <p className="mt-3 text-blue-700 bg-blue-50 border border-blue-200 rounded-md px-3 py-2">
               Share your invite links with guests and wait for them to confirm their items. Once
-              everyone has responded, you can freeze the plan and lock it for the event.
+              everyone has responded, you can send the plan to your guests.
             </p>
           </div>
         )}
-        {currentStatus === 'FROZEN' && (
+        {phase === 'SENT' && (
           <div className="text-sm text-gray-600">
-            <p className="font-medium text-gray-900 mb-1">FROZEN</p>
+            <p className="font-medium text-gray-900 mb-1">SENT</p>
             <p>
-              Plan is locked and ready for execution. Team members can view their assignments and
-              acknowledge items. Mark COMPLETE when the event is finished.
+              The asks are with your guests. You can still change anything — the history keeps the
+              story. Replies arrive as they come.
             </p>
           </div>
         )}
-        {currentStatus === 'COMPLETE' && (
+        {phase === 'COMPLETE' && (
           <div className="text-sm text-gray-600">
-            <p className="font-medium text-gray-900 mb-1">COMPLETE</p>
-            <p>Event completed! You can save this plan as a template for future events.</p>
+            <p className="font-medium text-gray-900 mb-1">PAST</p>
+            <p>The day has been. You can save this plan as a template for future events.</p>
           </div>
         )}
       </div>

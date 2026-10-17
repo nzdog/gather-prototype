@@ -18,19 +18,6 @@ interface TransitionModalProps {
   onGoToAssign?: () => void;
 }
 
-interface FreezeWarning {
-  type: 'LOW_COMPLIANCE' | 'CRITICAL_GAPS' | 'UNASSIGNED_ITEMS';
-  message: string;
-  details: string[];
-}
-
-const FREEZE_REASONS = [
-  { value: 'time_pressure', label: 'Time pressure — event is soon' },
-  { value: 'handling_offline', label: 'Handling remaining items offline' },
-  { value: 'small_event', label: 'Small event — this is enough' },
-  { value: 'other', label: 'Other' },
-] as const;
-
 interface PlanSummary {
   teamCount: number;
   itemCount: number;
@@ -63,13 +50,20 @@ export default function TransitionModal({
   const [showWeakSpots, setShowWeakSpots] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hostId, setHostId] = useState<string | null>(null);
-  const [freezeWarnings, setFreezeWarnings] = useState<FreezeWarning[]>([]);
-  const [showFreezeWarnings, setShowFreezeWarnings] = useState(false);
-  const [complianceRate, setComplianceRate] = useState<number | null>(null);
-  const [freezeReason, setFreezeReason] = useState<string>('');
   const [unassignedItems, setUnassignedItems] = useState<UnassignedItem[]>([]);
 
-  const isFreezeTransition = currentStatus === 'CONFIRMING';
+  // GTC-197 (A3c) disabled the freeze branch; GTC-202 (A3c-2) DELETED it, which is what
+  // A3c's scope said ("the isFreezeTransition branch and its <80% reason prompt
+  // deleted"). Disabling left a readiness threshold and a demand for justification —
+  // "Why are you freezing early?", "Freeze Anyway" disabled below 80% compliance —
+  // sitting in the tree one prop away from rendering. Moment 4 §2 refuses readiness
+  // scores and thresholds outright; §7 refuses the demand. Dead code that encodes a
+  // forbidden behaviour is not harmless, and a future reader cannot tell the difference
+  // between "unreachable" and "not yet reached".
+  //
+  // There is no freeze transition at all now: CONFIRMING is the last authored state,
+  // and what follows is the send, which stamps a timestamp rather than moving a status.
+  void currentStatus; // retained on the props contract; no longer read for a decision
 
   // Modal blocking check - TransitionModal needs special handling since it's opened programmatically
   useEffect(() => {
@@ -197,42 +191,12 @@ export default function TransitionModal({
         throw new Error('Host ID not available');
       }
 
-      // For freeze transitions, check warnings first without freezing
-      if (isFreezeTransition && !showFreezeWarnings) {
-        // Check warnings without actually freezing
-        const checkResponse = await fetch(`/api/events/${eventId}/freeze-check`, {
-          method: 'POST',
-        });
-
-        if (checkResponse.ok) {
-          const checkResult = await checkResponse.json();
-          setComplianceRate(checkResult.complianceRate ?? null);
-
-          if (checkResult.warnings && checkResult.warnings.length > 0) {
-            // Show warnings, don't freeze yet
-            setFreezeWarnings(checkResult.warnings);
-            setShowFreezeWarnings(true);
-            setTransitioning(false);
-            return;
-          }
-        }
-        // If no warnings or check failed, proceed with freeze
-      }
-
-      // Actually perform the transition
-      const requestBody: { actorId: string; freezeReason?: string } = { actorId: hostId };
-
-      // Include freeze reason if freezing and compliance < 80%
-      if (isFreezeTransition && complianceRate !== null && complianceRate < 80 && freezeReason) {
-        requestBody.freezeReason = freezeReason;
-      }
-
       const response = await fetch(`/api/events/${eventId}/transition`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({ actorId: hostId }),
       });
 
       if (!response.ok) {
@@ -274,109 +238,12 @@ export default function TransitionModal({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        {showFreezeWarnings && freezeWarnings.length > 0 ? (
-          <>
-            {/* Freeze Warnings View */}
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold mb-2">Heads up before you freeze</h2>
-              <p className="text-gray-600">
-                You can still freeze the plan, but here are some things to be aware of:
-              </p>
-            </div>
-
-            {/* Warnings List */}
-            <div className="space-y-4 mb-6">
-              {freezeWarnings.map((warning, index) => (
-                <div key={index} className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4">
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">⚠️</span>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-yellow-900 mb-2">{warning.message}</h3>
-                      {warning.details.length > 0 && (
-                        <ul className="text-sm text-yellow-800 space-y-1">
-                          {warning.details.slice(0, 5).map((detail, i) => (
-                            <li key={i}>• {detail}</li>
-                          ))}
-                          {warning.details.length > 5 && (
-                            <li className="italic">...and {warning.details.length - 5} more</li>
-                          )}
-                        </ul>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Reason Picker (only show if compliance < 80%) */}
-            {complianceRate !== null && complianceRate < 80 && (
-              <div className="mb-6">
-                <h3 className="font-semibold text-lg mb-3">Why are you freezing early?</h3>
-                <div className="space-y-2">
-                  {FREEZE_REASONS.map((reason) => (
-                    <label
-                      key={reason.value}
-                      className="flex items-center gap-3 p-3 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
-                      style={{
-                        borderColor: freezeReason === reason.value ? '#4A7C59' : '#E5E7EB',
-                        backgroundColor: freezeReason === reason.value ? '#F0F4F1' : 'white',
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name="freezeReason"
-                        value={reason.value}
-                        checked={freezeReason === reason.value}
-                        onChange={(e) => setFreezeReason(e.target.value)}
-                        className="w-4 h-4 text-sage-600"
-                      />
-                      <span className="text-sm font-medium">{reason.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Error Display */}
-            {error && (
-              <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 mb-6">
-                <p className="text-red-800">{error}</p>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex gap-3">
-              <button
-                onClick={onClose}
-                disabled={transitioning}
-                className="flex-1 px-6 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-
-              <button
-                onClick={handleProceed}
-                disabled={
-                  transitioning || (complianceRate !== null && complianceRate < 80 && !freezeReason)
-                }
-                className="flex-1 px-6 py-3 bg-sage-600 text-white rounded-lg font-semibold hover:bg-sage-700 disabled:opacity-50"
-              >
-                {transitioning ? 'Freezing...' : 'Freeze Anyway'}
-              </button>
-            </div>
-          </>
-        ) : !showWeakSpots ? (
+        {!showWeakSpots ? (
           <>
             {/* Transition Confirmation */}
             <div className="mb-6">
-              <h2 className="text-2xl font-bold mb-2">
-                {isFreezeTransition ? 'Freeze this plan?' : 'Ready to Move to CONFIRMING?'}
-              </h2>
-              <p className="text-gray-600">
-                {isFreezeTransition
-                  ? 'Freezing will lock the plan and prevent further changes.'
-                  : 'Review your plan summary before transitioning.'}
-              </p>
+              <h2 className="text-2xl font-bold mb-2">Ready to Move to CONFIRMING?</h2>
+              <p className="text-gray-600">Review your plan summary before transitioning.</p>
             </div>
 
             {/* Plan Summary */}
@@ -463,7 +330,7 @@ export default function TransitionModal({
             ) : null}
 
             {/* What Happens Next */}
-            {!isFreezeTransition && (
+            {
               <div className="bg-sage-50 border-2 border-sage-200 rounded-lg p-6 mb-6">
                 <h3 className="font-semibold text-lg mb-2 text-sage-900">
                   What "Structure Locked" Means
@@ -487,7 +354,7 @@ export default function TransitionModal({
                   </li>
                 </ul>
               </div>
-            )}
+            }
 
             {/* Error Display */}
             {error && (
@@ -498,38 +365,20 @@ export default function TransitionModal({
 
             {/* Action Buttons */}
             <div className="flex gap-3">
-              {!isFreezeTransition && (
-                <button
-                  onClick={handleNotYet}
-                  disabled={transitioning}
-                  className="flex-1 px-6 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Not yet, keep planning
-                </button>
-              )}
-
-              {isFreezeTransition && (
-                <button
-                  onClick={onClose}
-                  disabled={transitioning}
-                  className="flex-1 px-6 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-              )}
+              <button
+                onClick={handleNotYet}
+                disabled={transitioning}
+                className="flex-1 px-6 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 disabled:opacity-50"
+              >
+                Not yet, keep planning
+              </button>
 
               <button
                 onClick={handleProceed}
                 disabled={transitioning}
                 className="flex-1 px-6 py-3 bg-sage-600 text-white rounded-lg font-semibold hover:bg-sage-700 disabled:opacity-50"
               >
-                {transitioning
-                  ? isFreezeTransition
-                    ? 'Freezing...'
-                    : 'Transitioning...'
-                  : isFreezeTransition
-                    ? 'Freeze Plan'
-                    : 'Yes, proceed →'}
+                {transitioning ? 'Transitioning...' : 'Yes, proceed →'}
               </button>
             </div>
           </>

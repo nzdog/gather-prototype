@@ -30,12 +30,11 @@ async function main() {
   expiresAt.setDate(expiresAt.getDate() + 90);
 
   for (const p of participants) {
-    // upsert Person — handles partial state from a previous failed run
-    const person = await prisma.person.upsert({
-      where: { email: p.email },
-      update: {},
-      create: { name: p.name, email: p.email },
-    });
+    // find-or-create Person — handles partial state from a previous failed run. Not an
+    // upsert: Person.email is not unique ([[GTC-293]]).
+    const person =
+      (await prisma.person.findFirst({ where: { email: p.email } })) ??
+      (await prisma.person.create({ data: { name: p.name, email: p.email } }));
 
     // upsert PersonEvent — unique on [personId, eventId]
     await prisma.personEvent.upsert({

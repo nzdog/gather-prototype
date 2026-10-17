@@ -10,12 +10,17 @@ interface Toast {
   type: ToastType;
 }
 
+interface ToastOptions {
+  /** Override the default TOAST_DURATION (4000 ms) for this toast only. */
+  duration?: number;
+}
+
 interface ToastContextValue {
   toast: {
-    success: (message: string) => void;
-    error: (message: string) => void;
-    warning: (message: string) => void;
-    info: (message: string) => void;
+    success: (message: string, options?: ToastOptions) => void;
+    error: (message: string, options?: ToastOptions) => void;
+    warning: (message: string, options?: ToastOptions) => void;
+    info: (message: string, options?: ToastOptions) => void;
   };
 }
 
@@ -35,19 +40,32 @@ const typeStyles: Record<ToastType, { bg: string; icon: string }> = {
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const addToast = useCallback((message: string, type: ToastType) => {
+  const addToast = useCallback((message: string, type: ToastType, options?: ToastOptions) => {
     const id = nextId++;
     setToasts((prev) => [...prev, { id, message, type }]);
+    const duration = options?.duration ?? TOAST_DURATION;
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, TOAST_DURATION);
+    }, duration);
   }, []);
 
   const toast = {
-    success: useCallback((msg: string) => addToast(msg, 'success'), [addToast]),
-    error: useCallback((msg: string) => addToast(msg, 'error'), [addToast]),
-    warning: useCallback((msg: string) => addToast(msg, 'warning'), [addToast]),
-    info: useCallback((msg: string) => addToast(msg, 'info'), [addToast]),
+    success: useCallback(
+      (msg: string, options?: ToastOptions) => addToast(msg, 'success', options),
+      [addToast]
+    ),
+    error: useCallback(
+      (msg: string, options?: ToastOptions) => addToast(msg, 'error', options),
+      [addToast]
+    ),
+    warning: useCallback(
+      (msg: string, options?: ToastOptions) => addToast(msg, 'warning', options),
+      [addToast]
+    ),
+    info: useCallback(
+      (msg: string, options?: ToastOptions) => addToast(msg, 'info', options),
+      [addToast]
+    ),
   };
 
   return (

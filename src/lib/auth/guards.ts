@@ -14,7 +14,7 @@ import { NextResponse } from 'next/server';
 import { getUser } from './session';
 import { resolveToken } from '../auth';
 import type { AuthContext } from '../auth';
-import type { User, Event, TokenScope } from '@prisma/client';
+import type { User, TokenScope } from '@prisma/client';
 import { prisma } from '../prisma';
 
 /**
@@ -121,38 +121,29 @@ export async function requireTokenScope(
   return context;
 }
 
-/**
- * Validates that event status allows mutations.
+/*
+ * requireNotFrozen() was DELETED by GTC-169 (A3a).
  *
- * FROZEN events block modifications unless override is allowed.
+ * It blocked every mutation on a FROZEN or COMPLETE event. The send-lock model
+ * removes that wall entirely: after the press, Kate can change ANYTHING — the lock
+ * is a ledger, not a gate (Moment 4 §7, "the fact is welcome; the challenge is
+ * forbidden"; Hinge §2, "the lock was never a wall").
  *
- * @param event - The event to check
- * @param allowOverride - If true, HOST can override frozen state
- * @returns void if allowed, NextResponse error if blocked
+ * What replaced it:
+ *   - Nothing, for permission. There is no lifecycle-derived hard block anywhere on
+ *     the server. Ordinary role/scope checks (requireEventRole, requireTokenScope,
+ *     requireTeamAccess) are unchanged and remain the only authority gates.
+ *   - src/lib/ledger.ts recordChange() for accountability — post-send changes carry a
+ *     version always, and a reason when they touch someone (GTC-196 / A3b wires it).
+ *   - src/lib/lifecycle.ts isSent()/isComplete() where a phase genuinely matters
+ *     (wrap-up timing, nudge eligibility, the no-undo rule).
  *
- * @example
- * const block = requireNotFrozen(event);
- * if (block) return block; // Mutation blocked
- * // Mutation allowed, proceed
+ * COMPLETE stopped blocking too: Moment 4 §8.8 has the day's corrections captured on
+ * paper and resolved in the system afterwards, which requires a past event to accept
+ * edits.
+ *
+ * Do not reintroduce this function. See docs/04_roadmap/send-lock-reconciliation-plan.md.
  */
-export function requireNotFrozen(event: Event, allowOverride = false): NextResponse | void {
-  if (event.status === 'FROZEN' && !allowOverride) {
-    console.error('[Auth] Mutation blocked: Event is FROZEN', {
-      eventId: event.id,
-      eventStatus: event.status,
-      allowOverride,
-    });
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  if (event.status === 'COMPLETE') {
-    console.error('[Auth] Mutation blocked: Event is COMPLETE', {
-      eventId: event.id,
-      eventStatus: event.status,
-    });
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-}
 
 /**
  * Validates that coordinator token has team-scoped access.

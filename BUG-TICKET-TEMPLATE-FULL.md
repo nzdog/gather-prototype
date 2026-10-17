@@ -8,6 +8,20 @@
 
 ---
 
+## 0. Citations (binding — GTC-222)
+
+**The Citations section of `BUG-TICKET-TEMPLATE.md` is binding on this template
+too. Read it before writing a single citation.** In short: cite the symbol
+(`onAssignmentReleased` in `src/lib/ledger.ts`), never the line number; use
+`// ANCHOR(GTC-nnn): label` where there is no symbol to name; a comment records
+WHY, not WHAT; a deliberate temporary state names the ticket that ends it.
+
+Complex tickets cite more code than standard ones, so they rot faster. A
+multi-actor reproduction package that addresses ten call sites by line number
+is ten silent failures waiting on the next refactor.
+
+---
+
 ## 1. Title and Bug Signal Lock
 
 **Title format:** `[Domain Area]: [Symptom]`
@@ -333,6 +347,7 @@ Do not guess. Do not fill unknowns with assumptions.
 ### Executor Checklist
 Before claiming this ticket complete, confirm:
 [ ] GATHER-BUILD-CONSTANTS.md read
+[ ] Citations are symbols, not line numbers (§0)
 [ ] Preflight passed and results pasted
 [ ] Bug reproduced and Observe confirmed
 [ ] Plan produced and no unauthorised scope expansion
