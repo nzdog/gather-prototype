@@ -7,8 +7,8 @@
  *
  *   DRAFT       status = DRAFT                              authored
  *   CONFIRMING  status = CONFIRMING and sentAt IS NULL      authored
- *   SENT        sentAt IS NOT NULL and now <= endDate       stamped by the press
- *   COMPLETE    now > endDate                               the calendar does it
+ *   SENT        sentAt IS NOT NULL, not yet COMPLETE         stamped by the press
+ *   COMPLETE    the NZ day holding endDate has ended         the calendar does it
  *
  * `EventStatus` keeps exactly the two values a human ever chooses. FROZEN and
  * COMPLETE stop being authored states and become, respectively, a timestamp and a
@@ -24,6 +24,13 @@
  * NOTHING ELSE IN THE CODEBASE MAY COMPARE event.status TO 'FROZEN' OR 'COMPLETE'
  * after GTC-169..198. This module is the one place the compat shim lives, which is
  * what makes the rollback in plan §9 cost one line.
+ *
+ * [[GTC-390]] — "THE CALENDAR" IS THE NZ CALENDAR. A form-made event stores its last day as
+ * 00:00 UTC, which is 1pm NZ in summer and noon in winter, so `now > endDate` made a one-day
+ * event read PAST at lunchtime on its own day. Founder ruling Q1 (17 Oct 2026), "Midnight NZ
+ * (Recommended)": an event is over when the NZ day holding its stored end has ended, at
+ * 00:00 Pacific/Auckland on the day after. Nothing stored changed; only this rule did. There
+ * is no time zone on an event: the app is NZ throughout, and this is its one assumption.
  *
  * A2 SCOPE: this module is additive. No caller reads it yet — GTC-169 (A3a) flips
  * the consumers.
@@ -62,18 +69,85 @@ export function isSent(event: LifecycleEvent): boolean {
   return event.sentAt !== null || event.status === 'FROZEN';
 }
 
+/** [[GTC-390]] — the app's one time zone, named once. */
+const NZ_TIME_ZONE = 'Pacific/Auckland';
+
+/**
+ * The NZ wall clock, read with an explicit zone, so the machine's own zone (a browser abroad,
+ * a UTC server) never enters it. Built once: this module runs in the browser too.
+ */
+const NZ_WALL_CLOCK = new Intl.DateTimeFormat('en-US', {
+  timeZone: NZ_TIME_ZONE,
+  hourCycle: 'h23',
+  year: 'numeric',
+  month: 'numeric',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: 'numeric',
+  second: 'numeric',
+});
+
+/** The NZ wall clock at an instant, as numbers. An older engine may write midnight as "24". */
+function nzWallClock(at: Date) {
+  const part = (type: string) =>
+    Number(NZ_WALL_CLOCK.formatToParts(at).find((p) => p.type === type)?.value);
+  return {
+    year: part('year'),
+    month: part('month'),
+    day: part('day'),
+    hour: part('hour') % 24,
+    minute: part('minute'),
+    second: part('second'),
+  };
+}
+
+/** How far NZ's clock is ahead of UTC at an instant: 12 hours (NZST) or 13 (NZDT). */
+function nzOffsetMs(at: Date): number {
+  const w = nzWallClock(at);
+  const wallAsUtc = Date.UTC(w.year, w.month - 1, w.day, w.hour, w.minute, w.second);
+  return wallAsUtc - Math.floor(at.getTime() / 1000) * 1000;
+}
+
+/**
+ * [[GTC-390]] — the instant today's NZ calendar day began (00:00 Pacific/Auckland).
+ *
+ * THE ONE INSTANT both halves of "is it over?" compare with: `isComplete` in JS and
+ * `COMPLETE_WHERE` in SQL take the stored end against this same value, with `<` for over and
+ * `>=` for not, so a row cannot read over in one and not in the other. It is worked out here,
+ * in JS, and handed to Postgres as a plain value: no SQL `now()` or `AT TIME ZONE`, so the
+ * database's own time zone setting cannot matter.
+ *
+ * The offset is read twice. On a changeover day the offset at the instant asked about is not
+ * the offset at that day's midnight (+13 at 1pm on 27 Sep 2026, +12 at its midnight), so the
+ * first guess is corrected by the offset AT the guessed midnight. Once is enough: NZ changes
+ * its clocks at 2am and 3am, never within an hour of midnight, so every NZ day has exactly one
+ * midnight (and is 23 or 25 hours long on the two changeover days).
+ */
+export function nzDayStart(now: Date = new Date()): Date {
+  const w = nzWallClock(now);
+  const midnightAsUtc = Date.UTC(w.year, w.month - 1, w.day);
+  const guess = midnightAsUtc - nzOffsetMs(now);
+  return new Date(midnightAsUtc - nzOffsetMs(new Date(guess)));
+}
+
 /**
  * Is the event past?
  *
- * The event date passing IS the state change (Moment 4 §10.1). Both sides are UTC
- * instants, so there is no timezone ambiguity in the comparison — `src/lib/timezone.ts`
- * is for display, not for this.
+ * The event date passing IS the state change (Moment 4 §10.1), and since [[GTC-390]] the
+ * date passing means the NZ DAY passing: an event is over once the NZ calendar day holding its
+ * stored end has ended. A Christmas lunch stored as 25 Dec (1pm NZ) is over at 00:00 on the
+ * 26th, not at 1pm on the 25th; an end stored with a real time of day (5:30pm) is over at the
+ * midnight after it.
  *
- * Boundary: `now === endDate` is NOT complete. The event ends AT endDate; it is past
- * only once we are beyond it. Strict `>` keeps that honest and is asserted in tests.
+ * `endDate < nzDayStart(now)` is exactly "its NZ day is before today": an instant before
+ * today's NZ midnight lies in an earlier NZ day, one at or after it in today or later.
+ *
+ * Boundary: over AT midnight. 00:00:00.000 NZ belongs to the new day, so an event whose last
+ * day was yesterday is over from that instant; 23:59:59.999 on its last day is not. Both are
+ * asserted in `test:event-day-end`.
  */
 export function isComplete(event: LifecycleEvent, now: Date = new Date()): boolean {
-  return now.getTime() > event.endDate.getTime();
+  return event.endDate.getTime() < nzDayStart(now).getTime();
 }
 
 /**
@@ -183,14 +257,22 @@ export function getEventPhaseJson(event: SerialisedEvent, now?: Date): EventPhas
  *
  * If a future migration ever reintroduces rows in that state, these fragments are the
  * things that break, silently.
+ *
+ * ⚠ [[GTC-390]] — SENT_AND_LIVE IS THE CHASE WINDOW, NOT THE SENT PHASE. It still ends at the
+ * STORED end instant, which for a form-made event is 1pm NZ (noon in winter) on the last day:
+ * reminders and the decide-by follow-up stop there, as they always have. Founder ruling Q2
+ * (17 Oct 2026), "Leave them as they are (Recommended)": nothing that sends changed. So from
+ * that instant to midnight NZ an event is no longer chased but not yet COMPLETE. Whether
+ * chasing should stop sooner (no reminders on the day) is [[GTC-391]].
  */
 export const SENT_AND_LIVE = (now: Date = new Date()) => ({
   sentAt: { not: null },
   endDate: { gt: now },
 });
 
+/** [[GTC-390]] — the SQL twin of `isComplete`: the same instant, the same strict `<`. */
 export const COMPLETE_WHERE = (now: Date = new Date()) => ({
-  endDate: { lte: now },
+  endDate: { lt: nzDayStart(now) },
 });
 
 export const NOT_YET_SENT_WHERE = () => ({

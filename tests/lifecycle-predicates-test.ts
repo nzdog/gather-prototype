@@ -9,6 +9,10 @@
  *   - the FROZEN compat shim reads legacy events correctly
  *   - mini-sends are derived, not flagged
  *
+ * GTC-390: an event is over once the NZ day holding its end has ended, not at the stored
+ * instant. The full boundary table is `test:event-day-end`; three assertions here were
+ * changed on purpose (the two boundary labels, conditions untouched, and COMPLETE_WHERE).
+ *
  * Pure functions, no database.
  */
 
@@ -78,11 +82,12 @@ console.log('\n\x1b[33mSuite 3: isComplete — the calendar does the transition\
 assert('future endDate → not complete', isComplete(ev({ endDate: FUTURE }), NOW) === false);
 assert('past endDate → complete', isComplete(ev({ endDate: PAST }), NOW) === true);
 assert(
-  'BOUNDARY: now === endDate is NOT complete (event ends AT endDate)',
+  // GTC-390: NOW is 00:00 NZST on 4 Aug, so an end AT NOW lies in today's NZ day.
+  "BOUNDARY: an end at the first instant of today's NZ day is NOT complete",
   isComplete(ev({ endDate: NOW }), NOW) === false
 );
 assert(
-  'BOUNDARY: one millisecond past endDate IS complete',
+  "BOUNDARY: an end one millisecond before today's NZ midnight IS complete (its day has ended)",
   isComplete(ev({ endDate: new Date(NOW.getTime() - 1) }), NOW) === true
 );
 assert(
@@ -136,7 +141,15 @@ console.log('\n\x1b[33mSuite 7: Prisma where-fragments filter in SQL, not JS\x1b
 const live = SENT_AND_LIVE(NOW);
 assert('SENT_AND_LIVE requires a non-null sentAt', JSON.stringify(live.sentAt) === '{"not":null}');
 assert('SENT_AND_LIVE requires a future endDate', live.endDate.gt === NOW);
-assert('COMPLETE_WHERE is endDate <= now', COMPLETE_WHERE(NOW).endDate.lte === NOW);
+// GTC-390, changed on purpose: was `endDate.lte === NOW`. NOW is 00:00 NZST on 4 Aug, so the
+// start of today's NZ day is NOW itself (worked out by hand, not by the code under test).
+const completeWhere = COMPLETE_WHERE(NOW).endDate as { lt?: Date; lte?: Date };
+assert(
+  "COMPLETE_WHERE is endDate < the start of today's NZ day",
+  completeWhere.lt instanceof Date &&
+    completeWhere.lt.getTime() === NOW.getTime() &&
+    !('lte' in completeWhere)
+);
 
 // ── Summary ──────────────────────────────────────────────────────────────────
 console.log(
