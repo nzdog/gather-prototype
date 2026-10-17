@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
 import { logInviteEvent } from '@/lib/invite-events';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordChange } from '@/lib/ledger';
 
 export async function POST(
   request: NextRequest,
@@ -96,6 +98,29 @@ export async function POST(
       })),
     },
   });
+
+  // A manual override sets a response ON SOMEONE'S BEHALF, so it moves their claim —
+  // recorded as a T1-shaped change carrying the host's why.
+  if (updatedAssignments.count > 0) {
+    const overrideActor = await ledgerActorForUser(auth.user, auth.role);
+    await prisma.$transaction((tx) =>
+      recordChange(tx, {
+        eventId,
+        actor: overrideActor,
+        reason: reason ?? null,
+        changes: [
+          {
+            action: 'MOVE_ASSIGNMENT',
+            targetType: 'Assignment',
+            targetId: personId,
+            before: null,
+            after: { response, assignmentsUpdated: updatedAssignments.count },
+            context: { assignmentResponse: 'PENDING' },
+          },
+        ],
+      })
+    );
+  }
 
   return NextResponse.json({
     success: true,

@@ -63,12 +63,12 @@ const planConfig = planConfigRaw as PlanConfig;
 
 const ALL_CATEGORY_KEYS = [
   'mains',
-  'entree',
+  'entree_starters',
   'dessert',
-  'sides',
+  'sides_salads',
   'drinks_alcoholic',
   'drinks_non_alcoholic',
-  'snacks',
+  'table_snacks',
   'breakfast_brunch',
   'cake',
   'cleanup',
@@ -80,12 +80,12 @@ const ALL_CATEGORY_KEYS = [
 
 const FALLBACK_LABELS: Record<string, string> = {
   mains: 'Mains',
-  entree: 'Entrée',
+  entree_starters: 'Entrée',
   dessert: 'Dessert',
-  sides: 'Sides & Salads',
+  sides_salads: 'Sides & Salads',
   drinks_alcoholic: 'Drinks (Alcoholic)',
   drinks_non_alcoholic: 'Drinks (Non-alcoholic)',
-  snacks: 'Table Snacks',
+  table_snacks: 'Table Snacks',
   breakfast_brunch: 'Breakfast / Brunch',
   cake: 'Cake',
   cleanup: 'Clean-up',

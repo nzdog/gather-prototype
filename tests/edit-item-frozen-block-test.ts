@@ -1,9 +1,13 @@
 /**
- * GTC-025 — Edit Item dialog must be blocked on FROZEN events.
+ * GTC-025 → REPLACED BY GTC-197 (A3c).
  *
- * Tests the pure isEditItemBlocked function exported from EditItemModal.
- * Asserts that FROZEN events block the editable dialog, and that DRAFT /
- * CONFIRMING events allow it through normally.
+ * The original contract: "Edit Item dialog must be blocked on FROZEN events."
+ * The send-lock model supersedes it — post-send edits are ALLOWED and RECORDED, not
+ * refused (Moment 4 §7, "the fact is welcome; the challenge is forbidden").
+ *
+ * The assertions are REPLACED, not deleted, and at equal strength: this file now
+ * proves the opposite property in every direction the original covered, so a
+ * reintroduced lifecycle block fails here rather than passing silently.
  */
 
 import { isEditItemBlocked } from '../src/components/plan/EditItemModal';
@@ -21,28 +25,32 @@ function assert(label: string, condition: boolean) {
   }
 }
 
-console.log('\x1b[33m=== GTC-025: Edit Item Frozen Block Tests ===\x1b[0m\n');
+console.log('\x1b[33m=== GTC-197: Edit Item is never lifecycle-blocked ===\x1b[0m\n');
 
-// ── Core invariant: FROZEN must be blocked ────────────────────────────────────
-console.log('\x1b[33mTest Suite 1: FROZEN event blocks edit\x1b[0m');
-assert('isEditItemBlocked returns true for FROZEN', isEditItemBlocked('FROZEN') === true);
+// ── Core invariant, INVERTED: FROZEN must NOT block ───────────────────────────
+console.log('\x1b[33mTest Suite 1: a legacy FROZEN event no longer blocks edit\x1b[0m');
+assert('isEditItemBlocked returns FALSE for FROZEN', isEditItemBlocked('FROZEN') === false);
 
-// ── Non-frozen statuses must NOT be blocked ───────────────────────────────────
-console.log('\n\x1b[33mTest Suite 2: Non-frozen statuses allow edit\x1b[0m');
+// ── No status blocks ──────────────────────────────────────────────────────────
+console.log('\n\x1b[33mTest Suite 2: no status blocks edit\x1b[0m');
 assert('isEditItemBlocked returns false for DRAFT', isEditItemBlocked('DRAFT') === false);
 assert('isEditItemBlocked returns false for CONFIRMING', isEditItemBlocked('CONFIRMING') === false);
-assert('isEditItemBlocked returns false for COMPLETE', isEditItemBlocked('COMPLETE') === false);
+assert(
+  "isEditItemBlocked returns false for COMPLETE — §8.8 resolves the day's corrections later",
+  isEditItemBlocked('COMPLETE') === false
+);
 assert('isEditItemBlocked returns false for empty string', isEditItemBlocked('') === false);
 
 // ── Edge cases ────────────────────────────────────────────────────────────────
-console.log('\n\x1b[33mTest Suite 3: Edge cases\x1b[0m');
+console.log('\n\x1b[33mTest Suite 3: nothing blocks, whatever it is called\x1b[0m');
+assert('lowercase "frozen" is not blocked', isEditItemBlocked('frozen') === false);
+assert('no lock-like status blocks', isEditItemBlocked('LOCKED') === false);
+assert('SENT does not block', isEditItemBlocked('SENT') === false);
 assert(
-  'isEditItemBlocked is case-sensitive — lowercase "frozen" is not blocked',
-  isEditItemBlocked('frozen') === false
-);
-assert(
-  'isEditItemBlocked only blocks FROZEN, not other lock-like statuses',
-  isEditItemBlocked('LOCKED') === false
+  'the predicate is total — no input produces a block',
+  ['DRAFT', 'CONFIRMING', 'FROZEN', 'COMPLETE', 'SENT', '', 'anything'].every(
+    (s) => isEditItemBlocked(s) === false
+  )
 );
 
 // ── Summary ───────────────────────────────────────────────────────────────────

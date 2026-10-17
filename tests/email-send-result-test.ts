@@ -1,0 +1,973 @@
+/**
+ * GTC-265 — Resend errors are never inspected.
+ *
+ * Run: npm run test:email-send-result
+ *
+ * THE RULE THIS SUITE HOLDS, and it is GTC-265's central rule:
+ *
+ *   A sender RETURNS its result and does not DECIDE what to do about a failure.
+ *   Each caller decides. `POST /api/auth/magic-link` and `POST /api/auth/claim`
+ *   stay byte-identical whatever happens, because that is enumeration
+ *   protection. The post-payment send fails loudly, because the payer typed the
+ *   address herself and there is nothing to enumerate.
+ *
+ * ── WHY THE FIXTURE SETS A KEY, WHICH LOOKS BACKWARDS ─────────────────────────
+ *
+ * `new Resend(undefined)` THROWS ("Missing API key"). Under `tsx`, `.env.local`
+ * is not loaded, so `RESEND_API_KEY` is unset and `getResendClient()` throws —
+ * which the senders' own `try/catch` turns into `{ success: false }` all by
+ * itself. A suite that left the key unset would therefore go GREEN against the
+ * UNFIXED code and prove nothing.
+ *
+ * So layer 2 sets a syntactically-valid sentinel key, lets the client construct,
+ * and stubs `globalThis.fetch` to hand back Resend's own failure envelope. That
+ * is the real defect: the SDK RETURNS its error rather than throwing it. The
+ * constructor-throw path is asserted separately so that nobody later "fixes"
+ * this by leaning on the throw.
+ *
+ * ── NOTHING IS SENT BY THIS SUITE ─────────────────────────────────────────────
+ *
+ * Layers 1-3 stub `globalThis.fetch`; no request leaves the process. ⚠ [[GTC-274]]: they open
+ * the live switch with `liveBehindTrap()`, which also walls http, https, DNS and sockets.
+ *
+ * Layer 4 drives the real nudge route over HTTP, because `requireEventRole`
+ * reads a session cookie and cannot be driven in process. ⚠ [[GTC-274]]: that
+ * server is never live, so it cannot send whatever its key; layer 4 asserts from
+ * the 502's detail that the email stopped inside the server (no key, or the live
+ * switch off). The GTC265_PROBE_KEY request to api.resend.com that this layer
+ * used to make first is retired.
+ *
+ * Destructive to its own created rows only; cleans up in `finally`.
+ */
+
+import { PrismaClient } from '@prisma/client';
+import { liveBehindTrap } from './helpers/provider-trap';
+
+const prisma = new PrismaClient();
+
+const TAG = 'GTC265';
+const BASE = process.env.GTC265_TEST_BASE_URL ?? 'http://localhost:3000';
+
+let passed = 0;
+let failed = 0;
+const redAssertions: string[] = [];
+
+function assert(phase: string, label: string, condition: boolean) {
+  if (condition) {
+    console.log(`\x1b[32m✓\x1b[0m [${phase}] ${label}`);
+    passed++;
+  } else {
+    console.error(`\x1b[31m✗\x1b[0m [${phase}] ${label}`);
+    failed++;
+    redAssertions.push(`[${phase}] ${label}`);
+  }
+}
+
+// ── The stub ──────────────────────────────────────────────────────────────────
+//
+// Resend's transport is `globalThis.fetch` and its failure envelope is built by
+// reading `response.ok`, then `response.text()`, then `JSON.parse`. A real
+// `Response` satisfies all three, so the stub hands back real ones rather than
+// a hand-rolled shape that could drift from what the SDK actually reads.
+
+const RESEND_401_BODY = {
+  statusCode: 401,
+  name: 'validation_error',
+  message: 'API key is invalid',
+};
+
+const realFetch = globalThis.fetch;
+let fetchCalls = 0;
+
+// GTC-189 slice 4b: ONE source for the stub's message id, so the stub and the
+// assertions that read it cannot drift apart.
+const STUB_MESSAGE_ID = `${TAG}-stub-message-id`;
+
+function stubFetchFailing() {
+  fetchCalls = 0;
+  globalThis.fetch = (async () => {
+    fetchCalls++;
+    return new Response(JSON.stringify(RESEND_401_BODY), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }) as typeof fetch;
+}
+
+function stubFetchSucceeding() {
+  fetchCalls = 0;
+  globalThis.fetch = (async () => {
+    fetchCalls++;
+    return new Response(JSON.stringify({ id: STUB_MESSAGE_ID }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }) as typeof fetch;
+}
+
+function restoreFetch() {
+  globalThis.fetch = realFetch;
+}
+
+/*
+ * GTC-289 phase 2 — THE SAME STUB, WITH THE ENVELOPE AS AN ARGUMENT.
+ *
+ * `stubFetchFailing()` above hands back ONE body and four assertions read its `message`. The
+ * widening reads its `name` and `statusCode` too, so those two fields stop being decoration and
+ * become load-bearing — and one body cannot cover a rate limit, a refused request and a code the
+ * installed SDK has never heard of.
+ *
+ * ✅ AND RESEND_401_BODY IS NOW OBSERVED RATHER THAN TRANSCRIBED — MEASURED 2026-09-19, and the
+ * executor expected the opposite. Phase 2 first wrote here that its `name: 'validation_error'` with
+ * `statusCode: 401` was "very likely not what Resend answers to a bad key, since `invalid_api_key`
+ * exists for that". A live probe with a deliberately invalid SENTINEL key — no credential, nothing
+ * delivered, refused at submission — answered:
+ *
+ *     { statusCode: 401, name: 'validation_error', message: 'API key is invalid' }
+ *
+ * **Byte-identical to this stub.** So GTC-265's fixture was right, the correction was wrong, and the
+ * two facts worth keeping are these: the declared `ErrorResponse` shape MATCHES the live body, and
+ * ⚠ **Resend answers an invalid key with `validation_error`** — not with any of the four codes whose
+ * names are about keys. A code name is a usable guide to whether to retry and a poor guide to why.
+ * [[GTC-323]], [[GTC-289]] phase 2.
+ */
+function stubFetchFailingWith(
+  body: { statusCode: number; name: string; message: string },
+  httpStatus?: number
+) {
+  fetchCalls = 0;
+  globalThis.fetch = (async () => {
+    fetchCalls++;
+    return new Response(JSON.stringify(body), {
+      status: httpStatus ?? body.statusCode,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }) as typeof fetch;
+}
+
+// Resend's own `logError` writes to console.error on every failure, and the
+// senders are required to record server-side. Both land here; the suite reads
+// the buffer to prove the record exists rather than trusting that it does.
+const realConsoleError = console.error;
+let errorLog: string[] = [];
+function captureConsoleError() {
+  errorLog = [];
+  console.error = (...args: unknown[]) => {
+    errorLog.push(args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' '));
+  };
+}
+function restoreConsoleError() {
+  console.error = realConsoleError;
+}
+
+// ── Fixture bookkeeping ───────────────────────────────────────────────────────
+const createdMagicLinkIds: string[] = [];
+const createdPersonIds: string[] = [];
+const createdUserIds: string[] = [];
+const createdEventIds: string[] = [];
+
+async function magicLinkCount(email: string) {
+  return prisma.magicLink.count({ where: { email } });
+}
+
+async function main() {
+  // [[GTC-274]]: layers 1-3 assert what the senders make of Resend's replies, which is the step
+  // AFTER the live switch, so the switch is opened for this process — only by the helper, behind
+  // walls that stop any request leaving it. Layers 1-3 stub `globalThis.fetch` as before.
+  liveBehindTrap();
+
+  // Force the sentinel BEFORE the module is loaded, so the cached client
+  // constructs. See the header: an unset key makes the constructor throw and
+  // the whole suite passes against unfixed code.
+  process.env.RESEND_API_KEY = 're_GTC265_sentinel_not_a_real_key';
+  process.env.EMAIL_FROM = process.env.EMAIL_FROM ?? 'Gather Test <test@gather.invalid>';
+
+  const email = await import('../src/lib/email');
+  const { sendNudgeEmail, sendMagicLinkEmail, sendWelcomeEmail, sendAskEmail } = email;
+
+  // ══ LAYER 1 — the rule is written where the next person will meet it ════════
+  const fs = await import('fs');
+  const emailSrc = fs.readFileSync('src/lib/email.ts', 'utf8');
+  assert(
+    'the rule',
+    "src/lib/email.ts records the return-don't-decide rule in its own header, not only in the ticket",
+    /returns? its result/i.test(emailSrc) && /does not decide|not\s+decide/i.test(emailSrc)
+  );
+  assert(
+    'the rule',
+    'and it names the asymmetry it exists for — enumeration protection on one side, a loud failure on the other',
+    /enumerat/i.test(emailSrc)
+  );
+
+  // ══ LAYER 2 — the senders, against a stubbed provider ═══════════════════════
+  //
+  // Every assertion here is paired: a failure must be reported as a failure AND
+  // a success must still be reported as a success. A sender that returns
+  // `{ success: false }` unconditionally would pass half of this layer.
+
+  stubFetchFailing();
+  captureConsoleError();
+  const nudgeFail = await sendNudgeEmail({
+    to: `${TAG}-nudge@example.com`,
+    subject: 'x',
+    body: 'y',
+    eventId: 'x',
+    personId: 'y',
+  });
+  restoreConsoleError();
+
+  assert(
+    'stub',
+    'CONTROL: the stub was actually reached — a green here means nothing if fetch was never called',
+    fetchCalls === 1
+  );
+  assert(
+    'sendNudgeEmail',
+    'reports FAILURE when Resend returns an error envelope — the SDK returns its error rather than throwing it',
+    nudgeFail.success === false
+  );
+  assert(
+    'sendNudgeEmail',
+    "and surfaces Resend's own message so the caller can log something useful",
+    typeof nudgeFail.error === 'string' && /API key is invalid/.test(nudgeFail.error!)
+  );
+
+  stubFetchSucceeding();
+  const nudgeOk = await sendNudgeEmail({
+    to: `${TAG}-nudge@example.com`,
+    subject: 'x',
+    body: 'y',
+    eventId: 'x',
+    personId: 'y',
+  });
+  assert(
+    'sendNudgeEmail',
+    'CONTROL: a SUCCESSFUL send is still reported as success — the fix must not report every send as failed',
+    nudgeOk.success === true
+  );
+
+  // sendMagicLinkEmail — Zone 2, and it returns rather than decides.
+  stubFetchFailing();
+  captureConsoleError();
+  const magicFail = await sendMagicLinkEmail(`${TAG}-magic@example.com`, `${TAG}-token-a`);
+  const magicFailLog = errorLog.join('\n');
+  restoreConsoleError();
+  assert(
+    'sendMagicLinkEmail',
+    'returns a result instead of void, and reports FAILURE — the caller cannot decide about something it never sees',
+    !!magicFail && magicFail.success === false
+  );
+  // ⚠ THIS ASSERTION WAS WEAKER THAN IT LOOKED, AND THE HISTORY IS RECORDED
+  // BECAUSE THE FIRST MUTATION RUN LIED.
+  //
+  // It first matched /resend|email|send/i. Resend's OWN internal `logError`
+  // writes "[Resend API Error]:" to console.error, which satisfies /resend/i —
+  // so deleting the sender's record would have changed nothing.
+  //
+  // Mutation M3 (delete the record) was run against that weak form and reported
+  // ZERO failures. That reading was worthless: the substitution had silently
+  // failed to apply and the code under test was unmutated. Re-applied properly,
+  // M3 failed three assertions. A controlled re-run then put the ORIGINAL weak
+  // assertions back alongside the real mutation, and only ONE of the three
+  // failed — the NODE_ENV=production one below, which did not exist before. So
+  // the weakness was real and the strengthening is not decoration.
+  //
+  // The rule this leaves behind, and it is GTC-267's with a new instance: a
+  // mutation that reports no failures has made two claims, not one — that the
+  // assertion is weak, AND that the mutation applied. Verify the second before
+  // believing the first.
+  //
+  // The assertion now requires the sender's own prefix, and the one below runs
+  // the same call under NODE_ENV=production — where the SDK's log goes silent —
+  // so that Resend's logging cannot stand in for ours.
+  assert(
+    'sendMagicLinkEmail',
+    "RECORDS the failure server-side under the SENDER's own prefix — the gap GTC-265 Unknown 1 names is that nobody, not even the server, knows",
+    /\[Email\]/.test(magicFailLog) && /REJECTED/.test(magicFailLog)
+  );
+
+  const savedNodeEnv = process.env.NODE_ENV;
+  stubFetchFailing();
+  captureConsoleError();
+  (process.env as Record<string, string | undefined>).NODE_ENV = 'production';
+  await sendMagicLinkEmail(`${TAG}-prod@example.com`, `${TAG}-token-prod`);
+  (process.env as Record<string, string | undefined>).NODE_ENV = savedNodeEnv;
+  const prodLog = errorLog.join('\n');
+  restoreConsoleError();
+  assert(
+    'sendMagicLinkEmail',
+    "and the record survives NODE_ENV=production, where Resend's own logError goes silent — the record must be ours, not the SDK's",
+    /\[Email\]/.test(prodLog) && /REJECTED/.test(prodLog) && !/Resend API Error/.test(prodLog)
+  );
+
+  stubFetchSucceeding();
+  const magicOk = await sendMagicLinkEmail(`${TAG}-magic@example.com`, `${TAG}-token-b`);
+  assert(
+    'sendMagicLinkEmail',
+    'CONTROL: a successful send still reports success',
+    !!magicOk && magicOk.success === true
+  );
+
+  // sendWelcomeEmail — Zone 2 as well, because it mints a MagicLink.
+  const welcomeAddr = `${TAG}-welcome-${Date.now()}@example.com`;
+  const beforeLinks = await magicLinkCount(welcomeAddr);
+  stubFetchFailing();
+  captureConsoleError();
+  const welcomeFail = await sendWelcomeEmail(welcomeAddr, `${TAG} event`, 'evt_x');
+  restoreConsoleError();
+  const afterLinks = await magicLinkCount(welcomeAddr);
+  const welcomeLinks = await prisma.magicLink.findMany({ where: { email: welcomeAddr } });
+  welcomeLinks.forEach((l) => createdMagicLinkIds.push(l.id));
+
+  assert(
+    'sendWelcomeEmail',
+    'returns a result instead of void, and reports FAILURE — this is the sender GTC-280 depends on',
+    !!welcomeFail && welcomeFail.success === false
+  );
+
+  // ⚠ ZONE 2 CONTROL. The sign-off for this ticket is "inspect the result,
+  // record the failure, return it" and explicitly NOT "change generation,
+  // expiry or consumption". These two assertions are what makes that
+  // checkable rather than merely promised.
+  assert(
+    'Zone 2 control',
+    'the MagicLink is still minted — generation is untouched by this ticket',
+    afterLinks === beforeLinks + 1
+  );
+  assert(
+    'Zone 2 control',
+    'and its expiry is still 30 days — GTC-282 owns that number, not this ticket',
+    welcomeLinks.length === 1 &&
+      Math.abs(welcomeLinks[0].expiresAt.getTime() - (Date.now() + 30 * 24 * 60 * 60 * 1000)) <
+        5 * 60 * 1000
+  );
+
+  stubFetchSucceeding();
+  const welcomeAddr2 = `${TAG}-welcome2-${Date.now()}@example.com`;
+  const welcomeOk = await sendWelcomeEmail(welcomeAddr2, `${TAG} event`, 'evt_x');
+  (await prisma.magicLink.findMany({ where: { email: welcomeAddr2 } })).forEach((l) =>
+    createdMagicLinkIds.push(l.id)
+  );
+  assert(
+    'sendWelcomeEmail',
+    'CONTROL: a successful send still reports success',
+    !!welcomeOk && welcomeOk.success === true
+  );
+
+  // ══ LAYER 2b — THE PROVIDER MESSAGE ID (GTC-189 slice 4b) ═══════════════════
+  //
+  // WHY IT IS SLICE 4'S AND NOT SLICE 6'S. Slice 5's dispatcher writes
+  // `OutboundMessage.providerMessageId` at acceptance, so the sender has to
+  // return the id BEFORE slice 5's code is written. Slice 6 reads the STORED id
+  // off the row when a webhook arrives and never touches the sender's return
+  // value. So the consumer is slice 5, and slice 4 is where it belongs — which
+  // holds even though slices 5, 6 and 7 land as one release.
+  //
+  // ⚠ NOTHING READS THE FIELD YET, and the last assertion in this layer pins
+  // that. It is optional and additive, so no caller changes.
+  //
+  // The id cannot be proven against the live provider here: GTC-247 records
+  // that this environment's RESEND_API_KEY does not authenticate, and layer 4's
+  // own precondition asserts the provider REJECTS it. A rejected send has no
+  // id to return. So what is proven here is the read of Resend's documented
+  // success envelope, against the stub that already models it.
+
+  stubFetchSucceeding();
+  const idNudge = await sendNudgeEmail({
+    to: `${TAG}-id@example.com`,
+    subject: 'x',
+    body: 'y',
+    eventId: 'x',
+    personId: 'y',
+  });
+  assert(
+    'stub',
+    'CONTROL: the success stub carries an id at all — without this the three assertions below could pass against an empty envelope',
+    JSON.parse(await new Response(JSON.stringify({ id: STUB_MESSAGE_ID })).text()).id ===
+      STUB_MESSAGE_ID
+  );
+  assert(
+    'providerMessageId',
+    "sendNudgeEmail returns Resend's message id on success — slice 5's dispatcher has nothing to join a bounce on otherwise",
+    idNudge.providerMessageId === STUB_MESSAGE_ID
+  );
+
+  stubFetchSucceeding();
+  const idMagic = await sendMagicLinkEmail(`${TAG}-id-magic@example.com`, `${TAG}-token-id`);
+  assert(
+    'providerMessageId',
+    'sendMagicLinkEmail returns it too — all three senders answer through resultOf, so they gain it at once rather than one at a time',
+    idMagic.providerMessageId === STUB_MESSAGE_ID
+  );
+
+  stubFetchSucceeding();
+  const idWelcomeAddr = `${TAG}-id-welcome-${Date.now()}@example.com`;
+  const idWelcome = await sendWelcomeEmail(idWelcomeAddr, `${TAG} event`, 'evt_x');
+  (await prisma.magicLink.findMany({ where: { email: idWelcomeAddr } })).forEach((l) =>
+    createdMagicLinkIds.push(l.id)
+  );
+  assert(
+    'providerMessageId',
+    'sendWelcomeEmail returns it too',
+    idWelcome.providerMessageId === STUB_MESSAGE_ID
+  );
+
+  // ⚠ AND ABSENT ON A FAILURE, which is the half that matters more. A rejected
+  // send has no provider id, and storing something that is not the provider's
+  // id would be worse than storing none: slice 6 joins on this value, so a
+  // placeholder would match nothing and look like a lost bounce.
+  stubFetchFailing();
+  captureConsoleError();
+  const idFail = await sendNudgeEmail({
+    to: `${TAG}-id-fail@example.com`,
+    subject: 'x',
+    body: 'y',
+    eventId: 'x',
+    personId: 'y',
+  });
+  restoreConsoleError();
+  assert(
+    'providerMessageId',
+    'and it is ABSENT on a rejected send — no placeholder, because slice 6 joins on this value and a value that is not the provider’s matches nothing',
+    idFail.success === false && idFail.providerMessageId === undefined
+  );
+
+  // ⚠ NOTHING READS IT. Asserted over the four files that call the three
+  // senders, not over all of `src/` — `providerMessageId` legitimately appears
+  // in `src/lib/sms/tnz-delivery-contract.ts`, which is GTC-264's SMS side and
+  // is a different sender's id. A caller reading this field is slice 5's work,
+  // and 4b may not anticipate it.
+  const callerFiles = [
+    'src/app/api/events/[id]/people/[personId]/nudge/route.ts',
+    'src/lib/wrap-up.ts',
+    'src/app/api/auth/magic-link/route.ts',
+    'src/app/api/events/route.ts',
+  ];
+  const callerSrc = callerFiles.map((f) => fs.readFileSync(f, 'utf8'));
+  assert(
+    'stub',
+    'CONTROL: the four caller files were actually read — each names the sender it calls, so the absence below is measured and not a bad path',
+    callerSrc.every((src) => /sendNudgeEmail|sendMagicLinkEmail|sendWelcomeEmail/.test(src))
+  );
+  assert(
+    'providerMessageId',
+    'NO CALLER READS IT — the field is optional and additive, and every consumer of it is slice 5 or later',
+    callerSrc.every((src) => !/providerMessageId/.test(src))
+  );
+
+  /*
+   * ✅ AND THE CONSUMER NOW EXISTS, WHICH TURNS 4b's PREDICTION INTO A FACT — GTC-189 slice 5c,
+   * 2026-09-19. The comment above says "a caller reading this field is slice 5's work, and 4b may
+   * not anticipate it." It is `recordAcceptance` in `src/lib/press/dispatch.ts`, writing the id onto
+   * `OutboundMessage.providerMessageId` at acceptance, exactly as the `SendResult` docstring said it
+   * would.
+   *
+   * The four-file assertion above stays true and stays scoped: the dispatcher calls a FOURTH sender,
+   * `sendAskEmail`, which slice 5c added because `sendNudgeEmail` carries no reply-to and no
+   * per-message display name. Asserted positively here so a reader of the absence above finds the
+   * presence rather than concluding the field is still unused.
+   */
+  const dispatchSrc = fs.readFileSync('src/lib/press/dispatch.ts', 'utf8');
+  assert(
+    'providerMessageId',
+    '✅ THE CONSUMER EXISTS: the press dispatcher reads providerMessageId and writes it onto the outbound row at acceptance (slice 5c)',
+    /providerMessageId/.test(dispatchSrc) && /recordAcceptance/.test(dispatchSrc)
+  );
+
+  /*
+   * ══ GTC-289 PHASE 2 — THE WIDENING: THE CODE AND THE STATUS COME BACK TOO ════
+   *
+   * ⚠ WHY IT IS HERE AND NOT ONLY IN ITS OWN SUITE. `resultOf` is module-private, so the only
+   * honest way to read what it returns is through a real sender and the real SDK. These assertions
+   * therefore prove the SDK's own parse as well as ours: if Resend renamed `error.name`, they fail.
+   * `tests/resend-error-contract-test.ts` owns the vocabulary; this owns the plumbing.
+   *
+   * ⚠ AND THE DEFECT THIS CLOSES IS NAMED IN SLICE 5c's OWN EVIDENCE: `isRetryableProviderError`
+   * matched a MESSAGE STRING because `SendResult` collapsed Resend's error to `error?: string`, and
+   * the SDK declares `ErrorResponse { message; statusCode; name }` with a closed 21-value code union.
+   * The predicate was reading prose where a code existed.
+   */
+  const BUSY_BODY = { statusCode: 429, name: 'rate_limit_exceeded', message: 'Too many requests' };
+
+  stubFetchFailingWith(BUSY_BODY);
+  captureConsoleError();
+  const busy = await sendNudgeEmail({
+    to: `${TAG}-busy@example.com`,
+    subject: 'x',
+    body: 'y',
+    eventId: 'x',
+    personId: 'y',
+  });
+  restoreConsoleError();
+  assert(
+    'providerErrorCode',
+    "a rejected send carries Resend's own error CODE back, verbatim — the field the retry decision was missing",
+    busy.success === false && busy.providerErrorCode === 'rate_limit_exceeded'
+  );
+  assert(
+    'providerErrorCode',
+    'and its status code, as a number rather than as text inside the message',
+    busy.providerStatusCode === 429
+  );
+  assert(
+    'providerErrorCode',
+    "and the message is STILL returned unchanged — the widening is additive, and `providerError` is documented as the provider's words",
+    busy.error === 'Too many requests'
+  );
+
+  // ⚠ A SECOND BODY, BECAUSE ONE CODE PROVES ONLY THAT A CONSTANT SURVIVES A ROUND TRIP.
+  stubFetchFailingWith({
+    statusCode: 422,
+    name: 'invalid_from_address',
+    message: 'The from address is not verified',
+  });
+  captureConsoleError();
+  const badFrom = await sendAskEmail({
+    to: `${TAG}-from@example.com`,
+    subject: 'x',
+    body: 'y',
+    replyTo: 'host@example.com',
+    fromName: 'A Host',
+  });
+  restoreConsoleError();
+  assert(
+    'providerErrorCode',
+    '⚠ A DIFFERENT CODE COMES BACK DIFFERENT, through the ASK sender — and `invalid_from_address` is the one this tree is most likely to meet, because slice 5c rewrites the display name on a SANDBOX sender ([[GTC-247]], ruling F)',
+    badFrom.success === false &&
+      badFrom.providerErrorCode === 'invalid_from_address' &&
+      badFrom.providerStatusCode === 422
+  );
+
+  /*
+   * ⚠ WHICH statusCode WINS — THE HTTP LINE OR THE BODY? Nothing in this repo has ever read it, and
+   * the answer decides whether `providerStatusCode` can be trusted at all. So it is MEASURED here
+   * with the two deliberately disagreeing, rather than assumed in either direction. The body says
+   * 429 and the transport says 500. Whatever this assertion says, it says it about the SDK's own
+   * parse — see the printed value below it on a failure.
+   */
+  stubFetchFailingWith({ statusCode: 429, name: 'rate_limit_exceeded', message: 'busy' }, 500);
+  captureConsoleError();
+  const mismatch = await sendNudgeEmail({
+    to: `${TAG}-mismatch@example.com`,
+    subject: 'x',
+    body: 'y',
+    eventId: 'x',
+    personId: 'y',
+  });
+  restoreConsoleError();
+  assert(
+    'providerErrorCode',
+    `⚠ MEASURED, NOT ASSUMED: with a body saying 429 and an HTTP line saying 500, the SDK's error.statusCode is the BODY's (got ${String(mismatch.providerStatusCode)})`,
+    mismatch.providerStatusCode === 429
+  );
+
+  stubFetchSucceeding();
+  const okSend = await sendNudgeEmail({
+    to: `${TAG}-ok-code@example.com`,
+    subject: 'x',
+    body: 'y',
+    eventId: 'x',
+    personId: 'y',
+  });
+  assert(
+    'providerErrorCode',
+    'and an ACCEPTED send carries NEITHER — the same rule as providerMessageId in reverse: a field that is only ever true of one outcome is absent on the other, never zero and never empty string',
+    okSend.success === true &&
+      okSend.providerErrorCode === undefined &&
+      okSend.providerStatusCode === undefined
+  );
+
+  assert(
+    'providerErrorCode',
+    '✅ AND THE CONSUMER EXISTS IN THE SAME COMMIT, which is what slice 4b could not say about providerMessageId: the dispatcher passes the code into its retry decision',
+    /code: sent\.providerErrorCode/.test(dispatchSrc) &&
+      /status: sent\.providerStatusCode/.test(dispatchSrc)
+  );
+
+  // ⚠ THE CONSTRUCTOR PATH, ASSERTED SO NOBODY LEANS ON IT.
+  //
+  // `new Resend(undefined)` throws. That throw is why an unset key makes the
+  // UNFIXED senders look correct, and it is a real path in production too — an
+  // env var can go missing. Both doors must report failure, and this assertion
+  // stops a future reader concluding the throw was the whole fix.
+  restoreFetch();
+  const savedKey = process.env.RESEND_API_KEY;
+  delete process.env.RESEND_API_KEY;
+  // A fresh module instance, so the cached client is rebuilt without a key.
+  const emailNoKey = await import(`../src/lib/email?nokey=${Date.now()}`);
+  captureConsoleError();
+  const thrownPath = await emailNoKey.sendNudgeEmail({
+    to: `${TAG}-nokey@example.com`,
+    subject: 'x',
+    body: 'y',
+    eventId: 'x',
+    personId: 'y',
+  });
+  restoreConsoleError();
+  process.env.RESEND_API_KEY = savedKey;
+  assert(
+    'both doors',
+    'a MISSING key is also reported as failure — the throw path and the returned-error path agree',
+    thrownPath.success === false
+  );
+
+  // ══ LAYER 3 — the auth callers stay byte-identical ══════════════════════════
+  //
+  // The senders now return a result. The two enumeration-protected callers must
+  // go on ignoring it in their RESPONSE while recording it on the server. Driven
+  // in process: neither route reads a cookie.
+
+  stubFetchFailing();
+  const magicRoute = await import('../src/app/api/auth/magic-link/route');
+  const enumAddr = `${TAG}-enum-${Date.now()}@example.com`;
+
+  captureConsoleError();
+  const failRes = await magicRoute.POST(
+    new Request('http://localhost/api/auth/magic-link', {
+      method: 'POST',
+      body: JSON.stringify({ email: enumAddr }),
+    })
+  );
+  const failBody = await failRes.text();
+  const failLog = errorLog.join('\n');
+  restoreConsoleError();
+
+  stubFetchSucceeding();
+  const okRes = await magicRoute.POST(
+    new Request('http://localhost/api/auth/magic-link', {
+      method: 'POST',
+      body: JSON.stringify({ email: enumAddr }),
+    })
+  );
+  const okBody = await okRes.text();
+
+  (await prisma.magicLink.findMany({ where: { email: enumAddr } })).forEach((l) =>
+    createdMagicLinkIds.push(l.id)
+  );
+
+  assert(
+    'enumeration protection',
+    'POST /api/auth/magic-link answers IDENTICALLY whether the send failed or succeeded — same status, same bytes',
+    failRes.status === okRes.status && failBody === okBody
+  );
+  assert(
+    'enumeration protection',
+    'and it is still the generic success body — the protection is intact, not merely unchanged',
+    failBody === JSON.stringify({ ok: true })
+  );
+  assert(
+    'enumeration protection',
+    "but the SERVER knows: a failed magic-link send is recorded under the sender's own prefix. The response shape was never the gap — the gap was that nobody knew at all",
+    /\[Email\]/.test(failLog) && /REJECTED/.test(failLog)
+  );
+
+  restoreFetch();
+  restoreConsoleError();
+
+  // ══ LAYER 4 — the nudge route, over HTTP ════════════════════════════════════
+  //
+  // GTC-265's three most important assertions live here: the 502, the absent
+  // NUDGE_SENT_HOST, and the un-started cooldown. They are only observable
+  // through the real route, because the cooldown reads rows the route writes.
+
+  // ⚠ [[GTC-274]] — THE GTC265_PROBE_KEY PRECONDITION IS GONE. It was a raw request from this test
+  // to api.resend.com, made to prove the dev server's key could not send. Under the live switch the
+  // dev server cannot send whatever its key (GATHER-BUILD-CONSTANTS.md: it never runs live), so
+  // this layer instead asserts, from the 502 itself, WHICH in-process stop refused the email. No
+  // request from this suite now leaves the machine.
+  let probeStatus = 0;
+  try {
+    probeStatus = (await fetch(`${BASE}/api/events/none/glance`)).status;
+  } catch {
+    probeStatus = 0;
+  }
+  assert(
+    'layer 4',
+    `the dev server is healthy on ${BASE} — a guarded sibling answers 401, not 500 or ECONNREFUSED`,
+    probeStatus === 401
+  );
+  if (probeStatus !== 401) return;
+
+  const now = new Date();
+  const DAY = 24 * 60 * 60 * 1000;
+
+  const hostUser = await prisma.user.create({
+    data: { email: `${TAG}-host-${Date.now()}@example.com` },
+  });
+  createdUserIds.push(hostUser.id);
+  const sessionToken = `${TAG}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  await prisma.session.create({
+    data: { userId: hostUser.id, token: sessionToken, expiresAt: new Date(Date.now() + DAY) },
+  });
+
+  const hostPerson = await prisma.person.create({
+    data: { name: `${TAG} Host`, email: `${TAG}-hostperson-${Date.now()}@example.com` },
+  });
+  createdPersonIds.push(hostPerson.id);
+
+  const event = await prisma.event.create({
+    data: {
+      name: `${TAG} email-leg event`,
+      startDate: new Date(now.getTime() + 7 * DAY),
+      endDate: new Date(now.getTime() + 8 * DAY),
+      status: 'CONFIRMING',
+      hostId: hostPerson.id,
+      sentAt: new Date(now.getTime() - 3 * DAY),
+    },
+  });
+  createdEventIds.push(event.id);
+  await prisma.eventRole.create({
+    data: { userId: hostUser.id, eventId: event.id, role: 'HOST' },
+  });
+
+  // ⚠ EMAIL-ONLY, AND THAT IS THE WHOLE FIXTURE. `chooseManualNudgeChannel`
+  // picks SMS whenever a valid +64 number is present, which is why
+  // tests/glance-actions-test.ts never reaches this leg at all.
+  const emailOnly = await prisma.person.create({
+    data: {
+      name: `${TAG} EmailOnly`,
+      email: `${TAG}-emailonly-${Date.now()}@example.com`,
+      phoneNumber: null,
+    },
+  });
+  createdPersonIds.push(emailOnly.id);
+  await prisma.personEvent.create({
+    data: {
+      personId: emailOnly.id,
+      eventId: event.id,
+      role: 'PARTICIPANT',
+      householdRole: 'GUEST',
+      sentAt: new Date(now.getTime() - 3 * DAY),
+    },
+  });
+  await prisma.personEvent.create({
+    data: {
+      personId: hostPerson.id,
+      eventId: event.id,
+      role: 'PARTICIPANT',
+      householdRole: 'GUEST',
+      sentAt: new Date(now.getTime() - 3 * DAY),
+    },
+  });
+
+  const NUDGE = `${BASE}/api/events/${event.id}/people/${emailOnly.id}/nudge`;
+  const headers = {
+    'Content-Type': 'application/json',
+    Cookie: `session=${sessionToken}`,
+  };
+  const body = JSON.stringify({ template: 'warm', message: 'a nudge that will not be sent' });
+
+  const first = await fetch(NUDGE, { method: 'POST', headers, body });
+  const firstJson = (await first.json().catch(() => null)) as {
+    error?: string;
+    detail?: string;
+  } | null;
+
+  // The two stops that mean the request never left the server process: the client could not be
+  // built (no key — the dev server runs with its provider keys blanked), or the live switch is off.
+  const { LIVE_SENDS_OFF } = await import('../src/lib/live-sends');
+  const stoppedInProcess =
+    /Missing API key/.test(firstJson?.detail ?? '') || firstJson?.detail === LIVE_SENDS_OFF;
+  assert(
+    'layer 4',
+    `GTC-274: the email was stopped INSIDE the server — no key, or the live switch off — never at a provider (detail: ${firstJson?.detail ?? 'none'})`,
+    stoppedInProcess
+  );
+
+  assert(
+    'layer 4',
+    'a failed EMAIL send is refused with 502, exactly as the SMS leg already is — the route never had two behaviours, it had one and was being lied to',
+    first.status === 502
+  );
+  assert(
+    'layer 4',
+    'and it reached the sender rather than being refused earlier — a 403 or 400 here would prove a different gate, not this one',
+    first.status !== 403 && first.status !== 400 && first.status !== 401
+  );
+
+  const logged = await prisma.inviteEvent.count({
+    where: { eventId: event.id, personId: emailOnly.id, type: 'NUDGE_SENT_HOST' },
+  });
+  assert(
+    'layer 4',
+    'NO NUDGE_SENT_HOST row is written for a send that never left — the row is what the audit trail shows the host',
+    logged === 0
+  );
+
+  const second = await fetch(NUDGE, { method: 'POST', headers, body });
+  assert(
+    'layer 4',
+    'and the 24-hour cooldown never started, so an immediate retry is NOT 429 — she is not locked out of retrying a message that was never sent',
+    second.status !== 429
+  );
+  assert(
+    'layer 4',
+    'the retry fails the same way it did the first time — 502, not a new error',
+    second.status === 502
+  );
+
+  void firstJson;
+
+  // ══ LAYER 5 — THE SECOND CONSUMER, and what the fix DOES to it ══════════════
+  //
+  // `sendNudgeEmail` has a consumer GTC-265 never named: `src/lib/wrap-up.ts`,
+  // reached by the `/api/cron/wrap-up-dispatch` cron. It already reads
+  // `emailResult.success`, already sets `failed`/`failReason`, and already logs
+  // `WRAPUP_MESSAGE_FAILED`. It was written for a truthful sender and was being
+  // lied to.
+  //
+  // ⚠ THIS WILL LOOK LIKE A REGRESSION AND IT IS THE FIX WORKING. On a machine
+  // whose key is present but rejected — the dev server, and production — rows
+  // that used to read WRAPUP_MESSAGE_SENT now read WRAPUP_MESSAGE_FAILED. Those
+  // messages were never sent. The dispatcher wrote SENT because the sender told
+  // it the send had succeeded.
+  //
+  // ⚠ AND IT IS INVISIBLE TO THE THREE WRAP-UP SUITES, WHICH IS WHY THIS LAYER
+  // EXISTS. They run under `tsx`, where `.env.local` is not loaded, so
+  // RESEND_API_KEY is unset, so `getResendClient()` THROWS and the unfixed
+  // sender already returned `{ success: false }`. Those suites were green
+  // before this fix and are green after it because they never saw the defect at
+  // all. Only a key-present, provider-rejecting environment shows it — which is
+  // the environment that matters and the one no suite had.
+  //
+  // Safe to run: `dispatchPendingWrapUpMessages` scans WrapUpLink rows GLOBALLY
+  // rather than by event, so this layer first asserts that the only pending rows
+  // are its own. Nothing can send — fetch is stubbed for the email leg and this
+  // link is `channel: 'email'`.
+
+  const wrapPerson = await prisma.person.create({
+    data: {
+      name: `${TAG} WrapGuest`,
+      email: `${TAG}-wrapguest-${Date.now()}@example.com`,
+    },
+  });
+  createdPersonIds.push(wrapPerson.id);
+  await prisma.personEvent.create({
+    data: {
+      personId: wrapPerson.id,
+      eventId: event.id,
+      role: 'PARTICIPANT',
+      householdRole: 'GUEST',
+      sentAt: new Date(now.getTime() - 3 * DAY),
+    },
+  });
+
+  const strayPending = await prisma.wrapUpLink.count({ where: { dispatched: false } });
+  assert(
+    'layer 5 precondition',
+    "no OTHER pending WrapUpLink rows exist — the dispatcher scans globally, so this layer must not be able to touch anyone else's",
+    strayPending === 0
+  );
+
+  if (strayPending === 0) {
+    // ⚠ THE CLOCK IS DERIVED FROM THE INJECTED `now`, NOT FROM THE REAL ONE.
+    //
+    // `dispatchPendingWrapUpMessages(now)` selects rows with
+    // `createdAt <= now - DISPATCH_DELAY_MINUTES` and defers the whole batch
+    // during NZ quiet hours (21:00-08:00). Those two constraints pull in
+    // opposite directions if the fixture uses the wall clock for one and an
+    // injected time for the other: a `now` pinned to NZ midday can land in the
+    // past relative to a row stamped `Date.now()`, and the batch comes back
+    // empty. It did, on the first run. Both timestamps now come from the same
+    // chosen instant.
+    const middayNZ = new Date();
+    middayNZ.setUTCHours(1, 0, 0, 0); // NZ 13:00 — outside the quiet window
+    const link = await prisma.wrapUpLink.create({
+      data: {
+        token: `${TAG}-wrap-${Date.now()}`,
+        eventId: event.id,
+        personId: wrapPerson.id,
+        guestName: `${TAG} WrapGuest`,
+        guestEmail: wrapPerson.email,
+        channel: 'email',
+        // Older than DISPATCH_DELAY_MINUTES (10) relative to `middayNZ`.
+        createdAt: new Date(middayNZ.getTime() - 30 * 60 * 1000),
+        expiresAt: new Date(middayNZ.getTime() + 30 * DAY),
+      },
+    });
+
+    stubFetchFailing();
+    captureConsoleError();
+    const { dispatchPendingWrapUpMessages } = await import('../src/lib/wrap-up');
+    const result = await dispatchPendingWrapUpMessages(middayNZ);
+    restoreConsoleError();
+    restoreFetch();
+
+    const after = await prisma.wrapUpLink.findUnique({ where: { id: link.id } });
+    const failedLog = await prisma.inviteEvent.count({
+      where: { eventId: event.id, personId: wrapPerson.id, type: 'WRAPUP_MESSAGE_FAILED' },
+    });
+    const sentLog = await prisma.inviteEvent.count({
+      where: { eventId: event.id, personId: wrapPerson.id, type: 'WRAPUP_MESSAGE_SENT' },
+    });
+
+    assert(
+      'layer 5',
+      'the dispatcher attempted exactly this one link — the batch was not empty and was not wider than its fixture',
+      result.total === 1 && result.deferred === 0
+    );
+    assert(
+      'layer 5',
+      'a rejected email send is now counted as FAILED by the wrap-up dispatcher, not as sent',
+      result.failed === 1 && result.sent === 0
+    );
+    assert(
+      'layer 5',
+      'the WrapUpLink row records failed=true with a reason — the row the retry route reads',
+      after?.failed === true && typeof after?.failReason === 'string' && !!after?.failReason
+    );
+    assert(
+      'layer 5',
+      'and the audit trail says WRAPUP_MESSAGE_FAILED, not WRAPUP_MESSAGE_SENT. ⚠ This is the fix working: before it, this row said SENT for a message that never left',
+      failedLog === 1 && sentLog === 0
+    );
+
+    await prisma.wrapUpLink.deleteMany({ where: { id: link.id } });
+  }
+}
+
+main()
+  .catch((err) => {
+    restoreFetch();
+    restoreConsoleError();
+    console.error('\x1b[31mSuite crashed:\x1b[0m', err);
+    failed++;
+    redAssertions.push('suite crashed');
+  })
+  .finally(async () => {
+    restoreFetch();
+    restoreConsoleError();
+    // Teardown, in dependency order.
+    try {
+      if (createdEventIds.length) {
+        await prisma.inviteEvent.deleteMany({ where: { eventId: { in: createdEventIds } } });
+        await prisma.personEvent.deleteMany({ where: { eventId: { in: createdEventIds } } });
+        await prisma.eventRole.deleteMany({ where: { eventId: { in: createdEventIds } } });
+        await prisma.event.deleteMany({ where: { id: { in: createdEventIds } } });
+      }
+      if (createdPersonIds.length) {
+        await prisma.person.deleteMany({ where: { id: { in: createdPersonIds } } });
+      }
+      if (createdUserIds.length) {
+        await prisma.session.deleteMany({ where: { userId: { in: createdUserIds } } });
+        await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+      }
+      if (createdMagicLinkIds.length) {
+        await prisma.magicLink.deleteMany({ where: { id: { in: createdMagicLinkIds } } });
+      }
+    } catch (cleanupErr) {
+      console.error('\x1b[31mTEARDOWN FAILED — rows may remain:\x1b[0m', cleanupErr);
+      failed++;
+    }
+    await prisma.$disconnect();
+
+    console.log('\n\x1b[1m\x1b[33m=== Test Summary ===\x1b[0m');
+    console.log(`Total tests: ${passed + failed}`);
+    console.log(`\x1b[32mPassed: ${passed}\x1b[0m`);
+    console.log(`\x1b[31mFailed: ${failed}\x1b[0m`);
+    if (failed > 0) {
+      console.log('\n\x1b[31mRED:\x1b[0m');
+      redAssertions.forEach((a) => console.log(`  ${a}`));
+    }
+    process.exit(failed > 0 ? 1 : 0);
+  });

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Send, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { OPT_OUT_LINE } from '@/lib/sms/opt-out-line';
 
 type NudgeVariant = 'warm' | 'casual' | 'gentle' | 'direct';
 
@@ -150,6 +151,11 @@ export function NudgeComposer({
         rows={4}
         className="w-full text-sm border border-gray-300 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-sage-500 focus:border-transparent"
       />
+
+      {/* [[GTC-337]] ruling 2 — a text ends with this line. Shown, not editable: the route adds it. */}
+      {contactMethod === 'sms' && (
+        <p className="-mt-2 px-3 text-sm text-gray-500">{OPT_OUT_LINE}</p>
+      )}
 
       {/* Error */}
       {error && (

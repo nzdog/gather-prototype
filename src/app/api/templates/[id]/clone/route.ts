@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth/session';
+import { recordBulkPlanChange } from '@/lib/ledger';
+import { itemNameForStorage } from '@/lib/items/name';
+import { DATE_WORDS, endBeforeStart } from '@/lib/events/date-pair';
 
 /**
  * POST /api/templates/[id]/clone
@@ -44,6 +47,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
   if (endDate && isNaN(Date.parse(endDate))) {
     return NextResponse.json({ error: 'Invalid end date' }, { status: 400 });
+  }
+
+  // [[GTC-385]] (item 53, Q2): a backwards pair is refused before any template is read.
+  if (endBeforeStart(startDate, endDate)) {
+    return NextResponse.json({ error: DATE_WORDS.BACKWARDS }, { status: 400 });
   }
 
   // SECURITY: Fetch only ownership fields before authorization check
@@ -179,7 +187,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
       await prisma.item.create({
         data: {
-          name: itemData.name,
+          name: itemNameForStorage(itemData.name) ?? itemData.name, // GTC-302
           description: itemData.description,
           critical: itemData.critical,
           criticalReason: itemData.criticalReason,
@@ -208,6 +216,18 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       },
     });
   }
+
+  // The clone populated a whole plan. One step, like a generation.
+  //
+  // NOTE for GTC-195 (K1): cloning's first act must become a mandatory people-review
+  // — "the guest list never copies silently" (Moment 4 §10.10). This entry gives that
+  // review something to anchor to.
+  await recordBulkPlanChange(prisma, {
+    eventId: event.id,
+    actor: { id: hostId, kind: 'HOST', name: null },
+    action: 'GENERATE_PLAN',
+    after: { clonedFromTemplateId: template.id, scalingApplied: applyQuantityScaling },
+  });
 
   return NextResponse.json({
     eventId: event.id,

@@ -56,17 +56,22 @@ async function runTests() {
   assert(isOptOutMessage('STOPALL'), 'STOPALL is recognized');
   assert(isOptOutMessage('UNSUBSCRIBE'), 'UNSUBSCRIBE is recognized');
   assert(isOptOutMessage('unsubscribe'), 'unsubscribe (lowercase) is recognized');
-  assert(isOptOutMessage('CANCEL'), 'CANCEL is recognized');
-  assert(isOptOutMessage('END'), 'END is recognized');
-  assert(isOptOutMessage('QUIT'), 'QUIT is recognized');
+  // ⚠ MOVED BY [[GTC-288]] — founder ruling 2026-10-01, Q3, "Exactly TNZ's": a STOP is a reply
+  // that BEGINS WITH one of TNZ's six (STOP, OPTOUT, OPT OUT, OPT-OUT, UNSUB, UNSUBSCRIBE), in any
+  // case. CANCEL, END and QUIT were Gather's own words and are now ordinary replies; "Stop please",
+  // "STOP sending messages" and "STOPPED" begin with STOP and are now opt-outs. Each read the
+  // opposite before.
+  assertFalse(isOptOutMessage('CANCEL'), "CANCEL is NOT an opt-out (not one of TNZ's words)");
+  assertFalse(isOptOutMessage('END'), "END is NOT an opt-out (not one of TNZ's words)");
+  assertFalse(isOptOutMessage('QUIT'), "QUIT is NOT an opt-out (not one of TNZ's words)");
 
   // Invalid opt-out messages (should NOT match)
-  assertFalse(isOptOutMessage('Stop please'), 'Stop please is NOT an opt-out (not exact match)');
+  assert(isOptOutMessage('Stop please'), 'Stop please is an opt-out (begins with STOP)');
   assertFalse(isOptOutMessage('Please STOP'), 'Please STOP is NOT an opt-out');
-  assertFalse(isOptOutMessage('STOPPED'), 'STOPPED is NOT an opt-out');
+  assert(isOptOutMessage('STOPPED'), 'STOPPED is an opt-out (begins with STOP)');
   assertFalse(isOptOutMessage('Hello'), 'Hello is NOT an opt-out');
   assertFalse(isOptOutMessage(''), 'Empty string is NOT an opt-out');
-  assertFalse(isOptOutMessage('STOP sending messages'), 'STOP with extra words is NOT an opt-out');
+  assert(isOptOutMessage('STOP sending messages'), 'STOP with extra words is an opt-out');
 
   // Get matched keyword
   assertDeepEqual(getOptOutKeyword('STOP'), 'stop', 'getOptOutKeyword returns normalized keyword');
@@ -144,35 +149,47 @@ async function runTests() {
     // Test phone number for opt-out testing
     const testPhone = '+64211111111';
 
-    // Clean up any existing test opt-out
-    await prisma.smsOptOut.deleteMany({
-      where: {
-        phoneNumber: testPhone,
-        hostId: hostId,
-      },
-    });
+    /*
+     * ⚠ REWRITTEN BY [[GTC-288]] — founder ruling 2026-09-12: an opt-out is account-wide, on the
+     * phone number, not per host. The per-host compound key (`phoneNumber_hostId`) is gone, so the
+     * rows here are written and removed by id, and `isOptedOut` takes the number alone. Each call is
+     * guarded so a failure reports against its own assertion rather than ending the suite.
+     */
+    const attempt = async <T>(fn: () => Promise<T>): Promise<T | undefined> => {
+      try {
+        return await fn();
+      } catch (e) {
+        console.log(`   (threw: ${e instanceof Error ? e.message.split('\n')[0] : 'unknown'})`);
+        return undefined;
+      }
+    };
+
+    // Clean up any existing test opt-out, under any host
+    await prisma.smsOptOut.deleteMany({ where: { phoneNumber: testPhone } });
 
     // Test 1: Check opt-out status (should be false initially)
-    const isOptedOutBefore = await isOptedOut(testPhone, hostId);
-    assertFalse(isOptedOutBefore, 'Phone is not opted out initially');
+    const isOptedOutBefore = await attempt(() => isOptedOut(testPhone));
+    assert(isOptedOutBefore === false, 'Phone is not opted out initially');
 
     // Test 2: Create an opt-out record
-    const optOutRecord = await prisma.smsOptOut.create({
-      data: {
-        phoneNumber: testPhone,
-        hostId: hostId,
-        rawMessage: 'STOP (test)',
-      },
-    });
-    assert(!!optOutRecord.id, 'Opt-out record created successfully');
+    const optOutRecord = await attempt(() =>
+      prisma.smsOptOut.create({
+        data: {
+          phoneNumber: testPhone,
+          hostId: hostId,
+          rawMessage: 'STOP (test)',
+        },
+      })
+    );
+    assert(!!optOutRecord?.id, 'Opt-out record created successfully');
 
     // Test 3: Check opt-out status (should be true now)
-    const isOptedOutAfter = await isOptedOut(testPhone, hostId);
-    assert(isOptedOutAfter, 'Phone is opted out after creating record');
+    const isOptedOutAfter = await attempt(() => isOptedOut(testPhone));
+    assert(isOptedOutAfter === true, 'Phone is opted out after creating record');
 
     // Test 4: Batch opt-out check
     const testPhones = [testPhone, '+64222222222', '+64233333333'];
-    const optOutMap = await getOptOutStatuses(testPhones, hostId);
+    const optOutMap = (await attempt(() => getOptOutStatuses(testPhones))) ?? new Map();
 
     assert(optOutMap.size === 3, 'Batch check returns Map with 3 entries');
     assert(optOutMap.get(testPhone) === true, 'Batch check: opted-out phone returns true');
@@ -185,27 +202,18 @@ async function runTests() {
       'Batch check: another non-opted-out phone returns false'
     );
 
-    // Test 5: Unique constraint (should update, not error)
-    const upsertResult = await prisma.smsOptOut.upsert({
-      where: {
-        phoneNumber_hostId: {
-          phoneNumber: testPhone,
-          hostId: hostId,
-        },
-      },
-      create: {
-        phoneNumber: testPhone,
-        hostId: hostId,
-        rawMessage: 'STOP (should not create)',
-      },
-      update: {
-        rawMessage: 'STOP (updated)',
-        optedOutAt: new Date(),
-      },
-    });
-    assert(upsertResult.rawMessage === 'STOP (updated)', 'Upsert updates existing record');
+    // Test 5: the row is changed by id (no per-host compound key any more)
+    const updated = optOutRecord
+      ? await attempt(() =>
+          prisma.smsOptOut.update({
+            where: { id: optOutRecord.id },
+            data: { rawMessage: 'STOP (updated)', optedOutAt: new Date() },
+          })
+        )
+      : undefined;
+    assert(updated?.rawMessage === 'STOP (updated)', 'An update by id changes the existing record');
 
-    // Test 6: Opt-out is per-host (create different host opt-out)
+    // Test 6: Opt-out is account-wide (a different host is covered too)
     const otherHosts = await prisma.person.findMany({
       where: {
         id: { not: hostId },
@@ -216,27 +224,20 @@ async function runTests() {
     });
 
     if (otherHosts.length > 0) {
-      const otherHostId = otherHosts[0].id;
-
-      // Should NOT be opted out from other host
-      const isOptedOutFromOther = await isOptedOut(testPhone, otherHostId);
-      assertFalse(
-        isOptedOutFromOther,
-        'Phone is not opted out from different host (per-host scoping works)'
+      // ⚠ INVERTED BY [[GTC-288]]: it read "Phone is not opted out from different host (per-host
+      // scoping works)". The row above is under this event's host; the number is opted out for
+      // every host.
+      const isOptedOutForOther = await attempt(() => isOptedOut(testPhone));
+      assert(
+        isOptedOutForOther === true,
+        'Phone is opted out for a different host too (account-wide)'
       );
     } else {
-      console.log('⚠️  No other host found, skipping per-host test');
+      console.log('⚠️  No other host found, skipping account-wide test');
     }
 
     // Clean up test data
-    await prisma.smsOptOut.delete({
-      where: {
-        phoneNumber_hostId: {
-          phoneNumber: testPhone,
-          hostId: hostId,
-        },
-      },
-    });
+    if (optOutRecord) await prisma.smsOptOut.delete({ where: { id: optOutRecord.id } });
     console.log('✅ Test data cleaned up');
   }
 
@@ -272,8 +273,9 @@ async function runTests() {
   const fs = require('fs');
   const path = require('path');
 
-  const webhookPath = path.join(__dirname, '../src/app/api/sms/inbound/route.ts');
-  assert(fs.existsSync(webhookPath), 'Inbound webhook route.ts exists');
+  // GTC-264 / GTC-229: TNZ's one webhook replaced the Twilio-shaped `sms/inbound` route.
+  const webhookPath = path.join(__dirname, '../src/app/api/sms/tnz-webhook/route.ts');
+  assert(fs.existsSync(webhookPath), 'TNZ webhook route.ts exists');
 
   const inviteStatusPath = path.join(
     __dirname,

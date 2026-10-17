@@ -182,17 +182,11 @@ export default function BillingPage() {
         <div className="bg-white rounded-lg shadow-md p-8 mb-6">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">
-                {isFree ? 'Free Plan' : 'Annual Plan'}
-              </h2>
+              {/* [[GTC-384]] (Q3, ruled 2026-10-14): no plan heading for a subscriber, only the
+                  status badge; a free user keeps "Free Plan". */}
+              {isFree && <h2 className="text-2xl font-bold text-gray-900">Free Plan</h2>}
               <StatusBadge status={billingStatus} />
             </div>
-            {!isFree && (
-              <div className="text-right">
-                <div className="text-3xl font-bold text-gray-900">$69</div>
-                <div className="text-sm text-gray-600">NZD / year</div>
-              </div>
-            )}
           </div>
 
           {/* Cancellation Notice */}
@@ -254,10 +248,10 @@ export default function BillingPage() {
                         <span className="font-semibold">
                           {trialDaysRemaining} day{trialDaysRemaining !== 1 ? 's' : ''}
                         </span>{' '}
-                        remaining in your trial. After that, you'll be charged $69 NZD/year.
+                        remaining in your trial.
                       </>
                     ) : (
-                      <>Your trial ends today. You'll be charged $69 NZD/year.</>
+                      <>Your trial ends today.</>
                     )}
                   </p>
                 </div>
@@ -268,7 +262,7 @@ export default function BillingPage() {
           {/* Plan Details */}
           <div className="space-y-3 mb-6">
             <PlanFeature
-              text="Pay per event — $12 NZD per event, no subscription"
+              text="Pay per event — $25 NZD per event, no subscription"
               enabled={isActive}
             />
             <PlanFeature text="AI-powered plan generation" enabled={isActive} />
@@ -294,15 +288,6 @@ export default function BillingPage() {
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-3">
-            {isFree && (
-              <button
-                onClick={() => router.push('/billing/upgrade')}
-                className="flex-1 bg-sage-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-sage-700 transition-colors"
-              >
-                Upgrade to Annual Plan
-              </button>
-            )}
-
             {isCanceled && (
               <button
                 onClick={handleResubscribe}

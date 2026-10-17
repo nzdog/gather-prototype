@@ -1,10 +1,11 @@
 // GET /api/events/[id]/tokens
 // Returns all invite links for an event
-// SECURITY: Host-only endpoint
+// SECURITY: Host-only endpoint — session or a HOST-scoped bearer token.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { listInviteLinks, ensureEventTokens } from '@/lib/tokens';
 import { prisma } from '@/lib/prisma';
+import { requireEventRole } from '@/lib/auth/guards';
 
 // Force Node.js runtime for crypto support
 export const runtime = 'nodejs';
@@ -13,13 +14,16 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   try {
     const { id: eventId } = await context.params;
 
-    // SERVER-SIDE AUTH: Verify this is the Host
-    // Two authentication methods supported:
-    // 1. Bearer token (HOST-scoped access token)
-    // 2. Query param hostId (validates against event.hostId)
-
-    const { searchParams } = new URL(request.url);
-    const hostIdParam = searchParams.get('hostId');
+    // SERVER-SIDE AUTH: Verify this is the Host.
+    //
+    // GTC-267: there used to be a second method here — `?hostId=`, compared against
+    // `event.hostId`. It was not authentication. `GET /api/events/[id]` published
+    // that same hostId to anonymous callers, so the parameter was a credential the
+    // neighbouring route handed out: event id -> hostId -> every access token on
+    // this event, including the HOST one. The session path below replaces it.
+    // GTC-026 added the parameter because the token-link flow has no session; that
+    // no longer applies, since the only route that reveals a hostId now requires a
+    // session itself.
     const authHeader = request.headers.get('authorization');
     const token = authHeader?.replace('Bearer ', '');
 
@@ -54,39 +58,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       return NextResponse.json({ inviteLinks });
     }
 
-    // Method 2: hostId query param auth (new - for Plan page)
-    if (hostIdParam) {
-      // Fetch event and verify hostId matches
-      const event = await prisma.event.findUnique({
-        where: { id: eventId },
-        select: { hostId: true, coHostId: true },
-      });
+    // Method 2: the host's own session, via the shared guard.
+    const auth = await requireEventRole(eventId, ['HOST', 'COHOST']);
+    if (auth instanceof NextResponse) return auth;
 
-      if (!event) {
-        return NextResponse.json({ error: 'Event not found' }, { status: 404 });
-      }
-
-      // Allow both host and co-host to access invite links
-      if (event.hostId !== hostIdParam && event.coHostId !== hostIdParam) {
-        return NextResponse.json(
-          { error: 'Unauthorized: Only the host can access invite links' },
-          { status: 403 }
-        );
-      }
-
-      // hostId auth passed - ensure tokens are up to date, then return invite links
-      await ensureEventTokens(eventId);
-      const inviteLinks = await listInviteLinks(eventId);
-      return NextResponse.json({ inviteLinks });
-    }
-
-    // No authentication method provided
-    return NextResponse.json(
-      {
-        error: 'Unauthorized: No authentication provided. Use Bearer token or hostId query param.',
-      },
-      { status: 403 }
-    );
+    await ensureEventTokens(eventId);
+    const inviteLinks = await listInviteLinks(eventId);
+    return NextResponse.json({ inviteLinks });
   } catch (error) {
     console.error('Error fetching invite links:', error);
     return NextResponse.json(

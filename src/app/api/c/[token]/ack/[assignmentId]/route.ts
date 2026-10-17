@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { logAudit } from '@/lib/workflow';
-import { AssignmentResponse } from '@prisma/client';
+import { recordAssignmentAnswer } from '@/lib/assignment/answer';
+import { parseAssignmentResponse } from '@/lib/attendance';
 
 /**
  * POST /api/c/[token]/ack/[assignmentId]
  *
- * Coordinator records response (Accept or Decline) for their own assignment
+ * Coordinator records the response to their OWN assignment: accept, decline, or maybe.
+ *
+ * GTC-174 (D1): a coordinator answering their own item is a guest answering an item —
+ * same model, same three ways (Hinge §3). This is not the host-override path, which
+ * stays binary because a host never records a maybe on someone else's behalf.
  */
 export async function POST(
   request: NextRequest,
@@ -22,12 +26,11 @@ export async function POST(
 
   // Parse request body for response type
   const body = await request.json();
-  const { response } = body;
+  const response = parseAssignmentResponse(body?.response);
 
-  // Validate response type
-  if (!response || !['ACCEPTED', 'DECLINED'].includes(response)) {
+  if (response === null) {
     return NextResponse.json(
-      { error: 'Invalid response. Must be ACCEPTED or DECLINED' },
+      { error: 'Invalid response. Must be ACCEPTED, DECLINED or MAYBE' },
       { status: 400 }
     );
   }
@@ -49,20 +52,18 @@ export async function POST(
     return NextResponse.json({ success: true });
   }
 
-  // Update response in transaction
+  // Update response in transaction.
+  //
+  // GTC-320: the write and the audit line are `recordAssignmentAnswer` in
+  // src/lib/assignment/answer.ts, shared with the participant door. This route's own-row
+  // check above is NOT shared — that is GTC-174's ruling and it stays here.
   await prisma.$transaction(async (tx) => {
-    await tx.assignment.update({
-      where: { id: assignmentId },
-      data: { response: response as AssignmentResponse },
-    });
-
-    await logAudit(tx, {
+    await recordAssignmentAnswer(tx, {
       eventId: resolvedContext.event.id,
+      assignmentId,
+      itemName: assignment.item.name,
+      response,
       actorId: resolvedContext.person.id,
-      actionType: response === 'ACCEPTED' ? 'ACCEPT_ASSIGNMENT' : 'DECLINE_ASSIGNMENT',
-      targetType: 'Assignment',
-      targetId: assignmentId,
-      details: `${response === 'ACCEPTED' ? 'Accepted' : 'Declined'} ${assignment.item.name}`,
     });
   });
 

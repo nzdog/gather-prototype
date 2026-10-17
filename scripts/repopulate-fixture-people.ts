@@ -12,7 +12,7 @@
  *
  * Run via:  railway run tsx scripts/repopulate-fixture-people.ts
  *
- * Idempotent: uses upsert for Person and PersonEvent records; skips AccessToken
+ * Idempotent: find-or-create for Person, upsert for PersonEvent records; skips AccessToken
  * creation if one already exists for that (eventId, personId, scope, teamId) combination.
  */
 
@@ -109,12 +109,10 @@ async function addParticipantsWithCoords(
     const personEmail = email(eventKey, i);
     const role = isCoord ? 'COORDINATOR' : 'PARTICIPANT';
 
-    // Upsert person
-    const person = await prisma.person.upsert({
-      where: { email: personEmail },
-      update: {},
-      create: { name: personName, email: personEmail },
-    });
+    // Find-or-create person. Not an upsert: Person.email is not unique ([[GTC-293]]).
+    const person =
+      (await prisma.person.findFirst({ where: { email: personEmail } })) ??
+      (await prisma.person.create({ data: { name: personName, email: personEmail } }));
 
     // If coordinator, assign them to the team
     if (isCoord) {
@@ -183,11 +181,10 @@ async function addParticipantsOnly(
     const personName = `${NAMES[i]} Fixture`;
     const personEmail = email(eventKey, i);
 
-    const person = await prisma.person.upsert({
-      where: { email: personEmail },
-      update: {},
-      create: { name: personName, email: personEmail },
-    });
+    // Not an upsert: Person.email is not unique ([[GTC-293]]).
+    const person =
+      (await prisma.person.findFirst({ where: { email: personEmail } })) ??
+      (await prisma.person.create({ data: { name: personName, email: personEmail } }));
 
     await prisma.personEvent.upsert({
       where: { personId_eventId: { personId: person.id, eventId } },

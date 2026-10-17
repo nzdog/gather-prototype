@@ -3,6 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordChange } from '@/lib/ledger';
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -124,10 +126,25 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // Verify event exists
     const event = await prisma.event.findUnique({
       where: { id: eventId },
+      include: { setup: { select: { id: true } } },
     });
 
     if (!event) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
+
+    /*
+     * [[GTC-382]] (Q8) — "+ Add category" on a Moment-flow event puts the new section after the last
+     * one, so it keeps its place on a reload (the plan view sorts by displayOrder). An old-style event
+     * (no EventSetup record) stores the default, 0, exactly as before.
+     */
+    let displayOrder: number | undefined;
+    if (event.setup) {
+      const last = await prisma.team.aggregate({
+        where: { eventId },
+        _max: { displayOrder: true },
+      });
+      displayOrder = (last._max.displayOrder ?? 0) + 1;
     }
 
     // Create team with sanitized inputs
@@ -140,6 +157,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         source: 'MANUAL',
         eventId,
         coordinatorId: coordinatorId.trim(),
+        ...(displayOrder !== undefined ? { displayOrder } : {}),
       },
       include: {
         coordinator: {
@@ -150,6 +168,22 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         },
       },
     });
+    const teamActor = await ledgerActorForUser(auth.user, auth.role);
+    await prisma.$transaction((tx) =>
+      recordChange(tx, {
+        eventId,
+        actor: teamActor,
+        changes: [
+          {
+            action: 'CREATE_TEAM',
+            targetType: 'Team',
+            targetId: team.id,
+            before: null,
+            after: { name: team.name },
+          },
+        ],
+      })
+    );
 
     return NextResponse.json({ team }, { status: 201 });
   } catch (error) {

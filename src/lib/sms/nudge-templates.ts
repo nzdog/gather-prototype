@@ -1,3 +1,5 @@
+import { withOptOutLine } from './opt-out-line';
+
 /**
  * SMS templates for auto-nudges
  *
@@ -8,39 +10,12 @@
  * - Include opt-out instruction (required by regulations)
  */
 
-export interface NudgeTemplateParams {
-  hostName: string;
-  eventName: string;
-  link: string;
-  personName?: string;
-}
-
-export interface ProxyNudgeTemplateParams {
-  eventName: string;
-  unclaimedCount: number;
-  dashboardLink: string;
-}
-
-/**
- * 24h "Open Rescue" nudge
- * Sent when someone hasn't opened their link yet
+/*
+ * [[GTC-337]] — `getFirstNudgeMessage` and `getSecondNudgeMessage` (and their
+ * `NudgeTemplateParams`) were deleted here. They told anyone with anything open that the host
+ * was "waiting for your response", including a guest who had answered one dish of two. The text
+ * reminders are `composeChaseText` in `src/lib/messages/chase-register.ts` now (ruling 1).
  */
-export function get24hNudgeMessage(params: NudgeTemplateParams): string {
-  const { hostName, eventName, link } = params;
-
-  // Target: ~140 chars to leave room for carrier additions
-  return `${hostName} is waiting for your response for ${eventName}. Tap to view: ${link} — Reply STOP to opt out`;
-}
-
-/**
- * 48h "Action Rescue" nudge
- * Sent when someone opened but hasn't responded
- */
-export function get48hNudgeMessage(params: NudgeTemplateParams): string {
-  const { hostName, eventName, link } = params;
-
-  return `Reminder: ${hostName} needs your response for ${eventName}. Please confirm: ${link} — Reply STOP to opt out`;
-}
 
 /**
  * Validate message length
@@ -68,18 +43,6 @@ export function getMessageInfo(message: string): {
     segments: getMessageSegments(message),
     hasUnicode,
   };
-}
-
-/**
- * Proxy household reminder nudge
- * Sent to proxy when household members haven't claimed their slots
- */
-export function getProxyHouseholdReminderMessage(params: ProxyNudgeTemplateParams): string {
-  const { eventName, unclaimedCount, dashboardLink } = params;
-
-  const peopleText = unclaimedCount === 1 ? 'person' : 'people';
-
-  return `${eventName}: ${unclaimedCount} ${peopleText} in your group haven't confirmed yet. Can you check in with them? ${dashboardLink} — Reply STOP to opt out`;
 }
 
 /**
@@ -121,12 +84,54 @@ export const HOST_NUDGE_VARIANT_LABELS: Record<HostNudgeVariant, string> = {
   direct: 'Direct',
 };
 
-/**
- * RSVP Followup nudge
- * Sent 48h after "Not sure" response to force conversion to Yes/No
- */
-export function getRsvpFollowupMessage(params: NudgeTemplateParams): string {
-  const { eventName, link } = params;
+export interface DecideByFollowupTemplateParams {
+  hostFirstName: string;
+  itemName: string;
+  /** The decide-by rendered as an NZ weekday — see formatDecideByDay. */
+  decideByDay: string;
+  link: string;
+}
 
-  return `${eventName}: We need a final answer — are you coming? ${link} — Reply STOP to opt out`;
+/**
+ * GTC-175 (D2) — the maybe's single decide-by follow-up.
+ *
+ * The copy is Hinge §8's own, near-verbatim: "still good for the pavlova? Kate needs to
+ * know by Thursday." Note what it is NOT. It does not ask "did you see this?" — he saw
+ * it, he tapped maybe; that is the silence cadence's question and §8 rules it the wrong
+ * one here. It does not chase, and it never repeats: one follow-up, then the clock runs
+ * out and the maybe becomes Kate's problem rather than the guest's.
+ *
+ * The host's FIRST name, matching the warm register of the host-composed variants above
+ * rather than the terse auto-nudge ones — this message speaks for Kate, not for the
+ * system.
+ *
+ * [[GTC-337]] ruling 2: it ends with `OPT_OUT_LINE` on its own line, with no dash — as every
+ * text Gather sends does. The dash was the one non-GSM-7 character in it ([[GTC-257]]).
+ */
+export function getDecideByFollowupMessage(params: DecideByFollowupTemplateParams): string {
+  const { hostFirstName, itemName, decideByDay, link } = params;
+
+  return withOptOutLine(
+    `Still good for the ${itemName}? ${hostFirstName} needs to know by ${decideByDay}. ${link}`
+  );
+}
+
+/**
+ * The decide-by as a guest would say it: a weekday name in NZ local time.
+ *
+ * NZ-local rather than UTC because the guest reads it on an NZ phone, and a deadline
+ * that lands Thursday evening UTC is Friday morning to them. Timezone-correct on any
+ * server — the same reasoning as isQuietHours (quiet-hours.ts:29-31).
+ *
+ * Falls back to a day + month once the deadline is more than a week out, where a bare
+ * weekday is ambiguous.
+ */
+export function formatDecideByDay(decideByAt: Date, now: Date = new Date()): string {
+  const withinAWeek = decideByAt.getTime() - now.getTime() < 7 * 24 * 60 * 60 * 1000;
+
+  return decideByAt.toLocaleDateString('en-NZ', {
+    timeZone: 'Pacific/Auckland',
+    weekday: 'long',
+    ...(withinAWeek ? {} : { day: 'numeric', month: 'long' }),
+  });
 }

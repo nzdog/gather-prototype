@@ -3,6 +3,8 @@
  * Based on Plan AI Protocol v2
  */
 
+import { getNzNotes } from './config-loader';
+
 export const PLAN_GENERATION_SYSTEM_PROMPT = `You are a planning assistant for Gather, helping hosts plan multi-day gatherings.
 
 NZ CULTURAL OVERRIDE (HIGHEST PRIORITY):
@@ -226,33 +228,6 @@ Return ONLY valid JSON matching this exact structure:
   ],
   "reasoning": "Explain how you applied the modifier and key decisions"
 }
-
-Return ONLY the JSON, no additional text.
-`;
-
-export const EXPLANATION_SYSTEM_PROMPT = `You are an explanation assistant for Gather, helping hosts understand conflict detection and suggestions.
-
-Your role:
-- Explain WHY a conflict or suggestion was raised
-- Explain the SOURCE of the claim (constraint, pattern, heuristic, etc.)
-- Be honest about CONFIDENCE levels
-- Use clear, human-friendly language
-- Reference specific details from the conflict data
-
-OUTPUT FORMAT:
-Return valid JSON:
-
-{
-  "source": "Brief description of where this insight comes from",
-  "confidence": "high|medium|low",
-  "reasoning": "Detailed human-readable explanation of why this matters and what the host should consider",
-  "suggestions": ["Optional array of specific actionable suggestions"]
-}
-
-CONFIDENCE LEVELS:
-- high: Hard constraints (equipment limits, dietary requirements, critical quantities)
-- medium: Strong patterns or risks (timing conflicts, coverage gaps)
-- low: Preferences or assumptions (nice-to-haves, optional improvements)
 
 Return ONLY the JSON, no additional text.
 `;
@@ -505,31 +480,21 @@ IMPORTANT INSTRUCTIONS:
   return prompt;
 }
 
-/**
- * Build user prompt for conflict explanation
- */
-export function buildExplanationPrompt(conflict: {
-  type: string;
-  severity: string;
-  claimType: string;
-  description: string;
-  metadata?: any;
-}): string {
-  return `Explain this conflict/suggestion to the host:
+/* ---------------------------------------------------------------------------
+ * Moment 2 shared types
+ *
+ * Used by the modal (Moment2Step1Modal) and the single-call finalize-plan
+ * route. The per-section prompt builders that used to live here were
+ * removed in GTC-146 alongside the per-section route.
+ * ------------------------------------------------------------------------- */
 
-TYPE: ${conflict.type}
-SEVERITY: ${conflict.severity}
-CLAIM TYPE: ${conflict.claimType}
-DESCRIPTION: ${conflict.description}
-
-${conflict.metadata ? `ADDITIONAL CONTEXT:\n${JSON.stringify(conflict.metadata, null, 2)}` : ''}
-
-Provide a clear, helpful explanation of:
-1. Where this insight comes from (source)
-2. How confident we are (high/medium/low)
-3. Why it matters and what the host should consider
-4. Specific actionable suggestions if applicable`;
+export interface OptionTreeLevelSelection {
+  options: string[];
+  freeText: string;
 }
+
+/** Mirrors GTC-131's OptionTreeSelections — keys are level indices, often serialized as strings. */
+export type OptionTreeSelections = Record<string | number, OptionTreeLevelSelection>;
 
 /**
  * Build user prompt for selective item regeneration
@@ -560,4 +525,248 @@ ${params.itemsToRegenerate.map((i) => `- ${i.team}: ${i.name} (needs replacement
 Generate new items ONLY for the "to regenerate" list. Keep the same categories/teams.
 Return items in the JSON format specified in the system prompt.
 Do not include any confirmed items in your response.`;
+}
+
+/* ---------------------------------------------------------------------------
+ * GTC-145 single-call plan generation
+ *
+ * One prompt that receives all of Kate's Step 1 context and returns a fully
+ * coordinated plan in a single Claude response. Replaced the per-section
+ * pattern (per-category prompts + gap-fill loop) so the model can avoid
+ * cross-section duplication, balance item counts across categories, and
+ * treat dietary requirements as an input rather than generating parallel
+ * alternatives.
+ * ------------------------------------------------------------------------- */
+
+export interface PlanGenerationCategoryInput {
+  /** Canonical category key, e.g., 'mains', 'sides_salads' */
+  key: string;
+  /** Human-readable label, e.g., 'Mains', 'Sides & Salads' */
+  label: string;
+  /** Emoji used in the assembled plan */
+  emoji: string;
+  /** Flattened OptionTree selections — Kate's stated preferences for this category */
+  selections: string[];
+  /** When true, the category should be skipped (Kate is undecided) */
+  stillDeciding: boolean;
+  /** Optional reference items from the NZ config to seed model context */
+  referenceItems: string[];
+}
+
+export interface PlanGenerationInput {
+  eventType: string;
+  totalAdults: number;
+  totalKids: number;
+  /**
+   * GTC-150 three-state dietary model: 'confirmed_needs' → the requirements
+   * list drives generation; 'confirmed_none' → host affirmatively confirmed
+   * none; 'unanswered' → host never confirmed — do not assume none.
+   */
+  dietaryStatus: 'unanswered' | 'confirmed_none' | 'confirmed_needs';
+  /** Structured dietary requirements + free-text "Other: ..." entries (confirmed_needs only) */
+  dietaryRequirements: string[];
+  /** Categories Kate engaged with, in the order they should appear */
+  engagedCategories: PlanGenerationCategoryInput[];
+  /** Free-text "Other" notes from the food section */
+  otherNotes: string;
+  /** Free-text other-jobs notes (set up / clean up / other) */
+  setUpNotes: string;
+  cleanUpNotes: string;
+  otherJobsNotes: string;
+  /**
+   * GTC-236: items already in the plan that regeneration is keeping (host-added,
+   * host-edited, or protected). Optional so every existing caller is untouched —
+   * absent means fresh generation and the prompt is byte-identical to before.
+   * `quantity` arrives preformatted ("4 kg", "2 bottles") because stored quantities
+   * mix amount/unit/custom-unit/free-text and the model only needs the display form.
+   */
+  preservableItems?: Array<{
+    category: string;
+    name: string;
+    quantity: string;
+    notes?: string;
+  }>;
+}
+
+export function buildPlanGenerationPrompt(input: PlanGenerationInput): {
+  system: string;
+  user: string;
+} {
+  const totalPeople = input.totalAdults + input.totalKids;
+  const eventLabel = input.eventType === 'Other' ? 'event' : input.eventType.toLowerCase();
+  const nzNotes = getNzNotes(input.eventType);
+
+  const systemPrompt = `You are a meal planning assistant for a ${eventLabel} in New Zealand.${nzNotes ? ' ' + nzNotes : ''}
+
+You produce a single, coordinated plan in one response. The plan reflects what the host (Kate) would actually shop for and bring to this event — not encyclopedic coverage of every possible item. Realism beats completeness.
+
+CROSS-CATEGORY COORDINATION (this is why we generate everything in one call):
+- Every item appears in exactly ONE category. No item duplicated across categories.
+- Avoid near-duplicates in the same role (e.g., do not list both "Yule Log" and "Chocolate Yule Log" in two different categories).
+- Drinks belong in drinks categories, not in entrée or mains. Cake belongs in Cake (when present) or Dessert, not both.
+- Dessert and Cake are distinct: if Cake is engaged, the celebratory cake lives there; Dessert holds other sweet items only.
+
+DIETARY REQUIREMENTS AS INPUT (not as a separate category):
+- Dietary requirements describe the people at the gathering. They are a constraint on item generation, not a section heading.
+- Prefer naturally-suitable items integrated into existing categories (a roasted vegetable side that is already vegetarian, a fresh fruit salad that is already vegan and gluten-free).
+- Only add a clearly separate dietary alternative when no naturally-suitable item fits the section.
+- Tag each item with appropriate dietary tags (VEGETARIAN, VEGAN, GLUTEN_FREE, DAIRY_FREE, NUT_FREE) where they apply.
+
+REALISTIC PORTION MATH:
+- Quantities reflect headcount with sensible per-person figures (e.g., proteins ~150–200g/adult, sides ~150g/adult, desserts ~1 portion/person).
+- Children eat smaller quantities than adults; account for the kids count.
+- Use real-world units (kg, g, L, ml, count, packs, trays, bottles, bowls).
+
+PLAN SIZE GUIDANCE:
+- Generate a realistic coordinated meal plan, not encyclopedic coverage.
+- Aim for items Kate would actually buy and bring, not items she could possibly bring.
+- For a typical 15–25 person gathering, expect roughly 15–30 items total across all engaged categories.
+- Per-category item counts should reflect importance: a Christmas Mains category for 20 people might have 3–5 items; Table Snacks 2–3 items.
+- Do not pad. If a category has nothing distinctive to add beyond what Kate selected, return what's there with sensible quantities and stop.
+
+ENGAGED CATEGORIES ONLY:
+- Generate items only for the categories listed in the user prompt.
+- Skip categories that are marked still-deciding.
+- Do not invent new categories beyond those provided.
+
+CRITICALITY (a host-facing badge only — it does not change what or how much you generate):
+- Only 3-5 items across the ENTIRE plan may be critical, maximum.
+- Critical means "the event genuinely fails without this item" — main proteins, and key dietary alternatives for guests with restrictions.
+- Sauces, condiments, bread, drinks, setup items, cleanup items, side dishes, and extra desserts are NEVER critical.
+- When in doubt, mark it NOT critical.
+- If critical is true, criticalReason must briefly explain why; otherwise leave criticalReason null.
+
+Return ONLY valid JSON in the exact shape specified. No prose, no markdown, no commentary.`;
+
+  // Build per-category input blocks
+  const categoryBlocks = input.engagedCategories
+    .filter((c) => !c.stillDeciding)
+    .map((c) => {
+      const refs =
+        c.referenceItems.length > 0
+          ? `  Reference items (NZ ${eventLabel}): ${c.referenceItems.join(', ')}`
+          : '';
+      const sel =
+        c.selections.length > 0
+          ? `  Kate's selections: ${c.selections.join(', ')}`
+          : `  Kate's selections: (none — pick sensible defaults for this category)`;
+      return `- ${c.label} (key: ${c.key})\n${sel}${refs ? '\n' + refs : ''}`;
+    })
+    .join('\n');
+
+  const skippedCategories = input.engagedCategories
+    .filter((c) => c.stillDeciding)
+    .map((c) => c.label);
+
+  // GTC-150: three-state dietary language. "Skipped" is never presented to
+  // the model as "none" — unanswered gets explicit uncertainty + safe defaults.
+  const dietaryBlock =
+    input.dietaryStatus === 'confirmed_needs'
+      ? `Dietary requirements present: ${input.dietaryRequirements.join(', ')}`
+      : input.dietaryStatus === 'confirmed_none'
+        ? 'The host has confirmed there are no dietary requirements at this event. Generate items normally without dietary constraints.'
+        : 'The host has not yet confirmed dietary requirements. Do not assume there are none. Include at least one vegetarian option in the mains category as a reasonable default, and prefer naturally-suitable items (e.g. plain vegetable sides) that accommodate common dietary restrictions.';
+
+  const dietaryCoverageInstruction =
+    input.dietaryStatus === 'confirmed_needs'
+      ? `- dietaryCoverage: one entry per dietary requirement above stating whether the plan covers it (covered: true/false). When covered, list the items that cover it. When not covered, briefly state what's missing.`
+      : input.dietaryStatus === 'confirmed_none'
+        ? `- dietaryCoverage: return an empty array — the host has confirmed there are no dietary requirements.`
+        : `- dietaryCoverage: return exactly one entry: { "requirement": "Dietary requirements not yet confirmed", "covered": false, "flaggedItems": [] } — so the host is reminded to confirm dietary needs.`;
+
+  // GTC-236: regeneration context. Wording follows the proven in-file precedent
+  // (buildRegenerationPrompt's "PROTECTED ITEMS (already exist - DO NOT include in
+  // output)"), plus ruling D2: the model decides how many new items fit — kept items
+  // count toward coverage, and there is no requirement to match prior item counts.
+  const preservable = input.preservableItems ?? [];
+  const preservableBlock =
+    preservable.length > 0
+      ? `ITEMS ALREADY IN THE PLAN (the host added, edited, or protected these — they are being kept):
+- Do NOT include them in your output, and do NOT generate duplicates or near-duplicates of them.
+- Count them toward each category's coverage and portion math. Generate as many or as few new items as makes a coordinated plan around them — you do not need to match previous item counts.
+${preservable
+  .map(
+    (p) =>
+      `  - ${p.category}: ${p.name}${p.quantity ? ` (${p.quantity})` : ''}${p.notes ? ` — ${p.notes}` : ''}`
+  )
+  .join('\n')}`
+      : '';
+
+  const otherFoodBlock = input.otherNotes.trim()
+    ? `Other food notes from Kate: ${input.otherNotes.trim()}`
+    : '';
+
+  // GTC-171 (B2): these three blocks used to be advisory context with no return path —
+  // they influenced the food plan and then evaporated. They are now the source for the
+  // `tasks` output, so each is labelled with the bucket key the row must come back under.
+  const otherJobsParts: string[] = [];
+  if (input.setUpNotes.trim())
+    otherJobsParts.push(`Set up (bucket key "set_up"): ${input.setUpNotes.trim()}`);
+  if (input.cleanUpNotes.trim())
+    otherJobsParts.push(`Clean up (bucket key "clean_up"): ${input.cleanUpNotes.trim()}`);
+  if (input.otherJobsNotes.trim())
+    otherJobsParts.push(`Other (bucket key "other_jobs"): ${input.otherJobsNotes.trim()}`);
+  const otherJobsBlock =
+    otherJobsParts.length > 0 ? `Other jobs Kate mentioned:\n  ${otherJobsParts.join('\n  ')}` : '';
+
+  const tasksInstruction =
+    otherJobsParts.length > 0
+      ? `- tasks: turn the "Other jobs" text above into discrete day-of job rows, each tagged with its bucket key. Split a run-on sentence into separate jobs and normalise the phrasing; do NOT invent jobs Kate did not mention, and do NOT emit a bucket that has no text above. These are jobs done DURING the day (washing, drying, clearing, setting tables) — they are not food and carry no quantity. They do not count toward the item budget above.`
+      : `- tasks: return an empty array — Kate mentioned no set-up, clean-up or other jobs.`;
+
+  const userPrompt = `Generate a coordinated plan for a ${eventLabel} for ${input.totalAdults} adults and ${input.totalKids} children (${totalPeople} total).
+
+${dietaryBlock}
+
+CATEGORIES TO GENERATE (in this order):
+${categoryBlocks || '(none)'}
+${skippedCategories.length > 0 ? `\nCategories Kate is still deciding on (skip these): ${skippedCategories.join(', ')}` : ''}
+${preservableBlock ? '\n' + preservableBlock : ''}
+${otherFoodBlock ? '\n' + otherFoodBlock : ''}
+${otherJobsBlock ? '\n' + otherJobsBlock : ''}
+
+Then produce three short auxiliary outputs in the same response:
+${dietaryCoverageInstruction}
+${tasksInstruction}
+- thingsToConsider: 6–10 short reminders of practical items the host might forget for a ${eventLabel} of this size (napkins, ice, serving spoons, rubbish bags, etc.). Each has a name and a suggested category.
+
+IMPORTANT: a job from the "Other jobs" text belongs in "tasks" and must NOT also appear as an item in "sections". Sections are food only.
+
+Return JSON in EXACTLY this shape:
+{
+  "sections": [
+    {
+      "category": string,            // human-readable label, e.g., "Mains"
+      "key": string,                  // canonical key, e.g., "mains"
+      "emoji": string,                // category emoji, e.g., "🍖"
+      "items": [
+        {
+          "name": string,
+          "quantity": number,
+          "unit": string,             // "kg", "g", "L", "ml", "count", "packs", "trays", "bottles", "bowls", etc.
+          "servingSize": string,      // e.g., "serves 4-6", "200g per adult"
+          "notes": string,            // optional; omit if not needed
+          "critical": boolean,        // see CRITICALITY above — 3-5 max across the whole plan
+          "criticalReason": string,   // required when critical is true; null otherwise
+          "dietaryTags": string[]     // any of VEGETARIAN, VEGAN, GLUTEN_FREE, DAIRY_FREE, NUT_FREE — empty array when none apply
+        }
+      ]
+    }
+  ],
+  "dietaryCoverage": [
+    { "requirement": string, "covered": boolean, "flaggedItems": string[] }
+  ],
+  "tasks": [
+    {
+      "bucket": string,             // exactly one of "set_up", "clean_up", "other_jobs"
+      "name": string,               // the job, e.g. "Wash the dishes"
+      "notes": string               // optional; omit if not needed
+    }
+  ],
+  "thingsToConsider": [
+    { "name": string, "category": string }
+  ]
+}`;
+
+  return { system: systemPrompt, user: userPrompt };
 }

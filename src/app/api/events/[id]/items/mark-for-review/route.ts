@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
+import { ledgerActorForUser } from '@/lib/auth/actor';
+import { recordChange } from '@/lib/ledger';
 
 export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -24,6 +26,26 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
         userConfirmed: false,
       },
     });
+
+    if (result.count > 0) {
+      const reviewActor = await ledgerActorForUser(auth.user, auth.role);
+      await prisma.$transaction((tx) =>
+        recordChange(tx, {
+          eventId,
+          actor: reviewActor,
+          changes: [
+            {
+              action: 'EDIT_ITEM',
+              targetType: 'Item',
+              targetId: eventId,
+              field: 'reviewState',
+              before: null,
+              after: { count: result.count, note: 'marked for review' },
+            },
+          ],
+        })
+      );
+    }
 
     return NextResponse.json({
       success: true,

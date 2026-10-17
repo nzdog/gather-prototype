@@ -72,7 +72,8 @@ interface ParticipantResponse {
     venueName: string | null;
   };
   team: unknown;
-  rsvpStatus: string;
+  // GTC-174 (D1): derived attendance replaces the retired rsvpStatus.
+  attendance: string;
   assignments: unknown[];
 }
 
@@ -121,7 +122,7 @@ const mockParticipantData: ParticipantResponse = {
     venueName: null,
   },
   team: null,
-  rsvpStatus: 'PENDING',
+  attendance: 'PENDING',
   assignments: [],
 };
 
@@ -138,7 +139,7 @@ function isHostPreviewResponse(data: unknown): data is HostPreviewResponse {
 
 function isParticipantResponse(data: unknown): data is ParticipantResponse {
   return (
-    typeof data === 'object' && data !== null && !('isHostPreview' in data) && 'rsvpStatus' in data
+    typeof data === 'object' && data !== null && !('isHostPreview' in data) && 'attendance' in data
   );
 }
 
@@ -188,6 +189,36 @@ test('host preview does not include rsvpStatus (no RSVP controls)', () => {
     throw new Error(
       'Host preview should not include rsvpStatus — RSVP controls should not be shown'
     );
+  }
+});
+
+// GTC-174 (D1): strengthened from "not in the host preview" to "nowhere in the route".
+// rsvpStatus is retained-but-unwritten and attendance is derived, so the participant
+// payload must not carry it either — the old assertion would have passed while the
+// guest branch still emitted it.
+test('the participant route emits no rsvpStatus anywhere (GTC-174)', () => {
+  const fs = require('fs') as typeof import('fs');
+  const path = require('path') as typeof import('path');
+  // Comment lines are stripped: the route's doc-comment legitimately names rsvpStatus
+  // to record what was superseded. Only executable references are a violation.
+  const src = fs
+    .readFileSync(path.resolve(__dirname, '..', 'src/app/api/p/[token]/route.ts'), 'utf8')
+    .split('\n')
+    .filter((l: string) => {
+      const t = l.trim();
+      return !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*');
+    })
+    .join('\n');
+  if (/rsvpStatus/.test(src)) {
+    throw new Error(
+      'src/app/api/p/[token]/route.ts still references rsvpStatus — attendance is derived (Hinge §3)'
+    );
+  }
+});
+
+test('the participant payload carries derived attendance instead (GTC-174)', () => {
+  if (!('attendance' in mockParticipantData)) {
+    throw new Error('Participant response should carry derived `attendance`');
   }
 });
 
