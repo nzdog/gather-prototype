@@ -4,7 +4,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireEventRole } from '@/lib/auth/guards';
+import { prisma } from '@/lib/prisma';
 import { retryFailedDispatches } from '@/lib/wrap-up';
+import { DEMO_SEND_WORDS, isDemoEvent } from '@/lib/demo/send-wall';
 
 export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id: eventId } = await context.params;
@@ -21,6 +23,11 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
   }
 
   try {
+    // [[GTC-392]] — a sample event sends nothing: refused before anything is read or written (W3).
+    if (await isDemoEvent(prisma, eventId)) {
+      return NextResponse.json({ error: DEMO_SEND_WORDS, code: 'DEMO_EVENT' }, { status: 409 });
+    }
+
     const retriedCount = await retryFailedDispatches(eventId);
     return NextResponse.json({
       success: true,

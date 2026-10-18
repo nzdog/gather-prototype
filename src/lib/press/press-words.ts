@@ -84,4 +84,8 @@ export const PRESS_REFUSAL_WORDS: Record<PressRefusalCode, string> = {
    */
   LINKS_NOT_ISSUED:
     'Some guests could not be given a link, so nothing was sent. Open the check again and it will be put right.',
+
+  // [[GTC-392]] W2, approved 2026-10-18: Send on a sample event.
+  DEMO_EVENT:
+    'This is a sample event, so nothing was sent. In a real event, this is where your messages go out.',
 };

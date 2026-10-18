@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { callClaudeForJSON, isClaudeAvailable } from '@/lib/ai/claude';
 import { requireEventRole } from '@/lib/auth/guards';
+import { takeDemoAiCall } from '@/lib/demo/ai-cap';
 
 // Type definitions
 interface AISuggestion {
@@ -94,6 +95,15 @@ export async function POST(
       );
     }
 
+    // [[GTC-392]] — a sample copy's plans come from its own small allowance, counted before the call.
+    const demoAi = await takeDemoAiCall(prisma, eventId);
+    if (!demoAi.ok) {
+      return NextResponse.json(
+        { error: 'AI call limit reached for this event', demoWords: demoAi.words },
+        { status: 429 }
+      );
+    }
+
     // Build prompts
     const systemPrompt = RESOLUTION_SYSTEM_PROMPT;
     const userPrompt = buildResolutionPrompt(conflict, event);
@@ -106,10 +116,12 @@ export async function POST(
     });
 
     // Increment AI call counter on success
-    await prisma.event.update({
-      where: { id: eventId },
-      data: { aiCallsUsed: { increment: 1 } },
-    });
+    if (!demoAi.counted) {
+      await prisma.event.update({
+        where: { id: eventId },
+        data: { aiCallsUsed: { increment: 1 } },
+      });
+    }
 
     return NextResponse.json({
       suggestion,

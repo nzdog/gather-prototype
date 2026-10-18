@@ -6,6 +6,7 @@ import { regeneratePlan, RegenerationParams } from '@/lib/ai/generate';
 import { resolveGeneratedTeamCoordinatorId } from '@/lib/ai/coordinator-assignment';
 import { randomBytes } from 'crypto';
 import { requireEventRole } from '@/lib/auth/guards';
+import { takeDemoAiCall } from '@/lib/demo/ai-cap';
 import { ledgerActorForUser } from '@/lib/auth/actor';
 import { recordBulkPlanChange } from '@/lib/ledger';
 import { itemNameForStorage } from '@/lib/items/name';
@@ -42,6 +43,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const AI_CALL_LIMIT = 20;
     if ((event.aiCallsUsed ?? 0) >= AI_CALL_LIMIT) {
       return NextResponse.json({ error: 'AI call limit reached for this event' }, { status: 429 });
+    }
+
+    // [[GTC-392]] — a sample copy's plans come from its own small allowance, counted before the call.
+    const demoAi = await takeDemoAiCall(prisma, eventId);
+    if (!demoAi.ok) {
+      return NextResponse.json(
+        { error: 'AI call limit reached for this event', demoWords: demoAi.words },
+        { status: 429 }
+      );
     }
 
     // PHASE 6: Create revision before regeneration to preserve pre-regenerate state
@@ -178,10 +188,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     // Increment AI call counter on success
-    await prisma.event.update({
-      where: { id: eventId },
-      data: { aiCallsUsed: { increment: 1 } },
-    });
+    if (!demoAi.counted) {
+      await prisma.event.update({
+        where: { id: eventId },
+        data: { aiCallsUsed: { increment: 1 } },
+      });
+    }
 
     // The ruled (a)-now-(c)-later case. Post-send this replaces a plan people have
     // claimed against — allowed, and recorded as one changeSet carrying the why, with

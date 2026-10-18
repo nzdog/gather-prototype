@@ -1065,7 +1065,7 @@ async function main() {
       })
     );
     assert(
-      '⚠ EVERY REFUSAL HAS HOST-FACING WORDS, AS A RECORD OVER THE UNION — so an eighth refusal code ' +
+      '⚠ EVERY REFUSAL HAS HOST-FACING WORDS, AS A RECORD OVER THE UNION — so a ninth refusal code ' +
         'does not compile until somebody writes the sentence a host reads. The alternative is a ' +
         'default, and a default here shows her "something went wrong" for a state the press named ' +
         'precisely',
@@ -1079,9 +1079,11 @@ async function main() {
           'NO_RECIPIENTS',
           'RECIPIENTS_UNAVAILABLE',
           'LINKS_NOT_ISSUED',
+          // [[GTC-392]] — a sample event is refused at the press (W2).
+          'DEMO_EVENT',
         ];
         return (
-          Object.keys(W.PRESS_REFUSAL_WORDS).length === 7 &&
+          Object.keys(W.PRESS_REFUSAL_WORDS).length === 8 &&
           codes.every(
             (c) =>
               typeof W.PRESS_REFUSAL_WORDS[c] === 'string' && W.PRESS_REFUSAL_WORDS[c].length > 10

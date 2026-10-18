@@ -103,7 +103,8 @@ export async function findDecideByFollowupCandidates(
     where: {
       response: 'MAYBE',
       decideByFollowupSentAt: null,
-      item: { team: { event: SENT_AND_LIVE(now) } },
+      // [[GTC-392]] — never a sample event.
+      item: { team: { event: { ...SENT_AND_LIVE(now), isDemo: false } } },
     },
     select: {
       id: true,

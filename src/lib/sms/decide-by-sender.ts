@@ -310,6 +310,8 @@ export async function retryUndeliveredFollowups(
       deliveryState: { in: retryableFor('DECIDE_BY_FOLLOWUP') },
       retries: { none: {} },
       deliveryCheckedAt: { gte: new Date(now.getTime() - TEXT_RETRY_WINDOW_MS) },
+      // [[GTC-392]] — never a sample event.
+      event: { isDemo: false },
       ...(scope ? { eventId: { in: scope.eventIds } } : {}),
     },
     orderBy: { acceptedAt: 'asc' },

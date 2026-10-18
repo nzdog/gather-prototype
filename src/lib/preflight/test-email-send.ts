@@ -9,6 +9,7 @@
  *
  * THE ORDER, each refusal before anything is sent:
  *   1. the event has been sent                         → AFTER_PRESS
+ *      a sample event ([[GTC-392]])                    → DEMO
  *   2. the person is not one of the press's messages   → NO_MESSAGE
  *   3. her account has no address (unreachable today)  → NO_ADDRESS
  *   4. the email service will not take her address     → BLOCKED   (Zone 9's reader, Q7)
@@ -29,6 +30,7 @@
 import type { Prisma } from '@prisma/client';
 import { sendHostTestEmail } from '@/lib/email';
 import { LIVE_SENDS_OFF } from '@/lib/live-sends';
+import { isDemoEvent } from '@/lib/demo/send-wall';
 import { emailBlockStateOf, listEmailBlocks } from '@/lib/eligibility/email-block';
 import { getEmailOptOut } from '@/lib/eligibility/email-opt-out';
 import { firstNameOf } from '@/lib/messages/ask-register';
@@ -62,6 +64,8 @@ export async function sendTestEmailFor(
   const event = await db.event.findUnique({ where: { id: eventId }, select: { sentAt: true } });
   if (!event) return 'NO_MESSAGE';
   if (event.sentAt) return 'AFTER_PRESS';
+  // [[GTC-392]] — a sample event sends nothing, not even a test to its own host (W4).
+  if (await isDemoEvent(db, eventId)) return 'DEMO';
 
   const preview = await readAskPreview(db, eventId, input.baseUrl);
   if (!preview) return 'NO_MESSAGE';

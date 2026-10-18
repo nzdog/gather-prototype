@@ -175,8 +175,10 @@ export async function findNudgeCandidates(
 
   // GTC-169 (A3a): the send starts the chasing and the event date ends it (Moment 4 §10.1). The
   // endDate half of SENT_AND_LIVE is load-bearing; the security suite asserts it.
+  // [[GTC-392]] — never a sample event: it is never chased.
   const where: Prisma.EventWhereInput = {
     ...SENT_AND_LIVE(now),
+    isDemo: false,
     ...(scope.eventIds ? { id: { in: scope.eventIds } } : {}),
   };
   const events = await prisma.event.findMany({

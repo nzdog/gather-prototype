@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useToast } from '@/contexts/ToastContext';
+import { DEMO_START_WORDS } from '@/lib/demo/start-limit';
 
 interface Token {
   scope: string;
@@ -17,6 +18,9 @@ export default function DemoLandingPage() {
   const [resetting, setResetting] = useState(false);
   const [openingDashboard, setOpeningDashboard] = useState(false);
   const [openStep, setOpenStep] = useState<number | null>(null);
+  // [[GTC-392]] part A — her own sample event, on the founder's Mac only until part D (Q5).
+  const [startingCopy, setStartingCopy] = useState(false);
+  const [copyNote, setCopyNote] = useState<{ words: string; href?: string } | null>(null);
 
   const toggleStep = (n: number) => setOpenStep((prev) => (prev === n ? null : n));
 
@@ -65,6 +69,44 @@ export default function DemoLandingPage() {
       toast.error('Failed to open planning dashboard');
       setOpeningDashboard(false);
     }
+  };
+
+  const handleStartCopy = async () => {
+    setStartingCopy(true);
+    setCopyNote(null);
+    try {
+      const response = await fetch('/api/demo/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ start: 'copy' }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (response.ok && typeof body.href === 'string') {
+        window.location.href = body.href;
+        return;
+      }
+      if (response.status === 409) {
+        // Signed in already: is it a sample she has open (W10), or a real account (W9)?
+        const list = await fetch('/api/events')
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null);
+        const open = ((list?.events ?? []) as Array<{ id: string; isDemo?: boolean }>).find(
+          (e) => e.isDemo === true
+        );
+        setCopyNote(
+          open
+            ? { words: DEMO_START_WORDS.ALREADY_OPEN, href: `/plan/${open.id}/setup` }
+            : { words: DEMO_START_WORDS.SIGNED_IN }
+        );
+      } else if (response.status === 429 && typeof body.error === 'string') {
+        setCopyNote({ words: body.error });
+      } else {
+        setCopyNote({ words: DEMO_START_WORDS.FAILED });
+      }
+    } catch {
+      setCopyNote({ words: DEMO_START_WORDS.FAILED });
+    }
+    setStartingCopy(false);
   };
 
   const handleReset = async () => {
@@ -280,6 +322,27 @@ export default function DemoLandingPage() {
           >
             {openingDashboard ? 'Opening…' : 'Open Planning Dashboard →'}
           </button>
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mt-4">
+              <button
+                onClick={handleStartCopy}
+                disabled={startingCopy}
+                className="inline-flex items-center gap-2 px-5 py-3 border border-sage-600 text-sage-700 font-semibold rounded-lg hover:bg-sage-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              >
+                {startingCopy ? 'Starting…' : DEMO_START_WORDS.BUTTON}
+              </button>
+              {copyNote && (
+                <p className="mt-3 text-sm text-gray-700">
+                  {copyNote.words}{' '}
+                  {copyNote.href && (
+                    <a href={copyNote.href} className="underline underline-offset-2">
+                      {DEMO_START_WORDS.GO_TO_IT}
+                    </a>
+                  )}
+                </p>
+              )}
+            </div>
+          )}
         </section>
 
         <hr className="border-gray-200 mb-10" />

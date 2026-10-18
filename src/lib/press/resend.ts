@@ -10,6 +10,7 @@ import { isChildMembership } from '@/lib/eligibility/child-exclusion';
 import { deliveryFactFrom, latestRowByMembership } from '@/lib/glance/delivery-fact';
 import { smsProviderConfiguredFor } from '@/lib/sms/send-sms';
 import { recordChange, type LedgerActor } from '@/lib/ledger';
+import { isDemoEvent } from '@/lib/demo/send-wall';
 import { formatPhoneForDisplay } from '@/lib/phone';
 import {
   checkContactChange,
@@ -183,6 +184,9 @@ async function resolveSubject(
     select: { id: true, sentAt: true, hostId: true },
   });
   if (!event) return refuse(404, 'EVENT_NOT_FOUND');
+
+  // [[GTC-392]] — a sample event sends nothing, so its door neither opens nor sends (W3).
+  if (await isDemoEvent(db, eventId)) return refuse(409, 'DEMO_EVENT');
 
   const membership = await db.personEvent.findUnique({
     where: { personId_eventId: { personId, eventId } },

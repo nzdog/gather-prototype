@@ -229,6 +229,8 @@ export async function dispatchPendingWrapUpMessages(now: Date = new Date()): Pro
     where: {
       dispatched: false,
       createdAt: { lte: cutoff },
+      // [[GTC-392]] — never a sample event's thank-you.
+      event: { isDemo: false },
     },
     include: {
       event: {
@@ -496,6 +498,7 @@ export async function retryUndeliveredThankYous(
       channel: 'TEXT',
       deliveryState: { in: retryableFor('THANK_YOU') },
       retries: { none: {} },
+      event: { isDemo: false },
       ...(scope ? { eventId: { in: scope.eventIds } } : {}),
     },
     orderBy: { acceptedAt: 'asc' },
@@ -656,7 +659,7 @@ export async function getDispatchSummary(eventId: string): Promise<DispatchSumma
 
 export async function retryFailedDispatches(eventId: string): Promise<number> {
   const failedLinks = await prisma.wrapUpLink.findMany({
-    where: { eventId, failed: true },
+    where: { eventId, failed: true, event: { isDemo: false } },
   });
 
   // Reset them so the cron dispatch picks them up

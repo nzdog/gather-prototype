@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
 import { randomBytes } from 'crypto';
+import { startDemoCopy } from '@/lib/demo/copy';
+import { checkStartLimit, DEMO_START_WORDS, noteStart, visitorOf } from '@/lib/demo/start-limit';
 
 const DEMO_EVENT_NAME = 'Henderson Family Christmas 2025';
 
@@ -60,7 +62,7 @@ const DEMO_SESSION_MAX_AGE_SECONDS = 2 * 60 * 60;
  * verdict on this handler is unchanged and still reads "no credential of any
  * kind" — that verdict is TRUE, and it is not the evidence for this fix.
  */
-export async function POST() {
+export async function POST(request: Request) {
   try {
     // GTC-269, and this is a live product bug in its own right, not hygiene.
     //
@@ -92,6 +94,46 @@ export async function POST() {
         },
         { status: 409 }
       );
+    }
+
+    /*
+     * [[GTC-392]] part A — THE SECOND SHAPE: `{ start: 'copy' }` starts the visitor's OWN sample
+     * event (founder plan rulings, 18 Oct 2026, Q1 and Q2). Read only after the presence check
+     * above, so a present session is never overwritten in either shape. An empty or unreadable
+     * body takes today's path below, unchanged, until part D retires it.
+     *
+     * Her credential: a throwaway account (`@demo-copy.invalid`) with exactly one role, HOST on the
+     * copy made in the same transaction; two hours; the event is hers by construction, never looked
+     * up. The limits apply to this shape only.
+     */
+    const body = (await request.json().catch(() => null)) as { start?: unknown } | null;
+    if (body?.start === 'copy') {
+      const visitor = visitorOf(request.headers);
+      const limit = await checkStartLimit(prisma, visitor);
+      if (!limit.ok) {
+        return NextResponse.json({ error: limit.words }, { status: 429 });
+      }
+      let copy;
+      try {
+        copy = await startDemoCopy(prisma);
+      } catch (copyError) {
+        console.error('[DemoSession] The copy could not be started:', copyError);
+        return NextResponse.json({ error: DEMO_START_WORDS.FAILED }, { status: 500 });
+      }
+      noteStart(visitor);
+      // Zone 1, as GTC-269: the same cookie, name and path unchanged, set after the commit.
+      (await cookies()).set('session', copy.sessionToken, {
+        httpOnly: true,
+        secure: (process.env.NODE_ENV as string) === 'production',
+        sameSite: 'lax',
+        maxAge: DEMO_SESSION_MAX_AGE_SECONDS,
+        path: '/',
+      });
+      return NextResponse.json({
+        success: true,
+        eventId: copy.eventId,
+        href: `/plan/${copy.eventId}/setup`,
+      });
     }
 
     // GTC-269: `isDemo: true` as well as the name. `Event.name` has no uniqueness

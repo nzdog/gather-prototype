@@ -177,7 +177,11 @@ const OUTCOMES = [
   'TOO_OFTEN',
   'NO_MESSAGE',
   'AFTER_PRESS',
+  // [[GTC-392]] — refused on a sample event, before the message is read.
+  'DEMO',
 ];
+/** [[GTC-392]] W4, approved 18 Oct 2026. */
+const W4_DEMO = 'Test emails are off in a sample event.';
 const DOOR_ROW = [W[20], W[21], "Change who's on what", 'Invites & people', 'Print the list'];
 
 const WORDS = 'src/lib/preflight/test-email.ts';
@@ -267,7 +271,7 @@ async function runInMemory() {
   );
   assert(
     'W',
-    'W5 to W11, W13 to W15 each outcome’s line, from the one map (10 outcomes, every one with words)',
+    'W5 to W11, W13 to W15 each outcome’s line, from the one map (11 outcomes, every one with words; GTC-392 W4 for a sample event)',
     ok(() => {
       const a = 'kate@example.com';
       const line = (o: string) => T.testEmailOutcomeLine(o, a);
@@ -282,7 +286,8 @@ async function runInMemory() {
         line('TOO_OFTEN') === W[11] &&
         line('NO_ADDRESS') === W[13] &&
         line('NO_MESSAGE') === W[14] &&
-        line('AFTER_PRESS') === W[15]
+        line('AFTER_PRESS') === W[15] &&
+        line('DEMO') === W4_DEMO
       );
     })
   );

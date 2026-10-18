@@ -1,4 +1,5 @@
 import type { Person, Prisma, PrismaClient } from '@prisma/client';
+import { isDemoEvent } from '@/lib/demo/send-wall';
 
 /**
  * [[GTC-293]] — WHO A TYPED ROW IS. The one identity rule every capture site shares: the
@@ -21,6 +22,10 @@ import type { Person, Prisma, PrismaClient } from '@prisma/client';
  *   her inbox, and is asked like any other adult (GTC-293 ruling 3: each their own email).
  *
  * `tests/shared-address-test.ts` holds the rule's behaviour.
+ *
+ * [[GTC-392]] Q4 — ON A SAMPLE EVENT the match looks only at people already on that sample, so a
+ * stranger typing a real guest's address and first name makes a NEW person and never reaches the
+ * real one's record. Real events keep the rule above exactly.
  */
 
 type Db = Prisma.TransactionClient | PrismaClient;
@@ -51,8 +56,12 @@ export async function findOrCreateCapturedPerson(
 
   let person: Person | null = null;
   if (email) {
+    const sample = await isDemoEvent(db, input.eventId);
     const candidates = await db.person.findMany({
-      where: { email: { equals: email, mode: 'insensitive' } },
+      where: {
+        email: { equals: email, mode: 'insensitive' },
+        ...(sample ? { eventMemberships: { some: { eventId: input.eventId } } } : {}),
+      },
       include: { eventMemberships: { where: { eventId: input.eventId }, select: { id: true } } },
       orderBy: { id: 'asc' },
     });

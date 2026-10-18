@@ -84,6 +84,7 @@ import { OPT_OUT_LINE } from '@/lib/sms/opt-out-line';
 import { MarkRows, Pill, cadenceSentence, type Member } from '@/components/preflight/mark-rows';
 import AfterThePress from '@/components/preflight/AfterThePress';
 import EventDetails from '@/components/shared/EventDetails';
+import { DemoBanner } from '@/components/demo/DemoBanner';
 import { BOARD_MOVE_AFTER_MS, SEE_THE_BOARD_LINK } from '@/lib/preflight/after-press-words';
 import { boardHref, itemDoorHref } from '@/lib/events/home-href';
 import {
@@ -1001,6 +1002,8 @@ export default function PreFlightPage() {
           )}
         </Step>
       </div>
+      {/* [[GTC-392]] — the sample event's banner; nothing on a real event. */}
+      <DemoBanner eventId={eventId} />
     </div>
   );
 }

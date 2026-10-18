@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { SMS_OPT_OUT_IN_FORCE } from '@/lib/sms/opt-out-service';
 import { requireEventRole } from '@/lib/auth/guards';
+import { DEMO_SEND_WORDS, isDemoEvent } from '@/lib/demo/send-wall';
 import { sendSms } from '@/lib/sms/send-sms';
 import { withOptOutLine } from '@/lib/sms/opt-out-line';
 import { closeTextSend, openTextSend } from '@/lib/sms/text-send-record';
@@ -44,6 +45,11 @@ export async function POST(
   }
 
   try {
+    // [[GTC-392]] — a sample event sends nothing: refused before anything is read or written (W3).
+    if (await isDemoEvent(prisma, eventId)) {
+      return NextResponse.json({ error: DEMO_SEND_WORDS, code: 'DEMO_EVENT' }, { status: 409 });
+    }
+
     // Parse and validate request body
     const body = await request.json();
     const { template, message } = body as { template: string; message: string };

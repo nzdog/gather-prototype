@@ -6,6 +6,7 @@ import { isLiveSendingOn, LIVE_SENDS_OFF } from '@/lib/live-sends';
 import { isE164 } from '@/lib/phone';
 import { SMS_OPT_OUT_IN_FORCE } from '@/lib/sms/opt-out-service';
 import { listTextBlocks } from '@/lib/eligibility/text-block';
+import { DEMO_STOP_WORDS, isDemoEvent } from '@/lib/demo/send-wall';
 
 /**
  * Country codes routed to TNZ. Twilio does not deliver to NZ (+64); AU (+61)
@@ -185,6 +186,21 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
         error: 'Twilio not configured for non-NZ/AU destination',
       };
     }
+  }
+
+  /*
+   * [[GTC-392]] — A SAMPLE EVENT NEVER TEXTS ANYONE, whatever the live switch says. The send wall's
+   * last layer: after Zone 7's opt-out check (first and untouched) and the provider's configuration,
+   * immediately before the switch. SMS_DISABLED, as the switch's own stop is ("sending is not on
+   * here"), and like it this writes no InviteEvent. A missing event reads "not a demo".
+   */
+  if (await isDemoEvent(prisma, eventId)) {
+    console.warn(`[SMS] ${DEMO_STOP_WORDS} — nothing sent to ${to}.`);
+    return {
+      success: false,
+      blocked: 'SMS_DISABLED',
+      error: DEMO_STOP_WORDS,
+    };
   }
 
   /*

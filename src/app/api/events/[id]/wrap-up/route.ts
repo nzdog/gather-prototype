@@ -10,6 +10,7 @@ import { prisma } from '@/lib/prisma';
 import { logAudit } from '@/lib/workflow';
 import { isComplete } from '@/lib/lifecycle';
 import { generateWrapUpLinks, selectWrapUpRecipients } from '@/lib/wrap-up';
+import { DEMO_SEND_WORDS, isDemoEvent } from '@/lib/demo/send-wall';
 
 export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id: eventId } = await context.params;
@@ -47,6 +48,11 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
 
     if (!event) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
+
+    // [[GTC-392]] — a sample event sends nothing: refused before anything is read or written (W3).
+    if (await isDemoEvent(prisma, eventId)) {
+      return NextResponse.json({ error: DEMO_SEND_WORDS, code: 'DEMO_EVENT' }, { status: 409 });
     }
 
     // GTC-169 (A3a): the gate moved from a status the host DECLARED to a fact about

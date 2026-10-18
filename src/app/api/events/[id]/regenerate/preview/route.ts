@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { regeneratePlan, RegenerationParams } from '@/lib/ai/generate';
 import { requireEventRole } from '@/lib/auth/guards';
+import { takeDemoAiCall } from '@/lib/demo/ai-cap';
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -36,6 +37,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const AI_CALL_LIMIT = 20;
     if ((event.aiCallsUsed ?? 0) >= AI_CALL_LIMIT) {
       return NextResponse.json({ error: 'AI call limit reached for this event' }, { status: 429 });
+    }
+
+    // [[GTC-392]] — a sample copy's plans come from its own small allowance, counted before the call.
+    const demoAi = await takeDemoAiCall(prisma, eventId);
+    if (!demoAi.ok) {
+      return NextResponse.json(
+        { error: 'AI call limit reached for this event', demoWords: demoAi.words },
+        { status: 429 }
+      );
     }
 
     // Capture current plan (what would be replaced)

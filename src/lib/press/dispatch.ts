@@ -135,8 +135,11 @@ export async function findNeverAttempted(
      * `attemptedAt: null` forever, and without this clause the never-attempted pass returned it on
      * every tick for the rest of time. Found by building the half that writes withholdings.
      */
-    where: { attemptedAt: null, withheldAt: null },
-    orderBy: { createdAt: 'asc' },
+    // [[GTC-392]] — a sample event's row, should one ever exist, is skipped, never sent.
+    where: { attemptedAt: null, withheldAt: null, event: { isDemo: false } },
+    // [[GTC-392]] — the id breaks ties: a press writes its rows in one transaction, so they share
+    // one `createdAt`, and without it their order was whatever plan Postgres chose.
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     take,
     select: CANDIDATE_SELECT,
   });
@@ -154,8 +157,8 @@ export async function findDueForRetry(
   now: Date = new Date()
 ): Promise<DrainCandidate[]> {
   return db.outboundMessage.findMany({
-    where: { nextAttemptAt: { not: null, lte: now } },
-    orderBy: { nextAttemptAt: 'asc' },
+    where: { nextAttemptAt: { not: null, lte: now }, event: { isDemo: false } },
+    orderBy: [{ nextAttemptAt: 'asc' }, { id: 'asc' }],
     take,
     select: CANDIDATE_SELECT,
   });
@@ -1345,7 +1348,11 @@ export async function enrolMiniSends(db: PrismaClient, takeEvents: number): Prom
    * it is a migration decision and a founder ruling, not a sweep's to take.
    */
   const pressed = await db.event.findMany({
-    where: { sentAt: { not: null }, outboundMessages: { some: { kind: 'ASK' } } },
+    where: {
+      sentAt: { not: null },
+      isDemo: false,
+      outboundMessages: { some: { kind: 'ASK' } },
+    },
     orderBy: { sentAt: 'desc' },
     take: takeEvents,
     select: { id: true },

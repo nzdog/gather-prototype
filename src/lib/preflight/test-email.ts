@@ -31,6 +31,8 @@ export const TEST_EMAIL_OUTCOMES = [
   'TOO_OFTEN',
   'NO_MESSAGE',
   'AFTER_PRESS',
+  // [[GTC-392]] — a sample event: refused before the message is read.
+  'DEMO',
 ] as const;
 export type TestEmailOutcome = (typeof TEST_EMAIL_OUTCOMES)[number];
 
@@ -68,6 +70,8 @@ export function testEmailOutcomeLine(outcome: TestEmailOutcome, address: string)
     NO_ADDRESS: TEST_EMAIL_WORDS.NO_ADDRESS,
     NO_MESSAGE: 'There’s no message to test for them.',
     AFTER_PRESS: 'The invitations have gone, so there’s nothing to test.',
+    // [[GTC-392]] W4, approved 2026-10-18.
+    DEMO: 'Test emails are off in a sample event.',
   };
   return lines[outcome];
 }

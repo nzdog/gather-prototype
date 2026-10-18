@@ -15,6 +15,7 @@ import {
 } from '@/lib/setup/entry-stage';
 import type { OwnPlanState } from '@/lib/setup/own-plan';
 import { useToast } from '@/contexts/ToastContext';
+import { DemoBanner } from '@/components/demo/DemoBanner';
 import SetupOpeningScreen from '@/components/plan/SetupOpeningScreen';
 import Moment1InputForm, {
   Moment1PersonInput,
@@ -290,7 +291,21 @@ type SetupItem = PlanApiItem & {
   } | null;
 };
 
+/**
+ * [[GTC-392]] — the page, and the sample event's banner beside it. The banner renders nothing on a
+ * real event; the screens themselves are `EventSetupFlow`, unchanged.
+ */
 export default function EventSetupPage() {
+  const params = useParams();
+  return (
+    <>
+      <EventSetupFlow />
+      <DemoBanner eventId={params.eventId as string} />
+    </>
+  );
+}
+
+function EventSetupFlow() {
   const params = useParams();
   const eventId = params.eventId as string;
   const toast = useToast();
@@ -805,7 +820,10 @@ export default function EventSetupPage() {
         body: JSON.stringify({ scope, ...(categoryKey ? { categoryKey } : {}) }),
       });
       if (res.status === 429) {
-        toast.error("You've used all 10 AI calls for this event.");
+        // [[GTC-392]] — a sample copy's refusal carries its own words (W5, W6).
+        const refused = (await res.json().catch(() => ({}))) as { demoWords?: string };
+        if (refused.demoWords) toast.error(refused.demoWords);
+        else toast.error("You've used all 10 AI calls for this event.");
         return;
       }
       if (!res.ok) throw new Error('Failed to regenerate');
@@ -1555,7 +1573,10 @@ export default function EventSetupPage() {
             });
             if (res.status === 429) {
               await loadEvent();
-              toast.error("You've used all 10 AI calls for this event.");
+              // [[GTC-392]] — a sample copy's refusal carries its own words (W5, W6).
+              const refused = (await res.json().catch(() => ({}))) as { demoWords?: string };
+              if (refused.demoWords) toast.error(refused.demoWords);
+              else toast.error("You've used all 10 AI calls for this event.");
               setShowMoment2Step2Skeleton(false);
               // [[GTC-385]] (item 58, Q4): back to the questions, her answers as she left them.
               setShowMoment2Step1(true);

@@ -46,6 +46,7 @@ import { prisma } from '@/lib/prisma';
 import { listUnsubscribeHeaders, withGuestEmailFooter } from '@/lib/email-footer';
 import { unsubscribeUrls } from '@/lib/unsubscribe-token';
 import { isLiveSendingOn, LiveSendsOffError } from '@/lib/live-sends';
+import { DEMO_STOP_WORDS, isDemoEvent } from '@/lib/demo/send-wall';
 
 /** What every sender in this file returns. Callers decide what it means. */
 export interface SendResult {
@@ -299,6 +300,9 @@ async function sendHostVoiced(
   params: HostVoicedEmail
 ): Promise<SendResult> {
   try {
+    // [[GTC-392]] — a sample event never emails anyone; no provider code: it never left.
+    if (await isDemoEvent(prisma, params.eventId))
+      return { success: false, error: DEMO_STOP_WORDS };
     const resend = getResendClient();
     const { text, headers } = guestEmailParts(params.body, params.personId, params.eventId);
     const response = await resend.emails.send({
@@ -392,6 +396,9 @@ export async function sendNudgeEmail(params: {
   personId: string;
 }): Promise<SendResult> {
   try {
+    // [[GTC-392]] — a sample event never emails anyone.
+    if (await isDemoEvent(prisma, params.eventId))
+      return { success: false, error: DEMO_STOP_WORDS };
     const resend = getResendClient();
     const { text, headers } = guestEmailParts(params.body, params.personId, params.eventId);
     const response = await resend.emails.send({

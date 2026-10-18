@@ -3,6 +3,7 @@ import { ensureEventTokens } from '@/lib/tokens';
 import { askRowPopulation, readAskPreview } from '@/lib/preflight/ask-preview';
 import { recordChange, type LedgerActor } from '@/lib/ledger';
 import { logInviteEvent } from '@/lib/invite-events';
+import { isDemoEvent } from '@/lib/demo/send-wall';
 
 /**
  * GTC-189 slice 5a — THE PRESS. One writer, and it is dark.
@@ -90,7 +91,9 @@ export type PressRefusalCode =
   | 'HOST_HAS_NO_ACCOUNT'
   | 'NO_RECIPIENTS'
   | 'RECIPIENTS_UNAVAILABLE'
-  | 'LINKS_NOT_ISSUED';
+  | 'LINKS_NOT_ISSUED'
+  // [[GTC-392]] — a sample event is never pressed.
+  | 'DEMO_EVENT';
 
 export interface PressRefusal {
   ok: false;
@@ -228,6 +231,15 @@ export async function pressSend(
       'HOST_HAS_NO_ACCOUNT',
       'This event has no host account, so replies would have nowhere to go. Claim the event first.'
     );
+  }
+
+  /*
+   * [[GTC-392]] (Q15) — A SAMPLE EVENT IS NEVER PRESSED. Last of the checks before anything is
+   * written, so the seeded unclaimed sample still answers HOST_HAS_NO_ACCOUNT. Nothing below runs:
+   * no token, no message row, no ledger line, no send clock. Part B puts the pretend Send here.
+   */
+  if (await isDemoEvent(db, eventId)) {
+    return refuse(409, 'DEMO_EVENT', 'This is a sample event, so it is never sent');
   }
 
   const now = new Date();

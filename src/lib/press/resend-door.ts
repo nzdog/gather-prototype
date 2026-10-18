@@ -179,7 +179,9 @@ export type ResendRefusalCode =
   | 'NOTHING_TO_SAVE'
   | 'EMAIL_UNREADABLE'
   | 'EMAIL_OPTED_OUT'
-  | 'MOBILE_UNREADABLE';
+  | 'MOBILE_UNREADABLE'
+  // [[GTC-392]] — a sample event: nothing is sent from it.
+  | 'DEMO_EVENT';
 
 /**
  * A sentence a host can read for every one of them — a `Record` over the union, so a twelfth
@@ -219,6 +221,9 @@ export const RESEND_REFUSAL_WORDS: Record<ResendRefusalCode, string> = {
   EMAIL_UNREADABLE: 'That doesn’t look like an email address.',
   EMAIL_OPTED_OUT: 'They chose not to receive email about this event, so I won’t email them.',
   MOBILE_UNREADABLE: 'I can’t read that as a New Zealand mobile number.',
+  // [[GTC-392]] W3, approved 2026-10-18. Spelled here (this module keeps type-only imports); the
+  // same words as `DEMO_SEND_WORDS` in `src/lib/demo/send-wall.ts`, and the suite holds them equal.
+  DEMO_EVENT: 'This is a sample event, so Gather sends nothing from it.',
 };
 
 /**

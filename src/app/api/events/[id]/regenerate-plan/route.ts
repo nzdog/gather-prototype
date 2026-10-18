@@ -4,6 +4,7 @@ import { requireEventRole } from '@/lib/auth/guards';
 import { ledgerActorForUser } from '@/lib/auth/actor';
 import { recordChange } from '@/lib/ledger';
 import { callClaudeForJSON } from '@/lib/ai/claude';
+import { takeDemoAiCall } from '@/lib/demo/ai-cap';
 import { MAX_TOKENS_FULL_PLAN } from '@/lib/ai/token-limits';
 import { buildPlanGenerationPrompt } from '@/lib/ai/prompts';
 import {
@@ -148,6 +149,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       });
     }
 
+    // [[GTC-392]] — a sample copy's plans come from its own small allowance, counted before the call.
+    const demoAi = await takeDemoAiCall(prisma, eventId);
+    if (!demoAi.ok) {
+      return NextResponse.json(
+        { error: 'AI call limit reached for this event', demoWords: demoAi.words },
+        { status: 429 }
+      );
+    }
+
     // Actor first: AuditEntry.actorId references Person, and ledgerActorForUser is the
     // canonical User→Person resolution — createRevision and recordChange must agree on it.
     const actor = await ledgerActorForUser(auth.user, auth.role);
@@ -242,10 +252,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       // comment records the same trap).
       await sweepEmptyGeneratedTeams(tx, { eventId, scopeTeamId: targetTeamId });
 
-      await tx.event.update({
-        where: { id: eventId },
-        data: { aiCallsUsed: { increment: 1 } },
-      });
+      if (!demoAi.counted) {
+        await tx.event.update({
+          where: { id: eventId },
+          data: { aiCallsUsed: { increment: 1 } },
+        });
+      }
 
       // Bulk convention (GTC-201): one recorded step, the PlanRevision checkpoint
       // carrying the detail. In-transaction and last, per recordChange's contract —

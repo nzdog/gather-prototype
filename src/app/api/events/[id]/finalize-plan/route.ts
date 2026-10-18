@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
+import { takeDemoAiCall } from '@/lib/demo/ai-cap';
 import { ledgerActorForUser } from '@/lib/auth/actor';
 import { recordBulkPlanChange } from '@/lib/ledger';
 import { createRevision } from '@/lib/workflow';
@@ -49,6 +50,15 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       return NextResponse.json({ error: 'No event setup found' }, { status: 404 });
     }
 
+    // [[GTC-392]] — a sample copy's plans come from its own small allowance, counted before the call.
+    const demoAi = await takeDemoAiCall(prisma, eventId);
+    if (!demoAi.ok) {
+      return NextResponse.json(
+        { error: 'AI call limit reached for this event', demoWords: demoAi.words },
+        { status: 429 }
+      );
+    }
+
     const { promptInput, bucketIsEligible } = await buildPlanGenerationInput(eventId, event, setup);
 
     const { system, user } = buildPlanGenerationPrompt(promptInput);
@@ -71,10 +81,12 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
      * here; whichever way it is settled should be settled in one place, on its own
      * ticket, for both routes at once.
      */
-    await prisma.event.update({
-      where: { id: eventId },
-      data: { aiCallsUsed: { increment: 1 } },
-    });
+    if (!demoAi.counted) {
+      await prisma.event.update({
+        where: { id: eventId },
+        data: { aiCallsUsed: { increment: 1 } },
+      });
+    }
 
     const sections = Array.isArray(result.sections) ? result.sections : [];
     const dietaryCoverage = Array.isArray(result.dietaryCoverage) ? result.dietaryCoverage : [];
