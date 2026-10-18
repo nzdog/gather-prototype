@@ -7,6 +7,7 @@ import { normalizePhoneNumber } from '@/lib/phone';
 import { validateChannelTarget } from '@/lib/households/channel';
 import { hostHasMembership } from '@/lib/households/hostHousehold';
 import { findOrCreateCapturedPerson } from '@/lib/households/capturePerson';
+import { addDemoCrowd } from '@/lib/demo/crowd';
 
 // GET /api/events/[id]/households - List households for event
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -77,6 +78,34 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     if (auth instanceof NextResponse) return auth;
 
     const body: HouseholdRequestBody = await request.json();
+
+    /*
+     * [[GTC-392]] part B — THE SECOND SHAPE: `{ demoCrowd: true }` adds the made-up crowd to a
+     * visitor's sample copy, in one transaction, once (founder plan rulings, 18 Oct 2026, QB3, QB4).
+     * Refused 409, writing nothing, on any event that is not a sample copy, before her own household
+     * is saved, and a second time. Read after the guard, before this route's own checks; the
+     * ordinary shape below is unchanged.
+     */
+    if ((body as { demoCrowd?: unknown } | null)?.demoCrowd === true) {
+      const crowdActor = await ledgerActorForUser(auth.user, auth.role);
+      const crowd = await addDemoCrowd(prisma, eventId, crowdActor);
+      if (!crowd.ok) {
+        return NextResponse.json({ error: crowd.words, code: crowd.code }, { status: 409 });
+      }
+      const crowdHouseholds = await prisma.household.findMany({
+        where: { id: { in: crowd.householdIds } },
+        include: {
+          members: {
+            include: {
+              person: { select: { id: true, name: true, email: true, phoneNumber: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+      return NextResponse.json({ households: crowdHouseholds }, { status: 201 });
+    }
+
     const { primaryContact, partner, helpers, littleCount, guests, contactPersonEventId } = body;
 
     // Validate primary contact name

@@ -6,6 +6,7 @@ import { normalizePhoneNumber, isInternationalNumber } from '@/lib/phone';
 import { SavedHousehold } from './HouseholdCardList';
 import { HOUSEHOLD_CONTACT_LINE, OWN_HOUSEHOLD_LINE } from '@/lib/households/contact-line';
 import { householdDraft } from '@/lib/households/draft';
+import { COPY_WORDS, isCopyAddress } from '@/lib/demo/copy-address';
 
 export interface Moment1PersonInput {
   primaryContact: {
@@ -764,15 +765,20 @@ export default function Moment1InputForm({
                 >
                   Email
                 </label>
+                {/* [[GTC-392]] part B (QB7): a sample copy's throwaway address is never shown (W40, W41). */}
                 <input
                   id="m1-host-email"
                   type="email"
-                  value={email}
+                  value={isCopyAddress(hostMode.email) ? COPY_WORDS.ACCOUNT : email}
                   readOnly
                   className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-gray-500"
                 />
                 <p className="text-xs text-gray-400 mt-1">
-                  Your account email — it&rsquo;s how this event stays yours.
+                  {isCopyAddress(hostMode.email) ? (
+                    COPY_WORDS.ACCOUNT_LINE
+                  ) : (
+                    <>Your account email — it&rsquo;s how this event stays yours.</>
+                  )}
                 </p>
               </div>
             ) : (

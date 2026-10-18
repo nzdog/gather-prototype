@@ -31,6 +31,8 @@ import {
   type MenuRow,
 } from '@/lib/moments/menu-search';
 import { PICKS_WORDS, picksSummary } from '@/lib/moments/picks-summary';
+import TypicalAnswersButton from '@/components/demo/TypicalAnswersButton';
+import { fillTypicalAnswers } from '@/lib/demo/typical-answers';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -60,6 +62,8 @@ interface Moment2Step1ModalProps {
     eventType: string | null;
     eventTypeOther: string | null;
   }) => void;
+  /** [[GTC-392]] part B: a sample event, which offers "Fill in typical answers". */
+  sample?: boolean;
 }
 
 interface FoodItem {
@@ -219,6 +223,7 @@ export default function Moment2Step1Modal({
   doors,
   details,
   onOccasionChange,
+  sample = false,
 }: Moment2Step1ModalProps) {
   const [state, setState] = useState<Step1State>(INITIAL_STATE);
   // GTC-364 (item 3, Q1): the sections open now. Several may be open at once, so opening one
@@ -464,6 +469,18 @@ export default function Moment2Step1Modal({
     },
     [updateState]
   );
+
+  /*
+   * [[GTC-392]] part B — "Fill in typical answers" (QB5, QB6): only what she left empty, through
+   * this screen's own state, so its own half-second save stores it. It never presses Generate.
+   */
+  const fillTypical = (): 'filled' | 'nothing' => {
+    const filled = fillTypicalAnswers(state);
+    if (!filled) return 'nothing';
+    updateState(() => filled.next);
+    if (filled.openMore) setShowAdditionalCategories(true);
+    return 'filled';
+  };
 
   // Generate handler — flush pending save then call onGenerate
   const handleGenerate = useCallback(async () => {
@@ -765,6 +782,9 @@ export default function Moment2Step1Modal({
 
           {/* Feedback line */}
           {feedbackLine && <p className="mt-4 text-base text-gray-600 italic">{feedbackLine}</p>}
+
+          {/* [[GTC-392]] part B — under the pills, in the page: never in the fixed bar. */}
+          {sample && <TypicalAnswersButton onFill={fillTypical} />}
         </div>
 
         {/* [[GTC-373]] (item 23, Q3) — "Find a dish", in the flow above "Food", never fixed. */}

@@ -85,6 +85,9 @@ import { MarkRows, Pill, cadenceSentence, type Member } from '@/components/prefl
 import AfterThePress from '@/components/preflight/AfterThePress';
 import EventDetails from '@/components/shared/EventDetails';
 import { DemoBanner } from '@/components/demo/DemoBanner';
+import PretendSend from '@/components/demo/PretendSend';
+import { pretendList, type PretendList } from '@/lib/demo/pretend-send';
+import { COPY_WORDS, isCopyAddress } from '@/lib/demo/copy-address';
 import { BOARD_MOVE_AFTER_MS, SEE_THE_BOARD_LINK } from '@/lib/preflight/after-press-words';
 import { boardHref, itemDoorHref } from '@/lib/events/home-href';
 import {
@@ -413,6 +416,8 @@ export default function PreFlightPage() {
   const [pressing, setPressing] = useState(false);
   const [pressed, setPressed] = useState<{ recipients: number } | null>(null);
   const [pressError, setPressError] = useState<string | null>(null);
+  // [[GTC-392]] part B — the pretend Send's list, on a sample only (QB1, QB2).
+  const [pretend, setPretend] = useState<PretendList | 'failed' | null>(null);
 
   const press = useCallback(async () => {
     if (pressing || pressed !== null) return;
@@ -460,6 +465,31 @@ export default function PreFlightPage() {
   useEffect(() => {
     if (pressed && tickStoreKey) forgetTicks(browserStore(), tickStoreKey);
   }, [pressed, tickStoreKey]);
+
+  /*
+   * [[GTC-392]] part B — THE PRETEND SEND. The press is untouched (QB1): on a sample it refuses,
+   * writes nothing, and the line under Send says so (W2). Only once that line holds W2 does this read
+   * step 4's own message read, which writes nothing, and build what Send would have done from it, as
+   * the drain composes it. It records nothing (QB2). Outside `press`, so its handler is unchanged.
+   */
+  useEffect(() => {
+    if (pressError !== PRESS_REFUSAL_WORDS.DEMO_EVENT) {
+      setPretend(null);
+      return;
+    }
+    let live = true;
+    fetch(`/api/events/${eventId}/pre-flight/message`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
+      .then((preview) => {
+        if (live) setPretend(pretendList(preview));
+      })
+      .catch(() => {
+        if (live) setPretend('failed');
+      });
+    return () => {
+      live = false;
+    };
+  }, [pressError, eventId]);
 
   if (error && !data) {
     return <div className="max-w-3xl mx-auto px-6 py-16 text-gray-600">{error}</div>;
@@ -1000,6 +1030,8 @@ export default function PreFlightPage() {
               {pressError}
             </p>
           )}
+          {/* [[GTC-392]] part B — what Send would have done, under W2, on a sample only. */}
+          {pretend && <PretendSend state={pretend} onOpenStep4={() => goToStep(4)} />}
         </Step>
       </div>
       {/* [[GTC-392]] — the sample event's banner; nothing on a real event. */}
@@ -1593,7 +1625,11 @@ function MessageStep({
         {/* The words are the view module's, ruled at slice 3 — Gather says "I". */}
         <p className="text-xs text-gray-500 mb-3">
           {data.replyTo ? (
-            replyToLine(data.replyTo)
+            isCopyAddress(data.replyTo) ? (
+              COPY_WORDS.REPLY_LINE
+            ) : (
+              replyToLine(data.replyTo)
+            )
           ) : (
             <span className="text-amber-700">{NO_REPLY_TO_LINE}</span>
           )}
@@ -1713,7 +1749,9 @@ function MessageStep({
               {current.replyTo !== null && (
                 <div className="flex gap-2">
                   <dt className="w-24 shrink-0 text-gray-400">Reply-to</dt>
-                  <dd className="text-gray-800">{current.replyTo}</dd>
+                  <dd className="text-gray-800">
+                    {isCopyAddress(current.replyTo) ? COPY_WORDS.REPLY_TO : current.replyTo}
+                  </dd>
                 </div>
               )}
             </dl>
@@ -1778,7 +1816,7 @@ function MessageStep({
                       type="button"
                       data-test-email-button=""
                       onClick={() => sendTest(current.recipient.personEventId)}
-                      disabled={dirty || testing || !viewerEmail}
+                      disabled={dirty || testing || !viewerEmail || isCopyAddress(viewerEmail)}
                       className="text-xs px-3 py-1 rounded-md border border-gray-300 bg-white text-gray-700 disabled:border-gray-200 disabled:text-gray-300"
                     >
                       {testing ? TEST_EMAIL_WORDS.SENDING : TEST_EMAIL_WORDS.BUTTON}
@@ -1788,9 +1826,11 @@ function MessageStep({
                         ? TEST_EMAIL_WORDS.SAVE_FIRST
                         : !viewerEmail
                           ? TEST_EMAIL_WORDS.NO_ADDRESS
-                          : current.recipient.channel === 'TEXT'
-                            ? `${testEmailLead(firstNameOf(current.recipient.name), viewerEmail)} ${testEmailTextNote(firstNameOf(current.recipient.name))}`
-                            : testEmailLead(firstNameOf(current.recipient.name), viewerEmail)}
+                          : isCopyAddress(viewerEmail)
+                            ? testEmailOutcomeLine('DEMO', viewerEmail)
+                            : current.recipient.channel === 'TEXT'
+                              ? `${testEmailLead(firstNameOf(current.recipient.name), viewerEmail)} ${testEmailTextNote(firstNameOf(current.recipient.name))}`
+                              : testEmailLead(firstNameOf(current.recipient.name), viewerEmail)}
                     </p>
                     {testOutcome && viewerEmail ? (
                       <p

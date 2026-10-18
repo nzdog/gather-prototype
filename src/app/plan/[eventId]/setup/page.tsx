@@ -16,6 +16,8 @@ import {
 import type { OwnPlanState } from '@/lib/setup/own-plan';
 import { useToast } from '@/contexts/ToastContext';
 import { DemoBanner } from '@/components/demo/DemoBanner';
+import CrowdButton, { type CrowdState } from '@/components/demo/CrowdButton';
+import { isCopyAddress, isCrowdAddress } from '@/lib/demo/copy-address';
 import SetupOpeningScreen from '@/components/plan/SetupOpeningScreen';
 import Moment1InputForm, {
   Moment1PersonInput,
@@ -277,6 +279,8 @@ interface SetupEvent extends SerialisedEvent {
    * dashboard's guard. Already on the wire (`EVENT_WIRE_SELECT`).
    */
   lastCheckPlanAt?: string | null;
+  /** [[GTC-392]] part B: a sample event (already on the wire, `EVENT_WIRE_SELECT`). */
+  isDemo?: boolean;
 }
 
 /**
@@ -454,6 +458,8 @@ function EventSetupFlow() {
   };
   const [households, setHouseholds] = useState<SavedHousehold[]>([]);
   const [channelCandidates, setChannelCandidates] = useState<ChannelCandidateOption[]>([]);
+  // [[GTC-392]] part B — "Add a crowd" on a sample copy (W16 to W21): where it is up to.
+  const [crowd, setCrowd] = useState<CrowdState>('idle');
   const [editingHousehold, setEditingHousehold] = useState<SavedHousehold | null>(null);
   const moment1FormRef = useRef<HTMLDivElement>(null);
   // [[GTC-365]] item 16: the household being typed in Moment 1, shown in the column before Save.
@@ -1113,6 +1119,57 @@ function EventSetupFlow() {
       }
     };
 
+    /*
+     * [[GTC-392]] part B — "Add a crowd": the households route's second shape, on a sample copy
+     * only (QB4). The 30 made-up people join the cards and the contact picker, with no reload.
+     * Usable once: a crowd already here reads W20.
+     */
+    const sampleCopy = isCopyAddress(hostStep.host?.email);
+    const crowdHere = households.some((h) =>
+      [h.primaryContact, h.partner, ...h.guests].some((m) => isCrowdAddress(m?.email))
+    );
+    const crowdState: CrowdState = crowd === 'idle' && crowdHere ? 'already' : crowd;
+    const addCrowd = async () => {
+      if (crowd === 'working') return;
+      setCrowd('working');
+      try {
+        const res = await fetch(`/api/events/${event.id}/households`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ demoCrowd: true }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 409 && data.code === 'ALREADY_ADDED') {
+          setCrowd('already');
+          return;
+        }
+        if (!res.ok) {
+          setCrowd('failed');
+          return;
+        }
+        const added: any[] = data.households ?? [];
+        setHouseholds((prev) => [...prev, ...added.map(apiHouseholdToSaved)]);
+        setChannelCandidates((prev) => [
+          ...prev,
+          ...added.flatMap((h: any) =>
+            (h.members ?? [])
+              .filter((m: any) => m.householdRole !== 'CHILD')
+              .map((m: any) => ({
+                personEventId: m.id,
+                name: m.person?.name || 'Unknown',
+                householdName:
+                  h.members?.find((x: any) => x.householdRole === 'PRIMARY_CONTACT')?.person
+                    ?.name || 'Household',
+                householdId: h.id,
+              }))
+          ),
+        ]);
+        setCrowd('done');
+      } catch {
+        setCrowd('failed');
+      }
+    };
+
     const handleEditSave = async (householdId: string, person: Moment1PersonInput) => {
       const res = await fetch(`/api/events/${event.id}/households/${householdId}`, {
         method: 'PUT',
@@ -1209,6 +1266,7 @@ function EventSetupFlow() {
                 above the form grows while she types, and the household being typed shows first,
                 just under the Save buttons (Q2). */}
             <div className="md:hidden mt-8">
+              {sampleCopy && <CrowdButton state={crowdState} onAdd={() => void addCrowd()} />}
               <HouseholdCardList
                 households={households}
                 onEdit={handleEdit}
@@ -1225,6 +1283,7 @@ function EventSetupFlow() {
                 ref={desktopColumnRef}
                 className="sticky top-8 max-h-[calc(100vh-4rem-65px)] overflow-y-auto"
               >
+                {sampleCopy && <CrowdButton state={crowdState} onAdd={() => void addCrowd()} />}
                 <HouseholdCardList
                   households={households}
                   onEdit={handleEdit}
@@ -1597,6 +1656,8 @@ function EventSetupFlow() {
         doors={doorsFor(2)}
         details={details}
         onOccasionChange={setLiveOccasion}
+        // [[GTC-392]] part B — "Fill in typical answers", on a sample only.
+        sample={Boolean(event.isDemo)}
       />
     );
   }

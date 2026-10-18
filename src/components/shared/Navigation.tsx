@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Plus, Calendar, CreditCard, LogOut, LogIn, Menu, X, ChevronDown } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
+import { COPY_WORDS, isCopyAddress } from '@/lib/demo/copy-address';
 
 type User = {
   id: string;
@@ -183,7 +184,8 @@ export default function Navigation({ user }: NavigationProps) {
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                   }`}
                 >
-                  {user.email}
+                  {/* [[GTC-392]] part B (QB7): a sample copy's account reads W40. */}
+                  {isCopyAddress(user.email) ? COPY_WORDS.ACCOUNT : user.email}
                   <ChevronDown
                     className={`w-4 h-4 transition-transform ${accountOpen ? 'rotate-180' : ''}`}
                     aria-hidden="true"
@@ -267,7 +269,9 @@ export default function Navigation({ user }: NavigationProps) {
           <div className="px-4 py-3 border-t border-gray-100">
             {user ? (
               <>
-                <p className="px-3 pb-2 text-sm text-gray-600 break-all">{user.email}</p>
+                <p className="px-3 pb-2 text-sm text-gray-600 break-all">
+                  {isCopyAddress(user.email) ? COPY_WORDS.ACCOUNT : user.email}
+                </p>
                 <a
                   href={billing.href}
                   onClick={() => setMenuOpen(false)}
