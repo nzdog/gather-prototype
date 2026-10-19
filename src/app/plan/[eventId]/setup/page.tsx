@@ -1282,13 +1282,18 @@ function EventSetupFlow() {
                 ref={desktopColumnRef}
                 className="sticky top-8 max-h-[calc(100vh-4rem-65px)] overflow-y-auto"
               >
-                {sampleCopy && <CrowdButton state={crowdState} onAdd={() => void addCrowd()} />}
+                {/* [[GTC-394]] tweak 4: "Add a crowd" directly under the list's heading. */}
                 <HouseholdCardList
                   households={households}
                   onEdit={handleEdit}
                   onDelete={handleDeleteHousehold}
                   editingHouseholdId={editingHousehold?.id}
                   draft={moment1Draft}
+                  top={
+                    sampleCopy ? (
+                      <CrowdButton state={crowdState} onAdd={() => void addCrowd()} />
+                    ) : undefined
+                  }
                 />
               </div>
             </div>

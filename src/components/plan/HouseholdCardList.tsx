@@ -53,6 +53,11 @@ interface HouseholdCardListProps {
    * once saved; first on a phone, just under the Save buttons.
    */
   draftAt?: 'start' | 'end';
+  /**
+   * [[GTC-394]] tweak 4 — what sits at the very top of the list, directly under its heading: on a
+   * sample copy, "Add a crowd" (founder ruling, 19 Oct 2026). Absent, the list is as it was.
+   */
+  top?: React.ReactNode;
 }
 
 /**
@@ -76,6 +81,7 @@ export default function HouseholdCardList({
   editingHouseholdId,
   draft = null,
   draftAt = 'end',
+  top,
 }: HouseholdCardListProps) {
   if (households.length === 0 && !draft) return null;
 
@@ -97,6 +103,7 @@ export default function HouseholdCardList({
         Ducks in a row so far
         {households.length > 0 && ` — ${countLine(households)}`}
       </p>
+      {top}
       {draftAt === 'start' && newCard}
       {households.map((household) =>
         draft && editingHouseholdId === household.id ? (

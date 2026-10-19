@@ -11,6 +11,7 @@
  *   O  tweak 2: the two transition pages, much simpler; the two quieter choices moved into
  *      Moment 2's questions, under the same rule.
  *   D  tweak 3: the first page, two buttons; Sarah's door opens her event on the board.
+ *   K  tweak 4: "Add a crowd" much more obvious, at the top of the household list.
  *
  * SAFETY. Static and rendered checks only: no database row, no dev server, no AI call, no
  * browser, no network. Every fixture and expected value is written here by hand, never taken from
@@ -199,6 +200,16 @@ const GONE_FROM_DEMO = [
   'Open Planning Dashboard',
   'Sarah paid $25',
 ];
+
+// ── Tweak 4: the crowd's words (GTC-392 W16 to W21), hand-written ───────────
+const W16 = 'Add a crowd';
+const W17 =
+  'Adds 30 made-up people in 11 households, so you can try Gather with a full party. You can change or remove any of them.';
+const W18 = 'Adding the crowd…';
+const W19 = 'Added 30 made-up people in 11 households.';
+const W20 = 'The crowd is already here.';
+const W21 = 'The crowd couldn’t be added. Try again.';
+const LIST_HEADING = 'Ducks in a row so far';
 
 // ── CHECKS-START: every condition, pure, dry-run before RED ───────────────────
 const indexesOf = (s: string, needle: string) => {
@@ -561,6 +572,63 @@ export const CHECKS = {
       !src.includes('confirm(')
     );
   },
+  /** K1 — the crowd button: filled accent, full width, larger text, in a soft tinted box with W17. */
+  crowdButton(html: string) {
+    const box = html.match(/^<div data-crowd="" class="([^"]*)">/);
+    const btn = html.match(/<button[^>]*class="([^"]*)"[^>]*>([^<]*)<\/button>/);
+    const cls = (btn?.[1] ?? '').split(/\s+/);
+    return (
+      !!box &&
+      /\bbg-sage-(50|100)\b/.test(box[1]) &&
+      /\brounded-lg\b/.test(box[1]) &&
+      !!btn &&
+      btn[2] === W16 &&
+      ['bg-accent', 'text-white', 'w-full'].every((c) => cls.includes(c)) &&
+      cls.some((c) => /^text-(base|lg)$/.test(c)) &&
+      !cls.some((c) => /^border-accent\//.test(c)) &&
+      html.indexOf(W17) > html.indexOf(`>${W16}</button>`) &&
+      html.match(/<\/div>$/) !== null
+    );
+  },
+  /** K2 — the list: its heading, then what is put at its top, then the households. */
+  listTop(html: string, marker: string, firstName: string) {
+    const head = html.indexOf(LIST_HEADING);
+    const top = html.indexOf(marker);
+    const card = html.indexOf(`>${firstName}<`);
+    return head >= 0 && top > head && card > top;
+  },
+  /** K3 — the setup page: on a computer the crowd sits at the list's top; on a phone where it was. */
+  setupCrowdPlace(src: string) {
+    const phone = src.indexOf('<div className="md:hidden mt-8">');
+    const desk = src.indexOf('<div className="hidden md:block w-80 flex-shrink-0">');
+    const phoneBlock = src.slice(phone, desk);
+    const deskBlock = src.slice(desk, src.indexOf('if (showMoment3'));
+    return (
+      phone > 0 &&
+      desk > phone &&
+      /\{sampleCopy && <CrowdButton state=\{crowdState\} onAdd=\{\(\) => void addCrowd\(\)\} \/>\}\s*<HouseholdCardList/.test(
+        phoneBlock
+      ) &&
+      /<HouseholdCardList[\s\S]*?top=\{\s*sampleCopy \? (\(\s*)?<CrowdButton state=\{crowdState\} onAdd=\{\(\) => void addCrowd\(\)\} \/>(\s*\))? : undefined\s*\}/.test(
+        deskBlock
+      ) &&
+      !/\{sampleCopy && <CrowdButton/.test(deskBlock) &&
+      (src.match(/<CrowdButton\b/g) ?? []).length === 2
+    );
+  },
+  /** K4 — its states say what they said: working, failed, done, already. */
+  crowdStates(working: string, failedH: string, done: string, already: string) {
+    return (
+      working.includes(`>${W18}</button>`) &&
+      /<button[^>]*disabled=""/.test(working) &&
+      failedH.includes(`>${W16}</button>`) &&
+      failedH.includes(W21) &&
+      done.includes(W19) &&
+      !done.includes('<button') &&
+      already.includes(W20) &&
+      !already.includes('<button')
+    );
+  },
 };
 // ── CHECKS-END ───────────────────────────────────────────────────────────────
 
@@ -905,10 +973,54 @@ async function layerD() {
   );
 }
 
+// ══ Tweak 4 ══════════════════════════════════════════════════════════════════
+async function layerK() {
+  section('K — tweak 4: "Add a crowd", much more obvious');
+  const CB = await load('../src/components/demo/CrowdButton');
+  const HCL = await load('../src/components/plan/HouseholdCardList');
+  const crowd = (state: string) =>
+    CB?.default ? render(createElement(CB.default, { state, onAdd: () => {} })) : '';
+  assert(
+    'K',
+    'K1 the button is filled accent, full width and larger, in a soft tinted box with its line',
+    CHECKS.crowdButton(crowd('idle')),
+    crowd('idle').slice(0, 400)
+  );
+  const list = HCL?.default
+    ? render(
+        createElement(HCL.default, {
+          households: [
+            household('hh1', 'Kate Walker', true),
+            household('hh2', 'Tom Brennan', false),
+          ],
+          onEdit: () => {},
+          onDelete: async () => {},
+          top: createElement('div', { 'data-gtc394-top': '' }, 'TOP'),
+        })
+      )
+    : '';
+  assert(
+    'K',
+    'K2 the household list takes what goes at its top: directly under its heading "Ducks in a row so far", above the households',
+    CHECKS.listTop(list, 'data-gtc394-top', 'Kate Walker')
+  );
+  assert(
+    'K',
+    'K3 the setup page puts it there on a computer; on a phone it stays where it is, below the form; still for a copy only',
+    CHECKS.setupCrowdPlace(code(SETUP))
+  );
+  assert(
+    'K',
+    'K4 its states say what they said: W18 while it works (greyed), W21 if it failed, W19 once done, W20 if already there',
+    CHECKS.crowdStates(crowd('working'), crowd('failed'), crowd('done'), crowd('already'))
+  );
+}
+
 async function main() {
   await layerH();
   await layerO();
   await layerD();
+  await layerK();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
     console.log(reds.map((r) => `  - ${r}`).join('\n'));
