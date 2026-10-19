@@ -499,6 +499,8 @@ export default function Moment2Step1Modal({
     if (!filled) return 'nothing';
     updateState(() => filled.next);
     if (filled.openMore) setShowAdditionalCategories(true);
+    // [[GTC-394]] tweak 5: every section it filled opens; nothing else opens or closes.
+    setOpenSections((prev) => [...prev, ...filled.opened.filter((id) => !prev.includes(id))]);
     return 'filled';
   };
 
@@ -763,6 +765,10 @@ export default function Moment2Step1Modal({
           <MomentArc currentMoment={2} completedMoments={[1]} doors={leavingDoors} />
         </div>
 
+        {/* [[GTC-392]] part B — in the page, never in the fixed bar. [[GTC-394]] tweak 5: at the top
+            of the questions, where it shows on a laptop without scrolling. */}
+        {sample && <TypicalAnswersButton onFill={fillTypical} />}
+
         {/* Event type selector */}
         <div className="mb-8">
           <p className="text-lg font-medium text-gray-900 mb-4">
@@ -802,9 +808,6 @@ export default function Moment2Step1Modal({
 
           {/* Feedback line */}
           {feedbackLine && <p className="mt-4 text-base text-gray-600 italic">{feedbackLine}</p>}
-
-          {/* [[GTC-392]] part B — under the pills, in the page: never in the fixed bar. */}
-          {sample && <TypicalAnswersButton onFill={fillTypical} />}
         </div>
 
         {/* [[GTC-373]] (item 23, Q3) — "Find a dish", in the flow above "Food", never fixed. */}

@@ -184,6 +184,43 @@ const BBQ_PICKS: Record<string, Record<number, { options: string[]; freeText: st
   table_snacks: sel(['Dips and nibbles'], ['Mixed dip platter']),
   dessert: sel(['Pavlova'], ['Classic pavlova with cream']),
 };
+/**
+ * [[GTC-394]] tweak 5 (founder, 19 Oct 2026): the fill is random now, from a random source passed
+ * in. ALWAYS_FIRST, hand-written, makes it pick the first choice everywhere, and so take every note
+ * it may (0 < 1/3) until the cap of two. FIRST_PICKS is what that gives on a blank page, typed by
+ * hand from the Casual BBQ lists: the first style, the first dish it lists, and the founder's notes
+ * on the first two sections in the questions' order (Mains, Sides & Salads). The third Alcoholic
+ * Drinks question is left empty (founder ruling).
+ */
+const ALWAYS_FIRST = () => 0;
+const typed = (levels: Array<[string[], string]>) =>
+  Object.fromEntries(levels.map(([options, freeText], i) => [i, { options, freeText }]));
+const FIRST_PICKS: Record<string, Record<number, { options: string[]; freeText: string }>> = {
+  mains: typed([
+    [['Classic sausage sizzle'], 'No pork, if we can.'],
+    [['Beef sausages'], ''],
+  ]),
+  sides_salads: typed([
+    [['Classic coleslaw'], 'The salads can be made the day before.'],
+    [['Creamy coleslaw'], ''],
+  ]),
+  dessert: typed([
+    [['Pavlova'], ''],
+    [['Classic pavlova with cream'], ''],
+  ]),
+  drinks_alcoholic: typed([
+    [['Beer and cider'], ''],
+    [['NZ craft beer selection'], ''],
+  ]),
+  drinks_non_alcoholic: typed([
+    [['Soft drinks and juice'], ''],
+    [['L&P and classic NZ fizzy'], ''],
+  ]),
+  table_snacks: typed([
+    [['Cheese and crackers'], ''],
+    [['NZ cheese selection (Kapiti, Mainland)'], ''],
+  ]),
+};
 /** The questions' starting state, as `Moment2Step1Modal` declares it. */
 const blankAnswers = () => ({
   eventType: null as string | null,
@@ -1042,7 +1079,9 @@ async function main() {
 
     // ══ T — the typical answers ════════════════════════════════════════════════
     section('T — "Fill in typical answers"');
-    const bbq = ok(() => !!TA?.fillTypicalAnswers) ? TA.fillTypicalAnswers(blankAnswers()) : null;
+    const bbq = ok(() => !!TA?.fillTypicalAnswers)
+      ? TA.fillTypicalAnswers(blankAnswers(), ALWAYS_FIRST)
+      : null;
     const picksOf = (s: any, key: string) =>
       key === 'mains' ? s?.mainsData?.selections : s?.extendedCategoriesData?.[key]?.selections;
     const sameSel = (a: any, b: any) =>
@@ -1053,11 +1092,20 @@ async function main() {
           JSON.stringify(a[lvl]?.options) === JSON.stringify(v.options) &&
           (a[lvl]?.freeText ?? '') === ''
       );
+    /** As sameSel, with the typed note of each level compared too (GTC-394 tweak 5). */
+    const sameTyped = (a: any, b: any) =>
+      !!a &&
+      Object.keys(b).length === Object.keys(a).length &&
+      Object.entries(b).every(
+        ([lvl, v]: [string, any]) =>
+          JSON.stringify(a[lvl]?.options) === JSON.stringify(v.options) &&
+          (a[lvl]?.freeText ?? '') === v.freeText
+      );
     assert(
       'T',
-      'T1 with no kind picked: Casual BBQ, and every food pick exactly as the plan lists it',
+      'T1 with no kind picked: Casual BBQ, and every food pick exactly as a hand-written always-first sequence gives it, notes included (GTC-394 tweak 5)',
       bbq?.next?.eventType === 'Casual BBQ' &&
-        Object.entries(BBQ_PICKS).every(([k, v]) => sameSel(picksOf(bbq.next, k), v)) &&
+        Object.entries(FIRST_PICKS).every(([k, v]) => sameTyped(picksOf(bbq.next, k), v)) &&
         picksOf(bbq.next, 'entree_starters') === undefined &&
         bbq.openMore === true,
       JSON.stringify(bbq).slice(0, 400)
@@ -1086,7 +1134,9 @@ async function main() {
     mine.dietaryData = { status: 'confirmed_none', requirements: [], other: '' };
     mine.setUpData = { freeText: 'Her own words', stillDeciding: false };
     mine.extendedCategoriesData = { sides_salads: { selections: {}, stillDeciding: true } };
-    const kept = ok(() => !!TA?.fillTypicalAnswers) ? TA.fillTypicalAnswers(mine) : null;
+    const kept = ok(() => !!TA?.fillTypicalAnswers)
+      ? TA.fillTypicalAnswers(mine, ALWAYS_FIRST)
+      : null;
     assert(
       'T',
       'T3 it fills only what she left empty: her mains, her dietary answer, her set-up words and a section she is still deciding stay',
@@ -1096,12 +1146,14 @@ async function main() {
         kept.next.setUpData.freeText === 'Her own words' &&
         kept.next.extendedCategoriesData.sides_salads?.stillDeciding === true &&
         JSON.stringify(kept.next.extendedCategoriesData.sides_salads?.selections) === '{}' &&
-        sameSel(picksOf(kept.next, 'table_snacks'), BBQ_PICKS.table_snacks) &&
+        sameSel(picksOf(kept.next, 'table_snacks'), FIRST_PICKS.table_snacks) &&
         kept.next.cleanUpData.freeText === W28
     );
     const xmas = blankAnswers();
     xmas.eventType = 'Christmas';
-    const filledX = ok(() => !!TA?.fillTypicalAnswers) ? TA.fillTypicalAnswers(xmas) : null;
+    const filledX = ok(() => !!TA?.fillTypicalAnswers)
+      ? TA.fillTypicalAnswers(xmas, ALWAYS_FIRST)
+      : null;
     const FOOD = [
       'entree_starters',
       'mains',
@@ -1129,17 +1181,16 @@ async function main() {
     };
     assert(
       'T',
-      'T4 another kind (Christmas) keeps its kind and gets the first choice in each of its up-front food questions',
+      'T4 another kind (Christmas) keeps its kind and gets the first choice in each of its up-front food questions (from an always-first sequence, GTC-394 tweak 5)',
       filledX?.next?.eventType === 'Christmas' && xmasUp.length > 0 && xmasUp.every(firstChoiceOk),
       JSON.stringify(filledX?.next?.extendedCategoriesData ?? null).slice(0, 300)
     );
     assert(
       'T',
-      'T5 the dietary answer and the two jobs: Vegetarian and Gluten-free; W27; W28',
+      'T5 the dietary answer and the two jobs, from an always-first sequence: Vegetarian; W27; W28 (GTC-394 tweak 5)',
       !!bbq &&
         bbq.next.dietaryData.status === 'confirmed_needs' &&
-        JSON.stringify(bbq.next.dietaryData.requirements) ===
-          JSON.stringify(['Vegetarian', 'Gluten-free']) &&
+        JSON.stringify(bbq.next.dietaryData.requirements) === JSON.stringify(['Vegetarian']) &&
         bbq.next.setUpData.freeText === W27 &&
         bbq.next.cleanUpData.freeText === W28 &&
         bbq.next.otherJobsOtherData.freeText === '' &&
@@ -1172,7 +1223,7 @@ async function main() {
       'T7 the setup route stores them as the questions’ own save would (200; Casual BBQ; the mains)',
       stored.status === 200 &&
         setupRow?.eventType === 'Casual BBQ' &&
-        sameSel((setupRow?.mainsData as any)?.selections, BBQ_PICKS.mains),
+        sameTyped((setupRow?.mainsData as any)?.selections, FIRST_PICKS.mains),
       `${stored.status} ${JSON.stringify(stored.body).slice(0, 200)}`
     );
     const afterAnswers = sample ? await eventCounts(sample.eventId) : null;

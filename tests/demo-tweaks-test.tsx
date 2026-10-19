@@ -12,6 +12,7 @@
  *      Moment 2's questions, under the same rule.
  *   D  tweak 3: the first page, two buttons; Sarah's door opens her event on the board.
  *   K  tweak 4: "Add a crowd" much more obvious, at the top of the household list.
+ *   A  tweak 5: "Fill in typical answers": obvious, it opens what it fills, random, a note.
  *
  * SAFETY. Static and rendered checks only: no database row, no dev server, no AI call, no
  * browser, no network. Every fixture and expected value is written here by hand, never taken from
@@ -210,6 +211,71 @@ const W19 = 'Added 30 made-up people in 11 households.';
 const W20 = 'The crowd is already here.';
 const W21 = 'The crowd couldn’t be added. Try again.';
 const LIST_HEADING = 'Ducks in a row so far';
+
+// ── Tweak 5: the typical answers, hand-written ───────────────────────────────
+const TYPICAL_FILE = 'src/lib/demo/typical-answers.ts';
+const ANSWERS_BUTTON_FILE = 'src/components/demo/TypicalAnswersButton.tsx';
+const W23 = 'Fill in typical answers';
+const W24 =
+  'I’ll answer the questions the way a typical host might. You can change any answer before you press Generate.';
+/** The founder's six notes, by section (first prompt, tweak 5). */
+const NOTES: Record<string, string> = {
+  mains: 'No pork, if we can.',
+  sides_salads: 'The salads can be made the day before.',
+  dessert: 'Nana can’t have nuts.',
+  drinks_alcoholic: 'Keep it light, there are drivers.',
+  drinks_non_alcoholic: 'Plenty of ice, please.',
+  table_snacks: 'Something for the kids too.',
+};
+/** The jobs: W27 and W28 first, then the founder's four new sentences. */
+const SET_UPS = [
+  'Tables and chairs out, and the BBQ cleaned with a full gas bottle.',
+  'Chilly bins out, and the tables set up under the trees.',
+  'Chairs out, a speaker set up, and extension leads run.',
+];
+const CLEAN_UPS = [
+  'Dishes, rubbish and recycling, and a scrape-down of the BBQ.',
+  'Rubbish and recycling out, and the tables wiped down.',
+  'Leftovers packed up and the chairs put away.',
+];
+/** The real Dietary list, as the questions show it. */
+const DIETARY = ['Vegetarian', 'Vegan', 'Gluten-free', 'Dairy-free', 'Nut allergy'];
+/** The Casual BBQ sections it fills (QB5), in the questions' order. */
+const BBQ_FILLED = [
+  'mains',
+  'sides_salads',
+  'dessert',
+  'drinks_alcoholic',
+  'drinks_non_alcoholic',
+  'table_snacks',
+];
+/** A hand-written sequence source: the numbers given, in turn, again from the start when done. */
+const sequence = (xs: number[]) => {
+  let i = 0;
+  return () => xs[i++ % xs.length];
+};
+/** A hand-written pseudo-random source (Park–Miller), one per seed: never from the code under test. */
+const seeded = (seed: number) => {
+  let s = seed % 2147483647 || 1;
+  return () => {
+    s = (s * 16807) % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+};
+const blankQuestions = () => ({
+  eventType: null as string | null,
+  eventTypeOther: '',
+  mainsData: { items: [] as unknown[], stillDeciding: false } as any,
+  sidesData: { items: [] as unknown[], stillDeciding: false },
+  dessertsData: { items: [] as unknown[], stillDeciding: false },
+  drinksData: { items: [] as unknown[], stillDeciding: false },
+  dietaryData: { status: 'unanswered', requirements: [] as string[], other: '' },
+  otherNotes: '',
+  extendedCategoriesData: {} as Record<string, any>,
+  setUpData: { freeText: '', stillDeciding: false },
+  cleanUpData: { freeText: '', stillDeciding: false },
+  otherJobsOtherData: { freeText: '', stillDeciding: false },
+});
 
 // ── CHECKS-START: every condition, pure, dry-run before RED ───────────────────
 const indexesOf = (s: string, needle: string) => {
@@ -629,6 +695,111 @@ export const CHECKS = {
       !already.includes('<button')
     );
   },
+  /**
+   * A3 — one fill, read against the questions' own lists (passed in, read from the config): every
+   * tick is a choice the question offers, a dish only under a ticked style, one or two of each where
+   * the question allows it; the third, independent question untouched; at most two notes, each the
+   * section's own words in its first "Other" box; Dietary one to three from the list; each job one
+   * of its three; the sections it says it filled are the ones it filled.
+   */
+  fillIsSound(
+    fill: any,
+    levelsOf: (key: string) => any[] | null,
+    sections: string[],
+    expectOpened: string[]
+  ) {
+    if (!fill?.next) return false;
+    const picksOf = (key: string) =>
+      key === 'mains'
+        ? fill.next.mainsData?.selections
+        : fill.next.extendedCategoriesData?.[key]?.selections;
+    let notes = 0;
+    for (const key of sections) {
+      const levels = levelsOf(key);
+      const sel = picksOf(key);
+      if (!levels || !sel) return false;
+      const styles: string[] = sel[0]?.options ?? [];
+      const multi0 = levels[0].multiSelect !== false;
+      if (styles.length < 1 || styles.length > (multi0 ? 2 : 1)) return false;
+      if (!styles.every((s) => (levels[0].options ?? []).includes(s))) return false;
+      const typed = sel[0]?.freeText ?? '';
+      if (typed !== '') {
+        if (typed !== NOTES[key]) return false;
+        notes++;
+      }
+      for (let i = 1; i < levels.length; i++) {
+        const got: string[] = sel[i]?.options ?? [];
+        if (!levels[i].dependsOn) {
+          if (got.length > 0 || (sel[i]?.freeText ?? '') !== '') return false;
+          continue;
+        }
+        if ((sel[i]?.freeText ?? '') !== '') return false;
+        // Under each ticked style, one or two of the dishes it lists; nothing a style did not list.
+        const under = styles.map((s) => levels[i].dependsOn[s] ?? []);
+        if (!got.every((d) => under.some((u: string[]) => u.includes(d)))) return false;
+        // A dish listed under two ticked styles shows once, under the first (the questions' rule).
+        const shownAt = styles.map((s, k) => {
+          const earlier = new Set(under.slice(0, k).flat());
+          return (levels[i].dependsOn[s] ?? []).filter((d: string) => !earlier.has(d));
+        });
+        const multi = levels[i].multiSelect !== false;
+        const perStyleOk = shownAt.every((shown: string[]) => {
+          const n = got.filter((d) => shown.includes(d)).length;
+          return n <= (multi ? 2 : 1) && (n >= 1 || shown.length === 0);
+        });
+        if (!perStyleOk) return false;
+      }
+    }
+    const dietary = fill.next.dietaryData;
+    return (
+      notes <= 2 &&
+      dietary.status === 'confirmed_needs' &&
+      dietary.requirements.length >= 1 &&
+      dietary.requirements.length <= 3 &&
+      dietary.requirements.every((r: string) => DIETARY.includes(r)) &&
+      new Set(dietary.requirements).size === dietary.requirements.length &&
+      SET_UPS.includes(fill.next.setUpData.freeText) &&
+      CLEAN_UPS.includes(fill.next.cleanUpData.freeText) &&
+      fill.next.otherJobsOtherData.freeText === '' &&
+      fill.next.otherNotes === '' &&
+      JSON.stringify([...(fill.opened ?? [])].sort()) === JSON.stringify([...expectOpened].sort())
+    );
+  },
+  /** A6 — the button: filled accent, larger, in a soft tinted box with W24. */
+  answersButton(html: string) {
+    const box = html.match(/^<div data-typical-answers="" class="([^"]*)">/);
+    const btn = html.match(/<button[^>]*class="([^"]*)"[^>]*>([^<]*)<\/button>/);
+    const cls = (btn?.[1] ?? '').split(/\s+/);
+    return (
+      !!box &&
+      /\bbg-sage-(50|100)\b/.test(box[1]) &&
+      !!btn &&
+      btn[2] === W23 &&
+      ['bg-accent', 'text-white', 'w-full'].every((c) => cls.includes(c)) &&
+      cls.some((c) => /^text-(base|lg)$/.test(c)) &&
+      html.indexOf(W24) > html.indexOf(`>${W23}</button>`)
+    );
+  },
+  /** A6 — the questions: the button at their top, before the kind question; it opens what it filled. */
+  answersPlace(modal: string) {
+    const strip = modal.indexOf('<MomentArc currentMoment={2}');
+    const button = modal.indexOf('<TypicalAnswersButton');
+    const kinds = modal.indexOf('What kind of event are you planning?');
+    const fill = bodyFrom(modal, 'const fillTypical = (): ');
+    return (
+      strip > 0 &&
+      button > strip &&
+      kinds > button &&
+      (modal.match(/<TypicalAnswersButton\b/g) ?? []).length === 1 &&
+      /sample\s*&&\s*\(?\s*<TypicalAnswersButton/.test(modal) &&
+      /fillTypicalAnswers\(state\)/.test(fill) &&
+      /setOpenSections\(\(prev\) => \[\s*\.\.\.prev,\s*\.\.\.filled\.opened\.filter\(\(id\) => !prev\.includes\(id\)\)\s*\]\)/.test(
+        fill
+      ) &&
+      /if \(filled\.openMore\) setShowAdditionalCategories\(true\)/.test(fill) &&
+      !/handleGenerate|onGenerate|finalize-plan/.test(fill)
+    );
+  },
 };
 // ── CHECKS-END ───────────────────────────────────────────────────────────────
 
@@ -1016,11 +1187,204 @@ async function layerK() {
   );
 }
 
+// ══ Tweak 5 ══════════════════════════════════════════════════════════════════
+async function layerA() {
+  section(
+    'A — tweak 5: "Fill in typical answers": obvious, it opens what it fills, random, a note'
+  );
+  const TA = await load('../src/lib/demo/typical-answers');
+  const CL = await load('../src/lib/ai/config-loader');
+  const TB = await load('../src/components/demo/TypicalAnswersButton');
+  const fill = (state: any, src?: () => number) =>
+    TA?.fillTypicalAnswers ? TA.fillTypicalAnswers(state, src) : null;
+  const levelsFor = (kind: string) => (key: string) => CL?.getCategoryLevels(kind, key) ?? null;
+  const picksOf = (s: any, key: string) =>
+    key === 'mains' ? s?.mainsData?.selections : s?.extendedCategoriesData?.[key]?.selections;
+
+  const a = fill(blankQuestions(), seeded(7));
+  const b = fill(blankQuestions(), seeded(8));
+  const a2 = fill(blankQuestions(), seeded(7));
+  assert(
+    'A',
+    'A1 two different hand-written sequences give different fills',
+    !!a?.next && !!b?.next && JSON.stringify(a.next) !== JSON.stringify(b.next)
+  );
+  assert(
+    'A',
+    'A2 the same sequence gives the same fill, and opens the same sections',
+    !!a?.next &&
+      JSON.stringify(a.next) === JSON.stringify(a2?.next) &&
+      JSON.stringify(a.opened) === JSON.stringify(a2?.opened)
+  );
+
+  const OPENED_BBQ = [...BBQ_FILLED, 'dietary', 'setUp', 'cleanUp'];
+  let sound = 0;
+  let casual = 0;
+  const seen = {
+    noNote: 0,
+    twoNotes: 0,
+    oneStyle: 0,
+    twoStyles: 0,
+    twoDishes: 0,
+    oneNeed: 0,
+    threeNeeds: 0,
+  };
+  const jobs = new Set<string>();
+  for (let seed = 1; seed <= 240; seed++) {
+    const f = fill(blankQuestions(), seeded(seed));
+    if (CHECKS.fillIsSound(f, levelsFor('Casual BBQ'), BBQ_FILLED, OPENED_BBQ)) sound++;
+    if (f?.next?.eventType === 'Casual BBQ' && f.openMore === true) casual++;
+    const notes = BBQ_FILLED.filter(
+      (k) => (picksOf(f?.next, k)?.[0]?.freeText ?? '') !== ''
+    ).length;
+    if (notes === 0) seen.noNote++;
+    if (notes === 2) seen.twoNotes++;
+    const styles = BBQ_FILLED.map((k) => picksOf(f?.next, k)?.[0]?.options?.length ?? 0);
+    if (styles.includes(1)) seen.oneStyle++;
+    if (styles.includes(2)) seen.twoStyles++;
+    if (BBQ_FILLED.some((k) => (picksOf(f?.next, k)?.[1]?.options?.length ?? 0) >= 2))
+      seen.twoDishes++;
+    const needs = f?.next?.dietaryData?.requirements?.length ?? 0;
+    if (needs === 1) seen.oneNeed++;
+    if (needs === 3) seen.threeNeeds++;
+    jobs.add(`${f?.next?.setUpData?.freeText}|${f?.next?.cleanUpData?.freeText}`);
+  }
+  assert(
+    'A',
+    'A3 over 240 hand-written sequences on a blank page: every pick one the questions offer, at most two notes, Dietary one to three from the list, each job one of its three; no kind picks Casual BBQ',
+    sound === 240 && casual === 240,
+    `sound ${sound}/240, Casual BBQ ${casual}/240`
+  );
+  assert(
+    'A',
+    'A4 and it is random, not the first choice: across them, one and two styles, two dishes, no note and two notes, one and three needs, and more than three pairs of jobs all occur',
+    Object.values(seen).every((n) => n > 0) && jobs.size > 3,
+    `${JSON.stringify(seen)}, job pairs ${jobs.size}`
+  );
+
+  const hers = () => {
+    const q = blankQuestions();
+    q.eventType = 'Casual BBQ';
+    q.mainsData = {
+      items: [],
+      stillDeciding: false,
+      selections: {
+        0: { options: ['Seafood on the grill'], freeText: 'Her own note' },
+        1: { options: ['Prawns'], freeText: '' },
+      },
+    };
+    q.extendedCategoriesData = { sides_salads: { selections: {}, stillDeciding: true } };
+    q.dietaryData = { status: 'confirmed_none', requirements: [], other: '' };
+    q.setUpData = { freeText: 'Her own words', stillDeciding: false };
+    return q;
+  };
+  let untouched = 0;
+  for (let seed = 1; seed <= 240; seed++) {
+    const f = fill(hers(), seeded(seed));
+    const n = f?.next;
+    const rest = ['dessert', 'drinks_alcoholic', 'drinks_non_alcoholic', 'table_snacks'];
+    if (
+      JSON.stringify(n?.mainsData?.selections) === JSON.stringify(hers().mainsData.selections) &&
+      n?.extendedCategoriesData?.sides_salads?.stillDeciding === true &&
+      JSON.stringify(n?.extendedCategoriesData?.sides_salads?.selections) === '{}' &&
+      n?.dietaryData?.status === 'confirmed_none' &&
+      n?.dietaryData?.requirements?.length === 0 &&
+      n?.setUpData?.freeText === 'Her own words' &&
+      CLEAN_UPS.includes(n?.cleanUpData?.freeText) &&
+      rest.every((k) => (picksOf(n, k)?.[0]?.options?.length ?? 0) > 0) &&
+      rest.filter((k) => (picksOf(n, k)?.[0]?.freeText ?? '') !== '').length <= 2 &&
+      JSON.stringify([...(f?.opened ?? [])].sort()) === JSON.stringify([...rest, 'cleanUp'].sort())
+    )
+      untouched++;
+  }
+  assert(
+    'A',
+    'A5 over 240 sequences, a section she answered (or is still deciding) is never touched, gets no note and is not opened',
+    untouched === 240,
+    `${untouched}/240`
+  );
+
+  const FOOD = [
+    'entree_starters',
+    'mains',
+    'sides_salads',
+    'dessert',
+    'cake',
+    'drinks_alcoholic',
+    'drinks_non_alcoholic',
+    'table_snacks',
+    'breakfast_brunch',
+  ];
+  const xmasUp = FOOD.filter(
+    (k) => (CL?.getUpFrontCategories('Christmas') ?? []).includes(k) && !!levelsFor('Christmas')(k)
+  );
+  let xmasSound = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const q = blankQuestions();
+    q.eventType = 'Christmas';
+    const f = fill(q, seeded(seed));
+    if (
+      f?.next?.eventType === 'Christmas' &&
+      f.openMore === false &&
+      CHECKS.fillIsSound(f, levelsFor('Christmas'), xmasUp, [
+        ...xmasUp,
+        'dietary',
+        'setUp',
+        'cleanUp',
+      ])
+    )
+      xmasSound++;
+  }
+  assert(
+    'A',
+    'A6 another kind (Christmas) keeps its kind; over 60 sequences each of its up-front food questions gets sound random picks',
+    xmasUp.length > 0 && xmasSound === 60,
+    `${xmasSound}/60 over ${xmasUp.join(',')}`
+  );
+  const full = fill(blankQuestions(), seeded(3));
+  assert(
+    'A',
+    'A7 still: with nothing left empty it fills nothing (W26), whatever the sequence',
+    !!full?.next && fill(full.next, seeded(11)) === null && fill(full.next) === null
+  );
+  const button = TB?.default ? render(createElement(TB.default, { onFill: () => 'filled' })) : '';
+  assert(
+    'A',
+    'A8 the button: filled accent, larger, in a soft tinted box with its line',
+    CHECKS.answersButton(button),
+    button.slice(0, 300)
+  );
+  assert(
+    'A',
+    'A9 the questions: the button at their top, on a sample only; a fill opens every section it filled (and "Show more"), closes nothing, and never presses Generate',
+    CHECKS.answersPlace(code(MODAL))
+  );
+  const TAsrc = code(TYPICAL_FILE);
+  assert(
+    'A',
+    'A10 the random source is an argument, Math.random by default; the module reaches no sender, token, database or AI call',
+    /random:\s*RandomSource\s*=\s*Math\.random/.test(TAsrc) &&
+      !/from '@\/lib\/(press|sms|email|live-sends|tokens|prisma)['/]|from '@\/lib\/ai\/(claude|generate)['/]|callClaude|fetch\(/.test(
+        TAsrc
+      )
+  );
+  assert(
+    'A',
+    'A11 the words: the six notes, the four new job sentences, W27 and W28 kept first',
+    JSON.stringify(TA?.TYPICAL_NOTES) === JSON.stringify(NOTES) &&
+      JSON.stringify(TA?.TYPICAL_SET_UP) === JSON.stringify(SET_UPS) &&
+      JSON.stringify(TA?.TYPICAL_CLEAN_UP) === JSON.stringify(CLEAN_UPS) &&
+      TA?.TYPICAL_WORDS?.SET_UP === SET_UPS[0] &&
+      TA?.TYPICAL_WORDS?.CLEAN_UP === CLEAN_UPS[0]
+  );
+}
+
 async function main() {
   await layerH();
   await layerO();
   await layerD();
   await layerK();
+  await layerA();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
     console.log(reds.map((r) => `  - ${r}`).join('\n'));
