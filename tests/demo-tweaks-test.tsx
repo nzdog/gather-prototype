@@ -14,6 +14,7 @@
  *   K  tweak 4: "Add a crowd" much more obvious, at the top of the household list.
  *   A  tweak 5: "Fill in typical answers": obvious, it opens what it fills, random, a note.
  *   P  tweak 6: "What you've picked" as a table, with the print's look.
+ *   M  tweak 7: step 4, the message first, simple and the same every time (the screen only).
  *
  * SAFETY. Static and rendered checks only: no database row, no dev server, no AI call, no
  * browser, no network. Every fixture and expected value is written here by hand, never taken from
@@ -343,6 +344,34 @@ const CASE_NOTHING_IN = {
 const CASE_NOTHING_IN_LINES = [
   '⚠️ Dietary requirements: No dietary needs',
   'Nothing picked in Mains and Sides & Salads yet. Gather will choose for you.',
+];
+
+// ── Tweak 7: step 4, hand-written ────────────────────────────────────────────
+const PREFLIGHT = 'src/app/plan/[eventId]/pre-flight/page.tsx';
+/** What step 4 composes, stores and fingerprints from: not edited by tweak 7. */
+const STEP4_LIBS = [
+  'src/lib/preflight/ask-preview.ts',
+  'src/lib/preflight/ask-preview-compose.ts',
+  'src/lib/preflight/tick-memory.ts',
+];
+/** Step 4's first part, in the founder's fixed order: the message, its notes, then the controls. */
+const STEP4_ORDER = [
+  'data-message-part="1"',
+  'MESSAGE_STEP_PARTS[0]',
+  'data-message-email=""',
+  'current.ask.movements',
+  'OPT_OUT_LINE',
+  'data-test-email=""',
+  'NOT_MESSAGED_WHY',
+  'replyToLine(',
+  '>Your line</label>',
+  '>Read it as</label>',
+  '<select',
+  'CHASED_BY_LABEL',
+  'data-message-part="2"',
+  'CHASE_DEFAULT_QUESTION',
+  'data-message-part="3"',
+  'HOST_LIST_HEADING',
 ];
 
 // ── CHECKS-START: every condition, pure, dry-run before RED ───────────────────
@@ -919,6 +948,51 @@ export const CHECKS = {
       !/picksSummary\(/.test(modal) &&
       !/picksLines\.map/.test(modal)
     );
+  },
+  /** M1 — step 4 in its fixed order: the message first, then the notes, then the controls. */
+  stepFourOrder(src: string) {
+    const msg = src.slice(Math.max(0, src.indexOf('function MessageStep')));
+    const at = STEP4_ORDER.map((m) => msg.indexOf(m));
+    return (
+      src.indexOf('function MessageStep') > 0 &&
+      at.every((i) => i >= 0) &&
+      at.every((i, k) => k === 0 || i > at[k - 1])
+    );
+  },
+  /** M2 — the message is one email box: the subject, then each movement with its voice, then the opt-out line. */
+  emailBlock(src: string) {
+    const msg = src.slice(Math.max(0, src.indexOf('function MessageStep')));
+    const box = msg.indexOf('data-message-email=""');
+    const end = msg.indexOf('current.segments !== null', box);
+    const block = box > 0 && end > box ? msg.slice(box, end) : '';
+    const subj = block.indexOf('{current.subject}');
+    const moves = block.indexOf('current.ask.movements.map');
+    return (
+      block.length > 0 &&
+      /className="[^"]*\boverflow-hidden\b/.test(block) &&
+      subj > 0 &&
+      moves > subj &&
+      block.includes("m.voice === 'HOST' ? 'Your voice' : 'Gather'") &&
+      /\{OPT_OUT_LINE\}/.test(block) &&
+      block.indexOf('{OPT_OUT_LINE}') > moves &&
+      />\s*Gather\s*</.test(block.slice(moves)) &&
+      /className="[^"]*\bwhitespace-pre-wrap\b[^"]*"[^>]*>\s*\{m\.text\}/.test(block) &&
+      (msg.match(/<h3 className=/g) ?? []).length === 3
+    );
+  },
+  /** M5 — no new words: every quoted word and every line of text in step 4 was there before. */
+  noNewWords(now: string, head: string) {
+    const words = (src: string) => {
+      const msg = src.slice(Math.max(0, src.indexOf('function MessageStep')));
+      const quoted = [...msg.matchAll(/'((?:[^'\\\n]|\\.)*)'/g)].map((m) => m[1]);
+      const text = [...msg.matchAll(/>([^<>{}]*[A-Za-z][^<>{}]*)</g)].map((m) =>
+        m[1].replace(/\s+/g, ' ').trim()
+      );
+      return new Set([...quoted, ...text].filter((w) => /[A-Za-z]/.test(w)));
+    };
+    const before = words(head);
+    const after = words(now);
+    return before.size > 20 && [...after].every((w) => before.has(w));
   },
 };
 // ── CHECKS-END ───────────────────────────────────────────────────────────────
@@ -1576,6 +1650,62 @@ async function layerP() {
   );
 }
 
+// ══ Tweak 7 ══════════════════════════════════════════════════════════════════
+async function layerM() {
+  section('M — tweak 7: step 4, the message first, simple and the same every time');
+  const TM = await load('../src/lib/preflight/tick-memory');
+  const pageNow = code(PREFLIGHT);
+  const pageHead = stripComments(atTag(PREFLIGHT));
+  assert(
+    'M',
+    'M1 the message comes first, then its notes, then the controls in one fixed order: her line, "Read it as" (with their own nudge choice), the nudge question, the people left to her',
+    CHECKS.stepFourOrder(pageNow)
+  );
+  assert(
+    'M',
+    'M2 the message is one readable email: its subject, then the text, each movement keeping its voice label ("Your voice", "Gather"), the opt-out line last; no new heading',
+    CHECKS.emailBlock(pageNow)
+  );
+  const effect = (src: string) => {
+    const m = src.match(
+      /useEffect\(\(\) => \{\s*if \(data\) onPrint\(printOf\(data\)\);\s*\}, \[data, onPrint\]\);/
+    );
+    return m ? m[0] : '';
+  };
+  assert(
+    'M',
+    'M3 what step 4 fingerprints and ticks is as before: the same onPrint(printOf(data)), and its composing, stored and tick modules not edited',
+    effect(pageNow).length > 0 &&
+      effect(pageNow) === effect(pageHead) &&
+      spawnSync('git', ['diff', '--quiet', 'demo-ab-good', '--', ...STEP4_LIBS], { cwd: ROOT })
+        .status === 0
+  );
+  const data = {
+    storedAuthorLine: 'See you there!',
+    recipients: [{ personEventId: 'pe-1', name: 'Tom Brennan', channel: 'EMAIL' }],
+    hostList: [{ personEventId: 'pe-2', name: 'June Walker' }],
+    chase: { stored: null, resolved: 'BY_EMAIL', byRecipient: {}, notChased: [] },
+  };
+  const reordered = {
+    chase: { notChased: [], byRecipient: {}, resolved: 'BY_EMAIL', stored: null },
+    hostList: [{ name: 'June Walker', personEventId: 'pe-2' }],
+    recipients: [{ channel: 'EMAIL', name: 'Tom Brennan', personEventId: 'pe-1' }],
+    storedAuthorLine: 'See you there!',
+  };
+  assert(
+    'M',
+    'M4 the fingerprint is the same for the same inputs (hand-written, keys in any order) and differs when her line differs',
+    !!TM?.printOf &&
+      TM.printOf(data) === TM.printOf(reordered) &&
+      TM.printOf(data) !== TM.printOf({ ...data, storedAuthorLine: 'See you soon!' })
+  );
+  assert(
+    'M',
+    'M5 no new words: every word step 4 says was in it before (the three part headings reused)',
+    CHECKS.noNewWords(pageNow, pageHead)
+  );
+}
+
 async function main() {
   await layerH();
   await layerO();
@@ -1583,6 +1713,7 @@ async function main() {
   await layerK();
   await layerA();
   await layerP();
+  await layerM();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
     console.log(reds.map((r) => `  - ${r}`).join('\n'));

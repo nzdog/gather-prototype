@@ -1503,8 +1503,8 @@ function MessageStep({
 
   /*
    * [[GTC-386]] (item 66, PLAN RULINGS 2026-10-15) — THREE LABELLED PARTS, in this order: what guests
-   * will receive (Q4: her line, the notes, "Read it as" with each person's own nudge choice, and the
-   * message, as they were), how I nudge (the question and its two choices, Q3), and the people I'll
+   * will receive ([[GTC-394]] tweak 7: the message first, then the notes, her line, and "Read it as"
+   * with each person's own nudge choice; it was her line, the notes, "Read it as", the message), how I nudge (the question and its two choices, Q3), and the people I'll
    * leave to her (group A, then group B, each under its own heading, Q1 and Q2). The labels wear
    * Moment 2's quiet small-capitals divider (Q6); the first has no rule, the step's own line is above it.
    */
@@ -1514,68 +1514,116 @@ function MessageStep({
         <h3 className="text-xs uppercase tracking-wider text-gray-500 mb-2">
           {MESSAGE_STEP_PARTS[0]}
         </h3>
-        {/* Movement 1 — hers. */}
-        <label className="block text-sm font-medium text-gray-900 mb-1">Your line</label>
-        <p className="text-xs text-gray-500 mb-2">
-          A starting point built from the event — change it to whatever you would actually say. It
-          goes first, in your words, to everyone.
-        </p>
-        <textarea
-          value={authorLine}
-          onChange={(e) => setEdited(e.target.value)}
-          rows={3}
-          className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:ring-accent/40 focus:border-accent"
-        />
-        <div className="flex flex-wrap items-center gap-3 mt-2 mb-5">
-          <button
-            type="button"
-            onClick={() => saveAuthorLine(authorLine)}
-            disabled={!dirty || saving}
-            className="text-xs px-3 py-1 rounded-md bg-accent text-white disabled:bg-gray-200 disabled:text-gray-400"
-          >
-            {saving ? 'Saving…' : 'Save my line'}
-          </button>
-          <button
-            type="button"
-            onClick={revertToDraft}
-            disabled={saving || (edited === null && data.storedAuthorLine === null)}
-            className="text-xs text-gray-500 underline disabled:no-underline disabled:text-gray-300"
-          >
-            Put the draft back
-          </button>
-          <button
-            type="button"
-            onClick={sendWithoutLine}
-            disabled={saving || (edited === null && data.storedAuthorLine === '')}
-            className="text-xs text-gray-500 underline disabled:no-underline disabled:text-gray-300"
-          >
-            Send without a line from me
-          </button>
-          {/*
-          THE THREE STATES, SAID PLAINLY. Kate cannot see which one she is in from the box
-          alone — an empty box is "no line from me" and a box full of the draft is "Gather
-          speaks for me", and those look nothing alike but read the same if nothing says so.
+        {/*
+          [[GTC-394]] tweak 7 (founder, 19 Oct 2026: "The message is buried and hard to work out...
+          It needs to be systemized and simplified"; ruled "How step 4 shows it"): the message FIRST,
+          as one readable email, with its counts and her test under it; then the notes about it; then
+          the controls in one fixed order, the same for every person: her line, "Read it as" (with
+          that person's own nudge choice), the nudge question, the people I'll leave to her. Order and
+          quiet styling only: what is composed, stored, fingerprinted and ticked is unchanged.
         */}
-          {saveError ? (
-            <p className="text-xs text-red-600">{saveError}</p>
-          ) : dirty ? (
-            <p className="text-xs text-amber-700">Not saved yet.</p>
-          ) : data.storedAuthorLine === '' ? (
-            <p className="text-xs text-gray-500">
-              No line from you. Guests get the greeting and then the handover — the preview below is
-              exactly what they will read.
-            </p>
-          ) : data.storedAuthorLine !== null ? (
-            <p className="text-xs text-gray-500">
-              Saved. Everyone gets this line, including anyone you add later.
-            </p>
-          ) : (
-            <p className="text-xs text-gray-500">
-              This is the draft, in your voice. Save it to make it yours, or send without a line
-              from you.
-            </p>
-          )}
-        </div>
+        {current && (
+          <div data-message-first="" className="mb-5">
+            {current.ask === null ? (
+              /* Ruling A2 — the host as carrier. Movements 1 and 2 are voiced as her, so which voice
+               a message TO her is in is decision 20, unruled; her link is GTC-297. Not composed. */
+              <p className="text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-md px-4 py-3">
+                This goes to you, because another household picked you as its contact. It carries
+                only their child&rsquo;s ask &mdash; nothing of yours. Its wording is not settled
+                yet (GTC-189 decision 20) and neither is the link you would answer it from
+                (GTC-297), so it is not shown.
+              </p>
+            ) : (
+              <>
+                {/* The message itself, as one readable email: the subject, then the text. The seam
+                    stays visible, quieter: each movement keeps its voice as a small label. */}
+                <div
+                  data-message-email=""
+                  className="border border-gray-200 rounded-md bg-white overflow-hidden"
+                >
+                  {current.subject !== null && (
+                    <div className="px-4 pt-3 pb-2 border-b border-gray-100">
+                      <p className="text-[10px] uppercase tracking-wide text-gray-400">Subject</p>
+                      <p className="text-sm font-medium text-gray-900 break-words">
+                        {current.subject}
+                      </p>
+                    </div>
+                  )}
+                  <div className="px-4 py-3 space-y-3">
+                    {current.ask.movements.map((m) => (
+                      <div key={m.slot}>
+                        <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-0.5">
+                          {m.voice === 'HOST' ? 'Your voice' : 'Gather'}
+                        </p>
+                        <p className="text-sm text-gray-900 whitespace-pre-wrap break-words">
+                          {m.text}
+                        </p>
+                      </div>
+                    ))}
+                    {/* [[GTC-337]] ruling 2 — Gather ends every text with this line; the count below
+                      includes it. An email carries none. */}
+                    {current.textAsSent !== null && (
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-0.5">
+                          Gather
+                        </p>
+                        <p className="text-sm text-gray-900">{OPT_OUT_LINE}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  {current.segments !== null && current.textAsSent !== null ? (
+                    <>
+                      {current.textAsSent.length} characters · {current.segments}{' '}
+                      {current.segments === 1 ? 'text' : 'texts'}
+                      {current.segments > 1 && ' — long is fine, it just costs more to send'}.
+                      {current.narrowSegments &&
+                        ' Counted at 70 characters a text rather than 160, because the wording uses punctuation plain SMS cannot carry.'}
+                    </>
+                  ) : (
+                    'Sent by email, so there is no text count.'
+                  )}
+                </p>
+
+                {/* [[GTC-388]] (item 64, Q14) — her test of this person's message, under it. Only
+                  for someone the press will message (W14's case has no button). */}
+                {messages.includes(current) && (
+                  <div data-test-email="" className="mt-3">
+                    <button
+                      type="button"
+                      data-test-email-button=""
+                      onClick={() => sendTest(current.recipient.personEventId)}
+                      disabled={dirty || testing || !viewerEmail || isCopyAddress(viewerEmail)}
+                      className="text-xs px-3 py-1 rounded-md border border-gray-300 bg-white text-gray-700 disabled:border-gray-200 disabled:text-gray-300"
+                    >
+                      {testing ? TEST_EMAIL_WORDS.SENDING : TEST_EMAIL_WORDS.BUTTON}
+                    </button>
+                    <p data-test-email-lead="" className="text-xs text-gray-500 mt-1.5">
+                      {dirty
+                        ? TEST_EMAIL_WORDS.SAVE_FIRST
+                        : !viewerEmail
+                          ? TEST_EMAIL_WORDS.NO_ADDRESS
+                          : isCopyAddress(viewerEmail)
+                            ? testEmailOutcomeLine('DEMO', viewerEmail)
+                            : current.recipient.channel === 'TEXT'
+                              ? `${testEmailLead(firstNameOf(current.recipient.name), viewerEmail)} ${testEmailTextNote(firstNameOf(current.recipient.name))}`
+                              : testEmailLead(firstNameOf(current.recipient.name), viewerEmail)}
+                    </p>
+                    {testOutcome && viewerEmail ? (
+                      <p
+                        data-test-email-outcome={testOutcome === 'SENT' ? 'sent' : 'not-sent'}
+                        className={`text-xs mt-1 ${testOutcome === 'SENT' ? 'text-gray-700' : 'text-amber-700'}`}
+                      >
+                        {testEmailOutcomeLine(testOutcome, viewerEmail)}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
         {/* GTC-256, CLOSED 2026-08-29. Stated, not hidden.
           Still correct, and now permanent for these events rather than pending: phase 2
@@ -1647,7 +1695,70 @@ function MessageStep({
           )}
         </p>
 
-        {/* Who is sent what. */}
+        {/* Movement 1 — hers. */}
+        <label className="block text-sm font-medium text-gray-900 mb-1">Your line</label>
+        <p className="text-xs text-gray-500 mb-2">
+          A starting point built from the event — change it to whatever you would actually say. It
+          goes first, in your words, to everyone.
+        </p>
+        <textarea
+          value={authorLine}
+          onChange={(e) => setEdited(e.target.value)}
+          rows={3}
+          className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:ring-accent/40 focus:border-accent"
+        />
+        <div className="flex flex-wrap items-center gap-3 mt-2 mb-5">
+          <button
+            type="button"
+            onClick={() => saveAuthorLine(authorLine)}
+            disabled={!dirty || saving}
+            className="text-xs px-3 py-1 rounded-md bg-accent text-white disabled:bg-gray-200 disabled:text-gray-400"
+          >
+            {saving ? 'Saving…' : 'Save my line'}
+          </button>
+          <button
+            type="button"
+            onClick={revertToDraft}
+            disabled={saving || (edited === null && data.storedAuthorLine === null)}
+            className="text-xs text-gray-500 underline disabled:no-underline disabled:text-gray-300"
+          >
+            Put the draft back
+          </button>
+          <button
+            type="button"
+            onClick={sendWithoutLine}
+            disabled={saving || (edited === null && data.storedAuthorLine === '')}
+            className="text-xs text-gray-500 underline disabled:no-underline disabled:text-gray-300"
+          >
+            Send without a line from me
+          </button>
+          {/*
+          THE THREE STATES, SAID PLAINLY. Kate cannot see which one she is in from the box
+          alone — an empty box is "no line from me" and a box full of the draft is "Gather
+          speaks for me", and those look nothing alike but read the same if nothing says so.
+        */}
+          {saveError ? (
+            <p className="text-xs text-red-600">{saveError}</p>
+          ) : dirty ? (
+            <p className="text-xs text-amber-700">Not saved yet.</p>
+          ) : data.storedAuthorLine === '' ? (
+            <p className="text-xs text-gray-500">
+              No line from you. Guests get the greeting and then the handover — the preview below is
+              exactly what they will read.
+            </p>
+          ) : data.storedAuthorLine !== null ? (
+            <p className="text-xs text-gray-500">
+              Saved. Everyone gets this line, including anyone you add later.
+            </p>
+          ) : (
+            <p className="text-xs text-gray-500">
+              This is the draft, in your voice. Save it to make it yours, or send without a line
+              from you.
+            </p>
+          )}
+        </div>
+
+        {/* Who is sent what: whose message the one above is, and what it carries. */}
         {current && (
           <>
             <div className="flex items-baseline justify-between gap-4 mb-2">
@@ -1767,95 +1878,6 @@ function MessageStep({
                 </div>
               )}
             </dl>
-
-            {current.ask === null ? (
-              /* Ruling A2 — the host as carrier. Movements 1 and 2 are voiced as her, so which voice
-               a message TO her is in is decision 20, unruled; her link is GTC-297. Not composed. */
-              <p className="text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-md px-4 py-3">
-                This goes to you, because another household picked you as its contact. It carries
-                only their child&rsquo;s ask &mdash; nothing of yours. Its wording is not settled
-                yet (GTC-189 decision 20) and neither is the link you would answer it from
-                (GTC-297), so it is not shown.
-              </p>
-            ) : (
-              <>
-                {/* The message itself, seam visible. */}
-                <div className="border border-gray-200 rounded-md bg-white overflow-hidden">
-                  {current.subject !== null && (
-                    <div className="px-4 py-2 border-b border-gray-100 bg-gray-50">
-                      <p className="text-[11px] uppercase tracking-wide text-gray-400">Subject</p>
-                      <p className="text-sm text-gray-800">{current.subject}</p>
-                    </div>
-                  )}
-                  {current.ask.movements.map((m) => (
-                    <div key={m.slot} className="px-4 py-3 border-b border-gray-100 last:border-0">
-                      <p className="text-[11px] uppercase tracking-wide text-gray-400 mb-1">
-                        {m.voice === 'HOST' ? 'Your voice' : 'Gather'}
-                      </p>
-                      <p className="text-sm text-gray-900 whitespace-pre-wrap">{m.text}</p>
-                    </div>
-                  ))}
-                  {/* [[GTC-337]] ruling 2 — Gather ends every text with this line; the count below
-                    includes it. An email carries none. */}
-                  {current.textAsSent !== null && (
-                    <div className="px-4 py-3 border-b border-gray-100 last:border-0">
-                      <p className="text-[11px] uppercase tracking-wide text-gray-400 mb-1">
-                        Gather
-                      </p>
-                      <p className="text-sm text-gray-900">{OPT_OUT_LINE}</p>
-                    </div>
-                  )}
-                </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  {current.segments !== null && current.textAsSent !== null ? (
-                    <>
-                      {current.textAsSent.length} characters · {current.segments}{' '}
-                      {current.segments === 1 ? 'text' : 'texts'}
-                      {current.segments > 1 && ' — long is fine, it just costs more to send'}.
-                      {current.narrowSegments &&
-                        ' Counted at 70 characters a text rather than 160, because the wording uses punctuation plain SMS cannot carry.'}
-                    </>
-                  ) : (
-                    'Sent by email, so there is no text count.'
-                  )}
-                </p>
-
-                {/* [[GTC-388]] (item 64, Q14) — her test of this person's message, under it. Only
-                  for someone the press will message (W14's case has no button). */}
-                {messages.includes(current) && (
-                  <div data-test-email="" className="mt-3">
-                    <button
-                      type="button"
-                      data-test-email-button=""
-                      onClick={() => sendTest(current.recipient.personEventId)}
-                      disabled={dirty || testing || !viewerEmail || isCopyAddress(viewerEmail)}
-                      className="text-xs px-3 py-1 rounded-md border border-gray-300 bg-white text-gray-700 disabled:border-gray-200 disabled:text-gray-300"
-                    >
-                      {testing ? TEST_EMAIL_WORDS.SENDING : TEST_EMAIL_WORDS.BUTTON}
-                    </button>
-                    <p data-test-email-lead="" className="text-xs text-gray-500 mt-1.5">
-                      {dirty
-                        ? TEST_EMAIL_WORDS.SAVE_FIRST
-                        : !viewerEmail
-                          ? TEST_EMAIL_WORDS.NO_ADDRESS
-                          : isCopyAddress(viewerEmail)
-                            ? testEmailOutcomeLine('DEMO', viewerEmail)
-                            : current.recipient.channel === 'TEXT'
-                              ? `${testEmailLead(firstNameOf(current.recipient.name), viewerEmail)} ${testEmailTextNote(firstNameOf(current.recipient.name))}`
-                              : testEmailLead(firstNameOf(current.recipient.name), viewerEmail)}
-                    </p>
-                    {testOutcome && viewerEmail ? (
-                      <p
-                        data-test-email-outcome={testOutcome === 'SENT' ? 'sent' : 'not-sent'}
-                        className={`text-xs mt-1 ${testOutcome === 'SENT' ? 'text-gray-700' : 'text-amber-700'}`}
-                      >
-                        {testEmailOutcomeLine(testOutcome, viewerEmail)}
-                      </p>
-                    ) : null}
-                  </div>
-                )}
-              </>
-            )}
           </>
         )}
       </section>

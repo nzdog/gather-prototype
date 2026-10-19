@@ -223,7 +223,7 @@ const CHECKS = {
     JSON.stringify(f.order) === '["1","2","3"]' &&
     JSON.stringify(f.labels) === JSON.stringify(PARTS) &&
     f.firstTags.every((t: string) => t === 'H3'),
-  /** C2: part 1 holds her line, the amber box, "Read it as", the per-person choice and the message, in today's order. */
+  /** C2: part 1 holds the message, the amber box, her line, "Read it as" and the per-person choice, in that order (GTC-394 tweak 7; it was her line first, the message last). */
   C_PART1: (f: any) =>
     !!f &&
     f.p1.every((i: number) => i >= 0) &&
@@ -728,7 +728,8 @@ const STEP4_FACTS = `(() => {
   const t = (el) => (el ? el.textContent : '');
   const at = (el, w) => t(el).indexOf(w);
   const all = t(s);
-  const p1Words = ['Your line', 'One person gets no message', 'Read it as', 'Nudges by', 'Your voice'];
+  // GTC-394 tweak 7 (founder: "How step 4 shows it"): the message first, then the notes, her line, Read it as.
+  const p1Words = ['Your voice', 'One person gets no message', 'Your line', 'Read it as', 'Nudges by'];
   const h3 = parts.map((p) => p.querySelector(':scope > h3'));
   const style = (h) => { if (!h) return ''; const c = getComputedStyle(h); return [c.textTransform, c.fontSize, c.color].join('|'); };
   const W = ${'${WORDS}'};
@@ -1039,7 +1040,7 @@ async function runLive() {
       );
       assert(
         'C',
-        `${k('C2')} ${tag}: part 1 holds her line, the amber box, "Read it as", the person’s own nudge choice and the message, in today’s order (Q4)`,
+        `${k('C2')} ${tag}: part 1 holds the message, the amber box, her line, "Read it as" and the person’s own nudge choice, in that order (GTC-394 tweak 7; Q4’s order was her line first)`,
         ok(() => CHECKS.C_PART1(f)),
         d
       );
