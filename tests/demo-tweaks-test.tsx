@@ -13,6 +13,7 @@
  *   D  tweak 3: the first page, two buttons; Sarah's door opens her event on the board.
  *   K  tweak 4: "Add a crowd" much more obvious, at the top of the household list.
  *   A  tweak 5: "Fill in typical answers": obvious, it opens what it fills, random, a note.
+ *   P  tweak 6: "What you've picked" as a table, with the print's look.
  *
  * SAFETY. Static and rendered checks only: no database row, no dev server, no AI call, no
  * browser, no network. Every fixture and expected value is written here by hand, never taken from
@@ -276,6 +277,73 @@ const blankQuestions = () => ({
   cleanUpData: { freeText: '', stillDeciding: false },
   otherJobsOtherData: { freeText: '', stillDeciding: false },
 });
+
+// ── Tweak 6: the summary table, hand-written ─────────────────────────────────
+const PICKS_FILE = 'src/lib/moments/picks-summary.ts';
+const W6 = 'Still deciding · left out of the plan for now';
+const W9 = 'Nothing picked yet.';
+const HEADERS = ['Section', 'Picked', 'Notes'];
+/** Case 1: picks with dishes and a note, a section still deciding, a third question's tick. */
+const CASE_PICKS = {
+  eventType: 'Casual BBQ',
+  sections: ['entree_starters', 'mains', 'sides_salads', 'dessert', 'drinks_alcoholic'],
+  picks: {
+    mains: {
+      selections: {
+        0: { options: ['Classic sausage sizzle'], freeText: 'No pork, if we can.' },
+        1: { options: ['Beef sausages', 'Chicken sausages'], freeText: '' },
+      },
+      stillDeciding: false,
+    },
+    sides_salads: { selections: {}, stillDeciding: true },
+    dessert: {
+      selections: {
+        0: { options: ['Pavlova'], freeText: '' },
+        1: { options: ['Berry pavlova'], freeText: '' },
+      },
+      stillDeciding: false,
+    },
+    drinks_alcoholic: {
+      selections: {
+        0: { options: ['Beer and cider'], freeText: '' },
+        2: { options: ['Under-18s will be present'], freeText: '' },
+      },
+      stillDeciding: false,
+    },
+  },
+  dietary: {
+    status: 'confirmed_needs',
+    requirements: ['Vegetarian', 'Gluten-free'],
+    other: 'no shellfish',
+  },
+};
+/** What the summary says for case 1, typed by hand. */
+const CASE_PICKS_LINES = [
+  '⚠️ Dietary requirements: Vegetarian, Gluten-free, no shellfish',
+  '🍖 Mains: Classic sausage sizzle (Beef sausages, Chicken sausages), “No pork, if we can.”',
+  `🥗 Sides & Salads: ${W6}`,
+  '🍰 Dessert: Pavlova (Berry pavlova)',
+  '🍷 Alcoholic Drinks: Beer and cider, Under-18s will be present',
+];
+/** Case 2: nothing picked at all (W9). */
+const CASE_NOTHING = {
+  eventType: 'Casual BBQ',
+  sections: ['entree_starters'],
+  picks: {},
+  dietary: { status: 'unanswered', requirements: [], other: '' },
+};
+const CASE_NOTHING_LINES = ['⚠️ Dietary requirements: Needs confirmation', W9];
+/** Case 3: nothing picked in two always-planned sections (W8). */
+const CASE_NOTHING_IN = {
+  eventType: 'Casual BBQ',
+  sections: ['mains', 'sides_salads', 'dessert'],
+  picks: {},
+  dietary: { status: 'confirmed_none', requirements: [], other: '' },
+};
+const CASE_NOTHING_IN_LINES = [
+  '⚠️ Dietary requirements: No dietary needs',
+  'Nothing picked in Mains and Sides & Salads yet. Gather will choose for you.',
+];
 
 // ── CHECKS-START: every condition, pure, dry-run before RED ───────────────────
 const indexesOf = (s: string, needle: string) => {
@@ -798,6 +866,58 @@ export const CHECKS = {
       ) &&
       /if \(filled\.openMore\) setShowAdditionalCategories\(true\)/.test(fill) &&
       !/handleGenerate|onGenerate|finalize-plan/.test(fill)
+    );
+  },
+  /** P1 — the rows, joined as "{section}: {picked and typed}", are the summary's lines, in order. */
+  rowsAreLines(rows: any[], lines: string[]) {
+    const asLine = (r: any) =>
+      r.kind === 'line' ? r.text : `${r.section}: ${[...r.picked, ...r.notes].join(', ')}`;
+    return (
+      Array.isArray(rows) &&
+      rows.length === lines.length &&
+      rows.every((r, i) => asLine(r) === lines[i])
+    );
+  },
+  /** P5 — the table: the three headers in a header row, one table row per row, a line across three. */
+  tableDrawn(html: string, rows: any[]) {
+    const table = html.match(/^<table data-picks-table="" class="([^"]*)">/);
+    const ths = [...html.matchAll(/<th\b[^>]*>([^<]*)<\/th>/g)].map((m) => m[1]);
+    const body = html.slice(html.indexOf('<tbody>'));
+    const trs = body.match(/<tr\b/g) ?? [];
+    const lines = rows.filter((r) => r.kind === 'line').length;
+    return (
+      !!table &&
+      /\bw-full\b/.test(table[1]) &&
+      /\btable-fixed\b/.test(table[1]) &&
+      html.indexOf('<thead>') > 0 &&
+      html.indexOf('<thead>') < html.indexOf('<tbody>') &&
+      JSON.stringify(ths) === JSON.stringify(HEADERS) &&
+      /class="[^"]*\buppercase\b/.test(
+        html.slice(html.indexOf('<thead>'), html.indexOf('</thead>'))
+      ) &&
+      trs.length === rows.length &&
+      (body.match(/<td colSpan="3"/g) ?? []).length === lines &&
+      (body.match(/<td\b/g) ?? []).length === lines + 3 * (rows.length - lines) &&
+      (body.match(/<td\b[^>]*class="[^"]*\bbreak-words\b/g) ?? []).length ===
+        (body.match(/<td\b/g) ?? []).length
+    );
+  },
+  /** P6 — the questions draw the table from picksRows, under its heading, above the bar. */
+  modalTable(modal: string) {
+    const fn = modal.indexOf('export function PicksTable');
+    const use = modal.indexOf('<PicksTable rows={');
+    const call = modal.indexOf('picksRows(');
+    return (
+      fn > modal.indexOf('function FoodOptionTreeAccordion') &&
+      fn < modal.indexOf('function NotesAccordion') &&
+      call > 0 &&
+      call < modal.indexOf('function FoodOptionTreeAccordion') &&
+      /renderableFoodCategories/.test(modal.slice(call, call + 600)) &&
+      /additionalFoodCategories/.test(modal.slice(call, call + 600)) &&
+      use > modal.indexOf('{PICKS_WORDS.HEADING}') &&
+      use < modal.indexOf('fixed bottom-0 left-0 right-0') &&
+      !/picksSummary\(/.test(modal) &&
+      !/picksLines\.map/.test(modal)
     );
   },
 };
@@ -1379,12 +1499,90 @@ async function layerA() {
   );
 }
 
+// ══ Tweak 6 ══════════════════════════════════════════════════════════════════
+async function layerP() {
+  section('P — tweak 6: "What you’ve picked" as a table, like the print');
+  const PS = await load('../src/lib/moments/picks-summary');
+  const MOD = await load('../src/components/plan/Moment2Step1Modal');
+  const rows = (c: any) => (PS?.picksRows ? PS.picksRows(c) : null);
+  assert(
+    'P',
+    'P1 the rows follow picksSummary’s own order and words, for three hand-written cases (picks with a note, nothing yet, nothing picked)',
+    !!PS?.picksSummary &&
+      [CASE_PICKS, CASE_NOTHING, CASE_NOTHING_IN].every((c: any) =>
+        CHECKS.rowsAreLines(rows(c) as any, PS.picksSummary(c))
+      )
+  );
+  const r1 = (rows(CASE_PICKS) as any[]) ?? [];
+  assert(
+    'P',
+    'P2 Dietary is the first row; a section still deciding keeps its words (W6) in the picked column; what was typed is in the notes column',
+    r1[0]?.kind === 'row' &&
+      r1[0]?.section === '⚠️ Dietary requirements' &&
+      r1.some(
+        (r) =>
+          r.section === '🥗 Sides & Salads' && JSON.stringify(r.picked) === JSON.stringify([W6])
+      ) &&
+      r1.some(
+        (r) =>
+          r.section === '🍖 Mains' &&
+          JSON.stringify(r.notes) === JSON.stringify(['“No pork, if we can.”']) &&
+          JSON.stringify(r.picked) ===
+            JSON.stringify(['Classic sausage sizzle (Beef sausages, Chicken sausages)'])
+      )
+  );
+  const r2 = (rows(CASE_NOTHING) as any[]) ?? [];
+  const r3 = (rows(CASE_NOTHING_IN) as any[]) ?? [];
+  assert(
+    'P',
+    'P3 nothing picked yet (W9) and nothing picked in the always-planned sections (W8) sit in the table, each a line across it',
+    r2.length === 2 &&
+      r2[1]?.kind === 'line' &&
+      r2[1]?.text === W9 &&
+      r3.length === 2 &&
+      r3[1]?.kind === 'line' &&
+      r3[1]?.text === CASE_NOTHING_IN_LINES[1]
+  );
+  assert(
+    'P',
+    'P4 CONTROL: picksSummary is kept exactly: its code as at demo-ab-good, and its lines as written by hand for the three cases',
+    !!PS?.picksSummary &&
+      squash(bodyFrom(code(PICKS_FILE), 'export function picksSummary(')) ===
+        squash(bodyFrom(stripComments(atTag(PICKS_FILE)), 'export function picksSummary(')) &&
+      bodyFrom(code(PICKS_FILE), 'export function picksSummary(').length > 200 &&
+      JSON.stringify(PS.picksSummary(CASE_PICKS)) === JSON.stringify(CASE_PICKS_LINES) &&
+      JSON.stringify(PS.picksSummary(CASE_NOTHING)) === JSON.stringify(CASE_NOTHING_LINES) &&
+      JSON.stringify(PS.picksSummary(CASE_NOTHING_IN)) === JSON.stringify(CASE_NOTHING_IN_LINES)
+  );
+  const drawn = MOD?.PicksTable ? render(createElement(MOD.PicksTable, { rows: r1 })) : '';
+  const drawnNothing = MOD?.PicksTable ? render(createElement(MOD.PicksTable, { rows: r2 })) : '';
+  assert(
+    'P',
+    'P5 the screen draws a table: "Section", "Picked", "Notes" in an upper-case header row, a row per row, fixed columns that wrap',
+    CHECKS.tableDrawn(drawn, r1) && CHECKS.tableDrawn(drawnNothing, r2),
+    drawn.slice(0, 300)
+  );
+  assert(
+    'P',
+    'P6 the questions draw it from picksRows, from their own two lists, under "What you’ve picked" and above the bar',
+    CHECKS.modalTable(code(MODAL))
+  );
+  assert(
+    'P',
+    'P7 the headers: "Section" is Find a dish’s own word; "Picked" and "Notes" are the founder’s',
+    JSON.stringify(PS?.PICKS_TABLE_WORDS) ===
+      JSON.stringify({ SECTION: 'Section', PICKED: 'Picked', NOTES: 'Notes' }) &&
+      /SECTION:\s*MENU_WORDS\.SECTION/.test(code(PICKS_FILE))
+  );
+}
+
 async function main() {
   await layerH();
   await layerO();
   await layerD();
   await layerK();
   await layerA();
+  await layerP();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
     console.log(reds.map((r) => `  - ${r}`).join('\n'));

@@ -732,7 +732,9 @@ async function runInMemory() {
     above.trim().slice(0, 200)
   );
   const mainEnd = modalSrc.indexOf('function FoodOptionTreeAccordion');
-  const callAt = modalSrc.indexOf('picksSummary(');
+  // GTC-394 tweak 6: the screen draws its table from picksSummary's sibling, picksRows (the same
+  // helpers and words, in rows), so that is the call this looks for.
+  const callAt = modalSrc.indexOf('picksRows(');
   const bar = modalSrc.indexOf('Generate plan &rarr;');
   const between = notesAt >= 0 && bar > notesAt ? modalSrc.slice(notesAt, bar) : '';
   assert(
@@ -1020,8 +1022,21 @@ async function runLive() {
     /** The summary: the box around the W4 heading. Its text, or null when there is none. */
     const SUMMARY = `(() => { const hd = [...document.querySelectorAll('h2,h3,h4,p,div,span')].find(e => e.children.length === 0 && e.textContent.trim() === ${JSON.stringify(W4)});
         return hd ? hd.parentElement : null; })()`;
+    /*
+     * GTC-394 tweak 6: the summary is a table now (the section, what is picked, what was typed). Its
+     * text is read back as the summary's own lines: the heading, then each row as "{section}:
+     * {picked}, {typed}", a line across the table as it is. picksRows guarantees those are
+     * picksSummary's lines, so the checks that read it are unchanged.
+     */
     const summaryText = () =>
-      js<string | null>(`(() => { const b = ${SUMMARY}; return b ? b.innerText : null; })()`);
+      js<string | null>(`(() => { const b = ${SUMMARY}; if (!b) return null;
+        const h = b.querySelector('h3'); const t = b.querySelector('table');
+        if (!h || !t) return null;
+        const rows = [...t.querySelectorAll('tbody tr')].map((tr) => {
+          const c = [...tr.querySelectorAll('td')].map((td) => td.innerText.trim());
+          return c.length === 1 ? c[0] : c[0] + ': ' + c.slice(1).filter(Boolean).join(', ');
+        });
+        return [h.innerText.trim(), ...rows].join('\\n'); })()`);
     /** At the foot of the questions: the summary sits under Notes and clears the bar; it fits `w`. */
     const footFits = (w: number) =>
       js<string>(`(() => { const b = ${SUMMARY}; if (!b) return 'no summary';

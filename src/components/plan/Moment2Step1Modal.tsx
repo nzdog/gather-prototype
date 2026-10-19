@@ -30,7 +30,12 @@ import {
   tickFromSearch,
   type MenuRow,
 } from '@/lib/moments/menu-search';
-import { PICKS_WORDS, picksSummary } from '@/lib/moments/picks-summary';
+import {
+  PICKS_TABLE_WORDS,
+  PICKS_WORDS,
+  picksRows,
+  type PicksRow,
+} from '@/lib/moments/picks-summary';
 import TypicalAnswersButton from '@/components/demo/TypicalAnswersButton';
 import { fillTypicalAnswers } from '@/lib/demo/typical-answers';
 import { OWN_PLAN_WORDS, type OwnPlanState } from '@/lib/setup/own-plan';
@@ -591,12 +596,13 @@ export default function Moment2Step1Modal({
     });
   }, [state.eventType]);
 
-  // GTC-379 (item 44): the summary's lines, from the screen's own state and its own two lists, so
-  // it reads the sections in the order the questions show them, "Show more" ones included.
-  const picksLines = useMemo(
+  // GTC-379 (item 44): the summary, from the screen's own state and its own two lists, so it reads
+  // the sections in the order the questions show them, "Show more" ones included. [[GTC-394]]
+  // tweak 6: as the table's rows (`picksRows`, picksSummary's own words in rows).
+  const picksTable = useMemo(
     () =>
       state.eventType
-        ? picksSummary({
+        ? picksRows({
             eventType: state.eventType,
             sections: [...renderableFoodCategories, ...additionalFoodCategories],
             picks: { ...state.extendedCategoriesData, mains: state.mainsData },
@@ -1021,13 +1027,10 @@ export default function Moment2Step1Modal({
             />
             {/* GTC-379 (item 44, W4 to W9): what she has picked, under Notes and above the bar.
                 It grows with the page; nothing is added to the bar. */}
-            <div className="mt-6 rounded-lg bg-gray-50 px-4 py-3">
+            <div className="mt-6 rounded-lg border border-gray-200 bg-white px-4 py-3">
               <h3 className="text-sm font-medium text-gray-900 mb-2">{PICKS_WORDS.HEADING}</h3>
-              <ul className="space-y-1 text-sm text-gray-700 break-words">
-                {picksLines.map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
+              {/* [[GTC-394]] tweak 6 (founder: "more like a spreadsheet... like the PDF"). */}
+              <PicksTable rows={picksTable} />
             </div>
           </div>
         )}
@@ -1348,6 +1351,51 @@ export function QuietChoices({
         </div>
       )}
     </div>
+  );
+}
+
+// ─── "What you’ve picked", as a table ([[GTC-394]] tweak 6) ──────────────────
+
+/**
+ * The summary's rows with the print's look (`src/lib/print/item-list.ts`): a full-width table, a
+ * small upper-case header row, a thin rule under each row, 13px text. Fixed columns that wrap their
+ * words, so it never widens a phone's page. The rows are `picksRows`, the same words as
+ * `picksSummary`. No hooks: it renders the same on the server.
+ */
+export function PicksTable({ rows }: { rows: PicksRow[] }) {
+  const th =
+    'py-1.5 pr-2 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500';
+  const td = 'py-1.5 pr-2 align-top break-words';
+  return (
+    <table
+      data-picks-table=""
+      className="w-full table-fixed border-collapse text-[13px] text-gray-900"
+    >
+      <thead>
+        <tr className="border-b border-gray-300">
+          <th className={`${th} w-[34%]`}>{PICKS_TABLE_WORDS.SECTION}</th>
+          <th className={th}>{PICKS_TABLE_WORDS.PICKED}</th>
+          <th className={`${th} w-[26%]`}>{PICKS_TABLE_WORDS.NOTES}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) =>
+          row.kind === 'line' ? (
+            <tr key={row.text} className="border-b border-gray-100">
+              <td colSpan={3} className={`${td} text-gray-600`}>
+                {row.text}
+              </td>
+            </tr>
+          ) : (
+            <tr key={row.section} className="border-b border-gray-100">
+              <td className={`${td} font-medium`}>{row.section}</td>
+              <td className={td}>{row.picked.join(', ')}</td>
+              <td className={`${td} text-gray-600`}>{row.notes.join(', ')}</td>
+            </tr>
+          )
+        )}
+      </tbody>
+    </table>
   );
 }
 
