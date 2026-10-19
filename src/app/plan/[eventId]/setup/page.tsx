@@ -13,7 +13,7 @@ import {
   resolveSetupStage,
   type SetupStage,
 } from '@/lib/setup/entry-stage';
-import type { OwnPlanState } from '@/lib/setup/own-plan';
+import { quietChoices, type OwnPlanState } from '@/lib/setup/own-plan';
 import { useToast } from '@/contexts/ToastContext';
 import { DemoBanner } from '@/components/demo/DemoBanner';
 import CrowdButton, { type CrowdState } from '@/components/demo/CrowdButton';
@@ -989,7 +989,6 @@ function EventSetupFlow() {
           setShowSetup(false);
           setShowMoment1(true);
         }}
-        doors={doorsFor(1)}
         details={details}
       />
     );
@@ -1582,6 +1581,68 @@ function EventSetupFlow() {
     );
   }
 
+  /*
+   * [[GTC-394]] tweak 2 — the two quieter choices moved from Moment 2's opening to its questions
+   * (founder, 19 Oct 2026: "Move them into the questions"): the same handlers, routes and states,
+   * offered under the opening's rule, unchanged (`quietChoices`: invites only before the press, GTC-375
+   * Q4; her own list before the press, on an event with a record, not while a plan is put away).
+   */
+  const invitesOnly = Boolean(event?.setup?.invitesOnly);
+  const offered = quietChoices({
+    sent: Boolean(event?.sentAt),
+    hasSetup: Boolean(event?.setup),
+    invitesOnly,
+    planWaiting,
+  });
+  /*
+   * [[GTC-382]] (item 40) — "Write the list myself" (W1): offered where the quiet link is, before the
+   * press, on an event with a record only (an old-style event reads as it did), and not while a plan
+   * is put away (Q2; the opening hides it). With her list already there it goes back to it and makes
+   * nothing (Q3, W3). Otherwise the setup route makes the eight (Q4) — from an invites-only event in
+   * the same call that clears the flag — and the plan view opens. A co-host is told W4, a failure W5.
+   */
+  const listExists = hasAnyPlan(items, teamCount);
+  const writeOwnList = async () => {
+    if (ownPlanState === 'working') return;
+    if (listExists && !invitesOnly) {
+      setMoment2PlanCategories(await loadMoment2PlanCategories());
+      applyStage('plan');
+      return;
+    }
+    setOwnPlanState('working');
+    try {
+      const res = await fetch(`/api/events/${eventId}/setup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          invitesOnly ? { invitesOnly: false, ownPlan: true } : { ownPlan: true }
+        ),
+      });
+      if (!res.ok) {
+        setOwnPlanState(res.status === 403 ? 'not-host' : 'failed');
+        return;
+      }
+      // The rows too: the plan view reads them to know the plan is her own.
+      const [loadedEvent, , categories] = await Promise.all([
+        loadEvent(),
+        loadItems(),
+        loadMoment2PlanCategories(),
+      ]);
+      setInvitesOnlyState('idle');
+      setPlanWaiting(false);
+      setOwnPlanState('idle');
+      if (loadedEvent?.setup?.planApprovedAt) {
+        setMoment3Data(await loadMoment3Data());
+        applyStage('moment3');
+        return;
+      }
+      setMoment2PlanCategories(categories);
+      applyStage('plan');
+    } catch {
+      setOwnPlanState('failed');
+    }
+  };
+
   if (showMoment2Step2Skeleton && event) {
     return (
       <Moment2Step2Skeleton
@@ -1658,6 +1719,11 @@ function EventSetupFlow() {
         onOccasionChange={setLiveOccasion}
         // [[GTC-392]] part B — "Fill in typical answers", on a sample only.
         sample={Boolean(event.isDemo)}
+        onOwnPlan={offered.ownPlan ? () => void writeOwnList() : undefined}
+        ownPlanState={ownPlanState}
+        ownPlanExists={listExists && !invitesOnly}
+        onInvitesOnly={offered.invitesOnly ? () => void chooseInvitesOnly() : undefined}
+        invitesOnlyState={invitesOnlyState}
       />
     );
   }
@@ -1673,7 +1739,6 @@ function EventSetupFlow() {
      * entry rule says, as if she had never left (plan Q8), told W4, or W5 if something held by someone
      * no longer on the event came back with nobody holding it (Q9).
      */
-    const invitesOnly = Boolean(event.setup?.invitesOnly);
     const start = async () => {
       if (!invitesOnly) {
         setShowMoment2Opening(false);
@@ -1713,70 +1778,14 @@ function EventSetupFlow() {
         { duration: 6000 }
       );
     };
-    // [[GTC-375]] Q4: offered before the press on every opening, an event whose only items were added
-    // by hand included (they are put away the same way). After the press it is fixed.
-    const offerInvitesOnly = !event.sentAt;
-    /*
-     * [[GTC-382]] (item 40) — "Write the list myself" (W1): offered where the quiet link is, before the
-     * press, on an event with a record only (an old-style event reads as it did), and not while a plan
-     * is put away (Q2; the opening hides it). With her list already there it goes back to it and makes
-     * nothing (Q3, W3). Otherwise the setup route makes the eight (Q4) — from an invites-only event in
-     * the same call that clears the flag — and the plan view opens. A co-host is told W4, a failure W5.
-     */
-    const listExists = hasAnyPlan(items, teamCount);
-    const writeOwnList = async () => {
-      if (ownPlanState === 'working') return;
-      if (listExists && !invitesOnly) {
-        setMoment2PlanCategories(await loadMoment2PlanCategories());
-        applyStage('plan');
-        return;
-      }
-      setOwnPlanState('working');
-      try {
-        const res = await fetch(`/api/events/${eventId}/setup`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(
-            invitesOnly ? { invitesOnly: false, ownPlan: true } : { ownPlan: true }
-          ),
-        });
-        if (!res.ok) {
-          setOwnPlanState(res.status === 403 ? 'not-host' : 'failed');
-          return;
-        }
-        // The rows too: the plan view reads them to know the plan is her own.
-        const [loadedEvent, , categories] = await Promise.all([
-          loadEvent(),
-          loadItems(),
-          loadMoment2PlanCategories(),
-        ]);
-        setInvitesOnlyState('idle');
-        setPlanWaiting(false);
-        setOwnPlanState('idle');
-        if (loadedEvent?.setup?.planApprovedAt) {
-          setMoment3Data(await loadMoment3Data());
-          applyStage('moment3');
-          return;
-        }
-        setMoment2PlanCategories(categories);
-        applyStage('plan');
-      } catch {
-        setOwnPlanState('failed');
-      }
-    };
     return (
       <Moment2Opening
         eventName={event.name}
         onStart={() => void start()}
         onBack={() => void goToMoment('moment1')}
-        doors={doorsFor(2)}
         details={details}
-        onInvitesOnly={offerInvitesOnly ? () => void chooseInvitesOnly() : undefined}
         invitesOnlyState={invitesOnlyState}
         planWaiting={invitesOnly && planWaiting}
-        onOwnPlan={offerInvitesOnly && event.setup ? () => void writeOwnList() : undefined}
-        ownPlanState={ownPlanState}
-        ownPlanExists={listExists && !invitesOnly}
       />
     );
   }

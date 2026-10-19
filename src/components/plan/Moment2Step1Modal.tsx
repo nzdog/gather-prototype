@@ -33,6 +33,8 @@ import {
 import { PICKS_WORDS, picksSummary } from '@/lib/moments/picks-summary';
 import TypicalAnswersButton from '@/components/demo/TypicalAnswersButton';
 import { fillTypicalAnswers } from '@/lib/demo/typical-answers';
+import { OWN_PLAN_WORDS, type OwnPlanState } from '@/lib/setup/own-plan';
+import { INVITES_ONLY_WORDS, type InvitesOnlyState } from '@/lib/setup/invites-only';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -64,6 +66,19 @@ interface Moment2Step1ModalProps {
   }) => void;
   /** [[GTC-392]] part B: a sample event, which offers "Fill in typical answers". */
   sample?: boolean;
+  /**
+   * [[GTC-394]] tweak 2 — the two quieter choices, moved here from Moment 2's opening (founder,
+   * 19 Oct 2026: "Move them into the questions"). The page decides who is offered each, by the rule
+   * the opening used (`quietChoices`); absent, it is not offered. Each saves the answers first.
+   */
+  onOwnPlan?: () => void;
+  /** [[GTC-382]] — W4 for a co-host (Q5), W5 if the press fails. */
+  ownPlanState?: OwnPlanState;
+  /** [[GTC-382]] (Q3) — her list already exists: W3 stands in for W2, and W1 goes back to it. */
+  ownPlanExists?: boolean;
+  onInvitesOnly?: () => void;
+  /** [[GTC-374]] — W3 while it works, W4 if it fails, W5 for a co-host. */
+  invitesOnlyState?: InvitesOnlyState;
 }
 
 interface FoodItem {
@@ -224,6 +239,11 @@ export default function Moment2Step1Modal({
   details,
   onOccasionChange,
   sample = false,
+  onOwnPlan,
+  ownPlanState = 'idle',
+  ownPlanExists = false,
+  onInvitesOnly,
+  invitesOnlyState = 'idle',
 }: Moment2Step1ModalProps) {
   const [state, setState] = useState<Step1State>(INITIAL_STATE);
   // GTC-364 (item 3, Q1): the sections open now. Several may be open at once, so opening one
@@ -1008,6 +1028,16 @@ export default function Moment2Step1Modal({
             </div>
           </div>
         )}
+
+        {/* [[GTC-394]] tweak 2 — the two quieter choices, at the foot of the questions and above the
+            bar, whether or not a kind is picked; each saves the answers first, as every way out does. */}
+        <QuietChoices
+          onOwnPlan={onOwnPlan ? () => void leave(onOwnPlan) : undefined}
+          ownPlanState={ownPlanState}
+          ownPlanExists={ownPlanExists}
+          onInvitesOnly={onInvitesOnly ? () => void leave(onInvitesOnly) : undefined}
+          invitesOnlyState={invitesOnlyState}
+        />
       </div>
 
       {/* Sticky generate button */}
@@ -1233,6 +1263,88 @@ function DietaryAccordion({
         </div>
       </div>
     </AccordionShell>
+  );
+}
+
+// ─── The two quieter choices ([[GTC-394]] tweak 2) ───────────────────────────
+
+/**
+ * "Write the list myself" ([[GTC-382]] item 40) and "Skip the plan: invites only" ([[GTC-374]] item
+ * 14), moved here from Moment 2's opening with their words, lines and states as they were, each
+ * under its own line. Two quiet choices, drawn alike. No hooks: it renders the same on the server.
+ */
+export function QuietChoices({
+  onOwnPlan,
+  ownPlanState = 'idle',
+  ownPlanExists = false,
+  onInvitesOnly,
+  invitesOnlyState = 'idle',
+}: {
+  onOwnPlan?: () => void;
+  ownPlanState?: OwnPlanState;
+  ownPlanExists?: boolean;
+  onInvitesOnly?: () => void;
+  invitesOnlyState?: InvitesOnlyState;
+}) {
+  if (!onOwnPlan && !onInvitesOnly) return null;
+  const working = invitesOnlyState === 'working' || ownPlanState === 'working';
+  const choice =
+    'px-3 py-2 -ml-3 text-left text-base text-gray-700 underline underline-offset-4 hover:text-gray-900 disabled:opacity-60';
+  return (
+    <div data-quiet-choices="" className="mt-10 border-t border-gray-200 pt-6 space-y-5">
+      {onOwnPlan && (
+        <div className="flex flex-col items-start">
+          <button
+            type="button"
+            data-own-plan=""
+            onClick={onOwnPlan}
+            disabled={working}
+            className={choice}
+          >
+            {OWN_PLAN_WORDS.CHOOSE}
+          </button>
+          <p className="mt-1 text-sm leading-snug text-gray-500">
+            {ownPlanExists ? OWN_PLAN_WORDS.WAITING : OWN_PLAN_WORDS.EXPLAIN}
+          </p>
+          {(ownPlanState === 'failed' || ownPlanState === 'not-host') && (
+            <p
+              data-own-plan-state={ownPlanState}
+              role="status"
+              className="mt-2 text-sm text-amber-800"
+            >
+              {ownPlanState === 'not-host' ? OWN_PLAN_WORDS.NOT_HOST : OWN_PLAN_WORDS.FAILED}
+            </p>
+          )}
+        </div>
+      )}
+      {onInvitesOnly && (
+        <div className="flex flex-col items-start">
+          <button
+            type="button"
+            data-invites-only=""
+            onClick={onInvitesOnly}
+            disabled={working}
+            className={choice}
+          >
+            {INVITES_ONLY_WORDS.CHOOSE}
+          </button>
+          <p className="mt-1 text-sm leading-snug text-gray-500">{INVITES_ONLY_WORDS.EXPLAIN}</p>
+          {invitesOnlyState !== 'idle' && (
+            <p
+              data-invites-only-state={invitesOnlyState}
+              role="status"
+              className={`mt-2 text-sm ${invitesOnlyState === 'working' ? 'text-gray-500' : 'text-amber-800'}`}
+            >
+              {invitesOnlyState === 'working'
+                ? INVITES_ONLY_WORDS.WORKING
+                : invitesOnlyState === 'not-host'
+                  ? INVITES_ONLY_WORDS.NOT_HOST
+                  : INVITES_ONLY_WORDS.FAILED}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

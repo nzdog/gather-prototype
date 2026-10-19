@@ -356,10 +356,10 @@ async function runInMemory() {
   const w2At = openingWith.indexOf(W2);
   assert(
     'R',
-    'R5 Moment 2’s opening with a plan put away: W2 under "Let’s do this →", above GTC-374’s W1',
+    'R5 Moment 2’s opening with a plan put away: W2 under "Let’s do this →"; GTC-374’s W1 is no longer on the opening (GTC-394 tweak 2 moved it to the questions)',
     w2At > openingWith.indexOf(LETS_DO_THIS) &&
       openingWith.indexOf(LETS_DO_THIS) > 0 &&
-      w2At < openingWith.indexOf(GTC374_W1)
+      !openingWith.includes(GTC374_W1)
   );
   const openingWithout = render(
     createElement(Moment2Opening as any, {
@@ -1036,17 +1036,12 @@ async function runLive() {
     r.C5 = u5.length === 2 && u5.every((x) => !x.under && x.door === 'A');
     detail.C5 = JSON.stringify(u5);
 
-    // C6 — the strip's "What's the plan?" opens Moment 2's opening: W2, and the setup page's strip
-    // without the underline.
+    // C6 — the strip's "What's the plan?" opens Moment 2's opening: W2. Since GTC-394 tweak 2 the
+    // opening carries no strip, so nothing "not needed" is drawn there.
     const t6 = await tap(stripDoor("What's the plan?"), 7000);
     const b6 = await body();
     const u6 = JSON.parse(await ev<string>(notNeededUnderline)) as { under: boolean }[];
-    r.C6 =
-      t6 === null &&
-      b6.includes(LETS_DO_THIS) &&
-      b6.includes(W2) &&
-      u6.length >= 1 &&
-      u6.every((x) => !x.under);
+    r.C6 = t6 === null && b6.includes(LETS_DO_THIS) && b6.includes(W2) && u6.length === 0;
     detail.C6 = `tap ${t6}, strip ${JSON.stringify(u6)}`;
 
     // C7 — "Let’s do this →" brings it back (the fixture's own event): the plan, and W4.
@@ -1114,7 +1109,7 @@ async function runLive() {
     C3: 'C3 W1 pressed (the fixture’s own): the plan put away, held, and the pre-flight opens',
     C4: 'C4 the pre-flight: W3 under GTC-374’s W10',
     C5: 'C5 the pre-flight’s strip: "· not needed" not underlined, its door still a link',
-    C6: 'C6 the strip opens Moment 2’s opening with W2; the setup page’s strip not underlined either',
+    C6: 'C6 the strip opens Moment 2’s opening with W2; the opening draws no strip now (GTC-394 tweak 2)',
     C7: 'C7 "Let’s do this →" brings the plan back (the fixture’s own), with W4',
     C8: 'C8 a co-host who presses W1 is told GTC-374’s W5, and nothing is put away',
     C9: 'C9 the guest page: the date by the details card’s rule with the times (W8), and W6',

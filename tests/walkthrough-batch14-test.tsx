@@ -182,17 +182,21 @@ const CHECKS = {
   /** S4 (55): a guest household's form: no switch, no line. */
   S4: (h: string) =>
     h.includes('Who’s coming to') && !h.includes(OWN_LINE) && !h.includes('Message me about'),
-  /** M1 (54): line, strip, "What this does", "When it's done" directly under it, the button. */
+  /**
+   * M1 (54): "What this does", "When it's done" directly under it, the button. Since GTC-394 tweak 2
+   * the herd-of-cats line and the strip are gone from this screen and the Moment's name, big, heads
+   * it: the title, then the two lines, then the button.
+   */
   M1: (h: string) => {
-    const line = h.indexOf('herd of cats');
-    const strip = h.indexOf('data-moment-strip');
+    const title = h.indexOf('<h1');
     const does = h.indexOf('data-moment-words="1-does"');
     const done = h.indexOf('data-moment-words="1-done"');
     const button = h.indexOf('Ready to start herding');
     return (
-      line >= 0 &&
-      strip > line &&
-      does > strip &&
+      title >= 0 &&
+      !h.includes('herd of cats') &&
+      !h.includes('data-moment-strip') &&
+      does > title &&
       done > does &&
       button > done &&
       h.split('data-moment-words="1-does"').length === 2 &&
@@ -508,7 +512,7 @@ async function runInMemory() {
   );
   assert(
     'M',
-    'M1 the herd-of-cats screen: the line, the strip, "What this does", "When it’s done" directly under it (max-w-xl), then the button; once each',
+    'M1 Moment 1’s opening screen: its title, "What this does", "When it’s done" directly under it (max-w-xl), then the button; once each; no herd line, no strip (GTC-394 tweak 2)',
     CHECKS.M1(opening)
   );
   assert(
@@ -842,7 +846,8 @@ async function runLive() {
         const does = document.querySelector('[data-moment-words="1-does"]');
         const done = document.querySelector('[data-moment-words="1-done"]');
         const out = [...document.querySelectorAll('a')].find((a) => a.innerText.trim() === '← Your events');
-        const line = [...document.querySelectorAll('p')].find((p) => p.innerText.includes('herd of cats'));
+        // GTC-394 tweak 2: the screen's first line is its title now; the herd-of-cats line is gone.
+        const line = box && box.querySelector('h1');
         if (!btn || !box || !does || !done || !out || !line) return { found: false };
         box.scrollTo(0, 0);
         const boxTop = box.getBoundingClientRect().top;
@@ -861,7 +866,7 @@ async function runLive() {
       })()`);
       assert(
         'C',
-        `M3 ${tag}: the herd-of-cats screen carries Moment 1’s two lines, left-aligned; "← Your events" never sits on the line, the line is not cut off at the top, and the button can be scrolled to`,
+        `M3 ${tag}: Moment 1’s opening screen carries Moment 1’s two lines, left-aligned; "← Your events" never sits on its title, the title is not cut off at the top, and the button can be scrolled to (GTC-394 tweak 2)`,
         !!m3?.found &&
           m3.apart &&
           m3.lineShown &&

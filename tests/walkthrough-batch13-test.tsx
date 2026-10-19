@@ -57,6 +57,7 @@ import { prisma } from '../src/lib/prisma';
 import { installProviderTrap } from './helpers/provider-trap';
 import { ToastProvider } from '../src/contexts/ToastContext';
 import Moment2Opening from '../src/components/plan/Moment2Opening';
+import * as Moment2Questions from '../src/components/plan/Moment2Step1Modal';
 import Moment2PlanView from '../src/components/plan/Moment2PlanView';
 import { openHeadless, type Headless } from './helpers/headless';
 
@@ -341,20 +342,28 @@ async function runInMemory() {
       })
     );
   const withChoice = opening({ onOwnPlan: () => {} });
-  const startEnd = withChoice.indexOf(`${START}</button>`);
-  const ownAt = withChoice.indexOf(`>${W1}</button>`);
+  // GTC-394 tweak 2 (founder, 19 Oct 2026: "Move them into the questions"): W1 left Moment 2's
+  // opening for its questions, with the same words, lines, states and handler.
+  const QC = (Moment2Questions as any).QuietChoices;
+  const quiet = (props: Record<string, unknown>) =>
+    QC ? render(createElement(QC, { onInvitesOnly: () => {}, ...props })) : '';
+  const both = quiet({ onOwnPlan: () => {} });
+  const ownAt = both.indexOf(`>${W1}</button>`);
+  const questionsSrc = codeOnly(read('src/components/plan/Moment2Step1Modal.tsx'));
   assert(
     'R',
-    'R1 the opening with the choice: W1 is the next button after "Let’s do this →", before invites only and "← Back to the people", with W2 under it (scoping Q3)',
-    withChoice.length > 0 &&
-      startEnd > 0 &&
-      ownAt > startEnd &&
-      count(withChoice.slice(startEnd + START.length, ownAt), /<button\b/g) === 1 &&
-      !withChoice.slice(withChoice.lastIndexOf('<button', ownAt), ownAt).includes('>') &&
-      withChoice.indexOf(W2) > ownAt &&
-      withChoice.indexOf(W2) < withChoice.indexOf(INVITES_ONLY) &&
-      withChoice.indexOf(INVITES_ONLY) < withChoice.indexOf(BACK_TO_PEOPLE),
-    `render ${withChoice.length} chars, start ${startEnd}, W1 ${ownAt}`
+    'R1 the choice: not on the opening, which keeps "Let’s do this →"; on the questions W1 is the first button, with W2 under it, before invites only, above the bar and its "← Back to the people" (scoping Q3; GTC-394 tweak 2)',
+    withChoice.includes(START) &&
+      !withChoice.includes(W1) &&
+      !withChoice.includes(W2) &&
+      ownAt > 0 &&
+      count(both.slice(0, ownAt), /<button\b/g) === 1 &&
+      !both.slice(both.lastIndexOf('<button', ownAt), ownAt).includes('>') &&
+      both.indexOf(W2) > ownAt &&
+      both.indexOf(W2) < both.indexOf(INVITES_ONLY) &&
+      questionsSrc.indexOf('<QuietChoices') > 0 &&
+      questionsSrc.indexOf('<QuietChoices') < questionsSrc.indexOf('{STRIP_WORDS.BACK_TO_PEOPLE}'),
+    `render ${both.length} chars, W1 ${ownAt}`
   );
   const classOf = (h: string, text: string) => {
     const m = h.match(
@@ -372,18 +381,19 @@ async function runInMemory() {
       .sort()
       .join(' ');
   const goCls = classOf(withChoice, START);
-  const ownCls = classOf(withChoice, W1);
+  const ownCls = classOf(both, W1);
+  const invCls = classOf(both, INVITES_ONLY);
   assert(
     'R',
-    'R2 the two buttons share their width, height and size classes; W1 is outlined (a border, no solid fill), "Let’s do this →" stays solid',
+    'R2 on the questions W1 and invites only are alike, two quiet choices sharing one class and size, neither a solid button; "Let’s do this →" on the opening stays solid (GTC-394 tweak 2)',
     !!goCls &&
       !!ownCls &&
-      sizeTokens(goCls) === sizeTokens(ownCls) &&
-      sizeTokens(ownCls).includes('w-full') &&
-      ownCls.some((t) => /^border/.test(t)) &&
+      !!invCls &&
+      ownCls.join(' ') === invCls.join(' ') &&
+      sizeTokens(ownCls) === sizeTokens(invCls) &&
       !ownCls.includes('bg-accent') &&
       goCls.includes('bg-accent'),
-    `${goCls?.join(' ')} | ${ownCls?.join(' ')}`
+    `${goCls?.join(' ')} | ${ownCls?.join(' ')} | ${invCls?.join(' ')}`
   );
   const without = opening({});
   const waiting = opening({ onOwnPlan: () => {}, planWaiting: true });
@@ -395,14 +405,15 @@ async function runInMemory() {
       waiting.includes(START) &&
       !waiting.includes(W1)
   );
-  const failedR = opening({ onOwnPlan: () => {}, ownPlanState: 'failed' });
-  const coHostR = opening({ onOwnPlan: () => {}, ownPlanState: 'not-host' });
-  const listR = opening({ onOwnPlan: () => {}, ownPlanExists: true });
+  // GTC-394 tweak 2: the states moved with the choice, onto the questions.
+  const failedR = quiet({ onOwnPlan: () => {}, ownPlanState: 'failed' });
+  const coHostR = quiet({ onOwnPlan: () => {}, ownPlanState: 'not-host' });
+  const listR = quiet({ onOwnPlan: () => {}, ownPlanExists: true });
   const statusLine = (h: string, text: string) =>
     new RegExp(`role="status"[^>]*>${text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}<`).test(h);
   assert(
     'R',
-    'R4 a failed press says W5 and a co-host W4, each a status line; with her list there W3 stands in for W2',
+    'R4 a failed press says W5 and a co-host W4, each a status line; with her list there W3 stands in for W2 (on the questions, GTC-394 tweak 2)',
     failedR.includes(W1) &&
       statusLine(failedR, W5) &&
       statusLine(coHostR, W4) &&
@@ -549,11 +560,13 @@ async function runInMemory() {
     onReady: /loadItems\(\)/.test(onReady),
     press: /ownPlan:\s*true/.test(setup),
     planView: /<Moment2PlanView\b[\s\S]{0,6000}?\bownPlan=\{/.test(setup),
-    opening: /<Moment2Opening\b[\s\S]{0,1500}?\bonOwnPlan=\{/.test(setup),
+    questions: setup
+      .slice(setup.indexOf('<Moment2Step1Modal'), setup.indexOf('if (showMoment2Opening'))
+      .includes('onOwnPlan={'),
   };
   assert(
     'S',
-    'S3 the setup page: hasAnyPlan with the section count at the mount, the bring-back, ?at=, the strip’s doors and its Moment 2 tap (gated on the record); the skeleton reloads items; the press sends ownPlan; the view and the opening are told (Q1)',
+    'S3 the setup page: hasAnyPlan with the section count at the mount, the bring-back, ?at=, the strip’s doors and its Moment 2 tap (gated on the record); the skeleton reloads items; the press sends ownPlan; the view and the questions are told (Q1; GTC-394 tweak 2)',
     Object.values(s3).every(Boolean),
     Object.entries(s3)
       .filter(([, v]) => !v)
@@ -1017,7 +1030,9 @@ async function runLive() {
     const ownPlanShown = (p: any) => !!p && p.h1 === W6(nameA) && p.order && !p.regen && !p.suggest;
     const teamCountA = () => prisma.team.count({ where: { eventId: evA } });
 
-    // C1 — Moment 2's opening on her event (no plan yet), at 1280 and 390.
+    // C1 — Moment 2's opening on her event (no plan yet), at 1280 and 390: since GTC-394 tweak 2
+    // "Let’s do this →" alone, and one guarded tap on, the questions with W1, W2 under it, then
+    // invites only.
     for (const [w, h, mobile] of [
       [1280, 900, false],
       [390, 844, true],
@@ -1025,46 +1040,47 @@ async function runLive() {
       const k = mobile ? 'p' : '';
       await c.setViewport(w, h, mobile);
       await c.navigate(`/plan/${evA}/setup?at=opening`, 8000);
-      const o =
-        await ev<any>(`(() => { const rect = (e) => { if (!e) return null; const b = e.getBoundingClientRect();
-          return { top: b.top, bottom: b.bottom, left: b.left, right: b.right, width: b.width, height: b.height }; };
+      const rectJs = `(e) => { if (!e) return null; const b = e.getBoundingClientRect();
+          return { top: b.top, bottom: b.bottom, left: b.left, right: b.right, width: b.width, height: b.height }; }`;
+      const o = await ev<any>(`(() => { const rect = ${rectJs};
         const go = ${buttonNamed(START)}; const own = ${W1_BUTTON};
-        const line = [...document.querySelectorAll('p')].find(p => (${norm})(p.innerText) === ${JSON.stringify(W2)});
         const io = document.querySelector('[data-invites-only]');
         const yours = [...document.querySelectorAll('a')].find(a => (${norm})(a.innerText) === ${JSON.stringify(YOUR_EVENTS)});
-        const strip = document.querySelector('[data-moment-strip]');
-        const cs = (e) => e ? getComputedStyle(e) : null;
-        return { go: rect(go), own: rect(own), line: rect(line), io: rect(io), yours: rect(yours), strip: rect(strip),
-          ownBorder: own ? parseFloat(cs(own).borderTopWidth) : 0, ownBg: own ? cs(own).backgroundColor : null,
-          goBg: go ? cs(go).backgroundColor : null, sw: document.documentElement.scrollWidth }; })()`);
-      const near = (a: number, b: number) => Math.abs(a - b) <= 1;
+        const title = document.querySelector('h1');
+        return { go: rect(go), own: rect(own), io: rect(io), yours: rect(yours), title: rect(title),
+          sw: document.documentElement.scrollWidth }; })()`);
+      const on = o?.go ? await tap(buttonNamed(START), 3500) : 'absent';
+      const q = await ev<any>(`(() => { const rect = ${rectJs};
+        const own = ${W1_BUTTON};
+        const line = [...document.querySelectorAll('p')].find(p => (${norm})(p.innerText) === ${JSON.stringify(W2)});
+        const io = document.querySelector('[data-invites-only]');
+        return { own: rect(own), line: rect(line), io: rect(io), sw: document.documentElement.scrollWidth }; })()`);
       const apart = (a: any, b: any) =>
         !!a &&
         !!b &&
         (a.bottom <= b.top || b.bottom <= a.top || a.right <= b.left || b.right <= a.left);
       r[`C1${k}`] =
         !!o?.go &&
-        !!o?.own &&
-        o.own.top >= o.go.bottom &&
-        o.own.top - o.go.bottom <= 24 &&
-        near(o.own.width, o.go.width) &&
-        near(o.own.height, o.go.height) &&
-        near(o.own.left, o.go.left) &&
-        o.ownBorder >= 1 &&
-        o.ownBg !== o.goBg &&
-        !!o.line &&
-        o.line.top >= o.own.bottom &&
-        !!o.io &&
-        o.io.top >= o.line.bottom &&
-        apart(o.yours, o.strip) &&
-        (!mobile || o.sw <= 390);
-      detail[`C1${k}`] = JSON.stringify(o);
+        !o.own &&
+        !o.io &&
+        apart(o.yours, o.title) &&
+        (!mobile || o.sw <= 390) &&
+        on === null &&
+        !!q?.own &&
+        !!q.line &&
+        q.line.top >= q.own.bottom &&
+        !!q.io &&
+        q.io.top >= q.line.bottom &&
+        (!mobile || q.sw <= 390);
+      detail[`C1${k}`] = JSON.stringify({ o, on, q });
     }
 
     await c.setViewport(1280, 1400, false);
     // C2 — a guarded tap on W1 opens the eight, in order, with W6 and W8, and no Regenerate.
     await c.navigate(`/plan/${evA}/setup?at=opening`, 8000);
-    const t2 = await tap(W1_BUTTON, 6000);
+    // GTC-394 tweak 2: W1 is on the questions, one guarded tap of "Let’s do this →" on.
+    const on2 = await tap(buttonNamed(START), 3500);
+    const t2 = on2 === null ? await tap(W1_BUTTON, 6000) : 'not reached';
     const p2 = await planState();
     r.C2 =
       t2 === null && ownPlanShown(p2) && p2.empty === 8 && p2.first && (await teamCountA()) === 8;
@@ -1150,9 +1166,12 @@ async function runLive() {
     const t8a = ownPlanShown(p8a)
       ? await tap(buttonNamed(W10, `document.querySelector('.fixed.bottom-0')`), 3000)
       : 'absent';
+    // GTC-394 tweak 2: the opening has "Let’s do this →" alone; W1 and W3 are on the questions.
+    const start8 = await ev<boolean>(`!!(${buttonNamed(START)}) && !(${W1_BUTTON})`);
+    const on8 = t8a === null && start8 ? await tap(buttonNamed(START), 3500) : 'absent';
     const o8 = await ev<any>(`(() => { const t = document.body.innerText;
-      return { start: !!(${buttonNamed(START)}), own: !!(${W1_BUTTON}), w3: t.includes(${JSON.stringify(W3)}), w2: t.includes(${JSON.stringify(W2)}) }; })()`);
-    const t8b = t8a === null && o8.own ? await tap(W1_BUTTON, 5000) : 'absent';
+      return { start: ${start8}, own: !!(${W1_BUTTON}), w3: t.includes(${JSON.stringify(W3)}), w2: t.includes(${JSON.stringify(W2)}) }; })()`);
+    const t8b = on8 === null && o8.own ? await tap(W1_BUTTON, 5000) : 'absent';
     const p8b = await planState();
     r.C8 =
       t8a === null &&
@@ -1164,7 +1183,7 @@ async function runLive() {
       ownPlanShown(p8b) &&
       (p8b.mains ?? '').includes('Glazed ham') &&
       (await teamCountA()) === 8;
-    detail.C8 = JSON.stringify({ t8a, o8, t8b, h1: p8b?.h1, teams: await teamCountA() });
+    detail.C8 = JSON.stringify({ t8a, on8, o8, t8b, h1: p8b?.h1, teams: await teamCountA() });
 
     // C9 — at 390 her plan scrolls nowhere sideways, and the footer's back reads W10.
     await c.setViewport(390, 844, true);
@@ -1203,14 +1222,14 @@ async function runLive() {
   if (covered.length) console.log(`    covered (not pressed): ${covered.join(' | ')}`);
 
   const C_LABELS: Record<string, string> = {
-    C1: 'Moment 2’s opening: W1 directly under "Let’s do this →", the same width and height, outlined; W2 under it; invites only below; "← Your events" clear of the strip (scoping Q3, Q9)',
-    C2: 'a guarded tap on W1 opens her plan: W6, the eight in order, "No items yet." on each, W8, no Regenerate, eight sections stored (Q4)',
+    C1: 'Moment 2’s opening: "Let’s do this →" alone, "← Your events" clear of its title; on the questions W1, W2 under it, invites only below (scoping Q3, Q9; GTC-394 tweak 2)',
+    C2: 'a guarded tap on W1 (on the questions, GTC-394 tweak 2) opens her plan: W6, the eight in order, "No items yet." on each, W8, no Regenerate, eight sections stored (Q4)',
     C3: 'a reload keeps her own plan, the eight in order, W8 (Q1)',
     C4: 'a row added through "+ Add item" survives a reload; W8 gone; W7 "1 item across 8 categories, for N guests." (Q1, Q6)',
     C5: 'the strip to Moment 1, then the strip’s "What’s the plan?" back to her plan (Q1)',
     C6: '?at=plan opens her plan; ?at=opening no longer opens the opening (Q1, C6)',
     C7: 'the old dashboard’s way back reads W5 and lands on her plan (Q1)',
-    C8: 'W10 goes to Moment 2’s opening, W3 under W1; W1 again returns to the same eight, nothing made (Q3)',
+    C8: 'W10 goes to Moment 2’s opening; on its questions W3 under W1; W1 again returns to the same eight, nothing made (Q3; GTC-394 tweak 2)',
     C9: 'at 390 her plan scrolls nowhere sideways and the footer’s back reads W10',
     C10: 'CONTROL: a drafted plan still shows the suggest heading, "based on", both Regenerates and "← Back to the questions"',
   };

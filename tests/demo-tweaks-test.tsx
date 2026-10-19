@@ -8,6 +8,8 @@
  * THE LAYERS
  *   H  tweak 1 (a): the host's card, one shared definition, in the eight places where the screen
  *      already knows who the host is.
+ *   O  tweak 2: the two transition pages, much simpler; the two quieter choices moved into
+ *      Moment 2's questions, under the same rule.
  *
  * SAFETY. Static and rendered checks only: no database row, no dev server, no AI call, no
  * browser, no network. Every fixture and expected value is written here by hand, never taken from
@@ -136,6 +138,36 @@ const PLACES: Array<{ name: string; file: string; flags: string[]; pill: boolean
   },
 ];
 
+// ── Tweak 2: the files, the ruled words, hand-written ────────────────────────
+const TITLES_FILE = 'src/lib/moments/opening-titles.ts';
+const ARC_FILE = 'src/components/plan/MomentArc.tsx';
+const OPENING_1 = 'src/components/plan/SetupOpeningScreen.tsx';
+const OPENING_2 = 'src/components/plan/Moment2Opening.tsx';
+const MODAL = 'src/components/plan/Moment2Step1Modal.tsx';
+const SETUP = 'src/app/plan/[eventId]/setup/page.tsx';
+/** The strip's own labels, straight apostrophes, as MomentArc shows them (React escapes '). */
+const TITLE_1 = "Who's coming?";
+const TITLE_2 = "What's the plan?";
+const esc = (t: string) => t.replace(/'/g, '&#x27;');
+const START_1 = 'Ready to start herding →';
+const START_2 = 'Let’s do this →';
+const BACK_TO_PEOPLE = '← Back to the people';
+const YOUR_EVENTS = '← Your events';
+const OWN_PLAN_CHOOSE = 'Write the list myself';
+const OWN_PLAN_EXPLAIN = 'I’ll set out the usual sections, and you fill them in.';
+const INVITES_CHOOSE = 'Skip the plan: invites only';
+const INVITES_EXPLAIN =
+  'Nobody’s asked to bring anything. Guests are only asked whether they can come. You can still make a plan any time before you send.';
+const INVITES_WORKING = 'Getting the invitations ready…';
+const OWN_WAITING = 'Your list is waiting, as you left it.';
+const OWN_NOT_HOST = 'Only the host can write the list.';
+const OWN_FAILED_WORDS = 'That didn’t work. Try again.';
+const PLAN_WAITING = 'Your plan is put away. “Let’s do this →” brings it back as you left it.';
+const NOT_HOST_INVITES = 'Only the host can choose this, and send the invitations.';
+const FAILED_WORDS = 'That didn’t work. Try again.';
+/** The strip's other two labels: either on an opening page means the strip is still there. */
+const STRIP_ONLY = [esc("Who's on what?"), 'Is everyone sorted?'];
+
 // ── CHECKS-START: every condition, pure, dry-run before RED ───────────────────
 const indexesOf = (s: string, needle: string) => {
   const out: number[] = [];
@@ -149,6 +181,35 @@ function tagBefore(html: string, at: number, tag: string, want: RegExp): string 
     const t = html.slice(i, html.indexOf('>', i) + 1);
     if (want.test(t)) return t;
     i = html.lastIndexOf(`<${tag}`, i - 1);
+  }
+  return '';
+}
+/** The text of a function or arrow body from `start`, by brace counting (strings ignored). */
+function bodyFrom(src: string, start: string): string {
+  const at = src.indexOf(start);
+  if (at < 0) return '';
+  // The body's own brace: after the parameters (`) {`) or the arrow (`=> {`), not a destructured prop.
+  const ends = [src.indexOf(') {', at), src.indexOf('=> {', at)].filter((i) => i >= 0);
+  if (ends.length === 0) return '';
+  const open = src.indexOf('{', Math.min(...ends));
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}' && --depth === 0) return src.slice(at, i + 1);
+  }
+  return '';
+}
+const squash = (t: string) => t.replace(/\s+/g, ' ').trim();
+/** One JSX element's opening tag and props, from `<Name` to its first `/>` or `>` at depth 0. */
+function elementOf(src: string, name: string): string {
+  const at = src.indexOf(`<${name}`);
+  if (at < 0) return '';
+  let depth = 0;
+  for (let i = at + 1; i < src.length; i++) {
+    const c = src[i];
+    if (c === '{') depth++;
+    else if (c === '}') depth--;
+    else if (depth === 0 && c === '>') return src.slice(at, i + 1);
   }
   return '';
 }
@@ -265,6 +326,168 @@ export const CHECKS = {
       hostLi.includes(HOST_PILL_HTML) &&
       hostLi.includes('you — never messaged about your own event') &&
       !otherLi.includes(HOST_PILL_HTML)
+    );
+  },
+  /** O1 — the two titles, the strip's own first two labels, read from MomentArc as it stands. */
+  titlesMatchArc(titles: string, arc: string) {
+    const label = (n: number) =>
+      arc.match(new RegExp(`number:\\s*${n},\\s*label:\\s*"([^"]*)"`))?.[1];
+    return (
+      label(1) === TITLE_1 &&
+      label(2) === TITLE_2 &&
+      titles.includes(`1: "${label(1)}"`) &&
+      titles.includes(`2: "${label(2)}"`)
+    );
+  },
+  /** O3, O4 — an opening page: the big title, the two paragraphs, one primary button, nothing else. */
+  openingPage(html: string, moment: 1 | 2, title: string, start: string, back: boolean) {
+    const buttons = html.match(/<button\b/g) ?? [];
+    const primary = (html.match(/<button[^>]*class="[^"]*\bbg-accent\b[^"]*"/g) ?? []).length;
+    const h1 = html.match(/<h1\b[^>]*>([^<]*)<\/h1>/);
+    return (
+      !!h1 &&
+      h1[1] === esc(title) &&
+      /text-(3xl|4xl|5xl)/.test(h1[0]) &&
+      html.indexOf(`data-moment-words="${moment}-does"`) > html.indexOf('<h1') &&
+      html.indexOf(`data-moment-words="${moment}-done"`) >
+        html.indexOf(`data-moment-words="${moment}-does"`) &&
+      primary === 1 &&
+      buttons.length === (back ? 2 : 1) &&
+      html.includes(`>${start}</button>`) &&
+      html.indexOf(`>${start}</button>`) > html.indexOf(`data-moment-words="${moment}-done"`) &&
+      html.includes(YOUR_EVENTS) &&
+      (!back || html.includes(`>${BACK_TO_PEOPLE}</button>`)) &&
+      STRIP_ONLY.every((w) => !html.includes(w)) &&
+      !html.includes('data-moment-strip') &&
+      !/herd of cats/.test(html) &&
+      !html.includes(OWN_PLAN_CHOOSE) &&
+      !html.includes(OWN_PLAN_EXPLAIN) &&
+      !html.includes(INVITES_CHOOSE) &&
+      !html.includes('data-own-plan') &&
+      !html.includes('data-invites-only=')
+    );
+  },
+  /** O7 — the questions offer the two choices at their foot: a component of their own, above the bar. */
+  modalChoices(src: string) {
+    const fn = src.indexOf('export function QuietChoices');
+    const body = bodyFrom(src, 'export function QuietChoices');
+    const use = src.indexOf('<QuietChoices');
+    const el = elementOf(src, 'QuietChoices');
+    return (
+      fn > src.indexOf('function FoodOptionTreeAccordion') &&
+      fn < src.indexOf('function NotesAccordion') &&
+      use > src.indexOf('<NotesAccordion') &&
+      use < src.indexOf('fixed bottom-0 left-0 right-0') &&
+      /onOwnPlan=\{onOwnPlan \? \(\) => void leave\(onOwnPlan\) : undefined\}/.test(el) &&
+      /onInvitesOnly=\{onInvitesOnly \? \(\) => void leave\(onInvitesOnly\) : undefined\}/.test(
+        el
+      ) &&
+      el.includes('invitesOnlyState={invitesOnlyState}') &&
+      el.includes('ownPlanState={ownPlanState}') &&
+      el.includes('ownPlanExists={ownPlanExists}') &&
+      body.indexOf('data-own-plan=""') > 0 &&
+      body.indexOf('data-invites-only=""') > body.indexOf('data-own-plan=""') &&
+      body.includes('OWN_PLAN_WORDS.CHOOSE') &&
+      /ownPlanExists\s*\?\s*OWN_PLAN_WORDS\.WAITING\s*:\s*OWN_PLAN_WORDS\.EXPLAIN/.test(body) &&
+      body.includes('OWN_PLAN_WORDS.NOT_HOST') &&
+      body.includes('OWN_PLAN_WORDS.FAILED') &&
+      body.includes('INVITES_ONLY_WORDS.CHOOSE') &&
+      body.includes('INVITES_ONLY_WORDS.EXPLAIN') &&
+      body.includes('INVITES_ONLY_WORDS.WORKING') &&
+      body.includes('INVITES_ONLY_WORDS.NOT_HOST') &&
+      body.includes('INVITES_ONLY_WORDS.FAILED') &&
+      !/AccordionShell|data-accordion|stillDeciding/.test(body) &&
+      !src.includes('INVITES_ONLY_WORDS.PLAN_WAITING')
+    );
+  },
+  /** O10 — the choices, rendered: the words in order, each line under its choice, each state's line. */
+  choicesRendered(
+    both: string,
+    failed: string,
+    notHost: string,
+    list: string,
+    inviteWorking: string
+  ) {
+    const own = both.indexOf(`>${OWN_PLAN_CHOOSE}</button>`);
+    const inv = both.indexOf(`>${INVITES_CHOOSE}</button>`);
+    const status = (h: string, t: string) => new RegExp(`role="status"[^>]*>${t}<`).test(h);
+    return (
+      own > 0 &&
+      both.indexOf(OWN_PLAN_EXPLAIN) > own &&
+      inv > both.indexOf(OWN_PLAN_EXPLAIN) &&
+      both.indexOf(INVITES_EXPLAIN) > inv &&
+      status(failed, OWN_FAILED_WORDS) &&
+      status(notHost, OWN_NOT_HOST) &&
+      !failed.includes(OWN_NOT_HOST) &&
+      list.includes(OWN_WAITING) &&
+      !list.includes(OWN_PLAN_EXPLAIN) &&
+      list.indexOf(OWN_WAITING) > list.indexOf(`>${OWN_PLAN_CHOOSE}</button>`) &&
+      status(inviteWorking, INVITES_WORKING) &&
+      ![OWN_FAILED_WORDS, OWN_NOT_HOST, INVITES_WORKING].some((w) => both.includes(w))
+    );
+  },
+  /** O8 — the setup page: the questions get the choices under the one rule; the openings do not. */
+  setupWiring(src: string, head: string) {
+    const modal = elementOf(src, 'Moment2Step1Modal');
+    const opening = elementOf(src, 'Moment2Opening');
+    const first = elementOf(src, 'SetupOpeningScreen');
+    const same = (start: string) =>
+      bodyFrom(head, start).length > 100 &&
+      squash(bodyFrom(src, start)) === squash(bodyFrom(head, start));
+    return (
+      /quietChoices\(/.test(src) &&
+      /onInvitesOnly=\{\s*offered\.invitesOnly\s*\?\s*\(\)\s*=>\s*void chooseInvitesOnly\(\)\s*:\s*undefined\s*\}/.test(
+        modal
+      ) &&
+      /onOwnPlan=\{\s*offered\.ownPlan\s*\?\s*\(\)\s*=>\s*void writeOwnList\(\)\s*:\s*undefined\s*\}/.test(
+        modal
+      ) &&
+      modal.includes('invitesOnlyState={invitesOnlyState}') &&
+      modal.includes('ownPlanState={ownPlanState}') &&
+      /ownPlanExists=\{listExists && !invitesOnly\}/.test(modal) &&
+      opening.length > 0 &&
+      !/onInvitesOnly=|onOwnPlan=|ownPlanState=|ownPlanExists=|doors=/.test(opening) &&
+      opening.includes('planWaiting={invitesOnly && planWaiting}') &&
+      opening.includes('invitesOnlyState={invitesOnlyState}') &&
+      first.length > 0 &&
+      !/doors=/.test(first) &&
+      same('const chooseInvitesOnly = async () =>') &&
+      same('const writeOwnList = async () =>')
+    );
+  },
+  /** O9 — the two opening components hold no strip, no herd line and no quieter choice. */
+  openingSources(one: string, two: string) {
+    return (
+      one.length > 0 &&
+      two.length > 0 &&
+      [one, two].every(
+        (s) =>
+          !s.includes('<MomentArc') &&
+          !s.includes('herd of cats') &&
+          !s.includes('OWN_PLAN_WORDS') &&
+          !s.includes('data-own-plan') &&
+          !s.includes('data-invites-only=') &&
+          !s.includes('INVITES_ONLY_WORDS.CHOOSE') &&
+          !s.includes('INVITES_ONLY_WORDS.EXPLAIN') &&
+          s.includes("from '@/lib/moments/opening-titles'")
+      ) &&
+      two.includes('INVITES_ONLY_WORDS.PLAN_WAITING') &&
+      two.includes('INVITES_ONLY_WORDS.NOT_HOST') &&
+      two.includes('STRIP_WORDS.BACK_TO_PEOPLE')
+    );
+  },
+  /** O5 — the words that belong to "Let’s do this →" sit under it, each only in its own state. */
+  mainButtonWords(waiting: string, notHost: string, failed: string, idle: string) {
+    const under = (html: string, words: string) =>
+      html.indexOf(`>${START_2}</button>`) > 0 &&
+      html.indexOf(words) > html.indexOf(`>${START_2}</button>`);
+    return (
+      under(waiting, PLAN_WAITING) &&
+      under(notHost, NOT_HOST_INVITES) &&
+      under(failed, FAILED_WORDS) &&
+      ![PLAN_WAITING, NOT_HOST_INVITES, FAILED_WORDS].some((w) => idle.includes(w)) &&
+      !notHost.includes(PLAN_WAITING) &&
+      !waiting.includes(NOT_HOST_INVITES)
     );
   },
 };
@@ -436,8 +659,143 @@ async function layerH() {
   );
 }
 
+// ══ Tweak 2 ══════════════════════════════════════════════════════════════════
+const atTag = (rel: string) => {
+  const r = spawnSync('git', ['show', `demo-ab-good:${rel}`], { cwd: ROOT, encoding: 'utf8' });
+  return r.status === 0 ? r.stdout : '';
+};
+/** The old offering rule, written out by hand from Moment 2's opening at `demo-ab-good`. */
+const oldRule = (c: {
+  sent: boolean;
+  hasSetup: boolean;
+  invitesOnly: boolean;
+  planWaiting: boolean;
+}) => ({
+  // onInvitesOnly={offerInvitesOnly ? ... : undefined}, offerInvitesOnly = !event.sentAt
+  invitesOnly: !c.sent,
+  // onOwnPlan={offerInvitesOnly && event.setup ? ...}, then hidden while planWaiting (invitesOnly && planWaiting)
+  ownPlan: !c.sent && c.hasSetup && !(c.invitesOnly && c.planWaiting),
+});
+
+async function layerO() {
+  section('O — tweak 2: the transition pages, much simpler; the two choices in the questions');
+  const OT = await load('../src/lib/moments/opening-titles');
+  const SO = await load('../src/components/plan/SetupOpeningScreen');
+  const M2 = await load('../src/components/plan/Moment2Opening');
+  const OP = await load('../src/lib/setup/own-plan');
+
+  assert(
+    'O',
+    'O1 the two titles are the strip’s own first two labels, read from MomentArc.tsx as it stands',
+    CHECKS.titlesMatchArc(read(TITLES_FILE), read(ARC_FILE)) &&
+      OT?.OPENING_TITLES?.[1] === TITLE_1 &&
+      OT?.OPENING_TITLES?.[2] === TITLE_2
+  );
+  assert(
+    'O',
+    'O2 CONTROL: MomentArc.tsx is not edited (batch14 Z2 guards it)',
+    read(ARC_FILE).length > 0 &&
+      spawnSync('git', ['diff', '--quiet', 'demo-ab-good', '--', ARC_FILE], { cwd: ROOT })
+        .status === 0
+  );
+  const one = SO?.default ? render(createElement(SO.default, { onStart: () => {} })) : '';
+  assert(
+    'O',
+    'O3 Moment 1’s page: the title, the two paragraphs and one button; no strip, no herd line',
+    CHECKS.openingPage(one, 1, TITLE_1, START_1, false),
+    one.slice(0, 500)
+  );
+  const two = (over: Record<string, unknown> = {}) =>
+    M2?.default
+      ? render(
+          createElement(M2.default, {
+            eventName: 'The Walker barbecue',
+            onStart: () => {},
+            onBack: () => {},
+            // Props the page used to pass: a page that still passed them shows nothing for them.
+            onInvitesOnly: () => {},
+            onOwnPlan: () => {},
+            ownPlanExists: true,
+            ...over,
+          } as any)
+        )
+      : '';
+  const idle = two();
+  assert(
+    'O',
+    'O4 Moment 2’s page: the title, the two paragraphs and one button, and its way back; no strip, no choices',
+    CHECKS.openingPage(idle, 2, TITLE_2, START_2, true),
+    idle.slice(0, 500)
+  );
+  const waiting = two({ planWaiting: true });
+  const notHost = two({ invitesOnlyState: 'not-host' });
+  const failedStart = two({ invitesOnlyState: 'failed' });
+  assert(
+    'O',
+    'O5 the main button’s own words stay under it, under the same conditions: the plan put away, not the host, it failed',
+    CHECKS.mainButtonWords(waiting, notHost, failedStart, idle)
+  );
+  const cases: Array<{
+    sent: boolean;
+    hasSetup: boolean;
+    invitesOnly: boolean;
+    planWaiting: boolean;
+  }> = [];
+  for (const sent of [false, true])
+    for (const hasSetup of [false, true])
+      for (const invitesOnly of [false, true])
+        for (const planWaiting of [false, true])
+          cases.push({ sent, hasSetup, invitesOnly, planWaiting });
+  const sameRule =
+    typeof OP?.quietChoices === 'function' &&
+    cases.every((c) => JSON.stringify(OP.quietChoices(c)) === JSON.stringify(oldRule(c)));
+  assert(
+    'O',
+    'O6 the rule for offering the two choices is the old one, over all 16 hand-written cases',
+    sameRule
+  );
+  assert(
+    'O',
+    'O7 the questions offer them at their foot, above the bar: the same words, lines and states, through the page’s handlers',
+    CHECKS.modalChoices(code(MODAL))
+  );
+  const MOD = await load('../src/components/plan/Moment2Step1Modal');
+  const choices = (over: Record<string, unknown>) =>
+    MOD?.QuietChoices
+      ? render(
+          createElement(MOD.QuietChoices, {
+            onOwnPlan: () => {},
+            onInvitesOnly: () => {},
+            ...over,
+          })
+        )
+      : '';
+  assert(
+    'O',
+    'O10 the choices on the questions, rendered: W1 then its line, then invites only and its line; each state says its own words',
+    CHECKS.choicesRendered(
+      choices({}),
+      choices({ ownPlanState: 'failed' }),
+      choices({ ownPlanState: 'not-host' }),
+      choices({ ownPlanExists: true }),
+      choices({ invitesOnlyState: 'working' })
+    )
+  );
+  assert(
+    'O',
+    'O8 the setup page: the questions get both choices under the one rule; the opening pages get neither; the handlers are as they were',
+    CHECKS.setupWiring(code(SETUP), stripComments(atTag(SETUP)))
+  );
+  assert(
+    'O',
+    'O9 the two opening components hold no strip, no herd line and no quieter choice; the main button’s words and the way back stay',
+    CHECKS.openingSources(code(OPENING_1), code(OPENING_2))
+  );
+}
+
 async function main() {
   await layerH();
+  await layerO();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
     console.log(reds.map((r) => `  - ${r}`).join('\n'));

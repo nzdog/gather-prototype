@@ -1,20 +1,24 @@
 'use client';
 
 import { useState } from 'react';
-import MomentArc, { type ArcDoor } from './MomentArc';
 import MomentWords from './MomentWords';
 import { STRIP_WORDS } from '@/lib/moments/strip';
+import { OPENING_TITLES } from '@/lib/moments/opening-titles';
 import EventDetails, { type EventDetailsFacts } from '@/components/shared/EventDetails';
 
 interface SetupOpeningScreenProps {
   onStart: () => void;
-  /** [[GTC-367]] (item 2): the strip's doors; Moment 1's is the same as the button. */
-  doors?: Partial<Record<1 | 2 | 3 | 4, ArcDoor>>;
   /** [[GTC-368]] (item 17): the event's name and its details (W10, top right; C4). */
   details?: EventDetailsFacts;
 }
 
-export default function SetupOpeningScreen({ onStart, doors, details }: SetupOpeningScreenProps) {
+/**
+ * Moment 1's transition page. [[GTC-394]] tweak 2 (founder, 19 Oct 2026: "The title and the
+ * paragraphs are the important things"): the Moment's name, big; "What this does" and "When it’s
+ * done"; the one button. The strip and the herd-of-cats line are gone from here (the strip stays on
+ * every other screen); "← Your events" and the event's details stay, as navigation.
+ */
+export default function SetupOpeningScreen({ onStart, details }: SetupOpeningScreenProps) {
   const [fading, setFading] = useState(false);
 
   const handleClick = () => {
@@ -48,17 +52,11 @@ export default function SetupOpeningScreen({ onStart, doors, details }: SetupOpe
       {/* [[GTC-384]] (item 54): the column grows from the top of the box and scrolls when it is taller
           than the screen, instead of being centred past its own top. */}
       <div className="max-w-[600px] mx-auto px-6 py-8 flex flex-col items-center justify-center min-h-full">
-        {/* The line */}
-        <p className="text-2xl sm:text-3xl text-gray-800 leading-relaxed mb-12 text-center">
-          We&rsquo;re here to organise what could be described as a herd of cats. Let&rsquo;s get it
-          done.
-        </p>
+        {/* [[GTC-394]] tweak 2: the Moment's name, big. */}
+        <h1 className="text-4xl sm:text-5xl font-semibold text-gray-900 text-center">
+          {OPENING_TITLES[1]}
+        </h1>
 
-        {/* The four moment arc */}
-        <MomentArc currentMoment={1} doors={doors} />
-
-        {/* [[GTC-384]] (item 54): Moment 1's "What this does" and "When it’s done" moved here from
-            Moment 1's form, between the strip and the button, as on Moment 2's opening. */}
         <MomentWords moment={1} part="does" className="mt-10 max-w-xl" />
         <MomentWords moment={1} part="done" className="mt-4 max-w-xl" />
 

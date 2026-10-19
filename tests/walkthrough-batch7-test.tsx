@@ -48,6 +48,7 @@ import { openHeadless, type Headless } from './helpers/headless';
 import GlanceBoard from '../src/components/glance/GlanceBoard';
 import MomentArc from '../src/components/plan/MomentArc';
 import Moment2Opening from '../src/components/plan/Moment2Opening';
+import * as Moment2Questions from '../src/components/plan/Moment2Step1Modal';
 
 const realFetch = globalThis.fetch;
 installProviderTrap();
@@ -540,14 +541,22 @@ async function runInMemory() {
       })
     );
   const withChoice = opening({ onInvitesOnly: () => {} });
-  const at1 = withChoice.indexOf(`>${W1}</button>`);
+  // [[GTC-394]] tweak 2 (founder, 19 Oct 2026: "Move them into the questions"): the choice left
+  // Moment 2's opening for its questions, with the same words, line and handler.
+  const QC = (Moment2Questions as any).QuietChoices;
+  const quiet = QC ? render(createElement(QC, { onInvitesOnly: () => {} })) : '';
+  const at1 = quiet.indexOf(`>${W1}</button>`);
+  const questionsSrc = codeOnly(read('src/components/plan/Moment2Step1Modal.tsx'));
   assert(
     'R',
-    'R1 with the choice: W1 a button after "Let’s do this →" and before "← Back to the people", W2 under it',
-    at1 > withChoice.indexOf(LETS_DO_THIS) &&
-      withChoice.indexOf(LETS_DO_THIS) > 0 &&
-      at1 < withChoice.indexOf(BACK_TO_PEOPLE) &&
-      withChoice.indexOf(W2) > at1
+    'R1 with the choice: the opening shows neither W1 nor W2 now; on the questions W1 is a button with W2 under it, above the bar and its "← Back to the people" ([[GTC-394]] tweak 2)',
+    withChoice.indexOf(LETS_DO_THIS) > 0 &&
+      !withChoice.includes(W1) &&
+      !withChoice.includes(W2) &&
+      at1 > 0 &&
+      quiet.indexOf(W2) > at1 &&
+      questionsSrc.indexOf('<QuietChoices') > 0 &&
+      questionsSrc.indexOf('<QuietChoices') < questionsSrc.indexOf('{STRIP_WORDS.BACK_TO_PEOPLE}')
   );
   const without = opening({});
   assert(
@@ -1147,12 +1156,15 @@ async function runLive() {
     const path = () => ev<string>(`location.pathname + location.search`);
     const onOpening = async () => (await body()).includes(LETS_DO_THIS);
 
-    // C1 — Moment 2's opening, reached by the strip from Moment 1 (a strip tap writes nothing).
+    // C1 — Moment 2's opening, reached by the strip from Moment 1 (a strip tap writes nothing), and
+    // [[GTC-394]] tweak 2: "Let’s do this →" on to the questions, where W1 and W2 now are.
     await c.navigate(`/plan/${cA}/setup`, 8000);
     const toOpening = await tap(stripDoor("What's the plan?"), 2500);
-    const shown = (await onOpening()) && (await body());
-    r.C1 = toOpening === null && !!shown && shown.includes(W1) && shown.includes(W2);
-    detail.C1 = `strip tap ${toOpening}`;
+    const opened1 = await onOpening();
+    const toQuestions1 = opened1 ? await tap(byWords(LETS_DO_THIS, 'button'), 3500) : 'not reached';
+    const shown = toQuestions1 === null && (await body());
+    r.C1 = toOpening === null && opened1 && !!shown && shown.includes(W1) && shown.includes(W2);
+    detail.C1 = `strip tap ${toOpening}, on to the questions ${toQuestions1}`;
 
     // C2 — W1, pressed through clickGuarded, on this suite's own fixture only.
     const pressed = r.C1 ? await tap(byWords(W1, 'button'), 7000) : 'not reached';
@@ -1229,12 +1241,15 @@ async function runLive() {
       same(hits, ['Kate Lowe: Confirmed', 'Jo Lowe: Confirmed', 'Ross Lowe: No answer yet']);
     detail.C7 = `flagged ${boardFlagged}, tap ${t7}, doors ${JSON.stringify(doorsSeen)}, hits ${JSON.stringify(hits)}`;
 
-    // C11 — an event whose only item was added by hand: Moment 2's opening offers W1 and W2 (GTC-375 Q4).
+    // C11 — an event whose only item was added by hand: Moment 2 offers W1 and W2 (GTC-375 Q4), on
+    // its questions since [[GTC-394]] tweak 2, one tap of "Let’s do this →" on from the opening.
     await c.navigate(`/plan/${cC}/setup`, 8000);
     const t11 = await tap(stripDoor("What's the plan?"), 2500);
+    const opened11 = (await body()).includes(LETS_DO_THIS);
+    const q11 = opened11 ? await tap(byWords(LETS_DO_THIS, 'button'), 3500) : 'not reached';
     const b11 = await body();
-    r.C11 = t11 === null && b11.includes(LETS_DO_THIS) && b11.includes(W1) && b11.includes(W2);
-    detail.C11 = `tap ${t11}`;
+    r.C11 = t11 === null && opened11 && q11 === null && b11.includes(W1) && b11.includes(W2);
+    detail.C11 = `tap ${t11}, on to the questions ${q11}`;
 
     // C8 — the pre-flight at 390.
     await c.setViewport(390, 844, true);
@@ -1249,7 +1264,10 @@ async function runLive() {
   }
 
   const labels: [string, string][] = [
-    ['C1', 'C1 Moment 2’s opening offers W1, with W2 under it'],
+    [
+      'C1',
+      'C1 Moment 2 offers W1, with W2 under it: on its questions, one tap on from its opening (GTC-394 tweak 2)',
+    ],
     [
       'C2',
       'C2 W1, through clickGuarded on its own fixture: the pre-flight opens; CONFIRMING; the flag true',
@@ -1297,7 +1315,7 @@ async function runLive() {
   );
   assert(
     'C',
-    'C11 GTC-375 Q4: an event whose only item was added by hand — Moment 2’s opening offers W1 and W2',
+    'C11 GTC-375 Q4: an event whose only item was added by hand — Moment 2 offers W1 and W2, on its questions (GTC-394 tweak 2)',
     r.C11 === true,
     detail.C11
   );

@@ -59,3 +59,21 @@ export function ownPlanHeading(eventName: string): string {
 
 /** Where the press is up to on Moment 2's opening: W4 for a co-host, W5 if it fails. */
 export type OwnPlanState = 'idle' | 'working' | 'failed' | 'not-host';
+
+/**
+ * [[GTC-394]] tweak 2 — who is offered the two quieter choices, now on Moment 2's questions: the rule
+ * Moment 2's opening used, unchanged. "Skip the plan: invites only" before the press ([[GTC-375]]
+ * Q4); "Write the list myself" before the press, on an event with a record, and not while a plan is
+ * put away ([[GTC-382]] Q2).
+ */
+export function quietChoices(c: {
+  sent: boolean;
+  hasSetup: boolean;
+  invitesOnly: boolean;
+  planWaiting: boolean;
+}): { invitesOnly: boolean; ownPlan: boolean } {
+  return {
+    invitesOnly: !c.sent,
+    ownPlan: !c.sent && c.hasSetup && !(c.invitesOnly && c.planWaiting),
+  };
+}
