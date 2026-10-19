@@ -10,6 +10,7 @@
  *      already knows who the host is.
  *   O  tweak 2: the two transition pages, much simpler; the two quieter choices moved into
  *      Moment 2's questions, under the same rule.
+ *   D  tweak 3: the first page, two buttons; Sarah's door opens her event on the board.
  *
  * SAFETY. Static and rendered checks only: no database row, no dev server, no AI call, no
  * browser, no network. Every fixture and expected value is written here by hand, never taken from
@@ -21,6 +22,10 @@ import path from 'path';
 import { spawnSync } from 'child_process';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+// Tweak 3 (GTC-394 ruling, 19 Oct 2026): the demo page and the toast provider imported statically,
+// as the Moment 3 suites do; a dynamic import() would give the page a second toast context.
+import DemoPage from '../src/app/demo/page';
+import { ToastProvider } from '../src/contexts/ToastContext';
 
 const ROOT = path.join(__dirname, '..');
 
@@ -167,6 +172,33 @@ const NOT_HOST_INVITES = 'Only the host can choose this, and send the invitation
 const FAILED_WORDS = 'That didn’t work. Try again.';
 /** The strip's other two labels: either on an opening page means the strip is still there. */
 const STRIP_ONLY = [esc("Who's on what?"), 'Is everyone sorted?'];
+
+// ── Tweak 3: the first page, hand-written ─────────────────────────────────────
+const DEMO_PAGE = 'src/app/demo/page.tsx';
+const SESSION_ROUTE = 'src/app/api/demo/session/route.ts';
+const DEMO_ROUTES = [
+  SESSION_ROUTE,
+  'src/app/api/demo/tokens/route.ts',
+  'src/app/api/demo/reset/route.ts',
+];
+/** The two new words (founder's first prompt, tweak 3). */
+const SARAH_DEMO = 'Sarah demo';
+const TRY_IT = 'Try it yourself';
+/** Words of the sections that go: none may be on the page. */
+const GONE_FROM_DEMO = [
+  'How Sarah Got Here',
+  'Where we are now',
+  'The Planning Dashboard',
+  'The Host View',
+  'The Coordinator View',
+  'The Participant View',
+  'What happens next',
+  'Behind the scenes',
+  'Get started',
+  'Reset Demo Data',
+  'Open Planning Dashboard',
+  'Sarah paid $25',
+];
 
 // ── CHECKS-START: every condition, pure, dry-run before RED ───────────────────
 const indexesOf = (s: string, needle: string) => {
@@ -490,6 +522,45 @@ export const CHECKS = {
       !waiting.includes(NOT_HOST_INVITES)
     );
   },
+  /** D1, D2 — the first page: the heading "Gather" and its buttons, and nothing else. */
+  demoPage(html: string, dev: boolean) {
+    const buttons = [...html.matchAll(/<button\b[^>]*>([^<]*)<\/button>/g)].map((m) => m[1]);
+    const h1 = html.match(/<h1\b[^>]*>([^<]*)<\/h1>/);
+    return (
+      !!h1 &&
+      h1[1] === 'Gather' &&
+      (html.match(/<h1\b/g) ?? []).length === 1 &&
+      JSON.stringify(buttons) === JSON.stringify(dev ? [SARAH_DEMO, TRY_IT] : [SARAH_DEMO]) &&
+      (html.match(/<button\b/g) ?? []).length === buttons.length &&
+      !/<(h2|h3|p|a|section|hr)\b/.test(html) &&
+      GONE_FROM_DEMO.every((w) => !html.includes(w))
+    );
+  },
+  /** D3 — the page's code: the two doors, as they were, Sarah to the board; nothing else fetched. */
+  demoSource(src: string, head: string) {
+    const sarah = bodyFrom(src, 'const handleOpenSarah = async () =>');
+    const old = bodyFrom(head, 'const handleOpenDashboard = async () =>');
+    const sameCopy =
+      bodyFrom(head, 'const handleStartCopy = async () =>').length > 200 &&
+      squash(bodyFrom(src, 'const handleStartCopy = async () =>')) ===
+        squash(bodyFrom(head, 'const handleStartCopy = async () =>'));
+    return (
+      sameCopy &&
+      old.length > 200 &&
+      squash(sarah.replace('handleOpenSarah', 'handleOpenDashboard'))
+        .replace(/setOpeningSarah/g, 'setOpeningDashboard')
+        .replace('`/plan/${eventId}/glance`', '`/plan/${eventId}`') === squash(old) &&
+      sarah.includes("fetch('/api/demo/session', { method: 'POST' })") &&
+      sarah.includes('window.location.href = `/plan/${eventId}/glance`;') &&
+      /process\.env\.NODE_ENV === 'development' && \(\s*<button\s+onClick=\{handleStartCopy\}/.test(
+        src
+      ) &&
+      (src.match(/fetch\(/g) ?? []).length === 3 &&
+      !src.includes('/api/demo/tokens') &&
+      !src.includes('/api/demo/reset') &&
+      !src.includes('confirm(')
+    );
+  },
 };
 // ── CHECKS-END ───────────────────────────────────────────────────────────────
 
@@ -793,9 +864,51 @@ async function layerO() {
   );
 }
 
+// ══ Tweak 3 ══════════════════════════════════════════════════════════════════
+async function layerD() {
+  section('D — tweak 3: the first page, two buttons; Sarah on the board');
+  /** The page as a build for `env` draws it (the copy button is development-only, GTC-392 Q5). */
+  const draw = (env: string) => {
+    const was = process.env.NODE_ENV;
+    (process.env as any).NODE_ENV = env;
+    try {
+      return render(createElement(ToastProvider as any, null, createElement(DemoPage)));
+    } finally {
+      (process.env as any).NODE_ENV = was;
+    }
+  };
+  const dev = draw('development');
+  const prod = draw('production');
+  assert(
+    'D',
+    'D1 on the founder’s Mac (development): the heading "Gather" and two buttons, "Sarah demo" and "Try it yourself", and nothing else',
+    CHECKS.demoPage(dev, true),
+    dev.slice(0, 400)
+  );
+  assert(
+    'D',
+    'D2 in a production build: the heading and only "Sarah demo" (the copy button waits for part D)',
+    CHECKS.demoPage(prod, false),
+    prod.slice(0, 400)
+  );
+  assert(
+    'D',
+    'D3 the two doors as they were, Sarah’s now opening /plan/{eventId}/glance; no tokens fetch, no Reset',
+    CHECKS.demoSource(code(DEMO_PAGE), stripComments(atTag(DEMO_PAGE)))
+  );
+  assert(
+    'D',
+    'D4 CONTROL: the session, tokens and reset routes are not edited (the reset route stays, development-only)',
+    DEMO_ROUTES.every((f) => read(f).length > 0) &&
+      spawnSync('git', ['diff', '--quiet', 'demo-ab-good', '--', ...DEMO_ROUTES], { cwd: ROOT })
+        .status === 0
+  );
+}
+
 async function main() {
   await layerH();
   await layerO();
+  await layerD();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
     console.log(reds.map((r) => `  - ${r}`).join('\n'));

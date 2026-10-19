@@ -265,11 +265,11 @@ async function runInMemory() {
   const upgrade = read('src/app/billing/upgrade/page.tsx');
   assert(
     'P',
-    'P2 every price a person sees reads $25: New Event (two), the demo (two), billing (one)',
+    'P2 every price a person sees reads $25: New Event (two), billing (one); the demo page shows no price since GTC-394 tweak 3 (two buttons)',
     planNew.includes('pay $25 to get started') &&
       planNew.includes('Pay & Create — $25') &&
-      demo.includes('Sarah paid $25') &&
-      demo.includes('pay $25 when you&rsquo;re ready') &&
+      demo.length > 0 &&
+      !/\$\d/.test(demo) &&
       billing.includes('Pay per event — $25 NZD per event, no subscription')
   );
   const twelve = filesUnder('src/app')

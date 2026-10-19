@@ -314,13 +314,17 @@ export const CHECKS = {
   },
   demoPage(src: string) {
     return (
-      /process\.env\.NODE_ENV === 'development'/.test(src) &&
-      src.includes('DEMO_START_WORDS.BUTTON') &&
+      // [[GTC-394]] tweak 3 (founder's ruling 3, 19 Oct 2026): the button carries the page's own
+      // label, "Try it yourself", still only in development; DEMO_START_WORDS.BUTTON stays W11 in
+      // start-limit.ts (checked as before), unused by the page. The page beside it is the two-button
+      // page ("Sarah demo"), not the old walkthrough.
+      /process\.env\.NODE_ENV === 'development' && \([\s\S]{0,600}?\bTRY_IT_YOURSELF\b/.test(src) &&
+      /const TRY_IT_YOURSELF = 'Try it yourself';/.test(src) &&
       src.includes("start: 'copy'") &&
       /fetch\('\/api\/events'/.test(src) &&
       src.includes('DEMO_START_WORDS.ALREADY_OPEN') &&
       src.includes('DEMO_START_WORDS.SIGNED_IN') &&
-      src.includes('Sarah paid $25')
+      src.includes("'Sarah demo'")
     );
   },
   banner(src: string) {
