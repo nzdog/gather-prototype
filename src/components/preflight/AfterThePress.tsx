@@ -49,6 +49,7 @@ import { MarkRows, Pill, type Member } from '@/components/preflight/mark-rows';
 import { boardHref } from '@/lib/events/home-href';
 import { STRIP_WORDS } from '@/lib/moments/strip';
 import EventDetails, { type EventDetailsFacts } from '@/components/shared/EventDetails';
+import { HOST_CARD, HostPill } from '@/components/shared/HostCard';
 
 // ─── Wire shapes (the parts of /pre-flight and /pre-flight/message this reads) ───
 
@@ -57,6 +58,8 @@ interface HouseholdView {
   label: string;
   resolvedContactPersonEventId: string | null;
   members: Member[];
+  /** [[GTC-394]] tweak 1 (b): already on the pre-flight read this screen makes. */
+  isHostHousehold?: boolean;
 }
 
 interface ChaseView {
@@ -212,8 +215,24 @@ export function AfterThePressView({
         {/* One card per household: step 3's mark row, then the exception where there is one. */}
         <div className="space-y-4">
           {households.map((h) => (
-            <section key={h.id} className="bg-white border border-gray-200 rounded-lg p-5">
-              <h2 className="text-sm font-medium text-gray-900 mb-3">{`${h.label}’s household`}</h2>
+            <section
+              key={h.id}
+              className={
+                // [[GTC-394]] tweak 1 (b): the host's own household stands out, as on every screen.
+                h.isHostHousehold
+                  ? `border ${HOST_CARD} rounded-lg p-5`
+                  : 'bg-white border border-gray-200 rounded-lg p-5'
+              }
+            >
+              <h2 className="text-sm font-medium text-gray-900 mb-3">
+                {`${h.label}’s household`}
+                {h.isHostHousehold && (
+                  <>
+                    {' '}
+                    <HostPill />
+                  </>
+                )}
+              </h2>
               <MarkRows
                 members={h.members}
                 channelPersonEventId={h.resolvedContactPersonEventId}

@@ -16,6 +16,10 @@
  *   P  tweak 6: "What you've picked" as a table, with the print's look.
  *   M  tweak 7: step 4, the message first, simple and the same every time (the screen only).
  *   S  tweak 8: the pretend list says "Invite only", and the "Open step 4" link goes.
+ *   B  tweak 1 (b): the host's card in four more places (founder ruling, 20 Oct 2026): Who I
+ *      chase's household cards, the /h/ page's people list, the reachability list and the old
+ *      board's chips (role only). The board's host strip is left alone; Moment 1's summary list
+ *      never holds the host.
  *
  * SAFETY. Static and rendered checks only: no database row, no dev server, no AI call, no
  * browser, no network. Every fixture and expected value is written here by hand, never taken from
@@ -380,6 +384,35 @@ const PRETEND_LIB = 'src/lib/demo/pretend-send.ts';
 const PRETEND_PANEL = 'src/components/demo/PretendSend.tsx';
 const INVITE_ONLY = 'Invite only';
 const W35_SAME = 'Each would be the message in step 4, word for word.';
+
+// ── Tweak 1 (b): the four more places, hand-written ──────────────────────────
+const PLACES_B: Array<{ name: string; file: string; flags: string[] }> = [
+  {
+    name: 'Who I chase’s household cards',
+    file: 'src/components/preflight/AfterThePress.tsx',
+    flags: ['h.isHostHousehold'],
+  },
+  {
+    name: 'the /h/ page’s people list',
+    file: 'src/app/h/[token]/page.tsx',
+    flags: ['person.id === data.person.id'],
+  },
+  {
+    name: 'the reachability list (old dashboard)',
+    file: 'src/components/plan/ReachabilityBar.tsx',
+    flags: ['person.isHost'],
+  },
+  {
+    name: 'the old board’s chips, role only (old dashboard)',
+    file: 'src/components/plan/TeamBoard.tsx',
+    flags: ["person.role === 'HOST'"],
+  },
+];
+/** Left alone by the founder's ruling (the board's strip) or with nothing to draw (Moment 1's summary). */
+const LEFT_ALONE_B = [
+  'src/components/glance/GlancePersonReading.tsx',
+  'src/components/plan/Moment1Summary.tsx',
+];
 
 // ── CHECKS-START: every condition, pure, dry-run before RED ───────────────────
 const indexesOf = (s: string, needle: string) => {
@@ -1000,6 +1033,29 @@ export const CHECKS = {
     const before = words(head);
     const after = words(now);
     return before.size > 20 && [...after].every((w) => before.has(w));
+  },
+  /** B6 — Who I chase: the host's household card wears it with the pill; another's does not. */
+  chaseCards(html: string, host: string, other: string) {
+    const card = (name: string) => {
+      const at = html.indexOf(`>${name}’s household`);
+      return at < 0
+        ? ''
+        : html.slice(html.lastIndexOf('<section', at), html.indexOf('</section>', at));
+    };
+    const h = card(host);
+    const o = card(other);
+    const tag = (c: string) => c.slice(0, c.indexOf('>') + 1);
+    return (
+      h.length > 0 &&
+      o.length > 0 &&
+      tag(h).includes(HOST_TINT) &&
+      tag(h).includes(HOST_BORDER) &&
+      !tag(h).includes('bg-white') &&
+      h.includes(HOST_PILL_HTML) &&
+      tag(o).includes('bg-white') &&
+      !tag(o).includes(HOST_TINT) &&
+      !o.includes(HOST_PILL_HTML)
+    );
   },
 };
 // ── CHECKS-END ───────────────────────────────────────────────────────────────
@@ -1791,6 +1847,77 @@ async function layerS() {
   );
 }
 
+// ══ Tweak 1 (b) ══════════════════════════════════════════════════════════════
+async function layerB() {
+  section('B — tweak 1 (b): the host’s card in four more places, the same definition');
+  const AT = await load('../src/components/preflight/AfterThePress');
+  PLACES_B.forEach((p, n) =>
+    assert(
+      'B',
+      `B${n + 1} ${p.name} use it, behind the flag the screen already holds (${p.flags.join(', ')})`,
+      CHECKS.usesHostCard(code(p.file), p.flags, true)
+    )
+  );
+  assert(
+    'B',
+    'B5 nothing new is read: two optional fields on local types only (isHostHousehold on Who I chase’s, isHost on the reachability list’s), no hostId prop on the old board',
+    /interface HouseholdView \{[^}]*isHostHousehold\?: boolean;[^}]*\}/.test(
+      code(PLACES_B[0].file)
+    ) &&
+      /interface PersonDetail \{[^}]*isHost\?: boolean;[^}]*\}/.test(code(PLACES_B[2].file)) &&
+      !/hostId/.test(code(PLACES_B[3].file)) &&
+      spawnSync('git', ['diff', '--quiet', 'HEAD', '--', 'src/app/api'], { cwd: ROOT }).status === 0
+  );
+  const view = (households: any[]) =>
+    AT?.AfterThePressView
+      ? render(
+          createElement(AT.AfterThePressView, {
+            eventName: 'The Walker barbecue',
+            sentAt: '2026-10-19T00:00:00.000Z',
+            pace: null,
+            households,
+            unhoused: [],
+            chase: null,
+            saving: false,
+            error: null,
+            onMark: () => {},
+            onException: () => {},
+            onDefault: () => {},
+          })
+        )
+      : '';
+  const chase = view([
+    {
+      id: 'hh-host',
+      label: 'Kate Walker',
+      resolvedContactPersonEventId: 'pe-KateWalker',
+      isHostHousehold: true,
+      members: [member({ name: 'Kate Walker', markable: false })],
+    },
+    {
+      id: 'hh-other',
+      label: 'Tom Brennan',
+      resolvedContactPersonEventId: 'pe-TomBrennan',
+      isHostHousehold: false,
+      members: [member({ name: 'Tom Brennan' })],
+    },
+  ]);
+  assert(
+    'B',
+    'B6 Who I chase, rendered: the host’s household card wears it with the pill; another household’s does not',
+    CHECKS.chaseCards(chase, 'Kate Walker', 'Tom Brennan'),
+    chase.slice(0, 300)
+  );
+  assert(
+    'B',
+    'B7 CONTROL: the board’s host strip is left alone (founder ruling) and Moment 1’s summary is not edited (the host is never in its list)',
+    LEFT_ALONE_B.every((f) => read(f).length > 0) &&
+      spawnSync('git', ['diff', '--quiet', 'HEAD', '--', ...LEFT_ALONE_B], { cwd: ROOT }).status ===
+        0 &&
+      !code('src/components/glance/GlanceBoard.tsx').includes('person.isHost ?')
+  );
+}
+
 async function main() {
   await layerH();
   await layerO();
@@ -1800,6 +1927,7 @@ async function main() {
   await layerP();
   await layerM();
   await layerS();
+  await layerB();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
     console.log(reds.map((r) => `  - ${r}`).join('\n'));

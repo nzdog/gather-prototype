@@ -15,6 +15,7 @@ import {
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, MoreVertical } from 'lucide-react';
+import { HOST_CARD, HostPill } from '@/components/shared/HostCard';
 
 interface Team {
   id: string;
@@ -105,9 +106,12 @@ function DraggablePersonChip({
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
       <div
-        className={`flex items-center justify-between gap-2 px-3 py-2 ${getCardTint(person.role)} border border-gray-200 rounded-md shadow-sm hover:shadow-md transition-shadow ${
-          isDragging ? 'opacity-50' : ''
-        }`}
+        className={`flex items-center justify-between gap-2 px-3 py-2 ${
+          // [[GTC-394]] tweak 1 (b): the host's chip stands out (by her role on the event, ruled).
+          person.role === 'HOST'
+            ? `border ${HOST_CARD}`
+            : `${getCardTint(person.role)} border border-gray-200`
+        } rounded-md shadow-sm hover:shadow-md transition-shadow ${isDragging ? 'opacity-50' : ''}`}
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <div {...listeners} className="cursor-grab active:cursor-grabbing">
@@ -124,6 +128,7 @@ function DraggablePersonChip({
               <p className="text-sm font-medium text-gray-900 truncate hover:text-accent transition-colors">
                 {person.name}
               </p>
+              {person.role === 'HOST' && <HostPill />}
               {person.role === 'COORDINATOR' && (
                 <span
                   className={`px-2 py-0.5 text-xs font-medium rounded ${getRoleBadgeColor(person.role)}`}
@@ -304,12 +309,18 @@ export default function TeamBoard({ teams, people, onMovePerson, onEditPerson }:
   }
 
   const PersonChip = ({ person }: { person: Person }) => (
-    <div className="flex items-center justify-between gap-2 px-3 py-2 bg-white border border-gray-200 rounded-md shadow-sm">
+    <div
+      className={`flex items-center justify-between gap-2 px-3 py-2 ${
+        // [[GTC-394]] tweak 1 (b): the host's chip stands out while dragged too.
+        person.role === 'HOST' ? `border ${HOST_CARD}` : 'bg-white border border-gray-200'
+      } rounded-md shadow-sm`}
+    >
       <div className="flex items-center gap-2 flex-1 min-w-0">
         <GripVertical className="w-4 h-4 text-gray-400 flex-shrink-0" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <p className="text-sm font-medium text-gray-900 truncate">{person.name}</p>
+            {person.role === 'HOST' && <HostPill />}
             {person.role === 'COORDINATOR' && (
               <span
                 className={`px-2 py-0.5 text-xs font-medium rounded ${getRoleBadgeColor(person.role)}`}

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Users, X } from 'lucide-react';
+import { HOST_CARD, HostPill } from '@/components/shared/HostCard';
 
 interface ReachabilityData {
   direct: number;
@@ -14,6 +15,8 @@ interface PersonDetail {
   id: string;
   name: string;
   reachabilityTier: 'DIRECT' | 'PROXY' | 'SHARED' | 'UNTRACKABLE';
+  /** [[GTC-394]] tweak 1 (b): already on each person the invite-status read hands this. */
+  isHost?: boolean;
 }
 
 interface Props {
@@ -185,12 +188,18 @@ export function ReachabilityBar({ data, people = [] }: Props) {
                   {getFilteredPeople(selectedTier).map((person) => (
                     <li
                       key={person.id}
-                      className="flex items-center gap-2 p-2 rounded hover:bg-gray-50"
+                      className={
+                        // [[GTC-394]] tweak 1 (b): the host's own row stands out, as on every screen.
+                        person.isHost
+                          ? `flex items-center gap-2 p-2 rounded border ${HOST_CARD}`
+                          : 'flex items-center gap-2 p-2 rounded hover:bg-gray-50'
+                      }
                     >
                       <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-gray-600 font-medium text-sm">
                         {person.name.charAt(0).toUpperCase()}
                       </div>
                       <span className="text-gray-900">{person.name}</span>
+                      {person.isHost && <HostPill />}
                       <span className="ml-auto text-xs text-gray-500">
                         {person.reachabilityTier}
                       </span>

@@ -23,6 +23,7 @@ import { HostPersonModal } from '@/components/h/HostPersonModal';
 import { useToast } from '@/contexts/ToastContext';
 import { CHASE_DOOR_HOST_VIEW_NOTE, CHASE_DOOR_LINK } from '@/lib/preflight/after-press-words';
 import { whenLine } from '@/components/shared/EventDetails';
+import { HOST_CARD, HostPill } from '@/components/shared/HostCard';
 
 interface Item {
   id: string;
@@ -990,10 +991,16 @@ export default function HostView() {
                   <button
                     key={person.id}
                     onClick={() => setSelectedPerson(person)}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                    className={
+                      // [[GTC-394]] tweak 1 (b): the host's own row (this link is hers) stands out.
+                      person.id === data.person.id
+                        ? `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border ${HOST_CARD} transition-colors text-left`
+                        : 'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors text-left'
+                    }
                   >
                     <StatusIcon status={person.status} />
                     <span className="flex-1 text-sm text-gray-800">{person.name}</span>
+                    {person.id === data.person.id && <HostPill />}
                     <ResponseBadge response={person.response} />
                   </button>
                 ))}
