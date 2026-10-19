@@ -29,6 +29,7 @@
     "test:demo-ui": "tsx tests/demo-ui-isolation.ts",
     "test:demo-sandbox": "tsx tests/demo-sandbox-test.ts",
     "test:demo-sandbox-b": "tsx --tsconfig tests/tsconfig.json tests/demo-sandbox-b-test.tsx",
+    "test:demo-tweaks": "tsx --tsconfig tests/tsconfig.json tests/demo-tweaks-test.tsx",
     "test:setup-progress-banner": "tsx tests/setup-progress-banner-test.ts",
     "test:host-nudge": "tsx tests/host-nudge-test.ts",
     "test:wrap-up": "tsx tests/wrap-up-dispatch-test.ts",

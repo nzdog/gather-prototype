@@ -9,6 +9,7 @@
  */
 
 import { resolveNudgeOffsetDays, type NudgeMark, type NudgePace } from '@/lib/nudge-cadence';
+import { HOST_CARD, HostPill } from '@/components/shared/HostCard';
 
 export interface Member {
   personEventId: string;
@@ -106,12 +107,17 @@ export function MarkRows({
           person: { nudgeMark: m.nudgeMark },
           event: { nudgePace: pace },
         });
+        // [[GTC-394]] tweak 1: the host's own row stands out, as on every screen. She is the one
+        // messageable person with no mark to offer (GTC-256 Ruling 5, the line below).
+        const isHost = m.messageable && !m.markable;
         return (
           <li
             key={m.personEventId}
-            className={`flex flex-wrap items-center gap-x-3 gap-y-2 py-2 border-b border-gray-50 last:border-0 ${
-              m.messageable ? '' : 'opacity-60'
-            }`}
+            className={`flex flex-wrap items-center gap-x-3 gap-y-2 py-2 ${
+              isHost
+                ? `rounded-md border px-2 ${HOST_CARD}`
+                : 'border-b border-gray-50 last:border-0'
+            } ${m.messageable ? '' : 'opacity-60'}`}
           >
             {/*
               FIXED-WIDTH NAME COLUMN so every row's controls start at the same x. It was
@@ -126,6 +132,7 @@ export function MarkRows({
               <span className="text-sm text-gray-900 truncate" title={m.name}>
                 {m.name}
               </span>
+              {isHost && <HostPill />}
               {m.personEventId === channelPersonEventId && (
                 <span className="shrink-0 text-[11px] uppercase tracking-wide text-accent border border-accent/40 rounded px-1.5 py-0.5">
                   channel

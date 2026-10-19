@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { HOST_CARD, HostPill } from '@/components/shared/HostCard';
 import {
   CheckCircle,
   Clock,
@@ -636,7 +637,8 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
               <div
                 key={person.id}
                 className={`flex items-center justify-between py-1.5 px-2 rounded ${
-                  person.isHost ? '' : 'hover:bg-gray-50 cursor-pointer'
+                  // [[GTC-394]] tweak 1: the host's own row stands out, as on every screen.
+                  person.isHost ? `border ${HOST_CARD}` : 'hover:bg-gray-50 cursor-pointer'
                 }`}
                 onClick={() => {
                   if (onPersonClick && !person.isHost) {
@@ -647,6 +649,7 @@ export function InviteStatusSection({ eventId, onPersonClick, onDataUpdate }: Pr
                 <div className="flex items-center gap-2">
                   <StatusIcon status={person.status} />
                   <span className="text-sm">{person.name}</span>
+                  {person.isHost && <HostPill />}
                   {person.isHost && (
                     <span className="text-xs text-gray-500">
                       you — never messaged about your own event

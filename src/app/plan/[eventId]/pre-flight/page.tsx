@@ -86,6 +86,7 @@ import AfterThePress from '@/components/preflight/AfterThePress';
 import EventDetails from '@/components/shared/EventDetails';
 import { DemoBanner } from '@/components/demo/DemoBanner';
 import PretendSend from '@/components/demo/PretendSend';
+import { HOST_CARD, HostPill } from '@/components/shared/HostCard';
 import { pretendList, type PretendList } from '@/lib/demo/pretend-send';
 import { COPY_WORDS, isCopyAddress } from '@/lib/demo/copy-address';
 import { BOARD_MOVE_AFTER_MS, SEE_THE_BOARD_LINK } from '@/lib/preflight/after-press-words';
@@ -800,85 +801,96 @@ export default function PreFlightPage() {
             {households.map((h) => {
               const channel = channelFor(h, channelCandidates);
               return (
-                <AccordionShell
+                /* [[GTC-394]] tweak 1: the host's own household stands out, as on every screen. The
+                   shell is not edited (preflight-fold R7), so the look is a frame round it. */
+                <div
                   key={h.id}
-                  id={h.id}
-                  label={`${h.label}’s household`}
-                  showHide
-                  open={openHouseholds.includes(h.id)}
-                  onToggle={() =>
-                    setOpenHouseholds((prev) =>
-                      prev.includes(h.id) ? prev.filter((x) => x !== h.id) : [...prev, h.id]
-                    )
-                  }
-                  headerHint={
-                    <span className="text-sm text-gray-500">
-                      {channel ? (
-                        <>
-                          &rarr; {channel.name}
-                          {channel.elsewhere && (
-                            <span className="text-gray-400"> ({channel.elsewhere})</span>
-                          )}
-                        </>
-                      ) : (
-                        <span className="text-amber-700">no one to talk to</span>
-                      )}
-                    </span>
-                  }
+                  className={h.isHostHousehold ? `rounded-xl border p-1 ${HOST_CARD}` : undefined}
                 >
-                  {h.littleCount > 0 && (
-                    <p className="text-xs text-gray-400 mb-3">
-                      + {h.littleCount} kid{h.littleCount === 1 ? '' : 's'} without jobs
-                    </p>
-                  )}
+                  <AccordionShell
+                    id={h.id}
+                    label={`${h.label}’s household`}
+                    showHide
+                    open={openHouseholds.includes(h.id)}
+                    onToggle={() =>
+                      setOpenHouseholds((prev) =>
+                        prev.includes(h.id) ? prev.filter((x) => x !== h.id) : [...prev, h.id]
+                      )
+                    }
+                    headerHint={
+                      <span className="text-sm text-gray-500">
+                        {h.isHostHousehold && (
+                          <>
+                            <HostPill />{' '}
+                          </>
+                        )}
+                        {channel ? (
+                          <>
+                            &rarr; {channel.name}
+                            {channel.elsewhere && (
+                              <span className="text-gray-400"> ({channel.elsewhere})</span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-amber-700">no one to talk to</span>
+                        )}
+                      </span>
+                    }
+                  >
+                    {h.littleCount > 0 && (
+                      <p className="text-xs text-gray-400 mb-3">
+                        + {h.littleCount} kid{h.littleCount === 1 ? '' : 's'} without jobs
+                      </p>
+                    )}
 
-                  {/* [[GTC-384]] (Q4): the picker, its question (item 63's words) and its line only
+                    {/* [[GTC-384]] (Q4): the picker, its question (item 63's words) and its line only
                       where they are true: not on the host's own household, where her children are
                       hers whoever is picked. Nothing stored changes. */}
-                  {!h.isHostHousehold && (
-                    <>
-                      <label className="block text-sm text-gray-600 mb-1">
-                        Who should Gather talk to for the kids in this household?
-                      </label>
-                      <select
-                        value={h.contactPersonEventId ?? ''}
-                        onChange={(e) => patchChannel(h.id, e.target.value || null)}
-                        className="w-full mb-3 px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-accent"
-                      >
-                        {/* value="" is "not picked", which resolves to the primary contact. */}
-                        <option value="">{h.label} (main contact)</option>
-                        {channelCandidates
-                          .filter(
-                            (c) =>
-                              c.personEventId !==
-                              h.members.find((m) => m.householdRole === 'PRIMARY_CONTACT')
-                                ?.personEventId
-                          )
-                          .map((c) => (
-                            <option key={c.personEventId} value={c.personEventId}>
-                              {c.name}
-                              {c.householdId === h.id
-                                ? ''
-                                : c.householdLabel
-                                  ? ` — ${c.householdLabel}’s household`
-                                  : ' — not in a household'}
-                            </option>
-                          ))}
-                      </select>
-                      {/* GTC-363 (item 6, W1), darker since [[GTC-384]] (item 63). */}
-                      <p className="text-sm text-gray-600 -mt-2 mb-3">{HOUSEHOLD_CONTACT_LINE}</p>
-                    </>
-                  )}
+                    {!h.isHostHousehold && (
+                      <>
+                        <label className="block text-sm text-gray-600 mb-1">
+                          Who should Gather talk to for the kids in this household?
+                        </label>
+                        <select
+                          value={h.contactPersonEventId ?? ''}
+                          onChange={(e) => patchChannel(h.id, e.target.value || null)}
+                          className="w-full mb-3 px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                        >
+                          {/* value="" is "not picked", which resolves to the primary contact. */}
+                          <option value="">{h.label} (main contact)</option>
+                          {channelCandidates
+                            .filter(
+                              (c) =>
+                                c.personEventId !==
+                                h.members.find((m) => m.householdRole === 'PRIMARY_CONTACT')
+                                  ?.personEventId
+                            )
+                            .map((c) => (
+                              <option key={c.personEventId} value={c.personEventId}>
+                                {c.name}
+                                {c.householdId === h.id
+                                  ? ''
+                                  : c.householdLabel
+                                    ? ` — ${c.householdLabel}’s household`
+                                    : ' — not in a household'}
+                              </option>
+                            ))}
+                        </select>
+                        {/* GTC-363 (item 6, W1), darker since [[GTC-384]] (item 63). */}
+                        <p className="text-sm text-gray-600 -mt-2 mb-3">{HOUSEHOLD_CONTACT_LINE}</p>
+                      </>
+                    )}
 
-                  <MarkRows
-                    members={h.members}
-                    channelPersonEventId={h.resolvedContactPersonEventId}
-                    pace={pace}
-                    onMark={(personEventId, nudgeMark) =>
-                      patchCadence({ personEventId, nudgeMark })
-                    }
-                  />
-                </AccordionShell>
+                    <MarkRows
+                      members={h.members}
+                      channelPersonEventId={h.resolvedContactPersonEventId}
+                      pace={pace}
+                      onMark={(personEventId, nudgeMark) =>
+                        patchCadence({ personEventId, nudgeMark })
+                      }
+                    />
+                  </AccordionShell>
+                </div>
               );
             })}
           </div>

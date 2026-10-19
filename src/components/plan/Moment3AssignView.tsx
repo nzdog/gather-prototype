@@ -67,6 +67,7 @@ import { boardHref } from '@/lib/events/home-href';
 import { STRIP_WORDS } from '@/lib/moments/strip';
 import { DISH_MARKS_GUESS_M3, DISH_MARKS_KEY, type DishMark } from '@/lib/items/dish-marks';
 import { DishMarkTags, DishMarksKey } from './DishMarks';
+import { HOST_CARD, HostPill } from '@/components/shared/HostCard';
 
 export interface Moment3Item {
   id: string;
@@ -733,9 +734,10 @@ export default function Moment3AssignView({
                   return (
                     <li
                       key={person.personId}
-                      className={`flex items-center gap-2 rounded-md bg-white border border-gray-200 px-3 py-2 text-sm ${
-                        selected || selectedItemOpen ? 'ring-2 ring-accent' : ''
-                      }`}
+                      className={`flex items-center gap-2 rounded-md ${
+                        // [[GTC-394]] tweak 1: the host's own row stands out, as on every screen.
+                        person.isHost ? `border ${HOST_CARD}` : 'bg-white border border-gray-200'
+                      } px-3 py-2 text-sm ${selected || selectedItemOpen ? 'ring-2 ring-accent' : ''}`}
                     >
                       <button
                         type="button"
@@ -751,6 +753,7 @@ export default function Moment3AssignView({
                         >
                           {person.name}
                         </span>
+                        {person.isHost && <HostPill />}
                         <span className="ml-auto shrink-0 text-xs text-gray-500 tabular-nums">
                           {person.count}
                         </span>

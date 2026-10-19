@@ -72,6 +72,7 @@ import { readingPanelFor, type ReadingPlace } from './reading';
 import PrintListDoor from './PrintListDoor';
 import EventSearch from './EventSearch';
 import PlanLists from './PlanLists';
+import { HOST_CARD, HostPill } from '@/components/shared/HostCard';
 import type { SearchPerson } from '@/lib/search/event-search';
 import {
   COLOUR_KEY,
@@ -397,9 +398,23 @@ function HouseholdCard({
   place: ReadingPlace;
 }) {
   return (
-    <div data-household-card={household.householdId} className="rounded-lg bg-[#f5f4ef] p-2.5">
+    <div
+      data-household-card={household.householdId}
+      className={
+        // [[GTC-394]] tweak 1: the host's own household stands out, as on every screen.
+        household.isHostHousehold
+          ? `rounded-lg border p-2.5 ${HOST_CARD}`
+          : 'rounded-lg bg-[#f5f4ef] p-2.5'
+      }
+    >
       <p className="m-0 mb-1.5 text-[12px] font-medium text-[#5f5e5a]">
         {household.primaryContactName ?? 'Household'}
+        {household.isHostHousehold && (
+          <>
+            {' '}
+            <HostPill />
+          </>
+        )}
       </p>
       <div className="flex flex-col gap-1">
         {household.members.map((person) => (
@@ -437,6 +452,8 @@ export default function GlanceBoard({
   const sticky: ReadonlySet<string> = new Set(stickyReversals);
   // [[GTC-387]] — the reading room's link names this event, and none for a child on invites-only.
   const place: ReadingPlace = { eventId: glance.eventId, invitesOnly };
+  // [[GTC-394]] tweak 1: the flag the payload already carries, read off the people it holds.
+  const unhousedHasHost = glance.unhoused.some((p) => p.isHost);
   // Everything a red strip's door needs, assembled once. The pool is the same array for
   // every island; see PersonSurface's header for the trade that buys.
   const action = {
@@ -580,7 +597,15 @@ export default function GlanceBoard({
             it is the least-committing thing that keeps everyone on the board.
           */}
           {glance.unhoused.length > 0 ? (
-            <div data-unhoused-card="" className="rounded-lg bg-[#f5f4ef] p-2.5">
+            <div
+              data-unhoused-card=""
+              className={
+                // [[GTC-394]] tweak 1: on an event from before households, the host is in here.
+                unhousedHasHost
+                  ? `rounded-lg border p-2.5 ${HOST_CARD}`
+                  : 'rounded-lg bg-[#f5f4ef] p-2.5'
+              }
+            >
               <p className="m-0 mb-1.5 text-[12px] font-medium text-[#5f5e5a]">
                 Not in a household
               </p>

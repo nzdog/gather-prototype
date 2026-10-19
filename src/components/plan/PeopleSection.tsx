@@ -10,6 +10,7 @@ import ImportCSVModal, { PersonRow } from './ImportCSVModal';
 import AssignCoordinatorsModal from './AssignCoordinatorsModal';
 import { useReasonPrompt } from './ReasonPrompt';
 import { isSentJson, type SerialisedEvent } from '@/lib/lifecycle';
+import { HOST_CARD, HostPill } from '@/components/shared/HostCard';
 
 interface Team {
   id: string;
@@ -457,10 +458,26 @@ export default function PeopleSection({
               </thead>
               <tbody>
                 {people.map((person) => (
-                  <tr key={person.id} className="border-b hover:bg-gray-50">
+                  <tr
+                    key={person.id}
+                    className={
+                      // [[GTC-394]] tweak 1: the host's own row stands out, as on every screen.
+                      person.personId === hostId
+                        ? `border ${HOST_CARD}`
+                        : 'border-b hover:bg-gray-50'
+                    }
+                  >
                     <td className="py-3 px-4">
                       <div>
-                        <p className="font-medium text-gray-900">{person.name}</p>
+                        <p className="font-medium text-gray-900">
+                          {person.name}
+                          {person.personId === hostId && (
+                            <>
+                              {' '}
+                              <HostPill />
+                            </>
+                          )}
+                        </p>
                         {person.email && <p className="text-sm text-gray-600">{person.email}</p>}
                       </div>
                     </td>

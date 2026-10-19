@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { DRAFT_WORDS } from '@/lib/households/draft';
+import { HOST_CARD, HostPill } from '@/components/shared/HostCard';
 
 export interface SavedHousehold {
   id: string;
@@ -221,12 +222,14 @@ function HouseholdCard({
     );
   }
 
+  // [[GTC-394]] tweak 1: the host's own saved card stands out (a card being typed keeps its dashes).
+  const hostLook = household.isHostHousehold && !draftLabel;
   return (
     <div
       ref={cardRef}
       data-draft-card={draftLabel ? '' : undefined}
-      className={`border rounded-lg px-4 py-3 bg-white transition-opacity duration-200 ${
-        draftLabel ? 'border-dashed border-gray-400' : 'border-gray-200'
+      className={`border rounded-lg px-4 py-3 ${hostLook ? HOST_CARD : 'bg-white'} transition-opacity duration-200 ${
+        draftLabel ? 'border-dashed border-gray-400' : hostLook ? '' : 'border-gray-200'
       }`}
       style={{ opacity: visible ? 1 : 0 }}
       onClick={clearError}
@@ -243,11 +246,7 @@ function HouseholdCard({
         <div className="flex items-center gap-2">
           {/* GTC-256 (Ruling 1): "the host is at her own party" — she reads as herself in
               her own guest list, rather than as one more name in it. */}
-          {household.isHostHousehold && (
-            <span className="text-xs font-medium text-accent bg-accent/10 rounded-full px-2 py-0.5">
-              You
-            </span>
-          )}
+          {household.isHostHousehold && <HostPill />}
           {additionalCount > 0 && (
             <span className="text-xs font-medium text-gray-500 bg-gray-100 rounded-full px-2 py-0.5">
               +{additionalCount}
