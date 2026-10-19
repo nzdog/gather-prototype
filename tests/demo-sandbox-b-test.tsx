@@ -81,6 +81,8 @@ const W29 = 'Here’s what Send would have done:';
 const W34 = 'Nobody would get a message yet. Add an email or mobile for at least one guest.';
 const W35 = 'Each would be the message in step 4, word for word.';
 const W35_LINK = 'Open step 4 →';
+/** [[GTC-394]] tweak 8 (founder: "I want them to say Invite only"): where a line said "— nothing". */
+const INVITE_ONLY = 'Invite only';
 const W36 = 'I couldn’t put the list together just now. Step 4 shows each message.';
 const W38 =
   'On a real event, an email reply comes to you. Here nothing is sent, so nobody can reply.';
@@ -1508,7 +1510,7 @@ async function main() {
       'R',
       'R2 one line each, by name and how, with the child and what they bring (W31)',
       full.includes('Aroha Ngata · by email · with Mere — bring Sausages and steaks') &&
-        full.includes('Grace Liu · by email — nothing') &&
+        full.includes('Grace Liu · by email — Invite only') &&
         full.includes('Kate Rangi · by text — do Set up')
     );
     assert(
@@ -1523,10 +1525,8 @@ async function main() {
     );
     assert(
       'R',
-      'R5 the closing line (W35) and the link to step 4',
-      full.includes(W35) &&
-        full.includes(W35_LINK) &&
-        /<button[^>]*>Open step 4 →<\/button>/.test(full)
+      'R5 the closing line (W35); the link to step 4 is gone (GTC-394 tweak 8, founder: "The Open step 4 link goes")',
+      full.includes(W35) && !full.includes(W35_LINK) && !/<button\b/.test(full)
     );
     const nobody = render({
       messages: [],
@@ -1596,7 +1596,11 @@ async function main() {
       ['W29', PW.LEAD, W29],
       ['W34', PW.NOBODY, W34],
       ['W35', PW.SAME, W35],
-      ['W35 link', PW.OPEN_STEP_4, W35_LINK],
+      [
+        'W31 Invite only (GTC-394 tweak 8, in place of the link’s row)',
+        PW.INVITE_ONLY,
+        INVITE_ONLY,
+      ],
       ['W36', PW.FAILED, W36],
       ['W38', AW.REPLY_LINE, W38],
       ['W39', AW.REPLY_TO, W39],
@@ -1626,7 +1630,7 @@ async function main() {
             channel: 'EMAIL',
             withChildren: [],
             brief: 'nothing',
-          }) === 'Ana Tupou · by email — nothing' &&
+          }) === 'Ana Tupou · by email — Invite only' &&
           PS.personLine({
             name: 'Sione Taufa',
             channel: 'TEXT',

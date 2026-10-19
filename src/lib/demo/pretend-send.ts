@@ -21,10 +21,13 @@ export const PRETEND_WORDS = {
   LEAD: 'Here’s what Send would have done:',
   /** W34 — in place of the count and the lists when nobody can be reached. */
   NOBODY: 'Nobody would get a message yet. Add an email or mobile for at least one guest.',
-  /** W35 — the panel's last line. */
+  /** W35 — the panel's last line. ([[GTC-394]] tweak 8: its link, "Open step 4 →", is gone.) */
   SAME: 'Each would be the message in step 4, word for word.',
-  /** W35's link. */
-  OPEN_STEP_4: 'Open step 4 →',
+  /**
+   * [[GTC-394]] tweak 8 (founder, 19 Oct 2026: "The invites say nothing. I want them to say Invite
+   * only"): what a line says for someone asked for nothing, where step 4's own words say "nothing".
+   */
+  INVITE_ONLY: 'Invite only',
   /** W36 — in place of the panel when the list cannot be read. */
   FAILED: 'I couldn’t put the list together just now. Step 4 shows each message.',
 } as const;
@@ -48,13 +51,16 @@ export interface PretendList {
   carrierFor: string[];
 }
 
+/** Step 4's word for someone asked for nothing. */
+const NOTHING = 'nothing';
+
 /** Step 4's own words for what someone is asked for ("bring … · do …", or "nothing"). */
 function brief(x: { itemNames: readonly string[]; jobNames: readonly string[] }): string {
   const parts = [
     x.itemNames.length > 0 ? `bring ${x.itemNames.join(', ')}` : null,
     x.jobNames.length > 0 ? `do ${x.jobNames.join(', ')}` : null,
   ].filter((p): p is string => p !== null);
-  return parts.length > 0 ? parts.join(' · ') : 'nothing';
+  return parts.length > 0 ? parts.join(' · ') : NOTHING;
 }
 
 type WirePreview = Omit<AskPreview, 'event'> & {
@@ -89,11 +95,12 @@ export function countLine(n: number, emailed: number, texted: number): string {
   return `${n} people would get a message: ${emailed} by email, ${texted} by text.`;
 }
 
-/** W31 — one line per person. */
+/** W31 — one line per person; someone asked for nothing reads "Invite only" ([[GTC-394]] tweak 8). */
 export function personLine(x: PretendMessage): string {
   const how = x.channel === 'TEXT' ? 'by text' : 'by email';
   const kids = x.withChildren.length > 0 ? ` · with ${x.withChildren.join(', ')}` : '';
-  return `${x.name} · ${how}${kids} — ${x.brief}`;
+  const asked = x.brief === NOTHING ? PRETEND_WORDS.INVITE_ONLY : x.brief;
+  return `${x.name} · ${how}${kids} — ${asked}`;
 }
 
 /** W32. */

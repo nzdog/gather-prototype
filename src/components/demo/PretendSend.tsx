@@ -13,16 +13,12 @@ import {
  *
  * It shows what Send would have done: who would get a message, how, and what they are asked for;
  * who Gather would leave to her; and that each message is step 4's. Names only. It records nothing
- * and calls nothing; `onOpenStep4` is the page's own way to a step. No hooks, so it renders the same
- * on the server.
+ * and calls nothing. No hooks, so it renders the same on the server.
+ *
+ * [[GTC-394]] tweak 8 (founder, 19 Oct 2026: "The Open step 4 link goes"): the link and its wiring
+ * are gone; the sentence W35 stays.
  */
-export default function PretendSend({
-  state,
-  onOpenStep4,
-}: {
-  state: PretendList | 'failed';
-  onOpenStep4?: () => void;
-}) {
+export default function PretendSend({ state }: { state: PretendList | 'failed' }) {
   if (state === 'failed') {
     return (
       <p data-pretend-send="failed" className="text-sm text-gray-700 mt-3">
@@ -49,16 +45,7 @@ export default function PretendSend({
           </ul>
           {state.carrierFor.length > 0 && <p className="mt-2">{carrierLine(state.carrierFor)}</p>}
           {state.leftToHer.length > 0 && <p className="mt-2">{leaveLine(state.leftToHer)}</p>}
-          <p className="mt-3">
-            {PRETEND_WORDS.SAME}{' '}
-            <button
-              type="button"
-              onClick={onOpenStep4}
-              className="underline underline-offset-2 text-gray-900 hover:text-gray-700"
-            >
-              {PRETEND_WORDS.OPEN_STEP_4}
-            </button>
-          </p>
+          <p className="mt-3">{PRETEND_WORDS.SAME}</p>
         </>
       )}
     </div>

@@ -1043,7 +1043,7 @@ export default function PreFlightPage() {
             </p>
           )}
           {/* [[GTC-392]] part B — what Send would have done, under W2, on a sample only. */}
-          {pretend && <PretendSend state={pretend} onOpenStep4={() => goToStep(4)} />}
+          {pretend && <PretendSend state={pretend} />}
         </Step>
       </div>
       {/* [[GTC-392]] — the sample event's banner; nothing on a real event. */}

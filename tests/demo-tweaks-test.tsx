@@ -15,6 +15,7 @@
  *   A  tweak 5: "Fill in typical answers": obvious, it opens what it fills, random, a note.
  *   P  tweak 6: "What you've picked" as a table, with the print's look.
  *   M  tweak 7: step 4, the message first, simple and the same every time (the screen only).
+ *   S  tweak 8: the pretend list says "Invite only", and the "Open step 4" link goes.
  *
  * SAFETY. Static and rendered checks only: no database row, no dev server, no AI call, no
  * browser, no network. Every fixture and expected value is written here by hand, never taken from
@@ -373,6 +374,12 @@ const STEP4_ORDER = [
   'data-message-part="3"',
   'HOST_LIST_HEADING',
 ];
+
+// ── Tweak 8: the pretend list, hand-written ──────────────────────────────────
+const PRETEND_LIB = 'src/lib/demo/pretend-send.ts';
+const PRETEND_PANEL = 'src/components/demo/PretendSend.tsx';
+const INVITE_ONLY = 'Invite only';
+const W35_SAME = 'Each would be the message in step 4, word for word.';
 
 // ── CHECKS-START: every condition, pure, dry-run before RED ───────────────────
 const indexesOf = (s: string, needle: string) => {
@@ -1706,6 +1713,84 @@ async function layerM() {
   );
 }
 
+// ══ Tweak 8 ══════════════════════════════════════════════════════════════════
+async function layerS() {
+  section('S — tweak 8: the pretend list says "Invite only", and the link goes');
+  const PS = await load('../src/lib/demo/pretend-send');
+  const PP = await load('../src/components/demo/PretendSend');
+  assert(
+    'S',
+    'S1 someone asked for nothing reads "Name · by email — Invite only", the line’s own separators kept',
+    !!PS?.personLine &&
+      PS.personLine({ name: 'Grace Liu', channel: 'EMAIL', withChildren: [], brief: 'nothing' }) ===
+        `Grace Liu · by email — ${INVITE_ONLY}` &&
+      PS.personLine({
+        name: 'Hemi Walker',
+        channel: 'TEXT',
+        withChildren: [],
+        brief: 'nothing',
+      }) === `Hemi Walker · by text — ${INVITE_ONLY}`
+  );
+  assert(
+    'S',
+    'S2 someone asked for something reads as before',
+    !!PS?.personLine &&
+      PS.personLine({
+        name: 'Aroha Ngata',
+        channel: 'EMAIL',
+        withChildren: ['Mere'],
+        brief: 'bring Pavlova',
+      }) === 'Aroha Ngata · by email · with Mere — bring Pavlova'
+  );
+  const list = {
+    messages: [
+      { name: 'Grace Liu', channel: 'EMAIL', withChildren: [], brief: 'nothing' },
+      { name: 'Aroha Ngata', channel: 'EMAIL', withChildren: ['Mere'], brief: 'bring Pavlova' },
+    ],
+    emailed: 2,
+    texted: 0,
+    leftToHer: ['June Walker'],
+    carrierFor: [],
+  };
+  const panel = PP?.default ? render(createElement(PP.default, { state: list } as any)) : '';
+  assert(
+    'S',
+    'S3 the panel: the "Invite only" line, the sentence "Each would be the message in step 4, word for word.", and no link or button',
+    panel.includes(`Grace Liu · by email — ${INVITE_ONLY}`) &&
+      panel.includes('Aroha Ngata · by email · with Mere — bring Pavlova') &&
+      panel.includes(W35_SAME) &&
+      !/<button\b|<a\b/.test(panel) &&
+      !panel.includes('Open step 4'),
+    panel.slice(0, 300)
+  );
+  assert(
+    'S',
+    'S4 still names only, and it writes nothing: no address or number in the panel; no fetch or sender in either file',
+    panel.length > 0 &&
+      !/@|\+64|\d{7,}/.test(panel) &&
+      [PRETEND_LIB, PRETEND_PANEL].every((f) => {
+        const s = code(f);
+        return (
+          s.length > 0 &&
+          !/fetch\(|sendSms|getResendClient|from '@\/lib\/(press|sms|email|tokens|prisma)['/]/.test(
+            s
+          )
+        );
+      })
+  );
+  const pre = code(PREFLIGHT);
+  assert(
+    'S',
+    'S5 the link and its wiring are gone: no OPEN_STEP_4, no onOpenStep4, and the pre-flight hands the panel its list only',
+    !!PS?.PRETEND_WORDS &&
+      !('OPEN_STEP_4' in PS.PRETEND_WORDS) &&
+      PS.PRETEND_WORDS.INVITE_ONLY === INVITE_ONLY &&
+      PS.PRETEND_WORDS.SAME === W35_SAME &&
+      !/onOpenStep4|OPEN_STEP_4/.test(code(PRETEND_PANEL) + code(PRETEND_LIB) + pre) &&
+      /\{pretend && <PretendSend state=\{pretend\} \/>\}/.test(pre)
+  );
+}
+
 async function main() {
   await layerH();
   await layerO();
@@ -1714,6 +1799,7 @@ async function main() {
   await layerA();
   await layerP();
   await layerM();
+  await layerS();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
     console.log(reds.map((r) => `  - ${r}`).join('\n'));
