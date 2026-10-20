@@ -68,6 +68,8 @@ import { STRIP_WORDS } from '@/lib/moments/strip';
 import { DISH_MARKS_GUESS_M3, DISH_MARKS_KEY, type DishMark } from '@/lib/items/dish-marks';
 import { DishMarkTags, DishMarksKey } from './DishMarks';
 import { HOST_CARD, HostPill } from '@/components/shared/HostCard';
+import EventDropOffLine from '@/components/shared/EventDropOffLine';
+import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 
 export interface Moment3Item {
   id: string;
@@ -78,6 +80,9 @@ export interface Moment3Item {
   detail: string;
   /** [[GTC-385]] (item 59): the dish's marks (none in drinks, none on a job). */
   marks?: DishMark[];
+  /** [[GTC-395]] item 7: the item's own drop-off place and note, when it has them. */
+  dropOffLocation?: string | null;
+  dropOffNote?: string | null;
 }
 
 export interface Moment3Category {
@@ -527,6 +532,9 @@ export default function Moment3AssignView({
             }`}
           >
             {topBack}
+            {/* [[GTC-395]] item 7 (ruling, 20 Oct 2026): where and when to drop off, in this row
+                beside the event's details, so it adds no height above the lists on a computer. */}
+            {details && <EventDropOffLine facts={details} spacing="" />}
             {details && <EventDetails facts={details} />}
           </div>
         )}
@@ -656,6 +664,12 @@ export default function Moment3AssignView({
                                     {item.detail}
                                   </span>
                                 )}
+                                {/* [[GTC-395]] item 7: the item's own drop-off, last in the box. */}
+                                <DropOffDisplay
+                                  dropOffLocation={item.dropOffLocation}
+                                  dropOffNote={item.dropOffNote}
+                                  className="flex-wrap"
+                                />
                               </span>
                               <span
                                 className={

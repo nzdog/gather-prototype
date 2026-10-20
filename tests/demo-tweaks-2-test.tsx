@@ -14,6 +14,9 @@
  *      in another household stays while it is the pick.
  *   R  item 5: "What you've picked" on the right of Moment 2's questions, in Moment 1's arrangement;
  *      on a phone it stays under the questions. Layout only.
+ *   E  item 7: where and when to drop off: the event's one line (its venue and times) at the top of
+ *      Moment 2's plan and of Moment 3; an item's own place or note on its row, through the
+ *      existing DropOffDisplay with its own words.
  *
  * SAFETY. Static and rendered checks only: no database row, no dev server, no AI call, no
  * browser, no network. Every fixture and expected value is written here by hand, never taken from
@@ -28,6 +31,11 @@ import { renderToStaticMarkup } from 'react-dom/server';
 // Imported statically, as GTC-394 ruled for the demo page (a dynamic import() would give the page
 // a second toast context if it ever used one).
 import DemoPage from '../src/app/demo/page';
+// Item 7: the two views and the toast provider imported statically, as the Moment 3 suites do (a
+// dynamic import() would give Moment 3 a second toast context).
+import { ToastProvider } from '../src/contexts/ToastContext';
+import Moment2PlanView from '../src/components/plan/Moment2PlanView';
+import Moment3AssignView from '../src/components/plan/Moment3AssignView';
 
 const ROOT = path.join(__dirname, '..');
 
@@ -275,8 +283,9 @@ const NOT_EDITED_C = [
   'src/app/api/events/[id]/pre-flight/channel/route.ts',
   'src/lib/households/channel.ts',
   'prisma/schema.prisma',
-  'src/app/plan/[eventId]/setup/page.tsx',
 ];
+/** [[GTC-395]] ruling (20 Oct 2026): on the setup page C5 pins only the dropdown's list code. */
+const SETUP_FILE_C = 'src/app/plan/[eventId]/setup/page.tsx';
 /** Moment 1's page offers every household's non-child members (Ana's household and Bob's). */
 const M1_CANDIDATES = [
   { personEventId: 'pe-ana', name: 'Ana Ngata', householdName: 'Ana Ngata', householdId: 'h-ana' },
@@ -359,6 +368,128 @@ const between = (src: string, from: string, to: string) => {
   const b = a >= 0 ? src.indexOf(to, a) : -1;
   return a >= 0 && b > a ? src.slice(a, b) : '';
 };
+
+// ── Item 7: where and when to drop off, hand-written ────────────────────────
+const DROP_WORDS_FILE = 'src/lib/items/drop-off-words.ts';
+const DROP_LINE_FILE = 'src/components/shared/EventDropOffLine.tsx';
+const PLAN_VIEW = 'src/components/plan/Moment2PlanView.tsx';
+const M3_VIEW = 'src/components/plan/Moment3AssignView.tsx';
+/** The new words (founder: "drop off at <venue>, <start> to <end>"). */
+const DROP_AT = 'Drop off at';
+const NO_VENUE = 'Drop off: the venue hasn’t been added yet.';
+/** Not edited by item 7: the drop-off component and helper, the items routes, every sender. */
+const NOT_EDITED_E = [
+  'src/components/shared/DropOffDisplay.tsx',
+  'src/lib/formatDropOff.ts',
+  'src/app/api',
+  'src/lib/messages',
+  'src/lib/press',
+  'src/lib/email.ts',
+  'src/lib/sms',
+  'prisma',
+];
+const VENUE_FACTS = {
+  id: 'e1',
+  name: 'Boxing Day',
+  startDate: '2026-12-26T00:00:00.000Z',
+  endDate: '2026-12-26T00:00:00.000Z',
+  venueName: 'Riverside Park',
+  venueTimingStart: '12:00pm',
+  venueTimingEnd: '4:00pm',
+};
+const NO_VENUE_FACTS = {
+  ...VENUE_FACTS,
+  venueName: null,
+  venueTimingStart: null,
+  venueTimingEnd: null,
+};
+const PLAN_PROPS = {
+  eventId: 'e1',
+  eventName: 'Boxing Day',
+  guestCount: 6,
+  onUpdateItem: async () => {},
+  onRemoveItem: async () => {},
+  onAddItem: async () => {},
+  onAddCategory: async () => {},
+  onApprove: () => {},
+  onBack: () => {},
+  onRegeneratePlan: () => {},
+  onRegenerateCategory: () => {},
+  regeneratingScope: null,
+  onEditGuests: () => {},
+  onGoToDashboard: () => {},
+};
+const PLAN_CATS = [
+  {
+    id: 'c1',
+    name: 'Mains',
+    emoji: '🍖',
+    items: [
+      {
+        id: 'i1',
+        name: 'Roast lamb',
+        quantity: 1,
+        unit: 'kg',
+        servingSize: 'serves 6',
+        dropOffLocation: 'The back door',
+        dropOffNote: 'before 11am',
+      },
+      { id: 'i2', name: 'Bread rolls', quantity: 12, unit: 'rolls', servingSize: '' },
+    ],
+  },
+];
+const M3_CATS = [
+  {
+    id: 'c1',
+    name: 'Mains',
+    emoji: '🍖',
+    items: [
+      {
+        id: 'i1',
+        name: 'Roast lamb',
+        kind: 'ITEM',
+        detail: '1 kg',
+        dropOffLocation: 'The back door',
+        dropOffNote: 'before 11am',
+      },
+      { id: 'i2', name: 'Bread rolls', kind: 'ITEM', detail: '12 rolls' },
+    ],
+  },
+];
+/** DropOffDisplay's own words for the lamb, as it draws them (its file, not edited). */
+const LAMB_DROP = ['Drop-off:', 'The back door', 'By:', 'before 11am'];
+const drawPlan = (extra: Record<string, unknown>) =>
+  render(
+    createElement(
+      ToastProvider as any,
+      null,
+      createElement(Moment2PlanView as any, { ...PLAN_PROPS, categories: PLAN_CATS, ...extra })
+    )
+  );
+const drawM3 = (extra: Record<string, unknown>) =>
+  render(
+    createElement(
+      ToastProvider as any,
+      null,
+      createElement(Moment3AssignView as any, {
+        eventId: 'e1',
+        event: { id: 'e1', status: 'DRAFT', sentAt: null },
+        hostPersonId: 'p-kate',
+        headcount: 4,
+        categories: M3_CATS,
+        initialHolders: {},
+        households: [],
+        askForReason: async () => ({ proceed: true }),
+        askForBatchReason: async () => ({ proceed: true }),
+        onBack: () => {},
+        onMoveOn: () => {},
+        stripDoors: {},
+        ...extra,
+      })
+    )
+  );
+/** The text of a piece of markup, tags dropped. */
+const textOf = (html: string) => html.replace(/<[^>]+>/g, '');
 
 export const CHECKS = {
   /** F1, F2 — the first page: the heading "Gather" and its buttons, and nothing else. */
@@ -515,6 +646,79 @@ export const CHECKS = {
         )
       )
     );
+  },
+  /** E3, E5 — the event's line, then the plan's heading straight after it. */
+  lineBeforeHeading(html: string, words: string) {
+    const m = html.match(/<p data-drop-off-line=""[^>]*>([^<]*)<\/p>(<h1\b)?/);
+    return (
+      !!m &&
+      m[1] === words.replace(/’/g, '’') &&
+      !!m[2] &&
+      (html.match(/data-drop-off-line/g) ?? []).length === 1
+    );
+  },
+  /**
+   * E4, E5 — Moment 3: the line in the TOP ROW, after W10 and before the event's details, ahead of
+   * the strip, with no margin of its own (founder's ruling, 20 Oct 2026: on a computer it adds no
+   * height above the lists; batch11 C7's row must rest where it did before item 7).
+   */
+  lineInMoment3TopRow(html: string, words: string) {
+    const line = html.indexOf('<p data-drop-off-line=""');
+    const back = html.indexOf('>← Back to “What’s the plan?”</button>');
+    const name = html.indexOf('data-event-details-button');
+    const strip = html.indexOf('data-moment-strip');
+    const does = html.indexOf('data-moment-words="3-does"');
+    const m = html.slice(line).match(/^<p data-drop-off-line="" class="([^"]*)">([^<]*)<\/p>/);
+    return (
+      back > 0 &&
+      line > back &&
+      name > line &&
+      strip > name &&
+      does > strip &&
+      !!m &&
+      m[2] === words &&
+      !/\bm[tby]-|\bmy-|\bp[tby]-/.test(m[1]) &&
+      (html.match(/data-drop-off-line/g) ?? []).length === 1
+    );
+  },
+  /** E6 — an item's own drop-off on its row, in DropOffDisplay's words, and only on that row. */
+  rowDropOff(html: string, rowStart: string, otherRowStart: string, words: string[]) {
+    const a = html.indexOf(rowStart);
+    const b = html.indexOf(otherRowStart);
+    if (a < 0 || b < 0) return false;
+    const own = a < b ? html.slice(a, b) : html.slice(a);
+    const other = a < b ? html.slice(b) : html.slice(b, a);
+    const text = textOf(own);
+    let at = 0;
+    for (const w of words) {
+      const i = text.indexOf(w, at);
+      if (i < 0) return false;
+      at = i + w.length;
+    }
+    return !textOf(other).includes('Drop-off:') && !textOf(other).includes('By:');
+  },
+  /**
+   * C5 — the setup page's code that builds the dropdown's list: every `setChannelCandidates(` call,
+   * from its name to its closing bracket. [[GTC-395]] ruling, 20 Oct 2026: C5 pins only this code on
+   * the setup page (item 7 edits the page elsewhere).
+   */
+  candidateCalls(src: string) {
+    const out: string[] = [];
+    let at = src.indexOf('setChannelCandidates(');
+    while (at >= 0) {
+      let depth = 0;
+      let end = -1;
+      for (let i = at + 'setChannelCandidates'.length; i < src.length; i++) {
+        if (src[i] === '(') depth++;
+        else if (src[i] === ')' && --depth === 0) {
+          end = i + 1;
+          break;
+        }
+      }
+      out.push(end > 0 ? src.slice(at, end) : src.slice(at));
+      at = src.indexOf('setChannelCandidates(', at + 1);
+    }
+    return out;
   },
 };
 // ── CHECKS-END ───────────────────────────────────────────────────────────────
@@ -833,8 +1037,13 @@ async function layerC() {
   );
   assert(
     'C',
-    'C5 CONTROL: the three routes that check a pick, src/lib/households, the schema and the setup page are not edited since demo-tweaks-good',
-    NOT_EDITED_C.every((f) => read(f).length > 0) && unchangedSinceGood(NOT_EDITED_C)
+    'C5 CONTROL: the three routes that check a pick, src/lib/households and the schema are not edited since demo-tweaks-good, and the setup page’s code that builds the dropdown’s list (its two setChannelCandidates( calls) is the same code as there',
+    NOT_EDITED_C.every((f) => read(f).length > 0) &&
+      unchangedSinceGood(NOT_EDITED_C) &&
+      CHECKS.candidateCalls(atGood(SETUP_FILE_C)).length === 2 &&
+      CHECKS.candidateCalls(atGood(SETUP_FILE_C)).every((c) => c.length > 200) &&
+      JSON.stringify(CHECKS.candidateCalls(read(SETUP_FILE_C))) ===
+        JSON.stringify(CHECKS.candidateCalls(atGood(SETUP_FILE_C)))
   );
 }
 
@@ -883,11 +1092,106 @@ async function layerR() {
   );
 }
 
+// ══ Item 7 ═══════════════════════════════════════════════════════════════════
+async function layerE() {
+  section('E — item 7: where and when to drop off');
+  const DW = await load('../src/lib/items/drop-off-words');
+  const line = (f: Record<string, unknown>) =>
+    DW?.eventDropOffLine ? DW.eventDropOffLine(f) : null;
+  assert(
+    'E',
+    'E1 the event’s line, from its venue and times: where, then when; with no venue, one plain line',
+    DW?.DROP_OFF_WORDS?.AT === DROP_AT &&
+      DW?.DROP_OFF_WORDS?.NO_VENUE === NO_VENUE &&
+      line(VENUE_FACTS) === 'Drop off at Riverside Park, 12:00pm to 4:00pm' &&
+      line({ venueName: 'Riverside Park', venueTimingStart: '12:00pm' }) ===
+        'Drop off at Riverside Park, from 12:00pm' &&
+      line({ venueName: 'Riverside Park', venueTimingEnd: '4:00pm' }) ===
+        'Drop off at Riverside Park, by 4:00pm' &&
+      line({ venueName: ' Riverside Park ' }) === 'Drop off at Riverside Park' &&
+      line({ venueName: '  ', venueTimingStart: '12:00pm' }) === NO_VENUE &&
+      line(NO_VENUE_FACTS) === NO_VENUE,
+    JSON.stringify([line(VENUE_FACTS), line(NO_VENUE_FACTS)])
+  );
+  const lineSrc = code(DROP_LINE_FILE);
+  assert(
+    'E',
+    'E2 one shared component draws it, a plain line that wraps; no hook, no router, no fetch',
+    lineSrc.length > 0 &&
+      /eventDropOffLine\(facts\)/.test(lineSrc) &&
+      /break-words/.test(lineSrc) &&
+      !/\buse[A-Z]\w*\(|useRouter|fetch\(|'use client'/.test(lineSrc)
+  );
+  const plan = drawPlan({ details: VENUE_FACTS });
+  const planNoVenue = drawPlan({ details: NO_VENUE_FACTS });
+  const planBare = drawPlan({});
+  assert(
+    'E',
+    'E3 Moment 2’s plan: the line at the top, straight above the heading (the count line still the heading’s next)',
+    CHECKS.lineBeforeHeading(plan, 'Drop off at Riverside Park, 12:00pm to 4:00pm') &&
+      /<\/h1><p class="text-sm text-gray-500/.test(plan) &&
+      !planBare.includes('data-drop-off-line'),
+    plan.slice(plan.indexOf('data-drop-off-line') - 40, plan.indexOf('data-drop-off-line') + 200)
+  );
+  const m3 = drawM3({ details: VENUE_FACTS });
+  const m3NoVenue = drawM3({ details: NO_VENUE_FACTS });
+  const m3Bare = drawM3({});
+  assert(
+    'E',
+    'E4 Moment 3: the line at the top, in the top row beside the event’s details (after W10, before the strip), with no margin of its own',
+    CHECKS.lineInMoment3TopRow(m3, 'Drop off at Riverside Park, 12:00pm to 4:00pm') &&
+      !m3Bare.includes('data-drop-off-line'),
+    m3.slice(m3.indexOf('data-drop-off-line') - 40, m3.indexOf('data-drop-off-line') + 200)
+  );
+  const plainNoVenue = (html: string) => {
+    const m = html.match(/<p data-drop-off-line=""[^>]*>([\s\S]*?)<\/p>/);
+    return !!m && m[1] === NO_VENUE && !/<a\b|<button\b/.test(m[1]);
+  };
+  assert(
+    'E',
+    'E5 with no venue, both screens show one plain line that says so (neither screen has a way to the venue step)',
+    plainNoVenue(planNoVenue) &&
+      plainNoVenue(m3NoVenue) &&
+      CHECKS.lineBeforeHeading(planNoVenue, NO_VENUE) &&
+      CHECKS.lineInMoment3TopRow(m3NoVenue, NO_VENUE)
+  );
+  assert(
+    'E',
+    'E6 an item with its own place or note shows it on its row, through DropOffDisplay in its own words; an item without, nothing',
+    CHECKS.rowDropOff(plan, '>Roast lamb</button>', '>Bread rolls</button>', LAMB_DROP) &&
+      CHECKS.rowDropOff(m3, '<span>Roast lamb</span>', '<span>Bread rolls</span>', LAMB_DROP) &&
+      /<DropOffDisplay\b[\s\S]{0,300}dropOffLocation=\{item\.dropOffLocation\}/.test(
+        code(PLAN_VIEW)
+      ) &&
+      /<DropOffDisplay\b[\s\S]{0,300}dropOffLocation=\{item\.dropOffLocation\}/.test(code(M3_VIEW)),
+    textOf(plan).slice(0, 0)
+  );
+  const setup = code(SETUP_PAGE);
+  assert(
+    'E',
+    'E7 the setup page passes each item’s own place and note through (already sent by the items read; no route changed)',
+    /dropOffLocation\?: string \| null;\s*dropOffNote\?: string \| null;/.test(setup) &&
+      (
+        setup.match(
+          /dropOffLocation: item\.dropOffLocation \?\? null,\s*dropOffNote: item\.dropOffNote \?\? null,/g
+        ) ?? []
+      ).length === 2 &&
+      /dropOffLocation\?: string \| null;/.test(code(PLAN_VIEW)) &&
+      /dropOffLocation\?: string \| null;/.test(code(M3_VIEW))
+  );
+  assert(
+    'E',
+    'E8 CONTROL: DropOffDisplay and its helper, every route, the messages, the press, email, texts and the schema are not edited since demo-tweaks-good',
+    NOT_EDITED_E.every((f) => fs.existsSync(path.join(ROOT, f))) && unchangedSinceGood(NOT_EDITED_E)
+  );
+}
+
 async function main() {
   await layerF();
   await layerN();
   await layerC();
   await layerR();
+  await layerE();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
     console.log(reds.map((r) => `  - ${r}`).join('\n'));

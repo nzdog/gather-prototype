@@ -93,6 +93,9 @@ type PlanApiItem = {
   displayOrder: number | null;
   /** [[GTC-385]] (item 59): 'ITEM' or 'TASK', which the items route already sends. */
   kind?: string;
+  /** [[GTC-395]] item 7: the item's own drop-off place and note, which the items route already sends. */
+  dropOffLocation?: string | null;
+  dropOffNote?: string | null;
   team: { id: string; name: string; displayOrder?: number };
 };
 
@@ -147,6 +150,9 @@ function mapItemsToMoment3(items: Moment3ApiItem[]): {
             detail: kind === 'TASK' ? '' : amountAndUnit || (item.quantityText ?? ''),
             // [[GTC-385]] (item 59, Q8): Moment 3 shows the same marks as the plan.
             marks: shownMarks(team.name, kind, item.dietaryTags),
+            // [[GTC-395]] item 7: the item's own drop-off, shown on its row.
+            dropOffLocation: item.dropOffLocation ?? null,
+            dropOffNote: item.dropOffNote ?? null,
           };
         }),
     }));
@@ -192,6 +198,8 @@ function mapTeamsAndItemsToPlanCategories(
     dietaryFlags?: string[];
     displayOrder?: number;
     kind?: string;
+    dropOffLocation?: string | null;
+    dropOffNote?: string | null;
   }>;
 }> {
   const itemsByTeamId = new Map<string, PlanApiItem[]>();
@@ -234,6 +242,9 @@ function mapTeamsAndItemsToPlanCategories(
           displayOrder: item.displayOrder ?? undefined,
           // [[GTC-385]] (item 59): a job carries no marks and no ticks.
           kind: item.kind,
+          // [[GTC-395]] item 7: the item's own drop-off, shown on its row.
+          dropOffLocation: item.dropOffLocation ?? null,
+          dropOffNote: item.dropOffNote ?? null,
         };
       }),
   }));

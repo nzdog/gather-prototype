@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import MomentArc, { type ArcDoor } from './MomentArc';
+import EventDropOffLine from '@/components/shared/EventDropOffLine';
+import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 import { STRIP_WORDS } from '@/lib/moments/strip';
 import EventDetails, { type EventDetailsFacts } from '@/components/shared/EventDetails';
 import { useToast } from '@/contexts/ToastContext';
@@ -36,6 +38,9 @@ export interface PlanItem {
   displayOrder?: number;
   /** [[GTC-385]] (item 59): 'ITEM' or 'TASK'; a job carries no marks and no ticks. */
   kind?: string;
+  /** [[GTC-395]] item 7: the item's own drop-off place and note, when it has them. */
+  dropOffLocation?: string | null;
+  dropOffNote?: string | null;
 }
 
 export interface PlanCategory {
@@ -279,6 +284,9 @@ export default function Moment2PlanView({
             disabled={regeneratingScope !== null}
           />
         </div>
+
+        {/* [[GTC-395]] item 7: where and when to drop off, the event's one line, above the heading. */}
+        {details && <EventDropOffLine facts={details} />}
 
         {/* Title + summary */}
         <h1 className="text-xl font-semibold text-gray-900 mb-1">
@@ -684,6 +692,12 @@ function ItemRow({
             {item.servingSize}
           </span>
         )}
+        {/* [[GTC-395]] item 7: the item's own drop-off, in DropOffDisplay's own words (none: nothing). */}
+        <DropOffDisplay
+          dropOffLocation={item.dropOffLocation}
+          dropOffNote={item.dropOffNote}
+          className="flex-wrap"
+        />
       </div>
 
       {/* Quantity (tap-to-edit) */}
