@@ -744,32 +744,32 @@ export const CHECKS = {
       !!h1 &&
       h1[1] === 'Gather' &&
       (html.match(/<h1\b/g) ?? []).length === 1 &&
-      JSON.stringify(buttons) === JSON.stringify(dev ? [SARAH_DEMO, TRY_IT] : [SARAH_DEMO]) &&
+      // [[GTC-395]] items 1 and 2 (founder, 20 Oct 2026): "Sarah demo" goes; "Try it yourself" alone,
+      // still development-only, so a production build shows the heading and no button.
+      JSON.stringify(buttons) === JSON.stringify(dev ? [TRY_IT] : []) &&
       (html.match(/<button\b/g) ?? []).length === buttons.length &&
       !/<(h2|h3|p|a|section|hr)\b/.test(html) &&
-      GONE_FROM_DEMO.every((w) => !html.includes(w))
+      GONE_FROM_DEMO.every((w) => !html.includes(w)) &&
+      !html.includes(SARAH_DEMO)
     );
   },
-  /** D3 — the page's code: the two doors, as they were, Sarah to the board; nothing else fetched. */
+  /**
+   * D3 — the page's code. [[GTC-395]] items 1 and 2 (founder, 20 Oct 2026): the Sarah door and its
+   * handler gone; the copy door as it was, development-only; nothing else fetched.
+   */
   demoSource(src: string, head: string) {
-    const sarah = bodyFrom(src, 'const handleOpenSarah = async () =>');
-    const old = bodyFrom(head, 'const handleOpenDashboard = async () =>');
     const sameCopy =
       bodyFrom(head, 'const handleStartCopy = async () =>').length > 200 &&
       squash(bodyFrom(src, 'const handleStartCopy = async () =>')) ===
         squash(bodyFrom(head, 'const handleStartCopy = async () =>'));
     return (
       sameCopy &&
-      old.length > 200 &&
-      squash(sarah.replace('handleOpenSarah', 'handleOpenDashboard'))
-        .replace(/setOpeningSarah/g, 'setOpeningDashboard')
-        .replace('`/plan/${eventId}/glance`', '`/plan/${eventId}`') === squash(old) &&
-      sarah.includes("fetch('/api/demo/session', { method: 'POST' })") &&
-      sarah.includes('window.location.href = `/plan/${eventId}/glance`;') &&
+      !/Sarah|handleOpen/.test(src) &&
+      !src.includes("fetch('/api/demo/session', { method: 'POST' })") &&
       /process\.env\.NODE_ENV === 'development' && \(\s*<button\s+onClick=\{handleStartCopy\}/.test(
         src
       ) &&
-      (src.match(/fetch\(/g) ?? []).length === 3 &&
+      (src.match(/fetch\(/g) ?? []).length === 2 &&
       !src.includes('/api/demo/tokens') &&
       !src.includes('/api/demo/reset') &&
       !src.includes('confirm(')
@@ -1377,19 +1377,19 @@ async function layerD() {
   const prod = draw('production');
   assert(
     'D',
-    'D1 on the founder’s Mac (development): the heading "Gather" and two buttons, "Sarah demo" and "Try it yourself", and nothing else',
+    'D1 on the founder’s Mac (development): the heading "Gather" and one button, "Try it yourself", and nothing else (GTC-395: "Sarah demo" goes)',
     CHECKS.demoPage(dev, true),
     dev.slice(0, 400)
   );
   assert(
     'D',
-    'D2 in a production build: the heading and only "Sarah demo" (the copy button waits for part D)',
+    'D2 in a production build: the heading and no button (GTC-395: "Sarah demo" goes; the copy button waits for part D)',
     CHECKS.demoPage(prod, false),
     prod.slice(0, 400)
   );
   assert(
     'D',
-    'D3 the two doors as they were, Sarah’s now opening /plan/{eventId}/glance; no tokens fetch, no Reset',
+    'D3 the copy door as it was, development-only; the Sarah door gone (GTC-395); no tokens fetch, no Reset',
     CHECKS.demoSource(code(DEMO_PAGE), stripComments(atTag(DEMO_PAGE)))
   );
   assert(

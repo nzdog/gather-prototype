@@ -324,7 +324,8 @@ export const CHECKS = {
       /fetch\('\/api\/events'/.test(src) &&
       src.includes('DEMO_START_WORDS.ALREADY_OPEN') &&
       src.includes('DEMO_START_WORDS.SIGNED_IN') &&
-      src.includes("'Sarah demo'")
+      // [[GTC-395]] items 1 and 2 (founder, 20 Oct 2026): the page's only button; "Sarah demo" goes.
+      !/Sarah/.test(src)
     );
   },
   banner(src: string) {
