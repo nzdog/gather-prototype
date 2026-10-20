@@ -12,6 +12,8 @@
  *   C  item 4: "Who should Gather talk to for the kids in this household?" lists this household's
  *      adults only, on Moment 1's edit-household form and the pre-flight's step 3; an existing pick
  *      in another household stays while it is the pick.
+ *   R  item 5: "What you've picked" on the right of Moment 2's questions, in Moment 1's arrangement;
+ *      on a phone it stays under the questions. Layout only.
  *
  * SAFETY. Static and rendered checks only: no database row, no dev server, no AI call, no
  * browser, no network. Every fixture and expected value is written here by hand, never taken from
@@ -332,6 +334,32 @@ const PF_ANA = (contactPersonEventId: string | null) => ({
   ],
 });
 
+// ── Item 5: "What you've picked" on the right, hand-written ─────────────────
+const MODAL = 'src/components/plan/Moment2Step1Modal.tsx';
+const SETUP_PAGE = 'src/app/plan/[eventId]/setup/page.tsx';
+const PICKS_LIB = 'src/lib/moments/picks-summary.ts';
+/** Moment 1's arrangement, as the setup page writes it (GTC-365): the row, the columns, the box. */
+const M1_ROW = 'flex flex-col md:flex-row md:gap-8';
+const M1_LEFT = 'flex-1 min-w-0';
+const M1_PHONE = 'md:hidden mt-8';
+const M1_RIGHT = 'hidden md:block w-80 flex-shrink-0';
+const M1_STICKY = 'sticky top-8 max-h-[calc(100vh-4rem-65px)] overflow-y-auto';
+const M1_BOX = 'max-w-5xl mx-auto px-6 py-8';
+/** The modal's: the same, its box widened at md only, its column 81px shorter (the bar, ruled). */
+const M2_BOX = 'max-w-2xl mx-auto px-6 py-8 pb-32 md:max-w-5xl';
+const M2_STICKY = 'sticky top-8 max-h-[calc(100vh-4rem-65px-81px)] overflow-y-auto';
+const PICKS_BOX = 'rounded-lg border border-gray-200 bg-white px-4 py-3';
+const PICKS_TABLE = '<PicksTable rows={picksTable} />';
+const PICKS_HEAD =
+  '<h3 className="text-sm font-medium text-gray-900 mb-2">{PICKS_WORDS.HEADING}</h3>';
+/** The same code but its layout: whitespace, brackets and commas (Prettier's re-wraps) dropped. */
+const flat = (src: string) => src.replace(/[\s(),]/g, '');
+const between = (src: string, from: string, to: string) => {
+  const a = src.indexOf(from);
+  const b = a >= 0 ? src.indexOf(to, a) : -1;
+  return a >= 0 && b > a ? src.slice(a, b) : '';
+};
+
 export const CHECKS = {
   /** F1, F2 — the first page: the heading "Gather" and its buttons, and nothing else. */
   frontPage(html: string, buttonsWanted: string[]) {
@@ -439,6 +467,53 @@ export const CHECKS = {
         select
       ) &&
       !/channelCandidates\s*\.filter/.test(select)
+    );
+  },
+  /** R1 — the modal uses Moment 1's row, columns and box (read in the setup page too). */
+  rightColumnLayout(modal: string, setup: string) {
+    return (
+      [M1_ROW, M1_LEFT, M1_PHONE, M1_RIGHT, M1_STICKY, M1_BOX].every((c) =>
+        setup.includes(`className="${c}"`)
+      ) &&
+      modal.includes(`<div className="${M2_BOX}">`) &&
+      modal.includes(`<div className="${M1_ROW}">`) &&
+      modal.includes(`<div className="${M1_LEFT}">`) &&
+      modal.includes(`<div className="${M1_RIGHT}">`) &&
+      modal.includes(`<div className="${M2_STICKY}">`) &&
+      !modal.includes('max-w-2xl mx-auto px-6 py-8 pb-32">')
+    );
+  },
+  /** R2 — the order: the row, the questions (the strip to the foot choices, the phone copy under Notes), then the column, then the bar. */
+  rightColumnOrder(modal: string) {
+    const at = (x: string) => modal.indexOf(x);
+    const marks = [
+      `<div className="${M1_ROW}">`,
+      `<div className="${M1_LEFT}">`,
+      '<MomentArc currentMoment={2}',
+      '<NotesAccordion',
+      `<div className="mt-6 ${PICKS_BOX} md:hidden">`,
+      '<QuietChoices',
+      `<div className="${M1_RIGHT}">`,
+      '<div className="fixed bottom-0 left-0 right-0',
+    ].map(at);
+    return marks.every((m, i) => m >= 0 && (i === 0 || m > marks[i - 1]));
+  },
+  /** R3 — the table twice, as Moment 1 draws its list: the phone copy, and the column's, after a kind is picked. */
+  rightColumnTable(modal: string) {
+    const count = (x: string) => modal.split(x).length - 1;
+    const column = between(
+      modal,
+      `<div className="${M2_STICKY}">`,
+      '<div className="fixed bottom-0'
+    );
+    return (
+      count(PICKS_TABLE) === 2 &&
+      count(PICKS_HEAD) === 2 &&
+      flat(column).startsWith(
+        flat(
+          `<div className="${M2_STICKY}">{state.eventType && <div className="${PICKS_BOX}">${PICKS_HEAD}${PICKS_TABLE}</div>}</div>`
+        )
+      )
     );
   },
 };
@@ -763,10 +838,56 @@ async function layerC() {
   );
 }
 
+// ══ Item 5 ═══════════════════════════════════════════════════════════════════
+async function layerR() {
+  section('R — item 5: "What you’ve picked" on the right, in Moment 1’s arrangement');
+  const modal = code(MODAL);
+  const head = stripComments(atGood(MODAL));
+  assert(
+    'R',
+    'R1 Moment 1’s row, columns, widths and breakpoint (as the setup page writes them); the box widens at md only; the column 81px shorter',
+    CHECKS.rightColumnLayout(modal, code(SETUP_PAGE))
+  );
+  assert(
+    'R',
+    'R2 on a computer the questions then the column; on a phone the table under Notes, before the foot choices, as now; the bar after both',
+    CHECKS.rightColumnOrder(modal)
+  );
+  assert(
+    'R',
+    'R3 the table drawn twice, as Moment 1 draws its list: the phone copy and the column’s, the column’s once a kind is picked',
+    CHECKS.rightColumnTable(modal)
+  );
+  const bar = (src: string) =>
+    between(src, '<div className="fixed bottom-0 left-0 right-0', '\n  );\n}');
+  const quiet = (src: string) => between(src, '<QuietChoices', '/>');
+  const questions = (src: string) =>
+    between(src, '<MomentArc currentMoment={2}', '<QuietChoices').replace(' md:hidden', '');
+  assert(
+    'R',
+    'R4 CONTROL: the Generate bar and the foot choices as they were (the same code)',
+    bar(head).length > 500 &&
+      flat(bar(modal)) === flat(bar(head)) &&
+      quiet(head).length > 100 &&
+      flat(quiet(modal)) === flat(quiet(head))
+  );
+  assert(
+    'R',
+    'R5 CONTROL: layout only — the questions’ code as it was but its indent and the phone copy’s md:hidden; the table and the words not edited',
+    questions(head).length > 5000 &&
+      flat(questions(modal)) === flat(questions(head)) &&
+      flat(between(modal, 'export function PicksTable', '\nfunction ')) ===
+        flat(between(head, 'export function PicksTable', '\nfunction ')) &&
+      between(head, 'export function PicksTable', '\nfunction ').length > 200 &&
+      unchangedSinceGood([PICKS_LIB])
+  );
+}
+
 async function main() {
   await layerF();
   await layerN();
   await layerC();
+  await layerR();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
     console.log(reds.map((r) => `  - ${r}`).join('\n'));

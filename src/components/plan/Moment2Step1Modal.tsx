@@ -736,7 +736,7 @@ export default function Moment2Step1Modal({
 
   return (
     <div className="fixed inset-0 top-[65px] z-50 bg-white overflow-y-auto">
-      <div className="max-w-2xl mx-auto px-6 py-8 pb-32">
+      <div className="max-w-2xl mx-auto px-6 py-8 pb-32 md:max-w-5xl">
         {/*
           [[GTC-367]] (items 1, 2 and 31) — the way out (W1) and the strip, where the × was. This
           screen carries its own way out; it saves first (Q7). [[GTC-381]] (ruling 2, Q7): it starts
@@ -767,283 +767,310 @@ export default function Moment2Step1Modal({
             />
           )}
         </div>
-        <div className="mb-8">
-          <MomentArc currentMoment={2} completedMoments={[1]} doors={leavingDoors} />
-        </div>
+        {/* [[GTC-395]] item 5 (founder, 20 Oct 2026): "What you've picked" on the right, the way
+            Moment 1 shows "Ducks in a row so far" beside its form: Moment 1's row, columns, widths
+            and breakpoint (the setup page). On a phone the table stays under the questions. */}
+        <div className="flex flex-col md:flex-row md:gap-8">
+          <div className="flex-1 min-w-0">
+            <div className="mb-8">
+              <MomentArc currentMoment={2} completedMoments={[1]} doors={leavingDoors} />
+            </div>
 
-        {/* [[GTC-392]] part B — in the page, never in the fixed bar. [[GTC-394]] tweak 5: at the top
+            {/* [[GTC-392]] part B — in the page, never in the fixed bar. [[GTC-394]] tweak 5: at the top
             of the questions, where it shows on a laptop without scrolling. */}
-        {sample && <TypicalAnswersButton onFill={fillTypical} />}
+            {sample && <TypicalAnswersButton onFill={fillTypical} />}
 
-        {/* Event type selector */}
-        <div className="mb-8">
-          <p className="text-lg font-medium text-gray-900 mb-4">
-            What kind of event are you planning?
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {CONFIG_EVENT_TYPES.map((type) => (
-              <button
-                key={type}
-                type="button"
-                onClick={() => handleEventTypeSelect(type)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                  state.eventType === type
-                    ? 'bg-accent text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {type}
-              </button>
-            ))}
-          </div>
+            {/* Event type selector */}
+            <div className="mb-8">
+              <p className="text-lg font-medium text-gray-900 mb-4">
+                What kind of event are you planning?
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {CONFIG_EVENT_TYPES.map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => handleEventTypeSelect(type)}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                      state.eventType === type
+                        ? 'bg-accent text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
 
-          {/* Other text input */}
-          {state.eventType === 'Other' && (
-            <div className="mt-3">
-              <input
-                type="text"
-                placeholder="What kind of event?"
-                value={state.eventTypeOther}
-                onChange={(e) =>
-                  updateState((prev) => ({ ...prev, eventTypeOther: e.target.value }))
-                }
-                className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent/40"
-              />
-            </div>
-          )}
-
-          {/* Feedback line */}
-          {feedbackLine && <p className="mt-4 text-base text-gray-600 italic">{feedbackLine}</p>}
-        </div>
-
-        {/* [[GTC-373]] (item 23, Q3) — "Find a dish", in the flow above "Food", never fixed. */}
-        {menuRows.length > 0 && (
-          <MenuSearch
-            rows={menuRows}
-            isTicked={menuTicked}
-            dietaryNone={state.dietaryData.status === 'confirmed_none'}
-            onPick={pickFromMenu}
-          />
-        )}
-
-        {/* Accordions — only show after event type selected */}
-        {state.eventType && (
-          <div className="space-y-2">
-            {/* FOOD section */}
-            <div className="text-xs uppercase tracking-wider text-gray-500 mt-4 mb-2 border-t border-gray-200 pt-4">
-              Food
-            </div>
-            {/* Dietary requirements — first so food sections have context */}
-            <DietaryAccordion
-              id="dietary"
-              openSections={openSections}
-              onToggle={handleAccordionToggle}
-              data={state.dietaryData}
-              onChange={(d) => updateState((prev) => ({ ...prev, dietaryData: d }))}
-            />
-            {/* Canonical OptionTree food categories shown up front (GTC-363: the defaults,
-                plus any shown up front only). The rest are deferred to "Show more". */}
-            {state.eventType &&
-              renderableFoodCategories.map((catKey) => {
-                const meta = OPTION_TREE_CATEGORY_META[catKey];
-                const levels = getCategoryLevels(state.eventType!, catKey);
-                if (!levels || levels.length === 0) return null;
-                if (catKey === 'mains') {
-                  const data = state.mainsData;
-                  return (
-                    <FoodOptionTreeAccordion
-                      key="mains"
-                      id="mains"
-                      label={`${meta.emoji} ${meta.label}`}
-                      levels={levels}
-                      selections={data.selections ?? {}}
-                      stillDeciding={data.stillDeciding}
-                      openSections={openSections}
-                      onToggle={handleAccordionToggle}
-                      onSelectionsChange={(next) =>
-                        updateState((prev) => ({
-                          ...prev,
-                          // GTC-364 (item 18): a choice made here ends "still deciding".
-                          mainsData: { ...prev.mainsData, selections: next, stillDeciding: false },
-                        }))
-                      }
-                      onStillDecidingToggle={() =>
-                        updateState((prev) => ({
-                          ...prev,
-                          mainsData: {
-                            ...prev.mainsData,
-                            stillDeciding: !prev.mainsData.stillDeciding,
-                          },
-                        }))
-                      }
-                    />
-                  );
-                }
-                const entry = state.extendedCategoriesData[catKey] ?? {
-                  selections: {},
-                  stillDeciding: false,
-                };
-                return (
-                  <FoodOptionTreeAccordion
-                    key={catKey}
-                    id={catKey}
-                    label={`${meta.emoji} ${meta.label}`}
-                    levels={levels}
-                    selections={entry.selections}
-                    stillDeciding={entry.stillDeciding}
-                    openSections={openSections}
-                    onToggle={handleAccordionToggle}
-                    onSelectionsChange={(next) =>
-                      updateState((prev) => ({
-                        ...prev,
-                        extendedCategoriesData: {
-                          ...prev.extendedCategoriesData,
-                          // GTC-364 (item 18): a choice made here ends "still deciding".
-                          [catKey]: { selections: next, stillDeciding: false },
-                        },
-                      }))
+              {/* Other text input */}
+              {state.eventType === 'Other' && (
+                <div className="mt-3">
+                  <input
+                    type="text"
+                    placeholder="What kind of event?"
+                    value={state.eventTypeOther}
+                    onChange={(e) =>
+                      updateState((prev) => ({ ...prev, eventTypeOther: e.target.value }))
                     }
-                    onStillDecidingToggle={() =>
-                      updateState((prev) => {
-                        const cur = prev.extendedCategoriesData[catKey] ?? {
-                          selections: {},
-                          stillDeciding: false,
-                        };
-                        return {
-                          ...prev,
-                          extendedCategoriesData: {
-                            ...prev.extendedCategoriesData,
-                            [catKey]: { ...cur, stillDeciding: !cur.stillDeciding },
-                          },
-                        };
-                      })
-                    }
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent/40"
                   />
-                );
-              })}
-            {/* Show more food categories toggle (sub-commit h) */}
-            {additionalFoodCategories.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowAdditionalCategories((v) => !v)}
-                className="w-full text-sm text-accent hover:text-accent-dark font-medium py-2 mt-1 transition-colors"
-              >
-                {showAdditionalCategories
-                  ? 'Hide additional categories'
-                  : `Show ${additionalFoodCategories.length} more food ${additionalFoodCategories.length === 1 ? 'category' : 'categories'}`}
-              </button>
+                </div>
+              )}
+
+              {/* Feedback line */}
+              {feedbackLine && (
+                <p className="mt-4 text-base text-gray-600 italic">{feedbackLine}</p>
+              )}
+            </div>
+
+            {/* [[GTC-373]] (item 23, Q3) — "Find a dish", in the flow above "Food", never fixed. */}
+            {menuRows.length > 0 && (
+              <MenuSearch
+                rows={menuRows}
+                isTicked={menuTicked}
+                dietaryNone={state.dietaryData.status === 'confirmed_none'}
+                onPick={pickFromMenu}
+              />
             )}
 
-            {/* Additional (non-default) food OptionTree accordions */}
-            {showAdditionalCategories &&
-              additionalFoodCategories.map((catKey) => {
-                const meta = OPTION_TREE_CATEGORY_META[catKey];
-                const levels = getCategoryLevels(state.eventType!, catKey);
-                if (!levels || levels.length === 0) return null;
-                const entry = state.extendedCategoriesData[catKey] ?? {
-                  selections: {},
-                  stillDeciding: false,
-                };
-                return (
-                  <FoodOptionTreeAccordion
-                    key={catKey}
-                    id={catKey}
-                    label={`${meta.emoji} ${meta.label}`}
-                    levels={levels}
-                    selections={entry.selections}
-                    stillDeciding={entry.stillDeciding}
-                    openSections={openSections}
-                    onToggle={handleAccordionToggle}
-                    onSelectionsChange={(next) =>
-                      updateState((prev) => ({
-                        ...prev,
-                        extendedCategoriesData: {
-                          ...prev.extendedCategoriesData,
-                          // GTC-364 (item 18): a choice made here ends "still deciding".
-                          [catKey]: { selections: next, stillDeciding: false },
-                        },
-                      }))
+            {/* Accordions — only show after event type selected */}
+            {state.eventType && (
+              <div className="space-y-2">
+                {/* FOOD section */}
+                <div className="text-xs uppercase tracking-wider text-gray-500 mt-4 mb-2 border-t border-gray-200 pt-4">
+                  Food
+                </div>
+                {/* Dietary requirements — first so food sections have context */}
+                <DietaryAccordion
+                  id="dietary"
+                  openSections={openSections}
+                  onToggle={handleAccordionToggle}
+                  data={state.dietaryData}
+                  onChange={(d) => updateState((prev) => ({ ...prev, dietaryData: d }))}
+                />
+                {/* Canonical OptionTree food categories shown up front (GTC-363: the defaults,
+                plus any shown up front only). The rest are deferred to "Show more". */}
+                {state.eventType &&
+                  renderableFoodCategories.map((catKey) => {
+                    const meta = OPTION_TREE_CATEGORY_META[catKey];
+                    const levels = getCategoryLevels(state.eventType!, catKey);
+                    if (!levels || levels.length === 0) return null;
+                    if (catKey === 'mains') {
+                      const data = state.mainsData;
+                      return (
+                        <FoodOptionTreeAccordion
+                          key="mains"
+                          id="mains"
+                          label={`${meta.emoji} ${meta.label}`}
+                          levels={levels}
+                          selections={data.selections ?? {}}
+                          stillDeciding={data.stillDeciding}
+                          openSections={openSections}
+                          onToggle={handleAccordionToggle}
+                          onSelectionsChange={(next) =>
+                            updateState((prev) => ({
+                              ...prev,
+                              // GTC-364 (item 18): a choice made here ends "still deciding".
+                              mainsData: {
+                                ...prev.mainsData,
+                                selections: next,
+                                stillDeciding: false,
+                              },
+                            }))
+                          }
+                          onStillDecidingToggle={() =>
+                            updateState((prev) => ({
+                              ...prev,
+                              mainsData: {
+                                ...prev.mainsData,
+                                stillDeciding: !prev.mainsData.stillDeciding,
+                              },
+                            }))
+                          }
+                        />
+                      );
                     }
-                    onStillDecidingToggle={() =>
-                      updateState((prev) => {
-                        const cur = prev.extendedCategoriesData[catKey] ?? {
-                          selections: {},
-                          stillDeciding: false,
-                        };
-                        return {
-                          ...prev,
-                          extendedCategoriesData: {
-                            ...prev.extendedCategoriesData,
-                            [catKey]: { ...cur, stillDeciding: !cur.stillDeciding },
-                          },
-                        };
-                      })
-                    }
-                  />
-                );
-              })}
+                    const entry = state.extendedCategoriesData[catKey] ?? {
+                      selections: {},
+                      stillDeciding: false,
+                    };
+                    return (
+                      <FoodOptionTreeAccordion
+                        key={catKey}
+                        id={catKey}
+                        label={`${meta.emoji} ${meta.label}`}
+                        levels={levels}
+                        selections={entry.selections}
+                        stillDeciding={entry.stillDeciding}
+                        openSections={openSections}
+                        onToggle={handleAccordionToggle}
+                        onSelectionsChange={(next) =>
+                          updateState((prev) => ({
+                            ...prev,
+                            extendedCategoriesData: {
+                              ...prev.extendedCategoriesData,
+                              // GTC-364 (item 18): a choice made here ends "still deciding".
+                              [catKey]: { selections: next, stillDeciding: false },
+                            },
+                          }))
+                        }
+                        onStillDecidingToggle={() =>
+                          updateState((prev) => {
+                            const cur = prev.extendedCategoriesData[catKey] ?? {
+                              selections: {},
+                              stillDeciding: false,
+                            };
+                            return {
+                              ...prev,
+                              extendedCategoriesData: {
+                                ...prev.extendedCategoriesData,
+                                [catKey]: { ...cur, stillDeciding: !cur.stillDeciding },
+                              },
+                            };
+                          })
+                        }
+                      />
+                    );
+                  })}
+                {/* Show more food categories toggle (sub-commit h) */}
+                {additionalFoodCategories.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAdditionalCategories((v) => !v)}
+                    className="w-full text-sm text-accent hover:text-accent-dark font-medium py-2 mt-1 transition-colors"
+                  >
+                    {showAdditionalCategories
+                      ? 'Hide additional categories'
+                      : `Show ${additionalFoodCategories.length} more food ${additionalFoodCategories.length === 1 ? 'category' : 'categories'}`}
+                  </button>
+                )}
 
-            {/* OTHER JOBS section */}
-            <div className="text-xs uppercase tracking-wider text-gray-500 mt-6 mb-2 border-t border-gray-200 pt-4">
-              Other jobs
-            </div>
-            <FreeTextAccordion
-              id="setUp"
-              label="🛠️ Set up"
-              placeholder="What needs setting up before guests arrive? E.g. tables, chairs, decorations..."
-              data={state.setUpData}
-              openSections={openSections}
-              onToggle={handleAccordionToggle}
-              onChange={(d) => updateState((prev) => ({ ...prev, setUpData: d }))}
-            />
-            <FreeTextAccordion
-              id="cleanUp"
-              label="🧹 Clean up"
-              placeholder="What needs cleaning up afterwards? E.g. dishes, rubbish, areas to tidy..."
-              data={state.cleanUpData}
-              openSections={openSections}
-              onToggle={handleAccordionToggle}
-              onChange={(d) => updateState((prev) => ({ ...prev, cleanUpData: d }))}
-            />
-            <FreeTextAccordion
-              id="otherJobsOther"
-              label="📋 Other"
-              placeholder="Anything else that needs organising? E.g. transport, gifts, music..."
-              data={state.otherJobsOtherData}
-              openSections={openSections}
-              onToggle={handleAccordionToggle}
-              onChange={(d) => updateState((prev) => ({ ...prev, otherJobsOtherData: d }))}
-            />
-            {/* GTC-379 (item 41, ruling 4): the notes box last, under a thin line and some space,
+                {/* Additional (non-default) food OptionTree accordions */}
+                {showAdditionalCategories &&
+                  additionalFoodCategories.map((catKey) => {
+                    const meta = OPTION_TREE_CATEGORY_META[catKey];
+                    const levels = getCategoryLevels(state.eventType!, catKey);
+                    if (!levels || levels.length === 0) return null;
+                    const entry = state.extendedCategoriesData[catKey] ?? {
+                      selections: {},
+                      stillDeciding: false,
+                    };
+                    return (
+                      <FoodOptionTreeAccordion
+                        key={catKey}
+                        id={catKey}
+                        label={`${meta.emoji} ${meta.label}`}
+                        levels={levels}
+                        selections={entry.selections}
+                        stillDeciding={entry.stillDeciding}
+                        openSections={openSections}
+                        onToggle={handleAccordionToggle}
+                        onSelectionsChange={(next) =>
+                          updateState((prev) => ({
+                            ...prev,
+                            extendedCategoriesData: {
+                              ...prev.extendedCategoriesData,
+                              // GTC-364 (item 18): a choice made here ends "still deciding".
+                              [catKey]: { selections: next, stillDeciding: false },
+                            },
+                          }))
+                        }
+                        onStillDecidingToggle={() =>
+                          updateState((prev) => {
+                            const cur = prev.extendedCategoriesData[catKey] ?? {
+                              selections: {},
+                              stillDeciding: false,
+                            };
+                            return {
+                              ...prev,
+                              extendedCategoriesData: {
+                                ...prev.extendedCategoriesData,
+                                [catKey]: { ...cur, stillDeciding: !cur.stillDeciding },
+                              },
+                            };
+                          })
+                        }
+                      />
+                    );
+                  })}
+
+                {/* OTHER JOBS section */}
+                <div className="text-xs uppercase tracking-wider text-gray-500 mt-6 mb-2 border-t border-gray-200 pt-4">
+                  Other jobs
+                </div>
+                <FreeTextAccordion
+                  id="setUp"
+                  label="🛠️ Set up"
+                  placeholder="What needs setting up before guests arrive? E.g. tables, chairs, decorations..."
+                  data={state.setUpData}
+                  openSections={openSections}
+                  onToggle={handleAccordionToggle}
+                  onChange={(d) => updateState((prev) => ({ ...prev, setUpData: d }))}
+                />
+                <FreeTextAccordion
+                  id="cleanUp"
+                  label="🧹 Clean up"
+                  placeholder="What needs cleaning up afterwards? E.g. dishes, rubbish, areas to tidy..."
+                  data={state.cleanUpData}
+                  openSections={openSections}
+                  onToggle={handleAccordionToggle}
+                  onChange={(d) => updateState((prev) => ({ ...prev, cleanUpData: d }))}
+                />
+                <FreeTextAccordion
+                  id="otherJobsOther"
+                  label="📋 Other"
+                  placeholder="Anything else that needs organising? E.g. transport, gifts, music..."
+                  data={state.otherJobsOtherData}
+                  openSections={openSections}
+                  onToggle={handleAccordionToggle}
+                  onChange={(d) => updateState((prev) => ({ ...prev, otherJobsOtherData: d }))}
+                />
+                {/* GTC-379 (item 41, ruling 4): the notes box last, under a thin line and some space,
                 no words. Still `otherNotes`, under the same id (GTC-363 item 25), so what the AI
                 reads is unchanged. */}
-            <div className="border-t border-gray-200 mt-6 pt-4" aria-hidden="true" />
-            <NotesAccordion
-              id="other"
-              openSections={openSections}
-              onToggle={handleAccordionToggle}
-              value={state.otherNotes}
-              onChange={(v) => updateState((prev) => ({ ...prev, otherNotes: v }))}
-            />
-            {/* GTC-379 (item 44, W4 to W9): what she has picked, under Notes and above the bar.
+                <div className="border-t border-gray-200 mt-6 pt-4" aria-hidden="true" />
+                <NotesAccordion
+                  id="other"
+                  openSections={openSections}
+                  onToggle={handleAccordionToggle}
+                  value={state.otherNotes}
+                  onChange={(v) => updateState((prev) => ({ ...prev, otherNotes: v }))}
+                />
+                {/* GTC-379 (item 44, W4 to W9): what she has picked, under Notes and above the bar.
                 It grows with the page; nothing is added to the bar. */}
-            <div className="mt-6 rounded-lg border border-gray-200 bg-white px-4 py-3">
-              <h3 className="text-sm font-medium text-gray-900 mb-2">{PICKS_WORDS.HEADING}</h3>
-              {/* [[GTC-394]] tweak 6 (founder: "more like a spreadsheet... like the PDF"). */}
-              <PicksTable rows={picksTable} />
+                <div className="mt-6 rounded-lg border border-gray-200 bg-white px-4 py-3 md:hidden">
+                  <h3 className="text-sm font-medium text-gray-900 mb-2">{PICKS_WORDS.HEADING}</h3>
+                  {/* [[GTC-394]] tweak 6 (founder: "more like a spreadsheet... like the PDF"). */}
+                  <PicksTable rows={picksTable} />
+                </div>
+              </div>
+            )}
+
+            {/* [[GTC-394]] tweak 2 — the two quieter choices, at the foot of the questions and above the
+            bar, whether or not a kind is picked; each saves the answers first, as every way out does. */}
+            <QuietChoices
+              onOwnPlan={onOwnPlan ? () => void leave(onOwnPlan) : undefined}
+              ownPlanState={ownPlanState}
+              ownPlanExists={ownPlanExists}
+              onInvitesOnly={onInvitesOnly ? () => void leave(onInvitesOnly) : undefined}
+              invitesOnlyState={invitesOnlyState}
+            />
+          </div>
+
+          {/* [[GTC-395]] item 5 — the right column (a computer): the same table, kept up as she picks,
+            in view as she scrolls, with its own scroll. 81px shorter than Moment 1's column so it
+            clears the Generate bar (the founder's ruling); there but empty before a kind is picked. */}
+          <div className="hidden md:block w-80 flex-shrink-0">
+            <div className="sticky top-8 max-h-[calc(100vh-4rem-65px-81px)] overflow-y-auto">
+              {state.eventType && (
+                <div className="rounded-lg border border-gray-200 bg-white px-4 py-3">
+                  <h3 className="text-sm font-medium text-gray-900 mb-2">{PICKS_WORDS.HEADING}</h3>
+                  <PicksTable rows={picksTable} />
+                </div>
+              )}
             </div>
           </div>
-        )}
-
-        {/* [[GTC-394]] tweak 2 — the two quieter choices, at the foot of the questions and above the
-            bar, whether or not a kind is picked; each saves the answers first, as every way out does. */}
-        <QuietChoices
-          onOwnPlan={onOwnPlan ? () => void leave(onOwnPlan) : undefined}
-          ownPlanState={ownPlanState}
-          ownPlanExists={ownPlanExists}
-          onInvitesOnly={onInvitesOnly ? () => void leave(onInvitesOnly) : undefined}
-          invitesOnlyState={invitesOnlyState}
-        />
+        </div>
       </div>
 
       {/* Sticky generate button */}
