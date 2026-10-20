@@ -7,6 +7,7 @@ import { SavedHousehold } from './HouseholdCardList';
 import { HOUSEHOLD_CONTACT_LINE, OWN_HOUSEHOLD_LINE } from '@/lib/households/contact-line';
 import { householdDraft } from '@/lib/households/draft';
 import { COPY_WORDS, isCopyAddress } from '@/lib/demo/copy-address';
+import { moment1ChannelChoices } from '@/components/plan/household-channel-choices';
 
 export interface Moment1PersonInput {
   primaryContact: {
@@ -1197,9 +1198,9 @@ export default function Moment1InputForm({
 
             {/*
               GTC-172 (C1) — the household contact picker (Moment 4 §10.7).
-              ONE decision per household, not a matrix: Moment 1 stays light. It is
-              cross-household capable, so the options span the whole event — Grandma's
-              channel may live in her daughter's household. Children are not offered.
+              ONE decision per household, not a matrix: Moment 1 stays light. Since
+              [[GTC-395]] item 4 it offers this household's adults only (the founder's
+              ruling; the cross-household list confused him). Children are not offered.
             */}
             {/* [[GTC-384]] (Q4): not on the host's own household, opened from the list either:
                 there her children are hers whoever is picked, so the question is untrue. */}
@@ -1220,13 +1221,23 @@ export default function Moment1InputForm({
                   <option value="">
                     {name.trim() ? `${name.trim()} (main contact)` : 'The main contact'}
                   </option>
-                  {channelCandidates
-                    .filter((c) => c.householdId !== editingHousehold?.id)
-                    .map((c) => (
-                      <option key={c.personEventId} value={c.personEventId}>
-                        {c.name} — {c.householdName}&rsquo;s household
-                      </option>
-                    ))}
+                  {/* [[GTC-395]] item 4 (founder's ruling, 20 Oct 2026): this household's adults
+                      only, from the form itself; an existing pick elsewhere stays while it is the
+                      pick (household-channel-choices.ts). */}
+                  {moment1ChannelChoices({
+                    householdId: editingHousehold?.id,
+                    partner: showPartner
+                      ? { personEventId: partnerPersonEventId, name: partnerName }
+                      : null,
+                    helpers,
+                    guests,
+                    picked: contactPersonEventId,
+                    candidates: channelCandidates,
+                  }).map((c) => (
+                    <option key={c.personEventId} value={c.personEventId}>
+                      {c.label}
+                    </option>
+                  ))}
                 </select>
                 {/* GTC-363 (item 6, W1), darker since [[GTC-384]] (item 63). */}
                 <p className="text-sm text-gray-600 mt-1">{HOUSEHOLD_CONTACT_LINE}</p>

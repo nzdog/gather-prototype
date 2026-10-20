@@ -9,6 +9,9 @@
  *      go, the session route behind it is not touched.
  *   N  item 3: the sample starts on its own pre-filled "Create Your Event" page (development-only),
  *      then its name, dates and venue are saved through the Edit event route.
+ *   C  item 4: "Who should Gather talk to for the kids in this household?" lists this household's
+ *      adults only, on Moment 1's edit-household form and the pre-flight's step 3; an existing pick
+ *      in another household stays while it is the pick.
  *
  * SAFETY. Static and rendered checks only: no database row, no dev server, no AI call, no
  * browser, no network. Every fixture and expected value is written here by hand, never taken from
@@ -259,6 +262,76 @@ function fakeFetch(
 }
 const STARTED = { status: 200, json: { success: true, eventId: 'ev-1', href: '/plan/ev-1/setup' } };
 
+// ── Item 4: the household picker, hand-written ────────────────────────────────
+const CHOICES_FILE = 'src/components/plan/household-channel-choices.ts';
+const M1_FORM = 'src/components/plan/Moment1InputForm.tsx';
+const PREFLIGHT = 'src/app/plan/[eventId]/pre-flight/page.tsx';
+/** Not edited by item 4: the routes that check a pick, the households code and the schema. */
+const NOT_EDITED_C = [
+  'src/app/api/events/[id]/households/route.ts',
+  'src/app/api/events/[id]/households/[householdId]/route.ts',
+  'src/app/api/events/[id]/pre-flight/channel/route.ts',
+  'src/lib/households/channel.ts',
+  'prisma/schema.prisma',
+  'src/app/plan/[eventId]/setup/page.tsx',
+];
+/** Moment 1's page offers every household's non-child members (Ana's household and Bob's). */
+const M1_CANDIDATES = [
+  { personEventId: 'pe-ana', name: 'Ana Ngata', householdName: 'Ana Ngata', householdId: 'h-ana' },
+  {
+    personEventId: 'pe-ross',
+    name: 'Ross Ngata',
+    householdName: 'Ana Ngata',
+    householdId: 'h-ana',
+  },
+  {
+    personEventId: 'pe-mere',
+    name: 'Mere Ngata',
+    householdName: 'Ana Ngata',
+    householdId: 'h-ana',
+  },
+  { personEventId: 'pe-tia', name: 'Tia Ngata', householdName: 'Ana Ngata', householdId: 'h-ana' },
+  { personEventId: 'pe-bob', name: 'Bob Reid', householdName: 'Bob Reid', householdId: 'h-bob' },
+  { personEventId: 'pe-jo', name: 'Jo Reid', householdName: 'Bob Reid', householdId: 'h-bob' },
+];
+/** Ana's form while she edits it: her partner, a guest, a helper ticked as an adult, a child helper. */
+const ANA_FORM = {
+  householdId: 'h-ana',
+  partner: { personEventId: 'pe-ross', name: 'Ross Ngata ' },
+  guests: [{ personEventId: 'pe-mere', name: 'Mere Ngata' }, { name: 'New Guest' }],
+  helpers: [
+    { personEventId: 'pe-tia', name: 'Tia Ngata', adultRoled: true },
+    { personEventId: 'pe-kai', name: 'Kai Ngata', adultRoled: false },
+  ],
+  candidates: M1_CANDIDATES,
+};
+const ANA_ADULTS = [
+  { personEventId: 'pe-ross', label: 'Ross Ngata' },
+  { personEventId: 'pe-mere', label: 'Mere Ngata' },
+  { personEventId: 'pe-tia', label: 'Tia Ngata' },
+];
+/** The pre-flight read offers every non-child member, with the household's label. */
+const PF_CANDIDATES = [
+  { personEventId: 'pe-ana', name: 'Ana Ngata', householdId: 'h-ana', householdLabel: 'Ana Ngata' },
+  {
+    personEventId: 'pe-ross',
+    name: 'Ross Ngata',
+    householdId: 'h-ana',
+    householdLabel: 'Ana Ngata',
+  },
+  { personEventId: 'pe-bob', name: 'Bob Reid', householdId: 'h-bob', householdLabel: 'Bob Reid' },
+  { personEventId: 'pe-lee', name: 'Lee Tan', householdId: null, householdLabel: null },
+];
+const PF_ANA = (contactPersonEventId: string | null) => ({
+  id: 'h-ana',
+  contactPersonEventId,
+  members: [
+    { personEventId: 'pe-ana', householdRole: 'PRIMARY_CONTACT' },
+    { personEventId: 'pe-ross', householdRole: 'PARTNER' },
+    { personEventId: 'pe-kai', householdRole: 'CHILD' },
+  ],
+});
+
 export const CHECKS = {
   /** F1, F2 — the first page: the heading "Gather" and its buttons, and nothing else. */
   frontPage(html: string, buttonsWanted: string[]) {
@@ -337,6 +410,35 @@ export const CHECKS = {
       ) &&
       !/fetch\(/.test(src) &&
       !/useState|DEMO_START_WORDS/.test(src)
+    );
+  },
+  /** C4 — Moment 1's select maps the household's own choices; the old cross-household filter is gone. */
+  moment1Picker(src: string) {
+    const at = src.indexOf('id="household-channel"');
+    const select = at >= 0 ? src.slice(at, src.indexOf('</select>', at)) : '';
+    return (
+      /\{!isHostHouseholdForm && channelCandidates\.length > 0 && \(/.test(src) &&
+      select.includes("{name.trim() ? `${name.trim()} (main contact)` : 'The main contact'}") &&
+      /\{moment1ChannelChoices\(\{[\s\S]*?\}\)\.map\(\(c\) => \(\s*<option key=\{c\.personEventId\} value=\{c\.personEventId\}>\s*\{c\.label\}\s*<\/option>/.test(
+        select
+      ) &&
+      /householdId: editingHousehold\?\.id/.test(select) &&
+      /picked: contactPersonEventId/.test(select) &&
+      !/channelCandidates\s*\.filter/.test(select) &&
+      !src.includes('householdId !== editingHousehold?.id')
+    );
+  },
+  /** C4 — the pre-flight's select maps its household's choices; the default and its guard as they were. */
+  preflightPicker(src: string) {
+    const at = src.indexOf('Who should Gather talk to for the kids in this household?');
+    const select = at >= 0 ? src.slice(at, src.indexOf('</select>', at)) : '';
+    return (
+      /\{!h\.isHostHousehold && \(/.test(src) &&
+      select.includes('<option value="">{h.label} (main contact)</option>') &&
+      /\{preflightChannelChoices\(h, channelCandidates\)\.map\(\(c\) => \(\s*<option key=\{c\.personEventId\} value=\{c\.personEventId\}>\s*\{c\.label\}\s*<\/option>/.test(
+        select
+      ) &&
+      !/channelCandidates\s*\.filter/.test(select)
     );
   },
 };
@@ -606,9 +708,65 @@ async function layerN() {
   );
 }
 
+// ══ Item 4 ═══════════════════════════════════════════════════════════════════
+async function layerC() {
+  section('C — item 4: "Who should Gather talk to" lists this household’s adults only');
+  const CH = await load('../src/components/plan/household-channel-choices');
+  const m1 = (picked: string | null) =>
+    CH?.moment1ChannelChoices ? CH.moment1ChannelChoices({ ...ANA_FORM, picked }) : null;
+  const pf = (picked: string | null) =>
+    CH?.preflightChannelChoices ? CH.preflightChannelChoices(PF_ANA(picked), PF_CANDIDATES) : null;
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  assert(
+    'C',
+    'C1 Moment 1: the household’s own adults from the form (partner, guest, helper ticked as an adult), each once saved; never its main contact, a child or another household',
+    same(m1(null), ANA_ADULTS) && same(m1('pe-ross'), ANA_ADULTS),
+    JSON.stringify(m1(null))
+  );
+  assert(
+    'C',
+    'C2 Moment 1: an existing pick in another household stays, labelled as before, while it is the pick; changed away, it is gone',
+    same(m1('pe-bob'), [
+      ...ANA_ADULTS,
+      { personEventId: 'pe-bob', label: 'Bob Reid — Bob Reid’s household' },
+    ]) && same(m1('pe-mere'), ANA_ADULTS),
+    JSON.stringify(m1('pe-bob'))
+  );
+  const ross = [{ personEventId: 'pe-ross', label: 'Ross Ngata' }];
+  assert(
+    'C',
+    'C3 the pre-flight: the household’s own candidates but its main contact, by name; a kept pick elsewhere with its suffix while it is the pick',
+    same(pf(null), ross) &&
+      same(pf('pe-ross'), ross) &&
+      same(pf('pe-bob'), [
+        ...ross,
+        { personEventId: 'pe-bob', label: 'Bob Reid — Bob Reid’s household' },
+      ]) &&
+      same(pf('pe-lee'), [
+        ...ross,
+        { personEventId: 'pe-lee', label: 'Lee Tan — not in a household' },
+      ]),
+    JSON.stringify([pf(null), pf('pe-bob'), pf('pe-lee')])
+  );
+  assert(
+    'C',
+    'C4 both screens draw those choices under the same default, still never on the host’s own household',
+    CHECKS.moment1Picker(code(M1_FORM)) &&
+      CHECKS.preflightPicker(code(PREFLIGHT)) &&
+      /from '@\/components\/plan\/household-channel-choices'/.test(code(M1_FORM)) &&
+      /from '@\/components\/plan\/household-channel-choices'/.test(code(PREFLIGHT))
+  );
+  assert(
+    'C',
+    'C5 CONTROL: the three routes that check a pick, src/lib/households, the schema and the setup page are not edited since demo-tweaks-good',
+    NOT_EDITED_C.every((f) => read(f).length > 0) && unchangedSinceGood(NOT_EDITED_C)
+  );
+}
+
 async function main() {
   await layerF();
   await layerN();
+  await layerC();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
     console.log(reds.map((r) => `  - ${r}`).join('\n'));

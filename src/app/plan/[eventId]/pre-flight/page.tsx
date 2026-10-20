@@ -128,6 +128,7 @@ import {
   type TickPrints,
   type TickStep,
 } from '@/lib/preflight/tick-memory';
+import { preflightChannelChoices } from '@/components/plan/household-channel-choices';
 
 // ─── Wire shapes (mirror /api/events/[id]/pre-flight) ────────────────────────
 
@@ -858,23 +859,13 @@ export default function PreFlightPage() {
                         >
                           {/* value="" is "not picked", which resolves to the primary contact. */}
                           <option value="">{h.label} (main contact)</option>
-                          {channelCandidates
-                            .filter(
-                              (c) =>
-                                c.personEventId !==
-                                h.members.find((m) => m.householdRole === 'PRIMARY_CONTACT')
-                                  ?.personEventId
-                            )
-                            .map((c) => (
-                              <option key={c.personEventId} value={c.personEventId}>
-                                {c.name}
-                                {c.householdId === h.id
-                                  ? ''
-                                  : c.householdLabel
-                                    ? ` — ${c.householdLabel}’s household`
-                                    : ' — not in a household'}
-                              </option>
-                            ))}
+                          {/* [[GTC-395]] item 4 (founder's ruling, 20 Oct 2026): this household's
+                              adults only; an existing pick elsewhere stays while it is the pick. */}
+                          {preflightChannelChoices(h, channelCandidates).map((c) => (
+                            <option key={c.personEventId} value={c.personEventId}>
+                              {c.label}
+                            </option>
+                          ))}
                         </select>
                         {/* GTC-363 (item 6, W1), darker since [[GTC-384]] (item 63). */}
                         <p className="text-sm text-gray-600 -mt-2 mb-3">{HOUSEHOLD_CONTACT_LINE}</p>
