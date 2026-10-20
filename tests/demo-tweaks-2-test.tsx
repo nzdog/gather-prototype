@@ -7,6 +7,8 @@
  * THE LAYERS
  *   F  items 1 and 2: the front page has only "Try it yourself"; the Sarah button and its handler
  *      go, the session route behind it is not touched.
+ *   N  item 3: the sample starts on its own pre-filled "Create Your Event" page (development-only),
+ *      then its name, dates and venue are saved through the Edit event route.
  *
  * SAFETY. Static and rendered checks only: no database row, no dev server, no AI call, no
  * browser, no network. Every fixture and expected value is written here by hand, never taken from
@@ -59,6 +61,17 @@ const code = (rel: string) => stripComments(read(rel));
 const GOOD_TAG = 'demo-tweaks-good';
 const unchangedSinceGood = (paths: string[]) =>
   spawnSync('git', ['diff', '--quiet', GOOD_TAG, '--', ...paths], { cwd: ROOT }).status === 0;
+async function load(rel: string): Promise<any> {
+  try {
+    return await import(rel);
+  } catch {
+    return null;
+  }
+}
+const atGood = (rel: string) => {
+  const r = spawnSync('git', ['show', `${GOOD_TAG}:${rel}`], { cwd: ROOT, encoding: 'utf8' });
+  return r.status === 0 ? r.stdout : '';
+};
 const render = (el: any) => {
   try {
     return renderToStaticMarkup(el);
@@ -82,6 +95,169 @@ const NOT_EDITED_F = [
   'src/lib/demo/send-wall.ts',
   'src/lib/demo/ai-cap.ts',
 ];
+
+// ── Item 3: the sample's "Create Your Event" page, hand-written ──────────────
+const NEW_PAGE = 'src/app/demo/new/page.tsx';
+const NEW_LAYOUT = 'src/app/demo/new/layout.tsx';
+const NEW_LIB = 'src/lib/demo/new-event.ts';
+const PLAN_NEW = 'src/app/plan/new/page.tsx';
+const EDIT_BOX = 'src/components/plan/EditEventModal.tsx';
+/** The real page's heading and labels, as they read in its file (the file is not edited). */
+const REAL_WORDS = ['Create Your Event', 'Event Name', 'Your Name', 'Email', 'Phone'];
+/** The Edit event box's venue heading and labels, as they read in its file (not edited). */
+const BOX_WORDS = ['Venue Details', 'Venue Name', 'Event Start Time', 'Event End Time'];
+/** The two new words (founder: the button and the line, the real page's minus the payment). */
+const NEW_LINE = 'Enter your event details to get started.';
+const REAL_LINE = 'Enter your event details and pay $25 to get started.';
+const NEW_BUTTON = 'Create';
+const REAL_BUTTON = 'Pay & Create — $25';
+/** Reused: the old /demo button's working word, and the Edit event box's failure line. */
+const STARTING = 'Starting…';
+const SAVE_FAILED = 'Failed to update event';
+/** The sample's own name and host (GTC-392 W12, W13), and the made-up details. */
+const W12 = 'Your sample gathering';
+const W13 = 'Sam';
+const MADE_UP = {
+  email: 'sam@example.com',
+  phone: '021 123 4567',
+  venueName: 'Riverside Park',
+  venueTimingStart: '12:00pm',
+  venueTimingEnd: '4:00pm',
+};
+/** GTC-392's start words (W9, W10, W15) and the link, as written there. */
+const W9 = "You're signed in to Gather. Sign out first to try a sample event.";
+const W10 = 'You already have a sample event open.';
+const W15 = 'The sample event could not be started. Please try again.';
+const GO_TO_IT = 'Go to it →';
+/** Not edited by item 3: the real page, the Edit event box and route, and the sample's own code. */
+const NOT_EDITED_N = [
+  PLAN_NEW,
+  EDIT_BOX,
+  'src/app/api/events/[id]/route.ts',
+  'src/app/api/demo/session/route.ts',
+  'src/lib/demo/copy.ts',
+  'src/lib/demo/start-limit.ts',
+  'src/lib/demo/send-wall.ts',
+  'src/lib/demo/ai-cap.ts',
+];
+/**
+ * The sample's day, worked out here by hand (GTC-392 W14): today's NZ date plus four weeks, then
+ * on to the Saturday (the same day if it is one).
+ */
+function sampleDay(now: Date): string {
+  const parts = new Intl.DateTimeFormat('en-NZ', {
+    timeZone: 'Pacific/Auckland',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  }).formatToParts(now);
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
+  const d = new Date(Date.UTC(get('year'), get('month') - 1, get('day')));
+  d.setUTCDate(d.getUTCDate() + 28);
+  while (d.getUTCDay() !== 6) d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+/** A new sample's event as GET /api/events/{id} answers it, written by hand (wire fields and all). */
+const FIXTURE_EVENT: Record<string, unknown> = {
+  id: 'ev-1',
+  name: W12,
+  status: 'DRAFT',
+  sentAt: null,
+  wrappedAt: null,
+  startDate: '2026-11-21T00:00:00.000Z',
+  endDate: '2026-11-21T00:00:00.000Z',
+  occasionType: null,
+  occasionDescription: null,
+  guestCount: null,
+  guestCountConfidence: 'MEDIUM',
+  guestCountMin: null,
+  guestCountMax: null,
+  dietaryStatus: 'UNSPECIFIED',
+  dietaryVegetarian: 0,
+  dietaryVegan: 0,
+  dietaryGlutenFree: 0,
+  dietaryDairyFree: 0,
+  dietaryAllergies: null,
+  venueName: null,
+  venueType: null,
+  venueKitchenAccess: null,
+  venueOvenCount: 0,
+  venueStoretopBurners: null,
+  venueBbqAvailable: null,
+  venueTimingStart: null,
+  venueTimingEnd: null,
+  venueNotes: null,
+  lastCheckPlanAt: null,
+  hostId: 'p-host',
+  isDemo: true,
+  clonedFromId: null,
+  aiCallsUsed: 0,
+  setup: {
+    id: 's-1',
+    planApprovedAt: null,
+    eventType: null,
+    eventTypeOther: null,
+    invitesOnly: false,
+  },
+};
+/** What the page sends, hand-written: her name, a two-day date pair, and her venue. */
+const PAGE_DETAILS = {
+  name: 'Ana’s birthday',
+  dates: { first: '2026-12-05', last: '2026-12-06', moreDays: true },
+  venueName: 'The Boatshed',
+  venueTimingStart: '6:00pm',
+  venueTimingEnd: '10:00pm',
+};
+/** The PATCH body expected for PAGE_DETAILS on FIXTURE_EVENT: the box's fields, hers on top. */
+const EXPECTED_PATCH: Record<string, unknown> = {
+  name: 'Ana’s birthday',
+  startDate: '2026-12-05',
+  endDate: '2026-12-06',
+  occasionType: null,
+  occasionDescription: null,
+  guestCount: null,
+  guestCountConfidence: 'MEDIUM',
+  guestCountMin: null,
+  guestCountMax: null,
+  dietaryStatus: 'UNSPECIFIED',
+  dietaryVegetarian: 0,
+  dietaryVegan: 0,
+  dietaryGlutenFree: 0,
+  dietaryDairyFree: 0,
+  dietaryAllergies: null,
+  venueName: 'The Boatshed',
+  venueType: null,
+  venueKitchenAccess: null,
+  venueOvenCount: 0,
+  venueStoretopBurners: null,
+  venueBbqAvailable: null,
+  venueTimingStart: '6:00pm',
+  venueTimingEnd: '10:00pm',
+  venueNotes: null,
+};
+type Call = { url: string; method: string; body: unknown };
+/** A hand-written fetch: answers by URL and method, and logs every call. */
+function fakeFetch(
+  answer: (url: string, method: string) => { status: number; json?: unknown } | 'throw'
+) {
+  const calls: Call[] = [];
+  const fn = async (url: string, init?: { method?: string; body?: string }) => {
+    const method = init?.method ?? 'GET';
+    calls.push({ url, method, body: init?.body ? JSON.parse(init.body) : undefined });
+    const a = answer(url, method);
+    if (a === 'throw') throw new Error('network down');
+    return {
+      ok: a.status >= 200 && a.status < 300,
+      status: a.status,
+      json: async () => {
+        if (a.json === undefined) throw new Error('no body');
+        return a.json;
+      },
+    };
+  };
+  return { fn: fn as unknown as typeof fetch, calls };
+}
+const STARTED = { status: 200, json: { success: true, eventId: 'ev-1', href: '/plan/ev-1/setup' } };
 
 export const CHECKS = {
   /** F1, F2 — the first page: the heading "Gather" and its buttons, and nothing else. */
@@ -108,6 +284,59 @@ export const CHECKS = {
       !/fetch\('\/api\/demo\/session',\s*\{\s*method:\s*'POST'\s*\}\)/.test(src) &&
       !/useToast|toast\./.test(src) &&
       /process\.env\.NODE_ENV === 'development' && \(\s*<button\b/.test(src)
+    );
+  },
+  /** N1 — each borrowed word reads, as text, in its own file. */
+  wordsInFile(src: string, words: string[]) {
+    return (
+      src.length > 0 &&
+      words.every((w) =>
+        new RegExp(`>\\s*${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*<`).test(src)
+      )
+    );
+  },
+  /** N3 — the labels in order, and an input's attributes by its id. */
+  labelsInOrder(html: string, labels: string[]) {
+    const seen = [
+      ...html.matchAll(/<(label|h3)\b[^>]*>(?:<svg[\s\S]*?<\/svg>)?([^<]*)<\/\1>/g),
+    ].map((m) => m[2].trim());
+    return JSON.stringify(seen) === JSON.stringify(labels);
+  },
+  input(html: string, id: string) {
+    const tag = html.match(new RegExp(`<input\\b[^>]*\\bid="${id}"[^>]*>`))?.[0] ?? '';
+    const value = tag.match(/\bvalue="([^"]*)"/)?.[1] ?? null;
+    return { found: tag.length > 0, value, locked: /\bdisabled=""/.test(tag) };
+  },
+  /** N4 — no price, no payment and nothing of Stripe. */
+  noPayment(text: string) {
+    return (
+      text.length > 0 && !/\$\s?\d|stripe|\bpay\b|\bpay\s*&|payment|checkout|billing/i.test(text)
+    );
+  },
+  /** N10 — the page's handler: the flow, then the outcome as one line, the sample opening anyway. */
+  pageHandler(src: string) {
+    return (
+      /startSampleWithDetails\(\{\s*name,\s*dates,\s*venueName,\s*venueTimingStart,\s*venueTimingEnd,?\s*\}\)/.test(
+        src
+      ) &&
+      /result\.kind === 'opened'\)\s*\{\s*window\.location\.href = result\.href;/.test(src) &&
+      /result\.kind === 'saveError'\)\s*\{[\s\S]{0,200}setTimeout\(\(\) => \{\s*window\.location\.href = result\.href;/.test(
+        src
+      ) &&
+      /\{\s*words: SAMPLE_EVENT_WORDS\.SAVE_FAILED, href: outcome\.href\s*\}/.test(src) &&
+      /\{DEMO_START_WORDS\.GO_TO_IT\}/.test(src) &&
+      !/fetch\(/.test(src)
+    );
+  },
+  /** N11 — /demo: the development-only button opens the sample's page, and /demo fetches nothing. */
+  demoDoor(src: string) {
+    return (
+      /const SAMPLE_PAGE = '\/demo\/new';/.test(src) &&
+      /process\.env\.NODE_ENV === 'development' && \(\s*<button\s+onClick=\{\(\) => window\.location\.assign\(SAMPLE_PAGE\)\}/.test(
+        src
+      ) &&
+      !/fetch\(/.test(src) &&
+      !/useState|DEMO_START_WORDS/.test(src)
     );
   },
 };
@@ -152,8 +381,234 @@ async function layerF() {
   );
 }
 
+// ══ Item 3 ═══════════════════════════════════════════════════════════════════
+async function layerN() {
+  section('N — item 3: the sample starts on its own pre-filled "Create Your Event" page');
+  const LIB = await load('../src/lib/demo/new-event');
+  const PAGE = await load('../src/app/demo/new/page');
+  const LAYOUT = await load('../src/app/demo/new/layout');
+  const W = LIB ?? {};
+  assert(
+    'N',
+    'N1 the heading and labels are the real page’s, the venue labels the Edit event box’s, each read in its own file',
+    CHECKS.wordsInFile(read(PLAN_NEW), REAL_WORDS) &&
+      CHECKS.wordsInFile(read(EDIT_BOX), BOX_WORDS) &&
+      JSON.stringify(Object.values(W.CREATE_EVENT_WORDS ?? {})) === JSON.stringify(REAL_WORDS) &&
+      JSON.stringify(Object.values(W.VENUE_WORDS ?? {})) === JSON.stringify(BOX_WORDS)
+  );
+  assert(
+    'N',
+    'N2 the only new words: the line and the button, the real page’s minus the payment; "Starting…" and the failure line reused from their files',
+    read(PLAN_NEW).includes(REAL_LINE) &&
+      read(PLAN_NEW).includes(REAL_BUTTON) &&
+      W.SAMPLE_EVENT_WORDS?.LINE === NEW_LINE &&
+      W.SAMPLE_EVENT_WORDS?.BUTTON === NEW_BUTTON &&
+      atGood('src/app/demo/page.tsx').includes(`'${STARTING}'`) &&
+      W.SAMPLE_EVENT_WORDS?.STARTING === STARTING &&
+      read(EDIT_BOX).includes(`'${SAVE_FAILED}'`) &&
+      W.SAMPLE_EVENT_WORDS?.SAVE_FAILED === SAVE_FAILED &&
+      Object.keys(W.SAMPLE_EVENT_WORDS ?? {}).length === 4
+  );
+  /** The page as the founder's Mac draws it: the layout round the page, in development. */
+  const drawPage = (env: string) => {
+    const was = process.env.NODE_ENV;
+    (process.env as any).NODE_ENV = env;
+    try {
+      if (!PAGE?.default || !LAYOUT?.default) return { html: '', threw: '' };
+      try {
+        return {
+          html: renderToStaticMarkup(
+            createElement(LAYOUT.default, null, createElement(PAGE.default))
+          ),
+          threw: '',
+        };
+      } catch (err) {
+        const e = err as { message?: string; digest?: string };
+        return { html: '', threw: `${e.digest ?? ''} ${e.message ?? ''}` };
+      }
+    } finally {
+      (process.env as any).NODE_ENV = was;
+    }
+  };
+  const dev = drawPage('development');
+  const html = dev.html;
+  const day = sampleDay(new Date());
+  const field = (id: string) => CHECKS.input(html, id);
+  assert(
+    'N',
+    'N3 on the founder’s Mac: the heading, the line, the labels in the real page’s order then the venue, and the button',
+    /<h1\b[^>]*>Create Your Event<\/h1>/.test(html) &&
+      html.includes(`<p class="text-gray-600">${NEW_LINE}</p>`) &&
+      CHECKS.labelsInOrder(html, [
+        'Event Name',
+        'Your Name',
+        'Email',
+        'Phone',
+        'Date',
+        'Venue Details',
+        'Venue Name',
+        'Event Start Time',
+        'Event End Time',
+      ]) &&
+      /<button type="submit"[^>]*>Create<\/button>/.test(html),
+    html.slice(0, 300)
+  );
+  assert(
+    'N',
+    'N4 pre-filled: her event name, the sample’s day and a made-up venue and times, editable; the host’s name, email and phone filled and locked',
+    field('name').value === W12 &&
+      !field('name').locked &&
+      field('hostName').value === W13 &&
+      field('hostName').locked &&
+      field('email').value === MADE_UP.email &&
+      field('email').locked &&
+      field('phone').value === MADE_UP.phone &&
+      field('phone').locked &&
+      field('startDate').value === day &&
+      !field('startDate').locked &&
+      field('venueName').value === MADE_UP.venueName &&
+      !field('venueName').locked &&
+      field('venueTimingStart').value === MADE_UP.venueTimingStart &&
+      !field('venueTimingStart').locked &&
+      field('venueTimingEnd').value === MADE_UP.venueTimingEnd &&
+      !field('venueTimingEnd').locked,
+    JSON.stringify({ day, start: field('startDate'), name: field('name') })
+  );
+  assert(
+    'N',
+    'N5 no $25, no Stripe and no payment word on the page, drawn or in its code and words',
+    CHECKS.noPayment(html) &&
+      CHECKS.noPayment(code(NEW_PAGE)) &&
+      CHECKS.noPayment(code(NEW_LIB)) &&
+      CHECKS.noPayment(code(NEW_LAYOUT))
+  );
+  const prod = drawPage('production');
+  assert(
+    'N',
+    'N6 development-only: in a production build the page is a plain not-found',
+    html.length > 0 &&
+      prod.html === '' &&
+      /NEXT_HTTP_ERROR_FALLBACK;404|NEXT_NOT_FOUND/.test(prod.threw),
+    prod.threw.slice(0, 120)
+  );
+  // The flow, driven by a hand-written fetch.
+  const start = LIB?.startSampleWithDetails as
+    | ((d: unknown, f: typeof fetch) => Promise<any>)
+    | undefined;
+  const run = async (answer: Parameters<typeof fakeFetch>[0]) => {
+    const f = fakeFetch(answer);
+    const outcome = start ? await start(PAGE_DETAILS, f.fn).catch(() => null) : null;
+    return { outcome, calls: f.calls };
+  };
+  const ok = await run((url, method) =>
+    url === '/api/demo/session' && method === 'POST'
+      ? STARTED
+      : url === '/api/events/ev-1' && method === 'GET'
+        ? { status: 200, json: { event: FIXTURE_EVENT } }
+        : url === '/api/events/ev-1' && method === 'PATCH'
+          ? { status: 200, json: { event: {} } }
+          : { status: 404, json: {} }
+  );
+  assert(
+    'N',
+    'N7 the button starts the sample as the old button did, then reads and saves it through the Edit event route, once each, and opens the setup page',
+    JSON.stringify(ok.calls.map((c) => `${c.method} ${c.url}`)) ===
+      JSON.stringify([
+        'POST /api/demo/session',
+        'GET /api/events/ev-1',
+        'PATCH /api/events/ev-1',
+      ]) &&
+      JSON.stringify(ok.calls[0]?.body) === JSON.stringify({ start: 'copy' }) &&
+      JSON.stringify(ok.outcome) === JSON.stringify({ kind: 'opened', href: '/plan/ev-1/setup' }),
+    JSON.stringify(ok)
+  );
+  const boxKeys = (() => {
+    const src = read(EDIT_BOX);
+    const at = src.indexOf('const [formData, setFormData] = useState({');
+    const block = at >= 0 ? src.slice(at, src.indexOf('});', at)) : '';
+    return [...block.matchAll(/^\s*(\w+):/gm)].map((m) => m[1]);
+  })();
+  assert(
+    'N',
+    'N8 the save sends the whole event as the Edit event box does (its form’s own fields, no others), with her name, dates and venue on top',
+    boxKeys.length === 24 &&
+      JSON.stringify(Object.keys((ok.calls[2]?.body as object) ?? {}).sort()) ===
+        JSON.stringify([...boxKeys].sort()) &&
+      JSON.stringify(ok.calls[2]?.body) === JSON.stringify(EXPECTED_PATCH),
+    JSON.stringify(ok.calls[2]?.body)
+  );
+  const readRefused = await run((url, method) =>
+    url === '/api/demo/session' ? STARTED : method === 'GET' ? { status: 403, json: {} } : 'throw'
+  );
+  const writeFails = await run((url, method) =>
+    url === '/api/demo/session'
+      ? STARTED
+      : method === 'GET'
+        ? { status: 200, json: { event: FIXTURE_EVENT } }
+        : { status: 500, json: { error: 'x' } }
+  );
+  const readThrows = await run((url) => (url === '/api/demo/session' ? STARTED : 'throw'));
+  const saveError = { kind: 'saveError', href: '/plan/ev-1/setup' };
+  const once = (calls: Call[]) => calls.filter((c) => c.url === '/api/demo/session').length === 1;
+  assert(
+    'N',
+    'N9 if the save fails the sample still opens, with its own line; nothing is retried',
+    JSON.stringify(readRefused.outcome) === JSON.stringify(saveError) &&
+      !readRefused.calls.some((c) => c.method === 'PATCH') &&
+      JSON.stringify(writeFails.outcome) === JSON.stringify(saveError) &&
+      writeFails.calls.filter((c) => c.method === 'PATCH').length === 1 &&
+      JSON.stringify(readThrows.outcome) === JSON.stringify(saveError) &&
+      [readRefused, writeFails, readThrows].every((r) => once(r.calls)),
+    JSON.stringify([readRefused.outcome, writeFails.outcome, readThrows.outcome])
+  );
+  const openAlready = await run((url) =>
+    url === '/api/demo/session'
+      ? { status: 409, json: { error: 'Already signed in' } }
+      : { status: 200, json: { events: [{ id: 'e-real' }, { id: 'e9', isDemo: true }] } }
+  );
+  const signedIn = await run((url) =>
+    url === '/api/demo/session'
+      ? { status: 409, json: {} }
+      : { status: 200, json: { events: [{ id: 'e-real', isDemo: false }] } }
+  );
+  const limited = await run(() => ({ status: 429, json: { error: 'Please try again later.' } }));
+  const broken = await run(() => ({ status: 500, json: {} }));
+  const offline = await run(() => 'throw');
+  const noSave = (calls: Call[]) => !calls.some((c) => c.url.startsWith('/api/events/'));
+  assert(
+    'N',
+    'N10 the start notes and limits /demo showed, the same DEMO_START_WORDS lines unchanged, and no save when no sample started',
+    JSON.stringify(openAlready.outcome) ===
+      JSON.stringify({ kind: 'refused', words: W10, href: '/plan/e9/setup' }) &&
+      JSON.stringify(signedIn.outcome) === JSON.stringify({ kind: 'refused', words: W9 }) &&
+      JSON.stringify(limited.outcome) ===
+        JSON.stringify({ kind: 'refused', words: 'Please try again later.' }) &&
+      JSON.stringify(broken.outcome) === JSON.stringify({ kind: 'refused', words: W15 }) &&
+      JSON.stringify(offline.outcome) === JSON.stringify({ kind: 'refused', words: W15 }) &&
+      [openAlready, signedIn, limited, broken, offline].every((r) => noSave(r.calls)) &&
+      read('src/lib/demo/start-limit.ts').includes(`GO_TO_IT: '${GO_TO_IT}'`),
+    JSON.stringify([openAlready.outcome, signedIn.outcome, limited.outcome])
+  );
+  assert(
+    'N',
+    'N11 the page’s button: the flow with her five details; opened goes to the setup page; a failed save shows its line and the link, then opens anyway',
+    CHECKS.pageHandler(code(NEW_PAGE))
+  );
+  assert(
+    'N',
+    'N12 /demo’s "Try it yourself" (still development-only) opens /demo/new, and /demo fetches nothing',
+    CHECKS.demoDoor(code(DEMO_PAGE))
+  );
+  assert(
+    'N',
+    'N13 CONTROL: the real page, the Edit event box and its route, the session route and the sample’s own code are not edited since demo-tweaks-good',
+    NOT_EDITED_N.every((f) => read(f).length > 0) && unchangedSinceGood(NOT_EDITED_N)
+  );
+}
+
 async function main() {
   await layerF();
+  await layerN();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
     console.log(reds.map((r) => `  - ${r}`).join('\n'));

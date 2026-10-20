@@ -755,21 +755,18 @@ export const CHECKS = {
   },
   /**
    * D3 — the page's code. [[GTC-395]] items 1 and 2 (founder, 20 Oct 2026): the Sarah door and its
-   * handler gone; the copy door as it was, development-only; nothing else fetched.
+   * handler gone. [[GTC-395]] item 3: the copy door is the sample's own page now, so /demo's
+   * development-only button opens `/demo/new` and the page fetches nothing.
    */
-  demoSource(src: string, head: string) {
-    const sameCopy =
-      bodyFrom(head, 'const handleStartCopy = async () =>').length > 200 &&
-      squash(bodyFrom(src, 'const handleStartCopy = async () =>')) ===
-        squash(bodyFrom(head, 'const handleStartCopy = async () =>'));
+  demoSource(src: string) {
     return (
-      sameCopy &&
+      src.length > 200 &&
       !/Sarah|handleOpen/.test(src) &&
-      !src.includes("fetch('/api/demo/session', { method: 'POST' })") &&
-      /process\.env\.NODE_ENV === 'development' && \(\s*<button\s+onClick=\{handleStartCopy\}/.test(
+      /const SAMPLE_PAGE = '\/demo\/new';/.test(src) &&
+      /process\.env\.NODE_ENV === 'development' && \(\s*<button\s+onClick=\{\(\) => window\.location\.assign\(SAMPLE_PAGE\)\}/.test(
         src
       ) &&
-      (src.match(/fetch\(/g) ?? []).length === 2 &&
+      !/fetch\(/.test(src) &&
       !src.includes('/api/demo/tokens') &&
       !src.includes('/api/demo/reset') &&
       !src.includes('confirm(')
@@ -1389,8 +1386,8 @@ async function layerD() {
   );
   assert(
     'D',
-    'D3 the copy door as it was, development-only; the Sarah door gone (GTC-395); no tokens fetch, no Reset',
-    CHECKS.demoSource(code(DEMO_PAGE), stripComments(atTag(DEMO_PAGE)))
+    'D3 the copy door, development-only, opens the sample’s own page (GTC-395 item 3); the Sarah door gone (GTC-395); no tokens fetch, no Reset',
+    CHECKS.demoSource(code(DEMO_PAGE))
   );
   assert(
     'D',

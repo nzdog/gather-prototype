@@ -318,7 +318,12 @@ async function testSuite3_ErrorVisibility() {
 
   // Test 3.1: Demo page has user-facing error handling (no silent failures)
   try {
-    const demoPage = fs.readFileSync(path.join(process.cwd(), 'src/app/demo/page.tsx'), 'utf-8');
+    // [[GTC-395]] item 3 (founder's ruling, 20 Oct 2026): the sample now starts on its own page, so
+    // the page that can fail is read: the new sample page, not /demo.
+    const demoPage = fs.readFileSync(
+      path.join(process.cwd(), 'src/app/demo/new/page.tsx'),
+      'utf-8'
+    );
     // The demo page must show error state when tokens are unavailable
     const hasErrorState =
       demoPage.includes('error') || demoPage.includes('Error') || demoPage.includes('unavailable');

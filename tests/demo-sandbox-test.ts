@@ -312,7 +312,7 @@ export const CHECKS = {
     const at = indexes(src, 'toast.error("You\'ve used all 10 AI calls for this event.")');
     return at.length === 2 && at.every((i) => /demoWords/.test(src.slice(Math.max(0, i - 300), i)));
   },
-  demoPage(src: string) {
+  demoPage(src: string, start: string) {
     return (
       // [[GTC-394]] tweak 3 (founder's ruling 3, 19 Oct 2026): the button carries the page's own
       // label, "Try it yourself", still only in development; DEMO_START_WORDS.BUTTON stays W11 in
@@ -320,10 +320,12 @@ export const CHECKS = {
       // page ("Sarah demo"), not the old walkthrough.
       /process\.env\.NODE_ENV === 'development' && \([\s\S]{0,600}?\bTRY_IT_YOURSELF\b/.test(src) &&
       /const TRY_IT_YOURSELF = 'Try it yourself';/.test(src) &&
-      src.includes("start: 'copy'") &&
-      /fetch\('\/api\/events'/.test(src) &&
-      src.includes('DEMO_START_WORDS.ALREADY_OPEN') &&
-      src.includes('DEMO_START_WORDS.SIGNED_IN') &&
+      // [[GTC-395]] item 3 (founder, 20 Oct 2026): the button opens the sample's own page, and the
+      // start (its 409 asking GET /api/events, W10 or W9) is that page's, in src/lib/demo/new-event.ts.
+      start.includes("start: 'copy'") &&
+      /fetch\('\/api\/events'/.test(start) &&
+      start.includes('DEMO_START_WORDS.ALREADY_OPEN') &&
+      start.includes('DEMO_START_WORDS.SIGNED_IN') &&
       // [[GTC-395]] items 1 and 2 (founder, 20 Oct 2026): the page's only button; "Sarah demo" goes.
       !/Sarah/.test(src)
     );
@@ -1721,7 +1723,7 @@ async function main() {
     assert(
       'W',
       'W11 on /demo only in development (Q5); a 409 asks GET /api/events for her sample (W10) or says W9',
-      CHECKS.demoPage(code('src/app/demo/page.tsx'))
+      CHECKS.demoPage(code('src/app/demo/page.tsx'), code('src/lib/demo/new-event.ts'))
     );
     assert(
       'W',
