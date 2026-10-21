@@ -129,6 +129,7 @@ import {
   type TickStep,
 } from '@/lib/preflight/tick-memory';
 import { preflightChannelChoices } from '@/components/plan/household-channel-choices';
+import { kidsNote } from '@/components/preflight/kids-note';
 
 // ─── Wire shapes (mirror /api/events/[id]/pre-flight) ────────────────────────
 
@@ -807,6 +808,9 @@ export default function PreFlightPage() {
           <div className="space-y-2">
             {households.map((h) => {
               const channel = channelFor(h, channelCandidates);
+              // [[GTC-396]] item 6 (founder, 21 Oct 2026): who the kids are, from the members this
+              // read already carries (their householdRole is CHILD); null when there are none.
+              const kids = kidsNote(h.members);
               return (
                 /* [[GTC-394]] tweak 1: the host's own household stands out, as on every screen. The
                    shell is not edited (preflight-fold R7), so the look is a frame round it. */
@@ -844,6 +848,9 @@ export default function PreFlightPage() {
                       </span>
                     }
                   >
+                    {/* [[GTC-396]] item 6: "Kids: Josh, Mere", on every household with children,
+                        the host's own included; nothing on a household without. */}
+                    {kids && <p className="text-xs text-gray-400 mb-3">{kids}</p>}
                     {h.littleCount > 0 && (
                       <p className="text-xs text-gray-400 mb-3">
                         + {h.littleCount} kid{h.littleCount === 1 ? '' : 's'} without jobs

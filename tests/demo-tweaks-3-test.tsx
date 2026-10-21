@@ -228,6 +228,29 @@ const FIGURES_START = '<div className="flex gap-6 mb-4">';
 const FIGURE_GUARD = '{coverage.complianceRate > 0 && (';
 const CONFIRMED_LABEL = 'confirmed so far';
 
+// ── Item 6: who the kids are, hand-written ───────────────────────────────────
+const KIDS_FILE = 'src/components/preflight/kids-note.ts';
+const PREFLIGHT_ROUTE = 'src/app/api/events/[id]/pre-flight/route.ts';
+const KIDS_WORD = 'Kids:';
+/** Ana's household as the pre-flight read carries it: adults first, then the children, by name. */
+const NGATA_MEMBERS = [
+  { name: 'Ana Ngata', householdRole: 'PRIMARY_CONTACT' },
+  { name: 'Ross Ngata', householdRole: 'PARTNER' },
+  { name: 'Tia Ngata', householdRole: 'GUEST' },
+  { name: 'Josh Ngata', householdRole: 'CHILD' },
+  { name: 'Mere Ngata', householdRole: 'CHILD' },
+];
+const NGATA_NOTE = 'Kids: Josh Ngata, Mere Ngata';
+/** Bob's: no child (a young person is still a GUEST); someone unhoused has no role. */
+const REID_MEMBERS = [
+  { name: 'Bob Reid', householdRole: 'PRIMARY_CONTACT' },
+  { name: 'Jo Reid', householdRole: 'GUEST' },
+  { name: 'Lee Tan', householdRole: null },
+];
+/** The page's "+ N kids without jobs" line, as at the tag, beside which the note sits. */
+const LITTLE_LINE = '{h.littleCount > 0 && (';
+const KIDS_LINE = '{kids && <p className="text-xs text-gray-400 mb-3">{kids}</p>}';
+
 // ── CONTROL: not touched by this batch, hand-written ─────────────────────────
 /**
  * The founder's untouched proof (his section 5), plus the neighbours no item edits. Never a whole
@@ -575,6 +598,60 @@ export const CHECKS = {
     );
   },
 
+  // ── Item 6 ──
+  /** K1 — the helper: the CHILD members' names in the page's order after "Kids:"; null without any. */
+  kidsNoteWords(mod: any) {
+    const note = (m: unknown[]) => (mod?.kidsNote ? mod.kidsNote(m) : undefined);
+    const swapped = [NGATA_MEMBERS[0], NGATA_MEMBERS[4], NGATA_MEMBERS[3]];
+    return (
+      mod?.KIDS_NOTE_WORDS?.KIDS === KIDS_WORD &&
+      note(NGATA_MEMBERS) === NGATA_NOTE &&
+      note(swapped) === 'Kids: Mere Ngata, Josh Ngata' &&
+      note([NGATA_MEMBERS[3]]) === 'Kids: Josh Ngata' &&
+      note(REID_MEMBERS) === null &&
+      note([]) === null &&
+      note([{ name: '   ', householdRole: 'CHILD' }, NGATA_MEMBERS[4]]) === 'Kids: Mere Ngata' &&
+      note([{ name: 'Kai Ngata', householdRole: 'CHILD', isYoungPerson: true }]) ===
+        'Kids: Kai Ngata'
+    );
+  },
+  /** K2 — the page: the note from the read's own members, inside every household's panel, above the little-ones line, before the picker (so the host's own household too). */
+  kidsOnPage(src: string) {
+    const households = between(src, '{households.map((h) => {', '{unhoused.length > 0 && (');
+    const shell = households.indexOf('<AccordionShell');
+    const kidsLine = households.indexOf(KIDS_LINE);
+    const little = households.indexOf(LITTLE_LINE);
+    const picker = households.indexOf('{!h.isHostHousehold && (');
+    const marks = households.indexOf('<MarkRows');
+    return (
+      src.includes("import { kidsNote } from '@/components/preflight/kids-note';") &&
+      count(households, 'const kids = kidsNote(h.members);') === 1 &&
+      count(src, 'kidsNote(') === 1 &&
+      shell > 0 &&
+      kidsLine > shell &&
+      little > kidsLine &&
+      picker > little &&
+      marks > picker &&
+      count(src, KIDS_LINE) === 1 &&
+      !src.includes(`'${KIDS_WORD}`) &&
+      !src.includes(`"${KIDS_WORD}`) &&
+      !src.includes(`>${KIDS_WORD}`)
+    );
+  },
+  /** K3 CONTROL — the little-ones line, the picker fragment and the marks as at the tag; the route not edited. */
+  panelKept(now: string, head: string, routeUnchanged: boolean) {
+    const little = (src: string) => between(src, LITTLE_LINE, ')}');
+    const picker = (src: string) => between(src, '{!h.isHostHousehold && (', '<MarkRows');
+    return (
+      little(head).length > 50 &&
+      flat(little(now)) === flat(little(head)) &&
+      picker(head).length > 300 &&
+      flat(picker(now)) === flat(picker(head)) &&
+      count(now, '<MarkRows') === count(head, '<MarkRows') &&
+      routeUnchanged
+    );
+  },
+
   // ── CONTROL ──
   /** U2 — package.json differs from the tag by the one new script and nothing else. */
   onlyTheScript(nowJson: string, goodJson: string) {
@@ -787,6 +864,29 @@ async function layerZ() {
   );
 }
 
+// ══ Item 6 ═══════════════════════════════════════════════════════════════════
+async function layerK() {
+  section('K — item 6: who the kids are, on the nudge household screen');
+  const KN = await load('../src/components/preflight/kids-note');
+  assert(
+    'K',
+    'K1 "Kids: Josh Ngata, Mere Ngata": the CHILD members’ names, as held, in the read’s order, after the one new word; nothing (null) for a household without children; a GUEST or a young person is not a kid; a blank name is skipped',
+    !!KN && CHECKS.kidsNoteWords(KN),
+    KN ? JSON.stringify(KN.kidsNote?.(NGATA_MEMBERS)) : 'module did not load'
+  );
+  const now = code(PREFLIGHT);
+  assert(
+    'K',
+    'K2 the households step draws it from the members its read already carries, inside every household’s panel (the host’s own too), above "+ N kids without jobs" and before the picker; the word lives in the helper only',
+    CHECKS.kidsOnPage(now)
+  );
+  assert(
+    'K',
+    'K3 CONTROL: the little-ones line, the picker and its line, and the marks as at demo-tweaks-2-good; the pre-flight read’s route not edited (no route, read or schema touched)',
+    CHECKS.panelKept(now, stripComments(atGood(PREFLIGHT)), unchangedSinceGood([PREFLIGHT_ROUTE]))
+  );
+}
+
 // ══ CONTROL ══════════════════════════════════════════════════════════════════
 async function layerU() {
   section('U — CONTROL: what this batch must not touch');
@@ -819,6 +919,7 @@ async function main() {
   await layerB();
   await layerL();
   await layerZ();
+  await layerK();
   await layerU();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
