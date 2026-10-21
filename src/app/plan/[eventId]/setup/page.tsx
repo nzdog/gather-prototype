@@ -477,6 +477,15 @@ function EventSetupFlow() {
   // It lives only here; nothing is written until she presses Save.
   const [moment1Draft, setMoment1Draft] = useState<SavedHousehold | null>(null);
   const desktopColumnRef = useRef<HTMLDivElement>(null);
+  // [[GTC-396]] item 2 (founder, 21 Oct 2026): Moment 1's screens are one overlay with its own
+  // scroll (the window never moves under it), and React keeps that element across the change from
+  // her own household's step to the people screen and across an edit, so the page stayed where the
+  // button was pressed. A plain jump to the overlay's top at the moment the screen changes.
+  const moment1OverlayRef = useRef<HTMLDivElement>(null);
+  const jumpMoment1ToTop = () => {
+    const overlay = moment1OverlayRef.current;
+    if (overlay) overlay.scrollTop = 0;
+  };
   // [[GTC-365]] Q2: on a computer the column keeps that card in view by scrolling itself, never the
   // page. (On a phone the column sits below the form, so nothing above the form grows.)
   useEffect(() => {
@@ -1073,10 +1082,14 @@ function EventSetupFlow() {
         const data = await res.json();
         setHouseholds((prev) => [...prev, apiHouseholdToSaved(data.household)]);
         setMoment1Phase('input');
+        jumpMoment1ToTop();
       };
 
       return (
-        <div className="fixed inset-0 top-[65px] z-50 bg-white overflow-y-auto">
+        <div
+          ref={moment1OverlayRef}
+          className="fixed inset-0 top-[65px] z-50 bg-white overflow-y-auto"
+        >
           <div className="max-w-5xl mx-auto px-6 py-8">
             {/* [[GTC-367]] (item 31, W1; correction C1): her own household's step had no way out.
                 [[GTC-368]] (item 17, Q1): the event's name across from it. */}
@@ -1194,6 +1207,7 @@ function EventSetupFlow() {
       const saved = apiHouseholdToSaved(data.household);
       setHouseholds((prev) => prev.map((h) => (h.id === householdId ? saved : h)));
       setEditingHousehold(null);
+      jumpMoment1ToTop();
     };
 
     const handleDeleteHousehold = async (householdId: string) => {
@@ -1225,7 +1239,10 @@ function EventSetupFlow() {
     }, 0);
 
     return (
-      <div className="fixed inset-0 top-[65px] z-50 bg-white overflow-y-auto">
+      <div
+        ref={moment1OverlayRef}
+        className="fixed inset-0 top-[65px] z-50 bg-white overflow-y-auto"
+      >
         <div className="max-w-5xl mx-auto px-6 py-8">
           {/* GTC-235: the way out of the longest-dwell overlay. Every Moment 1 screen was a
               full-screen layer and so covered the global navigation ([[GTC-381]], Q7: it now
@@ -1256,7 +1273,10 @@ function EventSetupFlow() {
                 onAddPerson={handleAddHousehold}
                 editingHousehold={editingHousehold}
                 onEditSave={handleEditSave}
-                onCancelEdit={() => setEditingHousehold(null)}
+                onCancelEdit={() => {
+                  setEditingHousehold(null);
+                  jumpMoment1ToTop();
+                }}
                 totalPeopleCount={totalPeopleCount}
                 channelCandidates={channelCandidates}
                 onDraftChange={setMoment1Draft}

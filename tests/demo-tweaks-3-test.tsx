@@ -125,6 +125,24 @@ const YOUR_EVENTS = '← Your events';
 const DOES_HEAD = 'What this does';
 const DONE_HEAD = 'When it’s done';
 
+// ── Item 2: the overlay's jump to the top, hand-written ──────────────────────
+const SETUP_PAGE = 'src/app/plan/[eventId]/setup/page.tsx';
+/** Moment 1's overlay (the thing that scrolls), as the setup page writes it (GTC-381 Q7). */
+const OVERLAY_CLASS = 'fixed inset-0 top-[65px] z-50 bg-white overflow-y-auto';
+/** batch12 S6's count of overlays on the setup page: the two of Moment 1 and the loading one. */
+const SETUP_OVERLAYS = 3;
+const OVERLAY_WITH_REF = new RegExp(
+  `<div\\s+ref=\\{moment1OverlayRef\\}\\s+className="${OVERLAY_CLASS.replace(/[[\]]/g, '\\$&')}"\\s*>`,
+  'g'
+);
+/** The same code but its layout: whitespace, brackets and commas (Prettier's re-wraps) dropped. */
+const flat = (src: string) => src.replace(/[\s(),]/g, '');
+const between = (src: string, from: string, to: string) => {
+  const a = src.indexOf(from);
+  const b = a >= 0 ? src.indexOf(to, a + from.length) : -1;
+  return a >= 0 && b > a ? src.slice(a, b) : '';
+};
+
 // ── CONTROL: not touched by this batch, hand-written ─────────────────────────
 /**
  * The founder's untouched proof (his section 5), plus the neighbours no item edits. Never a whole
@@ -232,6 +250,62 @@ export const CHECKS = {
     return html.length > 0 && !html.includes('herd of cats') && unchanged;
   },
 
+  // ── Item 2 ──
+  /** T1 — one ref, on both of Moment 1's overlays and nothing else; the overlays' count as before. */
+  overlayRef(src: string) {
+    return (
+      count(src, 'const moment1OverlayRef = useRef<HTMLDivElement>(null);') === 1 &&
+      (src.match(OVERLAY_WITH_REF) ?? []).length === 2 &&
+      count(src, 'ref={moment1OverlayRef}') === 2 &&
+      count(src, 'fixed inset-0 top-[65px] z-50') === SETUP_OVERLAYS
+    );
+  },
+  /** T2 — the helper: a plain jump of the overlay's own scroll to 0, nothing smooth, no window. */
+  jumpHelper(src: string) {
+    const m = src.match(/const jumpMoment1ToTop = \(\) => \{([\s\S]*?)\n  \};/);
+    const body = m ? m[1] : '';
+    return (
+      !!m &&
+      /const overlay = moment1OverlayRef\.current;\s*if \(overlay\) overlay\.scrollTop = 0;/.test(
+        body
+      ) &&
+      !/smooth|behavior|window|scrollIntoView|scrollTo\(/.test(body) &&
+      count(src, 'const jumpMoment1ToTop') === 1
+    );
+  },
+  /** T3 — called at the three moments, straight after the state that changes the screen, and nowhere else. */
+  jumpSites(src: string) {
+    const hostSave = between(src, 'const handleSaveHostHousehold = async', 'return (');
+    const editSave = between(src, 'const handleEditSave = async', 'const handleDeleteHousehold');
+    return (
+      count(src, 'jumpMoment1ToTop()') === 3 &&
+      /setMoment1Phase\('input'\);\s*jumpMoment1ToTop\(\);/.test(hostSave) &&
+      /setEditingHousehold\(null\);\s*jumpMoment1ToTop\(\);/.test(editSave) &&
+      /onCancelEdit=\{\(\) => \{\s*setEditingHousehold\(null\);\s*jumpMoment1ToTop\(\);\s*\}\}/.test(
+        src
+      )
+    );
+  },
+  /** T4 CONTROL — nothing else moved: Edit's own scroll, the column's, the stages, every scroll call as at the tag. */
+  movedNothingElse(now: string, head: string) {
+    const editBlock = (src: string) =>
+      between(src, 'const handleEdit = (householdId: string) => {', 'const totalPeopleCount');
+    const columnEffect = (src: string) =>
+      between(src, 'const col = desktopColumnRef.current;', '}, [moment1Draft]);');
+    const stages = (src: string) => between(src, 'const applyStage = useCallback(', '}, []);');
+    return (
+      editBlock(head).length > 100 &&
+      flat(editBlock(now)) === flat(editBlock(head)) &&
+      columnEffect(head).length > 100 &&
+      flat(columnEffect(now)) === flat(columnEffect(head)) &&
+      stages(head).length > 100 &&
+      flat(stages(now)) === flat(stages(head)) &&
+      count(now, 'scrollIntoView') === count(head, 'scrollIntoView') &&
+      count(now, 'window.scrollTo') === count(head, 'window.scrollTo') &&
+      count(now, 'scrollTop') === count(head, 'scrollTop') + 1
+    );
+  },
+
   // ── CONTROL ──
   /** U2 — package.json differs from the tag by the one new script and nothing else. */
   onlyTheScript(nowJson: string, goodJson: string) {
@@ -291,6 +365,33 @@ async function layerH() {
   );
 }
 
+// ══ Item 2 ═══════════════════════════════════════════════════════════════════
+async function layerT() {
+  section('T — item 2: Moment 1’s overlay jumps to the top when the screen changes');
+  const now = code(SETUP_PAGE);
+  const head = stripComments(atGood(SETUP_PAGE));
+  assert(
+    'T',
+    'T1 the overlay is the thing that scrolls: one ref, on both of Moment 1’s overlays (her own household’s step and the people screen); the setup page still has three overlays',
+    CHECKS.overlayRef(now)
+  );
+  assert(
+    'T',
+    'T2 one small helper: a plain jump of the overlay’s own scroll to the top (scrollTop = 0), nothing smooth, never the window',
+    CHECKS.jumpHelper(now)
+  );
+  assert(
+    'T',
+    'T3 called at the three moments and nowhere else: after her own household is saved and the people screen opens, after an edit is saved, after an edit is cancelled',
+    CHECKS.jumpSites(now)
+  );
+  assert(
+    'T',
+    'T4 CONTROL: nothing else moved — Edit’s own phone scroll, the column’s own scroll, the stages and every other scroll call as at demo-tweaks-2-good',
+    head.length > 0 && CHECKS.movedNothingElse(now, head)
+  );
+}
+
 // ══ CONTROL ══════════════════════════════════════════════════════════════════
 async function layerU() {
   section('U — CONTROL: what this batch must not touch');
@@ -319,6 +420,7 @@ async function layerU() {
 
 async function main() {
   await layerH();
+  await layerT();
   await layerU();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
