@@ -625,7 +625,8 @@ export const CHECKS = {
       count(src, FIGURE_GUARD) === 1 &&
       count(src, CONFIRMED_LABEL) === 1 &&
       count(figures, 'coverage.unassignedCount') === 1 &&
-      count(figures, 'coverage.criticalUnassignedCount') === 1 &&
+      // the critical figure reads its count twice: its colour and its value
+      count(figures, 'coverage.criticalUnassignedCount') === 2 &&
       figures.indexOf('coverage.criticalUnassignedCount') < figures.indexOf(FIGURE_GUARD)
     );
   },
