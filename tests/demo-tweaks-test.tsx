@@ -605,7 +605,12 @@ export const CHECKS = {
       (!back || html.includes(`>${BACK_TO_PEOPLE}</button>`)) &&
       STRIP_ONLY.every((w) => !html.includes(w)) &&
       !html.includes('data-moment-strip') &&
-      !/herd of cats/.test(html) &&
+      // [[GTC-396]] item 1 (founder, 21 Oct 2026): Moment 1's page has the herd line back, under
+      // the title and above "What this does"; Moment 2's page still has none.
+      (moment === 1
+        ? html.indexOf('herd of cats') > html.indexOf('<h1') &&
+          html.indexOf('herd of cats') < html.indexOf('data-moment-words="1-does"')
+        : !/herd of cats/.test(html)) &&
       !html.includes(OWN_PLAN_CHOOSE) &&
       !html.includes(OWN_PLAN_EXPLAIN) &&
       !html.includes(INVITES_CHOOSE) &&
@@ -701,15 +706,19 @@ export const CHECKS = {
       same('const writeOwnList = async () =>')
     );
   },
-  /** O9 — the two opening components hold no strip, no herd line and no quieter choice. */
+  /**
+   * O9 — the two opening components hold no strip and no quieter choice; the herd line is on
+   * Moment 1's only ([[GTC-396]] item 1, the founder, 21 Oct 2026; it was on neither).
+   */
   openingSources(one: string, two: string) {
     return (
       one.length > 0 &&
       two.length > 0 &&
+      one.includes('herd of cats') &&
+      !two.includes('herd of cats') &&
       [one, two].every(
         (s) =>
           !s.includes('<MomentArc') &&
-          !s.includes('herd of cats') &&
           !s.includes('OWN_PLAN_WORDS') &&
           !s.includes('data-own-plan') &&
           !s.includes('data-invites-only=') &&
@@ -1265,7 +1274,7 @@ async function layerO() {
   const one = SO?.default ? render(createElement(SO.default, { onStart: () => {} })) : '';
   assert(
     'O',
-    'O3 Moment 1’s page: the title, the two paragraphs and one button; no strip, no herd line',
+    'O3 Moment 1’s page: the title, the herd line under it (GTC-396 item 1), the two paragraphs and one button; no strip',
     CHECKS.openingPage(one, 1, TITLE_1, START_1, false),
     one.slice(0, 500)
   );
@@ -1352,7 +1361,7 @@ async function layerO() {
   );
   assert(
     'O',
-    'O9 the two opening components hold no strip, no herd line and no quieter choice; the main button’s words and the way back stay',
+    'O9 the two opening components hold no strip and no quieter choice, the herd line on Moment 1’s only (GTC-396 item 1); the main button’s words and the way back stay',
     CHECKS.openingSources(code(OPENING_1), code(OPENING_2))
   );
 }

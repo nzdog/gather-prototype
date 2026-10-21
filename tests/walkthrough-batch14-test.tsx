@@ -192,9 +192,14 @@ const CHECKS = {
     const does = h.indexOf('data-moment-words="1-does"');
     const done = h.indexOf('data-moment-words="1-done"');
     const button = h.indexOf('Ready to start herding');
+    // [[GTC-396]] item 1 (founder, 21 Oct 2026): the herd line is back, under the title and above
+    // "What this does" (it was "no herd line" from GTC-394 tweak 2 to GTC-395).
+    const herd = h.indexOf('herd of cats');
     return (
       title >= 0 &&
-      !h.includes('herd of cats') &&
+      herd > title &&
+      herd < does &&
+      h.split('herd of cats').length === 2 &&
       !h.includes('data-moment-strip') &&
       does > title &&
       done > does &&
@@ -512,7 +517,7 @@ async function runInMemory() {
   );
   assert(
     'M',
-    'M1 Moment 1’s opening screen: its title, "What this does", "When it’s done" directly under it (max-w-xl), then the button; once each; no herd line, no strip (GTC-394 tweak 2)',
+    'M1 Moment 1’s opening screen: its title, the herd line under it (GTC-396 item 1), "What this does", "When it’s done" directly under it (max-w-xl), then the button; once each; no strip (GTC-394 tweak 2)',
     CHECKS.M1(opening)
   );
   assert(

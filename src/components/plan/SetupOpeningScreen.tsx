@@ -15,8 +15,9 @@ interface SetupOpeningScreenProps {
 /**
  * Moment 1's transition page. [[GTC-394]] tweak 2 (founder, 19 Oct 2026: "The title and the
  * paragraphs are the important things"): the Moment's name, big; "What this does" and "When it’s
- * done"; the one button. The strip and the herd-of-cats line are gone from here (the strip stays on
- * every other screen); "← Your events" and the event's details stay, as navigation.
+ * done"; the one button. The strip is gone from here (it stays on every other screen); "← Your
+ * events" and the event's details stay, as navigation. [[GTC-396]] item 1: the herd-of-cats line
+ * is back under the title (the founder, 21 Oct 2026).
  */
 export default function SetupOpeningScreen({ onStart, details }: SetupOpeningScreenProps) {
   const [fading, setFading] = useState(false);
@@ -56,6 +57,16 @@ export default function SetupOpeningScreen({ onStart, details }: SetupOpeningScr
         <h1 className="text-4xl sm:text-5xl font-semibold text-gray-900 text-center">
           {OPENING_TITLES[1]}
         </h1>
+
+        {/* [[GTC-396]] item 1 (founder, 21 Oct 2026): the herd-of-cats line is back, in the words
+            and at the size this file held before GTC-394 tweak 2 (e97ccc6^), under the title and
+            above "What this does". Its old mb-12 is dropped: the words' own mt-10 is the gap. On a
+            phone the column still fits one screen (checked by the classes: 36px title, three lines
+            of 24px, the two paragraphs, the button), so it is not scaled down. This page only. */}
+        <p className="mt-6 text-2xl sm:text-3xl text-gray-800 leading-relaxed text-center">
+          We&rsquo;re here to organise what could be described as a herd of cats. Let&rsquo;s get it
+          done.
+        </p>
 
         <MomentWords moment={1} part="does" className="mt-10 max-w-xl" />
         <MomentWords moment={1} part="done" className="mt-4 max-w-xl" />
