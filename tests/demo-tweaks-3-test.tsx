@@ -222,6 +222,12 @@ const wordsOf = (html: string, marker: string) => {
   return m ? m[1] : '';
 };
 
+// ── Item 5: no "0%" while nothing is confirmed, hand-written ─────────────────
+const PREFLIGHT = 'src/app/plan/[eventId]/pre-flight/page.tsx';
+const FIGURES_START = '<div className="flex gap-6 mb-4">';
+const FIGURE_GUARD = '{coverage.complianceRate > 0 && (';
+const CONFIRMED_LABEL = 'confirmed so far';
+
 // ── CONTROL: not touched by this batch, hand-written ─────────────────────────
 /**
  * The founder's untouched proof (his section 5), plus the neighbours no item edits. Never a whole
@@ -539,6 +545,36 @@ export const CHECKS = {
     );
   },
 
+  // ── Item 5 ──
+  /** Z1 — the third figure drawn only while the rate is above 0; its own element, so the row closes up. */
+  figureHidden(src: string) {
+    const figures = between(src, FIGURES_START, `${CONFIRMED_LABEL}</p>`);
+    const guarded = new RegExp(
+      `${rx(FIGURE_GUARD)}\\s*<div>\\s*<p className="text-2xl font-medium text-gray-900">\\{coverage\\.complianceRate\\}%</p>\\s*<p className="text-sm text-gray-500">${CONFIRMED_LABEL}</p>\\s*</div>\\s*\\)\\}`
+    );
+    return (
+      figures.length > 0 &&
+      guarded.test(src) &&
+      count(src, FIGURE_GUARD) === 1 &&
+      count(src, CONFIRMED_LABEL) === 1 &&
+      count(figures, 'coverage.unassignedCount') === 1 &&
+      count(figures, 'coverage.criticalUnassignedCount') === 1 &&
+      figures.indexOf('coverage.criticalUnassignedCount') < figures.indexOf(FIGURE_GUARD)
+    );
+  },
+  /** Z2 CONTROL — the other two figures, their row and the words exactly as at the tag; no new words. */
+  figuresKept(now: string, head: string) {
+    const figures = (src: string) => between(src, FIGURES_START, `${CONFIRMED_LABEL}</p>`);
+    const nowBare = figures(now).replace(FIGURE_GUARD, '');
+    return (
+      figures(head).length > 200 &&
+      !figures(head).includes(FIGURE_GUARD) &&
+      flat(nowBare) === flat(figures(head)) &&
+      count(now, 'unassigned</p>') === count(head, 'unassigned</p>') &&
+      count(now, 'critical and unassigned</p>') === count(head, 'critical and unassigned</p>')
+    );
+  },
+
   // ── CONTROL ──
   /** U2 — package.json differs from the tag by the one new script and nothing else. */
   onlyTheScript(nowJson: string, goodJson: string) {
@@ -734,6 +770,23 @@ async function layerL() {
   );
 }
 
+// ══ Item 5 ═══════════════════════════════════════════════════════════════════
+async function layerZ() {
+  section('Z — item 5: no "0% confirmed so far" while nothing is confirmed');
+  const now = code(PREFLIGHT);
+  const head = stripComments(atGood(PREFLIGHT));
+  assert(
+    'Z',
+    'Z1 the "confirmed so far" figure is drawn only while the rate is above 0, as its own element inside the row, so the other two leave no hole',
+    CHECKS.figureHidden(now)
+  );
+  assert(
+    'Z',
+    'Z2 CONTROL: the row, "unassigned" and "critical and unassigned" exactly as at demo-tweaks-2-good; the figure itself unchanged when shown; no new words',
+    head.length > 0 && CHECKS.figuresKept(now, head)
+  );
+}
+
 // ══ CONTROL ══════════════════════════════════════════════════════════════════
 async function layerU() {
   section('U — CONTROL: what this batch must not touch');
@@ -765,6 +818,7 @@ async function main() {
   await layerT();
   await layerB();
   await layerL();
+  await layerZ();
   await layerU();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {

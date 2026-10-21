@@ -1012,8 +1012,10 @@ async function runLive() {
         rowShade;
       detail[`C4${k}`] = JSON.stringify({ tap3, rowWords, tapGus, gusWord, rowShade });
 
-      // C1 — step 1 open on the held event (a critical item loose): the three numbers and the list,
-      // and no sweep's fold.
+      // C1 — step 1 open on the held event (a critical item loose): the numbers and the list, and no
+      // sweep's fold. [[GTC-396]] item 5 (founder, 21 Oct 2026): on this fixture every assignment is
+      // PENDING, so nothing is confirmed and "confirmed so far" is not drawn; the other two numbers
+      // stay.
       await c.navigate(`/plan/${evP}/pre-flight`, 7000);
       const tap1 = await tap(`document.querySelector('#step-1 header button[aria-expanded]')`);
       await sleep(400);
@@ -1024,7 +1026,7 @@ async function runLive() {
         tap1 === null &&
         /unassigned/.test(s1.text) &&
         /critical and unassigned/.test(s1.text) &&
-        /confirmed so far/.test(s1.text) &&
+        !/confirmed so far/.test(s1.text) &&
         /Roast turkey/.test(s1.text) &&
         /Bread rolls/.test(s1.text) &&
         !s1.all.includes(SWEEP) &&
@@ -1194,7 +1196,7 @@ async function runLive() {
   }
 
   const C_LABELS: Record<string, string> = {
-    C1: 'step 1 open, a critical item loose: its three numbers and the list, and no "The sweep’s own wording" (item 46)',
+    C1: 'step 1 open, a critical item loose: its two numbers (no "confirmed so far" while nothing is confirmed, GTC-396 item 5) and the list, and no "The sweep’s own wording" (item 46)',
     C2: 'steps 1 to 4 read "Show", one opened reads "Hide"; the cue beside the text on a desktop, under it on a phone (W1, W2, ruling 4)',
     C3: 'the pointer on a step’s title, and on its tick box, shades the whole title row; the open contents and Ready never shade (ruling 1)',
     C3p: 'a touch screen: no hover, and after a tap nothing shades; the cue reads "Hide" (ruling 1)',

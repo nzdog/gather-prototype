@@ -680,10 +680,16 @@ export default function PreFlightPage() {
               </p>
               <p className="text-sm text-gray-500">critical and unassigned</p>
             </div>
-            <div>
-              <p className="text-2xl font-medium text-gray-900">{coverage.complianceRate}%</p>
-              <p className="text-sm text-gray-500">confirmed so far</p>
-            </div>
+            {/* [[GTC-396]] item 5 (founder, 21 Oct 2026): "0% confirmed so far" says nothing while
+                nothing is confirmed, so the figure is not drawn then and the row closes up (the read
+                carries the rate alone; 0 is no acceptance counted). Once anything is confirmed it
+                shows as before. */}
+            {coverage.complianceRate > 0 && (
+              <div>
+                <p className="text-2xl font-medium text-gray-900">{coverage.complianceRate}%</p>
+                <p className="text-sm text-gray-500">confirmed so far</p>
+              </div>
+            )}
           </div>
 
           {coverage.unassignedCount === 0 ? (
