@@ -35,6 +35,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import SetupOpeningScreen from '../src/components/plan/SetupOpeningScreen';
 import Moment2Opening from '../src/components/plan/Moment2Opening';
 import Moment1InputForm from '../src/components/plan/Moment1InputForm';
+// Item 4: the plan view and the toast provider imported statically, as the Moment 3 suites do (a
+// dynamic import() would give the view a second toast context).
+import { ToastProvider } from '../src/contexts/ToastContext';
+import Moment2PlanView from '../src/components/plan/Moment2PlanView';
 
 const ROOT = path.join(__dirname, '..');
 
@@ -179,6 +183,44 @@ const M1_PHONE = 'md:hidden mt-8';
 const M1_RIGHT = 'hidden md:block w-80 flex-shrink-0';
 const M1_STICKY = 'sticky top-8 max-h-[calc(100vh-4rem-65px)] overflow-y-auto';
 const rx = (s: string) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+
+// ── Item 4: the plan screen's lead-in, hand-written ──────────────────────────
+const PLAN_VIEW = 'src/components/plan/Moment2PlanView.tsx';
+const SKELETON = 'src/components/plan/Moment2Step2Skeleton.tsx';
+const PLAN_BASE = {
+  eventId: 'e1',
+  eventName: 'Boxing Day',
+  guestCount: 10,
+  categories: [],
+  onUpdateItem: async () => {},
+  onRemoveItem: async () => {},
+  onAddItem: async () => {},
+  onAddCategory: async () => {},
+  onApprove: () => {},
+  onBack: () => {},
+  onRegeneratePlan: () => {},
+  onRegenerateCategory: () => {},
+  regeneratingScope: null,
+  onEditGuests: () => {},
+  onGoToDashboard: () => {},
+  stripDoors: {},
+};
+const VENUE_FACTS = {
+  id: 'e1',
+  name: 'Boxing Day',
+  startDate: '2026-12-26',
+  endDate: '2026-12-26',
+  venueName: 'Riverside Park',
+  venueTimingStart: '12:00pm',
+  venueTimingEnd: '4:00pm',
+};
+/** The words' line inside one MomentWords block (its second paragraph). */
+const wordsOf = (html: string, marker: string) => {
+  const at = html.indexOf(`data-moment-words="${marker}"`);
+  if (at < 0) return '';
+  const m = html.slice(at).match(/<\/p><p class="[^"]*">([^<]*)<\/p><\/div>/);
+  return m ? m[1] : '';
+};
 
 // ── CONTROL: not touched by this batch, hand-written ─────────────────────────
 /**
@@ -433,6 +475,70 @@ export const CHECKS = {
     );
   },
 
+  // ── Item 4 ──
+  /** L1 — the two lines after the strip and before the heading, once each, "done" under "does", mb-3 as Moment 3. */
+  leadInOnPlan(html: string) {
+    const strip = html.indexOf('data-moment-strip');
+    const does = html.indexOf('data-moment-words="2-does"');
+    const done = html.indexOf('data-moment-words="2-done"');
+    const h1 = html.indexOf('<h1');
+    return (
+      strip >= 0 &&
+      does > strip &&
+      done > does &&
+      h1 > done &&
+      count(html, 'data-moment-words="2-does"') === 1 &&
+      count(html, 'data-moment-words="2-done"') === 1 &&
+      count(html, 'data-moment-words=') === 2 &&
+      /<\/p><\/div><div data-moment-words="2-done"/.test(html) &&
+      html.includes('data-moment-words="2-does" class="mb-3"') &&
+      html.includes('data-moment-words="2-done" class="mb-3"') &&
+      html.includes(`>${DOES_HEAD}</p>`) &&
+      html.includes(`>${DONE_HEAD}</p>`)
+    );
+  },
+  /** L2 — with the event's facts: the drop-off line after "done" and straight above the heading. */
+  dropOffStillAboveHeading(html: string) {
+    const done = html.indexOf('data-moment-words="2-done"');
+    const line = html.indexOf('<p data-drop-off-line=""');
+    return (
+      done >= 0 &&
+      line > done &&
+      /<p data-drop-off-line=""[^>]*>[^<]*<\/p><h1\b/.test(html) &&
+      count(html, 'data-drop-off-line') === 1
+    );
+  },
+  /** L3 — the words are Moment 2's own: the same text the opening page draws, for both lines. */
+  sameWordsAsOpening(plan: string, opening: string) {
+    const does = wordsOf(plan, '2-does');
+    const done = wordsOf(plan, '2-done');
+    return (
+      does.length > 20 &&
+      done.length > 20 &&
+      does === wordsOf(opening, '2-does') &&
+      done === wordsOf(opening, '2-done') &&
+      does !== done
+    );
+  },
+  /** L4 CONTROL — the rest of the view as at the tag; the skeleton draws none of it and is not edited. */
+  planViewKept(now: string, head: string, skeleton: string, skeletonUnchanged: boolean) {
+    const fromHeading = (src: string) =>
+      src.slice(src.indexOf('<h1 className="text-xl font-semibold'));
+    const top = (src: string) =>
+      between(src, 'return (\n    <div className="min-h-screen', '<MomentArc');
+    return (
+      count(now, '<MomentWords') === 2 &&
+      now.includes("import MomentWords from './MomentWords';") &&
+      fromHeading(head).length > 1000 &&
+      flat(fromHeading(now)) === flat(fromHeading(head)) &&
+      top(head).length > 50 &&
+      flat(top(now)) === flat(top(head)) &&
+      !skeleton.includes('MomentWords') &&
+      !skeleton.includes('data-moment-words') &&
+      skeletonUnchanged
+    );
+  },
+
   // ── CONTROL ──
   /** U2 — package.json differs from the tag by the one new script and nothing else. */
   onlyTheScript(nowJson: string, goodJson: string) {
@@ -574,6 +680,60 @@ async function layerB() {
   );
 }
 
+// ══ Item 4 ═══════════════════════════════════════════════════════════════════
+async function layerL() {
+  section('L — item 4: the plan screen mirrors the other Moments');
+  const drawPlan = (over: Record<string, unknown>) =>
+    render(
+      createElement(
+        ToastProvider as any,
+        null,
+        createElement(Moment2PlanView as any, { ...PLAN_BASE, ...over })
+      )
+    );
+  const plan = drawPlan({});
+  assert(
+    'L',
+    'L1 "What this does" then "When it’s done" sit between the strip and the plan’s heading, once each, "done" directly under "does", mb-3 as Moment 3 places its own',
+    CHECKS.leadInOnPlan(plan),
+    plan.slice(plan.indexOf('data-moment-strip'), plan.indexOf('<h1')).slice(-400)
+  );
+  const withFacts = drawPlan({ details: VENUE_FACTS });
+  assert(
+    'L',
+    'L2 GTC-395 item 7’s drop-off line still sits directly above the heading, now after "When it’s done"',
+    CHECKS.dropOffStillAboveHeading(withFacts)
+  );
+  const own = drawPlan({ ownPlan: true });
+  assert(
+    'L',
+    'L3 the plan written by hand (ownPlan) carries the same two lines in the same place',
+    CHECKS.leadInOnPlan(own)
+  );
+  const opening = render(
+    createElement(Moment2Opening as any, {
+      eventName: 'Boxing Day',
+      onStart: () => {},
+      onBack: () => {},
+    })
+  );
+  assert(
+    'L',
+    'L4 the words are Moment 2’s own existing words: the same two lines Moment 2’s opening page draws; no new words',
+    CHECKS.sameWordsAsOpening(plan, opening)
+  );
+  assert(
+    'L',
+    'L5 CONTROL: the heading, the count line, the list, the bar and everything after the heading as at demo-tweaks-2-good; the skeleton shown while generating draws no Moment words and is not edited',
+    CHECKS.planViewKept(
+      code(PLAN_VIEW),
+      stripComments(atGood(PLAN_VIEW)),
+      code(SKELETON),
+      unchangedSinceGood([SKELETON])
+    )
+  );
+}
+
 // ══ CONTROL ══════════════════════════════════════════════════════════════════
 async function layerU() {
   section('U — CONTROL: what this batch must not touch');
@@ -604,6 +764,7 @@ async function main() {
   await layerH();
   await layerT();
   await layerB();
+  await layerL();
   await layerU();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {

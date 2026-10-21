@@ -557,12 +557,18 @@ async function main() {
       })
     )
   );
+  // [[GTC-396]] item 4 (founder, 21 Oct 2026): the plan screen mirrors the other Moments, so it
+  // carries Moment 2's two lines (once each, "done" directly under "does", before the heading), as
+  // Moment 3 carries its own; ruling 5 kept them to the opening until then.
   assert(
     'R',
-    'R4 Moment 2’s plan: no Moment words (the opening only, ruling 5), "+ Add category" still there',
+    'R4 Moment 2’s plan: Moment 2’s two lines once each, "When it’s done" directly under "What this does", before the heading (GTC-396 item 4); "+ Add category" still there',
     planView.includes('+ Add category') &&
-      !planView.includes('data-moment-words') &&
-      !planView.includes(DONE)
+      planView.includes(pair(2)) &&
+      once(planView, 'data-moment-words="2-does"') &&
+      once(planView, 'data-moment-words="2-done"') &&
+      planView.indexOf('data-moment-words="2-done"') < planView.indexOf('<h1') &&
+      planView.includes(DONE)
   );
   assert(
     'R',

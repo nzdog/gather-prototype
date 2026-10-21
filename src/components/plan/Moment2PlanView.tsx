@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import MomentArc, { type ArcDoor } from './MomentArc';
+import MomentWords from './MomentWords';
 import EventDropOffLine from '@/components/shared/EventDropOffLine';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
 import { STRIP_WORDS } from '@/lib/moments/strip';
@@ -284,6 +285,13 @@ export default function Moment2PlanView({
             disabled={regeneratingScope !== null}
           />
         </div>
+
+        {/* [[GTC-396]] item 4 (founder, 21 Oct 2026): the plan screen mirrors the other Moments:
+            Moment 2's own "What this does" and "When it’s done" between the strip and the heading,
+            placed as Moment 3 places its own (GTC-378 ruling 6). The plan written by hand gets them
+            too; the skeleton shown while the plan is generating is not touched. */}
+        <MomentWords moment={2} part="does" className="mb-3" />
+        <MomentWords moment={2} part="done" className="mb-3" />
 
         {/* [[GTC-395]] item 7: where and when to drop off, the event's one line, above the heading. */}
         {details && <EventDropOffLine facts={details} />}
