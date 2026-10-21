@@ -156,6 +156,7 @@
     "test:walkthrough-batch18": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/walkthrough-batch18-test.tsx",
     "test:preflight-fold": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/preflight-fold-test.tsx",
     "test:sign-in-hole": "tsx tests/sign-in-hole-test.ts",
+    "test:deploy-audit": "tsx tests/deploy-audit-test.ts",
     "test:event-day-end": "tsx tests/event-day-end-test.ts"
   },
   "prisma": {
