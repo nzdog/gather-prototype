@@ -514,12 +514,17 @@ async function runInMemory() {
   const addAt = planView.indexOf('+ Add category');
   assert(
     'R',
-    // [[GTC-378]] ruling 5 (item 45): Moment 2's "When it’s done" is on its opening only.
-    'R8 the plan view: W10, "+ Add category", and no "When it’s done" (on the opening only, GTC-378)',
+    // [[GTC-378]] ruling 5 (item 45) kept Moment 2's "When it’s done" to its opening; [[GTC-396]]
+    // item 4 (founder, 21 Oct 2026): the plan view mirrors the other Moments, so it carries Moment
+    // 2's two lines once each, "When it’s done" directly under "What this does", before the heading.
+    'R8 the plan view: W10, "+ Add category", and Moment 2’s "When it’s done" directly under "What this does", once, before the heading (GTC-396 item 4)',
     !!nameButton(planView) &&
       addAt > 0 &&
-      !planView.includes(M[2].done) &&
-      !planView.includes(W15_DONE)
+      planView.includes(`${M[2].does}</p></div><div data-moment-words="2-done"`) &&
+      planView.split('data-moment-words="2-done"').length === 2 &&
+      planView.split(W15_DONE).length === 2 &&
+      planView.includes(M[2].done) &&
+      planView.indexOf('data-moment-words="2-done"') < planView.indexOf('<h1')
   );
   const formProps = {
     eventId: 'e1',
