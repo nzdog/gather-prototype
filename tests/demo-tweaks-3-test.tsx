@@ -34,6 +34,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import SetupOpeningScreen from '../src/components/plan/SetupOpeningScreen';
 import Moment2Opening from '../src/components/plan/Moment2Opening';
+import Moment1InputForm from '../src/components/plan/Moment1InputForm';
 
 const ROOT = path.join(__dirname, '..');
 
@@ -142,6 +143,42 @@ const between = (src: string, from: string, to: string) => {
   const b = a >= 0 ? src.indexOf(to, a + from.length) : -1;
   return a >= 0 && b > a ? src.slice(a, b) : '';
 };
+
+// ── Item 3: "Save & move on →" under both columns, hand-written ──────────────
+const M1_FORM = 'src/components/plan/Moment1InputForm.tsx';
+const CROWD_FILE = 'src/components/demo/CrowdButton.tsx';
+const MOVE_ON = 'Save & move on →';
+const ADD_ANOTHER = 'Save & add another household';
+/** "Add a crowd"'s filled accent style (CrowdButton.tsx), the founder's pick for the button. */
+const CROWD_CLASS =
+  'w-full py-3 text-base font-semibold text-white bg-accent rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-50';
+/** The form's other foot button, as at the tag (its class stays, mb-4 included). */
+const ADD_ANOTHER_CLASS =
+  'w-full py-3 text-accent font-medium border-2 border-dashed border-accent/30 rounded-lg hover:bg-accent/5 transition-colors disabled:opacity-50 mb-4';
+const FORM_BASE = {
+  eventId: 'e1',
+  eventName: 'Boxing Day',
+  onComplete: () => {},
+  onAddPerson: async () => {},
+  channelCandidates: [],
+};
+const EDITING_ANA = {
+  id: 'h-ana',
+  primaryContact: { name: 'Ana Ngata', email: 'ana@example.com', phone: '' },
+  partner: null,
+  helpers: [],
+  littleCount: 0,
+  guests: [],
+  contactPersonEventId: null,
+  messagesMuted: true,
+};
+const HOST_KATE = { name: 'Kate Lowe', email: 'kate@example.com', phone: null };
+/** Moment 1's arrangement, as the setup page writes it (GTC-365; pinned by demo-tweaks-2 R1). */
+const M1_ROW = 'flex flex-col md:flex-row md:gap-8';
+const M1_PHONE = 'md:hidden mt-8';
+const M1_RIGHT = 'hidden md:block w-80 flex-shrink-0';
+const M1_STICKY = 'sticky top-8 max-h-[calc(100vh-4rem-65px)] overflow-y-auto';
+const rx = (s: string) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 
 // ── CONTROL: not touched by this batch, hand-written ─────────────────────────
 /**
@@ -306,6 +343,96 @@ export const CHECKS = {
     );
   },
 
+  // ── Item 3 ──
+  /** B1 — the form's foot, adding people: "Save & add another household" as it was, no move-on. */
+  formFootGuest(html: string) {
+    return (
+      html.includes(`>${esc(ADD_ANOTHER)}</button>`) &&
+      html.includes(`class="${ADD_ANOTHER_CLASS}"`) &&
+      !html.includes(esc(MOVE_ON)) &&
+      !html.includes('>Save changes</button>') &&
+      !html.includes('>Cancel</button>')
+    );
+  },
+  /** B2 — the edit mode: Save changes and Cancel, nothing else at the foot. */
+  formFootEdit(html: string) {
+    return (
+      html.includes('>Save changes</button>') &&
+      html.includes('>Cancel</button>') &&
+      !html.includes(esc(MOVE_ON)) &&
+      !html.includes(esc(ADD_ANOTHER))
+    );
+  },
+  /** B3 — her own household's step: its one button, nothing else at the foot. */
+  formFootHost(html: string) {
+    return (
+      html.includes('>Save and add everyone else →</button>') &&
+      !html.includes(esc(MOVE_ON)) &&
+      !html.includes(esc(ADD_ANOTHER))
+    );
+  },
+  /** B4 — the form hands over its handler and saving flag; handleDone as it was; no button of its own. */
+  formHandsOver(now: string, head: string) {
+    const done = (src: string) => between(src, 'const handleDone = async () => {', 'onComplete();');
+    return (
+      /moveOnRef\?: MutableRefObject<\(\(\) => Promise<void>\) \| null>;/.test(now) &&
+      /onSavingChange\?: \(saving: boolean\) => void;/.test(now) &&
+      /useEffect\(\(\) => \{\s*if \(!moveOnRef\) return;\s*moveOnRef\.current = handleDone;/.test(
+        now
+      ) &&
+      /useEffect\(\(\) => \{\s*onSavingChange\?\.\(saving\);\s*\}, \[saving, onSavingChange\]\);/.test(
+        now
+      ) &&
+      done(head).length > 200 &&
+      flat(done(now)) === flat(done(head)) &&
+      !now.includes('onClick={handleDone}') &&
+      !now.includes(MOVE_ON)
+    );
+  },
+  /** B5 — the page draws the one button, under the row, with the crowd's style and the form's rule. */
+  pageDrawsIt(src: string, crowdSrc: string) {
+    const row = src.indexOf(`<div className="${M1_ROW}">`);
+    const right = src.indexOf(`<div className="${M1_RIGHT}">`);
+    const button = src.indexOf(MOVE_ON);
+    const m3 = src.indexOf('if (showMoment3');
+    const hostBlock = between(src, "if (moment1Phase === 'host')", 'const handleAddHousehold');
+    const inputBlock = between(src, 'const handleAddHousehold', 'if (showMoment3');
+    const button_rx = new RegExp(
+      `\\{!editingHousehold && \\(\\s*<button\\s+type="button"\\s+onClick=\\{\\(\\) => void moment1MoveOnRef\\.current\\?\\.\\(\\)\\}\\s+disabled=\\{moment1Saving\\}\\s+className="mt-6 ${rx(CROWD_CLASS)}"\\s*>\\s*${rx(MOVE_ON)}\\s*</button>\\s*\\)\\}`
+    );
+    return (
+      count(src, MOVE_ON) === 1 &&
+      row > 0 &&
+      right > row &&
+      button > right &&
+      m3 > button &&
+      button_rx.test(src) &&
+      crowdSrc.includes(`className="${CROWD_CLASS}"`) &&
+      count(src, 'const moment1MoveOnRef = useRef<(() => Promise<void>) | null>(null);') === 1 &&
+      count(src, 'const [moment1Saving, setMoment1Saving] = useState(false);') === 1 &&
+      count(inputBlock, 'moveOnRef={moment1MoveOnRef}') === 1 &&
+      count(inputBlock, 'onSavingChange={setMoment1Saving}') === 1 &&
+      !hostBlock.includes('moveOnRef=') &&
+      !hostBlock.includes('onSavingChange=') &&
+      !hostBlock.includes(MOVE_ON)
+    );
+  },
+  /** B6 CONTROL — the row, the phone list block and the column as at the tag; two forms still. */
+  layoutKept(now: string, head: string) {
+    const phone = (src: string) =>
+      between(src, `<div className="${M1_PHONE}">`, `<div className="${M1_RIGHT}">`);
+    const column = (src: string) => between(src, `<div className="${M1_RIGHT}">`, 'top={');
+    return (
+      [M1_ROW, M1_PHONE, M1_RIGHT, M1_STICKY].every((c) => now.includes(`className="${c}"`)) &&
+      phone(head).length > 100 &&
+      flat(phone(now)) === flat(phone(head)) &&
+      column(head).length > 100 &&
+      flat(column(now)) === flat(column(head)) &&
+      count(now, '<Moment1InputForm') === 2 &&
+      count(head, '<Moment1InputForm') === 2
+    );
+  },
+
   // ── CONTROL ──
   /** U2 — package.json differs from the tag by the one new script and nothing else. */
   onlyTheScript(nowJson: string, goodJson: string) {
@@ -392,6 +519,61 @@ async function layerT() {
   );
 }
 
+// ══ Item 3 ═══════════════════════════════════════════════════════════════════
+async function layerB() {
+  section('B — item 3: "Save & move on →" spans both columns, under the list');
+  const guest = render(createElement(Moment1InputForm as any, { ...FORM_BASE }));
+  const editing = render(
+    createElement(Moment1InputForm as any, {
+      ...FORM_BASE,
+      editingHousehold: EDITING_ANA,
+      onEditSave: async () => {},
+      onCancelEdit: () => {},
+    })
+  );
+  const host = render(
+    createElement(Moment1InputForm as any, {
+      ...FORM_BASE,
+      hostMode: HOST_KATE,
+      onSaveHostHousehold: async () => {},
+    })
+  );
+  assert(
+    'B',
+    'B1 the form’s foot while adding people: "Save & add another household" where it was, with its class; no "Save & move on →" (moved, not copied)',
+    CHECKS.formFootGuest(guest),
+    guest.slice(guest.lastIndexOf('<button'), guest.lastIndexOf('<button') + 200)
+  );
+  assert(
+    'B',
+    'B2 the edit mode is untouched: "Save changes" and "Cancel", no move-on, no add-another',
+    CHECKS.formFootEdit(editing)
+  );
+  assert(
+    'B',
+    'B3 her own household’s step is untouched: "Save and add everyone else →" alone',
+    CHECKS.formFootHost(host)
+  );
+  const formNow = code(M1_FORM);
+  const formHead = stripComments(atGood(M1_FORM));
+  assert(
+    'B',
+    'B4 the form hands the page its handler (handleDone, kept current in moveOnRef) and its saving flag (onSavingChange); handleDone as it was; the form draws no move-on button',
+    formHead.length > 0 && CHECKS.formHandsOver(formNow, formHead)
+  );
+  const page = code(SETUP_PAGE);
+  assert(
+    'B',
+    'B5 the setup page draws the one "Save & move on →" after the two-column row and before Moment 3, full width, in "Add a crowd"’s filled accent style, running the form’s handler, disabled while the form saves, not while a household is being edited; the host’s step gets none of it',
+    CHECKS.pageDrawsIt(page, code(CROWD_FILE))
+  );
+  assert(
+    'B',
+    'B6 CONTROL: the row, the phone list block and the sticky column as at demo-tweaks-2-good; the form still drawn twice (her own step, the people screen)',
+    CHECKS.layoutKept(page, stripComments(atGood(SETUP_PAGE)))
+  );
+}
+
 // ══ CONTROL ══════════════════════════════════════════════════════════════════
 async function layerU() {
   section('U — CONTROL: what this batch must not touch');
@@ -421,6 +603,7 @@ async function layerU() {
 async function main() {
   await layerH();
   await layerT();
+  await layerB();
   await layerU();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {

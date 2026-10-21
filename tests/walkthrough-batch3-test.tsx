@@ -871,10 +871,18 @@ async function runLive() {
     // ── Item 16, phone ────────────────────────────────────────────────────────
     await c.setViewport(390, 844, true);
     await go(`/plan/${m1.id}/setup`);
+    // [[GTC-396]] item 3 (founder, 21 Oct 2026): "Save & move on →" now sits UNDER the list, across
+    // both columns; the form's foot is "Save & add another household", so the column is measured
+    // against that (the same question: the column sits below the form).
     const below =
-      await ev<string>(`(() => { const col = window.__col(); const save = window.__btn('Save & move on →');
+      await ev<string>(`(() => { const col = window.__col(); const save = window.__btn('Save & add another household');
       if (!col || !save) return 'missing'; return String(col.getBoundingClientRect().top >= save.getBoundingClientRect().bottom); })()`);
-    assert('16', '16l phone: the column sits below the form', below === 'true', below);
+    assert(
+      '16',
+      '16l phone: the column sits below the form (its foot "Save & add another household" since GTC-396 item 3)',
+      below === 'true',
+      below
+    );
     const fieldAt = () =>
       ev<number>(`(() => { const i = document.querySelector('input[placeholder="e.g. Sarah Mitchell"]'); const s = i.closest('.overflow-y-auto');
         return Math.round(i.getBoundingClientRect().top + (s ? s.scrollTop : window.scrollY)); })()`);
@@ -892,14 +900,16 @@ async function runLive() {
       at0 === at1,
       `${at0} -> ${at1}`
     );
-    await ev(`window.__btn('Save & move on →')?.scrollIntoView({ block: 'center' })`);
+    // [[GTC-396]] item 3: the form's Save button is "Save & add another household" ("Save & move
+    // on →" sits under the list now); the card is just under the form, as before.
+    await ev(`window.__btn('Save & add another household')?.scrollIntoView({ block: 'center' })`);
     await sleep(300);
     const cardSeen =
       await ev<string>(`(() => { const d = window.__draft(); if (!d) return 'no card'; const r = d.getBoundingClientRect();
       return String(r.top >= 0 && r.bottom <= innerHeight && d.innerText.includes('Mo Kahu') && d.innerText.includes('Pita Kahu')); })()`);
     assert(
       '16',
-      '16n phone: at the Save buttons the unsaved card is in view, with both names',
+      '16n phone: at the form’s Save button ("Save & add another household" since GTC-396 item 3) the unsaved card is in view, with both names',
       cardSeen === 'true',
       cardSeen
     );

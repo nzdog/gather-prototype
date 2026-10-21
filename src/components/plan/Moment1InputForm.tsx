@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, type MutableRefObject } from 'react';
 import MomentArc, { type ArcDoor } from './MomentArc';
 import { normalizePhoneNumber, isInternationalNumber } from '@/lib/phone';
 import { SavedHousehold } from './HouseholdCardList';
@@ -108,6 +108,14 @@ interface Moment1InputFormProps {
   onDraftChange?: (draft: SavedHousehold | null) => void;
   /** [[GTC-367]] (item 2): the Moments strip's doors (`stripDoors`, src/lib/moments/strip.ts). */
   stripDoors?: Partial<Record<1 | 2 | 3 | 4, ArcDoor>>;
+  /**
+   * [[GTC-396]] item 3 (founder, 21 Oct 2026): "Save & move on →" is drawn by the setup page as one
+   * full-width button under both columns (so the end of the list points at it), with this form's
+   * own handler and saving flag. The form keeps the handler current in `moveOnRef` and reports
+   * `saving` through `onSavingChange`; it draws no button for it (moved, not copied).
+   */
+  moveOnRef?: MutableRefObject<(() => Promise<void>) | null>;
+  onSavingChange?: (saving: boolean) => void;
 }
 
 interface GuestForm {
@@ -174,6 +182,8 @@ export default function Moment1InputForm({
   channelCandidates = [],
   hostMode,
   onSaveHostHousehold,
+  moveOnRef,
+  onSavingChange,
   onDraftChange,
   stripDoors,
 }: Moment1InputFormProps) {
@@ -631,6 +641,19 @@ export default function Moment1InputForm({
     }
     onComplete();
   };
+
+  // [[GTC-396]] item 3: the page's "Save & move on →" runs this form's handleDone as it stands at the
+  // press (the ref is kept current after every render), and is disabled while this form saves.
+  useEffect(() => {
+    if (!moveOnRef) return;
+    moveOnRef.current = handleDone;
+    return () => {
+      moveOnRef.current = null;
+    };
+  });
+  useEffect(() => {
+    onSavingChange?.(saving);
+  }, [saving, onSavingChange]);
 
   /**
    * GTC-256 (phase 2) — save the host's own household.
@@ -1306,15 +1329,8 @@ export default function Moment1InputForm({
               >
                 {saving ? 'Saving…' : 'Save & add another household'}
               </button>
-
-              <button
-                type="button"
-                onClick={handleDone}
-                disabled={saving}
-                className="w-full py-3 text-gray-600 font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-              >
-                Save & move on →
-              </button>
+              {/* [[GTC-396]] item 3: "Save & move on →" moved to the setup page, under both columns
+                  (moveOnRef / onSavingChange above). */}
             </>
           )}
         </div>

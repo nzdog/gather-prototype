@@ -486,6 +486,11 @@ function EventSetupFlow() {
     const overlay = moment1OverlayRef.current;
     if (overlay) overlay.scrollTop = 0;
   };
+  // [[GTC-396]] item 3 (founder, 21 Oct 2026): "Save & move on →" is one full-width button under
+  // both columns, drawn below with the form's own handler and saving flag (the form hands them
+  // over), so the end of the list points at it. Moved from the form's foot, not copied.
+  const moment1MoveOnRef = useRef<(() => Promise<void>) | null>(null);
+  const [moment1Saving, setMoment1Saving] = useState(false);
   // [[GTC-365]] Q2: on a computer the column keeps that card in view by scrolling itself, never the
   // page. (On a phone the column sits below the form, so nothing above the form grows.)
   useEffect(() => {
@@ -1280,6 +1285,8 @@ function EventSetupFlow() {
                 totalPeopleCount={totalPeopleCount}
                 channelCandidates={channelCandidates}
                 onDraftChange={setMoment1Draft}
+                moveOnRef={moment1MoveOnRef}
+                onSavingChange={setMoment1Saving}
                 stripDoors={doorsFor(
                   1,
                   // [[GTC-367]] (Q9): a household typed or being changed keeps her here.
@@ -1329,6 +1336,20 @@ function EventSetupFlow() {
               </div>
             </div>
           </div>
+          {/* [[GTC-396]] item 3: the one "Save & move on →", across the foot of both columns and so
+              directly under the list; the filled accent style "Add a crowd" uses; the form's own
+              handler, words and enabled rule, shown as before (not while a household is being
+              edited). On a phone it is the same button under the stacked columns. */}
+          {!editingHousehold && (
+            <button
+              type="button"
+              onClick={() => void moment1MoveOnRef.current?.()}
+              disabled={moment1Saving}
+              className="mt-6 w-full py-3 text-base font-semibold text-white bg-accent rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-50"
+            >
+              Save & move on →
+            </button>
+          )}
         </div>
       </div>
     );
