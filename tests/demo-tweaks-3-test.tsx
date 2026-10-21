@@ -251,6 +251,50 @@ const REID_MEMBERS = [
 const LITTLE_LINE = '{h.littleCount > 0 && (';
 const KIDS_LINE = '{kids && <p className="text-xs text-gray-400 mb-3">{kids}</p>}';
 
+// ── Item 7: the two labels, hand-written ─────────────────────────────────────
+const COMPOSE = 'src/lib/preflight/ask-preview-compose.ts';
+const PERSON_PILL = 'Gather will hand this off to you';
+const SWITCH_PILL = 'Gather will leave them to you';
+const OLD_PERSON_PILL = 'Hand this one to me';
+const OLD_SWITCH_PILL = 'Leave them to me';
+const OLD_PILL_LINES = [
+  `  HAND_TO_HOST: '${OLD_SWITCH_PILL}',`,
+  `  HAND_TO_HOST: '${OLD_PERSON_PILL}',`,
+];
+const NEW_PILL_LINES = [`  HAND_TO_HOST: '${SWITCH_PILL}',`, `  HAND_TO_HOST: '${PERSON_PILL}',`];
+/** The only files that may read the pills or their composer: the two screens and the module. */
+const PILL_READERS = [
+  'src/app/plan/[eventId]/pre-flight/page.tsx',
+  'src/components/preflight/AfterThePress.tsx',
+  'src/lib/preflight/ask-preview-compose.ts',
+];
+const PILL_NAMES = ['CHASE_PERSON_PILLS', 'CHASE_DEFAULT_PILLS', 'chasePersonPills'];
+/** Where a message is composed or sent: none of these may read them. */
+const SENDING_ROOTS = [
+  'src/lib/press',
+  'src/app/api',
+  'src/lib/sms',
+  'src/lib/email.ts',
+  'src/lib/demo',
+  'src/lib/preflight/ask-preview.ts',
+  'src/lib/preflight/test-email.ts',
+  'src/lib/preflight/test-email-send.ts',
+];
+const walk = (dir: string, out: string[] = []): string[] => {
+  const full = path.join(ROOT, dir);
+  if (!fs.existsSync(full)) return out;
+  if (fs.statSync(full).isFile()) {
+    out.push(dir);
+    return out;
+  }
+  for (const name of fs.readdirSync(full)) {
+    const rel = path.join(dir, name);
+    if (fs.statSync(path.join(ROOT, rel)).isDirectory()) walk(rel, out);
+    else if (/\.(ts|tsx)$/.test(name)) out.push(rel);
+  }
+  return out;
+};
+
 // ── CONTROL: not touched by this batch, hand-written ─────────────────────────
 /**
  * The founder's untouched proof (his section 5), plus the neighbours no item edits. Never a whole
@@ -652,6 +696,65 @@ export const CHECKS = {
     );
   },
 
+  // ── Item 7 ──
+  /** P1 — the two labels as the founder wrote them, no full stop; the other pills and the suffix as they were. */
+  pillWords(mod: any) {
+    const person = mod?.chasePersonPills
+      ? mod.chasePersonPills({ exception: null, eventDefault: null })
+      : null;
+    return (
+      mod?.CHASE_PERSON_PILLS?.HAND_TO_HOST === PERSON_PILL &&
+      mod?.CHASE_DEFAULT_PILLS?.HAND_TO_HOST === SWITCH_PILL &&
+      !PERSON_PILL.endsWith('.') &&
+      !SWITCH_PILL.endsWith('.') &&
+      mod?.CHASE_PERSON_PILLS?.BY_EMAIL === 'Nudge by email' &&
+      mod?.CHASE_DEFAULT_PILLS?.BY_EMAIL === 'Nudge them by email' &&
+      mod?.DEFAULT_SUFFIX === ' (the default)' &&
+      Array.isArray(person) &&
+      person.length === 2 &&
+      person[1]?.label === PERSON_PILL &&
+      person[0]?.label === 'Nudge by email (the default)'
+    );
+  },
+  /** P2 — the module differs from the tag by those two lines and nothing else. */
+  composeDiffersByTwoLines(diff: string) {
+    const lines = diff.split('\n');
+    const minus = lines
+      .filter((l) => l.startsWith('-') && !l.startsWith('---'))
+      .map((l) => l.slice(1));
+    const plus = lines
+      .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
+      .map((l) => l.slice(1));
+    return (
+      diff.length > 0 &&
+      JSON.stringify(minus) === JSON.stringify(OLD_PILL_LINES) &&
+      JSON.stringify(plus) === JSON.stringify(NEW_PILL_LINES)
+    );
+  },
+  /** P3 — nothing that composes or sends a message reads the pills or their composer; the old words are gone. */
+  pillsReadOnlyByScreens(files: Array<{ rel: string; text: string }>) {
+    const readers = files
+      .filter((f) => PILL_NAMES.some((n) => f.text.includes(n)))
+      .map((f) => f.rel)
+      .sort();
+    const oldWords = files.filter(
+      (f) => f.text.includes(OLD_PERSON_PILL) || f.text.includes(OLD_SWITCH_PILL)
+    );
+    const inSending = files.filter(
+      (f) =>
+        SENDING_ROOTS.some((r) => f.rel === r || f.rel.startsWith(`${r}/`)) &&
+        (PILL_NAMES.some((n) => f.text.includes(n)) ||
+          f.text.includes(PERSON_PILL) ||
+          f.text.includes(SWITCH_PILL))
+    );
+    return (
+      files.length > 200 &&
+      JSON.stringify(readers) === JSON.stringify([...PILL_READERS].sort()) &&
+      oldWords.length === 0 &&
+      inSending.length === 0
+    );
+  },
+
   // ── CONTROL ──
   /** U2 — package.json differs from the tag by the one new script and nothing else. */
   onlyTheScript(nowJson: string, goodJson: string) {
@@ -887,6 +990,29 @@ async function layerK() {
   );
 }
 
+// ══ Item 7 ═══════════════════════════════════════════════════════════════════
+async function layerP() {
+  section('P — item 7: the two HAND_TO_HOST labels');
+  const APC = await load('../src/lib/preflight/ask-preview-compose');
+  assert(
+    'P',
+    'P1 "Gather will hand this off to you" (the per-person pill) and "Gather will leave them to you" (the switch), neither with a full stop; the BY_EMAIL pills, the suffix and the composer’s shape as they were',
+    !!APC && CHECKS.pillWords(APC),
+    APC ? JSON.stringify([APC.CHASE_PERSON_PILLS, APC.CHASE_DEFAULT_PILLS]) : 'module did not load'
+  );
+  assert(
+    'P',
+    'P2 the module differs from demo-tweaks-2-good by those two lines and nothing else',
+    CHECKS.composeDiffersByTwoLines(git(['diff', GOOD_TAG, '--', COMPOSE]).stdout)
+  );
+  const files = walk('src').map((rel) => ({ rel, text: read(rel) }));
+  assert(
+    'P',
+    `P3 across ${files.length} source files only the two screens and the module read the pills or their composer; nothing under the press, the routes, SMS, email, the demo library or the ask’s sender does; the old words are gone`,
+    CHECKS.pillsReadOnlyByScreens(files)
+  );
+}
+
 // ══ CONTROL ══════════════════════════════════════════════════════════════════
 async function layerU() {
   section('U — CONTROL: what this batch must not touch');
@@ -920,6 +1046,7 @@ async function main() {
   await layerL();
   await layerZ();
   await layerK();
+  await layerP();
   await layerU();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {

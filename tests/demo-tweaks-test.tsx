@@ -359,6 +359,37 @@ const STEP4_LIBS = [
   'src/lib/preflight/ask-preview-compose.ts',
   'src/lib/preflight/tick-memory.ts',
 ];
+/**
+ * [[GTC-396]] item 7 (founder, 21 Oct 2026): the compose module's two HAND_TO_HOST labels were
+ * reworded, so M3 asks the same question of it in its new form: against `demo-ab-good` it differs
+ * by those two label lines and nothing else; the other two libraries not at all.
+ */
+const COMPOSE_LIB = 'src/lib/preflight/ask-preview-compose.ts';
+const OLD_PILL_LINES = [
+  "  HAND_TO_HOST: 'Leave them to me',",
+  "  HAND_TO_HOST: 'Hand this one to me',",
+];
+const NEW_PILL_LINES = [
+  "  HAND_TO_HOST: 'Gather will leave them to you',",
+  "  HAND_TO_HOST: 'Gather will hand this off to you',",
+];
+const composeDiffersByThePillsOnly = () => {
+  const out = spawnSync('git', ['diff', 'demo-ab-good', '--', COMPOSE_LIB], {
+    cwd: ROOT,
+    encoding: 'utf8',
+  }).stdout;
+  const lines = out.split('\n');
+  const minus = lines
+    .filter((l) => l.startsWith('-') && !l.startsWith('---'))
+    .map((l) => l.slice(1));
+  const plus = lines
+    .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
+    .map((l) => l.slice(1));
+  return (
+    JSON.stringify(minus) === JSON.stringify(OLD_PILL_LINES) &&
+    JSON.stringify(plus) === JSON.stringify(NEW_PILL_LINES)
+  );
+};
 /** Step 4's first part, in the founder's fixed order: the message, its notes, then the controls. */
 const STEP4_ORDER = [
   'data-message-part="1"',
@@ -1743,11 +1774,15 @@ async function layerM() {
   };
   assert(
     'M',
-    'M3 what step 4 fingerprints and ticks is as before: the same onPrint(printOf(data)), and its composing, stored and tick modules not edited',
+    'M3 what step 4 fingerprints and ticks is as before: the same onPrint(printOf(data)), its stored and tick modules not edited, and its composing module differing by the two HAND_TO_HOST labels only (GTC-396 item 7)',
     effect(pageNow).length > 0 &&
       effect(pageNow) === effect(pageHead) &&
-      spawnSync('git', ['diff', '--quiet', 'demo-ab-good', '--', ...STEP4_LIBS], { cwd: ROOT })
-        .status === 0
+      spawnSync(
+        'git',
+        ['diff', '--quiet', 'demo-ab-good', '--', ...STEP4_LIBS.filter((f) => f !== COMPOSE_LIB)],
+        { cwd: ROOT }
+      ).status === 0 &&
+      composeDiffersByThePillsOnly()
   );
   const data = {
     storedAuthorLine: 'See you there!',

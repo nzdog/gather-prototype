@@ -161,7 +161,8 @@ const A_HEAD = "I won't message them";
 const B_HEAD = "I'll ask, but won't nudge";
 const B_LINE =
   "Their asks go out, and I won't follow up on them. If they haven't answered, they're yours.";
-const PILLS = { BY_EMAIL: 'Nudge them by email', HAND_TO_HOST: 'Leave them to me' };
+/** [[GTC-396]] item 7 (founder, 21 Oct 2026): the HAND_TO_HOST label reworded (was "Leave them to me"). */
+const PILLS = { BY_EMAIL: 'Nudge them by email', HAND_TO_HOST: 'Gather will leave them to you' };
 const SUFFIX = ' (the default)';
 /** Moment 2's quiet small-capitals divider (Moment2Step1Modal L784, L938), Q6. */
 const DIVIDER = 'text-xs uppercase tracking-wider text-gray-500';
@@ -341,14 +342,14 @@ async function runInMemory() {
   const on = render(
     createElement(Pill, { active: true, onClick: () => {} }, 'Nudge them by email')
   );
-  const off = render(createElement(Pill, { active: false, onClick: () => {} }, 'Leave them to me'));
+  const off = render(createElement(Pill, { active: false, onClick: () => {} }, PILLS.HAND_TO_HOST));
   assert(
     'R',
     'R1 a choice button says whether it is on (aria-pressed), its words and class as at HEAD',
     ok(
       () =>
         CHECKS.R_PILL(on, 'Nudge them by email', true) &&
-        CHECKS.R_PILL(off, 'Leave them to me', false)
+        CHECKS.R_PILL(off, PILLS.HAND_TO_HOST, false)
     ),
     `${on} | ${off}`
   );
@@ -1207,7 +1208,7 @@ async function runLive() {
     const now14 = await ev<any>(BOXES);
     assert(
       'C',
-      'C14 her own nudge choice ("Leave them to me") moves the pressed marker, drops "(the default)", and keeps step 4 ticked after a reload (Q3, Q7)',
+      'C14 her own nudge choice ("Gather will leave them to you", GTC-396 item 7) moves the pressed marker, drops "(the default)", and keeps step 4 ticked after a reload (Q3, Q7)',
       ok(
         () =>
           CHECKS.C_PART2(f14, PILLS.HAND_TO_HOST) &&

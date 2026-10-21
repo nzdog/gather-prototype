@@ -572,9 +572,10 @@ async function main() {
     (compose as any)?.CHASE_DEFAULT_SENTENCE,
     undefined
   );
-  expectEq('D', 'W3 — the switch pills', compose?.CHASE_DEFAULT_PILLS, {
+  // [[GTC-396]] item 7 (founder, 21 Oct 2026): the two HAND_TO_HOST labels reworded, no full stop.
+  expectEq('D', 'W3 — the switch pills (GTC-396 item 7)', compose?.CHASE_DEFAULT_PILLS, {
     BY_EMAIL: 'Nudge them by email',
-    HAND_TO_HOST: 'Leave them to me',
+    HAND_TO_HOST: 'Gather will leave them to you',
   });
   expectEq(
     'D',
@@ -588,9 +589,9 @@ async function main() {
     EMAIL: 'Email',
     NONE: 'No nudges — yours',
   });
-  expectEq('D', 'W5 — the per-person pills', compose?.CHASE_PERSON_PILLS, {
+  expectEq('D', 'W5 — the per-person pills (GTC-396 item 7)', compose?.CHASE_PERSON_PILLS, {
     BY_EMAIL: 'Nudge by email',
-    HAND_TO_HOST: 'Hand this one to me',
+    HAND_TO_HOST: 'Gather will hand this off to you',
   });
   expectEq(
     'D',
@@ -635,7 +636,7 @@ async function main() {
       { value: 'BY_EMAIL', label: 'Nudge by email (the default)', active: true, writes: null },
       {
         value: 'HAND_TO_HOST',
-        label: 'Hand this one to me',
+        label: 'Gather will hand this off to you',
         active: false,
         writes: 'HAND_TO_HOST',
       },
@@ -647,7 +648,12 @@ async function main() {
     attempt(() => compose?.chasePersonPills({ exception: 'HAND_TO_HOST', eventDefault: null })),
     [
       { value: 'BY_EMAIL', label: 'Nudge by email', active: false, writes: null },
-      { value: 'HAND_TO_HOST', label: 'Hand this one to me', active: true, writes: 'HAND_TO_HOST' },
+      {
+        value: 'HAND_TO_HOST',
+        label: 'Gather will hand this off to you',
+        active: true,
+        writes: 'HAND_TO_HOST',
+      },
     ]
   );
   expectEq(
@@ -658,7 +664,7 @@ async function main() {
       { value: 'BY_EMAIL', label: 'Nudge by email', active: false, writes: 'BY_EMAIL' },
       {
         value: 'HAND_TO_HOST',
-        label: 'Hand this one to me (the default)',
+        label: 'Gather will hand this off to you (the default)',
         active: true,
         writes: null,
       },

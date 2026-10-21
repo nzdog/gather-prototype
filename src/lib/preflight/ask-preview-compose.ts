@@ -303,13 +303,13 @@ export const CHASE_DEFAULT_QUESTION =
 /** The event switch. W3. */
 export const CHASE_DEFAULT_PILLS: Record<ChaseWhenNoMobile, string> = {
   BY_EMAIL: 'Nudge them by email',
-  HAND_TO_HOST: 'Leave them to me',
+  HAND_TO_HOST: 'Gather will leave them to you',
 };
 
 /** The per-person control. W5 — the second is ruling AH's own phrase. */
 export const CHASE_PERSON_PILLS: Record<ChaseWhenNoMobile, string> = {
   BY_EMAIL: 'Nudge by email',
-  HAND_TO_HOST: 'Hand this one to me',
+  HAND_TO_HOST: 'Gather will hand this off to you',
 };
 
 /** Marks whichever choice is the default, as the pace's "Not set" line does. W3. */
