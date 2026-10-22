@@ -82,6 +82,8 @@ const atGood = (rel: string) => {
   const r = git(['show', `${GOOD_TAG}:${rel}`]);
   return r.status === 0 ? r.stdout : '';
 };
+/** GTC-396's last commit (its ticket backfill); U2 reads package.json as it was there. */
+const GTC396_LAST = '3695755c0d9168ce32a52f6dcb1a74b4f9c9dba9';
 const atRef = (ref: string, rel: string) => {
   const r = git(['show', `${ref}:${rel}`]);
   return r.status === 0 ? r.stdout : '';
@@ -1024,10 +1026,13 @@ async function layerU() {
     missing.length === 0 && unchangedSinceGood(NOT_TOUCHED),
     missing.length ? `missing: ${missing.join(', ')}` : undefined
   );
+  // GTC-397 (founder's ruling, 22 Oct 2026): read package.json as it was at GTC-396's last
+  // commit, not the file on disk, so a later ticket's script line cannot turn this red. That
+  // commit never changes; the condition is the same and still fails on any other difference.
   assert(
     'U',
-    `U2 package.json differs from the tag by "${NEW_SCRIPT}" and nothing else`,
-    CHECKS.onlyTheScript(read('package.json'), atGood('package.json'))
+    `U2 package.json at GTC-396's last commit (${GTC396_LAST.slice(0, 7)}) differs from the tag by "${NEW_SCRIPT}" and nothing else`,
+    CHECKS.onlyTheScript(atRef(GTC396_LAST, 'package.json'), atGood('package.json'))
   );
   const tracked = UNTRACKED_SCRIPTS.filter(
     (f) => git(['log', '--oneline', `${GOOD_TAG}..HEAD`, '--', f]).stdout.trim().length > 0
