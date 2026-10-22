@@ -25,6 +25,9 @@
  *   F  a flagged lint tool outside the four's tree is listed, not failed
  *   G  two copies of one package: only the one reachable from the four counts
  *   H  where today's check was right, the same answer (GTC-359's axios case)
+ *   I  the two other kinds of link the walk follows: an OPTIONAL dependency (how sharp's native
+ *      image libraries and next's compilers come in) and a PEER dependency (how react comes in
+ *      under next); a flagged package reached only that way FAILS, naming the chain
  *   X  the wrapper prints names, severities and advisory ids only
  *   M  the module imports nothing
  */
@@ -120,6 +123,8 @@ const AXIOS_OWN = adv('axios', 'GHSA-c29m-xwm3-cm6r', 'high', '<1.20.0');
 const BRACE = adv('brace-expansion', 'GHSA-qhr7-859c-m2p7', 'high', '<1.1.13');
 const CRIT = adv('eslint', 'GHSA-fx01-crit-0001', 'critical', '<99.0.0');
 const QS = adv('qs', 'GHSA-fx01-qsqs-0001', 'high', '<6.14.0');
+const OPT = adv('@img/sharp-libvips-linux-x64', 'GHSA-fx01-optl-0001', 'high', '<1.2.4');
+const PEER = adv('react-dom', 'GHSA-fx01-peer-0001', 'high', '<19.1.1');
 
 // Tree A: twilio -> axios -> follow-redirects.
 const treeA = (fr: string) =>
@@ -338,6 +343,42 @@ export function buildChecks(M: any): Check[] {
       treeA('1.16.0')
     );
 
+  // I: a flagged package that one of the four reaches ONLY through an optional link (I1) or ONLY
+  // through a peer link (I2), marked as npm marks such copies. Nothing else depends on it.
+  const LIBVIPS = '@img/sharp-libvips-linux-x64';
+  const caseI1 = () =>
+    decide(
+      audit(vuln(LIBVIPS, 'high', [OPT], [`node_modules/${LIBVIPS}`])),
+      lockOf(
+        { sharp: '^0.34.5' },
+        {
+          'node_modules/sharp': pkg('0.34.5', undefined, {
+            optionalDependencies: { [LIBVIPS]: '1.2.3' },
+          }),
+          [`node_modules/${LIBVIPS}`]: pkg('1.2.3', undefined, {
+            optional: true,
+            os: ['linux'],
+            cpu: ['x64'],
+          }),
+        }
+      )
+    );
+  const caseI2 = () =>
+    decide(
+      audit(vuln('react-dom', 'high', [PEER], ['node_modules/react-dom'])),
+      lockOf(
+        { next: '15.5.27' },
+        {
+          'node_modules/next': pkg('15.5.27', undefined, {
+            peerDependencies: { react: '^19.0.0', 'react-dom': '^19.0.0' },
+          }),
+          'node_modules/react': pkg('19.1.0', undefined, { peer: true }),
+          'node_modules/react-dom': pkg('19.1.0', { scheduler: '^0.26.0' }, { peer: true }),
+          'node_modules/scheduler': pkg('0.26.0', undefined, { peer: true }),
+        }
+      )
+    );
+
   return [
     {
       id: 'A1',
@@ -498,6 +539,20 @@ export function buildChecks(M: any): Check[] {
         failures: ['axios: GHSA-c29m-xwm3-cm6r high', 'twilio <- axios: GHSA-c29m-xwm3-cm6r high'],
       },
       run: caseH1,
+    },
+    {
+      id: 'I1',
+      label:
+        'I1 sharp -> a flagged native library reached only through an OPTIONAL dependency: FAILS sharp <- @img/sharp-libvips-linux-x64',
+      expect: { failures: [`sharp <- ${LIBVIPS}: GHSA-fx01-optl-0001 high`] },
+      run: caseI1,
+    },
+    {
+      id: 'I2',
+      label:
+        'I2 next -> a flagged react-dom reached only through a PEER dependency: FAILS next <- react-dom',
+      expect: { failures: ['next <- react-dom: GHSA-fx01-peer-0001 high'] },
+      run: caseI2,
     },
     {
       id: 'X1',
