@@ -56,7 +56,9 @@ import { suggestAssignments, type Suggestion } from '@/lib/moment3/suggest';
 import { completionPanel } from '@/lib/moment3/completion';
 import {
   GIVEN_ROW,
+  HELD_BY_PICKED_ROW,
   dropSuggestionsFor,
+  heldByPicked,
   itemTap,
   selectionAfterGive,
   suggestionsOnScreen,
@@ -452,6 +454,8 @@ export default function Moment3AssignView({
   const selectedItemOpen = selection?.kind === 'item' && !holders[selection.id];
   const personSelected = selection?.kind === 'person';
   const onScreen = suggestionsOnScreen(ghosts, holders).filter((g) => !(g.itemId in pending));
+  /** [[GTC-398]] item 5 — while a person is picked, the rows they hold, highlighted (assigning.ts). */
+  const heldByThem = new Set(heldByPicked(selection, holders, pending));
 
   /** [[GTC-365]] W7 and W8 — who is picked, said at the foot while the people may be out of view. */
   const pickedRow =
@@ -634,18 +638,22 @@ export default function Moment3AssignView({
                         const ghost = shown ? undefined : ghosts.find((g) => g.itemId === item.id);
                         const selected = selection?.kind === 'item' && selection.id === item.id;
                         const target = personSelected && !shown;
+                        // [[GTC-398]] item 5: the picked person's row is the deeper blue.
+                        const isTheirs = heldByThem.has(item.id);
+                        const rowColours = isTheirs ? HELD_BY_PICKED_ROW : GIVEN_ROW;
                         return (
                           <li
                             key={item.id}
                             data-m3-item={item.id}
+                            data-m3-held-by-picked={isTheirs ? '' : undefined}
                             aria-busy={isPending || undefined}
                             // Q12, A: a given item is the soft blue (GIVEN_ROW), never the board's green.
                             style={
                               shown
                                 ? {
-                                    backgroundColor: GIVEN_ROW.background,
-                                    borderColor: GIVEN_ROW.border,
-                                    color: GIVEN_ROW.text,
+                                    backgroundColor: rowColours.background,
+                                    borderColor: rowColours.border,
+                                    color: rowColours.text,
                                   }
                                 : undefined
                             }

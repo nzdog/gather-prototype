@@ -15,6 +15,9 @@
  *      a margin below: the founder's "Shortest" (M3_WORDS.ASSIGN_HOW); not on "No plan items yet."
  *   S  item 4: "Want me to suggest?" is a proper button in "Add a crowd"'s filled accent style;
  *      the same words, handler and condition; the counter above it; Accept all as it was.
+ *   H  item 5: with a person picked, the rows they hold (or that are saving as theirs) are a deeper
+ *      blue (HELD_BY_PICKED_ROW, beside GIVEN_ROW) with data-m3-held-by-picked; a suggestion, a row
+ *      saving away from them and other people's rows are not; a pure rule (heldByPicked).
  *   U  CONTROL: the files this batch must not touch are not edited since demo-tweaks-3-good;
  *      package.json (read at the commit that added this suite) differs by two script lines; the
  *      lockfile there is GTC-397's; the two untracked scripts are in no commit.
@@ -277,6 +280,37 @@ const SUGGEST_CLASS = `mt-1 ${CROWD_CLASS}`;
 const ACCEPT_ALL_CLASS =
   'mt-1 px-3 py-1.5 text-sm text-gray-800 border border-gray-300 rounded-md bg-white hover:bg-gray-50 disabled:opacity-60 disabled:cursor-wait';
 const rx = (t: string) => t.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+
+// ── Item 5: the picked person's dishes, hand-written ─────────────────────────
+const ASSIGNING_FILE = 'src/lib/moment3/assigning.ts';
+/** GTC-365's soft blue (Q12, A), typed here. */
+const SOFT_BLUE = { background: '#EEF4FB', border: '#B7CCE6', text: '#1F3A5F' };
+/** The board's three state fills (walkthrough-batch3's list): never these. */
+const BOARD_COLOURS = ['#EAF3DE', '#FAEEDA', '#FCEBEB'];
+const hexRgb = (h: string) =>
+  /^#[0-9A-Fa-f]{6}$/.test(h) ? [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)) : null;
+/** WCAG relative luminance: lower is deeper. */
+const luminance = (h: string) => {
+  const rgb = hexRgb(h);
+  if (!rgb) return NaN;
+  const [r, g, b] = rgb.map((v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const contrast = (a: string, b: string) => {
+  const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+};
+/** Holders for the rule's cases: Ross holds the lamb and the trifle, Mere the bread, nobody the pav. */
+const HOLDERS = {
+  lamb: { personId: 'p-ross' },
+  trifle: { personId: 'p-ross' },
+  bread: { personId: 'p-mere' },
+  pav: null,
+};
+const sorted = (a: unknown) => (Array.isArray(a) ? [...a].sort().join(',') : 'not a list');
 
 // ── CONTROL: not touched by this batch, hand-written ─────────────────────────
 /**
@@ -594,6 +628,107 @@ export const CHECKS = {
     );
   },
 
+  // ── Item 5 ──
+  /** H1 — the colour: beside GIVEN_ROW (unchanged), a deeper fill and border, the same dark text, blue, never the board's. */
+  deeperBlue(mod: any) {
+    const g = mod?.GIVEN_ROW;
+    const h = mod?.HELD_BY_PICKED_ROW;
+    const rgb = (x: string) => hexRgb(x) ?? [0, 0, 0];
+    const blue = (x: string) => rgb(x)[2] > rgb(x)[0] && rgb(x)[2] > rgb(x)[1];
+    return (
+      !!g &&
+      !!h &&
+      g.background === SOFT_BLUE.background &&
+      g.border === SOFT_BLUE.border &&
+      g.text === SOFT_BLUE.text &&
+      [h.background, h.border, h.text].every((x: string) => hexRgb(x) !== null) &&
+      h.text === SOFT_BLUE.text &&
+      luminance(h.background) < luminance(g.background) - 0.05 &&
+      luminance(h.border) < luminance(g.border) - 0.1 &&
+      blue(h.background) &&
+      blue(h.border) &&
+      !BOARD_COLOURS.includes(h.background.toUpperCase()) &&
+      !BOARD_COLOURS.includes(h.border.toUpperCase()) &&
+      contrast(h.text, h.background) >= 4.5
+    );
+  },
+  /** H2 — the rule: yes for the picked person's rows (held, or saving as theirs); no for anyone else's, a suggestion, a row saving away, or nobody picked. */
+  heldRule(fn: any) {
+    if (typeof fn !== 'function') return false;
+    const ross = { kind: 'person', id: 'p-ross' };
+    const mere = { kind: 'person', id: 'p-mere' };
+    const cases: Array<[unknown, unknown, unknown, string]> = [
+      // yes: what Ross holds
+      [ross, HOLDERS, {}, 'lamb,trifle'],
+      // the highlight moves with the pick
+      [mere, HOLDERS, {}, 'bread'],
+      // yes: the pav saving as Ross's; the bread moving from Mere to Ross
+      [ross, HOLDERS, { pav: 'p-ross' }, 'lamb,pav,trifle'],
+      [ross, HOLDERS, { bread: 'p-ross' }, 'bread,lamb,trifle'],
+      // no: the lamb being taken back from Ross; the trifle moving to Mere
+      [ross, HOLDERS, { lamb: null }, 'trifle'],
+      [ross, HOLDERS, { trifle: 'p-mere' }, 'lamb'],
+      // no: a dish only suggested for Ross is held by nobody (suggestions are not an input)
+      [ross, { pav: null }, {}, ''],
+      // no: someone with nothing, a picked item, nobody picked (Done, Escape, a second tap)
+      [{ kind: 'person', id: 'p-kate' }, HOLDERS, {}, ''],
+      [{ kind: 'item', id: 'lamb' }, HOLDERS, {}, ''],
+      [null, HOLDERS, { pav: 'p-ross' }, ''],
+    ];
+    return cases.every(([sel, holders, pending, want]) => {
+      try {
+        return sorted(fn(sel, holders, pending)) === want;
+      } catch {
+        return false;
+      }
+    });
+  },
+  /** H3 — the view draws the rows from the rule: one set from heldByPicked(selection, holders, pending), the row's attribute and the deeper colours from it, GIVEN_ROW otherwise. */
+  viewUsesRule(view: string) {
+    return (
+      /import \{[^}]*\bHELD_BY_PICKED_ROW\b[^}]*\bheldByPicked\b[^}]*\} from '@\/lib\/moment3\/assigning';/.test(
+        view
+      ) &&
+      count(view, 'heldByPicked(') === 1 &&
+      /const heldByThem = new Set\(heldByPicked\(selection, holders, pending\)\);/.test(view) &&
+      /const isTheirs = heldByThem\.has\(item\.id\);/.test(view) &&
+      /const rowColours = isTheirs \? HELD_BY_PICKED_ROW : GIVEN_ROW;/.test(view) &&
+      /data-m3-held-by-picked=\{isTheirs \? '' : undefined\}/.test(view) &&
+      /backgroundColor: rowColours\.background,\s*borderColor: rowColours\.border,\s*color: rowColours\.text,/.test(
+        view
+      ) &&
+      count(view, 'data-m3-held-by-picked') === 1 &&
+      !/GIVEN_ROW\.(background|border|text)/.test(view)
+    );
+  },
+  /** H4 — nobody picked: no row marked; a held row is the soft blue; the deeper blue nowhere. */
+  nobodyPicked(html: string, deeper: string) {
+    const lamb = html.match(/<li data-m3-item="i-lamb"[^>]*>/);
+    return (
+      !!lamb &&
+      lamb[0].includes(
+        `style="background-color:${SOFT_BLUE.background};border-color:${SOFT_BLUE.border};color:${SOFT_BLUE.text}"`
+      ) &&
+      !html.includes('data-m3-held-by-picked') &&
+      deeper.length === 7 &&
+      !html.includes(deeper)
+    );
+  },
+  /** H5 CONTROL — no new request: the view's fetches as at the base; the rules file only grows (nothing in it changed or removed). */
+  nothingElse(view: string, baseView: string, assigningDiff: string) {
+    const fetches = (src: string) => (src.match(/\bfetch\(/g) ?? []).length;
+    const minus = assigningDiff
+      .split('\n')
+      .filter((l) => l.startsWith('-') && !l.startsWith('---'));
+    return (
+      fetches(baseView) > 0 &&
+      fetches(view) === fetches(baseView) &&
+      assigningDiff.includes('+export function heldByPicked(') &&
+      assigningDiff.includes('+export const HELD_BY_PICKED_ROW') &&
+      minus.length === 0
+    );
+  },
+
   // ── CONTROL ──
   /** U2 — package.json differs from the tag by GTC-397's script line and this suite's, nothing else. */
   twoScriptLines(atAdd: string, goodJson: string) {
@@ -772,6 +907,42 @@ async function layerS() {
   );
 }
 
+// ══ Item 5 ═══════════════════════════════════════════════════════════════════
+async function layerH() {
+  section('H — item 5: tapping a person highlights their dishes');
+  const AS = await load('../src/lib/moment3/assigning');
+  assert(
+    'H',
+    'H1 HELD_BY_PICKED_ROW, beside GIVEN_ROW (unchanged): a deeper blue fill and a deeper border, the same dark text (readable, 4.5:1 or more), hex, never the board’s colours',
+    !!AS && CHECKS.deeperBlue(AS),
+    JSON.stringify(AS?.HELD_BY_PICKED_ROW)
+  );
+  assert(
+    'H',
+    'H2 the rule (heldByPicked): the picked person’s rows, held or saving as theirs, and it moves with the pick; not a row taken back or moving away, not a suggestion, not with nobody or an item picked',
+    !!AS && CHECKS.heldRule(AS.heldByPicked)
+  );
+  assert(
+    'H',
+    'H3 Moment 3 draws the rows from the rule: the picked person’s rows carry data-m3-held-by-picked and the deeper blue, every other given row GIVEN_ROW; the ring on open dishes untouched',
+    CHECKS.viewUsesRule(code(M3_VIEW))
+  );
+  assert(
+    'H',
+    'H4 with nobody picked (as Moment 3 opens), no row is marked and a held row is the soft blue',
+    CHECKS.nobodyPicked(drawM3({}), String(AS?.HELD_BY_PICKED_ROW?.background ?? ''))
+  );
+  assert(
+    'H',
+    'H5 CONTROL: no new request (the view’s fetches as at the base, 8a4f1bc) and nothing in the rules file changed or removed, only the colour and the rule added',
+    CHECKS.nothingElse(
+      code(M3_VIEW),
+      stripComments(atRef(BASE, M3_VIEW)),
+      git(['diff', BASE, '--', ASSIGNING_FILE]).stdout
+    )
+  );
+}
+
 // ══ CONTROL ══════════════════════════════════════════════════════════════════
 async function layerU() {
   section('U — CONTROL: what this batch must not touch');
@@ -812,6 +983,7 @@ async function main() {
   await layerD();
   await layerA();
   await layerS();
+  await layerH();
   await layerU();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {

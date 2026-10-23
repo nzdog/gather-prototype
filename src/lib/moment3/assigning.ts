@@ -18,6 +18,18 @@ import type { Suggestion } from './suggest';
 /** Q12, A — a given item's row. Hex, applied as style: src/lib is outside Tailwind's content. */
 export const GIVEN_ROW = { background: '#EEF4FB', border: '#B7CCE6', text: '#1F3A5F' } as const;
 
+/**
+ * [[GTC-398]] item 5 (founder, 23 Oct 2026: "When person's name is tapped, their dish should
+ * highlight") — a row the PICKED person holds, while they are picked: a deeper blue fill and a
+ * deeper border than GIVEN_ROW, the same dark text, so their rows stand out from everyone else's
+ * soft blue. Hex, as GIVEN_ROW. Not the board's green.
+ */
+export const HELD_BY_PICKED_ROW = {
+  background: '#CFE0F5',
+  border: '#4F7CB8',
+  text: '#1F3A5F',
+} as const;
+
 export type Selection = { kind: 'item'; id: string } | { kind: 'person'; id: string } | null;
 
 /** Q6/Q7 — the suggestions she can see: shown, and their item still held by nobody. */
@@ -54,4 +66,23 @@ export function itemTap(selection: Selection, itemId: string, holderId: string |
 /** Q8 — after a give, a picked person stays picked; a picked item has its person, so it clears. */
 export function selectionAfterGive(selection: Selection): Selection {
   return selection?.kind === 'person' ? selection : null;
+}
+
+/**
+ * [[GTC-398]] item 5 — the items the picked person holds, to highlight: with a person picked, every
+ * item they hold now or that is saving as theirs; an item saving away from them (to someone else,
+ * or taken back) is not theirs. Nothing when no person is picked. A suggestion is not a holding, so
+ * it never counts. Pure: the view draws the rows from it.
+ */
+export function heldByPicked(
+  selection: Selection,
+  holders: Readonly<Record<string, { personId: string } | null | undefined>>,
+  pending: Readonly<Record<string, string | null>>
+): string[] {
+  if (selection?.kind !== 'person') return [];
+  const picked = selection.id;
+  const ids = new Set([...Object.keys(holders), ...Object.keys(pending)]);
+  return [...ids].filter((id) =>
+    id in pending ? pending[id] === picked : holders[id]?.personId === picked
+  );
 }
