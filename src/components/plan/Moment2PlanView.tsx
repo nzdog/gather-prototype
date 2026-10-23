@@ -285,8 +285,9 @@ export default function Moment2PlanView({
           />
         </div>
 
-        {/* [[GTC-395]] item 7: where and when to drop off, the event's one line, above the heading. */}
-        {details && <EventDropOffLine facts={details} />}
+        {/* [[GTC-395]] item 7: where and when to drop off, the event's one line, above the heading.
+            [[GTC-398]] item 2: drawn as a box here, so it stands out. */}
+        {details && <EventDropOffLine facts={details} place="plan" />}
 
         {/* Title + summary */}
         <h1 className="text-xl font-semibold text-gray-900 mb-1">

@@ -8,6 +8,9 @@
  *   L  item 1: Moment 2's plan screen loses the lead-in GTC-396 item 4 gave it ("Lose it"): no
  *      "What this does", no "When it's done"; Moment 2's opening page and Moment 3 keep theirs;
  *      the drop-off line still directly above the heading.
+ *   D  item 2: the drop-off line stands out, the same words: on the plan screen a box in the
+ *      plan view's own card style, text-base, semibold, dark, mb-4; on Moment 3 in the top row,
+ *      semibold and dark at the size it had, no margin (no height above the lists); one prop.
  *   U  CONTROL: the files this batch must not touch are not edited since demo-tweaks-3-good;
  *      package.json (read at the commit that added this suite) differs by two script lines; the
  *      lockfile there is GTC-397's; the two untracked scripts are in no commit.
@@ -193,6 +196,51 @@ const wordsOf = (html: string, marker: string) => {
   return m ? m[1] : '';
 };
 
+// ── Item 2: the drop-off line, hand-written ──────────────────────────────────
+const DROP_LINE_FILE = 'src/components/shared/EventDropOffLine.tsx';
+/** The plan screen's box: the plan view's own card classes, larger dark semibold words, its mb-4. */
+const PLAN_LINE_CLASSES = [
+  'mb-4',
+  'rounded-lg',
+  'border',
+  'border-gray-200',
+  'bg-white',
+  'px-4',
+  'py-3',
+  'text-base',
+  'font-semibold',
+  'text-gray-900',
+  'break-words',
+];
+/** Moment 3's: dark and semibold at the size it had (text-sm), no margin, padding or box. */
+const ROW_LINE_CLASSES = ['text-sm', 'font-semibold', 'text-gray-900', 'break-words'];
+const NO_VENUE_FACTS = {
+  ...VENUE_FACTS,
+  venueName: null,
+  venueTimingStart: null,
+  venueTimingEnd: null,
+};
+/** GTC-395 item 7's line with no venue, typed here. */
+const NO_VENUE_LINE = 'Drop off: the venue hasn’t been added yet.';
+/** Moment 3's W10, as React writes it. */
+const M3_W10 = '>← Back to “What’s the plan?”</button>';
+const classesOf = (html: string) => {
+  const m = html.match(/<p data-drop-off-line="" class="([^"]*)">([^<]*)<\/p>/);
+  return m ? { classes: m[1].split(/\s+/).filter(Boolean), words: m[2] } : null;
+};
+const sameSet = (a: string[], b: string[]) =>
+  a.length === b.length && [...a].sort().join(' ') === [...b].sort().join(' ');
+const walk = (dir: string, out: string[] = []): string[] => {
+  const full = path.join(ROOT, dir);
+  if (!fs.existsSync(full)) return out;
+  for (const name of fs.readdirSync(full)) {
+    const rel = path.join(dir, name);
+    if (fs.statSync(path.join(ROOT, rel)).isDirectory()) walk(rel, out);
+    else if (/\.(ts|tsx)$/.test(name)) out.push(rel);
+  }
+  return out;
+};
+
 // ── CONTROL: not touched by this batch, hand-written ─────────────────────────
 /**
  * The founder's untouched proof (his section 5), every file test:demo-sandbox-b's S11 reads, and
@@ -321,6 +369,86 @@ export const CHECKS = {
     );
   },
 
+  // ── Item 2 ──
+  /** D1 — the plan screen: the line is a box in the card style, larger, dark, semibold, its mb-4; straight above the heading. */
+  planLineBox(html: string, words: string) {
+    const got = classesOf(html);
+    return (
+      !!got &&
+      got.words === words &&
+      sameSet(got.classes, PLAN_LINE_CLASSES) &&
+      new RegExp(`<p data-drop-off-line="" class="[^"]*">[^<]*</p><h1\\b`).test(html) &&
+      count(html, 'data-drop-off-line') === 1
+    );
+  },
+  /** D2 — no new colours: every class the box carries is one the plan view's own code already uses for its cards. */
+  boxReusesCards(planCode: string) {
+    return (
+      /border border-gray-200 rounded-lg bg-white/.test(planCode) &&
+      ['border-gray-200', 'bg-white', 'text-gray-900', 'rounded-lg', 'px-4', 'py-3'].every((c) =>
+        new RegExp(`className="[^"]*\\b${c}\\b[^"]*"`).test(planCode)
+      )
+    );
+  },
+  /** D3 — Moment 3: in the top row (after W10, before the event's name, before the strip), dark and semibold, text-sm, no margin, padding or box. */
+  rowLine(html: string, words: string) {
+    const line = html.indexOf('<p data-drop-off-line=""');
+    const back = html.indexOf(M3_W10);
+    const name = html.indexOf('data-event-details-button');
+    const strip = html.indexOf('data-moment-strip');
+    const got = classesOf(html.slice(Math.max(0, line)));
+    return (
+      back > 0 &&
+      line > back &&
+      name > line &&
+      strip > name &&
+      !!got &&
+      got.words === words &&
+      sameSet(got.classes, ROW_LINE_CLASSES) &&
+      !got.classes.some((c) => /^(m|p)[xytblr]?-|^border|^bg-|^rounded/.test(c)) &&
+      count(html, 'data-drop-off-line') === 1
+    );
+  },
+  /** D4 — one prop says which: the component takes facts and place ('plan' | 'row') and nothing else; no hook, router or fetch; the words from eventDropOffLine. */
+  componentProp(src: string) {
+    const sig = between(src, 'export default function EventDropOffLine({', '}) {');
+    return (
+      /^export default function EventDropOffLine\(\{\s*facts,\s*place,\s*\}: \{\s*facts: DropOffFacts;\s*place: DropOffPlace;\s*$/.test(
+        sig
+      ) &&
+      /export type DropOffPlace = 'plan' \| 'row';/.test(src) &&
+      /\{eventDropOffLine\(facts\)\}/.test(src) &&
+      count(src, 'data-drop-off-line=""') === 1 &&
+      !/\buse[A-Z]\w*\(|useRouter|fetch\(|'use client'|spacing/.test(src)
+    );
+  },
+  /** D5 — only the two views draw it, each saying which; nothing else in src imports it (the pre-flight neither). */
+  onlyTwoCallers(files: Array<{ rel: string; text: string }>) {
+    const importers = files
+      .filter((f) => f.text.includes("from '@/components/shared/EventDropOffLine'"))
+      .map((f) => f.rel)
+      .sort();
+    const uses = files.flatMap((f) =>
+      [...f.text.matchAll(/<EventDropOffLine\b[^>]*\/>/g)].map((m) => `${f.rel} ${m[0]}`)
+    );
+    return (
+      files.length > 200 &&
+      JSON.stringify(importers) === JSON.stringify([M3_VIEW, PLAN_VIEW].sort()) &&
+      uses.length === 2 &&
+      uses.includes(`${PLAN_VIEW} <EventDropOffLine facts={details} place="plan" />`) &&
+      uses.includes(`${M3_VIEW} <EventDropOffLine facts={details} place="row" />`)
+    );
+  },
+  /** D6 CONTROL — Moment 3's top row otherwise as at the base: only the line's prop changed. */
+  topRowKept(now: string, base: string) {
+    const row = (src: string) => between(src, '{(topBack || details) && (', '<MomentArc');
+    return (
+      row(base).length > 200 &&
+      count(row(base), 'spacing=""') === 1 &&
+      flat(row(now)) === flat(row(base).replace('spacing=""', 'place="row"'))
+    );
+  },
+
   // ── CONTROL ──
   /** U2 — package.json differs from the tag by GTC-397's script line and this suite's, nothing else. */
   twoScriptLines(atAdd: string, goodJson: string) {
@@ -384,6 +512,48 @@ async function layerL() {
   );
 }
 
+// ══ Item 2 ═══════════════════════════════════════════════════════════════════
+async function layerD() {
+  section('D — item 2: the drop-off line stands out');
+  const plan = drawPlan({ details: VENUE_FACTS });
+  const planNoVenue = drawPlan({ details: NO_VENUE_FACTS });
+  assert(
+    'D',
+    'D1 the plan screen: the same words in a box (rounded-lg, border, border-gray-200, bg-white, px-4 py-3), text-base, font-semibold, text-gray-900, its mb-4; straight above the heading; with no venue too',
+    CHECKS.planLineBox(plan, VENUE_LINE) && CHECKS.planLineBox(planNoVenue, NO_VENUE_LINE),
+    JSON.stringify(classesOf(plan))
+  );
+  assert(
+    'D',
+    'D2 no new colours: the box is the plan view’s own card style (its forms’ border border-gray-200 rounded-lg bg-white), every class it carries already used by the view’s cards',
+    CHECKS.boxReusesCards(code(PLAN_VIEW))
+  );
+  const m3 = drawM3({ details: VENUE_FACTS });
+  const m3NoVenue = drawM3({ details: NO_VENUE_FACTS });
+  assert(
+    'D',
+    'D3 Moment 3: the same words in the top row (after W10, before the event’s name and the strip), font-semibold and text-gray-900 at text-sm as before, no margin, padding or box, so no height above the lists; with no venue too',
+    CHECKS.rowLine(m3, VENUE_LINE) && CHECKS.rowLine(m3NoVenue, NO_VENUE_LINE),
+    JSON.stringify(classesOf(m3.slice(Math.max(0, m3.indexOf('<p data-drop-off-line')))))
+  );
+  assert(
+    'D',
+    'D4 one prop on the shared component says which of the two it is (place: plan or row; the old spacing prop gone); no hook, router or fetch; the words still from eventDropOffLine',
+    CHECKS.componentProp(code(DROP_LINE_FILE))
+  );
+  const files = walk('src').map((rel) => ({ rel, text: code(rel) }));
+  assert(
+    'D',
+    `D5 across ${files.length} source files only the plan view (place="plan") and Moment 3 (place="row") draw it; nothing else imports it (the pre-flight neither)`,
+    CHECKS.onlyTwoCallers(files)
+  );
+  assert(
+    'D',
+    'D6 CONTROL: Moment 3’s top row otherwise as at the base (8a4f1bc): W10, the event’s details and their order unchanged, only the line’s prop',
+    CHECKS.topRowKept(code(M3_VIEW), stripComments(atRef(BASE, M3_VIEW)))
+  );
+}
+
 // ══ CONTROL ══════════════════════════════════════════════════════════════════
 async function layerU() {
   section('U — CONTROL: what this batch must not touch');
@@ -421,6 +591,7 @@ async function layerU() {
 
 async function main() {
   await layerL();
+  await layerD();
   await layerU();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {

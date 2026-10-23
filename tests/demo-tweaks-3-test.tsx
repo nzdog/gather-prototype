@@ -330,13 +330,20 @@ const NOT_TOUCHED = [
   'src/components/plan/MomentWords.tsx',
   'src/lib/moments/moment-words.ts',
   'src/lib/moments/opening-titles.ts',
-  'src/components/plan/Moment3AssignView.tsx',
   'src/components/plan/Moment2Step2Skeleton.tsx',
   'src/components/plan/HouseholdCardList.tsx',
   'src/components/plan/AccordionShell.tsx',
   'src/components/demo/CrowdButton.tsx',
   'src/components/preflight/mark-rows.tsx',
   'src/components/preflight/AfterThePress.tsx',
+];
+/**
+ * [[GTC-398]] (items 2 to 5) edits these two on purpose, so U1 asks its question of them at
+ * GTC-398's base (8a4f1bc), a fixed commit: GTC-396 still may not have touched them. GTC-398's own
+ * suite (test:demo-tweaks-4) pins their new state.
+ */
+const NOT_TOUCHED_TILL_GTC398 = [
+  'src/components/plan/Moment3AssignView.tsx',
   'src/components/shared/EventDropOffLine.tsx',
 ];
 const NEW_SCRIPT = 'test:demo-tweaks-3';
@@ -1029,11 +1036,20 @@ async function layerP() {
 async function layerU() {
   section('U — CONTROL: what this batch must not touch');
   const missing = NOT_TOUCHED.filter((f) => !fs.existsSync(path.join(ROOT, f)));
+  const missingAtBase = NOT_TOUCHED_TILL_GTC398.filter(
+    (f) => git(['cat-file', '-e', `${GTC398_BASE}:${f}`]).status !== 0
+  );
   assert(
     'U',
-    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since demo-tweaks-2-good (routes, schema, auth, press, AI, email, households, the paying page, the demo library, SMS, the live switch, the pre-flight’s other libraries, and the neighbours no item edits)`,
-    missing.length === 0 && unchangedSinceGood(NOT_TOUCHED),
-    missing.length ? `missing: ${missing.join(', ')}` : undefined
+    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since demo-tweaks-2-good (routes, schema, auth, press, AI, email, households, the paying page, the demo library, SMS, the live switch, the pre-flight’s other libraries, and the neighbours no item edits); the ${NOT_TOUCHED_TILL_GTC398.length} that GTC-398 edits are not edited between demo-tweaks-2-good and GTC-398’s base (8a4f1bc)`,
+    missing.length === 0 &&
+      unchangedSinceGood(NOT_TOUCHED) &&
+      missingAtBase.length === 0 &&
+      git(['diff', '--quiet', GOOD_TAG, GTC398_BASE, '--', ...NOT_TOUCHED_TILL_GTC398]).status ===
+        0,
+    missing.length || missingAtBase.length
+      ? `missing: ${[...missing, ...missingAtBase].join(', ')}`
+      : undefined
   );
   // GTC-397 (founder's ruling, 22 Oct 2026): read package.json as it was at GTC-396's last
   // commit, not the file on disk, so a later ticket's script line cannot turn this red. That

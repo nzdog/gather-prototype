@@ -534,7 +534,7 @@ export default function Moment3AssignView({
             {topBack}
             {/* [[GTC-395]] item 7 (ruling, 20 Oct 2026): where and when to drop off, in this row
                 beside the event's details, so it adds no height above the lists on a computer. */}
-            {details && <EventDropOffLine facts={details} spacing="" />}
+            {details && <EventDropOffLine facts={details} place="row" />}
             {details && <EventDetails facts={details} />}
           </div>
         )}
