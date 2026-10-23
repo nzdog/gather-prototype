@@ -14,6 +14,11 @@
  *   A  item 3: one new line on Moment 3, with the heading and above the two lists, small grey:
  *      the founder's "Shortest" (M3_WORDS.ASSIGN_HOW); under the heading on a phone, beside it from
  *      md up (no height above the lists on a computer); not on "No plan items yet."
+ *   S  item 4, built again (founder's ruling, 24 Oct 2026): "Want me to suggest?" is a compact
+ *      filled button, the link's height: "Add a crowd"'s colours only, side padding, rounded,
+ *      no vertical padding, no border, text-sm and mt-1 as the link; the same words, handler and
+ *      condition; the counter above it; Accept all as it was. (The first build, a 48px
+ *      full-width button, was reverted in 8bbcfb6: it moved walkthrough-batch11 C7.)
  *   H  item 5: with a person picked, the rows they hold (or that are saving as theirs) are a deeper
  *      blue (HELD_BY_PICKED_ROW, beside GIVEN_ROW) with data-m3-held-by-picked; a suggestion, a row
  *      saving away from them and other people's rows are not; a pure rule (heldByPicked).
@@ -277,6 +282,23 @@ const M3_LISTS = '<div class="flex flex-col md:flex-row md:gap-8">';
 
 /** Escapes a string for a RegExp. */
 const rx = (t: string) => t.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+
+// ── Item 4: "Want me to suggest?", hand-written ──────────────────────────────
+const CROWD_FILE = 'src/components/demo/CrowdButton.tsx';
+const SUGGEST = 'Want me to suggest?';
+/** "Add a crowd"'s colours (CrowdButton.tsx): its fill, its text colour and its hover fill. */
+const CROWD_COLOURS = ['bg-accent', 'text-white', 'hover:bg-accent-dark'];
+/** The compact button, typed here: the link's text-sm and mt-1, the colours, side padding, rounded. */
+const SUGGEST_CLASS =
+  'mt-1 px-2.5 py-0 rounded-md text-sm font-medium text-white bg-accent hover:bg-accent-dark';
+/** The link as it was at the base, typed here (its height: text-sm's line, mt-1, no padding). */
+const LINK_CLASS = 'mt-1 text-sm text-gray-600 hover:text-gray-900 underline underline-offset-2';
+/** Classes that would add height to the control (the 48px first build had py-3 and text-base). */
+const HEIGHT_CLASS =
+  /^(?:[a-z]+:)?(?:p|pt|pb|py)-(?!0$)|^(?:[a-z]+:)?border|^(?:[a-z]+:)?(?:h|min-h|leading)-|^(?:[a-z]+:)?text-(?:xs|base|lg|xl|[2-9]xl)$|^(?:[a-z]+:)?(?:mt|my|m|mb)-(?!1$)|^(?:[a-z]+:)?(?:block|flex|w-full)$/;
+/** Accept all's own style, as at the base (it replaces the button after the tap). */
+const ACCEPT_ALL_CLASS =
+  'mt-1 px-3 py-1.5 text-sm text-gray-800 border border-gray-300 rounded-md bg-white hover:bg-gray-50 disabled:opacity-60 disabled:cursor-wait';
 
 // ── Item 5: the picked person's dishes, hand-written ─────────────────────────
 const ASSIGNING_FILE = 'src/lib/moment3/assigning.ts';
@@ -590,6 +612,64 @@ export const CHECKS = {
     );
   },
 
+  // ── Item 4 ──
+  /** S1 — the button: the same words, the compact class, straight after the counter, once. */
+  suggestButton(html: string) {
+    const m = html.match(
+      new RegExp(
+        `<p class="text-sm text-gray-600">${rx(COUNTER_1_OF_3)}</p><button type="button" data-m3="suggest" class="([^"]*)">${rx(SUGGEST)}</button>`
+      )
+    );
+    return !!m && m[1] === SUGGEST_CLASS && count(html, `>${SUGGEST}</button>`) === 1;
+  },
+  /** S2 — the accent fill: the button carries "Add a crowd"'s three colours, read from its file, and no other colour or underline. */
+  crowdColours(cls: string, crowdSrc: string) {
+    const crowd = crowdSrc.match(/className="(w-full py-3 [^"]*)"/);
+    const crowdTokens = crowd ? crowd[1].split(/\s+/) : [];
+    const tokens = cls.split(/\s+/);
+    const colours = tokens.filter((t) => /^(?:hover:)?(?:bg|text)-(?!sm$|xs$|base$|lg$)/.test(t));
+    return (
+      CROWD_COLOURS.every((c) => crowdTokens.includes(c) && tokens.includes(c)) &&
+      colours.length === CROWD_COLOURS.length &&
+      !tokens.some((t) => /underline|gray/.test(t))
+    );
+  },
+  /** S3 — no added height: no vertical padding but py-0, no border, no height, leading or larger text, the link's text-sm and mt-1, not full width. */
+  noAddedHeight(cls: string, linkAtBase: string) {
+    const tokens = cls.split(/\s+/).filter(Boolean);
+    const link = linkAtBase.split(/\s+/).filter(Boolean);
+    return (
+      linkAtBase === LINK_CLASS &&
+      tokens.includes('py-0') &&
+      tokens.includes('text-sm') &&
+      link.includes('text-sm') &&
+      tokens.includes('mt-1') &&
+      link.includes('mt-1') &&
+      !tokens.some((t) => HEIGHT_CLASS.test(t)) &&
+      !link.some((t) => HEIGHT_CLASS.test(t))
+    );
+  },
+  /** S4 — the same handler and condition, the words from M3_WORDS: shown while there are proposals and none on screen. */
+  suggestSource(view: string) {
+    return new RegExp(
+      `proposals\\.length > 0 &&\\s*ghosts\\.length === 0 && \\(\\s*<button\\s+type="button"\\s+data-m3="suggest"\\s+onClick=\\{\\(\\) => setGhosts\\(proposals\\)\\}\\s+className="${rx(SUGGEST_CLASS)}"\\s*>\\s*\\{M3_WORDS\\.WANT_ME_TO_SUGGEST\\}\\s*</button>\\s*\\)`
+    ).test(view);
+  },
+  /** S5 — nothing to suggest (every dish held): no button. */
+  noButtonWhenNothing(html: string) {
+    return html.includes('3 of 3 items assigned.') && !html.includes(SUGGEST);
+  },
+  /** S6 CONTROL — Accept all's own branch, and its class, as at the base. */
+  acceptAllKept(now: string, base: string) {
+    const branch = (src: string) => between(src, '{accepting || onScreen.length > 0 ? (', ') : (');
+    return (
+      branch(base).length > 200 &&
+      flat(branch(now)) === flat(branch(base)) &&
+      count(now, `className="${ACCEPT_ALL_CLASS}"`) === 1 &&
+      count(base, `className="${ACCEPT_ALL_CLASS}"`) === 1
+    );
+  },
+
   // ── Item 5 ──
   /** H1 — the colour: beside GIVEN_ROW (unchanged), a deeper fill and border, the same dark text, blue, never the board's. */
   deeperBlue(mod: any) {
@@ -830,6 +910,58 @@ async function layerA() {
   );
 }
 
+// ══ Item 4 ═══════════════════════════════════════════════════════════════════
+async function layerS() {
+  section('S — item 4, built again: "Want me to suggest?" as a compact filled button');
+  const m3 = drawM3({});
+  const shown = m3.match(/<button type="button" data-m3="suggest" class="([^"]*)">/);
+  const cls = shown ? shown[1] : '';
+  assert(
+    'S',
+    'S1 "Want me to suggest?" is a button with the compact class, straight after the counter line, once',
+    CHECKS.suggestButton(m3),
+    m3.slice(m3.indexOf(COUNTER_1_OF_3) - 40, m3.indexOf(COUNTER_1_OF_3) + 260)
+  );
+  assert(
+    'S',
+    'S2 the accent fill: "Add a crowd"’s colours exactly (bg-accent, text-white, hover:bg-accent-dark, read from CrowdButton.tsx), no other colour, no underline',
+    CHECKS.crowdColours(cls, code(CROWD_FILE)),
+    cls
+  );
+  const linkAtBase =
+    stripComments(atRef(BASE, M3_VIEW)).match(
+      /onClick=\{\(\) => setGhosts\(proposals\)\}\s+className="([^"]*)"/
+    )?.[1] ?? '';
+  assert(
+    'S',
+    'S3 it adds no height: no vertical padding (py-0), no border, no height, leading or larger text, not full width; text-sm and mt-1 as the link at the base (8a4f1bc) — 20px line + 0 padding + 0 border = 20px, mt-1 4px above, as the link',
+    CHECKS.noAddedHeight(cls, linkAtBase),
+    `${cls} | base: ${linkAtBase}`
+  );
+  assert(
+    'S',
+    'S4 the same words (M3_WORDS.WANT_ME_TO_SUGGEST), the same handler (setGhosts with the proposals) and the same condition (proposals and none on screen)',
+    CHECKS.suggestSource(code(M3_VIEW))
+  );
+  const allHeld = drawM3({
+    initialHolders: {
+      'i-lamb': { personId: 'p-ross', name: 'Ross Lowe' },
+      'i-bread': { personId: 'p-mere', name: 'Mere Ngata' },
+      'i-pav': { personId: 'p-ross', name: 'Ross Lowe' },
+    },
+  });
+  assert(
+    'S',
+    'S5 with nothing to suggest (every dish held) there is no button',
+    CHECKS.noButtonWhenNothing(allHeld)
+  );
+  assert(
+    'S',
+    'S6 CONTROL: "Accept all", which replaces it after the tap, keeps its own style; its branch as at the base (8a4f1bc)',
+    CHECKS.acceptAllKept(code(M3_VIEW), stripComments(atRef(BASE, M3_VIEW)))
+  );
+}
+
 // ══ Item 5 ═══════════════════════════════════════════════════════════════════
 async function layerH() {
   section('H — item 5: tapping a person highlights their dishes');
@@ -905,6 +1037,7 @@ async function main() {
   await layerL();
   await layerD();
   await layerA();
+  await layerS();
   await layerH();
   await layerU();
   console.log(`\n${passed} passed, ${failed} failed`);
