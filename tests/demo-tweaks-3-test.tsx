@@ -12,9 +12,10 @@
  *   B  item 3: "Save & move on →" is one full-width accent button under both columns, drawn by the
  *      setup page with the form's own handler and saving flag; the form's foot keeps "Save & add
  *      another household"; the edit mode and the host's step are untouched.
- *   L  item 4: Moment 2's plan view carries Moment 2's "What this does" and "When it's done"
- *      between the strip and the heading, as Moment 3 does; the drop-off line still directly
- *      above the heading; the own-plan view too; the skeleton (generating) untouched.
+ *   L  item 4, REVERSED by GTC-398 item 1 (founder, 23 Oct 2026: "Lose it"): Moment 2's plan
+ *      view carries no Moment words (no "What this does", no "When it's done"); the drop-off
+ *      line directly above the heading; the own-plan view too; Moment 2's opening page still
+ *      carries both; the skeleton (generating) untouched.
  *   Z  item 5: the pre-flight's "confirmed so far" figure is hidden while the rate is 0.
  *   K  item 6: "Kids: Josh, Mere" on each household with children in the pre-flight's step 3.
  *   P  item 7: the two HAND_TO_HOST pills' new words; nothing that sends reads them.
@@ -84,6 +85,12 @@ const atGood = (rel: string) => {
 };
 /** GTC-396's last commit (its ticket backfill); U2 reads package.json as it was there. */
 const GTC396_LAST = '3695755c0d9168ce32a52f6dcb1a74b4f9c9dba9';
+/**
+ * GTC-397's last commit, where GTC-398 started (its app code the same as GTC-396's). GTC-398 edits
+ * the plan view, Moment 3 and the drop-off line, so the checks here that pin what GTC-398 must not
+ * change read those files as they were at this fixed commit, never a tag a later ticket can move.
+ */
+const GTC398_BASE = '8a4f1bc7e237bead8565f88c62ca2fe5bec95645';
 const atRef = (ref: string, rel: string) => {
   const r = git(['show', `${ref}:${rel}`]);
   return r.status === 0 ? r.stdout : '';
@@ -550,64 +557,63 @@ export const CHECKS = {
     );
   },
 
-  // ── Item 4 ──
-  /** L1 — the two lines after the strip and before the heading, once each, "done" under "does", mb-3 as Moment 3. */
-  leadInOnPlan(html: string) {
+  // ── Item 4 (reversed by GTC-398 item 1) ──
+  /** L1 — the plan screen carries no Moment words at all: no marker, neither heading; the strip still before the heading, once. */
+  noLeadInOnPlan(html: string) {
     const strip = html.indexOf('data-moment-strip');
-    const does = html.indexOf('data-moment-words="2-does"');
-    const done = html.indexOf('data-moment-words="2-done"');
     const h1 = html.indexOf('<h1');
     return (
       strip >= 0 &&
-      does > strip &&
-      done > does &&
-      h1 > done &&
-      count(html, 'data-moment-words="2-does"') === 1 &&
-      count(html, 'data-moment-words="2-done"') === 1 &&
-      count(html, 'data-moment-words=') === 2 &&
-      /<\/p><\/div><div data-moment-words="2-done"/.test(html) &&
-      html.includes('data-moment-words="2-does" class="mb-3"') &&
-      html.includes('data-moment-words="2-done" class="mb-3"') &&
-      html.includes(`>${DOES_HEAD}</p>`) &&
-      html.includes(`>${DONE_HEAD}</p>`)
+      h1 > strip &&
+      count(html, '<h1') === 1 &&
+      !html.includes('data-moment-words') &&
+      !html.includes(DOES_HEAD) &&
+      !html.includes(DONE_HEAD)
     );
   },
-  /** L2 — with the event's facts: the drop-off line after "done" and straight above the heading. */
+  /** L2 — with the event's facts: the drop-off line after the strip and straight above the heading, no Moment words before it. */
   dropOffStillAboveHeading(html: string) {
-    const done = html.indexOf('data-moment-words="2-done"');
+    const strip = html.indexOf('data-moment-strip');
     const line = html.indexOf('<p data-drop-off-line=""');
     return (
-      done >= 0 &&
-      line > done &&
+      strip >= 0 &&
+      line > strip &&
       /<p data-drop-off-line=""[^>]*>[^<]*<\/p><h1\b/.test(html) &&
-      count(html, 'data-drop-off-line') === 1
+      count(html, 'data-drop-off-line') === 1 &&
+      !html.includes('data-moment-words')
     );
   },
-  /** L3 — the words are Moment 2's own: the same text the opening page draws, for both lines. */
-  sameWordsAsOpening(plan: string, opening: string) {
-    const does = wordsOf(plan, '2-does');
-    const done = wordsOf(plan, '2-done');
+  /** L4 — Moment 2's opening page still draws both lines, once each, "done" under "does"; the plan view draws neither text. */
+  openingKeepsWords(plan: string, opening: string) {
+    const does = wordsOf(opening, '2-does');
+    const done = wordsOf(opening, '2-done');
     return (
       does.length > 20 &&
       done.length > 20 &&
-      does === wordsOf(opening, '2-does') &&
-      done === wordsOf(opening, '2-done') &&
-      does !== done
+      does !== done &&
+      count(opening, 'data-moment-words="2-does"') === 1 &&
+      count(opening, 'data-moment-words="2-done"') === 1 &&
+      /<\/p><\/div><div data-moment-words="2-done"/.test(opening) &&
+      opening.includes(`>${DOES_HEAD}</p>`) &&
+      opening.includes(`>${DONE_HEAD}</p>`) &&
+      plan.length > 0 &&
+      !plan.includes(does) &&
+      !plan.includes(done)
     );
   },
-  /** L4 CONTROL — the rest of the view as at the tag; the skeleton draws none of it and is not edited. */
-  planViewKept(now: string, head: string, skeleton: string, skeletonUnchanged: boolean) {
+  /** L5 CONTROL — no MomentWords in the view; the rest as at GTC-398's base; the skeleton draws none of it and is not edited. */
+  planViewKept(now: string, base: string, skeleton: string, skeletonUnchanged: boolean) {
     const fromHeading = (src: string) =>
       src.slice(src.indexOf('<h1 className="text-xl font-semibold'));
     const top = (src: string) =>
       between(src, 'return (\n    <div className="min-h-screen', '<MomentArc');
     return (
-      count(now, '<MomentWords') === 2 &&
-      now.includes("import MomentWords from './MomentWords';") &&
-      fromHeading(head).length > 1000 &&
-      flat(fromHeading(now)) === flat(fromHeading(head)) &&
-      top(head).length > 50 &&
-      flat(top(now)) === flat(top(head)) &&
+      count(now, '<MomentWords') === 0 &&
+      !now.includes('MomentWords') &&
+      fromHeading(base).length > 1000 &&
+      flat(fromHeading(now)) === flat(fromHeading(base)) &&
+      top(base).length > 50 &&
+      flat(top(now)) === flat(top(base)) &&
       !skeleton.includes('MomentWords') &&
       !skeleton.includes('data-moment-words') &&
       skeletonUnchanged
@@ -899,9 +905,12 @@ async function layerB() {
   );
 }
 
-// ══ Item 4 ═══════════════════════════════════════════════════════════════════
+// ══ Item 4 (reversed by GTC-398 item 1) ═════════════════════════════════════
 async function layerL() {
-  section('L — item 4: the plan screen mirrors the other Moments');
+  // [[GTC-398]] item 1 (founder, 23 Oct 2026: "After plan generation this screen comes up. Lose
+  // it."): GTC-396 item 4 is reversed on purpose. Each check asks its question of the new truth:
+  // the plan screen has no lead-in, Moment 2's opening page still has it.
+  section('L — item 4, reversed by GTC-398 item 1: the plan screen has no lead-in');
   const drawPlan = (over: Record<string, unknown>) =>
     render(
       createElement(
@@ -913,21 +922,21 @@ async function layerL() {
   const plan = drawPlan({});
   assert(
     'L',
-    'L1 "What this does" then "When it’s done" sit between the strip and the plan’s heading, once each, "done" directly under "does", mb-3 as Moment 3 places its own',
-    CHECKS.leadInOnPlan(plan),
+    'L1 the plan screen carries no Moment words: no data-moment-words, no "What this does", no "When it’s done"; the strip still before the heading (GTC-398 item 1)',
+    CHECKS.noLeadInOnPlan(plan),
     plan.slice(plan.indexOf('data-moment-strip'), plan.indexOf('<h1')).slice(-400)
   );
   const withFacts = drawPlan({ details: VENUE_FACTS });
   assert(
     'L',
-    'L2 GTC-395 item 7’s drop-off line still sits directly above the heading, now after "When it’s done"',
+    'L2 GTC-395 item 7’s drop-off line still sits directly above the heading, now straight after the strip, with no Moment words before it',
     CHECKS.dropOffStillAboveHeading(withFacts)
   );
   const own = drawPlan({ ownPlan: true });
   assert(
     'L',
-    'L3 the plan written by hand (ownPlan) carries the same two lines in the same place',
-    CHECKS.leadInOnPlan(own)
+    'L3 the plan written by hand (ownPlan) carries no Moment words either',
+    CHECKS.noLeadInOnPlan(own)
   );
   const opening = render(
     createElement(Moment2Opening as any, {
@@ -938,15 +947,15 @@ async function layerL() {
   );
   assert(
     'L',
-    'L4 the words are Moment 2’s own existing words: the same two lines Moment 2’s opening page draws; no new words',
-    CHECKS.sameWordsAsOpening(plan, opening)
+    'L4 Moment 2’s opening page still draws its "What this does" and "When it’s done", once each, "done" under "does"; the plan view draws neither line’s words',
+    CHECKS.openingKeepsWords(plan, opening)
   );
   assert(
     'L',
-    'L5 CONTROL: the heading, the count line, the list, the bar and everything after the heading as at demo-tweaks-2-good; the skeleton shown while generating draws no Moment words and is not edited',
+    'L5 CONTROL: no MomentWords in the plan view (nor its import); the heading, the count line, the list, the bar and everything after the heading, and the top, as at GTC-398’s base (8a4f1bc); the skeleton shown while generating draws no Moment words and is not edited',
     CHECKS.planViewKept(
       code(PLAN_VIEW),
-      stripComments(atGood(PLAN_VIEW)),
+      stripComments(atRef(GTC398_BASE, PLAN_VIEW)),
       code(SKELETON),
       unchangedSinceGood([SKELETON])
     )

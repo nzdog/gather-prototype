@@ -514,17 +514,16 @@ async function runInMemory() {
   const addAt = planView.indexOf('+ Add category');
   assert(
     'R',
-    // [[GTC-378]] ruling 5 (item 45) kept Moment 2's "When it’s done" to its opening; [[GTC-396]]
-    // item 4 (founder, 21 Oct 2026): the plan view mirrors the other Moments, so it carries Moment
-    // 2's two lines once each, "When it’s done" directly under "What this does", before the heading.
-    'R8 the plan view: W10, "+ Add category", and Moment 2’s "When it’s done" directly under "What this does", once, before the heading (GTC-396 item 4)',
+    // [[GTC-378]] ruling 5 (item 45): Moment 2's "When it’s done" is on its opening only. [[GTC-398]]
+    // item 1 (founder, 23 Oct 2026: "Lose it") reverses GTC-396 item 4, so R8 asks its question
+    // before GTC-396 again, and now also of Moment 2's "What this does".
+    'R8 the plan view: W10, "+ Add category", and no "When it’s done" nor Moment 2’s "What this does" line (on the opening only, GTC-378; GTC-398 item 1)',
     !!nameButton(planView) &&
       addAt > 0 &&
-      planView.includes(`${M[2].does}</p></div><div data-moment-words="2-done"`) &&
-      planView.split('data-moment-words="2-done"').length === 2 &&
-      planView.split(W15_DONE).length === 2 &&
-      planView.includes(M[2].done) &&
-      planView.indexOf('data-moment-words="2-done"') < planView.indexOf('<h1')
+      !planView.includes(M[2].done) &&
+      !planView.includes(W15_DONE) &&
+      !planView.includes(M[2].does) &&
+      !planView.includes('data-moment-words="2-does"')
   );
   const formProps = {
     eventId: 'e1',
