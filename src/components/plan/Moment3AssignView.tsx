@@ -556,15 +556,19 @@ export default function Moment3AssignView({
             always shown (GTC-368's Q9 condition lifted). */}
         <MomentWords moment={3} part="does" className="mb-3" />
         <MomentWords moment={3} part="done" className="mb-3" />
-        <h1 className="text-xl font-semibold text-gray-900 mb-6">{M3_WORDS.SENTENCE}</h1>
         {/* [[GTC-398]] item 3 (founder, 23 Oct 2026: "Instructions for how to assign people to
-            dishes"): how to give dishes, under the heading and above the two lists, whenever there
-            is something to give (not on "No plan items yet."). */}
-        {allItems.length > 0 && (
-          <p data-m3="assign-how" className="text-sm text-gray-600 mb-4">
-            {M3_WORDS.ASSIGN_HOW}
-          </p>
-        )}
+            dishes"): how to give dishes, with the heading and above the two lists, whenever there
+            is something to give (not on "No plan items yet."). Under the heading on a phone; beside
+            it from md up, so on a computer it adds no height above the lists (batch11 C7, the
+            founder's own fallback): the block keeps the heading's mb-6. */}
+        <div className="mb-6 md:flex md:flex-wrap md:items-baseline md:gap-x-4">
+          <h1 className="text-xl font-semibold text-gray-900">{M3_WORDS.SENTENCE}</h1>
+          {allItems.length > 0 && (
+            <p data-m3="assign-how" className="mt-1 md:mt-0 text-sm text-gray-600">
+              {M3_WORDS.ASSIGN_HOW}
+            </p>
+          )}
+        </div>
 
         {allItems.length === 0 ? (
           <div className="bg-white rounded-lg border border-gray-200 p-6 text-sm text-gray-700">

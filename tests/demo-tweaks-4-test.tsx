@@ -11,8 +11,9 @@
  *   D  item 2: the drop-off line stands out, the same words: on the plan screen a box in the
  *      plan view's own card style, text-base, semibold, dark, mb-4; on Moment 3 in the top row,
  *      semibold and dark at the size it had, no margin (no height above the lists); one prop.
- *   A  item 3: one new line on Moment 3, under the heading and above the two lists, small grey,
- *      a margin below: the founder's "Shortest" (M3_WORDS.ASSIGN_HOW); not on "No plan items yet."
+ *   A  item 3: one new line on Moment 3, with the heading and above the two lists, small grey:
+ *      the founder's "Shortest" (M3_WORDS.ASSIGN_HOW); under the heading on a phone, beside it from
+ *      md up (no height above the lists on a computer); not on "No plan items yet."
  *   S  item 4: "Want me to suggest?" is a proper button in "Add a crowd"'s filled accent style;
  *      the same words, handler and condition; the counter above it; Accept all as it was.
  *   H  item 5: with a person picked, the rows they hold (or that are saving as theirs) are a deeper
@@ -260,8 +261,16 @@ const M3_WORDS_FILE = 'src/lib/moment3/words.ts';
 /** The founder's "Shortest" (23 Oct 2026), typed here; the apostrophe is U+2019. */
 const ASSIGN_HOW = 'Tap a person, then tap the dishes they’re bringing.';
 const ASSIGN_HOW_LINE = `  ASSIGN_HOW: '${ASSIGN_HOW}',`;
-/** The paragraphs around it: small grey, and a margin below as the people panel's head has. */
-const ASSIGN_HOW_CLASSES = ['text-sm', 'text-gray-600', 'mb-4'];
+/**
+ * Small grey as the paragraphs around it; under the heading on a phone (mt-1), beside it from md
+ * up (md:mt-0) — the founder's fallback after batch11 C7 went red with the line under the heading
+ * on a computer (gate 1, 23 Oct 2026).
+ */
+const ASSIGN_HOW_CLASSES = ['mt-1', 'md:mt-0', 'text-sm', 'text-gray-600'];
+/** The block that holds the heading and the line: the heading's old mb-6, a row from md up. */
+const HEADING_BLOCK = 'mb-6 md:flex md:flex-wrap md:items-baseline md:gap-x-4';
+/** The heading, its old margin now the block's. */
+const M3_H1_CLASS = 'text-xl font-semibold text-gray-900';
 /** The counter for M3_CATS with the lamb held (the document's words), typed here. */
 const COUNTER_1_OF_3 = '1 of 3 items assigned.';
 const NO_PLAN_ITEMS = 'No plan items yet.';
@@ -532,10 +541,12 @@ export const CHECKS = {
       mod?.M3_WORDS?.SENTENCE === "Now. Who's on what."
     );
   },
-  /** A2 — Moment 3 with items: the line straight after the heading, small grey with a margin below, once, before the counter and the lists. */
+  /** A2 — Moment 3 with items: the heading and the line in one block that keeps the heading's mb-6 and is a row from md up; the line small grey, once, before the counter and the lists. */
   assignLine(html: string) {
     const m = html.match(
-      /<h1 class="[^"]*">Now\. Who&#x27;s on what\.<\/h1><p data-m3="assign-how" class="([^"]*)">([^<]*)<\/p>/
+      new RegExp(
+        `<div class="${rx(HEADING_BLOCK)}"><h1 class="${rx(M3_H1_CLASS)}">Now\\. Who&#x27;s on what\\.</h1><p data-m3="assign-how" class="([^"]*)">([^<]*)</p></div>`
+      )
     );
     const line = html.indexOf('data-m3="assign-how"');
     const lists = html.indexOf(M3_LISTS);
@@ -550,10 +561,13 @@ export const CHECKS = {
       counter > lists
     );
   },
-  /** A3 — the empty screen: "No plan items yet." and no line. */
+  /** A3 — the empty screen: "No plan items yet.", no line, the heading alone in its block (its old height). */
   noLineWhenEmpty(html: string) {
     return (
       html.includes(NO_PLAN_ITEMS) &&
+      html.includes(
+        `<div class="${HEADING_BLOCK}"><h1 class="${M3_H1_CLASS}">Now. Who&#x27;s on what.</h1></div>`
+      ) &&
       !html.includes('data-m3="assign-how"') &&
       !html.includes(ASSIGN_HOW) &&
       html.includes('Now. Who&#x27;s on what.')
@@ -579,7 +593,7 @@ export const CHECKS = {
   viewReadsWord(view: string) {
     return (
       count(view, '{M3_WORDS.ASSIGN_HOW}') === 1 &&
-      /\{allItems\.length > 0 && \(\s*<p data-m3="assign-how" className="text-sm text-gray-600 mb-4">\s*\{M3_WORDS\.ASSIGN_HOW\}\s*<\/p>\s*\)\}/.test(
+      /<div className="mb-6 md:flex md:flex-wrap md:items-baseline md:gap-x-4">\s*<h1 className="text-xl font-semibold text-gray-900">\{M3_WORDS\.SENTENCE\}<\/h1>\s*\{allItems\.length > 0 && \(\s*<p data-m3="assign-how" className="mt-1 md:mt-0 text-sm text-gray-600">\s*\{M3_WORDS\.ASSIGN_HOW\}\s*<\/p>\s*\)\}\s*<\/div>/.test(
         view
       ) &&
       !view.includes('Tap a person') &&
@@ -847,13 +861,13 @@ async function layerA() {
   const m3 = drawM3({});
   assert(
     'A',
-    'A2 Moment 3 with items: the line directly under "Now. Who’s on what.", text-sm text-gray-600 with mb-4, once, above the counter and the two lists',
+    'A2 Moment 3 with items: the line with "Now. Who’s on what." in one block keeping the heading’s mb-6 (a row from md up, so no height above the lists on a computer; under the heading on a phone, mt-1), text-sm text-gray-600, once, above the counter and the two lists',
     CHECKS.assignLine(m3),
     m3.slice(m3.indexOf('<h1'), m3.indexOf('<h1') + 300)
   );
   assert(
     'A',
-    'A3 the "No plan items yet." screen has no line',
+    'A3 the "No plan items yet." screen has no line; the heading alone in its block, as tall as before',
     CHECKS.noLineWhenEmpty(drawM3({ categories: [], initialHolders: {} }))
   );
   assert(
