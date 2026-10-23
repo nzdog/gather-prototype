@@ -122,6 +122,8 @@ const W7_REMOVE = (name: string) => `Remove ${name}`;
 const W7_GIVE = (item: string, name: string) => `Give ${item} to ${name}`;
 const W7_DISMISS = 'Dismiss';
 const W7_NOT_JA = 'Not just attending';
+/** [[GTC-398]] item 3 — the founder's "Shortest" (23 Oct 2026), the typographic apostrophe. */
+const ASSIGN_HOW = 'Tap a person, then tap the dishes they’re bringing.';
 
 const PAGE = 'src/app/plan/[eventId]/setup/page.tsx';
 const VIEW = 'src/components/plan/Moment3AssignView.tsx';
@@ -652,6 +654,11 @@ async function main() {
       /number:\s*1,\s*label:\s*"Who's coming\?"/.test(arc) &&
         /number:\s*2,\s*label:\s*"What's the plan\?"/.test(arc) &&
         /number:\s*4,\s*label:\s*'Is everyone sorted\?'/.test(arc)
+    );
+
+    eq(
+      'E16 "Tap a person, then tap the dishes they’re bringing." (GTC-398 item 3)',
+      () => Wd.ASSIGN_HOW === ASSIGN_HOW
     );
 
     const page = read(PAGE);

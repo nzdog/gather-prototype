@@ -42,6 +42,9 @@ export const M3_WORDS = {
   // [[GTC-365]] — W5 and W8, approved 2026-10-06 (PLAN RULINGS in docs/tickets/GTC-365.md).
   ACCEPTING: 'Accepting…',
   DONE: 'Done',
+  // [[GTC-398]] item 3 — how to give dishes, under the heading and above the lists. The founder's
+  // ruling of 23 Oct 2026: "Shortest", of three options (the typographic apostrophe, U+2019).
+  ASSIGN_HOW: 'Tap a person, then tap the dishes they’re bringing.',
 } as const;
 
 /** The document's counter: "[X] of [Y] items assigned." — as written, for every count. */

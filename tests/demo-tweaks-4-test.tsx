@@ -11,6 +11,8 @@
  *   D  item 2: the drop-off line stands out, the same words: on the plan screen a box in the
  *      plan view's own card style, text-base, semibold, dark, mb-4; on Moment 3 in the top row,
  *      semibold and dark at the size it had, no margin (no height above the lists); one prop.
+ *   A  item 3: one new line on Moment 3, under the heading and above the two lists, small grey,
+ *      a margin below: the founder's "Shortest" (M3_WORDS.ASSIGN_HOW); not on "No plan items yet."
  *   U  CONTROL: the files this batch must not touch are not edited since demo-tweaks-3-good;
  *      package.json (read at the commit that added this suite) differs by two script lines; the
  *      lockfile there is GTC-397's; the two untracked scripts are in no commit.
@@ -76,6 +78,13 @@ const atRef = (ref: string, rel: string) => {
   const r = git(['show', `${ref}:${rel}`]);
   return r.status === 0 ? r.stdout : '';
 };
+async function load(rel: string): Promise<any> {
+  try {
+    return await import(rel);
+  } catch {
+    return null;
+  }
+}
 const render = (el: any) => {
   try {
     return renderToStaticMarkup(el);
@@ -240,6 +249,19 @@ const walk = (dir: string, out: string[] = []): string[] => {
   }
   return out;
 };
+
+// ── Item 3: how to give dishes, hand-written ─────────────────────────────────
+const M3_WORDS_FILE = 'src/lib/moment3/words.ts';
+/** The founder's "Shortest" (23 Oct 2026), typed here; the apostrophe is U+2019. */
+const ASSIGN_HOW = 'Tap a person, then tap the dishes they’re bringing.';
+const ASSIGN_HOW_LINE = `  ASSIGN_HOW: '${ASSIGN_HOW}',`;
+/** The paragraphs around it: small grey, and a margin below as the people panel's head has. */
+const ASSIGN_HOW_CLASSES = ['text-sm', 'text-gray-600', 'mb-4'];
+/** The counter for M3_CATS with the lamb held (the document's words), typed here. */
+const COUNTER_1_OF_3 = '1 of 3 items assigned.';
+const NO_PLAN_ITEMS = 'No plan items yet.';
+/** Moment 3's two lists, side by side from md up, as the view writes them. */
+const M3_LISTS = '<div class="flex flex-col md:flex-row md:gap-8">';
 
 // ── CONTROL: not touched by this batch, hand-written ─────────────────────────
 /**
@@ -449,6 +471,74 @@ export const CHECKS = {
     );
   },
 
+  // ── Item 3 ──
+  /** A1 — the word: the founder's, the typographic apostrophe once and no straight one, its full stop. */
+  assignWord(mod: any) {
+    const w = mod?.M3_WORDS?.ASSIGN_HOW;
+    return (
+      w === ASSIGN_HOW &&
+      count(w, '’') === 1 &&
+      !w.includes("'") &&
+      w.endsWith('.') &&
+      mod?.M3_WORDS?.SENTENCE === "Now. Who's on what."
+    );
+  },
+  /** A2 — Moment 3 with items: the line straight after the heading, small grey with a margin below, once, before the counter and the lists. */
+  assignLine(html: string) {
+    const m = html.match(
+      /<h1 class="[^"]*">Now\. Who&#x27;s on what\.<\/h1><p data-m3="assign-how" class="([^"]*)">([^<]*)<\/p>/
+    );
+    const line = html.indexOf('data-m3="assign-how"');
+    const lists = html.indexOf(M3_LISTS);
+    const counter = html.indexOf(COUNTER_1_OF_3);
+    return (
+      !!m &&
+      m[2] === ASSIGN_HOW &&
+      sameSet(m[1].split(/\s+/).filter(Boolean), ASSIGN_HOW_CLASSES) &&
+      count(html, 'data-m3="assign-how"') === 1 &&
+      count(html, ASSIGN_HOW) === 1 &&
+      lists > line &&
+      counter > lists
+    );
+  },
+  /** A3 — the empty screen: "No plan items yet." and no line. */
+  noLineWhenEmpty(html: string) {
+    return (
+      html.includes(NO_PLAN_ITEMS) &&
+      !html.includes('data-m3="assign-how"') &&
+      !html.includes(ASSIGN_HOW) &&
+      html.includes('Now. Who&#x27;s on what.')
+    );
+  },
+  /** A4 — the words file differs from the base by the new constant (and its comment) and nothing else. */
+  wordsDiffer(diff: string) {
+    const lines = diff.split('\n');
+    const minus = lines.filter((l) => l.startsWith('-') && !l.startsWith('---'));
+    const plus = lines
+      .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
+      .map((l) => l.slice(1));
+    const added = plus.filter((l) => !/^\s*\/\//.test(l));
+    return (
+      diff.length > 0 &&
+      minus.length === 0 &&
+      added.length === 1 &&
+      added[0] === ASSIGN_HOW_LINE &&
+      plus.length <= 4
+    );
+  },
+  /** A5 — the view reads it from M3_WORDS, once, only while there are items; the words are not typed in the view. */
+  viewReadsWord(view: string) {
+    return (
+      count(view, '{M3_WORDS.ASSIGN_HOW}') === 1 &&
+      /\{allItems\.length > 0 && \(\s*<p data-m3="assign-how" className="text-sm text-gray-600 mb-4">\s*\{M3_WORDS\.ASSIGN_HOW\}\s*<\/p>\s*\)\}/.test(
+        view
+      ) &&
+      !view.includes('Tap a person') &&
+      view.indexOf('data-m3="assign-how"') > view.indexOf('{M3_WORDS.SENTENCE}</h1>') &&
+      view.indexOf('data-m3="assign-how"') < view.indexOf('{allItems.length === 0 ? (')
+    );
+  },
+
   // ── CONTROL ──
   /** U2 — package.json differs from the tag by GTC-397's script line and this suite's, nothing else. */
   twoScriptLines(atAdd: string, goodJson: string) {
@@ -554,6 +644,40 @@ async function layerD() {
   );
 }
 
+// ══ Item 3 ═══════════════════════════════════════════════════════════════════
+async function layerA() {
+  section('A — item 3: how to give dishes, on Moment 3');
+  const W3 = await load('../src/lib/moment3/words');
+  assert(
+    'A',
+    'A1 M3_WORDS.ASSIGN_HOW is the founder’s "Shortest": "Tap a person, then tap the dishes they’re bringing." (U+2019 once, no straight apostrophe, the full stop)',
+    !!W3 && CHECKS.assignWord(W3),
+    JSON.stringify(W3?.M3_WORDS?.ASSIGN_HOW)
+  );
+  const m3 = drawM3({});
+  assert(
+    'A',
+    'A2 Moment 3 with items: the line directly under "Now. Who’s on what.", text-sm text-gray-600 with mb-4, once, above the counter and the two lists',
+    CHECKS.assignLine(m3),
+    m3.slice(m3.indexOf('<h1'), m3.indexOf('<h1') + 300)
+  );
+  assert(
+    'A',
+    'A3 the "No plan items yet." screen has no line',
+    CHECKS.noLineWhenEmpty(drawM3({ categories: [], initialHolders: {} }))
+  );
+  assert(
+    'A',
+    'A4 the words file differs from the base (8a4f1bc) by ASSIGN_HOW and its comment, nothing else (every other Moment 3 word as it was)',
+    CHECKS.wordsDiffer(git(['diff', BASE, '--', M3_WORDS_FILE]).stdout)
+  );
+  assert(
+    'A',
+    'A5 the view takes the line from M3_WORDS, once, drawn only while there are items, between the heading and the lists; the words are typed in no view',
+    CHECKS.viewReadsWord(code(M3_VIEW))
+  );
+}
+
 // ══ CONTROL ══════════════════════════════════════════════════════════════════
 async function layerU() {
   section('U — CONTROL: what this batch must not touch');
@@ -592,6 +716,7 @@ async function layerU() {
 async function main() {
   await layerL();
   await layerD();
+  await layerA();
   await layerU();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {

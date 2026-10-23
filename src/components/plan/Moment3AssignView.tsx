@@ -553,6 +553,14 @@ export default function Moment3AssignView({
         <MomentWords moment={3} part="does" className="mb-3" />
         <MomentWords moment={3} part="done" className="mb-3" />
         <h1 className="text-xl font-semibold text-gray-900 mb-6">{M3_WORDS.SENTENCE}</h1>
+        {/* [[GTC-398]] item 3 (founder, 23 Oct 2026: "Instructions for how to assign people to
+            dishes"): how to give dishes, under the heading and above the two lists, whenever there
+            is something to give (not on "No plan items yet."). */}
+        {allItems.length > 0 && (
+          <p data-m3="assign-how" className="text-sm text-gray-600 mb-4">
+            {M3_WORDS.ASSIGN_HOW}
+          </p>
+        )}
 
         {allItems.length === 0 ? (
           <div className="bg-white rounded-lg border border-gray-200 p-6 text-sm text-gray-700">
