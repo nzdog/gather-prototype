@@ -601,16 +601,12 @@ export default function Moment3AssignView({
                   {accepting ? M3_WORDS.ACCEPTING : acceptAllLabel(onScreen.length)}
                 </button>
               ) : (
-                /* [[GTC-398]] item 4 (founder, 23 Oct 2026: "Want me to suggest more obvious"): a
-                   proper button in "Add a crowd"’s filled accent style (CrowdButton.tsx); the same
-                   words, handler and condition. Accept all keeps its own style. */
                 proposals.length > 0 &&
                 ghosts.length === 0 && (
                   <button
                     type="button"
-                    data-m3="suggest"
                     onClick={() => setGhosts(proposals)}
-                    className="mt-1 w-full py-3 text-base font-semibold text-white bg-accent rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-50"
+                    className="mt-1 text-sm text-gray-600 hover:text-gray-900 underline underline-offset-2"
                   >
                     {M3_WORDS.WANT_ME_TO_SUGGEST}
                   </button>
