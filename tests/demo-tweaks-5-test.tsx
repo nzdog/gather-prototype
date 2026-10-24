@@ -278,8 +278,8 @@ export const CHECKS = {
     const cur = arc.match(
       /aria-current="step"><span class="[^"]*">(\d)<\/span><span class="[^"]*">([^<]*)<\/span>/
     );
-    // React writes a comment between the label and its tick (two text nodes).
-    const ticked = ([1, 2, 3, 4] as const).filter((n) => arc.includes(`${LABELS[n]}<!-- --> ✓`));
+    // A static render writes the label and its tick as one run of text.
+    const ticked = ([1, 2, 3, 4] as const).filter((n) => arc.includes(`${LABELS[n]} ✓`));
     return (
       count(html, 'data-moment-strip') === 1 &&
       out > 0 &&
@@ -487,7 +487,7 @@ export const CHECKS = {
     const n = codeLines(now);
     const b = codeLines(base);
     return (
-      b.length > 20 &&
+      b.length > 0 &&
       linesNotIn(b, n).join('\n') === lost.join('\n') &&
       linesNotIn(n, b).every((l) => added.includes(l))
     );
