@@ -159,6 +159,7 @@
     "test:preflight-fold": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/preflight-fold-test.tsx",
     "test:sign-in-hole": "tsx tests/sign-in-hole-test.ts",
     "test:deploy-audit": "tsx tests/deploy-audit-test.ts",
+    "test:demo-tweaks-6": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/demo-tweaks-6-test.tsx",
     "test:event-day-end": "tsx tests/event-day-end-test.ts"
   },
   "prisma": {
