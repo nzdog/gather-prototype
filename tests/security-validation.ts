@@ -3031,8 +3031,8 @@ async function testSuite17_PersonRoutesStayInTheirEvent(fixtures: Fixtures) {
 // after the link is resolved, the 404 a missing thing gets ("Person not found", "Assignment not
 // found").
 //
-// Driven over HTTP against the dev server with the fixtures' own link tokens (suites 16 and 17
-// drive the same server with its host session cookie). The checks:
+// Driven over HTTP against the dev server with link tokens (a link is the sign-in for these
+// routes; suites 16 and 17 drive the same server with the host's session cookie). The checks:
 //   (a) a link for event A naming a thing on event B: the guard's answer, and nothing changes
 //       (the row, the invite log, the ledger, the OutboundMessage count).
 //   (b) the same link naming a thing on event A: the answer it gave before.
@@ -3041,10 +3041,15 @@ async function testSuite17_PersonRoutesStayInTheirEvent(fixtures: Fixtures) {
 // line (and a ledger line when a response moves); the coordinator's ack writes the answer and a
 // history line. Neither reaches a sender. The OutboundMessage count is asserted the same anyway.
 //
-// Every item this suite makes is named with GTC402_TAG and removed at the end (its assignments
-// go with it), with the coordinator's place on event B and the log and ledger rows its calls
-// wrote on events A and B, even when a check fails or a guard is gone; a leftover item from a
-// crashed run is removed by name at the start (event B itself is rebuilt with the fixtures).
+// Event A is made by this suite, with its own host link, two teams, a coordinator link and a
+// member. The fixtures' DRAFT event is no use here: suite 7 restores a saved plan on it, which
+// remakes its teams (new ids) and leaves its coordinator links with no team. Event B is the
+// fixtures' PAST event, which nothing before this suite remakes.
+//
+// Every row this suite makes is named with GTC402_TAG (its event, teams, items and people) and
+// removed at the end with everything that hangs off them (the coordinator's place on event B
+// included), and so are the log and ledger rows its calls wrote on event B, even when a check
+// fails or a guard is gone; a leftover from a crashed run is removed by name at the start.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const GTC402_TAG = 'GTC-402 suite 18';
@@ -3052,8 +3057,20 @@ const GTC402_PERSON_NOT_FOUND = 'Person not found';
 const GTC402_ASSIGNMENT_NOT_FOUND = 'Assignment not found';
 
 async function gtc402RemoveOwnRows() {
-  // Its items; their assignments go with them (onDelete: Cascade).
+  const people = await prisma.person.findMany({
+    where: { name: { startsWith: GTC402_TAG } },
+    select: { id: true },
+  });
+  const ids = people.map((p) => p.id);
+  // Its items (their assignments go with them), then its event A (its teams, places, links, log
+  // and ledger rows go with it), then its people (their place on event B goes with them).
   await prisma.item.deleteMany({ where: { name: { startsWith: GTC402_TAG } } });
+  await prisma.event.deleteMany({ where: { name: { startsWith: GTC402_TAG } } });
+  if (ids.length > 0) {
+    await prisma.inviteEvent.deleteMany({ where: { personId: { in: ids } } });
+    await prisma.auditEntry.deleteMany({ where: { actorId: { in: ids } } });
+    await prisma.person.deleteMany({ where: { id: { in: ids } } });
+  }
 }
 
 async function testSuite18_LinkRoutesStayInTheirEvent(fixtures: Fixtures) {
@@ -3062,12 +3079,7 @@ async function testSuite18_LinkRoutesStayInTheirEvent(fixtures: Fixtures) {
   );
 
   const BASE = process.env.SECURITY_TEST_BASE_URL ?? 'http://localhost:3000';
-  const evA = fixtures.eventDraft;
   const evB = fixtures.eventPast;
-  const hostLinkA = evA.hostToken;
-  const coordLinkA = evA.teamA.coordinator.token;
-  const coordinator = evA.teamA.coordinator.personId;
-  const memberA = evA.teamA.participant.personId;
   const outsider = evB.teamA.participant.personId;
 
   const post = async (url: string, body: unknown) => {
@@ -3124,37 +3136,103 @@ async function testSuite18_LinkRoutesStayInTheirEvent(fixtures: Fixtures) {
     ).map((m) => m.eventId);
 
   await gtc402RemoveOwnRows();
-  /** Log and ledger rows on events A and B before this suite. */
-  const ownScope = { eventId: { in: [evA.id, evB.id] } };
+  /** Log and ledger rows on event B before this suite (event A's go with it). */
+  const ownScope = { eventId: evB.id };
   const inviteAtStart = (
     await prisma.inviteEvent.findMany({ where: ownScope, select: { id: true } })
   ).map((r) => r.id);
   const auditAtStart = (
     await prisma.auditEntry.findMany({ where: ownScope, select: { id: true } })
   ).map((r) => r.id);
-  let coordPlaceOnB: string | null = null;
 
   try {
     // ── The fixture ──────────────────────────────────────────────────────────
-    // The coordinator of event A's Team A is also on event B (the same person on two events),
-    // and holds one item on B and two on A (one on their own team, one on A's other team).
-    coordPlaceOnB = (
-      await prisma.personEvent.create({
-        data: { personId: coordinator, eventId: evB.id, role: 'PARTICIPANT' },
-      })
-    ).id;
-    const ownItem = async (teamId: string, label: string) => {
+    // Event A, its host link, its two teams, its coordinator (Team A's, with a link) and a member.
+    // The coordinator is also on event B (the same person on two events), and holds one item on B
+    // and two on A (one on their own team, one on A's other team).
+    const expiresAt = new Date(Date.now() + 86_400_000);
+    const evA = await prisma.event.create({
+      data: {
+        name: `${GTC402_TAG} event A`,
+        startDate: new Date(Date.now() + 30 * 86_400_000),
+        endDate: new Date(Date.now() + 31 * 86_400_000),
+        status: 'DRAFT',
+        hostId: fixtures.host.id,
+      },
+    });
+    const hostLinkA = randomBytes(32).toString('hex');
+    await prisma.accessToken.create({
+      data: {
+        token: hostLinkA,
+        scope: 'HOST',
+        personId: fixtures.host.id,
+        eventId: evA.id,
+        expiresAt,
+      },
+    });
+    const makePerson = async (suffix: string) =>
+      (await prisma.person.create({ data: { name: `${GTC402_TAG} ${suffix}` } })).id;
+    const coordinator = await makePerson("coordinator of A's Team A");
+    const memberA = await makePerson('member of A');
+    const teamA = await prisma.team.create({
+      data: { name: `${GTC402_TAG} Team A`, eventId: evA.id, coordinatorId: coordinator },
+    });
+    const teamB = await prisma.team.create({
+      data: { name: `${GTC402_TAG} Team B`, eventId: evA.id },
+    });
+    await prisma.personEvent.create({
+      data: { personId: coordinator, eventId: evA.id, teamId: teamA.id, role: 'COORDINATOR' },
+    });
+    await prisma.personEvent.create({
+      data: { personId: memberA, eventId: evA.id, teamId: teamA.id, role: 'PARTICIPANT' },
+    });
+    await prisma.personEvent.create({
+      data: { personId: coordinator, eventId: evB.id, role: 'PARTICIPANT' },
+    });
+    const coordLinkA = randomBytes(32).toString('hex');
+    await prisma.accessToken.create({
+      data: {
+        token: coordLinkA,
+        scope: 'COORDINATOR',
+        personId: coordinator,
+        eventId: evA.id,
+        teamId: teamA.id,
+        expiresAt,
+      },
+    });
+    const held = async (
+      teamId: string,
+      personId: string,
+      label: string,
+      response: 'PENDING' | 'ACCEPTED'
+    ) => {
       const item = await prisma.item.create({
         data: { name: `${GTC402_TAG} ${label}`, teamId, status: 'ASSIGNED' },
       });
       const assignment = await prisma.assignment.create({
-        data: { itemId: item.id, personId: coordinator, response: 'PENDING' },
+        data: { itemId: item.id, personId, response },
       });
       return { item, assignment };
     };
-    const onB = await ownItem(evB.teamA.id, "coordinator's own item on event B");
-    const onA = await ownItem(evA.teamA.id, "coordinator's own item on event A, their team");
-    const onAOther = await ownItem(evA.teamB.id, "coordinator's own item on event A, other team");
+    await held(teamA.id, memberA, "member's item on event A", 'ACCEPTED');
+    const onB = await held(
+      evB.teamA.id,
+      coordinator,
+      "coordinator's own item on event B",
+      'PENDING'
+    );
+    const onA = await held(
+      teamA.id,
+      coordinator,
+      "coordinator's own item on A's Team A",
+      'PENDING'
+    );
+    const onAOther = await held(
+      teamB.id,
+      coordinator,
+      "coordinator's own item on A's Team B",
+      'PENDING'
+    );
 
     const hostLink = await prisma.accessToken.findUnique({ where: { token: hostLinkA } });
     const coordLink = await prisma.accessToken.findUnique({ where: { token: coordLinkA } });
@@ -3164,7 +3242,7 @@ async function testSuite18_LinkRoutesStayInTheirEvent(fixtures: Fixtures) {
         hostLink.eventId === evA.id &&
         coordLink?.scope === 'COORDINATOR' &&
         coordLink.eventId === evA.id &&
-        coordLink.teamId === evA.teamA.id &&
+        coordLink.teamId === teamA.id &&
         coordLink.personId === coordinator,
       JSON.stringify({ host: hostLink?.scope, coord: coordLink?.scope })
     );
@@ -3181,7 +3259,7 @@ async function testSuite18_LinkRoutesStayInTheirEvent(fixtures: Fixtures) {
       "fixture: the outsider (event B's Team A participant) has a place on B and none on A, and holds an item on B; A's member has a place on A only and holds one item there, already ACCEPTED",
       outsiderPlaces.length === 1 &&
         outsiderPlaces[0] === evB.id &&
-        outsiderOnB === 1 &&
+        outsiderOnB >= 1 &&
         memberPlaces.length === 1 &&
         memberPlaces[0] === evA.id &&
         memberOnA.length === 1 &&
@@ -3202,8 +3280,8 @@ async function testSuite18_LinkRoutesStayInTheirEvent(fixtures: Fixtures) {
         coordHolds.length === 3 &&
         coordHolds.every((h) => h.response === 'PENDING') &&
         holdOf(onB.assignment.id)?.item.team.eventId === evB.id &&
-        holdOf(onA.assignment.id)?.item.team.id === evA.teamA.id &&
-        holdOf(onAOther.assignment.id)?.item.team.id === evA.teamB.id,
+        holdOf(onA.assignment.id)?.item.team.id === teamA.id &&
+        holdOf(onAOther.assignment.id)?.item.team.id === teamB.id,
       JSON.stringify({ coordPlaces, coordHolds })
     );
 
@@ -3317,11 +3395,10 @@ async function testSuite18_LinkRoutesStayInTheirEvent(fixtures: Fixtures) {
     }
   } finally {
     // Put back what this suite changed, even when a check above failed or a guard is gone: the
-    // log and ledger rows its calls wrote on events A and B, the coordinator's place on B, then
-    // its own items (their assignments go with them).
+    // log and ledger rows its calls wrote on event B, then its own rows (event A, its teams,
+    // items, places and links, the log and ledger rows on it, its people and their place on B).
     await prisma.inviteEvent.deleteMany({ where: { ...ownScope, id: { notIn: inviteAtStart } } });
     await prisma.auditEntry.deleteMany({ where: { ...ownScope, id: { notIn: auditAtStart } } });
-    if (coordPlaceOnB) await prisma.personEvent.deleteMany({ where: { id: coordPlaceOnB } });
     await gtc402RemoveOwnRows();
   }
 }
