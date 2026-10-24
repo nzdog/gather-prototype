@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { STRIP_WORDS } from '@/lib/moments/strip';
 import { OPENING_TITLES } from '@/lib/moments/opening-titles';
 import { M3_WORDS } from '@/lib/moment3/words';
@@ -36,12 +37,13 @@ export default function Moment3Opening({ onStart, onBack, details, doors }: Mome
       {/* The way out and the event's name across from it, placed as on Moment 2's opening: on a
           phone the row takes its own room above the column; from sm up it sits at the top. */}
       <div className="relative px-6 pt-6 sm:absolute sm:top-6 sm:inset-x-6 sm:p-0 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <a
+        {/* A next/link, as the menu bar's own links are: nothing on this page warns on leaving. */}
+        <Link
           href="/plan/events"
           className="inline-block text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
         >
           {STRIP_WORDS.YOUR_EVENTS}
-        </a>
+        </Link>
         {details && <EventDetails facts={details} />}
       </div>
       <div className="max-w-2xl mx-auto px-6 py-8 flex flex-col items-center justify-center min-h-full">
