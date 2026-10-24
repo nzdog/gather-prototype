@@ -14,6 +14,9 @@
  *      and classes), the strip (current 3, 1 and 2 done), "← Your events", the event's details and
  *      "← Back to the plan"; shown only after the plan screen's own forward button, a screen state
  *      stored nowhere; every other way in opens the working screen, which loses its two blocks.
+ *   T  item 3: Moment 3's working screen opens at the top: the view's own arrival effect jumps the
+ *      window (what scrolls there) to the top, plainly, every time it opens except the landing on
+ *      one dish, which keeps its centring.
  *   U  CONTROL: the files this batch must not touch are not edited since demo-tweaks-4-good;
  *      package.json (read at the commit that added this suite) differs by one script line; the
  *      lockfile there is the tag's; the two untracked scripts are in no commit.
@@ -464,6 +467,40 @@ export const CHECKS = {
     );
   },
 
+  // ── Item 3 ──
+  /**
+   * T1 — the arrival effect, run once as the screen opens: the dish asked for is brought to the
+   * middle; otherwise a plain jump of the window to the top (no options, nothing smooth). The one
+   * window scroll in the view; no overlay, no ref.
+   */
+  jumpToTop(view: string) {
+    return (
+      /useEffect\(\(\) => \{\s*if \(arriveAtItem\) bringItemIntoView\(arriveAtItem\);\s*else window\.scrollTo\(0, 0\);\s*\}, \[\]\);/.test(
+        view
+      ) &&
+      count(view, 'window.scrollTo(') === 1 &&
+      count(view, 'scrollTop') === 0 &&
+      count(view, 'bringItemIntoView(') === 2
+    );
+  },
+  /** T2 — the landing on one dish keeps its centring: bringItemIntoView as at the base, a smooth scroll to the centre. */
+  centringKept(view: string, base: string) {
+    const fn = (src: string) => between(src, 'function bringItemIntoView(', '\n}\n');
+    return (
+      fn(base).length > 100 &&
+      fn(view) === fn(base) &&
+      fn(view).includes("row.scrollIntoView({ behavior: 'smooth', block: 'center' });")
+    );
+  },
+  /** T3 — the page hands over the dish once, only from the address it opened on (as before). */
+  handOverKept(setup: string, base: string) {
+    const once = (src: string) =>
+      count(src, 'if (askedItem) setArriveAtItem(askedItem);') === 1 &&
+      count(src, 'setArriveAtItem(') === 2 &&
+      count(src, 'arriveAtItem={arriveAtItem}') === 1;
+    return once(setup) && once(base);
+  },
+
   // ── CONTROL ──
   /** U2 — package.json differs from the tag by this suite's one script line, nothing else. */
   oneScriptLine(atAdd: string, goodJson: string) {
@@ -708,6 +745,26 @@ async function layerM() {
   );
 }
 
+// ══ Item 3 ═══════════════════════════════════════════════════════════════════
+async function layerT() {
+  section('T — item 3: Moment 3 starts at the top');
+  assert(
+    'T',
+    'T1 the working screen’s arrival effect: the dish asked for brought to the middle, otherwise a plain jump of the window to the top (no animation), once as it opens; the only window scroll in the view',
+    CHECKS.jumpToTop(code(M3_VIEW))
+  );
+  assert(
+    'T',
+    'T2 the landing on one dish keeps its centring: bringItemIntoView as at the base (6d2b103), a smooth scroll to the centre',
+    CHECKS.centringKept(code(M3_VIEW), stripComments(atRef(BASE, M3_VIEW)))
+  );
+  assert(
+    'T',
+    'T3 CONTROL: the setup page hands the dish over as before, once, from the address it opened on, now and at the base',
+    CHECKS.handOverKept(code(SETUP), stripComments(atRef(BASE, SETUP)))
+  );
+}
+
 // ══ CONTROL ══════════════════════════════════════════════════════════════════
 async function layerU() {
   section('U — CONTROL: what this batch must not touch');
@@ -746,6 +803,7 @@ async function layerU() {
 async function main() {
   await layerB();
   await layerM();
+  await layerT();
   await layerU();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {

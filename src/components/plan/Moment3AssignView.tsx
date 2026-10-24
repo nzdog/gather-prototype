@@ -232,8 +232,12 @@ export default function Moment3AssignView({
   );
 
   // [[GTC-380]] (Q10) — on arrival from the board's search, once: the item it asked for.
+  // [[GTC-399]] item 3 (the founder, 24 Oct 2026: "moment 3 needs to start at the top of the page"):
+  // every other time the screen opens, a plain jump to the top. The window is what scrolls here
+  // (the screen is not an overlay), and it kept the plan screen's place.
   useEffect(() => {
     if (arriveAtItem) bringItemIntoView(arriveAtItem);
+    else window.scrollTo(0, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
