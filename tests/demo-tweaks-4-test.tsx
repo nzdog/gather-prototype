@@ -89,6 +89,8 @@ const GTC400_BASE = '528e8adc5960c3fe3de989a89b738dbbe6a60e1d';
 const GTC401_BASE = '71a6287e2d3cefed5e37f3f8f5764955e0b34caa';
 /** [[GTC-402]]'s base: GTC-401's last commit (dea03c1), named for good. */
 const GTC402_BASE = 'dea03c10c2873344d0f989b238b24d65a166baeb';
+/** [[GTC-403]]'s base: GTC-402's last commit (a8e1117), named for good. */
+const GTC403_BASE = 'a8e1117fa798a1cfcec5b63fdf2c0f23c09bcac1';
 const git = (args: string[]) => spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' });
 const unchangedSinceGood = (paths: string[]) =>
   git(['diff', '--quiet', GOOD_TAG, '--', ...paths]).status === 0;
@@ -348,7 +350,7 @@ const sorted = (a: unknown) => (Array.isArray(a) ? [...a].sort().join(',') : 'no
  * layers instead. No package.json, lockfile, script or test file here (GTC-397's lesson).
  */
 const NOT_TOUCHED = [
-  'src/app/api', // but the routes GTC-400, GTC-401 and GTC-402 edit (see EXCLUDED)
+  'src/app/api', // but the routes GTC-400 to GTC-403 edit (see EXCLUDED)
   'prisma',
   'src/lib/auth',
   'src/lib/auth.ts',
@@ -423,6 +425,20 @@ const NOT_TOUCHED_TILL_GTC402 = [
   'src/app/api/h/[token]/people/[personId]/manual-override/route.ts',
   'src/app/api/c/[token]/ack/[assignmentId]/route.ts',
 ];
+/**
+ * [[GTC-403]] edits three more routes on purpose (the guest link's answer now checks the
+ * assignment is on the event its link opens; the coordinator link's dish create and edit check a
+ * day sent is on that event), so U1 asks its question of them at GTC-403's base (a8e1117), a
+ * fixed commit: GTC-398 still may not have touched them. The security suite (suite 19) pins their
+ * new behaviour. They are kept out of the live diff of src/app/api, which stays listed and still
+ * covers every other route. (GTC-403 also edits GTC-400's dish route, already in EXCLUDED and
+ * asked at GTC-400's base.)
+ */
+const NOT_TOUCHED_TILL_GTC403 = [
+  'src/app/api/p/[token]/ack/[assignmentId]/route.ts',
+  'src/app/api/c/[token]/items/route.ts',
+  'src/app/api/c/[token]/items/[itemId]/route.ts',
+];
 const EXCLUDED = [
   ':(exclude)src/lib/demo/typical-answers.ts',
   ':(exclude)src/components/preflight/PreflightStep.tsx',
@@ -435,6 +451,9 @@ const EXCLUDED = [
   ':(exclude)src/app/api/events/[id]/people/[personId]/route.ts',
   ':(exclude)src/app/api/h/[token]/people/[personId]/manual-override/route.ts',
   ':(exclude)src/app/api/c/[token]/ack/[assignmentId]/route.ts',
+  ':(exclude)src/app/api/p/[token]/ack/[assignmentId]/route.ts',
+  ':(exclude)src/app/api/c/[token]/items/route.ts',
+  ':(exclude)src/app/api/c/[token]/items/[itemId]/route.ts',
 ];
 const SUITE = 'tests/demo-tweaks-4-test.tsx';
 const NEW_SCRIPT = 'test:demo-tweaks-4';
@@ -1105,10 +1124,13 @@ async function layerU() {
     ...NOT_TOUCHED_TILL_GTC402.filter(
       (f) => git(['cat-file', '-e', `${GTC402_BASE}:${f}`]).status !== 0
     ),
+    ...NOT_TOUCHED_TILL_GTC403.filter(
+      (f) => git(['cat-file', '-e', `${GTC403_BASE}:${f}`]).status !== 0
+    ),
   ];
   assert(
     'U',
-    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since demo-tweaks-3-good (routes, schema, auth, press, AI, email, households, the paying page, the demo library, the pre-flight, the setup page, SMS, the live switch, and the neighbours no item edits); the ${NOT_TOUCHED_TILL_GTC399.length} that GTC-399 edits are not edited between demo-tweaks-3-good and GTC-399’s base (6d2b103); the ${NOT_TOUCHED_TILL_GTC400.length} that GTC-400 edits not between demo-tweaks-3-good and GTC-400’s base (528e8ad); the ${NOT_TOUCHED_TILL_GTC401.length} that GTC-401 edits not between demo-tweaks-3-good and GTC-401’s base (71a6287); the ${NOT_TOUCHED_TILL_GTC402.length} that GTC-402 edits not between demo-tweaks-3-good and GTC-402’s base (dea03c1)`,
+    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since demo-tweaks-3-good (routes, schema, auth, press, AI, email, households, the paying page, the demo library, the pre-flight, the setup page, SMS, the live switch, and the neighbours no item edits); the ${NOT_TOUCHED_TILL_GTC399.length} that GTC-399 edits are not edited between demo-tweaks-3-good and GTC-399’s base (6d2b103); the ${NOT_TOUCHED_TILL_GTC400.length} that GTC-400 edits not between demo-tweaks-3-good and GTC-400’s base (528e8ad); the ${NOT_TOUCHED_TILL_GTC401.length} that GTC-401 edits not between demo-tweaks-3-good and GTC-401’s base (71a6287); the ${NOT_TOUCHED_TILL_GTC402.length} that GTC-402 edits not between demo-tweaks-3-good and GTC-402’s base (dea03c1); the ${NOT_TOUCHED_TILL_GTC403.length} that GTC-403 edits not between demo-tweaks-3-good and GTC-403’s base (a8e1117)`,
     missing.length === 0 &&
       unchangedSinceGood([...NOT_TOUCHED, ...EXCLUDED]) &&
       git(['diff', '--quiet', GOOD_TAG, GTC399_BASE, '--', ...NOT_TOUCHED_TILL_GTC399]).status ===
@@ -1118,6 +1140,8 @@ async function layerU() {
       git(['diff', '--quiet', GOOD_TAG, GTC401_BASE, '--', ...NOT_TOUCHED_TILL_GTC401]).status ===
         0 &&
       git(['diff', '--quiet', GOOD_TAG, GTC402_BASE, '--', ...NOT_TOUCHED_TILL_GTC402]).status ===
+        0 &&
+      git(['diff', '--quiet', GOOD_TAG, GTC403_BASE, '--', ...NOT_TOUCHED_TILL_GTC403]).status ===
         0,
     missing.length ? `missing: ${missing.join(', ')}` : undefined
   );
