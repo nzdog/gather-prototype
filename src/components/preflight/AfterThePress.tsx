@@ -48,6 +48,8 @@ import { AFTER_PRESS_HEADING, afterPressLead } from '@/lib/preflight/after-press
 import { MarkRows, Pill, type Member } from '@/components/preflight/mark-rows';
 import { boardHref } from '@/lib/events/home-href';
 import { STRIP_WORDS } from '@/lib/moments/strip';
+import MomentArc, { type ArcDoor } from '@/components/plan/MomentArc';
+import { moment4Doors } from '@/lib/moments/strip-hrefs';
 import EventDetails, { type EventDetailsFacts } from '@/components/shared/EventDetails';
 import { HOST_CARD, HostPill } from '@/components/shared/HostCard';
 
@@ -87,6 +89,9 @@ export interface AfterThePressViewProps {
   onDefault: (value: ChaseWhenNoMobile) => void;
   /** [[GTC-368]] (item 17): the event's name and its details, in the name line's place (W10, Q1). */
   details?: EventDetailsFacts;
+  /** [[GTC-399]] item 6: the strip's doors (`moment4Doors`), and whether 2 and 3 are not needed. */
+  doors?: Partial<Record<1 | 2 | 3 | 4, ArcDoor>>;
+  invitesOnly?: boolean;
 }
 
 // ─── The view ────────────────────────────────────────────────────────────────
@@ -165,6 +170,8 @@ export function AfterThePressView({
   onException,
   onDefault,
   details,
+  doors,
+  invitesOnly = false,
 }: AfterThePressViewProps) {
   return (
     <div className="min-h-screen bg-warm-white">
@@ -176,6 +183,19 @@ export function AfterThePressView({
             <a href={boardHref(eventId)} className={`mb-6 ${BACK_TO_BOARD_CLASS}`}>
               {STRIP_WORDS.BACK_TO_BOARD}
             </a>
+          )}
+          {/* [[GTC-399]] item 6 (the founder's ruling, 24 Oct 2026: "All three"): the strip, under the
+              way back and above the title, as on the plan screen. This is the pre-flight's address
+              after the press, so it is Moment 4's screen, as the pre-flight's own strip says. */}
+          {doors && (
+            <div className="mb-6">
+              <MomentArc
+                currentMoment={4}
+                completedMoments={[1, 2, 3]}
+                notNeeded={invitesOnly ? [2, 3] : undefined}
+                doors={doors}
+              />
+            </div>
           )}
           {details ? (
             <div className="mb-1">
@@ -304,6 +324,8 @@ interface PreFlightWire {
     occasionDescription: string | null;
     eventType: string | null;
     eventTypeOther: string | null;
+    /** [[GTC-374]]: sent by the route already; [[GTC-399]] item 6 reads it for the strip. */
+    invitesOnly?: boolean;
   };
   households: HouseholdView[];
   unhoused: Member[];
@@ -384,6 +406,8 @@ export default function AfterThePress({ eventId }: { eventId: string }) {
       }
       onDefault={(v) => patch('chase', { chaseWhenNoMobileDefault: v })}
       details={{ ...data.event, id: eventId }}
+      doors={moment4Doors(eventId, { sent: true, invitesOnly: data.event.invitesOnly === true })}
+      invitesOnly={data.event.invitesOnly === true}
     />
   );
 }

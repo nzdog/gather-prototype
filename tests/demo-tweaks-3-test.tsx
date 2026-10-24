@@ -330,12 +330,10 @@ const NOT_TOUCHED = [
   'src/lib/workflow.ts',
   'src/components/plan/MomentWords.tsx',
   'src/lib/moments/moment-words.ts',
-  'src/components/plan/Moment2Step2Skeleton.tsx',
   'src/components/plan/HouseholdCardList.tsx',
   'src/components/plan/AccordionShell.tsx',
   'src/components/demo/CrowdButton.tsx',
   'src/components/preflight/mark-rows.tsx',
-  'src/components/preflight/AfterThePress.tsx',
 ];
 /**
  * [[GTC-398]] (items 2 to 5) edits these two on purpose, so U1 asks its question of them at
@@ -347,8 +345,8 @@ const NOT_TOUCHED_TILL_GTC398 = [
   'src/components/shared/EventDropOffLine.tsx',
 ];
 /**
- * [[GTC-399]] edits these three on purpose (item 1 Moment 2's opening, item 2 the titles, item 4 the
- * sample's button), so U1 asks its question of them at GTC-399's base (6d2b103), a fixed commit:
+ * [[GTC-399]] edits these five on purpose (item 1 Moment 2's opening, item 2 the titles, item 4 the
+ * sample's button, item 6 the strip on the generating screen and on "Who I nudge"), so U1 asks its question of them at GTC-399's base (6d2b103), a fixed commit:
  * GTC-396 still may not have touched them. GTC-399's own suite (test:demo-tweaks-5) pins their new
  * state. typical-answers.ts is also kept out of the live diff of its directory, which stays listed.
  */
@@ -356,6 +354,8 @@ const NOT_TOUCHED_TILL_GTC399 = [
   'src/components/plan/Moment2Opening.tsx',
   'src/lib/moments/opening-titles.ts',
   'src/lib/demo/typical-answers.ts',
+  'src/components/plan/Moment2Step2Skeleton.tsx',
+  'src/components/preflight/AfterThePress.tsx',
 ];
 const EXCLUDED = [':(exclude)src/lib/demo/typical-answers.ts'];
 const NEW_SCRIPT = 'test:demo-tweaks-3';
@@ -981,12 +981,12 @@ async function layerL() {
   );
   assert(
     'L',
-    'L5 CONTROL: no MomentWords in the plan view (nor its import); the heading, the count line, the list, the bar and everything after the heading, and the top, as at GTC-398’s base (8a4f1bc); the skeleton shown while generating draws no Moment words and is not edited',
+    'L5 CONTROL: no MomentWords in the plan view (nor its import); the heading, the count line, the list, the bar and everything after the heading, and the top, as at GTC-398’s base (8a4f1bc); the skeleton shown while generating draws no Moment words and is not edited up to GTC-399’s base (6d2b103; GTC-399 item 6 draws the strip on it, test:demo-tweaks-5 pins that)',
     CHECKS.planViewKept(
       code(PLAN_VIEW),
       stripComments(atRef(GTC398_BASE, PLAN_VIEW)),
       code(SKELETON),
-      unchangedSinceGood([SKELETON])
+      git(['diff', '--quiet', GOOD_TAG, GTC399_BASE, '--', SKELETON]).status === 0
     )
   );
 }

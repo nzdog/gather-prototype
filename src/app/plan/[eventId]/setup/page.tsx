@@ -1735,6 +1735,8 @@ function EventSetupFlow() {
       <Moment2Step2Skeleton
         eventName={event.name}
         plan={moment2Plan}
+        // [[GTC-399]] item 6: the strip's doors, as on the plan screen.
+        doors={doorsFor(2)}
         onReady={async () => {
           try {
             const categories = await loadMoment2PlanCategories();

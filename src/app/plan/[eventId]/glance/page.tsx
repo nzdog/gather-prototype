@@ -39,6 +39,8 @@ import GlanceReplay from '@/components/glance/GlanceReplay';
 import GlanceLive from '@/components/glance/GlanceLive';
 import { answersByDay, daysToGoLine } from '@/lib/events/event-dates';
 import { printEventDate } from '@/lib/print/item-list';
+import MomentArc from '@/components/plan/MomentArc';
+import { moment4Doors } from '@/lib/moments/strip-hrefs';
 
 /*
   ⚠ RULING 36 (2026-09-11) — THE `?variant=` SWITCH IS DELETED, AND `searchParams` WITH IT.
@@ -149,6 +151,20 @@ export default async function GlancePage({ params }: { params: Promise<{ eventId
 
   return (
     <div className="min-h-screen bg-[#efede6]">
+      {/*
+        [[GTC-399]] item 6 (the founder's ruling, 24 Oct 2026: "All three") — the Moments strip,
+        Moment 4's (the board's own label, "Is everyone sorted?"), above the board's first block
+        and in its width. In this page, the host's own signed-in page, and not in GlanceBoard: the
+        board stays as it was (no hook, its markup unchanged).
+      */}
+      <div className="mx-auto w-full max-w-[960px] px-4 pt-6">
+        <MomentArc
+          currentMoment={4}
+          completedMoments={[1, 2, 3]}
+          notNeeded={invitesOnly ? [2, 3] : undefined}
+          doors={moment4Doors(eventId, { sent: event.sentAt !== null, invitesOnly })}
+        />
+      </div>
       <GlanceBoard
         glance={glance}
         eventName={event.name}

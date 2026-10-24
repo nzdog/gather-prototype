@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { planWaitPercent, planWaitStage } from '@/lib/setup/plan-wait';
+import MomentArc, { type ArcDoor } from '@/components/plan/MomentArc';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,8 @@ interface Moment2Step2SkeletonProps {
   plan: Moment2Plan | null;
   onApprove: () => void;
   onReady?: () => void;
+  /** [[GTC-399]] item 6: the strip's doors (`stripDoors`, built by the setup page). */
+  doors?: Partial<Record<1 | 2 | 3 | 4, ArcDoor>>;
 }
 
 // ─── Skeleton placeholders ──────────────────────────────────────────────────
@@ -98,6 +101,7 @@ export default function Moment2Step2Skeleton({
   plan,
   onApprove,
   onReady,
+  doors,
 }: Moment2Step2SkeletonProps) {
   // Track which categories have been revealed (staggered animation)
   const [revealedCategories, setRevealedCategories] = useState<number>(0);
@@ -155,6 +159,18 @@ export default function Moment2Step2Skeleton({
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-2xl mx-auto px-6 py-8 pb-32">
+        {/* [[GTC-399]] item 6 (the founder's ruling, 24 Oct 2026: "All three"): the strip, above the
+            title as on the plan screen, current Moment 2; its doors wait while the plan is being
+            made, as the plan screen's do while it regenerates (this screen's own working flag, the
+            one its button reads). */}
+        <div className="mb-6">
+          <MomentArc
+            currentMoment={2}
+            completedMoments={[1]}
+            doors={doors}
+            disabled={!fullyRendered}
+          />
+        </div>
         {/* Title */}
         <h1 className="text-xl font-semibold text-gray-900 mb-1">
           Here&rsquo;s what I&rsquo;d suggest for {eventName}.

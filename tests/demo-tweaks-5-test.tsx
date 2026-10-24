@@ -22,6 +22,10 @@
  *   K  item 5 (as the founder ruled again, 24 Oct 2026: "two tick boxes so either can be ticked"):
  *      the row's box as it always was, and while a folding step is open a second at its foot, the
  *      same control (one state, one handler); Ready and the settled steps as they were.
+ *   S  item 6 (the founder's ruling, 24 Oct 2026: "All three"): the strip on the generating screen
+ *      (current 2, its doors waiting while it works), "Who I nudge" after the press and the board
+ *      (both Moment 4's, as the pre-flight's own strip and the board's label say), the same
+ *      MomentArc; on the host's signed-in pages only; GlanceBoard itself not edited.
  *   U  CONTROL: the files this batch must not touch are not edited since demo-tweaks-4-good;
  *      package.json (read at the commit that added this suite) differs by one script line; the
  *      lockfile there is the tag's; the two untracked scripts are in no commit.
@@ -46,6 +50,8 @@ import { ToastProvider } from '../src/contexts/ToastContext';
 import Moment3AssignView from '../src/components/plan/Moment3AssignView';
 import TypicalAnswersButton from '../src/components/demo/TypicalAnswersButton';
 import PreflightStep from '../src/components/preflight/PreflightStep';
+import Moment2Step2Skeleton from '../src/components/plan/Moment2Step2Skeleton';
+import { AfterThePressView } from '../src/components/preflight/AfterThePress';
 
 const ROOT = path.join(__dirname, '..');
 
@@ -160,6 +166,14 @@ const START_SRC = 'Let&rsquo;s do this &rarr;';
 const SUITE = 'tests/demo-tweaks-5-test.tsx';
 const TYPICAL_FILE = 'src/lib/demo/typical-answers.ts';
 const STEP_FILE = 'src/components/preflight/PreflightStep.tsx';
+const SKELETON = 'src/components/plan/Moment2Step2Skeleton.tsx';
+const AFTER_PRESS = 'src/components/preflight/AfterThePress.tsx';
+const BOARD_PAGE = 'src/app/plan/[eventId]/glance/page.tsx';
+const HREFS_FILE = 'src/lib/moments/strip-hrefs.ts';
+const BACK_TO_BOARD = '← Back to the board';
+/** The strip's W8 after the press on an invites-only event (GTC-374), typed by hand. */
+const NOT_NEEDED_AFTER_PRESS =
+  'The invitations have gone as invites only, so there’s no plan to make.';
 /** The tick slot in a folding step's row, as the base draws it (its classes unchanged). */
 const SLOT = '<div data-tick-slot="" class="flex w-[5.25rem] shrink-0 justify-end">';
 
@@ -623,6 +637,127 @@ export const CHECKS = {
     );
   },
 
+  // ── Item 6 ──
+  /**
+   * S1 to S3 — a strip on a screen without the setup page's top row: one strip, its current Moment,
+   * its ticks, before the one <h1>, after `after` when given; the not-needed Moments marked.
+   */
+  stripBeforeTitle(
+    html: string,
+    current: 1 | 2 | 3 | 4,
+    completed: number[],
+    after: string | null,
+    notNeeded: number[] = []
+  ) {
+    const strip = html.indexOf('<div data-moment-strip="">');
+    const h1 = html.indexOf('<h1');
+    const arc = strip >= 0 && h1 > strip ? html.slice(strip, h1) : '';
+    const cur = arc.match(
+      /aria-current="step"><span class="[^"]*">(\d)<\/span><span class="[^"]*">([^<]*)<\/span>/
+    );
+    const ticked = ([1, 2, 3, 4] as const).filter((n) => arc.includes(`${LABELS[n]} ✓`));
+    return (
+      count(html, 'data-moment-strip') === 1 &&
+      count(html, '<h1') === 1 &&
+      h1 > strip &&
+      (after === null || (html.indexOf(after) > 0 && strip > html.indexOf(after))) &&
+      html.includes('<div class="mb-6"><div data-moment-strip="">') &&
+      !!cur &&
+      cur[1] === String(current) &&
+      cur[2] === LABELS[current] &&
+      ticked.join(',') === completed.join(',') &&
+      count(arc, 'data-not-needed') === notNeeded.length &&
+      ([1, 2, 3, 4] as const).every((n) => count(arc, LABELS[n]) === 1)
+    );
+  },
+  /** S1 — while it works, every door that opens is a disabled button; a locked one says its line. */
+  doorsWait(html: string) {
+    const arc = between(html, '<div data-moment-strip="">', '<h1');
+    const opens = arc.match(/<button type="button" disabled=""[^>]*>/g) ?? [];
+    const locked = arc.match(/<button type="button" aria-disabled="true"[^>]*>/g) ?? [];
+    const live = (arc.match(/<button\b[^>]*>/g) ?? []).filter(
+      (b) => !b.includes('disabled=""') && !b.includes('aria-disabled="true"')
+    );
+    return opens.length === 1 && locked.length === 2 && live.length === 0 && !arc.includes('<a ');
+  },
+  /** S2 — a Moment 4 screen's doors are links, to the setup page's three Moments; none to itself. */
+  linkDoors(html: string, eventId: string) {
+    const arc = between(html, '<div data-moment-strip="">', '<h1');
+    const hrefs = [...arc.matchAll(/<a href="([^"]*)"/g)].map((m) => m[1]);
+    return (
+      hrefs.join(' ') ===
+      `/plan/${eventId}/setup?at=people /plan/${eventId}/setup?at=plan /plan/${eventId}/setup`
+    );
+  },
+  /** S4 — the doors as addresses, for planned and invites-only events, before and after the press. */
+  doorRule(fn: any) {
+    if (typeof fn !== 'function') return false;
+    const planned = JSON.stringify(fn('e1', { sent: true, invitesOnly: false }));
+    const plannedHeld = JSON.stringify(fn('e1', { sent: false, invitesOnly: false }));
+    const invSent = JSON.stringify(fn('e1', { sent: true, invitesOnly: true }));
+    const invHeld = JSON.stringify(fn('e1', { sent: false, invitesOnly: true }));
+    const go = {
+      1: { href: '/plan/e1/setup?at=people' },
+      2: { href: '/plan/e1/setup?at=plan' },
+      3: { href: '/plan/e1/setup' },
+    };
+    return (
+      planned === JSON.stringify(go) &&
+      plannedHeld === JSON.stringify(go) &&
+      invSent ===
+        JSON.stringify({
+          1: { href: '/plan/e1/setup?at=people' },
+          2: { locked: NOT_NEEDED_AFTER_PRESS, notNeeded: true },
+          3: { locked: NOT_NEEDED_AFTER_PRESS, notNeeded: true },
+        }) &&
+      invHeld ===
+        JSON.stringify({
+          1: { href: '/plan/e1/setup?at=people' },
+          2: { href: '/plan/e1/setup?at=opening', notNeeded: true },
+          3: { href: '/plan/e1/setup?at=opening', notNeeded: true },
+        })
+    );
+  },
+  /** S5 — the board page: one strip, Moment 4's, in the board's width, before the board; the board drawn as before. */
+  boardPage(src: string) {
+    const arc = src.indexOf('<MomentArc');
+    return (
+      count(src, '<MomentArc') === 1 &&
+      count(src, '<GlanceBoard') === 1 &&
+      arc > src.indexOf('<div className="min-h-screen bg-[#efede6]">') &&
+      arc < src.indexOf('<GlanceBoard') &&
+      src.lastIndexOf('<div className="mx-auto w-full max-w-[960px] px-4 pt-6">', arc) >
+        src.indexOf('<div className="min-h-screen bg-[#efede6]">') &&
+      /<MomentArc\s+currentMoment=\{4\}\s+completedMoments=\{\[1, 2, 3\]\}\s+notNeeded=\{invitesOnly \? \[2, 3\] : undefined\}\s+doors=\{moment4Doors\(eventId, \{ sent: event\.sentAt !== null, invitesOnly \}\)\}\s*\/>/.test(
+        src
+      ) &&
+      src.includes("import MomentArc from '@/components/plan/MomentArc';") &&
+      src.includes("import { moment4Doors } from '@/lib/moments/strip-hrefs';")
+    );
+  },
+  /** S6 — the two containers hand the strip its doors: the setup page doorsFor(2) to the generating screen; "Who I nudge" Moment 4's, from the event's invites-only flag. */
+  containers(setup: string, after: string) {
+    return (
+      /\bdoors=\{doorsFor\(2\)\}/.test(elementOf(setup, 'Moment2Step2Skeleton')) &&
+      /doors=\{moment4Doors\(eventId, \{ sent: true, invitesOnly: data\.event\.invitesOnly === true \}\)\}/.test(
+        elementOf(after, 'AfterThePressView')
+      ) &&
+      /invitesOnly=\{data\.event\.invitesOnly === true\}/.test(
+        elementOf(after, 'AfterThePressView')
+      )
+    );
+  },
+  /** S7 — only the host's signed-in pages (under /plan) draw a strip or the screens that carry one. */
+  hostPagesOnly(files: { rel: string; text: string }[]) {
+    const carriers =
+      /from '@\/components\/plan\/(MomentArc|Moment2Step2Skeleton|SetupOpeningScreen|Moment[123]\w*)'|from '@\/components\/preflight\/AfterThePress'|from '@\/components\/glance\/GlanceBoard'|from '@\/lib\/moments\/strip-hrefs'/;
+    const pages = files.filter((f) => /^src\/app\/.*page\.tsx$/.test(f.rel));
+    const outside = pages.filter(
+      (f) => !f.rel.startsWith('src/app/plan/') && carriers.test(f.text)
+    );
+    return pages.length > 10 && outside.length === 0;
+  },
+
   // ── CONTROL ──
   /** U2 — package.json differs from the tag by this suite's one script line, nothing else. */
   oneScriptLine(atAdd: string, goodJson: string) {
@@ -676,23 +811,22 @@ const NOT_TOUCHED = [
   'src/components/plan/Moment2PlanView.tsx',
   'src/components/plan/Moment1InputForm.tsx',
   'src/components/plan/Moment2Step1Modal.tsx',
-  'src/components/plan/Moment2Step2Skeleton.tsx',
   'src/components/plan/AccordionShell.tsx',
   // the pre-flight: only PreflightStep.tsx is edited (item 5; layer K asks what it may change)
   'src/app/plan/[eventId]/pre-flight',
-  'src/components/preflight/AfterThePress.tsx',
   'src/components/preflight/kids-note.ts',
   'src/components/preflight/mark-rows.tsx',
   'src/components/shared',
   'src/lib/items',
   'src/components/glance',
+  // the board's page directory: its page is edited (item 6; layer S asks what it may change)
   'src/app/plan/[eventId]/glance',
   'src/lib/sms',
   'src/app/billing',
 ];
 
 /** Files inside a listed directory that an item edits: kept out of U1's live diff (none now). */
-const EXCLUDED: string[] = [];
+const EXCLUDED = [':(exclude)src/app/plan/[eventId]/glance/page.tsx'];
 
 // ══ Item 1 ═══════════════════════════════════════════════════════════════════
 async function layerB() {
@@ -1017,6 +1151,149 @@ async function layerK() {
   );
 }
 
+// ══ Item 6 ═══════════════════════════════════════════════════════════════════
+const SKELETON_ADDED = [
+  "import MomentArc, { type ArcDoor } from '@/components/plan/MomentArc';",
+  'doors?: Partial<Record<1 | 2 | 3 | 4, ArcDoor>>;',
+  'doors,',
+  '<div className="mb-6">',
+  '<MomentArc',
+  'currentMoment={2}',
+  'completedMoments={[1]}',
+  'doors={doors}',
+  'disabled={!fullyRendered}',
+  '/>',
+  '</div>',
+];
+const AFTER_ADDED = [
+  "import MomentArc, { type ArcDoor } from '@/components/plan/MomentArc';",
+  "import { moment4Doors } from '@/lib/moments/strip-hrefs';",
+  'doors?: Partial<Record<1 | 2 | 3 | 4, ArcDoor>>;',
+  'invitesOnly?: boolean;',
+  'doors,',
+  'invitesOnly = false,',
+  '{doors && (',
+  '<div className="mb-6">',
+  '<MomentArc',
+  'currentMoment={4}',
+  'completedMoments={[1, 2, 3]}',
+  'notNeeded={invitesOnly ? [2, 3] : undefined}',
+  'doors={doors}',
+  '/>',
+  '</div>',
+  ')}',
+  'doors={moment4Doors(eventId, { sent: true, invitesOnly: data.event.invitesOnly === true })}',
+  'invitesOnly={data.event.invitesOnly === true}',
+];
+const BOARD_ADDED = [
+  "import MomentArc from '@/components/plan/MomentArc';",
+  "import { moment4Doors } from '@/lib/moments/strip-hrefs';",
+  '<div className="mx-auto w-full max-w-[960px] px-4 pt-6">',
+  '<MomentArc',
+  'currentMoment={4}',
+  'completedMoments={[1, 2, 3]}',
+  'notNeeded={invitesOnly ? [2, 3] : undefined}',
+  'doors={moment4Doors(eventId, { sent: event.sentAt !== null, invitesOnly })}',
+  '/>',
+  '</div>',
+];
+const pressView = (over: Record<string, unknown>) =>
+  render(
+    createElement(AfterThePressView as any, {
+      eventId: 'e1',
+      eventName: 'Boxing Day',
+      sentAt: '2026-12-01T00:00:00.000Z',
+      pace: null,
+      households: [],
+      unhoused: [],
+      chase: null,
+      saving: false,
+      error: null,
+      onMark: () => {},
+      onException: () => {},
+      onDefault: () => {},
+      ...over,
+    })
+  );
+
+async function layerS() {
+  section('S — item 6: the strip on the generating screen, "Who I nudge" and the board');
+  const SH = (await import('../src/lib/moments/strip-hrefs').catch(() => null)) as any;
+  const wait = render(
+    createElement(Moment2Step2Skeleton as any, {
+      eventName: 'Boxing Day',
+      plan: null,
+      onApprove: () => {},
+      doors: doorsWith([1], 2),
+    })
+  );
+  assert(
+    'S',
+    'S1 the generating screen: the strip above its title, current Moment 2, Moment 1 ticked; while it works its one open door is a disabled button (as the plan screen’s while it regenerates) and the two locked ones say their lines; its title and its wait as they were',
+    CHECKS.stripBeforeTitle(wait, 2, [1], null) &&
+      CHECKS.doorsWait(wait) &&
+      wait.includes('Here’s what I’d suggest for Boxing Day.</h1>') &&
+      wait.includes('Putting your plan together...'),
+    wait.slice(0, 900)
+  );
+  const doors = SH?.moment4Doors?.('e1', { sent: true, invitesOnly: false });
+  const after = pressView({ doors });
+  assert(
+    'S',
+    'S2 "Who I nudge": the strip under "← Back to the board" and above its title, current Moment 4, Moments 1 to 3 ticked; its doors links to the setup page’s Moments; without doors (as before) no strip',
+    CHECKS.stripBeforeTitle(after, 4, [1, 2, 3], `>${BACK_TO_BOARD}</a>`) &&
+      CHECKS.linkDoors(after, 'e1') &&
+      !pressView({}).includes('data-moment-strip') &&
+      !pressView({}).includes(LABELS[4]),
+    after.slice(0, 900)
+  );
+  const inv = pressView({
+    doors: SH?.moment4Doors?.('e1', { sent: true, invitesOnly: true }),
+    invitesOnly: true,
+  });
+  assert(
+    'S',
+    'S3 "Who I nudge" of an invites-only event: Moments 2 and 3 "not needed", locked, unticked; Moment 1 ticked; Moment 4 current',
+    CHECKS.stripBeforeTitle(inv, 4, [1], `>${BACK_TO_BOARD}</a>`, [2, 3]),
+    inv.slice(0, 900)
+  );
+  assert(
+    'S',
+    'S4 the doors as addresses (moment4Doors): Moments 1 to 3 by stripDoors’ own rule, to the setup page’s people, plan and Moment 3; an invites-only event’s 2 and 3 not needed, locked with W8 after the press, to Moment 2’s opening before it',
+    CHECKS.doorRule(SH?.moment4Doors)
+  );
+  assert(
+    'S',
+    'S5 the board: the page draws one strip, Moment 4’s ("Is everyone sorted?"), in the board’s width, before GlanceBoard; GlanceBoard itself not edited (U1)',
+    CHECKS.boardPage(code(BOARD_PAGE))
+  );
+  assert(
+    'S',
+    'S6 the containers hand the doors over: doorsFor(2) to the generating screen; Moment 4’s, from the event’s invites-only flag, to "Who I nudge"',
+    CHECKS.containers(code(SETUP), code(AFTER_PRESS))
+  );
+  const files = walk('src').map((rel) => ({ rel, text: code(rel) }));
+  assert(
+    'S',
+    'S7 only the host’s signed-in pages (under /plan) draw the strip or a screen that carries it: no guest, household, coordinator or join page does',
+    CHECKS.hostPagesOnly(files)
+  );
+  const lostOrNew = [
+    [SKELETON, SKELETON_ADDED],
+    [AFTER_PRESS, AFTER_ADDED],
+    [BOARD_PAGE, BOARD_ADDED],
+  ].filter(
+    ([f, added]) =>
+      !CHECKS.onlyThese(read(f as string), atRef(BASE, f as string), [], added as string[])
+  );
+  assert(
+    'S',
+    'S8 CONTROL: the three screens’ code as at the base (6d2b103) but the strip: nothing lost, nothing new but the strip, its doors and its imports',
+    lostOrNew.length === 0,
+    lostOrNew.map((x) => x[0]).join(', ')
+  );
+}
+
 // ══ CONTROL ══════════════════════════════════════════════════════════════════
 async function layerU() {
   section('U — CONTROL: what this batch must not touch');
@@ -1058,6 +1335,7 @@ async function main() {
   await layerT();
   await layerF();
   await layerK();
+  await layerS();
   await layerU();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
