@@ -3846,6 +3846,8 @@ async function testSuite19_AnswerAndDayStayInTheirEvent(fixtures: Fixtures) {
       const label = "POST /api/c/:coordLinkOfA/items (the coordinator's create)";
       {
         const dishes = await dishesOnTeam();
+        const onDayB = () => prisma.item.count({ where: { dayId: dayB.id, teamId: teamA.id } });
+        const onDayBBefore = await onDayB();
         const counts = await writeCounts();
         const r = await create({ name: `${GTC403_TAG} created with B's day`, dayId: dayB.id });
         logTest(
@@ -3855,9 +3857,8 @@ async function testSuite19_AnswerAndDayStayInTheirEvent(fixtures: Fixtures) {
         );
         logTest(
           '  ...and no dish was made',
-          (await dishesOnTeam()) === dishes &&
-            (await prisma.item.count({ where: { dayId: dayB.id, teamId: teamA.id } })) === 0,
-          `dishes ${dishes} -> ${await dishesOnTeam()}`
+          (await dishesOnTeam()) === dishes && (await onDayB()) === onDayBBefore,
+          `dishes ${dishes} -> ${await dishesOnTeam()}; on day B ${onDayBBefore} -> ${await onDayB()}`
         );
         logTest(
           '  ...and no ledger row was written, and the OutboundMessage count is the same',
