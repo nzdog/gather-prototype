@@ -27,6 +27,7 @@ import Moment1InputForm, {
 import HouseholdCardList, { SavedHousehold } from '@/components/plan/HouseholdCardList';
 import Moment1Summary from '@/components/plan/Moment1Summary';
 import Moment2Opening from '@/components/plan/Moment2Opening';
+import Moment3Opening from '@/components/plan/Moment3Opening';
 import Moment2Step1Modal from '@/components/plan/Moment2Step1Modal';
 import Moment2Step2Skeleton, { Moment2Plan } from '@/components/plan/Moment2Step2Skeleton';
 import Moment2PlanView, {
@@ -374,6 +375,13 @@ function EventSetupFlow() {
   const [moment2PlanCategories, setMoment2PlanCategories] = useState<Moment2PlanCategory[]>([]);
   // GTC-355: Moment 3, the fifth stage, and what it shows.
   const [showMoment3, setShowMoment3] = useState(false);
+  /**
+   * [[GTC-399]] item 2 — Moment 3's opening page, shown only on the way forward from the plan
+   * screen's own forward button (the founder's ruling). A screen state, stored nowhere: every
+   * other way into Moment 3 (a reload, the strip, the search, a link to one dish, the pre-flight's
+   * way back) opens the working screen, as before.
+   */
+  const [showMoment3Opening, setShowMoment3Opening] = useState(false);
   const [moment3Data, setMoment3Data] = useState<{
     categories: Moment3Category[];
     holders: Record<string, Moment3Holder | null>;
@@ -519,7 +527,7 @@ function EventSetupFlow() {
    * Every flag is cleared first, so this is the only place that decides which surface is
    * live and there is no arrangement of calls that leaves two of them true.
    */
-  const applyStage = useCallback((stage: SetupStage | 'moment2-opening') => {
+  const applyStage = useCallback((stage: SetupStage | 'moment2-opening' | 'moment3-opening') => {
     setShowSetup(stage === 'opening');
     setShowMoment1(stage === 'moment1');
     // [[GTC-367]]: the strip can open Moment 2's opening too, so it is one of the stages here.
@@ -528,6 +536,8 @@ function EventSetupFlow() {
     setShowMoment2Step2Skeleton(false);
     setShowMoment2PlanView(stage === 'plan');
     setShowMoment3(stage === 'moment3');
+    // [[GTC-399]] item 2: Moment 3's opening page, one of the stages here too, so only one shows.
+    setShowMoment3Opening(stage === 'moment3-opening');
   }, []);
 
   useEffect(() => {
@@ -1356,6 +1366,23 @@ function EventSetupFlow() {
     );
   }
 
+  if (showMoment3Opening && event && moment3Data) {
+    return (
+      <Moment3Opening
+        onStart={() => applyStage('moment3')}
+        onBack={async () => {
+          // "← Back to the plan", as the working screen's own: her approval stays.
+          await loadItems();
+          setMoment2PlanCategories(await loadMoment2PlanCategories());
+          setMoment3Data(null);
+          applyStage('plan');
+        }}
+        details={details}
+        doors={doorsFor(3)}
+      />
+    );
+  }
+
   if (showMoment3 && event && moment3Data) {
     return (
       <>
@@ -1602,7 +1629,9 @@ function EventSetupFlow() {
             await loadItems();
             setMoment3Data(await loadMoment3Data());
             setMoment2Plan(null);
-            applyStage('moment3');
+            // [[GTC-399]] item 2 (the founder's ruling): forward from the plan, Moment 3's opening
+            // page first; its one button opens the working screen.
+            applyStage('moment3-opening');
             toast.success('Plan approved.');
           }}
           onBack={() => {

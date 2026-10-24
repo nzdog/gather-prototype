@@ -162,6 +162,8 @@ const SETUP = 'src/app/plan/[eventId]/setup/page.tsx';
 /** The strip's own labels, straight apostrophes, as MomentArc shows them (React escapes '). */
 const TITLE_1 = "Who's coming?";
 const TITLE_2 = "What's the plan?";
+/** [[GTC-399]] item 2: Moment 3's opening page takes the strip's third label the same way. */
+const TITLE_3 = "Who's on what?";
 const esc = (t: string) => t.replace(/'/g, '&#x27;');
 const START_1 = 'Ready to start herding →';
 const START_2 = 'Let’s do this →';
@@ -605,15 +607,17 @@ export const CHECKS = {
       !otherLi.includes(HOST_PILL_HTML)
     );
   },
-  /** O1 — the two titles, the strip's own first two labels, read from MomentArc as it stands. */
+  /** O1 — the titles, the strip's own first three labels (GTC-399 item 2), read from MomentArc as it stands. */
   titlesMatchArc(titles: string, arc: string) {
     const label = (n: number) =>
       arc.match(new RegExp(`number:\\s*${n},\\s*label:\\s*"([^"]*)"`))?.[1];
     return (
       label(1) === TITLE_1 &&
       label(2) === TITLE_2 &&
+      label(3) === TITLE_3 &&
       titles.includes(`1: "${label(1)}"`) &&
-      titles.includes(`2: "${label(2)}"`)
+      titles.includes(`2: "${label(2)}"`) &&
+      titles.includes(`3: "${label(3)}"`)
     );
   },
   /** O3, O4 — an opening page: the big title, the two paragraphs, one primary button, nothing else. */
@@ -1304,10 +1308,11 @@ async function layerO() {
 
   assert(
     'O',
-    'O1 the two titles are the strip’s own first two labels, read from MomentArc.tsx as it stands',
+    'O1 the titles are the strip’s own first three labels (the third for Moment 3’s opening, GTC-399 item 2), read from MomentArc.tsx as it stands',
     CHECKS.titlesMatchArc(read(TITLES_FILE), read(ARC_FILE)) &&
       OT?.OPENING_TITLES?.[1] === TITLE_1 &&
-      OT?.OPENING_TITLES?.[2] === TITLE_2
+      OT?.OPENING_TITLES?.[2] === TITLE_2 &&
+      OT?.OPENING_TITLES?.[3] === TITLE_3
   );
   assert(
     'O',

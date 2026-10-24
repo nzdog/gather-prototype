@@ -35,6 +35,7 @@ import SetupOpeningScreen from '../src/components/plan/SetupOpeningScreen';
 import Moment2Opening from '../src/components/plan/Moment2Opening';
 import Moment2PlanView from '../src/components/plan/Moment2PlanView';
 import Moment3AssignView from '../src/components/plan/Moment3AssignView';
+import Moment3Opening from '../src/components/plan/Moment3Opening';
 
 installProviderTrap();
 
@@ -602,12 +603,25 @@ async function main() {
     },
   ]);
   const sentenceAt = (h: string) => h.indexOf('Now. Who&#x27;s on what.');
+  // [[GTC-399]] item 2 (the founder's ruling, 24 Oct 2026): the pair is on Moment 3's opening page,
+  // before its button; the working screen, a job still unassigned, does not repeat it.
+  const m3Opening = renderToStaticMarkup(
+    createElement(Moment3Opening as any, { onStart: () => {}, onBack: () => {}, doors: {} })
+  );
   assert(
     'R',
-    'R6 Moment 3, a job still unassigned: "When it’s done" directly under "What this does", always (ruling 6), before "Now. Who’s on what."',
-    m3Open.includes(pair(3)) &&
-      sentenceAt(m3Open) > m3Open.indexOf(M[3].done) &&
-      m3Open.indexOf(M[3].done) > 0
+    'R6 Moment 3: "When it’s done" directly under "What this does", always (ruling 6), once each, on its opening page before its button (GTC-399 item 2); the working screen, a job still unassigned, has "Now. Who’s on what." and neither',
+    m3Opening.includes(pair(3)) &&
+      m3Opening.split('data-moment-words="3-does"').length === 2 &&
+      m3Opening.split('data-moment-words="3-done"').length === 2 &&
+      m3Opening.indexOf(M[3].done) > 0 &&
+      m3Opening.indexOf('>Let’s do this →</button>') > m3Opening.indexOf(M[3].done) &&
+      sentenceAt(m3Open) > 0 &&
+      !m3Open.includes('data-moment-words') &&
+      !m3Open.includes(M[3].does) &&
+      !m3Open.includes(M[3].done) &&
+      !m3Open.includes(DOES) &&
+      !m3Open.includes(DONE)
   );
   const m3Src = read('src/components/plan/Moment3AssignView.tsx');
   const panelAt = m3Src.indexOf('The completion panel');

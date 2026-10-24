@@ -667,14 +667,17 @@ export const CHECKS = {
     const back = html.indexOf('>← Back to “What’s the plan?”</button>');
     const name = html.indexOf('data-event-details-button');
     const strip = html.indexOf('data-moment-strip');
-    const does = html.indexOf('data-moment-words="3-does"');
+    // [[GTC-399]] item 2: the working screen no longer draws Moment 3's two lead-in blocks (they
+    // are on its opening page), so the first thing after the strip is the heading.
+    const heading = html.indexOf('Now. Who&#x27;s on what.');
     const m = html.slice(line).match(/^<p data-drop-off-line="" class="([^"]*)">([^<]*)<\/p>/);
     return (
       back > 0 &&
       line > back &&
       name > line &&
       strip > name &&
-      does > strip &&
+      heading > strip &&
+      !html.includes('data-moment-words') &&
       !!m &&
       m[2] === words &&
       !/\bm[tby]-|\bmy-|\bp[tby]-/.test(m[1]) &&

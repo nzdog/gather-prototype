@@ -748,12 +748,17 @@ async function main() {
       'F1 the setup page has the moment3 stage and renders the view',
       sourcesExist && page.includes("'moment3'") && /<Moment3AssignView[\s>]/.test(page)
     );
+    // [[GTC-399]] item 2 (the founder's ruling, 24 Oct 2026: "Only when moving forward from the
+    // plan"): approving now opens Moment 3's opening page, whose one button opens the working screen.
+    const approved = page.match(
+      /onApprove=\{async \(\) => \{[\s\S]{0,1500}?planApproved: true([\s\S]{0,900}?)applyStage\('moment3-opening'\)/
+    );
     assert(
-      'F2 onApprove posts planApproved then opens Moment 3, with no button between',
+      'F2 onApprove posts planApproved then opens Moment 3’s opening page (GTC-399 item 2), with no stage between; its one button opens the working screen',
       sourcesExist &&
-        /onApprove=\{async \(\) => \{[\s\S]{0,1500}?planApproved: true[\s\S]{0,800}?applyStage\('moment3'\)/.test(
-          page
-        )
+        !!approved &&
+        !approved[1].includes('applyStage(') &&
+        /<Moment3Opening\b[\s\S]{0,300}?onStart=\{\(\) => applyStage\('moment3'\)\}/.test(page)
     );
     assert(
       'F3 the view never toasts on success and never calls confirm',

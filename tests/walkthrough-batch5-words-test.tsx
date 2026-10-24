@@ -39,6 +39,7 @@ import { openHeadless, type Headless } from './helpers/headless';
 import { ToastProvider } from '../src/contexts/ToastContext';
 import SetupOpeningScreen from '../src/components/plan/SetupOpeningScreen';
 import Moment1Summary from '../src/components/plan/Moment1Summary';
+import Moment3Opening from '../src/components/plan/Moment3Opening';
 import Moment1InputForm from '../src/components/plan/Moment1InputForm';
 import Moment2Opening from '../src/components/plan/Moment2Opening';
 import Moment2PlanView from '../src/components/plan/Moment2PlanView';
@@ -573,15 +574,33 @@ async function runInMemory() {
     )
   );
   const m3At = m3.indexOf(M3_SENTENCE.replace(/'/g, '&#x27;'));
+  // [[GTC-399]] item 2 (the founder's ruling, 24 Oct 2026): Moment 3's two lines are on its opening
+  // page now, the working screen does not repeat them.
+  const m3Opening = render(
+    createElement(Moment3Opening as any, {
+      onStart: () => {},
+      onBack: () => {},
+      details: FACTS,
+      doors: {},
+    })
+  );
+  const m3Start = m3Opening.indexOf('>Let’s do this →</button>');
   assert(
     'R',
-    'R10 Moment 3: W10, "What this does" with Moment 3’s line, "When it’s done" directly under it (GTC-378), before "Now. Who’s on what."',
-    !!nameButton(m3) &&
+    'R10 Moment 3: W10, "What this does" with Moment 3’s line, "When it’s done" directly under it (GTC-378), on its opening page before its button (GTC-399 item 2); its working screen has W10 and "Now. Who’s on what." and neither line',
+    !!nameButton(m3Opening) &&
+      m3Opening.includes(`>${W15_DOES}</p>`) &&
+      m3Opening.indexOf(M[3].does) > 0 &&
+      m3Opening.includes(`${M[3].does}</p></div><div data-moment-words="3-done"`) &&
+      m3Opening.indexOf(M[3].done) > 0 &&
+      m3Start > m3Opening.indexOf(M[3].done) &&
+      !!nameButton(m3) &&
       m3At > 0 &&
-      m3.indexOf(M[3].does) > 0 &&
-      m3.includes(`${M[3].does}</p></div><div data-moment-words="3-done"`) &&
-      m3.indexOf(M[3].done) > 0 &&
-      m3.indexOf(M[3].done) < m3At
+      !m3.includes('data-moment-words') &&
+      !m3.includes(M[3].does) &&
+      !m3.includes(M[3].done) &&
+      !m3.includes(W15_DOES) &&
+      !m3.includes(W15_DONE)
   );
   const after = await load('../src/components/preflight/AfterThePress');
   const chaseProps = {
@@ -1231,16 +1250,42 @@ async function runLive() {
     const givenTop = await topDone();
     await tap(`document.querySelector('[data-m3="all-sorted"]')`, 600);
     const givenPanel = await panelWords();
+    // [[GTC-399]] item 2 (the founder's ruling, 24 Oct 2026): the line is on Moment 3's OPENING page,
+    // which shows on the way forward from the plan; the working screen does not repeat it. Reached
+    // here from the working screen: "← Back to the plan", then "Plan looks good →" (the fixture is
+    // approved already, so the route keeps its stamp), then "Let’s do this →".
+    await c.navigate(setupOf(evM3.id), 8000);
+    await tap(link('← Back to the plan'), 2500);
+    const backOnPlan = (await body()).includes('Plan looks good →');
+    await tap(link('Plan looks good →'), 1500);
+    let openingDone = '';
+    for (let i = 0; i < 40 && !openingDone; i++) {
+      openingDone = await ev<string>(
+        `document.querySelector('[data-moment3-opening] [data-moment-words="3-done"]')?.textContent ?? ''`
+      );
+      if (!openingDone) await sleep(250);
+    }
+    const openingPair = await ev<boolean>(
+      `(() => { const d = document.querySelector('[data-moment3-opening] [data-moment-words="3-does"]'); return !!d && d.textContent.includes(${JSON.stringify(M[3].does)}) && d.nextElementSibling?.getAttribute('data-moment-words') === '3-done'; })()`
+    );
+    await tap(link('Let’s do this →'), 1500);
+    const working = await ev<boolean>(
+      `!document.querySelector('[data-moment3-opening]') && document.body.innerText.includes(${JSON.stringify(M3_SENTENCE)}) && !document.querySelector('[data-moment-words]')`
+    );
     assert(
       'C',
-      'C8 Moment 3’s line is at the top whether or not a job is unassigned, and never in the panel after "All sorted →" (GTC-378)',
+      'C8 Moment 3’s line is on its opening page, "When it’s done" directly under "What this does", reached forward from the plan (GTC-399 item 2); the working screen has neither whether or not a job is unassigned, and it is never in the panel after "All sorted →" (GTC-378)',
       unassignedPanel.length > 0 &&
         givenPanel.length > 0 &&
-        unassignedTop.includes(M[3].done) &&
-        givenTop.includes(M[3].done) &&
+        unassignedTop === '' &&
+        givenTop === '' &&
         !unassignedPanel.includes(M[3].done) &&
-        !givenPanel.includes(M[3].done),
-      `${unassignedTop.slice(0, 40)} | ${givenTop.slice(0, 40)} | ${givenPanel.slice(0, 120)}`
+        !givenPanel.includes(M[3].done) &&
+        backOnPlan &&
+        openingDone.includes(M[3].done) &&
+        openingPair &&
+        working,
+      `${JSON.stringify(unassignedTop.slice(0, 40))} | ${JSON.stringify(givenTop.slice(0, 40))} | plan ${backOnPlan} | opening ${openingDone.slice(0, 40)} pair ${openingPair} | working ${working} | ${givenPanel.slice(0, 120)}`
     );
 
     // ── C9 — the board's "What this does": closed on every visit, opens on a tap ──

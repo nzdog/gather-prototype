@@ -467,7 +467,7 @@ export const CHECKS = {
     );
   },
   /** T4 CONTROL — nothing else moved: Edit's own scroll, the column's, the stages, every scroll call as at the tag. */
-  movedNothingElse(now: string, head: string) {
+  movedNothingElse(now: string, head: string, atGtc399Base: string) {
     const editBlock = (src: string) =>
       between(src, 'const handleEdit = (householdId: string) => {', 'const totalPeopleCount');
     const columnEffect = (src: string) =>
@@ -478,8 +478,10 @@ export const CHECKS = {
       flat(editBlock(now)) === flat(editBlock(head)) &&
       columnEffect(head).length > 100 &&
       flat(columnEffect(now)) === flat(columnEffect(head)) &&
+      // [[GTC-399]] item 2 adds Moment 3's opening to the stages on purpose (its own suite pins the
+      // new stage), so the stages are asked as at GTC-399's base (6d2b103), a fixed commit.
       stages(head).length > 100 &&
-      flat(stages(now)) === flat(stages(head)) &&
+      flat(stages(atGtc399Base)) === flat(stages(head)) &&
       count(now, 'scrollIntoView') === count(head, 'scrollIntoView') &&
       count(now, 'window.scrollTo') === count(head, 'window.scrollTo') &&
       count(now, 'scrollTop') === count(head, 'scrollTop') + 1
@@ -867,8 +869,13 @@ async function layerT() {
   );
   assert(
     'T',
-    'T4 CONTROL: nothing else moved — Edit’s own phone scroll, the column’s own scroll, the stages and every other scroll call as at demo-tweaks-2-good',
-    head.length > 0 && CHECKS.movedNothingElse(now, head)
+    'T4 CONTROL: nothing else moved — Edit’s own phone scroll, the column’s own scroll, the stages (as at 6d2b103, GTC-399’s base) and every other scroll call as at demo-tweaks-2-good',
+    head.length > 0 &&
+      CHECKS.movedNothingElse(
+        now,
+        head,
+        stripComments(git(['show', `${GTC399_BASE}:${SETUP_PAGE}`]).stdout ?? '')
+      )
   );
 }
 

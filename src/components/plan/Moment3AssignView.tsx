@@ -30,7 +30,6 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import MomentArc, { type ArcDoor } from './MomentArc';
-import MomentWords from './MomentWords';
 import EventDetails, { type EventDetailsFacts } from '@/components/shared/EventDetails';
 import type { PendingChange } from '@/lib/ledger';
 import type { SerialisedEvent } from '@/lib/lifecycle';
@@ -551,11 +550,8 @@ export default function Moment3AssignView({
           />
         </div>
 
-        {/* [[GTC-368]] (item 5, Q10's A): where Moment 3 starts. [[GTC-378]] (item 45, ruling 6):
-            "When it’s done" moved here from the panel after "All sorted →", directly under it, and
-            always shown (GTC-368's Q9 condition lifted). */}
-        <MomentWords moment={3} part="does" className="mb-3" />
-        <MomentWords moment={3} part="done" className="mb-3" />
+        {/* [[GTC-399]] item 2 (the founder's ruling, 24 Oct 2026: "Remove them from the working
+            screen"): Moment 3's two lead-in blocks are on its opening page now, not repeated here. */}
         {/* [[GTC-398]] item 3 (founder, 23 Oct 2026: "Instructions for how to assign people to
             dishes"): how to give dishes, with the heading and above the two lists, whenever there
             is something to give (not on "No plan items yet."). Under the heading on a phone; beside

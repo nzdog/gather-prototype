@@ -9,6 +9,11 @@
  *      opening (current 1), Moment 2's opening (current 2, Moment 1 done) and Moment 1's summary
  *      (current 1); the same MomentArc and the doors the setup page builds, under the top row and
  *      above the title; the titles, words, buttons and links as they were.
+ *   M  item 2: Moment 3's opening page, built like Moment 2's: "Who's on what?" big (the strip's own
+ *      label), "What this does" and "When it’s done", one "Let’s do this →" (Moment 2's characters
+ *      and classes), the strip (current 3, 1 and 2 done), "← Your events", the event's details and
+ *      "← Back to the plan"; shown only after the plan screen's own forward button, a screen state
+ *      stored nowhere; every other way in opens the working screen, which loses its two blocks.
  *   U  CONTROL: the files this batch must not touch are not edited since demo-tweaks-4-good;
  *      package.json (read at the commit that added this suite) differs by one script line; the
  *      lockfile there is the tag's; the two untracked scripts are in no commit.
@@ -26,6 +31,11 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import SetupOpeningScreen from '../src/components/plan/SetupOpeningScreen';
 import Moment2Opening from '../src/components/plan/Moment2Opening';
 import Moment1Summary from '../src/components/plan/Moment1Summary';
+import Moment3Opening from '../src/components/plan/Moment3Opening';
+// Moment 3 and the toast provider imported statically, as the Moment 3 suites do (a dynamic
+// import() would give the view a second toast context).
+import { ToastProvider } from '../src/contexts/ToastContext';
+import Moment3AssignView from '../src/components/plan/Moment3AssignView';
 
 const ROOT = path.join(__dirname, '..');
 
@@ -93,6 +103,11 @@ function elementOf(src: string, name: string): string {
   }
   return '';
 }
+const between = (src: string, from: string, to: string) => {
+  const a = src.indexOf(from);
+  const b = a >= 0 ? src.indexOf(to, a + from.length) : -1;
+  return a >= 0 && b > a ? src.slice(a, b) : '';
+};
 /** A file's code lines (comments stripped, trimmed, blank lines dropped), for a line-set diff. */
 const codeLines = (src: string) =>
   stripComments(src)
@@ -118,6 +133,20 @@ const OPENING_1 = 'src/components/plan/SetupOpeningScreen.tsx';
 const OPENING_2 = 'src/components/plan/Moment2Opening.tsx';
 const SUMMARY = 'src/components/plan/Moment1Summary.tsx';
 const ARC_FILE = 'src/components/plan/MomentArc.tsx';
+const OPENING_3 = 'src/components/plan/Moment3Opening.tsx';
+const M3_VIEW = 'src/components/plan/Moment3AssignView.tsx';
+const TITLES_FILE = 'src/lib/moments/opening-titles.ts';
+/** Moment 3's two lines and the founder's two labels, typed by hand (GTC-368's words). */
+const M3_DOES =
+  'Puts a name next to every job. You decide who’s on what, and I keep track of it all.';
+const M3_DONE =
+  'Every job has an owner, and you’re not carrying the plan anymore. I’ll ask each person and follow up, so you don’t have to.';
+const DOES_HEAD = 'What this does';
+const DONE_HEAD = 'When it’s done';
+const BACK_TO_PLAN = '← Back to the plan';
+const M3_SENTENCE_HTML = 'Now. Who&#x27;s on what.';
+/** Moment 2's opening button, as its source writes it. */
+const START_SRC = 'Let&rsquo;s do this &rarr;';
 const SUITE = 'tests/demo-tweaks-5-test.tsx';
 const NEW_SCRIPT = 'test:demo-tweaks-5';
 const NEW_SCRIPT_VALUE = 'tsx --tsconfig tests/tsconfig.json tests/demo-tweaks-5-test.tsx';
@@ -196,6 +225,15 @@ const ITEM1_ADDED: Record<string, RegExp[]> = {
 };
 
 // ── CHECKS-START: every condition, pure, dry-run before the gate ─────────────
+/** The className of the one `<button>` whose children are `words`, in a source file. */
+function buttonClassFor(src: string, words: string): string[] {
+  const out: string[] = [];
+  const re = /<button\b([\s\S]*?)>\s*([^<]*?)\s*<\/button>/g;
+  for (let m = re.exec(src); m; m = re.exec(src)) {
+    if (m[2] === words) out.push(m[1].match(/className="([^"]*)"/)?.[1] ?? '');
+  }
+  return out;
+}
 export const CHECKS = {
   // ── Item 1 ──
   /**
@@ -299,6 +337,130 @@ export const CHECKS = {
       gone.join('\n') === lost.join('\n') &&
       fresh.length > 0 &&
       fresh.every((l) => added.some((re) => re.test(l)))
+    );
+  },
+
+  // ── Item 2 ──
+  /** M1 — OPENING_TITLES[3] is the strip's own third label, read from MomentArc as it stands. */
+  thirdTitle(titles: any, arc: string) {
+    const label = arc.match(/number:\s*3,\s*label:\s*"([^"]*)"/)?.[1];
+    return label === "Who's on what?" && titles?.[3] === label && titles?.[1] && titles?.[2];
+  },
+  /** M2 — the opening page, rendered: its overlay, the strip, the title, the two blocks, the one button, the way back. */
+  openingThree(html: string) {
+    const h1 = html.match(/<h1 class="([^"]*)">([^<]*)<\/h1>/);
+    const does = html.indexOf('data-moment-words="3-does"');
+    const done = html.indexOf('data-moment-words="3-done"');
+    const start = html.indexOf('>Let’s do this →</button>');
+    const back = html.indexOf(`>${BACK_TO_PLAN}</button>`);
+    const primary = html.match(/<button[^>]*class="[^"]*\bbg-accent\b[^"]*"[^>]*>/g) ?? [];
+    const arcEnd = html.indexOf('<h1');
+    const outsideStrip = html.slice(arcEnd);
+    return (
+      html.startsWith(
+        '<div data-moment3-opening="" class="fixed inset-0 top-[65px] z-50 bg-white overflow-y-auto">'
+      ) &&
+      !!h1 &&
+      h1[1] === 'text-4xl sm:text-5xl font-semibold text-gray-900 text-center' &&
+      h1[2] === LABELS[3] &&
+      does > html.indexOf('<h1') &&
+      done > does &&
+      html.includes(`${M3_DOES}</p></div><div data-moment-words="3-done"`) &&
+      html.includes(`>${DOES_HEAD}</p>`) &&
+      html.includes(`>${DONE_HEAD}</p>`) &&
+      html.includes(M3_DONE) &&
+      count(html, 'data-moment-words="3-does"') === 1 &&
+      count(html, 'data-moment-words="3-done"') === 1 &&
+      start > done &&
+      back > start &&
+      primary.length === 1 &&
+      (outsideStrip.match(/<button\b/g) ?? []).length === 2
+    );
+  },
+  /** M3 — the button: Moment 2's characters, and Moment 2's classes, once in each file. */
+  sameButton(three: string, two: string) {
+    const a = buttonClassFor(three, START_SRC);
+    const b = buttonClassFor(two, START_SRC);
+    return a.length === 1 && b.length === 1 && a[0] === b[0] && a[0].includes('bg-accent');
+  },
+  /** M4 — the opening's code: the words from their files, no request, no storage, no router. */
+  openingCode(src: string) {
+    return (
+      src.includes('{OPENING_TITLES[3]}') &&
+      src.includes('<MomentWords moment={3} part="does"') &&
+      src.includes('<MomentWords moment={3} part="done"') &&
+      src.includes('{M3_WORDS.BACK_TO_PLAN}') &&
+      src.includes('{STRIP_WORDS.YOUR_EVENTS}') &&
+      /<MomentArc currentMoment=\{3\} completedMoments=\{\[1, 2\]\} doors=\{doors\} \/>/.test(
+        src
+      ) &&
+      count(src, START_SRC) === 1 &&
+      !/\bfetch\(|localStorage|sessionStorage|useRouter|router\.|document\.cookie|useEffect/.test(
+        src
+      ) &&
+      !src.includes('EventDropOffLine')
+    );
+  },
+  /**
+   * M5 — the setup page: one new screen state, set only by applyStage; only the plan view's own
+   * forward button (its onApprove, after the approval is stored) asks for it; the opening's button
+   * opens the working screen; every other way to Moment 3 still asks for 'moment3'.
+   */
+  setupStage(src: string, approveEl: string) {
+    const approve =
+      approveEl.match(/onApprove=\{async \(\) => \{([\s\S]*?)\n {10}\}\}\s*onBack=/)?.[1] ?? '';
+    const opening = elementOf(src, 'Moment3Opening');
+    return (
+      count(src, 'const [showMoment3Opening, setShowMoment3Opening] = useState(false);') === 1 &&
+      count(src, 'setShowMoment3Opening(') === 1 &&
+      /setShowMoment3\(stage === 'moment3'\);\s*setShowMoment3Opening\(stage === 'moment3-opening'\);/.test(
+        src
+      ) &&
+      count(src, "'moment3-opening'") === 3 &&
+      count(src, "applyStage('moment3-opening')") === 1 &&
+      approve.indexOf('planApproved: true') > 0 &&
+      approve.indexOf("applyStage('moment3-opening')") > approve.indexOf('planApproved: true') &&
+      !approve.includes("applyStage('moment3')") &&
+      count(src, '<Moment3Opening') === 1 &&
+      /onStart=\{\(\) => applyStage\('moment3'\)\}/.test(opening) &&
+      /\bdoors=\{doorsFor\(3\)\}/.test(opening) &&
+      /\bdetails=\{details\}/.test(opening) &&
+      count(src, 'if (showMoment3Opening && event && moment3Data) {') === 1 &&
+      src.indexOf('if (showMoment3Opening && event && moment3Data) {') <
+        src.indexOf('if (showMoment3 && event && moment3Data) {') &&
+      // the other ways in, unchanged: the strip's door, her own list on an approved event, and the
+      // opening's own button; the page load and a brought-back plan apply the entry rule's stage
+      count(src, "applyStage('moment3')") === 3 &&
+      count(src, "if (stage === 'moment3') {") === 1 &&
+      !/showMoment3Opening|moment3-opening/.test(
+        between(src, 'const goToMoment = async', 'const doorsFor')
+      )
+    );
+  },
+  /** M6 — the working screen, rendered: no Moment words; its strip, its heading, its line and its counter kept. */
+  workingScreen(html: string) {
+    const strip = html.indexOf('data-moment-strip');
+    const heading = html.indexOf(M3_SENTENCE_HTML);
+    return (
+      strip > 0 &&
+      heading > strip &&
+      !html.includes('data-moment-words') &&
+      !html.includes(DOES_HEAD) &&
+      !html.includes(DONE_HEAD) &&
+      !html.includes(M3_DOES) &&
+      !html.includes(M3_DONE) &&
+      html.includes('data-m3="assign-how"') &&
+      html.includes('items assigned.')
+    );
+  },
+  /** M7 CONTROL — a file's code against the base: it loses exactly `lost`, and gains only lines in `added`. */
+  onlyThese(now: string, base: string, lost: string[], added: string[]) {
+    const n = codeLines(now);
+    const b = codeLines(base);
+    return (
+      b.length > 20 &&
+      linesNotIn(b, n).join('\n') === lost.join('\n') &&
+      linesNotIn(n, b).every((l) => added.includes(l))
     );
   },
 
@@ -437,6 +599,115 @@ async function layerB() {
   );
 }
 
+// ══ Item 2 ═══════════════════════════════════════════════════════════════════
+/** Moment 3's working screen, rendered with a hand-written plan: one dish held, two not. */
+const drawM3 = () =>
+  render(
+    createElement(
+      ToastProvider as any,
+      null,
+      createElement(Moment3AssignView as any, {
+        eventId: 'e1',
+        event: { id: 'e1', status: 'DRAFT', sentAt: null },
+        hostPersonId: 'p-kate',
+        headcount: 3,
+        categories: [
+          {
+            id: 'c1',
+            name: 'Mains',
+            emoji: '🍖',
+            items: [
+              { id: 'i-lamb', name: 'Roast lamb', kind: 'ITEM', detail: '' },
+              { id: 'i-bread', name: 'Bread rolls', kind: 'ITEM', detail: '' },
+              { id: 'i-pav', name: 'Pavlova', kind: 'ITEM', detail: '' },
+            ],
+          },
+        ],
+        initialHolders: { 'i-lamb': { personId: 'p-ross', name: 'Ross Lowe' } },
+        households: [],
+        askForReason: async () => ({ proceed: true }),
+        askForBatchReason: async () => ({ proceed: true }),
+        onBack: () => {},
+        onMoveOn: () => {},
+        stripDoors: {},
+      })
+    )
+  );
+/** What the view may lose against the base at item 2 (exactly), and what items 2 and 3 may add. */
+const M3_VIEW_LOST = [
+  "import MomentWords from './MomentWords';",
+  '<MomentWords moment={3} part="does" className="mb-3" />',
+  '<MomentWords moment={3} part="done" className="mb-3" />',
+];
+const M3_VIEW_ADDED = ['else window.scrollTo(0, 0);'];
+
+async function layerM() {
+  section('M — item 2: Moment 3’s opening page');
+  const OT = (await import('../src/lib/moments/opening-titles').catch(() => null)) as any;
+  assert(
+    'M',
+    'M1 OPENING_TITLES[3] is "Who’s on what?", the strip’s own third label read from MomentArc.tsx, with its straight apostrophe; 1 and 2 kept',
+    !!CHECKS.thirdTitle(OT?.OPENING_TITLES, read(ARC_FILE)),
+    JSON.stringify(OT?.OPENING_TITLES)
+  );
+  const opening = render(
+    createElement(Moment3Opening as any, {
+      onStart: () => {},
+      onBack: () => {},
+      doors: doorsWith([1, 2], 3),
+    })
+  );
+  assert(
+    'M',
+    'M2 the page: its own overlay; "← Your events", then the strip (current 3, Moments 1 and 2 ticked) above the big title "Who’s on what?"; "What this does" then "When it’s done" directly under it with Moment 3’s lines; one filled "Let’s do this →"; then "← Back to the plan"; no other button',
+    CHECKS.stripOnPage(opening, 3, [1, 2], true) && CHECKS.openingThree(opening),
+    opening.slice(0, 1200)
+  );
+  assert(
+    'M',
+    'M3 its button is Moment 2’s: the same characters (Let&rsquo;s do this &rarr;) and the same classes, once in each file',
+    CHECKS.sameButton(read(OPENING_3), read(OPENING_2))
+  );
+  assert(
+    'M',
+    'M4 its code takes every word from its own file (the title, MomentWords, M3_WORDS.BACK_TO_PLAN, STRIP_WORDS), draws the one strip with its props, and makes no request, stores nothing, reads no router',
+    CHECKS.openingCode(code(OPENING_3))
+  );
+  const setup = code(SETUP);
+  assert(
+    'M',
+    'M5 the setup page: one screen state (useState, set only in applyStage), asked for only by the plan view’s own forward button after the approval is stored; the opening’s button opens the working screen; the strip’s door, her own list and the page load open the working screen as before',
+    CHECKS.setupStage(setup, elementOf(setup, 'Moment2PlanView'))
+  );
+  assert(
+    'M',
+    'M6 the working screen draws neither block (no Moment words, neither heading, neither line); its strip, "Now. Who’s on what.", the assign line and the counter kept',
+    CHECKS.workingScreen(drawM3()),
+    drawM3().slice(0, 600)
+  );
+  assert(
+    'M',
+    'M7 CONTROL: the working screen’s code as at the base (6d2b103) but the two MomentWords lines and their import (and item 3’s one jump)',
+    CHECKS.onlyThese(read(M3_VIEW), atRef(BASE, M3_VIEW), M3_VIEW_LOST, M3_VIEW_ADDED)
+  );
+  assert(
+    'M',
+    'M8 CONTROL: the titles file differs from the base only by the third title (the first two and its export as they were)',
+    CHECKS.onlyThese(
+      read(TITLES_FILE),
+      atRef(BASE, TITLES_FILE),
+      ['export const OPENING_TITLES = { 1: "Who\'s coming?", 2: "What\'s the plan?" } as const;'],
+      [
+        'export const OPENING_TITLES = {',
+        '1: "Who\'s coming?",',
+        '2: "What\'s the plan?",',
+        '3: "Who\'s on what?",',
+        '} as const;',
+      ]
+    )
+  );
+}
+
 // ══ CONTROL ══════════════════════════════════════════════════════════════════
 async function layerU() {
   section('U — CONTROL: what this batch must not touch');
@@ -474,6 +745,7 @@ async function layerU() {
 
 async function main() {
   await layerB();
+  await layerM();
   await layerU();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {

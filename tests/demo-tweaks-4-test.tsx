@@ -42,6 +42,7 @@ import Moment2Opening from '../src/components/plan/Moment2Opening';
 import { ToastProvider } from '../src/contexts/ToastContext';
 import Moment2PlanView from '../src/components/plan/Moment2PlanView';
 import Moment3AssignView from '../src/components/plan/Moment3AssignView';
+import Moment3Opening from '../src/components/plan/Moment3Opening';
 
 const ROOT = path.join(__dirname, '..');
 
@@ -446,18 +447,38 @@ export const CHECKS = {
       !plan.includes(done)
     );
   },
-  /** L4 — Moment 3 keeps its own: "does" then "done" directly under it, before its heading. */
-  momentThreeKeeps(html: string) {
-    const does = html.indexOf('data-moment-words="3-does"');
-    const done = html.indexOf('data-moment-words="3-done"');
+  /**
+   * L4 — Moment 3 keeps its own "does" then "done" directly under it, once each: since GTC-399 item 2
+   * (the founder's ruling, 24 Oct 2026) on its OPENING page, after its title; its working screen
+   * draws neither (no Moment words), its heading straight after the strip.
+   */
+  momentThreeKeeps(html: string, opening: string) {
+    const does = opening.indexOf('data-moment-words="3-does"');
+    const done = opening.indexOf('data-moment-words="3-done"');
+    const title = opening.indexOf('<h1');
+    const doesWords = wordsOf(opening, '3-does');
+    const doneWords = wordsOf(opening, '3-done');
     const h1 = html.indexOf(M3_SENTENCE_HTML);
     return (
-      does > 0 &&
+      title > 0 &&
+      opening.includes('>Who&#x27;s on what?</h1>') &&
+      does > title &&
       done > does &&
-      h1 > done &&
-      count(html, 'data-moment-words="3-does"') === 1 &&
-      count(html, 'data-moment-words="3-done"') === 1 &&
-      /<\/p><\/div><div data-moment-words="3-done"/.test(html)
+      count(opening, 'data-moment-words="3-does"') === 1 &&
+      count(opening, 'data-moment-words="3-done"') === 1 &&
+      /<\/p><\/div><div data-moment-words="3-done"/.test(opening) &&
+      opening.includes(`>${DOES_HEAD}</p>`) &&
+      opening.includes(`>${DONE_HEAD}</p>`) &&
+      doesWords.length > 20 &&
+      doneWords.length > 20 &&
+      doesWords !== doneWords &&
+      h1 > html.indexOf('data-moment-strip') &&
+      html.indexOf('data-moment-strip') >= 0 &&
+      !html.includes('data-moment-words') &&
+      !html.includes(DOES_HEAD) &&
+      !html.includes(DONE_HEAD) &&
+      !html.includes(doesWords) &&
+      !html.includes(doneWords)
     );
   },
   /** L5 — the plan view's code: no MomentWords at all; the heading onwards and the top as at the base. */
@@ -841,8 +862,13 @@ async function layerL() {
   );
   assert(
     'L',
-    'L4 Moment 3 keeps its own "What this does" and "When it’s done", before "Now. Who’s on what."',
-    CHECKS.momentThreeKeeps(drawM3({}))
+    'L4 Moment 3 keeps its own "What this does" and "When it’s done", once each, "done" under "does": on its opening page since GTC-399 item 2; its working screen draws neither, "Now. Who’s on what." straight after the strip',
+    CHECKS.momentThreeKeeps(
+      drawM3({}),
+      render(
+        createElement(Moment3Opening as any, { onStart: () => {}, onBack: () => {}, doors: {} })
+      )
+    )
   );
   assert(
     'L',
