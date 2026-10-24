@@ -41,6 +41,27 @@ export async function PATCH(
 
   const body = await request.json();
 
+  // [[GTC-403]] — a day sent must be a day of the event this link opens, before anything is built
+  // or written. Clearing the day (empty or null) is not checked, nor is the dish's own current day,
+  // so an old dish whose day is already off this event can still be edited.
+  if (
+    body.dayId !== undefined &&
+    body.dayId !== null &&
+    body.dayId !== '' &&
+    body.dayId !== item.dayId
+  ) {
+    const dayOnThisEvent =
+      typeof body.dayId === 'string'
+        ? await prisma.day.findFirst({
+            where: { id: body.dayId, eventId: resolvedContext.event.id },
+            select: { id: true },
+          })
+        : null;
+    if (!dayOnThisEvent) {
+      return NextResponse.json({ error: 'That day is not on this event' }, { status: 400 });
+    }
+  }
+
   // GTC-302: a submitted name is tidied (`itemNameForStorage`), and a blank one refused rather than
   // stored. A request that sends no name leaves the stored one exactly as it is — GTC-302 Unknown 5
   // leaves the stored rows alone, so nothing here tidies a name nobody sent.

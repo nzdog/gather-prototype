@@ -3448,6 +3448,7 @@ async function testSuite18_LinkRoutesStayInTheirEvent(fixtures: Fixtures) {
 
 const GTC403_TAG = 'GTC-403 suite 19';
 const GTC403_ASSIGNMENT_NOT_FOUND = 'Assignment not found';
+const GTC403_DAY_NOT_ON_EVENT = 'That day is not on this event';
 
 async function gtc403RemoveOwnRows() {
   const people = await prisma.person.findMany({
@@ -3716,6 +3717,173 @@ async function testSuite19_AnswerAndDayStayInTheirEvent(fixtures: Fixtures) {
         (await lines()) === linesBefore + 1 && answered && (await outboundCount()) === outbound,
         `lines ${linesBefore} -> ${await lines()}; answered ${answeredBefore} -> ${await answeredLines(evA.id, guest, subject.item.id)}`
       );
+    }
+
+    // ── PART B: the dish's day, on each of the three routes ──────────────────
+    // Part B's own fixture: a day on each event, a coordinator of A's Team A with a link, the
+    // fixtures' host as HOST of A (the host's edit reads her session), and two dishes on A's Team
+    // A with no day.
+    await prisma.eventRole.create({
+      data: { userId: fixtures.user.id, eventId: evA.id, role: 'HOST' },
+    });
+    const dayA = await prisma.day.create({
+      data: { name: `${GTC403_TAG} day of A`, date: evA.startDate, eventId: evA.id },
+    });
+    const dayB = await prisma.day.create({
+      data: { name: `${GTC403_TAG} day of B`, date: evB.startDate, eventId: evB.id },
+    });
+    const coordinator = (
+      await prisma.person.create({ data: { name: `${GTC403_TAG} coordinator of A's Team A` } })
+    ).id;
+    await prisma.team.update({ where: { id: teamA.id }, data: { coordinatorId: coordinator } });
+    await prisma.personEvent.create({
+      data: { personId: coordinator, eventId: evA.id, teamId: teamA.id, role: 'COORDINATOR' },
+    });
+    const coordLinkA = randomBytes(32).toString('hex');
+    await prisma.accessToken.create({
+      data: {
+        token: coordLinkA,
+        scope: 'COORDINATOR',
+        personId: coordinator,
+        eventId: evA.id,
+        teamId: teamA.id,
+        expiresAt,
+      },
+    });
+    const dishFor = (label: string) =>
+      prisma.item.create({
+        data: { name: `${GTC403_TAG} ${label}`, teamId: teamA.id, status: 'UNASSIGNED' },
+      });
+    const hostDish = await dishFor("dish on A's Team A, for the host's edit");
+    const coordDish = await dishFor("dish on A's Team A, for the coordinator's edit");
+    const coordLink = await prisma.accessToken.findUnique({ where: { token: coordLinkA } });
+    const role = await prisma.eventRole.findFirst({
+      where: { userId: fixtures.user.id, eventId: evA.id },
+    });
+    logTest(
+      "fixture: day A is on event A and day B on event B; the coordinator link opens A's Team A; the fixtures' host holds HOST on A; both dishes are on A's Team A with no day",
+      dayA.eventId === evA.id &&
+        dayB.eventId === evB.id &&
+        coordLink?.scope === 'COORDINATOR' &&
+        coordLink.teamId === teamA.id &&
+        role?.role === 'HOST' &&
+        hostDish.dayId === null &&
+        coordDish.dayId === null,
+      JSON.stringify({ coord: coordLink?.scope, role: role?.role })
+    );
+
+    const HOST_COOKIE = fixtures.user.sessionCookie;
+    const rowOf = async (id: string) =>
+      JSON.stringify(await prisma.item.findUnique({ where: { id } }));
+    const hostEdit = (body: unknown) =>
+      send('PATCH', `/api/events/${evA.id}/items/${hostDish.id}`, body, HOST_COOKIE);
+    const coordEdit = (body: unknown) =>
+      send('PATCH', `/api/c/${coordLinkA}/items/${coordDish.id}`, body);
+    for (const [edit, dish, label] of [
+      [hostEdit, hostDish, "PATCH /api/events/:A/items/:dish (the host's edit)"],
+      [coordEdit, coordDish, "PATCH /api/c/:coordLinkOfA/items/:dish (the coordinator's edit)"],
+    ] as const) {
+      // (a) a day of event B
+      {
+        const before = await rowOf(dish.id);
+        const counts = await writeCounts();
+        const r = await edit({ dayId: dayB.id });
+        logTest(
+          `B(a) ${label} with a day of event B — refused 400 "${GTC403_DAY_NOT_ON_EVENT}"`,
+          r.status === 400 && r.json?.error === GTC403_DAY_NOT_ON_EVENT,
+          `got ${r.status} ${JSON.stringify(r.json)}`
+        );
+        logTest(
+          '  ...and the dish is unchanged in the database (the whole row)',
+          (await rowOf(dish.id)) === before,
+          'the dish row changed'
+        );
+        logTest(
+          '  ...and no ledger row was written, and the OutboundMessage count is the same',
+          (await writeCounts()) === counts,
+          `before ${counts}, after ${await writeCounts()}`
+        );
+      }
+      // (b) a day of event A
+      {
+        const outbound = await outboundCount();
+        const r = await edit({ dayId: dayA.id });
+        const after = await prisma.item.findUnique({ where: { id: dish.id } });
+        logTest(
+          `B(b) ${label} with a day of event A — still 200, and the day lands`,
+          r.status === 200 && after?.dayId === dayA.id && (await outboundCount()) === outbound,
+          `got ${r.status} ${JSON.stringify(r.json)}, dayId ${after?.dayId}`
+        );
+      }
+      // (c) the day cleared
+      {
+        const r = await edit({ dayId: null });
+        const after = await prisma.item.findUnique({ where: { id: dish.id } });
+        logTest(
+          `B(c) ${label} clearing the day (null) — still 200, and the dish has no day`,
+          r.status === 200 && after !== null && after.dayId === null,
+          `got ${r.status} ${JSON.stringify(r.json)}, dayId ${after?.dayId}`
+        );
+      }
+      // (d) the dish's own current day, already a day of event B (an old dish)
+      {
+        await prisma.item.update({ where: { id: dish.id }, data: { dayId: dayB.id } });
+        const note = `${GTC403_TAG} own day kept ${randomBytes(3).toString('hex')}`;
+        const r = await edit({ dayId: dayB.id, description: note });
+        const after = await prisma.item.findUnique({ where: { id: dish.id } });
+        logTest(
+          `B(d) ${label} sending the dish's own current day (a day of event B, set before) — still 200, and the edit lands`,
+          r.status === 200 && after?.dayId === dayB.id && after?.description === note,
+          `got ${r.status} ${JSON.stringify(r.json)}, dayId ${after?.dayId}, description ${JSON.stringify(after?.description)}`
+        );
+      }
+    }
+    // The coordinator's create: there is no dish yet, so no current day to send.
+    {
+      const create = (body: Record<string, unknown>) =>
+        send('POST', `/api/c/${coordLinkA}/items`, body);
+      const dishesOnTeam = () => prisma.item.count({ where: { teamId: teamA.id } });
+      const label = "POST /api/c/:coordLinkOfA/items (the coordinator's create)";
+      {
+        const dishes = await dishesOnTeam();
+        const counts = await writeCounts();
+        const r = await create({ name: `${GTC403_TAG} created with B's day`, dayId: dayB.id });
+        logTest(
+          `B(a) ${label} with a day of event B — refused 400 "${GTC403_DAY_NOT_ON_EVENT}"`,
+          r.status === 400 && r.json?.error === GTC403_DAY_NOT_ON_EVENT,
+          `got ${r.status} ${JSON.stringify(r.json)}`
+        );
+        logTest(
+          '  ...and no dish was made',
+          (await dishesOnTeam()) === dishes &&
+            (await prisma.item.count({ where: { dayId: dayB.id, teamId: teamA.id } })) === 0,
+          `dishes ${dishes} -> ${await dishesOnTeam()}`
+        );
+        logTest(
+          '  ...and no ledger row was written, and the OutboundMessage count is the same',
+          (await writeCounts()) === counts,
+          `before ${counts}, after ${await writeCounts()}`
+        );
+      }
+      for (const [dayId, what, word] of [
+        [dayA.id, 'a day of event A', 'b'],
+        [null, 'no day (null)', 'c'],
+      ] as const) {
+        const outbound = await outboundCount();
+        const r = await create({ name: `${GTC403_TAG} created with ${what}`, dayId });
+        const made = r.json?.item?.id
+          ? await prisma.item.findUnique({ where: { id: r.json.item.id } })
+          : null;
+        logTest(
+          `B(${word}) ${label} with ${what} — still 200, and the dish is made on A's Team A with that day`,
+          r.status === 200 &&
+            made !== null &&
+            made.teamId === teamA.id &&
+            made.dayId === dayId &&
+            (await outboundCount()) === outbound,
+          `got ${r.status} ${JSON.stringify(r.json)}`
+        );
+      }
     }
   } finally {
     // Put back what this suite changed, even when a check above failed or a guard is gone.

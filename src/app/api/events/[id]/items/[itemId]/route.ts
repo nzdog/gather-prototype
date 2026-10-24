@@ -68,6 +68,24 @@ export async function PATCH(
       return NextResponse.json({ error: 'Item does not belong to this event' }, { status: 400 });
     }
 
+    // [[GTC-403]] — a day sent must be a day of this event, before anything is built or written.
+    // Clearing the day (empty or null) is not checked, nor is the dish's own current day, so an old
+    // dish whose day is already off this event can still be edited.
+    if (
+      body.dayId !== undefined &&
+      body.dayId !== null &&
+      body.dayId !== '' &&
+      body.dayId !== currentItem.dayId
+    ) {
+      const dayOnThisEvent =
+        typeof body.dayId === 'string'
+          ? await prisma.day.findFirst({ where: { id: body.dayId, eventId }, select: { id: true } })
+          : null;
+      if (!dayOnThisEvent) {
+        return NextResponse.json({ error: 'That day is not on this event' }, { status: 400 });
+      }
+    }
+
     // Build update data
     const updateData: any = {};
 

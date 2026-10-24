@@ -28,6 +28,21 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
 
   const body = await request.json();
 
+  // [[GTC-403]] — a day sent must be a day of the event this link opens, before anything is built
+  // or written. No day (empty or null, which this route stores as no day) is not checked.
+  if (body.dayId) {
+    const dayOnThisEvent =
+      typeof body.dayId === 'string'
+        ? await prisma.day.findFirst({
+            where: { id: body.dayId, eventId: resolvedContext.event.id },
+            select: { id: true },
+          })
+        : null;
+    if (!dayOnThisEvent) {
+      return NextResponse.json({ error: 'That day is not on this event' }, { status: 400 });
+    }
+  }
+
   // Validate required fields — after tidying, so a blank name is refused rather than stored.
   const name = itemNameForStorage(body.name);
   if (!name) {
