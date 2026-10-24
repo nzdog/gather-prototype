@@ -92,6 +92,8 @@ const GOOD_TAG = 'demo-tweaks-4-good';
 const BASE = '6d2b10397975ba688f543b8561ca918e0870ea56';
 /** [[GTC-400]]'s base: this batch's last commit (528e8ad), named for good. */
 const GTC400_BASE = '528e8adc5960c3fe3de989a89b738dbbe6a60e1d';
+/** [[GTC-401]]'s base: GTC-400's last commit (71a6287), named for good. */
+const GTC401_BASE = '71a6287e2d3cefed5e37f3f8f5764955e0b34caa';
 const git = (args: string[]) => spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' });
 const unchangedSinceGood = (paths: string[]) =>
   git(['diff', '--quiet', GOOD_TAG, '--', ...paths]).status === 0;
@@ -783,7 +785,7 @@ export const CHECKS = {
  * own layer asks what it may change.
  */
 const NOT_TOUCHED = [
-  'src/app/api', // but the dish-edit route (GTC-400; see EXCLUDED and its list)
+  'src/app/api', // but the dish-edit route (GTC-400) and four person routes (GTC-401)
   'prisma',
   'src/lib/auth',
   'src/lib/auth.ts',
@@ -834,11 +836,28 @@ const NOT_TOUCHED = [
  * diff of src/app/api, which stays listed and still covers every other route.
  */
 const NOT_TOUCHED_TILL_GTC400 = ['src/app/api/events/[id]/items/[itemId]/route.ts'];
+/**
+ * [[GTC-401]] edits four person routes on purpose (each now checks the person has a place in the
+ * event in its address), so U1 asks its question of them at GTC-401's base (71a6287), a fixed
+ * commit: GTC-399 still may not have touched them. The security suite (suite 17) pins their new
+ * behaviour. They are kept out of the live diff of src/app/api, which stays listed and still
+ * covers every other route.
+ */
+const NOT_TOUCHED_TILL_GTC401 = [
+  'src/app/api/events/[id]/people/[personId]/nudge/route.ts',
+  'src/app/api/events/[id]/people/[personId]/invite-detail/route.ts',
+  'src/app/api/events/[id]/people/[personId]/manual-override/route.ts',
+  'src/app/api/events/[id]/people/[personId]/route.ts',
+];
 
 /** Files inside a listed directory that an item edits: kept out of U1's live diff (none now). */
 const EXCLUDED = [
   ':(exclude)src/app/plan/[eventId]/glance/page.tsx',
   ':(exclude)src/app/api/events/[id]/items/[itemId]/route.ts',
+  ':(exclude)src/app/api/events/[id]/people/[personId]/nudge/route.ts',
+  ':(exclude)src/app/api/events/[id]/people/[personId]/invite-detail/route.ts',
+  ':(exclude)src/app/api/events/[id]/people/[personId]/manual-override/route.ts',
+  ':(exclude)src/app/api/events/[id]/people/[personId]/route.ts',
 ];
 
 // ══ Item 1 ═══════════════════════════════════════════════════════════════════
@@ -1315,13 +1334,18 @@ async function layerU() {
     ...NOT_TOUCHED_TILL_GTC400.filter(
       (f) => git(['cat-file', '-e', `${GTC400_BASE}:${f}`]).status !== 0
     ),
+    ...NOT_TOUCHED_TILL_GTC401.filter(
+      (f) => git(['cat-file', '-e', `${GTC401_BASE}:${f}`]).status !== 0
+    ),
   ];
   assert(
     'U',
-    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since demo-tweaks-4-good (routes, schema, auth, press, AI, email, households, the paying page, the new-event page, the pre-flight's libraries, the sample's limits and words, the strip, the Moment words, the entry rule, Moment 3's rules, SMS, the board, and the neighbours no item edits); the ${NOT_TOUCHED_TILL_GTC400.length} that GTC-400 edits not between demo-tweaks-4-good and GTC-400’s base (528e8ad)`,
+    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since demo-tweaks-4-good (routes, schema, auth, press, AI, email, households, the paying page, the new-event page, the pre-flight's libraries, the sample's limits and words, the strip, the Moment words, the entry rule, Moment 3's rules, SMS, the board, and the neighbours no item edits); the ${NOT_TOUCHED_TILL_GTC400.length} that GTC-400 edits not between demo-tweaks-4-good and GTC-400’s base (528e8ad); the ${NOT_TOUCHED_TILL_GTC401.length} that GTC-401 edits not between demo-tweaks-4-good and GTC-401’s base (71a6287)`,
     missing.length === 0 &&
       unchangedSinceGood([...NOT_TOUCHED, ...EXCLUDED]) &&
       git(['diff', '--quiet', GOOD_TAG, GTC400_BASE, '--', ...NOT_TOUCHED_TILL_GTC400]).status ===
+        0 &&
+      git(['diff', '--quiet', GOOD_TAG, GTC401_BASE, '--', ...NOT_TOUCHED_TILL_GTC401]).status ===
         0,
     missing.length ? `missing: ${missing.join(', ')}` : undefined
   );

@@ -397,6 +397,21 @@ const NOT_EDITED_E = [
 const GTC400_BASE = '528e8adc5960c3fe3de989a89b738dbbe6a60e1d';
 const GTC400_ROUTE = 'src/app/api/events/[id]/items/[itemId]/route.ts';
 const GTC400_EXCLUDED = [`:(exclude)${GTC400_ROUTE}`];
+/**
+ * [[GTC-401]] edits four person routes on purpose (each now checks the person has a place in the
+ * event in its address), so E8 asks its question of them at GTC-401's base (71a6287), a fixed
+ * commit: GTC-395 still may not have touched them. The security suite (suite 17) pins their new
+ * behaviour. They are kept out of the live diff of src/app/api, which still covers every other
+ * route.
+ */
+const GTC401_BASE = '71a6287e2d3cefed5e37f3f8f5764955e0b34caa';
+const GTC401_ROUTES = [
+  'src/app/api/events/[id]/people/[personId]/nudge/route.ts',
+  'src/app/api/events/[id]/people/[personId]/invite-detail/route.ts',
+  'src/app/api/events/[id]/people/[personId]/manual-override/route.ts',
+  'src/app/api/events/[id]/people/[personId]/route.ts',
+];
+const GTC401_EXCLUDED = GTC401_ROUTES.map((f) => `:(exclude)${f}`);
 const VENUE_FACTS = {
   id: 'e1',
   name: 'Boxing Day',
@@ -1193,12 +1208,19 @@ async function layerE() {
   );
   assert(
     'E',
-    'E8 CONTROL: DropOffDisplay and its helper, every route, the messages, the press, email, texts and the schema are not edited since demo-tweaks-good (the one route GTC-400 edits: not between demo-tweaks-good and GTC-400’s base, 528e8ad)',
+    'E8 CONTROL: DropOffDisplay and its helper, every route, the messages, the press, email, texts and the schema are not edited since demo-tweaks-good (the one route GTC-400 edits: not between demo-tweaks-good and GTC-400’s base, 528e8ad; the four GTC-401 edits: not between demo-tweaks-good and GTC-401’s base, 71a6287)',
     NOT_EDITED_E.every((f) => fs.existsSync(path.join(ROOT, f))) &&
-      unchangedSinceGood([...NOT_EDITED_E, ...GTC400_EXCLUDED]) &&
+      unchangedSinceGood([...NOT_EDITED_E, ...GTC400_EXCLUDED, ...GTC401_EXCLUDED]) &&
       spawnSync('git', ['cat-file', '-e', `${GTC400_BASE}:${GTC400_ROUTE}`], { cwd: ROOT })
         .status === 0 &&
       spawnSync('git', ['diff', '--quiet', GOOD_TAG, GTC400_BASE, '--', GTC400_ROUTE], {
+        cwd: ROOT,
+      }).status === 0 &&
+      GTC401_ROUTES.every(
+        (f) =>
+          spawnSync('git', ['cat-file', '-e', `${GTC401_BASE}:${f}`], { cwd: ROOT }).status === 0
+      ) &&
+      spawnSync('git', ['diff', '--quiet', GOOD_TAG, GTC401_BASE, '--', ...GTC401_ROUTES], {
         cwd: ROOT,
       }).status === 0
   );
