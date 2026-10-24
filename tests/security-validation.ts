@@ -3403,6 +3403,326 @@ async function testSuite18_LinkRoutesStayInTheirEvent(fixtures: Fixtures) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Test Suite 19 — GTC-403: the guest's answer and a dish's day stay inside their event
+//
+// PART A. POST /api/p/[token]/ack/[assignmentId] (a PARTICIPANT link, the guest's Yes / No /
+// Maybe) checked that the assignment was the guest's own or a carried household member's, but
+// not that it was on the event the link opens. A guest on two events could answer her own item
+// on event B through event A's link, with the history line written into A. It now answers,
+// right after the link is resolved, the 404 a missing assignment gets ("Assignment not found").
+//
+// PART B. Three routes write a dish's day from the request body: the host's PATCH
+// /api/events/[id]/items/[itemId], and the coordinator link's POST /api/c/[token]/items and
+// PATCH /api/c/[token]/items/[itemId]. None checked the day was on the event, so a day of
+// another event could be stored. Each now answers 400 "That day is not on this event" before
+// anything is built or written. Clearing the day (null) is not checked, nor (on the two edits)
+// is the dish's own current day, so an old dish whose day is already off the event can still be
+// edited.
+//
+// The checks:
+//   Part A (a) a guest link for event A naming the guest's own assignment on event B: the 404,
+//              and nothing changes (the assignment, the history, the OutboundMessage count).
+//          (b) the same link naming her own assignment on A: the answer it gave before.
+//          (c) the same link naming a household member's (a child's) assignment on A, through
+//              the carried path: the answer it gave before.
+//   Part B, each route (a) a day of event B: the 400, the dish unchanged (on the create, no
+//              dish made) and no ledger row; (b) a day of event A: accepted and lands; (c) the
+//              day cleared (null): still works; (d) the two edits only, the dish's own current
+//              day, which is a day of event B: still works (a create has no current day).
+//
+// Driven over HTTP against the dev server: the guest's and the coordinator's links are their
+// sign-in, and the host's edit reads the fixtures' host session cookie (an EventRole HOST on
+// this suite's own event A, which goes with the event).
+//
+// ⚠ NONE OF THESE ROUTES CAN SEND, WITH THE GUARDS OR WITHOUT THEM: the guest's answer writes
+// the answer, a history line and an invite-log line; the dish routes write the dish and ledger
+// lines. Nothing reaches a sender. The OutboundMessage count is asserted the same anyway.
+//
+// Events A and B are this suite's own (the fixtures' DRAFT event has its teams remade by suite
+// 7, see suite 18). Every row it makes is named with GTC403_TAG (its events, teams, items and
+// people) and removed at the end with everything that hangs off them, even when a check fails
+// or a guard is gone; a leftover from a crashed run is removed by name at the start. Every write
+// these routes make, guarded or not, is filed on event A, so it goes with event A.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const GTC403_TAG = 'GTC-403 suite 19';
+const GTC403_ASSIGNMENT_NOT_FOUND = 'Assignment not found';
+
+async function gtc403RemoveOwnRows() {
+  const people = await prisma.person.findMany({
+    where: { name: { startsWith: GTC403_TAG } },
+    select: { id: true },
+  });
+  const ids = people.map((p) => p.id);
+  // Its items (their assignments go with them), then its events (their teams, days, households,
+  // places, links, roles, log and ledger rows go with them), then its people.
+  await prisma.item.deleteMany({ where: { name: { startsWith: GTC403_TAG } } });
+  await prisma.event.deleteMany({ where: { name: { startsWith: GTC403_TAG } } });
+  if (ids.length > 0) {
+    await prisma.inviteEvent.deleteMany({ where: { personId: { in: ids } } });
+    await prisma.auditEntry.deleteMany({ where: { actorId: { in: ids } } });
+    await prisma.person.deleteMany({ where: { id: { in: ids } } });
+  }
+}
+
+async function testSuite19_AnswerAndDayStayInTheirEvent(fixtures: Fixtures) {
+  logSection(
+    "Test Suite 19: GTC-403 — the guest's answer and a dish's day stay inside their event"
+  );
+
+  const BASE = process.env.SECURITY_TEST_BASE_URL ?? 'http://localhost:3000';
+
+  const send = async (method: 'POST' | 'PATCH', url: string, body: unknown, cookie?: string) => {
+    const res = await fetch(`${BASE}${url}`, {
+      method,
+      headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) },
+      body: JSON.stringify(body),
+    });
+    let json: any = null;
+    try {
+      json = await res.json();
+    } catch {
+      /* no body */
+    }
+    return { status: res.status, json };
+  };
+
+  let probeOk = false;
+  try {
+    const probe = await send('POST', '/api/p/gtc403-not-a-real-link/ack/x', {
+      response: 'ACCEPTED',
+    });
+    probeOk = probe.status === 403;
+  } catch {
+    probeOk = false;
+  }
+  logTest(
+    `dev server healthy on ${BASE} — an unknown guest link answers 403, not 500 or ECONNREFUSED`,
+    probeOk,
+    'Start it with `npm run dev`. These assertions cannot run without it.'
+  );
+  if (!probeOk) return;
+
+  /** Every row a log, the ledger or a send would add, counted across the whole database. */
+  const writeCounts = async () =>
+    JSON.stringify({
+      inviteEvents: await prisma.inviteEvent.count(),
+      auditEntries: await prisma.auditEntry.count(),
+      outboundMessages: await prisma.outboundMessage.count(),
+    });
+  const outboundCount = () => prisma.outboundMessage.count();
+  const assignmentState = async (id: string) =>
+    JSON.stringify(await prisma.assignment.findUnique({ where: { id }, include: { item: true } }));
+  /** The guest's "answered" invite-log lines on an event about one item. The route writes them
+   * after it answers, so a check waits for them. */
+  const answeredLines = (eventId: string, personId: string, itemId: string) =>
+    prisma.inviteEvent.count({
+      where: {
+        eventId,
+        personId,
+        type: 'RESPONSE_SUBMITTED',
+        metadata: { path: ['itemId'], equals: itemId },
+      },
+    });
+  const waitFor = async (check: () => Promise<boolean>) => {
+    for (let i = 0; i < 50; i++) {
+      if (await check()) return true;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    return check();
+  };
+
+  await gtc403RemoveOwnRows();
+
+  try {
+    // ── The fixture ──────────────────────────────────────────────────────────
+    const stamp = randomBytes(4).toString('hex');
+    const expiresAt = new Date(Date.now() + 86_400_000);
+    const makeEvent = (label: string) =>
+      prisma.event.create({
+        data: {
+          name: `${GTC403_TAG} event ${label}`,
+          startDate: new Date(Date.now() + 30 * 86_400_000),
+          endDate: new Date(Date.now() + 31 * 86_400_000),
+          status: 'DRAFT',
+          hostId: fixtures.host.id,
+        },
+      });
+    const evA = await makeEvent('A');
+    const evB = await makeEvent('B');
+
+    const guest = (
+      await prisma.person.create({
+        data: {
+          name: `${GTC403_TAG} guest of A and B`,
+          email: `gtc403-suite19-guest+${stamp}@example.test`,
+        },
+      })
+    ).id;
+    const child = (
+      await prisma.person.create({ data: { name: `${GTC403_TAG} child in the guest's household` } })
+    ).id;
+    const teamA = await prisma.team.create({
+      data: { name: `${GTC403_TAG} Team A`, eventId: evA.id },
+    });
+    const teamB = await prisma.team.create({
+      data: { name: `${GTC403_TAG} Team B`, eventId: evB.id },
+    });
+    // The guest's household on A: she is its contact, and her child is in it.
+    const household = await prisma.household.create({ data: { eventId: evA.id } });
+    const guestOnA = await prisma.personEvent.create({
+      data: {
+        personId: guest,
+        eventId: evA.id,
+        teamId: teamA.id,
+        role: 'PARTICIPANT',
+        householdId: household.id,
+        householdRole: 'PRIMARY_CONTACT',
+      },
+    });
+    await prisma.personEvent.create({
+      data: {
+        personId: child,
+        eventId: evA.id,
+        teamId: teamA.id,
+        role: 'PARTICIPANT',
+        householdId: household.id,
+        householdRole: 'CHILD',
+      },
+    });
+    await prisma.household.update({
+      where: { id: household.id },
+      data: { contactPersonEventId: guestOnA.id },
+    });
+    await prisma.personEvent.create({
+      data: { personId: guest, eventId: evB.id, teamId: teamB.id, role: 'PARTICIPANT' },
+    });
+    const guestLinkA = randomBytes(32).toString('hex');
+    await prisma.accessToken.create({
+      data: {
+        token: guestLinkA,
+        scope: 'PARTICIPANT',
+        personId: guest,
+        eventId: evA.id,
+        expiresAt,
+      },
+    });
+    const held = async (teamId: string, personId: string, label: string) => {
+      const item = await prisma.item.create({
+        data: { name: `${GTC403_TAG} ${label}`, teamId, status: 'ASSIGNED' },
+      });
+      const assignment = await prisma.assignment.create({
+        data: { itemId: item.id, personId, response: 'PENDING' },
+      });
+      return { item, assignment };
+    };
+    const guestOnB = await held(teamB.id, guest, "guest's own item on event B");
+    const guestOwnOnA = await held(teamA.id, guest, "guest's own item on event A");
+    const childOnA = await held(teamA.id, child, "child's item on event A");
+
+    const { resolveCarriedSubjects } = await import('../src/lib/eligibility/carried-answer');
+    const carried = await resolveCarriedSubjects(prisma, evA.id, guest);
+    const guestPlaces = (
+      await prisma.personEvent.findMany({ where: { personId: guest }, select: { eventId: true } })
+    ).map((m) => m.eventId);
+    const holds = await prisma.assignment.findMany({
+      where: {
+        id: { in: [guestOnB.assignment.id, guestOwnOnA.assignment.id, childOnA.assignment.id] },
+      },
+      select: { id: true, response: true, item: { select: { team: true } } },
+    });
+    const holdOf = (id: string) => holds.find((h) => h.id === id);
+    const guestLink = await prisma.accessToken.findUnique({ where: { token: guestLinkA } });
+    logTest(
+      "fixture: the guest has a place on A and on B, her link opens A, and she and her child hold three PENDING items: hers on B, hers on A, the child's on A",
+      guestLink?.scope === 'PARTICIPANT' &&
+        guestLink.eventId === evA.id &&
+        guestLink.personId === guest &&
+        guestPlaces.length === 2 &&
+        guestPlaces.includes(evA.id) &&
+        guestPlaces.includes(evB.id) &&
+        holds.length === 3 &&
+        holds.every((h) => h.response === 'PENDING') &&
+        holdOf(guestOnB.assignment.id)?.item.team.eventId === evB.id &&
+        holdOf(guestOwnOnA.assignment.id)?.item.team.eventId === evA.id &&
+        holdOf(childOnA.assignment.id)?.item.team.eventId === evA.id,
+      JSON.stringify({ link: guestLink?.scope, guestPlaces, holds })
+    );
+    logTest(
+      "fixture: on event A the guest's message carries her child (resolveCarriedSubjects names the child, and only the child)",
+      carried.length === 1 && carried[0].personId === child,
+      JSON.stringify(carried)
+    );
+
+    // ── PART A: the guest link's answer ──────────────────────────────────────
+    {
+      const before = await assignmentState(guestOnB.assignment.id);
+      const counts = await writeCounts();
+      const r = await send('POST', `/api/p/${guestLinkA}/ack/${guestOnB.assignment.id}`, {
+        response: 'DECLINED',
+      });
+      logTest(
+        `A(a) POST /api/p/:guestLinkOfA/ack/:herOwnAssignmentOnB — refused 404 "${GTC403_ASSIGNMENT_NOT_FOUND}"`,
+        r.status === 404 && r.json?.error === GTC403_ASSIGNMENT_NOT_FOUND,
+        `got ${r.status} ${JSON.stringify(r.json)}`
+      );
+      // The route writes its invite-log line after it answers; give a stray one time to land.
+      await new Promise((res) => setTimeout(res, 500));
+      logTest(
+        '  ...and the assignment on B and its item are unchanged (still PENDING)',
+        (await assignmentState(guestOnB.assignment.id)) === before,
+        'the assignment or its item changed'
+      );
+      logTest(
+        '  ...and no history, ledger or invite-log row was written, and the OutboundMessage count is the same (nothing sent)',
+        (await writeCounts()) === counts,
+        `before ${counts}, after ${await writeCounts()}`
+      );
+    }
+    for (const [subject, label, actor] of [
+      [guestOwnOnA, 'herOwnAssignmentOnA', 'her own'],
+      [childOnA, 'herChildsAssignmentOnA', "her child's, through the carried path"],
+    ] as const) {
+      const outbound = await outboundCount();
+      const lines = () =>
+        prisma.auditEntry.count({
+          where: {
+            eventId: evA.id,
+            targetId: subject.assignment.id,
+            actionType: 'ACCEPT_ASSIGNMENT',
+          },
+        });
+      const linesBefore = await lines();
+      const answeredBefore = await answeredLines(evA.id, guest, subject.item.id);
+      const r = await send('POST', `/api/p/${guestLinkA}/ack/${subject.assignment.id}`, {
+        response: 'ACCEPTED',
+      });
+      const after = await prisma.assignment.findUnique({ where: { id: subject.assignment.id } });
+      logTest(
+        `A(${actor === 'her own' ? 'b' : 'c'}) POST /api/p/:guestLinkOfA/ack/:${label} (${actor}) — still 200 with the attendance it derives, and the answer is recorded`,
+        r.status === 200 &&
+          r.json?.success === true &&
+          'attendance' in (r.json ?? {}) &&
+          typeof r.json?.attendanceAskable === 'boolean' &&
+          after?.response === 'ACCEPTED',
+        `got ${r.status} ${JSON.stringify(r.json)}, row ${after?.response}`
+      );
+      const answered = await waitFor(
+        async () => (await answeredLines(evA.id, guest, subject.item.id)) === answeredBefore + 1
+      );
+      logTest(
+        '  ...CONTROL: one history line and one "answered" invite-log line on A for it, and the OutboundMessage count is the same',
+        (await lines()) === linesBefore + 1 && answered && (await outboundCount()) === outbound,
+        `lines ${linesBefore} -> ${await lines()}; answered ${answeredBefore} -> ${await answeredLines(evA.id, guest, subject.item.id)}`
+      );
+    }
+  } finally {
+    // Put back what this suite changed, even when a check above failed or a guard is gone.
+    await gtc403RemoveOwnRows();
+  }
+}
+
 async function main() {
   console.log(`${BOLD}${YELLOW}=== Security Validation Test Suite ===${RESET}\n`);
   console.log('Contract under test:');
@@ -3433,6 +3753,7 @@ async function main() {
     await testSuite16_ItemEditStaysInItsEvent(fixtures);
     await testSuite17_PersonRoutesStayInTheirEvent(fixtures);
     await testSuite18_LinkRoutesStayInTheirEvent(fixtures);
+    await testSuite19_AnswerAndDayStayInTheirEvent(fixtures);
 
     console.log(`\n${BOLD}${YELLOW}=== Test Summary ===${RESET}`);
     console.log(`Total tests: ${testsRun}`);

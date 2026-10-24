@@ -50,6 +50,17 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
+  // [[GTC-403]] — the assignment must be on the event this link opens (its item's team's event),
+  // checked before the body is read and before anything is looked up, written or logged. One on
+  // another event gets the answer a missing assignment gets, as the coordinator's door answers.
+  const onThisEvent = await prisma.assignment.findFirst({
+    where: { id: assignmentId, item: { team: { eventId: resolvedContext.event.id } } },
+    select: { id: true },
+  });
+  if (!onThisEvent) {
+    return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+  }
+
   // GTC-169 (A3a) — SEMANTIC INVERSION. This route used to 400 with "Plan is frozen
   // — responses are locked" once the host froze the plan. That is backwards: after
   // the send is precisely when guests are supposed to respond.
