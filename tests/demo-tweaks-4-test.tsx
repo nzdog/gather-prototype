@@ -80,6 +80,8 @@ const code = (rel: string) => stripComments(read(rel));
 const GOOD_TAG = 'demo-tweaks-3-good';
 /** GTC-397's last commit, where this batch started (its app code the same as the tag's). */
 const BASE = '8a4f1bc7e237bead8565f88c62ca2fe5bec95645';
+/** [[GTC-399]]'s base: this batch's last commit (the tag demo-tweaks-4-good), named for good. */
+const GTC399_BASE = '6d2b10397975ba688f543b8561ca918e0870ea56';
 const git = (args: string[]) => spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' });
 const unchangedSinceGood = (paths: string[]) =>
   git(['diff', '--quiet', GOOD_TAG, '--', ...paths]).status === 0;
@@ -348,16 +350,15 @@ const NOT_TOUCHED = [
   'src/lib/email.ts',
   'src/lib/households',
   'src/app/plan/new',
-  'src/lib/demo',
+  'src/lib/demo', // but typical-answers.ts (GTC-399 item 4; see EXCLUDED)
   'src/lib/preflight',
-  'src/components/preflight',
+  'src/components/preflight', // but PreflightStep.tsx (GTC-399 item 5)
   'src/app/plan/[eventId]/pre-flight',
-  'src/app/plan/[eventId]/setup',
+  'src/app/plan/[eventId]/setup', // but page.tsx (GTC-399 items 1 and 2)
   // test:demo-sandbox-b S11's files not already named above
   'src/lib/sms',
   'src/lib/live-sends.ts',
   // the neighbours no item edits
-  'src/components/plan/Moment2Opening.tsx',
   'src/components/plan/Moment2Step2Skeleton.tsx',
   'src/components/plan/MomentWords.tsx',
   'src/lib/moments/moment-words.ts',
@@ -370,6 +371,23 @@ const NOT_TOUCHED = [
   'src/lib/moment3/suggest.ts',
   'src/lib/moment3/people.ts',
   'src/lib/moment3/completion.ts',
+];
+/**
+ * [[GTC-399]] edits these four on purpose, so U1 asks its question of them at GTC-399's base
+ * (6d2b103), a fixed commit: GTC-398 still may not have touched them. GTC-399's own suite
+ * (test:demo-tweaks-5) pins their new state. The three in a listed directory are kept out of its
+ * live diff, which still covers everything else there.
+ */
+const NOT_TOUCHED_TILL_GTC399 = [
+  'src/lib/demo/typical-answers.ts',
+  'src/components/preflight/PreflightStep.tsx',
+  'src/app/plan/[eventId]/setup/page.tsx',
+  'src/components/plan/Moment2Opening.tsx',
+];
+const EXCLUDED = [
+  ':(exclude)src/lib/demo/typical-answers.ts',
+  ':(exclude)src/components/preflight/PreflightStep.tsx',
+  ':(exclude)src/app/plan/[eventId]/setup/page.tsx',
 ];
 const SUITE = 'tests/demo-tweaks-4-test.tsx';
 const NEW_SCRIPT = 'test:demo-tweaks-4';
@@ -1001,11 +1019,19 @@ async function layerH() {
 // ══ CONTROL ══════════════════════════════════════════════════════════════════
 async function layerU() {
   section('U — CONTROL: what this batch must not touch');
-  const missing = NOT_TOUCHED.filter((f) => !fs.existsSync(path.join(ROOT, f)));
+  const missing = [
+    ...NOT_TOUCHED.filter((f) => !fs.existsSync(path.join(ROOT, f))),
+    ...NOT_TOUCHED_TILL_GTC399.filter(
+      (f) => git(['cat-file', '-e', `${GTC399_BASE}:${f}`]).status !== 0
+    ),
+  ];
   assert(
     'U',
-    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since demo-tweaks-3-good (routes, schema, auth, press, AI, email, households, the paying page, the demo library, the pre-flight, the setup page, SMS, the live switch, and the neighbours no item edits)`,
-    missing.length === 0 && unchangedSinceGood(NOT_TOUCHED),
+    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since demo-tweaks-3-good (routes, schema, auth, press, AI, email, households, the paying page, the demo library, the pre-flight, the setup page, SMS, the live switch, and the neighbours no item edits); the ${NOT_TOUCHED_TILL_GTC399.length} that GTC-399 edits are not edited between demo-tweaks-3-good and GTC-399’s base (6d2b103)`,
+    missing.length === 0 &&
+      unchangedSinceGood([...NOT_TOUCHED, ...EXCLUDED]) &&
+      git(['diff', '--quiet', GOOD_TAG, GTC399_BASE, '--', ...NOT_TOUCHED_TILL_GTC399]).status ===
+        0,
     missing.length ? `missing: ${missing.join(', ')}` : undefined
   );
   // GTC-397's lesson: package.json and the lockfile are read at a fixed commit (the one that added

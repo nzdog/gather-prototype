@@ -1015,6 +1015,7 @@ function EventSetupFlow() {
           setShowMoment1(true);
         }}
         details={details}
+        doors={doorsFor(1)}
       />
     );
   }
@@ -1027,7 +1028,7 @@ function EventSetupFlow() {
           eventId={event.id}
           eventName={event.name}
           households={households}
-          doors={doorsFor(2)}
+          doors={doorsFor(1)}
           details={details}
           onContinue={async () => {
             setMoment1Phase('input');
@@ -1843,6 +1844,7 @@ function EventSetupFlow() {
         details={details}
         invitesOnlyState={invitesOnlyState}
         planWaiting={invitesOnly && planWaiting}
+        doors={doorsFor(2)}
       />
     );
   }

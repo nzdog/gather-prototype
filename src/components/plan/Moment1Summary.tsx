@@ -213,8 +213,9 @@ export default function Moment1Summary({
           {details && <EventDetails facts={details} />}
         </div>
 
-        {/* MomentArc */}
-        <MomentArc currentMoment={2} completedMoments={[1]} doors={doors} />
+        {/* MomentArc. [[GTC-399]] item 1 (the founder, 24 Oct 2026): this is Moment 1's summary page,
+            so the strip reads Moment 1 as the current Moment, as Moment 1's form does. */}
+        <MomentArc currentMoment={1} doors={doors} />
 
         {/* Headline stats */}
         <div className="mt-10">

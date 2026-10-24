@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import MomentWords from './MomentWords';
+import MomentArc, { type ArcDoor } from './MomentArc';
 import { STRIP_WORDS } from '@/lib/moments/strip';
 import { OPENING_TITLES } from '@/lib/moments/opening-titles';
 import EventDetails, { type EventDetailsFacts } from '@/components/shared/EventDetails';
@@ -10,6 +11,8 @@ interface SetupOpeningScreenProps {
   onStart: () => void;
   /** [[GTC-368]] (item 17): the event's name and its details (W10, top right; C4). */
   details?: EventDetailsFacts;
+  /** [[GTC-399]] item 1: the strip's doors (`stripDoors`, built by the setup page). */
+  doors?: Partial<Record<1 | 2 | 3 | 4, ArcDoor>>;
 }
 
 /**
@@ -17,9 +20,11 @@ interface SetupOpeningScreenProps {
  * paragraphs are the important things"): the Moment's name, big; "What this does" and "When it’s
  * done"; the one button. The strip is gone from here (it stays on every other screen); "← Your
  * events" and the event's details stay, as navigation. [[GTC-396]] item 1: the herd-of-cats line
- * is back under the title (the founder, 21 Oct 2026).
+ * is back under the title (the founder, 21 Oct 2026). [[GTC-399]] item 1 (the founder, 24 Oct 2026:
+ * "Need the flow breadcrumbs on every screen"): the strip is back, above the title, current
+ * Moment 1, with the doors every other screen has. This reverses that part of GTC-394 tweak 2.
  */
-export default function SetupOpeningScreen({ onStart, details }: SetupOpeningScreenProps) {
+export default function SetupOpeningScreen({ onStart, details, doors }: SetupOpeningScreenProps) {
   const [fading, setFading] = useState(false);
 
   const handleClick = () => {
@@ -53,6 +58,11 @@ export default function SetupOpeningScreen({ onStart, details }: SetupOpeningScr
       {/* [[GTC-384]] (item 54): the column grows from the top of the box and scrolls when it is taller
           than the screen, instead of being centred past its own top. */}
       <div className="max-w-[600px] mx-auto px-6 py-8 flex flex-col items-center justify-center min-h-full">
+        {/* [[GTC-399]] item 1: the strip, under the top row and above the title, as on every other
+            screen (the same MomentArc, its own wrapper's mb-6). */}
+        <div className="mb-6">
+          <MomentArc currentMoment={1} doors={doors} />
+        </div>
         {/* [[GTC-394]] tweak 2: the Moment's name, big. */}
         <h1 className="text-4xl sm:text-5xl font-semibold text-gray-900 text-center">
           {OPENING_TITLES[1]}

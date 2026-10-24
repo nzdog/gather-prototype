@@ -4,6 +4,7 @@ import { STRIP_WORDS } from '@/lib/moments/strip';
 import { OPENING_TITLES } from '@/lib/moments/opening-titles';
 import EventDetails, { type EventDetailsFacts } from '@/components/shared/EventDetails';
 import MomentWords from '@/components/plan/MomentWords';
+import MomentArc, { type ArcDoor } from '@/components/plan/MomentArc';
 import { INVITES_ONLY_WORDS, type InvitesOnlyState } from '@/lib/setup/invites-only';
 
 interface Moment2OpeningProps {
@@ -20,6 +21,8 @@ interface Moment2OpeningProps {
   invitesOnlyState?: InvitesOnlyState;
   /** [[GTC-375]] W2 — a plan is put away, and "Let’s do this →" brings it back. */
   planWaiting?: boolean;
+  /** [[GTC-399]] item 1: the strip's doors (`stripDoors`, built by the setup page). */
+  doors?: Partial<Record<1 | 2 | 3 | 4, ArcDoor>>;
 }
 
 /**
@@ -28,6 +31,9 @@ interface Moment2OpeningProps {
  * (the plan put away; its refusal). The strip is gone from here, and "Write the list myself" and
  * "Skip the plan: invites only" moved into the questions (Moment2Step1Modal), under the same rule.
  * "← Your events", the event's details and "← Back to the people" stay, as navigation.
+ * [[GTC-399]] item 1 (the founder, 24 Oct 2026: "Flow breadcrumbs on moment 2 splash screen"): the
+ * strip is back, above the title, current Moment 2, Moment 1 completed, with the doors every other
+ * screen has. This reverses that part of GTC-394 tweak 2.
  */
 export default function Moment2Opening({
   onStart,
@@ -35,6 +41,7 @@ export default function Moment2Opening({
   details,
   invitesOnlyState = 'idle',
   planWaiting = false,
+  doors,
 }: Moment2OpeningProps) {
   const working = invitesOnlyState === 'working';
   return (
@@ -53,6 +60,11 @@ export default function Moment2Opening({
         {details && <EventDetails facts={details} />}
       </div>
       <div className="max-w-2xl mx-auto px-6 py-8 flex flex-col items-center justify-center min-h-full">
+        {/* [[GTC-399]] item 1: the strip, under the top row and above the title, as on every other
+            screen (the same MomentArc, its own wrapper's mb-6). */}
+        <div className="mb-6">
+          <MomentArc currentMoment={2} completedMoments={[1]} doors={doors} />
+        </div>
         {/* [[GTC-394]] tweak 2: the Moment's name, big. */}
         <h1 className="text-4xl sm:text-5xl font-semibold text-gray-900 text-center">
           {OPENING_TITLES[2]}

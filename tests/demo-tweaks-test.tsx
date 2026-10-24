@@ -634,7 +634,13 @@ export const CHECKS = {
       html.indexOf(`>${start}</button>`) > html.indexOf(`data-moment-words="${moment}-done"`) &&
       html.includes(YOUR_EVENTS) &&
       (!back || html.includes(`>${BACK_TO_PEOPLE}</button>`)) &&
-      STRIP_ONLY.every((w) => !html.includes(w)) &&
+      // [[GTC-399]] item 1 (founder, 24 Oct 2026): the strip is back above the title. Drawn here
+      // without doors, it is its plain row: each of the four labels once, before the <h1>, and no
+      // strip marker (that needs doors); the button counts above prove it adds no button.
+      [esc(TITLE_1), esc(TITLE_2), ...STRIP_ONLY].every(
+        (w) => indexesOf(html.slice(0, Math.max(0, html.indexOf('<h1'))), w).length === 1
+      ) &&
+      STRIP_ONLY.every((w) => indexesOf(html, w).length === 1) &&
       !html.includes('data-moment-strip') &&
       // [[GTC-396]] item 1 (founder, 21 Oct 2026): Moment 1's page has the herd line back, under
       // the title and above "What this does"; Moment 2's page still has none.
@@ -728,11 +734,13 @@ export const CHECKS = {
       modal.includes('ownPlanState={ownPlanState}') &&
       /ownPlanExists=\{listExists && !invitesOnly\}/.test(modal) &&
       opening.length > 0 &&
-      !/onInvitesOnly=|onOwnPlan=|ownPlanState=|ownPlanExists=|doors=/.test(opening) &&
+      !/onInvitesOnly=|onOwnPlan=|ownPlanState=|ownPlanExists=/.test(opening) &&
+      // [[GTC-399]] item 1: each opening page gets the doors the page builds for its Moment.
+      /\bdoors=\{doorsFor\(2\)\}/.test(opening) &&
       opening.includes('planWaiting={invitesOnly && planWaiting}') &&
       opening.includes('invitesOnlyState={invitesOnlyState}') &&
       first.length > 0 &&
-      !/doors=/.test(first) &&
+      /\bdoors=\{doorsFor\(1\)\}/.test(first) &&
       same('const chooseInvitesOnly = async () =>') &&
       same('const writeOwnList = async () =>')
     );
@@ -749,13 +757,19 @@ export const CHECKS = {
       !two.includes('herd of cats') &&
       [one, two].every(
         (s) =>
-          !s.includes('<MomentArc') &&
+          // [[GTC-399]] item 1: one strip, above the title (pinned per page below).
+          s.split('<MomentArc').length - 1 === 1 &&
+          s.indexOf('<MomentArc') < s.indexOf('<h1') &&
           !s.includes('OWN_PLAN_WORDS') &&
           !s.includes('data-own-plan') &&
           !s.includes('data-invites-only=') &&
           !s.includes('INVITES_ONLY_WORDS.CHOOSE') &&
           !s.includes('INVITES_ONLY_WORDS.EXPLAIN') &&
           s.includes("from '@/lib/moments/opening-titles'")
+      ) &&
+      /<MomentArc\s+currentMoment=\{1\}\s+doors=\{doors\}\s*\/>/.test(one) &&
+      /<MomentArc\s+currentMoment=\{2\}\s+completedMoments=\{\[1\]\}\s+doors=\{doors\}\s*\/>/.test(
+        two
       ) &&
       two.includes('INVITES_ONLY_WORDS.PLAN_WAITING') &&
       two.includes('INVITES_ONLY_WORDS.NOT_HOST') &&
@@ -1305,7 +1319,7 @@ async function layerO() {
   const one = SO?.default ? render(createElement(SO.default, { onStart: () => {} })) : '';
   assert(
     'O',
-    'O3 Moment 1’s page: the title, the herd line under it (GTC-396 item 1), the two paragraphs and one button; no strip',
+    'O3 Moment 1’s page: the strip above the title (GTC-399 item 1), the title, the herd line under it (GTC-396 item 1), the two paragraphs and one button',
     CHECKS.openingPage(one, 1, TITLE_1, START_1, false),
     one.slice(0, 500)
   );
@@ -1327,7 +1341,7 @@ async function layerO() {
   const idle = two();
   assert(
     'O',
-    'O4 Moment 2’s page: the title, the two paragraphs and one button, and its way back; no strip, no choices',
+    'O4 Moment 2’s page: the strip above the title (GTC-399 item 1), the title, the two paragraphs and one button, and its way back; no choices',
     CHECKS.openingPage(idle, 2, TITLE_2, START_2, true),
     idle.slice(0, 500)
   );
@@ -1387,12 +1401,12 @@ async function layerO() {
   );
   assert(
     'O',
-    'O8 the setup page: the questions get both choices under the one rule; the opening pages get neither; the handlers are as they were',
+    'O8 the setup page: the questions get both choices under the one rule; the opening pages get neither, and get their Moment’s doors (GTC-399 item 1); the handlers are as they were',
     CHECKS.setupWiring(code(SETUP), stripComments(atTag(SETUP)))
   );
   assert(
     'O',
-    'O9 the two opening components hold no strip and no quieter choice, the herd line on Moment 1’s only (GTC-396 item 1); the main button’s words and the way back stay',
+    'O9 the two opening components hold one strip above the title with their Moment’s props (GTC-399 item 1) and no quieter choice, the herd line on Moment 1’s only (GTC-396 item 1); the main button’s words and the way back stay',
     CHECKS.openingSources(code(OPENING_1), code(OPENING_2))
   );
 }

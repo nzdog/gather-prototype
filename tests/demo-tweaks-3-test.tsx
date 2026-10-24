@@ -91,6 +91,8 @@ const GTC396_LAST = '3695755c0d9168ce32a52f6dcb1a74b4f9c9dba9';
  * change read those files as they were at this fixed commit, never a tag a later ticket can move.
  */
 const GTC398_BASE = '8a4f1bc7e237bead8565f88c62ca2fe5bec95645';
+/** [[GTC-399]]'s base: GTC-398's last commit (the tag demo-tweaks-4-good), named for good. */
+const GTC399_BASE = '6d2b10397975ba688f543b8561ca918e0870ea56';
 const atRef = (ref: string, rel: string) => {
   const r = git(['show', `${ref}:${rel}`]);
   return r.status === 0 ? r.stdout : '';
@@ -320,16 +322,14 @@ const NOT_TOUCHED = [
   'src/lib/email.ts',
   'src/lib/households',
   'src/app/plan/new',
-  'src/lib/demo',
+  'src/lib/demo', // but typical-answers.ts (GTC-399 item 4; see EXCLUDED and the list below)
   'src/lib/sms',
   'src/lib/live-sends.ts',
   'src/lib/preflight/ask-preview.ts',
   'src/lib/preflight/tick-memory.ts',
   'src/lib/workflow.ts',
-  'src/components/plan/Moment2Opening.tsx',
   'src/components/plan/MomentWords.tsx',
   'src/lib/moments/moment-words.ts',
-  'src/lib/moments/opening-titles.ts',
   'src/components/plan/Moment2Step2Skeleton.tsx',
   'src/components/plan/HouseholdCardList.tsx',
   'src/components/plan/AccordionShell.tsx',
@@ -346,6 +346,18 @@ const NOT_TOUCHED_TILL_GTC398 = [
   'src/components/plan/Moment3AssignView.tsx',
   'src/components/shared/EventDropOffLine.tsx',
 ];
+/**
+ * [[GTC-399]] edits these three on purpose (item 1 Moment 2's opening, item 2 the titles, item 4 the
+ * sample's button), so U1 asks its question of them at GTC-399's base (6d2b103), a fixed commit:
+ * GTC-396 still may not have touched them. GTC-399's own suite (test:demo-tweaks-5) pins their new
+ * state. typical-answers.ts is also kept out of the live diff of its directory, which stays listed.
+ */
+const NOT_TOUCHED_TILL_GTC399 = [
+  'src/components/plan/Moment2Opening.tsx',
+  'src/lib/moments/opening-titles.ts',
+  'src/lib/demo/typical-answers.ts',
+];
+const EXCLUDED = [':(exclude)src/lib/demo/typical-answers.ts'];
 const NEW_SCRIPT = 'test:demo-tweaks-3';
 const NEW_SCRIPT_VALUE = 'tsx --tsconfig tests/tsconfig.json tests/demo-tweaks-3-test.tsx';
 const UNTRACKED_SCRIPTS = ['scripts/dev-login.ts', 'scripts/print-host-link.ts'];
@@ -825,8 +837,11 @@ async function layerH() {
   );
   assert(
     'H',
-    'H5 CONTROL: Moment 2’s opening page has no herd line and its file is not edited since demo-tweaks-2-good',
-    CHECKS.momentTwoOpeningKept(two, unchangedSinceGood([OPENING_2]))
+    'H5 CONTROL: Moment 2’s opening page has no herd line and its file is not edited between demo-tweaks-2-good and GTC-399’s base (6d2b103; GTC-399 item 1 draws the strip on it, its own suite pins that)',
+    CHECKS.momentTwoOpeningKept(
+      two,
+      git(['diff', '--quiet', GOOD_TAG, GTC399_BASE, '--', OPENING_2]).status === 0
+    )
   );
 }
 
@@ -1036,16 +1051,23 @@ async function layerP() {
 async function layerU() {
   section('U — CONTROL: what this batch must not touch');
   const missing = NOT_TOUCHED.filter((f) => !fs.existsSync(path.join(ROOT, f)));
-  const missingAtBase = NOT_TOUCHED_TILL_GTC398.filter(
-    (f) => git(['cat-file', '-e', `${GTC398_BASE}:${f}`]).status !== 0
-  );
+  const missingAtBase = [
+    ...NOT_TOUCHED_TILL_GTC398.filter(
+      (f) => git(['cat-file', '-e', `${GTC398_BASE}:${f}`]).status !== 0
+    ),
+    ...NOT_TOUCHED_TILL_GTC399.filter(
+      (f) => git(['cat-file', '-e', `${GTC399_BASE}:${f}`]).status !== 0
+    ),
+  ];
   assert(
     'U',
-    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since demo-tweaks-2-good (routes, schema, auth, press, AI, email, households, the paying page, the demo library, SMS, the live switch, the pre-flight’s other libraries, and the neighbours no item edits); the ${NOT_TOUCHED_TILL_GTC398.length} that GTC-398 edits are not edited between demo-tweaks-2-good and GTC-398’s base (8a4f1bc)`,
+    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since demo-tweaks-2-good (routes, schema, auth, press, AI, email, households, the paying page, the demo library, SMS, the live switch, the pre-flight’s other libraries, and the neighbours no item edits); the ${NOT_TOUCHED_TILL_GTC398.length} that GTC-398 edits are not edited between demo-tweaks-2-good and GTC-398’s base (8a4f1bc); the ${NOT_TOUCHED_TILL_GTC399.length} that GTC-399 edits not between demo-tweaks-2-good and GTC-399’s base (6d2b103)`,
     missing.length === 0 &&
-      unchangedSinceGood(NOT_TOUCHED) &&
+      unchangedSinceGood([...NOT_TOUCHED, ...EXCLUDED]) &&
       missingAtBase.length === 0 &&
       git(['diff', '--quiet', GOOD_TAG, GTC398_BASE, '--', ...NOT_TOUCHED_TILL_GTC398]).status ===
+        0 &&
+      git(['diff', '--quiet', GOOD_TAG, GTC399_BASE, '--', ...NOT_TOUCHED_TILL_GTC399]).status ===
         0,
     missing.length || missingAtBase.length
       ? `missing: ${[...missing, ...missingAtBase].join(', ')}`

@@ -184,8 +184,8 @@ const CHECKS = {
     h.includes('Who’s coming to') && !h.includes(OWN_LINE) && !h.includes('Message me about'),
   /**
    * M1 (54): "What this does", "When it's done" directly under it, the button. Since GTC-394 tweak 2
-   * the herd-of-cats line and the strip are gone from this screen and the Moment's name, big, heads
-   * it: the title, then the two lines, then the button.
+   * the Moment's name, big, heads it: the title, then the two lines, then the button. The strip,
+   * gone at GTC-394 tweak 2, is back above the title at GTC-399 item 1.
    */
   M1: (h: string) => {
     const title = h.indexOf('<h1');
@@ -195,12 +195,22 @@ const CHECKS = {
     // [[GTC-396]] item 1 (founder, 21 Oct 2026): the herd line is back, under the title and above
     // "What this does" (it was "no herd line" from GTC-394 tweak 2 to GTC-395).
     const herd = h.indexOf('herd of cats');
+    // [[GTC-399]] item 1 (founder, 24 Oct 2026): the strip is back (GTC-394 tweak 2 had taken it
+    // off), once, above the title, current Moment 1, nothing ticked.
+    const strip = h.indexOf('data-moment-strip');
     return (
       title >= 0 &&
+      strip >= 0 &&
+      strip < title &&
+      h.split('data-moment-strip').length === 2 &&
+      /aria-current="step"><span class="[^"]*">1<\/span><span class="[^"]*">Who&#x27;s coming\?<\/span>/.test(
+        h
+      ) &&
+      h.split('aria-current="step"').length === 2 &&
+      !h.includes('✓') &&
       herd > title &&
       herd < does &&
       h.split('herd of cats').length === 2 &&
-      !h.includes('data-moment-strip') &&
       does > title &&
       done > does &&
       button > done &&
@@ -517,7 +527,7 @@ async function runInMemory() {
   );
   assert(
     'M',
-    'M1 Moment 1’s opening screen: its title, the herd line under it (GTC-396 item 1), "What this does", "When it’s done" directly under it (max-w-xl), then the button; once each; no strip (GTC-394 tweak 2)',
+    'M1 Moment 1’s opening screen: its title, the herd line under it (GTC-396 item 1), "What this does", "When it’s done" directly under it (max-w-xl), then the button; once each; the strip above the title, current Moment 1 (GTC-399 item 1)',
     CHECKS.M1(opening)
   );
   assert(
