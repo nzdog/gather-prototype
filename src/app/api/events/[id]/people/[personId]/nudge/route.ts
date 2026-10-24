@@ -45,6 +45,17 @@ export async function POST(
   }
 
   try {
+    // [[GTC-401]] — the person must have a place in the event in the address (a membership row),
+    // checked before anything is read for the answer, written or sent. Someone on another event
+    // gets the answer a missing person gets, as reset-claim answers.
+    const placeInEvent = await prisma.personEvent.findUnique({
+      where: { personId_eventId: { personId, eventId } },
+      select: { id: true },
+    });
+    if (!placeInEvent) {
+      return NextResponse.json({ error: 'Person not found' }, { status: 404 });
+    }
+
     // [[GTC-392]] — a sample event sends nothing: refused before anything is read or written (W3).
     if (await isDemoEvent(prisma, eventId)) {
       return NextResponse.json({ error: DEMO_SEND_WORDS, code: 'DEMO_EVENT' }, { status: 409 });

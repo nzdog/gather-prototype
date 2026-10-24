@@ -24,6 +24,17 @@ export async function GET(
   }
 
   try {
+    // [[GTC-401]] — the person must have a place in the event in the address (a membership row),
+    // checked before anything is read for the answer, written or sent. Someone on another event
+    // gets the answer a missing person gets, as reset-claim answers.
+    const placeInEvent = await prisma.personEvent.findUnique({
+      where: { personId_eventId: { personId, eventId } },
+      select: { id: true },
+    });
+    if (!placeInEvent) {
+      return NextResponse.json({ error: 'Person not found' }, { status: 404 });
+    }
+
     // Query the person with all needed relations
     const person = await prisma.person.findUnique({
       where: { id: personId },

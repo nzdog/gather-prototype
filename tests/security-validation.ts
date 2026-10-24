@@ -2614,6 +2614,411 @@ async function testSuite16_ItemEditStaysInItsEvent(fixtures: Fixtures) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Test Suite 17 — GTC-401: the four person routes stay inside the event in their address
+//
+// POST people/[personId]/nudge, GET people/[personId]/invite-detail, POST
+// people/[personId]/manual-override and DELETE people/[personId] (all under
+// /api/events/[id]/) check the caller's role on the event in the address. Before GTC-401
+// none of them checked that the person had a place in that event, so a host of one event
+// could message, read, mark or "remove" a person of another event by putting her own
+// event's id in the address. Each now answers 404 "Person not found" (reset-claim's answer)
+// right after the sign-in check, before anything is read, written or sent.
+//
+// Driven over HTTP with the fixtures' own host session cookie, as suite 16 is. The checks:
+//   (a) A's host names a person with no place in event A: the guard's answer, and nothing
+//       changes (the person's row, their place on event B, the invite log, the ledger, the
+//       OutboundMessage count).
+//   (b) the same host names a person who IS in her event: the answer the route gave before.
+//
+// ⚠ NOTHING HERE CAN SEND, WITH THE GUARD OR WITHOUT IT. The nudge's outsider is made by this
+// suite with NO phone and NO email, so even with the guard taken out (the break proof) the
+// route stops at "No contact method available" before any sender. The nudge's (b) uses a
+// sample event (the send wall answers 409 before anything is read) and a child (the child
+// rule answers 403 before any sender). The other three routes never send.
+//
+// Every row this suite makes is named with GTC401_TAG and removed at the end, with the log
+// and ledger rows its calls wrote, even when a check fails or a guard is gone; a leftover
+// from a crashed run is removed by name at the start.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const GTC401_TAG = 'GTC-401 suite 17';
+const GTC401_NOT_FOUND = 'Person not found';
+
+async function gtc401RemoveOwnRows() {
+  const people = await prisma.person.findMany({
+    where: { name: { startsWith: GTC401_TAG } },
+    select: { id: true },
+  });
+  const ids = people.map((p) => p.id);
+  await prisma.event.deleteMany({ where: { name: { startsWith: GTC401_TAG } } });
+  if (ids.length > 0) {
+    await prisma.inviteEvent.deleteMany({ where: { personId: { in: ids } } });
+    await prisma.person.deleteMany({ where: { id: { in: ids } } });
+  }
+}
+
+async function testSuite17_PersonRoutesStayInTheirEvent(fixtures: Fixtures) {
+  logSection(
+    'Test Suite 17: GTC-401 — the four person routes stay inside the event in their address'
+  );
+
+  const BASE = process.env.SECURITY_TEST_BASE_URL ?? 'http://localhost:3000';
+  const evA = fixtures.eventDraft;
+  const evB = fixtures.eventPast;
+  const HOST_COOKIE = fixtures.user.sessionCookie;
+  const { DEMO_SEND_WORDS } = await import('../src/lib/demo/send-wall');
+
+  let probeOk = false;
+  try {
+    const probe = await fetch(`${BASE}/api/events/${evA.id}/people`);
+    probeOk = probe.status === 401;
+  } catch {
+    probeOk = false;
+  }
+  logTest(
+    `dev server healthy on ${BASE} — a guarded sibling answers 401, not 500 or ECONNREFUSED`,
+    probeOk,
+    'Start it with `npm run dev`. These assertions cannot run without it.'
+  );
+  if (!probeOk) return;
+
+  const call = async (method: 'GET' | 'POST' | 'DELETE', url: string, body?: unknown) => {
+    const res = await fetch(`${BASE}${url}`, {
+      method,
+      headers: {
+        Cookie: HOST_COOKIE,
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    });
+    let json: any = null;
+    try {
+      json = await res.json();
+    } catch {
+      /* no body */
+    }
+    return { status: res.status, json };
+  };
+  const personUrl = (eventId: string, personId: string, rest = '') =>
+    `/api/events/${eventId}/people/${personId}${rest}`;
+  /** The person's own row, their places in every event and their links: all of it, as JSON. */
+  const personState = async (personId: string) =>
+    JSON.stringify([
+      await prisma.person.findUnique({ where: { id: personId } }),
+      await prisma.personEvent.findMany({ where: { personId }, orderBy: { id: 'asc' } }),
+      await prisma.accessToken.findMany({ where: { personId }, orderBy: { id: 'asc' } }),
+      await prisma.assignment.findMany({ where: { personId }, orderBy: { id: 'asc' } }),
+    ]);
+  /** Every row a log, the ledger or a send would add, counted across the whole database. */
+  const writeCounts = async () =>
+    JSON.stringify({
+      inviteEvents: await prisma.inviteEvent.count(),
+      auditEntries: await prisma.auditEntry.count(),
+      outboundMessages: await prisma.outboundMessage.count(),
+    });
+  const eventRow = async (id: string) =>
+    JSON.stringify(await prisma.event.findUnique({ where: { id } }));
+  const outboundCount = () => prisma.outboundMessage.count();
+
+  await gtc401RemoveOwnRows();
+  /** Log and ledger rows on events A and B, or about the outsider, before this suite. */
+  const ownScope = {
+    OR: [{ eventId: { in: [evA.id, evB.id] } }, { personId: fixtures.nudgeCandidate.personId }],
+  };
+  const inviteAtStart = (
+    await prisma.inviteEvent.findMany({ where: ownScope, select: { id: true } })
+  ).map((r) => r.id);
+  const auditAtStart = (
+    await prisma.auditEntry.findMany({
+      where: {
+        OR: [{ eventId: { in: [evA.id, evB.id] } }, { targetId: fixtures.nudgeCandidate.personId }],
+      },
+      select: { id: true },
+    })
+  ).map((r) => r.id);
+
+  try {
+    // ── The people ───────────────────────────────────────────────────────────
+    const placeOn = async (personId: string, eventId: string, over: Record<string, unknown> = {}) =>
+      prisma.personEvent.create({ data: { personId, eventId, role: 'PARTICIPANT', ...over } });
+    const makePerson = (suffix: string, contact: { email?: string } = {}) =>
+      prisma.person.create({
+        data: { name: `${GTC401_TAG} ${suffix}`, email: contact.email ?? null, phoneNumber: null },
+      });
+    const quietOutsider = await makePerson('outsider with no phone or email');
+    await placeOn(quietOutsider.id, evB.id);
+    const memberA = await makePerson('member of A', { email: 'gtc401-member-a@example.com' });
+    await placeOn(memberA.id, evA.id);
+    const leaverA = await makePerson('member of A to remove');
+    await placeOn(leaverA.id, evA.id);
+    const childA = await makePerson('child of A');
+    await placeOn(childA.id, evA.id, { householdRole: 'CHILD' });
+    const sample = await prisma.event.create({
+      data: {
+        name: `${GTC401_TAG} sample`,
+        startDate: new Date(Date.now() + 30 * 86_400_000),
+        endDate: new Date(Date.now() + 31 * 86_400_000),
+        status: 'DRAFT',
+        hostId: fixtures.host.id,
+        isDemo: true,
+      },
+    });
+    await prisma.eventRole.create({
+      data: { userId: fixtures.user.id, eventId: sample.id, role: 'HOST' },
+    });
+    const sampleGuest = await makePerson('guest of the sample');
+    await placeOn(sampleGuest.id, sample.id);
+    /** The fixtures' Nudge Candidate: on event B only, with a phone and an email. */
+    const outsider = fixtures.nudgeCandidate.personId;
+
+    const placesOf = async (personId: string) =>
+      (await prisma.personEvent.findMany({ where: { personId }, select: { eventId: true } })).map(
+        (m) => m.eventId
+      );
+    const outsiderPerson = await prisma.person.findUnique({ where: { id: outsider } });
+    const quietPlaces = await placesOf(quietOutsider.id);
+    const outsiderPlaces = await placesOf(outsider);
+    logTest(
+      'fixture: both outsiders have a place on event B and none on event A; the Nudge Candidate has a phone and an email, the quiet outsider neither (so no sender could be chosen for him)',
+      quietPlaces.length === 1 &&
+        quietPlaces[0] === evB.id &&
+        outsiderPlaces.length === 1 &&
+        outsiderPlaces[0] === evB.id &&
+        Boolean(outsiderPerson?.phoneNumber) &&
+        Boolean(outsiderPerson?.email) &&
+        quietOutsider.phoneNumber === null &&
+        quietOutsider.email === null,
+      `quiet ${JSON.stringify(quietPlaces)}; candidate ${JSON.stringify(outsiderPlaces)}`
+    );
+    const aMembers = await prisma.personEvent.findMany({
+      where: { eventId: evA.id, personId: { in: [memberA.id, leaverA.id, childA.id] } },
+      select: { personId: true, householdRole: true },
+    });
+    logTest(
+      'fixture: the three members of A have their place on event A (the child as CHILD), and the sample is a sample event the host holds',
+      aMembers.length === 3 &&
+        aMembers.find((m) => m.personId === childA.id)?.householdRole === 'CHILD' &&
+        (await prisma.event.findUnique({ where: { id: sample.id } }))?.isDemo === true &&
+        (await prisma.personEvent.count({
+          where: { eventId: sample.id, personId: sampleGuest.id },
+        })) === 1,
+      JSON.stringify(aMembers)
+    );
+
+    // ── NUDGE ────────────────────────────────────────────────────────────────
+    {
+      const before = await personState(quietOutsider.id);
+      const counts = await writeCounts();
+      const outbound = await outboundCount();
+      const r = await call('POST', personUrl(evA.id, quietOutsider.id, '/nudge'), {
+        template: 'warm',
+        message: `${GTC401_TAG} must never leave`,
+      });
+      logTest(
+        `(a) POST /api/events/:A/people/:outsider/nudge by A's host — refused 404 "${GTC401_NOT_FOUND}"`,
+        r.status === 404 && r.json?.error === GTC401_NOT_FOUND,
+        `got ${r.status} ${JSON.stringify(r.json)}`
+      );
+      logTest(
+        "  ...and the outsider's row, places, links and holdings are unchanged",
+        (await personState(quietOutsider.id)) === before,
+        'the person changed'
+      );
+      logTest(
+        '  ...and no OutboundMessage row was written (the count is the same), so nothing was queued or sent',
+        (await outboundCount()) === outbound,
+        `OutboundMessage ${outbound} -> ${await outboundCount()}`
+      );
+      logTest(
+        '  ...and no invite-log or ledger row was written anywhere',
+        (await writeCounts()) === counts,
+        `${counts} -> ${await writeCounts()}`
+      );
+    }
+    {
+      const outbound = await outboundCount();
+      const r = await call('POST', personUrl(sample.id, sampleGuest.id, '/nudge'), {
+        template: 'warm',
+        message: `${GTC401_TAG} sample`,
+      });
+      logTest(
+        '(b) POST /api/events/:sample/people/:itsGuest/nudge by its host — still 409 DEMO_EVENT in the send wall’s words (the guard lets a member through)',
+        r.status === 409 && r.json?.code === 'DEMO_EVENT' && r.json?.error === DEMO_SEND_WORDS,
+        `got ${r.status} ${JSON.stringify(r.json)}`
+      );
+      logTest(
+        '  ...and no OutboundMessage row was written',
+        (await outboundCount()) === outbound,
+        `OutboundMessage ${outbound} -> ${await outboundCount()}`
+      );
+    }
+    {
+      const outbound = await outboundCount();
+      const r = await call('POST', personUrl(evA.id, childA.id, '/nudge'), {
+        template: 'warm',
+        message: `${GTC401_TAG} child`,
+      });
+      logTest(
+        "(b) POST /api/events/:A/people/:childOfA/nudge by A's host — still 403, the child rule (the guard lets a member through to it)",
+        r.status === 403 &&
+          r.json?.error === 'This person is recorded as a child and cannot be messaged directly.',
+        `got ${r.status} ${JSON.stringify(r.json)}`
+      );
+      logTest(
+        '  ...and no OutboundMessage row was written',
+        (await outboundCount()) === outbound,
+        `OutboundMessage ${outbound} -> ${await outboundCount()}`
+      );
+    }
+
+    // ── INVITE-DETAIL ────────────────────────────────────────────────────────
+    {
+      const before = await personState(outsider);
+      const counts = await writeCounts();
+      const r = await call('GET', personUrl(evA.id, outsider, '/invite-detail'));
+      logTest(
+        `(a) GET /api/events/:A/people/:outsider/invite-detail by A's host — refused 404 "${GTC401_NOT_FOUND}"`,
+        r.status === 404 && r.json?.error === GTC401_NOT_FOUND,
+        `got ${r.status}`
+      );
+      logTest(
+        "  ...and the answer carries none of the outsider's name, email or phone",
+        !JSON.stringify(r.json ?? {}).includes(outsiderPerson?.name ?? '\u0000') &&
+          !JSON.stringify(r.json ?? {}).includes(outsiderPerson?.email ?? '\u0000') &&
+          !JSON.stringify(r.json ?? {}).includes(outsiderPerson?.phoneNumber ?? '\u0000'),
+        'the answer names the outsider'
+      );
+      logTest(
+        "  ...and the outsider's row, places, links and holdings are unchanged, and no log or ledger row was written",
+        (await personState(outsider)) === before && (await writeCounts()) === counts,
+        'something changed'
+      );
+    }
+    {
+      const r = await call('GET', personUrl(evA.id, memberA.id, '/invite-detail'));
+      logTest(
+        "(b) GET /api/events/:A/people/:memberOfA/invite-detail by A's host — still 200 with her details and A's name",
+        r.status === 200 &&
+          r.json?.id === memberA.id &&
+          r.json?.name === memberA.name &&
+          r.json?.email === memberA.email &&
+          r.json?.eventName === evA.name,
+        `got ${r.status} ${JSON.stringify(r.json)}`
+      );
+    }
+
+    // ── MANUAL-OVERRIDE ──────────────────────────────────────────────────────
+    {
+      const before = await personState(outsider);
+      const counts = await writeCounts();
+      const r = await call('POST', personUrl(evA.id, outsider, '/manual-override'), {
+        response: 'ACCEPTED',
+        reason: `${GTC401_TAG} cross-event mark`,
+      });
+      logTest(
+        `(a) POST /api/events/:A/people/:outsider/manual-override by A's host — refused 404 "${GTC401_NOT_FOUND}"`,
+        r.status === 404 && r.json?.error === GTC401_NOT_FOUND,
+        `got ${r.status} ${JSON.stringify(r.json)}`
+      );
+      logTest(
+        "  ...and the outsider's row, places, links and holdings are unchanged",
+        (await personState(outsider)) === before,
+        'the person changed'
+      );
+      logTest(
+        '  ...and no invite-log ("marked by hand") or ledger row was written anywhere',
+        (await writeCounts()) === counts,
+        `${counts} -> ${await writeCounts()}`
+      );
+    }
+    {
+      const marksBefore = await prisma.inviteEvent.count({
+        where: { eventId: evA.id, personId: memberA.id, type: 'MANUAL_OVERRIDE_MARKED' },
+      });
+      const r = await call('POST', personUrl(evA.id, memberA.id, '/manual-override'), {
+        response: 'ACCEPTED',
+      });
+      logTest(
+        "(b) POST /api/events/:A/people/:memberOfA/manual-override by A's host — still 200, nothing to move, in the same words",
+        r.status === 200 &&
+          r.json?.success === true &&
+          r.json?.assignmentsUpdated === 0 &&
+          r.json?.message === `${memberA.name} marked as confirmed`,
+        `got ${r.status} ${JSON.stringify(r.json)}`
+      );
+      logTest(
+        '  CONTROL: that mark wrote its invite-log row, so the log read in (a) can see one',
+        (await prisma.inviteEvent.count({
+          where: { eventId: evA.id, personId: memberA.id, type: 'MANUAL_OVERRIDE_MARKED' },
+        })) ===
+          marksBefore + 1,
+        'the member mark wrote no invite-log row'
+      );
+    }
+
+    // ── DELETE ───────────────────────────────────────────────────────────────
+    {
+      const before = await personState(outsider);
+      const counts = await writeCounts();
+      const aBefore = await eventRow(evA.id);
+      const r = await call('DELETE', personUrl(evA.id, outsider), {
+        reason: `${GTC401_TAG} cross-event removal`,
+      });
+      logTest(
+        `(a) DELETE /api/events/:A/people/:outsider by A's host — refused 404 "${GTC401_NOT_FOUND}"`,
+        r.status === 404 && r.json?.error === GTC401_NOT_FOUND,
+        `got ${r.status} ${JSON.stringify(r.json)}`
+      );
+      logTest(
+        "  ...and the outsider's row, place on event B, links and holdings are unchanged",
+        (await personState(outsider)) === before,
+        'the person changed'
+      );
+      logTest(
+        '  ...and no "removed" ledger row or log row was written anywhere, and event A is untouched',
+        (await writeCounts()) === counts && (await eventRow(evA.id)) === aBefore,
+        `${counts} -> ${await writeCounts()}`
+      );
+    }
+    {
+      const removalsBefore = await prisma.auditEntry.count({
+        where: { eventId: evA.id, targetId: leaverA.id, actionType: 'REMOVE_PERSON' },
+      });
+      const r = await call('DELETE', personUrl(evA.id, leaverA.id));
+      logTest(
+        "(b) DELETE /api/events/:A/people/:memberOfA by A's host — still 200, and her place on A is gone",
+        r.status === 200 &&
+          r.json?.success === true &&
+          (await prisma.personEvent.count({
+            where: { eventId: evA.id, personId: leaverA.id },
+          })) === 0,
+        `got ${r.status} ${JSON.stringify(r.json)}`
+      );
+      logTest(
+        '  CONTROL: that removal wrote its ledger row, so the ledger read in (a) can see one',
+        (await prisma.auditEntry.count({
+          where: { eventId: evA.id, targetId: leaverA.id, actionType: 'REMOVE_PERSON' },
+        })) ===
+          removalsBefore + 1,
+        'the member removal wrote no ledger row'
+      );
+    }
+  } finally {
+    // Put back what this suite changed, even when a check above failed or a guard is gone: the
+    // log and ledger rows its calls wrote on events A and B or about the outsider (the rows on
+    // its own sample event and its own people go with them below), then its own rows.
+    await prisma.inviteEvent.deleteMany({ where: { ...ownScope, id: { notIn: inviteAtStart } } });
+    await prisma.auditEntry.deleteMany({
+      where: {
+        OR: [{ eventId: { in: [evA.id, evB.id] } }, { targetId: fixtures.nudgeCandidate.personId }],
+        id: { notIn: auditAtStart },
+      },
+    });
+    await gtc401RemoveOwnRows();
+  }
+}
+
 async function main() {
   console.log(`${BOLD}${YELLOW}=== Security Validation Test Suite ===${RESET}\n`);
   console.log('Contract under test:');
@@ -2642,6 +3047,7 @@ async function main() {
     await testSuite14_PaymentIsNotIdentity();
     await testSuite15_TnzWebhookFailsClosed();
     await testSuite16_ItemEditStaysInItsEvent(fixtures);
+    await testSuite17_PersonRoutesStayInTheirEvent(fixtures);
 
     console.log(`\n${BOLD}${YELLOW}=== Test Summary ===${RESET}`);
     console.log(`Total tests: ${testsRun}`);
