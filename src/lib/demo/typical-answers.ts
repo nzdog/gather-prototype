@@ -31,7 +31,7 @@ import { DIETARY_OPTIONS } from '@/lib/dietary';
 /** W23 to W28. */
 export const TYPICAL_WORDS = {
   /** W23 — the button. */
-  BUTTON: 'Fill in typical answers',
+  BUTTON: 'Fill in demo answers',
   /** W24 — the line under it. */
   EXPLAIN:
     'I’ll answer the questions the way a typical host might. You can change any answer before you press Generate.',

@@ -224,7 +224,9 @@ const LIST_HEADING = 'Ducks in a row so far';
 // ── Tweak 5: the typical answers, hand-written ───────────────────────────────
 const TYPICAL_FILE = 'src/lib/demo/typical-answers.ts';
 const ANSWERS_BUTTON_FILE = 'src/components/demo/TypicalAnswersButton.tsx';
-const W23 = 'Fill in typical answers';
+// [[GTC-399]] item 4 (the founder, 24 Oct 2026: "Instead of fill in typical answers - fill in demo
+// answers"): the button's words, W23, now read so.
+const W23 = 'Fill in demo answers';
 const W24 =
   'I’ll answer the questions the way a typical host might. You can change any answer before you press Generate.';
 /** The founder's six notes, by section (first prompt, tweak 5). */

@@ -70,7 +70,9 @@ const W19 = 'Added 30 made-up people in 11 households.';
 const W20 = 'The crowd is already here.';
 const W21 = 'The crowd couldn’t be added. Try again.';
 const W22 = 'A crowd can only be added to a sample event.';
-const W23 = 'Fill in typical answers';
+// [[GTC-399]] item 4 (the founder, 24 Oct 2026: "Instead of fill in typical answers - fill in demo
+// answers"): the button's words, W23, now read so.
+const W23 = 'Fill in demo answers';
 const W24 =
   'I’ll answer the questions the way a typical host might. You can change any answer before you press Generate.';
 const W25 = 'Filled in. Change anything you like.';

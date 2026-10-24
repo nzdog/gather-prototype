@@ -17,6 +17,8 @@
  *   T  item 3: Moment 3's working screen opens at the top: the view's own arrival effect jumps the
  *      window (what scrolls there) to the top, plainly, every time it opens except the landing on
  *      one dish, which keeps its centring.
+ *   F  item 4: the sample's button reads "Fill in demo answers": that one constant, the file otherwise
+ *      as it was; no visible line in the code names the button by its old words.
  *   U  CONTROL: the files this batch must not touch are not edited since demo-tweaks-4-good;
  *      package.json (read at the commit that added this suite) differs by one script line; the
  *      lockfile there is the tag's; the two untracked scripts are in no commit.
@@ -39,6 +41,7 @@ import Moment3Opening from '../src/components/plan/Moment3Opening';
 // import() would give the view a second toast context).
 import { ToastProvider } from '../src/contexts/ToastContext';
 import Moment3AssignView from '../src/components/plan/Moment3AssignView';
+import TypicalAnswersButton from '../src/components/demo/TypicalAnswersButton';
 
 const ROOT = path.join(__dirname, '..');
 
@@ -151,6 +154,19 @@ const M3_SENTENCE_HTML = 'Now. Who&#x27;s on what.';
 /** Moment 2's opening button, as its source writes it. */
 const START_SRC = 'Let&rsquo;s do this &rarr;';
 const SUITE = 'tests/demo-tweaks-5-test.tsx';
+const TYPICAL_FILE = 'src/lib/demo/typical-answers.ts';
+const OLD_BUTTON = 'Fill in typical answers';
+/** The one new text in this batch (the founder's item 4). */
+const NEW_BUTTON = 'Fill in demo answers';
+/** Every .ts and .tsx file under `dir`, relative to the repo. */
+const walk = (dir: string, out: string[] = []): string[] => {
+  for (const name of fs.readdirSync(path.join(ROOT, dir))) {
+    const rel = path.join(dir, name);
+    if (fs.statSync(path.join(ROOT, rel)).isDirectory()) walk(rel, out);
+    else if (/\.(ts|tsx)$/.test(name)) out.push(rel);
+  }
+  return out;
+};
 const NEW_SCRIPT = 'test:demo-tweaks-5';
 const NEW_SCRIPT_VALUE = 'tsx --tsconfig tests/tsconfig.json tests/demo-tweaks-5-test.tsx';
 const UNTRACKED_SCRIPTS = ['scripts/dev-login.ts', 'scripts/print-host-link.ts'];
@@ -501,6 +517,42 @@ export const CHECKS = {
     return once(setup) && once(base);
   },
 
+  // ── Item 4 ──
+  /** F1 — the constant reads the founder's words; the other words (W24 to W28) as they were. */
+  newButtonWord(words: any) {
+    return (
+      words?.BUTTON === NEW_BUTTON &&
+      words?.EXPLAIN ===
+        'I’ll answer the questions the way a typical host might. You can change any answer before you press Generate.' &&
+      words?.DONE === 'Filled in. Change anything you like.' &&
+      words?.NOTHING === 'Everything’s already answered.'
+    );
+  },
+  /** F2 — the file differs from the base by that one line and nothing else. */
+  oneLineDiff(diff: string) {
+    const changed = diff.split('\n').filter((l) => /^[-+]/.test(l) && !/^(---|\+\+\+) /.test(l));
+    return changed.join('\n') === `-  BUTTON: '${OLD_BUTTON}',\n+  BUTTON: '${NEW_BUTTON}',`;
+  },
+  /** F3 — the button, rendered: the new words in it, the line under it, the old words nowhere. */
+  buttonRendered(html: string) {
+    return (
+      html.includes(`>${NEW_BUTTON}</button>`) &&
+      html.indexOf('I’ll answer the questions') > html.indexOf(`>${NEW_BUTTON}</button>`) &&
+      !html.includes(OLD_BUTTON)
+    );
+  },
+  /** F4 — no code (comments aside) in src says the old words; the new ones are typed in the words file only. */
+  oldWordsGone(files: { rel: string; text: string }[]) {
+    return (
+      files.length > 100 &&
+      files.every((f) => !f.text.includes(OLD_BUTTON)) &&
+      files
+        .filter((f) => f.text.includes(NEW_BUTTON))
+        .map((f) => f.rel)
+        .join() === TYPICAL_FILE
+    );
+  },
+
   // ── CONTROL ──
   /** U2 — package.json differs from the tag by this suite's one script line, nothing else. */
   oneScriptLine(atAdd: string, goodJson: string) {
@@ -765,6 +817,36 @@ async function layerT() {
   );
 }
 
+// ══ Item 4 ═══════════════════════════════════════════════════════════════════
+async function layerF() {
+  section('F — item 4: "Fill in demo answers"');
+  const TA = (await import('../src/lib/demo/typical-answers').catch(() => null)) as any;
+  assert(
+    'F',
+    'F1 TYPICAL_WORDS.BUTTON reads "Fill in demo answers"; the line under it and the two answers it gives as they were',
+    CHECKS.newButtonWord(TA?.TYPICAL_WORDS),
+    JSON.stringify(TA?.TYPICAL_WORDS?.BUTTON)
+  );
+  assert(
+    'F',
+    'F2 typical-answers.ts differs from the base (6d2b103) by that one line and nothing else',
+    CHECKS.oneLineDiff(git(['diff', BASE, '--', TYPICAL_FILE]).stdout)
+  );
+  assert(
+    'F',
+    'F3 the button on the sample’s questions, rendered: the new words, its line under it, the old words nowhere',
+    CHECKS.buttonRendered(
+      render(createElement(TypicalAnswersButton as any, { onFill: () => 'filled' }))
+    )
+  );
+  const files = walk('src').map((rel) => ({ rel, text: code(rel) }));
+  assert(
+    'F',
+    `F4 across ${files.length} source files no code (comments aside) says "Fill in typical answers"; "Fill in demo answers" is typed in the words file only`,
+    CHECKS.oldWordsGone(files)
+  );
+}
+
 // ══ CONTROL ══════════════════════════════════════════════════════════════════
 async function layerU() {
   section('U — CONTROL: what this batch must not touch');
@@ -804,6 +886,7 @@ async function main() {
   await layerB();
   await layerM();
   await layerT();
+  await layerF();
   await layerU();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
