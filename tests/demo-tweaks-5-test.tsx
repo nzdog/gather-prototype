@@ -90,6 +90,8 @@ const code = (rel: string) => stripComments(read(rel));
 const GOOD_TAG = 'demo-tweaks-4-good';
 /** GTC-398's last commit, where this batch started (the tag's commit, named for good). */
 const BASE = '6d2b10397975ba688f543b8561ca918e0870ea56';
+/** [[GTC-400]]'s base: this batch's last commit (528e8ad), named for good. */
+const GTC400_BASE = '528e8adc5960c3fe3de989a89b738dbbe6a60e1d';
 const git = (args: string[]) => spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' });
 const unchangedSinceGood = (paths: string[]) =>
   git(['diff', '--quiet', GOOD_TAG, '--', ...paths]).status === 0;
@@ -781,7 +783,7 @@ export const CHECKS = {
  * own layer asks what it may change.
  */
 const NOT_TOUCHED = [
-  'src/app/api',
+  'src/app/api', // but the dish-edit route (GTC-400; see EXCLUDED and its list)
   'prisma',
   'src/lib/auth',
   'src/lib/auth.ts',
@@ -825,8 +827,19 @@ const NOT_TOUCHED = [
   'src/app/billing',
 ];
 
+/**
+ * [[GTC-400]] edits one route on purpose (the dish edit now checks the dish is the event's), so U1
+ * asks its question of it at GTC-400's base (528e8ad), a fixed commit: GTC-399 still may not have
+ * touched it. The security suite (suite 16) pins its new behaviour. It is kept out of the live
+ * diff of src/app/api, which stays listed and still covers every other route.
+ */
+const NOT_TOUCHED_TILL_GTC400 = ['src/app/api/events/[id]/items/[itemId]/route.ts'];
+
 /** Files inside a listed directory that an item edits: kept out of U1's live diff (none now). */
-const EXCLUDED = [':(exclude)src/app/plan/[eventId]/glance/page.tsx'];
+const EXCLUDED = [
+  ':(exclude)src/app/plan/[eventId]/glance/page.tsx',
+  ':(exclude)src/app/api/events/[id]/items/[itemId]/route.ts',
+];
 
 // ══ Item 1 ═══════════════════════════════════════════════════════════════════
 async function layerB() {
@@ -1297,11 +1310,19 @@ async function layerS() {
 // ══ CONTROL ══════════════════════════════════════════════════════════════════
 async function layerU() {
   section('U — CONTROL: what this batch must not touch');
-  const missing = NOT_TOUCHED.filter((f) => !fs.existsSync(path.join(ROOT, f)));
+  const missing = [
+    ...NOT_TOUCHED.filter((f) => !fs.existsSync(path.join(ROOT, f))),
+    ...NOT_TOUCHED_TILL_GTC400.filter(
+      (f) => git(['cat-file', '-e', `${GTC400_BASE}:${f}`]).status !== 0
+    ),
+  ];
   assert(
     'U',
-    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since demo-tweaks-4-good (routes, schema, auth, press, AI, email, households, the paying page, the new-event page, the pre-flight's libraries, the sample's limits and words, the strip, the Moment words, the entry rule, Moment 3's rules, SMS, the board, and the neighbours no item edits)`,
-    missing.length === 0 && unchangedSinceGood([...NOT_TOUCHED, ...EXCLUDED]),
+    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since demo-tweaks-4-good (routes, schema, auth, press, AI, email, households, the paying page, the new-event page, the pre-flight's libraries, the sample's limits and words, the strip, the Moment words, the entry rule, Moment 3's rules, SMS, the board, and the neighbours no item edits); the ${NOT_TOUCHED_TILL_GTC400.length} that GTC-400 edits not between demo-tweaks-4-good and GTC-400’s base (528e8ad)`,
+    missing.length === 0 &&
+      unchangedSinceGood([...NOT_TOUCHED, ...EXCLUDED]) &&
+      git(['diff', '--quiet', GOOD_TAG, GTC400_BASE, '--', ...NOT_TOUCHED_TILL_GTC400]).status ===
+        0,
     missing.length ? `missing: ${missing.join(', ')}` : undefined
   );
   // GTC-397's lesson: package.json and the lockfile are read at a fixed commit (the one that added

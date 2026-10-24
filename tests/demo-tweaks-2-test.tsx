@@ -388,6 +388,15 @@ const NOT_EDITED_E = [
   'src/lib/sms',
   'prisma',
 ];
+/**
+ * [[GTC-400]] edits one route on purpose (the dish edit now checks the dish is the event's), so
+ * E8 asks its question of that file at GTC-400's base (528e8ad), a fixed commit: GTC-395 still
+ * may not have touched it. The security suite (suite 16) pins its new behaviour. The file is
+ * kept out of the live diff of src/app/api, which still covers every other route.
+ */
+const GTC400_BASE = '528e8adc5960c3fe3de989a89b738dbbe6a60e1d';
+const GTC400_ROUTE = 'src/app/api/events/[id]/items/[itemId]/route.ts';
+const GTC400_EXCLUDED = [`:(exclude)${GTC400_ROUTE}`];
 const VENUE_FACTS = {
   id: 'e1',
   name: 'Boxing Day',
@@ -1184,8 +1193,14 @@ async function layerE() {
   );
   assert(
     'E',
-    'E8 CONTROL: DropOffDisplay and its helper, every route, the messages, the press, email, texts and the schema are not edited since demo-tweaks-good',
-    NOT_EDITED_E.every((f) => fs.existsSync(path.join(ROOT, f))) && unchangedSinceGood(NOT_EDITED_E)
+    'E8 CONTROL: DropOffDisplay and its helper, every route, the messages, the press, email, texts and the schema are not edited since demo-tweaks-good (the one route GTC-400 edits: not between demo-tweaks-good and GTC-400’s base, 528e8ad)',
+    NOT_EDITED_E.every((f) => fs.existsSync(path.join(ROOT, f))) &&
+      unchangedSinceGood([...NOT_EDITED_E, ...GTC400_EXCLUDED]) &&
+      spawnSync('git', ['cat-file', '-e', `${GTC400_BASE}:${GTC400_ROUTE}`], { cwd: ROOT })
+        .status === 0 &&
+      spawnSync('git', ['diff', '--quiet', GOOD_TAG, GTC400_BASE, '--', GTC400_ROUTE], {
+        cwd: ROOT,
+      }).status === 0
   );
 }
 
