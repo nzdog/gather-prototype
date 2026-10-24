@@ -637,13 +637,6 @@ async function runLive() {
     const st = (n: number) => `document.getElementById('step-${n}')`;
     const tog = (n: number) => `${st(n)}?.querySelector('header button[aria-expanded]')`;
     const box = (n: number) => `${st(n)}?.querySelector('header input[type=checkbox]')`;
-    /**
-     * [[GTC-399]] item 5: a step's one tick box, in its row when the step is closed and at the foot
-     * of its open content when it is open; `null` unless there is exactly one.
-     */
-    const TICK = `header input[type=checkbox], [data-tick-bottom] input[type=checkbox]`;
-    const oneBox = (n: number) =>
-      `(() => { const b = ${st(n)}?.querySelectorAll(${JSON.stringify(TICK)}) ?? []; return b.length === 1 ? b[0] : null; })()`;
     const label = (n: number) => `${st(n)}?.querySelector('header label')`;
     const goLine = `document.querySelector('[data-go-to-step]')`;
     const sendBtn = `[...document.querySelectorAll('button')].find(b => b.innerText.trim() === 'Send — finish the five checks first')`;
@@ -723,25 +716,57 @@ async function runLive() {
       detail[k('C4')] = `${t4} ${JSON.stringify(s4)}`;
 
       // C5 — the line opens step 2 and takes her there: its top at the top of the screen, the focus
-      // on its box; it ticks nothing and asks the server for nothing. [[GTC-399]] item 5: the step
-      // is open, so its one box is at the foot of its open content (its row's slot empty); each
-      // step's one box, wherever it is, is read before and after.
+      // on its box; it ticks nothing and asks the server for nothing.
       await ev(`(() => { window.__reqs = 0; const f = window.fetch.bind(window); window.fetch = (u, o) => { window.__reqs++; return f(u, o); };
-        window.__boxes = () => [...document.querySelectorAll('section[data-step]')].map(s => { const b = s.querySelectorAll(${JSON.stringify(TICK)}); return b.length === 1 ? String(b[0].checked) : 'boxes:' + b.length; }).join(','); window.__before = window.__boxes(); return true; })()`);
+        window.__boxes = () => [...document.querySelectorAll('section header input[type=checkbox]')].map(b => b.checked).join(','); window.__before = window.__boxes(); return true; })()`);
       const t5 = await tap(goLine, 2500);
       const s5 = {
         fold: await fold(2),
         top: Math.round(await ev<number>(`${st(2)}.getBoundingClientRect().top`)),
-        focus: await ev<boolean>(
-          `(() => { const b = ${oneBox(2)}; return !!b && document.activeElement === b && !!b.closest('#step-2-body [data-tick-bottom]') && ${st(2)}.querySelector('header [data-tick-slot]')?.children.length === 0; })()`
-        ),
-        quiet: await ev<boolean>(
-          `window.__before.split(',').length === 5 && !window.__before.includes('boxes:') && window.__boxes() === window.__before && window.__reqs === 0`
-        ),
+        focus: await ev<boolean>(`document.activeElement === ${box(2)}`),
+        quiet: await ev<boolean>(`window.__boxes() === window.__before && window.__reqs === 0`),
       };
       r[k('C5')] =
         t5 === null && s5.fold === 'open' && s5.top >= 0 && s5.top <= 96 && s5.focus && s5.quiet;
       detail[k('C5')] = `${t5} ${JSON.stringify(s5)}`;
+
+      // C11 — [[GTC-399]] item 5 (the founder's ruling, 24 Oct 2026: "two tick boxes so either can
+      // be ticked"): step 2, opened by the line, has a second box at the foot of its open content,
+      // and the two are one control: the foot's tick shows the row's ticked, the row's untick shows
+      // the foot's unticked, and the reverse; closed, only the row's is left. It ends as it began.
+      const footIn = `${st(2)}?.querySelector('[data-tick-bottom] input[data-tick-foot]')`;
+      const footLabel = `${st(2)}?.querySelector('[data-tick-bottom] label')`;
+      const both = () => ev<string>(`[!!${box(2)}?.checked, !!${footIn}?.checked].join(',')`);
+      const s11: Record<string, unknown> = {
+        inBody: await ev<boolean>(
+          `!!${footIn} && !!${footIn}.closest('#step-2-body') && ${st(2)}.querySelectorAll('input[data-tick-foot]').length === 1 && !!${box(2)}`
+        ),
+        before: await both(),
+      };
+      s11.tFoot = await tap(footLabel, 500);
+      s11.footTicks = await both();
+      s11.tRow = await tap(label(2), 500);
+      s11.rowUnticks = await both();
+      s11.tRow2 = await tap(label(2), 500);
+      s11.rowTicks = await both();
+      s11.tFoot2 = await tap(footLabel, 500);
+      s11.footUnticks = await both();
+      s11.tClose = await tap(tog(2), 600);
+      s11.fold = await fold(2);
+      s11.footGone = await ev<boolean>(`!${st(2)}?.querySelector('[data-tick-foot]')`);
+      s11.rowKept = await ev<boolean>(`!!${box(2)} && !${box(2)}.checked`);
+      r[k('C11')] =
+        s11.inBody === true &&
+        s11.before === 'false,false' &&
+        [s11.tFoot, s11.tRow, s11.tRow2, s11.tFoot2, s11.tClose].every((t) => t === null) &&
+        s11.footTicks === 'true,true' &&
+        s11.rowUnticks === 'false,false' &&
+        s11.rowTicks === 'true,true' &&
+        s11.footUnticks === 'false,false' &&
+        s11.fold === 'closed' &&
+        s11.footGone === true &&
+        s11.rowKept === true;
+      detail[k('C11')] = JSON.stringify(s11);
 
       if (tag === 'desktop') {
         // C7 — W1, W2 and W3 on the closed rows of the event that needs her; on the settled one,
@@ -805,15 +830,16 @@ async function runLive() {
     C2: 'a tap opens step 1, then step 3; step 1 stays open (several at once)',
     C3: 'a second tap closes step 1; step 3 stays open',
     C4: 'step 1’s box ticks it from its closed row; it stays closed; the line names step 2',
-    C5: 'the line opens step 2 and takes her there (top within 96px), the focus on its one box, at the foot of the open step (GTC-399 item 5); nothing ticked, no request',
+    C5: 'the line opens step 2 and takes her there (top within 96px), the focus on its box; nothing ticked, no request',
     C6: 'CONTROL: inside step 3, the household rows still fold, two open at once',
     C7: 'W1, W2 and W3 on the closed rows of the event that needs her; on the settled one no W1, no W3, and W2 reads "No dietary needs"',
     C8: 'invites only: steps 1 and 2 read W11, ticked and greyed, no toggle; step 3 closed; the line names step 3 and opens it',
     C9: 'CONTROL: exactly the screen’s width — invites only, closed, and with steps 1 to 4 open',
+    C11: 'step 2 open: a second box at the foot of its open content (GTC-399 item 5), one control with the row’s — the foot’s tick ticks both, the row’s untick unticks both, and the reverse; closed, only the row’s box is left',
   };
-  for (const id of ['C1', 'C2', 'C3', 'C6', 'C4', 'C5', 'C7', 'C8', 'C9'])
+  for (const id of ['C1', 'C2', 'C3', 'C6', 'C4', 'C5', 'C11', 'C7', 'C8', 'C9'])
     assert('C', `${id} desktop: ${C_LABELS[id]}`, r[id] === true, detail[id]);
-  for (const id of ['C1', 'C2', 'C3', 'C4', 'C5', 'C8', 'C9'])
+  for (const id of ['C1', 'C2', 'C3', 'C4', 'C5', 'C11', 'C8', 'C9'])
     assert('C', `${id}p phone: ${C_LABELS[id]}`, r[`${id}p`] === true, detail[`${id}p`]);
 
   assert(

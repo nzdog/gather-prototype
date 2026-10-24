@@ -22,11 +22,12 @@
  * distance from the box's right edge. Ready and the settled steps are as they were.
  *
  * [[GTC-399]] item 5 (the founder, 24 Oct 2026: "Move check box to the bottom when the accordion is
- * expanded so the user doesn't have to scroll up") — AN OPEN STEP'S TICK BOX IS AT ITS FOOT. While
- * a step that folds is open, its one tick box sits at the bottom of what it shows, under the last
- * thing to read; the slot beside the row stays, empty, so the row does not move. Closed, the box is
- * back in that slot. Moved, not copied: one box per step at any time, the same handler, state,
- * words and rules. Ready and the settled steps keep theirs in the row.
+ * expanded so the user doesn't have to scroll up"; his ruling the same day, "How about two tick
+ * boxes so either can be ticked") — AN OPEN STEP HAS A SECOND TICK BOX AT ITS FOOT. The row's box
+ * is as it always was, open or closed. While a step that folds is open, a second box sits at the
+ * bottom of what it shows (`data-tick-foot`), the same control in effect: the same checked state,
+ * the same handler, the same words and rules, so ticking either ticks the step and shows both
+ * ticked. Ready and the settled steps have only the row's.
  */
 
 import { FOLD_ROW_RING, FOLD_ROW_SHADE, FoldBody, FoldCue } from '@/components/plan/AccordionShell';
@@ -76,7 +77,7 @@ export default function PreflightStep({
   children: React.ReactNode;
 }) {
   const folds = !settled && onToggle !== undefined;
-  // [[GTC-399]] item 5: an open step that folds draws its box at its foot, not in its row.
+  // [[GTC-399]] item 5: an open step that folds draws a second box at its foot.
   const boxAtFoot = folds && open;
   const rowLine =
     line && !settled ? (
@@ -96,6 +97,21 @@ export default function PreflightStep({
     <label className="flex items-center gap-2 shrink-0 cursor-pointer text-sm text-gray-600">
       <input
         type="checkbox"
+        checked={checked || settled}
+        disabled={settled}
+        onChange={(e) => onCheck(e.target.checked)}
+        className="rounded border-gray-300 text-accent focus:ring-accent/40"
+      />
+      {checkLabel}
+    </label>
+  );
+  // [[GTC-399]] item 5: the foot's box, the row's in every way but its marker (no id on either:
+  // each input sits inside its own label, which names it).
+  const footBox = (
+    <label className="flex items-center gap-2 shrink-0 cursor-pointer text-sm text-gray-600">
+      <input
+        type="checkbox"
+        data-tick-foot=""
         checked={checked || settled}
         disabled={settled}
         onChange={(e) => onCheck(e.target.checked)}
@@ -151,7 +167,7 @@ export default function PreflightStep({
           )}
           {folds ? (
             <div data-tick-slot="" className="flex w-[5.25rem] shrink-0 justify-end">
-              {boxAtFoot ? null : box}
+              {box}
             </div>
           ) : (
             box
@@ -167,7 +183,7 @@ export default function PreflightStep({
                 data-tick-bottom=""
                 className="mt-6 pt-4 border-t border-gray-100 flex justify-end"
               >
-                {box}
+                {footBox}
               </div>
             )}
           </div>

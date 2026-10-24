@@ -1664,11 +1664,10 @@ async function runLive() {
         CHECKS.C_FOLD(fo3, W[10], true, '', '+447700900387');
       detail[`C12${k}`] = JSON.stringify({ fo2, fo3 });
       // tick step 4, then save Mere's email from her fold: she and Ana leave part 3, the tick stays (Q7)
-      // [[GTC-399]] item 5: step 4 is open here, so its one box is at the foot of its open content
-      // (its row's slot empty).
-      const STEP4_BOX = `(() => { const b = document.querySelectorAll('#step-4 header input[type=checkbox], #step-4 [data-tick-bottom] input[type=checkbox]'); return b.length === 1 && !!b[0].closest('[data-tick-bottom]') && document.querySelector('#step-4 header [data-tick-slot]')?.children.length === 0 && b[0].checked; })()`;
-      await b.tap('#step-4 [data-tick-bottom] label', 600);
-      const ticked = await b.ev<boolean>(STEP4_BOX);
+      await b.tap('#step-4 header label', 600);
+      const ticked = await b.ev<boolean>(
+        `!!document.querySelector('#step-4 header input[type=checkbox]')?.checked`
+      );
       const m0 = await b.ev<number>(MESSAGES);
       await b.tap(`button[data-contact-name="${pidPre('Mere Tane')}"]`, 1500);
       await typeInto(inFold(pidPre('Mere Tane'), '[data-contact-email]'), mail(`mere-pre${w}`));
@@ -1676,7 +1675,9 @@ async function runLive() {
       await b.tap(inFold(pidPre('Mere Tane'), '[data-contact-save]'), 3000);
       const after = await b.ev(PART3);
       const m1 = await b.ev<number>(MESSAGES);
-      const stillTicked = await b.ev<boolean>(STEP4_BOX);
+      const stillTicked = await b.ev<boolean>(
+        `!!document.querySelector('#step-4 header input[type=checkbox]')?.checked`
+      );
       r[`C13${k}`] =
         CHECKS.C_MOVED(after, W12('Mere Tane'), ['Mere Tane', 'Ana Tane'], m0, m1) &&
         ticked &&
@@ -1729,7 +1730,7 @@ async function runLive() {
       ],
       [
         'C13',
-        'C13 a fold save: W12 in part 3, Mere and Ana leave it, the messages go up by one, step 4’s tick stays (Q7; ticked and read at the foot of the open step, GTC-399 item 5), nothing queued',
+        'C13 a fold save: W12 in part 3, Mere and Ana leave it, the messages go up by one, step 4’s tick stays (Q7), nothing queued',
       ],
     ];
     for (const [key, label] of labels) {

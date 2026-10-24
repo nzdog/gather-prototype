@@ -19,9 +19,9 @@
  *      one dish, which keeps its centring.
  *   F  item 4: the sample's button reads "Fill in demo answers": that one constant, the file otherwise
  *      as it was; no visible line in the code names the button by its old words.
- *   K  item 5: the pre-flight's tick box at the foot of an open step: moved, not copied (one box per
- *      step), in its row again when the step is closed; Ready and the settled steps as they were;
- *      the page's way to a step finds the box in either place.
+ *   K  item 5 (as the founder ruled again, 24 Oct 2026: "two tick boxes so either can be ticked"):
+ *      the row's box as it always was, and while a folding step is open a second at its foot, the
+ *      same control (one state, one handler); Ready and the settled steps as they were.
  *   U  CONTROL: the files this batch must not touch are not edited since demo-tweaks-4-good;
  *      package.json (read at the commit that added this suite) differs by one script line; the
  *      lockfile there is the tag's; the two untracked scripts are in no commit.
@@ -160,11 +160,9 @@ const START_SRC = 'Let&rsquo;s do this &rarr;';
 const SUITE = 'tests/demo-tweaks-5-test.tsx';
 const TYPICAL_FILE = 'src/lib/demo/typical-answers.ts';
 const STEP_FILE = 'src/components/preflight/PreflightStep.tsx';
-const PREFLIGHT = 'src/app/plan/[eventId]/pre-flight/page.tsx';
 /** The tick slot in a folding step's row, as the base draws it (its classes unchanged). */
 const SLOT = '<div data-tick-slot="" class="flex w-[5.25rem] shrink-0 justify-end">';
-/** The arrival's selector: the box in a step's row, or at the foot of its open content. */
-const ARRIVAL_SELECTOR = `'header input[type="checkbox"], [data-tick-bottom] input[type="checkbox"]'`;
+
 const OLD_BUTTON = 'Fill in typical answers';
 /** The one new text in this batch (the founder's item 4). */
 const NEW_BUTTON = 'Fill in demo answers';
@@ -565,75 +563,63 @@ export const CHECKS = {
 
   // ── Item 5 ──
   /**
-   * K1 to K5 — one step, rendered: where its one box is. `place` is 'row' (in the header, in the
-   * slot when it folds), 'foot' (at the foot of the open content, after what it shows; the slot
-   * there, empty) or 'header' (a step that does not fold: in the header, no slot).
+   * K1 to K5 — one step, rendered. The row's box is always there, as at the base: in the slot when
+   * the step folds, in the header when it does not. `foot` says whether a second box sits at the
+   * foot of the open content (after what the step shows, under a rule, marked data-tick-foot).
+   * Every box carries the same word, the same checked state and the same disabled rule.
    */
-  boxPlace(
-    html: string,
-    place: 'row' | 'foot' | 'header',
-    word: string,
-    checked: boolean,
-    disabled: boolean
-  ) {
+  boxes(html: string, folds: boolean, foot: boolean, word: string, checked: boolean, off: boolean) {
     const headerEnd = html.indexOf('</header>');
-    const boxes = html.match(/<input type="checkbox"[^>]*>/g) ?? [];
-    const at = html.indexOf('<input type="checkbox"');
-    const label = html.slice(at).match(/^<input type="checkbox"[^>]*\/?>([^<]*)<\/label>/);
-    const foot = html.indexOf(
+    const inputs = html.match(/<input type="checkbox"[^>]*>/g) ?? [];
+    const labels = [...html.matchAll(/<input type="checkbox"[^>]*\/?>([^<]*)<\/label>/g)].map(
+      (m) => m[1]
+    );
+    const rowAt = html.indexOf('<input type="checkbox"');
+    const footAt = html.indexOf(
       '<div data-tick-bottom="" class="mt-6 pt-4 border-t border-gray-100 flex justify-end">'
     );
     const inside = html.indexOf('INSIDE-');
-    const box = boxes[0] ?? '';
-    const where =
-      place === 'row'
-        ? at > html.indexOf(SLOT) && html.indexOf(SLOT) > 0 && at < headerEnd && foot < 0
-        : place === 'foot'
-          ? html.includes(`${SLOT}</div>`) &&
-            foot > headerEnd &&
-            foot > inside &&
-            inside > html.indexOf('id="step-') &&
-            at > foot &&
-            html
-              .slice(foot)
-              .startsWith(
-                `<div data-tick-bottom="" class="mt-6 pt-4 border-t border-gray-100 flex justify-end"><label`
-              )
-          : at > 0 && at < headerEnd && !html.includes('data-tick-slot') && foot < 0;
+    const row = inputs[0] ?? '';
+    const second = inputs[1] ?? '';
     return (
-      boxes.length === 1 &&
-      where &&
-      !!label &&
-      label[1] === word &&
-      /\bchecked=""/.test(box) === checked &&
-      /\bdisabled=""/.test(box) === disabled &&
-      html.includes(
-        '<label class="flex items-center gap-2 shrink-0 cursor-pointer text-sm text-gray-600">'
-      )
+      inputs.length === (foot ? 2 : 1) &&
+      labels.length === inputs.length &&
+      labels.every((w) => w === word) &&
+      inputs.every((i) => /\bchecked=""/.test(i) === checked && /\bdisabled=""/.test(i) === off) &&
+      rowAt > 0 &&
+      rowAt < headerEnd &&
+      !row.includes('data-tick-foot') &&
+      (folds
+        ? rowAt > html.indexOf(SLOT) && html.indexOf(SLOT) > 0
+        : !html.includes('data-tick-slot')) &&
+      (foot
+        ? footAt > headerEnd &&
+          footAt > inside &&
+          inside > headerEnd &&
+          html.indexOf(second) > footAt &&
+          second.includes('data-tick-foot=""') &&
+          count(html, 'data-tick-foot') === 1 &&
+          !/\bid="/.test(second)
+        : footAt < 0 && !html.includes('data-tick-foot'))
     );
   },
-  /** K6 — the step's code: one box, one handler; it sits at the foot only while a folding step is open. */
-  stepCode(src: string) {
+  /** K6 — the step's code: the row's box as at the base; the foot's the same control (one handler, one state, one rule), drawn only while a folding step is open. */
+  stepCode(src: string, base: string) {
+    const rowBox = (x: string) => between(x, 'const box = (', '</label>');
+    const footBox = between(src, 'const footBox = (', '</label>');
     return (
-      count(src, 'const box = (') === 1 &&
-      count(src, 'onChange={(e) => onCheck(e.target.checked)}') === 1 &&
+      rowBox(base).length > 100 &&
+      rowBox(src) === rowBox(base) &&
+      footBox.replace(/\s*data-tick-foot=""/, '') ===
+        rowBox(src).replace('const box = (', 'const footBox = (') &&
+      count(src, 'onChange={(e) => onCheck(e.target.checked)}') === 2 &&
+      count(src, 'checked={checked || settled}') === 2 &&
+      count(src, 'disabled={settled}') === 2 &&
       count(src, 'const boxAtFoot = folds && open;') === 1 &&
-      count(src, '{boxAtFoot ? null : box}') === 1 &&
       count(src, '{boxAtFoot && (') === 1 &&
-      count(src, 'data-tick-bottom=""') === 1 &&
+      count(src, '{footBox}') === 1 &&
+      count(src, '{box}') === count(base, '{box}') &&
       !/hover:bg-/.test(between(src, 'data-tick-bottom=""', '</div>'))
-    );
-  },
-  /** K7 — the page's way to a step (goToStep) finds the box in either place, and only there. */
-  arrivalFinds(page: string) {
-    const go = between(page, 'const goToStep = (n: number) => {', 'const loose = ');
-    return (
-      go.includes(
-        `section.querySelector<HTMLInputElement>(\n        ${ARRIVAL_SELECTOR}\n      );`
-      ) &&
-      count(page, 'header input[type="checkbox"]') === 1 &&
-      go.includes('box.focus({ preventScroll: true });') &&
-      go.includes("section.scrollIntoView({ behavior: 'smooth', block: 'start' });")
     );
   },
 
@@ -692,8 +678,7 @@ const NOT_TOUCHED = [
   'src/components/plan/Moment2Step1Modal.tsx',
   'src/components/plan/Moment2Step2Skeleton.tsx',
   'src/components/plan/AccordionShell.tsx',
-  // the pre-flight: PreflightStep.tsx and the page are edited (item 5; layer K asks what they may
-  // change), so the page's directory is listed with the page kept out (EXCLUDED)
+  // the pre-flight: only PreflightStep.tsx is edited (item 5; layer K asks what it may change)
   'src/app/plan/[eventId]/pre-flight',
   'src/components/preflight/AfterThePress.tsx',
   'src/components/preflight/kids-note.ts',
@@ -706,8 +691,8 @@ const NOT_TOUCHED = [
   'src/app/billing',
 ];
 
-/** Files inside a listed directory that an item edits: kept out of U1's live diff. */
-const EXCLUDED = [':(exclude)src/app/plan/[eventId]/pre-flight/page.tsx'];
+/** Files inside a listed directory that an item edits: kept out of U1's live diff (none now). */
+const EXCLUDED: string[] = [];
 
 // ══ Item 1 ═══════════════════════════════════════════════════════════════════
 async function layerB() {
@@ -948,10 +933,23 @@ const drawStep = (over: Record<string, unknown>) =>
       createElement('p', null, `INSIDE-${String(over.n ?? 2)}`)
     )
   );
+/** What the step's code may lose against the base (exactly), and the only code lines it may add. */
 const STEP_LOST = ['<div className="px-5 py-5">{children}</div>'];
 const STEP_ADDED = [
   'const boxAtFoot = folds && open;',
-  '{boxAtFoot ? null : box}',
+  'const footBox = (',
+  '<label className="flex items-center gap-2 shrink-0 cursor-pointer text-sm text-gray-600">',
+  '<input',
+  'type="checkbox"',
+  'data-tick-foot=""',
+  'checked={checked || settled}',
+  'disabled={settled}',
+  'onChange={(e) => onCheck(e.target.checked)}',
+  'className="rounded border-gray-300 text-accent focus:ring-accent/40"',
+  '/>',
+  '{checkLabel}',
+  '</label>',
+  ');',
   '<div className="px-5 py-5">',
   '{children}',
   '{boxAtFoot && (',
@@ -959,34 +957,37 @@ const STEP_ADDED = [
   'data-tick-bottom=""',
   'className="mt-6 pt-4 border-t border-gray-100 flex justify-end"',
   '>',
+  '{footBox}',
   '</div>',
   ')}',
 ];
-const PAGE_LOST = [
-  `const box = section.querySelector<HTMLInputElement>('header input[type="checkbox"]');`,
-];
-const PAGE_ADDED = ['const box = section.querySelector<HTMLInputElement>(', ARRIVAL_SELECTOR, ');'];
 
 async function layerK() {
-  section('K — item 5: the pre-flight’s tick box at the foot of an open step');
+  section('K — item 5: a second tick box at the foot of an open step');
   assert(
     'K',
-    'K1 a closed step that folds: its one box in its row’s slot, "Checked", as before; nothing at the foot',
-    CHECKS.boxPlace(drawStep({ open: false }), 'row', 'Checked', false, false)
+    'K1 a closed step that folds: one box, in its row’s slot, "Checked", as at the base; none at the foot',
+    CHECKS.boxes(drawStep({ open: false }), true, false, 'Checked', false, false)
   );
   const open = drawStep({ open: true, checked: true });
   assert(
     'K',
-    'K2 the same step open: its one box (moved, not copied) at the foot of its open content, after what it shows, under a rule, "Checked" and ticked; its row’s slot still there, empty',
-    CHECKS.boxPlace(open, 'foot', 'Checked', true, false),
+    'K2 the same step open: the row’s box still in its slot, and a second at the foot of its open content, after what it shows, marked data-tick-foot, no id; both "Checked", both ticked',
+    CHECKS.boxes(open, true, true, 'Checked', true, false),
     open.slice(open.indexOf('</header>') - 200)
   );
   assert(
     'K',
-    'K3 step 4 open: its box at the foot reads "Settled", unticked, as its own word',
-    CHECKS.boxPlace(
+    'K3 the same step open and unticked: both boxes unticked (one state, so ticking either shows both)',
+    CHECKS.boxes(drawStep({ open: true, checked: false }), true, true, 'Checked', false, false)
+  );
+  assert(
+    'K',
+    'K4 step 4 open: both boxes read "Settled", its own word',
+    CHECKS.boxes(
       drawStep({ n: 4, open: true, checkLabel: 'Settled' }),
-      'foot',
+      true,
+      true,
       'Settled',
       false,
       false
@@ -994,47 +995,25 @@ async function layerK() {
   );
   assert(
     'K',
-    'K4 Ready (it never folds): its box in its header as before, no slot, nothing at the foot',
-    CHECKS.boxPlace(
+    'K5 Ready (it never folds) and a settled step (invites only), even asked to open: one box, in the header, as at the base (the settled one ticked and greyed)',
+    CHECKS.boxes(
       drawStep({ n: 5, onToggle: undefined, open: true }),
-      'header',
+      false,
+      false,
       'Checked',
       false,
       false
-    )
+    ) && CHECKS.boxes(drawStep({ settled: true, open: true }), false, false, 'Checked', true, true)
   );
   assert(
     'K',
-    'K5 a settled step (invites only): its box in its header, ticked and greyed, as before, even asked to open',
-    CHECKS.boxPlace(drawStep({ settled: true, open: true }), 'header', 'Checked', true, true)
+    'K6 the step’s code: the row’s box exactly as at the base (6d2b103); the foot’s the same control (one handler, one state, one rule, its marker only), drawn only while a folding step is open; no hover shade at the foot',
+    CHECKS.stepCode(code(STEP_FILE), stripComments(atRef(BASE, STEP_FILE)))
   );
   assert(
     'K',
-    'K6 the step’s code: one box and one handler; at the foot only while a folding step is open; no hover shade at the foot',
-    CHECKS.stepCode(code(STEP_FILE))
-  );
-  assert(
-    'K',
-    'K7 the page’s way to a step finds, focuses and rings the box in either place (its row, or the foot of the open step), still bringing the step’s top to the top',
-    CHECKS.arrivalFinds(code(PREFLIGHT))
-  );
-  const deltaOk = [
-    [STEP_FILE, STEP_LOST, STEP_ADDED],
-    [PREFLIGHT, PAGE_LOST, PAGE_ADDED],
-  ].filter(
-    ([f, lost, added]) =>
-      !CHECKS.onlyThese(
-        read(f as string),
-        atRef(BASE, f as string),
-        lost as string[],
-        added as string[]
-      )
-  );
-  assert(
-    'K',
-    'K8 CONTROL: the step’s and the page’s code as at the base (6d2b103) but these moves: the step loses only its one-line body, the page only its one selector line',
-    deltaOk.length === 0,
-    deltaOk.map((d) => d[0]).join(', ')
+    'K7 CONTROL: the step’s code as at the base but the foot’s box: it loses only its one-line body, and gains only the foot box and its place',
+    CHECKS.onlyThese(read(STEP_FILE), atRef(BASE, STEP_FILE), STEP_LOST, STEP_ADDED)
   );
 }
 

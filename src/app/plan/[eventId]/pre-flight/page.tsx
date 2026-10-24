@@ -558,11 +558,7 @@ export default function PreFlightPage() {
     if (opening) setOpenSteps((prev) => (prev.includes(n) ? prev : [...prev, n]));
     const arrive = () => {
       section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      // [[GTC-399]] item 5: an open step's box is at its foot, a closed one's in its row; never a
-      // dietary option's box inside the step (it comes before the foot).
-      const box = section.querySelector<HTMLInputElement>(
-        'header input[type="checkbox"], [data-tick-bottom] input[type="checkbox"]'
-      );
+      const box = section.querySelector<HTMLInputElement>('header input[type="checkbox"]');
       if (!box) return;
       box.focus({ preventScroll: true });
       const ring = box.closest('label');
