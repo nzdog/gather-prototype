@@ -376,7 +376,10 @@ export default function PreFlightPage() {
 
   // The dietary correction writes back to EventSetup.dietaryData — G1's underlying data,
   // through the existing setup route. No second copy (GTC-185 acceptance).
-  const saveDietary = async (next: DietaryData) => {
+  // [[GTC-404]] (ruling 4): once saved, it also says whether a plan has been drafted, so the step
+  // can say the plan came before this answer. It reads the event's dishes (the same read the setup
+  // page makes) and re-runs nothing.
+  const saveDietary = async (next: DietaryData): Promise<DietarySaved | null> => {
     setSaving(true);
     const res = await fetch(`/api/events/${eventId}/setup`, {
       method: 'POST',
@@ -386,9 +389,10 @@ export default function PreFlightPage() {
     setSaving(false);
     if (!res.ok) {
       setError((await res.json().catch(() => ({}))).error ?? 'That did not save.');
-      return;
+      return null;
     }
-    await load();
+    const [planDrafted] = await Promise.all([hasDishes(eventId), load()]);
+    return { planDrafted };
   };
 
   // [[GTC-374]] (Q8): an invites-only event's steps 1 and 2 are ticked for her.
@@ -1058,27 +1062,83 @@ export default function PreFlightPage() {
 
 // ─── The dietary re-verify (GTC-185, as rescoped) ────────────────────────────
 
+/** [[GTC-404]] — what a dietary save tells the step: whether a plan had been drafted by then. */
+interface DietarySaved {
+  planDrafted: boolean;
+}
+
+/**
+ * [[GTC-404]] (ruling 4) — has a plan been drafted: any dish on the event (a job alone is not one).
+ * The event's items, through the read the setup page already makes; a failed read says no.
+ */
+async function hasDishes(eventId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/events/${eventId}/items`);
+    if (!res.ok) return false;
+    const body: { items?: Array<{ kind?: string | null }> } = await res.json();
+    return (body.items ?? []).some((i) => i.kind !== 'TASK');
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Event-level only. Per-person dietary capture was ruled out on 2026-08-23 and is not
  * deferred — there is no by-name dietary data anywhere in the schema to show.
  *
  * ⚠ Hinge §1 and Moment 4 §10.5 both still say "re-verified by name". Both are superseded
  * by that ruling and neither spec is edited; the by-name reading is not available here.
+ *
+ * [[GTC-404]] (the founder's note 4, rulings of 25 Oct 2026) — TWO STATES. A step whose answer is
+ * saved ("none" or "some") shows, open, one line saying it and a "Change" button, no pills (ruling
+ * 1). "Change" brings back the pills, the ticks, the "Other dietary needs" box and "Save this", with
+ * "Cancel", which goes back to the saved answer and saves nothing. A step never answered opens
+ * straight into the pills, with no "Cancel". The button reads "Save this", never "Saved"; a save
+ * goes back to the saved state (ruling 3). After a save, when a plan has been drafted, one line
+ * under the saved one says the plan came first; nothing is re-run or re-drafted (ruling 4). The
+ * step's tick, fold, ring and closed line are the page's and do not change (ruling 2).
  */
 function DietarySection({
   value,
   onSave,
 }: {
   value: DietaryData;
-  onSave: (next: DietaryData) => void;
+  onSave: (next: DietaryData) => Promise<DietarySaved | null>;
 }) {
   const [draft, setDraft] = useState<DietaryData>(value);
   const [dirty, setDirty] = useState(false);
+  // [[GTC-404]] — "Change" pressed on a saved answer; a never-answered step is always editing.
+  const [changing, setChanging] = useState(false);
+  // [[GTC-404]] (ruling 4) — the last save was made after a plan had been drafted.
+  const [afterPlan, setAfterPlan] = useState(false);
 
   useEffect(() => {
     setDraft(value);
     setDirty(false);
   }, [value]);
+
+  const neverAnswered = value.status === 'unanswered';
+  const editing = neverAnswered || changing;
+
+  const startChange = () => {
+    setDraft(value);
+    setDirty(false);
+    setAfterPlan(false);
+    setChanging(true);
+  };
+
+  const cancel = () => {
+    setDraft(value);
+    setDirty(false);
+    setChanging(false);
+  };
+
+  const save = async () => {
+    const saved = await onSave(draft);
+    if (!saved) return;
+    setChanging(false);
+    setAfterPlan(saved.planDrafted);
+  };
 
   const set = (next: DietaryData) => {
     setDraft(next);
@@ -1109,8 +1169,35 @@ function DietarySection({
     draft.requirements.length > 0 ||
     (draft.other ?? '').trim() !== '';
 
+  if (!editing) {
+    // [[GTC-404]] (ruling 1) — the saved answer, in one line, then "Change". The needs read as the
+    // closed row reads them (dietaryTitleSummary), so the two never disagree.
+    const listed = dietaryTitleSummary(value).replace(/[.\s]+$/, '');
+    return (
+      <div data-dietary-state="sorted">
+        <p className="text-sm text-gray-700 mb-3">
+          {value.status === 'confirmed_none'
+            ? 'You said there are none.'
+            : `You said there are these: ${listed}.`}
+        </p>
+        {afterPlan && (
+          <p data-dietary-after-save="" className="text-sm text-amber-700 mb-3">
+            Saved. Your plan was drafted before this, so check the dishes still cover it.
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={startChange}
+          className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:border-gray-400 hover:text-gray-900"
+        >
+          Change
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div>
+    <div data-dietary-state="editing">
       <p className="text-sm text-gray-500 mb-3">
         {value.status === 'unanswered'
           ? 'Never answered. That is different from “nobody has any”.'
@@ -1159,14 +1246,26 @@ function DietarySection({
         </div>
       )}
 
+      {/* [[GTC-404]] (ruling 3): "Save this" until something is saved; "Saved" is no label now. */}
       <button
         type="button"
         disabled={!dirty || !coherent}
-        onClick={() => onSave(draft)}
+        onClick={save}
         className="px-4 py-2 text-sm rounded-md bg-accent text-white disabled:opacity-40"
       >
-        {dirty ? 'Save this' : 'Saved'}
+        Save this
       </button>
+      {/* [[GTC-404]] (ruling 1): back to the saved answer, nothing saved; never on a step never
+          answered, which has no saved answer to go back to. */}
+      {!neverAnswered && (
+        <button
+          type="button"
+          onClick={cancel}
+          className="ml-3 px-2 py-2 text-sm text-gray-600 underline decoration-gray-300 underline-offset-2 hover:text-gray-800"
+        >
+          Cancel
+        </button>
+      )}
       {!coherent && (
         <span className="ml-3 text-xs text-amber-700">
           Tick at least one, or say there are none.
