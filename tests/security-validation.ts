@@ -3019,6 +3019,313 @@ async function testSuite17_PersonRoutesStayInTheirEvent(fixtures: Fixtures) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Test Suite 18 — GTC-402: the host-link and coordinator-link routes stay inside their event
+//
+// POST /api/h/[token]/people/[personId]/manual-override (a HOST link) and POST
+// /api/c/[token]/ack/[assignmentId] (a COORDINATOR link) take a second id in their address;
+// the link decides the event. Before GTC-402 neither checked that the second thing was on that
+// event: the host link wrote a "marked by hand" line in its own event's invite log for a person
+// of another event, and the coordinator link recorded the coordinator's answer to their own item
+// on another event, writing the history line into the link's event. Each now answers, right
+// after the link is resolved, the 404 a missing thing gets ("Person not found", "Assignment not
+// found").
+//
+// Driven over HTTP against the dev server with the fixtures' own link tokens (suites 16 and 17
+// drive the same server with its host session cookie). The checks:
+//   (a) a link for event A naming a thing on event B: the guard's answer, and nothing changes
+//       (the row, the invite log, the ledger, the OutboundMessage count).
+//   (b) the same link naming a thing on event A: the answer it gave before.
+//
+// ⚠ NEITHER ROUTE CAN SEND, WITH THE GUARD OR WITHOUT IT: manual-override writes an invite-log
+// line (and a ledger line when a response moves); the coordinator's ack writes the answer and a
+// history line. Neither reaches a sender. The OutboundMessage count is asserted the same anyway.
+//
+// Every item this suite makes is named with GTC402_TAG and removed at the end (its assignments
+// go with it), with the coordinator's place on event B and the log and ledger rows its calls
+// wrote on events A and B, even when a check fails or a guard is gone; a leftover item from a
+// crashed run is removed by name at the start (event B itself is rebuilt with the fixtures).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const GTC402_TAG = 'GTC-402 suite 18';
+const GTC402_PERSON_NOT_FOUND = 'Person not found';
+const GTC402_ASSIGNMENT_NOT_FOUND = 'Assignment not found';
+
+async function gtc402RemoveOwnRows() {
+  // Its items; their assignments go with them (onDelete: Cascade).
+  await prisma.item.deleteMany({ where: { name: { startsWith: GTC402_TAG } } });
+}
+
+async function testSuite18_LinkRoutesStayInTheirEvent(fixtures: Fixtures) {
+  logSection(
+    'Test Suite 18: GTC-402 — the host-link and coordinator-link routes stay inside their event'
+  );
+
+  const BASE = process.env.SECURITY_TEST_BASE_URL ?? 'http://localhost:3000';
+  const evA = fixtures.eventDraft;
+  const evB = fixtures.eventPast;
+  const hostLinkA = evA.hostToken;
+  const coordLinkA = evA.teamA.coordinator.token;
+  const coordinator = evA.teamA.coordinator.personId;
+  const memberA = evA.teamA.participant.personId;
+  const outsider = evB.teamA.participant.personId;
+
+  const post = async (url: string, body: unknown) => {
+    const res = await fetch(`${BASE}${url}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    let json: any = null;
+    try {
+      json = await res.json();
+    } catch {
+      /* no body */
+    }
+    return { status: res.status, json };
+  };
+
+  let probeOk = false;
+  try {
+    const probe = await post('/api/c/gtc402-not-a-real-link/ack/x', { response: 'ACCEPTED' });
+    probeOk = probe.status === 403;
+  } catch {
+    probeOk = false;
+  }
+  logTest(
+    `dev server healthy on ${BASE} — an unknown link answers 403, not 500 or ECONNREFUSED`,
+    probeOk,
+    'Start it with `npm run dev`. These assertions cannot run without it.'
+  );
+  if (!probeOk) return;
+
+  /** The person's own row, their places in every event and their links: all of it, as JSON. */
+  const personState = async (personId: string) =>
+    JSON.stringify([
+      await prisma.person.findUnique({ where: { id: personId } }),
+      await prisma.personEvent.findMany({ where: { personId }, orderBy: { id: 'asc' } }),
+      await prisma.accessToken.findMany({ where: { personId }, orderBy: { id: 'asc' } }),
+      await prisma.assignment.findMany({ where: { personId }, orderBy: { id: 'asc' } }),
+    ]);
+  /** Every row a log, the ledger or a send would add, counted across the whole database. */
+  const writeCounts = async () =>
+    JSON.stringify({
+      inviteEvents: await prisma.inviteEvent.count(),
+      auditEntries: await prisma.auditEntry.count(),
+      outboundMessages: await prisma.outboundMessage.count(),
+    });
+  const outboundCount = () => prisma.outboundMessage.count();
+  const placesOf = async (personId: string) =>
+    (
+      await prisma.personEvent.findMany({
+        where: { personId },
+        select: { eventId: true, teamId: true },
+      })
+    ).map((m) => m.eventId);
+
+  await gtc402RemoveOwnRows();
+  /** Log and ledger rows on events A and B before this suite. */
+  const ownScope = { eventId: { in: [evA.id, evB.id] } };
+  const inviteAtStart = (
+    await prisma.inviteEvent.findMany({ where: ownScope, select: { id: true } })
+  ).map((r) => r.id);
+  const auditAtStart = (
+    await prisma.auditEntry.findMany({ where: ownScope, select: { id: true } })
+  ).map((r) => r.id);
+  let coordPlaceOnB: string | null = null;
+
+  try {
+    // ── The fixture ──────────────────────────────────────────────────────────
+    // The coordinator of event A's Team A is also on event B (the same person on two events),
+    // and holds one item on B and two on A (one on their own team, one on A's other team).
+    coordPlaceOnB = (
+      await prisma.personEvent.create({
+        data: { personId: coordinator, eventId: evB.id, role: 'PARTICIPANT' },
+      })
+    ).id;
+    const ownItem = async (teamId: string, label: string) => {
+      const item = await prisma.item.create({
+        data: { name: `${GTC402_TAG} ${label}`, teamId, status: 'ASSIGNED' },
+      });
+      const assignment = await prisma.assignment.create({
+        data: { itemId: item.id, personId: coordinator, response: 'PENDING' },
+      });
+      return { item, assignment };
+    };
+    const onB = await ownItem(evB.teamA.id, "coordinator's own item on event B");
+    const onA = await ownItem(evA.teamA.id, "coordinator's own item on event A, their team");
+    const onAOther = await ownItem(evA.teamB.id, "coordinator's own item on event A, other team");
+
+    const hostLink = await prisma.accessToken.findUnique({ where: { token: hostLinkA } });
+    const coordLink = await prisma.accessToken.findUnique({ where: { token: coordLinkA } });
+    logTest(
+      "fixture: the host link opens event A (HOST) and the coordinator link opens event A's Team A (COORDINATOR)",
+      hostLink?.scope === 'HOST' &&
+        hostLink.eventId === evA.id &&
+        coordLink?.scope === 'COORDINATOR' &&
+        coordLink.eventId === evA.id &&
+        coordLink.teamId === evA.teamA.id &&
+        coordLink.personId === coordinator,
+      JSON.stringify({ host: hostLink?.scope, coord: coordLink?.scope })
+    );
+    const outsiderPlaces = await placesOf(outsider);
+    const outsiderOnB = await prisma.assignment.count({
+      where: { personId: outsider, item: { team: { eventId: evB.id } } },
+    });
+    const memberPlaces = await placesOf(memberA);
+    const memberOnA = await prisma.assignment.findMany({
+      where: { personId: memberA, item: { team: { eventId: evA.id } } },
+      select: { response: true },
+    });
+    logTest(
+      "fixture: the outsider (event B's Team A participant) has a place on B and none on A, and holds an item on B; A's member has a place on A only and holds one item there, already ACCEPTED",
+      outsiderPlaces.length === 1 &&
+        outsiderPlaces[0] === evB.id &&
+        outsiderOnB === 1 &&
+        memberPlaces.length === 1 &&
+        memberPlaces[0] === evA.id &&
+        memberOnA.length === 1 &&
+        memberOnA[0].response === 'ACCEPTED',
+      `outsider ${JSON.stringify(outsiderPlaces)} holds ${outsiderOnB}; member ${JSON.stringify(memberPlaces)} ${JSON.stringify(memberOnA)}`
+    );
+    const coordPlaces = (await placesOf(coordinator)).sort();
+    const coordHolds = await prisma.assignment.findMany({
+      where: { id: { in: [onB.assignment.id, onA.assignment.id, onAOther.assignment.id] } },
+      select: { id: true, response: true, item: { select: { team: true } } },
+    });
+    const holdOf = (id: string) => coordHolds.find((h) => h.id === id);
+    logTest(
+      "fixture: the coordinator has a place on A and on B, and holds three PENDING items: one on B, one on A's Team A, one on A's Team B",
+      coordPlaces.length === 2 &&
+        coordPlaces.includes(evA.id) &&
+        coordPlaces.includes(evB.id) &&
+        coordHolds.length === 3 &&
+        coordHolds.every((h) => h.response === 'PENDING') &&
+        holdOf(onB.assignment.id)?.item.team.eventId === evB.id &&
+        holdOf(onA.assignment.id)?.item.team.id === evA.teamA.id &&
+        holdOf(onAOther.assignment.id)?.item.team.id === evA.teamB.id,
+      JSON.stringify({ coordPlaces, coordHolds })
+    );
+
+    // ── HOST LINK: manual-override ───────────────────────────────────────────
+    {
+      const before = await personState(outsider);
+      const counts = await writeCounts();
+      const r = await post(`/api/h/${hostLinkA}/people/${outsider}/manual-override`, {
+        response: 'DECLINED',
+        reason: `${GTC402_TAG} must never be written`,
+      });
+      logTest(
+        `(a) POST /api/h/:hostLinkOfA/people/:outsider/manual-override — refused 404 "${GTC402_PERSON_NOT_FOUND}"`,
+        r.status === 404 && r.json?.error === GTC402_PERSON_NOT_FOUND,
+        `got ${r.status} ${JSON.stringify(r.json)}`
+      );
+      logTest(
+        "  ...and the outsider's row, places, links and holdings are unchanged",
+        (await personState(outsider)) === before,
+        'the person changed'
+      );
+      logTest(
+        '  ...and no invite-log or ledger row was written, and the OutboundMessage count is the same (nothing sent)',
+        (await writeCounts()) === counts,
+        `before ${counts}, after ${await writeCounts()}`
+      );
+    }
+    {
+      const outbound = await outboundCount();
+      const marks = () =>
+        prisma.inviteEvent.count({
+          where: { eventId: evA.id, personId: memberA, type: 'MANUAL_OVERRIDE_MARKED' },
+        });
+      const marksBefore = await marks();
+      const r = await post(`/api/h/${hostLinkA}/people/${memberA}/manual-override`, {
+        response: 'ACCEPTED',
+        reason: `${GTC402_TAG} member of A`,
+      });
+      logTest(
+        '(b) POST /api/h/:hostLinkOfA/people/:memberOfA/manual-override — still 200, nothing to move (they have already accepted), in the same words',
+        r.status === 200 && r.json?.success === true && r.json?.assignmentsUpdated === 0,
+        `got ${r.status} ${JSON.stringify(r.json)}`
+      );
+      logTest(
+        '  ...CONTROL: and it wrote its one "marked by hand" line in A\'s invite log, and the OutboundMessage count is the same',
+        (await marks()) === marksBefore + 1 && (await outboundCount()) === outbound,
+        `marks ${marksBefore} -> ${await marks()}`
+      );
+    }
+
+    // ── COORDINATOR LINK: ack ────────────────────────────────────────────────
+    {
+      const rowBefore = JSON.stringify(
+        await prisma.assignment.findUnique({
+          where: { id: onB.assignment.id },
+          include: { item: true },
+        })
+      );
+      const counts = await writeCounts();
+      const r = await post(`/api/c/${coordLinkA}/ack/${onB.assignment.id}`, {
+        response: 'DECLINED',
+      });
+      logTest(
+        `(a) POST /api/c/:coordLinkOfA/ack/:theirOwnAssignmentOnB — refused 404 "${GTC402_ASSIGNMENT_NOT_FOUND}"`,
+        r.status === 404 && r.json?.error === GTC402_ASSIGNMENT_NOT_FOUND,
+        `got ${r.status} ${JSON.stringify(r.json)}`
+      );
+      logTest(
+        '  ...and the assignment on B and its item are unchanged (still PENDING)',
+        JSON.stringify(
+          await prisma.assignment.findUnique({
+            where: { id: onB.assignment.id },
+            include: { item: true },
+          })
+        ) === rowBefore,
+        'the assignment or its item changed'
+      );
+      logTest(
+        '  ...and no history, ledger or invite-log row was written, and the OutboundMessage count is the same (nothing sent)',
+        (await writeCounts()) === counts,
+        `before ${counts}, after ${await writeCounts()}`
+      );
+    }
+    for (const [own, label] of [
+      [onA, "their own assignment on A's Team A"],
+      [
+        onAOther,
+        "their own assignment on A's Team B (a coordinator answers their own items on any team)",
+      ],
+    ] as const) {
+      const outbound = await outboundCount();
+      const lines = () =>
+        prisma.auditEntry.count({
+          where: { eventId: evA.id, targetId: own.assignment.id, actionType: 'ACCEPT_ASSIGNMENT' },
+        });
+      const linesBefore = await lines();
+      const r = await post(`/api/c/${coordLinkA}/ack/${own.assignment.id}`, {
+        response: 'ACCEPTED',
+      });
+      const after = await prisma.assignment.findUnique({ where: { id: own.assignment.id } });
+      logTest(
+        `(b) POST /api/c/:coordLinkOfA/ack/:${label} — still 200, and the answer is recorded`,
+        r.status === 200 && r.json?.success === true && after?.response === 'ACCEPTED',
+        `got ${r.status} ${JSON.stringify(r.json)}, row ${after?.response}`
+      );
+      logTest(
+        `  ...CONTROL: one history line on A for it, and the OutboundMessage count is the same`,
+        (await lines()) === linesBefore + 1 && (await outboundCount()) === outbound,
+        `lines ${linesBefore} -> ${await lines()}`
+      );
+    }
+  } finally {
+    // Put back what this suite changed, even when a check above failed or a guard is gone: the
+    // log and ledger rows its calls wrote on events A and B, the coordinator's place on B, then
+    // its own items (their assignments go with them).
+    await prisma.inviteEvent.deleteMany({ where: { ...ownScope, id: { notIn: inviteAtStart } } });
+    await prisma.auditEntry.deleteMany({ where: { ...ownScope, id: { notIn: auditAtStart } } });
+    if (coordPlaceOnB) await prisma.personEvent.deleteMany({ where: { id: coordPlaceOnB } });
+    await gtc402RemoveOwnRows();
+  }
+}
+
 async function main() {
   console.log(`${BOLD}${YELLOW}=== Security Validation Test Suite ===${RESET}\n`);
   console.log('Contract under test:');
@@ -3048,6 +3355,7 @@ async function main() {
     await testSuite15_TnzWebhookFailsClosed();
     await testSuite16_ItemEditStaysInItsEvent(fixtures);
     await testSuite17_PersonRoutesStayInTheirEvent(fixtures);
+    await testSuite18_LinkRoutesStayInTheirEvent(fixtures);
 
     console.log(`\n${BOLD}${YELLOW}=== Test Summary ===${RESET}`);
     console.log(`Total tests: ${testsRun}`);

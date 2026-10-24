@@ -16,6 +16,17 @@ export async function POST(
 
   const eventId = resolvedContext.event.id;
 
+  // [[GTC-402]] — the person must have a place in the event this link opens (a membership row),
+  // checked before anything is read for the answer, written or logged. Someone on another event
+  // gets the answer a missing person gets, as the signed-in manual-override answers (GTC-401).
+  const placeInEvent = await prisma.personEvent.findUnique({
+    where: { personId_eventId: { personId, eventId } },
+    select: { id: true },
+  });
+  if (!placeInEvent) {
+    return NextResponse.json({ error: 'Person not found' }, { status: 404 });
+  }
+
   let response: 'ACCEPTED' | 'DECLINED';
   let reason = '';
 

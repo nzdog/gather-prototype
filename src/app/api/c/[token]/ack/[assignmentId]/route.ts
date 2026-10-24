@@ -24,6 +24,17 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
+  // [[GTC-402]] — the assignment must be on the event this link opens (its item's team's event),
+  // checked before the body is read and before anything is written. One on another event gets the
+  // answer a missing assignment gets, as this route and the guest's door answer.
+  const onThisEvent = await prisma.assignment.findFirst({
+    where: { id: assignmentId, item: { team: { eventId: resolvedContext.event.id } } },
+    select: { id: true },
+  });
+  if (!onThisEvent) {
+    return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+  }
+
   // Parse request body for response type
   const body = await request.json();
   const response = parseAssignmentResponse(body?.response);
