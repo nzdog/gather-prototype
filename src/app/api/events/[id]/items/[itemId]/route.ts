@@ -52,11 +52,20 @@ export async function PATCH(
     // state, and the why-scope rule needs to know whether anyone has answered.
     const currentItem = await prisma.item.findUnique({
       where: { id: itemId },
-      include: { assignment: { select: { response: true } } },
+      include: {
+        team: { select: { eventId: true } },
+        assignment: { select: { response: true } },
+      },
     });
 
     if (!currentItem) {
       return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+    }
+
+    // GTC-400: the role check above is for the event in the address, so the dish must belong to
+    // that event too, before anything is built or written (the same answer as the DELETE below).
+    if (currentItem.team.eventId !== eventId) {
+      return NextResponse.json({ error: 'Item does not belong to this event' }, { status: 400 });
     }
 
     // Build update data

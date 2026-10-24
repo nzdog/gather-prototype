@@ -2403,6 +2403,217 @@ async function testSuite15_TnzWebhookFailsClosed() {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Test Suite 16 — GTC-400: a dish edit stays inside the event in its address
+//
+// PATCH /api/events/[id]/items/[itemId] checks the caller's role on the event in the
+// address. Before GTC-400 it then found the dish by its own id alone, so a host or a
+// coordinator of one event could edit another event's dish by putting their own event's
+// id in the address. The DELETE in the same file always checked; the PATCH now gives the
+// same answer (400 "Item does not belong to this event") before it builds or writes.
+//
+// Driven over HTTP with a session cookie, as suite 10 is: the route reads its session
+// through `cookies()`, which needs a real request. The host is the fixtures' own signed-in
+// host. The coordinator is signed in the same way the fixtures sign in the host (a User,
+// a Session row and its cookie), with a COORDINATOR EventRole on event A ONLY, and linked
+// to event A's team A coordinator. That sign-in is this suite's own and is removed at the
+// end, with the ledger rows its edits wrote and the two dishes' names put back, so the
+// standing fixture is left as the suite found it.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const GTC400_COORD_EMAIL = 'security-coord-gtc400@gather.test';
+const NOT_THIS_EVENT = 'Item does not belong to this event';
+
+async function testSuite16_ItemEditStaysInItsEvent(fixtures: Fixtures) {
+  logSection('Test Suite 16: GTC-400 — a dish edit stays inside the event in its address');
+
+  const BASE = process.env.SECURITY_TEST_BASE_URL ?? 'http://localhost:3000';
+  const evA = fixtures.eventDraft;
+  const evB = fixtures.eventPast;
+  const HOST_COOKIE = fixtures.user.sessionCookie;
+
+  let probeOk = false;
+  try {
+    const probe = await fetch(`${BASE}/api/events/${evA.id}/people`);
+    probeOk = probe.status === 401;
+  } catch {
+    probeOk = false;
+  }
+  logTest(
+    `dev server healthy on ${BASE} — a guarded sibling answers 401, not 500 or ECONNREFUSED`,
+    probeOk,
+    'Start it with `npm run dev`. These assertions cannot run without it.'
+  );
+  if (!probeOk) return;
+
+  const dishOf = (eventId: string) =>
+    prisma.item.findFirst({ where: { team: { eventId } }, orderBy: { id: 'asc' } });
+  const dishA = await dishOf(evA.id);
+  const dishB = await dishOf(evB.id);
+  logTest(
+    'fixture: event A and event B are two events, and each has a dish',
+    evA.id !== evB.id && Boolean(dishA) && Boolean(dishB),
+    `A ${evA.id} dish ${dishA?.id}; B ${evB.id} dish ${dishB?.id}`
+  );
+  if (!dishA || !dishB) return;
+
+  const patch = async (eventId: string, itemId: string, cookie: string, body: unknown) => {
+    const res = await fetch(`${BASE}/api/events/${eventId}/items/${itemId}`, {
+      method: 'PATCH',
+      headers: { Cookie: cookie, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    let json: any = null;
+    try {
+      json = await res.json();
+    } catch {
+      /* no body */
+    }
+    return { status: res.status, json };
+  };
+  const rowOf = async (id: string) =>
+    JSON.stringify(await prisma.item.findUnique({ where: { id } }));
+  /** Ledger rows on either event, or about either dish wherever they were filed. */
+  const ledgerCount = () =>
+    prisma.auditEntry.count({
+      where: {
+        OR: [{ eventId: { in: [evA.id, evB.id] } }, { targetId: { in: [dishA.id, dishB.id] } }],
+      },
+    });
+
+  /** Ledger rows about the two dishes before this suite: the clean-up removes only newer ones. */
+  const entriesAtStart = new Set(
+    (
+      await prisma.auditEntry.findMany({
+        where: { targetId: { in: [dishA.id, dishB.id] } },
+        select: { id: true },
+      })
+    ).map((e) => e.id)
+  );
+  const coordPersonId = evA.teamA.coordinator.personId;
+  const coordPersonAtStart = await prisma.person.findUnique({
+    where: { id: coordPersonId },
+    select: { userId: true },
+  });
+  let coordUserId: string | null = null;
+  try {
+    // ── (a) A's host, A's address, B's dish ─────────────────────────────────────
+    const bBefore = await rowOf(dishB.id);
+    const ledgerBeforeA = await ledgerCount();
+    const a = await patch(evA.id, dishB.id, HOST_COOKIE, { name: 'GTC-400 cross-event edit' });
+    logTest(
+      `PATCH /api/events/:A/items/:dishOfB by A's host — refused 400 "${NOT_THIS_EVENT}"`,
+      a.status === 400 && a.json?.error === NOT_THIS_EVENT,
+      `got ${a.status} ${JSON.stringify(a.json)}`
+    );
+    logTest(
+      "  ...and event B's dish is unchanged in the database (the whole row)",
+      (await rowOf(dishB.id)) === bBefore,
+      'the dish row changed'
+    );
+    logTest(
+      '  ...and no ledger row was written',
+      (await ledgerCount()) === ledgerBeforeA,
+      'a ledger row was written'
+    );
+
+    // ── (b) the same host, her own event's dish: still allowed, and it lands ─────
+    const ownName = `GTC-400 own dish ${randomBytes(3).toString('hex')}`;
+    const ledgerBeforeB = await ledgerCount();
+    const b = await patch(evA.id, dishA.id, HOST_COOKIE, { name: ownName });
+    const landed = await prisma.item.findUnique({ where: { id: dishA.id } });
+    logTest(
+      "PATCH /api/events/:A/items/:dishOfA by A's host — still 200, and the new name is in the database",
+      b.status === 200 && landed?.name === ownName,
+      `got ${b.status}; stored name ${JSON.stringify(landed?.name)}`
+    );
+    logTest(
+      '  CONTROL: that edit wrote its ledger row, so the ledger read in (a) and (c) can see one',
+      (await ledgerCount()) === ledgerBeforeB + 1,
+      'the own-dish edit wrote no ledger row'
+    );
+
+    // ── (c) a coordinator of event A only, A's address, B's dish ────────────────
+    await prisma.user.deleteMany({ where: { email: GTC400_COORD_EMAIL } });
+    const coordUser = await prisma.user.create({ data: { email: GTC400_COORD_EMAIL } });
+    coordUserId = coordUser.id;
+    const coordToken = randomBytes(32).toString('hex');
+    await prisma.session.create({
+      data: {
+        userId: coordUser.id,
+        token: coordToken,
+        expiresAt: new Date(Date.now() + 3_600_000),
+      },
+    });
+    await prisma.eventRole.create({
+      data: { userId: coordUser.id, eventId: evA.id, role: 'COORDINATOR' },
+    });
+    await prisma.person.update({ where: { id: coordPersonId }, data: { userId: coordUser.id } });
+    const COORD_COOKIE = `session=${coordToken}`;
+
+    const roles = await prisma.eventRole.findMany({ where: { userId: coordUser.id } });
+    const signedIn = await patch(evA.id, dishA.id, COORD_COOKIE, {});
+    logTest(
+      "fixture: the coordinator holds a role on event A only, and her session passes A's guard (an empty edit of A's dish answers 200)",
+      roles.length === 1 &&
+        roles[0].eventId === evA.id &&
+        roles[0].role === 'COORDINATOR' &&
+        signedIn.status === 200,
+      `roles ${JSON.stringify(roles.map((r) => [r.eventId, r.role]))}; got ${signedIn.status}`
+    );
+
+    const bBeforeC = await rowOf(dishB.id);
+    const ledgerBeforeC = await ledgerCount();
+    const c = await patch(evA.id, dishB.id, COORD_COOKIE, {
+      name: 'GTC-400 cross-event edit by a coordinator',
+    });
+    logTest(
+      `PATCH /api/events/:A/items/:dishOfB by a coordinator of A — refused 400 "${NOT_THIS_EVENT}"`,
+      c.status === 400 && c.json?.error === NOT_THIS_EVENT,
+      `got ${c.status} ${JSON.stringify(c.json)}`
+    );
+    logTest(
+      "  ...and event B's dish is unchanged in the database (the whole row)",
+      (await rowOf(dishB.id)) === bBeforeC,
+      'the dish row changed'
+    );
+    logTest(
+      '  ...and no ledger row was written',
+      (await ledgerCount()) === ledgerBeforeC,
+      'a ledger row was written'
+    );
+
+    // ── (d) a dish that does not exist ──────────────────────────────────────────
+    const d = await patch(evA.id, `gtc400-missing-${randomBytes(6).toString('hex')}`, HOST_COOKIE, {
+      name: 'GTC-400 no such dish',
+    });
+    logTest(
+      'PATCH /api/events/:A/items/:missing by A\'s host — still 404 "Item not found"',
+      d.status === 404 && d.json?.error === 'Item not found',
+      `got ${d.status} ${JSON.stringify(d.json)}`
+    );
+  } finally {
+    // Put back what this suite changed, even when a check above failed or the guard is gone.
+    await prisma.auditEntry.deleteMany({
+      where: { targetId: { in: [dishA.id, dishB.id] }, id: { notIn: [...entriesAtStart] } },
+    });
+    await prisma.item.update({
+      where: { id: dishA.id },
+      data: { name: dishA.name, source: dishA.source },
+    });
+    await prisma.item.update({
+      where: { id: dishB.id },
+      data: { name: dishB.name, source: dishB.source },
+    });
+    await prisma.person.updateMany({
+      where: { id: coordPersonId },
+      data: { userId: coordPersonAtStart?.userId ?? null },
+    });
+    if (coordUserId) await prisma.user.deleteMany({ where: { id: coordUserId } });
+    await prisma.user.deleteMany({ where: { email: GTC400_COORD_EMAIL } });
+  }
+}
+
 async function main() {
   console.log(`${BOLD}${YELLOW}=== Security Validation Test Suite ===${RESET}\n`);
   console.log('Contract under test:');
@@ -2430,6 +2641,7 @@ async function main() {
     await testSuite13_EventListSelect(fixtures);
     await testSuite14_PaymentIsNotIdentity();
     await testSuite15_TnzWebhookFailsClosed();
+    await testSuite16_ItemEditStaysInItsEvent(fixtures);
 
     console.log(`\n${BOLD}${YELLOW}=== Test Summary ===${RESET}`);
     console.log(`Total tests: ${testsRun}`);
