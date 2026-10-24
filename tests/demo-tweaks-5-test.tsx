@@ -19,6 +19,9 @@
  *      one dish, which keeps its centring.
  *   F  item 4: the sample's button reads "Fill in demo answers": that one constant, the file otherwise
  *      as it was; no visible line in the code names the button by its old words.
+ *   K  item 5: the pre-flight's tick box at the foot of an open step: moved, not copied (one box per
+ *      step), in its row again when the step is closed; Ready and the settled steps as they were;
+ *      the page's way to a step finds the box in either place.
  *   U  CONTROL: the files this batch must not touch are not edited since demo-tweaks-4-good;
  *      package.json (read at the commit that added this suite) differs by one script line; the
  *      lockfile there is the tag's; the two untracked scripts are in no commit.
@@ -42,6 +45,7 @@ import Moment3Opening from '../src/components/plan/Moment3Opening';
 import { ToastProvider } from '../src/contexts/ToastContext';
 import Moment3AssignView from '../src/components/plan/Moment3AssignView';
 import TypicalAnswersButton from '../src/components/demo/TypicalAnswersButton';
+import PreflightStep from '../src/components/preflight/PreflightStep';
 
 const ROOT = path.join(__dirname, '..');
 
@@ -155,6 +159,12 @@ const M3_SENTENCE_HTML = 'Now. Who&#x27;s on what.';
 const START_SRC = 'Let&rsquo;s do this &rarr;';
 const SUITE = 'tests/demo-tweaks-5-test.tsx';
 const TYPICAL_FILE = 'src/lib/demo/typical-answers.ts';
+const STEP_FILE = 'src/components/preflight/PreflightStep.tsx';
+const PREFLIGHT = 'src/app/plan/[eventId]/pre-flight/page.tsx';
+/** The tick slot in a folding step's row, as the base draws it (its classes unchanged). */
+const SLOT = '<div data-tick-slot="" class="flex w-[5.25rem] shrink-0 justify-end">';
+/** The arrival's selector: the box in a step's row, or at the foot of its open content. */
+const ARRIVAL_SELECTOR = `'header input[type="checkbox"], [data-tick-bottom] input[type="checkbox"]'`;
 const OLD_BUTTON = 'Fill in typical answers';
 /** The one new text in this batch (the founder's item 4). */
 const NEW_BUTTON = 'Fill in demo answers';
@@ -553,6 +563,80 @@ export const CHECKS = {
     );
   },
 
+  // ── Item 5 ──
+  /**
+   * K1 to K5 — one step, rendered: where its one box is. `place` is 'row' (in the header, in the
+   * slot when it folds), 'foot' (at the foot of the open content, after what it shows; the slot
+   * there, empty) or 'header' (a step that does not fold: in the header, no slot).
+   */
+  boxPlace(
+    html: string,
+    place: 'row' | 'foot' | 'header',
+    word: string,
+    checked: boolean,
+    disabled: boolean
+  ) {
+    const headerEnd = html.indexOf('</header>');
+    const boxes = html.match(/<input type="checkbox"[^>]*>/g) ?? [];
+    const at = html.indexOf('<input type="checkbox"');
+    const label = html.slice(at).match(/^<input type="checkbox"[^>]*\/?>([^<]*)<\/label>/);
+    const foot = html.indexOf(
+      '<div data-tick-bottom="" class="mt-6 pt-4 border-t border-gray-100 flex justify-end">'
+    );
+    const inside = html.indexOf('INSIDE-');
+    const box = boxes[0] ?? '';
+    const where =
+      place === 'row'
+        ? at > html.indexOf(SLOT) && html.indexOf(SLOT) > 0 && at < headerEnd && foot < 0
+        : place === 'foot'
+          ? html.includes(`${SLOT}</div>`) &&
+            foot > headerEnd &&
+            foot > inside &&
+            inside > html.indexOf('id="step-') &&
+            at > foot &&
+            html
+              .slice(foot)
+              .startsWith(
+                `<div data-tick-bottom="" class="mt-6 pt-4 border-t border-gray-100 flex justify-end"><label`
+              )
+          : at > 0 && at < headerEnd && !html.includes('data-tick-slot') && foot < 0;
+    return (
+      boxes.length === 1 &&
+      where &&
+      !!label &&
+      label[1] === word &&
+      /\bchecked=""/.test(box) === checked &&
+      /\bdisabled=""/.test(box) === disabled &&
+      html.includes(
+        '<label class="flex items-center gap-2 shrink-0 cursor-pointer text-sm text-gray-600">'
+      )
+    );
+  },
+  /** K6 — the step's code: one box, one handler; it sits at the foot only while a folding step is open. */
+  stepCode(src: string) {
+    return (
+      count(src, 'const box = (') === 1 &&
+      count(src, 'onChange={(e) => onCheck(e.target.checked)}') === 1 &&
+      count(src, 'const boxAtFoot = folds && open;') === 1 &&
+      count(src, '{boxAtFoot ? null : box}') === 1 &&
+      count(src, '{boxAtFoot && (') === 1 &&
+      count(src, 'data-tick-bottom=""') === 1 &&
+      !/hover:bg-/.test(between(src, 'data-tick-bottom=""', '</div>'))
+    );
+  },
+  /** K7 — the page's way to a step (goToStep) finds the box in either place, and only there. */
+  arrivalFinds(page: string) {
+    const go = between(page, 'const goToStep = (n: number) => {', 'const loose = ');
+    return (
+      go.includes(
+        `section.querySelector<HTMLInputElement>(\n        ${ARRIVAL_SELECTOR}\n      );`
+      ) &&
+      count(page, 'header input[type="checkbox"]') === 1 &&
+      go.includes('box.focus({ preventScroll: true });') &&
+      go.includes("section.scrollIntoView({ behavior: 'smooth', block: 'start' });")
+    );
+  },
+
   // ── CONTROL ──
   /** U2 — package.json differs from the tag by this suite's one script line, nothing else. */
   oneScriptLine(atAdd: string, goodJson: string) {
@@ -847,6 +931,113 @@ async function layerF() {
   );
 }
 
+// ══ Item 5 ═══════════════════════════════════════════════════════════════════
+const drawStep = (over: Record<string, unknown>) =>
+  render(
+    createElement(
+      PreflightStep as any,
+      {
+        n: 2,
+        title: 'Dietary needs',
+        blurb: 'A hand-written blurb.',
+        checked: false,
+        onCheck: () => {},
+        onToggle: () => {},
+        ...over,
+      },
+      createElement('p', null, `INSIDE-${String(over.n ?? 2)}`)
+    )
+  );
+const STEP_LOST = ['<div className="px-5 py-5">{children}</div>'];
+const STEP_ADDED = [
+  'const boxAtFoot = folds && open;',
+  '{boxAtFoot ? null : box}',
+  '<div className="px-5 py-5">',
+  '{children}',
+  '{boxAtFoot && (',
+  '<div',
+  'data-tick-bottom=""',
+  'className="mt-6 pt-4 border-t border-gray-100 flex justify-end"',
+  '>',
+  '</div>',
+  ')}',
+];
+const PAGE_LOST = [
+  `const box = section.querySelector<HTMLInputElement>('header input[type="checkbox"]');`,
+];
+const PAGE_ADDED = ['const box = section.querySelector<HTMLInputElement>(', ARRIVAL_SELECTOR, ');'];
+
+async function layerK() {
+  section('K — item 5: the pre-flight’s tick box at the foot of an open step');
+  assert(
+    'K',
+    'K1 a closed step that folds: its one box in its row’s slot, "Checked", as before; nothing at the foot',
+    CHECKS.boxPlace(drawStep({ open: false }), 'row', 'Checked', false, false)
+  );
+  const open = drawStep({ open: true, checked: true });
+  assert(
+    'K',
+    'K2 the same step open: its one box (moved, not copied) at the foot of its open content, after what it shows, under a rule, "Checked" and ticked; its row’s slot still there, empty',
+    CHECKS.boxPlace(open, 'foot', 'Checked', true, false),
+    open.slice(open.indexOf('</header>') - 200)
+  );
+  assert(
+    'K',
+    'K3 step 4 open: its box at the foot reads "Settled", unticked, as its own word',
+    CHECKS.boxPlace(
+      drawStep({ n: 4, open: true, checkLabel: 'Settled' }),
+      'foot',
+      'Settled',
+      false,
+      false
+    )
+  );
+  assert(
+    'K',
+    'K4 Ready (it never folds): its box in its header as before, no slot, nothing at the foot',
+    CHECKS.boxPlace(
+      drawStep({ n: 5, onToggle: undefined, open: true }),
+      'header',
+      'Checked',
+      false,
+      false
+    )
+  );
+  assert(
+    'K',
+    'K5 a settled step (invites only): its box in its header, ticked and greyed, as before, even asked to open',
+    CHECKS.boxPlace(drawStep({ settled: true, open: true }), 'header', 'Checked', true, true)
+  );
+  assert(
+    'K',
+    'K6 the step’s code: one box and one handler; at the foot only while a folding step is open; no hover shade at the foot',
+    CHECKS.stepCode(code(STEP_FILE))
+  );
+  assert(
+    'K',
+    'K7 the page’s way to a step finds, focuses and rings the box in either place (its row, or the foot of the open step), still bringing the step’s top to the top',
+    CHECKS.arrivalFinds(code(PREFLIGHT))
+  );
+  const deltaOk = [
+    [STEP_FILE, STEP_LOST, STEP_ADDED],
+    [PREFLIGHT, PAGE_LOST, PAGE_ADDED],
+  ].filter(
+    ([f, lost, added]) =>
+      !CHECKS.onlyThese(
+        read(f as string),
+        atRef(BASE, f as string),
+        lost as string[],
+        added as string[]
+      )
+  );
+  assert(
+    'K',
+    'K8 CONTROL: the step’s and the page’s code as at the base (6d2b103) but these moves: the step loses only its one-line body, the page only its one selector line',
+    deltaOk.length === 0,
+    deltaOk.map((d) => d[0]).join(', ')
+  );
+}
+
 // ══ CONTROL ══════════════════════════════════════════════════════════════════
 async function layerU() {
   section('U — CONTROL: what this batch must not touch');
@@ -887,6 +1078,7 @@ async function main() {
   await layerM();
   await layerT();
   await layerF();
+  await layerK();
   await layerU();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {

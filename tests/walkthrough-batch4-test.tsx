@@ -888,8 +888,14 @@ async function runLive() {
       return r;
     };
     const section = (n: number) => `document.querySelectorAll('section')[${n - 1}]`;
-    const box = (n: number) => `${section(n)}?.querySelector('header input[type=checkbox]')`;
-    const label = (n: number) => `${section(n)}?.querySelector('header label')`;
+    // [[GTC-399]] item 5: a step's one tick box is in its row while the step is closed and at the
+    // foot of its open content while it is open; each reads null unless there is exactly one.
+    const TICK = `header input[type=checkbox], [data-tick-bottom] input[type=checkbox]`;
+    const TICK_LABEL = `header label, [data-tick-bottom] label`;
+    const box = (n: number) =>
+      `(() => { const b = ${section(n)}?.querySelectorAll(${JSON.stringify(TICK)}) ?? []; return b.length === 1 ? b[0] : null; })()`;
+    const label = (n: number) =>
+      `(() => { const b = ${section(n)}?.querySelectorAll(${JSON.stringify(TICK_LABEL)}) ?? []; return b.length === 1 ? b[0] : null; })()`;
     const goLine = `document.querySelector('[data-go-to-step]')`;
     const sendBtn = `[...document.querySelectorAll('button')].find(b => b.innerText.trim() === 'Send — finish the five checks first')`;
 
@@ -921,7 +927,7 @@ async function runLive() {
         (await ev<string>(`${goLine}?.innerText.trim() ?? ''`)) === W1(2, STEP_TITLES[1])
       );
       await ev(`(() => { window.__reqs = 0; const f = window.fetch.bind(window); window.fetch = (u, o) => { window.__reqs++; return f(u, o); };
-        window.__boxes = () => [...document.querySelectorAll('section header input[type=checkbox]')].map(b => b.checked).join(','); window.__before = window.__boxes(); return true; })()`);
+        window.__boxes = () => [...document.querySelectorAll('section[data-step]')].map(s => { const b = s.querySelectorAll(${JSON.stringify(TICK)}); return b.length === 1 ? String(b[0].checked) : 'boxes:' + b.length; }).join(','); window.__before = window.__boxes(); return true; })()`);
       const tapped = (await tap(goLine, 2500)) === null;
       const top = await ev<number>(`${section(2)}.getBoundingClientRect().top`);
       assert(
@@ -931,13 +937,19 @@ async function runLive() {
       );
       assert(
         'C',
-        `${ids[3]} ${tag}: and the focus is on step 2’s box, in reach`,
-        tapped && (await ev<boolean>(`document.activeElement === ${box(2)}`))
+        `${ids[3]} ${tag}: and the focus is on step 2’s box, in reach (its one box, at the foot of the step it opened, GTC-399 item 5)`,
+        tapped &&
+          (await ev<boolean>(
+            `(() => { const b = ${box(2)}; return !!b && document.activeElement === b && !!b.closest('[data-tick-bottom]'); })()`
+          ))
       );
       assert(
         'C',
         `${ids[4]} ${tag}: the tap ticked nothing and asked the server for nothing (Q2)`,
-        tapped && (await ev<boolean>(`window.__boxes() === window.__before && window.__reqs === 0`))
+        tapped &&
+          (await ev<boolean>(
+            `window.__before.split(',').length === 5 && !window.__before.includes('boxes:') && window.__boxes() === window.__before && window.__reqs === 0`
+          ))
       );
       if (tag === 'desktop') {
         assert(

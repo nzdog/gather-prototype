@@ -794,7 +794,14 @@ const NO_STORAGE = `(() => {
 
 const STORE = `(() => { try { const o = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i);
   if (k && k.startsWith(${JSON.stringify(KEY_PREFIX)})) o[k] = localStorage.getItem(k); } return o; } catch (e) { return { error: true }; } })()`;
-const BOXES = `(() => { const o = {}; for (let n = 1; n <= 5; n++) { const b = document.querySelector('#step-' + n + ' header input[type=checkbox]'); o[n] = b ? b.checked : null; } return o; })()`;
+/**
+ * Each step's one tick box: in its row while the step is closed, at the foot of its open content
+ * while it is open ([[GTC-399]] item 5); null unless the step has exactly one.
+ */
+const BOXES = `(() => { const o = {}; for (let n = 1; n <= 5; n++) { const b = document.querySelectorAll('#step-' + n + ' header input[type=checkbox], #step-' + n + ' [data-tick-bottom] input[type=checkbox]'); o[n] = b.length === 1 ? b[0].checked : null; } return o; })()`;
+/** [[GTC-399]] item 5: whether step `n`'s box is at the foot of its open content, ticked. */
+const footTicked = (n: number) =>
+  `(() => { const b = document.querySelector('#step-${n} [data-tick-bottom] input[type=checkbox]'); return !!b && b.checked && document.querySelector('#step-${n} header [data-tick-slot]')?.children.length === 0; })()`;
 
 async function runLive() {
   const up = await realFetch(`${BASE}/`)
@@ -1182,6 +1189,7 @@ async function runLive() {
     await tapText('#step-2', 'No dietary needs', 400);
     await tapText('#step-2', 'Save this', 1500);
     const mid13 = await ev<any>(BOXES);
+    const foot13 = await ev<boolean>(footTicked(2));
     await open(`/plan/${evA.id}/pre-flight`);
     const first13 = await ev<any>('window.__first');
     const stored13 = await prisma.eventSetup.findUnique({
@@ -1190,33 +1198,36 @@ async function runLive() {
     });
     assert(
       'C',
-      'C13 her own dietary save keeps step 2 ticked, on the page and after a reload (Q7)',
+      'C13 her own dietary save keeps step 2 ticked, on the page (its box at the foot of the open step, GTC-399 item 5) and after a reload (Q7)',
       ok(
         () =>
           JSON.stringify(stored13?.dietaryData ?? {}).includes('confirmed_none') &&
           mid13[2] === true &&
+          foot13 &&
           first13[2] === true
       ),
-      `${JSON.stringify(stored13?.dietaryData)} ${JSON.stringify(mid13)} ${JSON.stringify(first13)}`
+      `${JSON.stringify(stored13?.dietaryData)} ${JSON.stringify(mid13)} foot ${foot13} ${JSON.stringify(first13)}`
     );
     await tap(`#step-4 header button[aria-expanded]`, 1200);
     await tapText('#step-4 [data-message-part="2"]', PILLS.HAND_TO_HOST, 2000);
     const f14 = await ev<any>(STEP4_FACTS);
     const mid14 = await ev<any>(BOXES);
+    const foot14 = await ev<boolean>(footTicked(4));
     await open(`/plan/${evA.id}/pre-flight`);
     await sleep(800);
     const now14 = await ev<any>(BOXES);
     assert(
       'C',
-      'C14 her own nudge choice ("Gather will leave them to you", GTC-396 item 7) moves the pressed marker, drops "(the default)", and keeps step 4 ticked after a reload (Q3, Q7)',
+      'C14 her own nudge choice ("Gather will leave them to you", GTC-396 item 7) moves the pressed marker, drops "(the default)", and keeps step 4 ticked, on the page (its box at the foot of the open step, GTC-399 item 5) and after a reload (Q3, Q7)',
       ok(
         () =>
           CHECKS.C_PART2(f14, PILLS.HAND_TO_HOST) &&
           !f14.pills.some((p: any) => p.text.endsWith(SUFFIX)) &&
           mid14[4] === true &&
+          foot14 &&
           now14[4] === true
       ),
-      `${JSON.stringify(f14?.pills)} ${JSON.stringify(mid14)} ${JSON.stringify(now14)}`
+      `${JSON.stringify(f14?.pills)} ${JSON.stringify(mid14)} foot ${foot14} ${JSON.stringify(now14)}`
     );
 
     // Another event; another person on the same browser.

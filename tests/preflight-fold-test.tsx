@@ -637,6 +637,13 @@ async function runLive() {
     const st = (n: number) => `document.getElementById('step-${n}')`;
     const tog = (n: number) => `${st(n)}?.querySelector('header button[aria-expanded]')`;
     const box = (n: number) => `${st(n)}?.querySelector('header input[type=checkbox]')`;
+    /**
+     * [[GTC-399]] item 5: a step's one tick box, in its row when the step is closed and at the foot
+     * of its open content when it is open; `null` unless there is exactly one.
+     */
+    const TICK = `header input[type=checkbox], [data-tick-bottom] input[type=checkbox]`;
+    const oneBox = (n: number) =>
+      `(() => { const b = ${st(n)}?.querySelectorAll(${JSON.stringify(TICK)}) ?? []; return b.length === 1 ? b[0] : null; })()`;
     const label = (n: number) => `${st(n)}?.querySelector('header label')`;
     const goLine = `document.querySelector('[data-go-to-step]')`;
     const sendBtn = `[...document.querySelectorAll('button')].find(b => b.innerText.trim() === 'Send — finish the five checks first')`;
@@ -716,15 +723,21 @@ async function runLive() {
       detail[k('C4')] = `${t4} ${JSON.stringify(s4)}`;
 
       // C5 — the line opens step 2 and takes her there: its top at the top of the screen, the focus
-      // on its box; it ticks nothing and asks the server for nothing.
+      // on its box; it ticks nothing and asks the server for nothing. [[GTC-399]] item 5: the step
+      // is open, so its one box is at the foot of its open content (its row's slot empty); each
+      // step's one box, wherever it is, is read before and after.
       await ev(`(() => { window.__reqs = 0; const f = window.fetch.bind(window); window.fetch = (u, o) => { window.__reqs++; return f(u, o); };
-        window.__boxes = () => [...document.querySelectorAll('section header input[type=checkbox]')].map(b => b.checked).join(','); window.__before = window.__boxes(); return true; })()`);
+        window.__boxes = () => [...document.querySelectorAll('section[data-step]')].map(s => { const b = s.querySelectorAll(${JSON.stringify(TICK)}); return b.length === 1 ? String(b[0].checked) : 'boxes:' + b.length; }).join(','); window.__before = window.__boxes(); return true; })()`);
       const t5 = await tap(goLine, 2500);
       const s5 = {
         fold: await fold(2),
         top: Math.round(await ev<number>(`${st(2)}.getBoundingClientRect().top`)),
-        focus: await ev<boolean>(`document.activeElement === ${box(2)}`),
-        quiet: await ev<boolean>(`window.__boxes() === window.__before && window.__reqs === 0`),
+        focus: await ev<boolean>(
+          `(() => { const b = ${oneBox(2)}; return !!b && document.activeElement === b && !!b.closest('#step-2-body [data-tick-bottom]') && ${st(2)}.querySelector('header [data-tick-slot]')?.children.length === 0; })()`
+        ),
+        quiet: await ev<boolean>(
+          `window.__before.split(',').length === 5 && !window.__before.includes('boxes:') && window.__boxes() === window.__before && window.__reqs === 0`
+        ),
       };
       r[k('C5')] =
         t5 === null && s5.fold === 'open' && s5.top >= 0 && s5.top <= 96 && s5.focus && s5.quiet;
@@ -792,7 +805,7 @@ async function runLive() {
     C2: 'a tap opens step 1, then step 3; step 1 stays open (several at once)',
     C3: 'a second tap closes step 1; step 3 stays open',
     C4: 'step 1’s box ticks it from its closed row; it stays closed; the line names step 2',
-    C5: 'the line opens step 2 and takes her there (top within 96px), the focus on its box; nothing ticked, no request',
+    C5: 'the line opens step 2 and takes her there (top within 96px), the focus on its one box, at the foot of the open step (GTC-399 item 5); nothing ticked, no request',
     C6: 'CONTROL: inside step 3, the household rows still fold, two open at once',
     C7: 'W1, W2 and W3 on the closed rows of the event that needs her; on the settled one no W1, no W3, and W2 reads "No dietary needs"',
     C8: 'invites only: steps 1 and 2 read W11, ticked and greyed, no toggle; step 3 closed; the line names step 3 and opens it',

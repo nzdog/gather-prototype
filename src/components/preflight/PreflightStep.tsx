@@ -20,6 +20,13 @@
  * (ruling 1); a keyboard sees a sage ring inside the toggle. The tick box sits in a fixed-width
  * slot, wide enough for the wider of its two words ("Checked"), so every step's cue ends the same
  * distance from the box's right edge. Ready and the settled steps are as they were.
+ *
+ * [[GTC-399]] item 5 (the founder, 24 Oct 2026: "Move check box to the bottom when the accordion is
+ * expanded so the user doesn't have to scroll up") — AN OPEN STEP'S TICK BOX IS AT ITS FOOT. While
+ * a step that folds is open, its one tick box sits at the bottom of what it shows, under the last
+ * thing to read; the slot beside the row stays, empty, so the row does not move. Closed, the box is
+ * back in that slot. Moved, not copied: one box per step at any time, the same handler, state,
+ * words and rules. Ready and the settled steps keep theirs in the row.
  */
 
 import { FOLD_ROW_RING, FOLD_ROW_SHADE, FoldBody, FoldCue } from '@/components/plan/AccordionShell';
@@ -69,6 +76,8 @@ export default function PreflightStep({
   children: React.ReactNode;
 }) {
   const folds = !settled && onToggle !== undefined;
+  // [[GTC-399]] item 5: an open step that folds draws its box at its foot, not in its row.
+  const boxAtFoot = folds && open;
   const rowLine =
     line && !settled ? (
       <span
@@ -142,7 +151,7 @@ export default function PreflightStep({
           )}
           {folds ? (
             <div data-tick-slot="" className="flex w-[5.25rem] shrink-0 justify-end">
-              {box}
+              {boxAtFoot ? null : box}
             </div>
           ) : (
             box
@@ -151,7 +160,17 @@ export default function PreflightStep({
       </header>
       {settled ? null : folds ? (
         <FoldBody open={open} id={`step-${n}-body`}>
-          <div className="px-5 py-5">{children}</div>
+          <div className="px-5 py-5">
+            {children}
+            {boxAtFoot && (
+              <div
+                data-tick-bottom=""
+                className="mt-6 pt-4 border-t border-gray-100 flex justify-end"
+              >
+                {box}
+              </div>
+            )}
+          </div>
         </FoldBody>
       ) : (
         <div className="px-5 py-5">{children}</div>

@@ -354,7 +354,7 @@ const NOT_TOUCHED = [
   'src/lib/demo', // but typical-answers.ts (GTC-399 item 4; see EXCLUDED)
   'src/lib/preflight',
   'src/components/preflight', // but PreflightStep.tsx (GTC-399 item 5)
-  'src/app/plan/[eventId]/pre-flight',
+  'src/app/plan/[eventId]/pre-flight', // but page.tsx (GTC-399 item 5)
   'src/app/plan/[eventId]/setup', // but page.tsx (GTC-399 items 1 and 2)
   // test:demo-sandbox-b S11's files not already named above
   'src/lib/sms',
@@ -374,9 +374,9 @@ const NOT_TOUCHED = [
   'src/lib/moment3/completion.ts',
 ];
 /**
- * [[GTC-399]] edits these four on purpose, so U1 asks its question of them at GTC-399's base
+ * [[GTC-399]] edits these five on purpose, so U1 asks its question of them at GTC-399's base
  * (6d2b103), a fixed commit: GTC-398 still may not have touched them. GTC-399's own suite
- * (test:demo-tweaks-5) pins their new state. The three in a listed directory are kept out of its
+ * (test:demo-tweaks-5) pins their new state. The four in a listed directory are kept out of its
  * live diff, which still covers everything else there.
  */
 const NOT_TOUCHED_TILL_GTC399 = [
@@ -384,11 +384,13 @@ const NOT_TOUCHED_TILL_GTC399 = [
   'src/components/preflight/PreflightStep.tsx',
   'src/app/plan/[eventId]/setup/page.tsx',
   'src/components/plan/Moment2Opening.tsx',
+  'src/app/plan/[eventId]/pre-flight/page.tsx',
 ];
 const EXCLUDED = [
   ':(exclude)src/lib/demo/typical-answers.ts',
   ':(exclude)src/components/preflight/PreflightStep.tsx',
   ':(exclude)src/app/plan/[eventId]/setup/page.tsx',
+  ':(exclude)src/app/plan/[eventId]/pre-flight/page.tsx',
 ];
 const SUITE = 'tests/demo-tweaks-4-test.tsx';
 const NEW_SCRIPT = 'test:demo-tweaks-4';
