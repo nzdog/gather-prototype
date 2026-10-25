@@ -600,10 +600,13 @@ const STEP_FACTS = `(() => {
   };
 })()`;
 
-/** Round 2: the address of the strip's door to Moment 2 on this page, read from the strip itself. */
+/**
+ * Round 2: the address of the strip's door to Moment 2 on this page, read from the strip itself: the
+ * one strip link holding Moment 2's label (a cell reads "✓What's the plan? ✓", its tick first).
+ */
 const DOOR_2 = `(() => {
-  const a = [...document.querySelectorAll('[data-moment-strip] a')].find((x) => x.textContent.replace(/\\s+/g, ' ').trim().startsWith(${JSON.stringify(DOOR_2_LABEL)}));
-  return a ? a.getAttribute('href') : null;
+  const a = [...document.querySelectorAll('[data-moment-strip] a')].filter((x) => x.textContent.includes(${JSON.stringify(DOOR_2_LABEL)}));
+  return a.length === 1 ? a[0].getAttribute('href') : null;
 })()`;
 
 /** Round 2: mark whatever in step 2 reads "Add a dish" (a link or a button), for the guarded click. */
