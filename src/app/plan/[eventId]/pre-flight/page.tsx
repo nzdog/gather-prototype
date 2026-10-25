@@ -1097,6 +1097,9 @@ async function hasDishes(eventId: string): Promise<boolean> {
  * goes back to the saved state (ruling 3). After a save, when a plan has been drafted, one line
  * under the saved one says the plan came first; nothing is re-run or re-drafted (ruling 4). The
  * step's tick, fold, ring and closed line are the page's and do not change (ruling 2).
+ *
+ * Round 2 (the founder's ruling of 25 Oct 2026): under that line, and only with it, a plain link
+ * "Add a dish" to Moment 2's plan screen (`?at=plan`, the strip's door), where she picks the section.
  */
 function DietarySection({
   value,
@@ -1111,6 +1114,9 @@ function DietarySection({
   const [changing, setChanging] = useState(false);
   // [[GTC-404]] (ruling 4) — the last save was made after a plan had been drafted.
   const [afterPlan, setAfterPlan] = useState(false);
+  // [[GTC-404]] (round 2): the event, read as the page reads it, for the "Add a dish" link.
+  const params = useParams();
+  const eventId = params.eventId as string;
 
   useEffect(() => {
     setDraft(value);
@@ -1181,9 +1187,23 @@ function DietarySection({
             : `You said there are these: ${listed}.`}
         </p>
         {afterPlan && (
-          <p data-dietary-after-save="" className="text-sm text-amber-700 mb-3">
-            Saved. Your plan was drafted before this, so check the dishes still cover it.
-          </p>
+          <>
+            <p data-dietary-after-save="" className="text-sm text-amber-700 mb-3">
+              Saved. Your plan was drafted before this, so check the dishes still cover it.
+            </p>
+            {/* [[GTC-404]] (round 2, ruling 1): a plain link to Moment 2's plan screen, by the
+                strip's own door address for it above; she adds the dish in the section she likes.
+                The look is "Cancel"'s, the step's other plain link, without its spacing. */}
+            <p className="mb-3">
+              <a
+                data-dietary-add-dish=""
+                href={setupHref(eventId, AT_PLAN)}
+                className="text-sm text-gray-600 underline decoration-gray-300 underline-offset-2 hover:text-gray-800"
+              >
+                Add a dish
+              </a>
+            </p>
+          </>
         )}
         <button
           type="button"
