@@ -205,6 +205,26 @@ const rx = (s: string) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 
 // ── Item 4: the plan screen's lead-in, hand-written ──────────────────────────
 const PLAN_VIEW = 'src/components/plan/Moment2PlanView.tsx';
+/**
+ * [[GTC-405]] edits Moment 2's edit box on purpose (ItemEditForm, in the plan view after the heading:
+ * a dish's own drop-off place and time, and "Note for the guest"). L5 keeps its question of
+ * everything else after the heading live; the edit box is cut from that comparison and asked
+ * instead as unchanged from GTC-398's base up to GTC-405's base (c593d22), a fixed commit.
+ * GTC-405's own suite (test:demo-tweaks-7) pins its new state. Both markers are code, so they
+ * survive the comments being stripped; a missing marker cuts nothing and reads ''.
+ */
+const GTC405_BASE = 'c593d220a7390c3fc417739fd9c709c84d0be8c3';
+const EDIT_BOX_FROM = 'export function ItemEditForm(';
+const EDIT_BOX_TO = 'interface AddItemFormProps';
+const editBoxOf = (src: string) => {
+  const a = src.indexOf(EDIT_BOX_FROM);
+  const b = a >= 0 ? src.indexOf(EDIT_BOX_TO, a) : -1;
+  return a >= 0 && b > a ? src.slice(a, b) : '';
+};
+const withoutEditBox = (src: string) => {
+  const box = editBoxOf(src);
+  return box ? src.replace(box, '') : '';
+};
 const SKELETON = 'src/components/plan/Moment2Step2Skeleton.tsx';
 const PLAN_BASE = {
   eventId: 'e1',
@@ -687,10 +707,16 @@ export const CHECKS = {
       !plan.includes(done)
     );
   },
-  /** L5 CONTROL — no MomentWords in the view; the rest as at GTC-398's base; the skeleton draws none of it and is not edited. */
-  planViewKept(now: string, base: string, skeleton: string, skeletonUnchanged: boolean) {
+  /** L5 CONTROL — no MomentWords in the view; the rest as at GTC-398's base (the edit box, which GTC-405 edits, up to GTC-405's base); the skeleton draws none of it and is not edited. */
+  planViewKept(
+    now: string,
+    base: string,
+    skeleton: string,
+    skeletonUnchanged: boolean,
+    editBoxAtGtc405: string
+  ) {
     const fromHeading = (src: string) =>
-      src.slice(src.indexOf('<h1 className="text-xl font-semibold'));
+      withoutEditBox(src.slice(src.indexOf('<h1 className="text-xl font-semibold')));
     const top = (src: string) =>
       between(src, 'return (\n    <div className="min-h-screen', '<MomentArc');
     return (
@@ -702,7 +728,9 @@ export const CHECKS = {
       flat(top(now)) === flat(top(base)) &&
       !skeleton.includes('MomentWords') &&
       !skeleton.includes('data-moment-words') &&
-      skeletonUnchanged
+      skeletonUnchanged &&
+      editBoxOf(base).length > 1000 &&
+      flat(editBoxOf(editBoxAtGtc405)) === flat(editBoxOf(base))
     );
   },
 
@@ -1046,12 +1074,13 @@ async function layerL() {
   );
   assert(
     'L',
-    'L5 CONTROL: no MomentWords in the plan view (nor its import); the heading, the count line, the list, the bar and everything after the heading, and the top, as at GTC-398’s base (8a4f1bc); the skeleton shown while generating draws no Moment words and is not edited up to GTC-399’s base (6d2b103; GTC-399 item 6 draws the strip on it, test:demo-tweaks-5 pins that)',
+    'L5 CONTROL: no MomentWords in the plan view (nor its import); the heading, the count line, the list, the bar and everything after the heading, and the top, as at GTC-398’s base (8a4f1bc), but the edit box (GTC-405 edits it), which is as at that base up to GTC-405’s base (c593d22); the skeleton shown while generating draws no Moment words and is not edited up to GTC-399’s base (6d2b103; GTC-399 item 6 draws the strip on it, test:demo-tweaks-5 pins that)',
     CHECKS.planViewKept(
       code(PLAN_VIEW),
       stripComments(atRef(GTC398_BASE, PLAN_VIEW)),
       code(SKELETON),
-      git(['diff', '--quiet', GOOD_TAG, GTC399_BASE, '--', SKELETON]).status === 0
+      git(['diff', '--quiet', GOOD_TAG, GTC399_BASE, '--', SKELETON]).status === 0,
+      stripComments(atRef(GTC405_BASE, PLAN_VIEW))
     )
   );
 }

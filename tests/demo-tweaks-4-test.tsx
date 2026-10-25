@@ -126,6 +126,26 @@ const between = (src: string, from: string, to: string) => {
 
 // ── Shared fixtures, hand-written ────────────────────────────────────────────
 const PLAN_VIEW = 'src/components/plan/Moment2PlanView.tsx';
+/**
+ * [[GTC-405]] edits Moment 2's edit box on purpose (ItemEditForm, in the plan view after the heading:
+ * a dish's own drop-off place and time, and "Note for the guest"). L5 keeps its question of
+ * everything else after the heading live; the edit box is cut from that comparison and asked
+ * instead as unchanged from GTC-398's base up to GTC-405's base (c593d22), a fixed commit.
+ * GTC-405's own suite (test:demo-tweaks-7) pins its new state. Both markers are code, so they
+ * survive the comments being stripped; a missing marker cuts nothing and reads ''.
+ */
+const GTC405_BASE = 'c593d220a7390c3fc417739fd9c709c84d0be8c3';
+const EDIT_BOX_FROM = 'export function ItemEditForm(';
+const EDIT_BOX_TO = 'interface AddItemFormProps';
+const editBoxOf = (src: string) => {
+  const a = src.indexOf(EDIT_BOX_FROM);
+  const b = a >= 0 ? src.indexOf(EDIT_BOX_TO, a) : -1;
+  return a >= 0 && b > a ? src.slice(a, b) : '';
+};
+const withoutEditBox = (src: string) => {
+  const box = editBoxOf(src);
+  return box ? src.replace(box, '') : '';
+};
 const M3_VIEW = 'src/components/plan/Moment3AssignView.tsx';
 const SKELETON = 'src/components/plan/Moment2Step2Skeleton.tsx';
 const DOES_HEAD = 'What this does';
@@ -557,10 +577,10 @@ export const CHECKS = {
       !html.includes(doneWords)
     );
   },
-  /** L5 — the plan view's code: no MomentWords at all; the heading onwards and the top as at the base. */
-  planViewCode(now: string, base: string) {
+  /** L5 — the plan view's code: no MomentWords at all; the heading onwards and the top as at the base (the edit box, which GTC-405 edits, up to GTC-405's base). */
+  planViewCode(now: string, base: string, editBoxAtGtc405: string) {
     const fromHeading = (src: string) =>
-      src.slice(src.indexOf('<h1 className="text-xl font-semibold'));
+      withoutEditBox(src.slice(src.indexOf('<h1 className="text-xl font-semibold')));
     const top = (src: string) =>
       between(src, 'return (\n    <div className="min-h-screen', '<MomentArc');
     return (
@@ -570,7 +590,9 @@ export const CHECKS = {
       fromHeading(base).length > 1000 &&
       flat(fromHeading(now)) === flat(fromHeading(base)) &&
       top(base).length > 50 &&
-      flat(top(now)) === flat(top(base))
+      flat(top(now)) === flat(top(base)) &&
+      editBoxOf(base).length > 1000 &&
+      flat(editBoxOf(editBoxAtGtc405)) === flat(editBoxOf(base))
     );
   },
 
@@ -948,9 +970,12 @@ async function layerL() {
   );
   assert(
     'L',
-    'L5 the plan view’s code holds no MomentWords (neither the two lines nor the import); the heading onwards and the top as at the base (8a4f1bc); the skeleton draws no Moment words, and it and the Moment words are not edited (U1; the skeleton up to GTC-399’s base, 6d2b103)',
-    CHECKS.planViewCode(code(PLAN_VIEW), stripComments(atRef(BASE, PLAN_VIEW))) &&
-      !code(SKELETON).includes('MomentWords')
+    'L5 the plan view’s code holds no MomentWords (neither the two lines nor the import); the heading onwards and the top as at the base (8a4f1bc), but the edit box (GTC-405 edits it), which is as at that base up to GTC-405’s base (c593d22); the skeleton draws no Moment words, and it and the Moment words are not edited (U1; the skeleton up to GTC-399’s base, 6d2b103)',
+    CHECKS.planViewCode(
+      code(PLAN_VIEW),
+      stripComments(atRef(BASE, PLAN_VIEW)),
+      stripComments(atRef(GTC405_BASE, PLAN_VIEW))
+    ) && !code(SKELETON).includes('MomentWords')
   );
 }
 
