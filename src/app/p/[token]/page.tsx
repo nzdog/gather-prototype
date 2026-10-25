@@ -8,11 +8,13 @@ import {
   Home,
   ChevronDown,
   ChevronRight,
+  MapPin,
   Maximize2,
   Minimize2,
 } from 'lucide-react';
 import ItemStatusBadges from '@/components/plan/ItemStatusBadges';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
+import { eventDropOffLine } from '@/lib/items/drop-off-words';
 import { INVITES_ONLY_WORDS } from '@/lib/setup/invites-only';
 import { whenLine } from '@/components/shared/EventDetails';
 import { askHostLine } from '@/lib/guest/questions-line';
@@ -331,6 +333,11 @@ export default function ParticipantView() {
   // After hostPreview and error early-returns, data is guaranteed non-null
   if (!data) return null;
 
+  // [[GTC-405]] ruling 3: the event's drop-off line, in the words already ruled for it (GTC-395),
+  // from the venue and times this page already holds; for a dish with no drop-off of its own. With
+  // no venue there is no line (the helper's "no venue yet" sentence is the host's, not a guest's).
+  const eventDropOff = data.event.venueName?.trim() ? eventDropOffLine(data.event) : null;
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-6 min-h-screen flex flex-col">
@@ -543,6 +550,7 @@ export default function ParticipantView() {
                     onToggleCollapse={() => toggleAssignmentCollapse(assignment.id)}
                     onRespond={(r) => handleResponse(assignment.id, r)}
                     onBehalfOf={null}
+                    eventDropOff={eventDropOff}
                   />
                 ))}
               </div>
@@ -566,6 +574,7 @@ export default function ParticipantView() {
                     onToggleCollapse={() => toggleAssignmentCollapse(assignment.id)}
                     onRespond={(r) => handleResponse(assignment.id, r)}
                     onBehalfOf={child.firstName}
+                    eventDropOff={eventDropOff}
                   />
                 ))}
               </div>
@@ -619,13 +628,24 @@ function AssignmentCard({
   onToggleCollapse,
   onRespond,
   onBehalfOf,
+  eventDropOff,
 }: {
   assignment: Assignment;
   collapsed: boolean;
   onToggleCollapse: () => void;
   onRespond: (response: 'ACCEPTED' | 'DECLINED' | 'MAYBE') => void;
   onBehalfOf: string | null;
+  /** [[GTC-405]] ruling 3: the event's drop-off line, or null when the event has no venue. */
+  eventDropOff: string | null;
 }) {
+  // [[GTC-405]] ruling 3: a dish's own place or time (as DropOffDisplay reads them) wins; with
+  // neither, the card shows the event's line instead.
+  const ownDropOff = !!(
+    assignment.item.dropOffLocation ||
+    assignment.item.dropOffNote ||
+    assignment.item.dropOffAt
+  );
+
   const answered =
     assignment.response === 'ACCEPTED'
       ? onBehalfOf
@@ -704,10 +724,7 @@ function AssignmentCard({
 
       {!collapsed && (
         <div className="space-y-4 mt-4">
-          {(assignment.item.day ||
-            assignment.item.dropOffLocation ||
-            assignment.item.dropOffNote ||
-            assignment.item.dropOffAt) && (
+          {(assignment.item.day || ownDropOff || eventDropOff) && (
             <div className="space-y-2">
               {assignment.item.day && (
                 <div className="flex items-center gap-3">
@@ -715,13 +732,22 @@ function AssignmentCard({
                   <span className="text-gray-900">{assignment.item.day.name}</span>
                 </div>
               )}
-              <DropOffDisplay
-                dropOffLocation={assignment.item.dropOffLocation}
-                dropOffAt={assignment.item.dropOffAt}
-                dropOffNote={assignment.item.dropOffNote}
-                variant="stacked"
-                showIcons={true}
-              />
+              {ownDropOff ? (
+                <DropOffDisplay
+                  dropOffLocation={assignment.item.dropOffLocation}
+                  dropOffAt={assignment.item.dropOffAt}
+                  dropOffNote={assignment.item.dropOffNote}
+                  variant="stacked"
+                  showIcons={true}
+                />
+              ) : (
+                eventDropOff && (
+                  <div data-event-drop-off="" className="flex items-center gap-2 text-sm">
+                    <MapPin className="size-4 text-gray-400 flex-shrink-0" />
+                    <span className="text-gray-900 break-words">{eventDropOff}</span>
+                  </div>
+                )
+              )}
             </div>
           )}
 
