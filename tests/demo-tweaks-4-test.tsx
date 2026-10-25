@@ -146,6 +146,25 @@ const withoutEditBox = (src: string) => {
   const box = editBoxOf(src);
   return box ? src.replace(box, '') : '';
 };
+/**
+ * [[GTC-406]] edits Moment 2's item row on purpose (ItemRow, after the heading: a critical row's
+ * amber "critical" tag, ruling 3). L5 keeps its question of everything else after the heading live;
+ * the row is cut from that comparison too and asked instead as unchanged from GTC-398's base up to
+ * GTC-406's base (347fb10), a fixed commit. GTC-406's own suite (test:demo-tweaks-8) pins its new
+ * state. Both markers are code; a missing marker cuts nothing and reads ''.
+ */
+const GTC406_BASE = '347fb109403f43c767e64fdf29efa0c861808bb9';
+const ITEM_ROW_FROM = 'function ItemRow(';
+const ITEM_ROW_TO = 'interface InlineQuantityEditProps';
+const itemRowOf = (src: string) => {
+  const a = src.indexOf(ITEM_ROW_FROM);
+  const b = a >= 0 ? src.indexOf(ITEM_ROW_TO, a) : -1;
+  return a >= 0 && b > a ? src.slice(a, b) : '';
+};
+const withoutItemRow = (src: string) => {
+  const row = itemRowOf(src);
+  return row ? src.replace(row, '') : '';
+};
 const M3_VIEW = 'src/components/plan/Moment3AssignView.tsx';
 const SKELETON = 'src/components/plan/Moment2Step2Skeleton.tsx';
 const DOES_HEAD = 'What this does';
@@ -577,10 +596,12 @@ export const CHECKS = {
       !html.includes(doneWords)
     );
   },
-  /** L5 — the plan view's code: no MomentWords at all; the heading onwards and the top as at the base (the edit box, which GTC-405 edits, up to GTC-405's base). */
-  planViewCode(now: string, base: string, editBoxAtGtc405: string) {
+  /** L5 — the plan view's code: no MomentWords at all; the heading onwards and the top as at the base (the edit box, which GTC-405 edits, up to GTC-405's base; the item row, which GTC-406 edits, up to GTC-406's base). */
+  planViewCode(now: string, base: string, editBoxAtGtc405: string, itemRowAtGtc406: string) {
     const fromHeading = (src: string) =>
-      withoutEditBox(src.slice(src.indexOf('<h1 className="text-xl font-semibold')));
+      withoutItemRow(
+        withoutEditBox(src.slice(src.indexOf('<h1 className="text-xl font-semibold')))
+      );
     const top = (src: string) =>
       between(src, 'return (\n    <div className="min-h-screen', '<MomentArc');
     return (
@@ -592,7 +613,9 @@ export const CHECKS = {
       top(base).length > 50 &&
       flat(top(now)) === flat(top(base)) &&
       editBoxOf(base).length > 1000 &&
-      flat(editBoxOf(editBoxAtGtc405)) === flat(editBoxOf(base))
+      flat(editBoxOf(editBoxAtGtc405)) === flat(editBoxOf(base)) &&
+      itemRowOf(base).length > 1000 &&
+      flat(itemRowOf(itemRowAtGtc406)) === flat(itemRowOf(base))
     );
   },
 
@@ -970,11 +993,12 @@ async function layerL() {
   );
   assert(
     'L',
-    'L5 the plan view’s code holds no MomentWords (neither the two lines nor the import); the heading onwards and the top as at the base (8a4f1bc), but the edit box (GTC-405 edits it), which is as at that base up to GTC-405’s base (c593d22); the skeleton draws no Moment words, and it and the Moment words are not edited (U1; the skeleton up to GTC-399’s base, 6d2b103)',
+    'L5 the plan view’s code holds no MomentWords (neither the two lines nor the import); the heading onwards and the top as at the base (8a4f1bc), but the edit box (GTC-405 edits it), which is as at that base up to GTC-405’s base (c593d22), and the item row (GTC-406 edits it), which is as at that base up to GTC-406’s base (347fb10); the skeleton draws no Moment words, and it and the Moment words are not edited (U1; the skeleton up to GTC-399’s base, 6d2b103)',
     CHECKS.planViewCode(
       code(PLAN_VIEW),
       stripComments(atRef(BASE, PLAN_VIEW)),
-      stripComments(atRef(GTC405_BASE, PLAN_VIEW))
+      stripComments(atRef(GTC405_BASE, PLAN_VIEW)),
+      stripComments(atRef(GTC406_BASE, PLAN_VIEW))
     ) && !code(SKELETON).includes('MomentWords')
   );
 }
@@ -1045,8 +1069,9 @@ async function layerA() {
   );
   assert(
     'A',
-    'A4 the words file differs from the base (8a4f1bc) by ASSIGN_HOW and its comment, nothing else (every other Moment 3 word as it was)',
-    CHECKS.wordsDiffer(git(['diff', BASE, '--', M3_WORDS_FILE]).stdout)
+    'A4 the words file differs from the base (8a4f1bc) by ASSIGN_HOW and its comment, nothing else (every other Moment 3 word as it was), up to GTC-406’s base (347fb10; GTC-406 adds the box’s words after them, and test:demo-tweaks-8 U4 asks that the file only grew)',
+    // [[GTC-406]]: asked up to GTC-406's base, a fixed commit, as L5 asks the item row.
+    CHECKS.wordsDiffer(git(['diff', BASE, GTC406_BASE, '--', M3_WORDS_FILE]).stdout)
   );
   assert(
     'A',

@@ -136,6 +136,14 @@ const NEW_SCRIPT = 'test:demo-tweaks-6';
 const NEW_SCRIPT_VALUE =
   'NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/demo-tweaks-6-test.tsx';
 const UNTRACKED_SCRIPTS = ['scripts/dev-login.ts', 'scripts/print-host-link.ts'];
+/**
+ * [[GTC-406]] adds Moment 3's new words to src/lib/moment3/words.ts on purpose (the Details box and
+ * the amber tag), so U1 keeps that one file out of its live diff of src/lib and asks it instead at
+ * GTC-406's base (347fb10), a fixed commit: this ticket still may not have touched it.
+ * test:demo-tweaks-8 U4 asks that the file only grew.
+ */
+const GTC406_BASE = '347fb109403f43c767e64fdf29efa0c861808bb9';
+const NOT_TOUCHED_TILL_GTC406 = ['src/lib/moment3/words.ts'];
 /** The founder's untouched list for this ticket, read as it is now against the base. */
 const NOT_TOUCHED = [
   'src/app/api',
@@ -1128,8 +1136,17 @@ function layerU() {
   const missing = NOT_TOUCHED.filter((f) => !fs.existsSync(path.join(ROOT, f)));
   assert(
     'U',
-    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since the base (ed59114): routes, schema, src/lib (the pre-flight’s library included), the strip and the lockfile`,
-    missing.length === 0 && git(['diff', '--quiet', BASE, '--', ...NOT_TOUCHED]).status === 0,
+    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since the base (ed59114): routes, schema, src/lib (the pre-flight’s library included), the strip and the lockfile; but Moment 3’s words file, which GTC-406 adds to, not between the base and GTC-406’s base (347fb10)`,
+    missing.length === 0 &&
+      git([
+        'diff',
+        '--quiet',
+        BASE,
+        '--',
+        ...NOT_TOUCHED,
+        ...NOT_TOUCHED_TILL_GTC406.map((f) => `:(exclude)${f}`),
+      ]).status === 0 &&
+      git(['diff', '--quiet', BASE, GTC406_BASE, '--', ...NOT_TOUCHED_TILL_GTC406]).status === 0,
     missing.length ? `missing: ${missing.join(', ')}` : undefined
   );
   // GTC-397's lesson: package.json is read at a fixed commit (the one that added this suite), never

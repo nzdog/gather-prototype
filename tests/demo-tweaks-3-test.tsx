@@ -225,6 +225,25 @@ const withoutEditBox = (src: string) => {
   const box = editBoxOf(src);
   return box ? src.replace(box, '') : '';
 };
+/**
+ * [[GTC-406]] edits Moment 2's item row on purpose (ItemRow, after the heading: a critical row's
+ * amber "critical" tag, ruling 3). L5 keeps its question of everything else after the heading live;
+ * the row is cut from that comparison too and asked instead as unchanged from GTC-398's base up to
+ * GTC-406's base (347fb10), a fixed commit. GTC-406's own suite (test:demo-tweaks-8) pins its new
+ * state. Both markers are code; a missing marker cuts nothing and reads ''.
+ */
+const GTC406_BASE = '347fb109403f43c767e64fdf29efa0c861808bb9';
+const ITEM_ROW_FROM = 'function ItemRow(';
+const ITEM_ROW_TO = 'interface InlineQuantityEditProps';
+const itemRowOf = (src: string) => {
+  const a = src.indexOf(ITEM_ROW_FROM);
+  const b = a >= 0 ? src.indexOf(ITEM_ROW_TO, a) : -1;
+  return a >= 0 && b > a ? src.slice(a, b) : '';
+};
+const withoutItemRow = (src: string) => {
+  const row = itemRowOf(src);
+  return row ? src.replace(row, '') : '';
+};
 const SKELETON = 'src/components/plan/Moment2Step2Skeleton.tsx';
 const PLAN_BASE = {
   eventId: 'e1',
@@ -707,16 +726,19 @@ export const CHECKS = {
       !plan.includes(done)
     );
   },
-  /** L5 CONTROL — no MomentWords in the view; the rest as at GTC-398's base (the edit box, which GTC-405 edits, up to GTC-405's base); the skeleton draws none of it and is not edited. */
+  /** L5 CONTROL — no MomentWords in the view; the rest as at GTC-398's base (the edit box, which GTC-405 edits, up to GTC-405's base; the item row, which GTC-406 edits, up to GTC-406's base); the skeleton draws none of it and is not edited. */
   planViewKept(
     now: string,
     base: string,
     skeleton: string,
     skeletonUnchanged: boolean,
-    editBoxAtGtc405: string
+    editBoxAtGtc405: string,
+    itemRowAtGtc406: string
   ) {
     const fromHeading = (src: string) =>
-      withoutEditBox(src.slice(src.indexOf('<h1 className="text-xl font-semibold')));
+      withoutItemRow(
+        withoutEditBox(src.slice(src.indexOf('<h1 className="text-xl font-semibold')))
+      );
     const top = (src: string) =>
       between(src, 'return (\n    <div className="min-h-screen', '<MomentArc');
     return (
@@ -730,7 +752,9 @@ export const CHECKS = {
       !skeleton.includes('data-moment-words') &&
       skeletonUnchanged &&
       editBoxOf(base).length > 1000 &&
-      flat(editBoxOf(editBoxAtGtc405)) === flat(editBoxOf(base))
+      flat(editBoxOf(editBoxAtGtc405)) === flat(editBoxOf(base)) &&
+      itemRowOf(base).length > 1000 &&
+      flat(itemRowOf(itemRowAtGtc406)) === flat(itemRowOf(base))
     );
   },
 
@@ -1074,13 +1098,14 @@ async function layerL() {
   );
   assert(
     'L',
-    'L5 CONTROL: no MomentWords in the plan view (nor its import); the heading, the count line, the list, the bar and everything after the heading, and the top, as at GTC-398’s base (8a4f1bc), but the edit box (GTC-405 edits it), which is as at that base up to GTC-405’s base (c593d22); the skeleton shown while generating draws no Moment words and is not edited up to GTC-399’s base (6d2b103; GTC-399 item 6 draws the strip on it, test:demo-tweaks-5 pins that)',
+    'L5 CONTROL: no MomentWords in the plan view (nor its import); the heading, the count line, the list, the bar and everything after the heading, and the top, as at GTC-398’s base (8a4f1bc), but the edit box (GTC-405 edits it), which is as at that base up to GTC-405’s base (c593d22), and the item row (GTC-406 edits it), which is as at that base up to GTC-406’s base (347fb10); the skeleton shown while generating draws no Moment words and is not edited up to GTC-399’s base (6d2b103; GTC-399 item 6 draws the strip on it, test:demo-tweaks-5 pins that)',
     CHECKS.planViewKept(
       code(PLAN_VIEW),
       stripComments(atRef(GTC398_BASE, PLAN_VIEW)),
       code(SKELETON),
       git(['diff', '--quiet', GOOD_TAG, GTC399_BASE, '--', SKELETON]).status === 0,
-      stripComments(atRef(GTC405_BASE, PLAN_VIEW))
+      stripComments(atRef(GTC405_BASE, PLAN_VIEW)),
+      stripComments(atRef(GTC406_BASE, PLAN_VIEW))
     )
   );
 }

@@ -108,6 +108,13 @@ const between = (src: string, from: string, to: string) => {
 };
 const count = (s: string, needle: string) => s.split(needle).length - 1;
 const flat = (s: string) => s.replace(/\s+/g, '');
+/** [[GTC-406]] — a block's lines with their shared indent taken off (the first starts at its marker). */
+const dedent = (s: string) => {
+  const lines = s.split('\n');
+  const rest = lines.slice(1).filter((l) => l.trim().length > 0);
+  const n = rest.length ? Math.min(...rest.map((l) => l.length - l.trimStart().length)) : 0;
+  return [lines[0], ...lines.slice(1).map((l) => l.slice(n))].join('\n');
+};
 
 // ── The ruled words, typed by hand ───────────────────────────────────────────
 const PLACE_LABEL = 'Drop-off place';
@@ -138,6 +145,14 @@ const NEW_SCRIPT = 'test:demo-tweaks-7';
 const NEW_SCRIPT_VALUE =
   'NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/demo-tweaks-7-test.tsx';
 const UNTRACKED_SCRIPTS = ['scripts/dev-login.ts', 'scripts/print-host-link.ts'];
+/**
+ * [[GTC-406]] adds Moment 3's new words to src/lib/moment3/words.ts on purpose (the Details box and
+ * the amber tag), so U1 keeps that one file out of its live diff of src/lib and asks it instead at
+ * GTC-406's base (347fb10), a fixed commit: this ticket still may not have touched it.
+ * test:demo-tweaks-8 U4 asks that the file only grew.
+ */
+const GTC406_BASE = '347fb109403f43c767e64fdf29efa0c861808bb9';
+const NOT_TOUCHED_TILL_GTC406 = ['src/lib/moment3/words.ts'];
 /** The founder's untouched list for this ticket, read as it is now against the base. */
 const NOT_TOUCHED = [
   'src/app/api',
@@ -431,17 +446,27 @@ export const CHECKS = {
       !/dropOffAt/.test(box)
     );
   },
-  /** S2 — the setup page passes both on to the same PATCH, its request byte for byte as at the base. */
+  /**
+   * S2 — the setup page passes both on to the same PATCH, its request byte for byte as at the base.
+   * [[GTC-406]] ruling 6: Moment 2's save (the body, the why and the PATCH) moved whole into the
+   * page's one item save, `saveItemEdit`, which onUpdateItem calls and Moment 3's box shares. The
+   * request is still asked byte for byte, but for the block's own indent (`dedent`: one shift for
+   * every line); the two fields are asked in that save, and onUpdateItem must call it.
+   */
   setupSave(now: string, base: string) {
     const patch = (src: string) =>
       between(src, 'const res = await fetch(`/api/events/${eventId}/items/${itemId}`, {', '});');
+    const save = between(now, 'const saveItemEdit = async (', 'return true;');
     const onUpdate = between(now, 'onUpdateItem={async (itemId, updates) => {', 'onRemoveItem=');
     return (
       patch(base).length > 50 &&
-      patch(now) === patch(base) &&
+      dedent(patch(now)) === dedent(patch(base)) &&
       patch(now).includes("method: 'PATCH'") &&
-      /body\.dropOffLocation\s*=\s*updates\.dropOffLocation;/.test(onUpdate) &&
-      /body\.dropOffNote\s*=\s*updates\.dropOffNote;/.test(onUpdate) &&
+      save.includes(patch(now)) &&
+      /body\.dropOffLocation\s*=\s*updates\.dropOffLocation;/.test(save) &&
+      /body\.dropOffNote\s*=\s*updates\.dropOffNote;/.test(save) &&
+      !/dropOffAt/.test(save) &&
+      /saveItemEdit\(itemId, updates\)/.test(onUpdate) &&
       !/dropOffAt/.test(onUpdate)
     );
   },
@@ -552,7 +577,7 @@ function layerS() {
   );
   assert(
     'S',
-    'S2 the setup page passes the place and the time on as dropOffLocation and dropOffNote, through the same PATCH, its request byte for byte as at the base (c593d22); no dropOffAt (ruling 1)',
+    'S2 the setup page passes the place and the time on as dropOffLocation and dropOffNote, through the same PATCH, its request byte for byte as at the base (c593d22; since GTC-406 in the page’s one item save, which onUpdateItem calls, moved as a block); no dropOffAt (ruling 1)',
     CHECKS.setupSave(setupNow, setupBase)
   );
   assert(
@@ -1283,8 +1308,17 @@ function layerU() {
   const missing = NOT_TOUCHED.filter((f) => !fs.existsSync(path.join(ROOT, f)));
   assert(
     'U',
-    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since the base (c593d22): routes, schema, src/lib (auth, press, AI, households, the items' words and email included), the new-event page, the strip and the lockfile`,
-    missing.length === 0 && git(['diff', '--quiet', BASE, '--', ...NOT_TOUCHED]).status === 0,
+    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since the base (c593d22): routes, schema, src/lib (auth, press, AI, households, the items' words and email included), the new-event page, the strip and the lockfile; but Moment 3’s words file, which GTC-406 adds to, not between the base and GTC-406’s base (347fb10)`,
+    missing.length === 0 &&
+      git([
+        'diff',
+        '--quiet',
+        BASE,
+        '--',
+        ...NOT_TOUCHED,
+        ...NOT_TOUCHED_TILL_GTC406.map((f) => `:(exclude)${f}`),
+      ]).status === 0 &&
+      git(['diff', '--quiet', BASE, GTC406_BASE, '--', ...NOT_TOUCHED_TILL_GTC406]).status === 0,
     missing.length ? `missing: ${missing.join(', ')}` : undefined
   );
   // GTC-397's lesson: package.json is read at a fixed commit (the one that added this suite), never
