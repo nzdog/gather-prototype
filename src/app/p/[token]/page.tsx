@@ -680,14 +680,8 @@ function AssignmentCard({
             )}
           </div>
 
-          {assignment.item.critical && (
-            <div className="mb-2">
-              <span className="bg-red-100 text-red-800 text-xs font-semibold px-2 py-1 rounded">
-                CRITICAL
-              </span>
-            </div>
-          )}
-
+          {/* [[GTC-405]] ruling 4: no red critical badge on a guest's card. It is a host's signal
+              (Moment 4 §8.3), and still shows to a host (the link preview above) and a coordinator. */}
           <div className="mb-2">
             <ItemStatusBadges assignment={assignment} />
           </div>
