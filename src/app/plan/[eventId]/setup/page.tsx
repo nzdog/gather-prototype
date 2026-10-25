@@ -1465,6 +1465,11 @@ function EventSetupFlow() {
             // [[GTC-385]] (item 59, Q9): the ticks, through the item PATCH that already takes the
             // tags (a changed row becomes HOST_EDITED, so a regenerate keeps it).
             if (updates.dietaryFlags !== undefined) body.dietaryTags = updates.dietaryFlags;
+            // [[GTC-405]] ruling 1: the dish's own drop-off place and time (free text, the time in
+            // the note), through the item PATCH that already takes both. null clears.
+            if (updates.dropOffLocation !== undefined)
+              body.dropOffLocation = updates.dropOffLocation;
+            if (updates.dropOffNote !== undefined) body.dropOffNote = updates.dropOffNote;
             // GTC-202: T4. PlanItem carries no assignment, so the response comes from
             // `items` — loaded on mount for every path that can reach this view, so the
             // lookup is reliable rather than best-effort.
@@ -1507,6 +1512,12 @@ function EventSetupFlow() {
                         ...(updates.notes !== undefined ? { notes: updates.notes } : {}),
                         ...(updates.dietaryFlags !== undefined
                           ? { dietaryFlags: updates.dietaryFlags }
+                          : {}),
+                        ...(updates.dropOffLocation !== undefined
+                          ? { dropOffLocation: updates.dropOffLocation }
+                          : {}),
+                        ...(updates.dropOffNote !== undefined
+                          ? { dropOffNote: updates.dropOffNote }
                           : {}),
                       }
                     : it

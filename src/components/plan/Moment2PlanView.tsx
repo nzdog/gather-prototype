@@ -835,6 +835,11 @@ export function ItemEditForm({
   const [serves, setServes] = useState(item.servingSize);
   const [notes, setNotes] = useState(item.notes ?? '');
   const [marks, setMarks] = useState<DishMark[]>(dishMarks(item.dietaryFlags));
+  // [[GTC-405]] ruling 1: the dish's own drop-off place and time, typed as free text. A job is not
+  // dropped off, so only a dish shows the two boxes.
+  const showDropOff = item.kind !== 'TASK';
+  const [dropOffPlace, setDropOffPlace] = useState(item.dropOffLocation ?? '');
+  const [dropOffTime, setDropOffTime] = useState(item.dropOffNote ?? '');
   const [saving, setSaving] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
 
@@ -845,6 +850,10 @@ export function ItemEditForm({
   const handleSave = async () => {
     const parsedQuantity = parseFloat(quantity);
     if (!name.trim() || Number.isNaN(parsedQuantity)) return;
+    // [[GTC-405]] ruling 1: an empty box clears (null, never an empty string); each goes only when
+    // it changed, so a save that leaves them alone sends what it sent before.
+    const place = dropOffPlace.trim() || null;
+    const time = dropOffTime.trim() || null;
     setSaving(true);
     try {
       await onSave({
@@ -856,6 +865,12 @@ export function ItemEditForm({
         // [[GTC-385]] (item 59, Q9): the tags go only when the ticks changed; the other tags stay.
         ...(showMarks && !sameMarks(dishMarks(item.dietaryFlags), marks)
           ? { dietaryFlags: withMarks(item.dietaryFlags, marks) }
+          : {}),
+        ...(showDropOff && place !== (item.dropOffLocation?.trim() || null)
+          ? { dropOffLocation: place }
+          : {}),
+        ...(showDropOff && time !== (item.dropOffNote?.trim() || null)
+          ? { dropOffNote: time }
           : {}),
       });
     } finally {
@@ -918,6 +933,30 @@ export function ItemEditForm({
       </FormField>
 
       {showMarks && <DishTicks marks={marks} onChange={setMarks} />}
+
+      {showDropOff && (
+        <>
+          <FormField label="Drop-off place">
+            <input
+              type="text"
+              value={dropOffPlace}
+              onChange={(e) => setDropOffPlace(e.target.value)}
+              placeholder="e.g. the back door"
+              className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
+            />
+          </FormField>
+
+          <FormField label="Drop-off time">
+            <input
+              type="text"
+              value={dropOffTime}
+              onChange={(e) => setDropOffTime(e.target.value)}
+              placeholder="e.g. 11am"
+              className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
+            />
+          </FormField>
+        </>
+      )}
 
       <div className="flex items-center justify-between pt-1">
         <div className="flex items-center gap-2">
