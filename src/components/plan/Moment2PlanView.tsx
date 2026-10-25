@@ -922,7 +922,8 @@ export function ItemEditForm({
         />
       </FormField>
 
-      <FormField label="Notes">
+      {/* [[GTC-405]] ruling 5: guests see this note on their dish, so the label says so. */}
+      <FormField label="Note for the guest">
         <input
           type="text"
           value={notes}
