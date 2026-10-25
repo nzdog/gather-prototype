@@ -608,11 +608,18 @@ function boxFactsOf(html: string): BoxFacts | null {
     ...html.matchAll(/<dt[^>]*>([\s\S]*?)<\/dt><dd[^>]*>([\s\S]*?)<\/dd>/g),
   ].map((m) => [text(m[1]), text(m[2])]);
   const tickM = html.match(/<label[^>]*><input type="checkbox"([^>]*)\/?>([\s\S]*?)<\/label>/);
+  // An input's attributes come in React's own order: read each one by its name.
+  const attr = (tag: string, name: string) =>
+    tag.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1] ?? '';
   const boxes = [
     ...html.matchAll(
-      /<label[^>]*><span[^>]*>([\s\S]*?)<\/span><input type="text" value="([^"]*)"[^>]*placeholder="([^"]*)"[^>]*\/?><\/label>/g
+      /<label[^>]*><span[^>]*>([\s\S]*?)<\/span>(<input type="text"[^>]*>)<\/label>/g
     ),
-  ].map((m) => ({ label: text(m[1]), value: text(m[2]), hint: text(m[3]) }));
+  ].map((m) => ({
+    label: text(m[1]),
+    value: text(attr(m[2], 'value')),
+    hint: text(attr(m[2], 'placeholder')),
+  }));
   const buttons = [...html.matchAll(/<button([^>]*)>([\s\S]*?)<\/button>/g)].map((m) => ({
     text: text(m[2]),
     disabled: /\sdisabled=""/.test(m[1]),
@@ -862,8 +869,13 @@ const M3_ROWS = `[...document.querySelectorAll('li[data-m3-item]')].map((li) => 
     tags: tags.length,
     amber: tags.length === 1 && /amber/.test(tags[0].className) && getComputedStyle(tags[0]).textTransform === 'uppercase' && tags[0].innerText.trim() === 'CRITICAL',
     place: own && own.nextElementSibling ? own.nextElementSibling.textContent.trim() : null }; })`;
-/** The open box (a visible modal dialog), read by hand. */
-const BOX_FACTS = `(() => { const d = [...document.querySelectorAll('[role="dialog"][aria-modal="true"]')].find((x) => x.checkVisibility()); if (!d) return null;
+/**
+ * The open box: the VISIBLE modal dialog. Moment 3 always carries a hidden role="dialog" of its own
+ * (the event details pop-up, with its own "Close"), so every lookup is scoped to this one.
+ */
+const THE_BOX = `[...document.querySelectorAll('[role="dialog"][aria-modal="true"]')].find((x) => x.checkVisibility())`;
+/** The open box, read by hand. */
+const BOX_FACTS = `(() => { const d = ${THE_BOX}; if (!d) return null;
   const pairs = [...d.querySelectorAll('dt')].map((dt) => [dt.textContent.trim(), dt.nextElementSibling ? dt.nextElementSibling.textContent.trim() : null]);
   const tick = d.querySelector('input[type="checkbox"]');
   const tl = tick ? tick.closest('label') : null;
@@ -890,13 +902,10 @@ const ROW_OF = (name: string) =>
 const PERSON_OF = (name: string) =>
   `[...document.querySelectorAll('button[data-m3-row]')].find((b) => !b.closest('li[data-m3-item]') && b.textContent.includes(${JSON.stringify(name)}))`;
 const IN_BOX_BUTTON = (text: string) =>
-  `[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent.trim() === ${JSON.stringify(text)})`;
-const IN_BOX_TICK = `document.querySelector('[role="dialog"] input[type="checkbox"]')`;
+  `(() => { const d = ${THE_BOX}; return d ? [...d.querySelectorAll('button')].find((b) => b.textContent.trim() === ${JSON.stringify(text)}) : null; })()`;
+const IN_BOX_TICK = `(() => { const d = ${THE_BOX}; return d ? d.querySelector('input[type="checkbox"]') : null; })()`;
 /** Type into the box's input labelled `label` as React reads typing. */
-const SET = (
-  label: string,
-  value: string
-) => `(() => { const d = document.querySelector('[role="dialog"]'); if (!d) return false;
+const SET = (label: string, value: string) => `(() => { const d = ${THE_BOX}; if (!d) return false;
   const l = [...d.querySelectorAll('label')].find((x) => x.firstElementChild && x.firstElementChild.textContent.trim() === ${JSON.stringify(label)});
   const i = l && l.querySelector('input[type="text"]'); if (!i) return false;
   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, ${JSON.stringify(value)});
@@ -1147,7 +1156,13 @@ async function layerC() {
         return 'not found';
       }
       const why = await c.clickGuarded('[data-t="x"]', settleMs);
-      if (why) refusals.push(why);
+      if (why) {
+        const hit =
+          await ev<string>(`(() => { const t = document.querySelector('[data-t="x"]'); if (!t) return 'gone';
+          const r = t.getBoundingClientRect(); const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return e ? e.tagName + ' ' + String(e.className).slice(0, 60) + ' "' + (e.textContent || '').trim().slice(0, 30) + '"' : 'nothing'; })()`);
+        refusals.push(`${why} (${finder.slice(0, 60)} | hit ${hit})`);
+      }
       return why;
     };
     const calls = async () => (await ev<Sent[]>('window.__calls || []')) ?? [];
