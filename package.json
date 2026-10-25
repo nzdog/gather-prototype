@@ -161,6 +161,7 @@
     "test:deploy-audit": "tsx tests/deploy-audit-test.ts",
     "test:demo-tweaks-6": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/demo-tweaks-6-test.tsx",
     "test:demo-tweaks-7": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/demo-tweaks-7-test.tsx",
+    "test:demo-tweaks-8": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/demo-tweaks-8-test.tsx",
     "test:event-day-end": "tsx tests/event-day-end-test.ts"
   },
   "prisma": {
