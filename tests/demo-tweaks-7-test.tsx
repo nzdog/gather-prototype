@@ -496,6 +496,11 @@ export const CHECKS = {
     );
   },
 
+  /** S7 — how many times a file's code draws the badge: "CRITICAL" as an element's own text (not CRITICAL_GAP and the like). */
+  badges(code: string) {
+    return (code.match(/>\s*CRITICAL\s*</g) ?? []).length;
+  },
+
   // ── The "why" rule (P) ──
   /** P1 — what the route's rule asks for a drop-off change, by the answer the dish has. */
   whyRule(r: Record<string, string | null>) {
@@ -573,7 +578,7 @@ function layerS() {
   const others = CRITICAL_ELSEWHERE.map(([f, n]) => ({
     f,
     n,
-    got: count(stripComments(read(f)), CRITICAL),
+    got: CHECKS.badges(stripComments(read(f))),
   }));
   assert(
     'S',
