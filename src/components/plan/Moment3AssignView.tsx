@@ -26,6 +26,11 @@
  * a second tap or Escape, with the foot of the screen saying who; with a person picked a tap gives,
  * moves or takes back; and every tap counts — each item saves on its own, shown at once, dimmed
  * until it is saved (the rules in src/lib/moment3/assigning.ts).
+ *
+ * [[GTC-406]] (the founder's rulings, 26 Oct 2026): a small "Details" button at the right of each row
+ * opens the dish's box (Moment3ItemDetail.tsx): Critical and the dish's own drop-off place and time,
+ * saved through `onSaveItemDetail`, which the setup page wires to the save Moment 2's edit box uses.
+ * This view calls no new address. A critical row shows the amber "critical" tag after its name.
  */
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
@@ -36,9 +41,11 @@ import type { SerialisedEvent } from '@/lib/lifecycle';
 import type { ReasonAnswer } from './ReasonPrompt';
 import { useToast } from '@/contexts/ToastContext';
 import {
+  M3_DETAIL_WORDS,
   M3_WORDS,
   acceptAllFailed,
   acceptAllLabel,
+  detailsLabel,
   giveLabel,
   giveToLine,
   removeLabel,
@@ -71,6 +78,11 @@ import { DishMarkTags, DishMarksKey } from './DishMarks';
 import { HOST_CARD, HostPill } from '@/components/shared/HostCard';
 import EventDropOffLine from '@/components/shared/EventDropOffLine';
 import { DropOffDisplay } from '@/components/shared/DropOffDisplay';
+import Moment3ItemDetail, {
+  CriticalTag,
+  answerWords,
+  type Moment3ItemDetailChanges,
+} from './Moment3ItemDetail';
 
 export interface Moment3Item {
   id: string;
@@ -84,6 +96,15 @@ export interface Moment3Item {
   /** [[GTC-395]] item 7: the item's own drop-off place and note, when it has them. */
   dropOffLocation?: string | null;
   dropOffNote?: string | null;
+  /** [[GTC-406]] ruling 3: a critical row shows the amber tag. */
+  critical?: boolean;
+  /** [[GTC-406]] ruling 4: its amount is still a placeholder nobody has acknowledged (the hold rule). */
+  placeholderAmount?: boolean;
+  /**
+   * [[GTC-406]] (18a): the holder's answer as the items read loaded it (`Assignment.response`), and
+   * whose it is. The box says it after the send, and only while that person still holds the dish.
+   */
+  answer?: { personId: string; response: string } | null;
 }
 
 export interface Moment3Category {
@@ -130,6 +151,11 @@ interface Moment3AssignViewProps {
    * on arrival: picked, as if she had tapped them, so the next item she taps is theirs.
    */
   arriveAtPerson?: string | null;
+  /**
+   * [[GTC-406]] ruling 6 — saves a dish's details (only what changed) through the setup page's own
+   * item save: true when saved, false when its why was cancelled; it throws when the save fails.
+   */
+  onSaveItemDetail?: (itemId: string, changes: Moment3ItemDetailChanges) => Promise<boolean>;
 }
 
 const RECHECK_DEBOUNCE_MS = 1000;
@@ -170,7 +196,10 @@ function panelKeys(e: KeyboardEvent<HTMLDivElement>, onEscape: () => void) {
   }
   if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
   const rows = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[data-m3-row]'));
-  const at = rows.indexOf(document.activeElement as HTMLElement);
+  const active = document.activeElement as HTMLElement | null;
+  // [[GTC-406]] ruling 1: from a row's Details button, the arrows move from that row.
+  const own = active?.closest('li')?.querySelector<HTMLElement>('[data-m3-row]') ?? null;
+  const at = rows.indexOf((active?.hasAttribute('data-m3-row') ? active : own) as HTMLElement);
   const next = e.key === 'ArrowDown' ? Math.min(rows.length - 1, at + 1) : Math.max(0, at - 1);
   rows[next]?.focus();
   e.preventDefault();
@@ -188,7 +217,7 @@ export default function Moment3AssignView({
   event,
   hostPersonId,
   headcount,
-  categories,
+  categories: loadedCategories,
   initialHolders,
   households,
   askForReason,
@@ -201,6 +230,7 @@ export default function Moment3AssignView({
   details,
   arriveAtItem = null,
   arriveAtPerson = null,
+  onSaveItemDetail,
 }: Moment3AssignViewProps) {
   const toast = useToast();
   const [holders, setHolders] = useState<Record<string, Moment3Holder | null>>(initialHolders);
@@ -222,6 +252,12 @@ export default function Moment3AssignView({
   const asking = useRef(false);
   const planRef = useRef<HTMLDivElement>(null);
   const peopleRef = useRef<HTMLDivElement>(null);
+  /** [[GTC-406]] — the dish whose box is open, what its box saved, and each row's Details button. */
+  const [detailFor, setDetailFor] = useState<string | null>(null);
+  const [savedDetails, setSavedDetails] = useState<Record<string, Moment3ItemDetailChanges>>({});
+  /** Items given, moved or taken back here: their loaded answer is no longer theirs to show. */
+  const [regiven, setRegiven] = useState<Record<string, true>>({});
+  const detailButtons = useRef<Record<string, HTMLButtonElement | null>>({});
   const recheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(
@@ -262,6 +298,15 @@ export default function Moment3AssignView({
     return () => window.removeEventListener('keydown', onKey);
   }, [selection]);
 
+  // [[GTC-406]] — the rows as loaded, with what a dish's box saved here (shown at once).
+  const categories = useMemo(
+    () =>
+      loadedCategories.map((c) => ({
+        ...c,
+        items: c.items.map((i) => (savedDetails[i.id] ? { ...i, ...savedDetails[i.id] } : i)),
+      })),
+    [loadedCategories, savedDetails]
+  );
   const allItems = useMemo(() => categories.flatMap((c) => c.items), [categories]);
   // [[GTC-385]] (item 59, Q11): the key shows only when a dish is marked; here without "tap a dish".
   const anyMarks = allItems.some((i) => (i.marks?.length ?? 0) > 0);
@@ -342,6 +387,7 @@ export default function Moment3AssignView({
         ...prev,
         [itemId]: personId ? { personId, name: nameOf(personId) } : null,
       }));
+      setRegiven((prev) => ({ ...prev, [itemId]: true }));
       if (personId) setGhosts((prev) => prev.filter((g) => g.itemId !== itemId));
       scheduleRecheck();
       return true;
@@ -459,6 +505,55 @@ export default function Moment3AssignView({
   const onScreen = suggestionsOnScreen(ghosts, holders).filter((g) => !(g.itemId in pending));
   /** [[GTC-398]] item 5 — while a person is picked, the rows they hold, highlighted (assigning.ts). */
   const heldByThem = new Set(heldByPicked(selection, holders, pending));
+
+  /** [[GTC-406]] — the box closes; the focus goes back to its row's Details button. */
+  const closeDetail = () => {
+    const id = detailFor;
+    setDetailFor(null);
+    if (id) detailButtons.current[id]?.focus();
+  };
+
+  /** [[GTC-406]] ruling 6 — only what changed, through the setup page's save; shown at once. */
+  const saveDetail = async (
+    itemId: string,
+    changes: Moment3ItemDetailChanges
+  ): Promise<boolean> => {
+    if (!onSaveItemDetail) return false;
+    try {
+      if (!(await onSaveItemDetail(itemId, changes))) return false;
+    } catch {
+      toast.error(M3_WORDS.SAVE_FAILED);
+      return false;
+    }
+    setSavedDetails((prev) => ({ ...prev, [itemId]: { ...prev[itemId], ...changes } }));
+    return true;
+  };
+
+  /*
+   * [[GTC-406]] (18a) — the box for the dish whose Details was pressed. Who has it is the list's own
+   * holder. Their answer is said only after the send, and only while the person the items read
+   * loaded still holds it (a dish given, moved or taken back here shows the name alone).
+   */
+  const detailItem = detailFor ? (allItems.find((i) => i.id === detailFor) ?? null) : null;
+  const detailHolder = detailItem ? (holders[detailItem.id] ?? null) : null;
+  const detailAnswer =
+    detailItem &&
+    detailHolder &&
+    event.sentAt &&
+    !regiven[detailItem.id] &&
+    detailItem.answer?.personId === detailHolder.personId
+      ? answerWords(detailItem.answer.response)
+      : null;
+  const detailBox = detailItem ? (
+    <Moment3ItemDetail
+      key={detailItem.id}
+      item={detailItem}
+      holderName={detailHolder?.name ?? null}
+      holderAnswer={detailAnswer}
+      onSave={(changes) => saveDetail(detailItem.id, changes)}
+      onClose={closeDetail}
+    />
+  ) : null;
 
   /** [[GTC-365]] W7 and W8 — who is picked, said at the foot while the people may be out of view. */
   const pickedRow =
@@ -686,6 +781,8 @@ export default function Moment3AssignView({
                               <span className="min-w-0 break-words">
                                 <span>{item.name}</span>
                                 <DishMarkTags marks={item.marks ?? []} />
+                                {/* [[GTC-406]] ruling 3: a critical row's amber tag, after the marks. */}
+                                {item.critical && <CriticalTag />}
                                 {item.detail && (
                                   <span className="ml-2 inline-block max-w-full text-gray-400">
                                     {item.detail}
@@ -751,6 +848,20 @@ export default function Moment3AssignView({
                                 </button>
                               </>
                             )}
+                            {/* [[GTC-406]] ruling 1: the dish's details, at the right of the row. Not a
+                                row (the arrows skip it), never "pressed"; it picks nothing. */}
+                            <button
+                              type="button"
+                              data-m3-details
+                              ref={(el) => {
+                                detailButtons.current[item.id] = el;
+                              }}
+                              onClick={() => setDetailFor(item.id)}
+                              aria-label={detailsLabel(item.name)}
+                              className="shrink-0 px-2 py-0 text-xs text-gray-600 border border-gray-300 rounded bg-white hover:bg-gray-50 hover:text-gray-900"
+                            >
+                              {M3_DETAIL_WORDS.DETAILS}
+                            </button>
                           </li>
                         );
                       })}
@@ -889,6 +1000,9 @@ export default function Moment3AssignView({
           </div>
         </div>
       )}
+
+      {/* [[GTC-406]] — the dish's box, over everything, while it is open. */}
+      {detailBox}
     </div>
   );
 }

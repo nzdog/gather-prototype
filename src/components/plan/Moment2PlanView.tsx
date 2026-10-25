@@ -24,6 +24,7 @@ import {
   type DishMark,
 } from '@/lib/items/dish-marks';
 import { DishMarkTags, DishMarksKey } from './DishMarks';
+import { CriticalTag } from './Moment3ItemDetail';
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -41,6 +42,8 @@ export interface PlanItem {
   /** [[GTC-395]] item 7: the item's own drop-off place and note, when it has them. */
   dropOffLocation?: string | null;
   dropOffNote?: string | null;
+  /** [[GTC-406]] ruling 3: a critical row shows the amber "critical" tag (set on Moment 3). */
+  critical?: boolean;
 }
 
 export interface PlanCategory {
@@ -667,8 +670,9 @@ function ItemRow({
       {/* Name + serving size (stacked) */}
       <div className="basis-full sm:basis-0 flex-1 min-w-0 flex flex-col">
         {/* [[GTC-385]] (item 59): the marks sit after the name, outside its button, and only a
-            marked row is wrapped, so an unmarked row is drawn as it was. */}
-        {marks.length > 0 ? (
+            marked row is wrapped, so an unmarked row is drawn as it was. [[GTC-406]] ruling 3: a
+            critical row's amber tag sits there too, after the marks (as on Moment 3). */}
+        {marks.length > 0 || item.critical ? (
           <div className="flex flex-wrap items-center">
             <button
               type="button"
@@ -678,6 +682,7 @@ function ItemRow({
               {item.name}
             </button>
             <DishMarkTags marks={marks} />
+            {item.critical && <CriticalTag />}
           </div>
         ) : (
           <button

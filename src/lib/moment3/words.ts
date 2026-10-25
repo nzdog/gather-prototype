@@ -105,3 +105,32 @@ export function acceptAllFailed(failed: number, count: number): string {
 export function giveToLine(name: string): string {
   return `Tap items to give them to ${name}.`;
 }
+
+/**
+ * [[GTC-406]] — a dish's details on Moment 3: the "Details" button at the right of each row, the box
+ * it opens, and the amber "critical" tag on Moment 2's and Moment 3's rows. The founder's rulings of
+ * 26 Oct 2026 (18a), as written. The drop-off labels and hints are GTC-405's, as Moment 2's edit box
+ * has them. A holder's answer, when the box shows one, is the board's own words (`ANSWER_WORDS` in
+ * src/lib/print/plan-lists.ts), not new ones.
+ */
+export const M3_DETAIL_WORDS = {
+  DETAILS: 'Details',
+  AMOUNT: 'Amount',
+  WHO: "Who's bringing it",
+  NOBODY_YET: 'Nobody yet',
+  CRITICAL: "Critical: we can't do without it",
+  DROP_OFF_PLACE: 'Drop-off place',
+  DROP_OFF_PLACE_HINT: 'e.g. the back door',
+  DROP_OFF_TIME: 'Drop-off time',
+  DROP_OFF_TIME_HINT: 'e.g. 11am',
+  SAVE: 'Save',
+  CLOSE: 'Close',
+  ROW_TAG: 'critical',
+  // Ruling 4 (17a): only for a critical dish whose amount is still a placeholder.
+  NEEDS_AMOUNT: 'This needs an amount before you move on.',
+} as const;
+
+/** [[GTC-406]] ruling 1 — the Details button, read aloud. */
+export function detailsLabel(name: string): string {
+  return `Details for ${name}`;
+}

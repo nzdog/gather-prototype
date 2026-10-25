@@ -97,6 +97,13 @@ type PlanApiItem = {
   /** [[GTC-395]] item 7: the item's own drop-off place and note, which the items route already sends. */
   dropOffLocation?: string | null;
   dropOffNote?: string | null;
+  /**
+   * [[GTC-406]]: critical, and whether its amount is still a placeholder nobody has acknowledged
+   * (the hold rule's own test), which the items route already sends.
+   */
+  critical?: boolean;
+  quantityState?: string | null;
+  placeholderAcknowledged?: boolean;
   team: { id: string; name: string; displayOrder?: number };
 };
 
@@ -107,7 +114,8 @@ type PlanApiItem = {
  */
 type Moment3ApiItem = PlanApiItem & {
   kind?: string;
-  assignment: { person: { id: string; name: string } } | null;
+  /** [[GTC-406]]: `response` is the holder's answer, already on the wire with the assignment. */
+  assignment: { response?: string; person: { id: string; name: string } } | null;
 };
 
 function mapItemsToMoment3(items: Moment3ApiItem[]): {
@@ -154,6 +162,14 @@ function mapItemsToMoment3(items: Moment3ApiItem[]): {
             // [[GTC-395]] item 7: the item's own drop-off, shown on its row.
             dropOffLocation: item.dropOffLocation ?? null,
             dropOffNote: item.dropOffNote ?? null,
+            // [[GTC-406]]: the amber tag, the box's ruling-4 sentence, and the holder's answer.
+            critical: item.critical === true,
+            placeholderAmount:
+              item.quantityState === 'PLACEHOLDER' && item.placeholderAcknowledged !== true,
+            answer:
+              item.assignment && item.assignment.response
+                ? { personId: item.assignment.person.id, response: item.assignment.response }
+                : null,
           };
         }),
     }));
@@ -201,6 +217,7 @@ function mapTeamsAndItemsToPlanCategories(
     kind?: string;
     dropOffLocation?: string | null;
     dropOffNote?: string | null;
+    critical?: boolean;
   }>;
 }> {
   const itemsByTeamId = new Map<string, PlanApiItem[]>();
@@ -246,6 +263,8 @@ function mapTeamsAndItemsToPlanCategories(
           // [[GTC-395]] item 7: the item's own drop-off, shown on its row.
           dropOffLocation: item.dropOffLocation ?? null,
           dropOffNote: item.dropOffNote ?? null,
+          // [[GTC-406]] ruling 3: a critical row shows the amber tag.
+          critical: item.critical === true,
         };
       }),
   }));
@@ -852,6 +871,66 @@ function EventSetupFlow() {
     return { ...mapItemsToMoment3(items), households, headcount };
   };
 
+  /**
+   * [[GTC-406]] ruling 6 — THE PAGE'S ONE ITEM SAVE. Moment 2's edit box always saved here (the body,
+   * the why, the item PATCH: moved whole from Moment 2's `onUpdateItem`, unchanged), and Moment 3's
+   * details box now hands its save here too, so a dish's edit is saved one way. Critical is sent
+   * only when the box changed it; the route records it as TOGGLE_CRITICAL and never asks a why for
+   * it. False when the why was cancelled; throws when the save fails. Once saved, `items` takes what
+   * was sent, so the next save's why compares against what is stored.
+   */
+  const saveItemEdit = async (
+    itemId: string,
+    updates: Partial<Moment2PlanItem>
+  ): Promise<boolean> => {
+    if (!event) return false;
+    const body: Record<string, unknown> = {};
+    if (updates.name !== undefined) body.name = updates.name;
+    if (updates.quantity !== undefined) body.quantityAmount = updates.quantity;
+    if (updates.unit !== undefined) {
+      body.quantityUnit = 'CUSTOM';
+      body.quantityUnitCustom = updates.unit;
+    }
+    if (updates.servingSize !== undefined) body.quantityText = updates.servingSize;
+    if (updates.notes !== undefined) body.notes = updates.notes;
+    // [[GTC-385]] (item 59, Q9): the ticks, through the item PATCH that already takes the
+    // tags (a changed row becomes HOST_EDITED, so a regenerate keeps it).
+    if (updates.dietaryFlags !== undefined) body.dietaryTags = updates.dietaryFlags;
+    // [[GTC-405]] ruling 1: the dish's own drop-off place and time (free text, the time in
+    // the note), through the item PATCH that already takes both. null clears.
+    if (updates.dropOffLocation !== undefined) body.dropOffLocation = updates.dropOffLocation;
+    if (updates.dropOffNote !== undefined) body.dropOffNote = updates.dropOffNote;
+    // [[GTC-406]] ruling 6: critical, only when Moment 3's box changed it.
+    if (updates.critical !== undefined) body.critical = updates.critical;
+    // GTC-202: T4. PlanItem carries no assignment, so the response comes from
+    // `items` — loaded on mount for every path that can reach this view, so the
+    // lookup is reliable rather than best-effort.
+    const known = items.find((i) => i.id === itemId);
+    const answer = await askForBatchReason(
+      fieldChanges(
+        {
+          action: 'EDIT_ITEM',
+          targetType: 'Item',
+          targetId: itemId,
+          context: { assignmentResponse: known?.assignment?.response ?? null },
+        },
+        (known ?? {}) as Record<string, unknown>,
+        body,
+        ASK_FIELDS
+      ),
+      event
+    );
+    if (!answer.proceed) return false;
+    const res = await fetch(`/api/events/${eventId}/items/${itemId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body, reason: answer.reason }),
+    });
+    if (!res.ok) throw new Error('Failed to update item');
+    setItems((prev) => prev.map((i) => (i.id === itemId ? ({ ...i, ...body } as SetupItem) : i)));
+    return true;
+  };
+
   const handleRegenerate = async (scope: 'plan' | 'category', categoryKey?: string) => {
     setRegeneratingScope(scope === 'plan' ? 'plan' : (categoryKey ?? null));
     try {
@@ -1420,6 +1499,7 @@ function EventSetupFlow() {
           details={details}
           arriveAtItem={arriveAtItem}
           arriveAtPerson={arriveAtPerson}
+          onSaveItemDetail={saveItemEdit}
         />
       </>
     );
@@ -1453,48 +1533,8 @@ function EventSetupFlow() {
           onRegenerateCategory={(categoryKey) => handleRegenerate('category', categoryKey)}
           regeneratingScope={regeneratingScope}
           onUpdateItem={async (itemId, updates) => {
-            const body: Record<string, unknown> = {};
-            if (updates.name !== undefined) body.name = updates.name;
-            if (updates.quantity !== undefined) body.quantityAmount = updates.quantity;
-            if (updates.unit !== undefined) {
-              body.quantityUnit = 'CUSTOM';
-              body.quantityUnitCustom = updates.unit;
-            }
-            if (updates.servingSize !== undefined) body.quantityText = updates.servingSize;
-            if (updates.notes !== undefined) body.notes = updates.notes;
-            // [[GTC-385]] (item 59, Q9): the ticks, through the item PATCH that already takes the
-            // tags (a changed row becomes HOST_EDITED, so a regenerate keeps it).
-            if (updates.dietaryFlags !== undefined) body.dietaryTags = updates.dietaryFlags;
-            // [[GTC-405]] ruling 1: the dish's own drop-off place and time (free text, the time in
-            // the note), through the item PATCH that already takes both. null clears.
-            if (updates.dropOffLocation !== undefined)
-              body.dropOffLocation = updates.dropOffLocation;
-            if (updates.dropOffNote !== undefined) body.dropOffNote = updates.dropOffNote;
-            // GTC-202: T4. PlanItem carries no assignment, so the response comes from
-            // `items` — loaded on mount for every path that can reach this view, so the
-            // lookup is reliable rather than best-effort.
-            const known = items.find((i) => i.id === itemId);
-            const answer = await askForBatchReason(
-              fieldChanges(
-                {
-                  action: 'EDIT_ITEM',
-                  targetType: 'Item',
-                  targetId: itemId,
-                  context: { assignmentResponse: known?.assignment?.response ?? null },
-                },
-                (known ?? {}) as Record<string, unknown>,
-                body,
-                ASK_FIELDS
-              ),
-              event
-            );
-            if (!answer.proceed) return;
-            const res = await fetch(`/api/events/${eventId}/items/${itemId}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ...body, reason: answer.reason }),
-            });
-            if (!res.ok) throw new Error('Failed to update item');
+            // [[GTC-406]] ruling 6: the page's one item save (`saveItemEdit`), as before.
+            if (!(await saveItemEdit(itemId, updates))) return;
             // Patch local state instead of full reload for snappy UX.
             setMoment2PlanCategories((prev) =>
               prev.map((cat) => ({
