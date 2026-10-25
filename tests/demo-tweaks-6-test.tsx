@@ -15,7 +15,10 @@
  *      After a save the step goes to the saved state.
  *   4  After a saved change, when a plan has been drafted, one line under the saved one: "Saved.
  *      Your plan was drafted before this, so check the dishes still cover it." Nothing re-run.
- *   5  The "Add a dish" link (Part B) was not built (see the ticket), so nothing here asks for it.
+ *   5  (Round 2, the founder's ruling of 25 Oct 2026.) Under that line, and only with it, a plain
+ *      link "Add a dish" to Moment 2's plan screen, by the address the strip's door to Moment 2 has
+ *      on this page (`?at=plan`); she picks the section there. Gone after "Change", "Cancel" or a
+ *      reload; never on a step never saved. It lands on the plan screen itself, not an opening.
  *
  * THE LAYERS
  *   S  the page's source: the new words in the step's own part of the page; the save posts the same
@@ -112,6 +115,17 @@ const OPTIONS = ['Vegetarian', 'Vegan', 'Gluten-free', 'Dairy-free', 'Nut allerg
 const OTHER_BOX = 'Other dietary needs';
 const NEVER_LINE = 'Never answered. That is different from “nobody has any”.';
 const NEEDS_CONFIRMATION = 'Needs confirmation';
+// Round 2.
+const ADD_DISH = 'Add a dish';
+/** The strip's Moment 2 label, as the strip draws it. */
+const DOOR_2_LABEL = "What's the plan?";
+/** Moment 2's plan screen for the host's own plan: its heading and each section's add button. */
+const PLAN_HEADING = (eventName: string) => `Your plan for ${eventName}.`;
+const ADD_ITEM = '+ Add item';
+/** Moment 2's opening screen's big title (the plan screen never shows it as a heading). */
+const MOMENT_2_OPENING_TITLE = "What's the plan?";
+/** The plan screen's address from another page, typed by hand. */
+const PLAN_ADDRESS = (eventId: string) => `/plan/${eventId}/setup?at=plan`;
 
 // ── Files and commits ────────────────────────────────────────────────────────
 const SUITE = 'tests/demo-tweaks-6-test.tsx';
@@ -148,6 +162,33 @@ export interface StepFacts {
   foot: boolean | null;
   /** The closed row's line under the blurb. */
   line: { text: string; amber: boolean } | null;
+  /** Round 2: every link in the open step (the foot left out): its words and address. */
+  links: { t: string; href: string | null }[];
+  /** Round 2: whatever reads "Add a dish" (its link or button if it sits in one), or null. */
+  addDish: LinkFacts | null;
+}
+
+/** Round 2: what makes "Add a dish" a link a keyboard reaches. */
+export interface LinkFacts {
+  tag: string;
+  href: string | null;
+  role: string | null;
+  tab: number;
+  /** It took the focus when asked (then the focus went back). */
+  focused: boolean;
+  ariaDisabled: boolean;
+}
+
+/** Round 2: where the link took her. */
+export interface Landed {
+  path: string;
+  search: string;
+  h1: string[];
+  addItem: number;
+  moment3Opening: boolean;
+  preflight: boolean;
+  /** The landing page's own requests that are not reads (shown, for the record). */
+  writes: string[];
 }
 
 /** A stored dietaryData, as the suite compares it: status, needs in order, typed text. */
@@ -295,6 +336,71 @@ export const CHECKS = {
     );
   },
 
+  // ── Round 2: "Add a dish" ──
+  /** C10 — with the after-save line: one link in the step, "Add a dish", under the line. */
+  addDishShown(f: StepFacts | null) {
+    if (!f || !f.open || !f.addDish) return false;
+    return (
+      f.text.includes(AFTER_SAVE) &&
+      f.links.length === 1 &&
+      f.links[0].t === ADD_DISH &&
+      count(f.text, ADD_DISH) === 1 &&
+      f.text.indexOf(ADD_DISH) > f.text.indexOf(AFTER_SAVE)
+    );
+  },
+  /** C11 — its address is the strip's door to Moment 2 on the same page, which is the plan screen's address. */
+  stripAddress(f: StepFacts | null, door2: string | null, eventId: string) {
+    return (
+      !!f &&
+      !!f.addDish &&
+      door2 === PLAN_ADDRESS(eventId) &&
+      f.addDish.href === door2 &&
+      f.links.length === 1 &&
+      f.links[0].href === door2
+    );
+  },
+  /** C12 — a real link: an <a> with the address, no other role, in the tab order, takes the focus, not disabled. */
+  realLink(l: LinkFacts | null | undefined) {
+    return (
+      !!l &&
+      l.tag === 'A' &&
+      !!l.href &&
+      l.href.length > 1 &&
+      l.role === null &&
+      l.tab === 0 &&
+      l.focused &&
+      !l.ariaDisabled
+    );
+  },
+  /** C13 — without the line there is no link: none in the step, no "Add a dish" anywhere in it. */
+  noAddDish(moments: (StepFacts | null)[]) {
+    return (
+      moments.length >= 9 &&
+      moments.every(
+        (f) =>
+          !!f &&
+          f.open &&
+          !f.text.includes(AFTER_SAVE) &&
+          !f.text.includes(ADD_DISH) &&
+          f.addDish === null &&
+          f.links.length === 0
+      )
+    );
+  },
+  /** C14 — following it lands on Moment 2's plan screen itself: its heading and add buttons; not an opening, not the pre-flight. */
+  landed(l: Landed | null, eventId: string, eventName: string) {
+    return (
+      !!l &&
+      l.path === `/plan/${eventId}/setup` &&
+      l.search === '' &&
+      l.h1.includes(PLAN_HEADING(eventName)) &&
+      !l.h1.includes(MOMENT_2_OPENING_TITLE) &&
+      l.addItem >= 1 &&
+      !l.moment3Opening &&
+      !l.preflight
+    );
+  },
+
   // ── Source ──
   /** S1 — the new words, literal in the step's own part of the page; "Saved" no button label there. */
   words(section: string) {
@@ -350,6 +456,26 @@ export const CHECKS = {
     );
   },
 
+  /** S5 — round 2: "Add a dish" once, a plain <a> inside the after-save line's own condition, its address the strip's door to Moment 2 (setupHref with AT_PLAN), the event read as the page reads it. */
+  addDishSource(section: string, page: string) {
+    const after = section.indexOf('{afterPlan && (');
+    const tail = after >= 0 ? section.slice(after, after + 1500) : '';
+    const tag = /<a\b([^>]*)>\s*Add a dish\s*<\/a>/.exec(tail);
+    const arc = between(page, '<MomentArc', '/>');
+    return (
+      count(section, ADD_DISH) === 1 &&
+      tail.includes(AFTER_SAVE) &&
+      !!tag &&
+      tail.indexOf(AFTER_SAVE) < tail.indexOf(tag[0]) &&
+      /href=\{setupHref\(eventId, AT_PLAN\)\}/.test(tag[1]) &&
+      !/onClick|tabIndex|role=|target=/.test(tag[1]) &&
+      /const params = useParams\(\);\s*const eventId = params\.eventId as string;/.test(section) &&
+      /2: \{\s*href: invitesOnly \? setupHref\(eventId, AT_OPENING\) : setupHref\(eventId, AT_PLAN\),?\s*\}/.test(
+        arc
+      )
+    );
+  },
+
   // ── CONTROL ──
   /** U2 — package.json differs from the base by this suite's one script line, nothing else. */
   oneScriptLine(atAdd: string, baseJson: string) {
@@ -394,6 +520,11 @@ function layerS() {
     'S',
     'S4 the plan question is one read of the event’s items (no method, so GET); nothing in the step’s code re-runs a check or re-drafts the plan (ruling 4)',
     CHECKS.readOnly(dietary, save)
+  );
+  assert(
+    'S',
+    'S5 round 2: "Add a dish" once, a plain link (no click handler, no role, no tab order of its own) inside the after-save line’s condition and under it; its address setupHref(eventId, AT_PLAN), the one the strip’s door to Moment 2 has on this page',
+    CHECKS.addDishSource(dietary, nowCode)
   );
 }
 
@@ -443,7 +574,21 @@ const STEP_FACTS = `(() => {
   const buttons = inner ? [...inner.querySelectorAll('button')].filter((b) => !(bottom && bottom.contains(b))).map((b) => ({ t: flat(b.textContent), d: b.disabled })) : [];
   const ticks = inner ? [...inner.querySelectorAll('input[type="checkbox"]')].filter((i) => !i.hasAttribute('data-tick-foot')).map((i) => ({ label: flat(i.closest('label') ? i.closest('label').textContent : ''), c: i.checked })) : [];
   const box = inner ? inner.querySelector('input[type="text"]') : null;
+  const outside = (e) => !(bottom && bottom.contains(e));
+  const links = inner ? [...inner.querySelectorAll('a')].filter(outside).map((a) => ({ t: flat(a.textContent), href: a.getAttribute('href') })) : [];
+  const words = inner ? [...inner.querySelectorAll('*')].filter(outside).filter((e) => flat(e.textContent) === ${JSON.stringify(ADD_DISH)} && ![...e.children].some((k) => flat(k.textContent) === ${JSON.stringify(ADD_DISH)})) : [];
+  let addDish = null;
+  if (words.length) {
+    const el = words[0].closest('a, button') || words[0];
+    const prev = document.activeElement;
+    let focused = false;
+    try { el.focus({ preventScroll: true }); focused = document.activeElement === el; } catch (e) {}
+    try { if (prev && prev !== el && prev.focus) prev.focus({ preventScroll: true }); else if (el.blur) el.blur(); } catch (e) {}
+    addDish = { tag: el.tagName, href: el.getAttribute('href'), role: el.getAttribute('role'), tab: el.tabIndex, focused, ariaDisabled: el.getAttribute('aria-disabled') === 'true' };
+  }
   return {
+    links,
+    addDish,
     open: !!tog && tog.getAttribute('aria-expanded') === 'true',
     text,
     buttons,
@@ -454,6 +599,34 @@ const STEP_FACTS = `(() => {
     line: lineEl ? { text: flat(lineEl.textContent), amber: /text-amber-700/.test(lineEl.className) } : null,
   };
 })()`;
+
+/** Round 2: the address of the strip's door to Moment 2 on this page, read from the strip itself. */
+const DOOR_2 = `(() => {
+  const a = [...document.querySelectorAll('[data-moment-strip] a')].find((x) => x.textContent.replace(/\\s+/g, ' ').trim().startsWith(${JSON.stringify(DOOR_2_LABEL)}));
+  return a ? a.getAttribute('href') : null;
+})()`;
+
+/** Round 2: mark whatever in step 2 reads "Add a dish" (a link or a button), for the guarded click. */
+const MARK_ADD_DISH = `(() => {
+  document.querySelectorAll('[data-t]').forEach((e) => e.removeAttribute('data-t'));
+  const b = document.getElementById('step-2-body');
+  if (!b) return false;
+  const w = [...b.querySelectorAll('a, button')].find((x) => !x.closest('[data-tick-bottom]') && x.textContent.replace(/\\s+/g, ' ').trim() === ${JSON.stringify(ADD_DISH)});
+  if (!w) return false;
+  w.setAttribute('data-t', 'x');
+  return true;
+})()`;
+
+/** Round 2: where she landed (Landed). */
+const LANDED = `(() => ({
+  path: location.pathname,
+  search: location.search,
+  h1: [...document.querySelectorAll('h1')].map((h) => h.textContent.replace(/\\s+/g, ' ').trim()),
+  addItem: [...document.querySelectorAll('button')].filter((b) => b.textContent.trim() === ${JSON.stringify(ADD_ITEM)}).length,
+  moment3Opening: !!document.querySelector('[data-moment3-opening]'),
+  preflight: !!document.getElementById('step-2'),
+  writes: (window.__calls || []).filter((x) => !x.startsWith('GET ')),
+}))()`;
 
 async function layerC() {
   section('C — the step, live: two states, Cancel, the button, the after-save line, the tick');
@@ -724,6 +897,30 @@ async function layerC() {
     );
     saved += await savedSeen();
 
+    // ── Round 2: "Add a dish" on event A: gone after Change, Cancel and a reload; back after a
+    // save; followed to the plan screen ──
+    const door2A6 = await ev<string | null>(DOOR_2);
+    await tapIn('button', CHANGE);
+    const a7 = await facts();
+    await tapIn('button', CANCEL, 800);
+    const a8 = await facts();
+    saved += await savedSeen();
+    await open(evA);
+    const a9 = await facts();
+    await tapIn('button', CHANGE);
+    await tapIn('label', 'Vegan');
+    await tapIn('button', SAVE, 400);
+    const a10 = await afterSave();
+    const door2A10 = await ev<string | null>(DOOR_2);
+    saved += await savedSeen();
+    if (await ev<boolean>(MARK_ADD_DISH)) await tap('[data-t="x"]', 1500);
+    await waitFor(
+      `location.pathname === ${JSON.stringify(`/plan/${evA}/setup`)} && [...document.querySelectorAll('button')].some((b) => b.textContent.trim() === ${JSON.stringify(ADD_ITEM)})`,
+      20000
+    );
+    await sleep(800);
+    const landA = await ev<Landed | null>(LANDED);
+
     // ── Event B: no plan, none ──
     await open(evB);
     const b1 = await facts();
@@ -776,12 +973,74 @@ async function layerC() {
     const c4 = await facts();
     await tapIn('button', SAVE, 400);
     const c5 = await afterSave();
+    const door2C5 = await ev<string | null>(DOOR_2);
     saved += await savedSeen();
     assert(
       'C',
       'C6 the button reads "Save this" at every editing moment (greyed and ready, on a saved answer and a never-answered one), no button in step 2 ever read "Saved" on any of the three pages, and a save goes to the saved state (ruling 3)',
       CHECKS.saveLabel([a2, a5, c1, c4], saved, c5),
       `saved seen ${saved} | ${JSON.stringify([a2, a5, c1, c4].map((m) => m?.buttons))} | ${JSON.stringify(c5?.buttons)}`
+    );
+
+    // ── Round 2: the "Add a dish" checks ──
+    const AFTER_A10 = THESE_LINE('Vegetarian, no shellfish');
+    const SAVED_A6 = THESE_LINE('Vegetarian, Vegan, no shellfish');
+    const shown = [a6, a10, c5];
+    assert(
+      'C',
+      'C10 "Add a dish" shows with the after-save line, under it, the step’s one link: after the save on event A (twice, the second after a reload) and after the first save on event C, a step never answered (round 2, ruling 1)',
+      shown.every((f) => CHECKS.addDishShown(f)) &&
+        CHECKS.sorted(a10, AFTER_A10, true) &&
+        CHECKS.sorted(c5, NONE_LINE, true),
+      JSON.stringify(shown.map((f) => ({ links: f?.links, addDish: f?.addDish, text: f?.text })))
+    );
+    assert(
+      'C',
+      'C11 its address is the one the strip’s door to Moment 2 has on the same page, read from the strip: "/plan/<event>/setup?at=plan", the plan screen’s (round 2, ruling 1)',
+      CHECKS.stripAddress(a6, door2A6, evA) &&
+        CHECKS.stripAddress(a10, door2A10, evA) &&
+        CHECKS.stripAddress(c5, door2C5, evC),
+      JSON.stringify({
+        a6: [a6?.addDish?.href, door2A6],
+        a10: [a10?.addDish?.href, door2A10],
+        c5: [c5?.addDish?.href, door2C5],
+      })
+    );
+    assert(
+      'C',
+      'C12 it is a real link: an <a> with that address, no other role, in the tab order, takes the keyboard’s focus, not disabled',
+      shown.every((f) => CHECKS.realLink(f?.addDish)),
+      JSON.stringify(shown.map((f) => f?.addDish))
+    );
+    assert(
+      'C',
+      'C13 without the line there is no link: on a saved answer before any save, after "Change", after "Cancel", after a save (then "Change", then "Cancel"), after a reload, on event B after a save with no plan, and on a step never saved',
+      CHECKS.noAddDish([a1, a2, a4, a7, a8, a9, b1, b2, c1]) &&
+        CHECKS.editing(a7, {
+          cancel: true,
+          needs: true,
+          ticked: ['Vegetarian', 'Vegan'],
+          other: 'no shellfish',
+          saveDisabled: true,
+        }) &&
+        CHECKS.sorted(a8, SAVED_A6, false) &&
+        CHECKS.sorted(a9, SAVED_A6, false),
+      JSON.stringify(
+        [a1, a2, a4, a7, a8, a9, b1, b2, c1].map((f) => ({
+          links: f?.links,
+          addDish: f?.addDish,
+          text: f?.text.slice(0, 160),
+        }))
+      )
+    );
+    assert(
+      'C',
+      'C14 following it (a guarded click) lands on Moment 2’s plan screen itself: "/plan/<event>/setup" (the "?at=plan" read and put back), the heading "Your plan for GTC-404 — a plan, some needs.", a "+ Add item" button; not Moment 2’s or Moment 3’s opening, not the pre-flight',
+      CHECKS.landed(landA, evA, 'GTC-404 — a plan, some needs'),
+      JSON.stringify(landA)
+    );
+    console.log(
+      `    the plan screen’s own requests on landing, not reads: ${JSON.stringify(landA?.writes ?? null)}`
     );
 
     blocked = c.planMakingBlocked();
