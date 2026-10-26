@@ -700,7 +700,7 @@ export default function HostView() {
               </div>
             </div>
             <div
-              className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}
+              className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}
             >
               {sortedTeams.map((team) => {
                 const assignedCount = team.items.filter((i) => i.assignment).length;
@@ -748,7 +748,9 @@ export default function HostView() {
                           }`}
                         />
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-bold text-gray-900 text-lg mb-1">{team.name}</h3>
+                          <h3 className="min-w-0 break-words font-bold text-gray-900 text-lg mb-1">
+                            {team.name}
+                          </h3>
                           <p className="text-sm text-gray-600">{team.coordinator.name}</p>
                         </div>
                       </div>

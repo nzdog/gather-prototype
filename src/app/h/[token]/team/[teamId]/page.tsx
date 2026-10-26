@@ -238,7 +238,7 @@ export default function HostTeamView() {
             </div>
           ) : (
             <div
-              className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}
+              className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}
             >
               {sortedItems.map((item) => (
                 <div
@@ -254,7 +254,9 @@ export default function HostTeamView() {
                         {item.critical && (
                           <AlertCircle className="size-4 text-red-500 flex-shrink-0" />
                         )}
-                        <span className="font-semibold text-gray-900">{item.name}</span>
+                        <span className="min-w-0 break-words font-semibold text-gray-900">
+                          {item.name}
+                        </span>
                         {item.quantity && (
                           <span className="text-gray-500 flex-shrink-0">×{item.quantity}</span>
                         )}

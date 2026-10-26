@@ -508,7 +508,7 @@ export default function CoordinatorView() {
           </div>
         </div>
         <div
-          className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}
+          className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}
         >
           {sortedItems.map((item) => (
             <div
@@ -690,7 +690,7 @@ export default function CoordinatorView() {
             Your Personal Assignments
           </h2>
           <div
-            className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}
+            className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 gap-4 items-start' : 'flex flex-col gap-4 items-start'}`}
           >
             {data.myAssignments.map((assignment) => (
               <div

@@ -541,7 +541,7 @@ export default function ParticipantView() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
+              <div className="grid grid-cols-1 gap-4 items-start">
                 {data.assignments.map((assignment) => (
                   <AssignmentCard
                     key={assignment.id}
@@ -565,7 +565,7 @@ export default function ParticipantView() {
               <p className="text-sm text-gray-600 mt-1 mb-3">
                 Answer on {child.firstName}&rsquo;s behalf.
               </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
+              <div className="grid grid-cols-1 gap-4 items-start">
                 {child.assignments.map((assignment) => (
                   <AssignmentCard
                     key={assignment.id}
@@ -673,10 +673,14 @@ function AssignmentCard({
       {/* Card Header - Always Visible */}
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <h2 className="text-2xl font-bold text-gray-900">{assignment.item.name}</h2>
+          <div className="flex flex-wrap items-baseline gap-x-2 mb-1">
+            <h2 className="min-w-0 break-words text-xl font-bold text-gray-900">
+              {assignment.item.name}
+            </h2>
             {assignment.item.quantity && (
-              <span className="text-xl text-gray-500">×{assignment.item.quantity}</span>
+              <span className="whitespace-nowrap text-xl text-gray-500">
+                ×{assignment.item.quantity}
+              </span>
             )}
           </div>
 
@@ -794,7 +798,7 @@ function AssignmentCard({
                 {answered}
               </div>
               <p className="text-sm text-gray-500 text-center">{note}</p>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {(['ACCEPTED', 'DECLINED', 'MAYBE'] as const)
                   .filter((r) => r !== assignment.response)
                   .map((r) => (
