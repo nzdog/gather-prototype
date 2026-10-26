@@ -175,12 +175,21 @@ const NOT_TOUCHED = [
   'prisma',
   'src/lib',
   'src/app/p',
-  'src/app/plan/new',
+  'src/app/plan/new', // but page.tsx (GTC-407; see NOT_TOUCHED_TILL_GTC407)
   'src/components/plan/MomentArc.tsx',
   'package-lock.json',
 ];
 /** The one src/lib file this ticket may change (its new words): kept out of U1, asked in U4. */
 const NOT_TOUCHED_EXCEPT = [`:(exclude)${WORDS_FILE}`];
+/**
+ * [[GTC-407]] edits the paying page on purpose (after payment: the 409 screen, "Try Again" with
+ * the same receipt, the support address), so U1 asks its question of it at GTC-407's base
+ * (1b8bfe7), a fixed commit: this ticket still may not have touched it. GTC-407's own suite
+ * (test:demo-tweaks-9) pins its new state. It is kept out of the live diff of src/app/plan/new,
+ * which stays listed and still covers anything else that appears there.
+ */
+const GTC407_BASE = '1b8bfe7b8a9b7540ef582fff9be031b37e325b8c';
+const NOT_TOUCHED_TILL_GTC407 = ['src/app/plan/new/page.tsx'];
 
 // ── Shapes read in the browser ───────────────────────────────────────────────
 export interface RowFacts {
@@ -1558,9 +1567,18 @@ function layerU() {
   const missing = NOT_TOUCHED.filter((f) => !fs.existsSync(path.join(ROOT, f)));
   assert(
     'U',
-    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since the base (347fb10): routes, schema, src/lib (auth, press, AI, households, email, Moment 3's rules and the pre-flight's included; its one new-words file asked in U4), the guest page, the new-event page, the strip and the lockfile`,
+    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since the base (347fb10): routes, schema, src/lib (auth, press, AI, households, email, Moment 3's rules and the pre-flight's included; its one new-words file asked in U4), the guest page, the new-event page, the strip and the lockfile; the paying page, which GTC-407 edits, not between the base and GTC-407’s base (1b8bfe7)`,
     missing.length === 0 &&
-      git(['diff', '--quiet', BASE, '--', ...NOT_TOUCHED, ...NOT_TOUCHED_EXCEPT]).status === 0,
+      git([
+        'diff',
+        '--quiet',
+        BASE,
+        '--',
+        ...NOT_TOUCHED,
+        ...NOT_TOUCHED_EXCEPT,
+        ...NOT_TOUCHED_TILL_GTC407.map((f) => `:(exclude)${f}`),
+      ]).status === 0 &&
+      git(['diff', '--quiet', BASE, GTC407_BASE, '--', ...NOT_TOUCHED_TILL_GTC407]).status === 0,
     missing.length ? `missing: ${missing.join(', ')}` : undefined
   );
   // GTC-397's lesson: package.json is read at a fixed commit (the one that added this suite), never

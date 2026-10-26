@@ -144,7 +144,7 @@ const W15 = 'The sample event could not be started. Please try again.';
 const GO_TO_IT = 'Go to it →';
 /** Not edited by item 3: the real page, the Edit event box and route, and the sample's own code. */
 const NOT_EDITED_N = [
-  PLAN_NEW,
+  PLAN_NEW, // asked at GTC-407's base (see GTC407_BASE)
   EDIT_BOX,
   'src/app/api/events/[id]/route.ts',
   'src/app/api/demo/session/route.ts',
@@ -153,6 +153,13 @@ const NOT_EDITED_N = [
   'src/lib/demo/send-wall.ts',
   'src/lib/demo/ai-cap.ts',
 ];
+/**
+ * [[GTC-407]] edits the paying page on purpose (after payment: the 409 screen, "Try Again" with
+ * the same receipt, the support address), so N13 asks its question of that page at GTC-407's base
+ * (1b8bfe7), a fixed commit: item 3 still may not have touched it. GTC-407's own suite
+ * (test:demo-tweaks-9) pins its new state. N1 and N2 still read the page as it is now.
+ */
+const GTC407_BASE = '1b8bfe7b8a9b7540ef582fff9be031b37e325b8c';
 /**
  * The sample's day, worked out here by hand (GTC-392 W14): today's NZ date plus four weeks, then
  * on to the Saturday (the same day if it is one).
@@ -1037,8 +1044,12 @@ async function layerN() {
   );
   assert(
     'N',
-    'N13 CONTROL: the real page, the Edit event box and its route, the session route and the sample’s own code are not edited since demo-tweaks-good',
-    NOT_EDITED_N.every((f) => read(f).length > 0) && unchangedSinceGood(NOT_EDITED_N)
+    'N13 CONTROL: the real page, the Edit event box and its route, the session route and the sample’s own code are not edited since demo-tweaks-good (the real page, which GTC-407 edits: not between demo-tweaks-good and GTC-407’s base, 1b8bfe7)',
+    NOT_EDITED_N.every((f) => read(f).length > 0) &&
+      unchangedSinceGood(NOT_EDITED_N.filter((f) => f !== PLAN_NEW)) &&
+      // [[GTC-407]]: the real page asked at GTC-407's base, a fixed commit.
+      spawnSync('git', ['diff', '--quiet', GOOD_TAG, GTC407_BASE, '--', PLAN_NEW], { cwd: ROOT })
+        .status === 0
   );
 }
 
