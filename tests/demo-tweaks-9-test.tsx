@@ -374,12 +374,28 @@ export const CHECKS = {
       paused.every((p) => p.answered !== 'unexpected' && !p.url.includes('/api/billing'))
     );
   },
-  /** K2 — localhost only, no dialog, no click refused. */
-  walled(hosts: string[], dialogs: string[], refused: string[], base: string) {
+  /**
+   * K2 — every address Chrome asked for is on the dev server, or a data: or about: address by name
+   * (New Event's date box loads a `data:image/svg+xml` icon, whose host is empty, as batch15 K1
+   * found); the helper saw no host the address log did not; no dialog, no click refused.
+   */
+  walled(urls: string[], hosts: string[], dialogs: string[], refused: string[], base: string) {
     const own = new URL(base).host;
+    const hostOf = (u: string) => {
+      try {
+        return new URL(u).host;
+      } catch {
+        return '(unparsable)';
+      }
+    };
+    const outside = urls.filter(
+      (u) => !(u.startsWith('data:') || u.startsWith('about:') || hostOf(u) === own)
+    );
     return (
+      urls.length > 0 &&
+      outside.length === 0 &&
       hosts.length > 0 &&
-      hosts.every((h) => h === own) &&
+      hosts.every((h) => urls.some((u) => hostOf(u) === h)) &&
       dialogs.length === 0 &&
       refused.length === 0
     );
@@ -468,6 +484,8 @@ async function openAnswerer() {
   const pending = new Map<number, (m: any) => void>();
   const queue: Answer[] = [];
   const paused: Paused[] = [];
+  /** Every address the page asked for, read on this connection (K2). */
+  const urls: string[] = [];
   let unexpected = 0;
   const send = (method: string, params: Record<string, unknown> = {}) =>
     new Promise<any>((r) => {
@@ -481,6 +499,7 @@ async function openAnswerer() {
       pending.get(m.id)!(m);
       pending.delete(m.id);
     }
+    if (m.method === 'Network.requestWillBeSent') urls.push(m.params.request.url);
     if (m.method !== 'Fetch.requestPaused') return;
     const { requestId, request } = m.params;
     const isCreate = request.method === 'POST' && new URL(request.url).pathname === '/api/events';
@@ -511,6 +530,7 @@ async function openAnswerer() {
       }
     }, answer.holdMs ?? 0);
   });
+  await send('Network.enable');
   await send('Fetch.enable', {
     patterns: [
       { urlPattern: '*/api/events', requestStage: 'Request' },
@@ -526,6 +546,7 @@ async function openAnswerer() {
       paused.length = 0;
     },
     paused: () => [...paused],
+    urls: () => [...urls],
     left: () => queue.length,
     unexpected: () => unexpected,
     close() {
@@ -759,9 +780,16 @@ async function layerC() {
     );
     assert(
       'K',
-      'K2 CONTROL: the browser asked for the dev server only, no dialog opened, no click refused',
-      CHECKS.walled(c.hostsRequested(), c.dialogs(), refused, BASE_URL),
-      JSON.stringify({ hosts: c.hostsRequested(), dialogs: c.dialogs(), refused })
+      'K2 CONTROL: every address the browser asked for is on the dev server, or a data: or about: address by name; the helper saw no other host; no dialog opened, no click refused',
+      CHECKS.walled(answerer.urls(), c.hostsRequested(), c.dialogs(), refused, BASE_URL),
+      JSON.stringify({
+        outside: answerer
+          .urls()
+          .filter((u) => !/^(data|about):/.test(u) && !u.includes(new URL(BASE_URL).host)),
+        hosts: c.hostsRequested(),
+        dialogs: c.dialogs(),
+        refused,
+      })
     );
   } finally {
     answerer?.close();
