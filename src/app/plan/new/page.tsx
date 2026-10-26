@@ -10,8 +10,11 @@ import {
   datePairToSend,
   type DatePairValue,
 } from '@/lib/events/date-pair';
+// [[GTC-407]] (ruling 3): Gather's contact address, written once, in src/lib/email-footer.ts.
+import { GATHER_CONTACT_EMAIL } from '@/lib/email-footer';
 
-type PageState = 'form' | 'creating' | 'canceled' | 'error' | 'emailed';
+// [[GTC-407]] (ruling 1): 'paid-before' is her return after the payment already made her event.
+type PageState = 'form' | 'creating' | 'canceled' | 'error' | 'emailed' | 'paid-before';
 
 // Sanitise pre-populated query params to prevent XSS
 function sanitiseParam(value: string | null): string {
@@ -63,6 +66,8 @@ export default function NewPlanPage() {
   } | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
   const [showExpiredNotice, setShowExpiredNotice] = useState(false);
+  // [[GTC-407]] (ruling 2): the receipt a failed creation leaves still good, for "Try Again".
+  const [retrySessionId, setRetrySessionId] = useState<string | null>(null);
 
   // Handle pre-populated params from wrap-up links and expired notice
   useEffect(() => {
@@ -131,6 +136,13 @@ export default function NewPlanPage() {
   }, [searchParams]);
 
   const createEventWithPayment = async (sessionId: string) => {
+    /*
+     * [[GTC-407]] (ruling 2): does "Try Again" keep the receipt? Only an answer in the 400s says
+     * the receipt is no use (402 not paid, 400 unreadable). A 500, a connection that failed, or an
+     * answer lost while it was read leave the payment as good as it was, so "Try Again" sends the
+     * same session id again; the server's 409 stops a second event for one payment.
+     */
+    let keepReceipt = true;
     try {
       // Call event creation API — email and event data come from the Stripe session
       const response = await fetch('/api/events', {
@@ -140,6 +152,14 @@ export default function NewPlanPage() {
         },
         body: JSON.stringify({ stripeSessionId: sessionId }),
       });
+      if (response.status >= 400 && response.status < 500) keepReceipt = false;
+
+      // [[GTC-407]] (ruling 1): the payment already made her event (a reload, history, a second
+      // tab, or a retry after a lost answer). No error, no timer, no redirect.
+      if (response.status === 409) {
+        setPageState('paid-before');
+        return;
+      }
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -147,16 +167,6 @@ export default function NewPlanPage() {
         // Handle specific error cases
         if (response.status === 402) {
           throw new Error("Payment wasn't completed. Please try again.");
-        } else if (response.status === 409) {
-          // Payment already used
-          setError('This payment was already used to create an event.');
-          setPageState('error');
-
-          // Provide link to events list
-          setTimeout(() => {
-            router.push('/');
-          }, 3000);
-          return;
         }
 
         throw new Error(errorData.error || 'Failed to create event');
@@ -198,6 +208,7 @@ export default function NewPlanPage() {
       setPageState('emailed');
     } catch (err) {
       console.error('Error creating event:', err);
+      setRetrySessionId(keepReceipt ? sessionId : null);
       setError(
         err instanceof Error
           ? err.message
@@ -287,6 +298,15 @@ export default function NewPlanPage() {
   };
 
   const handleTryAgain = () => {
+    // [[GTC-407]] (ruling 2): the receipt is still good, so try the same creation again with the
+    // same session id, through the same screens. creatingRef is left as it is: it stops the
+    // effect from starting a second creation by itself, and this one is her own press.
+    if (pageState === 'error' && retrySessionId) {
+      setError('');
+      setPageState('creating');
+      createEventWithPayment(retrySessionId);
+      return;
+    }
     // Clear URL params and show form
     router.push('/plan/new');
     setPageState('form');
@@ -367,6 +387,32 @@ export default function NewPlanPage() {
     );
   }
 
+  /*
+   * [[GTC-407]] (ruling 1): she is back on the return address after her event was already made.
+   * The heading and the button are the screen above's; the one sentence is the founder's.
+   */
+  if (pageState === 'paid-before') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="max-w-md w-full mx-4">
+          <div className="bg-white rounded-lg shadow-md p-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Payment received</h2>
+            <p className="text-gray-600 mb-6">
+              Your event was set up when you paid. Sign in with the email you paid with and it will
+              be waiting for you.
+            </p>
+            <a
+              href="/auth/signin"
+              className="block w-full text-center px-6 py-3 bg-accent text-white rounded-lg font-semibold hover:bg-accent-dark"
+            >
+              Go to sign-in
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Payment canceled state
   if (pageState === 'canceled') {
     return (
@@ -405,7 +451,7 @@ export default function NewPlanPage() {
                 Try Again
               </button>
               <button
-                onClick={() => window.open('mailto:support@gather.app', '_blank')}
+                onClick={() => window.open(`mailto:${GATHER_CONTACT_EMAIL}`, '_blank')}
                 className="flex-1 px-6 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50"
               >
                 Contact Support
