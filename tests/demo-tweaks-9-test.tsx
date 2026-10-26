@@ -124,6 +124,15 @@ const NEW_SCRIPT = 'test:demo-tweaks-9';
 const NEW_SCRIPT_VALUE =
   'NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/demo-tweaks-9-test.tsx';
 const UNTRACKED_SCRIPTS = ['scripts/dev-login.ts', 'scripts/print-host-link.ts'];
+/**
+ * [[GTC-408]] edits the cancel page on purpose (its "Contact support" link now writes to the
+ * address this ticket ruled), so U1 asks its question of it at GTC-408's base (c227e81), a fixed
+ * commit: GTC-407 still may not have touched it. GTC-408's own suite (test:demo-tweaks-10) pins
+ * its new state. It is kept out of U1's live diff, which still covers everything else under src
+ * and prisma.
+ */
+const GTC408_BASE = 'c227e81f39ab8fffbcf9ece3cd774125787e47cc';
+const NOT_TOUCHED_TILL_GTC408 = ['src/app/billing/cancel/page.tsx'];
 
 /**
  * The parts of the page this ticket leaves alone, each cut between two markers that are code or
@@ -802,7 +811,15 @@ async function layerC() {
 // ══ U — CONTROL ══════════════════════════════════════════════════════════════
 function layerU() {
   section('U — CONTROL: what this ticket must not touch');
-  const changed = git(['diff', '--name-only', BASE, '--', 'src', 'prisma']).stdout;
+  const changed = git([
+    'diff',
+    '--name-only',
+    BASE,
+    '--',
+    'src',
+    'prisma',
+    ...NOT_TOUCHED_TILL_GTC408.map((f) => `:(exclude)${f}`),
+  ]).stdout;
   const untracked = git([
     'ls-files',
     '--others',
@@ -813,8 +830,10 @@ function layerU() {
   ]).stdout;
   assert(
     'U',
-    'U1 the only file under src or prisma that differs from GTC-407’s base (1b8bfe7) is src/app/plan/new/page.tsx, and nothing new is waiting there',
-    CHECKS.onlyThePage(changed, untracked),
+    'U1 the only file under src or prisma that differs from GTC-407’s base (1b8bfe7) is src/app/plan/new/page.tsx, and nothing new is waiting there; but the cancel page, which GTC-408 edits, not between the base and GTC-408’s base (c227e81)',
+    CHECKS.onlyThePage(changed, untracked) &&
+      git(['cat-file', '-e', `${GTC408_BASE}:${NOT_TOUCHED_TILL_GTC408[0]}`]).status === 0 &&
+      git(['diff', '--quiet', BASE, GTC408_BASE, '--', ...NOT_TOUCHED_TILL_GTC408]).status === 0,
     `${changed.trim()} | ${untracked.trim()}`
   );
   assert(
