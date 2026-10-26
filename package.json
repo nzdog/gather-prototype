@@ -163,6 +163,7 @@
     "test:demo-tweaks-7": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/demo-tweaks-7-test.tsx",
     "test:demo-tweaks-8": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/demo-tweaks-8-test.tsx",
     "test:demo-tweaks-9": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/demo-tweaks-9-test.tsx",
+    "test:demo-tweaks-10": "tsx --tsconfig tests/tsconfig.json tests/demo-tweaks-10-test.tsx",
     "test:event-day-end": "tsx tests/event-day-end-test.ts"
   },
   "prisma": {
