@@ -190,6 +190,15 @@ const NOT_TOUCHED_EXCEPT = [`:(exclude)${WORDS_FILE}`];
  */
 const GTC407_BASE = '1b8bfe7b8a9b7540ef582fff9be031b37e325b8c';
 const NOT_TOUCHED_TILL_GTC407 = ['src/app/plan/new/page.tsx'];
+/**
+ * [[GTC-409]] restyles the guest page on purpose (class names only: one dish card per row, the
+ * name and the arrow each in their own space), so S5 and U1 ask their question of it at GTC-409's
+ * base (b05cac3), a fixed commit: this ticket still may not have touched it. It is kept out of the
+ * live diff of src/app/p, which stays listed and still covers anything else that appears there.
+ * GTC-409's own suite (test:demo-tweaks-11) pins its new state.
+ */
+const GTC409_BASE = 'b05cac341e28ca1a3bdea5966f71015553cb98a4';
+const NOT_TOUCHED_TILL_GTC409 = ['src/app/p/[token]/page.tsx'];
 
 // ── Shapes read in the browser ───────────────────────────────────────────────
 export interface RowFacts {
@@ -584,9 +593,18 @@ function layerS() {
   );
   assert(
     'S',
-    'S5 the guest page is not edited since the base (ruling 3: GTC-405 took the badge off; this ticket leaves it)',
+    'S5 the guest page is not edited since the base (ruling 3: GTC-405 took the badge off; this ticket leaves it); its page.tsx, which GTC-409 restyles, not between the base and GTC-409’s base (b05cac3)',
     fs.existsSync(path.join(ROOT, GUEST)) &&
-      git(['diff', '--quiet', BASE, '--', GUEST]).status === 0 &&
+      git([
+        'diff',
+        '--quiet',
+        BASE,
+        '--',
+        GUEST,
+        ...NOT_TOUCHED_TILL_GTC409.map((f) => `:(exclude)${f}`),
+      ]).status === 0 &&
+      git(['cat-file', '-e', `${GTC409_BASE}:${NOT_TOUCHED_TILL_GTC409[0]}`]).status === 0 &&
+      git(['diff', '--quiet', BASE, GTC409_BASE, '--', ...NOT_TOUCHED_TILL_GTC409]).status === 0 &&
       git(['status', '--porcelain', '--', GUEST]).stdout.trim() === ''
   );
 }
@@ -1567,7 +1585,7 @@ function layerU() {
   const missing = NOT_TOUCHED.filter((f) => !fs.existsSync(path.join(ROOT, f)));
   assert(
     'U',
-    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since the base (347fb10): routes, schema, src/lib (auth, press, AI, households, email, Moment 3's rules and the pre-flight's included; its one new-words file asked in U4), the guest page, the new-event page, the strip and the lockfile; the paying page, which GTC-407 edits, not between the base and GTC-407’s base (1b8bfe7)`,
+    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since the base (347fb10): routes, schema, src/lib (auth, press, AI, households, email, Moment 3's rules and the pre-flight's included; its one new-words file asked in U4), the guest page, the new-event page, the strip and the lockfile; the paying page, which GTC-407 edits, not between the base and GTC-407’s base (1b8bfe7); the guest page’s page.tsx, which GTC-409 restyles, not between the base and GTC-409’s base (b05cac3)`,
     missing.length === 0 &&
       git([
         'diff',
@@ -1577,8 +1595,11 @@ function layerU() {
         ...NOT_TOUCHED,
         ...NOT_TOUCHED_EXCEPT,
         ...NOT_TOUCHED_TILL_GTC407.map((f) => `:(exclude)${f}`),
+        ...NOT_TOUCHED_TILL_GTC409.map((f) => `:(exclude)${f}`),
       ]).status === 0 &&
-      git(['diff', '--quiet', BASE, GTC407_BASE, '--', ...NOT_TOUCHED_TILL_GTC407]).status === 0,
+      git(['diff', '--quiet', BASE, GTC407_BASE, '--', ...NOT_TOUCHED_TILL_GTC407]).status === 0 &&
+      git(['cat-file', '-e', `${GTC409_BASE}:${NOT_TOUCHED_TILL_GTC409[0]}`]).status === 0 &&
+      git(['diff', '--quiet', BASE, GTC409_BASE, '--', ...NOT_TOUCHED_TILL_GTC409]).status === 0,
     missing.length ? `missing: ${missing.join(', ')}` : undefined
   );
   // GTC-397's lesson: package.json is read at a fixed commit (the one that added this suite), never

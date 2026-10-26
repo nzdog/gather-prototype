@@ -106,6 +106,20 @@ const NEW_SCRIPT_VALUE = 'tsx --tsconfig tests/tsconfig.json tests/demo-tweaks-1
 const UNTRACKED_SCRIPTS = ['scripts/dev-login.ts', 'scripts/print-host-link.ts'];
 
 /** The two pieces this ticket changes in the page, typed by hand. */
+/**
+ * [[GTC-409]] restyles four pages on purpose (class names only: the guest page's dish cards one per
+ * row, Grid view two across at most on the host page, its team page and the coordinator page), so
+ * U1 asks its question of them at GTC-409's base (b05cac3), a fixed commit: this ticket still may
+ * not have touched them. They are kept out of U1's live diff, which still covers everything else
+ * under src and prisma. GTC-409's own suite (test:demo-tweaks-11) pins their new state.
+ */
+const GTC409_BASE = 'b05cac341e28ca1a3bdea5966f71015553cb98a4';
+const NOT_TOUCHED_TILL_GTC409 = [
+  'src/app/p/[token]/page.tsx',
+  'src/app/h/[token]/page.tsx',
+  'src/app/h/[token]/team/[teamId]/page.tsx',
+  'src/app/c/[token]/page.tsx',
+];
 const BASE_IMPORTS = "import Link from 'next/link';\n";
 const NEW_IMPORTS =
   "import Link from 'next/link';\n" +
@@ -260,7 +274,15 @@ function layerR() {
 // ══ U — CONTROL ══════════════════════════════════════════════════════════════
 function layerU() {
   section('U — CONTROL: what this ticket must not touch');
-  const changed = git(['diff', '--name-only', BASE, '--', 'src', 'prisma']).stdout;
+  const changed = git([
+    'diff',
+    '--name-only',
+    BASE,
+    '--',
+    'src',
+    'prisma',
+    ...NOT_TOUCHED_TILL_GTC409.map((f) => `:(exclude)${f}`),
+  ]).stdout;
   const untracked = git([
     'ls-files',
     '--others',
@@ -271,8 +293,12 @@ function layerU() {
   ]).stdout;
   assert(
     'U',
-    'U1 the only file under src or prisma that differs from GTC-408’s base (c227e81) is src/app/billing/cancel/page.tsx, and nothing new is waiting there',
-    CHECKS.onlyThePage(changed, untracked),
+    'U1 the only file under src or prisma that differs from GTC-408’s base (c227e81) is src/app/billing/cancel/page.tsx, and nothing new is waiting there; but the four pages GTC-409 restyles, not between the base and GTC-409’s base (b05cac3)',
+    CHECKS.onlyThePage(changed, untracked) &&
+      NOT_TOUCHED_TILL_GTC409.every(
+        (f) => git(['cat-file', '-e', `${GTC409_BASE}:${f}`]).status === 0
+      ) &&
+      git(['diff', '--quiet', BASE, GTC409_BASE, '--', ...NOT_TOUCHED_TILL_GTC409]).status === 0,
     `${changed.trim()} | ${untracked.trim()}`
   );
   assert(

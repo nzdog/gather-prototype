@@ -171,6 +171,18 @@ const NOT_TOUCHED = [
   'src/components/plan/MomentArc.tsx',
   'package-lock.json',
 ];
+/**
+ * [[GTC-409]] restyles the coordinator page and the host's team page on purpose (class names only:
+ * Grid view two across at most, and the team page's long-word guard), so S7 asks its "not edited"
+ * question of those two at GTC-409's base (b05cac3), a fixed commit: this ticket still may not have
+ * touched them. Their badges are still counted as they are now; the other two files stay in the
+ * live diff. GTC-409's own suite (test:demo-tweaks-11) pins their new state.
+ */
+const GTC409_BASE = 'b05cac341e28ca1a3bdea5966f71015553cb98a4';
+const NOT_TOUCHED_TILL_GTC409 = [
+  'src/app/c/[token]/page.tsx',
+  'src/app/h/[token]/team/[teamId]/page.tsx',
+];
 /** Where a host or a coordinator sees "CRITICAL" today, and how many times each file draws it. */
 const CRITICAL_ELSEWHERE: Array<[string, number]> = [
   ['src/app/c/[token]/page.tsx', 2],
@@ -616,9 +628,19 @@ function layerS() {
   }));
   assert(
     'S',
-    `S7 CONTROL: where a host or a coordinator sees "CRITICAL" today (the coordinator’s page twice, the host’s team page, the old dashboard, the regeneration preview twice) is as at the base and still draws it (ruling 4)`,
+    `S7 CONTROL: where a host or a coordinator sees "CRITICAL" today (the coordinator’s page twice, the host’s team page, the old dashboard, the regeneration preview twice) is as at the base and still draws it (ruling 4); the coordinator’s page and the team page, which GTC-409 restyles, not between the base and GTC-409’s base (b05cac3)`,
     others.every((o) => o.got === o.n) &&
-      git(['diff', '--quiet', BASE, '--', ...CRITICAL_ELSEWHERE.map(([f]) => f)]).status === 0,
+      git([
+        'diff',
+        '--quiet',
+        BASE,
+        '--',
+        ...CRITICAL_ELSEWHERE.map(([f]) => f).filter((f) => !NOT_TOUCHED_TILL_GTC409.includes(f)),
+      ]).status === 0 &&
+      NOT_TOUCHED_TILL_GTC409.every(
+        (f) => git(['cat-file', '-e', `${GTC409_BASE}:${f}`]).status === 0
+      ) &&
+      git(['diff', '--quiet', BASE, GTC409_BASE, '--', ...NOT_TOUCHED_TILL_GTC409]).status === 0,
     JSON.stringify(others)
   );
 }
