@@ -2,6 +2,8 @@
 'use client';
 
 import Link from 'next/link';
+// [[GTC-408]] (ruling): Gather's contact address, written once, in src/lib/email-footer.ts.
+import { GATHER_CONTACT_EMAIL } from '@/lib/email-footer';
 
 export default function BillingCancelPage() {
   return (
@@ -49,7 +51,7 @@ export default function BillingCancelPage() {
         <div className="mt-8 pt-6 border-t border-gray-200">
           <p className="text-sm text-gray-500">
             Need help?{' '}
-            <a href="mailto:support@gather.app" className="text-sage-600 hover:underline">
+            <a href={`mailto:${GATHER_CONTACT_EMAIL}`} className="text-sage-600 hover:underline">
               Contact support
             </a>
           </p>
