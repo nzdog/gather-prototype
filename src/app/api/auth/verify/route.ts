@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
 import { randomBytes } from 'crypto';
 import { safeReturnPath } from '@/lib/safe-return-path';
+import { findOrCreateUserByEmail } from '@/lib/accounts/user-by-email';
 import type { User } from '@prisma/client';
 
 type ErrorType = 'invalid' | 'expired' | 'used' | 'claimed';
@@ -57,9 +58,9 @@ export async function POST(req: Request) {
     let user: User;
     try {
       user = await prisma.$transaction(async (tx) => {
-        // Find or create User by email
-        const found = await tx.user.findUnique({ where: { email: magicLink.email } });
-        const signedIn = found ?? (await tx.user.create({ data: { email: magicLink.email } }));
+        // [[GTC-411]] Find or create the User by email through the one shared rule: capitals and
+        // outer spaces do not open a second account (see src/lib/accounts/user-by-email.ts).
+        const signedIn = await findOrCreateUserByEmail(tx, magicLink.email);
 
         // A claim link (Ticket 1.6 + 1.7): link the Person to the User and create EventRoles.
         const personId = magicLink.personId;

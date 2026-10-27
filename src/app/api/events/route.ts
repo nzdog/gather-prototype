@@ -35,6 +35,7 @@ import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth/session';
 import { EVENT_LIST_WIRE_SELECT } from '@/lib/events/wire-select';
 import { resolvePaymentIdentity, maskEmail } from '@/lib/events/payment-identity';
+import { findOrCreateUserByEmail } from '@/lib/accounts/user-by-email';
 import { stripe } from '@/lib/stripe';
 import { sendWelcomeEmail } from '@/lib/email';
 
@@ -182,18 +183,26 @@ export async function POST(request: NextRequest) {
     // `identity.bindTo` is the PAID address on every branch, including the
     // mismatch branch. Moving someone's event under them is no better than
     // moving their session, so neither is done silently.
+    //
+    // [[GTC-411]] ruling 2: when the signed-in address and the paid one differ
+    // only by capitals or outer spaces, the event lands on the SIGNED-IN account
+    // (its own User, its own Person), and no second User or Person is made. In
+    // every other case the paid address goes through the one shared rule that
+    // the sign-in route uses too (src/lib/accounts/user-by-email.ts).
     const { event } = await prisma.$transaction(async (tx) => {
-      let user = await tx.user.findUnique({ where: { email: identity.bindTo } });
-      if (!user) {
-        user = await tx.user.create({ data: { email: identity.bindTo } });
-      }
+      const user =
+        identity.landOnSessionAccount && sessionUser
+          ? sessionUser
+          : await findOrCreateUserByEmail(tx, identity.bindTo);
 
+      // A Person made here carries the account's own stored address, not the
+      // spelling typed at the payment page, so the two never disagree.
       let person = await tx.person.findFirst({ where: { userId: user.id } });
       if (!person) {
         person = await tx.person.create({
           data: {
-            name: identity.bindTo.split('@')[0],
-            email: identity.bindTo,
+            name: user.email.split('@')[0],
+            email: user.email,
             userId: user.id,
           },
         });

@@ -52,17 +52,29 @@ export interface PaymentIdentity {
   bindTo: string;
   /** The session's address when it differs from the paid one, so it can be said out loud. */
   signedInAs: string | null;
+  /**
+   * [[GTC-411]] ruling 2: the event lands on the SIGNED-IN account (its own User and its own
+   * Person), not on whatever account the paid address would look up. True only on
+   * SESSION_MATCHES, where the two addresses differ at most by capitals or outer spaces, so they
+   * are one person's address and no second User or Person is made for it. It changes where the
+   * event is filed, never whether anyone is signed in.
+   */
+  landOnSessionAccount: boolean;
 }
 
 /**
- * Addresses are compared case- and whitespace-insensitively.
+ * Addresses are compared ignoring capitals and outer spaces.
  *
- * ⚠ THE COMPARISON IS NORMALISED; THE LOOKUP IS NOT, AND THAT ASYMMETRY IS
- * DELIBERATE. `prisma.user.findUnique({ where: { email } })` in the route is an
- * exact match, and changing that would change which accounts resolve to which
- * rows — identity semantics, not this ticket's. Normalising only the
- * comparison fails in the safe direction: a case difference can at worst turn
- * the frictionless branch into the emailed one, never the other way round.
+ * Since [[GTC-411]] the account lookup ignores them too. The route no longer
+ * looks the paid address up letter for letter: when the session matches, the
+ * event goes on the signed-in account itself (`landOnSessionAccount`); in every
+ * other case the route asks `findOrCreateUserByEmail`
+ * (src/lib/accounts/user-by-email.ts), the same rule the sign-in route uses: the
+ * exact spelling if it has an account, otherwise the oldest account whose
+ * address differs only by capitals or outer spaces, otherwise a new account
+ * stored lower-case. So a difference in capitals no longer opens a second
+ * account at either door. The comparison here still only decides the branch; it
+ * can never hand out a credential.
  */
 const normalise = (email: string): string => email.trim().toLowerCase();
 
@@ -77,6 +89,7 @@ export function resolvePaymentIdentity(
       needsSignInLink: true,
       bindTo: paidEmail,
       signedInAs: null,
+      landOnSessionAccount: false,
     };
   }
 
@@ -87,6 +100,7 @@ export function resolvePaymentIdentity(
       needsSignInLink: false,
       bindTo: paidEmail,
       signedInAs: null,
+      landOnSessionAccount: true,
     };
   }
 
@@ -96,6 +110,7 @@ export function resolvePaymentIdentity(
     needsSignInLink: true,
     bindTo: paidEmail,
     signedInAs: sessionUser.email,
+    landOnSessionAccount: false,
   };
 }
 
