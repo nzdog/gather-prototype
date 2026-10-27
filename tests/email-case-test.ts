@@ -21,6 +21,8 @@
  *   T5 an address with an underscore (n_gel@) never opens nigel@ (nor % any address).
  *   T6 two calls at once for one new address end with ONE User: a second transaction seen
  *      waiting on the first one's new row, and five calls at once.
+ *   T7 [[GTC-412]] (static, no database): the paid route's new Person takes its NAME from the
+ *      address as typed (identity.bindTo before the @) and its EMAIL from the stored address.
  *   P1 CONTROL: nothing here reached a provider (the provider trap counted no request).
  *   C1 CONTROL: every row this run made is gone again; the User count is as it was.
  *
@@ -264,6 +266,36 @@ async function main() {
       `A made ${!!aFirst}, B seen waiting ${sawWaiting}; A ${a.ok ? 'ok' : why(a.e)}; ` +
         `B ${b.ok ? 'ok' : why(b.e)}; race users ${nRace}; crowd ` +
         `${crowd.map((c) => (c.ok ? 'ok' : why(c.e))).join(',')} users ${nCrowd}`
+    );
+  }
+
+  // ── T7 ([[GTC-412]], static, no database) ──
+  // The paid route's new Person takes its NAME from the address as typed (the part before the @),
+  // and its EMAIL from the account's stored address. Read from the code, comments stripped.
+  {
+    const events = code('src/app/api/events/route.ts');
+    const creates = events.match(/\bperson\s*\.\s*create\s*\(/g) ?? [];
+    const m =
+      /\btx\s*\.\s*person\s*\.\s*create\s*\(\s*\{\s*data\s*:\s*\{([\s\S]*?)\}\s*,?\s*\}\s*\)/.exec(
+        events
+      );
+    const data = m ? m[1] : '';
+    const names = data.match(/\bname\s*:/g) ?? [];
+    const emails = data.match(/\bemail\s*:/g) ?? [];
+    const nameTyped =
+      /\bname\s*:\s*identity\s*\.\s*bindTo\s*\.\s*split\(\s*'@'\s*\)\s*\[\s*0\s*\]\s*,/.test(data);
+    const emailStored = /\bemail\s*:\s*user\s*\.\s*email\s*,/.test(data);
+    assert(
+      'T',
+      'T7 the paid route makes its one new Person with the NAME from the address as typed (identity.bindTo before the @) and the EMAIL from the account’s stored address (user.email)',
+      creates.length === 1 &&
+        !!m &&
+        names.length === 1 &&
+        emails.length === 1 &&
+        nameTyped &&
+        emailStored,
+      `person.create calls ${creates.length}; data found ${!!m}; name keys ${names.length}; ` +
+        `email keys ${emails.length}; name from bindTo ${nameTyped}; email from user ${emailStored}`
     );
   }
 

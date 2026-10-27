@@ -196,12 +196,14 @@ export async function POST(request: NextRequest) {
           : await findOrCreateUserByEmail(tx, identity.bindTo);
 
       // A Person made here carries the account's own stored address, not the
-      // spelling typed at the payment page, so the two never disagree.
+      // spelling typed at the payment page, so the two never disagree. Its
+      // NAME is the part before the @ as typed ([[GTC-412]]), so a host who
+      // pays as Sarah@x.com starts as Sarah, not sarah.
       let person = await tx.person.findFirst({ where: { userId: user.id } });
       if (!person) {
         person = await tx.person.create({
           data: {
-            name: user.email.split('@')[0],
+            name: identity.bindTo.split('@')[0],
             email: user.email,
             userId: user.id,
           },
