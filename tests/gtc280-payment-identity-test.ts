@@ -219,6 +219,37 @@ async function main() {
       resolve({ email: '  SARAH@Example.COM ' }, PAID).relation === 'SESSION_MATCHES'
     );
 
+    // [[GTC-411]] ruling 2: where the paid event lands. Read as its own field, so the type the
+    // checks above were written against stays as it was.
+    const lands = (r: object) => (r as { landOnSessionAccount?: unknown }).landOnSessionAccount;
+    const capitalsOnly = resolve({ email: '  SARAH@Example.COM ' }, PAID);
+    assert(
+      'GTC-411',
+      'a session whose address differs from the paid one only by capitals and outer spaces → SESSION_MATCHES, and the event lands on the signed-in account (landOnSessionAccount true)',
+      capitalsOnly.relation === 'SESSION_MATCHES' &&
+        lands(capitalsOnly) === true &&
+        capitalsOnly.bindTo === PAID,
+      JSON.stringify(capitalsOnly)
+    );
+    assert(
+      'GTC-411',
+      'the same address exactly → SESSION_MATCHES, and the event lands on the signed-in account too',
+      lands(matching) === true,
+      JSON.stringify(matching)
+    );
+    assert(
+      'GTC-411',
+      'a session for a DIFFERENT address → SESSION_MISMATCH, and the event does NOT land on the signed-in account (landOnSessionAccount false)',
+      mismatch.relation === 'SESSION_MISMATCH' && lands(mismatch) === false,
+      JSON.stringify(mismatch)
+    );
+    assert(
+      'GTC-411',
+      'no session → NO_SESSION, and landOnSessionAccount is false',
+      noSession.relation === 'NO_SESSION' && lands(noSession) === false,
+      JSON.stringify(noSession)
+    );
+
     assert(
       'the decision',
       'NO input of any relation yields a mint — bindTo is the paid address in all three, and the type carries no field that could mean "hand back a credential"',

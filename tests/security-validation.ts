@@ -3892,6 +3892,144 @@ async function testSuite19_AnswerAndDayStayInTheirEvent(fixtures: Fixtures) {
   }
 }
 
+/**
+ * Suite 20 — [[GTC-411]] (founder approval, Zone 6, 27 Oct 2026: one new suite, three checks):
+ * one account per address, whatever the capitals.
+ *
+ * Both doors that make a User from an email — signing in (POST /api/auth/verify) and paying
+ * (POST /api/events) — used to look the address up letter for letter, so "Nigel@x.com" and
+ * "nigel@x.com" were two accounts. Both now ask `findOrCreateUserByEmail`
+ * (src/lib/accounts/user-by-email.ts). The database's case-blind match may act as a pattern
+ * match (an underscore stands for any letter), which is why the helper checks every candidate
+ * again in code; S2 holds that line over HTTP.
+ *
+ * The paid door cannot be driven without a really-paid receipt; its branch is proved offline in
+ * test:gtc280, and here statically (S3). Rows are tagged for this run and removed by that tag.
+ */
+async function testSuite20_OneAccountPerAddress() {
+  logSection('Test Suite 20: GTC-411 — one account per address, whatever the capitals');
+
+  const BASE = process.env.SECURITY_TEST_BASE_URL ?? 'http://localhost:3000';
+  const TAG = `gtc411-sec-${Date.now().toString(36)}${randomBytes(2).toString('hex')}`;
+  const addr = (local: string) => `${TAG}-${local}@example.com`;
+
+  /** Every User of this run, in any letter case. */
+  const taggedUsers = async () =>
+    (
+      await prisma.user.findMany({
+        where: { email: { contains: TAG, mode: 'insensitive' } },
+      })
+    ).filter((u) => u.email.trim().toLowerCase().startsWith(TAG));
+
+  /** Sign in with a fresh link for `email`; the Session's user, read off the cookie it set. */
+  const signIn = async (email: string) => {
+    const link = await prisma.magicLink.create({
+      data: {
+        email,
+        token: randomBytes(32).toString('hex'),
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+      },
+    });
+    const res = await fetch(`${BASE}/api/auth/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: link.token }),
+    });
+    let json: any = null;
+    try {
+      json = await res.json();
+    } catch {
+      /* no body */
+    }
+    const token = /(?:^|[;,]\s*)session=([^;]+)/.exec(res.headers.get('set-cookie') ?? '')?.[1];
+    const session = token ? await prisma.session.findUnique({ where: { token } }) : null;
+    return { status: res.status, ok: json?.success === true, userId: session?.userId ?? null };
+  };
+
+  try {
+    // S1 — a sign-in whose capitals differ from an existing account lands on that account.
+    try {
+      const host = await prisma.user.create({
+        data: { email: addr('S1-Host').replace('example.com', 'Example.com') },
+      });
+      const r = await signIn(addr('s1-host'));
+      const key = addr('s1-host');
+      const forAddress = (await taggedUsers()).filter((u) => u.email.trim().toLowerCase() === key);
+      logTest(
+        'S1 live: a sign-in typed in other capitals lands on the existing account (the Session is its), and that address still has ONE User',
+        r.status === 200 && r.ok && r.userId === host.id && forAddress.length === 1,
+        `status ${r.status}, success ${r.ok}, session user is the host: ${r.userId === host.id}, users for the address: ${forAddress.length}`
+      );
+    } catch (e: any) {
+      logTest(
+        'S1 live: a sign-in typed in other capitals lands on the existing account',
+        false,
+        e.message
+      );
+    }
+
+    // S2 — an underscore is a letter, not a wildcard.
+    try {
+      const nigel = await prisma.user.create({ data: { email: addr('s2-nigel') } });
+      const r = await signIn(addr('s2-n_gel'));
+      const opened = r.userId ? await prisma.user.findUnique({ where: { id: r.userId } }) : null;
+      const nigelSessions = await prisma.session.count({ where: { userId: nigel.id } });
+      logTest(
+        'S2 live: a sign-in as n_gel@ never opens nigel@, the account the underscore would wildcard-match; it opens its own',
+        r.status === 200 &&
+          r.ok &&
+          opened !== null &&
+          opened.id !== nigel.id &&
+          opened.email === addr('s2-n_gel') &&
+          nigelSessions === 0,
+        `status ${r.status}, success ${r.ok}, opened ${opened?.email ?? 'nothing'}, sessions on nigel@: ${nigelSessions}`
+      );
+    } catch (e: any) {
+      logTest('S2 live: a sign-in as n_gel@ never opens nigel@', false, e.message);
+    }
+
+    // S3 — static: both doors use one rule.
+    const FIND_BY_EMAIL = /\buser\s*\.\s*findUnique\s*\(\s*\{\s*where\s*:\s*\{\s*email\b/;
+    const CREATE = /\buser\s*\.\s*create(Many)?\s*\(/;
+    const apiFiles: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of fs.readdirSync(path.join(__dirname, '..', dir), { withFileTypes: true })) {
+        const rel = `${dir}/${e.name}`;
+        if (e.isDirectory()) walk(rel);
+        else if (/\.tsx?$/.test(e.name)) apiFiles.push(rel);
+      }
+    };
+    walk('src/app/api');
+    const offenders = apiFiles.filter(
+      (f) => FIND_BY_EMAIL.test(readCode(f)) || CREATE.test(readCode(f))
+    );
+    const helper = readCode('src/lib/accounts/user-by-email.ts');
+    logTest(
+      'S3 static: no user.findUnique({ where: { email and no user.create under src/app/api; the sign-in and paid routes both ask findOrCreateUserByEmail (CONTROL: the detectors find both shapes in the helper and in a written sample)',
+      apiFiles.length > 50 &&
+        offenders.length === 0 &&
+        /findOrCreateUserByEmail\(\s*tx\s*,\s*magicLink\.email\s*\)/.test(
+          readCode('src/app/api/auth/verify/route.ts')
+        ) &&
+        /findOrCreateUserByEmail\(\s*tx\s*,\s*identity\.bindTo\s*\)/.test(
+          readCode('src/app/api/events/route.ts')
+        ) &&
+        FIND_BY_EMAIL.test(helper) &&
+        CREATE.test(helper) &&
+        FIND_BY_EMAIL.test('tx.user.findUnique({ where: { email: x } })') &&
+        CREATE.test('await tx.user.create({ data: { email } })') &&
+        !CREATE.test('tx.eventRole.create({ data })'),
+      `offenders: ${offenders.join(', ') || 'none'}; files read: ${apiFiles.length}`
+    );
+  } finally {
+    // Only this run's rows: its users (by tag, any letter case), their sessions, its links.
+    const mine = await taggedUsers();
+    await prisma.session.deleteMany({ where: { userId: { in: mine.map((u) => u.id) } } });
+    await prisma.magicLink.deleteMany({ where: { email: { contains: TAG, mode: 'insensitive' } } });
+    await prisma.user.deleteMany({ where: { id: { in: mine.map((u) => u.id) } } });
+  }
+}
+
 async function main() {
   console.log(`${BOLD}${YELLOW}=== Security Validation Test Suite ===${RESET}\n`);
   console.log('Contract under test:');
@@ -3923,6 +4061,7 @@ async function main() {
     await testSuite17_PersonRoutesStayInTheirEvent(fixtures);
     await testSuite18_LinkRoutesStayInTheirEvent(fixtures);
     await testSuite19_AnswerAndDayStayInTheirEvent(fixtures);
+    await testSuite20_OneAccountPerAddress();
 
     console.log(`\n${BOLD}${YELLOW}=== Test Summary ===${RESET}`);
     console.log(`Total tests: ${testsRun}`);
