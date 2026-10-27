@@ -39,13 +39,13 @@ historically broken it. All facts verified against the repo as of 2026-07-09.
 
 | Requirement | Detail | Verify |
 |---|---|---|
-| Node 20 | `.nvmrc` contains `20`. CI pins `node-version: '20'`. **Trap:** `package.json` has NO `engines` field, so npm will NOT stop you from using the wrong Node — check manually. | `node --version` → v20.x |
+| Node 22 | `.nvmrc` contains `22` (since GTC-410; 22.13 or later). CI pins `node-version: '22'`. **Trap:** `package.json` has NO `engines` field, so npm will NOT stop you from using the wrong Node — check manually. | `node --version` → v22.x |
 | npm | Lockfile is `package-lock.json`; CI uses `npm ci`. | `npm --version` |
 | PostgreSQL | Local server on `localhost:5432` with a `gather_dev` database. Prisma datasource provider is `postgresql` (`prisma/schema.prisma`, `prisma/migrations/migration_lock.toml`). | `psql -l \| grep gather_dev` |
 | No SQLite | The repo was reverted SQLite→PostgreSQL early on (commit 17e7021, 2026-01-02). `prisma/migrations_sqlite_broken_backup/` is dead history kept in git — Prisma ignores it because it is outside `prisma/migrations/`. Never resurrect it. | — |
 
 ```bash
-nvm use                     # picks up .nvmrc → Node 20
+nvm use                     # picks up .nvmrc → Node 22
 createdb gather_dev         # if the DB does not exist yet
 ```
 
@@ -144,7 +144,7 @@ commit that passes the hook can still fail CI on typecheck.
 
 ## 6. What CI runs (pre-empt it locally)
 
-`.github/workflows/ci.yml` — job `verify`, on every PR and push to `master`, Node 20, 10-min
+`.github/workflows/ci.yml` — job `verify`, on every PR and push to `master`, Node 22 (GTC-410), 10-min
 timeout (as of 2026-07-09):
 
 ```bash
@@ -210,7 +210,7 @@ If regeneration alone doesn't fix it, restart the dev server (it caches the old 
 | `"type": "commonjs"` | ALL routes 500 under Turbopack | Remove field; never add it | `17eb4cd`, CLAUDE.md, constants zone #8 |
 | Schema/migration divergence | P3005, drift prompt, CI-vs-local schema mismatch | Migration ships in the same commit as the schema edit | `826e3fe`, `e475def`, KB-002 |
 | Stale Prisma client | Type errors on valid schema fields after pull | `npm run db:generate` | Section 7 |
-| Wrong Node version | Subtle install/build failures; npm won't warn (no `engines`) | `nvm use` (`.nvmrc` = 20) before anything | `.nvmrc`, ci.yml |
+| Wrong Node version | Subtle install/build failures; npm won't warn (no `engines`) | `nvm use` (`.nvmrc` = 22) before anything | `.nvmrc`, ci.yml |
 | Tailwind config as `.ts` | Dev compile took 267s | Config must remain `tailwind.config.js` — do not "TypeScript-ify" it | `fae0a9d` (2026-02-28) |
 | `npm run build` locally | Unexpectedly migrates your `DATABASE_URL` target | Use `npx next build` if you only want a build | package.json `build` script |
 | eslint-config-next mismatch | Circular-structure warning in lint/build | Ignore; tracked as GTC-130 (open) | docs/tickets/GTC-130.md |
@@ -224,7 +224,7 @@ to add config there, that is a change-control question first (`gather-change-con
 Facts above are volatile. Re-verify in seconds before relying on them:
 
 ```bash
-node --version && cat .nvmrc                                  # Node pin (expect 20)
+node --version && cat .nvmrc                                  # Node pin (expect 22)
 grep -c '"engines"' package.json || true                      # still no engines field?
 grep -n '"type"' package.json                                 # MUST NOT show "commonjs"
 grep -n 'node-version' .github/workflows/ci.yml               # CI Node pin

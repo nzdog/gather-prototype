@@ -331,7 +331,7 @@ approval. Prettier may reformat staged files during commit; that is expected.
 
 ### In CI (`.github/workflows/ci.yml`, verified 2026-07-09)
 
-Runs on every PR and on push to `master`. Node 20, then in order:
+Runs on every PR and on push to `master`. Node 22 (GTC-410), then in order:
 
 | Step | Command | Blocking? |
 |---|---|---|
