@@ -927,6 +927,15 @@ const NOT_TOUCHED_TILL_GTC407 = ['src/app/plan/new/page.tsx'];
 const GTC408_BASE = 'c227e81f39ab8fffbcf9ece3cd774125787e47cc';
 const NOT_TOUCHED_TILL_GTC408 = ['src/app/billing/cancel/page.tsx'];
 
+/**
+ * [[GTC-411]] edits two routes on purpose (signing in and paying for an event now find or make a
+ * User through one shared rule that ignores capitals and outer spaces), so U1 asks its question
+ * of them at GTC-411's base (7597112), a fixed commit: GTC-399 still may not have touched them.
+ * test:email-case, test:gtc280 and the security suite (suite 20) pin their new behaviour. They are
+ * kept out of the live diff of src/app/api, which stays listed and still covers every other route.
+ */
+const GTC411_BASE = '759711288b981fe78941a11fb9bd177743a1db6f';
+const NOT_TOUCHED_TILL_GTC411 = ['src/app/api/auth/verify/route.ts', 'src/app/api/events/route.ts'];
 /** Files inside a listed directory that an item edits: kept out of U1's live diff (none now). */
 const EXCLUDED = [
   ':(exclude)src/app/plan/[eventId]/glance/page.tsx',
@@ -944,6 +953,8 @@ const EXCLUDED = [
   ':(exclude)src/lib/moment3/words.ts',
   ':(exclude)src/app/billing/cancel/page.tsx',
   ':(exclude)src/app/plan/new/page.tsx',
+  ':(exclude)src/app/api/auth/verify/route.ts',
+  ':(exclude)src/app/api/events/route.ts',
 ];
 
 // ══ Item 1 ═══════════════════════════════════════════════════════════════════
@@ -1445,10 +1456,13 @@ async function layerU() {
     ...NOT_TOUCHED_TILL_GTC408.filter(
       (f) => git(['cat-file', '-e', `${GTC408_BASE}:${f}`]).status !== 0
     ),
+    ...NOT_TOUCHED_TILL_GTC411.filter(
+      (f) => git(['cat-file', '-e', `${GTC411_BASE}:${f}`]).status !== 0
+    ),
   ];
   assert(
     'U',
-    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since demo-tweaks-4-good (routes, schema, auth, press, AI, email, households, the paying page, the new-event page, the pre-flight's libraries, the sample's limits and words, the strip, the Moment words, the entry rule, Moment 3's rules, SMS, the board, and the neighbours no item edits); the ${NOT_TOUCHED_TILL_GTC400.length} that GTC-400 edits not between demo-tweaks-4-good and GTC-400’s base (528e8ad); the ${NOT_TOUCHED_TILL_GTC401.length} that GTC-401 edits not between demo-tweaks-4-good and GTC-401’s base (71a6287); the ${NOT_TOUCHED_TILL_GTC402.length} that GTC-402 edits not between demo-tweaks-4-good and GTC-402’s base (dea03c1); the ${NOT_TOUCHED_TILL_GTC403.length} that GTC-403 edits not between demo-tweaks-4-good and GTC-403’s base (a8e1117); the ${NOT_TOUCHED_TILL_GTC404.length} that GTC-404 edits not between demo-tweaks-4-good and GTC-404’s base (ed59114); the ${NOT_TOUCHED_TILL_GTC405.length} that GTC-405 edits not between demo-tweaks-4-good and GTC-405’s base (c593d22); the ${NOT_TOUCHED_TILL_GTC406.length} that GTC-406 edits not between demo-tweaks-4-good and GTC-406’s base (347fb10); the ${NOT_TOUCHED_TILL_GTC407.length} that GTC-407 edits not between demo-tweaks-4-good and GTC-407’s base (1b8bfe7); the ${NOT_TOUCHED_TILL_GTC408.length} that GTC-408 edits not between demo-tweaks-4-good and GTC-408’s base (c227e81)`,
+    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since demo-tweaks-4-good (routes, schema, auth, press, AI, email, households, the paying page, the new-event page, the pre-flight's libraries, the sample's limits and words, the strip, the Moment words, the entry rule, Moment 3's rules, SMS, the board, and the neighbours no item edits); the ${NOT_TOUCHED_TILL_GTC400.length} that GTC-400 edits not between demo-tweaks-4-good and GTC-400’s base (528e8ad); the ${NOT_TOUCHED_TILL_GTC401.length} that GTC-401 edits not between demo-tweaks-4-good and GTC-401’s base (71a6287); the ${NOT_TOUCHED_TILL_GTC402.length} that GTC-402 edits not between demo-tweaks-4-good and GTC-402’s base (dea03c1); the ${NOT_TOUCHED_TILL_GTC403.length} that GTC-403 edits not between demo-tweaks-4-good and GTC-403’s base (a8e1117); the ${NOT_TOUCHED_TILL_GTC404.length} that GTC-404 edits not between demo-tweaks-4-good and GTC-404’s base (ed59114); the ${NOT_TOUCHED_TILL_GTC405.length} that GTC-405 edits not between demo-tweaks-4-good and GTC-405’s base (c593d22); the ${NOT_TOUCHED_TILL_GTC406.length} that GTC-406 edits not between demo-tweaks-4-good and GTC-406’s base (347fb10); the ${NOT_TOUCHED_TILL_GTC407.length} that GTC-407 edits not between demo-tweaks-4-good and GTC-407’s base (1b8bfe7); the ${NOT_TOUCHED_TILL_GTC408.length} that GTC-408 edits not between demo-tweaks-4-good and GTC-408’s base (c227e81); the ${NOT_TOUCHED_TILL_GTC411.length} that GTC-411 edits not between demo-tweaks-4-good and GTC-411’s base (7597112)`,
     missing.length === 0 &&
       unchangedSinceGood([...NOT_TOUCHED, ...EXCLUDED]) &&
       git(['diff', '--quiet', GOOD_TAG, GTC400_BASE, '--', ...NOT_TOUCHED_TILL_GTC400]).status ===
@@ -1468,6 +1482,8 @@ async function layerU() {
       git(['diff', '--quiet', GOOD_TAG, GTC407_BASE, '--', ...NOT_TOUCHED_TILL_GTC407]).status ===
         0 &&
       git(['diff', '--quiet', GOOD_TAG, GTC408_BASE, '--', ...NOT_TOUCHED_TILL_GTC408]).status ===
+        0 &&
+      git(['diff', '--quiet', GOOD_TAG, GTC411_BASE, '--', ...NOT_TOUCHED_TILL_GTC411]).status ===
         0,
     missing.length ? `missing: ${missing.join(', ')}` : undefined
   );

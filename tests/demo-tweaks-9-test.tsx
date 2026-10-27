@@ -147,6 +147,21 @@ const NOT_TOUCHED_TILL_GTC409 = [
   'src/app/h/[token]/team/[teamId]/page.tsx',
   'src/app/c/[token]/page.tsx',
 ];
+/**
+ * [[GTC-411]] edits three files on purpose (signing in and paying for an event now find or make a
+ * User through one shared rule that ignores capitals and outer spaces) and adds the rule's own
+ * file, so U1 asks its question of the three at GTC-411's base (7597112), a fixed commit: this
+ * ticket still may not have touched them; and the new file must not be there yet. All four are
+ * kept out of U1's live diff, which still covers everything else under src and prisma.
+ * test:email-case, test:gtc280 and the security suite (suite 20) pin their new state.
+ */
+const GTC411_BASE = '759711288b981fe78941a11fb9bd177743a1db6f';
+const NOT_TOUCHED_TILL_GTC411 = [
+  'src/app/api/auth/verify/route.ts',
+  'src/app/api/events/route.ts',
+  'src/lib/events/payment-identity.ts',
+];
+const NEW_IN_GTC411 = ['src/lib/accounts/user-by-email.ts'];
 
 /**
  * The parts of the page this ticket leaves alone, each cut between two markers that are code or
@@ -834,6 +849,7 @@ function layerU() {
     'prisma',
     ...NOT_TOUCHED_TILL_GTC408.map((f) => `:(exclude)${f}`),
     ...NOT_TOUCHED_TILL_GTC409.map((f) => `:(exclude)${f}`),
+    ...[...NOT_TOUCHED_TILL_GTC411, ...NEW_IN_GTC411].map((f) => `:(exclude)${f}`),
   ]).stdout;
   const untracked = git([
     'ls-files',
@@ -845,14 +861,27 @@ function layerU() {
   ]).stdout;
   assert(
     'U',
-    'U1 the only file under src or prisma that differs from GTC-407’s base (1b8bfe7) is src/app/plan/new/page.tsx, and nothing new is waiting there; but the cancel page, which GTC-408 edits, not between the base and GTC-408’s base (c227e81); and the four pages GTC-409 restyles not between the base and GTC-409’s base (b05cac3)',
+    'U1 the only file under src or prisma that differs from GTC-407’s base (1b8bfe7) is src/app/plan/new/page.tsx, and nothing new is waiting there; but the cancel page, which GTC-408 edits, not between the base and GTC-408’s base (c227e81); and the four pages GTC-409 restyles not between the base and GTC-409’s base (b05cac3); and the three files GTC-411 edits, not between the base and GTC-411’s base (7597112), and the rule’s file it adds, not there',
     CHECKS.onlyThePage(changed, untracked) &&
       git(['cat-file', '-e', `${GTC408_BASE}:${NOT_TOUCHED_TILL_GTC408[0]}`]).status === 0 &&
       git(['diff', '--quiet', BASE, GTC408_BASE, '--', ...NOT_TOUCHED_TILL_GTC408]).status === 0 &&
       NOT_TOUCHED_TILL_GTC409.every(
         (f) => git(['cat-file', '-e', `${GTC409_BASE}:${f}`]).status === 0
       ) &&
-      git(['diff', '--quiet', BASE, GTC409_BASE, '--', ...NOT_TOUCHED_TILL_GTC409]).status === 0,
+      git(['diff', '--quiet', BASE, GTC409_BASE, '--', ...NOT_TOUCHED_TILL_GTC409]).status === 0 &&
+      NOT_TOUCHED_TILL_GTC411.every(
+        (f) => git(['cat-file', '-e', `${GTC411_BASE}:${f}`]).status === 0
+      ) &&
+      NEW_IN_GTC411.every((f) => git(['cat-file', '-e', `${GTC411_BASE}:${f}`]).status !== 0) &&
+      git([
+        'diff',
+        '--quiet',
+        BASE,
+        GTC411_BASE,
+        '--',
+        ...NOT_TOUCHED_TILL_GTC411,
+        ...NEW_IN_GTC411,
+      ]).status === 0,
     `${changed.trim()} | ${untracked.trim()}`
   );
   assert(

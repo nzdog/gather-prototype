@@ -447,6 +447,16 @@ const GTC403_ROUTES = [
   'src/app/api/c/[token]/items/[itemId]/route.ts',
 ];
 const GTC403_EXCLUDED = GTC403_ROUTES.map((f) => `:(exclude)${f}`);
+/**
+ * [[GTC-411]] edits two routes on purpose (signing in and paying for an event now find or make a
+ * User through one shared rule that ignores capitals and outer spaces), so E8 asks its question
+ * of them at GTC-411's base (7597112), a fixed commit: GTC-395 still may not have touched them.
+ * test:email-case, test:gtc280 and the security suite (suite 20) pin their new behaviour. They are
+ * kept out of the live diff of src/app/api, which still covers every other route.
+ */
+const GTC411_BASE = '759711288b981fe78941a11fb9bd177743a1db6f';
+const GTC411_ROUTES = ['src/app/api/auth/verify/route.ts', 'src/app/api/events/route.ts'];
+const GTC411_EXCLUDED = GTC411_ROUTES.map((f) => `:(exclude)${f}`);
 const VENUE_FACTS = {
   id: 'e1',
   name: 'Boxing Day',
@@ -1247,7 +1257,7 @@ async function layerE() {
   );
   assert(
     'E',
-    'E8 CONTROL: DropOffDisplay and its helper, every route, the messages, the press, email, texts and the schema are not edited since demo-tweaks-good (the one route GTC-400 edits: not between demo-tweaks-good and GTC-400’s base, 528e8ad; the four GTC-401 edits: not between demo-tweaks-good and GTC-401’s base, 71a6287; the two GTC-402 edits: not between demo-tweaks-good and GTC-402’s base, dea03c1; the three GTC-403 edits: not between demo-tweaks-good and GTC-403’s base, a8e1117)',
+    'E8 CONTROL: DropOffDisplay and its helper, every route, the messages, the press, email, texts and the schema are not edited since demo-tweaks-good (the one route GTC-400 edits: not between demo-tweaks-good and GTC-400’s base, 528e8ad; the four GTC-401 edits: not between demo-tweaks-good and GTC-401’s base, 71a6287; the two GTC-402 edits: not between demo-tweaks-good and GTC-402’s base, dea03c1; the three GTC-403 edits: not between demo-tweaks-good and GTC-403’s base, a8e1117; the two GTC-411 edits: not between demo-tweaks-good and GTC-411’s base, 7597112)',
     NOT_EDITED_E.every((f) => fs.existsSync(path.join(ROOT, f))) &&
       unchangedSinceGood([
         ...NOT_EDITED_E,
@@ -1255,6 +1265,7 @@ async function layerE() {
         ...GTC401_EXCLUDED,
         ...GTC402_EXCLUDED,
         ...GTC403_EXCLUDED,
+        ...GTC411_EXCLUDED,
       ]) &&
       spawnSync('git', ['cat-file', '-e', `${GTC400_BASE}:${GTC400_ROUTE}`], { cwd: ROOT })
         .status === 0 &&
@@ -1280,6 +1291,13 @@ async function layerE() {
           spawnSync('git', ['cat-file', '-e', `${GTC403_BASE}:${f}`], { cwd: ROOT }).status === 0
       ) &&
       spawnSync('git', ['diff', '--quiet', GOOD_TAG, GTC403_BASE, '--', ...GTC403_ROUTES], {
+        cwd: ROOT,
+      }).status === 0 &&
+      GTC411_ROUTES.every(
+        (f) =>
+          spawnSync('git', ['cat-file', '-e', `${GTC411_BASE}:${f}`], { cwd: ROOT }).status === 0
+      ) &&
+      spawnSync('git', ['diff', '--quiet', GOOD_TAG, GTC411_BASE, '--', ...GTC411_ROUTES], {
         cwd: ROOT,
       }).status === 0
   );

@@ -183,6 +183,21 @@ const NOT_TOUCHED_TILL_GTC409 = [
   'src/app/c/[token]/page.tsx',
   'src/app/h/[token]/team/[teamId]/page.tsx',
 ];
+/**
+ * [[GTC-411]] edits three files on purpose (signing in and paying for an event now find or make a
+ * User through one shared rule that ignores capitals and outer spaces) and adds the rule's own
+ * file, so U1 asks its question of the three at GTC-411's base (7597112), a fixed commit: this
+ * ticket still may not have touched them; and the new file must not be there yet. All four are
+ * kept out of U1's live diff, which still covers every other route and everything else in
+ * src/lib. test:email-case, test:gtc280 and the security suite (suite 20) pin their new state.
+ */
+const GTC411_BASE = '759711288b981fe78941a11fb9bd177743a1db6f';
+const NOT_TOUCHED_TILL_GTC411 = [
+  'src/app/api/auth/verify/route.ts',
+  'src/app/api/events/route.ts',
+  'src/lib/events/payment-identity.ts',
+];
+const NEW_IN_GTC411 = ['src/lib/accounts/user-by-email.ts'];
 /** Where a host or a coordinator sees "CRITICAL" today, and how many times each file draws it. */
 const CRITICAL_ELSEWHERE: Array<[string, number]> = [
   ['src/app/c/[token]/page.tsx', 2],
@@ -1339,7 +1354,7 @@ function layerU() {
   const missing = NOT_TOUCHED.filter((f) => !fs.existsSync(path.join(ROOT, f)));
   assert(
     'U',
-    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since the base (c593d22): routes, schema, src/lib (auth, press, AI, households, the items' words and email included), the new-event page, the strip and the lockfile; but Moment 3’s words file, which GTC-406 adds to, not between the base and GTC-406’s base (347fb10); and the paying page, which GTC-407 edits, not between the base and GTC-407’s base (1b8bfe7)`,
+    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since the base (c593d22): routes, schema, src/lib (auth, press, AI, households, the items' words and email included), the new-event page, the strip and the lockfile; but Moment 3’s words file, which GTC-406 adds to, not between the base and GTC-406’s base (347fb10); and the paying page, which GTC-407 edits, not between the base and GTC-407’s base (1b8bfe7); and the three files GTC-411 edits, not between the base and GTC-411’s base (7597112), and the rule’s file it adds, not there`,
     missing.length === 0 &&
       git([
         'diff',
@@ -1349,9 +1364,23 @@ function layerU() {
         ...NOT_TOUCHED,
         ...NOT_TOUCHED_TILL_GTC406.map((f) => `:(exclude)${f}`),
         ...NOT_TOUCHED_TILL_GTC407.map((f) => `:(exclude)${f}`),
+        ...[...NOT_TOUCHED_TILL_GTC411, ...NEW_IN_GTC411].map((f) => `:(exclude)${f}`),
       ]).status === 0 &&
       git(['diff', '--quiet', BASE, GTC406_BASE, '--', ...NOT_TOUCHED_TILL_GTC406]).status === 0 &&
-      git(['diff', '--quiet', BASE, GTC407_BASE, '--', ...NOT_TOUCHED_TILL_GTC407]).status === 0,
+      git(['diff', '--quiet', BASE, GTC407_BASE, '--', ...NOT_TOUCHED_TILL_GTC407]).status === 0 &&
+      NOT_TOUCHED_TILL_GTC411.every(
+        (f) => git(['cat-file', '-e', `${GTC411_BASE}:${f}`]).status === 0
+      ) &&
+      NEW_IN_GTC411.every((f) => git(['cat-file', '-e', `${GTC411_BASE}:${f}`]).status !== 0) &&
+      git([
+        'diff',
+        '--quiet',
+        BASE,
+        GTC411_BASE,
+        '--',
+        ...NOT_TOUCHED_TILL_GTC411,
+        ...NEW_IN_GTC411,
+      ]).status === 0,
     missing.length ? `missing: ${missing.join(', ')}` : undefined
   );
   // GTC-397's lesson: package.json is read at a fixed commit (the one that added this suite), never
