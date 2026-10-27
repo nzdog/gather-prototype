@@ -198,6 +198,47 @@ const NOT_TOUCHED_TILL_GTC411 = [
   'src/lib/events/payment-identity.ts',
 ];
 const NEW_IN_GTC411 = ['src/lib/accounts/user-by-email.ts'];
+/**
+ * [[GTC-413]] moves ONE lockfile entry on purpose (the founder's ruling of 28 Oct 2026): qs from
+ * 6.16.0 to 6.16.1, the named fix for GHSA-6pq8-jhm2-2vcw, by its version, resolved and integrity
+ * only. The lockfile is still asked of the base as strictly as before, but for that one entry:
+ * byte for byte it is the base's text with only those three values changed; parsed, with
+ * node_modules/qs removed on both sides, the two are equal; and that entry is the base's 6.16.0
+ * entry with exactly those three fields set to 6.16.1's, nothing added and nothing else moved.
+ */
+const QS_NODE = 'node_modules/qs';
+const QS_FROM = '6.16.0';
+const QS_TO = {
+  version: '6.16.1',
+  resolved: 'https://registry.npmjs.org/qs/-/qs-6.16.1.tgz',
+  integrity:
+    'sha512-5Px6J7rfHBAGUhNQ3es4YzcOdBBw0SDcVtThJml4RdnKw4tKs2epA0kPZ+K8X+WiHktT93RHVcQ/3ym5aTCgtg==',
+};
+/** The lockfile now is the base's but for the one qs entry, which says 6.16.1 and nothing else. */
+function lockfileIsBaseButQs(now: string, base: string): boolean {
+  let a: any;
+  let b: any;
+  try {
+    a = JSON.parse(now);
+    b = JSON.parse(base);
+  } catch {
+    return false;
+  }
+  const qsNow = a?.packages?.[QS_NODE];
+  const qsBase = b?.packages?.[QS_NODE];
+  if (!qsNow || !qsBase || qsBase.version !== QS_FROM) return false;
+  const restNow = { ...a, packages: { ...a.packages } };
+  const restBase = { ...b, packages: { ...b.packages } };
+  delete restNow.packages[QS_NODE];
+  delete restBase.packages[QS_NODE];
+  const sameRest = JSON.stringify(restNow) === JSON.stringify(restBase);
+  const qsSays = JSON.stringify(qsNow) === JSON.stringify({ ...qsBase, ...QS_TO });
+  const three = (e: { version: string; resolved: string; integrity: string }) =>
+    `"${QS_NODE}": {\n      "version": "${e.version}",\n      "resolved": "${e.resolved}",\n      "integrity": "${e.integrity}",\n`;
+  const sameText =
+    base.split(three(qsBase)).length === 2 && now === base.split(three(qsBase)).join(three(QS_TO));
+  return sameRest && qsSays && sameText;
+}
 /** Where a host or a coordinator sees "CRITICAL" today, and how many times each file draws it. */
 const CRITICAL_ELSEWHERE: Array<[string, number]> = [
   ['src/app/c/[token]/page.tsx', 2],
@@ -1354,7 +1395,7 @@ function layerU() {
   const missing = NOT_TOUCHED.filter((f) => !fs.existsSync(path.join(ROOT, f)));
   assert(
     'U',
-    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since the base (c593d22): routes, schema, src/lib (auth, press, AI, households, the items' words and email included), the new-event page, the strip and the lockfile; but Moment 3’s words file, which GTC-406 adds to, not between the base and GTC-406’s base (347fb10); and the paying page, which GTC-407 edits, not between the base and GTC-407’s base (1b8bfe7); and the three files GTC-411 edits, not between the base and GTC-411’s base (7597112), and the rule’s file it adds, not there`,
+    `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since the base (c593d22): routes, schema, src/lib (auth, press, AI, households, the items' words and email included), the new-event page, the strip and the lockfile; but Moment 3’s words file, which GTC-406 adds to, not between the base and GTC-406’s base (347fb10); and the paying page, which GTC-407 edits, not between the base and GTC-407’s base (1b8bfe7); and the three files GTC-411 edits, not between the base and GTC-411’s base (7597112), and the rule’s file it adds, not there; and the lockfile, one entry of which GTC-413 moves, the base’s but for that qs entry, which says 6.16.1 and nothing else`,
     missing.length === 0 &&
       git([
         'diff',
@@ -1365,6 +1406,7 @@ function layerU() {
         ...NOT_TOUCHED_TILL_GTC406.map((f) => `:(exclude)${f}`),
         ...NOT_TOUCHED_TILL_GTC407.map((f) => `:(exclude)${f}`),
         ...[...NOT_TOUCHED_TILL_GTC411, ...NEW_IN_GTC411].map((f) => `:(exclude)${f}`),
+        ':(exclude)package-lock.json',
       ]).status === 0 &&
       git(['diff', '--quiet', BASE, GTC406_BASE, '--', ...NOT_TOUCHED_TILL_GTC406]).status === 0 &&
       git(['diff', '--quiet', BASE, GTC407_BASE, '--', ...NOT_TOUCHED_TILL_GTC407]).status === 0 &&
@@ -1380,7 +1422,8 @@ function layerU() {
         '--',
         ...NOT_TOUCHED_TILL_GTC411,
         ...NEW_IN_GTC411,
-      ]).status === 0,
+      ]).status === 0 &&
+      lockfileIsBaseButQs(read('package-lock.json'), atRef(BASE, 'package-lock.json')),
     missing.length ? `missing: ${missing.join(', ')}` : undefined
   );
   // GTC-397's lesson: package.json is read at a fixed commit (the one that added this suite), never

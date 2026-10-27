@@ -162,6 +162,47 @@ const NOT_TOUCHED_TILL_GTC411 = [
   'src/lib/events/payment-identity.ts',
 ];
 const NEW_IN_GTC411 = ['src/lib/accounts/user-by-email.ts'];
+/**
+ * [[GTC-413]] moves ONE lockfile entry on purpose (the founder's ruling of 28 Oct 2026): qs from
+ * 6.16.0 to 6.16.1, the named fix for GHSA-6pq8-jhm2-2vcw, by its version, resolved and integrity
+ * only. The lockfile is still asked of the base as strictly as before, but for that one entry:
+ * byte for byte it is the base's text with only those three values changed; parsed, with
+ * node_modules/qs removed on both sides, the two are equal; and that entry is the base's 6.16.0
+ * entry with exactly those three fields set to 6.16.1's, nothing added and nothing else moved.
+ */
+const QS_NODE = 'node_modules/qs';
+const QS_FROM = '6.16.0';
+const QS_TO = {
+  version: '6.16.1',
+  resolved: 'https://registry.npmjs.org/qs/-/qs-6.16.1.tgz',
+  integrity:
+    'sha512-5Px6J7rfHBAGUhNQ3es4YzcOdBBw0SDcVtThJml4RdnKw4tKs2epA0kPZ+K8X+WiHktT93RHVcQ/3ym5aTCgtg==',
+};
+/** The lockfile now is the base's but for the one qs entry, which says 6.16.1 and nothing else. */
+function lockfileIsBaseButQs(now: string, base: string): boolean {
+  let a: any;
+  let b: any;
+  try {
+    a = JSON.parse(now);
+    b = JSON.parse(base);
+  } catch {
+    return false;
+  }
+  const qsNow = a?.packages?.[QS_NODE];
+  const qsBase = b?.packages?.[QS_NODE];
+  if (!qsNow || !qsBase || qsBase.version !== QS_FROM) return false;
+  const restNow = { ...a, packages: { ...a.packages } };
+  const restBase = { ...b, packages: { ...b.packages } };
+  delete restNow.packages[QS_NODE];
+  delete restBase.packages[QS_NODE];
+  const sameRest = JSON.stringify(restNow) === JSON.stringify(restBase);
+  const qsSays = JSON.stringify(qsNow) === JSON.stringify({ ...qsBase, ...QS_TO });
+  const three = (e: { version: string; resolved: string; integrity: string }) =>
+    `"${QS_NODE}": {\n      "version": "${e.version}",\n      "resolved": "${e.resolved}",\n      "integrity": "${e.integrity}",\n`;
+  const sameText =
+    base.split(three(qsBase)).length === 2 && now === base.split(three(qsBase)).join(three(QS_TO));
+  return sameRest && qsSays && sameText;
+}
 
 /**
  * The parts of the page this ticket leaves alone, each cut between two markers that are code or
@@ -886,9 +927,9 @@ function layerU() {
   );
   assert(
     'U',
-    'U2 package-lock.json is as at the base',
+    'U2 package-lock.json is as at the base, but for the one qs entry GTC-413 moves, which says 6.16.1 and nothing else',
     read('package-lock.json').length > 1000 &&
-      git(['diff', '--quiet', BASE, '--', 'package-lock.json']).status === 0
+      lockfileIsBaseButQs(read('package-lock.json'), atRef(BASE, 'package-lock.json'))
   );
   // GTC-397's lesson: package.json is read at a fixed commit (the one that added this suite), never
   // as it is now, so a later ticket's script line cannot turn this red.
