@@ -652,6 +652,15 @@ export default function PreFlightPage() {
                   {INVITES_ONLY_WORDS.PREFLIGHT_WAITING}
                 </span>
               )}
+              {/* [[GTC-420]] (tweak 16): the way back to a plan, the small link's address. Before
+                  Send only: once sent, this page gives way to AfterThePress above. */}
+              <a
+                data-make-a-plan=""
+                href={setupHref(eventId, AT_OPENING)}
+                className="mt-2 block w-fit rounded-md bg-sage-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sage-700"
+              >
+                Make a plan after all →
+              </a>
             </p>
           ) : null}
           {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
