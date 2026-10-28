@@ -116,8 +116,11 @@ const render = (el: any) => {
 // ── Tweak 1 (a): the files and the ruled look, hand-written ─────────────────
 const HOST_CARD_FILE = 'src/components/shared/HostCard.tsx';
 const HOST_IMPORT = "from '@/components/shared/HostCard'";
-/** The card: a soft tint of the accent and a solid accent border (the sage scale builds). */
-const HOST_TINT = 'bg-sage-100';
+/**
+ * The card: a soft tint of the accent and a solid accent border (the sage scale builds).
+ * [[GTC-416]] (tweak 15, the founder's ruling of 28 Oct 2026): the deeper sage, sage-200.
+ */
+const HOST_TINT = 'bg-sage-200';
 const HOST_BORDER = 'border-accent';
 /** The "You" pill made stronger: filled accent, white text. The word stays "You". */
 const HOST_PILL_HTML =
