@@ -1,21 +1,26 @@
 'use client';
 
 /**
- * [[GTC-388]] (item 72) — "See menu" and "See assignments", the board's two read-only pop-ups.
+ * [[GTC-388]] (item 72) — "See menu" and "See assignments", the board's two read-only lists.
  *
  * Ruled 2026-10-16 (Q16 to Q23). AN ISLAND BESIDE THE BOARD'S OWN MARKUP, as the print door and the
  * search are, so `GlanceBoard` keeps phase 2's property: no hooks, no fetch. This file holds both
- * buttons and both pop-ups.
+ * doors and both lists.
  *
- * Q16: in-page overlays like the person pop-ups, closing on Close, a tap outside and Escape; drawn
- * only while open, so the closed board gains two buttons and nothing else. Q17: each opening reads
- * `GET /api/events/[id]/items`, the route the print and the search read, cut down at once to what
- * is shown (`toPlanListItems`). Q20: read-only, no link inside; "Change who's on what" is the way to
- * change it. The board hides both on an invites-only event (Q19). Q23: this file is one of the
- * glance sources Ruling 1's fence scans (`tests/glance-read-test.ts`).
+ * Q17: each opening reads `GET /api/events/[id]/items`, the route the print and the search read, cut
+ * down at once to what is shown (`toPlanListItems`). Q20: read-only, no link inside; "Change who's on
+ * what" is the way to change it. The board hides both on an invites-only event (Q19). Q23: this file
+ * is one of the glance sources Ruling 1's fence scans (`tests/glance-read-test.ts`).
+ *
+ * [[GTC-421]] (tweak 10, ruled 28 Oct 2026) — THEY FOLD OUT IN PLACE NOW, NOT OVER THE PAGE. Each is
+ * the browser's own fold-out (`<details>` and `<summary>`), so a tap, or Enter or Space on its line,
+ * opens and closes it. What opens is the pop-up's inside, unchanged: the heading, Close, and the
+ * loading, failed, empty or list lines. The list is drawn only while it is open, so the closed board
+ * still gains two lines and nothing else (Q16). One at a time, as with the pop-ups. The backdrop, the
+ * dialog role and the Escape listener were the pop-up's and are gone: the same state, one hook fewer.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState, type MouseEvent, type SyntheticEvent } from 'react';
 import { X } from 'lucide-react';
 import {
   PLAN_LISTS_WORDS as W,
@@ -37,8 +42,7 @@ export default function PlanLists({ eventId, className }: PlanListsProps) {
   const [open, setOpen] = useState<Which | null>(null);
   const [items, setItems] = useState<PlanListItem[] | null>(null);
   const [failed, setFailed] = useState(false);
-  // Each opening has its own number, so a list that arrives after she closed it, or opened the
-  // other, is not drawn.
+  // Each opening has its own number, so a list that arrives after she opened the other is not drawn.
   const opening = useRef(0);
 
   const show = (which: Which) => {
@@ -56,92 +60,88 @@ export default function PlanLists({ eventId, className }: PlanListsProps) {
         if (opening.current === mine) setFailed(true);
       });
   };
-  const close = () => {
-    opening.current++;
-    setOpen(null);
+
+  // [[GTC-421]] The browser opened or folded one (a tap, or Enter or Space on its line).
+  const toggled = (which: Which) => (e: SyntheticEvent<HTMLDetailsElement>) => {
+    const fold = e.currentTarget;
+    if (!fold.open) {
+      setOpen((now) => (now === which ? null : now));
+      return;
+    }
+    // One at a time: `name` does this in today's browsers, and this in older ones.
+    fold.parentElement
+      ?.querySelectorAll<HTMLDetailsElement>('details[data-plan-list-fold][open]')
+      .forEach((other) => {
+        if (other !== fold) other.open = false;
+      });
+    show(which);
   };
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      opening.current++;
-      setOpen(null);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
+  // Close folds it away and puts the focus back on its line.
+  const close = (e: MouseEvent<HTMLButtonElement>) => {
+    const fold = e.currentTarget.closest('details');
+    if (!fold) return;
+    fold.open = false;
+    fold.querySelector('summary')?.focus();
+  };
 
   const heading = open === 'menu' ? W.MENU_HEADING : W.ASSIGNMENTS_HEADING;
 
-  return (
-    <>
-      <button
-        type="button"
-        data-plan-list-door="menu"
-        aria-haspopup="dialog"
-        aria-expanded={open === 'menu'}
-        onClick={() => show('menu')}
-        className={className}
+  const fold = (which: Which, words: string) => (
+    <details
+      data-plan-list-fold={which}
+      name="plan-lists"
+      onToggle={toggled(which)}
+      className="open:basis-full"
+    >
+      <summary
+        data-plan-list-door={which}
+        className={`${className} list-none [&::-webkit-details-marker]:hidden`}
       >
-        {W.MENU_DOOR}
-      </button>
-      <button
-        type="button"
-        data-plan-list-door="assignments"
-        aria-haspopup="dialog"
-        aria-expanded={open === 'assignments'}
-        onClick={() => show('assignments')}
-        className={className}
-      >
-        {W.ASSIGNMENTS_DOOR}
-      </button>
-
-      {open ? (
+        {words}
+      </summary>
+      {open === which ? (
         <div
-          data-plan-list-backdrop=""
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={close}
+          data-plan-list={which}
+          className="mt-2 w-full max-w-[420px] rounded-xl border-[0.5px] border-[#dcdad2] bg-[#ffffff] p-5 text-left text-[#2c2c2a]"
         >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label={heading}
-            data-plan-list={open}
-            onClick={(e) => e.stopPropagation()}
-            className="max-h-[85vh] w-full max-w-[420px] overflow-y-auto rounded-xl bg-[#ffffff] p-5 text-left text-[#2c2c2a]"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <p data-plan-list-heading="" className="m-0 text-[17px] font-medium">
-                {heading}
+          <div className="flex items-start justify-between gap-3">
+            <p data-plan-list-heading="" className="m-0 text-[17px] font-medium">
+              {heading}
+            </p>
+            <button
+              type="button"
+              aria-label={W.CLOSE}
+              onClick={close}
+              className="-mr-1 -mt-1 rounded p-1 text-[#888780]"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="mt-3">
+            {failed ? (
+              <p data-plan-failed="" className="m-0 text-[13px] text-[#A32D2D]">
+                {W.FAILED}
               </p>
-              <button
-                type="button"
-                aria-label={W.CLOSE}
-                onClick={close}
-                className="-mr-1 -mt-1 rounded p-1 text-[#888780]"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="mt-3">
-              {failed ? (
-                <p data-plan-failed="" className="m-0 text-[13px] text-[#A32D2D]">
-                  {W.FAILED}
-                </p>
-              ) : items === null ? (
-                <p data-plan-loading="" className="m-0 text-[13px] text-[#888780]">
-                  {W.LOADING}
-                </p>
-              ) : open === 'menu' ? (
-                <MenuList items={items} />
-              ) : (
-                <WhoList items={items} />
-              )}
-            </div>
+            ) : items === null ? (
+              <p data-plan-loading="" className="m-0 text-[13px] text-[#888780]">
+                {W.LOADING}
+              </p>
+            ) : open === 'menu' ? (
+              <MenuList items={items} />
+            ) : (
+              <WhoList items={items} />
+            )}
           </div>
         </div>
       ) : null}
+    </details>
+  );
+
+  return (
+    <>
+      {fold('menu', W.MENU_DOOR)}
+      {fold('assignments', W.ASSIGNMENTS_DOOR)}
     </>
   );
 }
