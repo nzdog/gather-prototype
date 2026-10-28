@@ -94,6 +94,17 @@ const atRef = (ref: string, rel: string) => {
   const r = git(['show', `${ref}:${rel}`]);
   return r.status === 0 ? r.stdout : '';
 };
+/**
+ * [[GTC-414]] (T0, founder ruling 28 Oct 2026): the freeze checks here read a FIXED history. Each
+ * asks whether its frozen paths at its old base equal the same paths at T0_AT (21a9577, GitHub's
+ * main when the launch tweaks began), read with git between the two commits, never from the
+ * working folder. So a later ticket cannot turn them red, and a wrong base, or a file at 21a9577
+ * that differs from its old base, still does. New edits are watched by test:tweaks-guard (the
+ * protected zones) and by each later ticket's own suite.
+ */
+const T0_AT = '21a9577bdc3b2f3d84617f096dd811e891f55305';
+/** A file as it is at T0_AT ('' if git cannot show it). */
+const atT0 = (rel: string) => atRef(T0_AT, rel);
 const between = (src: string, from: string, to: string) => {
   const a = src.indexOf(from);
   const b = a >= 0 ? src.indexOf(to, a + from.length) : -1;
@@ -482,25 +493,27 @@ export const CHECKS = {
     );
   },
   /** S2 — the save's request, from `fetch(` to its closing `});`, the same text at the base and now. */
-  sameSave(now: string, base: string) {
+  sameSave(now: string, base: string, fixed: string = now) {
     const call = (src: string) => {
       const fn = between(src, 'const saveDietary', 'setSaving(false);');
       return between(fn, 'const res = await fetch(', '});');
     };
+    // [[GTC-414]]: the copy compared with the base is `fixed`'s (the page at 21a9577 in S2).
     return (
       call(base).length > 100 &&
-      call(now) === call(base) &&
+      call(fixed) === call(base) &&
       call(now).includes('/api/events/${eventId}/setup') &&
       call(now).includes("method: 'POST'") &&
       call(now).includes('JSON.stringify({ dietaryData: next })')
     );
   },
   /** S3 — step 2's place in the page (its tick, fold, line and what it holds), byte for byte as at the base. */
-  sameStep(now: string, base: string) {
+  sameStep(now: string, base: string, fixed: string = now) {
     const block = (src: string) => between(src, '{/* ── 2. Dietary', '{/* ── 3.');
+    // [[GTC-414]]: the copy compared with the base is `fixed`'s (the page at 21a9577 in S3).
     return (
       block(base).length > 300 &&
-      block(now) === block(base) &&
+      block(fixed) === block(base) &&
       block(now).includes('onCheck={(v) => tick(2, v)}') &&
       block(now).includes("amber: dietary.status === 'unanswered'")
     );
@@ -562,6 +575,8 @@ function layerS() {
   section('S — the page: the words, the same save, the same step, a read only');
   const now = read(PAGE);
   const base = atRef(BASE, PAGE);
+  // [[GTC-414]]: S2 and S3 compare the page at 21a9577 with the base, not the working folder's.
+  const fixed = atT0(PAGE);
   const nowCode = stripComments(now);
   const dietary = between(nowCode, 'async function hasDishes(', '\ntype MessageData');
   const save = between(nowCode, 'const saveDietary', '\n  };');
@@ -573,12 +588,12 @@ function layerS() {
   assert(
     'S',
     'S2 the save posts the same body to the same route, its request byte for byte as at the base (ed59114)',
-    CHECKS.sameSave(now, base)
+    CHECKS.sameSave(now, base, fixed)
   );
   assert(
     'S',
     'S3 step 2’s place in the page (its tick, both boxes, fold, ring and closed line) byte for byte as at the base (ruling 2)',
-    CHECKS.sameStep(now, base)
+    CHECKS.sameStep(now, base, fixed)
   );
   assert(
     'S',
@@ -1189,15 +1204,19 @@ async function cleanup() {
 // ══ U — CONTROL ══════════════════════════════════════════════════════════════
 function layerU() {
   section('U — CONTROL: what this ticket must not touch');
-  const missing = NOT_TOUCHED.filter((f) => !fs.existsSync(path.join(ROOT, f)));
+  // [[GTC-414]]: each path asked to exist at 21a9577, not in the working folder.
+  const missing = NOT_TOUCHED.filter((f) => git(['cat-file', '-e', `${T0_AT}:${f}`]).status !== 0);
   assert(
     'U',
     `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since the base (ed59114): routes, schema, src/lib (the pre-flight’s library included), the strip and the lockfile; but Moment 3’s words file, which GTC-406 adds to, not between the base and GTC-406’s base (347fb10); and the three files GTC-411 edits, not between the base and GTC-411’s base (7597112), and the rule’s file it adds, not there; and the lockfile, one entry of which GTC-413 moves, the base’s but for that qs entry, which says 6.16.1 and nothing else`,
     missing.length === 0 &&
+      // [[GTC-414]]: between the base and 21a9577, the same exclusions, not the working folder. The
+      // lockfile's own check below is GTC-413's and is left as it was.
       git([
         'diff',
         '--quiet',
         BASE,
+        T0_AT,
         '--',
         ...NOT_TOUCHED,
         ...NOT_TOUCHED_TILL_GTC406.map((f) => `:(exclude)${f}`),

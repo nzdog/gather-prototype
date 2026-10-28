@@ -101,6 +101,17 @@ const atRef = (ref: string, rel: string) => {
   const r = git(['show', `${ref}:${rel}`]);
   return r.status === 0 ? r.stdout : '';
 };
+/**
+ * [[GTC-414]] (T0, founder ruling 28 Oct 2026): the freeze checks here read a FIXED history. Each
+ * asks whether its frozen paths at its old base equal the same paths at T0_AT (21a9577, GitHub's
+ * main when the launch tweaks began), read with git between the two commits, never from the
+ * working folder. So a later ticket cannot turn them red, and a wrong base, or a file at 21a9577
+ * that differs from its old base, still does. New edits are watched by test:tweaks-guard (the
+ * protected zones) and by each later ticket's own suite.
+ */
+const T0_AT = '21a9577bdc3b2f3d84617f096dd811e891f55305';
+/** A file as it is at T0_AT ('' if git cannot show it). */
+const atT0 = (rel: string) => atRef(T0_AT, rel);
 const between = (src: string, from: string, to: string) => {
   const a = src.indexOf(from);
   const b = a >= 0 ? src.indexOf(to, a + from.length) : -1;
@@ -530,14 +541,15 @@ export const CHECKS = {
    * request is still asked byte for byte, but for the block's own indent (`dedent`: one shift for
    * every line); the two fields are asked in that save, and onUpdateItem must call it.
    */
-  setupSave(now: string, base: string) {
+  setupSave(now: string, base: string, fixed: string = now) {
     const patch = (src: string) =>
       between(src, 'const res = await fetch(`/api/events/${eventId}/items/${itemId}`, {', '});');
     const save = between(now, 'const saveItemEdit = async (', 'return true;');
     const onUpdate = between(now, 'onUpdateItem={async (itemId, updates) => {', 'onRemoveItem=');
     return (
       patch(base).length > 50 &&
-      dedent(patch(now)) === dedent(patch(base)) &&
+      // [[GTC-414]]: the request compared with the base is `fixed`'s (the page at 21a9577 in S2).
+      dedent(patch(fixed)) === dedent(patch(base)) &&
       patch(now).includes("method: 'PATCH'") &&
       save.includes(patch(now)) &&
       /body\.dropOffLocation\s*=\s*updates\.dropOffLocation;/.test(save) &&
@@ -647,6 +659,10 @@ function layerS() {
   const setupBase = stripComments(atRef(BASE, SETUP));
   const guestNow = stripComments(read(GUEST));
   const guestBase = stripComments(atRef(BASE, GUEST));
+  // [[GTC-414]]: S2, S3 and S4 compare the files at 21a9577 with the base, not the working folder's.
+  const planFixed = stripComments(atT0(PLAN_VIEW));
+  const setupFixed = stripComments(atT0(SETUP));
+  const guestFixed = stripComments(atT0(GUEST));
   assert(
     'S',
     'S1 the edit box’s code: "Drop-off place" (hint "e.g. the back door"), "Drop-off time" (hint "e.g. 11am"), "Note for the guest", no "Notes"; each sent only as typed or null, never dropOffAt (rulings 1 and 5)',
@@ -655,17 +671,17 @@ function layerS() {
   assert(
     'S',
     'S2 the setup page passes the place and the time on as dropOffLocation and dropOffNote, through the same PATCH, its request byte for byte as at the base (c593d22; since GTC-406 in the page’s one item save, which onUpdateItem calls, moved as a block); no dropOffAt (ruling 1)',
-    CHECKS.setupSave(setupNow, setupBase)
+    CHECKS.setupSave(setupNow, setupBase, setupFixed)
   );
   assert(
     'S',
     'S3 the Add item form and the setup page’s add-item save are as at the base: nothing typed there, its route untouched (ruling 2)',
-    CHECKS.addKept(planNow, planBase, setupNow, setupBase)
+    CHECKS.addKept(planFixed, planBase, setupFixed, setupBase)
   );
   assert(
     'S',
     'S4 the guest page makes no new request and holds no new field: the same number of fetch calls and its four data shapes as at the base (ruling 3)',
-    CHECKS.guestNoNewRead(guestNow, guestBase)
+    CHECKS.guestNoNewRead(guestFixed, guestBase)
   );
   assert(
     'S',
@@ -686,10 +702,13 @@ function layerS() {
     'S',
     `S7 CONTROL: where a host or a coordinator sees "CRITICAL" today (the coordinator’s page twice, the host’s team page, the old dashboard, the regeneration preview twice) is as at the base and still draws it (ruling 4); the coordinator’s page and the team page, which GTC-409 restyles, not between the base and GTC-409’s base (b05cac3)`,
     others.every((o) => o.got === o.n) &&
+      // [[GTC-414]]: between the base and 21a9577, not the working folder; the badges are still
+      // counted in the working folder as before.
       git([
         'diff',
         '--quiet',
         BASE,
+        T0_AT,
         '--',
         ...CRITICAL_ELSEWHERE.map(([f]) => f).filter((f) => !NOT_TOUCHED_TILL_GTC409.includes(f)),
       ]).status === 0 &&
@@ -1392,15 +1411,19 @@ async function cleanup() {
 // ══ U — CONTROL ══════════════════════════════════════════════════════════════
 function layerU() {
   section('U — CONTROL: what this ticket must not touch');
-  const missing = NOT_TOUCHED.filter((f) => !fs.existsSync(path.join(ROOT, f)));
+  // [[GTC-414]]: each path asked to exist at 21a9577, not in the working folder.
+  const missing = NOT_TOUCHED.filter((f) => git(['cat-file', '-e', `${T0_AT}:${f}`]).status !== 0);
   assert(
     'U',
     `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since the base (c593d22): routes, schema, src/lib (auth, press, AI, households, the items' words and email included), the new-event page, the strip and the lockfile; but Moment 3’s words file, which GTC-406 adds to, not between the base and GTC-406’s base (347fb10); and the paying page, which GTC-407 edits, not between the base and GTC-407’s base (1b8bfe7); and the three files GTC-411 edits, not between the base and GTC-411’s base (7597112), and the rule’s file it adds, not there; and the lockfile, one entry of which GTC-413 moves, the base’s but for that qs entry, which says 6.16.1 and nothing else`,
     missing.length === 0 &&
+      // [[GTC-414]]: between the base and 21a9577, the same exclusions, not the working folder. The
+      // lockfile's own check below is GTC-413's and is left as it was.
       git([
         'diff',
         '--quiet',
         BASE,
+        T0_AT,
         '--',
         ...NOT_TOUCHED,
         ...NOT_TOUCHED_TILL_GTC406.map((f) => `:(exclude)${f}`),

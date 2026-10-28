@@ -74,6 +74,22 @@ const atRef = (ref: string, rel: string) => {
   const r = git(['show', `${ref}:${rel}`]);
   return r.status === 0 ? r.stdout : '';
 };
+/**
+ * [[GTC-414]] (T0, founder ruling 28 Oct 2026): the freeze checks here read a FIXED history. Each
+ * asks whether its frozen paths at its old base equal the same paths at T0_AT (21a9577, GitHub's
+ * main when the launch tweaks began), read with git between the two commits, never from the
+ * working folder. So a later ticket cannot turn them red, and a wrong base, or a file at 21a9577
+ * that differs from its old base, still does. New edits are watched by test:tweaks-guard (the
+ * protected zones) and by each later ticket's own suite.
+ */
+const T0_AT = '21a9577bdc3b2f3d84617f096dd811e891f55305';
+/** A file as it is at T0_AT ('' if git cannot show it). */
+const atT0 = (rel: string) => atRef(T0_AT, rel);
+/** The names of the files that differ between the base and T0_AT (null on a git error). */
+const changedAtT0 = (base: string, paths: string[]) => {
+  const r = git(['diff', '--name-only', base, T0_AT, '--', ...paths]);
+  return r.status === 0 ? r.stdout : null;
+};
 const count = (s: string, needle: string) => s.split(needle).length - 1;
 
 // ── The ruled address and the page's words, typed by hand ────────────────────
@@ -297,7 +313,8 @@ function layerS() {
   assert(
     'S',
     'S4 the page is as at the base (c227e81) but the import and the one href: no other byte moves',
-    CHECKS.onlyTheTwoPieces(page, base)
+    // [[GTC-414]]: the page as at 21a9577, not the working folder's.
+    CHECKS.onlyTheTwoPieces(atT0(PAGE), base)
   );
 }
 
@@ -330,28 +347,23 @@ function layerR() {
 // ══ U — CONTROL ══════════════════════════════════════════════════════════════
 function layerU() {
   section('U — CONTROL: what this ticket must not touch');
-  const changed = git([
-    'diff',
-    '--name-only',
-    BASE,
-    '--',
+  // [[GTC-414]]: the names that differ between the base and 21a9577 (same folders, same
+  // exclusions), not the working folder; a git error is red. The old "nothing new is waiting"
+  // part read the working folder's untracked files; between two commits a file added under src
+  // or prisma shows in this diff as an added file, so the same scope is still covered.
+  const changedOrNull = changedAtT0(BASE, [
     'src',
     'prisma',
     ...NOT_TOUCHED_TILL_GTC409.map((f) => `:(exclude)${f}`),
     ...[...NOT_TOUCHED_TILL_GTC411, ...NEW_IN_GTC411].map((f) => `:(exclude)${f}`),
-  ]).stdout;
-  const untracked = git([
-    'ls-files',
-    '--others',
-    '--exclude-standard',
-    '--',
-    'src',
-    'prisma',
-  ]).stdout;
+  ]);
+  const changed = changedOrNull ?? '';
+  const untracked = '';
   assert(
     'U',
     'U1 the only file under src or prisma that differs from GTC-408’s base (c227e81) is src/app/billing/cancel/page.tsx, and nothing new is waiting there; but the four pages GTC-409 restyles, not between the base and GTC-409’s base (b05cac3); and the three files GTC-411 edits, not between the base and GTC-411’s base (7597112), and the rule’s file it adds, not there',
-    CHECKS.onlyThePage(changed, untracked) &&
+    changedOrNull !== null &&
+      CHECKS.onlyThePage(changed, untracked) &&
       NOT_TOUCHED_TILL_GTC409.every(
         (f) => git(['cat-file', '-e', `${GTC409_BASE}:${f}`]).status === 0
       ) &&

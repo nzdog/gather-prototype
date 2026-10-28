@@ -111,6 +111,20 @@ const atRef = (ref: string, rel: string) => {
   const r = git(['show', `${ref}:${rel}`]);
   return r.status === 0 ? r.stdout : '';
 };
+/**
+ * [[GTC-414]] (T0, founder ruling 28 Oct 2026): the freeze checks here read a FIXED history. Each
+ * asks whether its frozen paths at its old base equal the same paths at T0_AT (21a9577, GitHub's
+ * main when the launch tweaks began), read with git between the two commits, never from the
+ * working folder. So a later ticket cannot turn them red, and a wrong base, or a file at 21a9577
+ * that differs from its old base, still does. New edits are watched by test:tweaks-guard (the
+ * protected zones) and by each later ticket's own suite.
+ */
+const T0_AT = '21a9577bdc3b2f3d84617f096dd811e891f55305';
+/** A file as it is at T0_AT ('' if git cannot show it). */
+const atT0 = (rel: string) => atRef(T0_AT, rel);
+/** The paths are the same at the two commits (a git error, such as a wrong base, is false). */
+const sameAtT0 = (base: string, paths: string[]) =>
+  git(['diff', '--quiet', base, T0_AT, '--', ...paths]).status === 0;
 const render = (el: any) => {
   try {
     return renderToStaticMarkup(el);
@@ -536,11 +550,12 @@ export const CHECKS = {
     );
   },
   /** T2 — the landing on one dish keeps its centring: bringItemIntoView as at the base, a smooth scroll to the centre. */
-  centringKept(view: string, base: string) {
+  centringKept(view: string, base: string, fixed: string = view) {
     const fn = (src: string) => between(src, 'function bringItemIntoView(', '\n}\n');
+    // [[GTC-414]]: the copy compared with the base is `fixed`'s (the view at 21a9577 in T2).
     return (
       fn(base).length > 100 &&
-      fn(view) === fn(base) &&
+      fn(fixed) === fn(base) &&
       fn(view).includes("row.scrollIntoView({ behavior: 'smooth', block: 'center' });")
     );
   },
@@ -632,12 +647,13 @@ export const CHECKS = {
     );
   },
   /** K6 — the step's code: the row's box as at the base; the foot's the same control (one handler, one state, one rule), drawn only while a folding step is open. */
-  stepCode(src: string, base: string) {
+  stepCode(src: string, base: string, fixed: string = src) {
     const rowBox = (x: string) => between(x, 'const box = (', '</label>');
     const footBox = between(src, 'const footBox = (', '</label>');
+    // [[GTC-414]]: what is compared with the base is `fixed`'s (the step at 21a9577 in K6).
     return (
       rowBox(base).length > 100 &&
-      rowBox(src) === rowBox(base) &&
+      rowBox(fixed) === rowBox(base) &&
       footBox.replace(/\s*data-tick-foot=""/, '') ===
         rowBox(src).replace('const box = (', 'const footBox = (') &&
       count(src, 'onChange={(e) => onCheck(e.target.checked)}') === 2 &&
@@ -646,7 +662,7 @@ export const CHECKS = {
       count(src, 'const boxAtFoot = folds && open;') === 1 &&
       count(src, '{boxAtFoot && (') === 1 &&
       count(src, '{footBox}') === 1 &&
-      count(src, '{box}') === count(base, '{box}') &&
+      count(fixed, '{box}') === count(base, '{box}') &&
       !/hover:bg-/.test(between(src, 'data-tick-bottom=""', '</div>'))
     );
   },
@@ -1007,10 +1023,13 @@ async function layerB() {
   assert(
     'B',
     'B5 each page draws the one MomentArc with its Moment’s props; MomentArc.tsx not edited since demo-tweaks-4-good',
-    CHECKS.oneArc(code(OPENING_1), code(OPENING_2), code(SUMMARY), unchangedSinceGood([ARC_FILE]))
+    // [[GTC-414]]: MomentArc.tsx at demo-tweaks-4-good and at 21a9577, not the working folder; the
+    // three pages' strips are read from the working folder as before.
+    CHECKS.oneArc(code(OPENING_1), code(OPENING_2), code(SUMMARY), sameAtT0(GOOD_TAG, [ARC_FILE]))
   );
   const lostOrNew = [OPENING_1, OPENING_2, SUMMARY].filter(
-    (f) => !CHECKS.onlyTheStrip(read(f), atRef(BASE, f), ITEM1_LOST[f], ITEM1_ADDED[f])
+    // [[GTC-414]]: each page at 21a9577 against the base, not the working folder.
+    (f) => !CHECKS.onlyTheStrip(atT0(f), atRef(BASE, f), ITEM1_LOST[f], ITEM1_ADDED[f])
   );
   assert(
     'B',
@@ -1115,18 +1134,21 @@ async function layerM() {
   assert(
     'M',
     'M8 CONTROL: the titles file differs from the base only by the third title (the first two and its export as they were)',
-    CHECKS.onlyThese(
-      read(TITLES_FILE),
-      atRef(BASE, TITLES_FILE),
-      ['export const OPENING_TITLES = { 1: "Who\'s coming?", 2: "What\'s the plan?" } as const;'],
-      [
-        'export const OPENING_TITLES = {',
-        '1: "Who\'s coming?",',
-        '2: "What\'s the plan?",',
-        '3: "Who\'s on what?",',
-        '} as const;',
-      ]
-    )
+    // [[GTC-414]]: the titles file at 21a9577 against the base, not the working folder. It must be
+    // there: onlyThese passes on an empty file, so a git error (a wrong commit) would read green.
+    atT0(TITLES_FILE).length > 0 &&
+      CHECKS.onlyThese(
+        atT0(TITLES_FILE),
+        atRef(BASE, TITLES_FILE),
+        ['export const OPENING_TITLES = { 1: "Who\'s coming?", 2: "What\'s the plan?" } as const;'],
+        [
+          'export const OPENING_TITLES = {',
+          '1: "Who\'s coming?",',
+          '2: "What\'s the plan?",',
+          '3: "Who\'s on what?",',
+          '} as const;',
+        ]
+      )
   );
 }
 
@@ -1141,7 +1163,13 @@ async function layerT() {
   assert(
     'T',
     'T2 the landing on one dish keeps its centring: bringItemIntoView as at the base (6d2b103), a smooth scroll to the centre',
-    CHECKS.centringKept(code(M3_VIEW), stripComments(atRef(BASE, M3_VIEW)))
+    // [[GTC-414]]: bringItemIntoView compared as at 21a9577 (the third argument); its smooth scroll
+    // is read from the working folder as before.
+    CHECKS.centringKept(
+      code(M3_VIEW),
+      stripComments(atRef(BASE, M3_VIEW)),
+      stripComments(atT0(M3_VIEW))
+    )
   );
   assert(
     'T',
@@ -1163,7 +1191,11 @@ async function layerF() {
   assert(
     'F',
     'F2 typical-answers.ts differs from the base (6d2b103) by that one line and nothing else',
-    CHECKS.oneLineDiff(git(['diff', BASE, '--', TYPICAL_FILE]).stdout)
+    // [[GTC-414]]: the diff between the base and 21a9577, not the working folder (a git error gives
+    // no lines, so the one line is not found).
+    CHECKS.oneLineDiff(
+      ((r) => (r.status === 0 ? r.stdout : ''))(git(['diff', BASE, T0_AT, '--', TYPICAL_FILE]))
+    )
   );
   assert(
     'F',
@@ -1272,12 +1304,19 @@ async function layerK() {
   assert(
     'K',
     'K6 the step’s code: the row’s box exactly as at the base (6d2b103); the foot’s the same control (one handler, one state, one rule, its marker only), drawn only while a folding step is open; no hover shade at the foot',
-    CHECKS.stepCode(code(STEP_FILE), stripComments(atRef(BASE, STEP_FILE)))
+    // [[GTC-414]]: the row's box and its {box} count compared as at 21a9577 (the third argument);
+    // the foot's box is read from the working folder as before.
+    CHECKS.stepCode(
+      code(STEP_FILE),
+      stripComments(atRef(BASE, STEP_FILE)),
+      stripComments(atT0(STEP_FILE))
+    )
   );
   assert(
     'K',
     'K7 CONTROL: the step’s code as at the base but the foot’s box: it loses only its one-line body, and gains only the foot box and its place',
-    CHECKS.onlyThese(read(STEP_FILE), atRef(BASE, STEP_FILE), STEP_LOST, STEP_ADDED)
+    // [[GTC-414]]: the step at 21a9577 against the base, not the working folder.
+    CHECKS.onlyThese(atT0(STEP_FILE), atRef(BASE, STEP_FILE), STEP_LOST, STEP_ADDED)
   );
 }
 
@@ -1414,7 +1453,8 @@ async function layerS() {
     [BOARD_PAGE, BOARD_ADDED],
   ].filter(
     ([f, added]) =>
-      !CHECKS.onlyThese(read(f as string), atRef(BASE, f as string), [], added as string[])
+      // [[GTC-414]]: each screen at 21a9577 against the base, not the working folder.
+      !CHECKS.onlyThese(atT0(f as string), atRef(BASE, f as string), [], added as string[])
   );
   assert(
     'S',
@@ -1428,7 +1468,8 @@ async function layerS() {
 async function layerU() {
   section('U — CONTROL: what this batch must not touch');
   const missing = [
-    ...NOT_TOUCHED.filter((f) => !fs.existsSync(path.join(ROOT, f))),
+    // [[GTC-414]]: each path asked to exist at 21a9577, not in the working folder.
+    ...NOT_TOUCHED.filter((f) => git(['cat-file', '-e', `${T0_AT}:${f}`]).status !== 0),
     ...NOT_TOUCHED_TILL_GTC400.filter(
       (f) => git(['cat-file', '-e', `${GTC400_BASE}:${f}`]).status !== 0
     ),
@@ -1464,7 +1505,8 @@ async function layerU() {
     'U',
     `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since demo-tweaks-4-good (routes, schema, auth, press, AI, email, households, the paying page, the new-event page, the pre-flight's libraries, the sample's limits and words, the strip, the Moment words, the entry rule, Moment 3's rules, SMS, the board, and the neighbours no item edits); the ${NOT_TOUCHED_TILL_GTC400.length} that GTC-400 edits not between demo-tweaks-4-good and GTC-400’s base (528e8ad); the ${NOT_TOUCHED_TILL_GTC401.length} that GTC-401 edits not between demo-tweaks-4-good and GTC-401’s base (71a6287); the ${NOT_TOUCHED_TILL_GTC402.length} that GTC-402 edits not between demo-tweaks-4-good and GTC-402’s base (dea03c1); the ${NOT_TOUCHED_TILL_GTC403.length} that GTC-403 edits not between demo-tweaks-4-good and GTC-403’s base (a8e1117); the ${NOT_TOUCHED_TILL_GTC404.length} that GTC-404 edits not between demo-tweaks-4-good and GTC-404’s base (ed59114); the ${NOT_TOUCHED_TILL_GTC405.length} that GTC-405 edits not between demo-tweaks-4-good and GTC-405’s base (c593d22); the ${NOT_TOUCHED_TILL_GTC406.length} that GTC-406 edits not between demo-tweaks-4-good and GTC-406’s base (347fb10); the ${NOT_TOUCHED_TILL_GTC407.length} that GTC-407 edits not between demo-tweaks-4-good and GTC-407’s base (1b8bfe7); the ${NOT_TOUCHED_TILL_GTC408.length} that GTC-408 edits not between demo-tweaks-4-good and GTC-408’s base (c227e81); the ${NOT_TOUCHED_TILL_GTC411.length} that GTC-411 edits not between demo-tweaks-4-good and GTC-411’s base (7597112)`,
     missing.length === 0 &&
-      unchangedSinceGood([...NOT_TOUCHED, ...EXCLUDED]) &&
+      // [[GTC-414]]: at demo-tweaks-4-good and at 21a9577, the same exclusions, not the working folder.
+      sameAtT0(GOOD_TAG, [...NOT_TOUCHED, ...EXCLUDED]) &&
       git(['diff', '--quiet', GOOD_TAG, GTC400_BASE, '--', ...NOT_TOUCHED_TILL_GTC400]).status ===
         0 &&
       git(['diff', '--quiet', GOOD_TAG, GTC401_BASE, '--', ...NOT_TOUCHED_TILL_GTC401]).status ===

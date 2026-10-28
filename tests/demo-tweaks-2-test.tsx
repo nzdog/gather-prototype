@@ -85,6 +85,26 @@ const atGood = (rel: string) => {
   const r = spawnSync('git', ['show', `${GOOD_TAG}:${rel}`], { cwd: ROOT, encoding: 'utf8' });
   return r.status === 0 ? r.stdout : '';
 };
+/**
+ * [[GTC-414]] (T0, founder ruling 28 Oct 2026): the freeze checks here read a FIXED history. Each
+ * asks whether its frozen paths at its old base equal the same paths at T0_AT (21a9577, GitHub's
+ * main when the launch tweaks began), read with git between the two commits, never from the
+ * working folder. So a later ticket cannot turn them red, and a wrong base, or a file at 21a9577
+ * that differs from its old base, still does. New edits are watched by test:tweaks-guard (the
+ * protected zones) and by each later ticket's own suite.
+ */
+const T0_AT = '21a9577bdc3b2f3d84617f096dd811e891f55305';
+/** A file as it is at T0_AT ('' if git cannot show it). */
+const atT0 = (rel: string) => {
+  const r = spawnSync('git', ['show', `${T0_AT}:${rel}`], { cwd: ROOT, encoding: 'utf8' });
+  return r.status === 0 ? r.stdout : '';
+};
+/** The path (a file or a folder) is in T0_AT's tree. */
+const existsAtT0 = (rel: string) =>
+  spawnSync('git', ['cat-file', '-e', `${T0_AT}:${rel}`], { cwd: ROOT }).status === 0;
+/** The paths are the same at the two commits (a git error, such as a wrong base, is false). */
+const sameAtT0 = (base: string, paths: string[]) =>
+  spawnSync('git', ['diff', '--quiet', base, T0_AT, '--', ...paths], { cwd: ROOT }).status === 0;
 const render = (el: any) => {
   try {
     return renderToStaticMarkup(el);
@@ -830,7 +850,8 @@ async function layerF() {
   assert(
     'F',
     'F4 CONTROL: the session, tokens and reset routes and the sample’s own code are not edited since demo-tweaks-good',
-    NOT_EDITED_F.every((f) => read(f).length > 0) && unchangedSinceGood(NOT_EDITED_F)
+    // [[GTC-414]]: at demo-tweaks-good and at 21a9577, not the working folder.
+    NOT_EDITED_F.every((f) => atT0(f).length > 0) && sameAtT0(GOOD_TAG, NOT_EDITED_F)
   );
 }
 
@@ -1055,8 +1076,12 @@ async function layerN() {
   assert(
     'N',
     'N13 CONTROL: the real page, the Edit event box and its route, the session route and the sample’s own code are not edited since demo-tweaks-good (the real page, which GTC-407 edits: not between demo-tweaks-good and GTC-407’s base, 1b8bfe7)',
-    NOT_EDITED_N.every((f) => read(f).length > 0) &&
-      unchangedSinceGood(NOT_EDITED_N.filter((f) => f !== PLAN_NEW)) &&
+    // [[GTC-414]]: at demo-tweaks-good and at 21a9577, not the working folder.
+    NOT_EDITED_N.every((f) => atT0(f).length > 0) &&
+      sameAtT0(
+        GOOD_TAG,
+        NOT_EDITED_N.filter((f) => f !== PLAN_NEW)
+      ) &&
       // [[GTC-407]]: the real page asked at GTC-407's base, a fixed commit.
       spawnSync('git', ['diff', '--quiet', GOOD_TAG, GTC407_BASE, '--', PLAN_NEW], { cwd: ROOT })
         .status === 0
@@ -1114,11 +1139,12 @@ async function layerC() {
   assert(
     'C',
     'C5 CONTROL: the three routes that check a pick, src/lib/households and the schema are not edited since demo-tweaks-good, and the setup page’s code that builds the dropdown’s list (its two setChannelCandidates( calls) is the same code as there',
-    NOT_EDITED_C.every((f) => read(f).length > 0) &&
-      unchangedSinceGood(NOT_EDITED_C) &&
+    // [[GTC-414]]: the files and the setup page's list code at 21a9577, not the working folder.
+    NOT_EDITED_C.every((f) => atT0(f).length > 0) &&
+      sameAtT0(GOOD_TAG, NOT_EDITED_C) &&
       CHECKS.candidateCalls(atGood(SETUP_FILE_C)).length === 2 &&
       CHECKS.candidateCalls(atGood(SETUP_FILE_C)).every((c) => c.length > 200) &&
-      JSON.stringify(CHECKS.candidateCalls(read(SETUP_FILE_C))) ===
+      JSON.stringify(CHECKS.candidateCalls(atT0(SETUP_FILE_C))) ===
         JSON.stringify(CHECKS.candidateCalls(atGood(SETUP_FILE_C)))
   );
 }
@@ -1128,6 +1154,8 @@ async function layerR() {
   section('R — item 5: "What you’ve picked" on the right, in Moment 1’s arrangement');
   const modal = code(MODAL);
   const head = stripComments(atGood(MODAL));
+  // [[GTC-414]]: R4 and R5 compare the box at 21a9577 with the tag, not the working folder's.
+  const fixedModal = stripComments(atT0(MODAL));
   assert(
     'R',
     'R1 Moment 1’s row, columns, widths and breakpoint (as the setup page writes them); the box widens at md only; the column 81px shorter',
@@ -1152,19 +1180,19 @@ async function layerR() {
     'R',
     'R4 CONTROL: the Generate bar and the foot choices as they were (the same code)',
     bar(head).length > 500 &&
-      flat(bar(modal)) === flat(bar(head)) &&
+      flat(bar(fixedModal)) === flat(bar(head)) &&
       quiet(head).length > 100 &&
-      flat(quiet(modal)) === flat(quiet(head))
+      flat(quiet(fixedModal)) === flat(quiet(head))
   );
   assert(
     'R',
     'R5 CONTROL: layout only — the questions’ code as it was but its indent and the phone copy’s md:hidden; the table and the words not edited',
     questions(head).length > 5000 &&
-      flat(questions(modal)) === flat(questions(head)) &&
-      flat(between(modal, 'export function PicksTable', '\nfunction ')) ===
+      flat(questions(fixedModal)) === flat(questions(head)) &&
+      flat(between(fixedModal, 'export function PicksTable', '\nfunction ')) ===
         flat(between(head, 'export function PicksTable', '\nfunction ')) &&
       between(head, 'export function PicksTable', '\nfunction ').length > 200 &&
-      unchangedSinceGood([PICKS_LIB])
+      sameAtT0(GOOD_TAG, [PICKS_LIB])
   );
 }
 
@@ -1258,8 +1286,9 @@ async function layerE() {
   assert(
     'E',
     'E8 CONTROL: DropOffDisplay and its helper, every route, the messages, the press, email, texts and the schema are not edited since demo-tweaks-good (the one route GTC-400 edits: not between demo-tweaks-good and GTC-400’s base, 528e8ad; the four GTC-401 edits: not between demo-tweaks-good and GTC-401’s base, 71a6287; the two GTC-402 edits: not between demo-tweaks-good and GTC-402’s base, dea03c1; the three GTC-403 edits: not between demo-tweaks-good and GTC-403’s base, a8e1117; the two GTC-411 edits: not between demo-tweaks-good and GTC-411’s base, 7597112)',
-    NOT_EDITED_E.every((f) => fs.existsSync(path.join(ROOT, f))) &&
-      unchangedSinceGood([
+    // [[GTC-414]]: at demo-tweaks-good and at 21a9577 (same exclusions), not the working folder.
+    NOT_EDITED_E.every((f) => existsAtT0(f)) &&
+      sameAtT0(GOOD_TAG, [
         ...NOT_EDITED_E,
         ...GTC400_EXCLUDED,
         ...GTC401_EXCLUDED,

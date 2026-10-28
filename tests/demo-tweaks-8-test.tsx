@@ -107,6 +107,22 @@ const atRef = (ref: string, rel: string) => {
   const r = git(['show', `${ref}:${rel}`]);
   return r.status === 0 ? r.stdout : '';
 };
+/**
+ * [[GTC-414]] (T0, founder ruling 28 Oct 2026): the freeze checks here read a FIXED history. Each
+ * asks whether its frozen paths at its old base equal the same paths at T0_AT (21a9577, GitHub's
+ * main when the launch tweaks began), read with git between the two commits, never from the
+ * working folder. So a later ticket cannot turn them red, and a wrong base, or a file at 21a9577
+ * that differs from its old base, still does. New edits are watched by test:tweaks-guard (the
+ * protected zones) and by each later ticket's own suite.
+ */
+const T0_AT = '21a9577bdc3b2f3d84617f096dd811e891f55305';
+/** A file as it is at T0_AT ('' if git cannot show it). */
+const atT0 = (rel: string) => atRef(T0_AT, rel);
+/** The path exists at T0_AT. */
+const existsAtT0 = (rel: string) => git(['cat-file', '-e', `${T0_AT}:${rel}`]).status === 0;
+/** The paths are the same at the two commits (a git error, such as a wrong base, is false). */
+const sameAtT0 = (base: string, paths: string[]) =>
+  git(['diff', '--quiet', base, T0_AT, '--', ...paths]).status === 0;
 const between = (src: string, from: string, to: string) => {
   const a = src.indexOf(from);
   const b = a >= 0 ? src.indexOf(to, a + from.length) : -1;
@@ -330,6 +346,7 @@ export const CHECKS = {
   },
   /** S2 — Moment 3 calls the addresses it called at the base and no other; the box calls none. */
   noNewAddress(view: string, viewBase: string, boxCode: string) {
+    // [[GTC-414]]: in S2 `view` is Moment 3's view as at 21a9577, not the working folder's.
     const fetches = (s: string) => s.match(/fetch\(\s*`[^`]*`/g) ?? [];
     return (
       fetches(viewBase).length >= 3 &&
@@ -340,16 +357,18 @@ export const CHECKS = {
     );
   },
   /** S3 — the setup page's one item save carries critical; Moment 2 and Moment 3 both use it; its request as at the base. */
-  oneSave(now: string, base: string) {
+  oneSave(now: string, base: string, fixed: string = now) {
     const patch = (src: string) =>
       between(src, 'const res = await fetch(`/api/events/${eventId}/items/${itemId}`, {', '});');
+    // [[GTC-414]]: the request and the PATCH count compared with the base are `fixed`'s (the page
+    // at 21a9577 in S3); the save's wiring is read from `now` as before.
     const save = between(now, 'const saveItemEdit = async (', 'return true;');
     const onUpdate = between(now, 'onUpdateItem={async (itemId, updates) => {', 'onRemoveItem=');
     const m3 = between(now, '<Moment3AssignView', '/>');
     return (
       patch(base).length > 50 &&
-      dedent(patch(now)) === dedent(patch(base)) &&
-      count(now, "method: 'PATCH'") === count(base, "method: 'PATCH'") &&
+      dedent(patch(fixed)) === dedent(patch(base)) &&
+      count(fixed, "method: 'PATCH'") === count(base, "method: 'PATCH'") &&
       save.includes(patch(now)) &&
       /if \(updates\.critical !== undefined\) body\.critical = updates\.critical;/.test(save) &&
       /body\.dropOffLocation\s*=\s*updates\.dropOffLocation;/.test(save) &&
@@ -629,18 +648,22 @@ function layerS() {
       typeof (WORDS as any).detailsLabel === 'function' ? (WORDS as any).detailsLabel : () => ''
     )
   );
-  const view = stripComments(read(M3_VIEW));
   const viewBase = stripComments(atRef(BASE, M3_VIEW));
   const boxCode = stripComments(read(BOX));
   assert(
     'S',
     'S2 Moment 3’s view calls the addresses it called at the base (c… GTC-405’s ticket) and no other; the box calls none (ruling 6)',
-    CHECKS.noNewAddress(view, viewBase, boxCode)
+    // [[GTC-414]]: the view's addresses as at 21a9577; the box is read as before.
+    CHECKS.noNewAddress(stripComments(atT0(M3_VIEW)), viewBase, boxCode)
   );
   assert(
     'S',
     'S3 the setup page saves an edit one way: its one item save sends critical only when given, beside the drop-off and the rest, through the "why" and the same PATCH (its request as at the base, moved as a block); Moment 2’s edit box and Moment 3’s box both hand their save to it (ruling 6)',
-    CHECKS.oneSave(stripComments(read(SETUP)), stripComments(atRef(BASE, SETUP)))
+    CHECKS.oneSave(
+      stripComments(read(SETUP)),
+      stripComments(atRef(BASE, SETUP)),
+      stripComments(atT0(SETUP))
+    )
   );
   assert(
     'S',
@@ -650,18 +673,13 @@ function layerS() {
   assert(
     'S',
     'S5 the guest page is not edited since the base (ruling 3: GTC-405 took the badge off; this ticket leaves it); its page.tsx, which GTC-409 restyles, not between the base and GTC-409’s base (b05cac3)',
-    fs.existsSync(path.join(ROOT, GUEST)) &&
-      git([
-        'diff',
-        '--quiet',
-        BASE,
-        '--',
-        GUEST,
-        ...NOT_TOUCHED_TILL_GTC409.map((f) => `:(exclude)${f}`),
-      ]).status === 0 &&
+    // [[GTC-414]]: src/app/p at the base and at 21a9577 (same exclusion), not the working folder.
+    // The old `git status` part read the working folder (a file not yet committed); between two
+    // commits a file added there shows in the diff itself, so the same folder is still covered.
+    existsAtT0(GUEST) &&
+      sameAtT0(BASE, [GUEST, ...NOT_TOUCHED_TILL_GTC409.map((f) => `:(exclude)${f}`)]) &&
       git(['cat-file', '-e', `${GTC409_BASE}:${NOT_TOUCHED_TILL_GTC409[0]}`]).status === 0 &&
-      git(['diff', '--quiet', BASE, GTC409_BASE, '--', ...NOT_TOUCHED_TILL_GTC409]).status === 0 &&
-      git(['status', '--porcelain', '--', GUEST]).stdout.trim() === ''
+      git(['diff', '--quiet', BASE, GTC409_BASE, '--', ...NOT_TOUCHED_TILL_GTC409]).status === 0
   );
 }
 
@@ -1638,23 +1656,21 @@ async function cleanup() {
 // ══ U — CONTROL ══════════════════════════════════════════════════════════════
 function layerU() {
   section('U — CONTROL: what this ticket must not touch');
-  const missing = NOT_TOUCHED.filter((f) => !fs.existsSync(path.join(ROOT, f)));
+  // [[GTC-414]]: the paths must exist at 21a9577, and the diff is the base against 21a9577 (same
+  // paths, same exclusions), not the working folder. The lockfile part is GTC-413's, left as it is.
+  const missing = NOT_TOUCHED.filter((f) => !existsAtT0(f));
   assert(
     'U',
     `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since the base (347fb10): routes, schema, src/lib (auth, press, AI, households, email, Moment 3's rules and the pre-flight's included; its one new-words file asked in U4), the guest page, the new-event page, the strip and the lockfile; the paying page, which GTC-407 edits, not between the base and GTC-407’s base (1b8bfe7); the guest page’s page.tsx, which GTC-409 restyles, not between the base and GTC-409’s base (b05cac3); and the three files GTC-411 edits, not between the base and GTC-411’s base (7597112), and the rule’s file it adds, not there; and the lockfile, one entry of which GTC-413 moves, the base’s but for that qs entry, which says 6.16.1 and nothing else`,
     missing.length === 0 &&
-      git([
-        'diff',
-        '--quiet',
-        BASE,
-        '--',
+      sameAtT0(BASE, [
         ...NOT_TOUCHED,
         ...NOT_TOUCHED_EXCEPT,
         ...NOT_TOUCHED_TILL_GTC407.map((f) => `:(exclude)${f}`),
         ...NOT_TOUCHED_TILL_GTC409.map((f) => `:(exclude)${f}`),
         ...[...NOT_TOUCHED_TILL_GTC411, ...NEW_IN_GTC411].map((f) => `:(exclude)${f}`),
         ':(exclude)package-lock.json',
-      ]).status === 0 &&
+      ]) &&
       git(['diff', '--quiet', BASE, GTC407_BASE, '--', ...NOT_TOUCHED_TILL_GTC407]).status === 0 &&
       git(['cat-file', '-e', `${GTC409_BASE}:${NOT_TOUCHED_TILL_GTC409[0]}`]).status === 0 &&
       git(['diff', '--quiet', BASE, GTC409_BASE, '--', ...NOT_TOUCHED_TILL_GTC409]).status === 0 &&
@@ -1699,7 +1715,8 @@ function layerU() {
   assert(
     'U',
     'U4 src/lib/moment3/words.ts, the one src/lib file this ticket may change, only grew: everything it held at the base is still there, first and unchanged (M3_WORDS and its functions as they were)',
-    CHECKS.onlyGrew(read(WORDS_FILE), atRef(BASE, WORDS_FILE))
+    // [[GTC-414]]: the words file as at 21a9577, not the working folder's.
+    CHECKS.onlyGrew(atT0(WORDS_FILE), atRef(BASE, WORDS_FILE))
   );
 }
 

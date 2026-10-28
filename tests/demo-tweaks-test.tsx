@@ -78,6 +78,25 @@ const stripComments = (src: string) =>
 const code = (rel: string) => stripComments(read(rel));
 const unchangedSinceHead = (paths: string[]) =>
   spawnSync('git', ['diff', '--quiet', 'HEAD', '--', ...paths], { cwd: ROOT }).status === 0;
+/**
+ * [[GTC-414]] (T0, founder ruling 28 Oct 2026): the freeze checks here read a FIXED history. Each
+ * asks whether its frozen paths at its old base equal the same paths at T0_AT (21a9577, GitHub's
+ * main when the launch tweaks began), read with git between the two commits, never from the
+ * working folder. So a later ticket cannot turn them red, and a wrong base, or a file at 21a9577
+ * that differs from its old base, still does. New edits are watched by test:tweaks-guard (the
+ * protected zones) and by each later ticket's own suite.
+ */
+const T0_AT = '21a9577bdc3b2f3d84617f096dd811e891f55305';
+/** H14's base: the HEAD its "not edited since HEAD" read when tweak 1 (a) was built (f21618b^). */
+const H14_BASE = 'cad254c6ccda4ad3a1a447c4c4a675f8540a493e';
+/** A file as it is at T0_AT ('' if git cannot show it). */
+const atT0 = (rel: string) => {
+  const r = spawnSync('git', ['show', `${T0_AT}:${rel}`], { cwd: ROOT, encoding: 'utf8' });
+  return r.status === 0 ? r.stdout : '';
+};
+/** The paths are the same at the two commits (a git error, such as a wrong base, is false). */
+const sameAtT0 = (base: string, paths: string[]) =>
+  spawnSync('git', ['diff', '--quiet', base, T0_AT, '--', ...paths], { cwd: ROOT }).status === 0;
 async function load(rel: string): Promise<any> {
   try {
     return await import(rel);
@@ -378,10 +397,13 @@ const NEW_PILL_LINES = [
   "  HAND_TO_HOST: 'Gather will hand this off to you',",
 ];
 const composeDiffersByThePillsOnly = () => {
-  const out = spawnSync('git', ['diff', 'demo-ab-good', '--', COMPOSE_LIB], {
+  // [[GTC-414]]: the diff between demo-ab-good and 21a9577, not the working folder (a git error
+  // gives no lines, so the two label lines are not found).
+  const r = spawnSync('git', ['diff', 'demo-ab-good', T0_AT, '--', COMPOSE_LIB], {
     cwd: ROOT,
     encoding: 'utf8',
-  }).stdout;
+  });
+  const out = r.status === 0 ? r.stdout : '';
   const lines = out.split('\n');
   const minus = lines
     .filter((l) => l.startsWith('-') && !l.startsWith('---'))
@@ -721,13 +743,14 @@ export const CHECKS = {
     );
   },
   /** O8 — the setup page: the questions get the choices under the one rule; the openings do not. */
-  setupWiring(src: string, head: string) {
+  setupWiring(src: string, head: string, fixed: string = src) {
     const modal = elementOf(src, 'Moment2Step1Modal');
     const opening = elementOf(src, 'Moment2Opening');
     const first = elementOf(src, 'SetupOpeningScreen');
+    // [[GTC-414]]: the handlers compared are `fixed`'s (the page at 21a9577 in O8).
     const same = (start: string) =>
       bodyFrom(head, start).length > 100 &&
-      squash(bodyFrom(src, start)) === squash(bodyFrom(head, start));
+      squash(bodyFrom(fixed, start)) === squash(bodyFrom(head, start));
     return (
       /quietChoices\(/.test(src) &&
       /onInvitesOnly=\{\s*offered\.invitesOnly\s*\?\s*\(\)\s*=>\s*void chooseInvitesOnly\(\)\s*:\s*undefined\s*\}/.test(
@@ -1278,8 +1301,10 @@ async function layerH() {
   assert(
     'H',
     'H14 CONTROL: AccordionShell is not edited (preflight-fold R7 pins its markup; no new prop)',
-    unchangedSinceHead(['src/components/plan/AccordionShell.tsx']) &&
-      read('src/components/plan/AccordionShell.tsx').length > 0
+    // [[GTC-414]]: was "not edited since HEAD"; now the file at H14's own base (cad254c, the HEAD
+    // when tweak 1 (a) was built) equals the file at 21a9577.
+    sameAtT0(H14_BASE, ['src/components/plan/AccordionShell.tsx']) &&
+      atT0('src/components/plan/AccordionShell.tsx').length > 0
   );
 }
 
@@ -1319,9 +1344,8 @@ async function layerO() {
   assert(
     'O',
     'O2 CONTROL: MomentArc.tsx is not edited (batch14 Z2 guards it)',
-    read(ARC_FILE).length > 0 &&
-      spawnSync('git', ['diff', '--quiet', 'demo-ab-good', '--', ARC_FILE], { cwd: ROOT })
-        .status === 0
+    // [[GTC-414]]: at demo-ab-good and at 21a9577, not the working folder.
+    atT0(ARC_FILE).length > 0 && sameAtT0('demo-ab-good', [ARC_FILE])
   );
   const one = SO?.default ? render(createElement(SO.default, { onStart: () => {} })) : '';
   assert(
@@ -1409,7 +1433,9 @@ async function layerO() {
   assert(
     'O',
     'O8 the setup page: the questions get both choices under the one rule; the opening pages get neither, and get their Moment’s doors (GTC-399 item 1); the handlers are as they were',
-    CHECKS.setupWiring(code(SETUP), stripComments(atTag(SETUP)))
+    // [[GTC-414]]: the two handlers are compared as at 21a9577 (the third argument); the wiring is
+    // read from the working folder as before.
+    CHECKS.setupWiring(code(SETUP), stripComments(atTag(SETUP)), stripComments(atT0(SETUP)))
   );
   assert(
     'O',
@@ -1453,9 +1479,8 @@ async function layerD() {
   assert(
     'D',
     'D4 CONTROL: the session, tokens and reset routes are not edited (the reset route stays, development-only)',
-    DEMO_ROUTES.every((f) => read(f).length > 0) &&
-      spawnSync('git', ['diff', '--quiet', 'demo-ab-good', '--', ...DEMO_ROUTES], { cwd: ROOT })
-        .status === 0
+    // [[GTC-414]]: at demo-ab-good and at 21a9577, not the working folder.
+    DEMO_ROUTES.every((f) => atT0(f).length > 0) && sameAtT0('demo-ab-good', DEMO_ROUTES)
   );
 }
 
@@ -1742,9 +1767,10 @@ async function layerP() {
     'P',
     'P4 CONTROL: picksSummary is kept exactly: its code as at demo-ab-good, and its lines as written by hand for the three cases',
     !!PS?.picksSummary &&
-      squash(bodyFrom(code(PICKS_FILE), 'export function picksSummary(')) ===
+      // [[GTC-414]]: the code compared is the file at 21a9577, not the working folder's.
+      squash(bodyFrom(stripComments(atT0(PICKS_FILE)), 'export function picksSummary(')) ===
         squash(bodyFrom(stripComments(atTag(PICKS_FILE)), 'export function picksSummary(')) &&
-      bodyFrom(code(PICKS_FILE), 'export function picksSummary(').length > 200 &&
+      bodyFrom(stripComments(atT0(PICKS_FILE)), 'export function picksSummary(').length > 200 &&
       JSON.stringify(PS.picksSummary(CASE_PICKS)) === JSON.stringify(CASE_PICKS_LINES) &&
       JSON.stringify(PS.picksSummary(CASE_NOTHING)) === JSON.stringify(CASE_NOTHING_LINES) &&
       JSON.stringify(PS.picksSummary(CASE_NOTHING_IN)) === JSON.stringify(CASE_NOTHING_IN_LINES)
@@ -1796,13 +1822,13 @@ async function layerM() {
   assert(
     'M',
     'M3 what step 4 fingerprints and ticks is as before: the same onPrint(printOf(data)), its stored and tick modules not edited, and its composing module differing by the two HAND_TO_HOST labels only (GTC-396 item 7)',
-    effect(pageNow).length > 0 &&
-      effect(pageNow) === effect(pageHead) &&
-      spawnSync(
-        'git',
-        ['diff', '--quiet', 'demo-ab-good', '--', ...STEP4_LIBS.filter((f) => f !== COMPOSE_LIB)],
-        { cwd: ROOT }
-      ).status === 0 &&
+    // [[GTC-414]]: the page's effect and the libraries are read at 21a9577, not the working folder.
+    effect(stripComments(atT0(PREFLIGHT))).length > 0 &&
+      effect(stripComments(atT0(PREFLIGHT))) === effect(pageHead) &&
+      sameAtT0(
+        'demo-ab-good',
+        STEP4_LIBS.filter((f) => f !== COMPOSE_LIB)
+      ) &&
       composeDiffersByThePillsOnly()
   );
   const data = {

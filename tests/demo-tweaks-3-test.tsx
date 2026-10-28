@@ -105,6 +105,22 @@ const atRef = (ref: string, rel: string) => {
   const r = git(['show', `${ref}:${rel}`]);
   return r.status === 0 ? r.stdout : '';
 };
+/**
+ * [[GTC-414]] (T0, founder ruling 28 Oct 2026): the freeze checks here read a FIXED history. Each
+ * asks whether its frozen paths at its old base equal the same paths at T0_AT (21a9577, GitHub's
+ * main when the launch tweaks began), read with git between the two commits, never from the
+ * working folder. So a later ticket cannot turn them red, and a wrong base, or a file at 21a9577
+ * that differs from its old base, still does. New edits are watched by test:tweaks-guard (the
+ * protected zones) and by each later ticket's own suite.
+ */
+const T0_AT = '21a9577bdc3b2f3d84617f096dd811e891f55305';
+/** A file as it is at T0_AT ('' if git cannot show it). */
+const atT0 = (rel: string) => atRef(T0_AT, rel);
+/** The path (a file or a folder) is in T0_AT's tree. */
+const existsAtT0 = (rel: string) => git(['cat-file', '-e', `${T0_AT}:${rel}`]).status === 0;
+/** The paths are the same at the two commits (a git error, such as a wrong base, is false). */
+const sameAtT0 = (base: string, paths: string[]) =>
+  git(['diff', '--quiet', base, T0_AT, '--', ...paths]).status === 0;
 async function load(rel: string): Promise<any> {
   try {
     return await import(rel);
@@ -642,7 +658,7 @@ export const CHECKS = {
     );
   },
   /** B4 — the form hands over its handler and saving flag; handleDone as it was; no button of its own. */
-  formHandsOver(now: string, head: string) {
+  formHandsOver(now: string, head: string, fixed: string = now) {
     const done = (src: string) => between(src, 'const handleDone = async () => {', 'onComplete();');
     return (
       /moveOnRef\?: MutableRefObject<\(\(\) => Promise<void>\) \| null>;/.test(now) &&
@@ -654,7 +670,8 @@ export const CHECKS = {
         now
       ) &&
       done(head).length > 200 &&
-      flat(done(now)) === flat(done(head)) &&
+      // [[GTC-414]]: handleDone compared is `fixed`'s (the form at 21a9577 in B4).
+      flat(done(fixed)) === flat(done(head)) &&
       !now.includes('onClick={handleDone}') &&
       !now.includes(MOVE_ON)
     );
@@ -688,16 +705,17 @@ export const CHECKS = {
     );
   },
   /** B6 CONTROL — the row, the phone list block and the column as at the tag; two forms still. */
-  layoutKept(now: string, head: string) {
+  layoutKept(now: string, head: string, fixed: string = now) {
     const phone = (src: string) =>
       between(src, `<div className="${M1_PHONE}">`, `<div className="${M1_RIGHT}">`);
     const column = (src: string) => between(src, `<div className="${M1_RIGHT}">`, 'top={');
     return (
       [M1_ROW, M1_PHONE, M1_RIGHT, M1_STICKY].every((c) => now.includes(`className="${c}"`)) &&
       phone(head).length > 100 &&
-      flat(phone(now)) === flat(phone(head)) &&
+      // [[GTC-414]]: the blocks compared are `fixed`'s (the page at 21a9577 in B6).
+      flat(phone(fixed)) === flat(phone(head)) &&
       column(head).length > 100 &&
-      flat(column(now)) === flat(column(head)) &&
+      flat(column(fixed)) === flat(column(head)) &&
       count(now, '<Moment1InputForm') === 2 &&
       count(head, '<Moment1InputForm') === 2
     );
@@ -754,7 +772,8 @@ export const CHECKS = {
     skeleton: string,
     skeletonUnchanged: boolean,
     editBoxAtGtc405: string,
-    itemRowAtGtc406: string
+    itemRowAtGtc406: string,
+    fixed: string = now
   ) {
     const fromHeading = (src: string) =>
       withoutItemRow(
@@ -766,9 +785,10 @@ export const CHECKS = {
       count(now, '<MomentWords') === 0 &&
       !now.includes('MomentWords') &&
       fromHeading(base).length > 1000 &&
-      flat(fromHeading(now)) === flat(fromHeading(base)) &&
+      // [[GTC-414]]: the view compared is `fixed`'s (the file at 21a9577 in L5).
+      flat(fromHeading(fixed)) === flat(fromHeading(base)) &&
       top(base).length > 50 &&
-      flat(top(now)) === flat(top(base)) &&
+      flat(top(fixed)) === flat(top(base)) &&
       !skeleton.includes('MomentWords') &&
       !skeleton.includes('data-moment-words') &&
       skeletonUnchanged &&
@@ -1009,8 +1029,9 @@ async function layerT() {
     'T',
     'T4 CONTROL: nothing else moved — Edit’s own phone scroll, the column’s own scroll, the stages (as at 6d2b103, GTC-399’s base) and every other scroll call as at demo-tweaks-2-good',
     head.length > 0 &&
+      // [[GTC-414]]: the setup page compared is the file at 21a9577, not the working folder's.
       CHECKS.movedNothingElse(
-        now,
+        stripComments(atT0(SETUP_PAGE)),
         head,
         stripComments(git(['show', `${GTC399_BASE}:${SETUP_PAGE}`]).stdout ?? '')
       )
@@ -1057,7 +1078,8 @@ async function layerB() {
   assert(
     'B',
     'B4 the form hands the page its handler (handleDone, kept current in moveOnRef) and its saving flag (onSavingChange); handleDone as it was; the form draws no move-on button',
-    formHead.length > 0 && CHECKS.formHandsOver(formNow, formHead)
+    // [[GTC-414]]: handleDone compared as at 21a9577 (the third argument); the rest read live.
+    formHead.length > 0 && CHECKS.formHandsOver(formNow, formHead, stripComments(atT0(M1_FORM)))
   );
   const page = code(SETUP_PAGE);
   assert(
@@ -1068,7 +1090,8 @@ async function layerB() {
   assert(
     'B',
     'B6 CONTROL: the row, the phone list block and the sticky column as at demo-tweaks-2-good; the form still drawn twice (her own step, the people screen)',
-    CHECKS.layoutKept(page, stripComments(atGood(SETUP_PAGE)))
+    // [[GTC-414]]: the row's blocks compared as at 21a9577 (the third argument); the rest live.
+    CHECKS.layoutKept(page, stripComments(atGood(SETUP_PAGE)), stripComments(atT0(SETUP_PAGE)))
   );
 }
 
@@ -1126,7 +1149,9 @@ async function layerL() {
       code(SKELETON),
       git(['diff', '--quiet', GOOD_TAG, GTC399_BASE, '--', SKELETON]).status === 0,
       stripComments(atRef(GTC405_BASE, PLAN_VIEW)),
-      stripComments(atRef(GTC406_BASE, PLAN_VIEW))
+      stripComments(atRef(GTC406_BASE, PLAN_VIEW)),
+      // [[GTC-414]]: the view compared with GTC-398's base is the file at 21a9577.
+      stripComments(atT0(PLAN_VIEW))
     )
   );
 }
@@ -1144,7 +1169,8 @@ async function layerZ() {
   assert(
     'Z',
     'Z2 CONTROL: the row, "unassigned" and "critical and unassigned" exactly as at demo-tweaks-2-good; the figure itself unchanged when shown; no new words',
-    head.length > 0 && CHECKS.figuresKept(now, head)
+    // [[GTC-414]]: the page compared is the file at 21a9577, not the working folder's.
+    head.length > 0 && CHECKS.figuresKept(stripComments(atT0(PREFLIGHT)), head)
   );
 }
 
@@ -1167,7 +1193,12 @@ async function layerK() {
   assert(
     'K',
     'K3 CONTROL: the little-ones line, the picker and its line, and the marks as at demo-tweaks-2-good; the pre-flight read’s route not edited (no route, read or schema touched)',
-    CHECKS.panelKept(now, stripComments(atGood(PREFLIGHT)), unchangedSinceGood([PREFLIGHT_ROUTE]))
+    // [[GTC-414]]: the page and the route at 21a9577, not the working folder.
+    CHECKS.panelKept(
+      stripComments(atT0(PREFLIGHT)),
+      stripComments(atGood(PREFLIGHT)),
+      sameAtT0(GOOD_TAG, [PREFLIGHT_ROUTE])
+    )
   );
 }
 
@@ -1184,7 +1215,10 @@ async function layerP() {
   assert(
     'P',
     'P2 the module differs from demo-tweaks-2-good by those two lines and nothing else',
-    CHECKS.composeDiffersByTwoLines(git(['diff', GOOD_TAG, '--', COMPOSE]).stdout)
+    // [[GTC-414]]: the diff between the tag and 21a9577; a git error gives '' (red).
+    CHECKS.composeDiffersByTwoLines(
+      ((r) => (r.status === 0 ? r.stdout : ''))(git(['diff', GOOD_TAG, T0_AT, '--', COMPOSE]))
+    )
   );
   const files = walk('src').map((rel) => ({ rel, text: read(rel) }));
   assert(
@@ -1197,7 +1231,8 @@ async function layerP() {
 // ══ CONTROL ══════════════════════════════════════════════════════════════════
 async function layerU() {
   section('U — CONTROL: what this batch must not touch');
-  const missing = NOT_TOUCHED.filter((f) => !fs.existsSync(path.join(ROOT, f)));
+  // [[GTC-414]]: the paths are asked at 21a9577, not in the working folder.
+  const missing = NOT_TOUCHED.filter((f) => !existsAtT0(f));
   const missingAtBase = [
     ...NOT_TOUCHED_TILL_GTC398.filter(
       (f) => git(['cat-file', '-e', `${GTC398_BASE}:${f}`]).status !== 0
@@ -1228,7 +1263,7 @@ async function layerU() {
     'U',
     `U1 the ${NOT_TOUCHED.length} untouched paths exist and are not edited since demo-tweaks-2-good (routes, schema, auth, press, AI, email, households, the paying page, the demo library, SMS, the live switch, the pre-flight’s other libraries, and the neighbours no item edits); the ${NOT_TOUCHED_TILL_GTC398.length} that GTC-398 edits are not edited between demo-tweaks-2-good and GTC-398’s base (8a4f1bc); the ${NOT_TOUCHED_TILL_GTC399.length} that GTC-399 edits not between demo-tweaks-2-good and GTC-399’s base (6d2b103); the ${NOT_TOUCHED_TILL_GTC400.length} that GTC-400 edits not between demo-tweaks-2-good and GTC-400’s base (528e8ad); the ${NOT_TOUCHED_TILL_GTC401.length} that GTC-401 edits not between demo-tweaks-2-good and GTC-401’s base (71a6287); the ${NOT_TOUCHED_TILL_GTC402.length} that GTC-402 edits not between demo-tweaks-2-good and GTC-402’s base (dea03c1); the ${NOT_TOUCHED_TILL_GTC403.length} that GTC-403 edits not between demo-tweaks-2-good and GTC-403’s base (a8e1117); the ${NOT_TOUCHED_TILL_GTC407.length} that GTC-407 edits not between demo-tweaks-2-good and GTC-407’s base (1b8bfe7); the ${NOT_TOUCHED_TILL_GTC411.length} that GTC-411 edits not between demo-tweaks-2-good and GTC-411’s base (7597112)`,
     missing.length === 0 &&
-      unchangedSinceGood([...NOT_TOUCHED, ...EXCLUDED]) &&
+      sameAtT0(GOOD_TAG, [...NOT_TOUCHED, ...EXCLUDED]) &&
       missingAtBase.length === 0 &&
       git(['diff', '--quiet', GOOD_TAG, GTC398_BASE, '--', ...NOT_TOUCHED_TILL_GTC398]).status ===
         0 &&

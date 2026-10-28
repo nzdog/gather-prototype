@@ -86,6 +86,22 @@ const atRef = (ref: string, rel: string) => {
   const r = git(['show', `${ref}:${rel}`]);
   return r.status === 0 ? r.stdout : '';
 };
+/**
+ * [[GTC-414]] (T0, founder ruling 28 Oct 2026): the freeze checks here read a FIXED history. Each
+ * asks whether its frozen paths at its old base equal the same paths at T0_AT (21a9577, GitHub's
+ * main when the launch tweaks began), read with git between the two commits, never from the
+ * working folder. So a later ticket cannot turn them red, and a wrong base, or a file at 21a9577
+ * that differs from its old base, still does. New edits are watched by test:tweaks-guard (the
+ * protected zones) and by each later ticket's own suite.
+ */
+const T0_AT = '21a9577bdc3b2f3d84617f096dd811e891f55305';
+/** A file as it is at T0_AT ('' if git cannot show it). */
+const atT0 = (rel: string) => atRef(T0_AT, rel);
+/** The names of the files that differ between the base and T0_AT (null on a git error). */
+const changedAtT0 = (base: string, paths: string[]) => {
+  const r = git(['diff', '--name-only', base, T0_AT, '--', ...paths]);
+  return r.status === 0 ? r.stdout : null;
+};
 const between = (src: string, from: string, to: string) => {
   const a = src.indexOf(from);
   const b = a >= 0 ? src.indexOf(to, a + from.length) : -1;
@@ -505,6 +521,8 @@ function layerS() {
   section('S — the source: the words, the address, what is left alone');
   const page = read(PAGE);
   const base = atRef(BASE, PAGE);
+  // [[GTC-414]]: S3 and S4 compare the page as at 21a9577 with the base, not the working folder's.
+  const pageT0 = atT0(PAGE);
   assert(
     'S',
     'S1 ruling 1’s sentence once, "Payment received" and the sign-in link on two screens now, the old 409 words gone, no timer anywhere in the page',
@@ -518,10 +536,10 @@ function layerS() {
   assert(
     'S',
     `S3 CONTROL: the first-visit path as at GTC-407’s base (1b8bfe7), byte for byte: ${KEPT.map(([what]) => what).join('; ')}`,
-    CHECKS.keptAsAtBase(page, base),
+    CHECKS.keptAsAtBase(pageT0, base),
     KEPT.filter(([, from, to]) => {
       const was = between(base, from, to);
-      return !(was.length > 80 && page.includes(was));
+      return !(was.length > 80 && pageT0.includes(was));
     })
       .map(([what]) => what)
       .join(' | ')
@@ -529,7 +547,7 @@ function layerS() {
   assert(
     'S',
     'S4 CONTROL: the error screen as at the base but its one address (its words and both buttons kept); creatingRef as it was',
-    CHECKS.errorScreenButAddress(page, base)
+    CHECKS.errorScreenButAddress(pageT0, base)
   );
 }
 
@@ -881,29 +899,24 @@ async function layerC() {
 // ══ U — CONTROL ══════════════════════════════════════════════════════════════
 function layerU() {
   section('U — CONTROL: what this ticket must not touch');
-  const changed = git([
-    'diff',
-    '--name-only',
-    BASE,
-    '--',
+  // [[GTC-414]]: the names that differ between the base and 21a9577 (same folders, same
+  // exclusions), not the working folder; a git error is red. The old "nothing new is waiting"
+  // part read the working folder's untracked files; between two commits a file added under src
+  // or prisma shows in this diff as an added file, so the same scope is still covered.
+  const changedOrNull = changedAtT0(BASE, [
     'src',
     'prisma',
     ...NOT_TOUCHED_TILL_GTC408.map((f) => `:(exclude)${f}`),
     ...NOT_TOUCHED_TILL_GTC409.map((f) => `:(exclude)${f}`),
     ...[...NOT_TOUCHED_TILL_GTC411, ...NEW_IN_GTC411].map((f) => `:(exclude)${f}`),
-  ]).stdout;
-  const untracked = git([
-    'ls-files',
-    '--others',
-    '--exclude-standard',
-    '--',
-    'src',
-    'prisma',
-  ]).stdout;
+  ]);
+  const changed = changedOrNull ?? '';
+  const untracked = '';
   assert(
     'U',
     'U1 the only file under src or prisma that differs from GTC-407’s base (1b8bfe7) is src/app/plan/new/page.tsx, and nothing new is waiting there; but the cancel page, which GTC-408 edits, not between the base and GTC-408’s base (c227e81); and the four pages GTC-409 restyles not between the base and GTC-409’s base (b05cac3); and the three files GTC-411 edits, not between the base and GTC-411’s base (7597112), and the rule’s file it adds, not there',
-    CHECKS.onlyThePage(changed, untracked) &&
+    changedOrNull !== null &&
+      CHECKS.onlyThePage(changed, untracked) &&
       git(['cat-file', '-e', `${GTC408_BASE}:${NOT_TOUCHED_TILL_GTC408[0]}`]).status === 0 &&
       git(['diff', '--quiet', BASE, GTC408_BASE, '--', ...NOT_TOUCHED_TILL_GTC408]).status === 0 &&
       NOT_TOUCHED_TILL_GTC409.every(
