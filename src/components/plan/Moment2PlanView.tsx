@@ -323,7 +323,7 @@ export default function Moment2PlanView({
             type="button"
             onClick={onRegeneratePlan}
             disabled={regeneratingScope !== null}
-            className="-mt-4 mb-6 text-sm text-gray-600 hover:text-gray-900 underline underline-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
+            className="-mt-4 mb-6 px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {regeneratingScope === 'plan'
               ? 'Regenerating the plan…'
@@ -443,7 +443,7 @@ export default function Moment2PlanView({
             type="button"
             onClick={onGoToDashboard}
             disabled={regeneratingScope !== null}
-            className="text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2 disabled:no-underline disabled:opacity-50"
+            className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             Invites, people and nudges →
           </button>
@@ -454,7 +454,7 @@ export default function Moment2PlanView({
               data-invites-only=""
               onClick={onInvitesOnly}
               disabled={regeneratingScope !== null || invitesOnlyState === 'working'}
-              className="text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2 disabled:no-underline disabled:opacity-50"
+              className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
               {INVITES_ONLY_WORDS.PUT_AWAY}
             </button>
@@ -612,7 +612,7 @@ function CategorySection({
                       type="button"
                       onClick={() => onRegenerateCategory(categoryKey)}
                       disabled={regeneratingScope !== null}
-                      className="text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2 px-1 py-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
+                      className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {regeneratingScope === categoryKey
                         ? 'Regenerating…'

@@ -292,6 +292,23 @@ export default function Moment1InputForm({
     nameInputRef.current?.focus();
   }, []);
 
+  /*
+   * [[GTC-416]] tweak 5 (founder ruling, 28 Oct 2026) — when "Add Partner", "Kid with a job" or
+   * "Add Guest" opens a block, the block is scrolled into view so its name, email and phone boxes
+   * all show. The newest block is the first in the list; its own autoFocus still picks the box
+   * that takes focus. No smooth animation when the reduced-motion setting is on.
+   */
+  const newestBlockRef = useRef<HTMLDivElement>(null);
+  const scrollToNewest = useRef(false);
+  useEffect(() => {
+    if (!scrollToNewest.current) return;
+    scrollToNewest.current = false;
+    const block = newestBlockRef.current;
+    if (!block) return;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    block.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+  });
+
   // GTC-256: prefill from the host's own Person. `POST /api/events` seeds her name as
   // `email.split('@')[0]`, so this is usually a placeholder she is expected to correct —
   // which is why the field stays editable while the email does not. Depends on the
@@ -691,6 +708,7 @@ export default function Moment1InputForm({
   };
 
   const addGuest = () => {
+    scrollToNewest.current = true;
     const g = emptyGuest();
     setGuests((prev) => [g, ...prev]);
     setGuestErrors((prev) => [{}, ...prev]);
@@ -873,6 +891,7 @@ export default function Moment1InputForm({
                 <button
                   type="button"
                   onClick={() => {
+                    scrollToNewest.current = true;
                     setShowPartner(true);
                     setMemberOrder((prev) => [
                       { type: 'partner' as const, id: 'partner' },
@@ -887,6 +906,7 @@ export default function Moment1InputForm({
               <button
                 type="button"
                 onClick={() => {
+                  scrollToNewest.current = true;
                   const h = emptyGuest();
                   setHelpers((prev) => [h, ...prev]);
                   setHelperErrors((prev) => [{}, ...prev]);
@@ -920,6 +940,7 @@ export default function Moment1InputForm({
                 return (
                   <SubForm
                     key="partner"
+                    blockRef={orderIdx === 0 ? newestBlockRef : undefined}
                     title="Partner"
                     onRemove={() => {
                       setShowPartner(false);
@@ -987,6 +1008,7 @@ export default function Moment1InputForm({
                 return (
                   <SubForm
                     key={helper.id}
+                    blockRef={orderIdx === 0 ? newestBlockRef : undefined}
                     title={`Kid with a job${helpers.length > 1 ? ` ${i + 1}` : ''}`}
                     onRemove={() => {
                       setHelpers((prev) => prev.filter((_, j) => j !== i));
@@ -1115,7 +1137,12 @@ export default function Moment1InputForm({
                 if (i === -1) return null;
                 const guest = guests[i];
                 return (
-                  <SubForm key={guest.id} title={`Guest ${i + 1}`} onRemove={() => removeGuest(i)}>
+                  <SubForm
+                    key={guest.id}
+                    blockRef={orderIdx === 0 ? newestBlockRef : undefined}
+                    title={`Guest ${i + 1}`}
+                    onRemove={() => removeGuest(i)}
+                  >
                     <input
                       type="text"
                       value={guest.name}
@@ -1345,13 +1372,19 @@ function SubForm({
   title,
   onRemove,
   children,
+  blockRef,
 }: {
   title: string;
   onRemove: () => void;
   children: React.ReactNode;
+  /** [[GTC-416]] tweak 5: the newest block's ref, so the form can scroll it into view. */
+  blockRef?: React.Ref<HTMLDivElement>;
 }) {
   return (
-    <div className="border-l-4 border-blue-300 pl-4 py-3 mb-4 bg-gray-50 rounded-r-md space-y-3">
+    <div
+      ref={blockRef}
+      className="border-l-4 border-blue-300 pl-4 py-3 mb-4 bg-gray-50 rounded-r-md space-y-3"
+    >
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-gray-600">{title}</p>
         <button

@@ -12,7 +12,7 @@
  */
 
 /** The card: a soft tint of the accent and a solid accent border. Pair it with `border`. */
-export const HOST_CARD = 'border-accent bg-sage-100';
+export const HOST_CARD = 'border-accent bg-sage-200';
 
 /** GTC-256's "You" pill, made stronger. */
 export function HostPill() {
