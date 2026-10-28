@@ -7,10 +7,11 @@
  *       five minutes to arrive, so check your spam folder too. The link works for 15 minutes."
  *       (a plain straight apostrophe); the heading stays.
  *   13  The "Browse event templates" block leaves the home page; /plan/templates stays.
- *   17  The account menu (computer and phone): "Your events", Billing, "Help and support" (an
- *       email to the support address, subject "Help with Gather"), "Send feedback" (subject
- *       "Feedback on Gather"), Sign Out last. Billing still after the email (phone-menu M3).
- *       Plain links only (batch12 S5).
+ *   17  The account menu (computer and phone): Billing, "Help and support" (an email to the
+ *       support address, subject "Help with Gather"), "Send feedback" (subject "Feedback on
+ *       Gather"), Sign Out last. Billing still after the email (phone-menu M3). Plain links only
+ *       (batch12 S5). [[GTC-417]] (the founder's ruling, 28 Oct 2026): the account menu's own
+ *       "Your events" taken OUT again (the bar has its own "Your Events"); never there now.
  *   18  One small line, "Need help? Email" and the support address as a mail link, read from
  *       src/lib/email-footer.ts, on the error and not-found pages, the sign-in page, the sign-in
  *       link's error page and the paying page's cancelled screen; on none of the paid-before
@@ -271,11 +272,11 @@ const NAV_SIGN_IN_NEW =
 const NAV_CONSTS =
   '  /*\n' +
   '   * [[GTC-415]] tweak 17 (founder ruling, 28 Oct 2026) — the account menu, on a computer and on a\n' +
-  '   * phone, reads: Your events, Billing, Help and support, Send feedback, Sign Out. Plain links (a\n' +
-  "   * full page load, as Billing), no photo; the two emails go to Gather's one address, read from\n" +
-  '   * src/lib/email-footer.ts, each with its own subject.\n' +
+  '   * phone, reads: Billing, Help and support, Send feedback, Sign Out. Plain links (a full page\n' +
+  "   * load, as Billing), no photo; the two emails go to Gather's one address, read from\n" +
+  '   * src/lib/email-footer.ts, each with its own subject. [[GTC-417]]: no second "Your events"\n' +
+  '   * here; the bar has its own.\n' +
   '   */\n' +
-  "  const yourEvents = { href: '/plan/events', label: 'Your events', icon: Calendar };\n" +
   '  const help = {\n' +
   "    href: `mailto:${GATHER_CONTACT_EMAIL}?subject=${encodeURIComponent('Help with Gather')}`,\n" +
   "    label: 'Help and support',\n" +
@@ -304,6 +305,7 @@ function navExpected(t0: string) {
   const phoneBillingOpen = '                <a\n                  href={billing.href}\n';
   const phoneBillingClose =
     '                  <billing.icon className="w-5 h-5" />\n                  {billing.label}\n                </a>\n';
+  // [[GTC-417]]: the "open" pieces are still asked once at T0, though nothing goes before them now.
   const pieces = [
     NAV_IMPORT_OLD,
     "import { COPY_WORDS, isCopyAddress } from '@/lib/demo/copy-address';\n",
@@ -321,12 +323,10 @@ function navExpected(t0: string) {
       `import { COPY_WORDS, isCopyAddress } from '@/lib/demo/copy-address';\n${NAV_FOOTER_IMPORT}`
     )
     .replace(NAV_SIGN_IN_OLD, NAV_SIGN_IN_NEW + NAV_CONSTS)
-    .replace(computerBillingOpen, navLink('yourEvents', false) + computerBillingOpen)
     .replace(
       computerBillingClose,
       computerBillingClose + navLink('help', false) + navLink('feedback', false)
     )
-    .replace(phoneBillingOpen, navLink('yourEvents', true) + phoneBillingOpen)
     .replace(
       phoneBillingClose,
       phoneBillingClose + navLink('help', true) + navLink('feedback', true)
@@ -393,11 +393,11 @@ export const CHECKS = {
       !home.includes('Browse')
     );
   },
-  /** D1 — the computer's account panel, in order: Your events, Billing, Help, Feedback, Sign Out. */
+  /** D1 — the computer's account panel, in order: Billing, Help, Feedback, Sign Out; no "Your events". */
   computerOrder(nav: string) {
     const panel = between(nav, 'id="account-menu"', '{isSigningOut ?');
+    if (/yourEvents|Your events|\/plan\/events/.test(panel)) return false;
     const at = [
-      'href={yourEvents.href}',
       'href={billing.href}',
       'href={help.href}',
       'href={feedback.href}',
@@ -405,12 +405,16 @@ export const CHECKS = {
     ].map((m) => panel.indexOf(m));
     return panel.length > 0 && at.every((x, i) => x >= 0 && (i === 0 || x > at[i - 1]));
   },
-  /** D2 — the phone's menu, in order: the email, Your events, Billing, Help, Feedback, Sign Out. */
+  /** D2 — the phone's menu, in order: the email, Billing, Help, Feedback, Sign Out; no "Your events"
+   * after the email (the bar's own "Your Events", above it, stays). */
   phoneOrder(nav: string) {
     const menu = nav.slice(nav.indexOf('id="site-menu"'));
+    const email = '{isCopyAddress(user.email) ? COPY_WORDS.ACCOUNT : user.email}';
+    const afterEmail = menu.slice(menu.indexOf(email));
+    if (menu.indexOf(email) < 0 || /yourEvents|Your events|\/plan\/events/.test(afterEmail))
+      return false;
     const at = [
-      '{isCopyAddress(user.email) ? COPY_WORDS.ACCOUNT : user.email}',
-      'href={yourEvents.href}',
+      email,
       'href={billing.href}',
       'href={help.href}',
       'href={feedback.href}',
@@ -420,21 +424,24 @@ export const CHECKS = {
       nav.includes('id="site-menu"') && at.every((x, i) => x >= 0 && (i === 0 || x > at[i - 1]))
     );
   },
-  /** D3 — the three links' words and addresses; each drawn twice; plain <a>, no next/link. */
+  /** D3 — the two mail links' words and addresses, each drawn twice; no account-menu "Your events"
+   * (GTC-417), the bar's "Your Events" once; plain <a>, no next/link. */
   menuLinks(nav: string, hrefOf: (template: string) => string) {
     const code = stripComments(nav);
     const helpT = code.match(/const help = \{\s*href: (`[^`]*`),\s*label: '([^']*)'/);
     const feedT = code.match(/const feedback = \{\s*href: (`[^`]*`),\s*label: '([^']*)'/);
     return (
-      count(code, "const yourEvents = { href: '/plan/events', label: 'Your events'") === 1 &&
+      !code.includes('yourEvents') &&
+      !code.includes("'Your events'") &&
       count(code, "{ href: '/plan/events', label: 'Your Events', icon: Calendar }") === 1 &&
+      count(code, "'/plan/events'") === 1 &&
       !!helpT &&
       helpT[2] === 'Help and support' &&
       hrefOf(helpT[1]) === HELP_HREF &&
       !!feedT &&
       feedT[2] === 'Send feedback' &&
       hrefOf(feedT[1]) === FEEDBACK_HREF &&
-      ['yourEvents', 'help', 'feedback'].every(
+      ['help', 'feedback'].every(
         (o) => count(code, `href={${o}.href}`) === 2 && count(code, `{${o}.label}`) === 2
       ) &&
       /import \{ GATHER_CONTACT_EMAIL \} from '@\/lib\/email-footer';/.test(code) &&
@@ -649,17 +656,17 @@ function layerD() {
   const nav = read(NAV);
   assert(
     'D',
-    'D1 on a computer the email opens, in order: Your events, Billing, Help and support, Send feedback, Sign Out',
+    'D1 on a computer the email opens, in order: Billing, Help and support, Send feedback, Sign Out, and no "Your events" (GTC-417)',
     CHECKS.computerOrder(nav)
   );
   assert(
     'D',
-    'D2 on a phone the menu shows, in order: the email, Your events, Billing (after the email, phone-menu M3), Help and support, Send feedback, Sign Out',
+    'D2 on a phone the menu shows, in order: the email, Billing (after the email, phone-menu M3), Help and support, Send feedback, Sign Out, and no "Your events" after the email (GTC-417)',
     CHECKS.phoneOrder(nav)
   );
   assert(
     'D',
-    `D3 "Your events" goes where the bar's "Your Events" goes (/plan/events); "Help and support" is ${HELP_HREF}; "Send feedback" is ${FEEDBACK_HREF}; the address read from src/lib/email-footer.ts; each drawn on computer and phone; plain <a>, no next/link`,
+    `D3 no account-menu "Your events" (GTC-417), the bar's "Your Events" once (/plan/events); "Help and support" is ${HELP_HREF}; "Send feedback" is ${FEEDBACK_HREF}; the address read from src/lib/email-footer.ts; each drawn on computer and phone; plain <a>, no next/link`,
     CHECKS.menuLinks(nav, hrefOf)
   );
 }
