@@ -168,6 +168,7 @@
     "test:node-22": "tsx tests/node-22-test.ts",
     "test:email-case": "tsx tests/email-case-test.ts",
     "test:qs-same-text": "tsx tests/qs-same-text-test.ts",
+    "test:tweaks-guard": "tsx tests/tweaks-guard-test.ts",
     "test:event-day-end": "tsx tests/event-day-end-test.ts"
   },
   "prisma": {
