@@ -120,6 +120,19 @@ interface ParticipantData {
   carried: CarriedChild[];
 }
 
+/*
+ * [[GTC-419]] (tweak 12): after she has answered, the answer buttons stay. Hers is marked, in her
+ * answer's colour; the others are plain and white. The words are the first-time buttons' own.
+ */
+const PICKED = 'py-3 rounded-lg font-medium text-white border border-transparent cursor-default';
+const NOT_PICKED =
+  'py-3 rounded-lg font-medium bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 transition-all';
+const ITEM_ANSWERS = [
+  ['ACCEPTED', 'Yes', 'bg-sage-600'],
+  ['DECLINED', 'No', 'bg-gray-500'],
+  ['MAYBE', 'Maybe', 'bg-amber-500'],
+] as const;
+
 function getFriendlyErrorMessage(error: string | null): string {
   if (!error)
     return 'Something went wrong loading your page. Try refreshing — if it keeps happening, ask your host to send you a new link.';
@@ -461,14 +474,31 @@ export default function ParticipantView() {
                   ? 'Your host knows to expect you.'
                   : "We'll miss you at the event!"}
               </p>
-              <button
-                onClick={() => handleAttendanceAnswer(data.attendanceAnswer !== 'YES')}
-                className="mt-4 text-sm text-accent hover:underline"
-              >
-                {data.attendanceAnswer === 'YES'
-                  ? 'Changed your mind?'
-                  : 'Changed your mind? Click here'}
-              </button>
+              {/* [[GTC-419]] (tweak 12): her answer stays as two buttons, hers marked; the other
+                  one sends what "Changed your mind?" sent. No maybe for attendance (zone 5). */}
+              <div className="grid grid-cols-2 gap-3 mt-4">
+                <button
+                  aria-pressed={data.attendanceAnswer === 'YES'}
+                  onClick={
+                    data.attendanceAnswer === 'YES' ? undefined : () => handleAttendanceAnswer(true)
+                  }
+                  className={data.attendanceAnswer === 'YES' ? `${PICKED} bg-sage-600` : NOT_PICKED}
+                >
+                  Yes
+                </button>
+                <button
+                  aria-pressed={data.attendanceAnswer === 'NO'}
+                  onClick={
+                    data.attendanceAnswer === 'NO' ? undefined : () => handleAttendanceAnswer(false)
+                  }
+                  className={data.attendanceAnswer === 'NO' ? `${PICKED} bg-gray-500` : NOT_PICKED}
+                >
+                  No
+                </button>
+              </div>
+              <p className="text-sm text-gray-500 mt-4">
+                Changed your mind? Tap a different answer. You can come back to this page any time.
+              </p>
             </div>
           )}
 
@@ -646,17 +676,6 @@ function AssignmentCard({
     assignment.item.dropOffAt
   );
 
-  const answered =
-    assignment.response === 'ACCEPTED'
-      ? onBehalfOf
-        ? `Yes — on ${onBehalfOf}’s behalf`
-        : "Yes — you're bringing this"
-      : assignment.response === 'MAYBE'
-        ? 'Maybe'
-        : onBehalfOf
-          ? `No — on ${onBehalfOf}’s behalf`
-          : "No — you're not bringing this";
-
   const note =
     assignment.response === 'ACCEPTED'
       ? onBehalfOf
@@ -785,32 +804,21 @@ function AssignmentCard({
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              <div
-                className={`w-full py-3 rounded-lg font-medium text-white flex items-center justify-center gap-2 ${
-                  assignment.response === 'ACCEPTED'
-                    ? 'bg-green-500'
-                    : assignment.response === 'MAYBE'
-                      ? 'bg-amber-500'
-                      : 'bg-gray-500'
-                }`}
-              >
-                {assignment.response !== 'MAYBE' && <Check className="size-5" />}
-                {answered}
+              {/* [[GTC-419]] (tweak 12): the three buttons stay, hers marked; each of the other
+                  two sends what its "Change to" link sent. */}
+              <div className="grid grid-cols-3 gap-2">
+                {ITEM_ANSWERS.map(([r, word, picked]) => (
+                  <button
+                    key={r}
+                    aria-pressed={r === assignment.response}
+                    onClick={r === assignment.response ? undefined : () => onRespond(r)}
+                    className={r === assignment.response ? `${PICKED} ${picked}` : NOT_PICKED}
+                  >
+                    {word}
+                  </button>
+                ))}
               </div>
               <p className="text-sm text-gray-500 text-center">{note}</p>
-              <div className="grid grid-cols-2 gap-2">
-                {(['ACCEPTED', 'DECLINED', 'MAYBE'] as const)
-                  .filter((r) => r !== assignment.response)
-                  .map((r) => (
-                    <button
-                      key={r}
-                      onClick={() => onRespond(r)}
-                      className="text-sm text-accent hover:underline py-1"
-                    >
-                      Change to {r === 'ACCEPTED' ? 'Yes' : r === 'DECLINED' ? 'No' : 'Maybe'}
-                    </button>
-                  ))}
-              </div>
             </div>
           )}
         </div>
