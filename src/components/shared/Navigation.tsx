@@ -143,11 +143,11 @@ export default function Navigation({ user }: NavigationProps) {
   const signIn = { href: '/auth/signin', label: 'Host Sign In' };
   /*
    * [[GTC-415]] tweak 17 (founder ruling, 28 Oct 2026) — the account menu, on a computer and on a
-   * phone, reads: Your events, Billing, Help and support, Send feedback, Sign Out. Plain links (a
-   * full page load, as Billing), no photo; the two emails go to Gather's one address, read from
-   * src/lib/email-footer.ts, each with its own subject.
+   * phone, reads: Billing, Help and support, Send feedback, Sign Out. Plain links (a full page
+   * load, as Billing), no photo; the two emails go to Gather's one address, read from
+   * src/lib/email-footer.ts, each with its own subject. [[GTC-417]]: no second "Your events"
+   * here; the bar has its own.
    */
-  const yourEvents = { href: '/plan/events', label: 'Your events', icon: Calendar };
   const help = {
     href: `mailto:${GATHER_CONTACT_EMAIL}?subject=${encodeURIComponent('Help with Gather')}`,
     label: 'Help and support',
@@ -226,13 +226,6 @@ export default function Navigation({ user }: NavigationProps) {
                     id="account-menu"
                     className="absolute right-0 top-full mt-1.5 z-[60] min-w-[200px] bg-white border border-gray-200 rounded-lg shadow-md p-1.5"
                   >
-                    <a
-                      href={yourEvents.href}
-                      className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-                    >
-                      <yourEvents.icon className="w-4 h-4" />
-                      {yourEvents.label}
-                    </a>
                     <a
                       href={billing.href}
                       className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium ${
@@ -323,14 +316,6 @@ export default function Navigation({ user }: NavigationProps) {
                 <p className="px-3 pb-2 text-sm text-gray-600 break-all">
                   {isCopyAddress(user.email) ? COPY_WORDS.ACCOUNT : user.email}
                 </p>
-                <a
-                  href={yourEvents.href}
-                  onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  <yourEvents.icon className="w-5 h-5" />
-                  {yourEvents.label}
-                </a>
                 <a
                   href={billing.href}
                   onClick={() => setMenuOpen(false)}
