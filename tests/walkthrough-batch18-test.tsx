@@ -16,6 +16,10 @@
  *       overlays (Q16, Q22) that read the items route (Q17), hidden on invites-only (Q19), with no
  *       link inside (Q20); "Who’s on what" lists only holders, then what nobody holds (Q21)
  *
+ * [[GTC-421]] (tweak 10, 28 Oct 2026): the two overlays are the browser's own fold-outs now, in
+ * place in the door row. S11 and C6 to C12 are re-based to them, as strict; their words and lists
+ * (C_LIST, C_LINE) are unchanged.
+ *
  * Layers W, P, S run in memory. E runs the test email in process behind `liveBehindTrap` with a
  * fake key and a Resend stub (nothing leaves the process). H sends the test request over HTTP to the
  * never-live dev server (Q26): 401, 403, and the host's request stopping at the blank key. C drives
@@ -597,16 +601,22 @@ async function runInMemory() {
   const island = codeOnly(read(ISLAND));
   assert(
     'S',
-    'S11 the island: a client file, one items read, no link, no timer, no refresh, no socket; a dialog drawn only while open, closing on Escape (Q16, Q17, Q20)',
+    // [[GTC-421]] (tweak 10, 28 Oct 2026): the pop-ups are the browser's own fold-outs now; re-based
+    // from "a dialog drawn only while open, closing on Escape" to the fold-out, as strict.
+    'S11 the island: a client file, one items read, no link, no timer, no refresh, no socket; two fold-outs (details and summary, See menu then See assignments), each list drawn only while open; no dialog, no backdrop, no overlay, no Escape listener left (Q16, Q17, Q20; GTC-421)',
     /^['"]use client['"]/.test(read(ISLAND).trim()) &&
       (island.match(/fetch\(/g) ?? []).length === 1 &&
       /fetch\(`\/api\/events\/\$\{eventId\}\/items`\)/.test(island) &&
       !/<a\b|href=/.test(island) &&
       !/setTimeout|setInterval|router\.refresh|WebSocket|EventSource/.test(island) &&
-      /\{open \? \(/.test(island) &&
-      /role="dialog"/.test(island) &&
-      /aria-modal="true"/.test(island) &&
-      /'Escape'/.test(island)
+      /\{open === which \? \(/.test(island) &&
+      (island.match(/<details\b/g) ?? []).length === 1 &&
+      (island.match(/<summary\b/g) ?? []).length === 1 &&
+      /onToggle=\{toggled\(which\)\}/.test(island) &&
+      /\{fold\('menu', W\.MENU_DOOR\)\}\s*\{fold\('assignments', W\.ASSIGNMENTS_DOOR\)\}/.test(
+        island
+      ) &&
+      !/role="dialog"|aria-modal|data-plan-list-backdrop|fixed inset-0|'Escape'/.test(island)
   );
   assert(
     'S',
@@ -1342,6 +1352,23 @@ async function openWalled() {
         await send('Input.dispatchKeyEvent', { type, key, code: key, windowsVirtualKeyCode: code });
       await sleep(400);
     },
+    /** [[GTC-421]] Enter on the focused element, with its character, as a real key press sends it. */
+    async enter() {
+      await send('Input.dispatchKeyEvent', {
+        type: 'keyDown',
+        key: 'Enter',
+        code: 'Enter',
+        windowsVirtualKeyCode: 13,
+        text: '\r',
+      });
+      await send('Input.dispatchKeyEvent', {
+        type: 'keyUp',
+        key: 'Enter',
+        code: 'Enter',
+        windowsVirtualKeyCode: 13,
+      });
+      await sleep(500);
+    },
     async type(text: string) {
       await send('Input.insertText', { text });
       await sleep(250);
@@ -1377,23 +1404,31 @@ const TEST_FACTS = `(() => { const b = document.querySelector('#step-4 [data-tes
     outcome: b.querySelector('[data-test-email-outcome]')?.textContent.trim() ?? null,
     inPart1: !!part1 && part1.contains(b),
     afterMessage: !!last && !!(last.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) }; })()`;
-/** The board's door row: the buttons and links beside "Invites & people", in order. */
+/**
+ * The board's door row: the buttons, links and fold-out lines beside "Invites & people", in order.
+ * [[GTC-421]]: "See menu" and "See assignments" are fold-outs now, so their lines are summaries.
+ */
 const DOOR_FACTS = `(() => { const r = document.querySelector('[data-back-room-door]')?.parentElement; if (!r) return null;
-  return { row: [...r.querySelectorAll(':scope > a, :scope > button')].map((x) => x.textContent.trim()) }; })()`;
-/** The open pop-up, as facts. */
-const LIST_FACTS = `(() => { const d = [...document.querySelectorAll('[role="dialog"][data-plan-list]')].find((x) => x.checkVisibility()); if (!d) return { open: false };
+  return { row: [...r.querySelectorAll(':scope > a, :scope > button, :scope > details > summary')].map((x) => x.textContent.trim()) }; })()`;
+/** The open list, as facts. [[GTC-421]]: drawn in place inside its own open fold-out, not a dialog. */
+const LIST_FACTS = `(() => { const d = [...document.querySelectorAll('[data-plan-list]')].find((x) => x.checkVisibility()); if (!d) return { open: false };
   const t = (el, s) => el.querySelector(s)?.textContent.trim() ?? null;
   const which = d.getAttribute('data-plan-list');
+  const inPlace = d.parentElement?.matches('details[open][data-plan-list-fold="' + which + '"]') === true && !d.closest('[role="dialog"]') && !!document.querySelector('[data-back-room-door]')?.parentElement?.contains(d);
   const groups = which === 'menu'
     ? [...d.querySelectorAll('[data-plan-section]')].map((s) => ({ section: t(s, '[data-plan-group-name]'),
         rows: [...s.querySelectorAll('[data-plan-row]')].map((r) => ({ name: t(r, '[data-plan-row-name]'), amount: t(r, '[data-plan-row-amount]'), who: t(r, '[data-plan-row-who]') })) }))
     : [...d.querySelectorAll('[data-plan-person], [data-plan-unheld]')].map((s) => ({ person: t(s, '[data-plan-group-name]'),
         rows: [...s.querySelectorAll('[data-plan-row]')].map((r) => ({ name: t(r, '[data-plan-row-name]'), amount: t(r, '[data-plan-row-amount]'), who: t(r, '[data-plan-row-who]') })) }));
-  return { open: true, which, heading: t(d, '[data-plan-list-heading]'), groups,
+  return { open: true, which, inPlace, heading: t(d, '[data-plan-list-heading]'), groups,
     links: d.querySelectorAll('a').length, buttons: [...d.querySelectorAll('button')].map((b) => b.getAttribute('aria-label') ?? b.textContent.trim()),
     empty: t(d, '[data-plan-empty]'), loading: !!d.querySelector('[data-plan-loading]'), failed: t(d, '[data-plan-failed]') }; })()`;
-const VISIBLE_DIALOGS = `[...document.querySelectorAll('[role="dialog"]')].filter((d) => d.checkVisibility()).length`;
-const LIST_DRAWN = `(() => { const d = [...document.querySelectorAll('[role="dialog"][data-plan-list]')].find((x) => x.checkVisibility()); return !!d && !d.querySelector('[data-plan-loading]'); })()`;
+/**
+ * [[GTC-421]] "No pop-up drawn" is now "nothing open": no visible dialog (as before), no fold-out
+ * open and no list drawn.
+ */
+const VISIBLE_DIALOGS = `[...document.querySelectorAll('[role="dialog"]')].filter((d) => d.checkVisibility()).length + document.querySelectorAll('details[data-plan-list-fold][open]').length + [...document.querySelectorAll('[data-plan-list]')].filter((d) => d.checkVisibility()).length`;
+const LIST_DRAWN = `(() => { const d = [...document.querySelectorAll('[data-plan-list]')].find((x) => x.checkVisibility()); return !!d && !d.querySelector('[data-plan-loading]'); })()`;
 const STEP4_DRAWN = `!!document.querySelector('#step-4 [data-message-part="1"] select')`;
 
 /** Wait for something to draw, up to `ms`; one that never draws is reported, loudly. */
@@ -1639,26 +1674,44 @@ async function runLive() {
       await b.tap('[data-plan-list-door="menu"]', 300);
       await waitFor(b.ev, LIST_DRAWN, 'the menu', b.refusals);
       const f7 = await b.ev(LIST_FACTS);
-      r[`C7${k}`] = CHECKS.C_LIST(f7, 'menu', W[22], MENU) && (await fits(w));
+      r[`C7${k}`] =
+        CHECKS.C_LIST(f7, 'menu', W[22], MENU) && f7?.inPlace === true && (await fits(w));
       detail[`C7${k}`] = JSON.stringify(f7);
       await shot(`72-menu-${w}.png`);
-      await b.tap('[role="dialog"][data-plan-list] button[aria-label="Close"]', 500);
+      await b.tap('[data-plan-list] button[aria-label="Close"]', 500);
       const closedByX = f7?.open === true && CHECKS.C_CLOSED(await b.ev<number>(VISIBLE_DIALOGS));
       await b.tap('[data-plan-list-door="assignments"]', 300);
       await waitFor(b.ev, LIST_DRAWN, 'who’s on what', b.refusals);
       const f8 = await b.ev(LIST_FACTS);
-      r[`C8${k}`] = CHECKS.C_LIST(f8, 'assignments', W[23], WHO) && (await fits(w));
+      r[`C8${k}`] =
+        CHECKS.C_LIST(f8, 'assignments', W[23], WHO) && f8?.inPlace === true && (await fits(w));
       detail[`C8${k}`] = JSON.stringify(f8);
       await shot(`72-assignments-${w}.png`);
-      await b.key('Escape', 27);
-      const closedByEscape =
+      // [[GTC-421]] a fold-out has no backdrop and no Escape: it folds on a second tap of its line,
+      // and the keyboard opens and folds it (Enter on its line), the browser's own.
+      await b.tap('[data-plan-list-door="assignments"]', 500);
+      const closedByLine =
         f8?.open === true && CHECKS.C_CLOSED(await b.ev<number>(VISIBLE_DIALOGS));
-      await b.tap('[data-plan-list-door="menu"]', 300);
-      const openAgain = await waitFor(b.ev, LIST_DRAWN, 'the menu again', b.refusals);
-      await b.tapOutside('[data-plan-list-backdrop]', 500);
-      const closedOutside = openAgain && CHECKS.C_CLOSED(await b.ev<number>(VISIBLE_DIALOGS));
-      r[`C9${k}`] = closedByX && closedByEscape && closedOutside;
-      detail[`C9${k}`] = JSON.stringify({ closedByX, closedByEscape, closedOutside });
+      await b.ev(`document.querySelector('[data-plan-list-door="menu"]').focus()`);
+      await b.enter();
+      const openByKey = await waitFor(
+        b.ev,
+        LIST_DRAWN,
+        'the menu again, by the keyboard',
+        b.refusals
+      );
+      const keyOpened = (await b.ev<any>(LIST_FACTS))?.which === 'menu';
+      await b.enter();
+      const closedByKey =
+        openByKey && keyOpened && CHECKS.C_CLOSED(await b.ev<number>(VISIBLE_DIALOGS));
+      r[`C9${k}`] = closedByX && closedByLine && closedByKey;
+      detail[`C9${k}`] = JSON.stringify({
+        closedByX,
+        closedByLine,
+        openByKey,
+        keyOpened,
+        closedByKey,
+      });
       // the read fails (the wall fails this one items GET): W25
       b.wall.failItemsFor = B.e.id;
       await b.tap('[data-plan-list-door="menu"]', 300);
@@ -1667,7 +1720,7 @@ async function runLive() {
       b.wall.failItemsFor = '';
       r[`C10${k}`] = CHECKS.C_LINE(f10, 'menu', W[22], 'failed', W[25]);
       detail[`C10${k}`] = JSON.stringify(f10);
-      await b.key('Escape', 27);
+      await b.tap('[data-plan-list-door="menu"]', 500);
 
       // a co-host opens both, as the host does (Q17)
       await b.cookie(cora.token);
@@ -1675,11 +1728,11 @@ async function runLive() {
       await b.tap('[data-plan-list-door="menu"]', 300);
       await waitFor(b.ev, LIST_DRAWN, 'the co-host’s menu', b.refusals);
       const f11 = await b.ev(LIST_FACTS);
-      await b.key('Escape', 27);
+      await b.tap('[data-plan-list-door="menu"]', 500);
       await b.tap('[data-plan-list-door="assignments"]', 300);
       await waitFor(b.ev, LIST_DRAWN, 'the co-host’s who’s on what', b.refusals);
       const f11b = await b.ev(LIST_FACTS);
-      await b.key('Escape', 27);
+      await b.tap('[data-plan-list-door="assignments"]', 500);
       r[`C11${k}`] =
         CHECKS.C_LIST(f11, 'menu', W[22], MENU) && CHECKS.C_LIST(f11b, 'assignments', W[23], WHO);
       detail[`C11${k}`] = JSON.stringify({ f11, f11b });
@@ -1691,12 +1744,12 @@ async function runLive() {
       await waitFor(b.ev, LIST_DRAWN, 'the empty menu', b.refusals);
       const f12 = await b.ev(LIST_FACTS);
       await shot(`72-menu-empty-${w}.png`);
-      await b.key('Escape', 27);
+      await b.tap('[data-plan-list-door="menu"]', 500);
       await b.tap('[data-plan-list-door="assignments"]', 300);
       await waitFor(b.ev, LIST_DRAWN, 'the empty who’s on what', b.refusals);
       const f12b = await b.ev(LIST_FACTS);
       await shot(`72-assignments-empty-${w}.png`);
-      await b.key('Escape', 27);
+      await b.tap('[data-plan-list-door="assignments"]', 500);
       r[`C12${k}`] =
         CHECKS.C_LINE(f12, 'menu', W[22], 'empty', W[26]) &&
         CHECKS.C_LINE(f12b, 'assignments', W[23], 'empty', W[29]);
@@ -1729,17 +1782,20 @@ async function runLive() {
       ],
       [
         'C6',
-        'C6 the board’s door row: See menu, See assignments, then Change who’s on what, Invites & people, Print the list; no pop-up drawn (Q18)',
+        'C6 the board’s door row: See menu, See assignments, then Change who’s on what, Invites & people, Print the list; nothing open (Q18; GTC-421)',
       ],
       [
         'C7',
-        'C7 See menu: W22, the sections in the plan’s order, amounts, each holder with their answer (W28), Fruit salad “Nobody yet”; no link, Close only',
+        'C7 See menu: W22, the sections in the plan’s order, amounts, each holder with their answer (W28), Fruit salad “Nobody yet”; no link, Close only; in place, in its own fold-out (GTC-421)',
       ],
       [
         'C8',
-        'C8 See assignments: W23, holders by name with section and answer, then W30 with what nobody holds (Q21); no link, Close only',
+        'C8 See assignments: W23, holders by name with section and answer, then W30 with what nobody holds (Q21); no link, Close only; in place, in its own fold-out (GTC-421)',
       ],
-      ['C9', 'C9 each closes, having been open: on Close, on Escape, and on a tap outside (Q16)'],
+      [
+        'C9',
+        'C9 each folds away, having been open: on Close, on a second tap of its line, and by the keyboard (Enter on its line opens it, Enter again folds it) (Q16; GTC-421)',
+      ],
       ['C10', 'C10 a failed read says W25'],
       ['C11', 'C11 a co-host opens both, and sees what the host sees (Q17)'],
       ['C12', 'C12 an empty plan: the menu says W26, who’s on what says W29'],
