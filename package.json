@@ -171,6 +171,7 @@
     "test:tweaks-guard": "tsx tests/tweaks-guard-test.ts",
     "test:tweaks-a": "tsx --tsconfig tests/tsconfig.json tests/tweaks-a-test.tsx",
     "test:tweaks-b": "tsx --tsconfig tests/tsconfig.json tests/tweaks-b-test.tsx",
+    "test:tweaks-c": "tsx --tsconfig tests/tsconfig.json tests/tweaks-c-test.tsx",
     "test:event-day-end": "tsx tests/event-day-end-test.ts"
   },
   "prisma": {
