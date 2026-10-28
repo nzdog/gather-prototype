@@ -246,6 +246,79 @@ const PAYING_PAIRS: Pairs = [
     '              Try Again\n            </button>\n            <NeedHelp className="mt-4" />\n          </div>\n        </div>\n      </div>\n    );\n  }\n\n  // Error state',
   ],
 ];
+/**
+ * [[GTC-418]] (Ticket C, tweak 4, the founder's ruling of 28 Oct 2026): the paying page gains the
+ * signed-in payer's "You're all set!" screen, and the signed-out screen's heading and first line
+ * take the new words. E9 still asks for the whole file byte for byte: T0's file, Ticket A's help
+ * line, and exactly these pieces, typed here by hand.
+ */
+const GTC418_PAYING_PAIRS: Pairs = [
+  [
+    "type PageState = 'form' | 'creating' | 'canceled' | 'error' | 'emailed' | 'paid-before';\n",
+    "// [[GTC-418]] (tweak 4): 'paid' is the signed-in payer's \"You're all set!\", before setup.\n" +
+      "type PageState = 'form' | 'creating' | 'canceled' | 'error' | 'emailed' | 'paid-before' | 'paid';\n",
+  ],
+  [
+    '  const [retrySessionId, setRetrySessionId] = useState<string | null>(null);\n',
+    '  const [retrySessionId, setRetrySessionId] = useState<string | null>(null);\n' +
+      '  // [[GTC-418]] (tweak 4): the event the payment just made, as the server named it.\n' +
+      '  const [paidEvent, setPaidEvent] = useState<{ id: string; name: string } | null>(null);\n',
+  ],
+  [
+    '      if (result.alreadySignedIn) {\n' +
+      '        // Still a full page load so the server layout picks up her session;\n' +
+      '        // `replace` rather than `assign` so Back does not return to the consumed\n' +
+      '        // creation form (its sessionStorage draft is cleared just above).\n' +
+      '        window.location.replace(`/plan/${result.event.id}/setup`);\n' +
+      '        return;\n',
+    '      if (result.alreadySignedIn) {\n' +
+      '        /*\n' +
+      '         * [[GTC-418]] (tweak 4): "You\'re all set!" first; its button goes on to setup. The\n' +
+      "         * address becomes setup's now (no load, no request), so a refresh opens setup as it did\n" +
+      '         * before and never asks for the payment again, and Back skips the used return address.\n' +
+      '         */\n' +
+      "        window.history.replaceState(window.history.state, '', `/plan/${result.event.id}/setup`);\n" +
+      '        setPaidEvent({ id: result.event.id, name: result.event.name });\n' +
+      "        setPageState('paid');\n" +
+      '        return;\n',
+  ],
+  [
+    '  /*\n   * GTC-280 — payment received, and the link is the way in.\n',
+    "  // [[GTC-418]] (tweak 4): the signed-in payer's screen. No timer: she moves on when she presses.\n" +
+      "  if (pageState === 'paid' && paidEvent) {\n" +
+      '    return (\n' +
+      '      <div className="min-h-screen bg-gray-50 flex items-center justify-center">\n' +
+      '        <div className="max-w-md w-full mx-4">\n' +
+      '          <div className="bg-white rounded-lg shadow-md p-8">\n' +
+      '            <h2 className="text-2xl font-bold text-gray-900 mb-2">You&rsquo;re all set!</h2>\n' +
+      '            <p className="text-gray-600 mb-6">\n' +
+      '              Your event &ldquo;{paidEvent.name}&rdquo; is paid for and ready.\n' +
+      '            </p>\n' +
+      '            {/* A full page load, so the server layout picks up her session; `replace`, so Back\n' +
+      '                does not return to this screen. */}\n' +
+      '            <button\n' +
+      '              onClick={() => window.location.replace(`/plan/${paidEvent.id}/setup`)}\n' +
+      '              className="block w-full text-center px-6 py-3 bg-accent text-white rounded-lg font-semibold hover:bg-accent-dark"\n' +
+      '            >\n' +
+      '              Start with your people →\n' +
+      '            </button>\n' +
+      '          </div>\n' +
+      '        </div>\n' +
+      '      </div>\n' +
+      '    );\n' +
+      '  }\n' +
+      '\n' +
+      '  /*\n   * GTC-280 — payment received, and the link is the way in.\n',
+  ],
+  [
+    '            <h2 className="text-2xl font-bold text-gray-900 mb-2">Payment received</h2>\n' +
+      '            <p className="text-gray-600 mb-6">\n' +
+      '              Your event &ldquo;{handoff.eventName}&rdquo; is ready.\n',
+    '            <h2 className="text-2xl font-bold text-gray-900 mb-2">You&rsquo;re all set!</h2>\n' +
+      '            <p className="text-gray-600 mb-6">\n' +
+      '              Your event &ldquo;{handoff.eventName}&rdquo; is paid for and ready.\n',
+  ],
+];
 const PRIVACY_LINK_OLD =
   '<a href="mailto:privacy@gather.nz" className="text-accent hover:underline">\n' +
   '                privacy@gather.nz\n' +
@@ -753,11 +826,16 @@ function layerE() {
     'E8 the sign-in page, rendered, shows the help line once',
     count(signInHtml, 'data-need-help') === 1 && textOf(signInHtml).includes(HELP_LINE)
   );
+  // [[GTC-418]]: the paying page as T0's with the help line, then Ticket C's pieces, by hand.
+  const payingWithHelp = applyPairs(atRef(T0_TIP, PAYING), PAYING_PAIRS);
   assert(
     'E',
-    'E9 the sign-in link page and the paying page are T0’s files with exactly the help line and its import put in',
+    'E9 the sign-in link page and the paying page are T0’s files with exactly the help line and its import put in (and, in the paying page, exactly Ticket C’s pieces since, GTC-418)',
     CHECKS.exactly(read(VERIFY), applyPairs(atRef(T0_TIP, VERIFY), VERIFY_PAIRS)) &&
-      CHECKS.exactly(read(PAYING), applyPairs(atRef(T0_TIP, PAYING), PAYING_PAIRS))
+      CHECKS.exactly(
+        read(PAYING),
+        payingWithHelp === null ? null : applyPairs(payingWithHelp, GTC418_PAYING_PAIRS)
+      )
   );
   assert(
     'E',

@@ -111,6 +111,15 @@ const count = (s: string, needle: string) => s.split(needle).length - 1;
 
 // ── The ruled words, typed by hand ───────────────────────────────────────────
 const RECEIVED = 'Payment received';
+/**
+ * [[GTC-418]] (tweak 4, the founder's ruling of 28 Oct 2026): after a first creation that worked,
+ * the signed-out screen's heading is "You're all set!" (was "Payment received") and its first line
+ * "Your event “…” is paid for and ready." (was "… is ready."); the signed-in payer's new screen has
+ * the same heading. "Payment received" stays on the paid-before screen only. As the page writes
+ * it, and as the browser shows it.
+ */
+const ALL_SET_JSX = 'You&rsquo;re all set!';
+const ALL_SET = 'You’re all set!';
 const SENTENCE =
   'Your event was set up when you paid. Sign in with the email you paid with and it will be waiting for you.';
 const SIGN_IN = 'Go to sign-in';
@@ -325,12 +334,17 @@ export interface Paused {
 // ── CHECKS: every condition, dry-runnable ────────────────────────────────────
 export const CHECKS = {
   // ── S ──
-  /** S1 — the new sentence once (whitespace squashed), the old 409 words gone, no timer. */
+  /**
+   * S1 — the new sentence once (whitespace squashed), the old 409 words gone, no timer.
+   * [[GTC-418]]: "Payment received" is now the paid-before screen's heading only (once), and
+   * "You're all set!" heads the signed-out screen and the new paid screen (twice).
+   */
   ruling1Source(page: string) {
     const code = stripComments(page);
     return (
       count(squash(code), SENTENCE) === 1 &&
-      count(code, `>${RECEIVED}</h2>`) === 2 &&
+      count(code, `>${RECEIVED}</h2>`) === 1 &&
+      count(code, `>${ALL_SET_JSX}</h2>`) === 2 &&
       count(code, `href="${SIGN_IN_HREF}"`) === 2 &&
       !page.includes(OLD_409) &&
       !/setTimeout\(/.test(code)
@@ -445,12 +459,15 @@ export const CHECKS = {
       !s.form
     );
   },
-  /** C8 — "Payment received" after a first creation that worked (the GTC-280 screen). */
+  /**
+   * C8 — the screen after a first creation that worked (the GTC-280 screen). [[GTC-418]]: its
+   * heading and first line are the founder's new words, as strictly as before.
+   */
   emailedScreen(s: Screen | null) {
     return (
       !!s &&
-      s.lines[0] === RECEIVED &&
-      s.lines.includes('Your event “Riverside lunch” is ready.') &&
+      s.lines[0] === ALL_SET &&
+      s.lines.includes('Your event “Riverside lunch” is paid for and ready.') &&
       s.lines.some((l) => l.startsWith(SENT_LINK)) &&
       s.links.length === 1 &&
       s.links[0].text === SIGN_IN
@@ -529,7 +546,7 @@ function layerS() {
   const pageT0 = atT0(PAGE);
   assert(
     'S',
-    'S1 ruling 1’s sentence once, "Payment received" and the sign-in link on two screens now, the old 409 words gone, no timer anywhere in the page',
+    'S1 ruling 1’s sentence once, "Payment received" on the paid-before screen only and "You’re all set!" on two screens (GTC-418), the sign-in link on two screens, the old 409 words gone, no timer anywhere in the page',
     CHECKS.ruling1Source(page)
   );
   assert(
@@ -789,10 +806,11 @@ async function layerC() {
       heldOk.push(await screen());
       await sleep(250);
     }
-    const done = await waitFor((s) => s.lines[0] === RECEIVED || s.lines[0] === WRONG);
+    // [[GTC-418]]: a creation that works now lands on "You’re all set!".
+    const done = await waitFor((s) => s.lines[0] === ALL_SET || s.lines[0] === WRONG);
     assert(
       'C',
-      'C9 after the connection failure, "Try Again" goes through "Creating your event..." (never the form) to the error again on a 500, and again to "Payment received" when it works',
+      'C9 after the connection failure, "Try Again" goes through "Creating your event..." (never the form) to the error again on a 500, and again to the signed-out screen, "You’re all set!" (GTC-418), when it works',
       CHECKS.retryThroughCreating(heldLost) &&
         CHECKS.errorScreen(errAgain, 'Failed to create event') &&
         CHECKS.retryThroughCreating(heldOk) &&
