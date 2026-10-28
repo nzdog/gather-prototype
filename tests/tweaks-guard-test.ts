@@ -280,6 +280,113 @@ const PROTECTED: Entry[] = [
     start: 'export function listUnsubscribeHeaders(oneClickUrl: string): Record<string, string> {',
     why: 'the List-Unsubscribe and one-click headers',
   },
+  // ── Added by the founder's ruling of 28 Oct 2026 (batch 1, Part 0): four more things held ──
+  // ── Zone 4: what a paid account may do, and the billing pages ──
+  {
+    zone: 4,
+    kind: 'path',
+    path: 'src/lib/entitlements.ts',
+    why: 'what a paid account may do: who may create and edit an event',
+  },
+  {
+    zone: 4,
+    kind: 'path',
+    path: 'src/app/billing',
+    why: 'the billing pages: the plan, upgrade, success and cancel pages',
+  },
+  // ── Zone 6: the security suite's list of routes ──
+  {
+    zone: 6,
+    kind: 'path',
+    path: 'route-classifications.json',
+    why: 'every route and how it is guarded, as the security suite reads it',
+  },
+  // ── Zone 7: the wider readers of the SMS opt-out and the text block ──
+  {
+    zone: 7,
+    kind: 'path',
+    path: 'src/lib/sms/nudge-eligibility.ts',
+    why: 'who a reminder may go to: reads the SMS opt-out, the email opt-out and the block',
+  },
+  {
+    zone: 7,
+    kind: 'path',
+    path: 'src/lib/sms/decide-by-eligibility.ts',
+    why: 'who is due the decide-by follow-up: reads the SMS and email opt-outs',
+  },
+  {
+    zone: 7,
+    kind: 'path',
+    path: 'src/lib/sms/manual-nudge-recipient.ts',
+    why: "the host's by-hand nudge: who may get it, past the text block and the email block",
+  },
+  {
+    zone: 7,
+    kind: 'path',
+    path: 'src/lib/sms/tnz-delivery-record.ts',
+    why: 'records a text block when the provider reports a dead or opted-out number',
+  },
+  {
+    zone: 7,
+    kind: 'path',
+    path: 'src/app/api/events/[id]/invite-status/route.ts',
+    why: "the host's invite list: reads the SMS opt-out for each guest",
+  },
+  {
+    zone: 7,
+    kind: 'path',
+    path: 'src/app/api/events/[id]/people/[personId]/invite-detail/route.ts',
+    why: "one guest's invite detail: reads the SMS opt-out",
+  },
+  {
+    zone: 7,
+    kind: 'path',
+    path: 'src/app/api/events/[id]/people/[personId]/nudge/route.ts',
+    why: 'the by-hand nudge route: reads the SMS and email opt-outs and the email block',
+  },
+  // ── Zone 9: the wider readers of the email opt-out and the email block ──
+  {
+    zone: 9,
+    kind: 'path',
+    path: 'src/lib/sms/decide-by-sender.ts',
+    why: 'sends the decide-by follow-up: reads the email opt-out and the email block',
+  },
+  {
+    zone: 9,
+    kind: 'path',
+    path: 'src/lib/eligibility/channel-chooser.ts',
+    why: 'how each person is reached: a blocked address is no address',
+  },
+  {
+    zone: 9,
+    kind: 'path',
+    path: 'src/lib/eligibility/carried-answer.ts',
+    why: "a child's ask carried by their contact: reads every opt-out and block",
+  },
+  {
+    zone: 9,
+    kind: 'path',
+    path: 'src/lib/contact/contact-fix.ts',
+    why: 'the contact box: a saved contact is checked against every opt-out and block',
+  },
+  {
+    zone: 9,
+    kind: 'path',
+    path: 'src/lib/wrap-up.ts',
+    why: 'who the wrap-up goes to: reads the email opt-out, the email block and the text block',
+  },
+  {
+    zone: 9,
+    kind: 'path',
+    path: 'src/lib/email-delivery/delivery-poll.ts',
+    why: 'records an email block when the provider reports a bounce or a spam report',
+  },
+  {
+    zone: 9,
+    kind: 'path',
+    path: 'src/lib/eligibility/email-block-words.ts',
+    why: 'what the host is told about a blocked address (the report shown on its own event only)',
+  },
 ];
 // ═══ END OF THE PROTECTED LIST ════════════════════════════════════════════════════════════════
 
