@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
+import NeedHelp from '@/components/shared/NeedHelp';
 
 type ErrorType = 'invalid' | 'expired' | 'used' | 'claimed' | 'unknown';
 
@@ -139,6 +140,8 @@ function ErrorDisplay({ error }: { error: ErrorType }) {
           {action}
         </a>
       </div>
+      {/* [[GTC-415]] tweak 18: the one help line. */}
+      <NeedHelp className="mt-6" />
     </div>
   );
 }

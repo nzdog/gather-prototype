@@ -1,3 +1,7 @@
+// [[GTC-415]]: the page's address is Gather's one contact address, written once, in
+// src/lib/email-footer.ts.
+import { GATHER_CONTACT_EMAIL } from '@/lib/email-footer';
+
 export default function PrivacyPolicy() {
   return (
     <div className="min-h-screen bg-gray-50">
@@ -15,8 +19,8 @@ export default function PrivacyPolicy() {
             </p>
             <p className="text-gray-700">
               Contact:{' '}
-              <a href="mailto:privacy@gather.nz" className="text-accent hover:underline">
-                privacy@gather.nz
+              <a href={`mailto:${GATHER_CONTACT_EMAIL}`} className="text-accent hover:underline">
+                {GATHER_CONTACT_EMAIL}
               </a>
             </p>
           </section>
@@ -175,8 +179,8 @@ export default function PrivacyPolicy() {
 
             <p className="text-gray-700">
               To exercise these rights, contact us at{' '}
-              <a href="mailto:privacy@gather.nz" className="text-accent hover:underline">
-                privacy@gather.nz
+              <a href={`mailto:${GATHER_CONTACT_EMAIL}`} className="text-accent hover:underline">
+                {GATHER_CONTACT_EMAIL}
               </a>
             </p>
           </section>

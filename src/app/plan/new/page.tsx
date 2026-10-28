@@ -12,6 +12,8 @@ import {
 } from '@/lib/events/date-pair';
 // [[GTC-407]] (ruling 3): Gather's contact address, written once, in src/lib/email-footer.ts.
 import { GATHER_CONTACT_EMAIL } from '@/lib/email-footer';
+// [[GTC-415]] tweak 18: the one help line, on the cancelled screen only.
+import NeedHelp from '@/components/shared/NeedHelp';
 
 // [[GTC-407]] (ruling 1): 'paid-before' is her return after the payment already made her event.
 type PageState = 'form' | 'creating' | 'canceled' | 'error' | 'emailed' | 'paid-before';
@@ -429,6 +431,7 @@ export default function NewPlanPage() {
             >
               Try Again
             </button>
+            <NeedHelp className="mt-4" />
           </div>
         </div>
       </div>

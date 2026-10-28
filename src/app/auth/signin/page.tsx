@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
+import NeedHelp from '@/components/shared/NeedHelp';
 
 export default function SignInPage() {
   const [email, setEmail] = useState('');
@@ -95,7 +96,8 @@ export default function SignInPage() {
                     Check your email for a sign-in link
                   </p>
                   <p className="mt-1 text-sm text-green-700">
-                    We've sent a magic link to your email address. It will expire in 15 minutes.
+                    We've sent a sign-in link to your email address. It can take up to five minutes
+                    to arrive, so check your spam folder too. The link works for 15 minutes.
                   </p>
                 </div>
               </div>
@@ -128,6 +130,8 @@ export default function SignInPage() {
           <p className="text-xs text-gray-500">
             No password required. We'll send you a secure link to sign in.
           </p>
+          {/* [[GTC-415]] tweak 18: the one help line. */}
+          <NeedHelp className="mt-4" />
         </div>
       </div>
     </div>

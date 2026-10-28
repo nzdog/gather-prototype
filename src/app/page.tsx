@@ -127,20 +127,6 @@ export default async function LandingPage() {
             </div>
           </div>
         </div>
-
-        {/* Secondary Links */}
-        <div className="text-center">
-          <p className="text-gray-500 text-sm">
-            Browse{' '}
-            <a
-              href="/plan/templates"
-              className="text-accent hover:text-accent-dark underline font-medium"
-            >
-              event templates
-            </a>{' '}
-            to get started quickly
-          </p>
-        </div>
       </div>
     </div>
   );

@@ -1,10 +1,22 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { Plus, Calendar, CreditCard, LogOut, LogIn, Menu, X, ChevronDown } from 'lucide-react';
+import {
+  Plus,
+  Calendar,
+  CreditCard,
+  LogOut,
+  LogIn,
+  Menu,
+  X,
+  ChevronDown,
+  LifeBuoy,
+  MessageSquare,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { COPY_WORDS, isCopyAddress } from '@/lib/demo/copy-address';
+import { GATHER_CONTACT_EMAIL } from '@/lib/email-footer';
 
 type User = {
   id: string;
@@ -127,7 +139,25 @@ export default function Navigation({ user }: NavigationProps) {
     { href: '/plan/new', label: 'New Event', icon: Plus },
   ];
   const billing = { href: '/billing', label: 'Billing', icon: CreditCard };
-  const signIn = { href: '/auth/signin', label: 'Sign In' };
+  // [[GTC-415]] tweak 2: the button names who signs in. Same address as before.
+  const signIn = { href: '/auth/signin', label: 'Host Sign In' };
+  /*
+   * [[GTC-415]] tweak 17 (founder ruling, 28 Oct 2026) — the account menu, on a computer and on a
+   * phone, reads: Your events, Billing, Help and support, Send feedback, Sign Out. Plain links (a
+   * full page load, as Billing), no photo; the two emails go to Gather's one address, read from
+   * src/lib/email-footer.ts, each with its own subject.
+   */
+  const yourEvents = { href: '/plan/events', label: 'Your events', icon: Calendar };
+  const help = {
+    href: `mailto:${GATHER_CONTACT_EMAIL}?subject=${encodeURIComponent('Help with Gather')}`,
+    label: 'Help and support',
+    icon: LifeBuoy,
+  };
+  const feedback = {
+    href: `mailto:${GATHER_CONTACT_EMAIL}?subject=${encodeURIComponent('Feedback on Gather')}`,
+    label: 'Send feedback',
+    icon: MessageSquare,
+  };
   const billingActive = pathname === billing.href || pathname?.startsWith(billing.href + '/');
 
   return (
@@ -197,6 +227,13 @@ export default function Navigation({ user }: NavigationProps) {
                     className="absolute right-0 top-full mt-1.5 z-[60] min-w-[200px] bg-white border border-gray-200 rounded-lg shadow-md p-1.5"
                   >
                     <a
+                      href={yourEvents.href}
+                      className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      <yourEvents.icon className="w-4 h-4" />
+                      {yourEvents.label}
+                    </a>
+                    <a
                       href={billing.href}
                       className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium ${
                         billingActive ? 'bg-sage-50 text-accent' : 'text-gray-700 hover:bg-gray-50'
@@ -204,6 +241,20 @@ export default function Navigation({ user }: NavigationProps) {
                     >
                       <billing.icon className="w-4 h-4" />
                       {billing.label}
+                    </a>
+                    <a
+                      href={help.href}
+                      className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      <help.icon className="w-4 h-4" />
+                      {help.label}
+                    </a>
+                    <a
+                      href={feedback.href}
+                      className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      <feedback.icon className="w-4 h-4" />
+                      {feedback.label}
                     </a>
                     <button
                       onClick={handleSignOut}
@@ -273,6 +324,14 @@ export default function Navigation({ user }: NavigationProps) {
                   {isCopyAddress(user.email) ? COPY_WORDS.ACCOUNT : user.email}
                 </p>
                 <a
+                  href={yourEvents.href}
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  <yourEvents.icon className="w-5 h-5" />
+                  {yourEvents.label}
+                </a>
+                <a
                   href={billing.href}
                   onClick={() => setMenuOpen(false)}
                   className={`flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium ${
@@ -281,6 +340,22 @@ export default function Navigation({ user }: NavigationProps) {
                 >
                   <billing.icon className="w-5 h-5" />
                   {billing.label}
+                </a>
+                <a
+                  href={help.href}
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  <help.icon className="w-5 h-5" />
+                  {help.label}
+                </a>
+                <a
+                  href={feedback.href}
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  <feedback.icon className="w-5 h-5" />
+                  {feedback.label}
                 </a>
                 <button
                   onClick={handleSignOut}
