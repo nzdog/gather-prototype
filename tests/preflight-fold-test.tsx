@@ -134,7 +134,7 @@ const BLURBS = [
 const STEP3_INVITES_ONLY = 'Everyone with an email or mobile hears from me. Pick how hard I nudge.';
 const GO_TO = (n: number) => `Go to step ${n}: ${STEP_TITLES[n - 1]} ↑`;
 
-/** Send's element exactly as it stands at `0a689ca` — ruled 2: "Send stays exactly where it is". */
+/** Send's element exactly as it stands at `0a689ca` — ruled 2: "Send stays exactly where it is". [[GTC-422]] (tweak 9, 28 Oct 2026): re-based to "four checks"; the element is otherwise unchanged. */
 const SEND_AT_HEAD = `<button
             type="button"
             disabled={!allChecked || pressing || pressed !== null}
@@ -149,7 +149,7 @@ const SEND_AT_HEAD = `<button
               ? 'Sent'
               : pressing
                 ? 'Sending…'
-                : \`Send\${allChecked ? '' : ' — finish the five checks first'}\`}
+                : \`Send\${allChecked ? '' : ' — finish the four checks first'}\`}
           </button>`;
 
 /** AccordionShell rendered at `0a689ca` (Q1: its markup byte for byte as now). */
@@ -410,7 +410,7 @@ async function runInMemory() {
   const page = codeOnly(raw);
   assert(
     'S',
-    'S1 CONTROL: Send’s element is byte for byte as it was — its greying, its press, its words (ruling 2)',
+    'S1 CONTROL: Send’s element is byte for byte as it was — its greying, its press, its words (ruling 2; “four checks” since GTC-422)',
     raw.includes(SEND_AT_HEAD)
   );
   const tags = new Map<number, string>();
@@ -639,7 +639,7 @@ async function runLive() {
     const box = (n: number) => `${st(n)}?.querySelector('header input[type=checkbox]')`;
     const label = (n: number) => `${st(n)}?.querySelector('header label')`;
     const goLine = `document.querySelector('[data-go-to-step]')`;
-    const sendBtn = `[...document.querySelectorAll('button')].find(b => b.innerText.trim() === 'Send — finish the five checks first')`;
+    const sendBtn = `[...document.querySelectorAll('button')].find(b => b.innerText.trim() === 'Send — finish the four checks first')`;
     /** 'open', 'closed', or 'none' when the step has no toggle; heights read after the fold. */
     const fold = async (n: number) =>
       ev<string>(`(() => { const t = ${tog(n)}; if (!t) return 'none';

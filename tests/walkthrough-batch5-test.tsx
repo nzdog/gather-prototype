@@ -436,11 +436,12 @@ async function runInMemory() {
               ? 'Sent'
               : pressing
                 ? 'Sending…'
-                : \`Send\${allChecked ? '' : ' — finish the five checks first'}\`}
+                : \`Send\${allChecked ? '' : ' — finish the four checks first'}\`}
           </button>`;
   assert(
     'R',
-    'R-send CONTROL: the pre-flight’s Send is byte for byte as it was',
+    // [[GTC-422]] (tweak 9, 28 Oct 2026): re-based to "four checks"; the element is otherwise unchanged.
+    'R-send CONTROL: the pre-flight’s Send is byte for byte as it was (“four checks” since GTC-422)',
     read('src/app/plan/[eventId]/pre-flight/page.tsx').includes(SEND_AT_HEAD)
   );
 

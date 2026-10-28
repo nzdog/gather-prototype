@@ -104,6 +104,52 @@ const BUTTON =
 /** The page's own early return once the invitations have gone, as it stands at the base. */
 const AFTER_SEND =
   '  if (data.event.sentAt) {\n    return <AfterThePress eventId={eventId} />;\n  }\n';
+/**
+ * [[GTC-422]] (tweak 9, Batch 2 Part B) — Ticket D changes four lines of the same page, on purpose:
+ * step 5 has no box and Send waits on steps 1 to 4. P1 and R3 are re-based to that exact new value,
+ * as strict: the base plus F's button plus exactly these lines (typed here), and the page as drawn
+ * with exactly D's drawn change (step 5's box gone, "four checks").
+ */
+const GTC422_EDITS: Array<[string, string]> = [
+  [
+    '    return !fourPending && [1, 2, 3, 4, 5].every((n) => checked[n] || settled[n]);\n',
+    '    // [[GTC-422]] (tweak 9): step 5 has no box, so Send waits on steps 1 to 4 only.\n' +
+      '    return !fourPending && [1, 2, 3, 4].every((n) => checked[n] || settled[n]);\n',
+  ],
+  [
+    '  const nextStep = firstUnticked({ ...checked, ...settled });\n',
+    '  // [[GTC-422]]: step 5 has no box, so the line under Send never names it.\n' +
+      '  const nextStep = firstUnticked({ ...checked, ...settled, 5: true });\n',
+  ],
+  [
+    '          onCheck={(v) => tick(5, v)}\n        >\n',
+    '          onCheck={(v) => tick(5, v)}\n' +
+      '          // [[GTC-422]] (tweak 9): Ready is drawn without a box; Send waits on steps 1 to 4.\n' +
+      '          noBox\n        >\n',
+  ],
+  [
+    "                : \`Send\${allChecked ? '' : ' — finish the five checks first'}\`}\n",
+    "                : \`Send\${allChecked ? '' : ' — finish the four checks first'}\`}\n",
+  ],
+];
+/** The base's source with Ticket D's four lines, each found exactly once (else nothing matches). */
+const withD = (s: string) =>
+  GTC422_EDITS.reduce((x, [a, b]) => (count(x, a) === 1 ? x.replace(a, () => b) : '\u0000'), s);
+/** Step 5's box as the base drew it, and the page as drawn with Ticket D's change. */
+const STEP5_BOX =
+  '<label class="flex items-center gap-2 shrink-0 cursor-pointer text-sm text-gray-600"><input type="checkbox" class="rounded border-gray-300 text-accent focus:ring-accent/40"/>Checked</label>';
+const drawnWithD = (html: string) => {
+  const i = html.indexOf('<section id="step-5"');
+  if (i < 0) return html;
+  const tail = html.slice(i);
+  if (count(tail, STEP5_BOX) !== 1) return '\u0000';
+  return (
+    html.slice(0, i) +
+    tail
+      .replace(STEP5_BOX, '')
+      .replace('Send — finish the five checks first', 'Send — finish the four checks first')
+  );
+};
 /** The button as drawn (React writes the empty data attribute as =""). */
 const DRAWN_BUTTON = `<a data-make-a-plan="" href="${OPENING}" class="mt-2 block w-fit rounded-md bg-sage-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sage-700">${BUTTON_WORDS}</a>`;
 
@@ -264,7 +310,7 @@ export const CHECKS = {
     return (
       base.length > 1000 &&
       count(base, AFTER_WAITING) === 1 &&
-      now === base.replace(AFTER_WAITING, () => AFTER_WAITING + BUTTON)
+      now === withD(base.replace(AFTER_WAITING, () => AFTER_WAITING + BUTTON))
     );
   },
   /**
@@ -341,7 +387,9 @@ export const CHECKS = {
     return (
       base.html.length > 0 &&
       !base.html.includes('data-make-a-plan') &&
-      (button ? now.html.replace(DRAWN_BUTTON, '') === base.html : now.html === base.html)
+      (button
+        ? now.html.replace(DRAWN_BUTTON, '') === drawnWithD(base.html)
+        : now.html === drawnWithD(base.html))
     );
   },
   /** R4 — the waiting line shows only when a plan was put away, as before; the button either way. */
@@ -374,7 +422,7 @@ function layerP(now: string, base: string) {
   section('P — the pre-flight’s source, against GTC-419’s tip (8bc1064)');
   assert(
     'P',
-    'P1 the page is 8bc1064’s file with exactly the button (and its comment) put in, byte for byte: nothing else on the pre-flight changes (step 5 and Send included)',
+    'P1 the page is 8bc1064’s file with exactly the button (and its comment) put in, byte for byte, and Ticket D’s four lines (GTC-422: step 5 without a box, "four checks"): nothing else on the pre-flight changes',
     CHECKS.exactly(now, base)
   );
   assert(
@@ -429,7 +477,7 @@ function layerR(now: string, base: string) {
   );
   assert(
     'R',
-    'R3 CONTROL: in all six states the page drawn now is the page drawn at 8bc1064 but for the button itself (and at 8bc1064 there is no button)',
+    'R3 CONTROL: in all six states the page drawn now is the page drawn at 8bc1064 but for the button itself and Ticket D’s drawn change (step 5’s box gone, "four checks"; GTC-422) (and at 8bc1064 there is no button)',
     green('R3'),
     keys('R3')
   );

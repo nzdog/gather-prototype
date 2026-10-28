@@ -175,7 +175,7 @@ const nameButton = (html: string, id = PANEL_ID) =>
 const panelTag = (html: string, id = PANEL_ID) =>
   html.match(new RegExp(`<div[^>]*\\bid="${id}"[^>]*>`))?.[0] ?? '';
 
-/** Send's element exactly as it stands at `1fcf643` — GTC-366 Q1: "Send stays exactly as it is." */
+/** Send's element exactly as it stands at `1fcf643` — GTC-366 Q1: "Send stays exactly as it is." [[GTC-422]] (tweak 9, 28 Oct 2026): re-based to "four checks"; the element is otherwise unchanged. */
 const SEND_AT_HEAD = `<button
             type="button"
             disabled={!allChecked || pressing || pressed !== null}
@@ -190,7 +190,7 @@ const SEND_AT_HEAD = `<button
               ? 'Sent'
               : pressing
                 ? 'Sending…'
-                : \`Send\${allChecked ? '' : ' — finish the five checks first'}\`}
+                : \`Send\${allChecked ? '' : ' — finish the four checks first'}\`}
           </button>`;
 
 /** A person, as the glance payload shapes one (as tests/glance-grid-test.tsx builds them). */
@@ -717,7 +717,7 @@ async function runInMemory() {
   );
   assert(
     'K',
-    'K3 CONTROL: the pre-flight’s Send is byte for byte as it was',
+    'K3 CONTROL: the pre-flight’s Send is byte for byte as it was (“four checks” since GTC-422)',
     read('src/app/plan/[eventId]/pre-flight/page.tsx').includes(SEND_AT_HEAD)
   );
   const boardCode = codeOnly(read('src/components/glance/GlanceBoard.tsx'));

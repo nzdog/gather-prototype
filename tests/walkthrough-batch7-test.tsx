@@ -162,7 +162,7 @@ const LETS_DO_THIS = 'Let’s do this →';
 const BACK_TO_PEOPLE = '← Back to the people';
 const GO_TO_STEP_3 = 'Go to step 3: Who Gather talks to ↑';
 
-/** Send's element exactly as it stands at `4c7381b` (GTC-366 Q1: "Send stays exactly as it is"). */
+/** Send's element exactly as it stands at `4c7381b` (GTC-366 Q1: "Send stays exactly as it is"). [[GTC-422]] (tweak 9, 28 Oct 2026): re-based to "four checks"; the element is otherwise unchanged. */
 const SEND_AT_HEAD = `<button
             type="button"
             disabled={!allChecked || pressing || pressed !== null}
@@ -177,7 +177,7 @@ const SEND_AT_HEAD = `<button
               ? 'Sent'
               : pressing
                 ? 'Sending…'
-                : \`Send\${allChecked ? '' : ' — finish the five checks first'}\`}
+                : \`Send\${allChecked ? '' : ' — finish the four checks first'}\`}
           </button>`;
 
 // ══ IN MEMORY — the pure rules, the renders, the source ═════════════════════════
@@ -688,7 +688,7 @@ async function runInMemory() {
   const preflightRaw = read('src/app/plan/[eventId]/pre-flight/page.tsx');
   assert(
     'S',
-    'S1 CONTROL: Send’s element is byte for byte as it was (its greying, its press, its words)',
+    'S1 CONTROL: Send’s element is byte for byte as it was (its greying, its press, its words; “four checks” since GTC-422)',
     preflightRaw.includes(SEND_AT_HEAD)
   );
   const preflight = codeOnly(preflightRaw);

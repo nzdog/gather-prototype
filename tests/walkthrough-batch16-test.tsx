@@ -287,9 +287,13 @@ const CHECKS = {
     typeof after[other] === 'string' &&
     q.q === true &&
     q.on.includes(PILLS.BY_EMAIL + SUFFIX),
-  /** The five boxes as expected (true, false), read from the page or from its first frame. */
-  C_BOXES: (seen: any, expect: boolean[]) =>
-    !!seen && [1, 2, 3, 4, 5].every((n, i) => seen[n] === expect[i]),
+  /**
+   * The five steps' boxes as expected (true, false), read from the page or from its first frame.
+   * [[GTC-422]] (tweak 9): step 5 has no box, so its place reads null (none on the page, none in the
+   * first frame); steps 1 to 4 exactly as before.
+   */
+  C_BOXES: (seen: any, expect: (boolean | null)[]) =>
+    !!seen && [1, 2, 3, 4, 5].every((n, i) => (seen[n] ?? null) === expect[i]),
 };
 // ── END CHECKS ──
 
@@ -1080,7 +1084,7 @@ async function runLive() {
       'C',
       'C7 PRECONDITION: a first visit has nothing stored and nothing ticked',
       ok(() => !fresh.error && Object.keys(fresh).length === 0) &&
-        CHECKS.C_BOXES(await ev(BOXES), [false, false, false, false, false]),
+        CHECKS.C_BOXES(await ev(BOXES), [false, false, false, false, null]),
       JSON.stringify(fresh)
     );
     await tick(1);
@@ -1103,8 +1107,7 @@ async function runLive() {
       'C9 after a reload, steps 1 and 2 are ticked from their first frame; the line names step 3',
       ok(
         () =>
-          CHECKS.C_BOXES(first9, [true, true, false, false, false]) &&
-          go9.startsWith('Go to step 3')
+          CHECKS.C_BOXES(first9, [true, true, false, false, null]) && go9.startsWith('Go to step 3')
       ),
       `${JSON.stringify(first9)} "${go9}"`
     );
@@ -1115,12 +1118,12 @@ async function runLive() {
     assert(
       'C',
       'C10 leave the page and come back: the same two ticks',
-      ok(() => CHECKS.C_BOXES(first10, [true, true, false, false, false])),
+      ok(() => CHECKS.C_BOXES(first10, [true, true, false, false, null])),
       JSON.stringify(first10)
     );
     await tick(3);
     await tick(4);
-    await tick(5);
+    // [[GTC-422]]: step 5 has no box; Send is ready once steps 1 to 4 are ticked.
     const send11 = await ev<any>(
       `(() => { const b = [...document.querySelectorAll('#step-5 button')].find((x) => x.innerText.trim().startsWith('Send')); return b ? { text: b.innerText.trim(), off: b.disabled } : null; })()`
     );
@@ -1133,7 +1136,7 @@ async function runLive() {
     );
     assert(
       'C',
-      'C11 all five ticked, reloaded: all five come back (1 to 3 from the first frame, 4 once its message is checked), and Send is ready as it was — never pressed',
+      'C11 steps 1 to 4 ticked (step 5 has no box, GTC-422), reloaded: all four come back (1 to 3 from the first frame, 4 once its message is checked), and Send is ready as it was — never pressed',
       ok(
         () =>
           send11?.text === 'Send' &&
@@ -1141,7 +1144,7 @@ async function runLive() {
           first11[1] === true &&
           first11[2] === true &&
           first11[3] === true &&
-          CHECKS.C_BOXES(now11, [true, true, true, true, true]) &&
+          CHECKS.C_BOXES(now11, [true, true, true, true, null]) &&
           sendAfter?.text === 'Send' &&
           sendAfter.off === false
       ),
@@ -1167,11 +1170,11 @@ async function runLive() {
     const s12 = await ev<any>(STORE);
     assert(
       'C',
-      'C12 a change elsewhere (a critical thing added with no owner): step 1’s tick goes, and Ready with it; 2 to 4 stay; never drawn ticked first (Q7)',
+      'C12 a change elsewhere (a critical thing added with no owner): step 1’s tick goes (and Send waits again); 2 to 4 stay; never drawn ticked first (Q7); Ready has no box (GTC-422)',
       ok(
         () =>
           first12[1] === false &&
-          CHECKS.C_BOXES(now12, [false, true, true, true, false]) &&
+          CHECKS.C_BOXES(now12, [false, true, true, true, null]) &&
           CHECKS.C_STORED(s12, keyA, [2, 3, 4])
       ),
       `${JSON.stringify(first12)} ${JSON.stringify(now12)} ${JSON.stringify(s12).slice(0, 200)}`
@@ -1228,7 +1231,7 @@ async function runLive() {
       'C15 another event shows none of this one’s ticks',
       ok(
         () =>
-          CHECKS.C_BOXES(nowB, [false, false, false, false, false]) && typeof sB[keyA] === 'string'
+          CHECKS.C_BOXES(nowB, [false, false, false, false, null]) && typeof sB[keyA] === 'string'
       ),
       JSON.stringify(nowB)
     );
@@ -1247,10 +1250,10 @@ async function runLive() {
       'C16 a co-host on the same browser sees none of the host’s ticks, and hers are kept apart; the host’s come back as she left them (Q8)',
       ok(
         () =>
-          CHECKS.C_BOXES(nowAna, [false, false, false, false, false]) &&
+          CHECKS.C_BOXES(nowAna, [false, false, false, false, null]) &&
           CHECKS.C_STORED(sAna, keyAna, [3]) &&
           CHECKS.C_STORED(sAna, keyA, [2, 3, 4]) &&
-          CHECKS.C_BOXES(backKate, [false, true, true, true, false])
+          CHECKS.C_BOXES(backKate, [false, true, true, true, null])
       ),
       `${JSON.stringify(nowAna)} ${JSON.stringify(backKate)} ${Object.keys(sAna).length}`
     );
@@ -1298,11 +1301,11 @@ async function runLive() {
       ok(
         () =>
           denied === true &&
-          CHECKS.C_BOXES(deny0, [false, false, false, false, false]) &&
+          CHECKS.C_BOXES(deny0, [false, false, false, false, null]) &&
           deny1[2] === true &&
           errs.length === 0 &&
           sendDeny?.off === true &&
-          sendDeny.text === 'Send — finish the five checks first'
+          sendDeny.text === 'Send — finish the four checks first'
       ),
       `${denied} ${JSON.stringify(deny0)} ${JSON.stringify(deny1)} ${JSON.stringify(errs)} ${JSON.stringify(sendDeny)}`
     );
@@ -1336,8 +1339,8 @@ async function runLive() {
       'C20 at 390, after a reload, steps 2 to 4 come back ticked from their first frame',
       ok(
         () =>
-          CHECKS.C_BOXES(first20, [false, true, true, true, false]) &&
-          CHECKS.C_BOXES(now20, [false, true, true, true, false])
+          CHECKS.C_BOXES(first20, [false, true, true, true, null]) &&
+          CHECKS.C_BOXES(now20, [false, true, true, true, null])
       ),
       `${JSON.stringify(first20)} ${JSON.stringify(now20)}`
     );

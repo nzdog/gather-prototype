@@ -289,7 +289,7 @@ const glanceFixture = {
   unassignedOrdinaryCount: 0,
 };
 
-/** Send's element exactly as it stands at `1fcf643` — Q1: "Send stays exactly as it is." */
+/** Send's element exactly as it stands at `1fcf643` — Q1: "Send stays exactly as it is." [[GTC-422]] (tweak 9, 28 Oct 2026): re-based to "four checks"; the element is otherwise unchanged. */
 const SEND_AT_HEAD = `<button
             type="button"
             disabled={!allChecked || pressing || pressed !== null}
@@ -304,7 +304,7 @@ const SEND_AT_HEAD = `<button
               ? 'Sent'
               : pressing
                 ? 'Sending…'
-                : \`Send\${allChecked ? '' : ' — finish the five checks first'}\`}
+                : \`Send\${allChecked ? '' : ' — finish the four checks first'}\`}
           </button>`;
 
 // ══ IN MEMORY — the pure layer and the render ════════════════════════════════
@@ -642,7 +642,7 @@ async function runInMemory() {
   const preflight = read('src/app/plan/[eventId]/pre-flight/page.tsx');
   assert(
     'R',
-    'R-send CONTROL: Send’s element is byte for byte as it was — its greying, its press and its words (Q1, Q4)',
+    'R-send CONTROL: Send’s element is byte for byte as it was — its greying, its press and its words (Q1, Q4; “four checks” since GTC-422)',
     preflight.includes(SEND_AT_HEAD)
   );
   const page = codeOnly(read('src/app/plan/[eventId]/glance/page.tsx'));
@@ -891,7 +891,7 @@ async function runLive() {
     const box = (n: number) => `${section(n)}?.querySelector('header input[type=checkbox]')`;
     const label = (n: number) => `${section(n)}?.querySelector('header label')`;
     const goLine = `document.querySelector('[data-go-to-step]')`;
-    const sendBtn = `[...document.querySelectorAll('button')].find(b => b.innerText.trim() === 'Send — finish the five checks first')`;
+    const sendBtn = `[...document.querySelectorAll('button')].find(b => b.innerText.trim() === 'Send — finish the four checks first')`;
 
     // ── item 32 — at 1280, then 390 ─────────────────────────────────────────
     for (const [w, h, mobile, tag] of [
@@ -949,10 +949,16 @@ async function runLive() {
         const sw = await ev<number>('document.documentElement.scrollWidth');
         assert('C', `C32w CONTROL: the pre-flight is 390px wide at 390 (${sw}px)`, sw === 390);
         for (const n of [2, 3, 4]) await tap(label(n));
+        // [[GTC-422]] (tweak 9, 28 Oct 2026): step 5 has no box, so once steps 1 to 4 are ticked
+        // there is no line to name it, and Send is on. Re-based from "the line names step 5".
+        const on = await ev<any>(
+          `(() => { const b = [...document.querySelectorAll('button')].find(b => b.innerText.trim() === 'Send'); return { line: ${goLine}?.innerText.trim() ?? null, send: !!b && !b.disabled }; })()`
+        );
         assert(
           'C',
-          `C32l with steps 1 to 4 ticked, the line names step 5 — "${W1(5, STEP_TITLES[4])}" (Q3); step 5 is never ticked here`,
-          (await ev<string>(`${goLine}?.innerText.trim() ?? ''`)) === W1(5, STEP_TITLES[4])
+          'C32l with steps 1 to 4 ticked, no line under Send, and Send is on, reading "Send" (GTC-422: step 5 has no box); it is never pressed',
+          on?.line === null && on?.send === true,
+          JSON.stringify(on)
         );
       }
     }
