@@ -16,7 +16,8 @@ import { GATHER_CONTACT_EMAIL } from '@/lib/email-footer';
 import NeedHelp from '@/components/shared/NeedHelp';
 
 // [[GTC-407]] (ruling 1): 'paid-before' is her return after the payment already made her event.
-type PageState = 'form' | 'creating' | 'canceled' | 'error' | 'emailed' | 'paid-before';
+// [[GTC-418]] (tweak 4): 'paid' is the signed-in payer's "You're all set!", before setup.
+type PageState = 'form' | 'creating' | 'canceled' | 'error' | 'emailed' | 'paid-before' | 'paid';
 
 // Sanitise pre-populated query params to prevent XSS
 function sanitiseParam(value: string | null): string {
@@ -70,6 +71,8 @@ export default function NewPlanPage() {
   const [showExpiredNotice, setShowExpiredNotice] = useState(false);
   // [[GTC-407]] (ruling 2): the receipt a failed creation leaves still good, for "Try Again".
   const [retrySessionId, setRetrySessionId] = useState<string | null>(null);
+  // [[GTC-418]] (tweak 4): the event the payment just made, as the server named it.
+  const [paidEvent, setPaidEvent] = useState<{ id: string; name: string } | null>(null);
 
   // Handle pre-populated params from wrap-up links and expired notice
   useEffect(() => {
@@ -194,10 +197,14 @@ export default function NewPlanPage() {
        * handing her a session on the strength of a receipt is the bug.
        */
       if (result.alreadySignedIn) {
-        // Still a full page load so the server layout picks up her session;
-        // `replace` rather than `assign` so Back does not return to the consumed
-        // creation form (its sessionStorage draft is cleared just above).
-        window.location.replace(`/plan/${result.event.id}/setup`);
+        /*
+         * [[GTC-418]] (tweak 4): "You're all set!" first; its button goes on to setup. The
+         * address becomes setup's now (no load, no request), so a refresh opens setup as it did
+         * before and never asks for the payment again, and Back skips the used return address.
+         */
+        window.history.replaceState(window.history.state, '', `/plan/${result.event.id}/setup`);
+        setPaidEvent({ id: result.event.id, name: result.event.name });
+        setPageState('paid');
         return;
       }
 
@@ -327,6 +334,30 @@ export default function NewPlanPage() {
     );
   }
 
+  // [[GTC-418]] (tweak 4): the signed-in payer's screen. No timer: she moves on when she presses.
+  if (pageState === 'paid' && paidEvent) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="max-w-md w-full mx-4">
+          <div className="bg-white rounded-lg shadow-md p-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">You&rsquo;re all set!</h2>
+            <p className="text-gray-600 mb-6">
+              Your event &ldquo;{paidEvent.name}&rdquo; is paid for and ready.
+            </p>
+            {/* A full page load, so the server layout picks up her session; `replace`, so Back
+                does not return to this screen. */}
+            <button
+              onClick={() => window.location.replace(`/plan/${paidEvent.id}/setup`)}
+              className="block w-full text-center px-6 py-3 bg-accent text-white rounded-lg font-semibold hover:bg-accent-dark"
+            >
+              Start with your people →
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   /*
    * GTC-280 — payment received, and the link is the way in.
    *
@@ -342,9 +373,9 @@ export default function NewPlanPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="max-w-md w-full mx-4">
           <div className="bg-white rounded-lg shadow-md p-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Payment received</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">You&rsquo;re all set!</h2>
             <p className="text-gray-600 mb-6">
-              Your event &ldquo;{handoff.eventName}&rdquo; is ready.
+              Your event &ldquo;{handoff.eventName}&rdquo; is paid for and ready.
             </p>
 
             {handoff.signedInAs && (
