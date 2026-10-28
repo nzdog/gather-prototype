@@ -253,6 +253,34 @@ const CHILD_ROWS = [
 ];
 /** How many cards hold the three answers (the PENDING ones). */
 const PENDING_CARDS = 6;
+/**
+ * [[GTC-419]] (tweak 12, the founder's ruling of 28 Oct 2026): an answered card keeps "Yes", "No"
+ * and "Maybe" (hers marked) in place of the coloured bar and its "Change to" links; the line under
+ * the bar stays. So every open card now draws the three answers: the six unanswered and the two
+ * answered (Pavlova, a maybe; the ham, a yes). And as loaded (cards open) the guest page's words
+ * are b05cac3's with exactly these two pieces changed, typed here by hand.
+ */
+const ANSWER_CARDS = 8;
+const GTC419_GUEST_WORDS: Array<[string, string]> = [
+  [
+    "Maybe It's still yours — we'll check back before your host needs to know. Change to Yes Change to No",
+    "Yes No Maybe It's still yours — we'll check back before your host needs to know.",
+  ],
+  [
+    "Yes — you're bringing this Your host can see you've confirmed ✓ Change to No Change to Maybe",
+    "Yes No Maybe Your host can see you've confirmed ✓",
+  ],
+];
+/** The parent's guest-page captures as GTC-419 rules them: the first (cards open) with the two pieces changed. */
+const guestWordsAsRuled = (parent: string[]): string[] | null => {
+  if (parent.length < 1) return null;
+  let first = parent[0];
+  for (const [was, is] of GTC419_GUEST_WORDS) {
+    if (first.split(was).length !== 2) return null;
+    first = first.replace(was, () => is);
+  }
+  return [first, ...parent.slice(1)];
+};
 const GUEST_DATA = {
   isDemo: false,
   person: JO,
@@ -935,15 +963,16 @@ async function main() {
     l3.length === 0,
     `red at ${l3.join(', ')}`
   );
-  const l4 = per((w) => CHECKS.answersVisible(guest[w]?.open ?? null, PENDING_CARDS));
+  // [[GTC-419]]: the answered cards draw the three answers too (ANSWER_CARDS, eight).
+  const l4 = per((w) => CHECKS.answersVisible(guest[w]?.open ?? null, ANSWER_CARDS));
   assert(
     'L',
-    'L4 the guest page at every width: Yes, No and Maybe on each unanswered card, each inside the card and drawn whole, together across the card (ruling 3)',
+    'L4 the guest page at every width: Yes, No and Maybe on each open card (the six unanswered and, since GTC-419, the two answered), each inside the card and drawn whole, together across the card (ruling 3)',
     l4.length === 0,
     `red at ${l4.join(', ')}`
   );
   const l5 = per((w) =>
-    CHECKS.toggles(guest[w]?.closed ?? null, guest[w]?.again ?? null, GUEST_CARDS, PENDING_CARDS)
+    CHECKS.toggles(guest[w]?.closed ?? null, guest[w]?.again ?? null, GUEST_CARDS, ANSWER_CARDS)
   );
   assert(
     'L',
@@ -1004,11 +1033,13 @@ async function main() {
   // ── W ──
   (['guest', 'host', 'team', 'coordinator'] as const).forEach((pg, i) => {
     const w = words[pg];
-    const first = w ? w.head.findIndex((h, j) => h !== w.parent[j]) : -1;
+    // [[GTC-419]]: the guest page's words are the parent's as tweak 12 rules them.
+    const want = w ? (pg === 'guest' ? guestWordsAsRuled(w.parent) : w.parent) : null;
+    const first = w && want ? w.head.findIndex((h, j) => h !== want[j]) : -1;
     assert(
       'W',
-      `W${i + 1} ${pg === 'guest' ? 'the guest page' : names[pg]}: the visible words, as loaded, after the all-cards toggle and in List view, are the parent’s (b05cac3, served from a scratch folder outside the repo) word for word (ruling 4)`,
-      CHECKS.sameWords(w?.head ?? null, w?.parent ?? null),
+      `W${i + 1} ${pg === 'guest' ? 'the guest page' : names[pg]}: the visible words, as loaded, after the all-cards toggle and in List view, are the parent’s (b05cac3, served from a scratch folder outside the repo) word for word (ruling 4)${pg === 'guest' ? '; but, as loaded, the two answered cards’ answers as GTC-419 rules them, exactly' : ''}`,
+      CHECKS.sameWords(w?.head ?? null, want),
       w
         ? `${w.head.length}/${w.parent.length} captures; first difference at ${first}`
         : 'no capture'
