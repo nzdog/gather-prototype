@@ -432,11 +432,15 @@ export const CHECKS = {
       s.nameValue === nameValue
     );
   },
-  /** C7 — the canceled screen as before. */
+  /**
+   * C7 — the canceled screen as before. [[GTC-415]] (tweak 18, the founder's ruling of 28 Oct
+   * 2026): the card's last line is now the one help line, its words exact, as strictly as before.
+   */
   canceledScreen(s: Screen | null) {
     return (
       !!s &&
-      JSON.stringify(s.lines) === JSON.stringify([CANCELED, NO_CHARGE, TRY_AGAIN]) &&
+      JSON.stringify(s.lines) ===
+        JSON.stringify([CANCELED, NO_CHARGE, TRY_AGAIN, `Need help? Email ${NEW_ADDRESS}`]) &&
       JSON.stringify(s.buttons) === JSON.stringify([TRY_AGAIN]) &&
       !s.form
     );
