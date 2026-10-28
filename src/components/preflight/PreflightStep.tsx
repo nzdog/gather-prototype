@@ -28,6 +28,10 @@
  * bottom of what it shows (`data-tick-foot`), the same control in effect: the same checked state,
  * the same handler, the same words and rules, so ticking either ticks the step and shows both
  * ticked. Ready and the settled steps have only the row's.
+ *
+ * [[GTC-422]] (tweak 9, the founder, 28 Oct 2026: "Step 5 needs no tick") — `noBox`, off by
+ * default: a step that does not fold (Ready) is drawn with no box at all. Every other step, and
+ * Ready without it, is drawn exactly as before.
  */
 
 import { FOLD_ROW_RING, FOLD_ROW_SHADE, FoldBody, FoldCue } from '@/components/plan/AccordionShell';
@@ -50,6 +54,7 @@ export default function PreflightStep({
   open = false,
   onToggle,
   line = null,
+  noBox = false,
   children,
 }: {
   n: number;
@@ -74,6 +79,8 @@ export default function PreflightStep({
   onToggle?: () => void;
   /** [[GTC-377]] (W1 to W3) — under the blurb on the row; none when nothing needs saying. */
   line?: StepLine | null;
+  /** [[GTC-422]] — given, a step that does not fold (Ready) has no box. Off by default. */
+  noBox?: boolean;
   children: React.ReactNode;
 }) {
   const folds = !settled && onToggle !== undefined;
@@ -169,7 +176,7 @@ export default function PreflightStep({
             <div data-tick-slot="" className="flex w-[5.25rem] shrink-0 justify-end">
               {box}
             </div>
-          ) : (
+          ) : noBox ? null : (
             box
           )}
         </div>

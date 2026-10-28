@@ -399,7 +399,8 @@ export default function PreFlightPage() {
   // [[GTC-386]]: a remembered step 4 counts once its message has been checked.
   const allChecked = useMemo(() => {
     const settled = settledSteps(data?.event.invitesOnly === true);
-    return !fourPending && [1, 2, 3, 4, 5].every((n) => checked[n] || settled[n]);
+    // [[GTC-422]] (tweak 9): step 5 has no box, so Send waits on steps 1 to 4 only.
+    return !fourPending && [1, 2, 3, 4].every((n) => checked[n] || settled[n]);
   }, [checked, data, fourPending]);
 
   /*
@@ -533,7 +534,8 @@ export default function PreFlightPage() {
    * box and rings it for two seconds. It ticks nothing and presses nothing. A plain function, not a
    * hook: nothing here may add a hook after the after-the-press return above.
    */
-  const nextStep = firstUnticked({ ...checked, ...settled });
+  // [[GTC-422]]: step 5 has no box, so the line under Send never names it.
+  const nextStep = firstUnticked({ ...checked, ...settled, 5: true });
   /*
    * [[GTC-386]] — one tick for all five boxes: it stamps the step with what it shows now. A plain
    * function, like the others here, after the after-the-press return.
@@ -953,6 +955,8 @@ export default function PreFlightPage() {
           blurb="The last look is done."
           checked={!!checked[5]}
           onCheck={(v) => tick(5, v)}
+          // [[GTC-422]] (tweak 9): Ready is drawn without a box; Send waits on steps 1 to 4.
+          noBox
         >
           {/*
             ── GTC-189 SLICE 5f — THE PRESS. ONE ACT, NO RECALL ────────────────────────
@@ -1006,7 +1010,7 @@ export default function PreFlightPage() {
               ? 'Sent'
               : pressing
                 ? 'Sending…'
-                : `Send${allChecked ? '' : ' — finish the five checks first'}`}
+                : `Send${allChecked ? '' : ' — finish the four checks first'}`}
           </button>
 
           {/* [[GTC-366]] (item 32) — W1, under the greyed Send. Send itself is unchanged (Q1, Q4). */}
