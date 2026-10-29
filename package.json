@@ -176,6 +176,7 @@
     "test:tweaks-f": "tsx --tsconfig tests/tsconfig.json tests/tweaks-f-test.tsx",
     "test:tweaks-g": "tsx --tsconfig tests/tsconfig.json tests/tweaks-g-test.tsx",
     "test:tweaks-d": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/tweaks-d-test.tsx",
+    "test:tweaks-h": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/tweaks-h-test.tsx",
     "test:event-day-end": "tsx tests/event-day-end-test.ts"
   },
   "prisma": {
