@@ -17,12 +17,20 @@
  * TO CHANGE A PROTECTED PATH, a later ticket edits PROTECTED in its own commit, so the founder
  * sees the change in the diff and rules on it. Nothing else turns a check here green.
  *
+ * A RULED CHANGE ([[GTC-426]], 30 Oct 2026). A "path" entry may carry `plus`: the one change the
+ * founder ruled on top of 21a9577, written out in full. The working folder, the index and HEAD
+ * must then each hold 21a9577 PLUS exactly that change: the same files changed (no more, no
+ * fewer), each edited file equal to 21a9577's copy with the named lines inserted at their named
+ * places, and each new file the exact bytes named by its SHA-256. Anything else is red, and so
+ * is a place that does not hold the change yet (HEAD stays red until the change is committed).
+ *
  * SAFETY. Git and file reads only: no database, no dev server, no browser, no provider, no
  * network, no write.
  */
 import fs from 'fs';
 import path from 'path';
 import { spawnSync } from 'child_process';
+import { createHash } from 'crypto';
 
 const ROOT = path.join(__dirname, '..');
 /** GitHub's main when the launch tweaks began (GTC-413's last commit). */
@@ -39,8 +47,13 @@ const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 //   path   a file, a folder, or a git pattern (with *): the whole of it.
 //   span   the function or block that starts with `start` (whole first line, indent included).
 //   line   the one line that starts with `start`.
+//   plus   (path only) a ruled change on top of 21a9577: lines inserted into a file, each block
+//          after the run of whole lines `after` (found exactly once), or a new file by SHA-256.
+type Plus =
+  | { file: string; insert: { after: string[]; lines: string[] }[] }
+  | { file: string; sha256: string };
 type Entry =
-  | { zone: number; kind: 'path'; path: string; why: string }
+  | { zone: number; kind: 'path'; path: string; why: string; ruled?: string; plus?: Plus[] }
   | { zone: number; kind: 'span' | 'line'; path: string; start: string; why: string };
 
 const PROTECTED: Entry[] = [
@@ -150,17 +163,47 @@ const PROTECTED: Entry[] = [
     why: 'whose account a payment lands on (GTC-411, GTC-412)',
   },
   // ── Zone 5: the schema and its migrations ──
+  // GTC-426 (founder ruling, 30 Oct 2026): Person.sampleEventId, nullable text, no foreign key,
+  // with an index. The column and its one migration only; nothing reads or writes it yet.
   {
     zone: 5,
     kind: 'path',
     path: 'prisma/schema.prisma',
     why: 'the schema',
+    ruled: 'GTC-426: the sample marker on Person',
+    plus: [
+      {
+        file: 'prisma/schema.prisma',
+        insert: [
+          {
+            after: ['  nudge48hSentAt   DateTime?'],
+            lines: [
+              '  /// [[GTC-426]] — the sample event (a demo copy) this person was made for. NULL means a real',
+              '  /// person. No foreign key, on purpose (founder ruling, 30 Oct 2026): a plain tag that never',
+              '  /// blocks or cascades an event delete. Added in T1; nothing reads or writes it until T2.',
+              '  sampleEventId    String?',
+            ],
+          },
+          {
+            after: ['  @@index([userId])', '  @@index([email])'],
+            lines: ['  @@index([sampleEventId])'],
+          },
+        ],
+      },
+    ],
   },
   {
     zone: 5,
     kind: 'path',
     path: 'prisma/migrations',
     why: 'the migrations: never edited, deleted or reordered',
+    ruled: 'GTC-426: one new migration, ADD COLUMN and CREATE INDEX',
+    plus: [
+      {
+        file: 'prisma/migrations/20261029195430_gtc426_person_sample_event_id/migration.sql',
+        sha256: 'd367202c694a5683ad6bfb7fdae3334a7704a0b753fa2bab95532dbdd4434f96',
+      },
+    ],
   },
   // ── Zone 6: the security suite ──
   {
@@ -442,6 +485,32 @@ export const CHECKS = {
       work === fixed
     );
   },
+  /** `src` with each block of lines inserted after its run of whole lines `after`, which must
+   * occur exactly once (checked again after each insert). '' if any run is not found once. */
+  withInsertions(src: string, insert: { after: string[]; lines: string[] }[]): string {
+    if (src === '') return '';
+    let lines = src.split('\n');
+    for (const block of insert) {
+      if (block.after.length === 0) return '';
+      const at: number[] = [];
+      for (let i = 0; i + block.after.length <= lines.length; i++) {
+        if (block.after.every((a, k) => lines[i + k] === a)) at.push(i);
+      }
+      if (at.length !== 1) return '';
+      const end = at[0] + block.after.length;
+      lines = [...lines.slice(0, end), ...block.lines, ...lines.slice(end)];
+    }
+    return lines.join('\n');
+  },
+  /** The same set of "<status>\t<file>" lines, in any order, none twice. */
+  sameChanges(found: string[], expected: string[]): boolean {
+    const a = [...new Set(found)].sort();
+    const b = [...new Set(expected)].sort();
+    return a.length === found.length && a.length === b.length && a.every((x, i) => x === b[i]);
+  },
+  sha256(text: string): string {
+    return createHash('sha256').update(text, 'utf8').digest('hex');
+  },
 };
 
 /** The files T0_AT holds under a path or pattern (empty if none, or if git fails). */
@@ -461,6 +530,57 @@ function pathDiffers(spec: string): string[] {
     out.push(`untracked: ${untracked.stdout.trim().split('\n').join(', ')}`);
   if (git(['diff', '--quiet', '--cached', T0_AT, '--', spec]).status !== 0) out.push('index');
   if (git(['diff', '--quiet', T0_AT, 'HEAD', '--', spec]).status !== 0) out.push('HEAD');
+  return out;
+}
+
+/** "<status>\t<file>" for each file under a path that differs from T0_AT (null if git fails). */
+function changesFromT0(spec: string, where: 'working folder' | 'index' | 'HEAD'): string[] | null {
+  const args =
+    where === 'working folder'
+      ? ['diff', '--name-status', '--no-renames', T0_AT, '--', spec]
+      : where === 'index'
+        ? ['diff', '--cached', '--name-status', '--no-renames', T0_AT, '--', spec]
+        : ['diff', '--name-status', '--no-renames', T0_AT, 'HEAD', '--', spec];
+  const r = git(args);
+  if (r.status !== 0) return null;
+  const out = r.stdout.split('\n').filter(Boolean);
+  if (where === 'working folder') {
+    const untracked = git(['ls-files', '--others', '--exclude-standard', '--', spec]);
+    if (untracked.status !== 0) return null;
+    out.push(
+      ...untracked.stdout
+        .split('\n')
+        .filter(Boolean)
+        .map((f) => `A\t${f}`)
+    );
+  }
+  return out;
+}
+
+/** For an entry with a ruled change: which places do not hold 21a9577 plus exactly that change. */
+function plusDiffers(spec: string, plus: Plus[]): string[] {
+  const out: string[] = [];
+  const expected = plus.map((p) => `${'sha256' in p ? 'A' : 'M'}\t${p.file}`);
+  const places = [
+    { name: 'working folder' as const, read: readWork },
+    { name: 'index' as const, read: (rel: string) => show('', rel) },
+    { name: 'HEAD' as const, read: (rel: string) => show('HEAD', rel) },
+  ];
+  for (const place of places) {
+    const found = changesFromT0(spec, place.name);
+    if (found === null || !CHECKS.sameChanges(found, expected)) {
+      out.push(`${place.name} changes [${(found ?? ['git failed']).join(', ')}]`);
+      continue;
+    }
+    for (const p of plus) {
+      const now = place.read(p.file);
+      const held =
+        'sha256' in p
+          ? now !== '' && CHECKS.sha256(now) === p.sha256
+          : now !== '' && now === CHECKS.withInsertions(show(T0_AT, p.file), p.insert);
+      if (!held) out.push(`${place.name}: ${p.file} is not 21a9577 plus the ruled change`);
+    }
+  }
   return out;
 }
 
@@ -500,10 +620,16 @@ function layerG() {
     const id = `G${n + 1}`;
     if (e.kind === 'path') {
       const held = filesAtT0(e.path);
-      const differs = held.length > 0 ? pathDiffers(e.path) : ['nothing at 21a9577'];
+      const differs =
+        held.length === 0
+          ? ['nothing at 21a9577']
+          : e.plus
+            ? plusDiffers(e.path, e.plus)
+            : pathDiffers(e.path);
+      const plus = e.plus ? `, plus ${e.ruled ?? 'a ruled change'}` : '';
       assert(
         'G',
-        `${id} zone ${e.zone}: ${e.path} (${held.length} file${held.length === 1 ? '' : 's'}) — ${e.why}`,
+        `${id} zone ${e.zone}: ${e.path} (${held.length} file${held.length === 1 ? '' : 's'}${plus}) — ${e.why}`,
         held.length > 0 && differs.length === 0,
         `differs in: ${differs.join('; ')}`
       );
