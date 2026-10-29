@@ -98,6 +98,13 @@ const SUITE = 'tests/tweaks-e-test.tsx';
 const BASE = '0d5bd500ec098464095131f305e6f175f616596b';
 /** Ticket E's code commit: a fixed commit. */
 const CODE_E = 'ed87b7e074bf0ea1d6d65c934b34bc6071d989fe';
+/**
+ * [[GTC-424]] (tweak 12b, Batch 2 Part C) — Ticket I's code commit, a fixed commit. The answered
+ * box's No declines her own dishes first there (a new handler with the same two calls), so P1
+ * holds the page byte for byte as at that commit, Ticket E's code commit as 0d5bd50 with exactly
+ * Ticket E's four pieces, and the page unchanged between the two; P2 counts the two new calls.
+ */
+const CODE_I = 'cfc6436896eb2f0cc251a038aa6e2dd8bbd1cb57';
 const CODE_FILES = [PAGE];
 const NEW_SCRIPT = 'test:tweaks-e';
 const NEW_SCRIPT_VALUE = 'tsx --tsconfig tests/tsconfig.json tests/tweaks-e-test.tsx';
@@ -578,8 +585,10 @@ export const CHECKS = {
       was.includes("method: 'PATCH'") &&
       was.includes('fetch(`/api/p/${token}/ack/${assignmentId}`, {') &&
       between(now, M_CALLS_FROM, M_CALLS_TO) === was &&
-      count(now, 'fetch(') === count(base, 'fetch(') &&
-      count(now, 'handleAttendanceAnswer(') === count(base, 'handleAttendanceAnswer(') + 1
+      // [[GTC-424]]: Ticket I's handler, outside this region, holds two more fetch calls (the dish
+      // answer DECLINED and the attendance No), and the answered box's No calls it, not this one.
+      count(now, 'fetch(') === count(base, 'fetch(') + 2 &&
+      count(now, 'handleAttendanceAnswer(') === count(base, 'handleAttendanceAnswer(')
     );
   },
   /** P3 — the old controls and the bar are gone from the code. */
@@ -715,12 +724,15 @@ function layerP(now: string, base: string) {
   section('P — the guest page’s source, against GTC-418’s tip (0d5bd50)');
   assert(
     'P',
-    'P1 the page is 0d5bd50’s file with exactly Ticket E’s four pieces, byte for byte (the two looks and the three answers; the attendance buttons and the note; the bar’s words out; the card’s buttons)',
-    CHECKS.exactly(now, base)
+    'P1 the page at Ticket E’s code commit is 0d5bd50’s file with exactly Ticket E’s four pieces, byte for byte (the two looks and the three answers; the attendance buttons and the note; the bar’s words out; the card’s buttons); unchanged from there to Ticket I’s base; and the page now is byte for byte as at Ticket I’s code commit (GTC-424)',
+    CHECKS.exactly(atRef(CODE_E, PAGE), base) &&
+      atRef(`${CODE_I}^`, PAGE) === atRef(CODE_E, PAGE) &&
+      now.length > 1000 &&
+      now === atRef(CODE_I, PAGE)
   );
   assert(
     'P',
-    'P2 the calls’ code is as before, byte for byte: the page’s read, the attendance answer (PATCH /api/p/<link>) and the dish answer (POST /api/p/<link>/ack/<id>); no fetch added',
+    'P2 the calls’ code is as before, byte for byte: the page’s read, the attendance answer (PATCH /api/p/<link>) and the dish answer (POST /api/p/<link>/ack/<id>); exactly two fetch calls added since, both Ticket I’s (GTC-424), and the attendance answer called as often as at the base',
     CHECKS.callsCodeAsBefore(now, base)
   );
   assert(
