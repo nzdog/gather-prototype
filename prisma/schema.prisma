@@ -288,6 +288,10 @@ model Person {
   /// that should not exist. Read the PersonEvent columns — always.
   nudge24hSentAt   DateTime?
   nudge48hSentAt   DateTime?
+  /// [[GTC-426]] — the sample event (a demo copy) this person was made for. NULL means a real
+  /// person. No foreign key, on purpose (founder ruling, 30 Oct 2026): a plain tag that never
+  /// blocks or cascades an event delete. Added in T1; nothing reads or writes it until T2.
+  sampleEventId    String?
   tokens           AccessToken[]
   assignments      Assignment[]
   auditActions     AuditEntry[]
@@ -311,6 +315,7 @@ model Person {
 
   @@index([userId])
   @@index([email])
+  @@index([sampleEventId])
 }
 
 model PersonEvent {
