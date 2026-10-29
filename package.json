@@ -165,6 +165,7 @@
     "test:demo-tweaks-9": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/demo-tweaks-9-test.tsx",
     "test:demo-tweaks-10": "tsx --tsconfig tests/tsconfig.json tests/demo-tweaks-10-test.tsx",
     "test:demo-tweaks-11": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/demo-tweaks-11-test.tsx",
+    "test:demo-start-switch": "tsx tests/demo-start-switch-test.ts",
     "test:node-22": "tsx tests/node-22-test.ts",
     "test:email-case": "tsx tests/email-case-test.ts",
     "test:qs-same-text": "tsx tests/qs-same-text-test.ts",

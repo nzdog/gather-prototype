@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { randomBytes } from 'crypto';
 import { startDemoCopy } from '@/lib/demo/copy';
 import { checkStartLimit, DEMO_START_WORDS, noteStart, visitorOf } from '@/lib/demo/start-limit';
+import { isDemoStartOn } from '@/lib/demo/start-switch';
 
 const DEMO_EVENT_NAME = 'Henderson Family Christmas 2025';
 
@@ -64,6 +65,17 @@ const DEMO_SESSION_MAX_AGE_SECONDS = 2 * 60 * 60;
  */
 export async function POST(request: Request) {
   try {
+    /*
+     * [[GTC-425]] — THE DEMO START SWITCH (founder ruling, 29 Oct 2026). The copy-start shape opens
+     * only where GATHER_DEMO_START is exactly `on`; closed, it answers 404 before anything is read
+     * or written: no session cookie, no limit, no database. The body is read here, first, only to
+     * tell the two shapes apart. The no-body shape below is unchanged (GTC-015).
+     */
+    const body = (await request.json().catch(() => null)) as { start?: unknown } | null;
+    if (body?.start === 'copy' && !isDemoStartOn()) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
     // GTC-269, and this is a live product bug in its own right, not hygiene.
     //
     // The cookie below is named `session` at `path: '/'` — the same cookie a real
@@ -98,15 +110,15 @@ export async function POST(request: Request) {
 
     /*
      * [[GTC-392]] part A — THE SECOND SHAPE: `{ start: 'copy' }` starts the visitor's OWN sample
-     * event (founder plan rulings, 18 Oct 2026, Q1 and Q2). Read only after the presence check
-     * above, so a present session is never overwritten in either shape. An empty or unreadable
-     * body takes today's path below, unchanged, until part D retires it.
+     * event (founder plan rulings, 18 Oct 2026, Q1 and Q2). Acted on only after the presence
+     * check above, so a present session is never overwritten in either shape. An empty or
+     * unreadable body takes today's path below, unchanged, until part D retires it.
      *
      * Her credential: a throwaway account (`@demo-copy.invalid`) with exactly one role, HOST on the
      * copy made in the same transaction; two hours; the event is hers by construction, never looked
-     * up. The limits apply to this shape only.
+     * up. The limits apply to this shape only. [[GTC-425]]: the body was read at the top of the
+     * handler, and this shape only reaches here when the switch is on.
      */
-    const body = (await request.json().catch(() => null)) as { start?: unknown } | null;
     if (body?.start === 'copy') {
       const visitor = visitorOf(request.headers);
       const limit = await checkStartLimit(prisma, visitor);
