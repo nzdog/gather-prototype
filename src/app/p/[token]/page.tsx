@@ -156,6 +156,9 @@ export default function ParticipantView() {
   const [error, setError] = useState<string | null>(null);
   const [collapsedAssignments, setCollapsedAssignments] = useState<Set<string>>(new Set());
   const isInitialLoad = useRef(true);
+  // [[GTC-424]] (tweak 12b): "No" in the answered box did not go through; and a press under way.
+  const [notComingFailed, setNotComingFailed] = useState(false);
+  const notComingBusy = useRef(false);
 
   useEffect(() => {
     fetchData();
@@ -271,6 +274,43 @@ export default function ParticipantView() {
     }
   };
 
+  /**
+   * [[GTC-424]] (tweak 12b, ruled 28 Oct 2026): "No" in the answered attendance box. The server
+   * takes "not coming" only from a guest whose own dishes are all declined (409 otherwise), so
+   * this FIRST declines each of HER OWN dishes not declined yet, one after another, each with the
+   * call a tap on that dish's "No" sends, THEN sends the attendance No the box always sent. A
+   * child's carried rows are never touched (GTC-191). Any call that fails stops it there: the
+   * attendance No is never sent after a failed decline; the page is read again and says so. A
+   * second press while one is under way sends nothing.
+   */
+  const handleNotComing = async () => {
+    if (!data || notComingBusy.current) return;
+    notComingBusy.current = true;
+    setNotComingFailed(false);
+    const undeclined = data.assignments.filter((a) => a.response !== 'DECLINED');
+    try {
+      for (const a of undeclined) {
+        const response = await fetch(`/api/p/${token}/ack/${a.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ response: 'DECLINED' }),
+        });
+        if (!response.ok) throw new Error('Failed to record response');
+      }
+      const response = await fetch(`/api/p/${token}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ attending: false }),
+      });
+      if (!response.ok) throw new Error('Failed to record answer');
+    } catch {
+      setNotComingFailed(true);
+    } finally {
+      await fetchData();
+      notComingBusy.current = false;
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -350,6 +390,9 @@ export default function ParticipantView() {
   // from the venue and times this page already holds; for a dish with no drop-off of its own. With
   // no venue there is no line (the helper's "no venue yet" sentence is the host's, not a guest's).
   const eventDropOff = data.event.venueName?.trim() ? eventDropOffLine(data.event) : null;
+  // [[GTC-424]] (tweak 12b): the answered box marks her DERIVED attendance, so a stored No beside
+  // an accepted dish reads Yes there too, never "We'll miss you" beside "You're all set".
+  const shownAnswer = data.attendance === 'YES' ? 'YES' : data.attendanceAnswer;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -465,37 +508,46 @@ export default function ParticipantView() {
           {data.attendanceAnswer !== null && (
             <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 mb-6 text-center">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                {data.attendanceAnswer === 'YES'
+                {shownAnswer === 'YES'
                   ? "Great — we'll see you there."
                   : 'Thanks for letting us know'}
               </h2>
               <p className="text-gray-600">
-                {data.attendanceAnswer === 'YES'
+                {shownAnswer === 'YES'
                   ? 'Your host knows to expect you.'
                   : "We'll miss you at the event!"}
               </p>
+              {/* [[GTC-424]] (tweak 12b): her dishes are all No, and the host can see it. */}
+              {shownAnswer === 'NO' &&
+                data.assignments.length > 0 &&
+                data.assignments.every((a) => a.response === 'DECLINED') && (
+                  <p className="text-gray-600 mt-2">
+                    {"We've marked your items No, so your host knows to find someone else."}
+                  </p>
+                )}
               {/* [[GTC-419]] (tweak 12): her answer stays as two buttons, hers marked; the other
                   one sends what "Changed your mind?" sent. No maybe for attendance (zone 5). */}
               <div className="grid grid-cols-2 gap-3 mt-4">
                 <button
-                  aria-pressed={data.attendanceAnswer === 'YES'}
-                  onClick={
-                    data.attendanceAnswer === 'YES' ? undefined : () => handleAttendanceAnswer(true)
-                  }
-                  className={data.attendanceAnswer === 'YES' ? `${PICKED} bg-sage-600` : NOT_PICKED}
+                  aria-pressed={shownAnswer === 'YES'}
+                  onClick={shownAnswer === 'YES' ? undefined : () => handleAttendanceAnswer(true)}
+                  className={shownAnswer === 'YES' ? `${PICKED} bg-sage-600` : NOT_PICKED}
                 >
                   Yes
                 </button>
                 <button
-                  aria-pressed={data.attendanceAnswer === 'NO'}
-                  onClick={
-                    data.attendanceAnswer === 'NO' ? undefined : () => handleAttendanceAnswer(false)
-                  }
-                  className={data.attendanceAnswer === 'NO' ? `${PICKED} bg-gray-500` : NOT_PICKED}
+                  aria-pressed={shownAnswer === 'NO'}
+                  onClick={shownAnswer === 'NO' ? undefined : () => handleNotComing()}
+                  className={shownAnswer === 'NO' ? `${PICKED} bg-gray-500` : NOT_PICKED}
                 >
                   No
                 </button>
               </div>
+              {notComingFailed && (
+                <p role="alert" className="text-sm text-red-600 mt-3">
+                  {"That didn't go through. Please tap No again."}
+                </p>
+              )}
               <p className="text-sm text-gray-500 mt-4">
                 Changed your mind? Tap a different answer. You can come back to this page any time.
               </p>
