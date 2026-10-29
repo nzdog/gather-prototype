@@ -101,6 +101,12 @@ const BASE = '4851b3f3701068ae4faa0d10a99664fbc2a94fcf';
 const CODE_G = '60cf51a4800a11e29a48cdec6fa8ad1b311f381d';
 /** Ticket G's re-base commit (walkthrough-batch18 S11 and C6 to C12): a fixed commit. */
 const REBASE_G = '0192c35274a9fe293bac68f162a6cf5408a725e1';
+/**
+ * [[GTC-423]] (tweak 10, Batch 2 Part C) — Ticket H's code commit, a fixed commit. The board's row
+ * of five took Moment 2's button look there, so P1 holds the board byte for byte as at that commit
+ * (and as at 4851b3f just before it), and the row's class below is that look, typed by hand.
+ */
+const CODE_H = '1abbd1bffb2736934c94de6abae78e334af4df83';
 const CODE_FILES = [ISLAND];
 const REBASE_FILES = [BATCH18];
 const UNCHANGED = [BOARD, HOME, PRINT_DOOR, PRINT_LIB, LISTS_LIB, MOMENT2, OLD_DASHBOARD];
@@ -129,9 +135,13 @@ const LIST_WORDS = [
   'Not given to anyone yet',
 ];
 const EVENT_ID = 'gtc421-made-up-event';
-/** The board's own door class, as GlanceBoard hands it to the island (unchanged). */
+/**
+ * The board's own door class, as GlanceBoard hands it to the island. [[GTC-423]]: since Ticket H
+ * it is the row's one class, Moment 2's button look (it was 'inline-block cursor-pointer
+ * text-[12px] text-[#888780] underline underline-offset-2').
+ */
 const BOARD_DOOR_CLASS =
-  'inline-block cursor-pointer text-[12px] text-[#888780] underline underline-offset-2';
+  'px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors inline-flex items-center text-black cursor-pointer';
 /** The closed island, typed by hand: two fold-out lines and nothing else (React writes & as &amp;). */
 const fold = (which: string, words: string, cls: string) =>
   `<details data-plan-list-fold="${which}" name="plan-lists" class="open:basis-full">` +
@@ -139,9 +149,12 @@ const fold = (which: string, words: string, cls: string) =>
   `</details>`;
 const CLOSED = (cls: string) =>
   fold('menu', MENU_DOOR, cls) + fold('assignments', ASSIGNMENTS_DOOR, cls);
-/** The door and its two neighbours on the board, typed by hand as they were at 4851b3f. */
-const DOOR_HTML = `<a data-back-room-door="" href="/plan/${EVENT_ID}" class="inline-block text-[12px] text-[#888780] underline underline-offset-2">Invites &amp; people</a>`;
-const PLAN_DOOR_HTML = `<a data-plan-door="" href="/plan/${EVENT_ID}/setup" class="inline-block text-[12px] text-[#888780] underline underline-offset-2">Change who&#x27;s on what</a>`;
+/**
+ * The door and its two neighbours on the board, typed by hand as they were at 4851b3f but for
+ * their class: [[GTC-423]] gave all three the row's one class (BOARD_DOOR_CLASS above).
+ */
+const DOOR_HTML = `<a data-back-room-door="" href="/plan/${EVENT_ID}" class="${BOARD_DOOR_CLASS}">Invites &amp; people</a>`;
+const PLAN_DOOR_HTML = `<a data-plan-door="" href="/plan/${EVENT_ID}/setup" class="${BOARD_DOOR_CLASS}">Change who&#x27;s on what</a>`;
 const PRINT_DOOR_HTML = `<button type="button" data-print-door="" class="${BOARD_DOOR_CLASS}">Print the list</button>`;
 
 // ── Made-up lists, typed here ────────────────────────────────────────────────
@@ -484,10 +497,15 @@ export const CHECKS = {
 
 function layerP(island: string, islandBase: string) {
   section('P — the sources, against Part A’s tip (4851b3f)');
-  const changedSince = UNCHANGED.filter((f) => !CHECKS.same(read(f), atRef(BASE, f)));
+  // [[GTC-423]]: the board as at Ticket H's code commit, and as at 4851b3f just before it.
+  const changedSince = UNCHANGED.filter(
+    (f) =>
+      !CHECKS.same(read(f), atRef(f === BOARD ? CODE_H : BASE, f)) ||
+      (f === BOARD && !CHECKS.same(atRef(`${CODE_H}^`, f), atRef(BASE, f)))
+  );
   assert(
     'P',
-    'P1 part 2 SKIPPED: the board, the door’s words and address (home-href.ts), the print door, the print and list libraries, Moment 2 ("Invites, people and nudges") and the old dashboard are byte for byte as at 4851b3f',
+    'P1 part 2 SKIPPED: the board (byte for byte as at Ticket H’s code commit, GTC-423, where only its row’s look changed, and as at 4851b3f just before it), the door’s words and address (home-href.ts), the print door, the print and list libraries, Moment 2 ("Invites, people and nudges") and the old dashboard are byte for byte as at 4851b3f',
     changedSince.length === 0,
     changedSince.join(', ')
   );
@@ -742,7 +760,7 @@ function layerB(islandNow: Component | null, islandBase: Component | null) {
   );
   assert(
     'B',
-    'B2 part 2 SKIPPED: the door "Invites & people", to /plan/<id>, is drawn once, exactly as at 4851b3f, on a planned and an invites-only board',
+    'B2 part 2 SKIPPED: the door "Invites & people", to /plan/<id>, is drawn once, exactly as at 4851b3f but for the row’s class (GTC-423), on a planned and an invites-only board',
     loaded &&
       CHECKS.once(planned, DOOR_HTML) &&
       CHECKS.once(plannedBase, DOOR_HTML) &&
@@ -750,7 +768,7 @@ function layerB(islandNow: Component | null, islandBase: Component | null) {
   );
   assert(
     'B',
-    'B3 "Change who’s on what" and "Print the list" exactly as they were, each once',
+    'B3 "Change who’s on what" and "Print the list" exactly as they were but for the row’s class (GTC-423), each once',
     loaded &&
       CHECKS.once(planned, PLAN_DOOR_HTML) &&
       CHECKS.once(planned, PRINT_DOOR_HTML) &&
