@@ -51,6 +51,12 @@
  * agree on what a gate is. A `NODE_ENV` reference that is not a refusal — the
  * cookie's `secure` flag — is correctly ignored.
  *
+ * THE COPY-START SHAPE, FOUNDER RULING 29 OCT 2026 ([[GTC-425]]). GTC-015's decision
+ * stands for the route: it is reachable in production and carries no environment
+ * refusal. The copy-start shape of `POST /api/demo/session` (`{ start: 'copy' }`) is
+ * now gated by a switch, GATHER_DEMO_START, that the founder turns on at launch; off,
+ * that shape answers 404. The old no-body shape is unchanged. Test 1.2 holds both.
+ *
  * NOT ASSERTED HERE, AND DELIBERATELY: whether the session these routes mint is
  * safe. It is not this file's contract and a source scan cannot see it. GTC-269
  * bounds what the demo session reaches and asserts it behaviourally, by
@@ -135,12 +141,29 @@ async function testSuite1_RouteFileContent() {
     logTest('GET /api/demo/tokens: no environment refusal', false, err.message);
   }
 
-  // Test 1.2: session route does not refuse on the environment
+  // Test 1.2: session route — GTC-015's reachability, and the copy-start shape's switch.
+  //
+  // GTC-015 decided this route is reachable in production, and GTC-269 reaffirmed it: no
+  // environment refusal. By the founder's ruling of 29 Oct 2026 ([[GTC-425]]) the copy-start
+  // shape (`{ start: 'copy' }`) is now gated by a switch, GATHER_DEMO_START, which the founder
+  // turns on at launch; while it is off that shape answers 404. The old no-body shape is
+  // unchanged: no environment refusal and no switch. Its behaviour over HTTP, closed and open, is
+  // held by tests/demo-start-switch-test.ts.
+  const TEST_1_2 =
+    'POST /api/demo/session: no environment refusal (GTC-015); the copy-start shape alone is ' +
+    'switched by GATHER_DEMO_START, 404 while off (founder ruling, 29 Oct 2026)';
   try {
-    const { gated, evidence } = hasEnvironmentRefusal(fs.readFileSync(SESSION_ROUTE, 'utf-8'));
+    const source = fs.readFileSync(SESSION_ROUTE, 'utf-8');
+    const { gated, evidence } = hasEnvironmentRefusal(source);
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    const switched =
+      /if\s*\(\s*body\?\.start\s*===\s*'copy'\s*&&\s*!isDemoStartOn\(\)\s*\)\s*\{\s*return NextResponse\.json\([^;]*status:\s*404/.test(
+        code
+      );
+    const readOnce = (code.match(/isDemoStartOn\(\)/g) ?? []).length === 1;
     logTest(
-      'POST /api/demo/session: no environment refusal — reachable in production',
-      !gated,
+      TEST_1_2,
+      !gated && switched && readOnce,
       gated
         ? `Found an environment gate: "${evidence}". GTC-015 removed this on purpose ` +
             `so the deployed demo works, and GTC-269 reaffirmed it: the fix there was ` +
@@ -148,10 +171,15 @@ async function testSuite1_RouteFileContent() {
             `route. That containment is asserted in suite 11 of ` +
             `tests/security-validation.ts. If a gate is being reintroduced, that ` +
             `reverses a product decision — get a ruling.`
-        : undefined
+        : !switched || !readOnce
+          ? `The copy-start shape must answer 404 unless GATHER_DEMO_START is exactly "on", ` +
+            `and the switch must be read once, for that shape only (founder ruling, ` +
+            `29 Oct 2026, GTC-425). Removing it opens sample copies to anyone in ` +
+            `production before launch — get a ruling.`
+          : undefined
     );
   } catch (err: any) {
-    logTest('POST /api/demo/session: no environment refusal', false, err.message);
+    logTest(TEST_1_2, false, err.message);
   }
 
   // Test 1.3: the check above can actually see a gate.
