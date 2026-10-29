@@ -103,6 +103,14 @@ import {
 } from '@/components/shared/EventDetails';
 import { MOMENT_HEADINGS, MOMENT_WORDS } from '@/lib/moments/moment-words';
 
+/**
+ * [[GTC-423]] (tweak 10, ruled 28 Oct 2026) — the five controls in the board's door row, as
+ * buttons: Moment 2's secondary button, with its black text (it sets no colour and draws the
+ * page's black) and a pointer, so the two fold-out lines look and feel like the other three.
+ */
+const DOOR_ROW_BUTTON_CLASS =
+  'px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors inline-flex items-center text-black cursor-pointer';
+
 interface GlanceBoardProps {
   glance: EventGlance;
   eventName: string;
@@ -688,23 +696,20 @@ export default function GlanceBoard({
           as well as after. Plain links, so the board keeps its no-hooks property; navigation, not
           an action on a strip (Moment 4 spec: the surface shows states, the tap holds actions).
         */}
-        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+        <div className="mt-2 flex flex-wrap gap-2">
           {/*
             [[GTC-388]] (item 72, Q18, Q19) — "See menu" and "See assignments", first in the row; an
             island, so this file still holds no hook and no fetch. No plan on invites-only, so none.
           */}
           {invitesOnly ? null : (
-            <PlanLists
-              eventId={glance.eventId}
-              className="inline-block cursor-pointer text-[12px] text-[#888780] underline underline-offset-2"
-            />
+            <PlanLists eventId={glance.eventId} className={DOOR_ROW_BUTTON_CLASS} />
           )}
           {/* [[GTC-374]] (Q14): an invites-only event has no plan, so neither door about one. */}
           {invitesOnly ? null : (
             <a
               data-plan-door=""
               href={planDoorHref(glance.eventId)}
-              className="inline-block text-[12px] text-[#888780] underline underline-offset-2"
+              className={DOOR_ROW_BUTTON_CLASS}
             >
               {PLAN_DOOR_LINK}
             </a>
@@ -712,7 +717,7 @@ export default function GlanceBoard({
           <a
             data-back-room-door=""
             href={backRoomHref(glance.eventId)}
-            className="inline-block text-[12px] text-[#888780] underline underline-offset-2"
+            className={DOOR_ROW_BUTTON_CLASS}
           >
             {BACK_ROOM_LINK}
           </a>
@@ -722,7 +727,7 @@ export default function GlanceBoard({
               eventId={glance.eventId}
               eventName={eventName}
               printDate={printDate}
-              className="inline-block cursor-pointer text-[12px] text-[#888780] underline underline-offset-2"
+              className={DOOR_ROW_BUTTON_CLASS}
             />
           )}
         </div>
