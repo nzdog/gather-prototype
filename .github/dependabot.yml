@@ -10,6 +10,12 @@ updates:
     labels:
       - 'dependencies'
       - 'security'
+    # Tailwind 4 changed how it plugs into the build and broke main (#69,
+    # reverted). The move to 4 is its own ticket, so skip major versions.
+    ignore:
+      - dependency-name: 'tailwindcss'
+        update-types:
+          - 'version-update:semver-major'
     groups:
       dev-dependencies:
         dependency-type: 'development'

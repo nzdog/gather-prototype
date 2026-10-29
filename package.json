@@ -224,7 +224,7 @@
     "postcss": "^8.5.6",
     "prettier": "^3.7.4",
     "prisma": "^6.19.1",
-    "tailwindcss": "^4.3.3",
+    "tailwindcss": "^3.4.19",
     "typescript": "^5.9.3"
   }
 }
