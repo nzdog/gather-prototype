@@ -179,7 +179,8 @@
     "test:tweaks-d": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/tweaks-d-test.tsx",
     "test:tweaks-h": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/tweaks-h-test.tsx",
     "test:tweaks-i": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/tweaks-i-test.tsx",
-    "test:event-day-end": "tsx tests/event-day-end-test.ts"
+    "test:event-day-end": "tsx tests/event-day-end-test.ts",
+    "test:sample-marker": "tsx tests/sample-marker-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
