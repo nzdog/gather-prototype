@@ -1155,6 +1155,8 @@ export async function drainOnce(
           // header and the body link; nothing is decided here.
           personId: composedRow.recipient.personId,
           eventId,
+          itemNames: composedRow.recipient.itemNames,
+          jobNames: composedRow.recipient.jobNames,
         });
         if (sent.success) {
           await recordAcceptance(db, {

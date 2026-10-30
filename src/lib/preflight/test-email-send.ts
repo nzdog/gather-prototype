@@ -116,6 +116,8 @@ export async function sendTestEmailFor(
     body,
     replyTo: preview.replyTo,
     fromName: preview.hostName,
+    itemNames: row.recipient.itemNames,
+    jobNames: row.recipient.jobNames,
   });
   if (result.success) return 'SENT';
   if (result.error === LIVE_SENDS_OFF) return 'LIVE_OFF';

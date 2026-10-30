@@ -47,6 +47,7 @@ import { listUnsubscribeHeaders, withGuestEmailFooter } from '@/lib/email-footer
 import { unsubscribeUrls } from '@/lib/unsubscribe-token';
 import { isLiveSendingOn, LiveSendsOffError } from '@/lib/live-sends';
 import { DEMO_STOP_WORDS, isDemoEvent } from '@/lib/demo/send-wall';
+import { designGuestEmail, designHostTestEmail, type GuestOwnNames } from '@/lib/email-design';
 
 /** What every sender in this file returns. Callers decide what it means. */
 export interface SendResult {
@@ -251,7 +252,7 @@ function guestEmailParts(
  * `providerMessageId` rather than getting a second reading of Resend's envelope.
  */
 /** The ask and the chase share one shape: her name on Gather's address, replies to her. */
-interface HostVoicedEmail {
+interface HostVoicedEmail extends GuestOwnNames {
   to: string;
   subject: string;
   body: string;
@@ -305,12 +306,15 @@ async function sendHostVoiced(
       return { success: false, error: DEMO_STOP_WORDS };
     const resend = getResendClient();
     const { text, headers } = guestEmailParts(params.body, params.personId, params.eventId);
+    // [[GTC-428]] — the designed part beside the text; the list on the ask only (ruling 2).
+    const html = designGuestEmail(text, params.subject, label === 'ask' ? params : {});
     const response = await resend.emails.send({
       from: hostVoicedFrom(params.fromName),
       to: params.to,
       replyTo: params.replyTo,
       subject: params.subject,
       text,
+      ...(html ? { html } : {}),
       headers,
     });
     return resultOf(label, params.to, response);
@@ -335,7 +339,7 @@ function hostVoicedFrom(fromName: string): string {
 }
 
 /** The host's test of one guest's message, to her own address. [[GTC-388]] (item 64). */
-interface HostTestEmail {
+interface HostTestEmail extends GuestOwnNames {
   /** Her own account address (Q1) — never one typed in, never a guest's. */
   to: string;
   subject: string;
@@ -361,12 +365,15 @@ interface HostTestEmail {
 export async function sendHostTestEmail(params: HostTestEmail): Promise<SendResult> {
   try {
     const resend = getResendClient();
+    // [[GTC-428]] (ruling 5) — designed as the guest's own email, the stand-ins as they are.
+    const html = designHostTestEmail(params.body, params.subject, params);
     const response = await resend.emails.send({
       from: hostVoicedFrom(params.fromName),
       to: params.to,
       ...(params.replyTo ? { replyTo: params.replyTo } : {}),
       subject: params.subject,
       text: params.body,
+      ...(html ? { html } : {}),
     });
     return resultOf('host test', params.to, response);
   } catch (error) {
@@ -401,11 +408,14 @@ export async function sendNudgeEmail(params: {
       return { success: false, error: DEMO_STOP_WORDS };
     const resend = getResendClient();
     const { text, headers } = guestEmailParts(params.body, params.personId, params.eventId);
+    // [[GTC-428]] — the designed part beside the text (the nudge and the thank-you, ruling 1).
+    const html = designGuestEmail(text, params.subject);
     const response = await resend.emails.send({
       from: process.env.EMAIL_FROM || 'Gather <noreply@gather.app>',
       to: params.to,
       subject: params.subject,
       text,
+      ...(html ? { html } : {}),
       headers,
     });
     return resultOf('nudge', params.to, response);
