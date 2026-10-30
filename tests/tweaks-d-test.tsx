@@ -104,6 +104,11 @@ const BASE = '3b8cdfa25e002cff59e27c363c7b9a255f9f96ce';
 const CODE_D = 'a75667951ef75da7d0c7d8f3555ba0548b272235';
 /** Ticket D's re-base commit: a fixed commit. */
 const REBASE_D = '5cb6eac90beb15cb783ecdbf32f8d3a3654797e7';
+/**
+ * Ticket D's ticket commit, the end of its own work: a fixed commit. [[GTC-427]]: U5 reads
+ * BASE..OWN_TIP_D, never BASE..HEAD, so later work no longer moves it.
+ */
+const OWN_TIP_D = '70c6e80a8a1aca82d2e2b4b73ce806a5c28ed37e';
 const CODE_FILES = [PAGE, STEP];
 const REBASE_FILES = [
   'tests/preflight-fold-test.tsx',
@@ -1016,13 +1021,13 @@ function layerU() {
       CHECKS.oneScriptLine(atRef(addCommit, 'package.json'), atRef(BASE, 'package.json'))
   );
   const tracked = UNTRACKED_SCRIPTS.filter(
-    (f) => git(['log', '--oneline', `${BASE}..HEAD`, '--', f]).stdout.trim().length > 0
+    (f) => git(['log', '--oneline', `${BASE}..${OWN_TIP_D}`, '--', f]).stdout.trim().length > 0
   );
   const zones = git([
     'diff',
     '--name-only',
     BASE,
-    'HEAD',
+    OWN_TIP_D,
     '--',
     'src/app/api',
     'src/lib',
@@ -1030,7 +1035,7 @@ function layerU() {
   ]);
   assert(
     'U',
-    'U5 neither untracked script is in any commit since the base, and nothing under src/app/api, src/lib or prisma changed since it (the Send route and the press included)',
+    `U5 neither untracked script is in any commit from the base to this ticket’s own commit (${OWN_TIP_D.slice(0, 7)}), and nothing under src/app/api, src/lib or prisma changed in that range (the Send route and the press included)`,
     tracked.length === 0 && zones.status === 0 && zones.stdout.trim() === '',
     `${tracked.join(', ')} ${zones.stdout}`
   );

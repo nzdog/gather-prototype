@@ -116,6 +116,11 @@ const BASE = 'bcc3662bbb037ab466e289de3de700531b5633a5';
 const CODE_I = 'cfc6436896eb2f0cc251a038aa6e2dd8bbd1cb57';
 /** Ticket I's re-base commit (tweaks-e P1 and P2): a fixed commit. */
 const REBASE_I = 'bc7b33e31d75cb9ad5d05789c86a2943ce644570';
+/**
+ * Ticket I's ticket commit, the end of its own work: a fixed commit. [[GTC-427]]: U5 reads
+ * BASE..OWN_TIP_I, never BASE..HEAD, so later work no longer moves it.
+ */
+const OWN_TIP_I = '9c14e5704d2d30c9cd6c1dbe12af02418e0838de';
 const CODE_FILES = [PAGE];
 const REBASE_FILES = ['tests/tweaks-e-test.tsx'];
 const NEW_SCRIPT = 'test:tweaks-i';
@@ -1247,13 +1252,13 @@ function layerU() {
       CHECKS.oneScriptLine(atRef(addCommit, 'package.json'), atRef(REBASE_I, 'package.json'))
   );
   const tracked = UNTRACKED_SCRIPTS.filter(
-    (f) => git(['log', '--oneline', `${BASE}..HEAD`, '--', f]).stdout.trim().length > 0
+    (f) => git(['log', '--oneline', `${BASE}..${OWN_TIP_I}`, '--', f]).stdout.trim().length > 0
   );
   const zones = git([
     'diff',
     '--name-only',
     BASE,
-    'HEAD',
+    OWN_TIP_I,
     '--',
     'src/app/api',
     'src/lib',
@@ -1261,7 +1266,7 @@ function layerU() {
   ]);
   assert(
     'U',
-    'U5 neither untracked script is in any commit since the base, and nothing under src/app/api, src/lib or prisma changed since it (the answer routes and the attendance rules included)',
+    `U5 neither untracked script is in any commit from the base to this ticket’s own commit (${OWN_TIP_I.slice(0, 7)}), and nothing under src/app/api, src/lib or prisma changed in that range (the answer routes and the attendance rules included)`,
     tracked.length === 0 && zones.status === 0 && zones.stdout.trim() === '',
     `${tracked.join(', ')} ${zones.stdout}`
   );
