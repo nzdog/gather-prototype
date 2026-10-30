@@ -118,6 +118,10 @@ const render = (el: any) => {
 const DEMO_PAGE = 'src/app/demo/page.tsx';
 /** The one button (GTC-394 tweak 3's own label, founder's words). */
 const TRY_IT = 'Try it yourself';
+/** [[GTC-430]] — the founder's words (30 Oct 2026), wherever the button is not. */
+const UNDER_CONSTRUCTION = 'Under construction';
+/** [[GTC-430]] — the button's own client file (the page is a server component now). */
+const DEMO_BUTTON = 'src/components/demo/TryItYourselfButton.tsx';
 /** The route behind the old Sarah button and the sample's own code: none of them edited. */
 const NOT_EDITED_F = [
   'src/app/api/demo/session/route.ts',
@@ -581,9 +585,13 @@ const drawM3 = (extra: Record<string, unknown>) =>
 const textOf = (html: string) => html.replace(/<[^>]+>/g, '');
 
 export const CHECKS = {
-  /** F1, F2 — the first page: the heading "Gather" and its buttons, and nothing else. */
-  frontPage(html: string, buttonsWanted: string[]) {
+  /**
+   * F1, F2 — the first page: the heading "Gather" and its buttons, or ([[GTC-430]]) the note
+   * "Under construction" in their place, and nothing else.
+   */
+  frontPage(html: string, buttonsWanted: string[], notesWanted: string[]) {
     const buttons = [...html.matchAll(/<button\b[^>]*>([^<]*)<\/button>/g)].map((m) => m[1]);
+    const notes = [...html.matchAll(/<p\b[^>]*>([^<]*)<\/p>/g)].map((m) => m[1]);
     const h1 = html.match(/<h1\b[^>]*>([^<]*)<\/h1>/);
     return (
       !!h1 &&
@@ -591,20 +599,29 @@ export const CHECKS = {
       (html.match(/<h1\b/g) ?? []).length === 1 &&
       JSON.stringify(buttons) === JSON.stringify(buttonsWanted) &&
       (html.match(/<button\b/g) ?? []).length === buttons.length &&
-      !/<(h2|h3|p|a|section|hr|img)\b/.test(html) &&
+      JSON.stringify(notes) === JSON.stringify(notesWanted) &&
+      (html.match(/<p\b/g) ?? []).length === notes.length &&
+      !/<(h2|h3|a|section|hr|img)\b/.test(html) &&
       !/Sarah|Henderson|Christmas/.test(html)
     );
   },
   /** F3 — the page's code: no Sarah door left, and nothing posts to the session route bare. */
-  noSarah(src: string) {
+  noSarah(src: string, button: string) {
+    const both = `${src}\n${button}`;
     return (
       src.length > 200 &&
-      !/Sarah|Henderson/.test(src) &&
-      !/handleOpen/.test(src) &&
-      !/\/glance/.test(src) &&
-      !/fetch\('\/api\/demo\/session',\s*\{\s*method:\s*'POST'\s*\}\)/.test(src) &&
-      !/useToast|toast\./.test(src) &&
-      /process\.env\.NODE_ENV === 'development' && \(\s*<button\b/.test(src)
+      button.length > 100 &&
+      !/Sarah|Henderson/.test(both) &&
+      !/handleOpen/.test(both) &&
+      !/\/glance/.test(both) &&
+      !/fetch\('\/api\/demo\/session',\s*\{\s*method:\s*'POST'\s*\}\)/.test(both) &&
+      !/useToast|toast\./.test(both) &&
+      // [[GTC-430]]: the one button, in its own client file, drawn only in development AND with
+      // the switch on.
+      /process\.env\.NODE_ENV === 'development' && isDemoStartOn\(\) \? \(\s*<TryItYourselfButton\b/.test(
+        src
+      ) &&
+      /<button\b/.test(button)
     );
   },
   /** N1 — each borrowed word reads, as text, in its own file. */
@@ -650,14 +667,18 @@ export const CHECKS = {
     );
   },
   /** N11 — /demo: the development-only button opens the sample's page, and /demo fetches nothing. */
-  demoDoor(src: string) {
+  demoDoor(src: string, button: string) {
+    const both = `${src}\n${button}`;
     return (
       /const SAMPLE_PAGE = '\/demo\/new';/.test(src) &&
-      /process\.env\.NODE_ENV === 'development' && \(\s*<button\s+onClick=\{\(\) => window\.location\.assign\(SAMPLE_PAGE\)\}/.test(
+      // [[GTC-430]]: the page hands the sample's page to the button (development AND the switch
+      // on), and the button opens what it is handed.
+      /process\.env\.NODE_ENV === 'development' && isDemoStartOn\(\) \? \(\s*<TryItYourselfButton href=\{SAMPLE_PAGE\}/.test(
         src
       ) &&
-      !/fetch\(/.test(src) &&
-      !/useState|DEMO_START_WORDS/.test(src)
+      /<button\s+onClick=\{\(\) => window\.location\.assign\(href\)\}/.test(button) &&
+      !/fetch\(/.test(both) &&
+      !/useState|DEMO_START_WORDS/.test(both)
     );
   },
   /** C4 — Moment 1's select maps the household's own choices; the old cross-household filter is gone. */
@@ -818,34 +839,42 @@ export const CHECKS = {
 // ══ Items 1 and 2 ════════════════════════════════════════════════════════════
 async function layerF() {
   section('F — items 1 and 2: the front page has only "Try it yourself"');
-  /** The page as a build for `env` draws it (the button is development-only until part D). */
+  /**
+   * The page as a build for `env` draws it (the button is development-only until part D).
+   * [[GTC-430]]: the page reads the demo start switch now, so it is drawn with the switch on, as
+   * this Mac's .env.local has it and as every gate drew it, whatever the runner's setting.
+   */
   const draw = (env: string) => {
     const was = process.env.NODE_ENV;
+    const wasSwitch = process.env.GATHER_DEMO_START;
     (process.env as any).NODE_ENV = env;
+    process.env.GATHER_DEMO_START = 'on';
     try {
       return render(createElement(DemoPage));
     } finally {
       (process.env as any).NODE_ENV = was;
+      if (wasSwitch === undefined) delete process.env.GATHER_DEMO_START;
+      else process.env.GATHER_DEMO_START = wasSwitch;
     }
   };
   const dev = draw('development');
   const prod = draw('production');
   assert(
     'F',
-    'F1 on the founder’s Mac (development): the heading "Gather" and one button, "Try it yourself", and nothing else',
-    CHECKS.frontPage(dev, [TRY_IT]),
+    'F1 on the founder’s Mac (development, the switch on): the heading "Gather" and one button, "Try it yourself", and nothing else (no note, GTC-430)',
+    CHECKS.frontPage(dev, [TRY_IT], []),
     dev.slice(0, 400)
   );
   assert(
     'F',
-    'F2 in a production build: the heading "Gather" and no button (until GTC-392 part D)',
-    CHECKS.frontPage(prod, []),
+    'F2 in a production build, even with the switch on: the heading "Gather", "Under construction" under it (GTC-430) and no button (until GTC-392 part D)',
+    CHECKS.frontPage(prod, [], [UNDER_CONSTRUCTION]),
     prod.slice(0, 400)
   );
   assert(
     'F',
     'F3 the page’s code: the Sarah button and its handler gone, nothing posts to the session route without a body',
-    CHECKS.noSarah(code(DEMO_PAGE))
+    CHECKS.noSarah(code(DEMO_PAGE), code(DEMO_BUTTON))
   );
   assert(
     'F',
@@ -1070,8 +1099,8 @@ async function layerN() {
   );
   assert(
     'N',
-    'N12 /demo’s "Try it yourself" (still development-only) opens /demo/new, and /demo fetches nothing',
-    CHECKS.demoDoor(code(DEMO_PAGE))
+    'N12 /demo’s "Try it yourself" (still development-only, and only with the switch on: GTC-430) opens /demo/new, and /demo fetches nothing',
+    CHECKS.demoDoor(code(DEMO_PAGE), code(DEMO_BUTTON))
   );
   assert(
     'N',
