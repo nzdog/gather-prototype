@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, type MutableRefObject } from 'react';
+import { flushSync } from 'react-dom';
 import MomentArc, { type ArcDoor } from './MomentArc';
 import { normalizePhoneNumber, isInternationalNumber } from '@/lib/phone';
 import { SavedHousehold } from './HouseholdCardList';
@@ -162,6 +163,14 @@ function formSnapshot(f: {
   ]);
 }
 
+/**
+ * [[GTC-431]] — the founder's words beside the Save buttons when a form check stops a Save (31 Oct
+ * 2026: "Please fix N things above", and "Please fix 1 thing above" for one).
+ */
+export function fixWords(n: number): string {
+  return n === 1 ? 'Please fix 1 thing above' : `Please fix ${n} things above`;
+}
+
 let formIdCounter = 0;
 const emptyGuest = (): GuestForm => ({
   id: `f-${++formIdCounter}`,
@@ -248,6 +257,9 @@ export default function Moment1InputForm({
   const totalPeopleAdded = totalPeopleCount ?? internalPeopleAdded;
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
+  /** [[GTC-431]]: a Save was stopped by the form's own checks; the count beside Save shows. */
+  const [fixPrompt, setFixPrompt] = useState(false);
+  const formBoxRef = useRef<HTMLDivElement>(null);
 
   // Edit mode
   const isEditing = !!editingHousehold;
@@ -481,6 +493,7 @@ export default function Moment1InputForm({
     setLittleCount(1);
     setGuests([]);
     setGuestErrors([]);
+    setFixPrompt(false);
     setMemberOrder([]);
     setReopened((n) => n + 1);
     nameInputRef.current?.focus();
@@ -535,6 +548,37 @@ export default function Moment1InputForm({
     if (newGuestErrors.some((e) => e.email || e.phone)) hasErrors = true;
 
     return hasErrors;
+  };
+
+  /** [[GTC-431]]: how many boxes show an error now (the N in "Please fix N things above"). */
+  const errorCount = [
+    nameError,
+    emailError,
+    phoneError,
+    ...(showPartner ? [partnerEmailError, partnerPhoneError] : []),
+    ...helperErrors.flatMap((e) => [e.name, e.email, e.phone]),
+    ...guestErrors.flatMap((e) => [e.email, e.phone]),
+  ].filter(Boolean).length;
+
+  /**
+   * [[GTC-431]] — every Save runs the form's checks through here. When one fails, nothing is sent
+   * (as before), the count shows beside the Save buttons, and the first box with an error, in
+   * screen order, takes focus; focusing it brings it into view. The errors are drawn first
+   * (flushSync) so the box is found by its `aria-invalid`. Called only from a press.
+   */
+  const checksFail = (): boolean => {
+    let bad = false;
+    flushSync(() => {
+      bad = hasValidationErrors();
+      setFixPrompt(bad);
+    });
+    if (bad) {
+      const first = [
+        ...(formBoxRef.current?.querySelectorAll<HTMLElement>('[aria-invalid="true"]') ?? []),
+      ].find((el) => el.getClientRects().length > 0);
+      first?.focus();
+    }
+    return bad;
   };
 
   const buildPayload = (): Moment1PersonInput => {
@@ -603,7 +647,7 @@ export default function Moment1InputForm({
   };
 
   const handleAddAnother = async () => {
-    if (hasValidationErrors()) return;
+    if (checksFail()) return;
 
     setSaving(true);
     setSaveError(false);
@@ -623,7 +667,7 @@ export default function Moment1InputForm({
 
   const handleEditSave = async () => {
     if (!editingHousehold || !onEditSave) return;
-    if (hasValidationErrors()) return;
+    if (checksFail()) return;
 
     setSaving(true);
     try {
@@ -638,7 +682,7 @@ export default function Moment1InputForm({
   const handleDone = async () => {
     // If there's a name typed, save it first
     if (name.trim()) {
-      if (hasValidationErrors()) return;
+      if (checksFail()) return;
 
       setSaving(true);
       setSaveError(false);
@@ -684,7 +728,7 @@ export default function Moment1InputForm({
    */
   const handleSaveHostHousehold = async () => {
     if (!onSaveHostHousehold) return;
-    if (hasValidationErrors()) return;
+    if (checksFail()) return;
 
     setSaving(true);
     setSaveError(false);
@@ -770,7 +814,7 @@ export default function Moment1InputForm({
         {(hostMode || totalPeopleAdded === 0) && <div className="mb-6" />}
 
         {/* Form container */}
-        <div className="border border-gray-200 bg-white rounded-xl p-6">
+        <div ref={formBoxRef} className="border border-gray-200 bg-white rounded-xl p-6">
           {/* Primary contact form */}
           <div className="space-y-4 mb-6">
             <div>
@@ -788,6 +832,7 @@ export default function Moment1InputForm({
                   if (saveError) setSaveError(false);
                 }}
                 placeholder="e.g. Sarah Mitchell"
+                aria-invalid={nameError ? true : undefined}
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
                   nameError ? 'border-red-400' : 'border-gray-300'
                 }`}
@@ -971,6 +1016,7 @@ export default function Moment1InputForm({
                         }}
                         onBlur={() => setPartnerEmailError(validateEmail(partnerEmail))}
                         placeholder="Email"
+                        aria-invalid={partnerEmailError ? true : undefined}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
                           partnerEmailError ? 'border-red-400' : 'border-gray-300'
                         }`}
@@ -989,6 +1035,7 @@ export default function Moment1InputForm({
                         }}
                         onBlur={() => setPartnerPhoneError(validatePhone(partnerPhone))}
                         placeholder="Phone"
+                        aria-invalid={partnerPhoneError ? true : undefined}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
                           partnerPhoneError ? 'border-red-400' : 'border-gray-300'
                         }`}
@@ -1032,6 +1079,7 @@ export default function Moment1InputForm({
                         }}
                         placeholder="Kid's name"
                         autoFocus={orderIdx === 0}
+                        aria-invalid={helperErrors[i]?.name ? true : undefined}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
                           helperErrors[i]?.name ? 'border-red-400' : 'border-gray-300'
                         }`}
@@ -1061,6 +1109,7 @@ export default function Moment1InputForm({
                           );
                         }}
                         placeholder="Email"
+                        aria-invalid={helperErrors[i]?.email ? true : undefined}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
                           helperErrors[i]?.email ? 'border-red-400' : 'border-gray-300'
                         }`}
@@ -1090,6 +1139,7 @@ export default function Moment1InputForm({
                           );
                         }}
                         placeholder="Phone"
+                        aria-invalid={helperErrors[i]?.phone ? true : undefined}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
                           helperErrors[i]?.phone ? 'border-red-400' : 'border-gray-300'
                         }`}
@@ -1170,6 +1220,7 @@ export default function Moment1InputForm({
                           );
                         }}
                         placeholder="Email"
+                        aria-invalid={guestErrors[i]?.email ? true : undefined}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
                           guestErrors[i]?.email ? 'border-red-400' : 'border-gray-300'
                         }`}
@@ -1197,6 +1248,7 @@ export default function Moment1InputForm({
                           );
                         }}
                         placeholder="Phone"
+                        aria-invalid={guestErrors[i]?.phone ? true : undefined}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
                           guestErrors[i]?.phone ? 'border-red-400' : 'border-gray-300'
                         }`}
@@ -1312,6 +1364,13 @@ export default function Moment1InputForm({
         <div className="mt-6">
           {saveError && (
             <p className="text-red-600 text-sm mb-3">That didn&rsquo;t save — please try again.</p>
+          )}
+          {/* [[GTC-431]]: shown only after a Save the form's checks stopped, while any box shows an
+              error; the count follows her fixes. */}
+          {fixPrompt && errorCount > 0 && (
+            <p role="alert" className="text-red-600 text-sm mb-3">
+              {fixWords(errorCount)}
+            </p>
           )}
           {hostMode ? (
             <button
@@ -1440,6 +1499,7 @@ function SkipForNowField({
         }}
         onFocus={() => setShowSkip(false)}
         placeholder={placeholder}
+        aria-invalid={error ? true : undefined}
         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
           error ? 'border-red-400' : 'border-gray-300'
         }`}

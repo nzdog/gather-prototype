@@ -402,10 +402,14 @@ function layerS() {
     'S3 the newest partner, kid or guest block carries the ref, on SubForm’s own box',
     CHECKS.scrollTarget(form)
   );
+  // [[GTC-431]] re-base (the founder's plan approval, 31 Oct 2026, the move GTC-429 made for the
+  // lockfile checks): the form is read at this ticket's code commit (CODE_B, fixed) instead of the
+  // working folder, so a later ticket's edit to the form no longer turns this red. Same meaning
+  // and strictness: tweaks-b's own change to the form was exactly these pieces.
   assert(
     'S',
     'S4 the form is Ticket A’s file with exactly these pieces: no word, no autoFocus, no box order moves',
-    CHECKS.exactly(form, applyPairs(atRef(A_TIP, FORM), FORM_PAIRS))
+    CHECKS.exactly(atRef(CODE_B, FORM), applyPairs(atRef(A_TIP, FORM), FORM_PAIRS))
   );
   let html = '';
   try {
