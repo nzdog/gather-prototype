@@ -386,8 +386,8 @@ function layerU() {
   assert(
     'U',
     'U2 package-lock.json is as at the base, but for the one qs entry GTC-413 moves, which says 6.16.1 and nothing else',
-    read('package-lock.json').length > 1000 &&
-      lockfileIsBaseButQs(read('package-lock.json'), atRef(BASE, 'package-lock.json'))
+    atRef(T0_AT, 'package-lock.json').length > 1000 &&
+      lockfileIsBaseButQs(atRef(T0_AT, 'package-lock.json'), atRef(BASE, 'package-lock.json'))
   );
   // GTC-397's lesson: package.json is read at a fixed commit (the one that added this suite), never
   // as it is now, so a later ticket's script line cannot turn this red.
