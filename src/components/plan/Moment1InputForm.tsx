@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, type MutableRefObject } from 'react';
+import { useState, useEffect, useCallback, useContext, useRef, type MutableRefObject } from 'react';
+import { flushSync } from 'react-dom';
 import MomentArc, { type ArcDoor } from './MomentArc';
 import { normalizePhoneNumber, isInternationalNumber } from '@/lib/phone';
 import { SavedHousehold } from './HouseholdCardList';
@@ -8,6 +9,18 @@ import { HOUSEHOLD_CONTACT_LINE, OWN_HOUSEHOLD_LINE } from '@/lib/households/con
 import { householdDraft } from '@/lib/households/draft';
 import { COPY_WORDS, isCopyAddress } from '@/lib/demo/copy-address';
 import { moment1ChannelChoices } from '@/components/plan/household-channel-choices';
+import { ViewerIdContext } from '@/components/shared/Providers';
+import {
+  DRAFT_KEEP_WORDS,
+  browserDraftStore,
+  changingWords,
+  latestEditDraft,
+  readDraft,
+  removeDraft,
+  writeDraft,
+  type DraftForm,
+  type FormDraftState,
+} from '@/lib/households/form-draft';
 
 export interface Moment1PersonInput {
   primaryContact: {
@@ -116,6 +129,12 @@ interface Moment1InputFormProps {
    */
   moveOnRef?: MutableRefObject<(() => Promise<void>) | null>;
   onSavingChange?: (saving: boolean) => void;
+  /**
+   * [[GTC-435]]: the saved households' ids (null until the list has loaded) and a way to open one
+   * for editing, so "Carry on" can reopen a household she was changing when she left. Absent on her
+   * own household's step.
+   */
+  resumeEdit?: { savedIds: string[] | null; open: (householdId: string) => void };
 }
 
 interface GuestForm {
@@ -162,6 +181,39 @@ function formSnapshot(f: {
   ]);
 }
 
+/**
+ * [[GTC-431]] — the founder's words beside the Save buttons when a form check stops a Save (31 Oct
+ * 2026: "Please fix N things above", and "Please fix 1 thing above" for one).
+ */
+export function fixWords(n: number): string {
+  return n === 1 ? 'Please fix 1 thing above' : `Please fix ${n} things above`;
+}
+
+/**
+ * The form's own email and phone rules: '' when the box is fine, else the words under it. Both
+ * optional. [[GTC-432]] (founder, 31 Oct 2026): each checks the value with its spaces trimmed, as
+ * the payload sends it, so a space typed after an address no longer stops a Save. Phones already
+ * ignored spaces; the rules are otherwise unchanged. Module level, so a suite can check them.
+ */
+export function validateEmail(raw: string): string {
+  const value = raw.trim();
+  if (!value) return '';
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(value)) return 'Invalid email format';
+  return '';
+}
+
+export function validatePhone(raw: string): string {
+  const value = raw.trim();
+  if (!value) return '';
+  if (isInternationalNumber(value)) {
+    return 'International numbers not supported yet. NZ numbers only.';
+  }
+  const normalized = normalizePhoneNumber(value);
+  if (!normalized) return 'Invalid NZ phone number';
+  return '';
+}
+
 let formIdCounter = 0;
 const emptyGuest = (): GuestForm => ({
   id: `f-${++formIdCounter}`,
@@ -172,6 +224,7 @@ const emptyGuest = (): GuestForm => ({
 });
 
 export default function Moment1InputForm({
+  eventId,
   eventName,
   onComplete,
   onAddPerson,
@@ -186,6 +239,7 @@ export default function Moment1InputForm({
   onSavingChange,
   onDraftChange,
   stripDoors,
+  resumeEdit,
 }: Moment1InputFormProps) {
   // Primary contact
   const [name, setName] = useState('');
@@ -248,6 +302,9 @@ export default function Moment1InputForm({
   const totalPeopleAdded = totalPeopleCount ?? internalPeopleAdded;
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
+  /** [[GTC-431]]: a Save was stopped by the form's own checks; the count beside Save shows. */
+  const [fixPrompt, setFixPrompt] = useState(false);
+  const formBoxRef = useRef<HTMLDivElement>(null);
 
   // Edit mode
   const isEditing = !!editingHousehold;
@@ -285,6 +342,226 @@ export default function Moment1InputForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reopened]);
   const hasUnsavedInput = opened !== null && snapshot !== opened;
+
+  /*
+   * [[GTC-435]] — what she types is kept in this browser until it is saved (form-draft.ts), so
+   * leaving Moment 1 and coming back loses nothing. Kept only while someone is signed in, per
+   * person, event and form. Put back only when this form's opening has settled (blank, her own
+   * prefill, or the saved household being changed), always with the line above the form, and
+   * nothing is written or removed before that check, so an empty form on arrival never wipes it.
+   */
+  const viewerId = useContext(ViewerIdContext);
+  const draftForm: DraftForm = hostMode
+    ? 'host'
+    : editingHousehold
+      ? `edit:${editingHousehold.id}`
+      : 'new';
+  const [openedForm, setOpenedForm] = useState<DraftForm | null>(null);
+  useEffect(() => {
+    setOpenedForm(draftForm);
+    // Taken with `opened`, at each opening.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reopened]);
+  const [draftChecked, setDraftChecked] = useState<DraftForm | null>(null);
+  const [keptLine, setKeptLine] = useState<
+    null | { kind: 'kept' } | { kind: 'changing'; householdId: string; name: string }
+  >(null);
+  /** What the form opened with before a draft was put in it, for Discard. */
+  const openingState = useRef<FormDraftState | null>(null);
+
+  const draftState = (): FormDraftState => {
+    const helperAt = new Map(helpers.map((h, i) => [h.id, i]));
+    const guestAt = new Map(guests.map((g, i) => [g.id, i]));
+    const row = (r: GuestForm) => ({
+      name: r.name,
+      email: r.email,
+      phone: r.phone,
+      ...(r.personEventId ? { personEventId: r.personEventId } : {}),
+    });
+    return {
+      name,
+      // Her own step's email is her account's, read from it each time, never kept.
+      email: hostMode ? '' : email,
+      phone,
+      showPartner,
+      partner: {
+        name: partnerName,
+        email: partnerEmail,
+        phone: partnerPhone,
+        ...(partnerPersonEventId ? { personEventId: partnerPersonEventId } : {}),
+      },
+      helpers: helpers.map((h) => ({ ...row(h), adultRoled: Boolean(h.adultRoled) })),
+      showLittles,
+      littleCount,
+      guests: guests.map(row),
+      order: memberOrder.flatMap((m): FormDraftState['order'] => {
+        if (m.type === 'partner') return [{ type: 'partner' as const, index: 0 }];
+        const at = (m.type === 'helper' ? helperAt : guestAt).get(m.id);
+        return at === undefined ? [] : [{ type: m.type, index: at }];
+      }),
+      contactPersonEventId,
+      hostingAlone,
+      messagesMuted,
+    };
+  };
+
+  const applyDraftState = (s: FormDraftState) => {
+    setName(s.name);
+    if (!hostMode) setEmail(s.email);
+    setPhone(s.phone);
+    setNameError('');
+    setEmailError('');
+    setPhoneError('');
+    setShowPartner(s.showPartner);
+    setPartnerName(s.partner.name);
+    setPartnerEmail(s.partner.email);
+    setPartnerPhone(s.partner.phone);
+    setPartnerPersonEventId(s.partner.personEventId);
+    setPartnerEmailError('');
+    setPartnerPhoneError('');
+    const hs: GuestForm[] = s.helpers.map((h) => ({
+      id: `f-${++formIdCounter}`,
+      personEventId: h.personEventId,
+      name: h.name,
+      email: h.email,
+      phone: h.phone,
+      adultRoled: h.adultRoled ?? false,
+    }));
+    const gs: GuestForm[] = s.guests.map((g) => ({
+      id: `f-${++formIdCounter}`,
+      personEventId: g.personEventId,
+      name: g.name,
+      email: g.email,
+      phone: g.phone,
+    }));
+    setHelpers(hs);
+    setHelperErrors(hs.map(() => ({})));
+    setShowLittles(s.showLittles);
+    setLittleCount(s.littleCount);
+    setGuests(gs);
+    setGuestErrors(gs.map(() => ({})));
+    setContactPersonEventId(s.contactPersonEventId);
+    setHostingAlone(s.hostingAlone);
+    setMessagesMuted(s.messagesMuted);
+    setMemberOrder(
+      s.order.map((e) =>
+        e.type === 'partner'
+          ? { type: 'partner' as const, id: 'partner' }
+          : { type: e.type, id: (e.type === 'helper' ? hs : gs)[e.index].id }
+      )
+    );
+    setFixPrompt(false);
+    setSaveError(false);
+  };
+
+  /** A good save, Cancel or Discard: that form's draft goes, and the line with it. */
+  const forgetDraft = (form: DraftForm) => {
+    if (viewerId) removeDraft(browserDraftStore(), viewerId, eventId, form);
+    setKeptLine(null);
+  };
+  /**
+   * What resetForm clears: the draft of the form whose boxes it empties (a good "Save & add another
+   * household" or "Save changes", or Cancel). That is the form checked at this opening, read from
+   * the last render, so a list that re-renders with the household closed first cannot move it.
+   */
+  const forgetOnReset = useRef<() => void>(() => {});
+  useEffect(() => {
+    forgetOnReset.current = () => {
+      if (draftChecked && draftChecked === openedForm) forgetDraft(draftChecked);
+    };
+  });
+
+  /** The "You were changing" line for the saved household she changed last, or null. */
+  const changingLine = (store: ReturnType<typeof browserDraftStore>) => {
+    const changing = viewerId ? latestEditDraft(store, viewerId, eventId) : null;
+    // Without a name to say, no line: that draft still comes back when she presses Edit.
+    const name = changing?.draft.householdName?.trim() || changing?.draft.state.name.trim() || '';
+    return changing && name
+      ? { kind: 'changing' as const, householdId: changing.householdId, name }
+      : null;
+  };
+
+  // Looks for a draft once per opening of each form, when the opening has settled.
+  useEffect(() => {
+    if (!viewerId || draftChecked === draftForm) return;
+    if (openedForm !== draftForm || opened === null || snapshot !== opened) return;
+    const store = browserDraftStore();
+    const kept = readDraft(store, viewerId, eventId, draftForm);
+    const s = kept?.state;
+    const differs =
+      !!s &&
+      formSnapshot({
+        name: s.name,
+        email: hostMode ? email : s.email,
+        phone: s.phone,
+        partner: s.showPartner ? s.partner : null,
+        helpers: s.helpers.map((h) => ({ ...h, id: '' })),
+        littles: s.showLittles ? s.littleCount : 0,
+        guests: s.guests.map((g) => ({ ...g, id: '' })),
+        contactPersonEventId: s.contactPersonEventId,
+        hostingAlone: s.hostingAlone,
+        messagesMuted: s.messagesMuted,
+      }) !== opened;
+    if (s && differs) {
+      openingState.current = draftState();
+      applyDraftState(s);
+      setKeptLine({ kind: 'kept' });
+    } else {
+      if (kept) removeDraft(store, viewerId, eventId, draftForm);
+      setKeptLine(draftForm === 'new' && resumeEdit ? changingLine(store) : null);
+    }
+    setDraftChecked(draftForm);
+    // Runs when an opening settles or the form changes; typing alone never puts a draft back.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewerId, draftChecked, draftForm, openedForm, opened, snapshot]);
+
+  // Keeps what is typed, after that check; the form back as it opened removes the draft.
+  const keepDraft = useRef<() => void>(() => {});
+  useEffect(() => {
+    keepDraft.current = () => {
+      if (!viewerId || draftChecked !== draftForm) return;
+      const store = browserDraftStore();
+      if (hasUnsavedInput) {
+        writeDraft(
+          store,
+          viewerId,
+          eventId,
+          draftForm,
+          draftState(),
+          editingHousehold?.primaryContact.name
+        );
+      } else {
+        removeDraft(store, viewerId, eventId, draftForm);
+      }
+    };
+    keepDraft.current();
+  });
+  useEffect(() => {
+    const onHide = () => keepDraft.current();
+    window.addEventListener('pagehide', onHide);
+    return () => window.removeEventListener('pagehide', onHide);
+  }, []);
+
+  /*
+   * Ruling 4: a draft for a household since removed is dropped, silently. The founder's safeguard
+   * (31 Oct 2026): only once the list has loaded (`savedIds` is null until it has, and stays null
+   * if it fails) and the household is not in it; a list that failed to load keeps every draft.
+   */
+  const savedIds = resumeEdit?.savedIds ?? null;
+  const savedKey = savedIds ? savedIds.join(',') : null;
+  useEffect(() => {
+    if (keptLine?.kind !== 'changing' || !savedIds || !viewerId) return;
+    if (savedIds.includes(keptLine.householdId)) return;
+    const store = browserDraftStore();
+    removeDraft(store, viewerId, eventId, `edit:${keptLine.householdId}`);
+    setKeptLine(changingLine(store));
+    // Runs when the line or the loaded list changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keptLine, savedKey, viewerId]);
+  const showKeptLine =
+    !!keptLine &&
+    draftChecked === draftForm &&
+    (keptLine.kind === 'kept' || !!savedIds?.includes(keptLine.householdId));
 
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -444,24 +721,9 @@ export default function Moment1InputForm({
     return () => window.removeEventListener('beforeunload', handler);
   }, [hasUnsavedInput]);
 
-  const validateEmail = (value: string): string => {
-    if (!value) return '';
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(value)) return 'Invalid email format';
-    return '';
-  };
-
-  const validatePhone = (value: string): string => {
-    if (!value) return '';
-    if (isInternationalNumber(value)) {
-      return 'International numbers not supported yet. NZ numbers only.';
-    }
-    const normalized = normalizePhoneNumber(value);
-    if (!normalized) return 'Invalid NZ phone number';
-    return '';
-  };
-
   const resetForm = useCallback(() => {
+    // [[GTC-435]]: the form is reset only after a good save or on Cancel, so its draft goes too.
+    forgetOnReset.current();
     setName('');
     setEmail('');
     setPhone('');
@@ -481,6 +743,7 @@ export default function Moment1InputForm({
     setLittleCount(1);
     setGuests([]);
     setGuestErrors([]);
+    setFixPrompt(false);
     setMemberOrder([]);
     setReopened((n) => n + 1);
     nameInputRef.current?.focus();
@@ -535,6 +798,37 @@ export default function Moment1InputForm({
     if (newGuestErrors.some((e) => e.email || e.phone)) hasErrors = true;
 
     return hasErrors;
+  };
+
+  /** [[GTC-431]]: how many boxes show an error now (the N in "Please fix N things above"). */
+  const errorCount = [
+    nameError,
+    emailError,
+    phoneError,
+    ...(showPartner ? [partnerEmailError, partnerPhoneError] : []),
+    ...helperErrors.flatMap((e) => [e.name, e.email, e.phone]),
+    ...guestErrors.flatMap((e) => [e.email, e.phone]),
+  ].filter(Boolean).length;
+
+  /**
+   * [[GTC-431]] — every Save runs the form's checks through here. When one fails, nothing is sent
+   * (as before), the count shows beside the Save buttons, and the first box with an error, in
+   * screen order, takes focus; focusing it brings it into view. The errors are drawn first
+   * (flushSync) so the box is found by its `aria-invalid`. Called only from a press.
+   */
+  const checksFail = (): boolean => {
+    let bad = false;
+    flushSync(() => {
+      bad = hasValidationErrors();
+      setFixPrompt(bad);
+    });
+    if (bad) {
+      const first = [
+        ...(formBoxRef.current?.querySelectorAll<HTMLElement>('[aria-invalid="true"]') ?? []),
+      ].find((el) => el.getClientRects().length > 0);
+      first?.focus();
+    }
+    return bad;
   };
 
   const buildPayload = (): Moment1PersonInput => {
@@ -603,7 +897,7 @@ export default function Moment1InputForm({
   };
 
   const handleAddAnother = async () => {
-    if (hasValidationErrors()) return;
+    if (checksFail()) return;
 
     setSaving(true);
     setSaveError(false);
@@ -623,13 +917,18 @@ export default function Moment1InputForm({
 
   const handleEditSave = async () => {
     if (!editingHousehold || !onEditSave) return;
-    if (hasValidationErrors()) return;
+    if (checksFail()) return;
 
     setSaving(true);
+    setSaveError(false);
     try {
       const payload = buildPayload();
       await onEditSave(editingHousehold.id, payload);
       resetForm();
+    } catch {
+      // [[GTC-433]]: a failed save says so, as the other two Save buttons do, and keeps the form
+      // exactly as she left it, so pressing "Save changes" again retries the same edit.
+      setSaveError(true);
     } finally {
       setSaving(false);
     }
@@ -638,7 +937,7 @@ export default function Moment1InputForm({
   const handleDone = async () => {
     // If there's a name typed, save it first
     if (name.trim()) {
-      if (hasValidationErrors()) return;
+      if (checksFail()) return;
 
       setSaving(true);
       setSaveError(false);
@@ -648,6 +947,7 @@ export default function Moment1InputForm({
         if (totalPeopleCount === undefined) {
           setInternalPeopleAdded((prev) => prev + countMembers(payload));
         }
+        forgetDraft('new');
       } catch {
         setSaveError(true);
         setSaving(false);
@@ -684,7 +984,7 @@ export default function Moment1InputForm({
    */
   const handleSaveHostHousehold = async () => {
     if (!onSaveHostHousehold) return;
-    if (hasValidationErrors()) return;
+    if (checksFail()) return;
 
     setSaving(true);
     setSaveError(false);
@@ -700,6 +1000,7 @@ export default function Moment1InputForm({
         guests: hostingAlone ? undefined : base.guests,
         messagesMuted: hostingAlone ? true : messagesMuted,
       });
+      forgetDraft('host');
     } catch {
       setSaveError(true);
     } finally {
@@ -769,8 +1070,59 @@ export default function Moment1InputForm({
 
         {(hostMode || totalPeopleAdded === 0) && <div className="mb-6" />}
 
+        {/* [[GTC-435]]: never put back silently. A quiet line above the form on every restore, with
+            the founder's words (31 Oct 2026); hiding it keeps the form, Discard empties it. */}
+        {showKeptLine && keptLine && (
+          <div
+            role="status"
+            data-draft-line={keptLine.kind}
+            className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"
+          >
+            <p className="flex-1 min-w-[12rem] text-sm text-gray-700">
+              {keptLine.kind === 'kept' ? DRAFT_KEEP_WORDS.KEPT : changingWords(keptLine.name)}
+            </p>
+            <div className="flex gap-4">
+              {keptLine.kind === 'kept' ? (
+                <button
+                  type="button"
+                  onClick={() => setKeptLine(null)}
+                  className="py-1 text-sm font-medium text-accent underline underline-offset-2"
+                >
+                  {DRAFT_KEEP_WORDS.GOT_IT}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = keptLine.householdId;
+                    setKeptLine(null);
+                    resumeEdit?.open(id);
+                  }}
+                  className="py-1 text-sm font-medium text-accent underline underline-offset-2"
+                >
+                  {DRAFT_KEEP_WORDS.CARRY_ON}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  if (keptLine.kind === 'changing') {
+                    forgetDraft(`edit:${keptLine.householdId}`);
+                    return;
+                  }
+                  forgetDraft(draftForm);
+                  if (openingState.current) applyDraftState(openingState.current);
+                }}
+                className="py-1 text-sm text-gray-500 underline underline-offset-2 hover:text-gray-800"
+              >
+                {DRAFT_KEEP_WORDS.DISCARD}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Form container */}
-        <div className="border border-gray-200 bg-white rounded-xl p-6">
+        <div ref={formBoxRef} className="border border-gray-200 bg-white rounded-xl p-6">
           {/* Primary contact form */}
           <div className="space-y-4 mb-6">
             <div>
@@ -788,6 +1140,7 @@ export default function Moment1InputForm({
                   if (saveError) setSaveError(false);
                 }}
                 placeholder="e.g. Sarah Mitchell"
+                aria-invalid={nameError ? true : undefined}
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
                   nameError ? 'border-red-400' : 'border-gray-300'
                 }`}
@@ -971,6 +1324,7 @@ export default function Moment1InputForm({
                         }}
                         onBlur={() => setPartnerEmailError(validateEmail(partnerEmail))}
                         placeholder="Email"
+                        aria-invalid={partnerEmailError ? true : undefined}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
                           partnerEmailError ? 'border-red-400' : 'border-gray-300'
                         }`}
@@ -989,6 +1343,7 @@ export default function Moment1InputForm({
                         }}
                         onBlur={() => setPartnerPhoneError(validatePhone(partnerPhone))}
                         placeholder="Phone"
+                        aria-invalid={partnerPhoneError ? true : undefined}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
                           partnerPhoneError ? 'border-red-400' : 'border-gray-300'
                         }`}
@@ -1032,6 +1387,7 @@ export default function Moment1InputForm({
                         }}
                         placeholder="Kid's name"
                         autoFocus={orderIdx === 0}
+                        aria-invalid={helperErrors[i]?.name ? true : undefined}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
                           helperErrors[i]?.name ? 'border-red-400' : 'border-gray-300'
                         }`}
@@ -1061,6 +1417,7 @@ export default function Moment1InputForm({
                           );
                         }}
                         placeholder="Email"
+                        aria-invalid={helperErrors[i]?.email ? true : undefined}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
                           helperErrors[i]?.email ? 'border-red-400' : 'border-gray-300'
                         }`}
@@ -1090,6 +1447,7 @@ export default function Moment1InputForm({
                           );
                         }}
                         placeholder="Phone"
+                        aria-invalid={helperErrors[i]?.phone ? true : undefined}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
                           helperErrors[i]?.phone ? 'border-red-400' : 'border-gray-300'
                         }`}
@@ -1170,6 +1528,7 @@ export default function Moment1InputForm({
                           );
                         }}
                         placeholder="Email"
+                        aria-invalid={guestErrors[i]?.email ? true : undefined}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
                           guestErrors[i]?.email ? 'border-red-400' : 'border-gray-300'
                         }`}
@@ -1197,6 +1556,7 @@ export default function Moment1InputForm({
                           );
                         }}
                         placeholder="Phone"
+                        aria-invalid={guestErrors[i]?.phone ? true : undefined}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
                           guestErrors[i]?.phone ? 'border-red-400' : 'border-gray-300'
                         }`}
@@ -1312,6 +1672,13 @@ export default function Moment1InputForm({
         <div className="mt-6">
           {saveError && (
             <p className="text-red-600 text-sm mb-3">That didn&rsquo;t save — please try again.</p>
+          )}
+          {/* [[GTC-431]]: shown only after a Save the form's checks stopped, while any box shows an
+              error; the count follows her fixes. */}
+          {fixPrompt && errorCount > 0 && (
+            <p role="alert" className="text-red-600 text-sm mb-3">
+              {fixWords(errorCount)}
+            </p>
           )}
           {hostMode ? (
             <button
@@ -1440,6 +1807,7 @@ function SkipForNowField({
         }}
         onFocus={() => setShowSkip(false)}
         placeholder={placeholder}
+        aria-invalid={error ? true : undefined}
         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-accent ${
           error ? 'border-red-400' : 'border-gray-300'
         }`}

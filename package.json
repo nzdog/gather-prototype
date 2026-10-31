@@ -181,6 +181,7 @@
     "test:tweaks-i": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/tweaks-i-test.tsx",
     "test:event-day-end": "tsx tests/event-day-end-test.ts",
     "test:tweaks-j": "tsx tests/tweaks-j-test.ts",
+    "test:household-save": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/household-save-test.tsx",
     "test:sample-marker": "tsx tests/sample-marker-test.ts"
   },
   "prisma": {

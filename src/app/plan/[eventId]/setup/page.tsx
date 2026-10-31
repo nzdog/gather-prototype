@@ -495,6 +495,8 @@ function EventSetupFlow() {
     setInvitesOnlyState(outcome.kind === 'NOT_HOST' ? 'not-host' : 'failed');
   };
   const [households, setHouseholds] = useState<SavedHousehold[]>([]);
+  /** [[GTC-435]]: the list has loaded once, so a kept draft's household can be looked for in it. */
+  const [householdsLoaded, setHouseholdsLoaded] = useState(false);
   const [channelCandidates, setChannelCandidates] = useState<ChannelCandidateOption[]>([]);
   // [[GTC-392]] part B — "Add a crowd" on a sample copy (W16 to W21): where it is up to.
   const [crowd, setCrowd] = useState<CrowdState>('idle');
@@ -769,6 +771,7 @@ function EventSetupFlow() {
       if (res.ok) {
         const data = await res.json();
         setHouseholds(data.households.map(apiHouseholdToSaved));
+        setHouseholdsLoaded(true);
         // GTC-172 (C1): the contact picker is CROSS-HOUSEHOLD capable (§10.7) —
         // Grandma's channel may live in another household — so candidates are
         // gathered across the whole event, not per household. CHILD-role members are
@@ -1377,6 +1380,10 @@ function EventSetupFlow() {
                 onDraftChange={setMoment1Draft}
                 moveOnRef={moment1MoveOnRef}
                 onSavingChange={setMoment1Saving}
+                resumeEdit={{
+                  savedIds: householdsLoaded ? households.map((h) => h.id) : null,
+                  open: handleEdit,
+                }}
                 stripDoors={doorsFor(
                   1,
                   // [[GTC-367]] (Q9): a household typed or being changed keeps her here.
