@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireEventRole } from '@/lib/auth/guards';
 import { ledgerActorForUser } from '@/lib/auth/actor';
@@ -7,6 +8,7 @@ import { normalizePhoneNumber } from '@/lib/phone';
 import { validateChannelTarget } from '@/lib/households/channel';
 import { hostHasMembership } from '@/lib/households/hostHousehold';
 import { findOrCreateCapturedPerson } from '@/lib/households/capturePerson';
+import { ChannelValidationError } from '@/lib/households/reconcileMembers';
 import { addDemoCrowd } from '@/lib/demo/crowd';
 
 // GET /api/events/[id]/households - List households for event
@@ -185,8 +187,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       );
     }
 
-    // Helper: find-or-create a Person and create their PersonEvent
+    // Helper: find-or-create a Person and create their PersonEvent.
+    // [[GTC-434]]: every write goes through `db`, the transaction below, so a household is
+    // stored whole or not at all.
     async function createMember(
+      db: Prisma.TransactionClient,
       input: HouseholdMemberInput,
       householdId: string,
       householdRole: 'PRIMARY_CONTACT' | 'PARTNER' | 'GUEST' | 'CHILD',
@@ -199,7 +204,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       const normalizedPhone = input.phone ? normalizePhoneNumber(input.phone) : null;
 
       // [[GTC-293]]: who this row is — the address AND the first name, never the address alone.
-      const person = await findOrCreateCapturedPerson(prisma, {
+      const person = await findOrCreateCapturedPerson(db, {
         eventId,
         hostPersonId: event!.hostId,
         name: input.name,
@@ -223,14 +228,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       }
 
       // Check if person already in this event
-      const existing = await prisma.personEvent.findUnique({
+      const existing = await db.personEvent.findUnique({
         where: { personId_eventId: { personId: person.id, eventId } },
       });
 
       if (existing) {
         // Link to household if not already linked
         if (!existing.householdId) {
-          await prisma.personEvent.update({
+          await db.personEvent.update({
             where: { id: existing.id },
             data: { householdId, householdRole, isYoungPerson },
           });
@@ -238,7 +243,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         return existing;
       }
 
-      return prisma.personEvent.create({
+      return db.personEvent.create({
         data: {
           personId: person.id,
           eventId,
@@ -254,72 +259,100 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       });
     }
 
-    // Create household
-    const household = await prisma.household.create({
-      data: {
+    const hhActor = await ledgerActorForUser(auth.user, auth.role);
+
+    /*
+     * [[GTC-434]] (founder, 31 Oct 2026) — ONE TRANSACTION, as the PUT and her own household's
+     * POST already are. The household, every member, the contact picker and the ledger entry are
+     * written together: a failure part-way (a member's write refused, a bad picker) stores nothing,
+     * where it used to keep the household, its adults and the children before the failing one, and
+     * a retry then made a second household with no main contact. Database writes only: nothing in
+     * here sends or calls out.
+     */
+    const householdId = await prisma.$transaction(async (tx) => {
+      // Create household
+      const household = await tx.household.create({
+        data: {
+          eventId,
+          littleCount: littleCount ?? 0,
+        },
+      });
+
+      // Create primary contact
+      await createMember(tx, primaryContact, household.id, 'PRIMARY_CONTACT');
+
+      // Create partner if provided with a name
+      if (partner?.name?.trim()) {
+        await createMember(tx, partner, household.id, 'PARTNER');
+      }
+
+      // Create helpers (kids with jobs).
+      //
+      // GTC-172 (C1): `adultRoled` is the host's explicit, deliberate decision that this
+      // particular kid with a job is old enough to be messaged directly (§10.6). It
+      // changes the STORED ROLE — there is no "child but messageable" state, because
+      // that is the soft override §10.6 forbids. It is never inferred from a phone
+      // number or anything else about the person's data.
+      if (helpers) {
+        for (const helper of helpers) {
+          if (helper.name?.trim()) {
+            await createMember(
+              tx,
+              helper,
+              household.id,
+              helper.adultRoled ? 'GUEST' : 'CHILD',
+              true // captured as a kid with a job, whatever role they end up with
+            );
+          }
+        }
+      }
+
+      // Create guests if provided with names
+      if (guests) {
+        for (const guest of guests) {
+          if (guest.name?.trim()) {
+            await createMember(tx, guest, household.id, 'GUEST');
+          }
+        }
+      }
+
+      // GTC-172 (C1): the household contact picker (§10.7). Applied after members exist.
+      // On create this is normally a CROSS-HOUSEHOLD pick — an adult in an already-saved
+      // household — since this household's own members have no ids until just now.
+      // [[GTC-434]]: a refused pick throws, so the whole household is rolled back (400 below).
+      if (contactPersonEventId) {
+        const target = await tx.personEvent.findUnique({
+          where: { id: contactPersonEventId },
+          select: { eventId: true, householdRole: true },
+        });
+        const check = validateChannelTarget(target, eventId);
+        if (!check.ok) throw new ChannelValidationError(check.error);
+        await tx.household.update({
+          where: { id: household.id },
+          data: { contactPersonEventId },
+        });
+      }
+
+      await recordChange(tx, {
         eventId,
-        littleCount: littleCount ?? 0,
-      },
+        actor: hhActor,
+        changes: [
+          {
+            action: 'ADD_PERSON',
+            targetType: 'Household',
+            targetId: household.id,
+            before: null,
+            after: { primaryContact: primaryContact?.name ?? null },
+          },
+        ],
+      });
+
+      return household.id;
     });
-
-    // Create primary contact
-    await createMember(primaryContact, household.id, 'PRIMARY_CONTACT');
-
-    // Create partner if provided with a name
-    if (partner?.name?.trim()) {
-      await createMember(partner, household.id, 'PARTNER');
-    }
-
-    // Create helpers (kids with jobs).
-    //
-    // GTC-172 (C1): `adultRoled` is the host's explicit, deliberate decision that this
-    // particular kid with a job is old enough to be messaged directly (§10.6). It
-    // changes the STORED ROLE — there is no "child but messageable" state, because
-    // that is the soft override §10.6 forbids. It is never inferred from a phone
-    // number or anything else about the person's data.
-    if (helpers) {
-      for (const helper of helpers) {
-        if (helper.name?.trim()) {
-          await createMember(
-            helper,
-            household.id,
-            helper.adultRoled ? 'GUEST' : 'CHILD',
-            true // captured as a kid with a job, whatever role they end up with
-          );
-        }
-      }
-    }
-
-    // Create guests if provided with names
-    if (guests) {
-      for (const guest of guests) {
-        if (guest.name?.trim()) {
-          await createMember(guest, household.id, 'GUEST');
-        }
-      }
-    }
-
-    // GTC-172 (C1): the household contact picker (§10.7). Applied after members exist.
-    // On create this is normally a CROSS-HOUSEHOLD pick — an adult in an already-saved
-    // household — since this household's own members have no ids until just now.
-    if (contactPersonEventId) {
-      const target = await prisma.personEvent.findUnique({
-        where: { id: contactPersonEventId },
-        select: { eventId: true, householdRole: true },
-      });
-      const check = validateChannelTarget(target, eventId);
-      if (!check.ok) {
-        return NextResponse.json({ error: check.error }, { status: 400 });
-      }
-      await prisma.household.update({
-        where: { id: household.id },
-        data: { contactPersonEventId },
-      });
-    }
 
     // Fetch the complete household with members
     const result = await prisma.household.findUnique({
-      where: { id: household.id },
+      where: { id: householdId },
       include: {
         members: {
           include: {
@@ -336,25 +369,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       },
     });
 
-    const hhActor = await ledgerActorForUser(auth.user, auth.role);
-    await prisma.$transaction((tx) =>
-      recordChange(tx, {
-        eventId,
-        actor: hhActor,
-        changes: [
-          {
-            action: 'ADD_PERSON',
-            targetType: 'Household',
-            targetId: result?.id ?? '',
-            before: null,
-            after: { primaryContact: primaryContact?.name ?? null },
-          },
-        ],
-      })
-    );
-
     return NextResponse.json({ household: result }, { status: 201 });
   } catch (error: any) {
+    // [[GTC-434]]: a refused contact picker is a bad request, as before; the transaction has
+    // rolled back, so nothing of the household is kept.
+    if (error instanceof ChannelValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error('Error creating household:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

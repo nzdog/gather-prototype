@@ -947,6 +947,9 @@ async function runLive() {
           new7.length === 1 &&
           new7[0] === 'beforeunload';
         detail.C7 = JSON.stringify({ field7, typed7, t7, path7, new7 });
+        await ev(
+          `Object.keys(localStorage).filter((k) => k.startsWith('gather:household-draft:')).forEach((k) => localStorage.removeItem(k))`
+        );
       } else {
         // C6 — the phone menu, opened on Moment 1, lies on top of it, in the new order.
         await c.navigate(`/plan/${evM1}/setup`, 8000);

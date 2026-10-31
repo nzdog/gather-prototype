@@ -18,7 +18,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en">
       <body>
-        <Providers>
+        {/* [[GTC-435]]: the signed-in user's id only, for drafts kept in this browser. */}
+        <Providers viewerId={user?.id ?? null}>
           <Navigation user={user} />
           {children}
         </Providers>
