@@ -1195,7 +1195,24 @@ async function runLive() {
         console.log('    (C17 not run: the browser took the NUL out of the text box)');
       } else {
         await clearCalls();
-        await tap(`window.__btn('Save & add another household')`, 2000);
+        // Wait for the server's reply to this press (its body read), up to 15 s, then let the page
+        // draw it, instead of a fixed 2 s: a refusal can take longer than that on a busy machine.
+        await ev(`(() => { const f = window.fetch; window.__c17 = { sent: 0, replied: 0 };
+          window.fetch = function (u, o) { const p = f.apply(this, arguments);
+            if (((o && o.method) || 'GET').toUpperCase() === 'POST' && String(typeof u === 'string' ? u : u.url).endsWith('/households')) {
+              window.__c17.sent++;
+              p.then((r) => r.clone().text()).catch(() => {}).finally(() => { window.__c17.replied++; });
+            }
+            return p; }; })()`);
+        await tap(`window.__btn('Save & add another household')`, 300);
+        const t17 = Date.now();
+        while (
+          Date.now() - t17 < 15000 &&
+          !(await ev<boolean>(`window.__c17.sent > 0 && window.__c17.replied >= window.__c17.sent`))
+        )
+          await sleep(100);
+        await sleep(500);
+        const reply17 = await ev<{ sent: number; replied: number }>(`window.__c17`);
         const f17 = await ev<{ words: boolean; kids: number; name: string }>(`(() => ({
           words: [...document.querySelectorAll('p')].filter(window.__vis).some((p) => p.innerText.trim() === ${S(SAVE_FAILED)}),
           kids: window.__kids().length, name: document.querySelector('#m1-name').value }))()`);
@@ -1220,7 +1237,7 @@ async function runLive() {
               (m) => m.person.name === 'Cal c17' && m.householdRole === 'PRIMARY_CONTACT'
             ) === true &&
             last?.members.filter((m) => m.householdRole === 'CHILD').length === 6,
-          S({ ...f17, stored17, hhC17, now: await households(evX) })
+          S({ ...f17, reply17, stored17, hhC17, now: await households(evX) })
         );
       }
     } else {
