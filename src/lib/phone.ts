@@ -8,6 +8,15 @@ export function normalizePhoneNumber(phone: string): string | null {
   // Remove all non-digit characters except leading +
   let cleaned = phone.replace(/[^\d+]/g, '');
 
+  // [[GTC-432]] (founder, 31 Oct 2026): "+64 (0)21 123 4567" and "64 (0)21 123 4567" → +64211234567.
+  // The one 0 written after the country code is dropped, before anything else, so only a number
+  // she typed with +64 or 64 in front is touched (a local 0… or a 00 64… is not). Then as before.
+  if (cleaned.startsWith('+640')) {
+    cleaned = '+64' + cleaned.slice(4);
+  } else if (cleaned.startsWith('640')) {
+    cleaned = '64' + cleaned.slice(3);
+  }
+
   // Handle various NZ formats
   if (cleaned.startsWith('0')) {
     // Local format: 021 123 4567 → +64211234567

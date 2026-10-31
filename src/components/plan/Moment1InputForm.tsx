@@ -171,6 +171,31 @@ export function fixWords(n: number): string {
   return n === 1 ? 'Please fix 1 thing above' : `Please fix ${n} things above`;
 }
 
+/**
+ * The form's own email and phone rules: '' when the box is fine, else the words under it. Both
+ * optional. [[GTC-432]] (founder, 31 Oct 2026): each checks the value with its spaces trimmed, as
+ * the payload sends it, so a space typed after an address no longer stops a Save. Phones already
+ * ignored spaces; the rules are otherwise unchanged. Module level, so a suite can check them.
+ */
+export function validateEmail(raw: string): string {
+  const value = raw.trim();
+  if (!value) return '';
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(value)) return 'Invalid email format';
+  return '';
+}
+
+export function validatePhone(raw: string): string {
+  const value = raw.trim();
+  if (!value) return '';
+  if (isInternationalNumber(value)) {
+    return 'International numbers not supported yet. NZ numbers only.';
+  }
+  const normalized = normalizePhoneNumber(value);
+  if (!normalized) return 'Invalid NZ phone number';
+  return '';
+}
+
 let formIdCounter = 0;
 const emptyGuest = (): GuestForm => ({
   id: `f-${++formIdCounter}`,
@@ -455,23 +480,6 @@ export default function Moment1InputForm({
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [hasUnsavedInput]);
-
-  const validateEmail = (value: string): string => {
-    if (!value) return '';
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(value)) return 'Invalid email format';
-    return '';
-  };
-
-  const validatePhone = (value: string): string => {
-    if (!value) return '';
-    if (isInternationalNumber(value)) {
-      return 'International numbers not supported yet. NZ numbers only.';
-    }
-    const normalized = normalizePhoneNumber(value);
-    if (!normalized) return 'Invalid NZ phone number';
-    return '';
-  };
 
   const resetForm = useCallback(() => {
     setName('');

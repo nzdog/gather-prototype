@@ -9,12 +9,17 @@
  *   431  When a check stops a Save, "Please fix N things above" shows beside the Save buttons
  *        ("Please fix 1 thing above" for one), and the first failing box, in screen order, takes
  *        focus and comes into view. All three Save buttons, and "Save & move on →".
+ *   432  The form checks an email and a phone with their spaces trimmed, and a phone typed
+ *        "+64 (0)21 123 4567" is stored as +64211234567 (the one 0 after +64 dropped). Phone rules
+ *        otherwise unchanged.
  *
  * THE LAYERS
  *   W  the words, typed here by hand
  *   R  the form rendered in this process: no error marker and no count on a clean form
  *   S  the form's source: every Save path runs the checks through one place; the count is drawn
  *      only after a stopped Save
+ *   T  the form's email and phone rules and normalizePhoneNumber on typed inputs, each expected
+ *      value written here by hand (GTC-432)
  *   C  the setup page in the walled-off headless Chrome (port 9495) on the guarded dev server, at
  *      1280 and 390, on a fixture of its own (example.com addresses, made-up 021 numbers, nothing
  *      queued): each Save button pressed with a bad box far above it. Every page fetch is recorded
@@ -31,7 +36,12 @@ import { randomBytes } from 'crypto';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import Moment1InputForm, { fixWords } from '../src/components/plan/Moment1InputForm';
+import Moment1InputForm, {
+  fixWords,
+  validateEmail,
+  validatePhone,
+} from '../src/components/plan/Moment1InputForm';
+import { normalizePhoneNumber } from '../src/lib/phone';
 import { prisma } from '../src/lib/prisma';
 import { installProviderTrap } from './helpers/provider-trap';
 import { openHeadless, type Headless } from './helpers/headless';
@@ -176,6 +186,76 @@ function layerS() {
     /\{fixPrompt && errorCount > 0 && \(\s*<p role="alert" className="text-red-600 text-sm mb-3">\s*\{fixWords\(errorCount\)\}/.test(
       code
     ) && /setFixPrompt\(false\);/.test(code)
+  );
+}
+
+// ══ T — THE RULES, TRIMMED (GTC-432) ═════════════════════════════════════════
+const EMAIL_WORDS = 'Invalid email format';
+const NZ_WORDS = 'Invalid NZ phone number';
+const INTL_WORDS = 'International numbers not supported yet. NZ numbers only.';
+/** [typed, the form's words ('' = fine)], by hand. */
+const EMAILS: Array<[string, string]> = [
+  ['kid@example.com', ''],
+  ['kid@example.com ', ''],
+  ['  kid@example.com', ''],
+  ['', ''],
+  ['   ', ''],
+  ['kid@test', EMAIL_WORDS],
+  ['kid.example.com', EMAIL_WORDS],
+  ['kid@@example.com', EMAIL_WORDS],
+  ['kid one@example.com', EMAIL_WORDS],
+];
+/** [typed, the form's words, what normalizePhoneNumber stores (null = nothing)], by hand. */
+const PHONES: Array<[string, string, string | null]> = [
+  ['021 123 4567', '', '+64211234567'],
+  [' 021 123 4567 ', '', '+64211234567'],
+  ['022 123 456', '', '+6422123456'],
+  ['(09) 123 4567', '', '+6491234567'],
+  ['+64 21 123 4567', '', '+64211234567'],
+  ['64211234567', '', '+64211234567'],
+  ['0800 123 456', '', '+64800123456'],
+  ['+64 (0)21 123 4567', '', '+64211234567'],
+  ['64 (0)21 123 4567', '', '+64211234567'],
+  ['+64 (0)9 123 4567', '', '+6491234567'],
+  ['+64 (0)21 1234 5678', '', '+642112345678'],
+  ['', '', null],
+  ['123 4567', NZ_WORDS, null],
+  ['12345678', NZ_WORDS, null],
+  ['0064211234567', NZ_WORDS, null],
+  ['0064 21 123 456', NZ_WORDS, null],
+  ['+64 (0)123 4567', NZ_WORDS, null],
+  ['+61 412 345 678', INTL_WORDS, null],
+];
+function layerT() {
+  section('T — the email and phone rules, trimmed; "+64 (0)" stored without the 0 (GTC-432)');
+  const emailOff = EMAILS.filter(([v, w]) => validateEmail(v) !== w);
+  assert(
+    'T',
+    `T1 the form's email rule on ${EMAILS.length} typed values: spaces around an address no longer stop it; the rest as before`,
+    emailOff.length === 0,
+    JSON.stringify(emailOff.map(([v]) => [v, validateEmail(v)]))
+  );
+  const formOff = PHONES.filter(([v, w]) => validatePhone(v) !== w);
+  assert(
+    'T',
+    `T2 the form's phone rule on ${PHONES.length} typed values: as before, "+64 (0)" numbers accepted, "+64 (0)" + 7 digits refused`,
+    formOff.length === 0,
+    JSON.stringify(formOff.map(([v]) => [v, validatePhone(v)]))
+  );
+  const storedOff = PHONES.filter(([v, , n]) => normalizePhoneNumber(v) !== n);
+  assert(
+    'T',
+    'T3 what normalizePhoneNumber stores for each: "+64 (0)21 123 4567" and "64 (0)21 123 4567" are +64211234567, every other row as before',
+    storedOff.length === 0,
+    JSON.stringify(storedOff.map(([v]) => [v, normalizePhoneNumber(v)]))
+  );
+  const phoneCode = codeOnly(read('src/lib/phone.ts'));
+  assert(
+    'T',
+    'T4 the 0 is dropped first, only after +64 or 64, once: a local 0… or a 00 64… is never touched',
+    /let cleaned = phone\.replace\(\/\[\^\\d\+\]\/g, ''\);\s*if \(cleaned\.startsWith\('\+640'\)\) \{\s*cleaned = '\+64' \+ cleaned\.slice\(4\);\s*\} else if \(cleaned\.startsWith\('640'\)\) \{\s*cleaned = '64' \+ cleaned\.slice\(3\);\s*\}\s*if \(cleaned\.startsWith\('0'\)\)/.test(
+      phoneCode
+    )
   );
 }
 
@@ -456,6 +536,43 @@ async function runLive() {
       await tap(`window.__btn('Cancel')`, 500);
     }
 
+    // ── C12–C13: a "+64 (0)" phone saves right, at 390 (GTC-432) ─────────────────
+    // Found building GTC-432: an email box (type="email") hands the page its value with the spaces
+    // at either end already removed (the browser's own value rule), so on these boxes the form
+    // never saw them. C13 records that; T1 holds the trimmed rule itself.
+    await go(`/plan/${evA}/setup`);
+    const trimmedEmail = `kidtrim-${stamp}@example.com`;
+    await ev(`window.__set(document.querySelector('#m1-name'), 'Tia trim')`);
+    await tap(`window.__btn('👦 Kid with a job')`, 300);
+    await ev(`(() => { const k = window.__kids()[0]; window.__set(k.name, 'Kid trim');
+      window.__set(k.email, ${S(trimmedEmail + ' ')}); window.__set(k.phone, '+64 (0)21 000 0021');
+      return k.email.value; })()`);
+    const emailBoxValue = await ev<string>(`window.__kids()[0].email.value`);
+    await clearCalls();
+    await tap(`window.__btn('Save & add another household')`, 2000);
+    const trimKid = await prisma.person.findFirst({
+      where: { name: 'Kid trim', eventMemberships: { some: { eventId: evA } } },
+    });
+    assert(
+      'C',
+      'C12 390: a kid with phone "+64 (0)21 000 0021": no "Please fix", one POST; stored as +64210000021 (and the email as typed)',
+      S(await ev(`window.__alert()`)) === S([]) &&
+        S(await calls()) === S([`POST /api/events/${evA}/households`]) &&
+        trimKid?.email === trimmedEmail &&
+        trimKid?.phoneNumber === '+64210000021',
+      S({
+        calls: await calls(),
+        email: trimKid?.email === trimmedEmail,
+        phone: trimKid?.phoneNumber?.slice(0, 4),
+      })
+    );
+    assert(
+      'C',
+      'C13 FACT: the email box itself drops a space typed after the address (its value holds none), before the form reads it',
+      emailBoxValue === trimmedEmail,
+      S(emailBoxValue === trimmedEmail)
+    );
+
     // ── C9–C10: her own household's step, at 390 ──────────────────────────────
     await go(`/plan/${evB}/setup`);
     const started = await tap(`window.__btn('Ready to start herding →')`, 1500);
@@ -545,6 +662,7 @@ async function main() {
   layerW();
   layerR();
   layerS();
+  layerT();
   if (process.env.HOUSEHOLD_SAVE_DRY_RUN !== '1') {
     try {
       await runLive();
