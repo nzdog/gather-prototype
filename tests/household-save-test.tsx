@@ -17,12 +17,18 @@
  *   434  "Save & add another household" (POST /api/events/[id]/households) writes the household,
  *        its adults and children, the contact picker and the ledger entry in one transaction: a
  *        failure part-way stores nothing, and a retry stores the household once, whole.
+ *   435  What she types is kept in this browser (localStorage, per signed-in person, event and
+ *        form, 7 days) until it is saved, and put back with a quiet line when she comes back:
+ *        "Got it" / "Discard", or "Carry on" for a saved household she was changing. A sign-out
+ *        clears every draft here; nothing is sent anywhere.
  *
  * THE LAYERS
  *   W  the words, typed here by hand
  *   R  the form rendered in this process: no error marker and no count on a clean form
  *   S  the form's source: every Save path runs the checks through one place; the count is drawn
  *      only after a stopped Save
+ *   D  the draft module with a stand-in storage: the key, what is refused and removed, the sweep,
+ *      a storage that refuses every touch (GTC-435)
  *   T  the form's email and phone rules and normalizePhoneNumber on typed inputs, each expected
  *      value written here by hand (GTC-432)
  *   X  the households POST over HTTP on the guarded dev server, with the fixture host's session
@@ -34,11 +40,15 @@
  *      in the page; the browser fails every plan-making and sending request before it leaves; every
  *      click is `clickGuarded`. Never pressed: Move on, Send, Generate. Every fixture row is counted
  *      and removed by id; InviteEvent and OutboundMessage totals are asserted as found.
+ *      C18–C26 (GTC-435) leave by "← Your events" or the phone menu (the "Leave site?" a computer
+ *      shows answered Leave, as iPhone Safari leaves without asking) and come back by the event's
+ *      row, an in-app route change.
  *
  * Needs the dev server on :3000 and a global WebSocket (NODE_OPTIONS=--experimental-websocket).
  * HOUSEHOLD_SAVE_DRY_RUN=1 runs the in-memory layers only.
  */
 import fs from 'fs';
+import { execFileSync } from 'child_process';
 import path from 'path';
 import { randomBytes } from 'crypto';
 import { createElement } from 'react';
@@ -51,6 +61,20 @@ import Moment1InputForm, {
 } from '../src/components/plan/Moment1InputForm';
 import { normalizePhoneNumber } from '../src/lib/phone';
 import { validateChannelTarget } from '../src/lib/households/channel';
+import {
+  DRAFT_KEEP_WORDS,
+  DRAFT_MAX_AGE_MS,
+  browserDraftStore,
+  changingWords,
+  draftKey,
+  latestEditDraft,
+  readDraft,
+  removeDraft,
+  sweepDrafts,
+  writeDraft,
+  type DraftStore,
+  type FormDraftState,
+} from '../src/lib/households/form-draft';
 import { prisma } from '../src/lib/prisma';
 import { installProviderTrap } from './helpers/provider-trap';
 import { openHeadless, type Headless } from './helpers/headless';
@@ -63,6 +87,21 @@ const BASE = 'http://localhost:3000';
 const PORT = 9495;
 const FORM = 'src/components/plan/Moment1InputForm.tsx';
 const ROUTE = 'src/app/api/events/[id]/households/route.ts';
+const DRAFT_FILE = 'src/lib/households/form-draft.ts';
+/** [[GTC-435]]: the branch tip it is built on; the two Save handlers must be as they are there. */
+const BASE_435 = '9ff914dff007945800f6519bb950e289438f51e7';
+const gitShow = (ref: string, rel: string) => {
+  try {
+    return execFileSync('git', ['show', `${ref}:${rel}`], { cwd: ROOT, encoding: 'utf8' });
+  } catch {
+    return '';
+  }
+};
+const SETUP = 'src/app/plan/[eventId]/setup/page.tsx';
+const LAYOUT = 'src/app/layout.tsx';
+const PROVIDERS = 'src/components/shared/Providers.tsx';
+const EVENT_D = 'GTC-435 household draft — her household saved';
+const EVENT_E = 'GTC-435 household draft — her own household first';
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ── Reporting ────────────────────────────────────────────────────────────────
@@ -147,6 +186,13 @@ function layerR() {
     host.includes('Save and add everyone else →') &&
       !host.includes('aria-invalid') &&
       !host.includes('Please fix')
+  );
+  assert(
+    'R',
+    'R3 a clean form, with nobody signed in, draws no kept line (GTC-435)',
+    !add.includes('data-draft-line') &&
+      !add.includes(DRAFT_KEEP_WORDS.KEPT) &&
+      !host.includes('data-draft-line')
   );
 }
 
@@ -243,6 +289,334 @@ function layerS7() {
   );
 }
 
+// ══ D — THE DRAFT KEPT IN THIS BROWSER (GTC-435) ═════════════════════════════
+/** A stand-in for localStorage, in this process. */
+class StandInStore implements DraftStore {
+  m = new Map<string, string>();
+  get length() {
+    return this.m.size;
+  }
+  key(i: number) {
+    return [...this.m.keys()][i] ?? null;
+  }
+  getItem(k: string) {
+    return this.m.has(k) ? this.m.get(k)! : null;
+  }
+  setItem(k: string, v: string) {
+    this.m.set(k, String(v));
+  }
+  removeItem(k: string) {
+    this.m.delete(k);
+  }
+}
+/** A storage that refuses every touch, as some private browsers do. */
+const refusingStore: DraftStore = {
+  get length(): number {
+    throw new Error('refused');
+  },
+  key() {
+    throw new Error('refused');
+  },
+  getItem() {
+    throw new Error('refused');
+  },
+  setItem() {
+    throw new Error('refused');
+  },
+  removeItem() {
+    throw new Error('refused');
+  },
+};
+/** A household as typed: a main contact, a partner, six kids with a job, a guest. */
+const typedState = (tag: string): FormDraftState => ({
+  name: `Nina ${tag}`,
+  email: `nina-${tag}@example.com`,
+  phone: '021 000 0001',
+  showPartner: true,
+  partner: { name: `Ollie ${tag}`, email: '', phone: '' },
+  helpers: [1, 2, 3, 4, 5, 6].map((i) => ({
+    name: `Kid ${tag} ${i}`,
+    email: `kid${i}-${tag}@example.com`,
+    phone: `021 000 00${10 + i}`,
+    adultRoled: false,
+  })),
+  showLittles: false,
+  littleCount: 1,
+  guests: [{ name: `Gus ${tag}`, email: '', phone: '' }],
+  order: [
+    { type: 'guest', index: 0 },
+    ...[5, 4, 3, 2, 1, 0].map((index) => ({ type: 'helper' as const, index })),
+    { type: 'partner', index: 0 },
+  ],
+  contactPersonEventId: null,
+  hostingAlone: false,
+  messagesMuted: true,
+});
+const DAY = 24 * 60 * 60 * 1000;
+const NOW = Date.UTC(2026, 9, 31, 2, 0, 0);
+/** A stored value, as the module writes it, with one part changed. */
+const storedValue = (over: Record<string, unknown>) =>
+  JSON.stringify({
+    v: 1,
+    userId: 'u1',
+    eventId: 'e1',
+    form: 'new',
+    savedAt: NOW,
+    state: typedState('d'),
+    ...over,
+  });
+
+function layerD() {
+  section('D — the draft, kept in this browser per person, event and form (GTC-435)');
+  assert(
+    'D',
+    'D1 the key: gather:household-draft:v1:<user>:<event>:<form>, for her own step, a new household and a saved one',
+    draftKey('u1', 'e1', 'host') === 'gather:household-draft:v1:u1:e1:host' &&
+      draftKey('u1', 'e1', 'new') === 'gather:household-draft:v1:u1:e1:new' &&
+      draftKey('u1', 'e1', 'edit:h9') === 'gather:household-draft:v1:u1:e1:edit:h9'
+  );
+  {
+    const s = new StandInStore();
+    const st = typedState('d2');
+    const wrote = writeDraft(s, 'u1', 'e1', 'new', st, undefined, NOW);
+    const back = readDraft(s, 'u1', 'e1', 'new', NOW + 1000);
+    const raw = JSON.parse(s.getItem(draftKey('u1', 'e1', 'new')) ?? '{}');
+    assert(
+      'D',
+      'D2 written and read back for the same person, event and form: every name, email and phone, the rows in order; the value repeats who, which event, which form, and when',
+      wrote &&
+        S0(back?.state) === S0(st) &&
+        raw.userId === 'u1' &&
+        raw.eventId === 'e1' &&
+        raw.form === 'new' &&
+        raw.savedAt === NOW &&
+        raw.v === 1
+    );
+  }
+  {
+    const cases: Array<[string, string]> = [
+      ['another person inside the value', storedValue({ userId: 'u2' })],
+      ['another event inside the value', storedValue({ eventId: 'e2' })],
+      ['another form inside the value', storedValue({ form: 'host' })],
+      ['another version', storedValue({ v: 2 })],
+      ['7 days and 1 minute old', storedValue({ savedAt: NOW - 7 * DAY - 60_000 })],
+      ['dated 2 minutes ahead', storedValue({ savedAt: NOW + 120_000 })],
+      ['not JSON', '{'],
+      ['a littles count of 0', storedValue({ state: { ...typedState('d3'), littleCount: 0 } })],
+      [
+        'a row order past the rows',
+        storedValue({ state: { ...typedState('d3'), order: [{ type: 'helper', index: 6 }] } }),
+      ],
+    ];
+    const off = cases.filter(([, value]) => {
+      const s = new StandInStore();
+      const k = draftKey('u1', 'e1', 'new');
+      s.setItem(k, value);
+      return readDraft(s, 'u1', 'e1', 'new', NOW) !== null || s.getItem(k) !== null;
+    });
+    assert(
+      'D',
+      `D3 refused and removed (${cases.length}): ${cases.map(([w]) => w).join('; ')}`,
+      off.length === 0,
+      S0(off.map(([w]) => w))
+    );
+  }
+  {
+    const s = new StandInStore();
+    s.setItem(draftKey('u1', 'e1', 'new'), storedValue({ savedAt: NOW - 7 * DAY + 60_000 }));
+    assert(
+      'D',
+      'D4 7 days less a minute old: still read; asked for by another person or for another event: nothing, and hers kept',
+      readDraft(s, 'u1', 'e1', 'new', NOW) !== null &&
+        readDraft(s, 'u2', 'e1', 'new', NOW) === null &&
+        readDraft(s, 'u1', 'e2', 'new', NOW) === null &&
+        s.getItem(draftKey('u1', 'e1', 'new')) !== null
+    );
+  }
+  {
+    const s = new StandInStore();
+    s.setItem(draftKey('u1', 'e1', 'new'), storedValue({}));
+    s.setItem(draftKey('u1', 'e2', 'edit:h1'), storedValue({ eventId: 'e2', form: 'edit:h1' }));
+    s.setItem(draftKey('u2', 'e1', 'new'), storedValue({ userId: 'u2' }));
+    s.setItem('gather:preflight-ticks:e1:u1', '{"v":1,"ticks":{}}');
+    s.setItem('something-else', 'x');
+    const gone = sweepDrafts(s, null, NOW);
+    assert(
+      'D',
+      'D5 the sweep with nobody signed in removes every household draft (3) and nothing else',
+      gone === 3 &&
+        S0([...s.m.keys()].sort()) === S0(['gather:preflight-ticks:e1:u1', 'something-else']),
+      S0([...s.m.keys()])
+    );
+  }
+  {
+    const s = new StandInStore();
+    const keep1 = draftKey('u1', 'e1', 'new');
+    const keep2 = draftKey('u1', 'e2', 'edit:h1');
+    s.setItem(keep1, storedValue({}));
+    s.setItem(keep2, storedValue({ eventId: 'e2', form: 'edit:h1', savedAt: NOW - DAY }));
+    s.setItem(draftKey('u1', 'e1', 'host'), storedValue({ form: 'host', savedAt: NOW - 8 * DAY }));
+    s.setItem(draftKey('u2', 'e1', 'new'), storedValue({ userId: 'u2' }));
+    s.setItem(draftKey('u1', 'e3', 'new'), storedValue({ userId: 'u2', eventId: 'e3' }));
+    s.setItem('something-else', 'x');
+    const gone = sweepDrafts(s, 'u1', NOW);
+    assert(
+      'D',
+      'D6 the sweep with her signed in removes another person’s draft, her own too old one, and one whose value names someone else (3); keeps her two fresh ones',
+      gone === 3 && S0([...s.m.keys()].sort()) === S0([keep1, keep2, 'something-else'].sort()),
+      S0([...s.m.keys()])
+    );
+  }
+  {
+    let threw = false;
+    let read: unknown = 'x';
+    let wrote: unknown = 'x';
+    let swept: unknown = 'x';
+    let latest: unknown = 'x';
+    try {
+      read = readDraft(refusingStore, 'u1', 'e1', 'new', NOW);
+      wrote = writeDraft(refusingStore, 'u1', 'e1', 'new', typedState('d7'), undefined, NOW);
+      removeDraft(refusingStore, 'u1', 'e1', 'new');
+      swept = sweepDrafts(refusingStore, 'u1', NOW);
+      latest = latestEditDraft(refusingStore, 'u1', 'e1', NOW);
+    } catch {
+      threw = true;
+    }
+    assert(
+      'D',
+      'D7 a storage that refuses every touch breaks nothing: no draft read, the write says no, the sweep removes none; with no window there is no storage',
+      !threw &&
+        read === null &&
+        wrote === false &&
+        swept === 0 &&
+        latest === null &&
+        browserDraftStore() === null
+    );
+  }
+  {
+    const s = new StandInStore();
+    s.setItem(
+      draftKey('u1', 'e1', 'edit:h1'),
+      storedValue({ form: 'edit:h1', savedAt: NOW - 5000, householdName: 'Kate' })
+    );
+    s.setItem(
+      draftKey('u1', 'e1', 'edit:h2'),
+      storedValue({ form: 'edit:h2', savedAt: NOW - 1000, householdName: 'Ana' })
+    );
+    s.setItem(draftKey('u1', 'e1', 'new'), storedValue({}));
+    s.setItem(draftKey('u1', 'e2', 'edit:h3'), storedValue({ eventId: 'e2', form: 'edit:h3' }));
+    const latest = latestEditDraft(s, 'u1', 'e1', NOW);
+    assert(
+      'D',
+      'D8 the saved household she was changing last, on this event only: h2 ("Ana"), not h1, not the new household, not another event’s',
+      latest?.householdId === 'h2' && latest.draft.householdName === 'Ana'
+    );
+  }
+  assert(
+    'D',
+    'D9 the words, typed here by hand (founder, 31 Oct 2026, ruling 2)',
+    DRAFT_KEEP_WORDS.KEPT === 'We kept what you typed here earlier. It isn’t saved yet.' &&
+      DRAFT_KEEP_WORDS.GOT_IT === 'Got it' &&
+      DRAFT_KEEP_WORDS.DISCARD === 'Discard' &&
+      DRAFT_KEEP_WORDS.CARRY_ON === 'Carry on' &&
+      changingWords('Kate HS') === 'You were changing Kate HS’s household and hadn’t saved.' &&
+      DRAFT_MAX_AGE_MS === 7 * DAY
+  );
+}
+
+function layerS8() {
+  section(
+    'S8 — the form keeps the draft, and clears it only on a good save or her choice (GTC-435)'
+  );
+  const code = codeOnly(read(FORM));
+  const flat = code.replace(/\s+/g, ' ');
+  assert(
+    'S',
+    'S8 nothing is written or removed before the opening check; the check runs only once the opening has settled, once per form',
+    /keepDraft\.current = \(\) => \{ if \(!viewerId \|\| draftChecked !== draftForm\) return;/.test(
+      flat
+    ) &&
+      /if \(!viewerId \|\| draftChecked === draftForm\) return; if \(openedForm !== draftForm \|\| opened === null \|\| snapshot !== opened\) return;/.test(
+        flat
+      ) &&
+      count(code, 'writeDraft(') === 1 &&
+      count(code, 'setDraftChecked(draftForm)') === 1
+  );
+  const catches = [...flat.matchAll(/\} catch \{([^}]*)\}/g)].map((m) => m[1]);
+  /** One handler's text, from its declaration to its closing line. */
+  const handler = (src: string, nameOf: string) => {
+    const at = src.indexOf(`  const ${nameOf} = async () => {`);
+    return at < 0 ? '' : src.slice(at, src.indexOf('\n  };\n', at) + 5);
+  };
+  const base = codeOnly(gitShow(BASE_435, FORM));
+  assert(
+    'S',
+    'S9 the draft is cleared where the form resets (after a good "Save & add another household" or "Save changes", and on Cancel), for the form checked at this opening; her own step and "Save & move on" clear theirs after a good save; no catch clears one; both Save handlers are 9ff914d’s, byte for byte',
+    /const resetForm = useCallback\(\(\) => \{ forgetOnReset\.current\(\); setName\(''\);/.test(
+      flat
+    ) &&
+      /forgetOnReset\.current = \(\) => \{ if \(draftChecked && draftChecked === openedForm\) forgetDraft\(draftChecked\); \};/.test(
+        flat
+      ) &&
+      count(code, 'resetForm();') === 3 &&
+      /setInternalPeopleAdded\(\(prev\) => prev \+ countMembers\(payload\)\); \} forgetDraft\('new'\); \} catch \{ setSaveError\(true\);/.test(
+        flat
+      ) &&
+      /messagesMuted: hostingAlone \? true : messagesMuted, \}\); forgetDraft\('host'\); \} catch \{/.test(
+        flat
+      ) &&
+      catches.length >= 4 &&
+      catches.every((c) => !c.includes('forgetDraft') && !c.includes('removeDraft')) &&
+      base.length > 0 &&
+      ['handleAddAnother', 'handleEditSave'].every(
+        (h) => handler(code, h).length > 0 && handler(code, h) === handler(base, h)
+      )
+  );
+  const draftCode = codeOnly(read(DRAFT_FILE));
+  const importers: string[] = [];
+  const walk = (dir: string) => {
+    for (const f of fs.readdirSync(path.join(ROOT, dir))) {
+      const rel = `${dir}/${f}`;
+      if (fs.statSync(path.join(ROOT, rel)).isDirectory()) walk(rel);
+      else if (/\.(ts|tsx)$/.test(f) && read(rel).includes('households/form-draft'))
+        importers.push(rel);
+    }
+  };
+  walk('src');
+  assert(
+    'S',
+    'S10 nothing sends a draft: the module makes no request, the form makes none at all, and only the form and Providers use the module (no route, no server code)',
+    !/\bfetch\(|XMLHttpRequest|sendBeacon|navigator\./.test(draftCode) &&
+      count(code, 'fetch(') === 0 &&
+      S0(importers.sort()) === S0([FORM, PROVIDERS].sort()),
+    S0(importers)
+  );
+  const layout = codeOnly(read(LAYOUT)).replace(/\s+/g, ' ');
+  const providers = codeOnly(read(PROVIDERS)).replace(/\s+/g, ' ');
+  assert(
+    'S',
+    'S11 the layout hands Providers the user’s id only; Providers offers it and sweeps on every page load and on a change of person',
+    layout.includes('<Providers viewerId={user?.id ?? null}>') &&
+      providers.includes('<ViewerIdContext.Provider value={viewerId}>') &&
+      /useEffect\(\(\) => \{ sweepDrafts\(browserDraftStore\(\), viewerId\); \}, \[viewerId\]\);/.test(
+        providers
+      )
+  );
+  const setup = codeOnly(read(SETUP)).replace(/\s+/g, ' ');
+  assert(
+    'S',
+    'S12 the setup page’s one new prop: the saved ids once the list has loaded (null before, and still null if it fails: set only on a good reply), and its own Edit to open one',
+    setup.includes(
+      'resumeEdit={{ savedIds: householdsLoaded ? households.map((h) => h.id) : null, open: handleEdit, }}'
+    ) &&
+      setup.includes(
+        'if (res.ok) { const data = await res.json(); setHouseholds(data.households.map(apiHouseholdToSaved)); setHouseholdsLoaded(true);'
+      ) &&
+      count(setup, 'setHouseholdsLoaded(') === 1 &&
+      count(setup, 'resumeEdit=') === 1
+  );
+}
+
 // ══ T — THE RULES, TRIMMED (GTC-432) ═════════════════════════════════════════
 const EMAIL_WORDS = 'Invalid email format';
 const NZ_WORDS = 'Invalid NZ phone number';
@@ -323,7 +697,7 @@ const created = {
 const refusals: string[] = [];
 
 /** Every fetch the page makes, as "METHOD path", recorded in the page before its scripts run. */
-const RECORDER = `(() => { const f = window.fetch; window.__calls = []; window.__unhandled = 0; window.__failPut = null;
+const RECORDER = `(() => { const f = window.fetch; window.__calls = []; window.__unhandled = 0; window.__failPut = null; window.__failedGets = 0;
   window.addEventListener('unhandledrejection', () => { window.__unhandled++; });
   window.fetch = function (u, o) { let call = '';
     try { const url = typeof u === 'string' ? u : u.url;
@@ -332,6 +706,12 @@ const RECORDER = `(() => { const f = window.fetch; window.__calls = []; window._
     /* [[GTC-433]]: a household PUT failed in the page itself, never reaching the server. */
     if (window.__failPut && call.startsWith('PUT /api/events/') && call.split('/').length === 6 && call.split('/')[4] === 'households') {
       if (window.__failPut === 'network') return Promise.reject(new TypeError('Failed to fetch'));
+      return Promise.resolve(new Response(JSON.stringify({ error: 'made-up failure' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }));
+    }
+    /* [[GTC-435]]: the household list failed in the page itself (C27). */
+    if (window.__failHouseholdsGet && call.startsWith('GET /api/events/') && call.split('/').length === 5 && call.split('/')[4] === 'households') {
+      window.__failedGets++;
       return Promise.resolve(new Response(JSON.stringify({ error: 'made-up failure' }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }));
     }
@@ -428,6 +808,11 @@ async function runLive() {
   const evA = await mk('GTC-431 household save — her household saved', true);
   const evB = await mk('GTC-431 household save — her own household first', false);
   const evX = await mk('GTC-434 household save — one transaction', true);
+  // [[GTC-435]]: each with its (empty) setup record, as every new event has, so its row on Your
+  // Events opens the setup flow; removed with the event (onDelete: Cascade).
+  const evD = await mk(EVENT_D, true);
+  const evE = await mk(EVENT_E, false);
+  for (const eventId of [evD, evE]) await prisma.eventSetup.create({ data: { eventId } });
 
   const evIn = { eventId: { in: created.events } };
   const rows = async () =>
@@ -908,6 +1293,530 @@ async function runLive() {
         S(hs)
       );
     }
+    // ── C18–C27: an unsaved household kept while she is away, at 390 (GTC-435) ─────
+    section('C18–C27 — an unsaved household kept in this browser while she is away (GTC-435)');
+    await c.setViewport(390, 844, true);
+    const KEY_HEAD = `gather:household-draft:v1:${user.id}:`;
+    const DRAFT_HELPERS = `
+window.__line = () => { const l = [...document.querySelectorAll('[data-draft-line]')].find(window.__vis);
+  return l ? { kind: l.getAttribute('data-draft-line'), role: l.getAttribute('role'), text: l.querySelector('p').innerText.trim(),
+    buttons: [...l.querySelectorAll('button')].map((b) => b.innerText.trim()) } : null; };
+window.__keys = () => { const k = []; for (let i = 0; i < localStorage.length; i++) { const x = localStorage.key(i);
+  if (x && x.startsWith('gather:household-draft:')) k.push(x); } return k.sort(); };
+window.__form = () => ({ name: (document.querySelector('#m1-name') || {}).value ?? null,
+  kids: window.__kids().map((r) => [r.name.value, r.email.value, r.phone.value]) });
+window.__lineBtn = (t) => { const l = [...document.querySelectorAll('[data-draft-line]')].find(window.__vis);
+  return l ? [...l.querySelectorAll('button')].find((b) => b.innerText.trim() === t) || null : null; };
+true;`;
+    const dgo = async (p: string) => {
+      await go(p);
+      await ev(DRAFT_HELPERS);
+    };
+    /** Six kids as sixKids types them, in screen order. */
+    const typedKids = (tag: string) =>
+      [0, 1, 2, 3, 4, 5].map((i) => [
+        `Kid ${tag} ${i + 1}`,
+        `kid${i + 1}-${tag}-${stamp}@example.com`,
+        `021 000 00${10 + i}`,
+      ]);
+    const lineNow = () =>
+      ev<{ kind: string; role: string; text: string; buttons: string[] } | null>(`window.__line()`);
+    const formNow = () => ev<{ name: string | null; kids: string[][] }>(`window.__form()`);
+    const keysNow = () => ev<string[]>(`window.__keys()`);
+    /** Out by "← Your events" (a full page load: the "Leave site?" a computer shows is answered Leave). */
+    const leaveByLink = async () => {
+      const why = await tap(
+        `[...document.querySelectorAll('a')].filter(window.__vis).find((a) => a.innerText.trim() === '← Your events')`,
+        5000
+      );
+      await sleep(1500);
+      await ev(HELPERS);
+      return why === null && (await ev<string>(`location.pathname`)) === '/plan/events';
+    };
+    /** Back by the event's row on Your Events: an in-app route change, the same document. */
+    const backByRow = async (eventName: string) => {
+      await ev(`window.__sameDocument = 'yes'`);
+      const why = await tap(
+        `[...document.querySelectorAll('h2')].filter(window.__vis).find((h) => h.innerText.trim() === ${S(eventName)})`,
+        6000
+      );
+      await sleep(1500);
+      await ev(HELPERS);
+      await ev(DRAFT_HELPERS);
+      return {
+        clicked: why === null,
+        path: await ev<string>(`location.pathname`),
+        sameDocument: (await ev<string | undefined>(`window.__sameDocument`)) === 'yes',
+      };
+    };
+    const writes = () => calls().then((cs) => cs.filter((x) => !x.startsWith('GET ')));
+    const membersD = () => members(evD);
+
+    // C18 — the tester's case.
+    await dgo(`/plan/${evD}/setup`);
+    let c18 = false;
+    if (await ev<boolean>(`!!window.__btn('Save & add another household')`)) {
+      const hhD = await households(evD);
+      const memD = await membersD();
+      await ev(`window.__set(document.querySelector('#m1-name'), 'Nina c18')`);
+      await sixKids('c18', {});
+      await sleep(400);
+      const typed = await formNow();
+      const keyWritten = (await keysNow()).includes(`${KEY_HEAD}${evD}:new`);
+      const w1 = await writes();
+      const dialogsBefore = c.dialogs().length;
+      const out = await leaveByLink();
+      const askedToLeave = c.dialogs().slice(dialogsBefore).includes('beforeunload');
+      const w2 = await writes();
+      const back = await backByRow(EVENT_D);
+      const got = await formNow();
+      const line = await lineNow();
+      const w3 = await writes();
+      c18 =
+        S(typed.kids) === S(typedKids('c18')) &&
+        keyWritten &&
+        out &&
+        back.clicked &&
+        back.sameDocument &&
+        back.path === `/plan/${evD}/setup` &&
+        got.name === 'Nina c18' &&
+        S(got.kids) === S(typedKids('c18')) &&
+        line?.kind === 'kept' &&
+        line.role === 'status' &&
+        line.text === DRAFT_KEEP_WORDS.KEPT &&
+        S(line.buttons) === S([DRAFT_KEEP_WORDS.GOT_IT, DRAFT_KEEP_WORDS.DISCARD]) &&
+        [...w1, ...w2, ...w3].length === 0 &&
+        (await households(evD)) === hhD &&
+        (await membersD()) === memD;
+      assert(
+        'C',
+        'C18 390, the tester’s case: a main contact and six kids (name, email, phone) typed; out by "← Your events", back by the event’s row (an in-app route change); every name, email and phone back in its box, the line shown ("Got it", "Discard"); nothing sent, nothing stored',
+        c18,
+        S({
+          typed: typed.kids.length,
+          keyWritten,
+          out,
+          back,
+          got,
+          line,
+          askedToLeave,
+          w: [...w1, ...w2, ...w3],
+        })
+      );
+    } else {
+      assert('C', 'C18 390: the add form opened on the draft event', false);
+    }
+
+    // C19 — out by the phone menu's "Your Events"; and the address typed again (a full load).
+    {
+      const menu = await tap(`document.querySelector('button[aria-label="Open menu"]')`, 400);
+      const link = await tap(
+        `[...document.querySelectorAll('a')].filter(window.__vis).find((a) => a.innerText.trim() === 'Your Events')`,
+        5000
+      );
+      await sleep(1500);
+      await ev(HELPERS);
+      const onList = (await ev<string>(`location.pathname`)) === '/plan/events';
+      const back = await backByRow(EVENT_D);
+      const viaMenu = await formNow();
+      const lineMenu = await lineNow();
+      await dgo(`/plan/${evD}/setup`);
+      const viaLoad = await formNow();
+      const lineLoad = await lineNow();
+      assert(
+        'C',
+        'C19 390: out by the phone menu’s "Your Events" and back by the row, then the address loaded again: both times every box back and the line shown',
+        menu === null &&
+          link === null &&
+          onList &&
+          back.sameDocument &&
+          viaMenu.name === 'Nina c18' &&
+          S(viaMenu.kids) === S(typedKids('c18')) &&
+          lineMenu?.kind === 'kept' &&
+          viaLoad.name === 'Nina c18' &&
+          S(viaLoad.kids) === S(typedKids('c18')) &&
+          lineLoad?.kind === 'kept',
+        S({
+          menu,
+          link,
+          onList,
+          back,
+          viaMenu: viaMenu.kids.length,
+          lineMenu,
+          viaLoad: viaLoad.kids.length,
+          lineLoad,
+        })
+      );
+    }
+
+    // C20 — "Got it" hides the line for this visit only; "Discard" empties the form and the draft.
+    {
+      await tap(`window.__lineBtn(${S(DRAFT_KEEP_WORDS.GOT_IT)})`, 400);
+      const afterGot = { line: await lineNow(), form: await formNow(), keys: await keysNow() };
+      await dgo(`/plan/${evD}/setup`);
+      const lineAgain = await lineNow();
+      await tap(`window.__lineBtn(${S(DRAFT_KEEP_WORDS.DISCARD)})`, 600);
+      const afterDiscard = { line: await lineNow(), form: await formNow(), keys: await keysNow() };
+      await dgo(`/plan/${evD}/setup`);
+      const afterReload = { line: await lineNow(), form: await formNow(), keys: await keysNow() };
+      const newKey = `${KEY_HEAD}${evD}:new`;
+      assert(
+        'C',
+        'C20 390: "Got it": the line goes, the form and the draft stay, and the line is back on the next visit; "Discard": the form empty, the draft gone, and a reload opens a clean form with no line',
+        afterGot.line === null &&
+          S(afterGot.form.kids) === S(typedKids('c18')) &&
+          afterGot.keys.includes(newKey) &&
+          lineAgain?.kind === 'kept' &&
+          afterDiscard.line === null &&
+          afterDiscard.form.name === '' &&
+          afterDiscard.form.kids.length === 0 &&
+          !afterDiscard.keys.includes(newKey) &&
+          afterReload.line === null &&
+          afterReload.form.name === '' &&
+          afterReload.form.kids.length === 0 &&
+          !afterReload.keys.includes(newKey),
+        S({ afterGot, lineAgain, afterDiscard, afterReload })
+      );
+    }
+
+    // C21 — a failed save keeps the draft (a real refusal: a NUL in the third kid's name, which
+    // Postgres refuses, GTC-434); a good save clears it.
+    {
+      const hhD = await households(evD);
+      await ev(`window.__set(document.querySelector('#m1-name'), 'Rua c21')`);
+      await sixKids('c21', {});
+      const nul = await ev<boolean>(`(() => { const k = window.__kids()[2];
+        window.__set(k.name, 'Kid' + String.fromCharCode(0) + ' c21 3'); return k.name.value.includes(String.fromCharCode(0)); })()`);
+      await clearCalls();
+      await tap(`window.__btn('Save & add another household')`, 2000);
+      const failedWords = await ev<boolean>(
+        `[...document.querySelectorAll('p')].filter(window.__vis).some((p) => p.innerText.trim() === ${S(SAVE_FAILED)})`
+      );
+      const keptAfterFail =
+        await ev<number>(`(() => { const v = localStorage.getItem(${S(`${KEY_HEAD}${evD}:new`)});
+        try { return JSON.parse(v).state.helpers.length; } catch (e) { return -1; } })()`);
+      const failCalls = await writes();
+      const out = await leaveByLink();
+      const back = await backByRow(EVENT_D);
+      const got = await formNow();
+      const line = await lineNow();
+      const want = typedKids('c21');
+      want[2][0] = `Kid${String.fromCharCode(0)} c21 3`;
+      const restored = got.name === 'Rua c21' && S(got.kids) === S(want) && line?.kind === 'kept';
+      await ev(`window.__set(window.__kids()[2] && window.__kids()[2].name, 'Kid c21 3')`);
+      await clearCalls();
+      await tap(`window.__btn('Save & add another household')`, 2500);
+      const goodCalls = await writes();
+      const keysAfter = await keysNow();
+      const saved = await prisma.household.findFirst({
+        where: { eventId: evD },
+        orderBy: { createdAt: 'desc' },
+        include: { members: { include: { person: true } } },
+      });
+      await dgo(`/plan/${evD}/setup`);
+      const after = { line: await lineNow(), form: await formNow() };
+      assert(
+        'C',
+        `C21 390: Save refused part-way ("${SAVE_FAILED}", nothing stored): the draft still holds all six; out and back, all six again; fixed, one POST stores it whole, the draft gone, and the next visit opens clean`,
+        nul &&
+          failedWords &&
+          keptAfterFail === 6 &&
+          S(failCalls) === S([`POST /api/events/${evD}/households`]) &&
+          out &&
+          restored &&
+          S(goodCalls) === S([`POST /api/events/${evD}/households`]) &&
+          (await households(evD)) === hhD + 1 &&
+          saved?.members.some(
+            (m) => m.person.name === 'Rua c21' && m.householdRole === 'PRIMARY_CONTACT'
+          ) === true &&
+          saved?.members.filter((m) => m.householdRole === 'CHILD').length === 6 &&
+          !keysAfter.includes(`${KEY_HEAD}${evD}:new`) &&
+          after.line === null &&
+          after.form.name === '',
+        S({
+          nul,
+          failedWords,
+          keptAfterFail,
+          failCalls,
+          out,
+          restored,
+          got: got.kids.length,
+          line,
+          goodCalls,
+          keysAfter,
+        })
+      );
+    }
+
+    // C22 — "Save changes" on her own household: kept, offered with "Carry on", saved, cleared.
+    {
+      const opened = await tap(
+        `[...document.querySelectorAll('button')].filter(window.__vis).filter((b) => b.innerText.trim() === 'Edit').find((b) => (b.closest('[class*="border"]')?.innerText || '').includes('Kate HS'))`,
+        600
+      );
+      const editing = await ev<boolean>(`!!window.__btn('Save changes')`);
+      const kidsAtOpen = await ev<number>(`window.__kids().length`);
+      await sixKids('c22', {});
+      await sleep(400);
+      const editKeys = (await keysNow()).filter((k) => k.startsWith(`${KEY_HEAD}${evD}:edit:`));
+      const memD = await membersD();
+      const out = await leaveByLink();
+      const back = await backByRow(EVENT_D);
+      const offered = await lineNow();
+      const addFormFirst = await ev<boolean>(`!!window.__btn('Save & add another household')`);
+      await tap(`window.__lineBtn(${S(DRAFT_KEEP_WORDS.CARRY_ON)})`, 1200);
+      const nowEditing = await ev<boolean>(`!!window.__btn('Save changes')`);
+      const got = await formNow();
+      const lineThen = await lineNow();
+      const sixBack = S(got.kids.slice(0, 6)) === S(typedKids('c22'));
+      const nothingYet = (await membersD()) === memD;
+      await clearCalls();
+      await tap(`window.__btn('Save changes')`, 2500);
+      const putCalls = await writes();
+      const stored = await prisma.personEvent.count({
+        where: {
+          eventId: evD,
+          householdRole: 'CHILD',
+          person: {
+            name: { startsWith: 'Kid c22' },
+            email: { not: null },
+            phoneNumber: { not: null },
+          },
+        },
+      });
+      const keysAfter = await keysNow();
+      assert(
+        'C',
+        'C22 390: her own household opened with Edit and six kids added; out and back: the add form, and the line "You were changing Kate HS’s household and hadn’t saved." ("Carry on", "Discard"); "Carry on" opens it with the six as typed and the kept line; "Save changes": one PUT, the six stored with email and phone, the draft gone',
+        opened === null &&
+          editing &&
+          editKeys.length === 1 &&
+          out &&
+          back.sameDocument &&
+          addFormFirst &&
+          offered?.kind === 'changing' &&
+          offered.text === changingWords('Kate HS') &&
+          S(offered.buttons) === S([DRAFT_KEEP_WORDS.CARRY_ON, DRAFT_KEEP_WORDS.DISCARD]) &&
+          nowEditing &&
+          got.kids.length === kidsAtOpen + 6 &&
+          sixBack &&
+          lineThen?.kind === 'kept' &&
+          nothingYet &&
+          putCalls.length === 1 &&
+          new RegExp(`^PUT /api/events/${evD}/households/[^/]+$`).test(putCalls[0]) &&
+          stored === 6 &&
+          keysAfter.filter((k) => k.startsWith(`${KEY_HEAD}${evD}:`)).length === 0,
+        S({
+          opened,
+          editing,
+          editKeys,
+          out,
+          back,
+          addFormFirst,
+          offered,
+          nowEditing,
+          kids: got.kids.length,
+          kidsAtOpen,
+          sixBack,
+          lineThen,
+          putCalls,
+          stored,
+          keysAfter,
+        })
+      );
+    }
+
+    // C23 — her own household's step, on an event without her household.
+    {
+      await dgo(`/plan/${evE}/setup`);
+      await tap(`window.__btn('Ready to start herding →')`, 1500);
+      await ev(DRAFT_HELPERS);
+      const step = await ev<boolean>(`!!window.__btn('Save and add everyone else →')`);
+      await tap(`window.__btn('👦 Kid with a job')`, 300);
+      await ev(
+        `(() => { const k = window.__kids()[0]; window.__set(k.name, 'Mia c23'); window.__set(k.email, 'mia-c23-${stamp}@example.com'); window.__set(k.phone, '021 000 0023'); })()`
+      );
+      await sleep(400);
+      const out = await leaveByLink();
+      const back = await backByRow(EVENT_E);
+      await tap(`window.__btn('Ready to start herding →')`, 1500);
+      await ev(DRAFT_HELPERS);
+      const got = await formNow();
+      const line = await lineNow();
+      await tap(`window.__lineBtn(${S(DRAFT_KEEP_WORDS.DISCARD)})`, 600);
+      const discarded = await formNow();
+      const keysAfter = await keysNow();
+      assert(
+        'C',
+        'C23 390: her own household’s step: a kid typed; out and back (the opening screen, then the step): the kid back with the line, her name as her account has it; "Discard": the kid gone, her name kept, the draft gone; nothing stored',
+        step &&
+          out &&
+          back.path === `/plan/${evE}/setup` &&
+          got.name === 'Kate HS' &&
+          S(got.kids) === S([['Mia c23', `mia-c23-${stamp}@example.com`, '021 000 0023']]) &&
+          line?.kind === 'kept' &&
+          discarded.name === 'Kate HS' &&
+          discarded.kids.length === 0 &&
+          !keysAfter.includes(`${KEY_HEAD}${evE}:host`) &&
+          (await households(evE)) === 0,
+        S({ step, out, back, got, line, discarded, keysAfter })
+      );
+    }
+
+    // C24 — drafts that are not hers, not this event's, or too old never show.
+    {
+      const value = (over: Record<string, unknown>) =>
+        JSON.stringify({
+          v: 1,
+          userId: user.id,
+          eventId: evD,
+          form: 'new',
+          savedAt: Date.now(),
+          state: { ...typedState(`c24-${stamp}`) },
+          ...over,
+        });
+      const someone = `${KEY_HEAD.replace(user.id, 'someone-else')}${evD}:new`;
+      const otherEvent = `${KEY_HEAD}other-event:new`;
+      const mine = `${KEY_HEAD}${evD}:new`;
+      await dgo(`/plan/${evD}/setup`);
+      await ev(`(() => { localStorage.setItem(${S(someone)}, ${S(value({ userId: 'someone-else' }))});
+        localStorage.setItem(${S(otherEvent)}, ${S(value({ eventId: 'other-event' }))});
+        localStorage.setItem(${S(mine)}, ${S(value({ savedAt: Date.now() - 8 * DAY }))}); })()`);
+      await dgo(`/plan/${evD}/setup`);
+      const old = { line: await lineNow(), form: await formNow(), keys: await keysNow() };
+      await ev(`localStorage.setItem(${S(mine)}, ${S(value({ userId: 'someone-else' }))})`);
+      await dgo(`/plan/${evD}/setup`);
+      const mixed = { line: await lineNow(), form: await formNow(), keys: await keysNow() };
+      assert(
+        'C',
+        'C24 390: drafts planted under another person, for another event, 8 days old, and one under her key naming someone else: none shown (a clean form, no line); the other person’s, the old one and the mixed-up one removed; hers for the other event kept',
+        old.line === null &&
+          old.form.name === '' &&
+          !old.keys.includes(someone) &&
+          !old.keys.includes(mine) &&
+          old.keys.includes(otherEvent) &&
+          mixed.line === null &&
+          mixed.form.name === '' &&
+          !mixed.keys.includes(mine),
+        S({ old, mixed })
+      );
+    }
+
+    // C27 — a draft for a household no longer on the event: kept while the household list fails to
+    // load; dropped with no line once the list has loaded without it (ruling 4 and the founder's
+    // safeguard, 31 Oct 2026).
+    {
+      const goneForm = `edit:gone-household-${stamp}`;
+      const goneKey = `${KEY_HEAD}${evD}:${goneForm}`;
+      const goneValue = JSON.stringify({
+        v: 1,
+        userId: user.id,
+        eventId: evD,
+        form: goneForm,
+        savedAt: Date.now(),
+        householdName: 'Gone Away',
+        state: typedState(`c27-${stamp}`),
+      });
+      await dgo(`/plan/${evD}/setup`);
+      await ev(`localStorage.setItem(${S(goneKey)}, ${S(goneValue)})`);
+      const failing = await c.addInitScript(`window.__failHouseholdsGet = true;`);
+      await dgo(`/plan/${evD}/setup`);
+      await tap(`window.__btn('Ready to start herding →')`, 1500);
+      await sleep(800);
+      await ev(DRAFT_HELPERS);
+      const whileFailing = {
+        form: await ev<boolean>(`!!window.__btn('Save & add another household')`),
+        failed: await ev<number>(`window.__failedGets`),
+        line: await lineNow(),
+        kept: (await keysNow()).includes(goneKey),
+      };
+      await c.removeInitScript(failing);
+      await dgo(`/plan/${evD}/setup`);
+      await sleep(800);
+      const loaded = {
+        form: await ev<boolean>(`!!window.__btn('Save & add another household')`),
+        line: await lineNow(),
+        kept: (await keysNow()).includes(goneKey),
+      };
+      assert(
+        'C',
+        'C27 390: a kept draft for a household no longer on the event: while the household list fails to load, the add form opens, the draft is kept and not offered; once the list loads without it, the draft is removed and no line shows',
+        whileFailing.form &&
+          whileFailing.failed >= 1 &&
+          whileFailing.line === null &&
+          whileFailing.kept &&
+          loaded.form &&
+          loaded.line === null &&
+          !loaded.kept,
+        S({ whileFailing, loaded })
+      );
+    }
+
+    // C26 — a browser that refuses storage: the form types and saves as before.
+    {
+      const refuse = await c.addInitScript(`(() => { window.__pageErrors = 0;
+        window.addEventListener('error', () => { window.__pageErrors++; });
+        Object.defineProperty(window, 'localStorage', { configurable: true, get() { throw new DOMException('refused', 'SecurityError'); } }); })();`);
+      await go(`/plan/${evD}/setup`);
+      const hhD = await households(evD);
+      const refused = await ev<boolean>(
+        `(() => { try { localStorage.length; return false; } catch (e) { return true; } })()`
+      );
+      await ev(`window.__set(document.querySelector('#m1-name'), 'Ari c26')`);
+      await tap(`window.__btn('👦 Kid with a job')`, 300);
+      await ev(`window.__set(window.__kids()[0].name, 'Kid c26')`);
+      await clearCalls();
+      await tap(`window.__btn('Save & add another household')`, 2500);
+      const post = await writes();
+      const errs = await ev<{ page: number; unhandled: number }>(
+        `({ page: window.__pageErrors, unhandled: window.__unhandled })`
+      );
+      await c.removeInitScript(refuse);
+      assert(
+        'C',
+        'C26 390: storage refused before the page loads: the form types and saves as before (one POST, stored), no page error',
+        refused &&
+          S(post) === S([`POST /api/events/${evD}/households`]) &&
+          (await households(evD)) === hhD + 1 &&
+          errs.page === 0 &&
+          errs.unhandled === 0,
+        S({ refused, post, errs })
+      );
+    }
+
+    // C25 — sign-out clears every household draft here; signed in again, nothing comes back.
+    {
+      await dgo(`/plan/${evD}/setup`);
+      await ev(`window.__set(document.querySelector('#m1-name'), 'Sol c25')`);
+      await sleep(400);
+      const before = await keysNow();
+      await tap(`document.querySelector('button[aria-label="Open menu"]')`, 400);
+      const signedOut = await tap(`window.__btn('Sign Out')`, 4000);
+      await sleep(2000);
+      await ev(DRAFT_HELPERS);
+      const afterOut = { path: await ev<string>(`location.pathname`), keys: await keysNow() };
+      const token2 = randomBytes(32).toString('hex');
+      const s2 = await prisma.session.create({
+        data: { userId: user.id, token: token2, expiresAt: new Date(Date.now() + 3600e3) },
+      });
+      created.sessions.push(s2.id);
+      await c.setSessionCookie(token2);
+      await dgo(`/plan/${evD}/setup`);
+      const again = { line: await lineNow(), form: await formNow(), keys: await keysNow() };
+      assert(
+        'C',
+        'C25 390: with drafts here (this event’s and another’s), Sign Out from the phone menu leaves no household draft in this browser; signed in again, a clean form and no line',
+        before.includes(`${KEY_HEAD}${evD}:new`) &&
+          before.includes(`${KEY_HEAD}other-event:new`) &&
+          signedOut === null &&
+          afterOut.keys.length === 0 &&
+          again.line === null &&
+          again.form.name === '' &&
+          again.keys.length === 0,
+        S({ before, signedOut, afterOut, again })
+      );
+    }
+
     assert(
       'C',
       'C11 SAFETY: no click was refused, and Chrome asked for no host but localhost',
@@ -970,6 +1879,8 @@ async function main() {
   layerR();
   layerS();
   layerS7();
+  layerD();
+  layerS8();
   layerT();
   if (process.env.HOUSEHOLD_SAVE_DRY_RUN !== '1') {
     try {
