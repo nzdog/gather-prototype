@@ -14,6 +14,9 @@
  *        otherwise unchanged.
  *   433  "Save changes" that fails (an error reply, a network failure) shows "That didn't save —
  *        please try again." as the other Save buttons do, and keeps the form as she left it.
+ *   434  "Save & add another household" (POST /api/events/[id]/households) writes the household,
+ *        its adults and children, the contact picker and the ledger entry in one transaction: a
+ *        failure part-way stores nothing, and a retry stores the household once, whole.
  *
  * THE LAYERS
  *   W  the words, typed here by hand
@@ -22,6 +25,9 @@
  *      only after a stopped Save
  *   T  the form's email and phone rules and normalizePhoneNumber on typed inputs, each expected
  *      value written here by hand (GTC-432)
+ *   X  the households POST over HTTP on the guarded dev server, with the fixture host's session
+ *      cookie and no browser: a real part-way failure (a NUL in the third kid's name, which
+ *      Postgres refuses), a retry, and a refused contact picker, every row counted (GTC-434)
  *   C  the setup page in the walled-off headless Chrome (port 9495) on the guarded dev server, at
  *      1280 and 390, on a fixture of its own (example.com addresses, made-up 021 numbers, nothing
  *      queued): each Save button pressed with a bad box far above it. Every page fetch is recorded
@@ -44,6 +50,7 @@ import Moment1InputForm, {
   validatePhone,
 } from '../src/components/plan/Moment1InputForm';
 import { normalizePhoneNumber } from '../src/lib/phone';
+import { validateChannelTarget } from '../src/lib/households/channel';
 import { prisma } from '../src/lib/prisma';
 import { installProviderTrap } from './helpers/provider-trap';
 import { openHeadless, type Headless } from './helpers/headless';
@@ -55,6 +62,7 @@ const ROOT = path.join(__dirname, '..');
 const BASE = 'http://localhost:3000';
 const PORT = 9495;
 const FORM = 'src/components/plan/Moment1InputForm.tsx';
+const ROUTE = 'src/app/api/events/[id]/households/route.ts';
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ── Reporting ────────────────────────────────────────────────────────────────
@@ -83,6 +91,7 @@ const read = (rel: string) => {
 /** Source with comments taken out, so a check reads code and not what a comment says. */
 const codeOnly = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 const count = (s: string, sub: string) => s.split(sub).length - 1;
+const S0 = JSON.stringify;
 
 // ══ W — THE WORDS ════════════════════════════════════════════════════════════
 function layerW() {
@@ -194,6 +203,42 @@ function layerS() {
     'S6 "Save changes" clears the failed-save words before it saves, and a failure sets them; the form is not reset (GTC-433)',
     /const handleEditSave = async \(\) => \{[\s\S]{0,160}?setSaving\(true\);\s*setSaveError\(false\);\s*try \{\s*const payload = buildPayload\(\);\s*await onEditSave\(editingHousehold\.id, payload\);\s*resetForm\(\);\s*\} catch \{\s*setSaveError\(true\);\s*\} finally \{\s*setSaving\(false\);\s*\}\s*\};/.test(
       code
+    )
+  );
+}
+
+function layerS7() {
+  section('S7 — the households POST writes in one transaction (GTC-434)');
+  const route = codeOnly(read(ROUTE));
+  const post = route.slice(route.indexOf('export async function POST'));
+  const tx = post.slice(
+    post.indexOf('const householdId = await prisma.$transaction(async (tx) => {')
+  );
+  const flat = tx.replace(/\(\s+/g, '(').replace(/\s+/g, ' ');
+  const parts = {
+    oneTransaction: post.includes('const householdId = await prisma.$transaction(async (tx) => {'),
+    householdInTx: /const household = await tx\.household\.create\(/.test(tx),
+    fourMemberWrites: count(flat, 'await createMember(tx, ') === 4,
+    pickThrows: /if \(!check\.ok\) throw new ChannelValidationError\(check\.error\);/.test(tx),
+    pickInTx: /await tx\.household\.update\(/.test(tx),
+    ledgerInTx: /await recordChange\(tx, \{/.test(tx),
+    personThroughDb: /findOrCreateCapturedPerson\(db, \{/.test(post),
+    noWriteOutside: !/prisma\.(person|personEvent)\.|prisma\.household\.(create|update)\(/.test(
+      post
+    ),
+    pick400:
+      /if \(error instanceof ChannelValidationError\) \{\s*return NextResponse\.json\(\{ error: error\.message \}, \{ status: 400 \}\);/.test(
+        post
+      ),
+  };
+  assert(
+    'S',
+    'S7 the household, every member, the picker and the ledger entry are written through the transaction; no write outside it',
+    Object.values(parts).every(Boolean),
+    S0(
+      Object.entries(parts)
+        .filter(([, v]) => !v)
+        .map(([k]) => k)
     )
   );
 }
@@ -382,6 +427,7 @@ async function runLive() {
   };
   const evA = await mk('GTC-431 household save — her household saved', true);
   const evB = await mk('GTC-431 household save — her own household first', false);
+  const evX = await mk('GTC-434 household save — one transaction', true);
 
   const evIn = { eventId: { in: created.events } };
   const rows = async () =>
@@ -403,6 +449,98 @@ async function runLive() {
   );
   const households = (eventId: string) => prisma.household.count({ where: { eventId } });
   const members = (eventId: string) => prisma.personEvent.count({ where: { eventId } });
+
+  // ── X: the households POST over HTTP, no browser (GTC-434) ─────────────────────
+  section('X — the households POST saves all or nothing (GTC-434)');
+  const mailX = (l: string, tag: string) => `gtc434-${tag}-${l}-${stamp}@example.com`;
+  const NUL = String.fromCharCode(0);
+  const hhBody = (tag: string, nulAt: number | null, pick: string | null) => ({
+    primaryContact: { name: `Ana ${tag}`, email: mailX('ana', tag), phone: '021 000 0101' },
+    partner: { name: `Ben ${tag}`, email: mailX('ben', tag), phone: '021 000 0102' },
+    helpers: [1, 2, 3, 4, 5, 6].map((i) => ({
+      name: i === nulAt ? `Kid${NUL} ${tag} ${i}` : `Kid ${tag} ${i}`,
+      email: mailX(`kid${i}`, tag),
+      phone: `021 000 01${10 + i}`,
+    })),
+    contactPersonEventId: pick,
+  });
+  const postHh = async (body: unknown) => {
+    try {
+      const res = await realFetch(`${BASE}/api/events/${evX}/households`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie: `session=${token}` },
+        body: JSON.stringify(body),
+      });
+      return { status: res.status, body: (await res.json().catch(() => ({}))) as any };
+    } catch (e) {
+      return { status: 0, body: { error: String((e as Error).message) } };
+    }
+  };
+  const xState = async (tag: string) =>
+    [
+      await households(evX),
+      await members(evX),
+      await prisma.person.count({ where: { email: { contains: `gtc434-${tag}-` } } }),
+      await prisma.auditEntry.count({ where: { eventId: evX } }),
+      await prisma.household.count({
+        where: { eventId: evX, members: { none: { householdRole: 'PRIMARY_CONTACT' } } },
+      }),
+    ].join(',');
+  const whole = async (householdId: string | undefined, tag: string) => {
+    if (!householdId) return false;
+    const m = await prisma.personEvent.findMany({
+      where: { householdId },
+      include: { person: true },
+    });
+    const kids = m.filter((x) => x.householdRole === 'CHILD');
+    return (
+      m.length === 8 &&
+      m.some((x) => x.householdRole === 'PRIMARY_CONTACT' && x.person.name === `Ana ${tag}`) &&
+      m.some((x) => x.householdRole === 'PARTNER' && x.person.name === `Ben ${tag}`) &&
+      kids.length === 6 &&
+      kids.every((k) => !!k.person.email && !!k.person.phoneNumber)
+    );
+  };
+  {
+    const x1 = await postHh(hhBody('x1', null, null));
+    assert(
+      'X',
+      'X1 two adults and six kids: 201; one household with its contact, partner and six kids, each kid with email and phone',
+      x1.status === 201 && (await whole(x1.body?.household?.id, 'x1')),
+      S0({ status: x1.status })
+    );
+    const before = await xState('x2');
+    const x2 = await postHh(hhBody('x2', 3, null));
+    const after = await xState('x2');
+    assert(
+      'X',
+      'X2 the third kid’s write refused by the database (a NUL in the name): 500, and nothing kept: households, members, people, ledger rows as before',
+      x2.status === 500 && after === before,
+      S0({ status: x2.status, before, after })
+    );
+    const x3 = await postHh(hhBody('x2', null, null));
+    const afterRetry = (await xState('x2')).split(',');
+    const beforeRetry = before.split(',');
+    assert(
+      'X',
+      'X3 then the same household again: 201; exactly one new household, whole (contact, partner, six kids); no household without a main contact',
+      x3.status === 201 &&
+        Number(afterRetry[0]) === Number(beforeRetry[0]) + 1 &&
+        (await whole(x3.body?.household?.id, 'x2')) &&
+        afterRetry[4] === '0',
+      S0({ status: x3.status, before, after: afterRetry.join(',') })
+    );
+    const pickWords = (validateChannelTarget(null, evX) as { error: string }).error;
+    const b4 = await xState('x4');
+    const x4 = await postHh(hhBody('x4', null, 'not-a-person-event'));
+    const a4 = await xState('x4');
+    assert(
+      'X',
+      `X4 a contact pick that does not exist: 400 "${pickWords}", and nothing kept`,
+      x4.status === 400 && x4.body?.error === pickWords && a4 === b4,
+      S0({ status: x4.status, words: x4.body?.error === pickWords, before: b4, after: a4 })
+    );
+  }
 
   let chrome: Headless | null = null;
   try {
@@ -659,6 +797,51 @@ async function runLive() {
       );
     }
 
+    // ── C17: a part-way failure in the page, at 390 (GTC-434) ──────────────────────
+    await c.setViewport(390, 844, true);
+    await go(`/plan/${evX}/setup`);
+    if (await ev<boolean>(`!!window.__btn('Save & add another household')`)) {
+      const hhC17 = await households(evX);
+      await ev(`window.__set(document.querySelector('#m1-name'), 'Cal c17')`);
+      await sixKids('c17', {});
+      const kept = await ev<boolean>(`(() => { const k = window.__kids()[2];
+        window.__set(k.name, 'Kid' + String.fromCharCode(0) + ' c17 3'); return k.name.value.includes(String.fromCharCode(0)); })()`);
+      if (!kept) {
+        console.log('    (C17 not run: the browser took the NUL out of the text box)');
+      } else {
+        await clearCalls();
+        await tap(`window.__btn('Save & add another household')`, 2000);
+        const f17 = await ev<{ words: boolean; kids: number; name: string }>(`(() => ({
+          words: [...document.querySelectorAll('p')].filter(window.__vis).some((p) => p.innerText.trim() === ${S(SAVE_FAILED)}),
+          kids: window.__kids().length, name: document.querySelector('#m1-name').value }))()`);
+        const stored17 = await households(evX);
+        await ev(`window.__set(window.__kids()[2].name, 'Kid c17 3')`);
+        await clearCalls();
+        await tap(`window.__btn('Save & add another household')`, 2500);
+        const last = await prisma.household.findFirst({
+          where: { eventId: evX },
+          orderBy: { createdAt: 'desc' },
+          include: { members: { include: { person: true } } },
+        });
+        assert(
+          'C',
+          `C17 390: the third kid's write refused on Save: "${SAVE_FAILED}", the form kept, nothing stored; fixed, Save stores it once, whole`,
+          f17.words &&
+            f17.kids === 6 &&
+            f17.name === 'Cal c17' &&
+            stored17 === hhC17 &&
+            (await households(evX)) === hhC17 + 1 &&
+            last?.members.some(
+              (m) => m.person.name === 'Cal c17' && m.householdRole === 'PRIMARY_CONTACT'
+            ) === true &&
+            last?.members.filter((m) => m.householdRole === 'CHILD').length === 6,
+          S({ ...f17, stored17, hhC17, now: await households(evX) })
+        );
+      }
+    } else {
+      assert('C', 'C17 390: the add form opened on the one-transaction event', false);
+    }
+
     // ── C12–C13: a "+64 (0)" phone saves right, at 390 (GTC-432) ─────────────────
     await c.setViewport(390, 844, true);
     // Found building GTC-432: an email box (type="email") hands the page its value with the spaces
@@ -786,6 +969,7 @@ async function main() {
   layerW();
   layerR();
   layerS();
+  layerS7();
   layerT();
   if (process.env.HOUSEHOLD_SAVE_DRY_RUN !== '1') {
     try {
