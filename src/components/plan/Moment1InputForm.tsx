@@ -678,10 +678,15 @@ export default function Moment1InputForm({
     if (checksFail()) return;
 
     setSaving(true);
+    setSaveError(false);
     try {
       const payload = buildPayload();
       await onEditSave(editingHousehold.id, payload);
       resetForm();
+    } catch {
+      // [[GTC-433]]: a failed save says so, as the other two Save buttons do, and keeps the form
+      // exactly as she left it, so pressing "Save changes" again retries the same edit.
+      setSaveError(true);
     } finally {
       setSaving(false);
     }

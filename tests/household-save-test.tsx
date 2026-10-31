@@ -12,6 +12,8 @@
  *   432  The form checks an email and a phone with their spaces trimmed, and a phone typed
  *        "+64 (0)21 123 4567" is stored as +64211234567 (the one 0 after +64 dropped). Phone rules
  *        otherwise unchanged.
+ *   433  "Save changes" that fails (an error reply, a network failure) shows "That didn't save —
+ *        please try again." as the other Save buttons do, and keeps the form as she left it.
  *
  * THE LAYERS
  *   W  the words, typed here by hand
@@ -187,6 +189,13 @@ function layerS() {
       code
     ) && /setFixPrompt\(false\);/.test(code)
   );
+  assert(
+    'S',
+    'S6 "Save changes" clears the failed-save words before it saves, and a failure sets them; the form is not reset (GTC-433)',
+    /const handleEditSave = async \(\) => \{[\s\S]{0,160}?setSaving\(true\);\s*setSaveError\(false\);\s*try \{\s*const payload = buildPayload\(\);\s*await onEditSave\(editingHousehold\.id, payload\);\s*resetForm\(\);\s*\} catch \{\s*setSaveError\(true\);\s*\} finally \{\s*setSaving\(false\);\s*\}\s*\};/.test(
+      code
+    )
+  );
 }
 
 // ══ T — THE RULES, TRIMMED (GTC-432) ═════════════════════════════════════════
@@ -269,10 +278,21 @@ const created = {
 const refusals: string[] = [];
 
 /** Every fetch the page makes, as "METHOD path", recorded in the page before its scripts run. */
-const RECORDER = `(() => { const f = window.fetch; window.__calls = [];
-  window.fetch = function (u, o) { try { const url = typeof u === 'string' ? u : u.url;
-    window.__calls.push(((o && o.method) || (u && u.method) || 'GET').toUpperCase() + ' ' + new URL(url, location.href).pathname); } catch (e) {}
+const RECORDER = `(() => { const f = window.fetch; window.__calls = []; window.__unhandled = 0; window.__failPut = null;
+  window.addEventListener('unhandledrejection', () => { window.__unhandled++; });
+  window.fetch = function (u, o) { let call = '';
+    try { const url = typeof u === 'string' ? u : u.url;
+      call = ((o && o.method) || (u && u.method) || 'GET').toUpperCase() + ' ' + new URL(url, location.href).pathname;
+      window.__calls.push(call); } catch (e) {}
+    /* [[GTC-433]]: a household PUT failed in the page itself, never reaching the server. */
+    if (window.__failPut && call.startsWith('PUT /api/events/') && call.split('/').length === 6 && call.split('/')[4] === 'households') {
+      if (window.__failPut === 'network') return Promise.reject(new TypeError('Failed to fetch'));
+      return Promise.resolve(new Response(JSON.stringify({ error: 'made-up failure' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }));
+    }
     return f.apply(this, arguments); }; })();`;
+/** The words a failed save shows, as the page draws them. */
+const SAVE_FAILED = 'That didn’t save — please try again.';
 
 const HELPERS = `
 window.__vis = (el) => !!el && el.getClientRects().length > 0;
@@ -536,7 +556,111 @@ async function runLive() {
       await tap(`window.__btn('Cancel')`, 500);
     }
 
+    // ── C14–C16: "Save changes" that fails says so, at 390 and 1280 (GTC-433) ──────
+    const openOwnEdit = () =>
+      tap(
+        `[...document.querySelectorAll('button')].filter(window.__vis).filter((b) => b.innerText.trim() === 'Edit').find((b) => (b.closest('[class*="border"]')?.innerText || '').includes('Kate HS'))`,
+        600
+      );
+    const afterFail = () =>
+      ev<{
+        words: boolean;
+        editing: boolean;
+        kids: number;
+        filled: boolean;
+        alert: string[];
+        unhandled: number;
+      }>(
+        `(() => { const k = window.__kids();
+          return { words: [...document.querySelectorAll('p')].filter(window.__vis).some((p) => p.innerText.trim() === ${JSON.stringify(SAVE_FAILED)}),
+            editing: !!window.__btn('Save changes'), kids: k.length,
+            filled: k.every((r) => r.name.value.startsWith('Kid fail') && r.email.value.includes('@') && r.phone.value.startsWith('021')),
+            alert: window.__alert(), unhandled: window.__unhandled }; })()`
+      );
+    const onePut = (cs: string[]) =>
+      cs.length === 1 && new RegExp(`^PUT /api/events/${evA}/households/[^/]+$`).test(cs[0]);
+    for (const [w, h, mobile] of [
+      [390, 844, true],
+      [1280, 900, false],
+    ] as const) {
+      await c.setViewport(w, h, mobile);
+      await go(`/plan/${evA}/setup`);
+      const before = await members(evA);
+      const opened =
+        (await openOwnEdit()) === null && (await ev<boolean>(`!!window.__btn('Save changes')`));
+      if (!opened) {
+        assert('C', `C14 ${w}: her own household opened with Edit`, false);
+        continue;
+      }
+      const kidsAtOpen = await ev<number>(`window.__kids().length`);
+      await sixKids(`fail${w}`, {});
+      await ev(`window.__failPut = 'http500'`);
+      await clearCalls();
+      await tap(`window.__btn('Save changes')`, 1200);
+      const f1 = await afterFail();
+      const c1 = await calls();
+      assert(
+        'C',
+        `C14 ${w}: "Save changes" answered 500: "${SAVE_FAILED}" shows; still editing with the six new kids as typed (and any saved before); one PUT tried; nothing stored; no "Please fix"; no unhandled rejection`,
+        f1.words &&
+          f1.editing &&
+          f1.kids === kidsAtOpen + 6 &&
+          f1.filled &&
+          onePut(c1) &&
+          (await members(evA)) === before &&
+          S(f1.alert) === S([]) &&
+          f1.unhandled === 0,
+        S({ ...f1, calls: c1 })
+      );
+      if (w !== 390) {
+        await ev(`window.__failPut = null`);
+        await tap(`window.__btn('Cancel')`, 500);
+        continue;
+      }
+      await ev(`window.__failPut = 'network'`);
+      await clearCalls();
+      await tap(`window.__btn('Save changes')`, 1200);
+      const f2 = await afterFail();
+      const c2 = await calls();
+      assert(
+        'C',
+        `C15 390: "Save changes" with the network down: the same words; still editing with all six kids; nothing stored; no unhandled rejection`,
+        f2.words &&
+          f2.editing &&
+          f2.kids === kidsAtOpen + 6 &&
+          f2.filled &&
+          onePut(c2) &&
+          (await members(evA)) === before &&
+          f2.unhandled === 0,
+        S({ ...f2, calls: c2 })
+      );
+      await ev(`window.__failPut = null`);
+      await clearCalls();
+      await tap(`window.__btn('Save changes')`, 2500);
+      const f3 = await afterFail();
+      const c3 = await calls();
+      const stored = await prisma.personEvent.findMany({
+        where: {
+          eventId: evA,
+          householdRole: 'CHILD',
+          person: { name: { startsWith: 'Kid fail390' } },
+        },
+        include: { person: true },
+      });
+      assert(
+        'C',
+        'C16 390: then pressed again with nothing in the way: one PUT, the six kids stored with email and phone, the words gone, the form closed',
+        onePut(c3) &&
+          !f3.words &&
+          !f3.editing &&
+          stored.length === 6 &&
+          stored.every((m) => !!m.person.email && !!m.person.phoneNumber),
+        S({ words: f3.words, editing: f3.editing, calls: c3, stored: stored.length })
+      );
+    }
+
     // ── C12–C13: a "+64 (0)" phone saves right, at 390 (GTC-432) ─────────────────
+    await c.setViewport(390, 844, true);
     // Found building GTC-432: an email box (type="email") hands the page its value with the spaces
     // at either end already removed (the browser's own value rule), so on these boxes the form
     // never saw them. C13 records that; T1 holds the trimmed rule itself.
