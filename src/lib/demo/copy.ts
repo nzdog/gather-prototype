@@ -92,6 +92,8 @@ export async function startDemoCopy(
         setup: { create: {} },
       },
     });
+    // [[GTC-441]] T2: the host is a sample person too; the event's id exists only now.
+    await tx.person.update({ where: { id: host.id }, data: { sampleEventId: event.id } });
     await tx.eventRole.create({ data: { userId: user.id, eventId: event.id, role: 'HOST' } });
     await tx.session.create({ data: { userId: user.id, token: sessionToken, expiresAt } });
     return { eventId: event.id, userId: user.id, sessionToken, expiresAt };
