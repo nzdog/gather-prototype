@@ -1446,7 +1446,7 @@ function layerU() {
         ...NOT_TOUCHED_TILL_GTC411,
         ...NEW_IN_GTC411,
       ]).status === 0 &&
-      lockfileIsBaseButQs(read('package-lock.json'), atRef(BASE, 'package-lock.json')),
+      lockfileIsBaseButQs(atRef(T0_AT, 'package-lock.json'), atRef(BASE, 'package-lock.json')),
     missing.length ? `missing: ${missing.join(', ')}` : undefined
   );
   // GTC-397's lesson: package.json is read at a fixed commit (the one that added this suite), never

@@ -318,7 +318,10 @@ export const CHECKS = {
       // label, "Try it yourself", still only in development; DEMO_START_WORDS.BUTTON stays W11 in
       // start-limit.ts (checked as before), unused by the page. The page beside it is the two-button
       // page ("Sarah demo"), not the old walkthrough.
-      /process\.env\.NODE_ENV === 'development' && \([\s\S]{0,600}?\bTRY_IT_YOURSELF\b/.test(src) &&
+      // [[GTC-430]] (founder, 30 Oct 2026): and only with the demo start switch on.
+      /process\.env\.NODE_ENV === 'development' && isDemoStartOn\(\) \? \([\s\S]{0,600}?\bTRY_IT_YOURSELF\b/.test(
+        src
+      ) &&
       /const TRY_IT_YOURSELF = 'Try it yourself';/.test(src) &&
       // [[GTC-395]] item 3 (founder, 20 Oct 2026): the button opens the sample's own page, and the
       // start (its 409 asking GET /api/events, W10 or W9) is that page's, in src/lib/demo/new-event.ts.
@@ -1722,7 +1725,7 @@ async function main() {
     );
     assert(
       'W',
-      'W11 on /demo only in development (Q5); a 409 asks GET /api/events for her sample (W10) or says W9',
+      'W11 on /demo only in development (Q5) and with the switch on (GTC-430); a 409 asks GET /api/events for her sample (W10) or says W9',
       CHECKS.demoPage(code('src/app/demo/page.tsx'), code('src/lib/demo/new-event.ts'))
     );
     assert(

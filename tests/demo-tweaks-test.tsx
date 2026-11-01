@@ -217,6 +217,10 @@ const DEMO_ROUTES = [
 /** The two new words (founder's first prompt, tweak 3). */
 const SARAH_DEMO = 'Sarah demo';
 const TRY_IT = 'Try it yourself';
+/** [[GTC-430]] — the founder's words (30 Oct 2026), wherever the button is not. */
+const UNDER_CONSTRUCTION = 'Under construction';
+/** [[GTC-430]] — the button's own client file (the page is a server component now). */
+const DEMO_BUTTON = 'src/components/demo/TryItYourselfButton.tsx';
 /** Words of the sections that go: none may be on the page. */
 const GONE_FROM_DEMO = [
   'How Sarah Got Here',
@@ -822,9 +826,13 @@ export const CHECKS = {
       !waiting.includes(NOT_HOST_INVITES)
     );
   },
-  /** D1, D2 — the first page: the heading "Gather" and its buttons, and nothing else. */
+  /**
+   * D1, D2 — the first page: the heading "Gather" and its button, or ([[GTC-430]]) the note
+   * "Under construction" in its place, and nothing else.
+   */
   demoPage(html: string, dev: boolean) {
     const buttons = [...html.matchAll(/<button\b[^>]*>([^<]*)<\/button>/g)].map((m) => m[1]);
+    const notes = [...html.matchAll(/<p\b[^>]*>([^<]*)<\/p>/g)].map((m) => m[1]);
     const h1 = html.match(/<h1\b[^>]*>([^<]*)<\/h1>/);
     return (
       !!h1 &&
@@ -834,7 +842,11 @@ export const CHECKS = {
       // still development-only, so a production build shows the heading and no button.
       JSON.stringify(buttons) === JSON.stringify(dev ? [TRY_IT] : []) &&
       (html.match(/<button\b/g) ?? []).length === buttons.length &&
-      !/<(h2|h3|p|a|section|hr)\b/.test(html) &&
+      // [[GTC-430]] (founder, 30 Oct 2026): wherever the button is not, exactly the note, in one
+      // <p>; with the button, no <p> at all, as before.
+      JSON.stringify(notes) === JSON.stringify(dev ? [] : [UNDER_CONSTRUCTION]) &&
+      (html.match(/<p\b/g) ?? []).length === notes.length &&
+      !/<(h2|h3|a|section|hr)\b/.test(html) &&
       GONE_FROM_DEMO.every((w) => !html.includes(w)) &&
       !html.includes(SARAH_DEMO)
     );
@@ -844,18 +856,23 @@ export const CHECKS = {
    * handler gone. [[GTC-395]] item 3: the copy door is the sample's own page now, so /demo's
    * development-only button opens `/demo/new` and the page fetches nothing.
    */
-  demoSource(src: string) {
+  demoSource(src: string, button: string) {
+    const both = `${src}\n${button}`;
     return (
       src.length > 200 &&
-      !/Sarah|handleOpen/.test(src) &&
+      button.length > 100 &&
+      !/Sarah|handleOpen/.test(both) &&
       /const SAMPLE_PAGE = '\/demo\/new';/.test(src) &&
-      /process\.env\.NODE_ENV === 'development' && \(\s*<button\s+onClick=\{\(\) => window\.location\.assign\(SAMPLE_PAGE\)\}/.test(
+      // [[GTC-430]]: drawn only in development AND with the switch on, handed the sample's page;
+      // the button, in its own client file, opens what it is handed.
+      /process\.env\.NODE_ENV === 'development' && isDemoStartOn\(\) \? \(\s*<TryItYourselfButton href=\{SAMPLE_PAGE\} label=\{TRY_IT_YOURSELF\} \/>/.test(
         src
       ) &&
-      !/fetch\(/.test(src) &&
-      !src.includes('/api/demo/tokens') &&
-      !src.includes('/api/demo/reset') &&
-      !src.includes('confirm(')
+      /<button\s+onClick=\{\(\) => window\.location\.assign\(href\)\}/.test(button) &&
+      !/fetch\(/.test(both) &&
+      !both.includes('/api/demo/tokens') &&
+      !both.includes('/api/demo/reset') &&
+      !both.includes('confirm(')
     );
   },
   /** K1 — the crowd button: filled accent, full width, larger text, in a soft tinted box with W17. */
@@ -1450,34 +1467,42 @@ async function layerO() {
 // ══ Tweak 3 ══════════════════════════════════════════════════════════════════
 async function layerD() {
   section('D — tweak 3: the first page, two buttons; Sarah on the board');
-  /** The page as a build for `env` draws it (the copy button is development-only, GTC-392 Q5). */
+  /**
+   * The page as a build for `env` draws it (the copy button is development-only, GTC-392 Q5).
+   * [[GTC-430]]: the page reads the demo start switch now, so it is drawn with the switch on, as
+   * this Mac's .env.local has it and as every gate drew it, whatever the runner's setting.
+   */
   const draw = (env: string) => {
     const was = process.env.NODE_ENV;
+    const wasSwitch = process.env.GATHER_DEMO_START;
     (process.env as any).NODE_ENV = env;
+    process.env.GATHER_DEMO_START = 'on';
     try {
       return render(createElement(ToastProvider as any, null, createElement(DemoPage)));
     } finally {
       (process.env as any).NODE_ENV = was;
+      if (wasSwitch === undefined) delete process.env.GATHER_DEMO_START;
+      else process.env.GATHER_DEMO_START = wasSwitch;
     }
   };
   const dev = draw('development');
   const prod = draw('production');
   assert(
     'D',
-    'D1 on the founder’s Mac (development): the heading "Gather" and one button, "Try it yourself", and nothing else (GTC-395: "Sarah demo" goes)',
+    'D1 on the founder’s Mac (development, the switch on): the heading "Gather" and one button, "Try it yourself", and nothing else (GTC-395: "Sarah demo" goes; no note, GTC-430)',
     CHECKS.demoPage(dev, true),
     dev.slice(0, 400)
   );
   assert(
     'D',
-    'D2 in a production build: the heading and no button (GTC-395: "Sarah demo" goes; the copy button waits for part D)',
+    'D2 in a production build, even with the switch on: the heading, "Under construction" under it and no button (GTC-430), nothing else (GTC-395: "Sarah demo" goes; the copy button waits for part D)',
     CHECKS.demoPage(prod, false),
     prod.slice(0, 400)
   );
   assert(
     'D',
-    'D3 the copy door, development-only, opens the sample’s own page (GTC-395 item 3); the Sarah door gone (GTC-395); no tokens fetch, no Reset',
-    CHECKS.demoSource(code(DEMO_PAGE))
+    'D3 the copy door, development-only and only with the switch on (GTC-430), opens the sample’s own page (GTC-395 item 3) from its own client file; the Sarah door gone (GTC-395); no tokens fetch, no Reset',
+    CHECKS.demoSource(code(DEMO_PAGE), code(DEMO_BUTTON))
   );
   assert(
     'D',
