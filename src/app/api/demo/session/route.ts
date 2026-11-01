@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
-import { startDemoCopy } from '@/lib/demo/copy';
-import { checkStartLimit, DEMO_START_WORDS, noteStart, visitorOf } from '@/lib/demo/start-limit';
+import { startDemoCopyWithinLimit } from '@/lib/demo/copy';
+import {
+  checkStartLimit,
+  DEMO_START_WORDS,
+  startLogLine,
+  visitorOf,
+  visitorTagOf,
+} from '@/lib/demo/start-limit';
 import { isDemoStartOn } from '@/lib/demo/start-switch';
 
 /**
@@ -83,19 +89,26 @@ export async function POST(request: Request) {
      * up. [[GTC-425]]: the body was read at the top of the handler, and this shape only reaches
      * here when the switch is on.
      */
+    // [[GTC-443]]: the visitor's tag, one log line (counts only), then the limits and the copy in
+    // one transaction under one lock. Her address is hashed here and goes no further.
     const visitor = visitorOf(request.headers);
-    const limit = await checkStartLimit(prisma, visitor);
-    if (!limit.ok) {
-      return NextResponse.json({ error: limit.words }, { status: 429 });
-    }
-    let copy;
+    const visitorTag = visitor.address ? await visitorTagOf(visitor.address) : null;
+    console.log(startLogLine(visitor, visitorTag !== null));
+    let started;
     try {
-      copy = await startDemoCopy(prisma);
+      started = await startDemoCopyWithinLimit(
+        prisma,
+        (tx, now) => checkStartLimit(tx, visitorTag, { now }),
+        { visitorTag }
+      );
     } catch (copyError) {
       console.error('[DemoSession] The copy could not be started:', copyError);
       return NextResponse.json({ error: DEMO_START_WORDS.FAILED }, { status: 500 });
     }
-    noteStart(visitor);
+    if (!started.ok) {
+      return NextResponse.json({ error: started.words }, { status: 429 });
+    }
+    const copy = started.copy;
     // Zone 1, as GTC-269: the same cookie, name and path unchanged, set after the commit.
     (await cookies()).set('session', copy.sessionToken, {
       httpOnly: true,

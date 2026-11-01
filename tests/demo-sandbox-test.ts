@@ -1461,29 +1461,47 @@ async function main() {
       aiFull?.ok === false && aiFull?.words === W8B,
       JSON.stringify(aiFull)
     );
-    const t0 = Date.UTC(2026, 9, 18, 3, 0, 0);
-    const visitorOk = ok(() => {
-      const v = `${TAG}-v2`;
-      for (const dt of [0, 10, 20]) LIM.noteStart(v, t0 + dt * 60 * 1000);
-      return true;
-    });
-    const v2a = visitorOk ? await check(`${TAG}-v2`, new Date(t0 + 30 * 60 * 1000), lim({})) : null;
-    const v2b = visitorOk ? await check(`${TAG}-v2`, new Date(t0 + 60 * 60 * 1000), lim({})) : null;
+    // [[GTC-443]] (founder's word, 2 Nov 2026): the count is the database's. Three copies carrying
+    // one visitor's tag, written in process (no route, so no memory anywhere).
+    const v2Tag = randomBytes(4).toString('hex');
+    let v2Made = 0;
+    if (COPY?.startDemoCopy) {
+      for (let i = 0; i < 3; i++) {
+        const c = await COPY.startDemoCopy(prisma, { now: new Date(), visitorTag: v2Tag }).catch(
+          () => null
+        );
+        if (c && (await copyRowsOf(c.eventId))) {
+          fx.sessionTokens.add(c.sessionToken);
+          v2Made++;
+        }
+      }
+    }
+    const v2a = await check(v2Tag, new Date(), lim({}));
+    const v2b = await check(v2Tag, new Date(Date.now() + 61 * 60 * 1000), lim({}));
     assert(
       'E',
-      'E13 one visitor: three starts in an hour, the fourth refused with W7; an hour after the first, one may start again',
-      v2a?.ok === false && v2a?.words === W7 && v2b?.ok === true,
-      JSON.stringify({ v2a, v2b })
+      'E13 one visitor: three copies carrying her tag written in the last hour, the fourth refused with W7 from the database; with the clock an hour on, one may start again',
+      v2Made === 3 && v2a?.ok === false && v2a?.words === W7 && v2b?.ok === true,
+      JSON.stringify({ v2Made, v2a, v2b })
     );
+    // [[GTC-443]] (founder's word, 2 Nov 2026): the ORDER. Both headers: X-Real-IP wins. X-Real-IP
+    // absent or blank: the X-Forwarded-For entry pickForwardedEntry picks (its end is proved at
+    // both ends in test:demo-start-limit).
     assert(
       'E',
-      'E14 the visitor is the first address in x-forwarded-for, then x-real-ip',
-      ok(
-        () =>
-          LIM.visitorOf(new Headers({ 'x-forwarded-for': '203.0.113.7, 10.0.0.1' })) ===
-            '203.0.113.7' &&
-          LIM.visitorOf(new Headers({ 'x-real-ip': '198.51.100.9' })) === '198.51.100.9'
-      )
+      'E14 the visitor is X-Real-IP when both headers come; with X-Real-IP absent or blank, the X-Forwarded-For entry pickForwardedEntry picks',
+      ok(() => {
+        const xff = '203.0.113.7, 10.0.0.1';
+        const picked = LIM.pickForwardedEntry(['203.0.113.7', '10.0.0.1']);
+        return (
+          LIM.visitorOf(new Headers({ 'x-forwarded-for': xff, 'x-real-ip': '198.51.100.9' }))
+            .address === '198.51.100.9' &&
+          ['203.0.113.7', '10.0.0.1'].includes(picked) &&
+          LIM.visitorOf(new Headers({ 'x-forwarded-for': xff })).address === picked &&
+          LIM.visitorOf(new Headers({ 'x-forwarded-for': xff, 'x-real-ip': '  ' })).address ===
+            picked
+        );
+      })
     );
     assert(
       'E',

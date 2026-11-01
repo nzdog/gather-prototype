@@ -185,7 +185,8 @@
     "test:demo-note": "tsx --tsconfig tests/tsconfig.json tests/demo-note-test.tsx",
     "test:sample-marker": "tsx tests/sample-marker-test.ts",
     "test:sample-identity": "tsx --tsconfig tests/tsconfig.json tests/sample-identity-test.tsx",
-    "test:demo-cleanup": "tsx tests/demo-cleanup-test.ts"
+    "test:demo-cleanup": "tsx tests/demo-cleanup-test.ts",
+    "test:demo-start-limit": "tsx tests/demo-start-limit-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
