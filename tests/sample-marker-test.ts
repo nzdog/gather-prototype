@@ -138,10 +138,13 @@ export const CHECKS = {
 };
 
 /** [[GTC-441]] T2: the only files that name the field (the identity rule, the crowd, the host). */
+// [[GTC-442]] (founder ruling Q2, 1 Nov 2026): the clean-up finds a copy's people by the marker,
+// so it is the fourth file that may name it (a reader; the three above are its writers).
 const NAMING_FILES = [
   'src/lib/households/capturePerson.ts',
   'src/lib/demo/crowd.ts',
   'src/lib/demo/copy.ts',
+  'src/lib/demo/cleanup.ts',
 ] as const;
 
 // ── The database: gather_demo only ───────────────────────────────────────────
@@ -336,7 +339,7 @@ function layerN() {
   ];
   assert(
     'N',
-    'N1 the files under src/ or scripts/ that name sampleEventId are exactly capturePerson.ts, crowd.ts and copy.ts',
+    'N1 the files under src/ or scripts/ that name sampleEventId are exactly capturePerson.ts, crowd.ts, copy.ts and cleanup.ts',
     CHECKS.sameFiles(named, NAMING_FILES),
     `named in: ${named.join(', ') || 'none'}`
   );

@@ -1373,12 +1373,29 @@ async function main() {
       clobber.status === 409 && (await prisma.session.count()) === sessionsBeforeClobber,
       JSON.stringify({ status: clobber.status })
     );
+    // [[GTC-442]] (founder rulings Q15 and Q2, 1 Nov 2026): part D retires the shared sample, so
+    // this asks that a POST with no body is answered 404 and writes nothing, where it asked that
+    // it still took the shared sample's path.
+    const sessionsBeforeOld = await prisma.session.count();
+    const usersBeforeOld = await prisma.user.count();
     const old = await postStart(ip(3));
+    const sessionsAfterOld = await prisma.session.count();
+    const usersAfterOld = await prisma.user.count();
     assert(
       'E',
-      'E7 CONTROL: no body still takes today’s path, the shared sample (part D retires it)',
-      old.status === 200 && !!sharedDemo && old.body?.eventId === sharedDemo.id,
-      JSON.stringify({ status: old.status, eventId: old.body?.eventId })
+      'E7 a POST with no body answers 404 "Not found", sets no cookie and writes no row (GTC-442)',
+      old.status === 404 &&
+        old.body?.error === 'Not found' &&
+        !old.token &&
+        sessionsAfterOld === sessionsBeforeOld &&
+        usersAfterOld === usersBeforeOld,
+      JSON.stringify({
+        status: old.status,
+        error: old.body?.error,
+        cookie: !!old.token,
+        sessions: sessionsAfterOld - sessionsBeforeOld,
+        users: usersAfterOld - usersBeforeOld,
+      })
     );
     const four: Array<Awaited<ReturnType<typeof postStart>>> = [];
     for (let i = 0; i < 4; i++) four.push(await postStart(ip(4), { body: { start: 'copy' } }));

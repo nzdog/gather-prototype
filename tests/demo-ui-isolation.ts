@@ -64,11 +64,22 @@ function testSuite_DemoUiIsolation() {
     'Route handler must include isDemo in the NextResponse.json() body'
   );
 
-  // Test 3: isDemo is derived from the demo event name constant
+  // Test 3: isDemo is the event's own column, and no event is named to set it.
+  //
+  // [[GTC-442]] (founder rulings, 1 Nov 2026, Q14): rewritten. It asked for the old shared
+  // demo's name literal, which GTC-333 removed from the route, so it had been the gate's known
+  // red since. A sample is any isDemo event (the send wall's meaning, GTC-441 R2), so the route
+  // must hand back the event's own isDemo and must not decide it by an event name.
+  const participantApiCode = participantApiSrc
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
   logTest(
-    'Participant API identifies demo event by known event name',
-    /Henderson Family Christmas 2025/.test(participantApiSrc),
-    'API must compare event name to "Henderson Family Christmas 2025" to set isDemo'
+    'Participant API identifies a sample by its isDemo column and names no event',
+    /isDemo:\s*resolvedContext\.event\.isDemo\b/.test(participantApiCode) &&
+      !/Henderson|Your sample gathering/.test(participantApiCode) &&
+      !/\.name\s*={2,3}\s*['"`]/.test(participantApiCode),
+    'The route must return isDemo: resolvedContext.event.isDemo, with no event-name literal ' +
+      'and no comparison of a name to a literal'
   );
 
   // Test 4: "Back to Demo" link is inside an isDemo conditional

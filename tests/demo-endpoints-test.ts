@@ -1,10 +1,12 @@
 /**
- * Demo Endpoints Test — GTC-015, narrowed by GTC-269
+ * Demo Endpoints Test — GTC-015, narrowed by GTC-269, the old demo retired by GTC-442
  *
  * Asserts:
- * 1. Both demo routes are REACHABLE in production — the GTC-015 decision
- * 2. Demo seed data exists in DB (event + required persona tokens)
- * 3. The tokens route is scoped to specific demo personas (not all tokens)
+ * 1. The demo route is REACHABLE in production — the GTC-015 decision — and its one shape
+ *    is the visitor's own sample: every other body answers 404 first (GTC-442)
+ * 2. The old shared demo is gone: no tokens route, nothing in src names it, no code reads
+ *    the shared event's name (GTC-442, replacing the old seed-data and tokens checks)
+ * 3. The sample page shows its failures
  *
  * Run with: npx tsx tests/demo-endpoints-test.ts
  *
@@ -55,7 +57,15 @@
  * stands for the route: it is reachable in production and carries no environment
  * refusal. The copy-start shape of `POST /api/demo/session` (`{ start: 'copy' }`) is
  * now gated by a switch, GATHER_DEMO_START, that the founder turns on at launch; off,
- * that shape answers 404. The old no-body shape is unchanged. Test 1.2 holds both.
+ * that shape answers 404. Test 1.2 holds both.
+ *
+ * THE OLD SHARED DEMO RETIRED, FOUNDER RULINGS 1 NOV 2026 ([[GTC-442]], Q10, Q14, Q15). The
+ * no-body shape of `POST /api/demo/session` (the shared Henderson session) now answers 404
+ * before anything else, and `GET /api/demo/tokens` is deleted. Their checks here were retired,
+ * each replaced by a check that its subject is gone: 1.1 and 1.3b (the tokens route) by G1 and
+ * G2; 2.1 to 2.5 (the shared event's seed rows) by G3. 1.2 is re-aimed at the 404. The local
+ * "…2025" row and the seed are left as they are (the plan), so G3 reads src code, not the
+ * database.
  *
  * NOT ASSERTED HERE, AND DELIBERATELY: whether the session these routes mint is
  * safe. It is not this file's contract and a source scan cannot see it. GTC-269
@@ -66,7 +76,6 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { prisma } from '../src/lib/prisma';
 
 const RED = '\x1b[31m';
 const GREEN = '\x1b[32m';
@@ -96,9 +105,59 @@ function logSection(title: string) {
   console.log(`\n${BOLD}${YELLOW}${title}${RESET}`);
 }
 
-const DEMO_EVENT_NAME = 'Henderson Family Christmas 2025';
-const TOKENS_ROUTE = path.join(process.cwd(), 'src/app/api/demo/tokens/route.ts');
+const OLD_DEMO_EVENT_NAME = 'Henderson Family Christmas 2025';
+const TOKENS_DIR = path.join(process.cwd(), 'src/app/api/demo/tokens');
 const SESSION_ROUTE = path.join(process.cwd(), 'src/app/api/demo/session/route.ts');
+
+/** Every file under a folder, on disk (untracked files included). */
+function filesUnder(dir: string): string[] {
+  const out: string[] = [];
+  const walk = (d: string) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const full = path.join(d, e.name);
+      if (e.isDirectory()) walk(full);
+      else out.push(full);
+    }
+  };
+  walk(dir);
+  return out;
+}
+/** Code only: block and line comments stripped (a URL's `://` is kept). */
+const codeOnly = (src: string) =>
+  src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+
+/**
+ * CHECKS, pure, so each can be tried on a passing and a failing input.
+ */
+export const CHECKS = {
+  /** The first thing after the body is read: any body but the copy shape answers 404. */
+  retiredFirst(source: string): boolean {
+    const code = codeOnly(source);
+    const handler = code.slice(Math.max(0, code.indexOf('export async function POST')));
+    const bodyAt = handler.indexOf('const body =');
+    const firstIf = bodyAt < 0 ? -1 : handler.indexOf('if (', bodyAt);
+    if (firstIf < 0) return false;
+    const retired =
+      /^if \(body\?\.start !== 'copy'\) \{\s*return NextResponse\.json\(\{ error: 'Not found' \}, \{ status: 404 \}\);/.test(
+        handler.slice(firstIf)
+      );
+    const before = (needle: string) => {
+      const i = handler.indexOf(needle);
+      return i < 0 || firstIf < i;
+    };
+    return retired && before('cookies()') && before('prisma.') && before('isDemoStartOn()');
+  },
+  /** Files whose raw text holds the needle (comments included). */
+  naming(files: Array<{ file: string; text: string }>, needle: string): string[] {
+    return files.filter((f) => f.text.includes(needle)).map((f) => f.file);
+  },
+  /** .ts/.tsx files whose CODE holds the needle (comments stripped). */
+  codeNaming(files: Array<{ file: string; text: string }>, needle: string): string[] {
+    return files
+      .filter((f) => /\.tsx?$/.test(f.file) && codeOnly(f.text).includes(needle))
+      .map((f) => f.file);
+  },
+};
 
 /**
  * Does this source refuse on the grounds of the environment?
@@ -124,34 +183,18 @@ function hasEnvironmentRefusal(source: string): { gated: boolean; evidence: stri
 async function testSuite1_RouteFileContent() {
   logSection('Test Suite 1: Route Files — reachable in production (GTC-015 decision)');
 
-  // Test 1.1: tokens route does not refuse on the environment
-  try {
-    const { gated, evidence } = hasEnvironmentRefusal(fs.readFileSync(TOKENS_ROUTE, 'utf-8'));
-    logTest(
-      'GET /api/demo/tokens: no environment refusal — reachable in production',
-      !gated,
-      gated
-        ? `Found an environment gate: "${evidence}". GTC-015 removed this on purpose ` +
-            `so the deployed demo works. If it is being reintroduced, that reverses a ` +
-            `product decision — get a ruling and update the header of this file. Do ` +
-            `NOT assume this assertion is the stale one.`
-        : undefined
-    );
-  } catch (err: any) {
-    logTest('GET /api/demo/tokens: no environment refusal', false, err.message);
-  }
-
   // Test 1.2: session route — GTC-015's reachability, and the copy-start shape's switch.
   //
   // GTC-015 decided this route is reachable in production, and GTC-269 reaffirmed it: no
   // environment refusal. By the founder's ruling of 29 Oct 2026 ([[GTC-425]]) the copy-start
   // shape (`{ start: 'copy' }`) is now gated by a switch, GATHER_DEMO_START, which the founder
-  // turns on at launch; while it is off that shape answers 404. The old no-body shape is
-  // unchanged: no environment refusal and no switch. Its behaviour over HTTP, closed and open, is
-  // held by tests/demo-start-switch-test.ts.
+  // turns on at launch; while it is off that shape answers 404. [[GTC-442]] (founder ruling
+  // Q15, 1 Nov 2026): the old no-body shape is retired, so the first thing after the body is
+  // read answers every other body 404, before the switch, the cookie and the database. Its
+  // behaviour over HTTP is held by tests/demo-start-switch-test.ts and security suite 11.
   const TEST_1_2 =
-    'POST /api/demo/session: no environment refusal (GTC-015); the copy-start shape alone is ' +
-    'switched by GATHER_DEMO_START, 404 while off (founder ruling, 29 Oct 2026)';
+    'POST /api/demo/session: no environment refusal (GTC-015); any body but the copy shape ' +
+    'answers 404 first (GTC-442); the copy shape is switched by GATHER_DEMO_START, 404 while off';
   try {
     const source = fs.readFileSync(SESSION_ROUTE, 'utf-8');
     const { gated, evidence } = hasEnvironmentRefusal(source);
@@ -161,9 +204,10 @@ async function testSuite1_RouteFileContent() {
         code
       );
     const readOnce = (code.match(/isDemoStartOn\(\)/g) ?? []).length === 1;
+    const retired = CHECKS.retiredFirst(source);
     logTest(
       TEST_1_2,
-      !gated && switched && readOnce,
+      !gated && switched && readOnce && retired,
       gated
         ? `Found an environment gate: "${evidence}". GTC-015 removed this on purpose ` +
             `so the deployed demo works, and GTC-269 reaffirmed it: the fix there was ` +
@@ -176,7 +220,11 @@ async function testSuite1_RouteFileContent() {
             `and the switch must be read once, for that shape only (founder ruling, ` +
             `29 Oct 2026, GTC-425). Removing it opens sample copies to anyone in ` +
             `production before launch — get a ruling.`
-          : undefined
+          : !retired
+            ? 'The old no-body shape must be gone: right after the body is read, any body but ' +
+              "{ start: 'copy' } answers 404 { error: 'Not found' }, before the switch, the " +
+              'cookie and any database call (founder ruling Q15, 1 Nov 2026, GTC-442).'
+            : undefined
     );
   } catch (err: any) {
     logTest(TEST_1_2, false, err.message);
@@ -196,7 +244,7 @@ async function testSuite1_RouteFileContent() {
       'CONTROL: the same check DOES detect the gate on POST /api/demo/reset',
       gated,
       'demo/reset is gated on NODE_ENV. If this reports not-gated, the detector is ' +
-        'broken and tests 1.1 and 1.2 above prove nothing.'
+        'broken and test 1.2 above proves nothing.'
     );
   } catch (err: any) {
     logTest(
@@ -205,140 +253,40 @@ async function testSuite1_RouteFileContent() {
       err.message
     );
   }
-
-  // Test 1.3: tokens route is scoped to specific demo personas (not a findMany of all tokens)
-  try {
-    const content = fs.readFileSync(TOKENS_ROUTE, 'utf-8');
-    // The route must target specific demo personas, not return every token in the DB
-    const scopedToPersonas =
-      content.includes('Sarah Henderson') ||
-      content.includes('DEMO_') ||
-      content.includes('personName') ||
-      content.includes('where:');
-    logTest(
-      'GET /api/demo/tokens: scoped query (not all tokens)',
-      scopedToPersonas,
-      scopedToPersonas
-        ? undefined
-        : 'Route must query specific demo personas, not return all tokens from DB'
-    );
-  } catch (err: any) {
-    logTest('GET /api/demo/tokens: scoped query (not all tokens)', false, err.message);
-  }
 }
 
-async function testSuite2_DemoSeedData() {
-  logSection('Test Suite 2: Demo Seed Data Present in DB');
+async function testSuite2_OldDemoGone() {
+  logSection('Test Suite 2: the old shared demo is gone (GTC-442)');
 
-  // Test 2.1: Demo event exists
-  let eventId: string | null = null;
-  try {
-    const event = await prisma.event.findFirst({
-      where: { name: DEMO_EVENT_NAME },
-      select: { id: true },
-    });
-    const exists = event !== null;
-    eventId = event?.id ?? null;
-    logTest(
-      `Demo event "${DEMO_EVENT_NAME}" exists in DB`,
-      exists,
-      exists ? undefined : 'Demo seed not run — no demo event found'
-    );
-  } catch (err: any) {
-    logTest(`Demo event "${DEMO_EVENT_NAME}" exists in DB`, false, err.message);
-  }
+  // G1 replaces 1.1 and 1.3b: their subject, the tokens route, is deleted.
+  logTest(
+    'G1 GET /api/demo/tokens is gone: no route file or folder at src/app/api/demo/tokens',
+    !fs.existsSync(TOKENS_DIR),
+    'src/app/api/demo/tokens still exists. Founder ruling Q10, 1 Nov 2026: it is deleted, ' +
+      "not guarded. It vended the shared demo's raw tokens to any caller."
+  );
 
-  if (!eventId) {
-    console.log(`\n${YELLOW}⚠ Skipping token checks — demo event not found${RESET}`);
-    return;
-  }
+  const src = filesUnder(path.join(process.cwd(), 'src')).map((f) => ({
+    file: path.relative(process.cwd(), f),
+    text: fs.readFileSync(f, 'latin1'),
+  }));
 
-  // Test 2.2: Sarah Henderson has a HOST token
-  try {
-    const token = await prisma.accessToken.findFirst({
-      where: {
-        scope: 'HOST',
-        eventId,
-        person: { name: 'Sarah Henderson' },
-      },
-    });
-    const exists = token !== null;
-    logTest(
-      'Sarah Henderson has HOST token',
-      exists,
-      exists ? undefined : 'No HOST token found for Sarah Henderson'
-    );
-  } catch (err: any) {
-    logTest('Sarah Henderson has HOST token', false, err.message);
-  }
+  // G2: nothing in src calls it, links to it or describes it, comments included.
+  const naming = CHECKS.naming(src, '/api/demo/tokens');
+  logTest(
+    'G2 nothing in src names /api/demo/tokens (code, links or comments)',
+    src.length > 100 && naming.length === 0,
+    `named in: ${naming.join(', ')}`
+  );
 
-  // Test 2.3: Rob Henderson has a COORDINATOR token
-  try {
-    const token = await prisma.accessToken.findFirst({
-      where: {
-        scope: 'COORDINATOR',
-        eventId,
-        person: { name: 'Rob Henderson' },
-      },
-    });
-    const exists = token !== null;
-    logTest(
-      'Rob Henderson has COORDINATOR token',
-      exists,
-      exists ? undefined : 'No COORDINATOR token found for Rob Henderson'
-    );
-  } catch (err: any) {
-    logTest('Rob Henderson has COORDINATOR token', false, err.message);
-  }
-
-  // Test 2.4: Emma Henderson has a PARTICIPANT token
-  try {
-    const token = await prisma.accessToken.findFirst({
-      where: {
-        scope: 'PARTICIPANT',
-        eventId,
-        person: { name: 'Emma Henderson' },
-      },
-    });
-    const exists = token !== null;
-    logTest(
-      'Emma Henderson has PARTICIPANT token',
-      exists,
-      exists ? undefined : 'No PARTICIPANT token found for Emma Henderson'
-    );
-  } catch (err: any) {
-    logTest('Emma Henderson has PARTICIPANT token', false, err.message);
-  }
-
-  // Test 2.5: tokens endpoint returns all 3 required personas
-  try {
-    const tokens = await prisma.accessToken.findMany({
-      where: {
-        eventId,
-        person: {
-          name: { in: ['Sarah Henderson', 'Rob Henderson', 'Emma Henderson'] },
-        },
-      },
-      include: { person: true },
-    });
-    const hasHost = tokens.some((t) => t.scope === 'HOST' && t.person.name === 'Sarah Henderson');
-    const hasCoord = tokens.some(
-      (t) => t.scope === 'COORDINATOR' && t.person.name === 'Rob Henderson'
-    );
-    const hasParticipant = tokens.some(
-      (t) => t.scope === 'PARTICIPANT' && t.person.name === 'Emma Henderson'
-    );
-    const allPresent = hasHost && hasCoord && hasParticipant;
-    logTest(
-      'All 3 required demo persona tokens present',
-      allPresent,
-      allPresent
-        ? undefined
-        : `Missing: ${!hasHost ? 'Sarah HOST' : ''} ${!hasCoord ? 'Rob COORD' : ''} ${!hasParticipant ? 'Emma PARTICIPANT' : ''}`
-    );
-  } catch (err: any) {
-    logTest('All 3 required demo persona tokens present', false, err.message);
-  }
+  // G3 replaces 2.1 to 2.5: their subject, the shared event's seed rows, is no longer read. The
+  // local row and the seed stay (the plan), so this reads the code that would look for it.
+  const reading = CHECKS.codeNaming(src, OLD_DEMO_EVENT_NAME);
+  logTest(
+    `G3 no code in src reads "${OLD_DEMO_EVENT_NAME}" (comments may still name it)`,
+    src.length > 100 && reading.length === 0,
+    `read in: ${reading.join(', ')}`
+  );
 }
 
 async function testSuite3_ErrorVisibility() {
@@ -370,7 +318,7 @@ async function main() {
 
   try {
     await testSuite1_RouteFileContent();
-    await testSuite2_DemoSeedData();
+    await testSuite2_OldDemoGone();
     await testSuite3_ErrorVisibility();
 
     console.log(`\n${BOLD}${YELLOW}=== Test Summary ===${RESET}`);
@@ -388,9 +336,7 @@ async function main() {
   } catch (err: any) {
     console.error(`\n${RED}${BOLD}Fatal error:${RESET}`, err.message);
     process.exit(1);
-  } finally {
-    await prisma.$disconnect();
   }
 }
 
-main();
+if (process.env.DEMO_ENDPOINTS_DRY_RUN !== '1') main();

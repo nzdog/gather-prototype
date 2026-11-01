@@ -1,67 +1,26 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
-import { randomBytes } from 'crypto';
 import { startDemoCopy } from '@/lib/demo/copy';
 import { checkStartLimit, DEMO_START_WORDS, noteStart, visitorOf } from '@/lib/demo/start-limit';
 import { isDemoStartOn } from '@/lib/demo/start-switch';
 
-const DEMO_EVENT_NAME = 'Henderson Family Christmas 2025';
-
 /**
- * The user this route mints sessions for.
- *
- * GTC-269: deliberately NOT the user linked to the demo `Person`. This account is
- * never linked to a `Person`, so it cannot inherit event roles. The claim branch in
- * `src/app/api/auth/verify/route.ts` creates an `EventRole` for every event where
- * `hostId === personId`, so a user tied to the demo Person accumulates HOST on
- * everything that Person has ever hosted — measured 2026-09-11, the previous
- * account (`sarah.henderson@demo.gather`) held HOST on two events, one of them
- * `GTC-133 Sub-commit (g) Test` with `isDemo: false`. That account is left in place
- * and untouched; this route simply stops using it.
- */
-const DEMO_SESSION_EMAIL = 'demo-session@demo.gather';
-
-/**
- * How long a demo session lasts.
- *
- * GTC-269: was 30 days, copied from `verify/route.ts` where a consumed magic link
- * justifies it. Nothing is consumed here, so nothing justifies a standing
- * credential. Two hours covers the dashboard walkthrough and the three token views
- * with room for an interruption, and expires on its own the same afternoon.
+ * How long a sample's session lasts: two hours, as GTC-269 ruled for the old shared demo (Q8).
  */
 const DEMO_SESSION_MAX_AGE_SECONDS = 2 * 60 * 60;
 
 /**
- * POST /api/demo/session
+ * POST /api/demo/session — starts a visitor's own sample event (`{ start: 'copy' }`).
  *
- * Mints a short-lived session for a dedicated demo account so the planning
- * dashboard at `/plan/[eventId]` is reachable from the "Open Planning Dashboard"
- * button on `/demo`.
+ * REACHABLE BY ANYONE, ON PURPOSE (GTC-015): no credential and no environment gate. The copy shape
+ * opens only where GATHER_DEMO_START is exactly `on` ([[GTC-425]]); her credential is a throwaway
+ * account with exactly one role, HOST on the copy made in the same transaction, for two hours.
  *
- * REACHABLE BY ANYONE, ON PURPOSE. GTC-015 (`f6e4b41`, 2026-03-08) removed this
- * route's production gate so that a stranger on the deployed site can try the
- * demo, and the founder reaffirmed that decision on 2026-09-11. This route
- * requires no credential and is not environment-gated. That is the product
- * decision, not an oversight.
- *
- * What GTC-269 fixed is the credential it hands back, which used to be wider than
- * the thing being demoed. The containment is now real and is four things:
- *
- *   1. The session belongs to `DEMO_SESSION_EMAIL`, an account with no `Person`
- *      link, whose `EventRole` set is pruned on every call to exactly one row —
- *      HOST on the demo event. `requireEventRole` keys on `userId` + `eventId`, so
- *      that one row is the entire reach of this credential.
- *   2. It lasts two hours, not thirty days.
- *   3. It never overwrites a session that is already present.
- *   4. The event is resolved by name AND `isDemo: true`, so a real event that
- *      happens to share the name can never be resolved. `Event.name` has no
- *      uniqueness constraint.
- *
- * Asserted behaviourally in suite 11 of `tests/security-validation.ts`, by
- * enumerating what the minted session reaches. Note that the route scanner's
- * verdict on this handler is unchanged and still reads "no credential of any
- * kind" — that verdict is TRUE, and it is not the evidence for this fix.
+ * [[GTC-442]] (founder rulings, 1 Nov 2026, Q10 and Q15): THE OLD SHARED DEMO IS RETIRED. A POST
+ * with no body, or any body but the copy shape, answers 404 `{ error: 'Not found' }` before
+ * anything is read or written: no cookie read, no database, no cookie set. The shared demo
+ * session it used to mint, and the token route beside it, are gone.
  */
 export async function POST(request: Request) {
   try {
@@ -69,9 +28,14 @@ export async function POST(request: Request) {
      * [[GTC-425]] — THE DEMO START SWITCH (founder ruling, 29 Oct 2026). The copy-start shape opens
      * only where GATHER_DEMO_START is exactly `on`; closed, it answers 404 before anything is read
      * or written: no session cookie, no limit, no database. The body is read here, first, only to
-     * tell the two shapes apart. The no-body shape below is unchanged (GTC-015).
+     * tell the shapes apart. [[GTC-442]]: every body but the copy shape is answered 404 just
+     * below, before the switch is read.
      */
     const body = (await request.json().catch(() => null)) as { start?: unknown } | null;
+    // [[GTC-442]]: the old no-body shape is retired. Anything but the copy shape is not found.
+    if (body?.start !== 'copy') {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
     if (body?.start === 'copy' && !isDemoStartOn()) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
@@ -111,100 +75,40 @@ export async function POST(request: Request) {
     /*
      * [[GTC-392]] part A — THE SECOND SHAPE: `{ start: 'copy' }` starts the visitor's OWN sample
      * event (founder plan rulings, 18 Oct 2026, Q1 and Q2). Acted on only after the presence
-     * check above, so a present session is never overwritten in either shape. An empty or
-     * unreadable body takes today's path below, unchanged, until part D retires it.
+     * check above, so a present session is never overwritten. [[GTC-442]]: it is now the only
+     * shape; the first check above answers every other body 404.
      *
      * Her credential: a throwaway account (`@demo-copy.invalid`) with exactly one role, HOST on the
      * copy made in the same transaction; two hours; the event is hers by construction, never looked
-     * up. The limits apply to this shape only. [[GTC-425]]: the body was read at the top of the
-     * handler, and this shape only reaches here when the switch is on.
+     * up. [[GTC-425]]: the body was read at the top of the handler, and this shape only reaches
+     * here when the switch is on.
      */
-    if (body?.start === 'copy') {
-      const visitor = visitorOf(request.headers);
-      const limit = await checkStartLimit(prisma, visitor);
-      if (!limit.ok) {
-        return NextResponse.json({ error: limit.words }, { status: 429 });
-      }
-      let copy;
-      try {
-        copy = await startDemoCopy(prisma);
-      } catch (copyError) {
-        console.error('[DemoSession] The copy could not be started:', copyError);
-        return NextResponse.json({ error: DEMO_START_WORDS.FAILED }, { status: 500 });
-      }
-      noteStart(visitor);
-      // Zone 1, as GTC-269: the same cookie, name and path unchanged, set after the commit.
-      (await cookies()).set('session', copy.sessionToken, {
-        httpOnly: true,
-        secure: (process.env.NODE_ENV as string) === 'production',
-        sameSite: 'lax',
-        maxAge: DEMO_SESSION_MAX_AGE_SECONDS,
-        path: '/',
-      });
-      return NextResponse.json({
-        success: true,
-        eventId: copy.eventId,
-        href: `/plan/${copy.eventId}/setup`,
-      });
+    const visitor = visitorOf(request.headers);
+    const limit = await checkStartLimit(prisma, visitor);
+    if (!limit.ok) {
+      return NextResponse.json({ error: limit.words }, { status: 429 });
     }
-
-    // GTC-269: `isDemo: true` as well as the name. `Event.name` has no uniqueness
-    // constraint and this is a `findFirst` with no `orderBy`, so without the filter
-    // a real event named "Henderson Family Christmas 2025" could be the row that
-    // gets resolved — and its host's Person would then be handed a HOST EventRole
-    // and a live session to whoever clicked the button.
-    //
-    // The name literal itself is drift: `prisma/seed.ts` writes a 2026 name while
-    // this route looks for 2025, so both demo routes 404 against a fresh seed. That
-    // is GTC-272 — one shared DEMO_EVENT_NAME constant — and is not fixed here.
-    const event = await prisma.event.findFirst({
-      where: { name: DEMO_EVENT_NAME, isDemo: true },
-      select: { id: true },
-    });
-
-    if (!event) {
-      return NextResponse.json({ error: 'Demo event not found' }, { status: 404 });
+    let copy;
+    try {
+      copy = await startDemoCopy(prisma);
+    } catch (copyError) {
+      console.error('[DemoSession] The copy could not be started:', copyError);
+      return NextResponse.json({ error: DEMO_START_WORDS.FAILED }, { status: 500 });
     }
-
-    // The dedicated demo account. Upserted by email and never linked to a `Person`.
-    const user = await prisma.user.upsert({
-      where: { email: DEMO_SESSION_EMAIL },
-      update: {},
-      create: { email: DEMO_SESSION_EMAIL },
-    });
-
-    // Exactly one EventRole, enforced rather than hoped for. The prune is what makes
-    // "reaches exactly one event" a durable property instead of a momentarily true
-    // one: if anything ever grants this account a role elsewhere, the next demo
-    // session revokes it rather than handing it out.
-    await prisma.eventRole.deleteMany({
-      where: { userId: user.id, eventId: { not: event.id } },
-    });
-
-    await prisma.eventRole.upsert({
-      where: { userId_eventId: { userId: user.id, eventId: event.id } },
-      update: {},
-      create: { userId: user.id, eventId: event.id, role: 'HOST' },
-    });
-
-    const sessionToken = randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + DEMO_SESSION_MAX_AGE_SECONDS * 1000);
-
-    await prisma.session.create({
-      data: { userId: user.id, token: sessionToken, expiresAt },
-    });
-
-    // Cookie name and path are unchanged — Zone 1 (GTC-001) keeps both fixed, and
-    // the founder's sign-off for GTC-269 was explicit that neither moves.
-    (await cookies()).set('session', sessionToken, {
+    noteStart(visitor);
+    // Zone 1, as GTC-269: the same cookie, name and path unchanged, set after the commit.
+    (await cookies()).set('session', copy.sessionToken, {
       httpOnly: true,
       secure: (process.env.NODE_ENV as string) === 'production',
       sameSite: 'lax',
       maxAge: DEMO_SESSION_MAX_AGE_SECONDS,
       path: '/',
     });
-
-    return NextResponse.json({ success: true, eventId: event.id });
+    return NextResponse.json({
+      success: true,
+      eventId: copy.eventId,
+      href: `/plan/${copy.eventId}/setup`,
+    });
   } catch (error) {
     console.error('[DemoSession] Failed:', error);
     return NextResponse.json(

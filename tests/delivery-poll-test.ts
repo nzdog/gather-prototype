@@ -770,10 +770,13 @@ async function main() {
      * ⚠ MOVED AT [[GTC-290]] (founder approval, 2026-10-02). It pinned four cron directories. GTC-290
      * added a fifth, the TNZ status poll, which is a different provider's poll on its own route; the
      * email poll still added none. The set is now named, so a sixth still fails here.
+     *
+     * ⚠ MOVED AGAIN AT [[GTC-442]] (founder's written word, 1 Nov 2026): a sixth, the demo
+     * clean-up, which deletes expired sample copies and is no poll at all. A seventh still fails.
      */
     assert(
       '⚠ AND THE EMAIL POLL ADDED NO CRON ROUTE OF ITS OWN — the cron directories are exactly the ' +
-        'five named (the fifth is GTC-290’s TNZ status poll): ' +
+        'six named (the fifth is GTC-290’s TNZ status poll, the sixth GTC-442’s demo clean-up): ' +
         'GTC-270’s auth block has to be written out per file because GTC-268’s scanner does not ' +
         'follow imports, so a second route means a second copy of the refusals',
       ok(() => {
@@ -786,6 +789,7 @@ async function main() {
           JSON.stringify(dirs) ===
           JSON.stringify([
             'decide-by-followups',
+            'demo-cleanup',
             'nudges',
             'outbound-dispatch',
             'tnz-status-poll',
