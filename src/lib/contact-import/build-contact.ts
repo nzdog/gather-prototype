@@ -108,21 +108,21 @@ export function makeContact(input: ContactInput, newId: () => string): MadeConta
   const problems: string[] = [];
   if (input.tidy && input.commaSplit && !tidied.flipped) problems.push(WORDS.W6);
 
-  const person: ContactPerson = { tempId: newId(), name: tidied.name, problems };
+  const contact: ContactPerson = { tempId: newId(), name: tidied.name, problems };
 
   const email = pickEmail(input.emails);
   if (email) {
-    person.email = email.pick.result.email;
+    contact.email = email.pick.result.email;
     if (email.pick.result.kind === 'bad') problems.push(email.pick.result.problem);
     if (email.extra) problems.push(WORDS.W4);
   }
   const phone = pickPhone(input.phones);
   if (phone) {
-    person.phone = phone.pick.result.phone;
+    contact.phone = phone.pick.result.phone;
     if (phone.pick.result.kind !== 'ok') problems.push(phone.pick.result.problem);
     if (phone.extra) problems.push(WORDS.W5);
   }
   for (const p of input.extraProblems ?? []) problems.push(p);
 
-  return { person, flipped: tidied.flipped };
+  return { person: contact, flipped: tidied.flipped };
 }
