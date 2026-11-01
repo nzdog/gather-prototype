@@ -44,6 +44,10 @@ import { isDeepStrictEqual } from 'util';
 const ROOT = path.join(__dirname, '..');
 // origin/main when GTC-448 was planned (df782c4): the base every "unchanged" control reads.
 const BASE = 'df782c463885602907b00564991eb8422768ec66';
+// The build commit (the code commit). K1, K3 and Z1 to Z3 compare BASE with END, two fixed commits,
+// as the repo's own suites do (demo-note: BRANCH_POINT and CODE), not the working folder, so a later
+// ticket landing on main cannot turn them red.
+const END = '202c67518d2cfe2fc2f2bc94d150cb2beb11eade';
 const NEW_SCRIPT = 'test:contact-import';
 const NEW_SCRIPT_LINE = 'tsx --tsconfig tests/tsconfig.json tests/contact-import-test.ts';
 
@@ -90,6 +94,7 @@ function git(args: string[]): string {
   return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', maxBuffer: 1 << 26 });
 }
 const atBase = (p: string) => git(['show', `${BASE}:${p}`]);
+const atEnd = (p: string) => git(['show', `${END}:${p}`]);
 const readWork = (p: string) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
 // ── Loading the modules under test (guarded) ─────────────────────────────────
@@ -331,7 +336,7 @@ async function main() {
       'src/components/plan/Moment1InputForm.tsx',
       'src/components/plan/ImportCSVModal.tsx',
     ];
-    return allOk(files, (f) => atBase(f) === readWork(f));
+    return allOk(files, (f) => atBase(f) === atEnd(f));
   });
   check('K2', 'old parseVCF results as at the base (fixture)', () => {
     const { parseVCF } = mod('oldvcf');
@@ -348,7 +353,7 @@ async function main() {
     };
   });
   check('K3', 'tests/vcf-import-test.ts equals the base', () => {
-    return atBase('tests/vcf-import-test.ts') === readWork('tests/vcf-import-test.ts');
+    return atBase('tests/vcf-import-test.ts') === atEnd('tests/vcf-import-test.ts');
   });
 
   // ── Z · what must not change ──────────────────────────────────────────────
@@ -361,24 +366,25 @@ async function main() {
       'scripts/triage-unknown-routes.ts',
       'route-classifications.json',
     ];
-    const changed = git(['diff', '--name-only', BASE, '--', ...paths]).trim();
+    const changed = git(['diff', '--name-only', BASE, END, '--', ...paths]).trim();
     const fresh = git(['ls-files', '--others', '--exclude-standard', '--', ...paths]).trim();
     return { ok: changed === '' && fresh === '', detail: j({ changed, fresh }) };
   });
   check('Z2', 'changed files are only the allowed list', () => {
     const allowed = (f: string) =>
       f === 'docs/tickets/GTC-448.md' ||
+      f === 'docs/tickets/GTC-189.md' ||
       f === 'package.json' ||
       f === 'tests/contact-import-test.ts' ||
       f === 'src/lib/vcard.ts' ||
       f.startsWith('src/lib/contact-import/');
-    const changed = git(['diff', '--name-only', BASE]).split('\n').filter(Boolean);
+    const changed = git(['diff', '--name-only', BASE, END]).split('\n').filter(Boolean);
     const off = changed.filter((f) => !allowed(f));
     return { ok: off.length === 0, detail: j(off) };
   });
   check('Z3', 'package.json is the base plus the one script line', () => {
     const baseText = atBase('package.json');
-    const nowText = readWork('package.json');
+    const nowText = atEnd('package.json');
     const before = '    "test:sample-marker": "tsx tests/sample-marker-test.ts"\n  },';
     const after =
       '    "test:sample-marker": "tsx tests/sample-marker-test.ts",\n' +
