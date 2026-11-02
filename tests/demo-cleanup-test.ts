@@ -23,8 +23,9 @@
  *      empty one or a wrong one; 200 with it (header or query); 500 when a copy failed or the
  *      sweep threw; the secret check written as the other five write it
  *   V  vercel.json's line, the constants' cron row, and what the code imports
- *   O  [[GTC-448]] the second pass: a copy its visitor deleted (DELETE /api/events/[id]) leaves
- *      her account, its session, Sam and her stamped people; past the same age they go, by the
+ *   O  [[GTC-448]] the second pass: a copy its visitor deleted (the route refuses since GTC-449;
+ *      the suite deletes it in process) leaves her account, its session, Sam and her stamped
+ *      people; past the same age they go, by the
  *      account (an ORPHAN ACCOUNT: a copy's address, no role, none of its people on an event);
  *      the young one, the live copy of the same visitor, real rows and every guard stay; its own
  *      25 and 100; the route's 500 and 200; nothing sent; counts only in the log
@@ -1186,7 +1187,7 @@ async function run() {
 
 // ══ O — the second pass ([[GTC-448]]) ═════════════════════════════════════════
 const O_CHECKS = {
-  O1: 'O1 her copy, filled over HTTP and then deleted by her: DELETE /api/events/[id] answers 200',
+  O1: 'O1 her copy, filled over HTTP, then deleted in process as a copy deleted before GTC-449 (the route now refuses her: test:demo-delete-limits R1)',
   O2: 'O2 what her delete leaves: the event, its rows and her role gone; the account, its session, Sam, every stamped person, the template and the profile remain',
   O3: 'O3 past the age, one run deletes by id: the account, its session, Sam, every stamped person (typed, crowd, removed mid-visit), the template and the profile',
   O4: 'O4 that run’s counts: one orphan found and deleted, none skipped or failed; accounts 1, sessions 1, templates 2, people as collected',
@@ -1402,7 +1403,7 @@ async function orphanLayer() {
   const crowdCount = await prisma.person.count({
     where: { sampleEventId: C, email: { contains: '.demo-copy.invalid' } },
   });
-  const del = await http('DELETE', `/api/events/${C}`, V.cookie);
+  const del = await prisma.event.deleteMany({ where: { id: C } });
   const vo: Orphan = { ...V, stamped: collected.filter((id) => id !== V.hostId) };
   assert(
     'O',
@@ -1414,7 +1415,7 @@ async function orphanLayer() {
       crowd.status === 201 &&
       delHh.status === 200 &&
       crowdCount > 0 &&
-      del.status === 200,
+      del.count === 1,
     JSON.stringify({
       hh: hh.status,
       kiri: kiri.status,
@@ -1423,7 +1424,7 @@ async function orphanLayer() {
       crowd: crowd.status,
       delHh: delHh.status,
       crowdCount,
-      del: del.status,
+      del: del.count,
     })
   );
   const leftOn = await rowsOn([C]);
