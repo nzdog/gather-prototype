@@ -135,6 +135,25 @@ const GTC422_EDITS: Array<[string, string]> = [
 /** The base's source with Ticket D's four lines, each found exactly once (else nothing matches). */
 const withD = (s: string) =>
   GTC422_EDITS.reduce((x, [a, b]) => (count(x, a) === 1 ? x.replace(a, () => b) : '\u0000'), s);
+/**
+ * [[GTC-444]] (the founder, 2 Nov 2026: Ask 2, check P1 only) — the board link beside the pretend
+ * panel: its import and its one line, on top of the button and Ticket D's lines, byte for byte.
+ */
+const GTC444_EDITS: Array<[string, string]> = [
+  [
+    "import PretendSend from '@/components/demo/PretendSend';\n",
+    "import PretendSend from '@/components/demo/PretendSend';\n" +
+      "import SampleBoardLink from '@/components/demo/SampleBoardLink';\n",
+  ],
+  [
+    '          {pretend && <PretendSend state={pretend} />}\n',
+    '          {pretend && <PretendSend state={pretend} />}\n' +
+      '          {pretend && <SampleBoardLink eventId={eventId} />}\n',
+  ],
+];
+/** A source with GTC-444's two lines, each found exactly once (else nothing matches). */
+const with444 = (s: string) =>
+  GTC444_EDITS.reduce((x, [a, b]) => (count(x, a) === 1 ? x.replace(a, () => b) : '\u0000'), s);
 /** Step 5's box as the base drew it, and the page as drawn with Ticket D's change. */
 const STEP5_BOX =
   '<label class="flex items-center gap-2 shrink-0 cursor-pointer text-sm text-gray-600"><input type="checkbox" class="rounded border-gray-300 text-accent focus:ring-accent/40"/>Checked</label>';
@@ -310,7 +329,7 @@ export const CHECKS = {
     return (
       base.length > 1000 &&
       count(base, AFTER_WAITING) === 1 &&
-      now === withD(base.replace(AFTER_WAITING, () => AFTER_WAITING + BUTTON))
+      now === with444(withD(base.replace(AFTER_WAITING, () => AFTER_WAITING + BUTTON)))
     );
   },
   /**
@@ -422,7 +441,7 @@ function layerP(now: string, base: string) {
   section('P — the pre-flight’s source, against GTC-419’s tip (8bc1064)');
   assert(
     'P',
-    'P1 the page is 8bc1064’s file with exactly the button (and its comment) put in, byte for byte, and Ticket D’s four lines (GTC-422: step 5 without a box, "four checks"): nothing else on the pre-flight changes',
+    'P1 the page is 8bc1064’s file with exactly the button (and its comment) put in, byte for byte, and Ticket D’s four lines (GTC-422: step 5 without a box, "four checks"), and GTC-444’s two lines (the board link’s import and its line after the pretend panel): nothing else on the pre-flight changes',
     CHECKS.exactly(now, base)
   );
   assert(

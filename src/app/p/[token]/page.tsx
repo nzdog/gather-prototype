@@ -79,6 +79,8 @@ interface CarriedChild {
 
 interface ParticipantData {
   isDemo: boolean;
+  /** [[GTC-444]] A sample copy's guest page: W48 back to the board. Absent on any other event. */
+  sampleCopy?: true;
   person: {
     id: string;
     name: string;
@@ -406,6 +408,16 @@ export default function ParticipantView() {
             >
               <Home className="size-4" />
               Back to Demo
+            </a>
+          )}
+          {/* [[GTC-444]] W48, on a sample copy only: back to the board (SAMPLE_BOARD_WORDS). */}
+          {data.sampleCopy && (
+            <a
+              href={`/plan/${data.event.id}/glance`}
+              data-back-to-board=""
+              className="mb-3 ml-4 inline-flex items-center text-sm text-accent hover:text-sage-800"
+            >
+              ← Back to the board
             </a>
           )}
           <h1 className="text-2xl font-bold text-gray-900">{data.event.name}</h1>

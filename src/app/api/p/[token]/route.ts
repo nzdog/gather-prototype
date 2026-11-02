@@ -7,6 +7,7 @@ import { logAudit } from '@/lib/workflow';
 import { deriveAttendance, isAttendanceAskable, parseAttendanceBody } from '@/lib/attendance';
 import { resolveCarriedSubjects } from '@/lib/eligibility/carried-answer';
 import { firstNameOf } from '@/lib/messages/ask-register';
+import { isSampleCopy } from '@/lib/demo/sample-board';
 
 /**
  * GET /api/p/[token]
@@ -38,9 +39,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ tok
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
+  // [[GTC-444]] (Q6) — on a sample copy the host sees the guest's own page, never the preview.
+  const sampleCopy = await isSampleCopy(prisma, resolvedContext.event.id);
+
   // Check if the viewer is the host of this event (for link preview)
   const user = await getUser();
-  if (user) {
+  if (user && !sampleCopy) {
     const hostRole = await prisma.eventRole.findFirst({
       where: {
         userId: user.id,
@@ -210,6 +214,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ tok
 
   return NextResponse.json({
     isDemo: resolvedContext.event.isDemo,
+    // [[GTC-444]] W48's switch, on a sample copy only; absent on every other event.
+    ...(sampleCopy ? { sampleCopy: true } : {}),
     person: {
       id: resolvedContext.person.id,
       name: resolvedContext.person.name,

@@ -91,6 +91,33 @@ function applyPairs(base: string, pairs: Pairs): string | null {
   return s;
 }
 
+/**
+ * [[GTC-444]] (the founder, 2 Nov 2026: Ask 3, check P1 only) — on a sample copy, W48 back to the
+ * board: the sampleCopy field and its comment, and the W48 block after "Back to Demo", byte for byte.
+ */
+const GTC444_PAIRS: Pairs = [
+  [
+    'interface ParticipantData {\n  isDemo: boolean;\n',
+    'interface ParticipantData {\n  isDemo: boolean;\n' +
+      "  /** [[GTC-444]] A sample copy's guest page: W48 back to the board. Absent on any other event. */\n" +
+      '  sampleCopy?: true;\n',
+  ],
+  [
+    '              Back to Demo\n            </a>\n          )}\n',
+    '              Back to Demo\n            </a>\n          )}\n' +
+      '          {/* [[GTC-444]] W48, on a sample copy only: back to the board (SAMPLE_BOARD_WORDS). */}\n' +
+      '          {data.sampleCopy && (\n' +
+      '            <a\n' +
+      '              href={`/plan/${data.event.id}/glance`}\n' +
+      '              data-back-to-board=""\n' +
+      '              className="mb-3 ml-4 inline-flex items-center text-sm text-accent hover:text-sage-800"\n' +
+      '            >\n' +
+      '              ← Back to the board\n' +
+      '            </a>\n' +
+      '          )}\n',
+  ],
+];
+
 // ── Files and commits ────────────────────────────────────────────────────────
 const PAGE = 'src/app/p/[token]/page.tsx';
 const SUITE = 'tests/tweaks-e-test.tsx';
@@ -724,11 +751,11 @@ function layerP(now: string, base: string) {
   section('P — the guest page’s source, against GTC-418’s tip (0d5bd50)');
   assert(
     'P',
-    'P1 the page at Ticket E’s code commit is 0d5bd50’s file with exactly Ticket E’s four pieces, byte for byte (the two looks and the three answers; the attendance buttons and the note; the bar’s words out; the card’s buttons); unchanged from there to Ticket I’s base; and the page now is byte for byte as at Ticket I’s code commit (GTC-424)',
+    'P1 the page at Ticket E’s code commit is 0d5bd50’s file with exactly Ticket E’s four pieces, byte for byte (the two looks and the three answers; the attendance buttons and the note; the bar’s words out; the card’s buttons); unchanged from there to Ticket I’s base; and the page now is byte for byte as at Ticket I’s code commit (GTC-424) with exactly GTC-444’s pieces (the sampleCopy field and its comment; the W48 block)',
     CHECKS.exactly(atRef(CODE_E, PAGE), base) &&
       atRef(`${CODE_I}^`, PAGE) === atRef(CODE_E, PAGE) &&
       now.length > 1000 &&
-      now === atRef(CODE_I, PAGE)
+      now === applyPairs(atRef(CODE_I, PAGE), GTC444_PAIRS)
   );
   assert(
     'P',
