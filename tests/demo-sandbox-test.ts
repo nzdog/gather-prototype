@@ -67,6 +67,8 @@ const W4 = 'Test emails are off in a sample event.';
 const W5 =
   'This sample event has made all the plans it can. You can still change the plan by hand.';
 const W6 = 'The sample has made all the plans it can for today. Please try again tomorrow.';
+const W57 =
+  'This sample has used its 3 tries at making a plan. You can still write the list yourself, or skip the plan and send invites only.';
 const W7 = "You've started a few sample events in the last hour. Please try again a little later.";
 const W8A = 'Lots of people are trying Gather right now. Please try again in a few minutes.';
 const W8B = 'The sample is full for today. Please try again tomorrow.';
@@ -1635,13 +1637,13 @@ async function main() {
       f2 =
         r.slice(0, 3).every((x: any) => x?.ok === true && x?.counted === true) &&
         r[3]?.ok === false &&
-        r[3]?.words === W5 &&
+        r[3]?.words === W57 &&
         used === 3;
       f2detail = JSON.stringify({ r, used });
     }
     assert(
       'F',
-      'F2 a copy takes three plans, each counted before it is made, and is refused the fourth in W5’s words',
+      'F2 a copy takes three plans, each counted before it is made, and is refused the fourth in W57’s words (no item yet, GTC-446)',
       f2,
       f2detail
     );
@@ -1654,7 +1656,7 @@ async function main() {
         ?.aiCallsUsed;
       f3 =
         r.filter((x: any) => x?.ok === true).length === 2 &&
-        r.filter((x: any) => x?.ok === false && x?.words === W5).length === 3 &&
+        r.filter((x: any) => x?.ok === false && x?.words === W57).length === 3 &&
         used === 3;
       f3detail = JSON.stringify({ r, used });
     }
