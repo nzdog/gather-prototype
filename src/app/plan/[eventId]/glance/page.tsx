@@ -43,6 +43,7 @@ import MomentArc from '@/components/plan/MomentArc';
 import { moment4Doors } from '@/lib/moments/strip-hrefs';
 import { readSampleBoardView } from '@/lib/demo/sample-board';
 import SampleViewToggle from '@/components/demo/SampleViewToggle';
+import GuestRepliesButton from '@/components/demo/GuestRepliesButton';
 
 /*
   ⚠ RULING 36 (2026-09-11) — THE `?variant=` SWITCH IS DELETED, AND `searchParams` WITH IT.
@@ -165,6 +166,9 @@ export default async function GlancePage({ params }: { params: Promise<{ eventId
       */}
       <div className="mx-auto w-full max-w-[960px] px-4 pt-6">
         {sample && <SampleViewToggle eventId={eventId} view={sample} />}
+        {sample?.guest && (
+          <GuestRepliesButton eventId={eventId} guestFirstName={sample.guest.firstName} />
+        )}
         <MomentArc
           currentMoment={4}
           completedMoments={[1, 2, 3]}
