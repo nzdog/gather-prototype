@@ -184,7 +184,8 @@
     "test:household-save": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/household-save-test.tsx",
     "test:demo-note": "tsx --tsconfig tests/tsconfig.json tests/demo-note-test.tsx",
     "test:sample-marker": "tsx tests/sample-marker-test.ts",
-    "test:contact-import": "tsx --tsconfig tests/tsconfig.json tests/contact-import-test.ts"
+    "test:contact-import": "tsx --tsconfig tests/tsconfig.json tests/contact-import-test.ts",
+    "test:child-assignment": "tsx tests/child-assignment-eligibility-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
