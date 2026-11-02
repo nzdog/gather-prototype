@@ -23,7 +23,15 @@
  *      empty one or a wrong one; 200 with it (header or query); 500 when a copy failed or the
  *      sweep threw; the secret check written as the other five write it
  *   V  vercel.json's line, the constants' cron row, and what the code imports
+ *   O  [[GTC-448]] the second pass: a copy its visitor deleted (DELETE /api/events/[id]) leaves
+ *      her account, its session, Sam and her stamped people; past the same age they go, by the
+ *      account (an ORPHAN ACCOUNT: a copy's address, no role, none of its people on an event);
+ *      the young one, the live copy of the same visitor, real rows and every guard stay; its own
+ *      25 and 100; the route's 500 and 200; nothing sent; counts only in the log
  *   Z  every probe row is removed by id; the totals are as found; no copy is left
+ *
+ * Founder rulings for GTC-448 (2 Nov 2026): A to Q as the plan recommends; Zone 2 opened narrowly
+ * for cleanup.ts's listed lines (the same reading of GTC-269 as GTC-442's Q11).
  *
  * Visitor actions are driven over HTTP on a fresh guarded dev server (DEMO_SANDBOX_BASE_URL,
  * default http://localhost:3000) with the copy's own session; copies, plan rows and controls are
@@ -150,6 +158,33 @@ export const CHECKS = {
         )
       );
     return rows.length === 1 && /\| Hourly, at :17 past the hour \|$/.test(rows[0]);
+  },
+  /** [[GTC-448]] A run's summary line carries the orphan accounts' four counts. */
+  orphanSummary(line: string): boolean {
+    return /orphan accounts found \d+, deleted \d+, skipped \d+, failed \d+/.test(line);
+  },
+  /**
+   * [[GTC-448]] W58's edge: under `isExpired`, a copy started (and deleted) at `startIso` is first
+   * taken by an hourly run at :17 that falls on the NEXT NZ day.
+   */
+  firstRunIsNextNzDay(isExpired: (s: Date, n: Date) => boolean, startIso: string): boolean {
+    const start = new Date(startIso);
+    const nzDate = (d: Date) =>
+      new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Pacific/Auckland',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(d);
+    const [y, m, d] = nzDate(start).split('-').map(Number);
+    const nextDay = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+    let run = new Date(start);
+    run.setUTCMinutes(17, 0, 0);
+    if (run.getTime() <= start.getTime()) run = new Date(run.getTime() + HOUR);
+    for (let i = 0; i < 72; i++, run = new Date(run.getTime() + HOUR)) {
+      if (isExpired(start, run)) return nzDate(run) === nextDay;
+    }
+    return false;
   },
   /** A log line carries counts only: none of the given words, no address, no id. */
   countsOnly(line: string, banned: string[]): boolean {
@@ -303,8 +338,8 @@ let ROUTE_MOD: any;
 let NEXT: any;
 
 /** A copy started in process (as the route's copy shape does), then backdated if asked. */
-async function startCopy(startedAt?: Date) {
-  const c = await COPY.startDemoCopy(prisma, { now: new Date() });
+async function startCopy(startedAt?: Date, visitorTag?: string) {
+  const c = await COPY.startDemoCopy(prisma, { now: new Date(), visitorTag });
   fx.events.add(c.eventId);
   fx.users.add(c.userId);
   fx.sessions.add(c.sessionToken);
@@ -401,8 +436,15 @@ function failingFor(eventId: string): any {
 // ── The log, captured while a sweep or the route runs ───────────────────────
 const logLines: string[] = [];
 let completedRuns = 0;
+/** [[GTC-448]] fetch calls made while a sweep or the route ran (nothing may be sent). */
+let fetchCalls = 0;
 async function capture<T>(f: () => Promise<T>): Promise<T> {
   const was = { log: console.log, warn: console.warn, error: console.error };
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = ((...a: Parameters<typeof fetch>) => {
+    fetchCalls++;
+    return realFetch(...a);
+  }) as typeof fetch;
   const keep =
     (orig: (...a: unknown[]) => void) =>
     (...a: unknown[]) => {
@@ -419,6 +461,7 @@ async function capture<T>(f: () => Promise<T>): Promise<T> {
     return await f();
   } finally {
     Object.assign(console, was);
+    globalThis.fetch = realFetch;
   }
 }
 async function sweep(db: any, options?: { limit?: number; lookAt?: number }) {
@@ -527,6 +570,11 @@ async function main() {
     loaded = false;
   }
   assert('P', 'P5 the clean-up module and its cron route load', loaded);
+  assert(
+    'P',
+    'P6 the second pass, sweepOneOrphan, loads ([[GTC-448]])',
+    loaded && typeof CLEAN.sweepOneOrphan === 'function'
+  );
 
   if (loaded && serverOk && copyUsers === 0 && start.stamped === 0) {
     try {
@@ -537,6 +585,7 @@ async function main() {
   } else {
     section('A to R — not run: the code is missing, or a precondition failed (nothing written)');
     for (const [layer, label] of NEEDS_CODE) assert(layer, label, false, 'not run');
+    for (const label of Object.values(O_CHECKS)) assert('O', label, false, 'not run');
   }
   sourceLayer();
 
@@ -1104,6 +1153,9 @@ async function run() {
     JSON.stringify(g1)
   );
 
+  // ══ O — the second pass ([[GTC-448]]) ═══════════════════════════════════════
+  await orphanLayer();
+
   // ══ F — the log ══════════════════════════════════════════════════════════════
   section('F — the log');
   const banned = [
@@ -1129,6 +1181,674 @@ async function run() {
     NEEDS_CODE[32][1],
     summaries === completedRuns,
     `${summaries} for ${completedRuns} runs`
+  );
+}
+
+// ══ O — the second pass ([[GTC-448]]) ═════════════════════════════════════════
+const O_CHECKS = {
+  O1: 'O1 her copy, filled over HTTP and then deleted by her: DELETE /api/events/[id] answers 200',
+  O2: 'O2 what her delete leaves: the event, its rows and her role gone; the account, its session, Sam, every stamped person, the template and the profile remain',
+  O3: 'O3 past the age, one run deletes by id: the account, its session, Sam, every stamped person (typed, crowd, removed mid-visit), the template and the profile',
+  O4: 'O4 that run’s counts: one orphan found and deleted, none skipped or failed; accounts 1, sessions 1, templates 2, people as collected',
+  O5: 'O5 every table moved by exactly those rows, no more',
+  O6: 'O6 CONTROL a copy deleted by its visitor today stays: account, session, Sam, her people',
+  O7: 'O7 the edge on the real clock: an orphan made one minute after the cut-off stays; one made one minute before goes',
+  O8: 'O8 W58’s edge, pure: a copy started and deleted at 09:00, 21:30, 22:30 or 23:59 NZ (summer and winter) is first taken on the next NZ day',
+  O9a: 'O9a two copies of one visitor (one tag): the deleted one’s account, session, Sam and people go',
+  O9b: 'O9b CONTROL the live one, started today, is whole: event, account, session, Sam, its stamped people and crowd',
+  O10: 'O10 CONTROL an old account whose copy still exists (started today) is taken by neither pass',
+  O11: 'O11 CONTROL Sam’s mark naming a live copy: skipped (its copy still exists), logged; the live copy, its people and the account whole',
+  O12: 'O12 CONTROL a real account (old, no event), a real person and a real event with its guest are untouched',
+  O13: 'O13 sweepOneOrphan on a real account: skipped (not a copy account), nothing deleted',
+  O14: 'O14 a WrapUpLink on a stamped person (on a real event): the account is skipped whole, logged',
+  O15: 'O15 a stamped person with a membership on a real event is kept, with it; the rest of that account goes',
+  O16: 'O16 a stamped person who hosts a real event and one who co-hosts another are kept; both events unchanged',
+  O17: 'O17 an orphan whose Sam has no mark: the account, its session and Sam go; a person stamped with its copy is not reached',
+  O18: 'O18 the default limit: of 26 orphans one run deletes the 25 oldest, the youngest whole; the next run takes it',
+  O19: 'O19 with a limit of 1, a skipped oldest orphan uses no place: the next one goes',
+  O20: 'O20 with a look limit of 2 and two skipped orphans at the front, the third is not reached',
+  O21: 'O21 the passes’ places are their own: with a limit of 1, one expired copy and one orphan both go',
+  O22: 'O22 the second pass’s constants: up to 100 looked at, at most 25 deleted',
+  O23: 'O23 an orphan made to fail through the db argument is rolled back whole, counted failed; the other goes',
+  O24: 'O24 the route: an orphan that cannot be deleted answers 500 with the counts; the other orphan in that run goes',
+  O25: 'O25 the route: once it can go, 200, success, one orphan deleted',
+  O26: 'O26 a second run deletes nothing and fails nothing',
+  O27: 'O27 nothing sent: no fetch call while the layer’s runs ran, no message or invite row made, and those runs deleted orphans',
+  O28: 'O28 the log: every orphan line carries counts only, and each run’s one summary carries the orphan accounts’ four counts',
+} as const;
+
+type Orphan = { eventId: string; userId: string; hostId: string; token: string; stamped: string[] };
+
+/** The account and its session made at `at` (the copy's start, as copy.ts writes them together). */
+async function backdateAccount(userId: string, at: Date) {
+  await prisma.user.update({ where: { id: userId }, data: { createdAt: at } });
+  await prisma.session.updateMany({
+    where: { userId },
+    data: { createdAt: at, expiresAt: new Date(at.getTime() + 2 * HOUR) },
+  });
+}
+/**
+ * A copy its visitor deleted: started, stamped people added, its event deleted in process (every
+ * row the DELETE route removes by hand also goes by the event's cascade), then the account and its
+ * session backdated to `madeAt` if given.
+ */
+async function orphanCopy(o: { madeAt?: Date; people?: string[]; tag?: string } = {}) {
+  const c = await startCopy(undefined, o.tag);
+  const stamped: string[] = [];
+  for (const n of o.people ?? []) stamped.push((await stampedOn(c.eventId, n)).id);
+  await prisma.event.delete({ where: { id: c.eventId } });
+  if (o.madeAt) await backdateAccount(c.userId, o.madeAt);
+  return { ...c, stamped } as Orphan;
+}
+async function orphanWhole(o: Orphan) {
+  return (
+    (await exists.user(o.userId)) &&
+    (await exists.session(o.token)) &&
+    (await exists.person(o.hostId)) &&
+    (await prisma.person.count({ where: { id: { in: o.stamped } } })) === o.stamped.length
+  );
+}
+async function orphanGone(o: Orphan) {
+  return (
+    !(await exists.user(o.userId)) &&
+    !(await exists.session(o.token)) &&
+    !(await exists.person(o.hostId)) &&
+    (await prisma.person.count({ where: { id: { in: o.stamped } } })) === 0
+  );
+}
+/** Whatever is left of these orphans, by id (a run that took them leaves nothing). */
+async function removeOrphans(...os: Orphan[]) {
+  for (const o of os) {
+    await prisma.person.deleteMany({ where: { id: { in: [o.hostId, ...o.stamped] } } });
+    await prisma.user.deleteMany({ where: { id: o.userId } });
+  }
+}
+
+/** Every run in this layer: counted for O27 (messages made, orphans deleted) and F2. */
+const OL = { msgDelta: 0, deletedTotal: 0 };
+const msgTotal = async () =>
+  (await prisma.outboundMessage.count()) + (await prisma.inviteEvent.count());
+async function oSweep(db: any = prisma, options?: { limit?: number; lookAt?: number }) {
+  const m0 = await msgTotal();
+  const r = await sweep(db, options);
+  OL.msgDelta += Math.abs((await msgTotal()) - m0);
+  OL.deletedTotal += typeof r.orphansDeleted === 'number' ? r.orphansDeleted : 0;
+  return r;
+}
+async function oRoute() {
+  const m0 = await msgTotal();
+  const r = await callRoute('GET', '', { authorization: `Bearer ${MADE_UP_SECRET}` });
+  completedRuns++;
+  OL.msgDelta += Math.abs((await msgTotal()) - m0);
+  OL.deletedTotal += typeof r.body?.orphansDeleted === 'number' ? r.body.orphansDeleted : 0;
+  return r;
+}
+const linesFrom = (i: number) => logLines.slice(i).filter((l) => l.includes('[demo-cleanup]'));
+
+/** The client, but one orphan account's delete throws after it ran (its transaction rolls back). */
+function failingOrphan(userId: string): any {
+  const bind = (o: any, k: PropertyKey) => {
+    const v = o[k];
+    return typeof v === 'function' ? v.bind(o) : v;
+  };
+  return new Proxy(prisma, {
+    get(t: any, k) {
+      if (k !== '$transaction') return bind(t, k);
+      return (fn: any, opts: any) =>
+        t.$transaction(
+          async (tx: any) =>
+            fn(
+              new Proxy(tx, {
+                get(tt: any, kk) {
+                  if (kk !== 'user') return bind(tt, kk);
+                  return new Proxy(tt.user, {
+                    get(u: any, m) {
+                      if (m !== 'delete') return bind(u, m);
+                      return async (args: any) => {
+                        const out = await u.delete(args);
+                        if (args?.where?.id === userId) {
+                          throw Object.assign(new Error('probe'), { code: 'GTC448_PROBE' });
+                        }
+                        return out;
+                      };
+                    },
+                  });
+                },
+              })
+            ),
+          opts
+        );
+    },
+  });
+}
+
+async function orphanLayer() {
+  section('O — the second pass: a copy its visitor deleted ([[GTC-448]])');
+  const NOW = Date.now();
+  const ago = (ms: number) => new Date(NOW - ms);
+  const logStart = logLines.length;
+  const fetchStart = fetchCalls;
+  const oneSkip = typeof CLEAN.sweepOneOrphan === 'function';
+  const host = await realAccount('heke', 'Heke Real');
+  const linkOn = async (eventId: string, personId: string, n: string) => {
+    const l = await prisma.wrapUpLink.create({
+      data: {
+        token: `${TAG}-wul-${n}`,
+        eventId,
+        personId,
+        guestName: 'Guest',
+        channel: 'email',
+        expiresAt: new Date(NOW + DAY),
+      },
+    });
+    fx.links.add(l.id);
+    return l;
+  };
+
+  // ── O1 to O5: her copy, over HTTP, deleted by her ──────────────────────────
+  const V = await startCopy();
+  const C = V.eventId;
+  const hh = await http('POST', `/api/events/${C}/host-household`, V.cookie, {
+    alone: false,
+    name: 'Sam',
+    partner: { name: 'Aroha Visitor', email: addr('aroha') },
+    helpers: [{ name: 'Hemi Visitor' }],
+  });
+  const kiri = await http('POST', `/api/events/${C}/households`, V.cookie, {
+    primaryContact: { name: 'Kiri Visitor', email: addr('kiri') },
+  });
+  const tama = await http('POST', `/api/events/${C}/households`, V.cookie, {
+    primaryContact: { name: 'Tama Visitor', email: addr('tama') },
+  });
+  const wiremu = await http('POST', `/api/events/${C}/people`, V.cookie, {
+    name: 'Wiremu Visitor',
+    email: addr('wiremu'),
+  });
+  const crowd = await http('POST', `/api/events/${C}/households`, V.cookie, { demoCrowd: true });
+  names.push('Aroha', 'Hemi', 'Kiri', 'Tama', 'Wiremu', 'Visitor');
+  const tamaHh = tama.body?.household?.id;
+  const delHh = tamaHh
+    ? await http('DELETE', `/api/events/${C}/households/${tamaHh}`, V.cookie)
+    : { status: -1 };
+  const tpl = await prisma.structureTemplate.create({
+    data: {
+      hostId: V.userId,
+      templateSource: 'HOST',
+      name: `${TAG} tpl O`,
+      occasionType: 'OTHER',
+      teams: [],
+      items: [],
+      days: [],
+    },
+  });
+  fx.templates.add(tpl.id);
+  const qp = await prisma.quantitiesProfile.create({
+    data: {
+      hostId: V.hostId,
+      occasionType: 'OTHER',
+      derivedFrom: {},
+      ratios: {},
+      itemQuantities: [],
+      overrides: {},
+    },
+  });
+  fx.profiles.add(qp.id);
+  const collected = (
+    await prisma.person.findMany({
+      where: { OR: [{ id: V.hostId }, { sampleEventId: C }] },
+      select: { id: true },
+    })
+  ).map((p) => p.id);
+  const crowdCount = await prisma.person.count({
+    where: { sampleEventId: C, email: { contains: '.demo-copy.invalid' } },
+  });
+  const del = await http('DELETE', `/api/events/${C}`, V.cookie);
+  const vo: Orphan = { ...V, stamped: collected.filter((id) => id !== V.hostId) };
+  assert(
+    'O',
+    O_CHECKS.O1,
+    hh.status === 201 &&
+      kiri.status === 201 &&
+      tama.status === 201 &&
+      wiremu.status < 300 &&
+      crowd.status === 201 &&
+      delHh.status === 200 &&
+      crowdCount > 0 &&
+      del.status === 200,
+    JSON.stringify({
+      hh: hh.status,
+      kiri: kiri.status,
+      tama: tama.status,
+      wiremu: wiremu.status,
+      crowd: crowd.status,
+      delHh: delHh.status,
+      crowdCount,
+      del: del.status,
+    })
+  );
+  const leftOn = await rowsOn([C]);
+  assert(
+    'O',
+    O_CHECKS.O2,
+    !(await exists.event(C)) &&
+      Object.entries(leftOn).every(([k, n]) => k === 'event' || n === 0) &&
+      (await prisma.eventRole.count({ where: { userId: V.userId } })) === 0 &&
+      (await orphanWhole(vo)) &&
+      collected.length >= 7 &&
+      (await prisma.personEvent.count({ where: { personId: { in: collected } } })) === 0 &&
+      (await prisma.structureTemplate.count({ where: { id: tpl.id } })) === 1 &&
+      (await prisma.quantitiesProfile.count({ where: { id: qp.id } })) === 1,
+    JSON.stringify({ leftOn, collected: collected.length })
+  );
+  await backdateAccount(V.userId, ago(2.5 * DAY));
+  const stampedCount = await prisma.person.count({
+    where: { id: { in: collected }, sampleEventId: { not: null } },
+  });
+  const before = await totals();
+  const s3 = await oSweep();
+  const after = await totals();
+  assert(
+    'O',
+    O_CHECKS.O3,
+    (await orphanGone(vo)) &&
+      (await prisma.structureTemplate.count({ where: { id: tpl.id } })) === 0 &&
+      (await prisma.quantitiesProfile.count({ where: { id: qp.id } })) === 0
+  );
+  assert(
+    'O',
+    O_CHECKS.O4,
+    s3.orphansFound === 1 &&
+      s3.orphansDeleted === 1 &&
+      s3.orphansSkipped === 0 &&
+      s3.orphansFailed === 0 &&
+      s3.accounts === 1 &&
+      s3.sessions === 1 &&
+      s3.templates === 2 &&
+      s3.people === collected.length,
+    JSON.stringify({ ...s3, collected: collected.length })
+  );
+  const want: Record<string, number> = { ...before };
+  want.person -= collected.length;
+  want.stamped -= stampedCount;
+  want.user -= 1;
+  want.session -= 1;
+  want.structureTemplate -= 1;
+  want.quantitiesProfile -= 1;
+  assert('O', O_CHECKS.O5, diff(want, after) === '', diff(want, after));
+  await removeOrphans(vo);
+
+  // ── O6, O7: today's stays; the edge ──────────────────────────────────────────
+  const young = await orphanCopy({ people: ['Rewi Visitor'] });
+  const cut = CLEAN.expiredBefore(new Date()).getTime();
+  const edgeOut = await orphanCopy({ madeAt: new Date(cut + 60_000) });
+  const edgeIn = await orphanCopy({ madeAt: new Date(cut - 60_000) });
+  names.push('Rewi');
+  await oSweep();
+  assert('O', O_CHECKS.O6, await orphanWhole(young));
+  assert(
+    'O',
+    O_CHECKS.O7,
+    (await orphanWhole(edgeOut)) && (await orphanGone(edgeIn)),
+    JSON.stringify({ out: await orphanWhole(edgeOut), inGone: await orphanGone(edgeIn) })
+  );
+  await removeOrphans(young, edgeOut, edgeIn);
+
+  // ── O8: W58's edge, pure ─────────────────────────────────────────────────────
+  assert(
+    'O',
+    O_CHECKS.O8,
+    [
+      '2026-11-02T20:00:00Z', // 09:00 NZDT, 3 Nov
+      '2026-11-03T08:30:00Z', // 21:30 NZDT
+      '2026-11-03T09:30:00Z', // 22:30 NZDT
+      '2026-11-03T10:59:00Z', // 23:59 NZDT
+      '2026-07-15T11:59:00Z', // 23:59 NZST
+    ].every((iso) => CHECKS.firstRunIsNextNzDay(CLEAN.isExpiredCopy, iso))
+  );
+
+  // ── O9: two copies of one visitor ────────────────────────────────────────────
+  const tag = randomBytes(4).toString('hex');
+  const A = await orphanCopy({ madeAt: ago(1.5 * DAY), people: ['Anaru Visitor'], tag });
+  const B = await startCopy(undefined, tag);
+  await stampedOn(B.eventId, 'Huhana Visitor');
+  // Her own household first: the crowd is refused before it (409).
+  const bOwn = await http('POST', `/api/events/${B.eventId}/host-household`, B.cookie, {
+    alone: true,
+    name: 'Sam',
+  });
+  const bCrowd = await http('POST', `/api/events/${B.eventId}/households`, B.cookie, {
+    demoCrowd: true,
+  });
+  names.push('Anaru', 'Huhana');
+  const bPeople = async () =>
+    (
+      await prisma.person.findMany({
+        where: { sampleEventId: B.eventId },
+        select: { id: true },
+        orderBy: { id: 'asc' },
+      })
+    ).map((p) => p.id);
+  const bBefore = { rows: await rowsOn([B.eventId]), people: await bPeople() };
+  await oSweep();
+  assert('O', O_CHECKS.O9a, await orphanGone(A));
+  const bAfter = { rows: await rowsOn([B.eventId]), people: await bPeople() };
+  assert(
+    'O',
+    O_CHECKS.O9b,
+    bOwn.status === 201 &&
+      bCrowd.status === 201 &&
+      (await whole(B)) &&
+      bBefore.people.length >= 3 &&
+      JSON.stringify(bAfter) === JSON.stringify(bBefore),
+    JSON.stringify({ own: bOwn.status, crowd: bCrowd.status, before: bBefore.people.length })
+  );
+  await removeOrphans(A);
+
+  // ── O10: an old account whose copy still exists ─────────────────────────────
+  const C10 = await startCopy();
+  await backdateAccount(C10.userId, ago(2.5 * DAY));
+  await oSweep();
+  assert('O', O_CHECKS.O10, await whole(C10));
+
+  // ── O11: Sam's mark naming a live copy ──────────────────────────────────────
+  const G = await orphanCopy({ madeAt: ago(2.6 * DAY), people: ['Pita Visitor'] });
+  const L = await startCopy();
+  const lP = await stampedOn(L.eventId, 'Mere Visitor');
+  names.push('Pita', 'Mere');
+  await prisma.person.update({ where: { id: G.hostId }, data: { sampleEventId: L.eventId } });
+  const lBefore = await rowsOn([L.eventId]);
+  const l11 = logLines.length;
+  const s11 = await oSweep();
+  assert(
+    'O',
+    O_CHECKS.O11,
+    s11.orphansSkipped === 1 &&
+      s11.orphansDeleted === 0 &&
+      linesFrom(l11).some((l) =>
+        l.includes('[demo-cleanup] skipped an orphan account: its copy still exists')
+      ) &&
+      (await orphanWhole(G)) &&
+      (await whole(L)) &&
+      (await exists.person(lP.id)) &&
+      JSON.stringify(await rowsOn([L.eventId])) === JSON.stringify(lBefore),
+    JSON.stringify(s11)
+  );
+  await removeOrphans(G);
+
+  // ── O12, O13: real rows ──────────────────────────────────────────────────────
+  const RA = await realAccount('rawiri', 'Rawiri Real');
+  await prisma.user.update({ where: { id: RA.user.id }, data: { createdAt: ago(3 * DAY) } });
+  const RP = await prisma.person.create({ data: { name: 'Ihaia Real', email: addr('ihaia') } });
+  fx.persons.add(RP.id);
+  names.push('Ihaia Real', 'Rawiri Real');
+  const RE = await makeEvent(host.person.id, `${TAG} real O12`, false, ago(3 * DAY));
+  const reGuest = await prisma.person.create({ data: { name: 'Ruia Real', email: addr('ruia') } });
+  fx.persons.add(reGuest.id);
+  names.push('Ruia Real');
+  await prisma.personEvent.create({ data: { personId: reGuest.id, eventId: RE.id } });
+  const reBefore = await rowsOn([RE.id]);
+  await oSweep();
+  assert(
+    'O',
+    O_CHECKS.O12,
+    (await exists.user(RA.user.id)) &&
+      (await exists.person(RA.person.id)) &&
+      (await exists.person(RP.id)) &&
+      (await exists.event(RE.id)) &&
+      (await exists.person(reGuest.id)) &&
+      JSON.stringify(await rowsOn([RE.id])) === JSON.stringify(reBefore)
+  );
+  const e13 = oneSkip ? await capture(() => CLEAN.sweepOneOrphan(prisma, RA.user.id)) : null;
+  assert(
+    'O',
+    O_CHECKS.O13,
+    e13?.kind === 'skipped' &&
+      e13?.why === 'not a copy account' &&
+      (await exists.user(RA.user.id)) &&
+      (await exists.person(RA.person.id)),
+    JSON.stringify(e13)
+  );
+
+  // ── O14: a WrapUpLink ────────────────────────────────────────────────────────
+  const RW = await makeEvent(host.person.id, `${TAG} real O14`, false);
+  const WL = await orphanCopy({ madeAt: ago(2.7 * DAY), people: ['Hone Visitor'] });
+  names.push('Hone');
+  const wl = await linkOn(RW.id, WL.stamped[0], 'o14');
+  const l14 = logLines.length;
+  const s14 = await oSweep();
+  assert(
+    'O',
+    O_CHECKS.O14,
+    s14.orphansSkipped === 1 &&
+      s14.orphansDeleted === 0 &&
+      linesFrom(l14).some((l) =>
+        l.includes('[demo-cleanup] skipped an orphan account: a wrap-up link exists')
+      ) &&
+      (await orphanWhole(WL)) &&
+      (await prisma.wrapUpLink.count({ where: { id: wl.id } })) === 1,
+    JSON.stringify(s14)
+  );
+  await prisma.wrapUpLink.delete({ where: { id: wl.id } });
+  await removeOrphans(WL);
+
+  // ── O15, O16: kept people ───────────────────────────────────────────────────
+  const KP = await orphanCopy({
+    madeAt: ago(2.8 * DAY),
+    people: ['Manu Visitor', 'Ngaio Visitor', 'Ora Visitor', 'Rangi Visitor'],
+  });
+  names.push('Manu', 'Ngaio', 'Ora', 'Rangi');
+  const [pm, ph, pc, po] = KP.stamped;
+  const RK = await makeEvent(host.person.id, `${TAG} real O15`, false);
+  await prisma.personEvent.create({ data: { personId: pm, eventId: RK.id } });
+  const RH = await makeEvent(ph, `${TAG} hosted by a sample person O16`, false);
+  const RC = await makeEvent(host.person.id, `${TAG} co-hosted O16`, false);
+  await prisma.event.update({ where: { id: RC.id }, data: { coHostId: pc } });
+  const s15 = await oSweep();
+  const rest =
+    !(await exists.user(KP.userId)) &&
+    !(await exists.session(KP.token)) &&
+    !(await exists.person(KP.hostId)) &&
+    !(await exists.person(po));
+  assert(
+    'O',
+    O_CHECKS.O15,
+    s15.orphansDeleted === 1 &&
+      rest &&
+      (await exists.person(pm)) &&
+      (await prisma.personEvent.count({ where: { personId: pm, eventId: RK.id } })) === 1,
+    JSON.stringify(s15)
+  );
+  const rh = await prisma.event.findUnique({ where: { id: RH.id }, select: { hostId: true } });
+  const rc = await prisma.event.findUnique({ where: { id: RC.id }, select: { coHostId: true } });
+  assert(
+    'O',
+    O_CHECKS.O16,
+    s15.peopleKept === 3 &&
+      rest &&
+      (await exists.person(ph)) &&
+      (await exists.person(pc)) &&
+      rh?.hostId === ph &&
+      rc?.coHostId === pc,
+    JSON.stringify({ kept: s15.peopleKept, rh, rc })
+  );
+  await prisma.event.deleteMany({ where: { id: { in: [RK.id, RH.id, RC.id] } } });
+  await removeOrphans(KP);
+
+  // ── O17: no mark on Sam ──────────────────────────────────────────────────────
+  const NM = await orphanCopy({ madeAt: ago(2.9 * DAY), people: ['Tipene Visitor'] });
+  names.push('Tipene');
+  await prisma.person.update({ where: { id: NM.hostId }, data: { sampleEventId: null } });
+  const s17 = await oSweep();
+  assert(
+    'O',
+    O_CHECKS.O17,
+    s17.orphansDeleted === 1 &&
+      s17.people === 1 &&
+      !(await exists.user(NM.userId)) &&
+      !(await exists.session(NM.token)) &&
+      !(await exists.person(NM.hostId)) &&
+      (await exists.person(NM.stamped[0])),
+    JSON.stringify(s17)
+  );
+  await removeOrphans(NM);
+
+  // ── O18: the default 25 ──────────────────────────────────────────────────────
+  const many: Orphan[] = [];
+  for (let i = 0; i < 26; i++) {
+    many.push(await orphanCopy({ madeAt: new Date(NOW - 3 * DAY + i * 60_000) }));
+  }
+  const s18a = await oSweep();
+  const firstGone = (await Promise.all(many.slice(0, 25).map(orphanGone))).every(Boolean);
+  const lastWhole = await orphanWhole(many[25]);
+  const s18b = await oSweep();
+  assert(
+    'O',
+    O_CHECKS.O18,
+    s18a.orphansDeleted === 25 &&
+      firstGone &&
+      lastWhole &&
+      s18b.orphansDeleted === 1 &&
+      (await orphanGone(many[25])),
+    JSON.stringify({ a: s18a.orphansDeleted, firstGone, lastWhole, b: s18b.orphansDeleted })
+  );
+  await removeOrphans(...many);
+
+  // ── O19, O20: a skip uses no place; the look limit ──────────────────────────
+  const S1 = await orphanCopy({ madeAt: ago(3.3 * DAY), people: ['Aperahama Visitor'] });
+  const S1b = await orphanCopy({ madeAt: ago(3.25 * DAY), people: ['Hohepa Visitor'] });
+  const S2 = await orphanCopy({ madeAt: ago(3.2 * DAY) });
+  names.push('Aperahama', 'Hohepa');
+  const k1 = await linkOn(RW.id, S1.stamped[0], 'o19');
+  const k2 = await linkOn(RW.id, S1b.stamped[0], 'o20');
+  // O19 first, without S1b's link mattering: S1 and S1b are both skipped, S2 goes.
+  const s19 = await oSweep(prisma, { limit: 1 });
+  assert(
+    'O',
+    O_CHECKS.O19,
+    s19.orphansSkipped === 2 &&
+      s19.orphansDeleted === 1 &&
+      (await orphanWhole(S1)) &&
+      (await orphanGone(S2)),
+    JSON.stringify(s19)
+  );
+  const S3 = await orphanCopy({ madeAt: ago(3.1 * DAY) });
+  const s20 = await oSweep(prisma, { lookAt: 2 });
+  assert(
+    'O',
+    O_CHECKS.O20,
+    s20.orphansFound === 2 &&
+      s20.orphansSkipped === 2 &&
+      s20.orphansDeleted === 0 &&
+      s20.orphansFailed === 0 &&
+      (await orphanWhole(S1)) &&
+      (await orphanWhole(S1b)) &&
+      (await orphanWhole(S3)),
+    JSON.stringify(s20)
+  );
+  await prisma.wrapUpLink.deleteMany({ where: { id: { in: [k1.id, k2.id] } } });
+  await removeOrphans(S1, S1b, S2, S3);
+
+  // ── O21: each pass its own places ────────────────────────────────────────────
+  const Q = await startCopy(ago(2 * DAY));
+  const Z = await orphanCopy({ madeAt: ago(2 * DAY) });
+  const s21 = await oSweep(prisma, { limit: 1 });
+  assert(
+    'O',
+    O_CHECKS.O21,
+    s21.deleted === 1 && (await gone(Q)) && s21.orphansDeleted === 1 && (await orphanGone(Z)),
+    JSON.stringify(s21)
+  );
+  await removeOrphans(Z);
+
+  // ── O22: the constants ───────────────────────────────────────────────────────
+  assert(
+    'O',
+    O_CHECKS.O22,
+    CLEAN.DEMO_CLEANUP?.lookAt === 100 && CLEAN.DEMO_CLEANUP?.perRun === 25
+  );
+
+  // ── O23: a failure through the db argument ──────────────────────────────────
+  const X1 = await orphanCopy({ madeAt: ago(2.2 * DAY), people: ['Matiu Visitor'] });
+  const X2 = await orphanCopy({ madeAt: ago(2.1 * DAY) });
+  names.push('Matiu');
+  const s23 = await oSweep(failingOrphan(X1.userId));
+  assert(
+    'O',
+    O_CHECKS.O23,
+    s23.orphansFailed === 1 &&
+      s23.orphansDeleted === 1 &&
+      (await orphanWhole(X1)) &&
+      (await orphanGone(X2)),
+    JSON.stringify(s23)
+  );
+  await removeOrphans(X1, X2);
+
+  // ── O24, O25: the route ──────────────────────────────────────────────────────
+  const Y1 = await orphanCopy({ madeAt: ago(2.3 * DAY), people: ['Paora Visitor'] });
+  const Y2 = await orphanCopy({ madeAt: ago(2.25 * DAY) });
+  names.push('Paora');
+  const RA2 = await makeEvent(host.person.id, `${TAG} real O24`, false);
+  const t24 = await prisma.team.create({ data: { name: `${TAG} O24`, eventId: RA2.id } });
+  const i24 = await prisma.item.create({ data: { name: `${TAG} O24 item`, teamId: t24.id } });
+  const a24 = await prisma.assignment.create({ data: { itemId: i24.id, personId: Y1.stamped[0] } });
+  const r24 = await oRoute();
+  assert(
+    'O',
+    O_CHECKS.O24,
+    r24.status === 500 &&
+      r24.body?.orphansFailed === 1 &&
+      r24.body?.orphansDeleted === 1 &&
+      (await orphanWhole(Y1)) &&
+      (await orphanGone(Y2)),
+    JSON.stringify({ status: r24.status, body: r24.body })
+  );
+  await prisma.assignment.delete({ where: { id: a24.id } });
+  const r25 = await oRoute();
+  assert(
+    'O',
+    O_CHECKS.O25,
+    r25.status === 200 &&
+      r25.body?.success === true &&
+      r25.body?.orphansDeleted === 1 &&
+      r25.body?.orphansFailed === 0 &&
+      (await orphanGone(Y1)),
+    JSON.stringify({ status: r25.status, body: r25.body })
+  );
+  await removeOrphans(Y1, Y2);
+
+  // ── O26 to O28: again; nothing sent; the log ────────────────────────────────
+  const s26 = await oSweep();
+  assert(
+    'O',
+    O_CHECKS.O26,
+    s26.orphansDeleted === 0 && s26.orphansFailed === 0,
+    JSON.stringify(s26)
+  );
+  assert(
+    'O',
+    O_CHECKS.O27,
+    fetchCalls === fetchStart && OL.msgDelta === 0 && OL.deletedTotal > 0,
+    JSON.stringify({ fetches: fetchCalls - fetchStart, ...OL })
+  );
+  const banned = [
+    ...names,
+    TAG,
+    RUN,
+    ...[...fx.events],
+    ...[...fx.users],
+    ...[...fx.persons],
+    V.token,
+  ];
+  const ours = linesFrom(logStart);
+  const summaries = ours.filter((l) => l.includes('[demo-cleanup] copies found'));
+  assert(
+    'O',
+    O_CHECKS.O28,
+    summaries.length > 0 &&
+      summaries.every((l) => CHECKS.orphanSummary(l)) &&
+      ours.some((l) => l.includes('orphan account')) &&
+      ours.filter((l) => l.includes('orphan')).every((l) => CHECKS.countsOnly(l, banned)),
+    `${summaries.length} summaries, ${summaries.filter((l) => !CHECKS.orphanSummary(l)).length} without the four counts`
   );
 }
 
