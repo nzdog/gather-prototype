@@ -183,7 +183,8 @@
     "test:tweaks-j": "tsx tests/tweaks-j-test.ts",
     "test:household-save": "NODE_OPTIONS=--experimental-websocket tsx --tsconfig tests/tsconfig.json tests/household-save-test.tsx",
     "test:demo-note": "tsx --tsconfig tests/tsconfig.json tests/demo-note-test.tsx",
-    "test:sample-marker": "tsx tests/sample-marker-test.ts"
+    "test:sample-marker": "tsx tests/sample-marker-test.ts",
+    "test:contact-import": "tsx --tsconfig tests/tsconfig.json tests/contact-import-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

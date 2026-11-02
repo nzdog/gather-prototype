@@ -261,3 +261,90 @@ export function parseVCF(text: string): VCFParseResult {
     totalFound: blocks.length,
   };
 }
+
+/**
+ * [[GTC-448]] — the raw-card reader for the contact import (src/lib/contact-import/read-vcard.ts).
+ * ADDITIVE: it shares this file's split, quoted-printable and name helpers and changes nothing
+ * above. Unlike `parseVCF` it keeps every card, with ALL its emails and numbers exactly as written
+ * (not normalised, not lower-cased) and a flag for the ones marked preferred, and it reports
+ * unreadable cards apart from the rest. The caller decides what to keep and what to drop.
+ */
+export interface RawVCardValue {
+  value: string;
+  /** TYPE contains PREF, or the field carries a `pref` parameter (the same test as `parseVCF`). */
+  pref: boolean;
+}
+
+export interface RawVCard {
+  /** FN when it has text, else N assembled as "Given Middle Family"; '' when neither. */
+  name: string;
+  /** True when the name came from FN, where it may be written "Last, First". */
+  nameFromFn: boolean;
+  emails: RawVCardValue[];
+  phones: RawVCardValue[];
+}
+
+export interface RawVCardRead {
+  cards: RawVCard[];
+  /** Cards the parser threw on. */
+  unreadable: number;
+  totalFound: number;
+}
+
+function isPreferredField(f: VCardField): boolean {
+  const types = f.meta?.type;
+  if (types) {
+    const hasPref = types.some((t) =>
+      t.split(',').some((token) => token.trim().toUpperCase() === 'PREF')
+    );
+    if (hasPref) return true;
+  }
+  const prefParam = f.meta?.pref;
+  return !!prefParam && prefParam.length > 0;
+}
+
+function rawValues(fields: VCardField[] | undefined): RawVCardValue[] {
+  return (fields ?? [])
+    .map((f) => ({ value: fieldValueToString(f), pref: isPreferredField(f) }))
+    .filter((v) => v.value !== '');
+}
+
+function rawName(card: Record<string, VCardField[]>): { name: string; nameFromFn: boolean } {
+  const fn = card.fn?.[0];
+  if (fn) {
+    const decoded = maybeDecodeField(fn);
+    // A comma that is not escaped (FN:Example, Aroha) reaches us as a split array. Join it back
+    // with the comma so a "Last, First" name can still be seen as one.
+    const value = Array.isArray(decoded.value)
+      ? decoded.value
+          .map((part) => (part || '').trim())
+          .filter(Boolean)
+          .join(', ')
+      : decoded.value.trim();
+    if (value) return { name: value, nameFromFn: true };
+  }
+  return { name: extractName(card), nameFromFn: false };
+}
+
+export function readRawVCards(text: string): RawVCardRead {
+  const blocks = splitVCards(text);
+  const cards: RawVCard[] = [];
+  let unreadable = 0;
+
+  for (const block of blocks) {
+    try {
+      const card: Record<string, VCardField[]> = vcardParser.parse(block);
+      const { name, nameFromFn } = rawName(card);
+      cards.push({
+        name,
+        nameFromFn,
+        emails: rawValues(card.email),
+        phones: rawValues(card.tel),
+      });
+    } catch {
+      unreadable++;
+    }
+  }
+
+  return { cards, unreadable, totalFound: blocks.length };
+}
