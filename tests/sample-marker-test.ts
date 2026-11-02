@@ -108,11 +108,14 @@ export const CHECKS = {
   sha256(text: string): string {
     return createHash('sha256').update(text, 'utf8').digest('hex');
   },
-  /** `name` comes straight after `previous` in the sorted list of migration folders. */
+  /**
+   * `name` comes straight after `previous` in the sorted list of migration folders. A later
+   * migration may follow it: this does not ask `name` to be the last (GTC-449, ruling 64).
+   */
   sortsRightAfter(folders: string[], previous: string, name: string): boolean {
     const sorted = [...folders].sort();
     const i = sorted.indexOf(previous);
-    return i >= 0 && sorted[i + 1] === name && i + 2 === sorted.length;
+    return i >= 0 && sorted[i + 1] === name;
   },
   /** The source files under a folder whose text names `word` (recursive; .ts, .tsx, .js, .mjs). */
   filesNaming(dir: string, word: string): string[] {
@@ -200,7 +203,7 @@ function layerM() {
     .map((e) => e.name);
   assert(
     'M',
-    `M1 ${MIGRATION} sorts straight after ${PREVIOUS}, and is the last`,
+    `M1 ${MIGRATION} sorts straight after ${PREVIOUS}`,
     CHECKS.sortsRightAfter(folders, PREVIOUS, MIGRATION)
   );
   const files = fs.existsSync(path.join(ROOT, MIGRATIONS, MIGRATION))
