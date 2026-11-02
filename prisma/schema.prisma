@@ -495,6 +495,16 @@ model PersonEvent {
   /// on reload. Setting this true never grants messageability, and setting it false
   /// never removes it — read it for layout, never for a send decision.
   isYoungPerson        Boolean            @default(false)
+  /// GTC-449 (rulings 2, 15 and 23): the host's "decide later" for a CHILD — she has
+  /// not yet decided whether Gather may message this child. ONLY MEANINGFUL WHILE
+  /// `householdRole` IS CHILD. It is NEVER an input to messaging, links or counts:
+  /// `householdRole` stays the sole gate (Moment 4 §10.6, absolute), so a child on
+  /// decide later is excluded from every send, link, directory and headcount exactly
+  /// as a plain child is. The contact details such a child may be holding on `Person`
+  /// are held, never used, until she chooses to message. Read it for the host's own
+  /// screens (the form, the card, pre-flight), never for a send decision. A yes/no,
+  /// not an empty state: every row reads "no" until she chooses it.
+  messagingUndecided   Boolean            @default(false)
   /// [[GTC-355]] Q2 — "Just attending": the host's Moment 3 mark that this person is coming to
   /// eat and needs nothing to bring. It takes them out of Moment 3's unplaced count and out of
   /// Gather's suggestions, and NOTHING ELSE. It is never read by the press, the chooser, the
