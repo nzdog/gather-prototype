@@ -28,6 +28,8 @@ import path from 'path';
 import { spawnSync } from 'child_process';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+// [[GTC-447]]: the helper before the page; it sets up Next's request stores the page now needs.
+import { drawInNext, type Drawn } from './helpers/next-request-scope';
 // Imported statically, as GTC-394 ruled for the demo page (a dynamic import() would give the page
 // a second toast context if it ever used one).
 import DemoPage from '../src/app/demo/page';
@@ -616,11 +618,10 @@ export const CHECKS = {
       !/\/glance/.test(both) &&
       !/fetch\('\/api\/demo\/session',\s*\{\s*method:\s*'POST'\s*\}\)/.test(both) &&
       !/useToast|toast\./.test(both) &&
-      // [[GTC-430]]: the one button, in its own client file, drawn only in development AND with
-      // the switch on.
-      /process\.env\.NODE_ENV === 'development' && isDemoStartOn\(\) \? \(\s*<TryItYourselfButton\b/.test(
-        src
-      ) &&
+      // [[GTC-430]], [[GTC-447]]: the one button, in its own client file, drawn only with the
+      // switch on (no NODE_ENV).
+      /\{isDemoStartOn\(\) \? \(\s*<TryItYourselfButton\b/.test(src) &&
+      !/NODE_ENV/.test(src) &&
       /<button\b/.test(button)
     );
   },
@@ -671,11 +672,10 @@ export const CHECKS = {
     const both = `${src}\n${button}`;
     return (
       /const SAMPLE_PAGE = '\/demo\/new';/.test(src) &&
-      // [[GTC-430]]: the page hands the sample's page to the button (development AND the switch
-      // on), and the button opens what it is handed.
-      /process\.env\.NODE_ENV === 'development' && isDemoStartOn\(\) \? \(\s*<TryItYourselfButton href=\{SAMPLE_PAGE\}/.test(
-        src
-      ) &&
+      // [[GTC-430]], [[GTC-447]]: the page hands the sample's page to the button (the switch on,
+      // no NODE_ENV), and the button opens what it is handed.
+      /\{isDemoStartOn\(\) \? \(\s*<TryItYourselfButton href=\{SAMPLE_PAGE\}/.test(src) &&
+      !/NODE_ENV/.test(src) &&
       /<button\s+onClick=\{\(\) => window\.location\.assign\(href\)\}/.test(button) &&
       !/fetch\(/.test(both) &&
       !/useState|DEMO_START_WORDS/.test(both)
@@ -840,25 +840,25 @@ export const CHECKS = {
 async function layerF() {
   section('F — items 1 and 2: the front page has only "Try it yourself"');
   /**
-   * The page as a build for `env` draws it (the button is development-only until part D).
+   * The page as a server for `env` draws it.
    * [[GTC-430]]: the page reads the demo start switch now, so it is drawn with the switch on, as
    * this Mac's .env.local has it and as every gate drew it, whatever the runner's setting.
+   * [[GTC-447]]: the page is async now (`await connection()` first), so it is called inside Next's
+   * own request scope; the switch alone decides, in production as in development.
    */
-  const draw = (env: string) => {
-    const was = process.env.NODE_ENV;
-    const wasSwitch = process.env.GATHER_DEMO_START;
-    (process.env as any).NODE_ENV = env;
-    process.env.GATHER_DEMO_START = 'on';
-    try {
-      return render(createElement(DemoPage));
-    } finally {
-      (process.env as any).NODE_ENV = was;
-      if (wasSwitch === undefined) delete process.env.GATHER_DEMO_START;
-      else process.env.GATHER_DEMO_START = wasSwitch;
-    }
+  const draw = async (env: string) => {
+    const d = await drawInNext({
+      route: '/demo',
+      scope: 'request',
+      nodeEnv: env,
+      demoStart: 'on',
+      make: () => (DemoPage as () => unknown)(),
+    });
+    if (d.threw) console.log(`    (render threw: ${d.threw})`);
+    return d.html;
   };
-  const dev = draw('development');
-  const prod = draw('production');
+  const dev = await draw('development');
+  const prod = await draw('production');
   assert(
     'F',
     'F1 on the founder’s Mac (development, the switch on): the heading "Gather" and one button, "Try it yourself", and nothing else (no note, GTC-430)',
@@ -867,8 +867,8 @@ async function layerF() {
   );
   assert(
     'F',
-    'F2 in a production build, even with the switch on: the heading "Gather", "Under construction" under it (GTC-430) and no button (until GTC-392 part D)',
-    CHECKS.frontPage(prod, [], [UNDER_CONSTRUCTION]),
+    'F2 in a production build with the switch on: the heading "Gather" and one button, "Try it yourself", as in development (GTC-447: the switch alone decides), no note',
+    CHECKS.frontPage(prod, [TRY_IT], []),
     prod.slice(0, 400)
   );
   assert(
@@ -912,28 +912,23 @@ async function layerN() {
       W.SAMPLE_EVENT_WORDS?.SAVE_FAILED === SAVE_FAILED &&
       Object.keys(W.SAMPLE_EVENT_WORDS ?? {}).length === 4
   );
-  /** The page as the founder's Mac draws it: the layout round the page, in development. */
-  const drawPage = (env: string) => {
-    const was = process.env.NODE_ENV;
-    (process.env as any).NODE_ENV = env;
-    try {
-      if (!PAGE?.default || !LAYOUT?.default) return { html: '', threw: '' };
-      try {
-        return {
-          html: renderToStaticMarkup(
-            createElement(LAYOUT.default, null, createElement(PAGE.default))
-          ),
-          threw: '',
-        };
-      } catch (err) {
-        const e = err as { message?: string; digest?: string };
-        return { html: '', threw: `${e.digest ?? ''} ${e.message ?? ''}` };
-      }
-    } finally {
-      (process.env as any).NODE_ENV = was;
-    }
+  /**
+   * The page as the founder's Mac draws it: the layout round the page, in development.
+   * [[GTC-447]]: the layout is async now (`await connection()` first) and opens only with the
+   * switch on, so it is called inside Next's own request scope with the switch as given (on, as
+   * this Mac's .env.local has it, unless a check says otherwise; undefined = unset).
+   */
+  const drawPage = async (env: string, demoStart: string | undefined): Promise<Drawn> => {
+    if (!PAGE?.default || !LAYOUT?.default) return { html: '', threw: '', digest: '' };
+    return drawInNext({
+      route: '/demo/new',
+      scope: 'request',
+      nodeEnv: env,
+      demoStart,
+      make: () => LAYOUT.default({ children: createElement(PAGE.default) }),
+    });
   };
-  const dev = drawPage('development');
+  const dev = await drawPage('development', 'on');
   const html = dev.html;
   const day = sampleDay(new Date());
   const field = (id: string) => CHECKS.input(html, id);
@@ -985,14 +980,16 @@ async function layerN() {
       CHECKS.noPayment(code(NEW_LIB)) &&
       CHECKS.noPayment(code(NEW_LAYOUT))
   );
-  const prod = drawPage('production');
+  const prodOff = await drawPage('production', undefined);
+  const devOff = await drawPage('development', 'off');
   assert(
     'N',
-    'N6 development-only: in a production build the page is a plain not-found',
+    'N6 with the switch off the page is a plain not-found, in production and in development (GTC-447)',
     html.length > 0 &&
-      prod.html === '' &&
-      /NEXT_HTTP_ERROR_FALLBACK;404|NEXT_NOT_FOUND/.test(prod.threw),
-    prod.threw.slice(0, 120)
+      [prodOff, devOff].every(
+        (d) => d.html === '' && /NEXT_HTTP_ERROR_FALLBACK;404|NEXT_NOT_FOUND/.test(d.threw)
+      ),
+    `${prodOff.threw.slice(0, 80)} | ${devOff.threw.slice(0, 80)}`
   );
   // The flow, driven by a hand-written fetch.
   const start = LIB?.startSampleWithDetails as
@@ -1099,7 +1096,7 @@ async function layerN() {
   );
   assert(
     'N',
-    'N12 /demo’s "Try it yourself" (still development-only, and only with the switch on: GTC-430) opens /demo/new, and /demo fetches nothing',
+    'N12 /demo’s "Try it yourself" (only with the switch on: GTC-430, GTC-447) opens /demo/new, and /demo fetches nothing',
     CHECKS.demoDoor(code(DEMO_PAGE), code(DEMO_BUTTON))
   );
   assert(

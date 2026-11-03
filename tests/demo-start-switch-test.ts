@@ -8,6 +8,8 @@
  *     before the limits and before anything is read or written;
  *   - the old no-body shape is unchanged (GTC-015: the route stays reachable in production);
  *   - the button and page gates (NODE_ENV, /demo and /demo/new) stay exactly as they are;
+ *     [[GTC-447]] (founder, 3 Nov 2026): retired. Both now read this switch alone, after
+ *     `await connection()`, and name no NODE_ENV; S2's last check says so;
  *   - the variable is NOT set on Railway: production stays closed until the founder turns it on
  *     at launch. This Mac's `.env.local` sets it, so the demo and its suites keep working here.
  *
@@ -368,12 +370,23 @@ function layerS2() {
     'the old no-body shape is gone, and every body but the copy shape gets 404 first',
     CHECKS.noBodyGone(src)
   );
-  const gatesSame =
-    spawnSync('git', ['diff', '--quiet', 'HEAD', '--', ...GATES], { cwd: ROOT }).status === 0;
+  // [[GTC-447]]: this asked that the two NODE_ENV gates stay byte for byte as HEAD held them.
+  // The switch alone decides now, so it asks that both read it after connection(), with no
+  // NODE_ENV, and no longer compares with HEAD.
+  const readsSwitch = (g: string) => {
+    const c = stripComments(read(g));
+    const conn = c.indexOf('await connection();');
+    return (
+      /import \{ connection \} from 'next\/server';/.test(c) &&
+      conn >= 0 &&
+      c.indexOf('isDemoStartOn()') > conn &&
+      !/NODE_ENV/.test(c)
+    );
+  };
   assert(
     'S2',
-    'the NODE_ENV gates on /demo and /demo/new are byte for byte as HEAD holds them',
-    gatesSame && GATES.every((g) => read(g).includes('process.env.NODE_ENV'))
+    'the /demo page and the /demo/new layout read the switch through isDemoStartOn() after connection(), and name no NODE_ENV (GTC-447)',
+    GATES.every(readsSwitch)
   );
 }
 

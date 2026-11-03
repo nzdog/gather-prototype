@@ -9,6 +9,11 @@
  *      the sample page keep their development-only guard (the demo opens nowhere new);
  *   3. the front page, its button, the sample page, the routes and the switch are not touched.
  *
+ * [[GTC-447]] (founder, 3 Nov 2026): ruling 2's development-only half is retired. The switch alone
+ * decides, in production as in development: exactly "on" gives the button, anything else the note.
+ * The page is async now (`await connection()` first), so R draws it inside Next's own request
+ * scope (tests/helpers/next-request-scope.ts). R2 and C2 say so; nothing else here changes.
+ *
  * LAYERS
  *   R  the page drawn in this process, NODE_ENV and GATHER_DEMO_START set by hand for each case:
  *      production with the switch unset, "", "true", "1", "ON", "off" and "on"; development with
@@ -31,8 +36,8 @@
 import fs from 'fs';
 import path from 'path';
 import { spawnSync } from 'child_process';
-import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
+// [[GTC-447]]: the helper first; it sets up Next's request stores before the page is loaded.
+import { drawInNext } from './helpers/next-request-scope';
 import DemoPage from '../src/app/demo/page';
 
 const ROOT = path.join(__dirname, '..');
@@ -133,24 +138,19 @@ const walk = (dir: string): string[] => {
   return out;
 };
 
-/** The page as a build for `nodeEnv` draws it, with the switch as given (undefined = unset). */
-function draw(nodeEnv: string, demoStart: string | undefined): string {
-  const env = process.env as Record<string, string | undefined>;
-  const wasEnv = env.NODE_ENV;
-  const wasSwitch = env[SWITCH];
-  env.NODE_ENV = nodeEnv;
-  if (demoStart === undefined) delete env[SWITCH];
-  else env[SWITCH] = demoStart;
-  try {
-    return renderToStaticMarkup(createElement(DemoPage));
-  } catch (e) {
-    return `THREW ${(e as Error).message}`;
-  } finally {
-    if (wasEnv === undefined) delete env.NODE_ENV;
-    else env.NODE_ENV = wasEnv;
-    if (wasSwitch === undefined) delete env[SWITCH];
-    else env[SWITCH] = wasSwitch;
-  }
+/**
+ * The page as a server for `nodeEnv` draws it, with the switch as given (undefined = unset).
+ * [[GTC-447]]: called inside Next's own request scope, as the page is async now.
+ */
+async function draw(nodeEnv: string, demoStart: string | undefined): Promise<string> {
+  const d = await drawInNext({
+    route: '/demo',
+    scope: 'request',
+    nodeEnv,
+    demoStart,
+    make: () => (DemoPage as () => unknown)(),
+  });
+  return d.threw ? `THREW ${d.threw}` : d.html;
 }
 
 // ── CHECKS-START: pure over their inputs ─────────────────────────────────────
@@ -199,23 +199,25 @@ export const CHECKS = {
     return m ? m[2] : '';
   },
   /**
-   * The page reads the switch only through isDemoStartOn(), once, inside its render function, in
-   * the button's condition; never at module scope, never by its name.
+   * The page reads the switch only through isDemoStartOn(), once, after `await connection()`,
+   * inside its async render function, in the button's condition; never at module scope, never by
+   * its name, and no other setting (no process.env) ([[GTC-447]]).
    */
   readsAtRender(src: string): boolean {
-    const fn = src.indexOf('export default function DemoLandingPage()');
+    const fn = src.indexOf('export default async function DemoLandingPage()');
+    const conn = src.indexOf('await connection();');
     const at = src.indexOf('isDemoStartOn()');
     const before = fn >= 0 ? src.slice(0, fn) : src;
     return (
       fn >= 0 &&
+      conn > fn &&
       count(src, 'isDemoStartOn()') === 1 &&
-      at > fn &&
+      at > conn &&
       !before.includes('isDemoStartOn()') &&
       /import \{ isDemoStartOn \} from '@\/lib\/demo\/start-switch';/.test(src) &&
-      /\{process\.env\.NODE_ENV === 'development' && isDemoStartOn\(\) \? \(/.test(src) &&
+      /\{isDemoStartOn\(\) \? \(/.test(src) &&
       !src.includes(SWITCH) &&
-      JSON.stringify(src.match(/process\.env(\.[A-Za-z_]+|\[)/g)) ===
-        JSON.stringify(['process.env.NODE_ENV'])
+      !/process\.env/.test(src)
     );
   },
   /** The button file: a client file that reads no setting and never the switch. */
@@ -250,7 +252,7 @@ export const CHECKS = {
 };
 // ── CHECKS-END ───────────────────────────────────────────────────────────────
 
-function layerR() {
+async function layerR() {
   section('R — the page as each build draws it, the switch set by hand');
   const offValues: Array<[string, string | undefined]> = [
     ['unset', undefined],
@@ -260,7 +262,8 @@ function layerR() {
     ['"ON"', 'ON'],
     ['"off"', 'off'],
   ];
-  const prodOff = offValues.map(([name, v]) => [name, draw('production', v)] as const);
+  const prodOff: Array<readonly [string, string]> = [];
+  for (const [name, v] of offValues) prodOff.push([name, await draw('production', v)] as const);
   const badProd = prodOff.filter(([, html]) => !CHECKS.noteOnly(html)).map(([n]) => n);
   assert(
     'R',
@@ -268,20 +271,20 @@ function layerR() {
     badProd.length === 0,
     badProd.length ? `not the note for: ${badProd.join(', ')}` : undefined
   );
-  const prodOn = draw('production', 'on');
+  const prodOn = await draw('production', 'on');
   assert(
     'R',
-    'R2 production with the switch exactly "on": still the note and no button (the demo opens nowhere new)',
-    CHECKS.noteOnly(prodOn),
+    'R2 production with the switch exactly "on": the button "Try it yourself" and no note (GTC-447: the switch alone decides)',
+    CHECKS.buttonOnly(prodOn),
     prodOn.slice(0, 300)
   );
-  const devOff = (
-    [
-      ['unset', undefined],
-      ['"off"', 'off'],
-      ['"ON"', 'ON'],
-    ] as Array<[string, string | undefined]>
-  ).map(([name, v]) => [name, draw('development', v)] as const);
+  const devOff: Array<readonly [string, string]> = [];
+  for (const [name, v] of [
+    ['unset', undefined],
+    ['"off"', 'off'],
+    ['"ON"', 'ON'],
+  ] as Array<[string, string | undefined]>)
+    devOff.push([name, await draw('development', v)] as const);
   const badDev = devOff.filter(([, html]) => !CHECKS.noteOnly(html)).map(([n]) => n);
   assert(
     'R',
@@ -289,7 +292,7 @@ function layerR() {
     badDev.length === 0,
     badDev.length ? `not the note for: ${badDev.join(', ')}` : undefined
   );
-  const devOn = draw('development', 'on');
+  const devOn = await draw('development', 'on');
   assert(
     'R',
     'R4 development with the switch exactly "on": the button "Try it yourself" and no note',
@@ -303,10 +306,10 @@ function layerR() {
     all.length === 11 && all.every((h) => CHECKS.heading(h))
   );
   const turns = [
-    draw('development', 'on'),
-    draw('development', undefined),
-    draw('development', 'on'),
-    draw('development', 'off'),
+    await draw('development', 'on'),
+    await draw('development', undefined),
+    await draw('development', 'on'),
+    await draw('development', 'off'),
   ];
   assert(
     'R',
@@ -329,7 +332,7 @@ function layerC() {
   );
   assert(
     'C',
-    'C2 the page reads the switch only through isDemoStartOn(), once, inside its render, in the button’s condition; NODE_ENV is its only other setting',
+    'C2 the page reads the switch only through isDemoStartOn(), once, after `await connection()`, inside its async render, in the button’s condition; it reads no other setting (no process.env) (GTC-447)',
     CHECKS.readsAtRender(stripComments(page))
   );
   assert(
@@ -406,9 +409,9 @@ function layerU() {
   );
 }
 
-function main() {
+async function main() {
   console.log('GTC-430 — /demo says "Under construction" wherever the button is not');
-  layerR();
+  await layerR();
   layerC();
   layerU();
   console.log(`\n${passed} passed, ${failed} failed`);

@@ -31,6 +31,8 @@ import path from 'path';
 import { spawnSync } from 'child_process';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+// [[GTC-447]]: the helper before the page; it sets up Next's request stores the page now needs.
+import { drawInNext } from './helpers/next-request-scope';
 // Tweak 3 (GTC-394 ruling, 19 Oct 2026): the demo page and the toast provider imported statically,
 // as the Moment 3 suites do; a dynamic import() would give the page a second toast context.
 import DemoPage from '../src/app/demo/page';
@@ -863,11 +865,12 @@ export const CHECKS = {
       button.length > 100 &&
       !/Sarah|handleOpen/.test(both) &&
       /const SAMPLE_PAGE = '\/demo\/new';/.test(src) &&
-      // [[GTC-430]]: drawn only in development AND with the switch on, handed the sample's page;
-      // the button, in its own client file, opens what it is handed.
-      /process\.env\.NODE_ENV === 'development' && isDemoStartOn\(\) \? \(\s*<TryItYourselfButton href=\{SAMPLE_PAGE\} label=\{TRY_IT_YOURSELF\} \/>/.test(
+      // [[GTC-430]], [[GTC-447]]: drawn only with the switch on (no NODE_ENV), handed the
+      // sample's page; the button, in its own client file, opens what it is handed.
+      /\{isDemoStartOn\(\) \? \(\s*<TryItYourselfButton href=\{SAMPLE_PAGE\} label=\{TRY_IT_YOURSELF\} \/>/.test(
         src
       ) &&
+      !/NODE_ENV/.test(src) &&
       /<button\s+onClick=\{\(\) => window\.location\.assign\(href\)\}/.test(button) &&
       !/fetch\(/.test(both) &&
       !both.includes('/api/demo/tokens') &&
@@ -1468,25 +1471,26 @@ async function layerO() {
 async function layerD() {
   section('D — tweak 3: the first page, two buttons; Sarah on the board');
   /**
-   * The page as a build for `env` draws it (the copy button is development-only, GTC-392 Q5).
+   * The page as a server for `env` draws it.
    * [[GTC-430]]: the page reads the demo start switch now, so it is drawn with the switch on, as
    * this Mac's .env.local has it and as every gate drew it, whatever the runner's setting.
+   * [[GTC-447]]: the page is async now (`await connection()` first), so it is called inside Next's
+   * own request scope; the switch alone decides, in production as in development.
    */
-  const draw = (env: string) => {
-    const was = process.env.NODE_ENV;
-    const wasSwitch = process.env.GATHER_DEMO_START;
-    (process.env as any).NODE_ENV = env;
-    process.env.GATHER_DEMO_START = 'on';
-    try {
-      return render(createElement(ToastProvider as any, null, createElement(DemoPage)));
-    } finally {
-      (process.env as any).NODE_ENV = was;
-      if (wasSwitch === undefined) delete process.env.GATHER_DEMO_START;
-      else process.env.GATHER_DEMO_START = wasSwitch;
-    }
+  const draw = async (env: string) => {
+    const d = await drawInNext({
+      route: '/demo',
+      scope: 'request',
+      nodeEnv: env,
+      demoStart: 'on',
+      make: async () =>
+        createElement(ToastProvider as any, null, await (DemoPage as () => unknown)()),
+    });
+    if (d.threw) console.log(`    (render threw: ${d.threw})`);
+    return d.html;
   };
-  const dev = draw('development');
-  const prod = draw('production');
+  const dev = await draw('development');
+  const prod = await draw('production');
   assert(
     'D',
     'D1 on the founder’s Mac (development, the switch on): the heading "Gather" and one button, "Try it yourself", and nothing else (GTC-395: "Sarah demo" goes; no note, GTC-430)',
@@ -1495,13 +1499,13 @@ async function layerD() {
   );
   assert(
     'D',
-    'D2 in a production build, even with the switch on: the heading, "Under construction" under it and no button (GTC-430), nothing else (GTC-395: "Sarah demo" goes; the copy button waits for part D)',
-    CHECKS.demoPage(prod, false),
+    'D2 in a production build with the switch on: the heading and one button, "Try it yourself", as in development, and nothing else (GTC-447: the switch alone decides; GTC-395: "Sarah demo" goes)',
+    CHECKS.demoPage(prod, true),
     prod.slice(0, 400)
   );
   assert(
     'D',
-    'D3 the copy door, development-only and only with the switch on (GTC-430), opens the sample’s own page (GTC-395 item 3) from its own client file; the Sarah door gone (GTC-395); no tokens fetch, no Reset',
+    'D3 the copy door, only with the switch on (GTC-430, GTC-447), opens the sample’s own page (GTC-395 item 3) from its own client file; the Sarah door gone (GTC-395); no tokens fetch, no Reset',
     CHECKS.demoSource(code(DEMO_PAGE), code(DEMO_BUTTON))
   );
   assert(

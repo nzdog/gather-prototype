@@ -18,14 +18,20 @@ import { dayOf, datePairProblem, type DatePairValue } from '@/lib/events/date-pa
 /**
  * /demo/new — [[GTC-395]] item 3 (founder, 20 Oct 2026): a sample starts on its own "Create Your
  * Event" page, pre-filled. A sibling of the real paying page (`src/app/plan/new/page.tsx`, not
- * edited), looking like it, with no price, no payment and nothing of Stripe. Development-only, as
- * the "Try it yourself" button is (this folder's layout gives a plain not-found anywhere else).
+ * edited), looking like it, with no price, no payment and nothing of Stripe.
  *
  * The event's name, dates and venue are hers to change; the host's name, email and phone are shown
  * filled but locked, because the sample uses a throwaway host and ignores them. The button starts
  * the sample and saves her details onto it (`startSampleWithDetails`, src/lib/demo/new-event.ts).
  * If the save fails, the sample still opens, and this page says so in one line first.
+ *
+ * [[GTC-447]]: open where the demo start switch is on, in production too (this folder's layout
+ * gives a plain not-found wherever it is off). Under the button, the privacy line W58.
  */
+
+/** [[GTC-392]] W58 (founder ruling Q16, 1 Nov 2026), under the start button. */
+const PRIVACY_LINE =
+  'Only you can see your sample. It, and everything you type into it, is deleted the next day.';
 
 /** How long the save-failed line shows before the sample opens anyway. */
 const SAVE_ERROR_PAUSE_MS = 3000;
@@ -210,6 +216,10 @@ export default function DemoNewEventPage() {
           >
             {starting ? SAMPLE_EVENT_WORDS.STARTING : SAMPLE_EVENT_WORDS.BUTTON}
           </button>
+
+          <p data-privacy-line="" className="-mt-3 text-sm text-gray-500 text-center">
+            {PRIVACY_LINE}
+          </p>
 
           {line && (
             <p className="text-sm text-gray-700 text-center">
