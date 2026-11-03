@@ -153,7 +153,10 @@ export async function addDemoCrowd(
         householdIds.push(household.id);
         for (const member of h.members) {
           const email = member.address ? crowdAddress(member.name, tag) : null;
-          const person = await tx.person.create({ data: { name: member.name, email } });
+          // [[GTC-441]] T2: a sample person carries the copy's id.
+          const person = await tx.person.create({
+            data: { name: member.name, email, sampleEventId: eventId },
+          });
           await tx.personEvent.create({
             data: {
               personId: person.id,

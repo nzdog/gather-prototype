@@ -238,6 +238,25 @@ const GTC290_ADDED = [
   'POST src/app/api/cron/tnz-status-poll/route.ts',
 ] as const;
 
+/*
+ * ⚠ CHANGED 2026-11-01 BY [[GTC-442]] (founder approval, Zone 6, one opening), BOTH NAMED.
+ *
+ * REMOVED: `GET /api/demo/tokens`, the old shared demo's token vending route. No guard and no
+ * credential, and its lookup had no isDemo filter. It is deleted, not guarded (founder ruling
+ * Q10), so it leaves the HEAD set and the set "closed" since `298b62d` gains it by name. The
+ * "no credential of any kind" count falls 12 → 11.
+ *
+ * ADDED: the sixth cron route, `src/app/api/cron/demo-cleanup/route.ts` (Q9), which deletes
+ * expired sample copies. Unguarded in this file's precise sense, like the other cron routes, and
+ * NOT unauthenticated: both refusals keyed on `CRON_SECRET` are written out in the route file and
+ * pinned `SHARED_SECRET:PROVEN` in the verdict table. Named, as the additions above are.
+ */
+const GTC442_REMOVED = ['GET src/app/api/demo/tokens/route.ts'] as const;
+const GTC442_ADDED = [
+  'GET src/app/api/cron/demo-cleanup/route.ts',
+  'POST src/app/api/cron/demo-cleanup/route.ts',
+] as const;
+
 function keys(result: ScanResult): Set<string> {
   return new Set(unguardedHandlers(result).map(handlerKey));
 }
@@ -404,6 +423,10 @@ function suite1_HeadShape(head: ScanResult) {
    * ⚠ 111 → 112 FILES AND 141 → 143 HANDLERS AT [[GTC-290]] (2026-10-02) — one new cron route,
    * `tnz-status-poll`, carrying `GET` and `POST`. The unguarded count moves 26 → 28 by those two,
    * named in `GTC290_ADDED`; both carry the cron secret, so the "no credential" count stays 12.
+   *
+   * ⚠ 143 → 144 HANDLERS AT [[GTC-442]] (2026-11-01), FILES UNCHANGED AT 112 — one route file
+   * deleted (`demo/tokens`, a `GET`) and one added (`cron/demo-cleanup`, a `GET` and a `POST`).
+   * The unguarded count moves 28 → 29; see `GTC442_REMOVED` and `GTC442_ADDED`.
    */
   logTest(
     'the scanner discovers exactly 112 route files under src/app/api',
@@ -412,8 +435,8 @@ function suite1_HeadShape(head: ScanResult) {
   );
 
   logTest(
-    'the scanner enumerates exactly 143 exported HTTP handlers',
-    head.handlers.length === 143,
+    'the scanner enumerates exactly 144 exported HTTP handlers',
+    head.handlers.length === 144,
     `found ${head.handlers.length}`
   );
 
@@ -427,9 +450,10 @@ function suite1_HeadShape(head: ScanResult) {
   // ⚠ 25 → 27: [[GTC-296]]'s two public unsubscribe handlers, both named in `GTC296_ADDED`.
   // ⚠ 27 → 26 at [[GTC-264]] / [[GTC-229]]: two removed, one added. See `GTC229_REMOVED`.
   // ⚠ 26 → 28 at [[GTC-290]]: the TNZ status poll's two cron handlers, named in `GTC290_ADDED`.
+  // ⚠ 28 → 29 at [[GTC-442]]: the tokens route deleted, the clean-up's two cron handlers added.
   logTest(
-    'exactly 28 handlers carry no session or token guard at HEAD',
-    keys(head).size === 28,
+    'exactly 29 handlers carry no session or token guard at HEAD',
+    keys(head).size === 29,
     `found ${keys(head).size}: ${[...keys(head)].sort().join(', ')}`
   );
 
@@ -444,9 +468,11 @@ function suite1_HeadShape(head: ScanResult) {
   // removed `sms/inbound` route was never in the inventory, so nothing leaves it.
   // ⚠ 111/141 → 112/143 and 85 → 86 at [[GTC-290]]: the TNZ status poll, classified CUSTOM — the
   // first cron route in the inventory (the other four are GTC-354's).
+  // ⚠ 112/143 → 112/144 and 86 stays 86 at [[GTC-442]]: the tokens route's entry out, the
+  // clean-up's in (CUSTOM, as the TNZ status poll).
   logTest(
     'the surface is larger than the retired inventory could express (86 entries)',
-    head.files.length === 112 && head.handlers.length === 143,
+    head.files.length === 112 && head.handlers.length === 144,
     `files ${head.files.length}, handlers ${head.handlers.length}`
   );
 }
@@ -527,15 +553,17 @@ function suite2_Gtc267Control(head: ScanResult, pre: ScanResult) {
   // The set equality is the real assertion: not "at least", but "exactly".
   const closed = sortedDiff(preKeys, headKeys);
   // ⚠ 12 → 14 at [[GTC-264]] / [[GTC-229]]: `sms/inbound` was deleted, not guarded.
+  // ⚠ 14 → 15 at [[GTC-442]]: `demo/tokens` was deleted, not guarded.
   const expectedClosed = [
     ...GTC267_NINE,
     GTC267_TENTH,
     ...GTC273_ALSO_CLOSED,
     ...GTC229_REMOVED,
+    ...GTC442_REMOVED,
   ].sort();
   logTest(
-    'the set closed between the two commits is EXACTLY GTC-267’s ten, GTC-273’s two and ' +
-      'GTC-229’s two removed, no more and no fewer',
+    'the set closed between the two commits is EXACTLY GTC-267’s ten, GTC-273’s two, ' +
+      'GTC-229’s two removed and GTC-442’s one removed, no more and no fewer',
     JSON.stringify(closed) === JSON.stringify(expectedClosed),
     `got ${closed.length}: ${closed.join(', ')}`
   );
@@ -544,17 +572,20 @@ function suite2_Gtc267Control(head: ScanResult, pre: ScanResult) {
   // ⚠ 3 → 5: [[GTC-296]]'s two, added by name for the reason `GTC296_ADDED` records.
   // ⚠ 5 → 6 at [[GTC-264]]: the TNZ webhook, named in `GTC264_ADDED`.
   // ⚠ 6 → 8 at [[GTC-290]]: the TNZ status poll's two, named in `GTC290_ADDED`.
+  // ⚠ 8 → 10 at [[GTC-442]]: the clean-up's two, named in `GTC442_ADDED`.
   const expectedOpened = [
     GTC267_ADDED,
     ...GTC189_CRON_ADDED,
     ...GTC296_ADDED,
     ...GTC264_ADDED,
     ...GTC290_ADDED,
+    ...GTC442_ADDED,
   ].sort();
   logTest(
-    'exactly eight handlers became unguarded — clone-source, the press drain, the two ' +
-      'unsubscribe handlers, the TNZ webhook and the TNZ status poll’s two; the drain, the ' +
-      'webhook and the poll carry a SHARED_SECRET the verdict table pins as PROVEN',
+    'exactly ten handlers became unguarded — clone-source, the press drain, the two ' +
+      'unsubscribe handlers, the TNZ webhook, the TNZ status poll’s two and the demo ' +
+      'clean-up’s two; the drain, the webhook, the poll and the clean-up carry a ' +
+      'SHARED_SECRET the verdict table pins as PROVEN',
     JSON.stringify(opened) === JSON.stringify(expectedOpened),
     `got ${opened.length}: ${opened.join(', ')}`
   );
@@ -568,7 +599,7 @@ function suite2_Gtc267Control(head: ScanResult, pre: ScanResult) {
    * because nothing goes red to tell you. Slice 5c updated both.
    */
   logTest(
-    'the arithmetic closes: 34 - 14 + 8 = 28',
+    'the arithmetic closes: 34 - 15 + 10 = 29',
     preKeys.size - closed.length + opened.length === headKeys.size,
     `${preKeys.size} - ${closed.length} + ${opened.length} !== ${headKeys.size}`
   );
@@ -751,27 +782,30 @@ function suite5_HardCasesAtHead(head: ScanResult) {
   // an unset variable disabled the check silently and three SMS sender routes answered
   // 200 to anyone. The assertion below USED TO ASSERT THAT STATE, pinned so it could
   // not change while the ticket was open. It is now pointed at the fixed state.
+  //
+  // ⚠ SIX → EIGHT AT [[GTC-442]]: the demo clean-up's GET and POST join the three routes here.
   const cronFiles = [
     'src/app/api/cron/nudges/route.ts',
     'src/app/api/cron/wrap-up-dispatch/route.ts',
     'src/app/api/cron/decide-by-followups/route.ts',
+    'src/app/api/cron/demo-cleanup/route.ts',
   ];
   const cron = head.handlers.filter((h) => cronFiles.includes(h.filePath));
-  logTest('all six cron handlers are found', cron.length === 6, `found ${cron.length}`);
+  logTest('all eight cron handlers are found', cron.length === 8, `found ${cron.length}`);
   logTest(
     'no cron handler carries a session or token guard',
-    cron.length === 6 && cron.every((h) => !h.guarded),
+    cron.length === 8 && cron.every((h) => !h.guarded),
     'a CRON_SECRET comparison is a shared secret, not a session guard'
   );
   logTest(
     'every cron handler carries a SHARED_SECRET credential, found through the helper or inline',
-    cron.length === 6 &&
+    cron.length === 8 &&
       cron.every((h) => h.otherCredentials.some((c) => c.kind === 'SHARED_SECRET')),
-    `detected on ${cron.filter((h) => h.otherCredentials.some((c) => c.kind === 'SHARED_SECRET')).length}/6`
+    `detected on ${cron.filter((h) => h.otherCredentials.some((c) => c.kind === 'SHARED_SECRET')).length}/8`
   );
   logTest(
     'NO cron handler is flagged FAIL-OPEN any more (GTC-270 — do not relax this to make it pass)',
-    cron.length === 6 && cron.every((h) => h.otherCredentials.every((c) => !c.failOpen)),
+    cron.length === 8 && cron.every((h) => h.otherCredentials.every((c) => !c.failOpen)),
     'a cron handler is fail-open again: an unset CRON_SECRET would admit every caller ' +
       'to an SMS sender. Fix the route so it refuses when the secret is not configured ' +
       '— suite 12 in tests/security-validation.ts holds the behaviour. Never satisfy ' +
@@ -848,7 +882,8 @@ function suite5_HardCasesAtHead(head: ScanResult) {
   // The count did NOT move when GTC-269 was fixed, and that is the correct result,
   // not a stale number. GTC-269 closed a credential-scope defect, not a missing
   // guard: `POST /demo/session` is still callable by anyone, so it is still one of
-  // these twelve. See the assertion immediately below for why that is deliberate.
+  // these eleven (twelve before GTC-442 deleted the tokens route). See the assertion
+  // immediately below for why that is deliberate.
   const noCredential = head.handlers.filter((h) => !h.guarded && h.otherCredentials.length === 0);
   logTest(
     // ⚠ THIS ASSERTION CATCHES TWO OF GTC-273's THIRTEEN FAIL-OPEN REWRITES. THAT IS
@@ -876,8 +911,10 @@ function suite5_HardCasesAtHead(head: ScanResult) {
     // — still a red, still caught, and the incidental property survives the move.
     // ⚠ 14 → 12 AT [[GTC-264]] / [[GTC-229]]: the two `sms/inbound` handlers, which had no
     // credential at all, are deleted; the TNZ webhook that replaces them carries one.
-    'exactly 12 handlers carry no guard and no other credential of any kind',
-    noCredential.length === 12,
+    // ⚠ 12 → 11 AT [[GTC-442]]: `GET /api/demo/tokens`, which had no credential at all, is
+    // deleted; the clean-up route that arrives with it carries the cron secret.
+    'exactly 11 handlers carry no guard and no other credential of any kind',
+    noCredential.length === 11,
     `found ${noCredential.length}: ${noCredential.map(handlerKey).sort().join(', ')}`
   );
 
@@ -893,8 +930,8 @@ function suite5_HardCasesAtHead(head: ScanResult) {
   //
   // What is deliberate: this handler requires no credential because GTC-015
   // (`f6e4b41`, 2026-03-08) removed its production gate on purpose, so a stranger
-  // on the deployed site can click "Open Planning Dashboard" on `/demo`. Founder
-  // ruling, 2026-09-11, reaffirmed it.
+  // on the deployed site can try the demo. Founder ruling, 2026-09-11, reaffirmed it;
+  // since [[GTC-442]] the route's one shape starts a visitor's own sample copy.
   //
   // Where the containment actually lives — and it is NOT here. GTC-269's defect was
   // that the route handed back a credential wider than the thing it demoed: a
@@ -1209,23 +1246,27 @@ export function cronSecretAccepted(
   // GTC-270 achieved this; until now the scanner could only say "not the one shape
   // I recognise". It can now say fail-closed and mean it.
   logTest(
-    'the evaluator proves all six real cron handlers FAIL-CLOSED at HEAD',
+    // ⚠ SIX → EIGHT AT [[GTC-442]]: the demo clean-up's two. A missing file counts as not
+    // proven rather than throwing, so the suite reports instead of stopping.
+    'the evaluator proves all eight real cron handlers FAIL-CLOSED at HEAD',
     (() => {
       const files = [
         'src/app/api/cron/nudges/route.ts',
         'src/app/api/cron/wrap-up-dispatch/route.ts',
         'src/app/api/cron/decide-by-followups/route.ts',
+        'src/app/api/cron/demo-cleanup/route.ts',
       ];
       const fs = require('fs') as typeof import('fs');
       let n = 0;
       for (const f of files) {
+        if (!fs.existsSync(f)) continue;
         const text = fs.readFileSync(f, 'utf-8');
         for (const m of ['GET', 'POST']) {
           const r = evaluateSecretAbsent(f, text, m);
           if (r.verdict === 'FAIL_CLOSED') n++;
         }
       }
-      return n === 6;
+      return n === 8;
     })(),
     'GTC-270 made these fail closed; the scanner must be able to say so'
   );
@@ -1763,6 +1804,12 @@ const HEAD_VERDICTS: ReadonlyArray<readonly [string, boolean, string]> = [
     false,
     'SHARED_SECRET:PROVEN+SHARED_SECRET:PROVEN',
   ],
+  [
+    // [[GTC-442]] — the demo clean-up. Both refusing ifs written out in the route file.
+    'GET src/app/api/cron/demo-cleanup/route.ts',
+    false,
+    'SHARED_SECRET:PROVEN+SHARED_SECRET:PROVEN',
+  ],
   ['GET src/app/api/cron/nudges/route.ts', false, 'SHARED_SECRET:PROVEN+SHARED_SECRET:PROVEN'],
   [
     // [[GTC-290]] — the TNZ status poll. Both refusing ifs written out in the route file.
@@ -1783,7 +1830,6 @@ const HEAD_VERDICTS: ReadonlyArray<readonly [string, boolean, string]> = [
     false,
     'SHARED_SECRET:PROVEN+SHARED_SECRET:PROVEN',
   ],
-  ['GET src/app/api/demo/tokens/route.ts', false, ''],
   ['GET src/app/api/events/[id]/clone-source/route.ts', false, ''],
   ['GET src/app/api/events/[id]/tokens/route.ts', true, 'CREDENTIAL_COLUMN:PROVEN'],
   ['GET src/app/api/gather/[eventId]/directory/route.ts', false, ''],
@@ -1808,6 +1854,12 @@ const HEAD_VERDICTS: ReadonlyArray<readonly [string, boolean, string]> = [
   ['POST src/app/api/billing/checkout/route.ts', false, ''],
   [
     'POST src/app/api/cron/decide-by-followups/route.ts',
+    false,
+    'SHARED_SECRET:PROVEN+SHARED_SECRET:PROVEN',
+  ],
+  [
+    // [[GTC-442]] — the demo clean-up. Same shape as its siblings.
+    'POST src/app/api/cron/demo-cleanup/route.ts',
     false,
     'SHARED_SECRET:PROVEN+SHARED_SECRET:PROVEN',
   ],

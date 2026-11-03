@@ -10,6 +10,7 @@ import { hostHasMembership } from '@/lib/households/hostHousehold';
 import { findOrCreateCapturedPerson } from '@/lib/households/capturePerson';
 import { ChannelValidationError } from '@/lib/households/reconcileMembers';
 import { addDemoCrowd } from '@/lib/demo/crowd';
+import { addDemoReplies } from '@/lib/demo/replies';
 
 // GET /api/events/[id]/households - List households for event
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -106,6 +107,20 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         orderBy: { createdAt: 'asc' },
       });
       return NextResponse.json({ households: crowdHouseholds }, { status: 201 });
+    }
+
+    /*
+     * [[GTC-445]] — THE THIRD SHAPE: `{ demoReplies: true }` makes a sample copy's guests answer,
+     * through their own answer writer, in one transaction, once (founder rulings, 1 Nov 2026, Q7).
+     * Refused 409, writing nothing, on any event that is not a sample copy (W55), a second time
+     * (W53) and with nobody to answer (W56). Read after the guard, as the crowd's shape is.
+     */
+    if ((body as { demoReplies?: unknown } | null)?.demoReplies === true) {
+      const replies = await addDemoReplies(prisma, eventId);
+      if (!replies.ok) {
+        return NextResponse.json({ error: replies.words, code: replies.code }, { status: 409 });
+      }
+      return NextResponse.json({ answered: replies.answered });
     }
 
     const { primaryContact, partner, helpers, littleCount, guests, contactPersonEventId } = body;

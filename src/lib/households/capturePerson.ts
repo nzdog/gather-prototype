@@ -26,6 +26,11 @@ import { isDemoEvent } from '@/lib/demo/send-wall';
  * [[GTC-392]] Q4 — ON A SAMPLE EVENT the match looks only at people already on that sample, so a
  * stranger typing a real guest's address and first name makes a NEW person and never reaches the
  * real one's record. Real events keep the rule above exactly.
+ *
+ * [[GTC-441]] T2 — THE SAMPLE MARKER. A person made on a sample carries `sampleEventId`, that
+ * sample's id, and a real event's match leaves every such person out (`sampleEventId: null`), so a
+ * real event never reaches a person made in a sample. "Sample" means `isDemoEvent`, the send wall's
+ * meaning. It is read before the address branch, so a person typed with no address is marked too.
  */
 
 type Db = Prisma.TransactionClient | PrismaClient;
@@ -53,14 +58,16 @@ export async function findOrCreateCapturedPerson(
 ): Promise<Person> {
   const name = input.name.trim();
   const email = input.email || null;
+  const sample = await isDemoEvent(db, input.eventId);
 
   let person: Person | null = null;
   if (email) {
-    const sample = await isDemoEvent(db, input.eventId);
     const candidates = await db.person.findMany({
       where: {
         email: { equals: email, mode: 'insensitive' },
-        ...(sample ? { eventMemberships: { some: { eventId: input.eventId } } } : {}),
+        ...(sample
+          ? { eventMemberships: { some: { eventId: input.eventId } } }
+          : { sampleEventId: null }),
       },
       include: { eventMemberships: { where: { eventId: input.eventId }, select: { id: true } } },
       orderBy: { id: 'asc' },
@@ -85,6 +92,7 @@ export async function findOrCreateCapturedPerson(
         email,
         phoneNumber: input.phoneNumber,
         inviteAnchorAt: input.sentAt || null,
+        sampleEventId: sample ? input.eventId : null,
       },
     });
   }

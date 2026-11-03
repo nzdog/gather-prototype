@@ -86,6 +86,7 @@ import AfterThePress from '@/components/preflight/AfterThePress';
 import EventDetails from '@/components/shared/EventDetails';
 import { DemoBanner } from '@/components/demo/DemoBanner';
 import PretendSend from '@/components/demo/PretendSend';
+import SampleBoardLink from '@/components/demo/SampleBoardLink';
 import { HOST_CARD, HostPill } from '@/components/shared/HostCard';
 import { pretendList, type PretendList } from '@/lib/demo/pretend-send';
 import { COPY_WORDS, isCopyAddress } from '@/lib/demo/copy-address';
@@ -1065,6 +1066,7 @@ export default function PreFlightPage() {
           )}
           {/* [[GTC-392]] part B — what Send would have done, under W2, on a sample only. */}
           {pretend && <PretendSend state={pretend} />}
+          {pretend && <SampleBoardLink eventId={eventId} />}
         </Step>
       </div>
       {/* [[GTC-392]] — the sample event's banner; nothing on a real event. */}

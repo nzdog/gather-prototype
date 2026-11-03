@@ -107,6 +107,33 @@ function applyPairs(base: string, pairs: Pairs): string | null {
   return s;
 }
 
+/**
+ * [[GTC-444]] (the founder, 2 Nov 2026: Ask 4, check P1 only) — on a sample copy, W48 back to the
+ * board: the sampleCopy field and its comment, and the W48 block after "Back to Demo", byte for byte.
+ */
+const GTC444_PAIRS: Pairs = [
+  [
+    'interface ParticipantData {\n  isDemo: boolean;\n',
+    'interface ParticipantData {\n  isDemo: boolean;\n' +
+      "  /** [[GTC-444]] A sample copy's guest page: W48 back to the board. Absent on any other event. */\n" +
+      '  sampleCopy?: true;\n',
+  ],
+  [
+    '              Back to Demo\n            </a>\n          )}\n',
+    '              Back to Demo\n            </a>\n          )}\n' +
+      '          {/* [[GTC-444]] W48, on a sample copy only: back to the board (SAMPLE_BOARD_WORDS). */}\n' +
+      '          {data.sampleCopy && (\n' +
+      '            <a\n' +
+      '              href={`/plan/${data.event.id}/glance`}\n' +
+      '              data-back-to-board=""\n' +
+      '              className="mb-3 ml-4 inline-flex items-center text-sm text-accent hover:text-sage-800"\n' +
+      '            >\n' +
+      '              ← Back to the board\n' +
+      '            </a>\n' +
+      '          )}\n',
+  ],
+];
+
 // ── Files and commits ────────────────────────────────────────────────────────
 const PAGE = 'src/app/p/[token]/page.tsx';
 const SUITE = 'tests/tweaks-i-test.tsx';
@@ -713,7 +740,7 @@ const answeredBox = (html: string) =>
 export const CHECKS = {
   /** P1 — the page is the base with exactly Ticket I's pieces, byte for byte. */
   exactly(now: string, base: string) {
-    const expected = base.length > 1000 ? applyPairs(base, I_PAIRS) : null;
+    const expected = base.length > 1000 ? applyPairs(base, [...I_PAIRS, ...GTC444_PAIRS]) : null;
     return expected !== null && now === expected;
   },
   /** P2 — the read and the two answer calls as before, byte for byte; the imports as before. */
@@ -839,7 +866,7 @@ function layerP(now: string, base: string) {
   section('P — the guest page’s source, against GTC-423’s tip');
   assert(
     'P',
-    'P1 the page is the base’s file with exactly Ticket I’s pieces, byte for byte (the failure flag and the press guard; the new handler; the shown answer; the answered box)',
+    'P1 the page is the base’s file with exactly Ticket I’s pieces, byte for byte (the failure flag and the press guard; the new handler; the shown answer; the answered box), and GTC-444’s (the sampleCopy field and its comment; the W48 block)',
     CHECKS.exactly(now, base)
   );
   assert(

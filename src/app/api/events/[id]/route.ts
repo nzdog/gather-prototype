@@ -8,10 +8,15 @@ import { canEditEvent } from '@/lib/entitlements';
 import { ledgerActorForUser } from '@/lib/auth/actor';
 import { recordChange, fieldChanges, onMaterialChange, MATERIAL_EVENT_FIELDS } from '@/lib/ledger';
 import { isSent } from '@/lib/lifecycle';
+import { copyEventWhere } from '@/lib/demo/copy';
 // GTC-271: EVENT_WIRE_SELECT moved to a shared module so the single-event narrowing and
 // the list narrowing (EVENT_LIST_WIRE_SELECT) are defined in one place and can be read
 // against each other. The field list is unchanged from what GTC-267 shipped.
 import { EVENT_WIRE_SELECT } from '@/lib/events/wire-select';
+
+// [[GTC-449]] W59 (approved 3 Nov 2026): a sample copy's refusal, in its answer's `message`.
+const SAMPLE_COPY_DELETE_WORDS =
+  "A sample event can't be deleted, but there's no need: it, and everything you type into it, is deleted the next day. To start again, sign out and try a new sample event. You can still remove anyone you added.";
 
 // Everything the host can change about the event itself. The material subset
 // (date/venue) additionally fires the F1 re-ask; the rest is versioned only.
@@ -239,6 +244,20 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
           reason: 'SUBSCRIPTION_INACTIVE',
           message: 'Your subscription is inactive. Please update your payment method or upgrade.',
         },
+        { status: 403 }
+      );
+    }
+
+    // [[GTC-449]] A sample copy is not deleted by its visitor. Every limit on copies (the starts and
+    // the day's AI total) counts copy events, so a deleted copy would leave them all; it goes with
+    // the clean-up the next day instead. Read only for a sample (`isDemo`): a real event's delete
+    // makes the same reads and writes as before, and the old shared sample is not a copy.
+    if (
+      existingEvent.isDemo &&
+      (await prisma.event.count({ where: { id: eventId, ...copyEventWhere() } })) > 0
+    ) {
+      return NextResponse.json(
+        { error: 'Cannot delete event', reason: 'SAMPLE_COPY', message: SAMPLE_COPY_DELETE_WORDS },
         { status: 403 }
       );
     }

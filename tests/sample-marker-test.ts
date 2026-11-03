@@ -17,7 +17,8 @@
  *      existing row null, and a raw insert that leaves it out reads null (rolled back)
  *   C  the generated client knows the field: in the scalar list, optional String in the model
  *      map, and a create that leaves it out returns null (rolled back)
- *   N  nothing in src/ or scripts/ names the field yet (T2 adds the first reader and writer)
+ *   N  the files under src/ and scripts/ that name the field are exactly the three T2 writes
+ *      ([[GTC-441]], 1 Nov 2026): capturePerson.ts, crowd.ts and copy.ts
  *   R  the rolled-back probes left no row behind
  *
  * RED before the migration is applied and the client regenerated: D and C red, the rest green.
@@ -128,7 +129,23 @@ export const CHECKS = {
     if (fs.existsSync(dir)) walk(dir);
     return out;
   },
+  /** The two lists hold exactly the same files (order aside, no repeats). */
+  sameFiles(named: string[], expected: readonly string[]): boolean {
+    const a = [...named].sort();
+    const b = [...expected].sort();
+    return new Set(a).size === a.length && a.length === b.length && a.every((f, i) => f === b[i]);
+  },
 };
+
+/** [[GTC-441]] T2: the only files that name the field (the identity rule, the crowd, the host). */
+// [[GTC-442]] (founder ruling Q2, 1 Nov 2026): the clean-up finds a copy's people by the marker,
+// so it is the fourth file that may name it (a reader; the three above are its writers).
+const NAMING_FILES = [
+  'src/lib/households/capturePerson.ts',
+  'src/lib/demo/crowd.ts',
+  'src/lib/demo/copy.ts',
+  'src/lib/demo/cleanup.ts',
+] as const;
 
 // ── The database: gather_demo only ───────────────────────────────────────────
 function databaseName(url: string | undefined): string {
@@ -315,16 +332,16 @@ async function layerC() {
 }
 
 function layerN() {
-  section('N — nothing reads or writes the field yet (T2 adds the first)');
+  section('N — only the three T2 files read or write the field ([[GTC-441]])');
   const named = [
     ...CHECKS.filesNaming(path.join(ROOT, 'src'), FIELD),
     ...CHECKS.filesNaming(path.join(ROOT, 'scripts'), FIELD),
   ];
   assert(
     'N',
-    'N1 no file under src/ or scripts/ names sampleEventId',
-    named.length === 0,
-    `named in: ${named.join(', ')}`
+    'N1 the files under src/ or scripts/ that name sampleEventId are exactly capturePerson.ts, crowd.ts, copy.ts and cleanup.ts',
+    CHECKS.sameFiles(named, NAMING_FILES),
+    `named in: ${named.join(', ') || 'none'}`
   );
 }
 

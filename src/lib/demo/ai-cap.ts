@@ -10,7 +10,8 @@ import { copyEventWhere } from '@/lib/demo/copy';
  * count. A copy, in one short transaction under an advisory lock (so two presses cannot both pass):
  *   - the day's total, the sum of `aiCallsUsed` over copies started since today's NZ midnight, at
  *     or over its number refuses with W6;
- *   - the copy's own allowance is taken by a conditional update; none left refuses with W5;
+ *   - the copy's own allowance is taken by a conditional update; none left refuses with W5, or
+ *     with W57 when the copy has no item at all (no plan to change by hand: [[GTC-446]], Q8 (a));
  *   - otherwise the call is counted BEFORE it is made (a failed call still used one, GTC-237's
  *     rule), and the route skips its own count.
  * Kept out of `src/lib/ai` on purpose: suites run `git diff` on that folder.
@@ -24,6 +25,9 @@ export const DEMO_AI_WORDS = {
     'This sample event has made all the plans it can. You can still change the plan by hand.',
   /** W6 */
   DAY_USED_UP: 'The sample has made all the plans it can for today. Please try again tomorrow.',
+  /** W57 ([[GTC-446]]): the copy's own limit, with no plan to change */
+  NO_PLAN:
+    'This sample has used its 3 tries at making a plan. You can still write the list yourself, or skip the plan and send invites only.',
 } as const;
 
 export type DemoAiLimits = { perCopy: number; perDay: number };
@@ -66,7 +70,12 @@ export async function takeDemoAiCall(
       where: { id: eventId, aiCallsUsed: { lt: limits.perCopy } },
       data: { aiCallsUsed: { increment: 1 } },
     });
-    if (taken.count === 0) return { ok: false, words: DEMO_AI_WORDS.COPY_USED_UP } as const;
+    if (taken.count === 0) {
+      // Items reach an event through its teams; a task row is an item row too.
+      const items = await tx.item.count({ where: { team: { eventId } } });
+      const words = items > 0 ? DEMO_AI_WORDS.COPY_USED_UP : DEMO_AI_WORDS.NO_PLAN;
+      return { ok: false, words } as const;
+    }
     return { ok: true, counted: true } as const;
   });
 }

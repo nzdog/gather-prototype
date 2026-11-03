@@ -121,7 +121,16 @@ export default function EventsPage() {
         method: 'DELETE',
       });
 
-      if (!response.ok) throw new Error('Failed to delete event');
+      if (!response.ok) {
+        // [[GTC-449]] A sample copy is not deleted: its answer carries its own words (W59).
+        const refusal = await response.json().catch(() => null);
+        if (refusal?.reason === 'SAMPLE_COPY' && typeof refusal.message === 'string') {
+          toast.info(refusal.message);
+          closeDeleteModal();
+          return;
+        }
+        throw new Error('Failed to delete event');
+      }
 
       // Reload events
       loadEvents();

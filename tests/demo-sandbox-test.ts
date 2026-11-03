@@ -67,6 +67,8 @@ const W4 = 'Test emails are off in a sample event.';
 const W5 =
   'This sample event has made all the plans it can. You can still change the plan by hand.';
 const W6 = 'The sample has made all the plans it can for today. Please try again tomorrow.';
+const W57 =
+  'This sample has used its 3 tries at making a plan. You can still write the list yourself, or skip the plan and send invites only.';
 const W7 = "You've started a few sample events in the last hour. Please try again a little later.";
 const W8A = 'Lots of people are trying Gather right now. Please try again in a few minutes.';
 const W8B = 'The sample is full for today. Please try again tomorrow.';
@@ -319,9 +321,9 @@ export const CHECKS = {
       // start-limit.ts (checked as before), unused by the page. The page beside it is the two-button
       // page ("Sarah demo"), not the old walkthrough.
       // [[GTC-430]] (founder, 30 Oct 2026): and only with the demo start switch on.
-      /process\.env\.NODE_ENV === 'development' && isDemoStartOn\(\) \? \([\s\S]{0,600}?\bTRY_IT_YOURSELF\b/.test(
-        src
-      ) &&
+      // [[GTC-447]] (founder, 3 Nov 2026): the switch alone, in production too; no NODE_ENV.
+      /\{isDemoStartOn\(\) \? \([\s\S]{0,600}?\bTRY_IT_YOURSELF\b/.test(src) &&
+      !/NODE_ENV/.test(src) &&
       /const TRY_IT_YOURSELF = 'Try it yourself';/.test(src) &&
       // [[GTC-395]] item 3 (founder, 20 Oct 2026): the button opens the sample's own page, and the
       // start (its 409 asking GET /api/events, W10 or W9) is that page's, in src/lib/demo/new-event.ts.
@@ -1373,12 +1375,29 @@ async function main() {
       clobber.status === 409 && (await prisma.session.count()) === sessionsBeforeClobber,
       JSON.stringify({ status: clobber.status })
     );
+    // [[GTC-442]] (founder rulings Q15 and Q2, 1 Nov 2026): part D retires the shared sample, so
+    // this asks that a POST with no body is answered 404 and writes nothing, where it asked that
+    // it still took the shared sample's path.
+    const sessionsBeforeOld = await prisma.session.count();
+    const usersBeforeOld = await prisma.user.count();
     const old = await postStart(ip(3));
+    const sessionsAfterOld = await prisma.session.count();
+    const usersAfterOld = await prisma.user.count();
     assert(
       'E',
-      'E7 CONTROL: no body still takes today’s path, the shared sample (part D retires it)',
-      old.status === 200 && !!sharedDemo && old.body?.eventId === sharedDemo.id,
-      JSON.stringify({ status: old.status, eventId: old.body?.eventId })
+      'E7 a POST with no body answers 404 "Not found", sets no cookie and writes no row (GTC-442)',
+      old.status === 404 &&
+        old.body?.error === 'Not found' &&
+        !old.token &&
+        sessionsAfterOld === sessionsBeforeOld &&
+        usersAfterOld === usersBeforeOld,
+      JSON.stringify({
+        status: old.status,
+        error: old.body?.error,
+        cookie: !!old.token,
+        sessions: sessionsAfterOld - sessionsBeforeOld,
+        users: usersAfterOld - usersBeforeOld,
+      })
     );
     const four: Array<Awaited<ReturnType<typeof postStart>>> = [];
     for (let i = 0; i < 4; i++) four.push(await postStart(ip(4), { body: { start: 'copy' } }));
@@ -1444,29 +1463,47 @@ async function main() {
       aiFull?.ok === false && aiFull?.words === W8B,
       JSON.stringify(aiFull)
     );
-    const t0 = Date.UTC(2026, 9, 18, 3, 0, 0);
-    const visitorOk = ok(() => {
-      const v = `${TAG}-v2`;
-      for (const dt of [0, 10, 20]) LIM.noteStart(v, t0 + dt * 60 * 1000);
-      return true;
-    });
-    const v2a = visitorOk ? await check(`${TAG}-v2`, new Date(t0 + 30 * 60 * 1000), lim({})) : null;
-    const v2b = visitorOk ? await check(`${TAG}-v2`, new Date(t0 + 60 * 60 * 1000), lim({})) : null;
+    // [[GTC-443]] (founder's word, 2 Nov 2026): the count is the database's. Three copies carrying
+    // one visitor's tag, written in process (no route, so no memory anywhere).
+    const v2Tag = randomBytes(4).toString('hex');
+    let v2Made = 0;
+    if (COPY?.startDemoCopy) {
+      for (let i = 0; i < 3; i++) {
+        const c = await COPY.startDemoCopy(prisma, { now: new Date(), visitorTag: v2Tag }).catch(
+          () => null
+        );
+        if (c && (await copyRowsOf(c.eventId))) {
+          fx.sessionTokens.add(c.sessionToken);
+          v2Made++;
+        }
+      }
+    }
+    const v2a = await check(v2Tag, new Date(), lim({}));
+    const v2b = await check(v2Tag, new Date(Date.now() + 61 * 60 * 1000), lim({}));
     assert(
       'E',
-      'E13 one visitor: three starts in an hour, the fourth refused with W7; an hour after the first, one may start again',
-      v2a?.ok === false && v2a?.words === W7 && v2b?.ok === true,
-      JSON.stringify({ v2a, v2b })
+      'E13 one visitor: three copies carrying her tag written in the last hour, the fourth refused with W7 from the database; with the clock an hour on, one may start again',
+      v2Made === 3 && v2a?.ok === false && v2a?.words === W7 && v2b?.ok === true,
+      JSON.stringify({ v2Made, v2a, v2b })
     );
+    // [[GTC-443]] (founder's word, 2 Nov 2026): the ORDER. Both headers: X-Real-IP wins. X-Real-IP
+    // absent or blank: the X-Forwarded-For entry pickForwardedEntry picks (its end is proved at
+    // both ends in test:demo-start-limit).
     assert(
       'E',
-      'E14 the visitor is the first address in x-forwarded-for, then x-real-ip',
-      ok(
-        () =>
-          LIM.visitorOf(new Headers({ 'x-forwarded-for': '203.0.113.7, 10.0.0.1' })) ===
-            '203.0.113.7' &&
-          LIM.visitorOf(new Headers({ 'x-real-ip': '198.51.100.9' })) === '198.51.100.9'
-      )
+      'E14 the visitor is X-Real-IP when both headers come; with X-Real-IP absent or blank, the X-Forwarded-For entry pickForwardedEntry picks',
+      ok(() => {
+        const xff = '203.0.113.7, 10.0.0.1';
+        const picked = LIM.pickForwardedEntry(['203.0.113.7', '10.0.0.1']);
+        return (
+          LIM.visitorOf(new Headers({ 'x-forwarded-for': xff, 'x-real-ip': '198.51.100.9' }))
+            .address === '198.51.100.9' &&
+          ['203.0.113.7', '10.0.0.1'].includes(picked) &&
+          LIM.visitorOf(new Headers({ 'x-forwarded-for': xff })).address === picked &&
+          LIM.visitorOf(new Headers({ 'x-forwarded-for': xff, 'x-real-ip': '  ' })).address ===
+            picked
+        );
+      })
     );
     assert(
       'E',
@@ -1600,13 +1637,13 @@ async function main() {
       f2 =
         r.slice(0, 3).every((x: any) => x?.ok === true && x?.counted === true) &&
         r[3]?.ok === false &&
-        r[3]?.words === W5 &&
+        r[3]?.words === W57 &&
         used === 3;
       f2detail = JSON.stringify({ r, used });
     }
     assert(
       'F',
-      'F2 a copy takes three plans, each counted before it is made, and is refused the fourth in W5’s words',
+      'F2 a copy takes three plans, each counted before it is made, and is refused the fourth in W57’s words (no item yet, GTC-446)',
       f2,
       f2detail
     );
@@ -1619,7 +1656,7 @@ async function main() {
         ?.aiCallsUsed;
       f3 =
         r.filter((x: any) => x?.ok === true).length === 2 &&
-        r.filter((x: any) => x?.ok === false && x?.words === W5).length === 3 &&
+        r.filter((x: any) => x?.ok === false && x?.words === W57).length === 3 &&
         used === 3;
       f3detail = JSON.stringify({ r, used });
     }
@@ -1725,7 +1762,7 @@ async function main() {
     );
     assert(
       'W',
-      'W11 on /demo only in development (Q5) and with the switch on (GTC-430); a 409 asks GET /api/events for her sample (W10) or says W9',
+      'W11 on /demo only with the switch on (GTC-430, GTC-447); a 409 asks GET /api/events for her sample (W10) or says W9',
       CHECKS.demoPage(code('src/app/demo/page.tsx'), code('src/lib/demo/new-event.ts'))
     );
     assert(

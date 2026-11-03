@@ -1059,34 +1059,41 @@ async function testSuite10_EventReadAuth(fixtures: Fixtures) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Test Suite 11 — GTC-269: the credential POST /api/demo/session hands out
+// Test Suite 11 — GTC-269, rewritten at GTC-442: the credential POST /api/demo/session
+// hands out
 //
 // The defect held closed here is NOT "the route has no credential". The route is
 // DELIBERATELY reachable by anyone: GTC-015 (commit `f6e4b41`, 2026-03-08) removed
-// its production gate on purpose, so that a stranger on the deployed site can click
-// "Open Planning Dashboard" on `/demo`. Founder ruling, 2026-09-11: that product
-// decision stands.
+// its production gate on purpose, so a stranger on the deployed site can try the
+// demo. Founder ruling, 2026-09-11: that product decision stands.
 //
 // What does not stand is a credential wider than the thing it is demoing. The route
 // mints a `Session`, and a `Session` is a bearer credential for a whole `User` —
 // `getUser` in `src/lib/auth/session.ts` resolves the cookie to a user with no event
-// scoping whatsoever. Before this fix the route minted for the `User` linked to the
-// demo `Person`, and THAT user's `EventRole` set grows on its own as the Person's
-// hosting history grows: measured 2026-09-11, it held HOST on two events, one of
-// them `GTC-133 Sub-commit (g) Test` with `isDemo: false`.
+// scoping whatsoever. GTC-269 bounded the old shared demo's session to one event.
 //
-// ⚠ THE ROUTE SCANNER CANNOT BE THE EVIDENCE FOR THIS FIX, and that is deliberate,
-// not a gap. After the fix `POST /api/demo/session` still carries no guard and no
-// credential of any kind, so its verdict in `tests/security-route-scan-control.ts`
-// is UNCHANGED and still true. The containment is not "who may call it" — it is
-// "what the thing it hands back can reach". So this suite asserts the property
-// itself, by ENUMERATING what the minted session reaches. It never counts
-// `EventRole` rows: a row count is a statement about the fix's implementation, and
-// the contract is about reach.
+// ⚠ GTC-442 (founder rulings, 1 Nov 2026, Q10, Q14, Q15): THE OLD SHARED DEMO IS RETIRED.
+// The route now has one shape, `{ start: 'copy' }` (GTC-392 part A): a visitor's own
+// sample, a throwaway account (`@demo-copy.invalid`) with one role, HOST on the copy
+// made in the same transaction, for two hours. Every other body answers 404 and writes
+// nothing. This suite was rewritten one for one on that shape: each assertion still
+// asks what it asked of the shared session, of hers.
+//
+// ⚠ THE ROUTE SCANNER CANNOT BE THE EVIDENCE FOR THIS, and that is deliberate, not a
+// gap. `POST /api/demo/session` carries no guard and no credential of any kind, so its
+// verdict in `tests/security-route-scan-control.ts` is true and unchanged. The
+// containment is not "who may call it" — it is "what the thing it hands back can
+// reach". So this suite asserts the property itself, by ENUMERATING what the minted
+// session reaches. It never counts `EventRole` rows: a row count is a statement about
+// the implementation, and the contract is about reach.
 //
 // Fixture rule 4 (a negative needs a positive control) applies throughout. The
-// legitimate demo path is asserted to still work in the same run as every refusal,
-// because a route that 409s on everything, or 500s, or was renamed, also "refuses".
+// legitimate path is asserted to still work in the same run as every refusal, because
+// a route that 409s on everything, or 500s, or was renamed, also "refuses".
+//
+// Each sample is started as its own made-up visitor (a fresh address in the forwarding
+// headers), so the per-visitor start limit never decides an assertion here. Every copy
+// this suite starts is removed by id in its teardown.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Read `session=` back out of a live response's Set-Cookie headers. */
@@ -1103,9 +1110,11 @@ function sessionCookieFrom(res: Response): string | null {
 }
 
 async function testSuite11_DemoSessionScope(fixtures: Fixtures) {
-  logSection('Test Suite 11: GTC-269 — the demo session reaches exactly one event');
+  logSection('Test Suite 11: GTC-269, GTC-442 — a sample session reaches exactly its own copy');
 
   const BASE = process.env.SECURITY_TEST_BASE_URL ?? 'http://localhost:3000';
+  const COPY_DOMAIN = '@demo-copy.invalid';
+  const copyWhere = { isDemo: true, host: { user: { email: { endsWith: COPY_DOMAIN } } } };
 
   // ── The probe, same shape as suite 10 ────────────────────────────────────────
   let probeOk = false;
@@ -1122,42 +1131,68 @@ async function testSuite11_DemoSessionScope(fixtures: Fixtures) {
   );
   if (!probeOk) return;
 
-  // ── The subject ──────────────────────────────────────────────────────────────
-  //
-  // Resolved by `isDemo: true`, NOT by name. The demo event's name has drifted
-  // across six sites (GTC-272): `prisma/seed.ts` writes
-  // "Henderson Family Christmas 2026" while the route looks for "...2025". Mirroring
-  // the literal here would make this file a seventh site. `isDemo` is the column the
-  // route is being fixed to filter on, so it is also the honest handle.
-  const demoEvents = await prisma.event.findMany({
-    where: { isDemo: true },
-    select: { id: true, name: true },
-  });
+  // ── The subject: no copy at the start, so every copy below is this suite's ───
+  const copiesAtStart = await prisma.event.count({ where: copyWhere });
   logTest(
-    'CONTROL: exactly one isDemo event exists, so these assertions have a subject',
-    demoEvents.length === 1,
-    `found ${demoEvents.length}: ${demoEvents.map((e) => `${e.id} ${e.name}`).join(' | ')}. ` +
-      'Zero means the seed drift in GTC-272 has bitten — `prisma/seed.ts` writes a ' +
-      '2026 name and the route looks for 2025. This is a loud failure on purpose: a ' +
-      'silent skip here would be a suite that cannot report its red.'
+    'CONTROL: no sample copy is in the database at the start, so these assertions have a subject',
+    copiesAtStart === 0,
+    `found ${copiesAtStart}. A copy left by another run would be counted as this suite's. ` +
+      'This is a loud failure on purpose: a silent skip here would be a suite that cannot ' +
+      'report its red.'
   );
-  if (demoEvents.length !== 1) return;
-  const demoEventId = demoEvents[0].id;
+  if (copiesAtStart !== 0) return;
 
   // Row accounting, per the ticket: asserted by counting rows, not by reading a
   // status code. Recorded before anything is driven.
   const sessionsBefore = await prisma.session.count();
+  const accountsBefore = await prisma.user.count({ where: { email: { endsWith: COPY_DOMAIN } } });
+  const madeCopies = new Set<string>();
+  const mintedTokens = new Set<string>();
+  const visitor = () => {
+    const b = randomBytes(3);
+    return `100.${64 + (b[0] % 64)}.${b[1]}.${b[2]}`;
+  };
+  const startSample = async (cookie?: string) => {
+    const ip = visitor();
+    const res = await fetch(`${BASE}/api/demo/session`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-forwarded-for': ip,
+        'x-real-ip': ip,
+        ...(cookie ? { Cookie: cookie } : {}),
+      },
+      body: JSON.stringify({ start: 'copy' }),
+    });
+    const body = await res.json().catch(() => null);
+    const token = sessionCookieFrom(res);
+    if (token) mintedTokens.add(token);
+    if (typeof body?.eventId === 'string') madeCopies.add(body.eventId);
+    return { res, body, token };
+  };
+  const reachOf = async (token: string | null) => {
+    const res = await fetch(`${BASE}/api/events`, {
+      headers: { Cookie: `session=${token ?? ''}` },
+    });
+    const body = await res.json().catch(() => null);
+    const events: Array<{ id: string; name: string; isDemo: boolean }> = (body?.events ?? []).map(
+      (e: any) => ({ id: e.id, name: e.name, isDemo: e.isDemo })
+    );
+    return { status: res.status, events };
+  };
 
-  // ── 11.1 POSITIVE CONTROL: the demo path still works for a stranger ──────────
-  const mintRes = await fetch(`${BASE}/api/demo/session`, { method: 'POST' });
-  const mintBody = await mintRes.json().catch(() => null);
-  const mintedToken = sessionCookieFrom(mintRes);
-
+  // ── 11.1 POSITIVE CONTROL: the sample path works for a stranger ──────────────
+  const mint = await startSample();
+  const copyId: string | undefined = mint.body?.eventId;
+  const mintedToken = mint.token;
+  const copyRow = copyId
+    ? await prisma.event.findFirst({ where: { id: copyId, ...copyWhere }, select: { id: true } })
+    : null;
   logTest(
-    'CONTROL: an anonymous caller still gets a demo session — GTC-015 stands',
-    mintRes.status === 200 && mintedToken !== null && mintBody?.eventId === demoEventId,
-    `status ${mintRes.status}; cookie ${mintedToken ? 'set' : 'ABSENT'}; ` +
-      `eventId ${mintBody?.eventId} (expected ${demoEventId})`
+    'CONTROL: an anonymous caller asking for a sample gets 200, a session cookie and her own copy',
+    mint.res.status === 200 && mintedToken !== null && copyRow !== null,
+    `status ${mint.res.status}; cookie ${mintedToken ? 'set' : 'ABSENT'}; ` +
+      `copy ${copyRow ? 'found' : 'NOT found'} for eventId ${copyId}`
   );
 
   // ── 11.2 THE CONTRACT: enumerate what that session reaches ───────────────────
@@ -1166,23 +1201,17 @@ async function testSuite11_DemoSessionScope(fixtures: Fixtures) {
   // event the user holds any role on. That is the enumeration: whatever it lists is
   // what `requireEventRole` will then admit the holder to.
   const mintedCookie = mintedToken ? `session=${mintedToken}` : 'session=';
-  const listRes = await fetch(`${BASE}/api/events`, { headers: { Cookie: mintedCookie } });
-  const listBody = await listRes.json().catch(() => null);
-  const reached: Array<{ id: string; name: string; isDemo: boolean }> = (
-    listBody?.events ?? []
-  ).map((e: any) => ({ id: e.id, name: e.name, isDemo: e.isDemo }));
-
+  const reach = await reachOf(mintedToken);
   logTest(
-    'the minted session reaches EXACTLY ONE event, and it is the demo event',
-    listRes.status === 200 && reached.length === 1 && reached[0].id === demoEventId,
-    `status ${listRes.status}; reaches ${reached.length}: ` +
-      reached.map((e) => `${e.id} "${e.name}" isDemo=${e.isDemo}`).join(' | ')
+    'the minted session reaches EXACTLY ONE event, and it is her own copy',
+    reach.status === 200 && reach.events.length === 1 && reach.events[0].id === copyId,
+    `status ${reach.status}; reaches ${reach.events.length}: ` +
+      reach.events.map((e) => `${e.id} "${e.name}" isDemo=${e.isDemo}`).join(' | ')
   );
-
   logTest(
     'every event the minted session reaches is a demo event',
-    reached.length > 0 && reached.every((e) => e.isDemo === true),
-    reached.map((e) => `${e.name} isDemo=${e.isDemo}`).join(' | ') || 'reached nothing'
+    reach.events.length > 0 && reach.events.every((e) => e.isDemo === true),
+    reach.events.map((e) => `${e.name} isDemo=${e.isDemo}`).join(' | ') || 'reached nothing'
   );
 
   // ── 11.3 The same session, aimed at a real event, is refused ─────────────────
@@ -1207,7 +1236,7 @@ async function testSuite11_DemoSessionScope(fixtures: Fixtures) {
     `status ${crossControl.status} — if this is not 200 the refusal above proves nothing`
   );
 
-  // ── 11.4 The credential is demo-shaped, not a standing one ───────────────────
+  // ── 11.4 The credential is sample-shaped, not a standing one ─────────────────
   const mintedRow = mintedToken
     ? await prisma.session.findUnique({
         where: { token: mintedToken },
@@ -1229,17 +1258,14 @@ async function testSuite11_DemoSessionScope(fixtures: Fixtures) {
   // having their own `session` cookie silently replaced by the demo user's —
   // signed out of their own account and into the demo without being told.
   const sessionsBeforeClobber = await prisma.session.count();
-  const clobberRes = await fetch(`${BASE}/api/demo/session`, {
-    method: 'POST',
-    headers: { Cookie: fixtures.user.sessionCookie },
-  });
-  const clobberCookie = sessionCookieFrom(clobberRes);
+  const clobber = await startSample(fixtures.user.sessionCookie);
+  const clobberCookie = clobber.token;
   const sessionsAfterClobber = await prisma.session.count();
 
   logTest(
     'a caller who already holds a session is refused, not silently re-credentialed',
-    clobberRes.status === 409,
-    `status ${clobberRes.status} — expected 409`
+    clobber.res.status === 409,
+    `status ${clobber.res.status} — expected 409`
   );
   logTest(
     'the refused call sets no session cookie, so the existing one survives',
@@ -1256,113 +1282,108 @@ async function testSuite11_DemoSessionScope(fixtures: Fixtures) {
     headers: { Cookie: fixtures.user.sessionCookie },
   });
   logTest(
-    "CONTROL: the real host's session still works after the refused demo call",
+    "CONTROL: the real host's session still works after the refused sample call",
     hostStillValid.status === 200,
     `status ${hostStillValid.status}`
   );
 
-  // ── 11.6 The demo user is decoupled from the demo Person ─────────────────────
+  // ── 11.6 The account is a throwaway one, and hosts nothing real ──────────────
   //
-  // This is the assertion that makes "exactly one event" durable rather than
-  // momentarily true. The old route minted for `person.userId`, so the demo
-  // credential inherited every event the demo Person ever hosted. A dedicated user
-  // that is never linked to a Person cannot inherit anything.
-  const demoEventRow = await prisma.event.findUnique({
-    where: { id: demoEventId },
-    select: { hostId: true },
-  });
-  const demoPerson = demoEventRow
-    ? await prisma.person.findUnique({
-        where: { id: demoEventRow.hostId },
-        select: { userId: true },
-      })
+  // What makes "exactly one event" durable rather than momentarily true: the session
+  // belongs to an account made in the copy's own transaction, on the reserved copy
+  // domain, that holds no role on and hosts no real event.
+  const account = mintedRow
+    ? await prisma.user.findUnique({ where: { id: mintedRow.userId }, select: { email: true } })
     : null;
+  const realRoles = mintedRow
+    ? await prisma.eventRole.count({
+        where: { userId: mintedRow.userId, event: { isDemo: false } },
+      })
+    : -1;
+  const realHosted = mintedRow
+    ? await prisma.event.count({ where: { isDemo: false, host: { userId: mintedRow.userId } } })
+    : -1;
   logTest(
-    'the session belongs to a dedicated user, NOT the user linked to the demo Person',
-    mintedRow !== null && demoPerson !== null && mintedRow.userId !== demoPerson.userId,
-    `session user ${mintedRow?.userId}; demo Person's user ${demoPerson?.userId}`
+    'the session belongs to a throwaway copy account that holds and hosts no real event',
+    account !== null && account.email.endsWith(COPY_DOMAIN) && realRoles === 0 && realHosted === 0,
+    `copy address ${account ? account.email.endsWith(COPY_DOMAIN) : 'no account'}; ` +
+      `real roles ${realRoles}; real events hosted ${realHosted}`
   );
 
   // ── 11.7 THE MUTATION — prove the enumeration above actually catches a widening
   //
   // Founder instruction, 2026-09-11: "Mutate it: link the demo user to a second
   // event and prove the assertion catches it." A detector that has never fired is
-  // not a detector. The link is made AFTER the session is minted, so the route's own
-  // pruning cannot repair it before the enumeration runs.
+  // not a detector. The link is made AFTER the session is minted.
   let mutationCaught = false;
   let mutationRestored = false;
   if (mintedRow) {
     await prisma.eventRole.create({
       data: { userId: mintedRow.userId, eventId: fixtures.eventSent.id, role: 'HOST' },
     });
-    const widened = await fetch(`${BASE}/api/events`, { headers: { Cookie: mintedCookie } });
-    const widenedBody = await widened.json().catch(() => null);
-    const widenedCount = (widenedBody?.events ?? []).length;
-    mutationCaught = widenedCount > 1;
+    const widened = await reachOf(mintedToken);
+    mutationCaught = widened.events.length > 1;
     logTest(
-      'MUTATION: linking the demo user to a second event IS caught by 11.2',
+      'MUTATION: linking the sample account to a second event IS caught by 11.2',
       mutationCaught,
-      `after linking, the enumeration reports ${widenedCount} event(s) — if this is ` +
-        'still 1, assertion 11.2 cannot see a widening and proves nothing'
+      `after linking, the enumeration reports ${widened.events.length} event(s) — if this ` +
+        'is still 1, assertion 11.2 cannot see a widening and proves nothing'
     );
 
-    // ── The prune, asserted rather than assumed ──────────────────────────────
+    // ── Isolation between samples, asserted rather than assumed ──────────────
     //
-    // Added after mutation M5 (removing the route's `eventRole.deleteMany`) left
-    // this suite fully green: the dedicated demo account has no stray roles to
-    // prune, so nothing above could see the prune's absence. An unasserted line in
-    // a security fix is a line that can be deleted by a future tidy-up without a
-    // single test going red.
-    //
-    // With the widening still in place, a FRESH call must hand back a session that
-    // reaches one event again — the route repairing the invariant, not merely
-    // having been correct once. This is what makes "exactly one EventRole forever"
-    // a property of the route rather than of today's data.
-    const repairRes = await fetch(`${BASE}/api/demo/session`, { method: 'POST' });
-    const repairToken = sessionCookieFrom(repairRes);
-    const repairList = await fetch(`${BASE}/api/events`, {
-      headers: { Cookie: `session=${repairToken ?? ''}` },
-    });
-    const repairBody = await repairList.json().catch(() => null);
-    const repairCount = (repairBody?.events ?? []).length;
+    // GTC-269's prune made a fresh shared session reach one event again. Each sample
+    // now has its own account, so the property is that a SECOND sample, started while
+    // the first account is widened, gets an account of its own that reaches only its
+    // own copy, and the first visitor's session still works.
+    const second = await startSample();
+    const secondRow = second.token
+      ? await prisma.session.findUnique({
+          where: { token: second.token },
+          select: { userId: true },
+        })
+      : null;
+    const secondReach = await reachOf(second.token);
+    const firstStill = await reachOf(mintedToken);
     logTest(
-      'the route PRUNES a widening it finds — a fresh session still reaches one event',
-      repairRes.status === 200 && repairCount === 1,
-      `status ${repairRes.status}; the fresh session reaches ${repairCount} event(s) — ` +
-        'the demo user was deliberately linked to a second event just before this ' +
-        'call, so 2 means the route accepted an inherited role instead of revoking it'
+      'a second sample gets its own account, reaching only its own copy; the first session still works',
+      second.res.status === 200 &&
+        secondRow !== null &&
+        secondRow.userId !== mintedRow.userId &&
+        secondReach.events.length === 1 &&
+        secondReach.events[0].id === second.body?.eventId &&
+        secondReach.events[0].id !== copyId &&
+        firstStill.status === 200,
+      `status ${second.res.status}; own account ${secondRow ? secondRow.userId !== mintedRow.userId : 'none'}; ` +
+        `reaches ${secondReach.events.length}; first session ${firstStill.status}`
     );
-    if (repairToken) await prisma.session.deleteMany({ where: { token: repairToken } });
 
     await prisma.eventRole.deleteMany({
       where: { userId: mintedRow.userId, eventId: fixtures.eventSent.id },
     });
-    const restored = await fetch(`${BASE}/api/events`, { headers: { Cookie: mintedCookie } });
-    const restoredBody = await restored.json().catch(() => null);
-    mutationRestored = (restoredBody?.events ?? []).length === 1;
+    const restored = await reachOf(mintedToken);
+    mutationRestored = restored.events.length === 1;
     logTest(
       'MUTATION REVERTED: the enumeration is back to exactly one event',
       mutationRestored,
-      `reports ${(restoredBody?.events ?? []).length} event(s) after the revert`
+      `reports ${restored.events.length} event(s) after the revert`
     );
   }
 
-  // ── 11.8 The name lookup cannot resolve a real event ─────────────────────────
+  // ── 11.8 A real event named like a sample is never reached ───────────────────
   //
-  // ⚠ HONEST LABEL: this is a FORWARD REGRESSION GUARD, not a reproduced red. The
-  // route resolves by `findFirst` with no `orderBy`, so which of two same-named rows
-  // it returns is Postgres heap order — in practice the older row, which is the demo
-  // one. A decoy therefore cannot be made to win deterministically, and claiming
-  // this assertion as part of the RED would be claiming a proof that was never run.
-  // What it does hold: once `isDemo: true` is on the lookup, no non-demo row can
-  // ever be resolved, whatever the ordering.
-  const decoyName = demoEvents[0].name;
+  // The copy is the visitor's by construction (made in her own transaction), never
+  // looked up by name. A real event carrying the sample's name must be neither the
+  // event handed back nor one the new session reaches.
   const decoyHost = await prisma.person.create({
-    data: { name: 'GTC-269 decoy host', email: 'gtc269-decoy@example.com' },
+    data: {
+      name: 'GTC-442 decoy host',
+      email: `gtc442-decoy-${randomBytes(4).toString('hex')}@example.com`,
+    },
   });
   const decoy = await prisma.event.create({
     data: {
-      name: decoyName,
+      name: 'Your sample gathering',
       startDate: new Date(),
       endDate: new Date(Date.now() + 3_600_000),
       status: 'DRAFT',
@@ -1371,37 +1392,84 @@ async function testSuite11_DemoSessionScope(fixtures: Fixtures) {
     },
     select: { id: true },
   });
-  const withDecoy = await fetch(`${BASE}/api/demo/session`, { method: 'POST' });
-  const withDecoyBody = await withDecoy.json().catch(() => null);
-  const decoyToken = sessionCookieFrom(withDecoy);
+  const third = await startSample();
+  const thirdReach = await reachOf(third.token);
   logTest(
-    'with a non-demo event of the SAME NAME present, the route still resolves the demo one',
-    withDecoy.status === 200 && withDecoyBody?.eventId === demoEventId,
-    `resolved ${withDecoyBody?.eventId}; decoy was ${decoy.id}; demo is ${demoEventId}`
+    'with a real event named "Your sample gathering" present, a new sample never reaches it',
+    third.res.status === 200 &&
+      third.body?.eventId !== decoy.id &&
+      thirdReach.events.length === 1 &&
+      thirdReach.events.every((e) => e.id !== decoy.id && e.isDemo === true),
+    `status ${third.res.status}; handed ${third.body?.eventId}; decoy ${decoy.id}; ` +
+      `reaches ${thirdReach.events.map((e) => e.id).join(', ')}`
   );
 
-  // ── Teardown. Every row this suite wrote, removed in the same run. ───────────
+  // ── 11.9 GTC-442: the old no-body shape is gone ──────────────────────────────
   //
-  // `clobberCookie` is deleted too, and that is not defensive padding: BEFORE the
-  // fix the clobber call succeeds and mints a real 30-day session, so a RED run
-  // writes a row the GREEN run never will. The first RED run of this suite leaked
-  // exactly that row and it was deleted by hand; this line is why that cannot
-  // happen twice.
-  if (clobberCookie) await prisma.session.deleteMany({ where: { token: clobberCookie } });
-  if (decoyToken) await prisma.session.deleteMany({ where: { token: decoyToken } });
+  // Founder ruling Q15, 1 Nov 2026: a POST with no body answers 404 `{ error: 'Not
+  // found' }`, sets no cookie and writes nothing. Before GTC-442 it minted the shared
+  // Henderson session; if it still does, that row is deleted below by its token.
+  const sessionsBeforeNoBody = await prisma.session.count();
+  const usersBeforeNoBody = await prisma.user.count();
+  const noBodyIp = visitor();
+  const noBody = await fetch(`${BASE}/api/demo/session`, {
+    method: 'POST',
+    headers: { 'x-forwarded-for': noBodyIp, 'x-real-ip': noBodyIp },
+  });
+  const noBodyBody = await noBody.json().catch(() => null);
+  const noBodyToken = sessionCookieFrom(noBody);
+  if (noBodyToken) mintedTokens.add(noBodyToken);
+  const sessionsAfterNoBody = await prisma.session.count();
+  const usersAfterNoBody = await prisma.user.count();
+  logTest(
+    'a POST with no body answers 404 "Not found", sets no cookie and writes no row (GTC-442)',
+    noBody.status === 404 &&
+      noBodyBody?.error === 'Not found' &&
+      noBodyToken === null &&
+      sessionsAfterNoBody === sessionsBeforeNoBody &&
+      usersAfterNoBody === usersBeforeNoBody,
+    `status ${noBody.status}; error ${JSON.stringify(noBodyBody?.error)}; cookie ` +
+      `${noBodyToken ? 'SET' : 'none'}; sessions ${sessionsBeforeNoBody}→${sessionsAfterNoBody}; ` +
+      `users ${usersBeforeNoBody}→${usersAfterNoBody}`
+  );
+
+  // ── Teardown. Every row this suite wrote, removed in the same run, by id. ────
+  //
+  // Each copy goes with its people (its host and anyone stamped with its id), its
+  // account and that account's sessions. A token minted by a shape that should have
+  // been refused (a RED run) is deleted too, so a RED run leaks nothing.
   await prisma.event.delete({ where: { id: decoy.id } });
   await prisma.person.delete({ where: { id: decoyHost.id } });
-  if (mintedToken) await prisma.session.deleteMany({ where: { token: mintedToken } });
+  for (const id of madeCopies) {
+    const ev = await prisma.event.findFirst({
+      where: { id, ...copyWhere },
+      select: { hostId: true, host: { select: { userId: true } } },
+    });
+    if (!ev) continue;
+    const people = await prisma.person.findMany({
+      where: { OR: [{ id: ev.hostId }, { sampleEventId: id }] },
+      select: { id: true },
+    });
+    await prisma.event.delete({ where: { id } });
+    await prisma.person.deleteMany({ where: { id: { in: people.map((p) => p.id) } } });
+    if (ev.host.userId) {
+      await prisma.user.deleteMany({
+        where: { id: ev.host.userId, email: { endsWith: COPY_DOMAIN } },
+      });
+    }
+  }
+  await prisma.session.deleteMany({ where: { token: { in: [...mintedTokens] } } });
 
   const sessionsAfter = await prisma.session.count();
+  const accountsAfter = await prisma.user.count({ where: { email: { endsWith: COPY_DOMAIN } } });
   logTest(
-    'teardown: every Session row this suite minted is gone',
-    sessionsAfter === sessionsBefore,
-    `${sessionsBefore} before the suite, ${sessionsAfter} after teardown`
+    'teardown: every Session row and every copy account this suite made is gone',
+    sessionsAfter === sessionsBefore && accountsAfter === accountsBefore,
+    `sessions ${sessionsBefore} → ${sessionsAfter}; copy accounts ${accountsBefore} → ${accountsAfter}`
   );
   console.log(
     `  ${YELLOW}row accounting: Session rows ${sessionsBefore} before → ${sessionsAfter} ` +
-      `after; demo EventRole mutation created and deleted${RESET}`
+      `after; ${madeCopies.size} sample copies made and removed; mutation created and deleted${RESET}`
   );
 }
 

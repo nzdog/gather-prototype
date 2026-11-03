@@ -24,6 +24,12 @@
  * places, and each new file the exact bytes named by its SHA-256. Anything else is red, and so
  * is a place that does not hold the change yet (HEAD stays red until the change is committed).
  *
+ * AN EDITED FILE BY ITS HASH ([[GTC-442]], founder ruling Q1, 1 Nov 2026). A ruled change that
+ * deletes or replaces lines cannot be written as insertions, so a `plus` may also name an EDITED
+ * file (status M) by the SHA-256 of its whole final text. It is exactly as strict as the other
+ * two kinds: the file must be changed (M, not added), its bytes must hash to the pin, and no other
+ * file under the entry may differ, in the working folder, the index and HEAD alike.
+ *
  * SAFETY. Git and file reads only: no database, no dev server, no browser, no provider, no
  * network, no write.
  */
@@ -48,10 +54,11 @@ const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 //   span   the function or block that starts with `start` (whole first line, indent included).
 //   line   the one line that starts with `start`.
 //   plus   (path only) a ruled change on top of 21a9577: lines inserted into a file, each block
-//          after the run of whole lines `after` (found exactly once), or a new file by SHA-256.
+//          after the run of whole lines `after` (found exactly once), a new file by SHA-256, or
+//          (GTC-442) an edited file by the SHA-256 of its whole final text (`edited: true`).
 type Plus =
   | { file: string; insert: { after: string[]; lines: string[] }[] }
-  | { file: string; sha256: string };
+  | { file: string; sha256: string; edited?: true };
 type Entry =
   | { zone: number; kind: 'path'; path: string; why: string; ruled?: string; plus?: Plus[] }
   | { zone: number; kind: 'span' | 'line'; path: string; start: string; why: string };
@@ -211,6 +218,19 @@ const PROTECTED: Entry[] = [
     kind: 'path',
     path: 'tests/security-*',
     why: 'the security suite, its fixtures, its inventory gate and its route scan',
+    ruled: 'GTC-442: suite 11 on the copy shape; the scan pins for the sixth cron route',
+    plus: [
+      {
+        file: 'tests/security-validation.ts',
+        sha256: 'd0a74ed5dd10f9db7e0bba191afe9b60580962c09f090fc0f16c1e31c0ec5e2f',
+        edited: true,
+      },
+      {
+        file: 'tests/security-route-scan-control.ts',
+        sha256: '09d976d72d7687fb473a9075474c7fdfe41a9e2f13e4dd9ae16015cc70a54b79',
+        edited: true,
+      },
+    ],
   },
   // ── Zone 7: SMS opt-out ──
   {
@@ -343,6 +363,14 @@ const PROTECTED: Entry[] = [
     kind: 'path',
     path: 'route-classifications.json',
     why: 'every route and how it is guarded, as the security suite reads it',
+    ruled: 'GTC-442: the tokens route out, the demo clean-up in',
+    plus: [
+      {
+        file: 'route-classifications.json',
+        sha256: 'd7c96c75330ce41de513b3206f693591b865bdcfee83ffb0f805882f9a5c9d5d',
+        edited: true,
+      },
+    ],
   },
   // ── Zone 7: the wider readers of the SMS opt-out and the text block ──
   {
@@ -511,6 +539,16 @@ export const CHECKS = {
   sha256(text: string): string {
     return createHash('sha256').update(text, 'utf8').digest('hex');
   },
+  /** The git status a ruled change gives its file: A for a new file, M for an edited one. */
+  plusStatus(p: Plus): 'A' | 'M' {
+    return 'sha256' in p && !p.edited ? 'A' : 'M';
+  },
+  /** Does one place's copy of the file hold the ruled change? `fixed` is 21a9577's copy. */
+  plusHeld(p: Plus, now: string, fixed: string): boolean {
+    if (now === '') return false;
+    if ('sha256' in p) return CHECKS.sha256(now) === p.sha256 && (!p.edited || fixed !== '');
+    return now === CHECKS.withInsertions(fixed, p.insert);
+  },
 };
 
 /** The files T0_AT holds under a path or pattern (empty if none, or if git fails). */
@@ -560,7 +598,7 @@ function changesFromT0(spec: string, where: 'working folder' | 'index' | 'HEAD')
 /** For an entry with a ruled change: which places do not hold 21a9577 plus exactly that change. */
 function plusDiffers(spec: string, plus: Plus[]): string[] {
   const out: string[] = [];
-  const expected = plus.map((p) => `${'sha256' in p ? 'A' : 'M'}\t${p.file}`);
+  const expected = plus.map((p) => `${CHECKS.plusStatus(p)}\t${p.file}`);
   const places = [
     { name: 'working folder' as const, read: readWork },
     { name: 'index' as const, read: (rel: string) => show('', rel) },
@@ -573,11 +611,7 @@ function plusDiffers(spec: string, plus: Plus[]): string[] {
       continue;
     }
     for (const p of plus) {
-      const now = place.read(p.file);
-      const held =
-        'sha256' in p
-          ? now !== '' && CHECKS.sha256(now) === p.sha256
-          : now !== '' && now === CHECKS.withInsertions(show(T0_AT, p.file), p.insert);
+      const held = CHECKS.plusHeld(p, place.read(p.file), show(T0_AT, p.file));
       if (!held) out.push(`${place.name}: ${p.file} is not 21a9577 plus the ruled change`);
     }
   }

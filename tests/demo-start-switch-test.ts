@@ -8,12 +8,15 @@
  *     before the limits and before anything is read or written;
  *   - the old no-body shape is unchanged (GTC-015: the route stays reachable in production);
  *   - the button and page gates (NODE_ENV, /demo and /demo/new) stay exactly as they are;
+ *     [[GTC-447]] (founder, 3 Nov 2026): retired. Both now read this switch alone, after
+ *     `await connection()`, and name no NODE_ENV; S2's last check says so;
  *   - the variable is NOT set on Railway: production stays closed until the founder turns it on
  *     at launch. This Mac's `.env.local` sets it, so the demo and its suites keep working here.
  *
  *   S1  the switch itself: only `on` is on, and it is read at every call
- *   S2  the route, read as code: the check comes first in the copy shape, answers 404, and the
- *       no-body shape and the two NODE_ENV gates are byte for byte as HEAD holds them
+ *   S2  the route, read as code: the check comes first in the copy shape, answers 404; the old
+ *       no-body shape is gone and every other body gets 404 first ([[GTC-442]]); the two NODE_ENV
+ *       gates are byte for byte as HEAD holds them
  *   S3  a dev server started WITHOUT the switch (unset, as production is): POST start copy
  *       answers 404, sets no cookie, and writes no copy
  *   S4  CONTROL: a dev server started WITH the switch on: the same POST starts a copy, so S3's
@@ -84,6 +87,33 @@ const NO_BODY_MARK = '// GTC-269: `isDemo: true` as well as the name.';
 const noBodyPart = (src: string) => {
   const at = src.indexOf(NO_BODY_MARK);
   return at < 0 ? '' : src.slice(at);
+};
+
+/** CHECKS, pure, so each can be tried on a passing and a failing input. */
+export const CHECKS = {
+  /** No shared-demo lookup left, and the handler's first `if` answers any other body 404. */
+  noBodyGone(src: string): boolean {
+    const code = stripComments(src);
+    const handler = code.slice(code.indexOf('export async function POST'));
+    const firstIf = handler.indexOf('if (');
+    const retired =
+      /^if \(body\?\.start !== 'copy'\) \{\s*return NextResponse\.json\(\{ error: 'Not found' \}, \{ status: 404 \}\);/.test(
+        handler.slice(firstIf)
+      );
+    const before = (needle: string) => {
+      const i = handler.indexOf(needle);
+      return i < 0 || firstIf < i;
+    };
+    return (
+      noBodyPart(src) === '' &&
+      !/Henderson Family Christmas|demo-session@demo\.gather/.test(code) &&
+      firstIf > 0 &&
+      retired &&
+      before('isDemoStartOn()') &&
+      before('cookies()') &&
+      before('prisma.')
+    );
+  },
 };
 
 // ── The database: gather_demo only ───────────────────────────────────────────
@@ -332,19 +362,31 @@ function layerS2() {
     cond ? `if: ${(cond + body).replace(/\s+/g, ' ').slice(0, 160)}` : 'no guarding if found'
   );
 
-  const nowPart = noBodyPart(src);
-  const headPart = noBodyPart(atHead(ROUTE));
+  // [[GTC-442]] (founder rulings Q15 and Q2, 1 Nov 2026): this asked that the old no-body shape
+  // stay byte for byte as HEAD held it. That shape is retired, so it now asks that it is gone, and
+  // that every other body is answered 404 first: before the switch, the cookie and the database.
   assert(
     'S2',
-    'the old no-body shape is byte for byte as HEAD holds it',
-    nowPart.length > 0 && nowPart === headPart
+    'the old no-body shape is gone, and every body but the copy shape gets 404 first',
+    CHECKS.noBodyGone(src)
   );
-  const gatesSame =
-    spawnSync('git', ['diff', '--quiet', 'HEAD', '--', ...GATES], { cwd: ROOT }).status === 0;
+  // [[GTC-447]]: this asked that the two NODE_ENV gates stay byte for byte as HEAD held them.
+  // The switch alone decides now, so it asks that both read it after connection(), with no
+  // NODE_ENV, and no longer compares with HEAD.
+  const readsSwitch = (g: string) => {
+    const c = stripComments(read(g));
+    const conn = c.indexOf('await connection();');
+    return (
+      /import \{ connection \} from 'next\/server';/.test(c) &&
+      conn >= 0 &&
+      c.indexOf('isDemoStartOn()') > conn &&
+      !/NODE_ENV/.test(c)
+    );
+  };
   assert(
     'S2',
-    'the NODE_ENV gates on /demo and /demo/new are byte for byte as HEAD holds them',
-    gatesSame && GATES.every((g) => read(g).includes('process.env.NODE_ENV'))
+    'the /demo page and the /demo/new layout read the switch through isDemoStartOn() after connection(), and name no NODE_ENV (GTC-447)',
+    GATES.every(readsSwitch)
   );
 }
 
