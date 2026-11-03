@@ -67,11 +67,31 @@ const KEPT = [
   'src/lib/demo/copy.ts',
   'src/lib/demo/start-limit.ts',
 ];
-const CHANGED_SRC = [`M\t${PAGE}`, `M\t${LAYOUT}`, `M\t${NEW_PAGE}`];
+/**
+ * Main's pull request 83 (the contact import), merged into this branch on 3 Nov 2026: nine new
+ * files under src/lib/contact-import and src/lib/vcard.ts. Not this ticket's; named so C7 still
+ * holds src to an exact list.
+ */
+const MAIN_PR83_SRC = [
+  'A\tsrc/lib/contact-import/build-contact.ts',
+  'A\tsrc/lib/contact-import/check-email.ts',
+  'A\tsrc/lib/contact-import/check-phone.ts',
+  'A\tsrc/lib/contact-import/read-csv.ts',
+  'A\tsrc/lib/contact-import/read-paste.ts',
+  'A\tsrc/lib/contact-import/read-vcard.ts',
+  'A\tsrc/lib/contact-import/split-cells.ts',
+  'A\tsrc/lib/contact-import/tidy-name.ts',
+  'A\tsrc/lib/contact-import/types.ts',
+  'M\tsrc/lib/vcard.ts',
+];
+const CHANGED_SRC = [`M\t${PAGE}`, `M\t${LAYOUT}`, `M\t${NEW_PAGE}`, ...MAIN_PR83_SRC];
 const CONSTANTS = 'GATHER-BUILD-CONSTANTS.md';
 const GTC_392 = 'docs/tickets/GTC-392.md';
 const NEW_SCRIPT = 'test:demo-public';
 const NEW_SCRIPT_VALUE = 'tsx --tsconfig tests/tsconfig.json tests/demo-public-test.ts';
+/** Main's script line from pull request 83, merged in 3 Nov 2026. */
+const MAIN_SCRIPT = 'test:contact-import';
+const MAIN_SCRIPT_VALUE = 'tsx --tsconfig tests/tsconfig.json tests/contact-import-test.ts';
 
 // ── The words (hand-written) ─────────────────────────────────────────────────
 const HEADING = 'Gather';
@@ -364,17 +384,27 @@ export const CHECKS = {
     const b = [...expected].sort();
     return a.length === b.length && new Set(a).size === a.length && a.every((x, i) => x === b[i]);
   },
-  /** package.json differs by exactly one added line: the new script. */
-  oneScriptLine(now: string, before: string): boolean {
+  /**
+   * package.json differs by exactly two added script lines: this ticket's, and main's
+   * test:contact-import (pull request 83, merged in 3 Nov 2026). Main's goes last in the block,
+   * so the line before it gains the comma JSON needs; nothing else differs.
+   */
+  twoScriptLines(now: string, before: string): boolean {
     const a = before.split('\n');
     const b = now.split('\n');
-    if (before === '' || b.length !== a.length + 1) return false;
-    const i = b.findIndex((l, k) => l !== a[k]);
-    return (
-      i >= 0 &&
-      b[i] === `    "${NEW_SCRIPT}": "${NEW_SCRIPT_VALUE}",` &&
-      [...b.slice(0, i), ...b.slice(i + 1)].join('\n') === before
-    );
+    if (before === '' || b.length !== a.length + 2) return false;
+    const ours = `    "${NEW_SCRIPT}": "${NEW_SCRIPT_VALUE}",`;
+    const mains = `    "${MAIN_SCRIPT}": "${MAIN_SCRIPT_VALUE}"`;
+    const i = b.indexOf(ours);
+    const j = b.indexOf(mains);
+    if (i < 0 || j < 0 || b.lastIndexOf(ours) !== i || b.lastIndexOf(mains) !== j) return false;
+    if (b[j + 1] !== '  },') return false;
+    const prev = j - 1 === i ? j - 2 : j - 1;
+    if (prev < 0 || !b[prev].endsWith('",')) return false;
+    const rest = b.filter((_, k) => k !== i && k !== j);
+    const p = prev - (i < prev ? 1 : 0);
+    rest[p] = rest[p].slice(0, -1);
+    return rest.join('\n') === before;
   },
   /** H1: /demo over HTTP, the switch on: 200 and the button, no note. */
   demoOverHttp(status: number, html: string): boolean {
@@ -641,14 +671,14 @@ function layerC() {
     .filter((l) => l.startsWith('??'));
   assert(
     'C',
-    'C7 src differs from 6bc9572 in exactly the three files: the /demo page, the /demo/new layout and the sample page',
+    'C7 src differs from 6bc9572 in exactly the three files (the /demo page, the /demo/new layout and the sample page) plus the ten from main’s pull request 83 (nine new under src/lib/contact-import, and src/lib/vcard.ts)',
     diff.status === 0 && untracked.length === 0 && CHECKS.sameList(diff.stdout, CHANGED_SRC),
     `${diff.stdout.trim().replace(/\n/g, ', ')}${untracked.length ? ` + ${untracked.join(', ')}` : ''}`
   );
   assert(
     'C',
-    `C8 package.json differs from 6bc9572 by exactly the "${NEW_SCRIPT}" line`,
-    CHECKS.oneScriptLine(read('package.json'), atBase('package.json'))
+    `C8 package.json differs from 6bc9572 by exactly two script lines, "${NEW_SCRIPT}" and main’s "${MAIN_SCRIPT}" (pull request 83), with the comma JSON needs before main’s`,
+    CHECKS.twoScriptLines(read('package.json'), atBase('package.json'))
   );
 }
 
