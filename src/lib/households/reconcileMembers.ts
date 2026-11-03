@@ -75,6 +75,8 @@ export interface MemberInput {
    * may message this child. Only meaningful on a `helpers[]` entry, and only while the tick
    * (`adultRoled`) is off; see `decideLaterMarker`. A payload input, like `adultRoled`: the
    * stored fact is `PersonEvent.messagingUndecided`, and `householdRole` stays the sole gate.
+   * An explicit `false` is told apart from a value that is left out, and only the explicit
+   * `false` can be read as a settle (S2.3, in `updateExistingMember`).
    */
   decideLater?: boolean;
 }
@@ -123,7 +125,7 @@ export interface LoadedMember {
   /**
    * GTC-449 (S2.1): the saved decide-later marker, as the edit door loads it. Optional, and
    * read as `=== true` so a caller that omits it (her own household's first save) reads "no".
-   * S2.1 only types it; S2.3 reads it to tell a settle from an ordinary clear.
+   * `updateExistingMember` reads it (S2.3) to tell a settle from an ordinary clear.
    */
   messagingUndecided?: boolean;
 }
@@ -245,11 +247,38 @@ export async function reconcileHouseholdMembers(prisma: Tx, ctx: ReconcileContex
     messagingUndecided: boolean
   ) {
     const normalizedPhone = member.phone ? normalizePhoneNumber(member.phone) : null;
+
+    // GTC-449 (S2.3, rulings 33 and 34): a "settle" is the host turning Decide later off on a kid
+    // saved as decide later, with the tick still off ("don't message"). The form blanks the
+    // held email and phone (ruling 17); the one thing the server adds is that, if the person has
+    // said no to email on ANY event, the email stays on the record, so the same address cannot
+    // be typed again later and emailed. It is a settle only when all four hold: the saved marker
+    // is "yes"; the payload carries the boolean false, not a missing value; the tick is off, so
+    // the role is CHILD; and the email arrives blank. Anything else is today's write, exactly: a
+    // stale tab that leaves the marker out, a payload that says true, a plain child, a ticked
+    // row, an ordinary clear. This row is reached only when matched by personEventId (ruling 26).
+    // The one read is a plain "is there a row" on a table this file does not own: by the person
+    // alone, so it means any event. It can only keep an email, never clear one or send anything.
+    let keepEmail = false;
+    if (
+      existing.messagingUndecided === true &&
+      member.decideLater === false &&
+      role === 'CHILD' &&
+      !member.email
+    ) {
+      const optedOut = await prisma.emailOptOut.findFirst({
+        where: { personId: existing.personId },
+        select: { id: true },
+      });
+      keepEmail = optedOut !== null;
+    }
     let person = await prisma.person.update({
       where: { id: existing.personId },
       data: {
         name: member.name!.trim(),
-        email: member.email || null,
+        // Left out, not written, when a settle must keep the email. The phone is written as sent:
+        // the text-message STOP is on the number, not the person (ruling 50).
+        ...(keepEmail ? {} : { email: member.email || null }),
         phoneNumber: normalizedPhone,
       },
     });

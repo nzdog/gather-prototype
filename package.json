@@ -187,7 +187,8 @@
     "test:contact-import": "tsx --tsconfig tests/tsconfig.json tests/contact-import-test.ts",
     "test:child-assignment": "tsx tests/child-assignment-eligibility-test.ts",
     "test:marker-tripwire": "tsx tests/marker-tripwire-test.ts",
-    "test:decide-later-write": "tsx tests/decide-later-write-test.ts"
+    "test:decide-later-write": "tsx tests/decide-later-write-test.ts",
+    "test:decide-later-settle": "tsx tests/decide-later-settle-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
