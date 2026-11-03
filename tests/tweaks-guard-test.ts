@@ -165,12 +165,15 @@ const PROTECTED: Entry[] = [
   // ── Zone 5: the schema and its migrations ──
   // GTC-426 (founder ruling, 30 Oct 2026): Person.sampleEventId, nullable text, no foreign key,
   // with an index. The column and its one migration only; nothing reads or writes it yet.
+  // GTC-449 (founder rulings 57 to 59 and 72, 3 Nov 2026): PersonEvent.messagingUndecided, yes/no,
+  // not empty, default no, the "decide later" marker. The column with its doc comment and its one
+  // migration only; no sending, link or counting code names it (test:marker-tripwire).
   {
     zone: 5,
     kind: 'path',
     path: 'prisma/schema.prisma',
     why: 'the schema',
-    ruled: 'GTC-426: the sample marker on Person',
+    ruled: 'GTC-426: the sample marker on Person; GTC-449: the decide-later marker on PersonEvent',
     plus: [
       {
         file: 'prisma/schema.prisma',
@@ -188,6 +191,21 @@ const PROTECTED: Entry[] = [
             after: ['  @@index([userId])', '  @@index([email])'],
             lines: ['  @@index([sampleEventId])'],
           },
+          {
+            after: ['  isYoungPerson        Boolean            @default(false)'],
+            lines: [
+              '  /// GTC-449 (rulings 2, 15 and 23): the host\'s "decide later" for a CHILD — she has',
+              '  /// not yet decided whether Gather may message this child. ONLY MEANINGFUL WHILE',
+              '  /// `householdRole` IS CHILD. It is NEVER an input to messaging, links or counts:',
+              '  /// `householdRole` stays the sole gate (Moment 4 §10.6, absolute), so a child on',
+              '  /// decide later is excluded from every send, link, directory and headcount exactly',
+              '  /// as a plain child is. The contact details such a child may be holding on `Person`',
+              "  /// are held, never used, until she chooses to message. Read it for the host's own",
+              '  /// screens (the form, the card, pre-flight), never for a send decision. A yes/no,',
+              '  /// not an empty state: every row reads "no" until she chooses it.',
+              '  messagingUndecided   Boolean            @default(false)',
+            ],
+          },
         ],
       },
     ],
@@ -197,11 +215,16 @@ const PROTECTED: Entry[] = [
     kind: 'path',
     path: 'prisma/migrations',
     why: 'the migrations: never edited, deleted or reordered',
-    ruled: 'GTC-426: one new migration, ADD COLUMN and CREATE INDEX',
+    ruled:
+      'GTC-426: one new migration, ADD COLUMN and CREATE INDEX; GTC-449: one new migration, ADD COLUMN',
     plus: [
       {
         file: 'prisma/migrations/20261029195430_gtc426_person_sample_event_id/migration.sql',
         sha256: 'd367202c694a5683ad6bfb7fdae3334a7704a0b753fa2bab95532dbdd4434f96',
+      },
+      {
+        file: 'prisma/migrations/20261102205933_gtc449_person_event_messaging_undecided/migration.sql',
+        sha256: '03bc7d24a8da0f5a1659cd9f262e5dbe96bd04175a6f17a1a06c9230a2583b53',
       },
     ],
   },
