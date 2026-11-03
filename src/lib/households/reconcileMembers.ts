@@ -70,6 +70,30 @@ export interface MemberInput {
    * or from anything else about the person's data.
    */
   adultRoled?: boolean;
+  /**
+   * GTC-449 (S2.1): "Decide later" on a kid row — the host has not yet chosen whether Gather
+   * may message this child. Only meaningful on a `helpers[]` entry, and only while the tick
+   * (`adultRoled`) is off; see `decideLaterMarker`. A payload input, like `adultRoled`: the
+   * stored fact is `PersonEvent.messagingUndecided`, and `householdRole` stays the sole gate.
+   */
+  decideLater?: boolean;
+}
+
+/**
+ * GTC-449 (S2.1, rulings 1, 19, 20): the decide-later marker for one incoming row. All three
+ * save doors use this one rule.
+ *
+ * "Yes" only for a kid row — the stored role is CHILD, which means the tick is off — whose
+ * `decideLater` is exactly the boolean `true`. So the tick wins (a ticked row is stored
+ * GUEST, and gets "no"); a value that is left out gets "no" (an old tab or an old draft: the
+ * safe direction); a partner or a guest can never carry it; and nothing but a real `true`
+ * counts (the text "true" does not). Pure: it reads nothing and writes nothing.
+ */
+export function decideLaterMarker(
+  role: MemberRole | 'PRIMARY_CONTACT',
+  member: { decideLater?: boolean }
+): boolean {
+  return role === 'CHILD' && member.decideLater === true;
 }
 
 export interface PrimaryContactInput {
@@ -96,6 +120,12 @@ export interface LoadedMember {
   id: string;
   personId: string;
   householdRole: string | null;
+  /**
+   * GTC-449 (S2.1): the saved decide-later marker, as the edit door loads it. Optional, and
+   * read as `=== true` so a caller that omits it (her own household's first save) reads "no".
+   * S2.1 only types it; S2.3 reads it to tell a settle from an ordinary clear.
+   */
+  messagingUndecided?: boolean;
 }
 export interface LoadedHousehold {
   id: string;
@@ -167,20 +197,43 @@ export async function reconcileHouseholdMembers(prisma: Tx, ctx: ReconcileContex
   // `isYoungPerson` is carried separately and is DISPLAY ONLY — it keeps a re-roled
   // teenager rendering in the helpers list instead of silently reappearing among the
   // guests on reload, and it never affects eligibility.
-  const incoming: { member: MemberInput; role: MemberRole; isYoungPerson: boolean }[] = [];
+  //
+  // GTC-449 (S2.1): `messagingUndecided` is worked out here, once, by `decideLaterMarker` — "yes"
+  // only for a helper whose stored role is CHILD and whose `decideLater` is exactly true. A
+  // partner and a guest are always "no". It is written beside the role in both writers below, so
+  // a save that leaves the value out clears it (ruling 20).
+  const incoming: {
+    member: MemberInput;
+    role: MemberRole;
+    isYoungPerson: boolean;
+    messagingUndecided: boolean;
+  }[] = [];
   if (partner?.name?.trim())
-    incoming.push({ member: partner, role: 'PARTNER', isYoungPerson: false });
+    incoming.push({
+      member: partner,
+      role: 'PARTNER',
+      isYoungPerson: false,
+      messagingUndecided: false,
+    });
   for (const helper of helpers ?? []) {
     if (helper.name?.trim()) {
+      const helperRole: MemberRole = helper.adultRoled ? 'GUEST' : 'CHILD';
       incoming.push({
         member: helper,
-        role: helper.adultRoled ? 'GUEST' : 'CHILD',
+        role: helperRole,
         isYoungPerson: true,
+        messagingUndecided: decideLaterMarker(helperRole, helper),
       });
     }
   }
   for (const guest of guests ?? []) {
-    if (guest.name?.trim()) incoming.push({ member: guest, role: 'GUEST', isYoungPerson: false });
+    if (guest.name?.trim())
+      incoming.push({
+        member: guest,
+        role: 'GUEST',
+        isYoungPerson: false,
+        messagingUndecided: false,
+      });
   }
 
   /** Update an existing member's Person + PersonEvent in place; never touches teamId/rsvp/nudge. */
@@ -188,7 +241,8 @@ export async function reconcileHouseholdMembers(prisma: Tx, ctx: ReconcileContex
     existing: LoadedMember,
     member: MemberInput,
     role: MemberRole,
-    isYoungPerson: boolean
+    isYoungPerson: boolean,
+    messagingUndecided: boolean
   ) {
     const normalizedPhone = member.phone ? normalizePhoneNumber(member.phone) : null;
     let person = await prisma.person.update({
@@ -211,6 +265,7 @@ export async function reconcileHouseholdMembers(prisma: Tx, ctx: ReconcileContex
       data: {
         householdRole: role,
         isYoungPerson,
+        messagingUndecided,
         reachabilityTier: reach.reachabilityTier,
         contactMethod: reach.contactMethod,
       },
@@ -229,7 +284,12 @@ export async function reconcileHouseholdMembers(prisma: Tx, ctx: ReconcileContex
   };
 
   /** Create a genuinely new member (find-or-create Person by address + first name; upsert PersonEvent by (personId,eventId)). */
-  async function createNewMember(member: MemberInput, role: MemberRole, isYoungPerson: boolean) {
+  async function createNewMember(
+    member: MemberInput,
+    role: MemberRole,
+    isYoungPerson: boolean,
+    messagingUndecided: boolean
+  ) {
     const normalizedPhone = member.phone ? normalizePhoneNumber(member.phone) : null;
 
     // [[GTC-293]]: who this row is — the address AND the first name, never the address alone.
@@ -293,7 +353,12 @@ export async function reconcileHouseholdMembers(prisma: Tx, ctx: ReconcileContex
       if (!existing.householdId || existing.householdId === household.id) {
         await prisma.personEvent.update({
           where: { id: existing.id },
-          data: { householdId: household.id, householdRole: role, isYoungPerson },
+          data: {
+            householdId: household.id,
+            householdRole: role,
+            isYoungPerson,
+            messagingUndecided,
+          },
         });
       }
       return;
@@ -309,19 +374,20 @@ export async function reconcileHouseholdMembers(prisma: Tx, ctx: ReconcileContex
         householdId: household.id,
         householdRole: role,
         isYoungPerson,
+        messagingUndecided,
         // GTC-196: the mini-send clock — see people/route.ts for the full note.
         sentAt: sentAt ?? null,
       },
     });
   }
 
-  for (const { member, role, isYoungPerson } of incoming) {
+  for (const { member, role, isYoungPerson, messagingUndecided } of incoming) {
     const matched = member.personEventId ? existingById.get(member.personEventId) : undefined;
     if (matched) {
       keptIds.add(matched.id);
-      await updateExistingMember(matched, member, role, isYoungPerson);
+      await updateExistingMember(matched, member, role, isYoungPerson, messagingUndecided);
     } else {
-      await createNewMember(member, role, isYoungPerson);
+      await createNewMember(member, role, isYoungPerson, messagingUndecided);
     }
   }
 
