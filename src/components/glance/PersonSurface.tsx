@@ -61,9 +61,19 @@
  * ⚠ A REMIND DISPATCHES NOTHING, and that is the differential Ruling 25 names. A nudge changes
  * no state, so a board that repainted for it would repaint an identical board and imply that
  * something moved.
+ *
+ * ── [[GTC-451]] — WHAT THEY HOLD, AFTER A MOVE ────────────────────────────────
+ *
+ * The founder's word (4 Nov 2026): "Move" and "I’ll do it", and only those two, ask the refresh to
+ * carry a holdings flag, and the live island answers with every person's items
+ * (`GLANCE_HOLDINGS_EVENT`). This room lists those once they arrive, so the moved row goes and the
+ * outcome line stays; the room stays open. If the pressed control went with its row, focus moves
+ * to the room's close button, never to the page. And "Nudge them" words its message from the same
+ * current list (same rows, same settled-rows rule, same words), so a guest is never asked about
+ * an item she no longer holds.
  */
 
-import { useEffect, useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import type { GlanceItem, GlancePerson, GlanceReply } from '@/lib/glance/state';
 import type { AssignActorRole } from '@/lib/assignment/same-team';
@@ -88,7 +98,11 @@ import {
 } from '@/lib/glance/actions';
 import { DOOR_WORDS, doorWordFor, type DoorView } from '@/lib/press/resend-door';
 import { CONTACT_BOX_WORDS } from '@/lib/contact/contact-box';
-import { GLANCE_REFRESH_EVENT, GLANCE_REPLIES_EVENT } from '@/lib/glance/live';
+import {
+  GLANCE_HOLDINGS_EVENT,
+  GLANCE_REFRESH_EVENT,
+  GLANCE_REPLIES_EVENT,
+} from '@/lib/glance/live';
 import { whyLineFor } from './strip';
 import { REPLIES_HEADING } from './reading';
 
@@ -159,6 +173,38 @@ export default function PersonSurface({
     return () => window.removeEventListener(GLANCE_REPLIES_EVENT, onReplies);
   }, [person.personEventId]);
   const replies = liveReplies ?? person.replies ?? [];
+
+  /*
+    [[GTC-451]] — WHAT THEY HOLD NOW. Built at first paint from `person.items`; after a Move or a
+    take-over the live island hands every room its person's items through `GLANCE_HOLDINGS_EVENT`,
+    and this room lists those from then on. Only this person's list is taken.
+  */
+  const [liveItems, setLiveItems] = useState<GlanceItem[] | null>(null);
+  useEffect(() => {
+    const onHoldings = (e: Event) => {
+      const mine = (e as CustomEvent<Record<string, GlanceItem[]>>).detail?.[person.personEventId];
+      if (mine) setLiveItems(mine);
+    };
+    window.addEventListener(GLANCE_HOLDINGS_EVENT, onHoldings);
+    return () => window.removeEventListener(GLANCE_HOLDINGS_EVENT, onHoldings);
+  }, [person.personEventId]);
+  const items = liveItems ?? person.items;
+
+  /*
+    [[GTC-451]] ruling 2 — the row a Move or a take-over was pressed in. When the new list arrives
+    without it, the control that was pressed has gone with it, so focus moves to the room's own
+    close button rather than being left on the page.
+  */
+  const pressedRow = useRef<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    const gone = pressedRow.current;
+    if (!liveItems || gone === null || liveItems.some((row) => row.itemId === gone)) return;
+    pressedRow.current = null;
+    const active = document.activeElement;
+    if (!active || !dialogRef.current?.contains(active)) closeRef.current?.focus();
+  }, [liveItems]);
 
   /*
     ── GTC-189 SLICE 7b — RULING U'S DOOR, FETCHED WHEN IT OPENS ─────────────────
@@ -234,7 +280,9 @@ export default function PersonSurface({
           <button
             type="button"
             disabled={busy !== null}
-            onClick={() => run('remind', () => remind(eventId, person, { eventName, eventDate }))}
+            onClick={() =>
+              run('remind', () => remind(eventId, { ...person, items }, { eventName, eventDate }))
+            }
             className="rounded-md border-[0.5px] border-[#dcdad2] px-2.5 py-1.5 text-[13px] disabled:opacity-40"
           >
             {busy === 'remind' ? 'Nudging…' : 'Nudge them'}
@@ -505,7 +553,9 @@ export default function PersonSurface({
     key: string,
     action: () => Promise<GlanceActionOutcome>,
     // [[GTC-387]] — the contact box shows its outcome inside the box; everything else, below.
-    show: (outcome: GlanceActionOutcome | null) => void = setOutcome
+    show: (outcome: GlanceActionOutcome | null) => void = setOutcome,
+    // [[GTC-451]] — the row a Move or a take-over was pressed in; null for every other action.
+    holdingsFor: string | null = null
   ) {
     setBusy(key);
     show(null);
@@ -515,7 +565,13 @@ export default function PersonSurface({
       // RULING 25. Only an action that actually moved the board asks for the refresh, and only
       // when the route accepted it — a refused reassign changed nothing to catch up to.
       if (result.ok && result.movedBoard) {
-        window.dispatchEvent(new Event(GLANCE_REFRESH_EVENT));
+        // [[GTC-451]] — and only a Move or a take-over asks it to hand the rooms their items.
+        if (holdingsFor !== null) pressedRow.current = holdingsFor;
+        window.dispatchEvent(
+          holdingsFor !== null
+            ? new CustomEvent(GLANCE_REFRESH_EVENT, { detail: { holdings: true } })
+            : new Event(GLANCE_REFRESH_EVENT)
+        );
       }
     } finally {
       setBusy(null);
@@ -562,6 +618,7 @@ export default function PersonSurface({
           onClick={() => setOpen(false)}
         >
           <div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-label={person.name}
@@ -633,6 +690,7 @@ export default function PersonSurface({
                 ) : null}
               </div>
               <button
+                ref={closeRef}
                 type="button"
                 aria-label="Close"
                 onClick={() => setOpen(false)}
@@ -648,11 +706,11 @@ export default function PersonSurface({
               things and only one of them is the trouble.
             */}
             <div className="mt-4 flex flex-col gap-2.5">
-              {person.items.length === 0 ? (
+              {items.length === 0 ? (
                 <p className="m-0 text-[13px] text-[#888780]">Holding nothing yet.</p>
               ) : null}
 
-              {person.items.map((row) => {
+              {items.map((row) => {
                 const candidates = reassignCandidates(pool, row, actorRole, hostPersonId, [
                   person.personId,
                   hostPersonId,
@@ -696,13 +754,17 @@ export default function PersonSurface({
                         type="button"
                         disabled={chosen === '' || busy !== null}
                         onClick={() =>
-                          run(`move-${row.itemId}`, () =>
-                            reassign(
-                              eventId,
-                              row,
-                              chosen,
-                              candidates.find((c) => c.personId === chosen)?.name ?? 'them'
-                            )
+                          run(
+                            `move-${row.itemId}`,
+                            () =>
+                              reassign(
+                                eventId,
+                                row,
+                                chosen,
+                                candidates.find((c) => c.personId === chosen)?.name ?? 'them'
+                              ),
+                            setOutcome,
+                            row.itemId
                           )
                         }
                         className="rounded-md bg-[#2c2c2a] px-2.5 py-1.5 text-[13px] text-[#ffffff] disabled:opacity-40"
@@ -719,7 +781,12 @@ export default function PersonSurface({
                         type="button"
                         disabled={busy !== null}
                         onClick={() =>
-                          run(`take-${row.itemId}`, () => takeOver(eventId, row, hostPersonId))
+                          run(
+                            `take-${row.itemId}`,
+                            () => takeOver(eventId, row, hostPersonId),
+                            setOutcome,
+                            row.itemId
+                          )
                         }
                         className="rounded-md border-[0.5px] border-[#dcdad2] px-2.5 py-1.5 text-[13px] disabled:opacity-40"
                       >

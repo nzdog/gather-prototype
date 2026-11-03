@@ -75,15 +75,28 @@
  * Keeps the last good board, keeps the baseline where it was, and keeps polling. It says
  * NOTHING. An error banner on a screen whose whole job is a four-second answer is the lean-in
  * Ruling 1's general test refuses, and the failure is self-correcting twenty seconds later.
+ *
+ * ── [[GTC-451]] — THE ONE NARROW EXCEPTION TO "VALUES, NEVER STRUCTURE" ───────────────────
+ *
+ * The founder's word (4 Nov 2026), for "Move" and "I’ll do it" only: the refresh those two ask
+ * for carries a holdings flag, and on that poll alone this island hands every room the items its
+ * person now holds (`GLANCE_HOLDINGS_EVENT`, `GLANCE_ROWS_EVENT`). Nothing else moves: no new
+ * request (it is the same poll), no stamp, no reload, no server re-render, no door made or
+ * unmade, and the plain twenty-second poll still hands no lists. A flag asked for while a poll is
+ * already in flight waits for the next poll to START, so the lists are never the ones read
+ * before the move; a holdings poll that fails leaves the flag owed to the next tick.
  */
 
 import { useEffect, useRef } from 'react';
 import {
+  GLANCE_HOLDINGS_EVENT,
   GLANCE_POLL_MS,
   GLANCE_REFRESH_EVENT,
   GLANCE_REPLAY_DONE_EVENT,
   GLANCE_REPLIES_EVENT,
+  GLANCE_ROWS_EVENT,
   diffLive,
+  holdingsOf,
   liveStampDecision,
   liveStates,
   repliesOf,
@@ -102,6 +115,7 @@ import {
   stripStateOf,
   TRANSITION,
 } from './paint';
+import { readingRowsOf, type ReadingRow } from './reading';
 
 /** Everyone on the board, housed and unhoused, so a repaint can find a person's payload. */
 function peopleOf(glance: EventGlance): Map<string, GlancePerson> {
@@ -141,6 +155,8 @@ export default function GlanceLive({
    * spark at 12:04 are different ticks and that is exactly the case the ruling is about.
    */
   const quietDebt = useRef(false);
+  /** [[GTC-451]] A Move or a take-over has asked that the next poll hand the rooms their items. */
+  const holdingsOwed = useRef(false);
 
   useEffect(() => {
     let live = true;
@@ -172,9 +188,17 @@ export default function GlanceLive({
       });
     };
 
-    const apply = (glance: EventGlance) => {
+    const apply = (glance: EventGlance, withHoldings: boolean) => {
       // [[GTC-350]] fix 2 — every poll hands the open rooms the words it carried (the host's only).
       window.dispatchEvent(new CustomEvent(GLANCE_REPLIES_EVENT, { detail: repliesOf(glance) }));
+      // [[GTC-451]] — and only the poll a Move or a take-over asked for hands them their items.
+      if (withHoldings) {
+        const holdings = holdingsOf(glance);
+        const rows: Record<string, ReadingRow[]> = {};
+        for (const [id, items] of Object.entries(holdings)) rows[id] = readingRowsOf(items);
+        window.dispatchEvent(new CustomEvent(GLANCE_HOLDINGS_EVENT, { detail: holdings }));
+        window.dispatchEvent(new CustomEvent(GLANCE_ROWS_EVENT, { detail: rows }));
+      }
       const next = liveStates(glance);
       const previous = baseline.current;
       baseline.current = next;
@@ -229,15 +253,30 @@ export default function GlanceLive({
     const poll = async () => {
       if (!live || busy.current || !visible()) return;
       busy.current = true;
+      // [[GTC-451]] Taken when the poll STARTS: a poll already in flight when she pressed was read
+      // before the move, so it never carries the lists.
+      const withHoldings = holdingsOwed.current;
+      holdingsOwed.current = false;
+      let handed = false;
       try {
         const response = await fetch(`/api/events/${eventId}/glance`);
         if (!response.ok) return;
         const glance = (await response.json()) as EventGlance;
-        if (live) apply(glance);
+        if (live) {
+          apply(glance, withHoldings);
+          handed = withHoldings;
+        }
       } catch {
         // A failed poll keeps the last good board and keeps polling. It says nothing.
       } finally {
         busy.current = false;
+        if (withHoldings && !handed) {
+          // Owed to the next tick, which carries the lists once; no second request now.
+          holdingsOwed.current = true;
+        } else if (holdingsOwed.current) {
+          // Asked for while this poll was in flight: one more poll, now that it has finished.
+          void poll();
+        }
       }
     };
 
@@ -256,6 +295,8 @@ export default function GlanceLive({
       if (baseline.current !== null) return;
       seedFromBoard();
       if (visible()) start();
+      // [[GTC-451]] A Move pressed before the island armed is handed its lists now.
+      if (holdingsOwed.current) void poll();
     };
 
     const onVisibility = () => {
@@ -273,7 +314,11 @@ export default function GlanceLive({
     };
 
     // Ruling 25: an action that moves the board does not wait for the next tick.
-    const onRefresh = () => {
+    // [[GTC-451]] A Move or a take-over says so in the event's detail, and only those two do.
+    const onRefresh = (e: Event) => {
+      if ((e as CustomEvent<{ holdings?: boolean } | null>).detail?.holdings === true) {
+        holdingsOwed.current = true;
+      }
       if (baseline.current === null) return;
       void poll();
     };

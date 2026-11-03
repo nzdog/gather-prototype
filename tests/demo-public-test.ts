@@ -84,7 +84,17 @@ const MAIN_PR83_SRC = [
   'A\tsrc/lib/contact-import/types.ts',
   'M\tsrc/lib/vcard.ts',
 ];
-const CHANGED_SRC = [`M\t${PAGE}`, `M\t${LAYOUT}`, `M\t${NEW_PAGE}`, ...MAIN_PR83_SRC];
+const CHANGED_SRC = [
+  `M\t${PAGE}`,
+  `M\t${LAYOUT}`,
+  `M\t${NEW_PAGE}`,
+  ...MAIN_PR83_SRC,
+  'M\tsrc/components/glance/GlanceLive.tsx',
+  'M\tsrc/components/glance/GlancePersonReading.tsx',
+  'M\tsrc/components/glance/PersonSurface.tsx',
+  'M\tsrc/components/glance/reading.ts',
+  'M\tsrc/lib/glance/live.ts',
+];
 const CONSTANTS = 'GATHER-BUILD-CONSTANTS.md';
 const GTC_392 = 'docs/tickets/GTC-392.md';
 const NEW_SCRIPT = 'test:demo-public';
@@ -92,6 +102,9 @@ const NEW_SCRIPT_VALUE = 'tsx --tsconfig tests/tsconfig.json tests/demo-public-t
 /** Main's script line from pull request 83, merged in 3 Nov 2026. */
 const MAIN_SCRIPT = 'test:contact-import';
 const MAIN_SCRIPT_VALUE = 'tsx --tsconfig tests/tsconfig.json tests/contact-import-test.ts';
+/** [[GTC-451]]'s script line, taken out (exactly once) before C8's two-line comparison. */
+const GTC451_LINE =
+  '    "test:glance-card-refresh": "NODE_OPTIONS=--experimental-websocket tsx tests/glance-card-refresh-test.ts",';
 
 // ── The words (hand-written) ─────────────────────────────────────────────────
 const HEADING = 'Gather';
@@ -406,6 +419,12 @@ export const CHECKS = {
     rest[p] = rest[p].slice(0, -1);
     return rest.join('\n') === before;
   },
+  /** [[GTC-451]] — the text without `line`, or '' unless `line` is in it exactly once. */
+  withoutOneLine(text: string, line: string): string {
+    const lines = text.split('\n');
+    if (lines.filter((l) => l === line).length !== 1) return '';
+    return lines.filter((l) => l !== line).join('\n');
+  },
   /** H1: /demo over HTTP, the switch on: 200 and the button, no note. */
   demoOverHttp(status: number, html: string): boolean {
     return (
@@ -678,7 +697,10 @@ function layerC() {
   assert(
     'C',
     `C8 package.json differs from 6bc9572 by exactly two script lines, "${NEW_SCRIPT}" and main’s "${MAIN_SCRIPT}" (pull request 83), with the comma JSON needs before main’s`,
-    CHECKS.twoScriptLines(read('package.json'), atBase('package.json'))
+    CHECKS.twoScriptLines(
+      CHECKS.withoutOneLine(read('package.json'), GTC451_LINE),
+      atBase('package.json')
+    )
   );
 }
 
