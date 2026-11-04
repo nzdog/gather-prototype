@@ -46,9 +46,9 @@ const FIXED = '026d376';
 const ROUTE = 'src/app/api/events/[id]/route.ts';
 const PAGE = 'src/app/plan/events/page.tsx';
 
-/** W59, approved 3 Nov 2026 (the third draft). */
+/** W59, approved 3 Nov 2026 (the third draft); its words as ruled in GTC-452 (4 Nov 2026). */
 const W59 =
-  "A sample event can't be deleted, but there's no need: it, and everything you type into it, is deleted the next day. To start again, sign out and try a new sample event. You can still remove anyone you added.";
+  "A sample event can't be deleted, but there's no need: Gather deletes it, and everything you type into it, the next day. To start again, sign out and try a new sample event. You can still remove anyone you added.";
 /** W7, W8a, W8b and W6 as GTC-392 part A holds them. */
 const W7 = "You've started a few sample events in the last hour. Please try again a little later.";
 const W8A = 'Lots of people are trying Gather right now. Please try again in a few minutes.';

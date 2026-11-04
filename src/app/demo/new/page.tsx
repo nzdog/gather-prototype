@@ -29,9 +29,9 @@ import { dayOf, datePairProblem, type DatePairValue } from '@/lib/events/date-pa
  * gives a plain not-found wherever it is off). Under the button, the privacy line W58.
  */
 
-/** [[GTC-392]] W58 (founder ruling Q16, 1 Nov 2026), under the start button. */
+/** [[GTC-392]] W58 under the start button; its words as ruled in [[GTC-452]] (4 Nov 2026). */
 const PRIVACY_LINE =
-  'Only you can see your sample. It, and everything you type into it, is deleted the next day.';
+  'Only you can see your sample. Gather deletes it, and everything you type into it, the next day. Plans are made with an AI service.';
 
 /** How long the save-failed line shows before the sample opens anyway. */
 const SAVE_ERROR_PAUSE_MS = 3000;
