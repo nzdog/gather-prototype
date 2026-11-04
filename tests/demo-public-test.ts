@@ -19,7 +19,7 @@
  *   D  dynamic by its own word: both drawn inside Next's build-time scope stop static generation
  *      with Next's DynamicServerError, which is how `next build` marks a route dynamic (ƒ); and
  *      the code says so
- *   W  W58: drawn once, right under the start button; written once in src; GTC-392's words
+ *   W  W58: drawn once, right under the start button; written once in src; GTC-452's words
  *   O  the off state and the start route's 404, as before
  *   C  the files: what else stays as at 6bc9572; the constants row; src and package.json differ
  *      by exactly this ticket's change
@@ -94,9 +94,10 @@ const CHANGED_SRC = [
   'M\tsrc/components/glance/PersonSurface.tsx',
   'M\tsrc/components/glance/reading.ts',
   'M\tsrc/lib/glance/live.ts',
+  'M\tsrc/app/api/events/[id]/route.ts',
 ];
 const CONSTANTS = 'GATHER-BUILD-CONSTANTS.md';
-const GTC_392 = 'docs/tickets/GTC-392.md';
+const GTC_452 = 'docs/tickets/GTC-452.md';
 const NEW_SCRIPT = 'test:demo-public';
 const NEW_SCRIPT_VALUE = 'tsx --tsconfig tests/tsconfig.json tests/demo-public-test.ts';
 /** Main's script line from pull request 83, merged in 3 Nov 2026. */
@@ -113,12 +114,12 @@ const NOTE = 'Under construction';
 const NEW_HEADING = 'Create Your Event';
 const START_BUTTON = 'Create';
 /**
- * W58, GTC-392's privacy line (founder ruling Q16, 1 Nov 2026). The ONE pin of its words in the
- * tests: if the founder rules new words, this line and the page's PRIVACY_LINE change, and W3
- * reads the new ruling instead of GTC-392's.
+ * W58, GTC-392's privacy line, in the words the founder ruled in GTC-452 (4 Nov 2026). The ONE
+ * pin of its words in the tests: if the founder rules new words, this line and the page's
+ * PRIVACY_LINE change, and W3 reads the new ruling.
  */
 const W58 =
-  'Only you can see your sample. It, and everything you type into it, is deleted the next day.';
+  'Only you can see your sample. Gather deletes it, and everything you type into it, the next day. Plans are made with an AI service.';
 /** Not "on": the switch is exactly "on" or off. */
 const OFF_VALUES: Array<[string, string | undefined]> = [
   ['unset', undefined],
@@ -339,8 +340,8 @@ export const CHECKS = {
       count(holders[0][1], 'PRIVACY_LINE') === 2
     );
   },
-  /** GTC-392's W58, as the plan writes it (wrapped over lines, in double quotes). */
-  w58In392(doc: string): string {
+  /** The ticket's W58, as it writes it (wrapped over lines, in double quotes). */
+  w58Ruled(doc: string): string {
     const m = doc.match(/^- W58 \(privacy, \/demo\/new\): "([^"]+)"/m);
     return m ? m[1].replace(/\s+/g, ' ').trim() : '';
   },
@@ -627,12 +628,12 @@ async function layerW() {
     'W2 W58 is written once in src, in the sample page as `const PRIVACY_LINE`, and no drawing of /demo holds it',
     CHECKS.writtenOnce(src) && demos.every((d) => d.html.length > 0 && !d.html.includes(W58))
   );
-  const planned = CHECKS.w58In392(read(GTC_392));
+  const ruled = CHECKS.w58Ruled(read(GTC_452));
   assert(
     'W',
-    'W3 CONTROL: this suite’s W58 is GTC-392’s W58 as approved (Q16), copied, not retyped',
-    planned === W58,
-    planned
+    'W3 CONTROL: this suite’s W58 is GTC-452’s W58 as ruled (4 Nov 2026), copied, not retyped',
+    ruled === W58,
+    ruled
   );
 }
 

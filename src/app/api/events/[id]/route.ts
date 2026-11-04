@@ -14,9 +14,9 @@ import { copyEventWhere } from '@/lib/demo/copy';
 // against each other. The field list is unchanged from what GTC-267 shipped.
 import { EVENT_WIRE_SELECT } from '@/lib/events/wire-select';
 
-// [[GTC-449]] W59 (approved 3 Nov 2026): a sample copy's refusal, in its answer's `message`.
+// [[GTC-449]] W59 (words ruled in [[GTC-452]]): a sample copy's refusal, in its answer's `message`.
 const SAMPLE_COPY_DELETE_WORDS =
-  "A sample event can't be deleted, but there's no need: it, and everything you type into it, is deleted the next day. To start again, sign out and try a new sample event. You can still remove anyone you added.";
+  "A sample event can't be deleted, but there's no need: Gather deletes it, and everything you type into it, the next day. To start again, sign out and try a new sample event. You can still remove anyone you added.";
 
 // Everything the host can change about the event itself. The material subset
 // (date/venue) additionally fires the F1 re-ask; the rest is versioned only.
