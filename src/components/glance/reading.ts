@@ -272,13 +272,21 @@ export function readingPanelFor(
           : [],
     replies: person.replies ?? [],
     door: readingDoorFor(grey, person.personId, place),
-    rows: person.items.map((row) => ({
-      itemId: row.itemId,
-      name: row.name,
-      quantity: quantityLabel(row),
-      critical: row.critical,
-    })),
+    rows: readingRowsOf(person.items),
   };
+}
+
+/**
+ * [[GTC-451]] — the panel's rows from a person's items: the one definition, read by the panel
+ * above at first paint and by the live island when a Move hands the cards what they now hold.
+ */
+export function readingRowsOf(items: readonly GlanceItem[]): ReadingRow[] {
+  return items.map((row) => ({
+    itemId: row.itemId,
+    name: row.name,
+    quantity: quantityLabel(row),
+    critical: row.critical,
+  }));
 }
 
 /** [[GTC-387]] — the pop-up's one link, or none. */
