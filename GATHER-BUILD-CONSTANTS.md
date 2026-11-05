@@ -1,7 +1,7 @@
 # GATHER BUILD CONSTANTS
 
 Reference file for AI executors and developers. Keep this file accurate.
-Last updated: 2026-11-05 (GTC-455: the listening tests GTC-453 and GTC-454, the `[demo-tally]` line
+Last updated: 2026-11-06, NZ time (GTC-455: the listening tests GTC-453 and GTC-454, the `[demo-tally]` line
 on the demo clean-up's cron row, and a dated note that `main` is now the integration branch).
 Previously 2026-10-12 (GTC-381, plan ruling Q5: `npm run lint`'s known count is 63 errors).
 Previously 2026-10-08 (GTC-367, founder ruling L1: `npm run lint`'s known count is 62 errors).
@@ -80,9 +80,9 @@ For every ticket executed, before committing:
 
 ## Base Branch
 
-> **Update, 2026-11-05 (GTC-455).** `main` is now the integration branch: the founder's note says
+> **Update, 2026-11-06, NZ time (GTC-455).** `main` is now the integration branch: the founder's note says
 > `master` was renamed `main`, and pull requests #86 and #87 merged into `main` (its tip was
-> `5eb1fc3` on 5 Nov 2026, read with `git ls-remote`). The founder's notes also say Railway deploys
+> `5eb1fc3` on 6 Nov 2026, NZ time, read with `git ls-remote`). The founder's notes also say Railway deploys
 > production from `main`.
 >
 > **Railway, as the founder stated on 6 Nov 2026, NZ time (the founder's statement; the repo
@@ -114,6 +114,10 @@ descriptive branch names prefixed by ticket ID where applicable (e.g. `GTC-001-f
 **Railway auto-deploy from `master` is OFF as of 2026-08-10** (changed by
 Nigel). Deploys are now manual, triggered from Railway's Deployments tab.
 Consequence: merging to `master` no longer deploys anything by itself.
+
+> **Superseded (GTC-455, 6 Nov 2026, NZ time):** see the dated note under Base Branch above.
+> Staging now deploys automatically from `main`, by the founder's statement. The two lines above
+> are kept for history.
 
 **Caveat — this decouples deploy timing, not the database.** Turning off
 auto-deploy only separates code delivery from *when* a deploy happens. It does
