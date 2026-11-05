@@ -1868,14 +1868,27 @@ function sourceLayer() {
   const mod = read(MODULE);
   assert(
     'V',
-    'V3 cleanup.ts imports only the client’s types, the NZ day and the copy’s marks: it sends nothing',
+    'V3 cleanup.ts imports only the client’s types, the NZ day, the copy’s marks and the demo tally: it sends nothing',
     mod.length > 0 &&
       CHECKS.sameList(CHECKS.importsOf(mod), [
         '@prisma/client',
         '@/lib/lifecycle',
         '@/lib/demo/copy',
+        // [[GTC-454]] the demo tally, pinned below to send nothing either.
+        '@/lib/demo/tally',
       ]),
     CHECKS.importsOf(mod).join(', ')
+  );
+  // [[GTC-454]] The tally reads and counts; it imports only the client's types and the setup
+  // screen's own rule, which imports nothing.
+  const tallySrc = fs.readFileSync(path.join(ROOT, 'src/lib/demo/tally.ts'), 'utf8');
+  const stageSrc = fs.readFileSync(path.join(ROOT, 'src/lib/setup/entry-stage.ts'), 'utf8');
+  assert(
+    'V',
+    'V3b tally.ts imports only the client’s types and the setup stage rule, which imports nothing',
+    CHECKS.sameList(CHECKS.importsOf(tallySrc), ['@prisma/client', '@/lib/setup/entry-stage']) &&
+      CHECKS.importsOf(stageSrc).length === 0,
+    `${CHECKS.importsOf(tallySrc).join(', ')} | ${CHECKS.importsOf(stageSrc).join(', ')}`
   );
 }
 
