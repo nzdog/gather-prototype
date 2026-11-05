@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { nzDayStart } from '@/lib/lifecycle';
 import { copyEventWhere, DEMO_COPY_EMAIL_DOMAIN } from '@/lib/demo/copy';
+import { addReading, emptyTally, readCopy, tallyLine } from '@/lib/demo/tally';
 
 /**
  * [[GTC-442]] — THE CLEAN-UP: an expired sample copy goes, with everything a visitor made in it.
@@ -292,14 +293,19 @@ export async function sweepExpiredCopies(
     counts.sessions += o.sessions;
     counts.templates += o.templates;
   };
+  // [[GTC-454]] The demo tally: each copy read just before its delete, outside its transaction,
+  // so a failed read never stops the delete (the copy counts as unread instead).
+  const demo = emptyTally();
   for (const copy of copies) {
     if (counts.deleted >= limit) break;
     counts.found++;
+    const reading = await readCopy(db, copy.id).catch(() => null);
     try {
       const outcome = await sweepOneCopy(db, copy.id);
       if (outcome.kind === 'deleted') {
         counts.deleted++;
         tally(outcome);
+        addReading(demo, reading);
         if (outcome.peopleKept > 0) {
           console.warn(
             `[demo-cleanup] kept ${outcome.peopleKept} person(s) of a copy: they belong to another event`
@@ -358,5 +364,8 @@ export async function sweepExpiredCopies(
       `${counts.orphansFailed}; people deleted ${counts.people}, kept ${counts.peopleKept}; ` +
       `accounts ${counts.accounts}, sessions ${counts.sessions}, templates ${counts.templates}`
   );
+  // [[GTC-454]] A copy its visitor deleted is gone before we can read it: a number only.
+  demo.deletedByVisitor = counts.orphansDeleted;
+  console.log(tallyLine(demo));
   return counts;
 }
