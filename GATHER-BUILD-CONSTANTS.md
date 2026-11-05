@@ -1,7 +1,9 @@
 # GATHER BUILD CONSTANTS
 
 Reference file for AI executors and developers. Keep this file accurate.
-Last updated: 2026-10-12 (GTC-381, plan ruling Q5: `npm run lint`'s known count is 63 errors).
+Last updated: 2026-11-05 (GTC-455: the listening tests GTC-453 and GTC-454, the `[demo-tally]` line
+on the demo clean-up's cron row, and a dated note that `main` is now the integration branch).
+Previously 2026-10-12 (GTC-381, plan ruling Q5: `npm run lint`'s known count is 63 errors).
 Previously 2026-10-08 (GTC-367, founder ruling L1: `npm run lint`'s known count is 62 errors).
 Previously 2026-10-06 (GTC-364, ruling Q7: the standing dev-server line blanks the AI key too).
 Previously 2026-10-05 (GTC-364: looking on screen — three safeguards, after a look while
@@ -78,6 +80,19 @@ For every ticket executed, before committing:
 
 ## Base Branch
 
+> **Update, 2026-11-05 (GTC-455).** `main` is now the integration branch: the founder's note says
+> `master` was renamed `main`, and pull requests #86 and #87 merged into `main` (its tip was
+> `5eb1fc3` on 5 Nov 2026, read with `git ls-remote`). The founder's notes also say Railway deploys
+> production from `main`.
+>
+> **Railway, as the founder stated on 6 Nov 2026, NZ time (the founder's statement; the repo
+> does not record it):** production's automatic build is switched off, so production deploys only by
+> hand; staging deploys automatically from `main`. So anything merged to `main` reaches staging
+> by itself, and a push to any other branch reaches neither.
+>
+> `.github/workflows/ci.yml` still runs on pushes to `master` only (and on pull requests). The
+> text below, and the Deploy section's `master` wording, predate this and are kept for history.
+
 `feat/moment-one-redesign` — this is the working trunk in practice. As of
 2026-08-10 it is 161 commits ahead of `master`, and `master`'s HEAD is exactly
 their merge-base — it has not moved since 2026-04-10. Day-to-day work branches
@@ -140,6 +155,15 @@ npm run test:security
 change is gated on **every `test:*` script in `package.json`**, not a chosen
 list. So nothing in that namespace may send a real message: the live TNZ smoke
 send is `npm run live:tnz-sms` (was `test:tnz-sms`), outside it.
+
+### The listening tests (GTC-453, GTC-454)
+- `npm run test:listening-report` - the Level 1 report. Reads the local database
+  (`gather_dev`), writes nothing: its one write attempt is the one that must be refused.
+- `npm run test:demo-tally` - the demo tally. Runs on the local `gather_demo` only (it refuses
+  any other database) and writes there: it makes three samples and the clean-up deletes them.
+- `npm run test:demo-cleanup` on a `gather_demo` whose shared sample is titled 2026 fails B3
+  and D8, both looking up the old 2025 title (`tests/demo-cleanup-test.ts` line 840): the seed
+  name drift, recorded at GTC-454 and GTC-455, not a clean-up fault. It needs its own ticket.
 
 ### Live sending — one switch, production only
 *(Founder ruling, 2026-09-29, GTC-274.)* **Gather sends a real text or email only
@@ -427,7 +451,7 @@ match them.
 | `src/app/api/cron/wrap-up-dispatch/route.ts` | GET / POST | `/api/cron/wrap-up-dispatch` | Dispatches pending wrap-up thank-you messages (10 min delay after creation). Sends SMS **and email** — email is the fallback when SMS fails, and the primary channel for `channel: 'email'` links | Every 10 minutes |
 | `src/app/api/cron/decide-by-followups/route.ts` | GET / POST | `/api/cron/decide-by-followups` | Sends the maybe's single decide-by follow-up, by text or email (GTC-175 / D2, GTC-251) | Every 15 minutes |
 | `src/app/api/cron/tnz-status-poll/route.ts` | GET / POST | `/api/cron/tnz-status-poll` | Asks TNZ about texts TNZ never report on — a credit hold, a blocked link, Pending, Delayed, Unknown — at 15 min, 1 h, 6 h, 24 h and 48 h after acceptance; emails the founder once per episode of a credit hold or a blocked link (GTC-290) | Every 15 minutes |
-| `src/app/api/cron/demo-cleanup/route.ts` | GET / POST | `/api/cron/demo-cleanup` | Deletes expired sample copies (started before today's NZ midnight and more than 2 hours ago) and everything a visitor made in them, oldest first, at most 25 a run; then the accounts a copy its visitor deleted leaves (the same age, read from the account), with their sessions and people, at most 25 a run; answers 500 when a copy or such an account cannot be deleted (GTC-442, GTC-448) | Hourly, at :17 past the hour |
+| `src/app/api/cron/demo-cleanup/route.ts` | GET / POST | `/api/cron/demo-cleanup` | Deletes expired sample copies (started before today's NZ midnight and more than 2 hours ago) and everything a visitor made in them, oldest first, at most 25 a run; then the accounts a copy its visitor deleted leaves (the same age, read from the account), with their sessions and people, at most 25 a run; answers 500 when a copy or such an account cannot be deleted (GTC-442, GTC-448); then prints one `[demo-tally]` line of totals, the samples read just before their delete (GTC-454) | Hourly, at :17 past the hour |
 
 ### Cron health
 *(Founder rulings Q1 and Q2, 2026-09-30, GTC-339.)* A cron's status code and

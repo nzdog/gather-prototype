@@ -11,8 +11,10 @@ import { hasAnyPlan, momentTwoBegun } from '@/lib/setup/entry-stage';
  * and the clean-up is about to delete it. Nothing is read while a visitor is using it.
  *
  * NO ONE IN THE PICTURE. The reading is counts and yes/no facts only. It never reads a name, an
- * address, a token value, a visitor tag, or a link-open's metadata, and the log line carries
- * totals across samples, never a value from one sample.
+ * address, a token value, a visitor tag, or a link-open's metadata. The log line carries totals
+ * across the samples one run deletes; a run that deletes a single sample prints that sample's own
+ * counts, with no id, name or address. That is accepted: the line stays in the private server log,
+ * and the fewer-than-5 rule is for numbers shared outside (founder ruling, 5 Nov 2026, option A).
  *
  * NEVER IN THE WAY OF A DELETE. The reading is its own read, outside the copy's delete
  * transaction. If it fails, the copy is still deleted and counted as unread.

@@ -52,6 +52,31 @@ function check(name: string, ok: boolean, detail = ''): void {
 
 const T = (iso: string) => new Date(iso);
 
+/** [[GTC-455]] Does `word` appear in `text` as a whole word (no letter or digit touching it)? */
+function leaks(text: string, word: string): boolean {
+  const escaped = word.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![A-Za-z0-9])${escaped}(?![A-Za-z0-9])`, 'i').test(text);
+}
+
+function partW(): void {
+  // Invented words. "Ann" sits inside "Planning" but is not a whole word there.
+  check('W1 a short name inside a label word is not a leak', !leaks('A. PLANNING FINISHED', 'Ann'));
+  check('W2 the same name as a whole word is a leak', leaks('Host Ann came back', 'Ann'));
+  check('W3 case does not hide a leak', leaks('host ANN came back', 'ann'));
+  check(
+    'W4 an email is caught whole',
+    leaks('sent to someone@example.invalid today', 'someone@example.invalid')
+  );
+  check(
+    'W5 a phone number is caught, plus sign and all',
+    leaks('call +64 21 000 0000 now', '+64 21 000 0000')
+  );
+  check(
+    'W6 a title is caught across spaces',
+    leaks('Report for Invented Picnic 2026', 'Invented Picnic 2026')
+  );
+}
+
 // ── A. NZ calendar helpers ────────────────────────────────────────────────────────────────
 
 function partA(): void {
@@ -343,8 +368,10 @@ async function partC(prisma: PrismaClient): Promise<void> {
     ...items.map((i) => i.name),
     ...teams.map((t) => t.name),
   ].filter((w): w is string => typeof w === 'string' && w.trim().length >= 3);
-  const lower = output.toLowerCase();
-  const hits = words.filter((w) => lower.includes(w.toLowerCase()));
+  // [[GTC-455]] Whole words only: a seeded word counts when no letter or digit touches it on
+  // either side. Matching inside words raised a false alarm on a short seeded name sitting
+  // inside one of the report's own label words.
+  const hits = words.filter((w) => leaks(output, w));
   // The count only — the words themselves are never printed.
   check(
     `C2 the seeded run prints none of ${words.length} seeded names, emails, phones and titles`,
@@ -362,21 +389,27 @@ async function partC(prisma: PrismaClient): Promise<void> {
   const nonDemo = await prisma.event.findMany({ where: { isDemo: false }, select: { id: true } });
   const dir = mkdtempSync(join(tmpdir(), 'listening-'));
   const listFile = join(dir, 'tests.txt');
-  writeFileSync(listFile, `# my test gatherings\n${nonDemo[0].id}\n\n`);
-  const opts = parseArgs(['--exclude', listFile, '--since', '2020-01-01'], new Date());
-  const withList = (await withReadOnly(prisma, (tx) => loadAndBuild(tx, opts, new Date()))).join(
-    '\n'
-  );
-  check(
-    'C5 one gathering on the test list is left out',
-    withList.includes('test list 1,'),
-    withList.split('\n')[5]
-  );
-  check(
-    'C6 the gatherings read drop by one',
-    withList.includes(`Gatherings read: ${nonDemo.length - 1}`),
-    withList.split('\n')[4]
-  );
+  // [[GTC-455]] C5 and C6 need one ordinary gathering to put on the list. A database with none
+  // (a local gather_demo can be all samples) skips them, said aloud, never counted as passed.
+  if (nonDemo.length === 0) {
+    console.log('- C5, C6 skipped: this database has no non-demo gathering to put on the list');
+  } else {
+    writeFileSync(listFile, `# my test gatherings\n${nonDemo[0].id}\n\n`);
+    const opts = parseArgs(['--exclude', listFile, '--since', '2020-01-01'], new Date());
+    const withList = (await withReadOnly(prisma, (tx) => loadAndBuild(tx, opts, new Date()))).join(
+      '\n'
+    );
+    check(
+      'C5 one gathering on the test list is left out',
+      withList.includes('test list 1,'),
+      withList.split('\n')[5]
+    );
+    check(
+      'C6 the gatherings read drop by one',
+      withList.includes(`Gatherings read: ${nonDemo.length - 1}`),
+      withList.split('\n')[4]
+    );
+  }
   const future = parseArgs(['--cutoff', '2099-01-01'], new Date());
   const withCutoff = (
     await withReadOnly(prisma, (tx) => loadAndBuild(tx, future, new Date()))
@@ -421,6 +454,7 @@ function partS(): void {
 async function run(): Promise<void> {
   partA();
   partB();
+  partW();
   partS();
   const prisma = new PrismaClient();
   try {

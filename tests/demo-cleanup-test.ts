@@ -1887,7 +1887,15 @@ function sourceLayer() {
     'V',
     'V3b tally.ts imports only the client’s types and the setup stage rule, which imports nothing',
     CHECKS.sameList(CHECKS.importsOf(tallySrc), ['@prisma/client', '@/lib/setup/entry-stage']) &&
-      CHECKS.importsOf(stageSrc).length === 0,
+      CHECKS.importsOf(stageSrc).length === 0 &&
+      // [[GTC-455]] "types" checked, not assumed: the client import is `import type`, and
+      // neither file uses a form importsOf cannot see (double quotes, export-from, require,
+      // a dynamic import).
+      /^import type \{[^}]*\} from '@prisma\/client';$/m.test(tallySrc) &&
+      !/^import \{[^}]*\} from '@prisma\/client'/m.test(tallySrc) &&
+      [tallySrc, stageSrc].every(
+        (src) => !/from "|^export [^\n]* from |\brequire\(|\bimport\(/m.test(src)
+      ),
     `${CHECKS.importsOf(tallySrc).join(', ')} | ${CHECKS.importsOf(stageSrc).join(', ')}`
   );
 }
