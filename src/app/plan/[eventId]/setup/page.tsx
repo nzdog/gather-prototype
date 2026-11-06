@@ -744,6 +744,9 @@ function EventSetupFlow() {
         phone: m.person?.phoneNumber || undefined,
         // Reflects the STORED role, so the control shows the host what she chose.
         adultRoled: m.householdRole !== 'CHILD',
+        // [[GTC-449]]: the stored marker, shown back to the host. Only a CHILD can be on "Decide
+        // later", and only the exact boolean true counts (an older answer without it reads false).
+        decideLater: m.householdRole === 'CHILD' && m.messagingUndecided === true,
       })),
       littleCount: h.littleCount || 0,
       guests: guestMembers.map((g: any) => ({

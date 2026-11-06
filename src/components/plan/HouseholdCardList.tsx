@@ -15,6 +15,8 @@ export interface SavedHousehold {
     phone?: string;
     /** GTC-172 (C1): host roled this kid with a job as an adult (§10.6). */
     adultRoled?: boolean;
+    /** [[GTC-449]]: the host chose "Decide later" for this kid (type only here; S2.6 shows it). */
+    decideLater?: boolean;
   }>;
   littleCount: number;
   guests: Array<{ personEventId?: string; name: string; email?: string; phone?: string }>;
