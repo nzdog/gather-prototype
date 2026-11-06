@@ -1,7 +1,9 @@
 # GATHER BUILD CONSTANTS
 
 Reference file for AI executors and developers. Keep this file accurate.
-Last updated: 2026-11-06, NZ time (GTC-455: the listening tests GTC-453 and GTC-454, the `[demo-tally]` line
+Last updated: 2026-11-06, NZ time (GTC-456: production's automatic build is now on, and
+migrations run in Railway's pre-deploy step, not the build command; both by the founder's statement).
+Previously 2026-11-06, NZ time (GTC-455: the listening tests GTC-453 and GTC-454, the `[demo-tally]` line
 on the demo clean-up's cron row, and a dated note that `main` is now the integration branch).
 Previously 2026-10-12 (GTC-381, plan ruling Q5: `npm run lint`'s known count is 63 errors).
 Previously 2026-10-08 (GTC-367, founder ruling L1: `npm run lint`'s known count is 62 errors).
@@ -86,9 +88,12 @@ For every ticket executed, before committing:
 > production from `main`.
 >
 > **Railway, as the founder stated on 6 Nov 2026, NZ time (the founder's statement; the repo
-> does not record it):** production's automatic build is switched off, so production deploys only by
-> hand; staging deploys automatically from `main`. So anything merged to `main` reaches staging
-> by itself, and a push to any other branch reaches neither.
+> does not record it):** staging deploys automatically from `main`. Production's automatic build
+> was switched off; the founder switched it on the same day to release GTC-453 to GTC-455 (live
+> at 11:51 NZ time). While it stays on, anything merged to `main` deploys to staging and
+> production together: production's trigger branch is `main`, per the founder's deploy log and
+> the founder's statement of 31 Oct 2026 (the Source setting itself was not seen here). Whether
+> it stays on is the founder's decision: check Railway (GTC-456).
 >
 > `.github/workflows/ci.yml` still runs on pushes to `master` only (and on pull requests). The
 > text below, and the Deploy section's `master` wording, predate this and are kept for history.
@@ -115,9 +120,9 @@ descriptive branch names prefixed by ticket ID where applicable (e.g. `GTC-001-f
 Nigel). Deploys are now manual, triggered from Railway's Deployments tab.
 Consequence: merging to `master` no longer deploys anything by itself.
 
-> **Superseded (GTC-455, 6 Nov 2026, NZ time):** see the dated note under Base Branch above.
-> Staging now deploys automatically from `main`, by the founder's statement. The two lines above
-> are kept for history.
+> **Superseded (GTC-455, GTC-456, 6 Nov 2026, NZ time):** see the dated note under Base Branch
+> above. Staging deploys automatically from `main`, and production's automatic build is now on,
+> by the founder's statement. The two lines above are kept for history.
 
 **Caveat — this decouples deploy timing, not the database.** Turning off
 auto-deploy only separates code delivery from *when* a deploy happens. It does
@@ -125,6 +130,21 @@ NOT separate code from the production database: schema migrations still apply
 to the production database the moment code carrying them is deployed and run,
 regardless of how that deploy was triggered. Rehearse any migration against a
 copy of the production database before triggering a deploy that carries one.
+
+> **Migrations run in Railway's pre-deploy step, not the build (GTC-456, 6 Nov 2026, NZ time).**
+> By the founder's D8 ruling of 26 Oct 2026, migrations run in Railway's **pre-deploy** step, as
+> `npm run db:migrate:deploy` (`prisma migrate deploy`, in `package.json`), typed in Railway
+> only. Production's custom build command leaves them out on purpose; its build log for the
+> GTC-453 to GTC-455 release shows it as
+> `node scripts/check-live-sends.mjs && npm run db:generate && npx next build`. A failed
+> pre-deploy stops the deployment. A release that carries a migration still needs the rehearsal
+> above, on a copy, first. The D8 ruling, the pre-deploy command (shown in the founder's 28 Oct
+> 2026 screenshots of the production service) and the stop on failure are the founder's
+> statement, recorded in the founder's Gather Build project docs, not in this repo:
+> `claude/deploy-log-2026-10.md` (D8) and `claude/deploy-handoff-2026-10-26.md` (production as
+> seen on 28 Oct). Not checked here: the pre-deploy step's own log,
+> the live Railway settings, and staging's build and pre-deploy commands. Zone 5's sentence
+> under Do-Not-Touch Zones is unchanged.
 
 ---
 
