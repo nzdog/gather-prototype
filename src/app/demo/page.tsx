@@ -1,4 +1,5 @@
 import { connection } from 'next/server';
+import DemoExplainer from '@/components/demo/DemoExplainer';
 import TryItYourselfButton from '@/components/demo/TryItYourselfButton';
 import { isDemoStartOn } from '@/lib/demo/start-switch';
 
@@ -30,6 +31,11 @@ const UNDER_CONSTRUCTION = 'Under construction';
  * own word, so the switch is read at each request, never once when the site is built. Setting
  * GATHER_DEMO_START to exactly `on` opens the demo; deleting it closes it again.
  *
+ * [[GTC-457]] (founder, 8 Nov 2026): under the button, one closed fold-out, "How Gather works, step
+ * by step" (`DemoExplainer`). It is drawn in the button's own branch, so it follows the same switch
+ * and never shows beside "Under construction". The button keeps its width (the page is wider now,
+ * for the explainer).
+ *
  * The "Sarah demo" button and its handler went with GTC-395; the route's no-body path and the
  * tokens route went with [[GTC-442]]. The reset route still exists, answers 404 in production, and
  * elsewhere force-resets whichever database the server points at; this page never calls it.
@@ -38,11 +44,16 @@ export default async function DemoLandingPage() {
   await connection();
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-sm mx-auto px-5 py-20 text-center">
+      <div className="max-w-xl mx-auto px-5 py-20 text-center">
         <h1 className="text-3xl font-bold text-gray-900 mb-10">Gather</h1>
         <div className="flex flex-col gap-3">
           {isDemoStartOn() ? (
-            <TryItYourselfButton href={SAMPLE_PAGE} label={TRY_IT_YOURSELF} />
+            <>
+              <div className="mx-auto w-full max-w-sm">
+                <TryItYourselfButton href={SAMPLE_PAGE} label={TRY_IT_YOURSELF} />
+              </div>
+              <DemoExplainer />
+            </>
           ) : (
             <p className="text-gray-600">{UNDER_CONSTRUCTION}</p>
           )}
