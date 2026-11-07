@@ -36,6 +36,10 @@ const UNDER_CONSTRUCTION = 'Under construction';
  * and never shows beside "Under construction". The button keeps its width (the page is wider now,
  * for the explainer).
  *
+ * [[GTC-458]] (founder, 8 Nov 2026: "very boring page ... style it using Gather's design styles"):
+ * the page takes the theme's warm white and warm greys, and the heading is set in the serif the
+ * wordmark uses. The explainer under the button is now a heading and one fold-out per step.
+ *
  * The "Sarah demo" button and its handler went with GTC-395; the route's no-body path and the
  * tokens route went with [[GTC-442]]. The reset route still exists, answers 404 in production, and
  * elsewhere force-resets whichever database the server points at; this page never calls it.
@@ -43,9 +47,11 @@ const UNDER_CONSTRUCTION = 'Under construction';
 export default async function DemoLandingPage() {
   await connection();
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-xl mx-auto px-5 py-20 text-center">
-        <h1 className="text-3xl font-bold text-gray-900 mb-10">Gather</h1>
+    <div className="min-h-screen bg-warm-white">
+      <div className="max-w-2xl mx-auto px-5 py-16 text-center">
+        <h1 className="font-serif text-5xl font-semibold tracking-tight text-warm-black mb-10">
+          Gather
+        </h1>
         <div className="flex flex-col gap-3">
           {isDemoStartOn() ? (
             <>
@@ -55,7 +61,7 @@ export default async function DemoLandingPage() {
               <DemoExplainer />
             </>
           ) : (
-            <p className="text-gray-600">{UNDER_CONSTRUCTION}</p>
+            <p className="text-warm-grey-600">{UNDER_CONSTRUCTION}</p>
           )}
         </div>
       </div>
