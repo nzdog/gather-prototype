@@ -341,6 +341,19 @@ export default function Moment1InputForm({
   const isEditing = !!editingHousehold;
 
   /**
+   * [[GTC-449]] (S2.3, ruling 26) — was this kid row SAVED as decide later? Decided only by
+   * comparing with the saved household the form opened with, matched by personEventId: never by
+   * name or by place in the list. A row with no personEventId (a new row, or one typed in this
+   * sitting), a row saved any other way (including one saved before this change), and every row of
+   * a household not being edited, is not.
+   */
+  const savedAsDecideLater = (h: GuestForm): boolean =>
+    !!h.personEventId &&
+    !!editingHousehold?.helpers.some(
+      (s) => s.personEventId === h.personEventId && onDecideLater(s)
+    );
+
+  /**
    * The host's own household, while capturing it (`hostMode`) or when she later edits it from the
    * card list. GTC-256 (Ruling 6) put its message switch here; [[GTC-384]] (Q5) replaced the switch
    * with one true line, and (Q4) hides the contact picker here.
@@ -1513,12 +1526,32 @@ export default function Moment1InputForm({
                           onChange={(e) => {
                             const checked = e.target.checked;
                             // [[GTC-449]]: the tick wins (ruling 20): ticking turns "Decide later"
-                            // off, and unticking does not bring it back. The details stay.
+                            // off, and unticking does not bring it back. Ticking keeps the details
+                            // (they are the adult's now). [[GTC-449]] (S2.3, ruling 108): taking the
+                            // tick off again on a row SAVED as decide later settles it to "don't
+                            // message" by that route, so its held email and phone are emptied here,
+                            // as when the choice is turned off. In the form only; nothing is stored
+                            // until Save, and Cancel or Discard leave the stored details alone.
+                            const settle = !checked && savedAsDecideLater(helper);
                             setHelpers((prev) =>
                               prev.map((h, j) =>
-                                j === i ? { ...h, adultRoled: checked, decideLater: false } : h
+                                j === i
+                                  ? {
+                                      ...h,
+                                      adultRoled: checked,
+                                      decideLater: false,
+                                      ...(settle ? { email: '', phone: '' } : {}),
+                                    }
+                                  : h
                               )
                             );
+                            if (settle) {
+                              setHelperErrors((prev) =>
+                                prev.map((err, j) =>
+                                  j === i ? { ...err, email: undefined, phone: undefined } : err
+                                )
+                              );
+                            }
                           }}
                           className="mt-1 h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
                         />
@@ -1546,9 +1579,30 @@ export default function Moment1InputForm({
                             checked={onDecideLater(helper)}
                             onChange={(e) => {
                               const checked = e.target.checked;
+                              // [[GTC-449]] (S2.3, rulings 17 and 26): turning the choice off on a row
+                              // SAVED as decide later, with the tick off, is "don't message": its held
+                              // email and phone are emptied here, in the form only. Nothing is stored
+                              // until Save, and Cancel or Discard leave the stored details alone.
+                              // Choosing it, ticking, or a row not saved that way, empties nothing.
+                              const settle = !checked && savedAsDecideLater(helper);
                               setHelpers((prev) =>
-                                prev.map((h, j) => (j === i ? { ...h, decideLater: checked } : h))
+                                prev.map((h, j) =>
+                                  j === i
+                                    ? {
+                                        ...h,
+                                        decideLater: checked,
+                                        ...(settle ? { email: '', phone: '' } : {}),
+                                      }
+                                    : h
+                                )
                               );
+                              if (settle) {
+                                setHelperErrors((prev) =>
+                                  prev.map((err, j) =>
+                                    j === i ? { ...err, email: undefined, phone: undefined } : err
+                                  )
+                                );
+                              }
                             }}
                             className="mt-1 h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
                           />

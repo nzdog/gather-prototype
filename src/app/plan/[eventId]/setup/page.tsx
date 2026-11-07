@@ -327,6 +327,36 @@ type SetupItem = PlanApiItem & {
 };
 
 /**
+ * [[GTC-449]] (S2.3, ruling 35) — which kids' email addresses did the server KEEP when the host
+ * settled them? Pure; compares what the page sent with what came back, and adds no server field.
+ * A kid counts only when every one of these holds, so an ordinary save never shows W9:
+ *   - the row names a person (personEventId), and the household as it was saved had that person
+ *     on "Decide later" (ruling 26);
+ *   - the row was sent with Decide later explicitly off and the tick off ("don't message");
+ *   - the row's email was sent blank;
+ *   - the answer still holds an email for that person.
+ * Returns their names, for W9, in the order the household sends them.
+ */
+function keptEmailNames(
+  before: SavedHousehold | undefined,
+  sent: Moment1PersonInput,
+  after: SavedHousehold
+): string[] {
+  if (!before) return [];
+  const names: string[] = [];
+  for (const row of sent.helpers ?? []) {
+    if (!row.personEventId || row.decideLater !== false || row.adultRoled) continue;
+    if (row.email?.trim()) continue;
+    const was = before.helpers.find((h) => h.personEventId === row.personEventId);
+    const now = after.helpers.find((h) => h.personEventId === row.personEventId);
+    if (was?.decideLater === true && !was.adultRoled && now?.email?.trim()) {
+      names.push(now.name || row.name);
+    }
+  }
+  return names;
+}
+
+/**
  * [[GTC-392]] — the page, and the sample event's banner beside it. The banner renders nothing on a
  * real event; the screens themselves are `EventSetupFlow`, unchanged.
  */
@@ -501,6 +531,17 @@ function EventSetupFlow() {
   // [[GTC-392]] part B — "Add a crowd" on a sample copy (W16 to W21): where it is up to.
   const [crowd, setCrowd] = useState<CrowdState>('idle');
   const [editingHousehold, setEditingHousehold] = useState<SavedHousehold | null>(null);
+  // [[GTC-449]] (S2.3, ruling 35): W9 stays on a household's card until she next opens that
+  // household (or leaves the page). Opening it (Edit) puts it in `editingHousehold`; the note goes then.
+  useEffect(() => {
+    const id = editingHousehold?.id;
+    if (!id) return;
+    setHouseholds((prev) =>
+      prev.some((h) => h.id === id && h.keptEmailNames)
+        ? prev.map((h) => (h.id === id ? { ...h, keptEmailNames: undefined } : h))
+        : prev
+    );
+  }, [editingHousehold?.id]);
   const moment1FormRef = useRef<HTMLDivElement>(null);
   // [[GTC-365]] item 16: the household being typed in Moment 1, shown in the column before Save.
   // It lives only here; nothing is written until she presses Save.
@@ -1306,7 +1347,18 @@ function EventSetupFlow() {
       }
       const data = await res.json();
       const saved = apiHouseholdToSaved(data.household);
-      setHouseholds((prev) => prev.map((h) => (h.id === householdId ? saved : h)));
+      // [[GTC-449]] (S2.3, ruling 35): a kid settled to "don't message" whose email the server kept
+      // is told to the host as W9 on the saved card, from what was sent against what came back.
+      const kept = keptEmailNames(
+        households.find((h) => h.id === householdId),
+        person,
+        saved
+      );
+      setHouseholds((prev) =>
+        prev.map((h) =>
+          h.id === householdId ? (kept.length ? { ...saved, keptEmailNames: kept } : saved) : h
+        )
+      );
       setEditingHousehold(null);
       jumpMoment1ToTop();
     };

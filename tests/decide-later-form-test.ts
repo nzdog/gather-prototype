@@ -1,22 +1,25 @@
 /**
- * GTC-449 S2.2 (ruling 76) — the form: a "Decide later" choice on a kid row.
+ * GTC-449 S2.2 and S2.3 (form half) (ruling 76) — the form: a "Decide later" choice on a kid row,
+ * and what happens when it is turned off.
  *
  * What this file pins, from "The tests" in docs/tickets/GTC-449.md: item 7 (a restored draft keeps
- * the marker), the first part of item 11 (the form's choice: offered only while the tick is off,
- * ticking keeps what is typed, choosing stores nothing until Save), the form half of item 16 (the
- * control is not offered while the tick is on; the tick wins) and the form side of item 4 (what the
- * form SENDS, and what it shows when a saved household is reopened). The rest of item 11 (turning
- * the choice off empties the boxes: the blanking) and the page test for W9 belong to S2.3's form
- * half and are NOT here; the confirm line is S2.4's.
+ * the marker), item 11 (the form's choice: offered only while the tick is off, ticking keeps what
+ * is typed, choosing stores nothing until Save; and, from S2.3, turning the choice off on a row
+ * saved as decide later empties its email and phone boxes), the form half of item 16 (the control
+ * is not offered while the tick is on; the tick wins), the form side of item 4 (what the form
+ * SENDS, and what it shows when a saved household is reopened) and, from S2.3, the page test of
+ * item 18 (after a refused clear the saved card shows W9, once). The confirm line is S2.4's.
  *
- * The words are the founder's, W1 to W3 of "The W-lines, as ruled" (rulings 13 and 14), exactly:
+ * The words are the founder's, W1 to W3 and W9 of "The W-lines, as ruled" (rulings 13, 14 and 35),
+ * exactly:
  *   W1  "Decide later"
  *   W2  "Gather won't message {name} until you choose. You can change this any time."
  *   W3  "Gather is keeping {name}'s contact details for now. It won't use them unless you choose to
  *        message {name}."
- * Check W.1 reads them out of the ticket, so a word changed in the code and not in the ticket (or
- * the other way) is red. No other new sentence is checked for, and none may be added without a
- * ruling.
+ *   W9  "We kept {name}'s email address on file, because there is a no-email note for them."
+ * Checks W.1 and W.2 read them out of the ticket, so a word changed in the code and not in the
+ * ticket (or the other way) is red. No other new sentence is checked for, and none may be added
+ * without a ruling.
  *
  * HOW THE FORM IS RUN WITHOUT A BROWSER. The estate has no jsdom (see tweaks-d-test.tsx, which
  * compiles a page with a stand-in React). This file does the same for `Moment1InputForm.tsx`: it
@@ -30,7 +33,11 @@
  * calls the network or can send anything; a `fetch` that is called at all is a red check.
  *
  * `apiHouseholdToSaved` lives inside the setup page's component, so it is read out of the page's
- * live source with the TypeScript parser and run on its own.
+ * live source with the TypeScript parser and run on its own. The page's `handleEditSave` (the
+ * save of an edit) and its effect that drops W9 when a household is next opened are read out the
+ * same way and run with stand-ins for the page's state setters and its one `fetch`, so the real
+ * page code decides what the saved card carries. The real card (`HouseholdCardList`) is rendered
+ * to markup to see W9 on it.
  *
  * Run: npx tsx --tsconfig tests/tsconfig.json tests/decide-later-form-test.ts
  * Writes nothing: no rows, no files.
@@ -39,9 +46,11 @@
 import fs from 'fs';
 import path from 'path';
 import * as ReactAll from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { transformSync } from 'esbuild';
 import * as ts from 'typescript';
 
+import HouseholdCardList from '../src/components/plan/HouseholdCardList';
 import { ViewerIdContext } from '../src/components/shared/Providers';
 import * as FormDraft from '../src/lib/households/form-draft';
 import { moment1ChannelChoices } from '../src/components/plan/household-channel-choices';
@@ -88,6 +97,9 @@ const W2 = (n: string) =>
   `Gather won't message ${n} until you choose. You can change this any time.`;
 const W3 = (n: string) =>
   `Gather is keeping ${n}'s contact details for now. It won't use them unless you choose to message ${n}.`;
+// W9, ruling 35, exactly (straight apostrophe, as the ticket has it; ruling 103).
+const W9 = (n: string) =>
+  `We kept ${n}'s email address on file, because there is a no-email note for them.`;
 
 // ── A fetch that must never be called ────────────────────────────────────────
 let fetchCalls = 0;
@@ -455,6 +467,80 @@ function loadApiHouseholdToSaved(): ((h: any) => any) | null {
   return m.exports.f;
 }
 
+// ── The setup page's other pieces (S2.3), read out of its live source the same way ──────────
+/**
+ * Finds one piece of the page by a rule over its syntax tree, compiles it (types stripped) and
+ * evaluates it with the given names in scope. Returns null when the piece is not there, so a check
+ * that needs it is red and says so. The names are the page's own free variables: state setters, its
+ * one `fetch`, `event`, `households` and the helpers it calls. A piece that reaches for a name not
+ * given here throws, which reads as a red check, never as a pass.
+ */
+function compileFromPage(
+  pick: (sf: ts.SourceFile) => ts.Node | null,
+  scope: Record<string, unknown>
+): any {
+  const src = read(SETUP);
+  const sf = ts.createSourceFile('page.tsx', src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const node = pick(sf);
+  if (!node) return null;
+  const js = transformSync(`exports.f = ${node.getText(sf)};`, {
+    loader: 'ts',
+    format: 'cjs',
+  }).code;
+  const m: { exports: any } = { exports: {} };
+  new Function('module', 'exports', ...Object.keys(scope), js)(
+    m,
+    m.exports,
+    ...Object.values(scope)
+  );
+  return m.exports.f;
+}
+function findNode(sf: ts.SourceFile, test: (n: ts.Node) => ts.Node | null | undefined) {
+  let found: ts.Node | null = null;
+  const visit = (n: ts.Node) => {
+    if (!found) found = test(n) ?? null;
+    if (!found) ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  return found;
+}
+/** The page's module-level `keptEmailNames` (the pure rule for W9), or null if it is not there. */
+const loadKeptEmailNames = (): ((b: any, s: any, a: any) => string[]) | null =>
+  compileFromPage(
+    (sf) =>
+      findNode(sf, (n) =>
+        ts.isFunctionDeclaration(n) && n.name?.text === 'keptEmailNames' ? n : null
+      ),
+    {}
+  );
+/** The page's `handleEditSave` (the save of an edit), run with the given stand-ins. */
+const loadHandleEditSave = (scope: Record<string, unknown>) =>
+  compileFromPage(
+    (sf) =>
+      findNode(sf, (n) =>
+        ts.isVariableDeclaration(n) &&
+        ts.isIdentifier(n.name) &&
+        n.name.text === 'handleEditSave' &&
+        n.initializer &&
+        ts.isArrowFunction(n.initializer)
+          ? n.initializer
+          : null
+      ),
+    scope
+  ) as ((householdId: string, person: any) => Promise<void>) | null;
+/** The page's effect that drops W9 when a household is next opened (the one that names the note). */
+const loadKeptNoteEffect = (scope: Record<string, unknown>) =>
+  compileFromPage(
+    (sf) =>
+      findNode(sf, (n) => {
+        if (!ts.isCallExpression(n) || !ts.isIdentifier(n.expression)) return null;
+        if (n.expression.text !== 'useEffect') return null;
+        const first = n.arguments[0];
+        return first && first.getText(sf).includes('keptEmailNames') ? first : null;
+      }),
+    scope
+  ) as (() => void) | null;
+
 const member = (over: Record<string, unknown>) => ({
   id: 'pe-josh',
   role: 'GUEST',
@@ -482,13 +568,19 @@ const household = (members: any[]): any => ({
 
 async function main() {
   // ══ W — THE WORDS ARE THE RULED WORDS ═══════════════════════════════════════
-  section('W — the words are the founder’s W1 to W3');
+  section('W — the words are the founder’s W1 to W3 and W9');
   const ticket = read(TICKET).replace(/\s+/g, ' ');
   assert(
     'W.1',
     'W2 and W3 as the code will say them (with {name}) are in the ticket exactly, and so is W1',
     ticket.includes(W2('{name}')) && ticket.includes(W3('{name}')) && ticket.includes(`*"${W1}"*`),
     { w2: ticket.includes(W2('{name}')), w3: ticket.includes(W3('{name}')) }
+  );
+  assert(
+    'W.2',
+    'W9 as the code will say it (with {name}) is in the ticket exactly, as ruling 35 gave it',
+    ticket.includes(W9('{name}')),
+    { w9: ticket.includes(W9('{name}')) }
   );
 
   // ══ H — THE STAND-IN RUNS THE REAL FORM ═════════════════════════════════════
@@ -978,6 +1070,881 @@ async function main() {
     'the picker offers the ticked kid and not the kid on decide later (the tick is off)',
     choices.length === 1 && choices[0].personEventId === 'pe-b',
     choices
+  );
+
+  // ══ 11 (SECOND PART) — TURNING THE CHOICE OFF EMPTIES THE BOXES ═════════════
+  section('11 — turning Decide later off on a row SAVED as decide later empties its boxes');
+  const emailOf = (i: Inst, n = 0) => boxIn(i, 'Email', n)?.props.value;
+  const phoneOf = (i: Inst, n = 0) => boxIn(i, 'Phone', n)?.props.value;
+  const nameOf = (i: Inst, n = 0) => boxIn(i, "Kid's name", n)?.props.value;
+  const rowAt = (i: Inst, name: string) => [0, 1, 2].find((n) => nameOf(i, n) === name);
+  const JOSH = { email: 'josh@example.com', phone: '021 555 0199' };
+  /** A saved household as the page hands it to the form, with the kids as given. */
+  const savedKids = (
+    kids: Array<{
+      id?: string;
+      name: string;
+      email?: string;
+      phone?: string;
+      decideLater?: boolean;
+    }>
+  ): any => ({
+    ...saved(true),
+    helpers: kids.map((k) => ({
+      ...(k.id ? { personEventId: k.id } : {}),
+      name: k.name,
+      email: k.email,
+      phone: k.phone,
+      adultRoled: false,
+      ...(k.decideLater === undefined ? {} : { decideLater: k.decideLater }),
+    })),
+  });
+  let cancels = 0;
+  const mountSaved = (hh: any, opts: Parameters<typeof mount>[1] = {}) =>
+    mount({ editingHousehold: hh, onCancelEdit: () => void cancels++ }, opts);
+
+  const b1 = editForm(true);
+  const before1 = JSON.stringify(b1.f.props.editingHousehold);
+  const fetchB1 = fetchCalls;
+  tick(b1, decideBox(b1), false);
+  assert(
+    '11.12',
+    'a kid saved as decide later, tick off: turning the choice off empties the email and phone boxes at once; the name stays, the choice is off, W2 and W3 are gone',
+    decideBox(b1)?.props.checked === false &&
+      emailOf(b1) === '' &&
+      phoneOf(b1) === '' &&
+      nameOf(b1) === 'Josh' &&
+      !rowText(b1).includes(W2('Josh')) &&
+      !rowText(b1).includes(W3('Josh')),
+    { checked: decideBox(b1)?.props.checked, email: emailOf(b1), phone: phoneOf(b1) }
+  );
+  const b2 = mount({
+    editingHousehold: { ...saved(true), isHostHousehold: true },
+    onCancelEdit() {},
+  });
+  tick(b2, decideBox(b2), false);
+  assert(
+    '11.13',
+    'the same on her own household’s edit (it settles through the same Save changes, C11)',
+    emailOf(b2) === '' && phoneOf(b2) === '' && nameOf(b2) === 'Josh',
+    { email: emailOf(b2), phone: phoneOf(b2) }
+  );
+
+  const nv1 = editForm(false);
+  tick(nv1, decideBox(nv1), true);
+  tick(nv1, decideBox(nv1), false);
+  const nv2 = editForm(undefined);
+  tick(nv2, decideBox(nv2), true);
+  tick(nv2, decideBox(nv2), false);
+  assert(
+    '11.14',
+    'a saved kid NOT saved as decide later (the choice off, or saved before this change): choosing and un-choosing in one sitting empties nothing (ruling 26)',
+    emailOf(nv1) === JOSH.email &&
+      phoneOf(nv1) === JOSH.phone &&
+      emailOf(nv2) === JOSH.email &&
+      phoneOf(nv2) === JOSH.phone,
+    { a: [emailOf(nv1), phoneOf(nv1)], b: [emailOf(nv2), phoneOf(nv2)] }
+  );
+
+  const np = mountSaved(savedKids([{ name: 'Josh', ...JOSH, decideLater: true }]));
+  tick(np, decideBox(np), false);
+  assert(
+    '11.15',
+    'a saved decide-later kid whose row has no personEventId is not blanked (ruling 26: matched by personEventId)',
+    emailOf(np) === JOSH.email && phoneOf(np) === JOSH.phone,
+    { email: emailOf(np), phone: phoneOf(np) }
+  );
+
+  const nw = await formWithKid('Josh');
+  type(nw, boxIn(nw, 'Email'), JOSH.email);
+  type(nw, boxIn(nw, 'Phone'), JOSH.phone);
+  tick(nw, decideBox(nw), true);
+  tick(nw, decideBox(nw), false);
+  assert(
+    '11.16',
+    'a new household’s kid row: choosing and un-choosing empties nothing (a row never saved as decide later)',
+    emailOf(nw) === JOSH.email && phoneOf(nw) === JOSH.phone,
+    { email: emailOf(nw), phone: phoneOf(nw) }
+  );
+
+  // By personEventId, not by name or place: a NEW row typed with the same name as the saved
+  // decide-later kid is a different row and is not blanked; the saved one is.
+  const sm = editForm(true);
+  await pressButton(sm, 'Kid with a job');
+  const newIdx = [0, 1].find((n) => nameOf(sm, n) === '');
+  type(sm, boxIn(sm, "Kid's name", newIdx ?? 0), 'Josh');
+  type(sm, boxIn(sm, 'Email', newIdx ?? 0), 'other@example.com');
+  type(sm, boxIn(sm, 'Phone', newIdx ?? 0), '021 555 0111');
+  tick(sm, decideBox(sm, newIdx ?? 0), true);
+  tick(sm, decideBox(sm, newIdx ?? 0), false);
+  const newRowKept = emailOf(sm, newIdx ?? 0) === 'other@example.com';
+  const oldIdx = newIdx === 0 ? 1 : 0;
+  tick(sm, decideBox(sm, oldIdx), false);
+  assert(
+    '11.17',
+    'a new row typed in the same sitting with the SAME NAME as the saved decide-later kid is not blanked; the saved one (by personEventId) is',
+    newIdx !== undefined &&
+      newRowKept &&
+      emailOf(sm, newIdx) === 'other@example.com' &&
+      phoneOf(sm, newIdx) === '021 555 0111' &&
+      emailOf(sm, oldIdx) === '' &&
+      phoneOf(sm, oldIdx) === '',
+    { newIdx, newRow: [emailOf(sm, newIdx ?? 0), phoneOf(sm, newIdx ?? 0)] }
+  );
+
+  const two = mountSaved(
+    savedKids([
+      { id: 'pe-josh', name: 'Josh', ...JOSH, decideLater: true },
+      {
+        id: 'pe-tia',
+        name: 'Tia',
+        email: 'tia@example.com',
+        phone: '021 555 0188',
+        decideLater: false,
+      },
+    ])
+  );
+  const tiaAt = rowAt(two, 'Tia');
+  const joshAt = rowAt(two, 'Josh');
+  tick(two, decideBox(two, tiaAt ?? 0), true);
+  tick(two, decideBox(two, tiaAt ?? 0), false);
+  const tiaIntact =
+    emailOf(two, tiaAt ?? 0) === 'tia@example.com' && phoneOf(two, tiaAt ?? 0) === '021 555 0188';
+  const joshStill =
+    emailOf(two, joshAt ?? 0) === JOSH.email && decideBox(two, joshAt ?? 0)?.props.checked === true;
+  tick(two, decideBox(two, joshAt ?? 0), false);
+  assert(
+    '11.18',
+    'two saved kids: only the one saved as decide later is blanked, and only when its own choice is turned off; the other keeps its details',
+    tiaAt !== undefined &&
+      joshAt !== undefined &&
+      tiaIntact &&
+      joshStill &&
+      emailOf(two, joshAt) === '' &&
+      phoneOf(two, joshAt) === '' &&
+      emailOf(two, tiaAt) === 'tia@example.com' &&
+      phoneOf(two, tiaAt) === '021 555 0188',
+    { tiaAt, joshAt, tiaIntact, joshStill }
+  );
+
+  const tk = editForm(true);
+  tick(tk, tickBox(tk), true);
+  assert(
+    '11.19',
+    'a kid saved as decide later, settled to "message" with the tick: the email and phone are kept (they are the adult’s now), the tick is on, the choice is gone',
+    tickBox(tk)?.props.checked === true &&
+      !decideLabel(tk) &&
+      emailOf(tk) === JOSH.email &&
+      phoneOf(tk) === JOSH.phone,
+    { email: emailOf(tk), phone: phoneOf(tk) }
+  );
+
+  assert(
+    '11.20',
+    'nothing is stored until Save: after the boxes are emptied no save ran, the form called no fetch, and the saved household it was given is exactly as it was',
+    b1.calls.edited.length === 0 &&
+      b1.calls.added.length === 0 &&
+      b1.calls.hosted.length === 0 &&
+      fetchCalls === fetchB1 &&
+      JSON.stringify(b1.f.props.editingHousehold) === before1
+  );
+
+  await pressButton(b1, 'Save changes');
+  const sent1 = b1.calls.edited[0]?.p;
+  const kid1 = sent1?.helpers?.[0];
+  assert(
+    '11.21',
+    'Save then sends the settle the server reads: the same kid (personEventId), decideLater false, tick off, and no email and no phone',
+    b1.calls.edited.length === 1 &&
+      kid1?.personEventId === 'pe-josh' &&
+      kid1.decideLater === false &&
+      kid1.adultRoled === false &&
+      kid1.email === undefined &&
+      kid1.phone === undefined &&
+      sent1.primaryContact.email === 'kate@example.com',
+    kid1
+  );
+
+  const un = editForm(true);
+  await pressButton(un, 'Save changes');
+  const kidUn = un.calls.edited[0]?.p.helpers?.[0];
+  assert(
+    '11.22',
+    'a decide-later kid saved again unchanged keeps both details in the request and stays decideLater true (ruling 17)',
+    !!kidUn &&
+      kidUn.decideLater === true &&
+      kidUn.email === JOSH.email &&
+      kidUn.phone === JOSH.phone,
+    kidUn
+  );
+
+  const cc = mountSaved(saved(true));
+  const ccBefore = JSON.stringify(cc.f.props.editingHousehold);
+  const cancelsBefore = cancels;
+  tick(cc, decideBox(cc), false);
+  await pressButton(cc, 'Cancel');
+  const again = mountSaved(cc.f.props.editingHousehold);
+  assert(
+    '11.23',
+    'empty the boxes, then Cancel: the page is told, nothing was saved or fetched, the saved household is exactly as it was, and opening it again shows the stored details with the choice on',
+    cancels === cancelsBefore + 1 &&
+      cc.calls.edited.length === 0 &&
+      JSON.stringify(cc.f.props.editingHousehold) === ccBefore &&
+      emailOf(again) === JOSH.email &&
+      phoneOf(again) === JOSH.phone &&
+      decideBox(again)?.props.checked === true,
+    {
+      cancels: cancels - cancelsBefore,
+      email: emailOf(again),
+      checked: decideBox(again)?.props.checked,
+    }
+  );
+
+  const dStore = new MemStore();
+  const d1 = editForm(true, { viewerId: 'u1', store: dStore });
+  tick(d1, decideBox(d1), false);
+  const draftKept = FormDraft.readDraft(dStore, 'u1', 'ev-1', 'edit:hh-1');
+  const d2 = editForm(true, { viewerId: 'u1', store: dStore });
+  const reopenedBlank =
+    emailOf(d2) === '' && phoneOf(d2) === '' && decideBox(d2)?.props.checked === false;
+  await pressButton(d2, 'Discard');
+  assert(
+    '11.24',
+    'empty the boxes and leave: the kept draft holds them empty; open it again and press Discard: the stored email and phone and the choice come back, and the draft is gone',
+    draftKept !== null &&
+      reopenedBlank &&
+      emailOf(d2) === JOSH.email &&
+      phoneOf(d2) === JOSH.phone &&
+      decideBox(d2)?.props.checked === true &&
+      FormDraft.readDraft(dStore, 'u1', 'ev-1', 'edit:hh-1') === null,
+    {
+      draftKept: draftKept !== null,
+      reopenedBlank,
+      email: emailOf(d2),
+      checked: decideBox(d2)?.props.checked,
+    }
+  );
+
+  const rStore = new MemStore();
+  FormDraft.writeDraft(
+    rStore,
+    'u1',
+    'ev-1',
+    'edit:hh-1',
+    draftOf([row({ personEventId: 'pe-josh', decideLater: true })], {
+      name: 'Kate Smith-Jones',
+      email: 'kate@example.com',
+      phone: '021 123 4567',
+    }),
+    'Kate Smith'
+  );
+  const rf = editForm(true, { viewerId: 'u1', store: rStore });
+  const draftBack = primaryName(rf)?.props.value === 'Kate Smith-Jones';
+  tick(rf, decideBox(rf), false);
+  assert(
+    '11.25',
+    'a household put back from a kept draft still knows the kid was saved as decide later: turning the choice off there empties the boxes too',
+    draftBack && emailOf(rf) === '' && phoneOf(rf) === '',
+    { draftBack, email: emailOf(rf), phone: phoneOf(rf) }
+  );
+
+  // An error shown under a box (a bad address or number) must not stay under a box that has just
+  // been emptied: the emptied boxes are blank and valid, so the fix-it text goes with them.
+  const er = editForm(true);
+  type(er, boxIn(er, 'Email'), 'not-an-email');
+  type(er, boxIn(er, 'Phone'), 'abc');
+  boxIn(er, 'Email')?.props.onBlur();
+  boxIn(er, 'Phone')?.props.onBlur();
+  settle(er.f);
+  const errorsShown =
+    rowText(er).includes('Invalid email format') && rowText(er).includes('Invalid NZ phone number');
+  tick(er, decideBox(er), false);
+  assert(
+    '11.26',
+    'a bad address or number showing under the boxes is cleared with them when the choice is turned off: no error text, no aria-invalid',
+    errorsShown &&
+      !rowText(er).includes('Invalid email format') &&
+      !rowText(er).includes('Invalid NZ phone number') &&
+      boxIn(er, 'Email')?.props['aria-invalid'] === undefined &&
+      boxIn(er, 'Phone')?.props['aria-invalid'] === undefined,
+    { errorsShown, row: rowText(er).slice(0, 200) }
+  );
+
+  // ══ 11 (ruling 108) — TICKED, THEN UNTICKED, IS ALSO "DON'T MESSAGE" ════════
+  // A kid SAVED as decide later whose message box is ticked and then unticked has been settled to
+  // "don't message" by that route as surely as by turning Decide later off, so the same boxes are
+  // emptied, at the moment of unticking. Ticking itself keeps the details (the adult's now).
+  section('11 — ruling 108: a saved decide-later kid, ticked then unticked, is emptied too');
+  const t1 = editForm(true);
+  const t1Before = JSON.stringify(t1.f.props.editingHousehold);
+  const fetchT1 = fetchCalls;
+  tick(t1, tickBox(t1), true);
+  const keptWhileTicked =
+    tickBox(t1)?.props.checked === true && emailOf(t1) === JOSH.email && phoneOf(t1) === JOSH.phone;
+  tick(t1, tickBox(t1), false);
+  assert(
+    '11.27',
+    'a kid saved as decide later: ticking keeps the boxes, then unticking empties the email and phone at once; the tick is off, the choice is offered but not on, the name stays, W2 and W3 are not shown',
+    keptWhileTicked &&
+      tickBox(t1)?.props.checked === false &&
+      emailOf(t1) === '' &&
+      phoneOf(t1) === '' &&
+      nameOf(t1) === 'Josh' &&
+      !!decideBox(t1) &&
+      decideBox(t1)?.props.checked === false &&
+      !rowText(t1).includes(W2('Josh')) &&
+      !rowText(t1).includes(W3('Josh')),
+    { keptWhileTicked, email: emailOf(t1), phone: phoneOf(t1), tick: tickBox(t1)?.props.checked }
+  );
+  const t2 = mount({
+    editingHousehold: { ...saved(true), isHostHousehold: true },
+    onCancelEdit() {},
+  });
+  tick(t2, tickBox(t2), true);
+  tick(t2, tickBox(t2), false);
+  assert(
+    '11.28',
+    'the same on her own household’s edit',
+    emailOf(t2) === '' && phoneOf(t2) === '' && nameOf(t2) === 'Josh',
+    { email: emailOf(t2), phone: phoneOf(t2) }
+  );
+
+  // Never for any other row: not saved as decide later (choice off, or saved before this change),
+  // a decide-later row with no personEventId, a new row typed with the saved kid's name, and a new
+  // household's row.
+  const nsA = editForm(false);
+  const nsB = editForm(undefined);
+  const nsC = mountSaved(savedKids([{ name: 'Josh', ...JOSH, decideLater: true }]));
+  for (const x of [nsA, nsB, nsC]) {
+    tick(x, tickBox(x), true);
+    tick(x, tickBox(x), false);
+  }
+  const nsD = editForm(true);
+  await pressButton(nsD, 'Kid with a job');
+  const nsDidx = [0, 1].find((n) => nameOf(nsD, n) === '');
+  type(nsD, boxIn(nsD, "Kid's name", nsDidx ?? 0), 'Josh');
+  type(nsD, boxIn(nsD, 'Email', nsDidx ?? 0), 'other@example.com');
+  type(nsD, boxIn(nsD, 'Phone', nsDidx ?? 0), '021 555 0111');
+  tick(nsD, tickBox(nsD, nsDidx ?? 0), true);
+  tick(nsD, tickBox(nsD, nsDidx ?? 0), false);
+  const nsE = await formWithKid('Josh');
+  type(nsE, boxIn(nsE, 'Email'), JOSH.email);
+  type(nsE, boxIn(nsE, 'Phone'), JOSH.phone);
+  tick(nsE, tickBox(nsE), true);
+  tick(nsE, tickBox(nsE), false);
+  assert(
+    '11.29',
+    'ticked then unticked empties nothing on any other row: not saved as decide later (choice off, or no marker), no personEventId, a new row with the same name as the saved kid, a new household’s row',
+    emailOf(nsA) === JOSH.email &&
+      phoneOf(nsA) === JOSH.phone &&
+      emailOf(nsB) === JOSH.email &&
+      phoneOf(nsB) === JOSH.phone &&
+      emailOf(nsC) === JOSH.email &&
+      phoneOf(nsC) === JOSH.phone &&
+      nsDidx !== undefined &&
+      emailOf(nsD, nsDidx) === 'other@example.com' &&
+      phoneOf(nsD, nsDidx) === '021 555 0111' &&
+      emailOf(nsE) === JOSH.email &&
+      phoneOf(nsE) === JOSH.phone,
+    {
+      a: [emailOf(nsA), phoneOf(nsA)],
+      b: [emailOf(nsB), phoneOf(nsB)],
+      c: [emailOf(nsC), phoneOf(nsC)],
+      d: [emailOf(nsD, nsDidx ?? 0), phoneOf(nsD, nsDidx ?? 0)],
+      e: [emailOf(nsE), phoneOf(nsE)],
+    }
+  );
+
+  const tw = mountSaved(
+    savedKids([
+      { id: 'pe-josh', name: 'Josh', ...JOSH, decideLater: true },
+      {
+        id: 'pe-tia',
+        name: 'Tia',
+        email: 'tia@example.com',
+        phone: '021 555 0188',
+        decideLater: false,
+      },
+    ])
+  );
+  const twTia = rowAt(tw, 'Tia');
+  const twJosh = rowAt(tw, 'Josh');
+  tick(tw, tickBox(tw, twTia ?? 0), true);
+  tick(tw, tickBox(tw, twTia ?? 0), false);
+  const twTiaKept =
+    emailOf(tw, twTia ?? 0) === 'tia@example.com' && phoneOf(tw, twTia ?? 0) === '021 555 0188';
+  const twJoshKept =
+    emailOf(tw, twJosh ?? 0) === JOSH.email && phoneOf(tw, twJosh ?? 0) === JOSH.phone;
+  tick(tw, tickBox(tw, twJosh ?? 0), true);
+  tick(tw, tickBox(tw, twJosh ?? 0), false);
+  assert(
+    '11.30',
+    'two saved kids: ticking and unticking the plain one empties nothing, and the decide-later one is emptied only by its own tick and untick; the other keeps its details',
+    twTia !== undefined &&
+      twJosh !== undefined &&
+      twTiaKept &&
+      twJoshKept &&
+      emailOf(tw, twJosh) === '' &&
+      phoneOf(tw, twJosh) === '' &&
+      emailOf(tw, twTia) === 'tia@example.com' &&
+      phoneOf(tw, twTia) === '021 555 0188',
+    { twTia, twJosh, twTiaKept, twJoshKept }
+  );
+
+  assert(
+    '11.31',
+    'nothing is stored by the tick and untick: no save ran, the form called no fetch, the saved household it was given is exactly as it was',
+    t1.calls.edited.length === 0 &&
+      t1.calls.added.length === 0 &&
+      t1.calls.hosted.length === 0 &&
+      fetchCalls === fetchT1 &&
+      JSON.stringify(t1.f.props.editingHousehold) === t1Before
+  );
+  await pressButton(t1, 'Save changes');
+  const kidT1 = t1.calls.edited[0]?.p.helpers?.[0];
+  assert(
+    '11.32',
+    'Save then sends the same settle as turning the choice off: the same kid (personEventId), decideLater false, tick off, and no email and no phone',
+    t1.calls.edited.length === 1 &&
+      kidT1?.personEventId === 'pe-josh' &&
+      kidT1.decideLater === false &&
+      kidT1.adultRoled === false &&
+      kidT1.email === undefined &&
+      kidT1.phone === undefined,
+    kidT1
+  );
+
+  // Cancel and Discard put the stored details back, as they do for turning the choice off.
+  const tc = mountSaved(saved(true));
+  const tcBefore = JSON.stringify(tc.f.props.editingHousehold);
+  const tcCancels = cancels;
+  tick(tc, tickBox(tc), true);
+  tick(tc, tickBox(tc), false);
+  await pressButton(tc, 'Cancel');
+  const tcAgain = mountSaved(tc.f.props.editingHousehold);
+  const tStore = new MemStore();
+  const td1 = editForm(true, { viewerId: 'u1', store: tStore });
+  tick(td1, tickBox(td1), true);
+  tick(td1, tickBox(td1), false);
+  const td2 = editForm(true, { viewerId: 'u1', store: tStore });
+  const tdBlank =
+    emailOf(td2) === '' && phoneOf(td2) === '' && decideBox(td2)?.props.checked === false;
+  await pressButton(td2, 'Discard');
+  assert(
+    '11.33',
+    'after ticking and unticking: Cancel leaves the stored household as it was and opening it again shows the stored details with the choice on; a kept draft holds them empty, and Discard brings the stored details and the choice back',
+    cancels === tcCancels + 1 &&
+      tc.calls.edited.length === 0 &&
+      JSON.stringify(tc.f.props.editingHousehold) === tcBefore &&
+      emailOf(tcAgain) === JOSH.email &&
+      phoneOf(tcAgain) === JOSH.phone &&
+      decideBox(tcAgain)?.props.checked === true &&
+      tdBlank &&
+      emailOf(td2) === JOSH.email &&
+      phoneOf(td2) === JOSH.phone &&
+      decideBox(td2)?.props.checked === true &&
+      FormDraft.readDraft(tStore, 'u1', 'ev-1', 'edit:hh-1') === null,
+    { cancelled: cancels - tcCancels, again: emailOf(tcAgain), tdBlank, discard: emailOf(td2) }
+  );
+
+  const te = editForm(true);
+  type(te, boxIn(te, 'Email'), 'not-an-email');
+  type(te, boxIn(te, 'Phone'), 'abc');
+  boxIn(te, 'Email')?.props.onBlur();
+  boxIn(te, 'Phone')?.props.onBlur();
+  settle(te.f);
+  const teShown =
+    rowText(te).includes('Invalid email format') && rowText(te).includes('Invalid NZ phone number');
+  tick(te, tickBox(te), true);
+  tick(te, tickBox(te), false);
+  assert(
+    '11.34',
+    'a bad address or number showing under the boxes is cleared with them when the tick is taken off again: no error text, no aria-invalid',
+    teShown &&
+      !rowText(te).includes('Invalid email format') &&
+      !rowText(te).includes('Invalid NZ phone number') &&
+      boxIn(te, 'Email')?.props['aria-invalid'] === undefined &&
+      boxIn(te, 'Phone')?.props['aria-invalid'] === undefined,
+    { teShown, row: rowText(te).slice(0, 200) }
+  );
+
+  const tm = editForm(true);
+  tick(tm, tickBox(tm), true);
+  await pressButton(tm, 'Save changes');
+  const kidTm = tm.calls.edited[0]?.p.helpers?.[0];
+  assert(
+    '11.35',
+    'ticked and left ticked (settled to "message"): Save sends the adult with both details as stored and decideLater false',
+    !!kidTm &&
+      kidTm.adultRoled === true &&
+      kidTm.decideLater === false &&
+      kidTm.email === JOSH.email &&
+      kidTm.phone === JOSH.phone,
+    kidTm
+  );
+
+  // ══ 18 — THE PAGE: W9 AFTER A REFUSED CLEAR ═════════════════════════════════
+  section('18 — the setup page: after a refused clear the saved card carries W9');
+  let keptRule: ((b: any, s: any, a: any) => string[]) | null = null;
+  try {
+    keptRule = loadKeptEmailNames();
+  } catch (err) {
+    console.log(`    could not read keptEmailNames: ${(err as Error).message.split('\n')[0]}`);
+  }
+  assert(
+    '18.10',
+    'the setup page has a module-level keptEmailNames, the pure rule for which kids’ emails were kept',
+    typeof keptRule === 'function'
+  );
+
+  /** The page's real handleEditSave, run with the answer the server would give. */
+  async function saveEdit(opts: { list: any[]; sent: any; answer: any }) {
+    let list = opts.list;
+    let editing: unknown = 'untouched';
+    let jumps = 0;
+    let run: ReturnType<typeof loadHandleEditSave> = null;
+    try {
+      run = loadHandleEditSave({
+        event: { id: 'ev-1' },
+        fetch: async () => ({ ok: true, json: async () => ({ household: opts.answer }) }),
+        apiHouseholdToSaved: toSaved,
+        households: opts.list,
+        setHouseholds: (u: any) => void (list = typeof u === 'function' ? u(list) : u),
+        setEditingHousehold: (v: unknown) => void (editing = v),
+        jumpMoment1ToTop: () => void jumps++,
+        keptEmailNames: keptRule ?? undefined,
+      });
+    } catch (err) {
+      console.log(`    could not read handleEditSave: ${(err as Error).message.split('\n')[0]}`);
+    }
+    if (!run) return null;
+    await run('hh-1', opts.sent);
+    return { list, editing, jumps };
+  }
+  const apiKid = (
+    id: string,
+    name: string,
+    email: string | null,
+    undecided: boolean,
+    role = 'CHILD'
+  ) =>
+    member({
+      id,
+      householdRole: role,
+      messagingUndecided: undecided,
+      person: { id: `p-${name.toLowerCase()}`, name, email, phoneNumber: null },
+    });
+  const listWith = (...kids: any[]): any[] => [toSaved!(household(kids))];
+  const notesOf = (r: Awaited<ReturnType<typeof saveEdit>>) => r?.list?.[0]?.keptEmailNames;
+  const none = (n: unknown) => !Array.isArray(n) || n.length === 0;
+
+  // The request is what the REAL form sends (the form half and the page half meet here).
+  const fSettle = editForm(true);
+  tick(fSettle, decideBox(fSettle), false);
+  await pressButton(fSettle, 'Save changes');
+  const settleSent = fSettle.calls.edited[0]?.p;
+
+  const refused = toSaved
+    ? await saveEdit({
+        list: listWith(apiKid('pe-josh', 'Josh', JOSH.email, true)),
+        sent: settleSent,
+        answer: household([apiKid('pe-josh', 'Josh', JOSH.email, false)]),
+      })
+    : null;
+  assert(
+    '18.11',
+    'a refused clear (a decide-later kid settled, the email sent blank, the answer still holds the email): the saved household carries one note, naming Josh',
+    JSON.stringify(notesOf(refused)) === JSON.stringify(['Josh']),
+    notesOf(refused)
+  );
+  assert(
+    '18.12',
+    'the save still does what it did: the household in the list is the saved one, the form is closed, and the page jumps to the top once',
+    !!refused &&
+      refused.list.length === 1 &&
+      refused.list[0].id === 'hh-1' &&
+      refused.list[0].helpers[0]?.decideLater === false &&
+      refused.editing === null &&
+      refused.jumps === 1,
+    refused && { editing: refused.editing, jumps: refused.jumps }
+  );
+
+  const cleared = toSaved
+    ? await saveEdit({
+        list: listWith(apiKid('pe-josh', 'Josh', JOSH.email, true)),
+        sent: settleSent,
+        answer: household([apiKid('pe-josh', 'Josh', null, false)]),
+      })
+    : null;
+  assert(
+    '18.13',
+    'a settle that cleared the email (the answer’s email is blank): no note',
+    !!cleared && none(notesOf(cleared)),
+    notesOf(cleared)
+  );
+
+  const fPlain = editForm(false);
+  type(fPlain, boxIn(fPlain, 'Email'), '');
+  await pressButton(fPlain, 'Save changes');
+  const plainSent = fPlain.calls.edited[0]?.p;
+  const plainCleared = toSaved
+    ? await saveEdit({
+        list: listWith(apiKid('pe-josh', 'Josh', JOSH.email, false)),
+        sent: plainSent,
+        answer: household([apiKid('pe-josh', 'Josh', null, false)]),
+      })
+    : null;
+  const plainEvenIfKept = toSaved
+    ? await saveEdit({
+        list: listWith(apiKid('pe-josh', 'Josh', JOSH.email, false)),
+        sent: plainSent,
+        answer: household([apiKid('pe-josh', 'Josh', JOSH.email, false)]),
+      })
+    : null;
+  assert(
+    '18.14',
+    'an ordinary clear (a plain kid, never on decide later): no note, even if the answer still held the email (only a settle is a refusal)',
+    !!plainCleared &&
+      !!plainEvenIfKept &&
+      none(notesOf(plainCleared)) &&
+      none(notesOf(plainEvenIfKept)),
+    { cleared: notesOf(plainCleared), kept: notesOf(plainEvenIfKept) }
+  );
+
+  const fTyped = editForm(true);
+  tick(fTyped, decideBox(fTyped), false);
+  type(fTyped, boxIn(fTyped, 'Email'), 'new@example.com');
+  await pressButton(fTyped, 'Save changes');
+  const typedNew = toSaved
+    ? await saveEdit({
+        list: listWith(apiKid('pe-josh', 'Josh', JOSH.email, true)),
+        sent: fTyped.calls.edited[0]?.p,
+        answer: household([apiKid('pe-josh', 'Josh', 'new@example.com', false)]),
+      })
+    : null;
+  assert(
+    '18.15',
+    'a settle with a new email typed (the email was not sent blank): no note, the email is as sent',
+    !!typedNew && none(notesOf(typedNew)),
+    notesOf(typedNew)
+  );
+
+  const fTick = editForm(true);
+  tick(fTick, tickBox(fTick), true);
+  await pressButton(fTick, 'Save changes');
+  const tickSent = fTick.calls.edited[0]?.p;
+  const tickBlank = tickSent && {
+    ...tickSent,
+    helpers: tickSent.helpers.map((h: any) => ({ ...h, email: undefined })),
+  };
+  const ticked = toSaved
+    ? await saveEdit({
+        list: listWith(apiKid('pe-josh', 'Josh', JOSH.email, true)),
+        sent: tickBlank,
+        answer: household([apiKid('pe-josh', 'Josh', JOSH.email, false, 'GUEST')]),
+      })
+    : null;
+  assert(
+    '18.16',
+    'settled to "message" (the tick on) with the email blank and the answer holding one: not a settle to "don’t message", so no note',
+    !!ticked && tickBlank?.helpers[0].adultRoled === true && none(notesOf(ticked)),
+    notesOf(ticked)
+  );
+
+  const noId = toSaved
+    ? await saveEdit({
+        list: listWith(apiKid('pe-josh', 'Josh', JOSH.email, true)),
+        sent: {
+          ...settleSent,
+          helpers: settleSent.helpers.map((h: any) => ({ ...h, personEventId: undefined })),
+        },
+        answer: household([apiKid('pe-josh', 'Josh', JOSH.email, false)]),
+      })
+    : null;
+  assert(
+    '18.17',
+    'a kid row sent with no personEventId is not a settle (ruling 26): no note',
+    !!noId && none(notesOf(noId)),
+    notesOf(noId)
+  );
+
+  const withMarker = (v: unknown) => ({
+    ...settleSent,
+    helpers: settleSent.helpers.map((h: any) => {
+      const { decideLater: _drop, ...rest } = h;
+      return v === 'omit' ? rest : { ...rest, decideLater: v };
+    }),
+  });
+  const staleTab = toSaved
+    ? await saveEdit({
+        list: listWith(apiKid('pe-josh', 'Josh', JOSH.email, true)),
+        sent: withMarker('omit'),
+        answer: household([apiKid('pe-josh', 'Josh', JOSH.email, false)]),
+      })
+    : null;
+  const stillLater = toSaved
+    ? await saveEdit({
+        list: listWith(apiKid('pe-josh', 'Josh', JOSH.email, true)),
+        sent: withMarker(true),
+        answer: household([apiKid('pe-josh', 'Josh', JOSH.email, true)]),
+      })
+    : null;
+  assert(
+    '18.24',
+    'a request that leaves the marker out (an old tab), or keeps it true, is not a settle (ruling 20 and the server’s rule): no note either way',
+    !!staleTab && !!stillLater && none(notesOf(staleTab)) && none(notesOf(stillLater)),
+    { stale: notesOf(staleTab), later: notesOf(stillLater) }
+  );
+
+  const fTwo = mountSaved(
+    savedKids([
+      { id: 'pe-josh', name: 'Josh', ...JOSH, decideLater: true },
+      {
+        id: 'pe-tia',
+        name: 'Tia',
+        email: 'tia@example.com',
+        phone: '021 555 0188',
+        decideLater: true,
+      },
+    ])
+  );
+  tick(fTwo, decideBox(fTwo, rowAt(fTwo, 'Josh') ?? 0), false);
+  tick(fTwo, decideBox(fTwo, rowAt(fTwo, 'Tia') ?? 0), false);
+  await pressButton(fTwo, 'Save changes');
+  const twoSent = fTwo.calls.edited[0]?.p;
+  const twoRefused = toSaved
+    ? await saveEdit({
+        list: listWith(
+          apiKid('pe-josh', 'Josh', JOSH.email, true),
+          apiKid('pe-tia', 'Tia', 'tia@example.com', true)
+        ),
+        sent: twoSent,
+        answer: household([
+          apiKid('pe-josh', 'Josh', JOSH.email, false),
+          apiKid('pe-tia', 'Tia', 'tia@example.com', false),
+        ]),
+      })
+    : null;
+  assert(
+    '18.18',
+    'two kids settled and both emails kept: a note for each, in the order of the household, each naming its own kid',
+    JSON.stringify(notesOf(twoRefused)) === JSON.stringify(['Josh', 'Tia']) ||
+      JSON.stringify(notesOf(twoRefused)) === JSON.stringify(['Tia', 'Josh']),
+    notesOf(twoRefused)
+  );
+
+  const otherHh = toSaved
+    ? { ...toSaved(household([apiKid('pe-ann', 'Ann', 'ann@example.com', true)])), id: 'hh-9' }
+    : null;
+  const withOther = toSaved
+    ? await saveEdit({
+        list: [otherHh, ...listWith(apiKid('pe-josh', 'Josh', JOSH.email, true))],
+        sent: settleSent,
+        answer: household([apiKid('pe-josh', 'Josh', JOSH.email, false)]),
+      })
+    : null;
+  assert(
+    '18.19',
+    'only the household that was saved changes: another household in the list is the very same object, with no note',
+    !!withOther &&
+      withOther.list[0] === otherHh &&
+      withOther.list[0].keptEmailNames === undefined &&
+      JSON.stringify(withOther.list[1]?.keptEmailNames) === JSON.stringify(['Josh']),
+    withOther && withOther.list.map((h: any) => [h.id, h.keptEmailNames])
+  );
+
+  // ── The card: W9 on it, once, quiet, with no button ────────────────────────
+  const markup = (hs: any[]) =>
+    renderToStaticMarkup(
+      ReactAll.createElement(HouseholdCardList as any, { households: hs, onEdit: () => {} })
+    );
+  const markupText = (html: string) =>
+    html
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&#x27;/g, "'")
+      .replace(/&amp;/g, '&')
+      .replace(/\s+/g, ' ')
+      .trim();
+  const count = (hay: string, needle: string) => hay.split(needle).length - 1;
+  const notes = (html: string) =>
+    [...html.matchAll(/<p[^>]*data-kept-email-note[^>]*>([\s\S]*?)<\/p>/g)].map((m) => m[1]);
+
+  const cardKept = markup(refused?.list ?? []);
+  const cardKeptText = markupText(cardKept);
+  assert(
+    '18.20',
+    'the saved card shows W9 exactly as ruled, once, naming Josh, as one quiet line with no button or link inside it',
+    count(cardKeptText, W9('Josh')) === 1 &&
+      notes(cardKept).length === 1 &&
+      notes(cardKept).every((n) => !/<(button|a|input)\b/.test(n)) &&
+      cardKeptText.includes('Edit'),
+    { notes: notes(cardKept) }
+  );
+  const cardAfterClear = markupText(markup(cleared?.list ?? []));
+  const cardAfterOrdinary = markupText(markup(plainCleared?.list ?? []));
+  const cardNever = markupText(markup(listWith(apiKid('pe-josh', 'Josh', JOSH.email, true))));
+  assert(
+    '18.21',
+    'W9 is not on the card after a settle that cleared the email, after an ordinary clear, or on a household that never had a refusal',
+    !!cleared &&
+      !!plainCleared &&
+      !cardAfterClear.includes('We kept') &&
+      !cardAfterOrdinary.includes('We kept') &&
+      !cardNever.includes('We kept'),
+    { cardAfterClear, cardNever }
+  );
+  const cardTwo = markupText(markup(twoRefused?.list ?? []));
+  assert(
+    '18.22',
+    'two refusals on one household: W9 once for each kid, each with its own name',
+    count(cardTwo, W9('Josh')) === 1 && count(cardTwo, W9('Tia')) === 1,
+    cardTwo
+  );
+
+  // ── Until she next opens the household (the page's effect on `editingHousehold`) ─────────
+  let held: any[] = [];
+  const noted = (): any[] =>
+    toSaved
+      ? [
+          {
+            ...toSaved(household([apiKid('pe-josh', 'Josh', JOSH.email, false)])),
+            keptEmailNames: ['Josh'],
+          },
+          { ...otherHh, keptEmailNames: ['Ann'] },
+        ]
+      : [];
+  const runOpen = (editingHousehold: unknown) => {
+    let effect: ReturnType<typeof loadKeptNoteEffect> = null;
+    try {
+      effect = loadKeptNoteEffect({
+        editingHousehold,
+        setHouseholds: (u: any) => void (held = typeof u === 'function' ? u(held) : u),
+      });
+    } catch (err) {
+      console.log(`    could not run the effect: ${(err as Error).message.split('\n')[0]}`);
+    }
+    effect?.();
+    return effect;
+  };
+  held = noted();
+  const heldAtStart = held;
+  const eNone = runOpen(null);
+  const sameWhenClosed = held === heldAtStart;
+  const eOther = runOpen({ id: 'hh-404' });
+  const sameWhenOther = held === heldAtStart;
+  const eOpen = runOpen({ id: 'hh-1' });
+  assert(
+    '18.23',
+    'opening a household (Edit) drops its note and only its note; with no household open, or another one, nothing in the list changes',
+    !!eNone &&
+      !!eOther &&
+      !!eOpen &&
+      sameWhenClosed &&
+      sameWhenOther &&
+      held[0]?.keptEmailNames === undefined &&
+      held[0]?.id === 'hh-1' &&
+      JSON.stringify(held[1]?.keptEmailNames) === JSON.stringify(['Ann']),
+    held.map((h: any) => [h.id, h.keptEmailNames])
   );
 
   globalThis.fetch = realFetch;

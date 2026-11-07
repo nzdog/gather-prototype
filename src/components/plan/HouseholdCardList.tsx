@@ -37,7 +37,23 @@ export interface SavedHousehold {
    * this component's.
    */
   messagesMuted?: boolean | null;
+  /**
+   * [[GTC-449]] (S2.3, ruling 35): the names of kids whose email address the server kept when the
+   * host settled them to "don't message", because there is a no-email note for them. Set by the
+   * setup page after a save, only in the page's own list, never from the server; each name shows W9.
+   * Gone when she next opens the household or leaves the page.
+   */
+  keptEmailNames?: string[];
 }
+
+/**
+ * [[GTC-449]] (S2.3) — W9, the founder's words (ruling 35), exactly, with straight apostrophes
+ * (ruling 103). Change them only by a ruling.
+ */
+export const KEPT_EMAIL_WORDS = {
+  kept: (name: string) =>
+    `We kept ${name}'s email address on file, because there is a no-email note for them.`,
+} as const;
 
 interface HouseholdCardListProps {
   households: SavedHousehold[];
@@ -277,6 +293,15 @@ function HouseholdCard({
           ))}
         </div>
       )}
+
+      {/* [[GTC-449]] (S2.3, ruling 35) — W9: a quiet line after a refused clear, one per kid whose
+          email the server kept. No button, no link. A card that shows what is typed has none. */}
+      {!draftLabel &&
+        household.keptEmailNames?.map((name, i) => (
+          <p key={`kept-${i}`} data-kept-email-note="" className="mt-1 text-xs text-gray-500">
+            {KEPT_EMAIL_WORDS.kept(name)}
+          </p>
+        ))}
 
       {/* Action links — none on a card that shows what is typed: the form is where it changes. */}
       <div className={`flex justify-end gap-3 mt-1${draftLabel ? ' hidden' : ''}`}>

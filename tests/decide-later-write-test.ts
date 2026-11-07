@@ -17,6 +17,13 @@
  * Test items covered (docs/tickets/GTC-449.md, "The tests"): 4, 9, 10, 15 and 16. The form half
  * of item 16 ("the control is not offered while the tick is on") belongs to S2.2.
  *
+ * Ruling 106 (S2.3, the form half) adds four standing checks, 106.1 to 106.4, one per SAVE ANSWER the
+ * setup page feeds to `apiHouseholdToSaved`: the households POST, its second shape (`demoCrowd`),
+ * the PUT and the host-household POST. Each must hand back `messagingUndecided` on the member rows,
+ * as the boolean the page reads with `=== true`; a Decide later kid reads true. The crowd cannot
+ * make a Decide later kid (made-up people, no payload), so its check pins the field as the stored
+ * boolean on every member, kids included. Test-only: no source file changed for them.
+ *
  * HOW THE ROUTES ARE CALLED. The house habit (see the other household tests) is to drive the
  * reconcile seam, because `requireEventRole` reads a session cookie from `next/headers`, which
  * only exists inside a real request. That would leave the households POST untested, since its
@@ -123,6 +130,8 @@ const isAdult = (r: Awaited<ReturnType<typeof row>>) =>
 async function main() {
   const eventIds: string[] = [];
   let userId = '';
+  let crowdUserId = ''; // the sample copy's throwaway account (ruling 106, the crowd answer)
+  let crowdEventId = ''; // the sample copy event; its crowd of made-up people is removed with it
   const bareIds: string[] = []; // people made directly by this test, outside any event
 
   try {
@@ -832,6 +841,113 @@ async function main() {
       '15.4 both answers are the same status, and neither is a refusal (no 4xx)',
       noConfirm.status === withConfirm.status && noConfirm.status < 400
     );
+
+    // ════════════════════════════════════════════════════════════════════════════════════════
+    // Ruling 106 — each SAVE ANSWER carries the saved marker (the four the page maps)
+    // ════════════════════════════════════════════════════════════════════════════════════════
+    section('Ruling 106 — every save answer hands the marker back, as the boolean the page reads');
+    const membersOf = (answer: any): any[] =>
+      answer?.household?.members ?? (answer?.households ?? []).flatMap((h: any) => h.members ?? []);
+    const byName = (members: any[], name: string) =>
+      members.find((m) => m.person?.name === nm(name));
+    const allBoolean = (members: any[]) =>
+      members.length > 0 && members.every((m) => typeof m.messagingUndecided === 'boolean');
+
+    // 106.1 — the households POST answer (the one `handleAddHousehold` maps), from door 1 above.
+    const answer1 = membersOf(door1.json);
+    assert(
+      '106.1 the households POST answer: the Decide later kid reads true, a plain kid and the adults false, every member row carries the boolean',
+      byName(answer1, 'PLater')?.messagingUndecided === true &&
+        byName(answer1, 'PLater')?.householdRole === 'CHILD' &&
+        byName(answer1, 'PPlain')?.messagingUndecided === false &&
+        byName(answer1, 'PTick')?.messagingUndecided === false &&
+        allBoolean(answer1),
+      answer1.map((m) => [m.person?.name, m.messagingUndecided])
+    );
+
+    // 106.2 — the households POST's second shape, "Add a crowd" (what `addCrowd` maps). A sample
+    // copy only: a throwaway account at the reserved copy domain, an isDemo event, and her own
+    // household saved first. The crowd's kids are made-up people with no payload, so none can be
+    // on Decide later: what is pinned is that the answer carries the stored boolean on every
+    // member, the four kids included, so the page's `=== true` reads a real value.
+    const crowdUser = await prisma.user.create({
+      data: { email: `${randomBytes(16).toString('hex')}@demo-copy.invalid` },
+    });
+    crowdUserId = crowdUser.id;
+    const crowdToken = randomBytes(24).toString('hex');
+    await prisma.session.create({
+      data: { userId: crowdUser.id, token: crowdToken, expiresAt: new Date(Date.now() + 86400000) },
+    });
+    const crowdHost = await prisma.person.create({
+      data: { name: nm('CrowdHost'), email: crowdUser.email, userId: crowdUser.id },
+    });
+    const crowdStart = new Date();
+    crowdStart.setDate(crowdStart.getDate() + 30);
+    const crowdEvent = await prisma.event.create({
+      data: {
+        name: `${TAG} S2.3 crowd copy`,
+        startDate: crowdStart,
+        endDate: crowdStart,
+        hostId: crowdHost.id,
+        isDemo: true,
+      },
+    });
+    crowdEventId = crowdEvent.id;
+    eventIds.push(crowdEvent.id);
+    await prisma.eventRole.create({
+      data: { userId: crowdUser.id, eventId: crowdEvent.id, role: 'HOST' },
+    });
+    const hostToken = SESSION_TOKEN;
+    SESSION_TOKEN = crowdToken;
+    let crowdFirst: Awaited<ReturnType<typeof hostPost>>;
+    let crowdAnswer: Awaited<ReturnType<typeof hhPost>>;
+    try {
+      crowdFirst = await hostPost(crowdEvent.id, { alone: true });
+      crowdAnswer = await hhPost(crowdEvent.id, { demoCrowd: true });
+    } finally {
+      SESSION_TOKEN = hostToken;
+    }
+    const crowdMembers = membersOf(crowdAnswer.json);
+    const crowdKids = crowdMembers.filter((m) => m.householdRole === 'CHILD');
+    assert(
+      '106.2 the crowd answer (households POST, second shape): 201, 11 households, 4 kids, and every member row carries the stored marker as the boolean false',
+      crowdFirst.status === 201 &&
+        crowdAnswer.status === 201 &&
+        (crowdAnswer.json?.households ?? []).length === 11 &&
+        crowdKids.length === 4 &&
+        crowdKids.every((m) => m.messagingUndecided === false) &&
+        allBoolean(crowdMembers),
+      {
+        first: crowdFirst.status,
+        status: crowdAnswer.status,
+        households: (crowdAnswer.json?.households ?? []).length,
+        kids: crowdKids.map((m) => m.messagingUndecided),
+        members: crowdMembers.length,
+      }
+    );
+
+    // 106.3 — the PUT answer (what `handleEditSave` maps), from the edit that re-sent PLater.
+    const answerPut = membersOf(edit1.json);
+    assert(
+      '106.3 the PUT answer: the Decide later kid still reads true after an edit of another field, a plain kid false, every member row carries the boolean',
+      byName(answerPut, 'PLater')?.messagingUndecided === true &&
+        byName(answerPut, 'PLater')?.householdRole === 'CHILD' &&
+        byName(answerPut, 'PPlain')?.messagingUndecided === false &&
+        allBoolean(answerPut),
+      answerPut.map((m) => [m.person?.name, m.messagingUndecided])
+    );
+
+    // 106.4 — the host-household POST answer (what `handleSaveHostHousehold` maps), from door 3.
+    const answerHost = membersOf(door3.json);
+    assert(
+      '106.4 the host-household POST answer: the Decide later kid reads true, a plain kid and the ticked kid false, every member row carries the boolean',
+      byName(answerHost, 'HLater')?.messagingUndecided === true &&
+        byName(answerHost, 'HLater')?.householdRole === 'CHILD' &&
+        byName(answerHost, 'HPlain')?.messagingUndecided === false &&
+        byName(answerHost, 'HTick')?.messagingUndecided === false &&
+        allBoolean(answerHost),
+      answerHost.map((m) => [m.person?.name, m.messagingUndecided])
+    );
   } finally {
     // ── Cleanup, by id: the events (their households, memberships, tokens and ledger entries
     // cascade), then the people this run made, then the sign-in.
@@ -839,6 +955,15 @@ async function main() {
       where: { eventId: { in: eventIds } },
       select: { id: true },
     });
+    // The sample copy's crowd are made-up people with no TAG in their names (ruling 106): read
+    // their ids from that one event before it goes, so they are removed by id and counted.
+    const crowdPeople = crowdEventId
+      ? await prisma.personEvent.findMany({
+          where: { eventId: crowdEventId },
+          select: { personId: true },
+        })
+      : [];
+    const crowdPersonIds = crowdPeople.map((p) => p.personId);
     await prisma.nudgeLog.deleteMany({ where: { personEventId: { in: pes.map((p) => p.id) } } });
     await prisma.household.updateMany({
       where: { eventId: { in: eventIds } },
@@ -847,18 +972,27 @@ async function main() {
     await prisma.event.deleteMany({ where: { id: { in: eventIds } } });
     await prisma.person.deleteMany({
       where: {
-        OR: [{ id: { in: bareIds } }, { name: { startsWith: TAG } }],
+        OR: [
+          { id: { in: bareIds } },
+          { id: { in: crowdPersonIds } },
+          { name: { startsWith: TAG } },
+        ],
         eventMemberships: { none: {} },
       },
     });
-    if (userId) {
-      await prisma.session.deleteMany({ where: { userId } });
-      await prisma.person.deleteMany({ where: { userId } });
-      await prisma.user.deleteMany({ where: { id: userId } });
+    for (const uid of [userId, crowdUserId]) {
+      if (!uid) continue;
+      await prisma.session.deleteMany({ where: { userId: uid } });
+      await prisma.person.deleteMany({ where: { userId: uid } });
+      await prisma.user.deleteMany({ where: { id: uid } });
     }
-    const leftPeople = await prisma.person.count({ where: { name: { startsWith: TAG } } });
+    const leftPeople = await prisma.person.count({
+      where: { OR: [{ name: { startsWith: TAG } }, { id: { in: crowdPersonIds } }] },
+    });
     const leftEvents = await prisma.event.count({ where: { name: { startsWith: TAG } } });
-    const leftUsers = userId ? await prisma.user.count({ where: { id: userId } }) : 0;
+    const leftUsers = await prisma.user.count({
+      where: { id: { in: [userId, crowdUserId].filter(Boolean) } },
+    });
     section('Cleanup');
     assert(
       'C.1 every row this run made is gone: no person, event or user is left',
