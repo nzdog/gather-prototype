@@ -189,7 +189,8 @@
     "test:marker-tripwire": "tsx tests/marker-tripwire-test.ts",
     "test:decide-later-write": "tsx tests/decide-later-write-test.ts",
     "test:decide-later-settle": "tsx tests/decide-later-settle-test.ts",
-    "test:decide-later-form": "tsx --tsconfig tests/tsconfig.json tests/decide-later-form-test.ts"
+    "test:decide-later-form": "tsx --tsconfig tests/tsconfig.json tests/decide-later-form-test.ts",
+    "test:decide-later-preflight": "tsx --tsconfig tests/tsconfig.json tests/decide-later-preflight-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

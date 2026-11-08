@@ -15,7 +15,7 @@ export interface SavedHousehold {
     phone?: string;
     /** GTC-172 (C1): host roled this kid with a job as an adult (§10.6). */
     adultRoled?: boolean;
-    /** [[GTC-449]]: the host chose "Decide later" for this kid (type only here; S2.6 shows it). */
+    /** [[GTC-449]]: the host chose "Decide later" for this kid; a saved card shows it as W8 (S2.6). */
     decideLater?: boolean;
   }>;
   littleCount: number;
@@ -53,6 +53,14 @@ export interface SavedHousehold {
 export const KEPT_EMAIL_WORDS = {
   kept: (name: string) =>
     `We kept ${name}'s email address on file, because there is a no-email note for them.`,
+} as const;
+
+/**
+ * [[GTC-449]] (S2.6, ruling 14) — W8, the founder's words, exactly: "Josh (decide later)", the kid's
+ * name, one space, then these words. Change them only by a ruling.
+ */
+export const DECIDE_LATER_WORDS = {
+  marker: '(decide later)',
 } as const;
 
 interface HouseholdCardListProps {
@@ -285,7 +293,17 @@ function HouseholdCard({
         <div className="flex flex-wrap items-center gap-2 mt-1 text-sm text-gray-500">
           {household.partner && <span>👫 {household.partner.name}</span>}
           {household.helpers.map((helper, i) => (
-            <span key={`helper-${i}`}>👦 {helper.name}</span>
+            <span key={`helper-${i}`}>
+              👦 {helper.name}
+              {/* [[GTC-449]] (S2.6, ruling 14) — W8: a kid saved as Decide later says so. Display only,
+                  and only on a saved card: a card that shows what is typed has none. */}
+              {!draftLabel && helper.decideLater && (
+                <>
+                  {' '}
+                  <span data-decide-later-note="">{DECIDE_LATER_WORDS.marker}</span>
+                </>
+              )}
+            </span>
           ))}
           {household.littleCount > 0 && <span>🧒 {household.littleCount}</span>}
           {household.guests.map((guest, i) => (
