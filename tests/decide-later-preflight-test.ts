@@ -15,6 +15,12 @@
  * real pre-flight route on the throwaway copy with rows it makes itself, removes only those,
  * and checks that InviteEvent and OutboundMessage did not move.
  *
+ * S2.8 (item 3 of "The tests"): section A calls the real ask preview (`readAskPreview`) on the
+ * throwaway copy, again with rows it makes itself and removes itself. It checks that a kid on
+ * decide later is carried to the household's contact, or put on the host's list, exactly as a
+ * plain kid is, with no ask row of its own; and that the same kid settled to message does get
+ * one. The marker is the host's own note, not a rule, so these arrive green by design.
+ *
  * W8 (ruling 14), exactly: "Josh (decide later)" beside the kid's name on the saved household
  * card. The name, one space, then "(decide later)" in lower case with round brackets. It is the
  * only new sentence here; there is no other, and none may be added without a ruling.
@@ -1207,6 +1213,202 @@ async function runRoute() {
   }
 }
 
+// ══ S2.8 — THE ASK PREVIEW TREATS A DECIDE LATER KID AS IT TREATS A PLAIN KID ══
+async function runAskPreview() {
+  section('A — the real ask preview: a Decide later kid is routed as a plain kid is (item 3)');
+  const { prisma } = await import('../src/lib/prisma');
+  const { readAskPreview } = await import('../src/lib/preflight/ask-preview');
+  const TAG = `S28A${Date.now().toString(36)}`;
+  const mail = (k: string) => `${TAG}-${k}@example.com`.toLowerCase();
+  const nm = (k: string) => `${TAG} ${k}`;
+  const eventIds: string[] = [];
+  const personIds: string[] = [];
+  const totals = async () => ({
+    invite: await prisma.inviteEvent.count(),
+    outbound: await prisma.outboundMessage.count(),
+  });
+  const before = await totals();
+  try {
+    const hostPerson = await prisma.person.create({
+      data: { name: nm('Host'), email: mail('host') },
+    });
+    personIds.push(hostPerson.id);
+    const start = new Date();
+    start.setDate(start.getDate() + 30);
+    const ev = await prisma.event.create({
+      data: { name: `${TAG} S2.8`, startDate: start, endDate: start, hostId: hostPerson.id },
+    });
+    eventIds.push(ev.id);
+    await prisma.personEvent.create({
+      data: { personId: hostPerson.id, eventId: ev.id, role: 'HOST' },
+    });
+    const team = await prisma.team.create({ data: { eventId: ev.id, name: 'Mains' } });
+    const member = async (
+      k: string,
+      householdId: string,
+      householdRole: 'PRIMARY_CONTACT' | 'CHILD',
+      o: { email?: string | null; phone?: string | null; flag?: boolean } = {}
+    ) => {
+      const p = await prisma.person.create({
+        data: {
+          name: nm(k),
+          email: o.email === undefined ? mail(k) : o.email,
+          phoneNumber: o.phone ?? null,
+        },
+      });
+      personIds.push(p.id);
+      const pe = await prisma.personEvent.create({
+        data: {
+          personId: p.id,
+          eventId: ev.id,
+          role: 'PARTICIPANT',
+          householdId,
+          householdRole,
+          messagingUndecided: o.flag === true,
+        },
+      });
+      // Every member holds one item: a child with no item is not a recipient for a reason of its own.
+      const item = await prisma.item.create({
+        data: { teamId: team.id, name: `${nm(k)} dish`, kind: 'ITEM' },
+      });
+      await prisma.assignment.create({
+        data: { itemId: item.id, personId: p.id, response: 'PENDING' },
+      });
+      return { p, pe };
+    };
+    /** One household: a contact, a plain kid and a kid on Decide later, both with an email and a phone. */
+    const build = async (label: 'A' | 'B', contact: { email?: string | null }) => {
+      const hh = await prisma.household.create({ data: { eventId: ev.id } });
+      const adult = await member(`Adult${label}`, hh.id, 'PRIMARY_CONTACT', contact);
+      await prisma.household.update({
+        where: { id: hh.id },
+        data: { contactPersonEventId: adult.pe.id },
+      });
+      const base = label === 'A' ? '+6421123900' : '+6421123910';
+      const plain = await member(`Plain${label}`, hh.id, 'CHILD', { phone: `${base}1` });
+      const undecided = await member(`Undecided${label}`, hh.id, 'CHILD', {
+        phone: `${base}2`,
+        flag: true,
+      });
+      return { adult, plain, undecided };
+    };
+    // A: a contact with an email, so the kids' asks are carried to them.
+    const A = await build('A', {});
+    // B: a contact with no email and no phone, so the kids' asks have nowhere to go.
+    const B = await build('B', { email: null });
+
+    const preview = async (): Promise<any> => readAskPreview(prisma, ev.id, '');
+    const p1 = await preview();
+    const routes = p1?.askRoutes ?? {};
+    const recipients: any[] = p1?.recipients ?? [];
+    const hostList: any[] = p1?.hostList ?? [];
+    const isRecipient = (id: string) => recipients.some((r) => r.personEventId === id);
+
+    const kids = await prisma.personEvent.findMany({
+      where: { eventId: ev.id, householdRole: 'CHILD' },
+      include: { person: true },
+    });
+    const kidRow = (m: { pe: { id: string } }) => kids.find((r) => r.id === m.pe.id);
+    assert(
+      'A.1',
+      'the fixture: four kids, all CHILD, each with an email and a phone; only the two on Decide later hold the marker',
+      kids.length === 4 &&
+        kids.every((r) => !!r.person.email && !!r.person.phoneNumber) &&
+        kidRow(A.undecided)?.messagingUndecided === true &&
+        kidRow(B.undecided)?.messagingUndecided === true &&
+        kidRow(A.plain)?.messagingUndecided === false &&
+        kidRow(B.plain)?.messagingUndecided === false
+    );
+
+    const routeA = (m: { pe: { id: string } }) => routes[m.pe.id];
+    assert(
+      'A.2',
+      'a household whose contact can be reached: the Decide later kid has exactly the plain kid’s ask route, CARRIED to the contact',
+      !!routeA(A.plain) &&
+        same(routeA(A.undecided), routeA(A.plain)) &&
+        routeA(A.undecided).kind === 'CARRIED' &&
+        routeA(A.undecided).recipientId === A.adult.pe.id,
+      [routeA(A.plain), routeA(A.undecided)]
+    );
+    const contactA = recipients.find((r) => r.personEventId === A.adult.pe.id);
+    assert(
+      'A.3',
+      'the contact’s message carries both kids, and neither kid is a recipient with an ask row of their own',
+      same(
+        (contactA?.carried ?? []).map((c: any) => c.personEventId).sort(),
+        [A.plain.pe.id, A.undecided.pe.id].sort()
+      ) &&
+        !isRecipient(A.plain.pe.id) &&
+        !isRecipient(A.undecided.pe.id),
+      (contactA?.carried ?? []).map((c: any) => c.name)
+    );
+
+    const routeB = (m: { pe: { id: string } }) => routes[m.pe.id];
+    const lineB = (m: { pe: { id: string } }) => hostList.find((l) => l.personEventId === m.pe.id);
+    assert(
+      'A.4',
+      'a household whose contact cannot be reached: both kids have the same route, on the host’s list as children for the same reason, and neither is a recipient',
+      !!routeB(B.plain) &&
+        routeB(B.plain).kind === 'HOST_LIST' &&
+        same(routeB(B.undecided), routeB(B.plain)) &&
+        lineB(B.plain)?.child === true &&
+        lineB(B.undecided)?.child === true &&
+        lineB(B.undecided)?.why === lineB(B.plain)?.why &&
+        !isRecipient(B.plain.pe.id) &&
+        !isRecipient(B.undecided.pe.id),
+      [routeB(B.plain), routeB(B.undecided), lineB(B.plain)?.why, lineB(B.undecided)?.why]
+    );
+
+    // THE CONTROL: the same kid, settled to message (role GUEST, marker off), is a recipient.
+    await prisma.personEvent.update({
+      where: { id: A.undecided.pe.id },
+      data: { householdRole: 'GUEST', messagingUndecided: false },
+    });
+    const p2 = await preview();
+    const recipients2: any[] = p2?.recipients ?? [];
+    const contactA2 = recipients2.find((r) => r.personEventId === A.adult.pe.id);
+    assert(
+      'A.5',
+      'control: the same kid settled to message DIRECTLY has an ask row of their own, and the contact now carries only the plain kid',
+      p2?.askRoutes?.[A.undecided.pe.id]?.kind === 'DIRECT' &&
+        recipients2.some((r) => r.personEventId === A.undecided.pe.id) &&
+        same(
+          (contactA2?.carried ?? []).map((c: any) => c.personEventId),
+          [A.plain.pe.id]
+        ),
+      p2?.askRoutes?.[A.undecided.pe.id]
+    );
+  } finally {
+    await prisma.household.updateMany({
+      where: { eventId: { in: eventIds } },
+      data: { contactPersonEventId: null },
+    });
+    await prisma.assignment.deleteMany({
+      where: { item: { team: { eventId: { in: eventIds } } } },
+    });
+    await prisma.item.deleteMany({ where: { team: { eventId: { in: eventIds } } } });
+    await prisma.team.deleteMany({ where: { eventId: { in: eventIds } } });
+    await prisma.personEvent.deleteMany({ where: { eventId: { in: eventIds } } });
+    await prisma.household.deleteMany({ where: { eventId: { in: eventIds } } });
+    await prisma.event.deleteMany({ where: { id: { in: eventIds } } });
+    await prisma.person.deleteMany({ where: { id: { in: personIds } } });
+    const left = {
+      people: await prisma.person.count({ where: { name: { startsWith: TAG } } }),
+      events: await prisma.event.count({ where: { name: { startsWith: TAG } } }),
+    };
+    const end = await totals();
+    assert(
+      'A.6',
+      'every row this section made is gone (people, event) and InviteEvent and OutboundMessage are as found: it reads and writes neither',
+      left.people === 0 &&
+        left.events === 0 &&
+        end.invite === before.invite &&
+        end.outbound === before.outbound,
+      { left, before, end }
+    );
+  }
+}
+
 async function main() {
   // ══ W — THE WORDS ARE THE RULED WORDS ═══════════════════════════════════════
   section('W — the words are the founder’s W8');
@@ -1485,6 +1687,7 @@ async function main() {
   runPage();
   runPrints();
   runSource();
+  await runAskPreview();
   await runRoute();
 
   console.log(`\n\x1b[33m=== Results: ${passed} passed, ${failed} failed ===\x1b[0m`);
