@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Play } from 'lucide-react';
 import { FoldBody, FoldCue, FOLD_ROW_RING, FOLD_ROW_SHADE } from '@/components/plan/AccordionShell';
 import { EXPLAINER_STEPS, EXPLAINER_WORDS, type ExplainerBlock } from '@/lib/demo/explainer-words';
+import { MOMENT_HEADINGS } from '@/lib/moments/moment-words';
 
 /**
  * [[GTC-457]] — THE EXPLAINER ON /demo (founder, 8 Nov 2026: "A detailed explainer in accordion
@@ -26,26 +27,49 @@ import { EXPLAINER_STEPS, EXPLAINER_WORDS, type ExplainerBlock } from '@/lib/dem
  * its button says whether it is open (`aria-expanded`) and what it opens (`aria-controls`). The
  * screenshots load only when scrolled near (`loading="lazy"`), so a closed explainer costs a
  * visitor nothing.
+ *
+ * [[GTC-459]] (founder, 8 Nov 2026): each Moment opens with "What this does" and "When it’s done"
+ * (short forms of its screen's lines), and Moments 3 and 4 carry a picture. A picture opens full
+ * size in a new tab, which is the phone fix GTC-458 left open.
  */
 
-function Block({ block }: { block: ExplainerBlock }) {
+/** The label a Moment's "does" and "done" lines open with: the screens' own words. */
+const ROLE_LABELS = { does: MOMENT_HEADINGS.DOES, done: MOMENT_HEADINGS.DONE } as const;
+
+function Block({ block, open }: { block: ExplainerBlock; open: boolean }) {
   if (block.kind === 'p') {
-    return <p>{block.text}</p>;
+    if (!block.role) return <p>{block.text}</p>;
+    return (
+      <p>
+        <span className="font-semibold text-warm-black">{ROLE_LABELS[block.role]}:</span>{' '}
+        {block.text}
+      </p>
+    );
   }
   return (
     <figure className="mx-auto my-5" style={{ maxWidth: block.width }}>
       <div className="overflow-hidden rounded-lg border border-warm-grey-200 bg-warm-white shadow-sm">
-        {/* A plain img on purpose: fixed, already-cropped files in /public, nothing to resize. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={block.src}
-          alt={block.alt}
-          width={block.width}
-          height={block.height}
-          loading="lazy"
-          decoding="async"
-          className="block h-auto w-full"
-        />
+        {/* Opens full size in a new tab, so the small text is readable on a phone. Not focusable
+            while its step is closed. */}
+        <a
+          href={block.src}
+          target="_blank"
+          rel="noopener noreferrer"
+          tabIndex={open ? undefined : -1}
+          className="block"
+        >
+          {/* A plain img on purpose: fixed, already-cropped files in /public, nothing to resize. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={block.src}
+            alt={block.alt}
+            width={block.width}
+            height={block.height}
+            loading="lazy"
+            decoding="async"
+            className="block h-auto w-full"
+          />
+        </a>
       </div>
       <figcaption className="mt-2 text-xs leading-snug text-warm-grey-600">
         {block.caption}
@@ -116,7 +140,7 @@ export default function DemoExplainer() {
                   className="space-y-3 border-t border-warm-grey-100 px-4 pb-5 pt-4 text-sm leading-relaxed text-warm-grey-700 sm:pl-[60px]"
                 >
                   {step.blocks.map((block, j) => (
-                    <Block key={j} block={block} />
+                    <Block key={j} block={block} open={open} />
                   ))}
                 </div>
               </FoldBody>
