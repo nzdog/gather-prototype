@@ -8,7 +8,9 @@
  * saved as decide later empties its email and phone boxes), the form half of item 16 (the control
  * is not offered while the tick is on; the tick wins), the form side of item 4 (what the form
  * SENDS, and what it shows when a saved household is reopened) and, from S2.3, the page test of
- * item 18 (after a refused clear the saved card shows W9, once). The confirm line is S2.4's.
+ * item 18 (after a refused clear the saved card shows W9, once) and, from S2.4, items 5 and 14 (the
+ * confirm line: after the press, a kid saved as decide later and now ticked gets it, nobody else
+ * does; ruling 89's words, ruling 111's name joining, and ruling 110's one setting on the page).
  *
  * The words are the founder's, W1 to W3 and W9 of "The W-lines, as ruled" (rulings 13, 14 and 35),
  * exactly:
@@ -17,6 +19,9 @@
  *   W3  "Gather is keeping {name}'s contact details for now. It won't use them unless you choose to
  *        message {name}."
  *   W9  "We kept {name}'s email address on file, because there is a no-email note for them."
+ * and, for S2.4, ruling 89's confirm line and its two buttons (which replaced W4):
+ *   "The invitations have already gone out. If you save this, Gather will be able to message
+ *    {name}."   Buttons: "Save and let Gather message {name}" and "Go back".
  * Checks W.1 and W.2 read them out of the ticket, so a word changed in the code and not in the
  * ticket (or the other way) is red. No other new sentence is checked for, and none may be added
  * without a ruling.
@@ -100,6 +105,13 @@ const W3 = (n: string) =>
 // W9, ruling 35, exactly (straight apostrophe, as the ticket has it; ruling 103).
 const W9 = (n: string) =>
   `We kept ${n}'s email address on file, because there is a no-email note for them.`;
+
+// Ruling 89, exactly (it replaced W4): the confirm line and its two buttons. Ruling 111 fills
+// {name} with the names joined in plain English.
+const W4_LINE = (n: string) =>
+  `The invitations have already gone out. If you save this, Gather will be able to message ${n}.`;
+const W4_SAVE = (n: string) => `Save and let Gather message ${n}`;
+const W4_BACK = 'Go back';
 
 // ── A fetch that must never be called ────────────────────────────────────────
 let fetchCalls = 0;
@@ -581,6 +593,17 @@ async function main() {
     'W9 as the code will say it (with {name}) is in the ticket exactly, as ruling 35 gave it',
     ticket.includes(W9('{name}')),
     { w9: ticket.includes(W9('{name}')) }
+  );
+  // Ruling 89 sits in a block quote, so each wrapped line starts "> ": take that off before folding.
+  const ruling89 = read(TICKET)
+    .replace(/\n>[ \t]?/g, '\n')
+    .replace(/\s+/g, ' ');
+  assert(
+    'W.3',
+    'ruling 89’s confirm line and its two buttons, as the code will say them (with {name}), are in the ticket exactly',
+    ruling89.includes(W4_LINE('{name}')) &&
+      ruling89.includes(`The buttons read: ${W4_SAVE('{name}')}, and ${W4_BACK}.`),
+    { line: ruling89.includes(W4_LINE('{name}')) }
   );
 
   // ══ H — THE STAND-IN RUNS THE REAL FORM ═════════════════════════════════════
@@ -1581,6 +1604,433 @@ async function main() {
       kidTm.email === JOSH.email &&
       kidTm.phone === JOSH.phone,
     kidTm
+  );
+
+  // ══ 111 — JOINING NAMES ═════════════════════════════════════════════════════
+  section('111 — the names in the confirm line are joined in plain English');
+  const joinNames = FormMod.joinNames as ((n: string[]) => string) | undefined;
+  const joined = (n: string[]) =>
+    typeof joinNames === 'function' ? joinNames(n) : '(no joinNames)';
+  assert(
+    'J.1',
+    'the form file exports a name-joining function, joinNames',
+    typeof joinNames === 'function'
+  );
+  assert('J.2', 'one name is as it is', joined(['Josh']) === 'Josh', joined(['Josh']));
+  assert(
+    'J.3',
+    'two names read “Josh and Mere”',
+    joined(['Josh', 'Mere']) === 'Josh and Mere',
+    joined(['Josh', 'Mere'])
+  );
+  assert(
+    'J.4',
+    'three names read “Josh, Mere and Aroha”, with no comma before “and”',
+    joined(['Josh', 'Mere', 'Aroha']) === 'Josh, Mere and Aroha',
+    joined(['Josh', 'Mere', 'Aroha'])
+  );
+  assert(
+    'J.5',
+    'four names read “Josh, Mere, Aroha and Tama”',
+    joined(['Josh', 'Mere', 'Aroha', 'Tama']) === 'Josh, Mere, Aroha and Tama',
+    joined(['Josh', 'Mere', 'Aroha', 'Tama'])
+  );
+  assert(
+    'J.6',
+    'spaces around a name are trimmed, whether there is one name, two or three',
+    joined(['  Josh  ']) === 'Josh' &&
+      joined([' Josh ', '  Mere']) === 'Josh and Mere' &&
+      joined(['Josh ', '  Mere', ' Aroha  ']) === 'Josh, Mere and Aroha',
+    [joined(['  Josh  ']), joined([' Josh ', '  Mere']), joined(['Josh ', '  Mere', ' Aroha  '])]
+  );
+
+  // ══ 5 AND 14 — THE CONFIRM LINE (S2.4) ══════════════════════════════════════
+  section('5 and 14 — the confirm line: after the press, a kid saved as decide later, now ticked');
+  const sent = (hh: any, over: Record<string, unknown> = {}) =>
+    mount({ editingHousehold: hh, onCancelEdit() {}, invitationsSent: true, ...over });
+  const pageText = (i: Inst) => textOf(i.tree());
+  const anyLine = (i: Inst) => pageText(i).includes('The invitations have already gone out.');
+  const kid = (id: string, name: string, decideLater?: boolean) => ({
+    id,
+    name,
+    ...JOSH,
+    ...(decideLater === undefined ? {} : { decideLater }),
+  });
+  const joshOnly = () => savedKids([kid('pe-josh', 'Josh', true)]);
+  /** Save changes went straight through: one save sent, no line, no “Go back”. */
+  const savedAtOnce = (i: Inst) =>
+    i.calls.edited.length === 1 && !anyLine(i) && !button(i, W4_BACK);
+  const fetchS24 = fetchCalls;
+
+  // 5.1 to 5.6 — the path through the line
+  const c1 = sent(joshOnly());
+  tick(c1, tickBox(c1), true);
+  await pressButton(c1, 'Save changes');
+  const c1Saved = c1.calls.edited.length;
+  const c1Line = pageText(c1).includes(W4_LINE('Josh'));
+  assert(
+    '5.1',
+    'after the press, a kid saved as decide later and now ticked: Save changes does not save yet; the ruling 89 line shows, with the kid’s name',
+    c1Saved === 0 && c1Line,
+    { saved: c1Saved, line: c1Line }
+  );
+  assert(
+    '5.2',
+    'the line comes with its two buttons, “Save and let Gather message Josh” and “Go back”, in the place of Save changes; Cancel is still there',
+    !!button(c1, W4_SAVE('Josh')) &&
+      !!button(c1, W4_BACK) &&
+      !button(c1, 'Save changes') &&
+      !!button(c1, 'Cancel'),
+    {
+      save: !!button(c1, W4_SAVE('Josh')),
+      back: !!button(c1, W4_BACK),
+      saveChanges: !!button(c1, 'Save changes'),
+    }
+  );
+  await pressButton(c1, W4_SAVE('Josh'));
+  const c1Kid = c1.calls.edited[0]?.p.helpers?.[0];
+  assert(
+    '5.3',
+    '“Save and let Gather message Josh” saves once, to the same household, with the kid ticked to message (adult, decide later false) and both details as stored; the line is gone',
+    c1.calls.edited.length === 1 &&
+      c1.calls.edited[0].id === 'hh-1' &&
+      c1Kid?.adultRoled === true &&
+      c1Kid?.decideLater === false &&
+      c1Kid?.email === JOSH.email &&
+      c1Kid?.phone === JOSH.phone &&
+      !anyLine(c1),
+    { edited: c1.calls.edited.length, kid: c1Kid }
+  );
+
+  const c2 = sent(joshOnly());
+  tick(c2, tickBox(c2), true);
+  await pressButton(c2, 'Save changes');
+  await pressButton(c2, W4_BACK);
+  const backed = {
+    saved: c2.calls.edited.length,
+    line: anyLine(c2),
+    saveChanges: !!button(c2, 'Save changes'),
+    ticked: tickBox(c2)?.props.checked,
+    email: emailOf(c2),
+    phone: phoneOf(c2),
+    primary: primaryName(c2)?.props.value,
+  };
+  assert(
+    '5.4',
+    '“Go back” closes the line and saves nothing; Save changes is back; the form is as she left it (kid still ticked, details and the primary name still there: no reset)',
+    backed.saved === 0 &&
+      !backed.line &&
+      backed.saveChanges &&
+      backed.ticked === true &&
+      backed.email === JOSH.email &&
+      backed.phone === JOSH.phone &&
+      backed.primary === 'Kate Smith',
+    backed
+  );
+  await pressButton(c2, 'Save changes');
+  assert(
+    '5.5',
+    'after “Go back”, pressing Save changes asks again, and still saves nothing',
+    pageText(c2).includes(W4_LINE('Josh')) && c2.calls.edited.length === 0
+  );
+
+  const c0 = sent(joshOnly(), { invitationsSent: false });
+  tick(c0, tickBox(c0), true);
+  await pressButton(c0, 'Save changes');
+  assert(
+    '5.6',
+    'the line adds nothing to the request: what is sent after the line is exactly what an un-asked Save changes sends, and nothing is fetched (a screen courtesy only, ruling 25)',
+    c1Line &&
+      c0.calls.edited.length === 1 &&
+      JSON.stringify(c1.calls.edited[0]?.p) === JSON.stringify(c0.calls.edited[0]?.p) &&
+      fetchCalls === fetchS24,
+    {
+      line: c1Line,
+      same: JSON.stringify(c1.calls.edited[0]?.p) === JSON.stringify(c0.calls.edited[0]?.p),
+    }
+  );
+
+  // 5.7 to 5.9 — anything that changes while the line shows closes it (ruling 111's approved default)
+  const c3 = sent(joshOnly());
+  tick(c3, tickBox(c3), true);
+  await pressButton(c3, 'Save changes');
+  const shown3 = pageText(c3).includes(W4_LINE('Josh'));
+  const nameWas = primaryName(c3)?.props.value;
+  type(c3, primaryName(c3), 'Kate Smyth');
+  const closedByTyping =
+    !anyLine(c3) && !!button(c3, 'Save changes') && c3.calls.edited.length === 0;
+  type(c3, primaryName(c3), nameWas);
+  const stayedClosed = !anyLine(c3) && !!button(c3, 'Save changes');
+  assert(
+    '5.7',
+    'typing anywhere in the form while the line shows closes it and brings Save changes back; putting the box back as it was does not bring the line back',
+    shown3 && closedByTyping && stayedClosed,
+    { shown3, closedByTyping, stayedClosed }
+  );
+  const c4 = sent(joshOnly());
+  tick(c4, tickBox(c4), true);
+  await pressButton(c4, 'Save changes');
+  const shown4 = pageText(c4).includes(W4_LINE('Josh'));
+  tick(c4, tickBox(c4), false);
+  assert(
+    '5.8',
+    'unticking the kid while the line shows closes it (there is nothing left to ask about), and Save changes is back',
+    shown4 && !anyLine(c4) && !!button(c4, 'Save changes') && c4.calls.edited.length === 0,
+    { shown4, line: anyLine(c4) }
+  );
+  const cancelsS24 = cancels;
+  const c5 = mountSaved(joshOnly(), {});
+  c5.f.props.invitationsSent = true;
+  settle(c5.f);
+  tick(c5, tickBox(c5), true);
+  await pressButton(c5, 'Save changes');
+  const shown5 = pageText(c5).includes(W4_LINE('Josh'));
+  await pressButton(c5, 'Cancel');
+  assert(
+    '5.9',
+    'Cancel while the line shows: the page is told once, nothing is saved, and the line does not linger',
+    shown5 && cancels === cancelsS24 + 1 && c5.calls.edited.length === 0 && !anyLine(c5),
+    { shown5, cancels: cancels - cancelsS24 }
+  );
+
+  // 5.10 to 5.12 — more than one kid (ruling 111)
+  const twoKids = sent(savedKids([kid('pe-josh', 'Josh', true), kid('pe-mere', 'Mere', true)]));
+  tick(twoKids, tickBox(twoKids, 0), true);
+  tick(twoKids, tickBox(twoKids, 1), true);
+  await pressButton(twoKids, 'Save changes');
+  assert(
+    '5.10',
+    'two kids saved as decide later, both ticked: one line, with “Josh and Mere”, and the Save button names them the same way',
+    pageText(twoKids).includes(W4_LINE('Josh and Mere')) &&
+      !!button(twoKids, W4_SAVE('Josh and Mere')) &&
+      twoKids.calls.edited.length === 0,
+    { text: pageText(twoKids).slice(-260) }
+  );
+  const three = sent(
+    savedKids([
+      kid('pe-josh', 'Josh', true),
+      kid('pe-mere', 'Mere', true),
+      kid('pe-aroha', 'Aroha', true),
+    ])
+  );
+  tick(three, tickBox(three, 2), true);
+  tick(three, tickBox(three, 1), true);
+  tick(three, tickBox(three, 0), true);
+  await pressButton(three, 'Save changes');
+  assert(
+    '5.11',
+    'three kids, ticked in reverse order: the names come in the order the kids appear in the form, “Josh, Mere and Aroha”, no comma before “and”',
+    pageText(three).includes(W4_LINE('Josh, Mere and Aroha')) &&
+      !!button(three, W4_SAVE('Josh, Mere and Aroha')),
+    { text: pageText(three).slice(-260) }
+  );
+  const mixed = sent(
+    savedKids([
+      kid('pe-josh', 'Josh', true),
+      kid('pe-mere', 'Mere', false),
+      kid('pe-aroha', 'Aroha', true),
+    ])
+  );
+  // A new row goes to the top of the form (newest first): Tama, then Josh, Mere and Aroha.
+  await pressButton(mixed, 'Kid with a job');
+  type(mixed, boxIn(mixed, "Kid's name", 0), 'Tama');
+  tick(mixed, tickBox(mixed, 0), true);
+  tick(mixed, tickBox(mixed, 1), true);
+  tick(mixed, tickBox(mixed, 2), true);
+  await pressButton(mixed, 'Save changes');
+  assert(
+    '5.12',
+    'only the kid saved as decide later and now ticked is named: not a plain kid (Mere), not one left on decide later (Aroha), not a new row (Tama)',
+    pageText(mixed).includes(W4_LINE('Josh')) &&
+      !!button(mixed, W4_SAVE('Josh')) &&
+      mixed.calls.edited.length === 0,
+    { text: pageText(mixed).slice(-260) }
+  );
+
+  // 5.13, 5.14 — the form’s own checks still run, and a kid with no name
+  const bad = sent(joshOnly());
+  tick(bad, tickBox(bad), true);
+  type(bad, boxIn(bad, 'Email'), 'josh@');
+  await pressButton(bad, 'Save changes');
+  const badAsked = pageText(bad).includes(W4_LINE('Josh'));
+  await pressButton(bad, W4_SAVE('Josh'));
+  assert(
+    '5.13',
+    'the line is asked first, then the form’s own checks run as ever: a bad address stops the save, shows its error, and the line closes with Save changes back',
+    badAsked &&
+      bad.calls.edited.length === 0 &&
+      rowText(bad).includes('Invalid email format') &&
+      !anyLine(bad) &&
+      !!button(bad, 'Save changes'),
+    { badAsked, saved: bad.calls.edited.length, row: rowText(bad).slice(0, 160) }
+  );
+  const nn = sent(savedKids([kid('pe-josh', 'Josh', true), kid('pe-mere', 'Mere', true)]));
+  type(nn, boxIn(nn, "Kid's name", 1), '');
+  tick(nn, tickBox(nn, 0), true);
+  tick(nn, tickBox(nn, 1), true);
+  await pressButton(nn, 'Save changes');
+  const nnAsked = pageText(nn).includes(W4_LINE('Josh')) && !!button(nn, W4_SAVE('Josh'));
+  await pressButton(nn, W4_SAVE('Josh'));
+  assert(
+    '5.14',
+    'a ticked kid with no name is left out of the names, and the form’s own “Name is required” still stops the save',
+    nnAsked && nn.calls.edited.length === 0 && rowText(nn, 1).includes('Name is required'),
+    { nnAsked, saved: nn.calls.edited.length, row: rowText(nn, 1).slice(0, 120) }
+  );
+
+  // 14.x — where the line must NOT appear
+  const unnamed = sent(joshOnly());
+  type(unnamed, boxIn(unnamed, "Kid's name"), '');
+  tick(unnamed, tickBox(unnamed), true);
+  await pressButton(unnamed, 'Save changes');
+  assert(
+    '14.1',
+    'a ticked kid with no name, alone: no line (there is no name to put in it); the form’s “Name is required” stops the save as ever',
+    !anyLine(unnamed) &&
+      !button(unnamed, W4_BACK) &&
+      unnamed.calls.edited.length === 0 &&
+      rowText(unnamed).includes('Name is required'),
+    { line: anyLine(unnamed), saved: unnamed.calls.edited.length }
+  );
+  const plain = sent(savedKids([kid('pe-josh', 'Josh', false)]));
+  tick(plain, tickBox(plain), true);
+  await pressButton(plain, 'Save changes');
+  assert(
+    '14.2',
+    'a plain kid (saved with the choice off) ticked to message after the press gets no line: Save changes saves at once, as today (ruling 16)',
+    savedAtOnce(plain) && plain.calls.edited[0]?.p.helpers?.[0]?.adultRoled === true,
+    { saved: plain.calls.edited.length, line: anyLine(plain) }
+  );
+  const old = sent(savedKids([kid('pe-josh', 'Josh')]));
+  tick(old, tickBox(old), true);
+  await pressButton(old, 'Save changes');
+  assert(
+    '14.3',
+    'a kid saved before this ticket (no marker at all) ticked to message after the press gets no line either',
+    savedAtOnce(old),
+    { saved: old.calls.edited.length, line: anyLine(old) }
+  );
+  const notPressed: Inst[] = [
+    sent(joshOnly(), { invitationsSent: false }),
+    sent(joshOnly(), { invitationsSent: undefined }),
+  ];
+  for (const n of notPressed) {
+    tick(n, tickBox(n), true);
+    await pressButton(n, 'Save changes');
+  }
+  assert(
+    '14.4',
+    'before the invitations have gone out (the setting false, or not passed at all), a decide-later kid ticked to message saves at once, with no line, as today',
+    notPressed.every(savedAtOnce),
+    notPressed.map((n) => [n.calls.edited.length, anyLine(n)])
+  );
+  const still = sent(joshOnly());
+  await pressButton(still, 'Save changes');
+  assert(
+    '14.5',
+    'a decide-later kid left on decide later (not going to message) saves at once, with no line, and is still sent as decide later',
+    savedAtOnce(still) && still.calls.edited[0]?.p.helpers?.[0]?.decideLater === true,
+    { saved: still.calls.edited.length, line: anyLine(still) }
+  );
+  const settledOff = sent(joshOnly());
+  tick(settledOff, decideBox(settledOff), false);
+  await pressButton(settledOff, 'Save changes');
+  const roundTrip = sent(joshOnly());
+  tick(roundTrip, tickBox(roundTrip), true);
+  tick(roundTrip, tickBox(roundTrip), false);
+  await pressButton(roundTrip, 'Save changes');
+  assert(
+    '14.6',
+    'a decide-later kid settled to “don’t message” (the choice turned off, or ticked and then unticked) saves at once, with no line',
+    savedAtOnce(settledOff) &&
+      savedAtOnce(roundTrip) &&
+      settledOff.calls.edited[0]?.p.helpers?.[0]?.adultRoled === false &&
+      roundTrip.calls.edited[0]?.p.helpers?.[0]?.adultRoled === false,
+    { off: settledOff.calls.edited.length, roundTrip: roundTrip.calls.edited.length }
+  );
+  const newRow = sent(savedKids([kid('pe-josh', 'Josh', true)]));
+  await pressButton(newRow, 'Kid with a job');
+  type(newRow, boxIn(newRow, "Kid's name", 0), 'Tama');
+  tick(newRow, tickBox(newRow, 0), true);
+  await pressButton(newRow, 'Save changes');
+  assert(
+    '14.7',
+    'a kid typed in this sitting (no stored row yet) and ticked gets no line, even beside a decide-later kid who is left on decide later',
+    savedAtOnce(newRow),
+    { saved: newRow.calls.edited.length, line: anyLine(newRow) }
+  );
+  const twins = sent(savedKids([kid('pe-josh-1', 'Josh', true), kid('pe-josh-2', 'Josh', false)]));
+  tick(twins, tickBox(twins, 1), true);
+  await pressButton(twins, 'Save changes');
+  assert(
+    '14.8',
+    'rows are matched by their stored id, never by name: with two kids both called Josh, ticking the plain one gets no line',
+    savedAtOnce(twins),
+    { saved: twins.calls.edited.length, line: anyLine(twins) }
+  );
+  const adding = await formWithKid('Josh', { invitationsSent: true });
+  tick(adding, tickBox(adding), true);
+  await pressButton(adding, 'Save & add another household');
+  assert(
+    '14.9',
+    'adding a new household after the press: no line (a new household has no kid saved as decide later); it saves at once',
+    adding.calls.added.length === 1 && !anyLine(adding) && !button(adding, W4_BACK),
+    { added: adding.calls.added.length, line: anyLine(adding) }
+  );
+  const hosting = mount({
+    hostMode: { name: 'Kate Smith', email: 'kate@example.com', phone: null },
+    invitationsSent: true,
+  });
+  await pressButton(hosting, 'Save and add everyone else');
+  assert(
+    '14.10',
+    'her own household’s first screen, even with the setting passed: no line; it saves at once',
+    hosting.calls.hosted.length === 1 && !anyLine(hosting) && !button(hosting, W4_BACK),
+    { hosted: hosting.calls.hosted.length, line: anyLine(hosting) }
+  );
+
+  // ══ 110 — THE SETUP PAGE PASSES ONE SETTING ═════════════════════════════════
+  section('110 — the setup page: the edit call passes whether the invitations have gone');
+  const pageSf = ts.createSourceFile(
+    'page.tsx',
+    read(SETUP),
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX
+  );
+  const formCalls: Array<ts.JsxSelfClosingElement | ts.JsxOpeningElement> = [];
+  const seekForms = (n: ts.Node) => {
+    if (
+      (ts.isJsxSelfClosingElement(n) || ts.isJsxOpeningElement(n)) &&
+      n.tagName.getText(pageSf) === 'Moment1InputForm'
+    )
+      formCalls.push(n);
+    ts.forEachChild(n, seekForms);
+  };
+  seekForms(pageSf);
+  const attrOf = (el: ts.JsxSelfClosingElement | ts.JsxOpeningElement | undefined, name: string) =>
+    el?.attributes.properties.find(
+      (a): a is ts.JsxAttribute => ts.isJsxAttribute(a) && a.name.getText(pageSf) === name
+    );
+  const exprOf = (a: ts.JsxAttribute | undefined) =>
+    a?.initializer && ts.isJsxExpression(a.initializer)
+      ? a.initializer.expression?.getText(pageSf)
+      : undefined;
+  const editCall = formCalls.find((c) => attrOf(c, 'editingHousehold'));
+  const hostCall = formCalls.find((c) => attrOf(c, 'hostMode'));
+  assert(
+    'P.1',
+    'the call that edits a household passes invitationsSent={Boolean(event.sentAt)}: whether Event.sentAt is set, no other field (ruling 91); and it is the only call that passes it',
+    formCalls.length === 2 &&
+      exprOf(attrOf(editCall, 'invitationsSent')) === 'Boolean(event.sentAt)' &&
+      formCalls.filter((c) => attrOf(c, 'invitationsSent')).length === 1,
+    { calls: formCalls.length, expr: exprOf(attrOf(editCall, 'invitationsSent')) }
+  );
+  assert(
+    'P.2',
+    'the first-screen call (her own household) does not pass it: the call is untouched',
+    formCalls.length === 2 && !!hostCall && !!editCall && !attrOf(hostCall, 'invitationsSent'),
+    { calls: formCalls.length }
   );
 
   // ══ 18 — THE PAGE: W9 AFTER A REFUSED CLEAR ═════════════════════════════════

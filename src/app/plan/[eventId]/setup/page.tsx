@@ -1432,6 +1432,7 @@ function EventSetupFlow() {
                 }}
                 totalPeopleCount={totalPeopleCount}
                 channelCandidates={channelCandidates}
+                invitationsSent={Boolean(event.sentAt)}
                 onDraftChange={setMoment1Draft}
                 moveOnRef={moment1MoveOnRef}
                 onSavingChange={setMoment1Saving}

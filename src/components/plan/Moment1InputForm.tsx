@@ -142,6 +142,12 @@ interface Moment1InputFormProps {
    * own household's step.
    */
   resumeEdit?: { savedIds: string[] | null; open: (householdId: string) => void };
+  /**
+   * [[GTC-449]] (S2.4, rulings 91 and 110): whether the invitations have already gone out, as the
+   * setup page reads it (`Boolean(event.sentAt)`). Passed on the call that edits a household and
+   * nowhere else, so every other use of this form is byte-for-byte what it was.
+   */
+  invitationsSent?: boolean;
 }
 
 interface GuestForm {
@@ -175,6 +181,28 @@ const DECIDE_LATER_WORDS = {
 /** A kid row is on "Decide later" only with the tick off: the tick wins (ruling 20). */
 const onDecideLater = (h: { adultRoled?: boolean; decideLater?: boolean }) =>
   !h.adultRoled && h.decideLater === true;
+
+/**
+ * [[GTC-449]] (S2.4) — the founder's words for the confirm line and its two buttons (ruling 89,
+ * which replaced W4). {name} is the names joined by `joinNames` (ruling 111). Change none without a
+ * ruling.
+ */
+const CONFIRM_WORDS = {
+  line: (names: string) =>
+    `The invitations have already gone out. If you save this, Gather will be able to message ${names}.`,
+  save: (names: string) => `Save and let Gather message ${names}`,
+  back: 'Go back',
+} as const;
+
+/**
+ * Ruling 111 — names in plain English: one as it is, "Josh and Mere", "Josh, Mere and Aroha" (no
+ * comma before "and"). Each name is trimmed.
+ */
+export function joinNames(names: ReadonlyArray<string>): string {
+  const list = names.map((n) => n.trim());
+  if (list.length < 2) return list[0] ?? '';
+  return `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`;
+}
 
 /**
  * [[GTC-368]] — the founder's ruling on the false "Leave site?": *"Warn only when something has
@@ -271,6 +299,7 @@ export default function Moment1InputForm({
   onDraftChange,
   stripDoors,
   resumeEdit,
+  invitationsSent,
 }: Moment1InputFormProps) {
   // Primary contact
   const [name, setName] = useState('');
@@ -386,6 +415,28 @@ export default function Moment1InputForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reopened]);
   const hasUnsavedInput = opened !== null && snapshot !== opened;
+
+  /**
+   * [[GTC-449]] (S2.4, rulings 5, 16, 25, 89, 91, 110 and 111) — the confirm line. After the
+   * invitations have gone out, "Save changes" on a saved household asks once when a kid SAVED as
+   * decide later is now ticked to be messaged. A screen courtesy only: the request is the same
+   * with or without it, and the server has no guard (ruling 25). Named are the kids saved as
+   * decide later and now ticked, in the order of the form; a plain kid, a new row and a kid with no
+   * name (the form's own "Name is required" stops that save) are not. `confirmFor` is the form as
+   * it stood when she was asked: any later change to the form closes the line.
+   */
+  const confirmNames =
+    invitationsSent && isEditing
+      ? helpers
+          .filter((h) => h.adultRoled === true && savedAsDecideLater(h) && h.name.trim() !== '')
+          .map((h) => h.name)
+      : [];
+  const [confirmFor, setConfirmFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (confirmFor !== null && confirmFor !== snapshot) setConfirmFor(null);
+  }, [confirmFor, snapshot]);
+  const confirmOpen = confirmFor !== null && confirmFor === snapshot && confirmNames.length > 0;
+  const confirmWho = joinNames(confirmNames);
 
   /*
    * [[GTC-435]] — what she types is kept in this browser until it is saved (form-draft.ts), so
@@ -987,6 +1038,20 @@ export default function Moment1InputForm({
     } finally {
       setSaving(false);
     }
+  };
+
+  /** [[GTC-449]] (S2.4): the Save changes button. Asks first when the confirm line applies. */
+  const pressSaveChanges = () => {
+    if (confirmNames.length > 0) {
+      setConfirmFor(snapshot);
+      return;
+    }
+    void handleEditSave();
+  };
+  /** The line's Save button: the line goes, then the save runs its usual checks as ever. */
+  const confirmSave = () => {
+    setConfirmFor(null);
+    void handleEditSave();
   };
 
   const handleDone = async () => {
@@ -1829,14 +1894,36 @@ export default function Moment1InputForm({
             </button>
           ) : isEditing ? (
             <>
-              <button
-                type="button"
-                onClick={handleEditSave}
-                disabled={saving}
-                className="w-full py-3 text-white font-medium bg-accent rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-50 mb-4"
-              >
-                {saving ? 'Saving…' : 'Save changes'}
-              </button>
+              {confirmOpen ? (
+                <div className="mb-4">
+                  <p className="text-sm text-gray-700 mb-3">{CONFIRM_WORDS.line(confirmWho)}</p>
+                  <button
+                    type="button"
+                    onClick={confirmSave}
+                    disabled={saving}
+                    className="w-full py-3 text-white font-medium bg-accent rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-50 mb-4"
+                  >
+                    {saving ? 'Saving…' : CONFIRM_WORDS.save(confirmWho)}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmFor(null)}
+                    disabled={saving}
+                    className="w-full py-3 text-gray-600 font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    {CONFIRM_WORDS.back}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={pressSaveChanges}
+                  disabled={saving}
+                  className="w-full py-3 text-white font-medium bg-accent rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-50 mb-4"
+                >
+                  {saving ? 'Saving…' : 'Save changes'}
+                </button>
+              )}
               {onCancelEdit && (
                 <button
                   type="button"
