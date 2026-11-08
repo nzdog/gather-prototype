@@ -133,16 +133,30 @@ interface PreflightFacts {
     littleCount: number;
     contactPersonEventId: string | null;
     resolvedContactPersonEventId: string | null;
-    members: Array<{ personEventId: string; name: string; nudgeMark: string | null }>;
+    members: Array<PrintMember>;
   }>;
-  unhoused: Array<{ personEventId: string; name: string; nudgeMark: string | null }>;
+  unhoused: Array<PrintMember>;
 }
 
-const person = (m: { personEventId: string; name: string; nudgeMark: string | null }) => [
-  m.personEventId,
-  m.name,
-  m.nudgeMark,
-];
+/** What a member's entry in step 3's fingerprint reads; the marker is optional (see `person`). */
+interface PrintMember {
+  personEventId: string;
+  name: string;
+  nudgeMark: string | null;
+  messagingUndecided?: boolean;
+}
+
+/**
+ * [[GTC-449]] S2.5 — step 3 shows who is on "Decide later", so the marker is part of what it showed.
+ * It joins a member's entry ONLY WHEN IT IS YES. A member without it (or with it false) has exactly
+ * the entry this file has always made, so a tick stored before this change still matches and no one
+ * finds their ticks gone after the deploy; a kid who is newly on decide later changes the print and
+ * drops the tick, as any other change on the step does.
+ */
+const person = (m: PrintMember) =>
+  m.messagingUndecided === true
+    ? [m.personEventId, m.name, m.nudgeMark, true]
+    : [m.personEventId, m.name, m.nudgeMark];
 
 /**
  * Steps 1 to 3's fingerprints, each over what that step shows: the things with no owner and which

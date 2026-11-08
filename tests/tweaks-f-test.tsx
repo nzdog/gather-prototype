@@ -131,6 +131,52 @@ const GTC422_EDITS: Array<[string, string]> = [
     "                : \`Send\${allChecked ? '' : ' — finish the five checks first'}\`}\n",
     "                : \`Send\${allChecked ? '' : ' — finish the four checks first'}\`}\n",
   ],
+  // [[GTC-449]] S2.5 (ruling 82): the page's six hunks for the "Decide later" lines. Same data as
+  // tweaks-d's PAGE_EDITS; the list keeps its GTC-422 name because withD applies it as it stands.
+  [
+    "import { kidsNote } from '@/components/preflight/kids-note';\n",
+    "import { kidsNote } from '@/components/preflight/kids-note';\n" +
+      "import { decideLaterNote, decideLaterRowLine } from '@/components/preflight/kids-note';\n",
+  ],
+  [
+    '  resolvedContactPersonEventId: string | null;\n' + '  members: Member[];\n',
+    '  resolvedContactPersonEventId: string | null;\n' +
+      '  /** [[GTC-449]] S2.5: each member also carries the "Decide later" marker, for step 3\'s lines. */\n' +
+      '  members: Array<Member & { messagingUndecided?: boolean }>;\n',
+  ],
+  [
+    '  const talk = talkLine(households.filter((h) => channelFor(h, channelCandidates) === null).length);\n',
+    '  const talk = talkLine(households.filter((h) => channelFor(h, channelCandidates) === null).length);\n' +
+      "  // [[GTC-449]] S2.5 (W7, ruling 28): step 3's second row line, the kids still on decide later.\n" +
+      '  const decideLaterLine = decideLaterRowLine(households);\n',
+  ],
+  [
+    '          line={talk ? { text: talk, amber: true } : null}\n' + '        >\n',
+    '          line={talk ? { text: talk, amber: true } : null}\n' +
+      '          secondLine={decideLaterLine ? { text: decideLaterLine, amber: true } : null}\n' +
+      '        >\n',
+  ],
+  [
+    '              const kids = kidsNote(h.members);\n' + '              return (\n',
+    '              const kids = kidsNote(h.members);\n' +
+      '              // [[GTC-449]] S2.5 (W5 and W6): the kids in this household on decide later, if any.\n' +
+      '              const decideLater = decideLaterNote(h.members);\n' +
+      '              return (\n',
+  ],
+  [
+    '                    {kids && <p className="text-xs text-gray-400 mb-3">{kids}</p>}\n',
+    '                    {kids && <p className="text-xs text-gray-400 mb-3">{kids}</p>}\n' +
+      '                    {/* [[GTC-449]] S2.5 (W5, W6; rulings 3, 21, 22): the same small grey type as the\n' +
+      '                        Kids line. Read-only, no link or button; Send is never blocked by this. */}\n' +
+      '                    {decideLater && (\n' +
+      '                      <>\n' +
+      '                        {decideLater.names && (\n' +
+      '                          <p className="text-xs text-gray-400 mb-3">{decideLater.names}</p>\n' +
+      '                        )}\n' +
+      '                        <p className="text-xs text-gray-400 mb-3">{decideLater.warning}</p>\n' +
+      '                      </>\n' +
+      '                    )}\n',
+  ],
 ];
 /** The base's source with Ticket D's four lines, each found exactly once (else nothing matches). */
 const withD = (s: string) =>

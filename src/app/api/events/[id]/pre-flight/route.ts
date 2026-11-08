@@ -89,6 +89,8 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
               householdRole: true,
               isYoungPerson: true,
               nudgeMark: true,
+              // [[GTC-449]] S2.5: a kid saved as "Decide later", for step 3's read-only lines.
+              messagingUndecided: true,
               person: { select: { name: true, email: true, phoneNumber: true } },
             },
           },
@@ -108,6 +110,8 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
           role: true,
           householdRole: true,
           nudgeMark: true,
+          // [[GTC-449]] S2.5: read here too, so the field is true to the record on every row.
+          messagingUndecided: true,
           person: { select: { name: true, email: true, phoneNumber: true } },
         },
         // PersonEvent carries no createdAt; name order is stable enough for a list.
@@ -122,6 +126,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
       householdRole: string | null;
       isYoungPerson?: boolean;
       nudgeMark: string | null;
+      messagingUndecided?: boolean;
       person: { name: string; email: string | null; phoneNumber: string | null };
     }) => ({
       personEventId: m.id,
@@ -155,6 +160,10 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
        */
       markable: isAddressable({ personId: m.personId, role: m.role }, event.hostId),
       nudgeMark: m.nudgeMark,
+      // [[GTC-449]] S2.5: "Decide later", read as exactly true so a missing value reads false. Only
+      // the screen reads it, to show step 3's lines; it makes nobody messageable (`messageable`
+      // above still follows the role alone).
+      messagingUndecided: m.messagingUndecided === true,
     });
 
     // Household members come back in no defined order, so a row would jump position

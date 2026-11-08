@@ -182,6 +182,7 @@ const STAGE2_SCREENS = [
   'src/components/plan/household-channel-choices.ts',
   'src/components/preflight/PreflightStep.tsx',
   'src/components/preflight/kids-note.ts',
+  'src/lib/preflight/tick-memory.ts',
 ] as const;
 
 // ── Reporting ────────────────────────────────────────────────────────────────

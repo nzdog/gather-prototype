@@ -169,6 +169,57 @@ export const PAGE_EDITS: Edit[] = [
     old: "                : `Send${allChecked ? '' : ' — finish the five checks first'}`}\n",
     new: "                : `Send${allChecked ? '' : ' — finish the four checks first'}`}\n",
   },
+  // [[GTC-449]] S2.5 (ruling 82): the pre-flight page's six hunks for the "Decide later" lines.
+  {
+    old: "import { kidsNote } from '@/components/preflight/kids-note';\n",
+    new:
+      "import { kidsNote } from '@/components/preflight/kids-note';\n" +
+      "import { decideLaterNote, decideLaterRowLine } from '@/components/preflight/kids-note';\n",
+  },
+  {
+    old: '  resolvedContactPersonEventId: string | null;\n' + '  members: Member[];\n',
+    new:
+      '  resolvedContactPersonEventId: string | null;\n' +
+      '  /** [[GTC-449]] S2.5: each member also carries the "Decide later" marker, for step 3\'s lines. */\n' +
+      '  members: Array<Member & { messagingUndecided?: boolean }>;\n',
+  },
+  {
+    old: '  const talk = talkLine(households.filter((h) => channelFor(h, channelCandidates) === null).length);\n',
+    new:
+      '  const talk = talkLine(households.filter((h) => channelFor(h, channelCandidates) === null).length);\n' +
+      "  // [[GTC-449]] S2.5 (W7, ruling 28): step 3's second row line, the kids still on decide later.\n" +
+      '  const decideLaterLine = decideLaterRowLine(households);\n',
+  },
+  {
+    old: '          line={talk ? { text: talk, amber: true } : null}\n' + '        >\n',
+    new:
+      '          line={talk ? { text: talk, amber: true } : null}\n' +
+      '          secondLine={decideLaterLine ? { text: decideLaterLine, amber: true } : null}\n' +
+      '        >\n',
+  },
+  {
+    old: '              const kids = kidsNote(h.members);\n' + '              return (\n',
+    new:
+      '              const kids = kidsNote(h.members);\n' +
+      '              // [[GTC-449]] S2.5 (W5 and W6): the kids in this household on decide later, if any.\n' +
+      '              const decideLater = decideLaterNote(h.members);\n' +
+      '              return (\n',
+  },
+  {
+    old: '                    {kids && <p className="text-xs text-gray-400 mb-3">{kids}</p>}\n',
+    new:
+      '                    {kids && <p className="text-xs text-gray-400 mb-3">{kids}</p>}\n' +
+      '                    {/* [[GTC-449]] S2.5 (W5, W6; rulings 3, 21, 22): the same small grey type as the\n' +
+      '                        Kids line. Read-only, no link or button; Send is never blocked by this. */}\n' +
+      '                    {decideLater && (\n' +
+      '                      <>\n' +
+      '                        {decideLater.names && (\n' +
+      '                          <p className="text-xs text-gray-400 mb-3">{decideLater.names}</p>\n' +
+      '                        )}\n' +
+      '                        <p className="text-xs text-gray-400 mb-3">{decideLater.warning}</p>\n' +
+      '                      </>\n' +
+      '                    )}\n',
+  },
 ];
 export const STEP_EDITS: Edit[] = [
   {
@@ -196,6 +247,81 @@ export const STEP_EDITS: Edit[] = [
   {
     old: '          ) : (\n            box\n          )}\n',
     new: '          ) : noBox ? null : (\n            box\n          )}\n',
+  },
+  // [[GTC-449]] S2.5 (ruling 82): the step's six hunks, the second row line.
+  {
+    old: ' * Ready without it, is drawn exactly as before.\n' + ' */\n',
+    new:
+      ' * Ready without it, is drawn exactly as before.\n' +
+      ' *\n' +
+      ' * [[GTC-449]] S2.5 (ruling 28) — A ROW CAN CARRY A SECOND LINE. `secondLine`, off by default, is\n' +
+      ' * drawn straight under `line` in the same way, folded or open (step 3: the households with no one to\n' +
+      ' * talk to first, the kids still on decide later under it). `line` is unchanged, so a step given\n' +
+      ' * one line draws exactly what it drew before, and a step given neither draws no line element. The\n' +
+      ' * second line alone is drawn alone. A settled step draws neither.\n' +
+      ' */\n',
+  },
+  {
+    old: '  noBox = false,\n' + '  children,\n',
+    new: '  noBox = false,\n' + '  secondLine = null,\n' + '  children,\n',
+  },
+  {
+    old: '  noBox?: boolean;\n' + '  children: React.ReactNode;\n',
+    new:
+      '  noBox?: boolean;\n' +
+      '  /** [[GTC-449]] S2.5 (ruling 28) — a second row line, under `line`; none when not given. */\n' +
+      '  secondLine?: StepLine | null;\n' +
+      '  children: React.ReactNode;\n',
+  },
+  {
+    old:
+      '  const rowLine =\n' +
+      '    line && !settled ? (\n' +
+      '      <span\n' +
+      '        data-step-line=""\n' +
+      '        className={`mt-1 flex items-center gap-1.5 text-sm ${\n' +
+      "          line.amber ? 'text-amber-700' : 'text-gray-500'\n" +
+      '        }`}\n' +
+      '      >\n' +
+      '        {line.amber && (\n' +
+      '          <span className="w-1.5 h-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />\n' +
+      '        )}\n' +
+      '        {line.text}\n' +
+      '      </span>\n' +
+      '    ) : null;\n',
+    new:
+      '  // [[GTC-449]] S2.5: one drawing for both row lines, so the second can never differ from the first.\n' +
+      '  const drawLine = (l: StepLine | null) =>\n' +
+      '    l && !settled ? (\n' +
+      '      <span\n' +
+      '        data-step-line=""\n' +
+      '        className={`mt-1 flex items-center gap-1.5 text-sm ${\n' +
+      "          l.amber ? 'text-amber-700' : 'text-gray-500'\n" +
+      '        }`}\n' +
+      '      >\n' +
+      '        {l.amber && (\n' +
+      '          <span className="w-1.5 h-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />\n' +
+      '        )}\n' +
+      '        {l.text}\n' +
+      '      </span>\n' +
+      '    ) : null;\n' +
+      '  const rowLine = drawLine(line);\n' +
+      '  const secondRowLine = drawLine(secondLine);\n',
+  },
+  {
+    old: '                  {rowLine}\n' + '                </span>\n',
+    new:
+      '                  {rowLine}\n' +
+      '                  {secondRowLine}\n' +
+      '                </span>\n',
+  },
+  {
+    old: '              {rowLine}\n' + '            </div>\n' + '          )}\n',
+    new:
+      '              {rowLine}\n' +
+      '              {secondRowLine}\n' +
+      '            </div>\n' +
+      '          )}\n',
   },
 ];
 export function applyEdits(base: string, edits: Edit[]): string | null {
