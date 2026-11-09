@@ -1,3 +1,5 @@
+import { connection } from 'next/server';
+import DemoExplainer from '@/components/demo/DemoExplainer';
 import TryItYourselfButton from '@/components/demo/TryItYourselfButton';
 import { isDemoStartOn } from '@/lib/demo/start-switch';
 
@@ -18,29 +20,48 @@ const UNDER_CONSTRUCTION = 'Under construction';
  * and one button, or the note in its place ([[GTC-430]]), nothing else.
  *
  * "Try it yourself" opens the sample's own "Create Your Event" page, pre-filled ([[GTC-395]] item 3,
- * `/demo/new`), where the private sample copy is started as GTC-392 part A built it. Both are still
- * development-only until part D (GTC-392 Q5).
+ * `/demo/new`), where the private sample copy is started as GTC-392 part A built it.
  *
- * [[GTC-430]] (founder, 30 Oct 2026): the button is drawn only in development AND with the demo
- * start switch on (`isDemoStartOn()`, read here on the server at each render); everywhere else the
- * page says "Under construction" where the button goes, so a visitor never sees an empty page. In a
- * production build that is always the note. This opens the demo nowhere.
+ * [[GTC-430]] (founder, 30 Oct 2026): wherever the button is not, the page says "Under
+ * construction" where the button goes, so a visitor never sees an empty page.
  *
- * The "Sarah demo" button and its handler went with GTC-395. The route behind it (the demo session
- * route's no-body path) is not touched: the old shared Sarah event stays in the database until part
- * D retires it. The tokens and reset routes are not touched either; the reset route still exists,
- * is development-only, and force-resets whichever database the server points at.
+ * [[GTC-447]] (GTC-392 part D, founder rulings of 1 Nov 2026): the button follows the demo start
+ * switch and nothing else (`isDemoStartOn()`, read here on the server), in production and in
+ * development alike; the switch off is the note. `connection()` first: the page is dynamic by its
+ * own word, so the switch is read at each request, never once when the site is built. Setting
+ * GATHER_DEMO_START to exactly `on` opens the demo; deleting it closes it again.
+ *
+ * [[GTC-457]] (founder, 8 Nov 2026): under the button, one closed fold-out, "How Gather works, step
+ * by step" (`DemoExplainer`). It is drawn in the button's own branch, so it follows the same switch
+ * and never shows beside "Under construction". The button keeps its width (the page is wider now,
+ * for the explainer).
+ *
+ * [[GTC-458]] (founder, 8 Nov 2026: "very boring page ... style it using Gather's design styles"):
+ * the page takes the theme's warm white and warm greys, and the heading is set in the serif the
+ * wordmark uses. The explainer under the button is now a heading and one fold-out per step.
+ *
+ * The "Sarah demo" button and its handler went with GTC-395; the route's no-body path and the
+ * tokens route went with [[GTC-442]]. The reset route still exists, answers 404 in production, and
+ * elsewhere force-resets whichever database the server points at; this page never calls it.
  */
-export default function DemoLandingPage() {
+export default async function DemoLandingPage() {
+  await connection();
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-sm mx-auto px-5 py-20 text-center">
-        <h1 className="text-3xl font-bold text-gray-900 mb-10">Gather</h1>
+    <div className="min-h-screen bg-warm-white">
+      <div className="max-w-2xl mx-auto px-5 py-16 text-center">
+        <h1 className="font-serif text-5xl font-semibold tracking-tight text-warm-black mb-10">
+          Gather
+        </h1>
         <div className="flex flex-col gap-3">
-          {process.env.NODE_ENV === 'development' && isDemoStartOn() ? (
-            <TryItYourselfButton href={SAMPLE_PAGE} label={TRY_IT_YOURSELF} />
+          {isDemoStartOn() ? (
+            <>
+              <div className="mx-auto w-full max-w-sm">
+                <TryItYourselfButton href={SAMPLE_PAGE} label={TRY_IT_YOURSELF} />
+              </div>
+              <DemoExplainer />
+            </>
           ) : (
-            <p className="text-gray-600">{UNDER_CONSTRUCTION}</p>
+            <p className="text-warm-grey-600">{UNDER_CONSTRUCTION}</p>
           )}
         </div>
       </div>

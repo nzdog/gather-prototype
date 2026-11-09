@@ -2863,9 +2863,12 @@ async function main() {
             [
               [
                 'src/components/glance/PersonSurface.tsx',
-                ['GLANCE_REFRESH_EVENT', 'GLANCE_REPLIES_EVENT'],
+                ['GLANCE_REFRESH_EVENT', 'GLANCE_REPLIES_EVENT', 'GLANCE_HOLDINGS_EVENT'],
               ],
-              ['src/components/glance/GlancePersonReading.tsx', ['GLANCE_REPLIES_EVENT']],
+              [
+                'src/components/glance/GlancePersonReading.tsx',
+                ['GLANCE_REPLIES_EVENT', 'GLANCE_ROWS_EVENT'],
+              ],
               [ISLAND, ['GLANCE_REPLAY_DONE_EVENT']],
             ] as const
           ).every(([file, allowed]) => {

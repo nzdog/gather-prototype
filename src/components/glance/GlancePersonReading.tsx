@@ -69,11 +69,18 @@
  * board is every strip, and retires phase 4's "nothing here hydrates at all" sentence. It
  * hydrates cheaply: this component takes a narrowed payload and NO candidate pool, so the
  * per-strip cost is a name, a word, a weekday and its rows.
+ *
+ * ── [[GTC-451]] — ITS ROWS AFTER A MOVE ───────────────────────────────────────────────────
+ *
+ * The founder's word (4 Nov 2026): after "Move" or "I’ll do it" the live island hands every room
+ * its person's rows (`GLANCE_ROWS_EVENT`), already narrowed to `ReadingRow` by `readingRowsOf`,
+ * so no date reaches this file there either. Only the rows change; the status word, the notes and
+ * the one link stay as the page drew them.
  */
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
-import { GLANCE_REPLIES_EVENT } from '@/lib/glance/live';
+import { GLANCE_REPLIES_EVENT, GLANCE_ROWS_EVENT } from '@/lib/glance/live';
 import type { GlanceReply } from '@/lib/glance/state';
 import {
   CHILD_NO_JOB_STATUS,
@@ -118,6 +125,22 @@ export default function GlancePersonReading({
     return () => window.removeEventListener(GLANCE_REPLIES_EVENT, onReplies);
   }, [personEventId]);
   const replies = liveReplies ?? panel.replies;
+
+  /*
+    [[GTC-451]] — WHAT THEY ARE BRINGING NOW. Built at first paint from `panel.rows`; after a Move
+    or a take-over the live island hands this room its person's rows, and it lists those from then
+    on. Only this person's rows are taken.
+  */
+  const [liveRows, setLiveRows] = useState<ReadingRow[] | null>(null);
+  useEffect(() => {
+    const onRows = (e: Event) => {
+      const mine = (e as CustomEvent<Record<string, ReadingRow[]>>).detail?.[personEventId];
+      if (mine) setLiveRows(mine);
+    };
+    window.addEventListener(GLANCE_ROWS_EVENT, onRows);
+    return () => window.removeEventListener(GLANCE_ROWS_EVENT, onRows);
+  }, [personEventId]);
+  const rows = liveRows ?? panel.rows;
 
   return (
     <>
@@ -247,7 +270,7 @@ export default function GlancePersonReading({
             <div className="mt-4 flex flex-col gap-2">
               {/* [[GTC-387]] Q16 and Q22 — a child holding nothing, and somebody not coming, are
                   told so in the status and the sentence; no "Bringing nothing." under them. */}
-              {panel.rows.length === 0 &&
+              {rows.length === 0 &&
               ![CHILD_NO_JOB_STATUS, NOT_COMING_STATUS].includes(panel.status) ? (
                 /*
                   The itemless case is REAL on both states this panel opens for: Ruling 16's
@@ -258,7 +281,7 @@ export default function GlancePersonReading({
                 <p className="m-0 text-[13px] text-[#888780]">Bringing nothing.</p>
               ) : null}
 
-              {panel.rows.map((row: ReadingRow) => (
+              {rows.map((row: ReadingRow) => (
                 <div
                   key={row.itemId}
                   data-reading-row={row.itemId}

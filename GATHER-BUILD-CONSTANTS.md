@@ -1,7 +1,11 @@
 # GATHER BUILD CONSTANTS
 
 Reference file for AI executors and developers. Keep this file accurate.
-Last updated: 2026-10-12 (GTC-381, plan ruling Q5: `npm run lint`'s known count is 63 errors).
+Last updated: 2026-11-06, NZ time (GTC-456: production's automatic build is now on, and
+migrations run in Railway's pre-deploy step, not the build command; both by the founder's statement).
+Previously 2026-11-06, NZ time (GTC-455: the listening tests GTC-453 and GTC-454, the `[demo-tally]` line
+on the demo clean-up's cron row, and a dated note that `main` is now the integration branch).
+Previously 2026-10-12 (GTC-381, plan ruling Q5: `npm run lint`'s known count is 63 errors).
 Previously 2026-10-08 (GTC-367, founder ruling L1: `npm run lint`'s known count is 62 errors).
 Previously 2026-10-06 (GTC-364, ruling Q7: the standing dev-server line blanks the AI key too).
 Previously 2026-10-05 (GTC-364: looking on screen — three safeguards, after a look while
@@ -78,6 +82,22 @@ For every ticket executed, before committing:
 
 ## Base Branch
 
+> **Update, 2026-11-06, NZ time (GTC-455).** `main` is now the integration branch: the founder's note says
+> `master` was renamed `main`, and pull requests #86 and #87 merged into `main` (its tip was
+> `5eb1fc3` on 6 Nov 2026, NZ time, read with `git ls-remote`). The founder's notes also say Railway deploys
+> production from `main`.
+>
+> **Railway, as the founder stated on 6 Nov 2026, NZ time (the founder's statement; the repo
+> does not record it):** staging deploys automatically from `main`. Production's automatic build
+> was switched off; the founder switched it on the same day to release GTC-453 to GTC-455 (live
+> at 11:51 NZ time). While it stays on, anything merged to `main` deploys to staging and
+> production together: production's trigger branch is `main`, per the founder's deploy log and
+> the founder's statement of 31 Oct 2026 (the Source setting itself was not seen here). Whether
+> it stays on is the founder's decision: check Railway (GTC-456).
+>
+> `.github/workflows/ci.yml` still runs on pushes to `master` only (and on pull requests). The
+> text below, and the Deploy section's `master` wording, predate this and are kept for history.
+
 `feat/moment-one-redesign` — this is the working trunk in practice. As of
 2026-08-10 it is 161 commits ahead of `master`, and `master`'s HEAD is exactly
 their merge-base — it has not moved since 2026-04-10. Day-to-day work branches
@@ -100,12 +120,31 @@ descriptive branch names prefixed by ticket ID where applicable (e.g. `GTC-001-f
 Nigel). Deploys are now manual, triggered from Railway's Deployments tab.
 Consequence: merging to `master` no longer deploys anything by itself.
 
+> **Superseded (GTC-455, GTC-456, 6 Nov 2026, NZ time):** see the dated note under Base Branch
+> above. Staging deploys automatically from `main`, and production's automatic build is now on,
+> by the founder's statement. The two lines above are kept for history.
+
 **Caveat — this decouples deploy timing, not the database.** Turning off
 auto-deploy only separates code delivery from *when* a deploy happens. It does
 NOT separate code from the production database: schema migrations still apply
 to the production database the moment code carrying them is deployed and run,
 regardless of how that deploy was triggered. Rehearse any migration against a
 copy of the production database before triggering a deploy that carries one.
+
+> **Migrations run in Railway's pre-deploy step, not the build (GTC-456, 6 Nov 2026, NZ time).**
+> By the founder's D8 ruling of 26 Oct 2026, migrations run in Railway's **pre-deploy** step, as
+> `npm run db:migrate:deploy` (`prisma migrate deploy`, in `package.json`), typed in Railway
+> only. Production's custom build command leaves them out on purpose; its build log for the
+> GTC-453 to GTC-455 release shows it as
+> `node scripts/check-live-sends.mjs && npm run db:generate && npx next build`. A failed
+> pre-deploy stops the deployment. A release that carries a migration still needs the rehearsal
+> above, on a copy, first. The D8 ruling, the pre-deploy command (shown in the founder's 28 Oct
+> 2026 screenshots of the production service) and the stop on failure are the founder's
+> statement, recorded in the founder's Gather Build project docs, not in this repo:
+> `claude/deploy-log-2026-10.md` (D8) and `claude/deploy-handoff-2026-10-26.md` (production as
+> seen on 28 Oct). Not checked here: the pre-deploy step's own log,
+> the live Railway settings, and staging's build and pre-deploy commands. Zone 5's sentence
+> under Do-Not-Touch Zones is unchanged.
 
 ---
 
@@ -140,6 +179,15 @@ npm run test:security
 change is gated on **every `test:*` script in `package.json`**, not a chosen
 list. So nothing in that namespace may send a real message: the live TNZ smoke
 send is `npm run live:tnz-sms` (was `test:tnz-sms`), outside it.
+
+### The listening tests (GTC-453, GTC-454)
+- `npm run test:listening-report` - the Level 1 report. Reads the local database
+  (`gather_dev`), writes nothing: its one write attempt is the one that must be refused.
+- `npm run test:demo-tally` - the demo tally. Runs on the local `gather_demo` only (it refuses
+  any other database) and writes there: it makes three samples and the clean-up deletes them.
+- `npm run test:demo-cleanup` on a `gather_demo` whose shared sample is titled 2026 fails B3
+  and D8, both looking up the old 2025 title (`tests/demo-cleanup-test.ts` line 840): the seed
+  name drift, recorded at GTC-454 and GTC-455, not a clean-up fault. It needs its own ticket.
 
 ### Live sending — one switch, production only
 *(Founder ruling, 2026-09-29, GTC-274.)* **Gather sends a real text or email only
@@ -427,6 +475,7 @@ match them.
 | `src/app/api/cron/wrap-up-dispatch/route.ts` | GET / POST | `/api/cron/wrap-up-dispatch` | Dispatches pending wrap-up thank-you messages (10 min delay after creation). Sends SMS **and email** — email is the fallback when SMS fails, and the primary channel for `channel: 'email'` links | Every 10 minutes |
 | `src/app/api/cron/decide-by-followups/route.ts` | GET / POST | `/api/cron/decide-by-followups` | Sends the maybe's single decide-by follow-up, by text or email (GTC-175 / D2, GTC-251) | Every 15 minutes |
 | `src/app/api/cron/tnz-status-poll/route.ts` | GET / POST | `/api/cron/tnz-status-poll` | Asks TNZ about texts TNZ never report on — a credit hold, a blocked link, Pending, Delayed, Unknown — at 15 min, 1 h, 6 h, 24 h and 48 h after acceptance; emails the founder once per episode of a credit hold or a blocked link (GTC-290) | Every 15 minutes |
+| `src/app/api/cron/demo-cleanup/route.ts` | GET / POST | `/api/cron/demo-cleanup` | Deletes expired sample copies (started before today's NZ midnight and more than 2 hours ago) and everything a visitor made in them, oldest first, at most 25 a run; then the accounts a copy its visitor deleted leaves (the same age, read from the account), with their sessions and people, at most 25 a run; answers 500 when a copy or such an account cannot be deleted (GTC-442, GTC-448); then prints one `[demo-tally]` line of totals, the samples read just before their delete (GTC-454) | Hourly, at :17 past the hour |
 
 ### Cron health
 *(Founder rulings Q1 and Q2, 2026-09-30, GTC-339.)* A cron's status code and
@@ -474,7 +523,7 @@ Actual values are redacted. Copy `.env.example` to `.env` and fill in real value
 | `TWILIO_PHONE_NUMBER` | Twilio sender number (OPTIONAL) | `.env` / deployment env |
 | `UNSUBSCRIBE_TOKEN_SECRET` | Signs the per-event email unsubscribe links (GTC-296). **Required, not optional** — fails closed when unset, following `CRON_SECRET`'s precedent: reading a token returns null (404) and minting one throws, so no guest email is sent at all rather than one with no way out. Changing it invalidates links already in mailboxes. | `.env` / deployment env |
 | `GATHER_ALERT_EMAIL` | **Production.** The founder's address for the TNZ account alert: one email per episode of a credit hold or a blocked link (GTC-290). Unset means no email is sent and the poll run fails (500), so the scheduler's failure email is the fallback. Never logged. | Railway production env |
-| `GATHER_DEMO_START` | **Off unless exactly `on`.** Opens the copy-start shape of `POST /api/demo/session` (the "Try it yourself" sample copy); otherwise that shape answers 404 and writes nothing (GTC-425, founder ruling 29 Oct 2026). Read on every request. Set in `.env.local` on a developer's machine; **not set on Railway** until the founder turns the demo on at launch. The old no-body shape and the NODE_ENV gates on `/demo` and `/demo/new` do not read it. | `.env.local` (dev); Railway production env at launch |
+| `GATHER_DEMO_START` | **Off unless exactly `on`.** The demo's one door (GTC-425, GTC-447; founder rulings 29 Oct and 1 Nov 2026). On: `/demo` shows its "Try it yourself" button, `/demo/new` (the sample's "Create Your Event" page) opens, and the copy-start shape of `POST /api/demo/session` starts a private sample copy. Off: `/demo` says "Under construction", `/demo/new` is a plain not-found, and that shape answers 404 and writes nothing. The same in production and in development. Read on every request: both pages call `connection()` first, so nothing is fixed when the site is built. Set in `.env.local` on a developer's machine; **not set on Railway** until the founder turns the demo on at launch (GTC-447's turn-on steps); deleting it, or any value but `on`, turns the demo off. | `.env.local` (dev); Railway production env at launch |
 | `CRON_SECRET` | Authenticates cron-job HTTP requests. **Required, not optional** — since GTC-270 an unset or empty value refuses every caller rather than admitting them | `.env` / deployment env |
 
 Template: `.env.example` at repo root.

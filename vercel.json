@@ -19,6 +19,10 @@
     {
       "path": "/api/cron/tnz-status-poll?secret=${CRON_SECRET}",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/demo-cleanup?secret=${CRON_SECRET}",
+      "schedule": "17 * * * *"
     }
   ]
 }

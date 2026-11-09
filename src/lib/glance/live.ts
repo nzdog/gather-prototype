@@ -34,7 +34,7 @@
  */
 
 import { isSparkTransition } from './replay';
-import type { EventGlance, GlanceReply, PersonState } from './state';
+import type { EventGlance, GlanceItem, GlanceReply, PersonState } from './state';
 
 /**
  * RULING 10, TAKEN LITERALLY: "polling, roughly every 20 seconds."
@@ -83,6 +83,31 @@ export const GLANCE_REPLAY_DONE_EVENT = 'gather:glance-replay-done';
  * polled board, keyed by `personEventId`. On a co-host's poll every list is empty, as on her board.
  */
 export const GLANCE_REPLIES_EVENT = 'gather:glance-replies';
+
+/**
+ * [[GTC-451]] (founder ruling 1, 4 Nov 2026) — A MOVE HANDS THE CARDS WHAT THEY NOW HOLD.
+ *
+ * Every card is built from the board as the page loaded it, so after "Move" or "I’ll do it" the
+ * new holder's card lacked the item and the old holder's still listed it until a reload. The
+ * header rule "values, never structure" is relaxed for those two actions only, and only as far as
+ * a card listing the items its person now holds: the action's own immediate refresh carries a
+ * holdings flag, and on THAT poll only the live island hands the rooms their items, as it hands
+ * them their replies on every poll. Two events, because the two rooms take two shapes: the red
+ * room takes the payload's rows, and the read-only room takes `ReadingRow`s, which carry no
+ * date (its own fence). The plain twenty-second poll hands no lists, and nothing here decides
+ * what exists on the board: a strip that turns red live is still no door.
+ */
+export const GLANCE_HOLDINGS_EVENT = 'gather:glance-holdings';
+export const GLANCE_ROWS_EVENT = 'gather:glance-rows';
+
+/** [[GTC-451]] Each person's items on a polled board, housed and unhoused, by `personEventId`. */
+export function holdingsOf(glance: EventGlance): Record<string, GlanceItem[]> {
+  const out: Record<string, GlanceItem[]> = {};
+  for (const person of [...glance.households.flatMap((h) => h.members), ...glance.unhoused]) {
+    out[person.personEventId] = person.items;
+  }
+  return out;
+}
 
 /** Each person's replies on a polled board, housed and unhoused, keyed by `personEventId`. */
 export function repliesOf(glance: EventGlance): Record<string, GlanceReply[]> {

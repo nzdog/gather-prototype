@@ -69,7 +69,7 @@ import { preflightPrints } from '../src/lib/preflight/tick-memory';
 const ROOT = path.join(__dirname, '..');
 const CARD = 'src/components/plan/HouseholdCardList.tsx';
 const SETUP = 'src/app/plan/[eventId]/setup/page.tsx';
-const TICKET = 'docs/tickets/GTC-449.md';
+const TICKET = 'docs/tickets/GTC-460.md';
 /** The commit before S2.6 (S2.4's): the card file is as S2.3 left it. */
 const BEFORE_S26 = '87f9c3a';
 

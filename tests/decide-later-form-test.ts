@@ -63,7 +63,7 @@ import { moment1ChannelChoices } from '../src/components/plan/household-channel-
 const ROOT = path.join(__dirname, '..');
 const FORM = 'src/components/plan/Moment1InputForm.tsx';
 const SETUP = 'src/app/plan/[eventId]/setup/page.tsx';
-const TICKET = 'docs/tickets/GTC-449.md';
+const TICKET = 'docs/tickets/GTC-460.md';
 
 // ── Reporting ────────────────────────────────────────────────────────────────
 let passed = 0;

@@ -112,14 +112,6 @@
     "securityIssues": []
   },
   {
-    "filePath": "src/app/api/demo/tokens/route.ts",
-    "apiPath": "/api/demo/tokens",
-    "methods": ["GET"],
-    "authType": "SESSION",
-    "authEvidence": ["getUser()"],
-    "securityIssues": []
-  },
-  {
     "filePath": "src/app/api/entitlements/check-create/route.ts",
     "apiPath": "/api/entitlements/check-create",
     "methods": ["GET"],
@@ -689,6 +681,17 @@
   {
     "filePath": "src/app/api/cron/tnz-status-poll/route.ts",
     "apiPath": "/api/cron/tnz-status-poll",
+    "methods": ["GET", "POST"],
+    "authType": "CUSTOM",
+    "authEvidence": [
+      "CRON_SECRET shared secret: cronSecretAccepted (src/app/api/cron/cron-secret.ts) on Authorization: Bearer or ?secret=",
+      "fails closed: isCronSecretConfigured refuses every caller when CRON_SECRET is unset or empty (GTC-270)"
+    ],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/cron/demo-cleanup/route.ts",
+    "apiPath": "/api/cron/demo-cleanup",
     "methods": ["GET", "POST"],
     "authType": "CUSTOM",
     "authEvidence": [

@@ -57,17 +57,49 @@ export interface StartedCopy {
   expiresAt: Date;
 }
 
-export async function startDemoCopy(
+/**
+ * [[GTC-443]] One key for every copy start, so the start limits are read and the copy written in
+ * turn. ai-cap's key is 392001; nothing else in src names this one.
+ */
+export const DEMO_START_LOCK_KEY = 392_002;
+
+/**
+ * [[GTC-443]] A copy's account address: 32 hex. With a visitor's tag (8 hex, start-limit.ts), the
+ * first 24 are random and the last 8 are the tag, so `crowdTagOf` (the first 8) is unchanged and
+ * the start limit counts her copies by their ending. With none, all 32 are random.
+ */
+export function copyAccountAddress(visitorTag?: string | null): string {
+  const tag = typeof visitorTag === 'string' && /^[0-9a-f]{8}$/.test(visitorTag) ? visitorTag : '';
+  return `${randomHex(tag ? 12 : 16)}${tag}@${DEMO_COPY_EMAIL_DOMAIN}`;
+}
+
+/** Run inside the copy's transaction, after the lock and before any write. */
+export type DemoStartCheck = (
+  tx: Prisma.TransactionClient,
+  now: Date
+) => Promise<{ ok: true } | { ok: false; words: string }>;
+
+/**
+ * [[GTC-443]] THE CHECK AND THE WRITE, IN ONE TRANSACTION UNDER ONE LOCK: the lock first, then
+ * `check` (the start limits), then the six rows. A refusal writes nothing.
+ */
+export async function startDemoCopyWithinLimit(
   db: PrismaClient,
-  options: { now?: Date } = {}
-): Promise<StartedCopy> {
+  check: DemoStartCheck,
+  options: { now?: Date; visitorTag?: string | null } = {}
+): Promise<{ ok: true; copy: StartedCopy } | { ok: false; words: string }> {
   const now = options.now ?? new Date();
-  const email = `${randomHex(16)}@${DEMO_COPY_EMAIL_DOMAIN}`;
+  const email = copyAccountAddress(options.visitorTag);
   const day = demoCopyDay(now);
   const sessionToken = randomHex(32);
   const expiresAt = new Date(now.getTime() + DEMO_SESSION_HOURS * 60 * 60 * 1000);
 
   return db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${DEMO_START_LOCK_KEY}::bigint)`;
+    // The clock is read once the lock is held: a start that waited must count the copy written
+    // while it waited, whose createdAt is later than any time taken before the wait.
+    const limit = await check(tx, options.now ?? new Date());
+    if (!limit.ok) return { ok: false, words: limit.words } as const;
     const user = await tx.user.create({ data: { email } });
     const host = await tx.person.create({
       data: { name: DEMO_HOST_NAME, email, userId: user.id },
@@ -92,8 +124,23 @@ export async function startDemoCopy(
         setup: { create: {} },
       },
     });
+    // [[GTC-441]] T2: the host is a sample person too; the event's id exists only now.
+    await tx.person.update({ where: { id: host.id }, data: { sampleEventId: event.id } });
     await tx.eventRole.create({ data: { userId: user.id, eventId: event.id, role: 'HOST' } });
     await tx.session.create({ data: { userId: user.id, token: sessionToken, expiresAt } });
-    return { eventId: event.id, userId: user.id, sessionToken, expiresAt };
+    return {
+      ok: true,
+      copy: { eventId: event.id, userId: user.id, sessionToken, expiresAt },
+    } as const;
   });
+}
+
+/** A copy with no limit to check (the suites' own starts): the same transaction and lock. */
+export async function startDemoCopy(
+  db: PrismaClient,
+  options: { now?: Date; visitorTag?: string | null } = {}
+): Promise<StartedCopy> {
+  const started = await startDemoCopyWithinLimit(db, async () => ({ ok: true }), options);
+  if (!started.ok) throw new Error(started.words);
+  return started.copy;
 }

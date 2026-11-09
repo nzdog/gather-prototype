@@ -221,6 +221,24 @@ export const PAGE_EDITS: Edit[] = [
       '                    )}\n',
   },
 ];
+/**
+ * [[GTC-444]] (the founder, 2 Nov 2026: Ask 1, check P1 only) — the board link beside the pretend
+ * panel: its import and its one line, on top of GTC-422's four, byte for byte.
+ */
+export const GTC444_PAGE_EDITS: Edit[] = [
+  {
+    old: "import PretendSend from '@/components/demo/PretendSend';\n",
+    new:
+      "import PretendSend from '@/components/demo/PretendSend';\n" +
+      "import SampleBoardLink from '@/components/demo/SampleBoardLink';\n",
+  },
+  {
+    old: '          {pretend && <PretendSend state={pretend} />}\n',
+    new:
+      '          {pretend && <PretendSend state={pretend} />}\n' +
+      '          {pretend && <SampleBoardLink eventId={eventId} />}\n',
+  },
+];
 export const STEP_EDITS: Edit[] = [
   {
     old: " * ticked. Ready and the settled steps have only the row's.\n */\n",
@@ -684,8 +702,8 @@ function layerP() {
   const pageBase = atRef(BASE, PAGE);
   assert(
     'P',
-    'P1 the page is the base with exactly the four typed changes, byte for byte: the five-step `every` becomes 1 to 4, the line never names step 5, Ready gains noBox, "five" becomes "four" in Send’s words',
-    CHECKS.exactly(page, pageBase, PAGE_EDITS)
+    'P1 the page is the base with exactly the four typed changes, byte for byte: the five-step `every` becomes 1 to 4, the line never names step 5, Ready gains noBox, "five" becomes "four" in Send’s words; and GTC-444’s two lines, the board link’s import and its line after the pretend panel',
+    CHECKS.exactly(page, pageBase, [...PAGE_EDITS, ...GTC444_PAGE_EDITS])
   );
   assert(
     'P',
