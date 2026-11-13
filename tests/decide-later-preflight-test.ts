@@ -203,6 +203,8 @@ const TICK_FILE = 'src/lib/preflight/tick-memory.ts';
 const BEFORE_S25 = '8bfe39b';
 /** The only source files S2.5 may change: the five its entry in the ticket names. */
 const S25_SRC = [ROUTE_FILE, NOTE_FILE, STEP_FILE, PREFLIGHT_PAGE, TICK_FILE];
+/** S2.5's own commit (its parent is BEFORE_S25): S.6 reads what that one commit changed. */
+const S25_COMMIT = '7afdf92';
 
 const W5_LABEL = 'Decide later:';
 const W6 = "Gather won't message them unless you change this in their household.";
@@ -955,14 +957,21 @@ function runSource() {
     addedAll.match(/\b[Ww]e\b|remind|chase|useState|useEffect|sentAt/)
   );
   const changed = [
-    ...gitOut(['diff', '--name-only', BEFORE_S25, '--', 'src', 'prisma', 'package.json']).split(
-      '\n'
-    ),
+    ...gitOut([
+      'diff',
+      '--name-only',
+      BEFORE_S25,
+      S25_COMMIT,
+      '--',
+      'src',
+      'prisma',
+      'package.json',
+    ]).split('\n'),
     ...gitOut(['ls-files', '--others', '--exclude-standard', '--', 'src', 'prisma']).split('\n'),
   ].filter(Boolean);
   assert(
     'S.6',
-    'nothing under src or prisma changed but the five files S2.5 names; no new file, no package.json change, so no new route, no gate file, AfterThePress untouched',
+    'S2.5’s commit (7afdf92): nothing under src or prisma changed but the five files S2.5 names; no new file, no package.json change, so no new route, no gate file, AfterThePress untouched',
     changed.every((f) => S25_SRC.includes(f)),
     changed.filter((f) => !S25_SRC.includes(f))
   );
