@@ -14,7 +14,7 @@
  *   A  the refusals: no item (W57), an item (W5), three failed calls, the day's total (W6), a real
  *      event, five at once, and what counts as an item
  *   S  the source: one item read, in the transaction, after the copy's take fails; the six routes
- *      and the setup page as at 79d7d7e
+ *      as at 79d7d7e; the setup page as at 79d7d7e plus exactly GTC-449's five pieces
  *   Z  every probe row removed by id; the totals as at the start
  *
  * SAFETY. gather_demo on this Mac only (refused otherwise; the address is never printed). In
@@ -31,7 +31,7 @@ import dns from 'dns';
 import fs from 'fs';
 import net from 'net';
 import path from 'path';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { spawnSync } from 'child_process';
 
 // Before any AI module loads: this process has no key, so the real AI function refuses at once.
@@ -42,8 +42,11 @@ const RUN = randomBytes(4).toString('hex');
 const TAG = `gtc446-${RUN}`;
 /** This ticket's starting commit (a fixed commit). */
 const PARENT = '79d7d7e';
+/** The commit GTC-449 and main both grew from (their merge-base). */
+const BASE = '128b3414b75ad6fe69a2c30231ee063a4c2ae699';
 const AI_CAP = 'src/lib/demo/ai-cap.ts';
 const PLAN = 'docs/tickets/GTC-392.md';
+/** The six AI routes: nothing changes them, as at 79d7d7e. */
 const KEPT = [
   'src/app/api/events/[id]/finalize-plan/route.ts',
   'src/app/api/events/[id]/regenerate-plan/route.ts',
@@ -51,8 +54,38 @@ const KEPT = [
   'src/app/api/events/[id]/regenerate/route.ts',
   'src/app/api/events/[id]/regenerate/preview/route.ts',
   'src/app/api/events/[id]/conflicts/[conflictId]/suggest-resolution/route.ts',
-  'src/app/plan/[eventId]/setup/page.tsx',
 ];
+// ── [[GTC-449]]: the setup page is 79d7d7e's (and the base's) plus exactly five pieces ──────
+const SETUP = 'src/app/plan/[eventId]/setup/page.tsx';
+/**
+ * WHY THESE HASHES EXIST. GTC-449's pieces 1 to 4 are not pinned word for word anywhere else: our own
+ * tests load each piece out of the page and RUN it, so a change that alters what it does goes red, but
+ * a changed comment, a renamed local or a reworded line does not. (Piece 5, the invitationsSent prop,
+ * is pinned word for word by decide-later-form-test P.1; it is hashed here too so the list is whole.)
+ * The numstat below only counts lines, so it would miss a same-size change inside a piece.
+ *
+ * WHAT IS HASHED. One SHA-256 per piece, in page order, of the piece's ADDED lines only, exactly as
+ * they stand in the page, each followed by a newline. Nothing else: no diff markers, no context
+ * lines, no removed line, no line numbers. The lines come from `git diff -U0` (see pieceLines),
+ * and an inserted block is first slid to its earliest position, so the two equal-looking places git
+ * may put the same text (piece 1 has one) give the same lines under any git version.
+ *
+ * TO RECOMPUTE A HASH after a deliberate edit of a piece, from the repo root (prints 5 lines, piece
+ * 1 first; paste them below):
+ *   DEMO_PLAN_TRIES_DRY_RUN=1 npx tsx -e "console.log(require('./tests/demo-plan-tries-test.ts').setupPieceHashes().join('\n'))"
+ *
+ * Pieces: 1 keptEmailNames (S2.3), 2 the effect that clears W9, 3 the decideLater mapper line,
+ * 4 the kept/W9 save, 5 the invitationsSent prop.
+ */
+const OUR_PIECES = [
+  '4dbcdb4cf9e82adc52d27d8d85e35102cccd2ed7b8cc6a38f06d39b4f3fab558',
+  'b131cf6b3c1c0f3c390023b5bc22bc9907647bdbc95b46eafaa475b6073ed746',
+  '932428d34591fc5d30fea2d21213fa01421dd42491b76868e1dea49535696e6b',
+  '52ed58fb01badadbfddbfccb34c43b39729faf19dad37dcdb11df0cdad0a18d3',
+  '27e57dbf2c4cce5829fe31d4b90ba5bd5049c4d0a5bd192a3f510c9f8f515190',
+];
+/** The page's lines added and removed since 79d7d7e: exactly +57 and -1. */
+const OUR_NUMSTAT = `57\t1\t${SETUP}\n`;
 const TOTALS = [
   'event',
   'eventSetup',
@@ -135,6 +168,69 @@ export function planWords(plan: string): { W5?: string; W6?: string; W57?: strin
     '## Questions for the founder'
   );
   return { W5: a.W5, W6: a.W6, W57: cd.W57 };
+}
+
+/**
+ * The ADDED lines of each hunk of a `git diff -U0` text, in order, normalised: a hunk that only
+ * inserts is slid up to its earliest position (while the line above it equals its last line), using
+ * the page's own lines. Only the '+' lines count; headers, markers and the removed line do not.
+ */
+export function pieceLines(diff: string, page: string): string[][] {
+  const pageLines = page.split('\n');
+  const out: string[][] = [];
+  let cur: { insertOnly: boolean; start: number; added: string[] } | null = null;
+  const close = () => {
+    if (!cur) return;
+    let lines = cur.added;
+    if (
+      cur.insertOnly &&
+      pageLines.slice(cur.start, cur.start + lines.length).join('\n') === lines.join('\n')
+    ) {
+      let s = cur.start;
+      while (s > 0 && pageLines[s - 1] === pageLines[s + lines.length - 1]) s--;
+      lines = pageLines.slice(s, s + lines.length);
+    }
+    out.push(lines);
+  };
+  for (const line of diff.split('\n')) {
+    const h = /^@@ -\d+(?:,(\d+))? \+(\d+)(?:,\d+)? @@/.exec(line);
+    if (h) {
+      close();
+      cur = { insertOnly: h[1] === '0', start: Number(h[2]) - 1, added: [] };
+    } else if (cur && line.startsWith('+')) cur.added.push(line.slice(1));
+  }
+  close();
+  return out;
+}
+const sha = (lines: string[]) =>
+  createHash('sha256')
+    .update(lines.join('\n') + '\n')
+    .digest('hex');
+/** The five hashes now, from the working tree against 79d7d7e (also what the recompute command prints). */
+export function setupPieceHashes(): string[] {
+  const diff = spawnSync(
+    'git',
+    [
+      'diff',
+      '-U0',
+      '--diff-algorithm=myers',
+      '--indent-heuristic',
+      '--no-color',
+      '--no-ext-diff',
+      '--no-textconv',
+      PARENT,
+      '--',
+      SETUP,
+    ],
+    { cwd: ROOT, encoding: 'utf8', maxBuffer: 1 << 26 }
+  ).stdout;
+  let page = '';
+  try {
+    page = fs.readFileSync(path.join(ROOT, SETUP), 'utf8');
+  } catch {
+    // a missing page gives no pieces, so S2 is red
+  }
+  return pieceLines(String(diff), page).map(sha);
 }
 
 // ── CHECKS-START: every live condition, pure, dry-run before RED ─────────────
@@ -270,9 +366,44 @@ export const CHECKS = {
       !code.slice(block, at).includes('return')
     );
   },
-  /** S2 */
-  kept(exist: boolean[], diffStatus: number | null) {
-    return exist.length === KEPT.length && exist.every(Boolean) && diffStatus === 0;
+  /**
+   * S2 — the six routes are 79d7d7e's; the setup page is the same at 79d7d7e and at the base
+   * (GTC-446 itself did not touch it), shows exactly +57 -1 against 79d7d7e, and those changes are
+   * exactly GTC-449's five pieces (one fingerprint each, in page order).
+   */
+  kept(
+    exist: boolean[],
+    routesStatus: number | null,
+    setupNumstat: string,
+    baseStatus: number | null,
+    pieces: string[]
+  ) {
+    return (
+      exist.length === KEPT.length + 1 &&
+      exist.every(Boolean) &&
+      routesStatus === 0 &&
+      setupNumstat === OUR_NUMSTAT &&
+      baseStatus === 0 &&
+      pieces.length === OUR_PIECES.length &&
+      OUR_PIECES.every((p, i) => pieces[i] === p)
+    );
+  },
+  /** S2's message: which of GTC-449's five setup-page pieces (1 to 5) no longer matches its hash. */
+  pieceReport(pieces: string[]) {
+    const names = [
+      'keptEmailNames',
+      'the W9 effect',
+      'the decideLater line',
+      'the W9 save',
+      'the invitationsSent prop',
+    ];
+    if (pieces.length !== OUR_PIECES.length) {
+      return `found ${pieces.length} pieces on the page, want ${OUR_PIECES.length}`;
+    }
+    const bad = OUR_PIECES.map((p, i) =>
+      pieces[i] === p ? '' : `piece ${i + 1} (${names[i]}) changed`
+    ).filter(Boolean);
+    return bad.length ? bad.join('; ') : 'all 5 pieces match';
   },
   /** Z1 */
   totalsBack(before: Record<string, number>, after: Record<string, number>, left: number) {
@@ -643,15 +774,22 @@ async function main() {
       'S1 ai-cap.ts reads items once, through the transaction, only after the copy’s own take fails (after the day’s total; none on the taken path) (O2, O3)',
       CHECKS.itemReadPlace(read(AI_CAP))
     );
-    const diff = spawnSync('git', ['diff', '--quiet', PARENT, '--', ...KEPT], { cwd: ROOT });
+    const git = (...a: string[]) => spawnSync('git', a, { cwd: ROOT, encoding: 'utf8' });
+    const routes = git('diff', '--quiet', PARENT, '--', ...KEPT);
+    const numstat = git('diff', '--numstat', PARENT, '--', SETUP);
+    const sameAtBase = git('diff', '--quiet', PARENT, BASE, '--', SETUP);
+    const pieces = setupPieceHashes();
     assert(
       'S',
-      'S2 the six AI routes and the setup page are byte for byte as at 79d7d7e',
+      'S2 the six AI routes are byte for byte as at 79d7d7e; the setup page is as at 79d7d7e (and at the base 128b341) plus exactly GTC-449’s five pieces (+57 -1)',
       CHECKS.kept(
-        KEPT.map((f) => fs.existsSync(path.join(ROOT, f))),
-        diff.status
+        [...KEPT, SETUP].map((f) => fs.existsSync(path.join(ROOT, f))),
+        routes.status,
+        String(numstat.stdout),
+        sameAtBase.status,
+        pieces
       ),
-      `git diff status ${diff.status}`
+      `routes ${routes.status}, numstat ${JSON.stringify(String(numstat.stdout).trim())}, base ${sameAtBase.status}, ${CHECKS.pieceReport(pieces)}`
     );
   } catch (e) {
     assert('X', 'the suite ran to its end', false, String((e as Error).message).slice(0, 300));
