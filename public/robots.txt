@@ -1,0 +1,4 @@
+# [[GTC-461]] Every crawler may fetch every page, link-preview crawlers included.
+# This file locks nothing: sign-in and the route guards keep private pages private.
+User-agent: *
+Allow: /
