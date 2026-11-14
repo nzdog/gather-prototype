@@ -1,7 +1,12 @@
 import { Calendar, Users, Share2, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
+import type { Metadata } from 'next';
 import { getUser } from '@/lib/auth/session';
+import { sharePreview } from '@/lib/share-preview';
+
+// [[GTC-461]]: the front page is the only page that names itself as og:url.
+export const metadata: Metadata = sharePreview('/');
 
 export default async function LandingPage() {
   const user = await getUser();

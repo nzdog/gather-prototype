@@ -234,6 +234,25 @@ const HOME_BLOCK =
   '          </p>\n' +
   '        </div>\n';
 const HOME_PAIRS: Pairs = [[HOME_BLOCK, '']];
+/**
+ * [[GTC-461]] (the founder's ruling of 14 Nov 2026): the front page gains its link-preview tags
+ * and is the only page that names itself as og:url. C2 still asks for the whole file byte for
+ * byte: T0's file, Ticket A's cut, and exactly these two insertions, typed here by hand.
+ */
+const GTC461_HOME_PAIRS: Pairs = [
+  [
+    "import { getUser } from '@/lib/auth/session';\n",
+    "import type { Metadata } from 'next';\n" +
+      "import { getUser } from '@/lib/auth/session';\n" +
+      "import { sharePreview } from '@/lib/share-preview';\n",
+  ],
+  [
+    '\nexport default async function LandingPage() {\n',
+    '\n// [[GTC-461]]: the front page is the only page that names itself as og:url.\n' +
+      "export const metadata: Metadata = sharePreview('/');\n" +
+      '\nexport default async function LandingPage() {\n',
+  ],
+];
 const PAYING_PAIRS: Pairs = [
   [
     "import { GATHER_CONTACT_EMAIL } from '@/lib/email-footer';\n",
@@ -704,8 +723,8 @@ function layerC() {
   );
   assert(
     'C',
-    'C2 the home page is T0’s file with exactly the "Browse event templates" block taken out',
-    CHECKS.exactly(home, applyPairs(atRef(T0_TIP, HOME), HOME_PAIRS))
+    'C2 the home page is T0’s file with exactly the "Browse event templates" block taken out (and exactly GTC-461’s two link-preview insertions put in)',
+    CHECKS.exactly(home, applyPairs(atRef(T0_TIP, HOME), [...HOME_PAIRS, ...GTC461_HOME_PAIRS]))
   );
   assert(
     'C',
