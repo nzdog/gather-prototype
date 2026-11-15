@@ -132,6 +132,14 @@ async function main() {
 
     const kid = await person('Kid');
     const staleKid = await person('StaleKid');
+    // GTC-449 (S2.8): a CHILD on "decide later", with a phone as well as an email. There is no
+    // "Kid" in the name on purpose: the older "no name holds Kid" check cannot cover this one
+    // by accident, so it gets a check of its own below.
+    const undecided = await person('Undecided');
+    await prisma.person.update({
+      where: { id: undecided.id },
+      data: { phoneNumber: '+64211234570' },
+    });
     const adultInHousehold = await person('AdultInHousehold');
     const adultNoHousehold = await person('AdultNoHousehold');
     const coordinator = await person('Coordinator');
@@ -191,9 +199,19 @@ async function main() {
       },
     });
     await prisma.personEvent.create({
+      data: {
+        personId: undecided.id,
+        eventId: event.id,
+        role: 'PARTICIPANT',
+        householdId: household.id,
+        householdRole: 'CHILD',
+        messagingUndecided: true,
+      },
+    });
+    await prisma.personEvent.create({
       data: { personId: coordinator.id, eventId: event.id, role: 'COORDINATOR', teamId: team.id },
     });
-    for (const p of [adultInHousehold, adultNoHousehold, kid, staleKid, coordinator]) {
+    for (const p of [adultInHousehold, adultNoHousehold, kid, staleKid, coordinator, undecided]) {
       const item = await prisma.item.create({
         data: { name: `${TAG} ${p.name} dish`, teamId: team.id, status: 'ASSIGNED' },
       });
@@ -217,6 +235,17 @@ async function main() {
         expiresAt: new Date(now.getTime() + 30 * DAY),
       },
     });
+    // GTC-449 (S2.8): the same for the decide-later child, so its revoke is exercised too.
+    await prisma.accessToken.create({
+      data: {
+        token: `${TAG}-stale-undecided-${stamp}`,
+        scope: 'PARTICIPANT',
+        personId: undecided.id,
+        eventId: event.id,
+        teamId: null,
+        expiresAt: new Date(now.getTime() + 30 * DAY),
+      },
+    });
 
     section('Layer 0b: the fixture holds one of every case the gate must tell apart');
     assert(
@@ -225,6 +254,23 @@ async function main() {
       (await prisma.accessToken.count({
         where: { eventId: event.id, personId: staleKid.id, scope: 'PARTICIPANT' },
       })) === 1
+    );
+
+    assert(
+      'CONTROL: a stale token exists for the decide-later CHILD before issuance runs, so its ' +
+        'revoke is exercised rather than asserted of an empty set',
+      (await prisma.accessToken.count({
+        where: { eventId: event.id, personId: undecided.id, scope: 'PARTICIPANT' },
+      })) === 1
+    );
+
+    const undecidedRow = await prisma.personEvent.findUniqueOrThrow({
+      where: { personId_eventId: { personId: undecided.id, eventId: event.id } },
+    });
+    assert(
+      'CONTROL: the decide-later CHILD really is a CHILD with the marker on, read back from the ' +
+        'database, so a fixture that silently dropped the marker would be caught here',
+      undecidedRow.householdRole === 'CHILD' && undecidedRow.messagingUndecided === true
     );
 
     const { ensureEventTokens } = await import('../src/lib/tokens');
@@ -243,6 +289,11 @@ async function main() {
         'child in the database — issuance now reads householdRole, which step 4 never did',
       (await tokenCount(kid.id)) === 0
     );
+    assert(
+      "⚠ A CHILD ON DECIDE LATER GETS NO TOKEN EITHER — the marker is the host's own note, not a " +
+        'rule, and issuance never reads it: the role CHILD alone withholds',
+      (await tokenCount(undecided.id)) === 0
+    );
 
     // ── Layer V: revoke ──────────────────────────────────────────────────
     section('Layer V: and a stale one is REVOKED, not merely not re-issued');
@@ -253,6 +304,10 @@ async function main() {
         'only the future." GTC-256 build decision 3\'s rule, one role down: declining to issue is ' +
         'construction-deep only while none exists, and three existed',
       (await tokenCount(staleKid.id)) === 0
+    );
+    assert(
+      "⚠ AND THE DECIDE-LATER CHILD'S STALE TOKEN IS REVOKED just as the plain child's is",
+      (await tokenCount(undecided.id)) === 0
     );
 
     // ── Layer A: the adjacent cases, and the NULL trap ───────────────────
@@ -296,6 +351,11 @@ async function main() {
       !names.some((n: string) => n.includes('Kid'))
     );
     assert(
+      '⚠ AND THE DECIDE-LATER CHILD IS NOT IN THE DIRECTORY EITHER — asserted by its own name, ' +
+        'because it has no "Kid" in it for the check above to find',
+      !names.some((n: string) => n.includes('Undecided'))
+    );
+    assert(
       '⚠ AND EVERY ADULT IS STILL THERE, the no-household one included — the NULL trap again, on ' +
         'the surface where it would have been a silent deletion rather than a missing token',
       names.some((n: string) => n.includes('AdultInHousehold')) &&
@@ -313,6 +373,10 @@ async function main() {
         'looked at',
       !emitted.includes(`${TAG}-stale-child-${stamp}`)
     );
+    assert(
+      "⚠ AND NO DECIDE-LATER CHILD'S TOKEN IS ANYWHERE IN THE PAYLOAD either",
+      !emitted.includes(`${TAG}-stale-undecided-${stamp}`)
+    );
 
     // ── Layer C: the claim route ──────────────────────────────────────────
     section('Layer C: the claim gate refuses a child row');
@@ -329,6 +393,18 @@ async function main() {
       ok(
         () =>
           exposure.isClaimableMembership({ role: 'PARTICIPANT', householdRole: 'CHILD' }) === false
+      )
+    );
+    assert(
+      '⚠ AND A CHILD ON DECIDE LATER IS REFUSED THE SAME WAY: the predicate answers on role and ' +
+        'householdRole, and the marker changes nothing',
+      ok(
+        () =>
+          exposure.isClaimableMembership({
+            role: 'PARTICIPANT',
+            householdRole: 'CHILD',
+            messagingUndecided: true,
+          }) === false
       )
     );
     assert(

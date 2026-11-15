@@ -45,6 +45,13 @@ export interface Moment1PersonInput {
      * instead of CHILD. Never inferred — the host ticks it, or it stays false.
      */
     adultRoled?: boolean;
+    /**
+     * [[GTC-449]] (S2.2): "Decide later" — the host has not yet decided whether to message this
+     * kid. The form sends the boolean on EVERY kid row (true or false, never left out): the server
+     * reads an explicit `false` on a kid it holds as undecided as a settle (S2.3). The tick wins:
+     * a ticked kid is always sent `false`.
+     */
+    decideLater?: boolean;
   }>;
   littleCount?: number;
   guests?: Array<{
@@ -135,6 +142,12 @@ interface Moment1InputFormProps {
    * own household's step.
    */
   resumeEdit?: { savedIds: string[] | null; open: (householdId: string) => void };
+  /**
+   * [[GTC-449]] (S2.4, rulings 91 and 110): whether the invitations have already gone out, as the
+   * setup page reads it (`Boolean(event.sentAt)`). Passed on the call that edits a household and
+   * nowhere else, so every other use of this form is byte-for-byte what it was.
+   */
+  invitationsSent?: boolean;
 }
 
 interface GuestForm {
@@ -146,6 +159,49 @@ interface GuestForm {
   phone: string;
   /** GTC-172 (C1): helper rows only — explicit adult-roling (§10.6). Off by default. */
   adultRoled?: boolean;
+  /**
+   * [[GTC-449]] (S2.2): helper rows only — "Decide later" (ruling 6). Offered only while the tick
+   * above is off, and never on together with it (the tick wins, ruling 20). Off by default.
+   */
+  decideLater?: boolean;
+}
+
+/**
+ * [[GTC-449]] (S2.2) — the founder's words for the "Decide later" choice (the ticket's W1 to W3;
+ * straight apostrophes, ruling 103). Change none without a ruling.
+ */
+const DECIDE_LATER_WORDS = {
+  CHOICE: 'Decide later',
+  chosen: (name: string) =>
+    `Gather won't message ${name} until you choose. You can change this any time.`,
+  keeping: (name: string) =>
+    `Gather is keeping ${name}'s contact details for now. It won't use them unless you choose to message ${name}.`,
+} as const;
+
+/** A kid row is on "Decide later" only with the tick off: the tick wins (ruling 20). */
+const onDecideLater = (h: { adultRoled?: boolean; decideLater?: boolean }) =>
+  !h.adultRoled && h.decideLater === true;
+
+/**
+ * [[GTC-449]] (S2.4) — the founder's words for the confirm line and its two buttons (ruling 89,
+ * which replaced W4). {name} is the names joined by `joinNames` (ruling 111). Change none without a
+ * ruling.
+ */
+const CONFIRM_WORDS = {
+  line: (names: string) =>
+    `The invitations have already gone out. If you save this, Gather will be able to message ${names}.`,
+  save: (names: string) => `Save and let Gather message ${names}`,
+  back: 'Go back',
+} as const;
+
+/**
+ * Ruling 111 — names in plain English: one as it is, "Josh and Mere", "Josh, Mere and Aroha" (no
+ * comma before "and"). Each name is trimmed.
+ */
+export function joinNames(names: ReadonlyArray<string>): string {
+  const list = names.map((n) => n.trim());
+  if (list.length < 2) return list[0] ?? '';
+  return `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`;
 }
 
 /**
@@ -172,7 +228,9 @@ function formSnapshot(f: {
   return JSON.stringify([
     person(f),
     f.partner ? person(f.partner) : null,
-    f.helpers.map((h) => [...person(h), Boolean(h.adultRoled)]),
+    // [[GTC-449]]: the choice counts as a change, so it is asked about on leaving and a draft that
+    // differs only by it is put back. The tick wins, so a kid ticked and "decided later" reads as ticked.
+    f.helpers.map((h) => [...person(h), Boolean(h.adultRoled), onDecideLater(h)]),
     f.littles,
     f.guests.map(person),
     f.contactPersonEventId,
@@ -221,6 +279,7 @@ const emptyGuest = (): GuestForm => ({
   email: '',
   phone: '',
   adultRoled: false,
+  decideLater: false,
 });
 
 export default function Moment1InputForm({
@@ -240,6 +299,7 @@ export default function Moment1InputForm({
   onDraftChange,
   stripDoors,
   resumeEdit,
+  invitationsSent,
 }: Moment1InputFormProps) {
   // Primary contact
   const [name, setName] = useState('');
@@ -310,6 +370,19 @@ export default function Moment1InputForm({
   const isEditing = !!editingHousehold;
 
   /**
+   * [[GTC-449]] (S2.3, ruling 26) — was this kid row SAVED as decide later? Decided only by
+   * comparing with the saved household the form opened with, matched by personEventId: never by
+   * name or by place in the list. A row with no personEventId (a new row, or one typed in this
+   * sitting), a row saved any other way (including one saved before this change), and every row of
+   * a household not being edited, is not.
+   */
+  const savedAsDecideLater = (h: GuestForm): boolean =>
+    !!h.personEventId &&
+    !!editingHousehold?.helpers.some(
+      (s) => s.personEventId === h.personEventId && onDecideLater(s)
+    );
+
+  /**
    * The host's own household, while capturing it (`hostMode`) or when she later edits it from the
    * card list. GTC-256 (Ruling 6) put its message switch here; [[GTC-384]] (Q5) replaced the switch
    * with one true line, and (Q4) hides the contact picker here.
@@ -342,6 +415,28 @@ export default function Moment1InputForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reopened]);
   const hasUnsavedInput = opened !== null && snapshot !== opened;
+
+  /**
+   * [[GTC-449]] (S2.4, rulings 5, 16, 25, 89, 91, 110 and 111) — the confirm line. After the
+   * invitations have gone out, "Save changes" on a saved household asks once when a kid SAVED as
+   * decide later is now ticked to be messaged. A screen courtesy only: the request is the same
+   * with or without it, and the server has no guard (ruling 25). Named are the kids saved as
+   * decide later and now ticked, in the order of the form; a plain kid, a new row and a kid with no
+   * name (the form's own "Name is required" stops that save) are not. `confirmFor` is the form as
+   * it stood when she was asked: any later change to the form closes the line.
+   */
+  const confirmNames =
+    invitationsSent && isEditing
+      ? helpers
+          .filter((h) => h.adultRoled === true && savedAsDecideLater(h) && h.name.trim() !== '')
+          .map((h) => h.name)
+      : [];
+  const [confirmFor, setConfirmFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (confirmFor !== null && confirmFor !== snapshot) setConfirmFor(null);
+  }, [confirmFor, snapshot]);
+  const confirmOpen = confirmFor !== null && confirmFor === snapshot && confirmNames.length > 0;
+  const confirmWho = joinNames(confirmNames);
 
   /*
    * [[GTC-435]] — what she types is kept in this browser until it is saved (form-draft.ts), so
@@ -390,7 +485,11 @@ export default function Moment1InputForm({
         phone: partnerPhone,
         ...(partnerPersonEventId ? { personEventId: partnerPersonEventId } : {}),
       },
-      helpers: helpers.map((h) => ({ ...row(h), adultRoled: Boolean(h.adultRoled) })),
+      helpers: helpers.map((h) => ({
+        ...row(h),
+        adultRoled: Boolean(h.adultRoled),
+        decideLater: onDecideLater(h),
+      })),
       showLittles,
       littleCount,
       guests: guests.map(row),
@@ -426,6 +525,8 @@ export default function Moment1InputForm({
       email: h.email,
       phone: h.phone,
       adultRoled: h.adultRoled ?? false,
+      // An older draft has no marker (off). If a draft ever held both, the tick wins (ruling 20).
+      decideLater: onDecideLater(h),
     }));
     const gs: GuestForm[] = s.guests.map((g) => ({
       id: `f-${++formIdCounter}`,
@@ -636,6 +737,8 @@ export default function Moment1InputForm({
         email: h.email || '',
         phone: h.phone || '',
         adultRoled: h.adultRoled ?? false,
+        // A household saved before this change has no marker on its kids: the choice is off.
+        decideLater: onDecideLater(h),
       }));
       setHelpers(loadedHelpers);
       setHelperErrors(editingHousehold.helpers.map(() => ({})));
@@ -858,6 +961,9 @@ export default function Moment1InputForm({
         phone: h.phone.trim() || undefined,
         // GTC-172 (C1): explicit, never derived from h.phone being present (§10.6).
         adultRoled: h.adultRoled ?? false,
+        // [[GTC-449]]: always the boolean, never left out: an explicit `false` on a kid the server
+        // holds as undecided is how it tells a settle from an old client (S2.3). Tick wins.
+        decideLater: onDecideLater(h),
       }));
     }
 
@@ -932,6 +1038,20 @@ export default function Moment1InputForm({
     } finally {
       setSaving(false);
     }
+  };
+
+  /** [[GTC-449]] (S2.4): the Save changes button. Asks first when the confirm line applies. */
+  const pressSaveChanges = () => {
+    if (confirmNames.length > 0) {
+      setConfirmFor(snapshot);
+      return;
+    }
+    void handleEditSave();
+  };
+  /** The line's Save button: the line goes, then the save runs its usual checks as ever. */
+  const confirmSave = () => {
+    setConfirmFor(null);
+    void handleEditSave();
   };
 
   const handleDone = async () => {
@@ -1470,9 +1590,33 @@ export default function Moment1InputForm({
                           checked={helper.adultRoled ?? false}
                           onChange={(e) => {
                             const checked = e.target.checked;
+                            // [[GTC-449]]: the tick wins (ruling 20): ticking turns "Decide later"
+                            // off, and unticking does not bring it back. Ticking keeps the details
+                            // (they are the adult's now). [[GTC-449]] (S2.3, ruling 108): taking the
+                            // tick off again on a row SAVED as decide later settles it to "don't
+                            // message" by that route, so its held email and phone are emptied here,
+                            // as when the choice is turned off. In the form only; nothing is stored
+                            // until Save, and Cancel or Discard leave the stored details alone.
+                            const settle = !checked && savedAsDecideLater(helper);
                             setHelpers((prev) =>
-                              prev.map((h, j) => (j === i ? { ...h, adultRoled: checked } : h))
+                              prev.map((h, j) =>
+                                j === i
+                                  ? {
+                                      ...h,
+                                      adultRoled: checked,
+                                      decideLater: false,
+                                      ...(settle ? { email: '', phone: '' } : {}),
+                                    }
+                                  : h
+                              )
                             );
+                            if (settle) {
+                              setHelperErrors((prev) =>
+                                prev.map((err, j) =>
+                                  j === i ? { ...err, email: undefined, phone: undefined } : err
+                                )
+                              );
+                            }
                           }}
                           className="mt-1 h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
                         />
@@ -1486,6 +1630,65 @@ export default function Moment1InputForm({
                         </span>
                       </label>
                     </div>
+                    {/*
+                      [[GTC-449]] (S2.2, ruling 6) — "Decide later", beside the tick, for a kid the
+                      host has not yet decided about. Offered only while the tick is off (ruling 20).
+                      Choosing it stores nothing and empties nothing here: it is sent on Save.
+                      W2 and W3 need the kid's name (ruling 101); W3 needs details on the row (102).
+                    */}
+                    {!helper.adultRoled && (
+                      <div className="pt-1">
+                        <label className="flex items-start gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={onDecideLater(helper)}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              // [[GTC-449]] (S2.3, rulings 17 and 26): turning the choice off on a row
+                              // SAVED as decide later, with the tick off, is "don't message": its held
+                              // email and phone are emptied here, in the form only. Nothing is stored
+                              // until Save, and Cancel or Discard leave the stored details alone.
+                              // Choosing it, ticking, or a row not saved that way, empties nothing.
+                              const settle = !checked && savedAsDecideLater(helper);
+                              setHelpers((prev) =>
+                                prev.map((h, j) =>
+                                  j === i
+                                    ? {
+                                        ...h,
+                                        decideLater: checked,
+                                        ...(settle ? { email: '', phone: '' } : {}),
+                                      }
+                                    : h
+                                )
+                              );
+                              if (settle) {
+                                setHelperErrors((prev) =>
+                                  prev.map((err, j) =>
+                                    j === i ? { ...err, email: undefined, phone: undefined } : err
+                                  )
+                                );
+                              }
+                            }}
+                            className="mt-1 h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
+                          />
+                          <span className="text-sm text-gray-600">
+                            {DECIDE_LATER_WORDS.CHOICE}
+                            {onDecideLater(helper) && helper.name.trim() && (
+                              <span className="block text-xs text-gray-400">
+                                {DECIDE_LATER_WORDS.chosen(helper.name.trim())}
+                              </span>
+                            )}
+                          </span>
+                        </label>
+                        {onDecideLater(helper) &&
+                          helper.name.trim() &&
+                          (helper.email.trim() || helper.phone.trim()) && (
+                            <p className="mt-1 pl-6 text-xs text-gray-400">
+                              {DECIDE_LATER_WORDS.keeping(helper.name.trim())}
+                            </p>
+                          )}
+                      </div>
+                    )}
                   </SubForm>
                 );
               }
@@ -1691,14 +1894,36 @@ export default function Moment1InputForm({
             </button>
           ) : isEditing ? (
             <>
-              <button
-                type="button"
-                onClick={handleEditSave}
-                disabled={saving}
-                className="w-full py-3 text-white font-medium bg-accent rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-50 mb-4"
-              >
-                {saving ? 'Saving…' : 'Save changes'}
-              </button>
+              {confirmOpen ? (
+                <div className="mb-4">
+                  <p className="text-sm text-gray-700 mb-3">{CONFIRM_WORDS.line(confirmWho)}</p>
+                  <button
+                    type="button"
+                    onClick={confirmSave}
+                    disabled={saving}
+                    className="w-full py-3 text-white font-medium bg-accent rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-50 mb-4"
+                  >
+                    {saving ? 'Saving…' : CONFIRM_WORDS.save(confirmWho)}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmFor(null)}
+                    disabled={saving}
+                    className="w-full py-3 text-gray-600 font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    {CONFIRM_WORDS.back}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={pressSaveChanges}
+                  disabled={saving}
+                  className="w-full py-3 text-white font-medium bg-accent rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-50 mb-4"
+                >
+                  {saving ? 'Saving…' : 'Save changes'}
+                </button>
+              )}
               {onCancelEdit && (
                 <button
                   type="button"

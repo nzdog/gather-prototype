@@ -195,7 +195,13 @@
     "test:demo-public": "tsx --tsconfig tests/tsconfig.json tests/demo-public-test.ts",
     "test:demo-delete-limits": "tsx tests/demo-delete-limits-test.ts",
     "test:glance-card-refresh": "NODE_OPTIONS=--experimental-websocket tsx tests/glance-card-refresh-test.ts",
-    "test:contact-import": "tsx --tsconfig tests/tsconfig.json tests/contact-import-test.ts"
+    "test:contact-import": "tsx --tsconfig tests/tsconfig.json tests/contact-import-test.ts",
+    "test:child-assignment": "tsx tests/child-assignment-eligibility-test.ts",
+    "test:marker-tripwire": "tsx tests/marker-tripwire-test.ts",
+    "test:decide-later-write": "tsx tests/decide-later-write-test.ts",
+    "test:decide-later-settle": "tsx tests/decide-later-settle-test.ts",
+    "test:decide-later-form": "tsx --tsconfig tests/tsconfig.json tests/decide-later-form-test.ts",
+    "test:decide-later-preflight": "tsx --tsconfig tests/tsconfig.json tests/decide-later-preflight-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

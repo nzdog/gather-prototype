@@ -27,7 +27,14 @@ interface HostHouseholdBody {
   name?: string;
   phone?: string;
   partner?: { name?: string; email?: string; phone?: string };
-  helpers?: Array<{ name?: string; email?: string; phone?: string; adultRoled?: boolean }>;
+  helpers?: Array<{
+    name?: string;
+    email?: string;
+    phone?: string;
+    adultRoled?: boolean;
+    /** GTC-449 (S2.1): "Decide later" on a kid row, stored by the shared member writer. */
+    decideLater?: boolean;
+  }>;
   littleCount?: number;
   guests?: Array<{ name?: string; email?: string; phone?: string }>;
   messagesMuted?: boolean | null;

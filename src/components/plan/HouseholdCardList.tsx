@@ -15,6 +15,8 @@ export interface SavedHousehold {
     phone?: string;
     /** GTC-172 (C1): host roled this kid with a job as an adult (§10.6). */
     adultRoled?: boolean;
+    /** [[GTC-449]]: the host chose "Decide later" for this kid; a saved card shows it as W8 (S2.6). */
+    decideLater?: boolean;
   }>;
   littleCount: number;
   guests: Array<{ personEventId?: string; name: string; email?: string; phone?: string }>;
@@ -35,7 +37,31 @@ export interface SavedHousehold {
    * this component's.
    */
   messagesMuted?: boolean | null;
+  /**
+   * [[GTC-449]] (S2.3, ruling 35): the names of kids whose email address the server kept when the
+   * host settled them to "don't message", because there is a no-email note for them. Set by the
+   * setup page after a save, only in the page's own list, never from the server; each name shows W9.
+   * Gone when she next opens the household or leaves the page.
+   */
+  keptEmailNames?: string[];
 }
+
+/**
+ * [[GTC-449]] (S2.3) — W9, the founder's words (ruling 35), exactly, with straight apostrophes
+ * (ruling 103). Change them only by a ruling.
+ */
+export const KEPT_EMAIL_WORDS = {
+  kept: (name: string) =>
+    `We kept ${name}'s email address on file, because there is a no-email note for them.`,
+} as const;
+
+/**
+ * [[GTC-449]] (S2.6, ruling 14) — W8, the founder's words, exactly: "Josh (decide later)", the kid's
+ * name, one space, then these words. Change them only by a ruling.
+ */
+export const DECIDE_LATER_WORDS = {
+  marker: '(decide later)',
+} as const;
 
 interface HouseholdCardListProps {
   households: SavedHousehold[];
@@ -267,7 +293,17 @@ function HouseholdCard({
         <div className="flex flex-wrap items-center gap-2 mt-1 text-sm text-gray-500">
           {household.partner && <span>👫 {household.partner.name}</span>}
           {household.helpers.map((helper, i) => (
-            <span key={`helper-${i}`}>👦 {helper.name}</span>
+            <span key={`helper-${i}`}>
+              👦 {helper.name}
+              {/* [[GTC-449]] (S2.6, ruling 14) — W8: a kid saved as Decide later says so. Display only,
+                  and only on a saved card: a card that shows what is typed has none. */}
+              {!draftLabel && helper.decideLater && (
+                <>
+                  {' '}
+                  <span data-decide-later-note="">{DECIDE_LATER_WORDS.marker}</span>
+                </>
+              )}
+            </span>
           ))}
           {household.littleCount > 0 && <span>🧒 {household.littleCount}</span>}
           {household.guests.map((guest, i) => (
@@ -275,6 +311,15 @@ function HouseholdCard({
           ))}
         </div>
       )}
+
+      {/* [[GTC-449]] (S2.3, ruling 35) — W9: a quiet line after a refused clear, one per kid whose
+          email the server kept. No button, no link. A card that shows what is typed has none. */}
+      {!draftLabel &&
+        household.keptEmailNames?.map((name, i) => (
+          <p key={`kept-${i}`} data-kept-email-note="" className="mt-1 text-xs text-gray-500">
+            {KEPT_EMAIL_WORDS.kept(name)}
+          </p>
+        ))}
 
       {/* Action links — none on a card that shows what is typed: the form is where it changes. */}
       <div className={`flex justify-end gap-3 mt-1${draftLabel ? ' hidden' : ''}`}>

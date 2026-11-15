@@ -21,7 +21,8 @@
  *   G  the guest page: 5f64ce6's plus exactly GTC-444's pieces
  *   A  answering as the guest through the real routes writes the audit rows; nothing is sent; the
  *      copy's board shows the note and the pair, a real board does not
- *   Z  every probe row removed by id; the counts back; tokens.ts and prisma/ as at 5f64ce6
+ *   Z  every probe row removed by id; the counts back; tokens.ts as at 5f64ce6, prisma/ as at 5f64ce6
+ *      plus exactly GTC-449's one field and its migration (word for word)
  *
  * Routes run over HTTP on the guarded dev server (DEMO_SANDBOX_BASE_URL, default
  * http://localhost:3000). The comparison server is 5f64ce6's tree, exported by `git archive` into a
@@ -63,6 +64,21 @@ const GUEST = 'src/app/p/[token]/page.tsx';
 const PRETEND = 'src/components/demo/PretendSend.tsx';
 const GLANCE_BOARD = 'src/components/glance/GlanceBoard.tsx';
 const HELPER = 'src/lib/demo/sample-board.ts';
+
+// ── [[GTC-449]]: the ONLY prisma change since the parent, typed by hand ──────────────────────
+// One field and its migration. The migration runs on the live database, so its text is pinned
+// word for word (a same-size change would pass a line count). Any later schema change updates this.
+const OUR_MIGRATION =
+  'prisma/migrations/20261102205933_gtc449_person_event_messaging_undecided/migration.sql';
+const OUR_MIGRATION_TEXT =
+  '-- AlterTable\n' +
+  'ALTER TABLE "PersonEvent" ADD COLUMN     "messagingUndecided" BOOLEAN NOT NULL DEFAULT false;\n';
+const OUR_FIELD_LINE = '  messagingUndecided   Boolean            @default(false)\n';
+/** `git diff --numstat --summary <parent> -- src/lib/tokens.ts prisma`: exactly these lines, so no tokens.ts. */
+const OUR_ZONE =
+  `2\t0\t${OUR_MIGRATION}\n` +
+  '10\t0\tprisma/schema.prisma\n' +
+  ` create mode 100644 ${OUR_MIGRATION}\n`;
 
 // ── Reporting ────────────────────────────────────────────────────────────────
 let passed = 0;
@@ -141,6 +157,50 @@ const PRE_PAIRS: Pairs = [
     '          {pretend && <PretendSend state={pretend} />}\n',
     '          {pretend && <PretendSend state={pretend} />}\n' +
       '          {pretend && <SampleBoardLink eventId={eventId} />}\n',
+  ],
+  // ── [[GTC-449]] S2.5: the six pieces of the pre-flight's decide-later lines, typed by hand. ──
+  // Applied after the two above, each old text once. Any later edit of this page updates this list.
+  [
+    "import { kidsNote } from '@/components/preflight/kids-note';\n",
+    "import { kidsNote } from '@/components/preflight/kids-note';\n" +
+      "import { decideLaterNote, decideLaterRowLine } from '@/components/preflight/kids-note';\n",
+  ],
+  [
+    '  resolvedContactPersonEventId: string | null;\n  members: Member[];\n',
+    '  resolvedContactPersonEventId: string | null;\n' +
+      '  /** [[GTC-449]] S2.5: each member also carries the "Decide later" marker, for step 3\'s lines. */\n' +
+      '  members: Array<Member & { messagingUndecided?: boolean }>;\n',
+  ],
+  [
+    '  const talk = talkLine(households.filter((h) => channelFor(h, channelCandidates) === null).length);\n',
+    '  const talk = talkLine(households.filter((h) => channelFor(h, channelCandidates) === null).length);\n' +
+      "  // [[GTC-449]] S2.5 (W7, ruling 28): step 3's second row line, the kids still on decide later.\n" +
+      '  const decideLaterLine = decideLaterRowLine(households);\n',
+  ],
+  [
+    '          line={talk ? { text: talk, amber: true } : null}\n',
+    '          line={talk ? { text: talk, amber: true } : null}\n' +
+      '          secondLine={decideLaterLine ? { text: decideLaterLine, amber: true } : null}\n',
+  ],
+  [
+    '              const kids = kidsNote(h.members);\n',
+    '              const kids = kidsNote(h.members);\n' +
+      '              // [[GTC-449]] S2.5 (W5 and W6): the kids in this household on decide later, if any.\n' +
+      '              const decideLater = decideLaterNote(h.members);\n',
+  ],
+  [
+    '                    {kids && <p className="text-xs text-gray-400 mb-3">{kids}</p>}\n',
+    '                    {kids && <p className="text-xs text-gray-400 mb-3">{kids}</p>}\n' +
+      '                    {/* [[GTC-449]] S2.5 (W5, W6; rulings 3, 21, 22): the same small grey type as the\n' +
+      '                        Kids line. Read-only, no link or button; Send is never blocked by this. */}\n' +
+      '                    {decideLater && (\n' +
+      '                      <>\n' +
+      '                        {decideLater.names && (\n' +
+      '                          <p className="text-xs text-gray-400 mb-3">{decideLater.names}</p>\n' +
+      '                        )}\n' +
+      '                        <p className="text-xs text-gray-400 mb-3">{decideLater.warning}</p>\n' +
+      '                      </>\n' +
+      '                    )}\n',
   ],
 ];
 const GUEST_PAIRS: Pairs = [
@@ -237,7 +297,7 @@ export const CHECKS = {
       !/<button\b/.test(html)
     );
   },
-  /** L2 — the pre-flight is 5f64ce6's with exactly the import and the line after the panel, on `pretend`. */
+  /** L2 — the pre-flight is 5f64ce6's with exactly the import and the line after the panel, on `pretend`, plus GTC-449's six S2.5 pieces (and nothing else). */
   preflightLine(now: string, base: string) {
     const exact = base.length > 1000 ? applyPairs(base, PRE_PAIRS) : null;
     return (
@@ -246,6 +306,15 @@ export const CHECKS = {
       now.includes(
         '{pretend && <PretendSend state={pretend} />}\n          {pretend && <SampleBoardLink eventId={eventId} />}'
       )
+    );
+  },
+  /** Z3 — tokens.ts untouched; prisma/ shows exactly GTC-449's field (10 lines) and migration (2 lines), no more; the migration is those two lines word for word; the field line is there once. */
+  zoneIsOurs(status: number | null, out: string, migration: string, schema: string) {
+    return (
+      status === 0 &&
+      out === OUR_ZONE &&
+      migration === OUR_MIGRATION_TEXT &&
+      schema.split(OUR_FIELD_LINE).length === 2
     );
   },
   /** L3 — CONTROL: the panel itself is as at 5f64ce6, and has no link or button. */
@@ -697,7 +766,7 @@ async function main() {
   );
   assert(
     'L',
-    'L2 the pre-flight draws it right after the pretend panel, on `pretend` only (a sample after the pretend Send): 5f64ce6’s page plus exactly the import and that line',
+    'L2 the pre-flight draws it right after the pretend panel, on `pretend` only (a sample after the pretend Send): 5f64ce6’s page plus exactly the import and that line, and GTC-449’s six pre-flight pieces',
     CHECKS.preflightLine(read(PRE), atRef(PARENT, PRE))
   );
   const PS: any = await load('../src/components/demo/PretendSend');
@@ -1114,14 +1183,16 @@ async function main() {
     moved.length === 0,
     moved.map((k) => `${k} ${start[k]} -> ${end[k]}`).join(', ')
   );
-  const zone = spawnSync('git', ['diff', '--quiet', PARENT, '--', 'src/lib/tokens.ts', 'prisma'], {
-    cwd: ROOT,
-  });
+  const zone = spawnSync(
+    'git',
+    ['diff', '--numstat', '--summary', PARENT, '--', 'src/lib/tokens.ts', 'prisma'],
+    { cwd: ROOT, encoding: 'utf8' }
+  );
   assert(
     'Z',
-    'Z3 src/lib/tokens.ts and prisma/ are as at 5f64ce6 (no token or schema change)',
-    zone.status === 0,
-    `${zone.status}`
+    'Z3 src/lib/tokens.ts is as at 5f64ce6, and prisma/ is as at 5f64ce6 plus exactly GTC-449’s one field and its migration (word for word)',
+    CHECKS.zoneIsOurs(zone.status, zone.stdout, read(OUR_MIGRATION), read('prisma/schema.prisma')),
+    `${zone.status} ${String(zone.stdout).replace(/\n/g, ' | ').slice(0, 300)}`
   );
 }
 

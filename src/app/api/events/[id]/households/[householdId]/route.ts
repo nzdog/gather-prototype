@@ -16,6 +16,12 @@ interface HouseholdMemberInput {
   phone?: string;
   /** GTC-172 (C1): explicit adult-roling of a kid with a job (§10.6). Helpers only. */
   adultRoled?: boolean;
+  /**
+   * GTC-449 (S2.1): "Decide later" on a kid row. Helpers only, and only while the tick is off.
+   * Passed straight to `reconcileHouseholdMembers`, which stores the marker; a save that leaves
+   * it out clears it (ruling 20).
+   */
+  decideLater?: boolean;
 }
 
 interface HouseholdRequestBody {

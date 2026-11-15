@@ -29,6 +29,14 @@
  * the subject assertions could be satisfied by a bug that simply stops messaging
  * everyone — the control is what proves the gate keys on ROLE and nothing else.
  *
+ * GTC-449 (S2.8) — A SECOND SUBJECT: A CHILD ON "DECIDE LATER". The same phone, the same
+ * email, a DIRECT tier, householdRole CHILD, and PersonEvent.messagingUndecided = true. The
+ * marker is the host's own note to herself ("I have not decided"); it is not a rule, so this
+ * child is kept out of every path below exactly as the plain subject is. These checks are
+ * GREEN BY DESIGN: they prove the gate does not read the marker. Their control is the SAME
+ * ROW settled to "message" (householdRole GUEST, marker off), put through the four paths
+ * again at the end: it must be eligible on each.
+ *
  * Run: npx tsx tests/child-message-exclusion-test.ts
  * Destructive to its own created rows only; cleans up in finally.
  */
@@ -101,6 +109,7 @@ async function main() {
       householdId: string | null;
       householdRole: 'PRIMARY_CONTACT' | 'CHILD' | 'GUEST' | null;
       isYoungPerson?: boolean;
+      messagingUndecided?: boolean;
     }) {
       const person = await prisma.person.create({
         data: {
@@ -127,6 +136,8 @@ async function main() {
           householdId: opts.householdId,
           householdRole: opts.householdRole,
           isYoungPerson: opts.isYoungPerson ?? false,
+          // GTC-449 (S2.8): off unless a caller asks, so every existing member is made as before.
+          messagingUndecided: opts.messagingUndecided ?? false,
           sentAt: anchor,
         },
       });
@@ -170,6 +181,17 @@ async function main() {
       isYoungPerson: true,
     });
 
+    // GTC-449 (S2.8): the same child on "decide later". Same household, same shape of phone, an
+    // email (makeMember gives every member one), a DIRECT tier, role CHILD, and the marker on.
+    const undecided = await makeMember({
+      name: 'Undecided Child',
+      phone: '+64211234569',
+      householdId: householdA.id,
+      householdRole: 'CHILD',
+      isYoungPerson: true,
+      messagingUndecided: true,
+    });
+
     // Household B — "Grandma", for the cross-household picker assertion.
     const householdB = await prisma.household.create({ data: { eventId: event.id } });
     const grandma = await makeMember({
@@ -203,6 +225,16 @@ async function main() {
     assert('path 1', 'subject CHILD excluded from eligibleFirst', !inFirst(subject.person.id));
     assert('path 1', 'subject CHILD excluded from eligibleSecond', !inSecond(subject.person.id));
     assert('path 1 control', 're-roled adult IS in eligibleFirst', inFirst(control.person.id));
+    assert(
+      'path 1',
+      'decide-later CHILD excluded from eligibleFirst',
+      !inFirst(undecided.person.id)
+    );
+    assert(
+      'path 1',
+      'decide-later CHILD excluded from eligibleSecond',
+      !inSecond(undecided.person.id)
+    );
 
     // GTC-179 (E2, phase 3), Ruling 7(b): AT MOST ONE NUDGE PER PERSON PER RUN, so an
     // unstamped person past both legs is now a FIRST-leg candidate only. The second-leg
@@ -234,6 +266,12 @@ async function main() {
       'path 1 control',
       'NULL-role direct-add adult IS still nudged (allowlist did not over-exclude)',
       inFirst(nullRoleControl.person.id) && inSecondAfter(nullRoleControl.person.id)
+    );
+    // Like the plain subject, the decide-later child is deliberately NOT stamped.
+    assert(
+      'path 1',
+      'decide-later CHILD still excluded from eligibleSecond once the controls advance',
+      !inSecondAfter(undecided.person.id)
     );
 
     // ── PATH 2 — REMOVED (GTC-178, phase 1) ──────────────────────────────
@@ -272,6 +310,11 @@ async function main() {
       'subject CHILD excluded from wrap-up recipients',
       !inWrapUp(subject.person.id)
     );
+    assert(
+      'path 4',
+      'decide-later CHILD excluded from wrap-up recipients',
+      !inWrapUp(undecided.person.id)
+    );
     assert('path 4 control', 're-roled adult IS a wrap-up recipient', inWrapUp(control.person.id));
     assert(
       'path 4 control',
@@ -283,8 +326,14 @@ async function main() {
     // A host action is not an exemption from §10.6.
     const manualChild = await resolveManualNudgeRecipient(event.id, subject.person.id);
     const manualControl = await resolveManualNudgeRecipient(event.id, control.person.id);
+    const manualUndecided = await resolveManualNudgeRecipient(event.id, undecided.person.id);
 
     assert('path 5', 'host manual nudge REJECTS a CHILD', manualChild.ok === false);
+    assert(
+      'path 5',
+      'host manual nudge REJECTS a decide-later CHILD',
+      manualUndecided.ok === false
+    );
     assert(
       'path 5 control',
       'host manual nudge allows the re-roled adult',
@@ -299,7 +348,7 @@ async function main() {
     const team = await prisma.team.create({
       data: { name: `${TAG} Team`, eventId: event.id },
     });
-    for (const member of [subject, control, nullRoleControl]) {
+    for (const member of [subject, control, nullRoleControl, undecided]) {
       const maybeItem = await prisma.item.create({
         data: { name: `${TAG} item for ${member.person.id}`, teamId: team.id, status: 'ASSIGNED' },
       });
@@ -317,6 +366,11 @@ async function main() {
       'path 6',
       'subject CHILD excluded from the decide-by follow-up',
       !inDecideBy(subject.person.id)
+    );
+    assert(
+      'path 6',
+      'decide-later CHILD excluded from the decide-by follow-up',
+      !inDecideBy(undecided.person.id)
     );
     assert(
       'path 6 control',
@@ -341,6 +395,81 @@ async function main() {
         !!subjectRow.person.email &&
         subjectRow.reachabilityTier === 'DIRECT' &&
         subjectRow.householdRole === 'CHILD'
+    );
+
+    // ── GTC-449 (S2.8): the decide-later subject really is what it says ──
+    const undecidedRow = await prisma.personEvent.findUniqueOrThrow({
+      where: { id: undecided.personEvent.id },
+      include: { person: true },
+    });
+    assert(
+      'fixture',
+      'decide-later subject has phone + email + DIRECT tier + role CHILD, and the marker reads back as yes',
+      undecidedRow.person.phoneNumber === '+64211234569' &&
+        !!undecidedRow.person.email &&
+        undecidedRow.reachabilityTier === 'DIRECT' &&
+        undecidedRow.householdRole === 'CHILD' &&
+        undecidedRow.messagingUndecided === true
+    );
+
+    // ── GTC-449 (S2.8): THE CONTROL — the same row, settled to "message" ──
+    // What the save routes store when the host settles a decide-later child to "message":
+    // role GUEST, marker off. Nothing else on the row or the person changes. The four paths
+    // run again, and the SAME child who was kept out above must now be eligible on each. If
+    // the exclusions above came from anything but the role, this is where it would show.
+    await prisma.personEvent.update({
+      where: { id: undecided.personEvent.id },
+      data: { householdRole: 'GUEST', messagingUndecided: false },
+    });
+    // The finder does not chase a row that holds an answer, and this
+    // child's maybe (made for path 6) is an answer. The controls were swept
+    // before any maybe existed. So the settled child also holds one pending
+    // item, something unanswered to be reminded of. The maybe stays: the
+    // decide-by check below needs it.
+    const settledItem = await prisma.item.create({
+      data: {
+        name: `${TAG} pending item for the settled child`,
+        teamId: team.id,
+        status: 'ASSIGNED',
+      },
+    });
+    await prisma.assignment.create({
+      data: { itemId: settledItem.id, personId: undecided.person.id, response: 'PENDING' },
+    });
+    const nudgesSettled = await findNudgeCandidates();
+    assert(
+      'settled control',
+      'the same child, settled to message, IS in eligibleFirst',
+      nudgesSettled.eligibleFirst.some((c) => c.personId === undecided.person.id)
+    );
+    const wrapUpEventSettled = await prisma.event.findUniqueOrThrow({
+      where: { id: event.id },
+      include: {
+        people: {
+          include: { person: { include: { assignments: { include: { item: true } } } } },
+        },
+      },
+    });
+    assert(
+      'settled control',
+      'the same child, settled to message, IS a wrap-up recipient',
+      selectWrapUpRecipients(wrapUpEventSettled.people, wrapUpEventSettled.hostId).some(
+        (g) => g.person.id === undecided.person.id
+      )
+    );
+    const manualSettled = await resolveManualNudgeRecipient(event.id, undecided.person.id);
+    assert(
+      'settled control',
+      'host manual nudge allows the same child, settled to message',
+      manualSettled.ok === true
+    );
+    const decideBySettled = await findDecideByFollowupCandidates(
+      new Date(now.getTime() + 8.5 * 24 * 60 * 60 * 1000)
+    );
+    assert(
+      'settled control',
+      'the same child, settled to message, IS due the decide-by follow-up',
+      decideBySettled.eligible.some((c) => c.personId === undecided.person.id)
     );
   } finally {
     // ── Cleanup ──────────────────────────────────────────────────────────

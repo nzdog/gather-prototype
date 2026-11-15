@@ -66,6 +66,8 @@ export interface DraftRow extends DraftPerson {
   /** A saved member's row, kept so "Save changes" keeps who they are (edit drafts only). */
   personEventId?: string;
   adultRoled?: boolean;
+  /** [[GTC-449]]: a kid on "Decide later". Absent in a draft written before this existed (off). */
+  decideLater?: boolean;
 }
 
 /** Everything she can type or choose in the form (formSnapshot's fields, and the row order). */
@@ -126,7 +128,8 @@ function isRow(r: unknown): r is DraftRow {
   return (
     isPerson(o) &&
     isOptText(o.personEventId) &&
-    (o.adultRoled === undefined || typeof o.adultRoled === 'boolean')
+    (o.adultRoled === undefined || typeof o.adultRoled === 'boolean') &&
+    (o.decideLater === undefined || typeof o.decideLater === 'boolean')
   );
 }
 

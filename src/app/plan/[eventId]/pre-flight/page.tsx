@@ -131,6 +131,7 @@ import {
 } from '@/lib/preflight/tick-memory';
 import { preflightChannelChoices } from '@/components/plan/household-channel-choices';
 import { kidsNote } from '@/components/preflight/kids-note';
+import { decideLaterNote, decideLaterRowLine } from '@/components/preflight/kids-note';
 
 // ─── Wire shapes (mirror /api/events/[id]/pre-flight) ────────────────────────
 
@@ -140,7 +141,8 @@ interface HouseholdView {
   littleCount: number;
   contactPersonEventId: string | null;
   resolvedContactPersonEventId: string | null;
-  members: Member[];
+  /** [[GTC-449]] S2.5: each member also carries the "Decide later" marker, for step 3's lines. */
+  members: Array<Member & { messagingUndecided?: boolean }>;
   /** GTC-363 (item 6): optional, so a view built without it shows the line. */
   isHostHousehold?: boolean;
 }
@@ -579,6 +581,8 @@ export default function PreFlightPage() {
   // [[GTC-377]] (W1 to W3) — what a closed row says when something inside needs her.
   const loose = looseLine(coverage.criticalUnassignedCount);
   const talk = talkLine(households.filter((h) => channelFor(h, channelCandidates) === null).length);
+  // [[GTC-449]] S2.5 (W7, ruling 28): step 3's second row line, the kids still on decide later.
+  const decideLaterLine = decideLaterRowLine(households);
 
   return (
     <div className="min-h-screen bg-warm-white">
@@ -784,6 +788,7 @@ export default function PreFlightPage() {
           open={openSteps.includes(3)}
           onToggle={() => toggleStep(3)}
           line={talk ? { text: talk, amber: true } : null}
+          secondLine={decideLaterLine ? { text: decideLaterLine, amber: true } : null}
         >
           {/* The per-EVENT pace (Moment 4 §10.3). */}
           <div className="mb-6 pb-6 border-b border-gray-100">
@@ -827,6 +832,8 @@ export default function PreFlightPage() {
               // [[GTC-396]] item 6 (founder, 21 Oct 2026): who the kids are, from the members this
               // read already carries (their householdRole is CHILD); null when there are none.
               const kids = kidsNote(h.members);
+              // [[GTC-449]] S2.5 (W5 and W6): the kids in this household on decide later, if any.
+              const decideLater = decideLaterNote(h.members);
               return (
                 /* [[GTC-394]] tweak 1: the host's own household stands out, as on every screen. The
                    shell is not edited (preflight-fold R7), so the look is a frame round it. */
@@ -867,6 +874,16 @@ export default function PreFlightPage() {
                     {/* [[GTC-396]] item 6: "Kids: Josh, Mere", on every household with children,
                         the host's own included; nothing on a household without. */}
                     {kids && <p className="text-xs text-gray-400 mb-3">{kids}</p>}
+                    {/* [[GTC-449]] S2.5 (W5, W6; rulings 3, 21, 22): the same small grey type as the
+                        Kids line. Read-only, no link or button; Send is never blocked by this. */}
+                    {decideLater && (
+                      <>
+                        {decideLater.names && (
+                          <p className="text-xs text-gray-400 mb-3">{decideLater.names}</p>
+                        )}
+                        <p className="text-xs text-gray-400 mb-3">{decideLater.warning}</p>
+                      </>
+                    )}
                     {h.littleCount > 0 && (
                       <p className="text-xs text-gray-400 mb-3">
                         + {h.littleCount} kid{h.littleCount === 1 ? '' : 's'} without jobs
