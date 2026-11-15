@@ -10,6 +10,8 @@ import { householdDraft } from '@/lib/households/draft';
 import { COPY_WORDS, isCopyAddress } from '@/lib/demo/copy-address';
 import { moment1ChannelChoices } from '@/components/plan/household-channel-choices';
 import { ViewerIdContext } from '@/components/shared/Providers';
+import { contactsHref } from '@/lib/contacts/address';
+import { CONTACTS_WORDS } from '@/lib/contacts/words';
 import {
   DRAFT_KEEP_WORDS,
   browserDraftStore,
@@ -616,6 +618,15 @@ export default function Moment1InputForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewerId, draftChecked, draftForm, openedForm, opened, snapshot]);
 
+  /*
+   * [[GTC-460]] (Stage 3, 3a): the link to the contacts page keeps the draft and then leaves without
+   * the browser's "Leave site?" question, but only if the draft really was kept. `draftWritten` is
+   * what the last write answered. `leavingForContacts` is off by default, goes on only for moments
+   * and only after that link's own press, and every other way out of the page still asks.
+   */
+  const draftWritten = useRef(false);
+  const leavingForContacts = useRef(false);
+
   // Keeps what is typed, after that check; the form back as it opened removes the draft.
   const keepDraft = useRef<() => void>(() => {});
   useEffect(() => {
@@ -623,7 +634,7 @@ export default function Moment1InputForm({
       if (!viewerId || draftChecked !== draftForm) return;
       const store = browserDraftStore();
       if (hasUnsavedInput) {
-        writeDraft(
+        draftWritten.current = writeDraft(
           store,
           viewerId,
           eventId,
@@ -816,13 +827,37 @@ export default function Moment1InputForm({
   // Warn on navigate away with unsaved input
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (hasUnsavedInput) {
+      if (hasUnsavedInput && !leavingForContacts.current) {
         e.preventDefault();
       }
     };
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [hasUnsavedInput]);
+
+  /*
+   * [[GTC-460]] (3a): the press of the "Your contacts" link. A press with a modifier key (a new tab)
+   * is left alone. Otherwise the draft is written now; if it was kept (or there was nothing to keep)
+   * the page may be left without the question, for two seconds. If the browser refused the write, the
+   * question stays.
+   */
+  const leaveForContacts = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    draftWritten.current = false;
+    keepDraft.current();
+    if (!hasUnsavedInput || draftWritten.current) {
+      leavingForContacts.current = true;
+      setTimeout(() => {
+        leavingForContacts.current = false;
+      }, 2000);
+    }
+  };
+  const savedHouseholdCount = resumeEdit?.savedIds?.length ?? null;
+  const contactsLink = contactsHref({
+    eventId,
+    ...(hostMode ? { form: 'host' as const } : {}),
+    ...(editingHousehold ? { editId: editingHousehold.id } : {}),
+  });
 
   const resetForm = useCallback(() => {
     // [[GTC-435]]: the form is reset only after a good save or on Cancel, so its draft goes too.
@@ -1189,6 +1224,35 @@ export default function Moment1InputForm({
         )}
 
         {(hostMode || totalPeopleAdded === 0) && <div className="mb-6" />}
+
+        {/* [[GTC-460]] (3a, W31, R1): the way to the contacts page. Large while only her own
+            household is saved; a one-line link on her own step, while the list is still loading, and
+            once there are others. A plain link: a full page load, like the menu bar's. */}
+        {!hostMode && savedHouseholdCount !== null && savedHouseholdCount <= 1 ? (
+          <div
+            data-contacts-entry="large"
+            className="mb-6 rounded-lg border border-gray-200 bg-gray-50 px-4 py-4"
+          >
+            <p className="mb-3 text-sm text-gray-700">{CONTACTS_WORDS.ENTRY_LARGE}</p>
+            <a
+              href={contactsLink}
+              onClick={leaveForContacts}
+              className="inline-block rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
+            >
+              {CONTACTS_WORDS.ENTRY_LINK}
+            </a>
+          </div>
+        ) : (
+          <p data-contacts-entry="small" className="mb-6 text-sm">
+            <a
+              href={contactsLink}
+              onClick={leaveForContacts}
+              className="text-accent underline underline-offset-2"
+            >
+              {CONTACTS_WORDS.ENTRY_LINK}
+            </a>
+          </p>
+        )}
 
         {/* [[GTC-435]]: never put back silently. A quiet line above the form on every restore, with
             the founder's words (31 Oct 2026); hiding it keeps the form, Discard empties it. */}

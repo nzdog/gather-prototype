@@ -44,6 +44,17 @@ const TAG = `gtc446-${RUN}`;
 const PARENT = '79d7d7e';
 /** The commit GTC-449 and main both grew from (their merge-base). */
 const BASE = '128b3414b75ad6fe69a2c30231ee063a4c2ae699';
+/**
+ * [[GTC-460]] Stage 3, step 3a (the founder's ruling 168, amendment 3 of the S3.0 census: "Approve:
+ * compare against the fixed copy 51eda95"). The main tip Stage 3's build branch was cut from, a fixed
+ * commit. The setup page is compared with 79d7d7e THROUGH this copy, not through the live file, so
+ * Stage 3's own edits of the page no longer turn S2 red. The numbers and the fingerprints below are
+ * unchanged: at this commit the page still differs from 79d7d7e by exactly GTC-449's five pieces.
+ * What this gives up, said plainly: after this commit S2 no longer notices a later change to those
+ * five pieces. They stay watched by decide-later-form (P.1 and its runs of the pieces) and the tests
+ * that run them; Stage 3's own edits of the page are watched by the contacts tests.
+ */
+const S3_BASE = '51eda95e5b6cc45062e3982517f905ae1c941709';
 const AI_CAP = 'src/lib/demo/ai-cap.ts';
 const PLAN = 'docs/tickets/GTC-392.md';
 /** The six AI routes: nothing changes them, as at 79d7d7e. */
@@ -219,6 +230,7 @@ export function setupPieceHashes(): string[] {
       '--no-ext-diff',
       '--no-textconv',
       PARENT,
+      S3_BASE,
       '--',
       SETUP,
     ],
@@ -226,7 +238,14 @@ export function setupPieceHashes(): string[] {
   ).stdout;
   let page = '';
   try {
-    page = fs.readFileSync(path.join(ROOT, SETUP), 'utf8');
+    // [[GTC-460]] (ruling 168): the page as the fixed copy holds it, not the live file.
+    page = String(
+      spawnSync('git', ['show', `${S3_BASE}:${SETUP}`], {
+        cwd: ROOT,
+        encoding: 'utf8',
+        maxBuffer: 1 << 26,
+      }).stdout
+    );
   } catch {
     // a missing page gives no pieces, so S2 is red
   }
@@ -776,12 +795,12 @@ async function main() {
     );
     const git = (...a: string[]) => spawnSync('git', a, { cwd: ROOT, encoding: 'utf8' });
     const routes = git('diff', '--quiet', PARENT, '--', ...KEPT);
-    const numstat = git('diff', '--numstat', PARENT, '--', SETUP);
+    const numstat = git('diff', '--numstat', PARENT, S3_BASE, '--', SETUP); // [[GTC-460]] (ruling 168): through the fixed copy
     const sameAtBase = git('diff', '--quiet', PARENT, BASE, '--', SETUP);
     const pieces = setupPieceHashes();
     assert(
       'S',
-      'S2 the six AI routes are byte for byte as at 79d7d7e; the setup page is as at 79d7d7e (and at the base 128b341) plus exactly GTC-449’s five pieces (+57 -1)',
+      'S2 the six AI routes are byte for byte as at 79d7d7e; the setup page, as the fixed copy 51eda95 holds it (GTC-460, ruling 168), is as at 79d7d7e (and at the base 128b341) plus exactly GTC-449’s five pieces (+57 -1)',
       CHECKS.kept(
         [...KEPT, SETUP].map((f) => fs.existsSync(path.join(ROOT, f))),
         routes.status,

@@ -455,6 +455,9 @@ function EventSetupFlow() {
   const [arriveAtItem, setArriveAtItem] = useState<string | null>(null);
   // [[GTC-387]] (item 70, Q12) — the person the board's "Give them a job" asked for, once.
   const [arriveAtPerson, setArriveAtPerson] = useState<string | null>(null);
+  // [[GTC-460]] (Stage 3, 3a) — the household the contacts page's way back asked to reopen (`?edit=`),
+  // read once with the other address words and held here until the list of households has loaded.
+  const [arriveAtEdit, setArriveAtEdit] = useState<string | null>(null);
 
   /**
    * [[GTC-360]] — "MOVE ON →" HOLDS THE PLAN, THEN GOES ON. Founder: *"On "Move on" from Moment 3
@@ -671,6 +674,9 @@ function EventSetupFlow() {
         const askedItem = new URLSearchParams(window.location.search).get(ITEM_PARAM);
         // [[GTC-387]] (Q12): the board's "Give them a job" asks for one person the same way.
         const askedPerson = new URLSearchParams(window.location.search).get(PERSON_PARAM);
+        // [[GTC-460]] (3a): the contacts page's way back to a household she was changing. It is read
+        // here, before the address is put back to this page's own below, and held until the list loads.
+        const askedEdit = new URLSearchParams(window.location.search).get('edit');
         // [[GTC-382]] (Q1): her own plan counts as a plan here too; an old-style event as before.
         const asked = requestedStage(at, {
           hasPlan: loadedEvent.setup
@@ -678,7 +684,7 @@ function EventSetupFlow() {
             : hasGeneratedPlan(loadedItems),
         });
         if (asked) stage = asked;
-        if (at !== null || askedItem !== null || askedPerson !== null) {
+        if (at !== null || askedItem !== null || askedPerson !== null || askedEdit !== null) {
           window.history.replaceState(window.history.state, '', window.location.pathname);
         }
         /*
@@ -706,6 +712,8 @@ function EventSetupFlow() {
           if (askedItem) setArriveAtItem(askedItem);
           if (askedPerson) setArriveAtPerson(askedPerson);
         }
+        // [[GTC-460]] (3a): only when the page opens on Moment 1.
+        if (stage === 'moment1' && askedEdit) setArriveAtEdit(askedEdit);
         // [[GTC-375]] (W2): on an invites-only event's opening, whether a plan is put away.
         if (stage === 'moment2-opening' && loadedEvent.setup?.invitesOnly) {
           const res = await fetch(`/api/events/${eventId}/setup`);
@@ -804,6 +812,15 @@ function EventSetupFlow() {
       messagesMuted: h.messagesMuted ?? null,
     };
   }, []);
+
+  // [[GTC-460]] (3a): once the households have loaded, the one the contacts page's way back named
+  // (`?edit=`) opens as "Carry on" opens it. An id that is not in the list is ignored. Once only.
+  useEffect(() => {
+    if (!arriveAtEdit || !householdsLoaded) return;
+    setArriveAtEdit(null);
+    const household = households.find((h) => h.id === arriveAtEdit);
+    if (household) setEditingHousehold(household);
+  }, [arriveAtEdit, householdsLoaded, households]);
 
   // Fetch households when Moment 1 view opens, or when the Moment 2 plan view
   // needs a canonical headcount for its summary header (GTC-136).
