@@ -431,6 +431,14 @@ const PROTECTED: Entry[] = [
     kind: 'path',
     path: 'src/app/api/events/[id]/people/[personId]/invite-detail/route.ts',
     why: "one guest's invite detail: reads the SMS opt-out",
+    ruled: 'GTC-463: each log row sends its type and time only',
+    plus: [
+      {
+        file: 'src/app/api/events/[id]/people/[personId]/invite-detail/route.ts',
+        sha256: '953bca4a52453956a2fa6787332c429579958e26365d9ed7c0c50d7b74bc0526',
+        edited: true,
+      },
+    ],
   },
   {
     zone: 7,

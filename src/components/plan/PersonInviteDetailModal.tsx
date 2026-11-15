@@ -59,7 +59,6 @@ interface PersonDetail {
   inviteEvents: {
     type: string;
     createdAt: string;
-    metadata: Record<string, unknown>;
   }[];
 }
 

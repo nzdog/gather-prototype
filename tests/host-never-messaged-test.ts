@@ -56,7 +56,7 @@ function assert(label: string, condition: boolean) {
 
 /**
  * The claim endpoint is UNAUTHENTICATED, so the handler can be driven directly. It reads
- * only `request.json()` before the branch under test, and `headers()` sits past it on the
+ * only `request.json()` — since [[GTC-463]] it reads no request headers at all, even on the
  * success path — so a stub request is the whole of the input.
  */
 async function claim(token: string, personId: string) {
@@ -155,11 +155,12 @@ async function main() {
     );
 
     // The partner is checked through the ALREADY-CLAIMED branch (409) rather than a
-    // successful claim, because the success path calls next/headers, which needs a real
-    // request scope this harness has not got. 409 is the stronger assertion anyway: it
-    // proves the endpoint resolved her, found her PARTICIPANT token, and reached the
-    // claim logic — so the new refusal is scoped to the host and has not swallowed
-    // everybody. A successful first claim is asserted over HTTP in the ticket's evidence.
+    // successful claim. (This once said the success path needed a real request scope; it
+    // has not since [[GTC-463]], which took out the device id and its headers() call.) 409
+    // is the stronger assertion anyway: it proves the endpoint resolved her, found her
+    // PARTICIPANT token, and reached the claim logic — so the new refusal is scoped to the
+    // host and has not swallowed everybody. A successful claim is asserted in process by
+    // tests/coordinator-token-exposure-test.ts and over HTTP by tests/no-device-id-test.ts.
     await prisma.accessToken.updateMany({
       where: { eventId: event.id, personId: partnerPE.personId, scope: 'PARTICIPANT' },
       data: { claimedAt: new Date(), claimedBy: 'test-device' },
