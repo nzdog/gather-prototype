@@ -594,6 +594,73 @@ const CHECKS: Check[] = [
       return { ok: steps.join() === '4,3,5,0', got: steps };
     },
   },
+  // U — fix one person in place (step 3b: the three ways forward on a flagged row)
+  {
+    id: 'U1',
+    label:
+      'updateContact replaces one person by id, in the same place; the others and the count are as they were',
+    run: (m) => {
+      const s = new MemStore();
+      m.addContacts(s, 'user-a', people(4));
+      const before = m.readContacts(s, 'user-a').contacts;
+      const r = m.updateContact(s, 'user-a', { ...before[1], name: 'Renamed', email: undefined });
+      const after = m.readContacts(s, 'user-a').contacts;
+      return {
+        ok:
+          r.status === 'ok' &&
+          after.length === 4 &&
+          after.map((c: any) => c.id).join() === 'c1,c2,c3,c4' &&
+          after[1].name === 'Renamed' &&
+          !('email' in after[1]) &&
+          JSON.stringify(after[0]) === JSON.stringify(before[0]) &&
+          JSON.stringify(after[2]) === JSON.stringify(before[2]) &&
+          JSON.stringify(after[3]) === JSON.stringify(before[3]) &&
+          r.contacts.length === 4,
+        got: after.map((c: any) => [c.id, c.name]),
+      };
+    },
+  },
+  {
+    id: 'U2',
+    label:
+      'updateContact when the browser will not save or is full: refused or full, and the list is as it was',
+    run: (m) => {
+      const s = new MemStore();
+      m.addContacts(s, 'user-a', people(3));
+      const before = s.snapshot();
+      s.failWrite = 'blocked';
+      const a = m.updateContact(s, 'user-a', person(2, { name: 'Changed' }));
+      s.failWrite = 'quota';
+      const b = m.updateContact(s, 'user-a', person(2, { name: 'Changed' }));
+      s.failWrite = false;
+      return {
+        ok: a.status === 'refused' && b.status === 'full' && s.snapshot() === before,
+        got: [a.status, b.status],
+      };
+    },
+  },
+  {
+    id: 'U3',
+    label:
+      'updateContact with an unknown id, a blank name or an over-long field changes nothing, and signed out touches nothing',
+    run: (m) => {
+      const s = new MemStore();
+      m.addContacts(s, 'user-a', people(3));
+      const before = s.snapshot();
+      m.updateContact(s, 'user-a', person(99));
+      m.updateContact(s, 'user-a', person(2, { name: '   ' }));
+      m.updateContact(s, 'user-a', person(2, { name: 'N'.repeat(201) }));
+      m.updateContact(s, 'user-a', person(2, { email: 'e'.repeat(255) }));
+      m.updateContact(s, 'user-a', person(2, { phone: '1'.repeat(41) }));
+      const unchanged = s.snapshot() === before;
+      const calls = s.calls;
+      const out = m.updateContact(s, null, person(2));
+      return {
+        ok: unchanged && out.status === 'signed-out' && s.calls === calls,
+        got: { unchanged, status: out.status },
+      };
+    },
+  },
 ];
 
 function runChecks(mod: Mod | null, why: string): Record<string, { ok: boolean; got?: unknown }> {
@@ -649,6 +716,20 @@ const MUTANTS: Mutant[] = [
       '    written = writeWhole(store, key, { v: CONTACTS_VERSION, userId, contacts: next.slice(0, i) });\n' +
       '  }',
     mustBeRed: ['F4'],
+  },
+  {
+    id: 'B4',
+    label: 'a fixed person moved to the end of the list instead of staying in place',
+    anchor: '  const next = read.contacts.map((c) => (c.id === clean.id ? clean : c));',
+    replacement: '  const next = [...read.contacts.filter((c) => c.id !== clean.id), clean];',
+    mustBeRed: ['U1'],
+  },
+  {
+    id: 'B5',
+    label: 'a fixed person not checked again (a blank name goes in)',
+    anchor: '  const clean = cleanContact(changed);',
+    replacement: '  const clean = changed as Contact | null;',
+    mustBeRed: ['U3'],
   },
 ];
 

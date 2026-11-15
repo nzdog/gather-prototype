@@ -37,12 +37,19 @@ const PAGE = 'src/app/plan/contacts/page.tsx';
 const FORM = 'src/components/plan/Moment1InputForm.tsx';
 const NAV = 'src/components/shared/Navigation.tsx';
 const SETUP_PAGE = 'src/app/plan/[eventId]/setup/page.tsx';
+const LOAD_BOX = 'src/components/contacts/LoadBox.tsx';
+const ROW = 'src/components/contacts/ContactRow.tsx';
 const NEW_FILES = [
   PAGE,
   SCREEN,
+  LOAD_BOX,
+  ROW,
   'src/lib/contacts/store.ts',
   'src/lib/contacts/words.ts',
   'src/lib/contacts/address.ts',
+  'src/lib/contacts/load.ts',
+  'src/lib/contacts/read-picked.ts',
+  'src/lib/contacts/picker.ts',
 ];
 
 // ── Reporting ────────────────────────────────────────────────────────────────
@@ -63,6 +70,20 @@ const section = (s: string) => console.log(`\n\x1b[1m\x1b[33m${s}\x1b[0m`);
 function check(id: string, label: string, fn: () => boolean | { ok: boolean; got?: unknown }) {
   try {
     const r = fn();
+    if (typeof r === 'boolean') assert(id, label, r);
+    else assert(id, label, r.ok, r.got);
+  } catch (e) {
+    assert(id, label, false, `threw: ${String((e as Error).message).slice(0, 200)}`);
+  }
+}
+/** Like `check`, for a check that waits (a file read, the phone's picker). */
+async function checkAsync(
+  id: string,
+  label: string,
+  fn: () => Promise<boolean | { ok: boolean; got?: unknown }>
+) {
+  try {
+    const r = await fn();
     if (typeof r === 'boolean') assert(id, label, r);
     else assert(id, label, r.ok, r.got);
   } catch (e) {
@@ -155,8 +176,21 @@ interface Win {
   addEventListener(t: string, f: (e: any) => void): void;
   removeEventListener(t: string, f: (e: any) => void): void;
   confirm(): boolean;
+  /** A pretend phone: only present when a test gives them (a plain window has none, like a laptop's). */
+  navigator?: unknown;
+  ContactsManager?: unknown;
+  isSecureContext?: boolean;
 }
-function makeWindow(over: { search?: string; local?: MemStore; session?: MemStore } = {}): Win {
+function makeWindow(
+  over: {
+    search?: string;
+    local?: MemStore;
+    session?: MemStore;
+    navigator?: unknown;
+    ContactsManager?: unknown;
+    isSecureContext?: boolean;
+  } = {}
+): Win {
   const w: Win = {
     localStorage: over.local ?? new MemStore(),
     sessionStorage: over.session ?? new MemStore(),
@@ -174,6 +208,9 @@ function makeWindow(over: { search?: string; local?: MemStore; session?: MemStor
       return true;
     },
   };
+  if ('navigator' in over) w.navigator = over.navigator;
+  if ('ContactsManager' in over) w.ContactsManager = over.ContactsManager;
+  if ('isSecureContext' in over) w.isSecureContext = over.isSecureContext;
   return w;
 }
 
@@ -265,19 +302,31 @@ const NAV_STUB = {
 const DRAFT_SHIM = { ...FormDraft, browserDraftStore: () => activeDraftStore };
 
 // ── The live source, compiled; the three files under test get the stand-in React ──────
-const LIVE = new Set([SCREEN, PAGE, FORM]);
+const LIVE = new Set([SCREEN, PAGE, FORM, LOAD_BOX, ROW]);
 const compiled = new Map<string, any>();
 /** Source text used instead of a file's own, in memory only (the break proofs); the real file is never edited. */
 const OVERRIDE = new Map<string, string>();
-/** Run `fn` with the screen's source replaced by `source`; the real file is read again afterwards. */
-function withScreenSource<T>(source: string, fn: () => T): T {
-  OVERRIDE.set(SCREEN, source);
-  compiled.delete(SCREEN);
+/** Run `fn` with one live file's source replaced by `source`; the real files are read again afterwards. */
+function withSource<T>(rel: string, source: string, fn: () => T): T {
+  OVERRIDE.set(rel, source);
+  compiled.clear();
   try {
     return fn();
   } finally {
-    OVERRIDE.delete(SCREEN);
-    compiled.delete(SCREEN);
+    OVERRIDE.delete(rel);
+    compiled.clear();
+  }
+}
+const withScreenSource = <T,>(source: string, fn: () => T): T => withSource(SCREEN, source, fn);
+/** The same, for a run that waits: the swap stays until the run is over. */
+async function withSourceAsync<T>(rel: string, source: string, fn: () => Promise<T>): Promise<T> {
+  OVERRIDE.set(rel, source);
+  compiled.clear();
+  try {
+    return await fn();
+  } finally {
+    OVERRIDE.delete(rel);
+    compiled.clear();
   }
 }
 function resolveFile(target: string): string | null {
@@ -318,11 +367,13 @@ function loadLive(rel: string): any {
 }
 
 function withWindow<T>(w: Win, fn: () => T): T {
+  const before = (globalThis as any).window;
   (globalThis as any).window = w;
   try {
     return fn();
   } finally {
-    delete (globalThis as any).window;
+    if (before === undefined) delete (globalThis as any).window;
+    else (globalThis as any).window = before;
   }
 }
 function renderOnce(f: Fiber) {
@@ -394,6 +445,8 @@ interface Inst {
   first: any;
   tree: () => any;
   act: (fn: () => unknown) => void;
+  /** Like `act`, for a handler that finishes later (a file read, the phone's picker): waits for it. */
+  actAsync: (fn: () => unknown) => Promise<void>;
 }
 function mount(
   rel: string,
@@ -429,6 +482,20 @@ function mount(
       withWindow(win, fn);
       settle(f);
     },
+    async actAsync(fn) {
+      const before = (globalThis as any).window;
+      (globalThis as any).window = win;
+      try {
+        await fn();
+        for (let n = 0; n < 6; n++) {
+          await new Promise((r) => setTimeout(r, 0));
+          settle(f);
+        }
+      } finally {
+        if (before === undefined) delete (globalThis as any).window;
+        else (globalThis as any).window = before;
+      }
+    },
   };
 }
 const press = (i: Inst, el: El | undefined, ev: Record<string, unknown> = {}) => {
@@ -447,17 +514,20 @@ const ruled = (s: string) => wordsSection.includes(`*"${s}"*`);
 
 // ── Page-side helpers ────────────────────────────────────────────────────────
 const SCREEN_PROPS = {};
-const screen = (viewerId: string | null, o: { local?: MemStore; search?: string } = {}) =>
+const screen = (
+  viewerId: string | null,
+  o: { local?: MemStore; search?: string; phone?: Record<string, unknown> } = {}
+) =>
   mount(SCREEN, SCREEN_PROPS, {
     viewerId,
-    win: makeWindow({ local: o.local, search: o.search }),
+    win: makeWindow({ local: o.local, search: o.search, ...(o.phone ?? {}) }),
   });
 const countOf = (i: Inst) => textOf(byAttr(i.tree(), 'data-contacts-count'));
 const clearButton = (i: Inst) => buttonText(i.tree(), 'Clear all contacts');
 const rows = (i: Inst) => all(i.tree(), (e) => 'data-contact-id' in e.props);
 const confirmBlock = (i: Inst) => byAttr(i.tree(), 'data-contacts-confirm');
 
-function main() {
+async function main() {
   // The request spy sees a call, so "the page made no request" (F.3, at the end) is not green for nothing.
   void globalThis.fetch('spy').catch(() => {});
   check('F.0', 'the request spy sees a call (so F.3 means something)', () => {
@@ -1403,6 +1473,844 @@ function main() {
     return { ok: draftKeys(drafts).length === 0 && asks(i) === false };
   });
 
+  // ══ L — LOADING: PASTE, FILE, THE PHONE'S PICKER, AND A ROW WITH A PROBLEM (step 3b) ═══════
+  section('L — loading people: the paste box, the file choice, the phone picker, flagged rows');
+  /** Registers a loading check so it can be run again on a broken copy of the screen (L.21), and runs it. */
+  const lRuns: Record<string, () => Promise<{ ok: boolean; got?: unknown }>> = {};
+  const lcheck = async (
+    id: string,
+    label: string,
+    fn: () =>
+      | boolean
+      | { ok: boolean; got?: unknown }
+      | Promise<boolean | { ok: boolean; got?: unknown }>
+  ) => {
+    lRuns[id] = async () => {
+      const r = await fn();
+      return typeof r === 'boolean' ? { ok: r } : r;
+    };
+    await checkAsync(id, label, () => lRuns[id]());
+  };
+  const WD = () => require('../src/lib/contacts/words');
+  const WW = () => WD().CONTACTS_WORDS;
+  const G448 = () => require('../src/lib/contact-import/types').WORDS;
+  const pasteBox = (i: Inst) => all(i.tree(), (e) => e.type === 'textarea')[0];
+  const typePaste = (i: Inst, v: string) =>
+    i.act(() => pasteBox(i).props.onChange({ target: { value: v } }));
+  const pasteButton = (i: Inst) => buttonText(i.tree(), WW().PASTE_BUTTON);
+  const fileInput = (i: Inst) =>
+    all(i.tree(), (e) => e.type === 'input' && e.props.type === 'file')[0];
+  const fileButton = (i: Inst) => buttonText(i.tree(), WW().FILE_BUTTON);
+  const pickerButton = (i: Inst) => buttonText(i.tree(), WW().PICKER_BUTTON);
+  const loadArea = (i: Inst) => byAttr(i.tree(), 'data-contacts-load');
+  const summaryOf = (i: Inst) =>
+    all(byAttr(i.tree(), 'data-contacts-summary'), (e) => e.type === 'p').map((p) => textOf(p));
+  const storedList = (local: MemStore, u = 'user-a'): any[] =>
+    JSON.parse(local.m.get(LIST_KEY(u)) ?? '{}').contacts ?? [];
+  const rowOf = (i: Inst, name: string) => rows(i).find((r) => textOf(r).includes(name));
+  const fakeFile = (name: string, type: string, size: number, text: string) => {
+    const f = {
+      name,
+      type,
+      size,
+      reads: 0,
+      text() {
+        f.reads++;
+        return Promise.resolve(text);
+      },
+    };
+    return f;
+  };
+  const chooseFile = (i: Inst, f: unknown) => {
+    const target = { files: [f], value: 'C:\\fakepath\\chosen' };
+    return i.actAsync(() => fileInput(i).props.onChange({ target })).then(() => target);
+  };
+  const SAMPLE = [
+    'Sam Overseas, +44 20 7946 0958',
+    'Bad Email, 021 555 0150, bad@email',
+    'Just A Name',
+    'Mere Tane, 021 555 0147, mere@example.com',
+  ].join('\n');
+  const loaded = (text = SAMPLE, o: { local?: MemStore } = {}) => {
+    const local = o.local ?? new MemStore();
+    const i = screen('user-a', { local });
+    typePaste(i, text);
+    press(i, pasteButton(i));
+    return { i, local };
+  };
+  /** The page's markup as plain text, without its handlers: to compare one page with another. */
+  const markup = (n: any): string => {
+    if (n == null || typeof n === 'boolean') return '';
+    if (typeof n === 'string' || typeof n === 'number') return String(n);
+    if (Array.isArray(n)) return n.map(markup).join('');
+    if (!isEl(n)) return '';
+    const attrs = Object.keys(n.props)
+      .filter(
+        (k) =>
+          k !== 'children' && typeof n.props[k] !== 'function' && typeof n.props[k] !== 'object'
+      )
+      .sort()
+      .map((k) => `${k}=${String(n.props[k])}`)
+      .join(' ');
+    return `<${typeof n.type === 'string' ? n.type : 'C'} ${attrs}>${markup(n.props.children)}</>`;
+  };
+  /** A pretend Android phone: select() records its calls and returns what the test scripts. */
+  const androidPhone = (script: (calls: any[]) => unknown) => {
+    const calls: any[] = [];
+    const contacts = {
+      select(this: unknown, props: unknown, options: unknown) {
+        calls.push({ props, options, self: this });
+        return script(calls);
+      },
+    };
+    return {
+      calls,
+      contacts,
+      phone: {
+        navigator: { contacts },
+        ContactsManager: function ContactsManager() {},
+        isSecureContext: true,
+      },
+    };
+  };
+  const named = (name: string) => {
+    const e = new Error('x');
+    e.name = name;
+    return e;
+  };
+
+  await lcheck(
+    'L.1',
+    'signed in: the paste box (label, help, the example in the empty box, button), the file choice with its help, the laptop note; nothing for a phone picker',
+    () => {
+      const W = WW();
+      const i = screen('user-a');
+      const area = loadArea(i);
+      const label = all(area, (e) => e.type === 'label').find(
+        (l) => textOf(l).trim() === W.PASTE_LABEL
+      );
+      const box = pasteBox(i);
+      const t = flat(textOf(area));
+      return {
+        ok:
+          !!area &&
+          !!label &&
+          label.props.htmlFor === box?.props.id &&
+          !!box?.props.id &&
+          box.props.placeholder === W.PASTE_EXAMPLE &&
+          t.includes(W.PASTE_HELP) &&
+          !!pasteButton(i) &&
+          !!fileButton(i) &&
+          t.includes(W.FILE_HELP) &&
+          flat(textOf(byAttr(i.tree(), 'data-contacts-laptop'))) === W.LAPTOP_NOTE &&
+          fileInput(i)?.props.accept?.includes('.csv') &&
+          fileInput(i)?.props.accept?.includes('.vcf') &&
+          !pickerButton(i) &&
+          flat(textOf(i.first)) === `${W.TITLE}${W.A5}`,
+        got: [!!area, !!label, !!pasteButton(i), !!fileButton(i)],
+      };
+    }
+  );
+  await lcheck(
+    'L.2',
+    'nobody signed in: no loading area at all; storage refused: the area is drawn and every loading button is disabled',
+    () => {
+      const out = screen(null);
+      const local = new MemStore();
+      local.failRead = true;
+      const i = screen('user-a', { local, phone: androidPhone(() => Promise.resolve([])).phone });
+      return {
+        ok:
+          !loadArea(out) &&
+          !pasteBox(out) &&
+          !!loadArea(i) &&
+          pasteButton(i)?.props.disabled === true &&
+          fileButton(i)?.props.disabled === true &&
+          pickerButton(i)?.props.disabled === true,
+        got: [!!loadArea(out), pasteButton(i)?.props.disabled, fileButton(i)?.props.disabled],
+      };
+    }
+  );
+  await lcheck(
+    'L.3',
+    'paste: the people appear in order, the count follows, they are stored whole, the summary says so, and the box empties',
+    () => {
+      const { i, local } = loaded();
+      const stored = storedList(local);
+      return {
+        ok:
+          rows(i).length === 4 &&
+          countOf(i) === '4 contacts' &&
+          stored.map((c) => c.name).join() === 'Sam Overseas,Bad Email,Just A Name,Mere Tane' &&
+          JSON.stringify(summaryOf(i)).includes('Added 4 people.') &&
+          pasteBox(i).props.value === '',
+        got: [rows(i).length, countOf(i), summaryOf(i), stored.length],
+      };
+    }
+  );
+  await lcheck(
+    'L.4',
+    'paste with nobody in it: "We couldn\'t find anyone in that.", the text stays in the box, nothing is stored; a name-less line is counted',
+    () => {
+      const W = WW();
+      const a = loaded('   \n  ');
+      const b = loaded('021 555 0151, x@y.co');
+      return {
+        ok:
+          summaryOf(a.i).join('|') === W.NOTHING_FOUND &&
+          storedList(a.local).length === 0 &&
+          pasteBox(a.i).props.value === '   \n  ' &&
+          summaryOf(b.i).join('|') === `${W.NOTHING_FOUND}|1 had no name, so they were left out.` &&
+          pasteBox(b.i).props.value === '021 555 0151, x@y.co',
+        got: [summaryOf(a.i), summaryOf(b.i)],
+      };
+    }
+  );
+  await lcheck(
+    'L.5',
+    'the summary lines: added, names turned round, and each left-out count only when above zero',
+    () => {
+      const { i } = loaded(
+        'Brown, Tui, 022 555 0149\nMere Tane, 021 555 0147\n021 555 0151, x@y.co\n022 555 0152, z@y.co\n' +
+          `${'N'.repeat(201)}, 021 555 0153`
+      );
+      return {
+        ok:
+          summaryOf(i).join('|') ===
+          [
+            'Added 2 people.',
+            'We turned 1 name around from “Last, First” to “First Last”.',
+            '2 had no name, so they were left out.',
+            "1 couldn't be read, so it was left out.",
+          ].join('|'),
+        got: summaryOf(i),
+      };
+    }
+  );
+  await lcheck(
+    'L.6',
+    'pasted text: 100,000 characters are read, 100,001 are refused with the ruled sentence and nothing is read or stored',
+    () => {
+      const W = WW();
+      const over = loaded('x'.repeat(100001));
+      const exact = loaded('x'.repeat(100000));
+      return {
+        ok:
+          summaryOf(over.i).join('|') === W.TOO_LONG &&
+          storedList(over.local).length === 0 &&
+          !summaryOf(exact.i).includes(W.TOO_LONG) &&
+          summaryOf(exact.i).length > 0,
+        got: [summaryOf(over.i), summaryOf(exact.i)],
+      };
+    }
+  );
+  await lcheck(
+    'L.7',
+    'a CSV and a vCard file are read in the browser and added; the chooser is reset so the same file can be chosen again',
+    async () => {
+      const csv = fakeFile(
+        'friends.csv',
+        'text/csv',
+        200,
+        'First Name,Last Name,Email,Phone\nMere,Tane,mere@example.com,021 555 0147\nHone,Rata,,\n'
+      );
+      const vcf = fakeFile(
+        'friends.vcf',
+        'text/vcard',
+        200,
+        'BEGIN:VCARD\nVERSION:3.0\nFN:Aroha Smith\nTEL:021 555 0148\nEND:VCARD\n'
+      );
+      const local = new MemStore();
+      const i = screen('user-a', { local });
+      const t1 = await chooseFile(i, csv);
+      const afterCsv = [rows(i).length, summaryOf(i).join('|')];
+      const t2 = await chooseFile(i, vcf);
+      return {
+        ok:
+          csv.reads === 1 &&
+          vcf.reads === 1 &&
+          afterCsv[0] === 2 &&
+          afterCsv[1] === 'Added 2 people.' &&
+          rows(i).length === 3 &&
+          summaryOf(i).join('|') === 'Added 1 person.' &&
+          storedList(local)
+            .map((c) => c.name)
+            .join() === 'Mere Tane,Hone Rata,Aroha Smith' &&
+          t1.value === '' &&
+          t2.value === '',
+        got: [afterCsv, rows(i).length, t1.value],
+      };
+    }
+  );
+  await lcheck(
+    'L.8',
+    'a file refused before it is read (over 5 MB, the wrong kind) says so in the ruled words and is never read; one that cannot be read says that',
+    async () => {
+      const W = WW();
+      const big = fakeFile('big.vcf', 'text/vcard', 5 * 1024 * 1024 + 1, 'x');
+      const wrong = fakeFile('notes.txt', 'text/plain', 10, 'x');
+      const broken = {
+        name: 'a.csv',
+        type: 'text/csv',
+        size: 10,
+        text: () => Promise.reject(new Error('read failed')),
+      };
+      const local = new MemStore();
+      const i = screen('user-a', { local });
+      await chooseFile(i, big);
+      const a = summaryOf(i).join('|');
+      await chooseFile(i, wrong);
+      const b = summaryOf(i).join('|');
+      await chooseFile(i, broken);
+      const c = summaryOf(i).join('|');
+      return {
+        ok:
+          big.reads === 0 &&
+          wrong.reads === 0 &&
+          a === W.TOO_BIG &&
+          b === W.WRONG_TYPE &&
+          c === W.FILE_UNREADABLE &&
+          storedList(local).length === 0,
+        got: [a, b, c],
+      };
+    }
+  );
+  await lcheck(
+    'L.9',
+    '"Choose a file" opens the chooser (it presses the hidden file input) and does nothing else',
+    () => {
+      const i = screen('user-a');
+      let clicks = 0;
+      fileInput(i).props.ref.current = { click: () => clicks++ };
+      press(i, fileButton(i));
+      return { ok: clicks === 1 && rows(i).length === 0 && summaryOf(i).length === 0, got: clicks };
+    }
+  );
+  await lcheck(
+    'L.10',
+    'a row with a problem shows the reader\'s own sentence, "Gather will take care of this." and the three ways forward; a row with none shows nothing extra',
+    () => {
+      const W = WW();
+      const g = G448();
+      const { i } = loaded();
+      const sam = rowOf(i, 'Sam Overseas');
+      const bad = rowOf(i, 'Bad Email');
+      const bare = rowOf(i, 'Just A Name');
+      const mere = rowOf(i, 'Mere Tane');
+      const probs = (r: El | undefined) =>
+        all(byAttr(r, 'data-contact-problems'), (e) => e.type === 'p').map((p) => textOf(p));
+      const ways = (r: El | undefined) =>
+        buttons(byAttr(r, 'data-contact-ways')).map((b) => textOf(b).trim());
+      return {
+        ok:
+          probs(sam).join('|') === g.W2 &&
+          probs(bad).join('|') === g.W1 &&
+          textOf(byAttr(sam, 'data-contact-care')) === W.FLAG_CARE &&
+          ways(sam).join('|') === [W.DOUBLE_CHECK, W.SKIP_IT, W.DIFFERENT_WAY].join('|') &&
+          ways(bad).length === 3 &&
+          textOf(sam).includes('+44 20 7946 0958') &&
+          [bare, mere].every(
+            (r) =>
+              !byAttr(r, 'data-contact-problems') &&
+              !byAttr(r, 'data-contact-care') &&
+              !byAttr(r, 'data-contact-ways')
+          ) &&
+          buttons(bare).length === 1 &&
+          textOf(buttons(bare)[0]) === 'Remove',
+        got: [probs(sam), ways(sam), buttons(bare).length],
+      };
+    }
+  );
+  await lcheck(
+    'L.11',
+    'Skip it: the flagged detail is left out, the person and the good details stay, the flag goes, and it is stored',
+    () => {
+      const W = WW();
+      const { i, local } = loaded();
+      press(i, buttonText(rowOf(i, 'Bad Email'), W.SKIP_IT));
+      const bad = rowOf(i, 'Bad Email');
+      const s = storedList(local).find((c) => c.name === 'Bad Email');
+      return {
+        ok:
+          !!bad &&
+          !textOf(bad).includes('bad@email') &&
+          textOf(bad).includes('+64215550150') &&
+          !byAttr(bad, 'data-contact-problems') &&
+          !('email' in s) &&
+          s.phone === '+64215550150' &&
+          !('problems' in s) &&
+          rows(i).length === 4 &&
+          !!byAttr(rowOf(i, 'Sam Overseas'), 'data-contact-problems'),
+        got: s,
+      };
+    }
+  );
+  await lcheck(
+    'L.12',
+    'Double-check it: boxes labelled Name, Email and Phone, the checks run again as she types, and Done saves it',
+    () => {
+      const W = WW();
+      const g = G448();
+      const { i, local } = loaded();
+      press(i, buttonText(rowOf(i, 'Bad Email'), W.DOUBLE_CHECK));
+      const panel = () => byAttr(rowOf(i, 'Bad Email'), 'data-contact-panel');
+      const field = (label: string) => {
+        const l = all(panel(), (e) => e.type === 'label').find((x) => textOf(x).trim() === label);
+        return all(panel(), (e) => e.type === 'input').find((x) => x.props.id === l?.props.htmlFor);
+      };
+      const opened = [
+        field(W.FIELD_NAME)?.props.value,
+        field(W.FIELD_EMAIL)?.props.value,
+        field(W.FIELD_PHONE)?.props.value,
+      ];
+      const live1 = () =>
+        all(panel(), (e) => 'data-contact-live' in e.props)
+          .map((p) => textOf(p))
+          .join('|');
+      const stillBad = live1();
+      i.act(() => field(W.FIELD_EMAIL)!.props.onChange({ target: { value: 'Bad@Email.co' } }));
+      const fixedLive = live1();
+      const done = () => buttonText(panel(), W.DONE);
+      i.act(() => field(W.FIELD_NAME)!.props.onChange({ target: { value: '   ' } }));
+      const blankDisabled = done()?.props.disabled === true;
+      i.act(() => field(W.FIELD_NAME)!.props.onChange({ target: { value: 'Bad  Email Two' } }));
+      press(i, done());
+      const s = storedList(local)[1];
+      return {
+        ok:
+          opened.join('|') === 'Bad Email|bad@email|+64215550150' &&
+          stillBad === g.W1 &&
+          fixedLive === '' &&
+          blankDisabled &&
+          !panel() &&
+          s.name === 'Bad Email Two' &&
+          s.email === 'bad@email.co' &&
+          !('problems' in s) &&
+          !byAttr(rowOf(i, 'Bad Email Two'), 'data-contact-problems'),
+        got: [opened, stillBad, fixedLive, blankDisabled, s],
+      };
+    }
+  );
+  await lcheck(
+    'L.13',
+    'Use a different way: one box, "Another number or email"; Done replaces the flagged detail and stores it',
+    () => {
+      const W = WW();
+      const { i, local } = loaded();
+      press(i, buttonText(rowOf(i, 'Sam Overseas'), W.DIFFERENT_WAY));
+      const panel = () => byAttr(rowOf(i, 'Sam Overseas'), 'data-contact-panel');
+      const l = all(panel(), (e) => e.type === 'label').find(
+        (x) => textOf(x).trim() === W.FIELD_OTHER
+      );
+      const box = all(panel(), (e) => e.type === 'input').find(
+        (x) => x.props.id === l?.props.htmlFor
+      );
+      i.act(() => box!.props.onChange({ target: { value: '022 555 0124' } }));
+      press(i, buttonText(panel(), W.DONE));
+      const s = storedList(local).find((c) => c.name === 'Sam Overseas');
+      return {
+        ok:
+          !!l &&
+          !!box &&
+          !panel() &&
+          s.phone === '+64225550124' &&
+          !('problems' in s) &&
+          !byAttr(rowOf(i, 'Sam Overseas'), 'data-contact-problems') &&
+          textOf(rowOf(i, 'Sam Overseas')).includes('+64225550124'),
+        got: s,
+      };
+    }
+  );
+  await lcheck(
+    'L.14',
+    'a fix the browser cannot save shows W42 and leaves the row exactly as it was',
+    () => {
+      const W = WW();
+      const { i, local } = loaded();
+      const before = local.m.get(LIST_KEY('user-a'));
+      local.failWrite = true;
+      press(i, buttonText(rowOf(i, 'Bad Email'), W.SKIP_IT));
+      const lines = all(i.tree(), (e) => 'data-contacts-state' in e.props).map((e) => textOf(e));
+      return {
+        ok:
+          lines.includes(W.SAVE_FAILED) &&
+          local.m.get(LIST_KEY('user-a')) === before &&
+          !!byAttr(rowOf(i, 'Bad Email'), 'data-contact-problems') &&
+          textOf(rowOf(i, 'Bad Email')).includes('bad@email'),
+        got: lines,
+      };
+    }
+  );
+  await lcheck(
+    'L.15',
+    'a load the browser cannot keep adds nothing: full says W17; refused says W16 and the loading buttons go grey',
+    () => {
+      const W = WW();
+      const local = new MemStore();
+      const i = screen('user-a', { local });
+      local.failWrite = true;
+      local.failWith = 'full';
+      typePaste(i, SAMPLE);
+      press(i, pasteButton(i));
+      const full = [summaryOf(i).join('|'), rows(i).length, pasteBox(i).props.value === SAMPLE];
+      local.failWith = 'refused';
+      press(i, pasteButton(i));
+      const states = all(i.tree(), (e) => 'data-contacts-state' in e.props).map((e) => textOf(e));
+      return {
+        ok:
+          full[0] === W.FULL &&
+          full[1] === 0 &&
+          full[2] === true &&
+          states.includes(W.REFUSED) &&
+          rows(i).length === 0 &&
+          pasteButton(i)?.props.disabled === true &&
+          fileButton(i)?.props.disabled === true &&
+          storedList(local).length === 0,
+        got: [full, states],
+      };
+    }
+  );
+  await lcheck(
+    'L.16',
+    'under the cap: the people who fit are added, the rest counted in the ruled words, none dropped silently',
+    () => {
+      const local = new MemStore();
+      const seed = Array.from({ length: 1998 }, (_, n) => ({ id: `old${n}`, name: `Old ${n}` }));
+      local.m.set(LIST_KEY('user-a'), JSON.stringify({ v: 1, userId: 'user-a', contacts: seed }));
+      const { i } = loaded('A One\nB Two\nC Three\nD Four\nE Five', { local });
+      return {
+        ok:
+          countOf(i) === '2000 contacts' &&
+          summaryOf(i).join('|') ===
+            "Added 2 people.|3 didn't fit. This page holds up to 2,000 contacts.",
+        got: [countOf(i), summaryOf(i)],
+      };
+    }
+  );
+  await lcheck(
+    'L.17',
+    'loading the same list twice doubles it (ruling 161): no person is skipped for being there already',
+    () => {
+      const { i, local } = loaded('Mere Tane, 021 555 0147\nHone Rata, 021 555 0148');
+      typePaste(i, 'Mere Tane, 021 555 0147\nHone Rata, 021 555 0148');
+      press(i, pasteButton(i));
+      return {
+        ok: countOf(i) === '4 contacts' && new Set(storedList(local).map((c) => c.id)).size === 4,
+        got: countOf(i),
+      };
+    }
+  );
+  await lcheck(
+    'L.18',
+    'where the picker is not there (laptop, iPhone, an insecure page, no manager, no select) the page is the same as with no support at all: no button, no greyed button, no sentence, no wrapper',
+    () => {
+      const W = WW();
+      const base = markup(screen('user-a').tree());
+      const select = () => Promise.resolve([]);
+      const shapes: Record<string, Record<string, unknown>> = {
+        laptop: { navigator: {}, isSecureContext: true },
+        iphone: { navigator: { userAgent: 'iPhone' }, isSecureContext: true },
+        insecure: {
+          navigator: { contacts: { select } },
+          ContactsManager: function () {},
+          isSecureContext: false,
+        },
+        noManager: { navigator: { contacts: { select } }, isSecureContext: true },
+        noSelect: {
+          navigator: { contacts: {} },
+          ContactsManager: function () {},
+          isSecureContext: true,
+        },
+        broken: { navigator: null, isSecureContext: true },
+      };
+      const same = Object.entries(shapes).filter(
+        ([, phone]) => markup(screen('user-a', { phone }).tree()) !== base
+      );
+      const there = markup(screen('user-a', { phone: androidPhone(select).phone }).tree());
+      return {
+        ok:
+          same.length === 0 &&
+          !base.includes(W.PICKER_BUTTON) &&
+          there.includes(W.PICKER_BUTTON) &&
+          there !== base,
+        got: same.map(([k]) => k),
+      };
+    }
+  );
+  await lcheck(
+    'L.19',
+    'the picker: the button shows where it exists; one tap makes one call, exactly select(["name","email","tel"], {multiple:true}), before any wait; the button is off while it is open; the people picked are added',
+    async () => {
+      const W = WW();
+      let finish: (v: unknown) => void = () => {};
+      const a = androidPhone(() => new Promise((res) => (finish = res)));
+      const local = new MemStore();
+      const i = screen('user-a', { local, phone: a.phone });
+      const present = !!pickerButton(i) && pickerButton(i)!.props.disabled !== true;
+      i.act(() => pickerButton(i)!.props.onClick({ preventDefault() {} }));
+      const afterTap = a.calls.length; // before anything has been waited for
+      const offWhileOpen = pickerButton(i)?.props.disabled === true;
+      i.act(() => pickerButton(i)!.props.onClick({ preventDefault() {} }));
+      const once = a.calls.length === 1;
+      finish([
+        { name: ['Pia Test'], tel: ['021 555 0111'] },
+        { name: ['Smith, John'], email: ['js@example.com'], tel: [] },
+      ]);
+      await i.actAsync(async () => {});
+      return {
+        ok:
+          present &&
+          afterTap === 1 &&
+          once &&
+          offWhileOpen &&
+          JSON.stringify(a.calls[0].props) === JSON.stringify(['name', 'email', 'tel']) &&
+          JSON.stringify(a.calls[0].options) === JSON.stringify({ multiple: true }) &&
+          a.calls[0].self === a.contacts &&
+          countOf(i) === '2 contacts' &&
+          storedList(local)
+            .map((c) => c.name)
+            .join() === 'Pia Test,John Smith' &&
+          summaryOf(i).join('|') ===
+            'Added 2 people.|We turned 1 name around from “Last, First” to “First Last”.' &&
+          pickerButton(i)?.props.disabled !== true,
+        got: {
+          present,
+          afterTap,
+          offWhileOpen,
+          once,
+          count: countOf(i),
+          summary: summaryOf(i),
+          W: !!W,
+        },
+      };
+    }
+  );
+  await lcheck(
+    'L.20',
+    'the picker ends: cancelled changes nothing and says nothing; refused or failed says W24, adds nothing and leaves the button usable; a full or refusing browser after picking says W17 or W16',
+    async () => {
+      const W = WW();
+      const pickOnce = async (script: () => unknown, local = new MemStore()) => {
+        const a = androidPhone(script);
+        const i = screen('user-a', { local, phone: a.phone });
+        await i.actAsync(() => pickerButton(i)!.props.onClick({ preventDefault() {} }));
+        return i;
+      };
+      const people = [{ name: ['Pia Test'], tel: ['021 555 0111'] }];
+      const cancelled = await pickOnce(() => Promise.resolve([]));
+      const denied = await pickOnce(() => Promise.reject(named('NotAllowedError')));
+      const thrown = await pickOnce(() => {
+        throw new TypeError('not allowed here');
+      });
+      const odd = await pickOnce(() => Promise.reject('no thanks'));
+      const fullLocal = new MemStore();
+      const fullPhone = androidPhone(() => Promise.resolve(people));
+      const fullI = screen('user-a', { local: fullLocal, phone: fullPhone.phone });
+      fullLocal.failWrite = true;
+      fullLocal.failWith = 'full';
+      await fullI.actAsync(() => pickerButton(fullI)!.props.onClick({ preventDefault() {} }));
+      const refLocal = new MemStore();
+      const refPhone = androidPhone(() => Promise.resolve(people));
+      const refI = screen('user-a', { local: refLocal, phone: refPhone.phone });
+      refLocal.failWrite = true;
+      await refI.actAsync(() => pickerButton(refI)!.props.onClick({ preventDefault() {} }));
+      const refStates = all(refI.tree(), (e) => 'data-contacts-state' in e.props).map((e) =>
+        textOf(e)
+      );
+      return {
+        ok:
+          summaryOf(cancelled).length === 0 &&
+          countOf(cancelled) === '0 contacts' &&
+          pickerButton(cancelled)?.props.disabled !== true &&
+          [denied, thrown, odd].every(
+            (x) =>
+              summaryOf(x).join('|') === W.PICKER_FAILED &&
+              countOf(x) === '0 contacts' &&
+              pickerButton(x)?.props.disabled !== true
+          ) &&
+          summaryOf(fullI).join('|') === W.FULL &&
+          countOf(fullI) === '0 contacts' &&
+          refStates.includes(W.REFUSED) &&
+          countOf(refI) === '0 contacts' &&
+          pickerButton(refI)?.props.disabled === true,
+        got: [
+          summaryOf(cancelled),
+          summaryOf(denied),
+          summaryOf(thrown),
+          summaryOf(odd),
+          summaryOf(fullI),
+          refStates,
+        ],
+      };
+    }
+  );
+
+  await lcheck(
+    'L.22',
+    'W43 (odd letters in a file) is drawn under the file choice and its help line, before the laptop note, with or without a picker, and when storage is refused',
+    () => {
+      const W = WW();
+      const order = (i: Inst) =>
+        all(loadArea(i), (e) => e.type === 'p' || e.type === 'button').map((e) => textOf(e).trim());
+      const at = (list: string[], t: string) => list.indexOf(t);
+      const ok = (list: string[]) =>
+        at(list, W.FILE_BUTTON) >= 0 &&
+        at(list, W.FILE_HELP) > at(list, W.FILE_BUTTON) &&
+        at(list, W.FILE_ODD_LETTERS) === at(list, W.FILE_HELP) + 1 &&
+        at(list, W.LAPTOP_NOTE) > at(list, W.FILE_ODD_LETTERS);
+      const plain = order(screen('user-a'));
+      const withPicker = order(
+        screen('user-a', { phone: androidPhone(() => Promise.resolve([])).phone })
+      );
+      const refusedLocal = new MemStore();
+      refusedLocal.failRead = true;
+      const refused = order(screen('user-a', { local: refusedLocal }));
+      return {
+        ok:
+          W.FILE_ODD_LETTERS ===
+            'If names show odd letters, save the file as CSV UTF-8 and choose it again.' &&
+          ok(plain) &&
+          ok(withPicker) &&
+          ok(refused) &&
+          !textOf(screen(null).tree()).includes(W.FILE_ODD_LETTERS),
+        got: { plain, withPicker: withPicker.length, refused: refused.length },
+      };
+    }
+  );
+  await checkAsync(
+    'L.21',
+    'break proofs (on in-memory copies of the screen, the loading area and the row): each fault turns exactly the checks named red and leaves the others green',
+    async () => {
+      const S = SCREEN;
+      const LB = LOAD_BOX;
+      const CR = ROW;
+      // [what is wrong, the file, the text it replaces (exactly once), the replacement, checks that go red]
+      const faults: Array<[string, string, string, string, string[]]> = [
+        [
+          'the picker is drawn everywhere',
+          S,
+          'if (mounted) setCanPick(pickerAvailable(window));',
+          'if (mounted) setCanPick(true);',
+          ['L.1', 'L.18'],
+        ],
+        [
+          'the picker button stays on while a pick is open',
+          LB,
+          'disabled={p.disabled || p.picking}',
+          'disabled={p.disabled}',
+          ['L.19'],
+        ],
+        ['a second tap makes a second call', S, 'if (pickingRef.current) return;', '', ['L.19']],
+        [
+          'the file chooser is not reset',
+          S,
+          "e.target.value = ''; // so the same file can be chosen again",
+          '',
+          ['L.7'],
+        ],
+        [
+          'a file is read before it is checked',
+          S,
+          "if ('refusal' in routed) {",
+          'if (false as boolean) {',
+          ['L.8'],
+        ],
+        [
+          'Skip it does nothing',
+          S,
+          'onSkip: () => save(skipIt(c)),',
+          'onSkip: () => save(c),',
+          ['L.11'],
+        ],
+        [
+          'every row shows the ways forward',
+          CR,
+          'const flagged = (c.problems?.length ?? 0) > 0;',
+          'const flagged = true;',
+          ['L.10', 'L.11', 'L.12', 'L.13'],
+        ],
+        [
+          'a fix that did not save is not told',
+          S,
+          "const failed = done.status !== 'ok';",
+          'const failed = false;',
+          ['L.14'],
+        ],
+        [
+          'Done closes the panel without saving',
+          S,
+          'if (next && save(next)) setPanel(null);',
+          'setPanel(null);',
+          ['L.12', 'L.13'],
+        ],
+        [
+          'a full browser says nothing',
+          S,
+          'setSummary([W.FULL]); // W17: nothing was added',
+          'setSummary([]);',
+          ['L.15', 'L.20'],
+        ],
+        [
+          'a failed pick says nothing',
+          S,
+          "else if (end.kind === 'failed') setSummary([W.PICKER_FAILED]); // W24; a cancel says nothing",
+          '',
+          ['L.20'],
+        ],
+        [
+          'a cancelled pick says the failed sentence',
+          S,
+          "else if (end.kind === 'failed') setSummary([W.PICKER_FAILED]); // W24; a cancel says nothing",
+          'else setSummary([W.PICKER_FAILED]);',
+          ['L.20'],
+        ],
+        [
+          'the paste box is not emptied after a load',
+          S,
+          "if (finish(read) && read.people.length > 0) setPasteText('');",
+          'finish(read);',
+          ['L.3'],
+        ],
+        [
+          'a browser that will not save still lets her load',
+          S,
+          'disabled: refused,',
+          'disabled: false,',
+          ['L.2', 'L.15', 'L.20'],
+        ],
+        ['W43 is left out of the loading area', LB, '{W.FILE_ODD_LETTERS}', '', ['L.22']],
+      ];
+      const wrong: string[] = [];
+      for (const [what, rel, from, to, red] of faults) {
+        const src = read(rel);
+        if (src.split(from).length !== 2) {
+          wrong.push(`${what}: its anchor is not in ${rel} exactly once`);
+          continue;
+        }
+        const bad = await withSourceAsync(
+          rel,
+          src.replace(from, () => to),
+          async () => {
+            const out: string[] = [];
+            for (const id of Object.keys(lRuns)) {
+              let v: string;
+              try {
+                v = (await lRuns[id]()).ok ? 'green' : 'red';
+              } catch {
+                v = 'red'; // a check that crashes is a red check
+              }
+              const want = red.includes(id) ? 'red' : 'green';
+              if (v !== want) out.push(`${id} was ${v}, wanted ${want}`);
+            }
+            return out;
+          }
+        );
+        wrong.push(...bad.map((b) => `${what}: ${b}`));
+      }
+      return { ok: wrong.length === 0, got: wrong.slice(0, 8) };
+    }
+  );
+
   // ══ F — THE NEW FILES ═══════════════════════════════════════════════════════
   section('F — the new files: no request, no raw markup, no regular expression, no draft module');
   check(
@@ -1460,4 +2368,7 @@ function main() {
   if (failed > 0) process.exit(1);
 }
 
-main();
+main().catch((e) => {
+  console.log(String(e));
+  process.exit(1);
+});

@@ -240,6 +240,33 @@ export function removeContact(
   return written === 'ok' ? result('ok', next) : result(written, read.contacts);
 }
 
+/**
+ * Replaces one person (matched by id) with a fixed copy, in the same place (step 3b: the three ways
+ * forward on a row with a problem). The copy goes through the same checks as a loaded person. An id
+ * that is not in the list, or a copy that cannot be read, changes nothing. A write that fails
+ * changes nothing and says whether the browser refused or was full.
+ */
+export function updateContact(
+  store: ContactsStore | null,
+  userId: string | null,
+  changed: Contact
+): WriteResult {
+  if (!userId) return result('signed-out', []);
+  const read = readContacts(store, userId);
+  if (read.status !== 'ok' || !store) return result('refused', read.contacts);
+  const clean = cleanContact(changed);
+  if (!clean || !read.contacts.some((c) => c.id === clean.id)) {
+    return result('ok', read.contacts, { unreadable: 1 });
+  }
+  const next = read.contacts.map((c) => (c.id === clean.id ? clean : c));
+  const written = writeWhole(store, contactsKey(userId), {
+    v: CONTACTS_VERSION,
+    userId,
+    contacts: next,
+  });
+  return written === 'ok' ? result('ok', next) : result(written, read.contacts);
+}
+
 function keysStartingWith(store: ContactsStore, head: string): string[] {
   const keys: string[] = [];
   for (let i = 0; i < store.length; i++) {

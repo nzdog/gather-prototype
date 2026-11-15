@@ -1,24 +1,27 @@
 'use client';
 
 /**
- * [[GTC-460]] Stage 3, step 3a — THE CONTACTS SCREEN: what /plan/contacts shows.
+ * [[GTC-460]] Stage 3, steps 3a and 3b — THE CONTACTS SCREEN: what /plan/contacts shows.
  *
- * The title, one line saying where her contacts live (A5), a count that is always on screen, a Clear
- * button that is always drawn and asks first, the list with a Remove button on each person, and plain
- * lines for the empty list, for nobody signed in, and for a browser that will not keep them. Nothing
- * can be loaded yet (step 3b). Every sentence is a ruled W-line, in `@/lib/contacts/words`.
+ * The title, one line saying where her contacts live (A5), the loading area (3b: a paste box, a file
+ * choice, the phone's picker where there is one, and a laptop help note), a count that is always on
+ * screen, a Clear button that is always drawn and asks first, and the list with a Remove button on
+ * each person, and the three ways forward on a person the reader flagged. Plain lines for the empty
+ * list, for nobody signed in, and for a browser that will not keep them. Every sentence is a ruled
+ * W-line, in `@/lib/contacts/words`.
  *
  * WHERE THE LIST COMES FROM. Only this browser's storage, through `@/lib/contacts/store`, under the
- * signed-in person's id (read from `ViewerIdContext`, as the household form's drafts are). This file
- * makes no request and holds nothing on a server. It reads storage only AFTER it has mounted, so the
- * page the server draws and the page the browser draws first are the same: a loading state with no
- * words in it.
+ * signed-in person's id (read from `ViewerIdContext`, as the household form's drafts are). Loading
+ * calls GTC-448's readers (through `@/lib/contacts/load`) in this browser. This file makes no request
+ * and holds nothing on a server. It reads storage only AFTER it has mounted, so the page the server
+ * draws and the page the browser draws first are the same: a loading state with no words in it. The
+ * phone's picker is looked for only after it has mounted, for the same reason.
  *
  * KB-001. A page opened straight after sign-in can still be drawn with nobody signed in. As
  * `plan/events/page.tsx` does, this asks the router to refresh when the id is missing, once it has
  * mounted, so the layout is drawn again with the session.
  */
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { ViewerIdContext } from '@/components/shared/Providers';
 import {
@@ -28,10 +31,27 @@ import {
   contactsKey,
   readContacts,
   removeContact,
+  updateContact,
   type Contact,
 } from '@/lib/contacts/store';
-import { CONTACTS_WORDS as W, clearAsk, countWords, removeLabel } from '@/lib/contacts/words';
+import { CONTACTS_WORDS as W, clearAsk, countWords } from '@/lib/contacts/words';
 import { backHref, readAddress, type ContactsAddress } from '@/lib/contacts/address';
+import {
+  MAX_PASTE_CHARS,
+  checkPaste,
+  differentWay,
+  doubleCheck,
+  loadPeople,
+  readText,
+  refusalWords,
+  routeFile,
+  skipIt,
+  summaryLines,
+} from '@/lib/contacts/load';
+import type { ReadResult } from '@/lib/contact-import/types';
+import { pickPeople, pickerAvailable, type PickerEnv } from '@/lib/contacts/picker';
+import { renderLoadBox } from '@/components/contacts/LoadBox';
+import { renderRow, type PanelField, type RowPanel } from '@/components/contacts/ContactRow';
 
 const NO_ADDRESS: ContactsAddress = { eventId: null, form: null, editId: null };
 
@@ -43,14 +63,29 @@ export default function ContactsScreen() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [refused, setRefused] = useState(false);
   const [asking, setAsking] = useState(false);
-  // W42 (ruling 172): the last Remove or Clear did not save. W16 (`refused`) is for loading only.
+  // W42 (ruling 172): the last Remove, Clear or fix did not save. W16 (`refused`) is for loading only.
   const [saveFailed, setSaveFailed] = useState(false);
+  // 3b: the loading area.
+  const [pasteText, setPasteText] = useState('');
+  const [summary, setSummary] = useState<string[]>([]);
+  const [canPick, setCanPick] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [panel, setPanel] = useState<RowPanel | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const pickingRef = useRef(false);
+  const latestViewer = useRef<string | null>(viewerId);
+  latestViewer.current = viewerId;
 
   // Mounted: only now is the browser's address and storage looked at.
   useEffect(() => {
     setAddress(readAddress(window.location.search));
     setMounted(true);
   }, []);
+
+  // The phone's picker: looked for only now, and only drawn if it is there.
+  useEffect(() => {
+    if (mounted) setCanPick(pickerAvailable(window));
+  }, [mounted]);
 
   // KB-001: nobody signed in as far as the layout knows - ask for it to be drawn again, once.
   useEffect(() => {
@@ -66,6 +101,8 @@ export default function ContactsScreen() {
     setContacts(read.contacts);
     setRefused(read.status === 'refused');
     setSaveFailed(false);
+    setSummary([]);
+    setPanel(null);
     setAsking(false);
   }, [mounted, viewerId]);
 
@@ -80,6 +117,7 @@ export default function ContactsScreen() {
       setContacts(read.contacts);
       setRefused(read.status === 'refused');
       setSaveFailed(false); // her list was read again: the old line is out of date
+      setPanel(null);
       setAsking(false);
     };
     window.addEventListener('storage', onStorage);
@@ -103,11 +141,131 @@ export default function ContactsScreen() {
     setRefused(read.status === 'refused');
     const clearFailed = done.status !== 'ok';
     setSaveFailed(clearFailed);
+    setPanel(null);
     setAsking(false);
+  };
+
+  // ── 3b: loading ──────────────────────────────────────────────────────────────────────────────
+  /** The people a reader found, added to her list. True when the write went through. */
+  const finish = (read: ReadResult): boolean => {
+    const { written, summary: counted } = loadPeople(browserContactsStore(), viewerId, read);
+    if (written.status === 'ok') {
+      setContacts(written.contacts);
+      setSummary(summaryLines(counted));
+      setSaveFailed(false);
+      return true;
+    }
+    if (written.status === 'full') {
+      setSummary([W.FULL]); // W17: nothing was added
+    } else {
+      setSummary([]);
+      setRefused(true); // W16: the browser will not keep a list
+    }
+    return false;
+  };
+
+  const addPaste = () => {
+    setSummary([]);
+    const refusal = checkPaste(pasteText);
+    if (refusal) {
+      setSummary([refusalWords(refusal)]);
+      return;
+    }
+    const read = readText('paste', pasteText);
+    if (finish(read) && read.people.length > 0) setPasteText('');
+  };
+
+  const onPasteText = (value: string) => {
+    // Keep one character past the limit, so a list that is too long is still seen to be too long.
+    setPasteText(value.length > MAX_PASTE_CHARS + 1 ? value.slice(0, MAX_PASTE_CHARS + 1) : value);
+  };
+
+  const onFile = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // so the same file can be chosen again
+    if (!file) return;
+    setSummary([]);
+    const routed = routeFile(file);
+    if ('refusal' in routed) {
+      setSummary([refusalWords(routed.refusal)]);
+      return;
+    }
+    if (typeof file.text !== 'function') {
+      setSummary([refusalWords('unreadable')]);
+      return;
+    }
+    const who = viewerId;
+    file.text().then(
+      (text) => {
+        if (latestViewer.current === who) finish(readText(routed.kind, text));
+      },
+      () => setSummary([refusalWords('unreadable')])
+    );
+  };
+
+  const pick = () => {
+    if (pickingRef.current) return;
+    pickingRef.current = true;
+    setPicking(true);
+    setSummary([]);
+    const who = viewerId;
+    // The ask is made here, in the tap's own turn, before anything is waited for.
+    pickPeople(window as unknown as PickerEnv).then((end) => {
+      pickingRef.current = false;
+      setPicking(false);
+      if (latestViewer.current !== who) return;
+      if (end.kind === 'picked') finish(end.read);
+      else if (end.kind === 'failed') setSummary([W.PICKER_FAILED]); // W24; a cancel says nothing
+    });
+  };
+
+  // ── 3b: the ways forward on a flagged row ─────────────────────────────────────────────────────
+  /** Saves a fixed person. True when it was saved; if not, W42 and the row stays as it was. */
+  const save = (next: Contact): boolean => {
+    const done = updateContact(browserContactsStore(), viewerId, next);
+    const failed = done.status !== 'ok';
+    setSaveFailed(failed);
+    if (!failed) setContacts(done.contacts);
+    return !failed;
+  };
+
+  const open = (c: Contact, kind: 'check' | 'other') => {
+    if (panel && panel.id === c.id && panel.kind === kind) {
+      setPanel(null);
+      return;
+    }
+    setPanel({
+      id: c.id,
+      kind,
+      name: c.name,
+      email: c.email ?? '',
+      phone: c.phone ?? '',
+      other: '',
+    });
+  };
+
+  const typeInPanel = (field: PanelField, value: string) => {
+    if (panel) setPanel({ ...panel, [field]: value });
+  };
+
+  const donePanel = () => {
+    if (!panel) return;
+    const c = contacts.find((x) => x.id === panel.id);
+    if (!c) {
+      setPanel(null);
+      return;
+    }
+    const next = panel.kind === 'check' ? doubleCheck(c, panel) : differentWay(c, panel.other);
+    if (next && save(next)) setPanel(null);
   };
 
   const back = mounted ? backHref(address) : null;
   const n = contacts.length;
+  const openPanel = panel && contacts.some((c) => c.id === panel.id) ? panel : null;
+  const liveFor = (c: Contact): string[] =>
+    openPanel && openPanel.id === c.id && openPanel.kind === 'check'
+      ? (doubleCheck(c, openPanel)?.problems ?? [])
+      : [];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -158,6 +316,19 @@ export default function ContactsScreen() {
                 </p>
               )}
             </div>
+
+            {renderLoadBox({
+              disabled: refused,
+              pasteText,
+              onPasteText,
+              onAddPaste: addPaste,
+              fileRef,
+              onFile,
+              canPick,
+              picking,
+              onPick: pick,
+              summary,
+            })}
 
             <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
               <p
@@ -214,27 +385,19 @@ export default function ContactsScreen() {
                 data-contacts-list
                 className="mt-4 divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white"
               >
-                {contacts.map((c) => (
-                  <li
-                    key={c.id}
-                    data-contact-id={c.id}
-                    className="flex items-start justify-between gap-3 px-4 py-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium text-gray-900 break-words">{c.name}</p>
-                      {c.email && <p className="text-sm text-gray-600 break-words">{c.email}</p>}
-                      {c.phone && <p className="text-sm text-gray-600 break-words">{c.phone}</p>}
-                    </div>
-                    <button
-                      type="button"
-                      aria-label={removeLabel(c.name)}
-                      onClick={() => remove(c.id)}
-                      className="shrink-0 px-3 py-2 text-sm text-gray-600 underline underline-offset-2 hover:text-gray-900"
-                    >
-                      {W.REMOVE}
-                    </button>
-                  </li>
-                ))}
+                {contacts.map((c) =>
+                  renderRow({
+                    contact: c,
+                    panel: openPanel && openPanel.id === c.id ? openPanel : null,
+                    live: liveFor(c),
+                    doneOff: openPanel?.kind === 'check' && openPanel.name.trim() === '',
+                    onRemove: () => remove(c.id),
+                    onOpen: (kind) => open(c, kind),
+                    onSkip: () => save(skipIt(c)),
+                    onType: typeInPanel,
+                    onDone: donePanel,
+                  })
+                )}
               </ul>
             )}
           </>
