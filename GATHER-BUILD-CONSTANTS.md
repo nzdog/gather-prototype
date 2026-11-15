@@ -271,10 +271,20 @@ live assertion, that nothing was written, passes with or without a server; 18 un
 suite 12's two wrong-secret refusals at `/api/cron/tnz-status-poll`). That is not a regression.
 With the server, the suite is 172/172 (168 at GTC-258; GTC-290 added four refusals of the new
 route: two in process with the secret unset, two live with a wrong one).
-Start the server with the provider keys and the AI key blanked for that process only, and
-never edit `.env.local` (the AI key since GTC-364, founder ruling Q7, 2026-10-06: no suite needs
-it on the server, and a press of "Generate plan →" must never reach the AI):
+Start the server with the provider keys and the AI key blanked on the
+command line, for that process only. The real keys live in `.env.local`
+(moved there from `.env`, chore 16 of GTC-460, 2026-11-15), so never
+blank a key by editing that file, and never print it. The AI key is
+blanked too, since GTC-364 (founder ruling Q7, 2026-10-06: no suite
+needs it on the server, and a press of "Generate plan →" must never
+reach the AI). Leave `CRON_SECRET` and `TNZ_CALLBACK_SECRET` off the
+command line: the server loads them from `.env.local`, and
+`test:security` reads `CRON_SECRET` from that same file for its
+positive control. Without that file, four live checks fail. Start it like this:
 `ANTHROPIC_API_KEY= RESEND_API_KEY= TWILIO_ACCOUNT_SID= TWILIO_AUTH_TOKEN= TWILIO_PHONE_NUMBER= TNZ_AUTH_TOKEN= npm run dev`.
+Optional: add `STRIPE_SECRET_KEY=sk_test_made_up` and
+`STRIPE_WEBHOOK_SECRET=whsec_made_up` to the same command line, so the
+real Stripe test key never loads into the server.
 `test:sign-in-hole` (GTC-369, ruling Q12) needs the same server, started the same way: it calls `POST /api/auth/verify` over HTTP (it sends nothing) and calls the claim route only in process, with the live switch never opened and the provider trap's walls up.
 The live layer drives only two cron routes, and only behind asserted
 preconditions (GTC-270):
@@ -341,14 +351,18 @@ run the poll unscoped against `gather_dev`: it asks TNZ about real MessageIDs.
 *(Founder ruling, 2026-10-05, GTC-364.)* **Why:** planning GTC-364, a scripted look at
 Moment 2's questions clicked the middle of a section's title row that sat behind the fixed
 bar at the bottom of the screen, and pressed "Generate plan →" — twice, once per width.
-`.env.local` holds the AI key, so each press made a real AI call on the scratch event.
+The dev server had the AI key, so each press made a real AI call on the
+scratch event.
 Nothing was sent, but "nothing generated" was broken. So any look on screen — a planning
 look, a screenshot walk, any headless or driven browser on the dev server — runs behind all
 three of these, every time:
-1. **The AI key off.** Start the dev server with `ANTHROPIC_API_KEY=` blanked as well as the
-   provider keys, for that process only, never by editing `.env.local`:
+1. **The AI key off.** Start the dev server with `ANTHROPIC_API_KEY=`
+   blanked as well as the provider keys, on the command line, for that
+   process only. Never blank a key by editing `.env.local`: it holds
+   the real keys (since chore 16 of GTC-460, 2026-11-15):
    `ANTHROPIC_API_KEY= RESEND_API_KEY= TWILIO_ACCOUNT_SID= TWILIO_AUTH_TOKEN= TWILIO_PHONE_NUMBER= TNZ_AUTH_TOKEN= npm run dev`.
-   Next.js keeps a variable that is set, even to nothing, rather than filling it from `.env.local`.
+   Next.js keeps a variable that is set, even to nothing, rather than
+   filling it from `.env.local` or `.env`.
 2. **The plan-making requests blocked in the browser.** Before the first page loads, the
    browser fails every request to `finalize-plan`, `regenerate-plan`, `/generate`,
    `/regenerate` and `suggest-resolution` (which calls the AI too; added 2026-10-06 on founder
@@ -442,7 +456,7 @@ into the `STRIPE_WEBHOOK_SECRET` environment variable on the deployment platform
 Use Twilio test credentials (Test Account SID and Auth Token from the Twilio
 Console). Test credentials accept API calls but do not send real SMS messages.
 Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_PHONE_NUMBER` in
-`.env` to the test values.
+`.env.local` to the test values.
 
 To trigger a cron job locally, call the endpoint directly. **`CRON_SECRET` must be
 set in the server's environment — GTC-270 made these routes fail closed, so an unset
@@ -507,24 +521,29 @@ Actual values are redacted. Copy `.env.example` to `.env` and fill in real value
 | Variable | Purpose | Location |
 |----------|---------|---------|
 | `DATABASE_URL` | PostgreSQL connection string | `.env` / Railway env |
-| `ANTHROPIC_API_KEY` | Claude AI plan generation | `.env` / deployment env |
-| `RESEND_API_KEY` | Magic-link transactional email | `.env` / deployment env |
+| `ANTHROPIC_API_KEY` | Claude AI plan generation | `.env.local` (dev) / deployment env |
+| `RESEND_API_KEY` | Magic-link transactional email | `.env.local` (dev) / deployment env |
 | `EMAIL_FROM` | Sender address for transactional email | `.env` / deployment env |
 | `NEXT_PUBLIC_APP_URL` | Base URL for magic-link generation | `.env` / deployment env |
-| `STRIPE_SECRET_KEY` | Stripe API access | `.env` / deployment env |
-| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signature verification | `.env` / deployment env |
+| `STRIPE_SECRET_KEY` | Stripe API access | `.env.local` (dev) / deployment env |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signature verification | `.env.local` (dev) / deployment env |
 | `STRIPE_PRICE_ID` | Stripe subscription price ID | `.env` / deployment env |
 | `GATHER_LIVE_SENDS` | **Production only.** Exactly `on` means Gather sends real texts and email; anything else, including unset, stops every send at its last step (GTC-274). Set on Railway production and checked by the build; never in `.env` or `.env.local`. See *Live sending*. | Railway production env only |
 | `TNZ_AUTH_TOKEN` | SMS via TNZ for NZ (+64) and AU (+61) — obtain from TNZ Dashboard → Users → API tab → Auth Token. Required for production NZ delivery (Twilio does not deliver to NZ). | `.env` / deployment env |
-| `TNZ_CALLBACK_SECRET` | Authenticates TNZ's calls to `/api/sms/tnz-webhook`, the one URL for delivery reports and replies (GTC-264, GTC-229). The webhook APIKey set in the TNZ Dashboard (Users → API User → API → Reporting), sent raw in `Authorization` and echoed as the body's `APIKey`; both are checked. Not `TNZ_AUTH_TOKEN`. **Required, not optional** — unset or empty refuses every caller, following `CRON_SECRET`'s precedent, and TNZ retry a refused call every five minutes for 24 hours. | `.env` / deployment env |
+| `TNZ_CALLBACK_SECRET` | Authenticates TNZ's calls to `/api/sms/tnz-webhook`, the one URL for delivery reports and replies (GTC-264, GTC-229). The webhook APIKey set in the TNZ Dashboard (Users → API User → API → Reporting), sent raw in `Authorization` and echoed as the body's `APIKey`; both are checked. Not `TNZ_AUTH_TOKEN`. **Required, not optional** — unset or empty refuses every caller, following `CRON_SECRET`'s precedent, and TNZ retry a refused call every five minutes for 24 hours. | `.env.local` (dev) / deployment env |
 | `TNZ_CALLBACK_SENDER` | The identity half of the same credential: the webhook Sender set on the same Dashboard screen, sent as `X-Sender` and the body's `Sender`; both are checked. **Required, not optional** — refuses every caller when unset, as above. | `.env` / deployment env |
-| `TWILIO_ACCOUNT_SID` | SMS via Twilio for non-NZ/AU destinations (OPTIONAL) | `.env` / deployment env |
-| `TWILIO_AUTH_TOKEN` | SMS via Twilio for non-NZ/AU destinations (OPTIONAL) | `.env` / deployment env |
-| `TWILIO_PHONE_NUMBER` | Twilio sender number (OPTIONAL) | `.env` / deployment env |
+| `TWILIO_ACCOUNT_SID` | SMS via Twilio for non-NZ/AU destinations (OPTIONAL) | `.env.local` (dev) / deployment env |
+| `TWILIO_AUTH_TOKEN` | SMS via Twilio for non-NZ/AU destinations (OPTIONAL) | `.env.local` (dev) / deployment env |
+| `TWILIO_PHONE_NUMBER` | Twilio sender number (OPTIONAL) | `.env.local` (dev) / deployment env |
 | `UNSUBSCRIBE_TOKEN_SECRET` | Signs the per-event email unsubscribe links (GTC-296). **Required, not optional** — fails closed when unset, following `CRON_SECRET`'s precedent: reading a token returns null (404) and minting one throws, so no guest email is sent at all rather than one with no way out. Changing it invalidates links already in mailboxes. | `.env` / deployment env |
 | `GATHER_ALERT_EMAIL` | **Production.** The founder's address for the TNZ account alert: one email per episode of a credit hold or a blocked link (GTC-290). Unset means no email is sent and the poll run fails (500), so the scheduler's failure email is the fallback. Never logged. | Railway production env |
 | `GATHER_DEMO_START` | **Off unless exactly `on`.** The demo's one door (GTC-425, GTC-447; founder rulings 29 Oct and 1 Nov 2026). On: `/demo` shows its "Try it yourself" button, `/demo/new` (the sample's "Create Your Event" page) opens, and the copy-start shape of `POST /api/demo/session` starts a private sample copy. Off: `/demo` says "Under construction", `/demo/new` is a plain not-found, and that shape answers 404 and writes nothing. The same in production and in development. Read on every request: both pages call `connection()` first, so nothing is fixed when the site is built. Set in `.env.local` on a developer's machine; **not set on Railway** until the founder turns the demo on at launch (GTC-447's turn-on steps); deleting it, or any value but `on`, turns the demo off. | `.env.local` (dev); Railway production env at launch |
-| `CRON_SECRET` | Authenticates cron-job HTTP requests. **Required, not optional** — since GTC-270 an unset or empty value refuses every caller rather than admitting them | `.env` / deployment env |
+| `CRON_SECRET` | Authenticates cron-job HTTP requests. **Required, not optional** — since GTC-270 an unset or empty value refuses every caller rather than admitting them | `.env.local` (dev) / deployment env |
+
+Since chore 16 of GTC-460 (2026-11-15), keys and secrets sit in
+`.env.local`; `DATABASE_URL` and the plain settings stay in `.env`.
+Next loads both; `tsx` scripts see only `.env`, through Prisma's
+client, so a key must be passed in for them.
 
 Template: `.env.example` at repo root.
 

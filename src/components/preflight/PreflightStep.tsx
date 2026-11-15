@@ -32,6 +32,12 @@
  * [[GTC-422]] (tweak 9, the founder, 28 Oct 2026: "Step 5 needs no tick") — `noBox`, off by
  * default: a step that does not fold (Ready) is drawn with no box at all. Every other step, and
  * Ready without it, is drawn exactly as before.
+ *
+ * [[GTC-449]] S2.5 (ruling 28) — A ROW CAN CARRY A SECOND LINE. `secondLine`, off by default, is
+ * drawn straight under `line` in the same way, folded or open (step 3: the households with no one to
+ * talk to first, the kids still on decide later under it). `line` is unchanged, so a step given
+ * one line draws exactly what it drew before, and a step given neither draws no line element. The
+ * second line alone is drawn alone. A settled step draws neither.
  */
 
 import { FOLD_ROW_RING, FOLD_ROW_SHADE, FoldBody, FoldCue } from '@/components/plan/AccordionShell';
@@ -55,6 +61,7 @@ export default function PreflightStep({
   onToggle,
   line = null,
   noBox = false,
+  secondLine = null,
   children,
 }: {
   n: number;
@@ -81,25 +88,30 @@ export default function PreflightStep({
   line?: StepLine | null;
   /** [[GTC-422]] — given, a step that does not fold (Ready) has no box. Off by default. */
   noBox?: boolean;
+  /** [[GTC-449]] S2.5 (ruling 28) — a second row line, under `line`; none when not given. */
+  secondLine?: StepLine | null;
   children: React.ReactNode;
 }) {
   const folds = !settled && onToggle !== undefined;
   // [[GTC-399]] item 5: an open step that folds draws a second box at its foot.
   const boxAtFoot = folds && open;
-  const rowLine =
-    line && !settled ? (
+  // [[GTC-449]] S2.5: one drawing for both row lines, so the second can never differ from the first.
+  const drawLine = (l: StepLine | null) =>
+    l && !settled ? (
       <span
         data-step-line=""
         className={`mt-1 flex items-center gap-1.5 text-sm ${
-          line.amber ? 'text-amber-700' : 'text-gray-500'
+          l.amber ? 'text-amber-700' : 'text-gray-500'
         }`}
       >
-        {line.amber && (
+        {l.amber && (
           <span className="w-1.5 h-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />
         )}
-        {line.text}
+        {l.text}
       </span>
     ) : null;
+  const rowLine = drawLine(line);
+  const secondRowLine = drawLine(secondLine);
   const box = (
     <label className="flex items-center gap-2 shrink-0 cursor-pointer text-sm text-gray-600">
       <input
@@ -158,6 +170,7 @@ export default function PreflightStep({
                   <span className="block text-lg font-medium text-gray-900">{title}</span>
                   <span className="block text-sm text-gray-500 mt-1">{blurb}</span>
                   {rowLine}
+                  {secondRowLine}
                 </span>
                 <FoldCue open={open} className="sm:self-center" />
               </button>
@@ -170,6 +183,7 @@ export default function PreflightStep({
                 {settled ? INVITES_ONLY_WORDS.STEP_NOT_NEEDED : blurb}
               </p>
               {rowLine}
+              {secondRowLine}
             </div>
           )}
           {folds ? (

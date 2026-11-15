@@ -364,6 +364,71 @@ async function runInMemory() {
       );
     })
   );
+  // GTC-449 S2.5 (ruling 28): step 3's row can carry a second line, W7, under talkLine's. R6 above
+  // is untouched: a step given only `line` still draws what it always drew. These three are added.
+  assert(
+    'R',
+    'R6b W7 alone (GTC-449): a row given only the second line shows it, amber, under the blurb, as the one line',
+    ok(() => {
+      const only = step({
+        open: false,
+        onToggle: () => {},
+        secondLine: { text: 'LINE-Y', amber: true },
+      });
+      const t = toggle(only);
+      const words = t ? text(t[1]) : '';
+      const lineAt = only.indexOf('data-step-line');
+      return (
+        !!t &&
+        words.indexOf('BLURB-X') >= 0 &&
+        words.indexOf('LINE-Y') > words.indexOf('BLURB-X') &&
+        (only.match(/data-step-line/g) || []).length === 1 &&
+        /text-amber-700/.test(only.slice(lineAt, only.indexOf('LINE-Y')))
+      );
+    })
+  );
+  assert(
+    'R',
+    'R6c W7 with talkLine’s line (GTC-449): both show, each once, both amber, both inside the toggle',
+    ok(() => {
+      const two = step({
+        open: false,
+        onToggle: () => {},
+        line: { text: 'LINE-X', amber: true },
+        secondLine: { text: 'LINE-Y', amber: true },
+      });
+      const t = toggle(two);
+      const words = t ? text(t[1]) : '';
+      return (
+        !!t &&
+        (two.match(/data-step-line/g) || []).length === 2 &&
+        (two.match(/text-amber-700/g) || []).length === 2 &&
+        words.includes('LINE-X') &&
+        words.includes('LINE-Y')
+      );
+    })
+  );
+  assert(
+    'R',
+    'R6d the order (GTC-449): the first line, then the second under it; open or folded',
+    ok(() =>
+      [false, true].every((open) => {
+        const two = step({
+          open,
+          onToggle: () => {},
+          line: { text: 'LINE-X', amber: true },
+          secondLine: { text: 'LINE-Y', amber: true },
+        });
+        const t = toggle(two);
+        const words = t ? text(t[1]) : '';
+        return (
+          !!t &&
+          words.indexOf('BLURB-X') < words.indexOf('LINE-X') &&
+          words.indexOf('LINE-X') < words.indexOf('LINE-Y')
+        );
+      })
+    )
+  );
   const shell = (p: Record<string, unknown>) =>
     AS?.default
       ? render(

@@ -8,7 +8,7 @@ import { normalizePhoneNumber } from '@/lib/phone';
 import { validateChannelTarget } from '@/lib/households/channel';
 import { hostHasMembership } from '@/lib/households/hostHousehold';
 import { findOrCreateCapturedPerson } from '@/lib/households/capturePerson';
-import { ChannelValidationError } from '@/lib/households/reconcileMembers';
+import { ChannelValidationError, decideLaterMarker } from '@/lib/households/reconcileMembers';
 import { addDemoCrowd } from '@/lib/demo/crowd';
 import { addDemoReplies } from '@/lib/demo/replies';
 
@@ -55,6 +55,8 @@ interface HouseholdMemberInput {
   phone?: string;
   /** GTC-172 (C1): explicit adult-roling of a kid with a job (§10.6). Helpers only. */
   adultRoled?: boolean;
+  /** GTC-449 (S2.1): "Decide later" on a kid row. Helpers only, and only while the tick is off. */
+  decideLater?: boolean;
 }
 
 interface HouseholdRequestBody {
@@ -64,7 +66,13 @@ interface HouseholdRequestBody {
     phone?: string;
   };
   partner?: HouseholdMemberInput;
-  helpers?: Array<{ name: string; email?: string; phone?: string; adultRoled?: boolean }>;
+  helpers?: Array<{
+    name: string;
+    email?: string;
+    phone?: string;
+    adultRoled?: boolean;
+    decideLater?: boolean;
+  }>;
   littleCount?: number;
   guests?: HouseholdMemberInput[];
   /** GTC-172 (C1): the household contact picker (§10.7). */
@@ -212,7 +220,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       householdRole: 'PRIMARY_CONTACT' | 'PARTNER' | 'GUEST' | 'CHILD',
       // GTC-172 (C1): DISPLAY ONLY — see the schema note on PersonEvent.isYoungPerson.
       // Never read for a send decision; householdRole is the sole gate (§10.6).
-      isYoungPerson = false
+      isYoungPerson = false,
+      // GTC-449 (S2.1): the host's "Decide later" note, worked out by `decideLaterMarker`. Stored
+      // beside the role and never read for a send decision either.
+      messagingUndecided = false
     ) {
       if (!input.name?.trim()) return null;
 
@@ -252,7 +263,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         if (!existing.householdId) {
           await db.personEvent.update({
             where: { id: existing.id },
-            data: { householdId, householdRole, isYoungPerson },
+            data: { householdId, householdRole, isYoungPerson, messagingUndecided },
           });
         }
         return existing;
@@ -268,6 +279,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           householdId,
           householdRole,
           isYoungPerson,
+          messagingUndecided,
           // GTC-196: the mini-send clock — see people/route.ts for the full note.
           sentAt: event!.sentAt ?? null,
         },
@@ -311,12 +323,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       if (helpers) {
         for (const helper of helpers) {
           if (helper.name?.trim()) {
+            const helperRole = helper.adultRoled ? 'GUEST' : 'CHILD';
             await createMember(
               tx,
               helper,
               household.id,
-              helper.adultRoled ? 'GUEST' : 'CHILD',
-              true // captured as a kid with a job, whatever role they end up with
+              helperRole,
+              true, // captured as a kid with a job, whatever role they end up with
+              decideLaterMarker(helperRole, helper) // GTC-449: "yes" only with the tick off
             );
           }
         }

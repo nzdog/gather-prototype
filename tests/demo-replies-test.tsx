@@ -24,7 +24,8 @@
  *   PA parity with the guest's own attendance PATCH
  *   N  nothing sent
  *   C  CONTROL: a real event's households POST as a5e59c3's server answers it
- *   Z  every probe row removed by id; the counts back; prisma/ and tokens.ts as at a5e59c3
+ *   Z  every probe row removed by id; the counts back; tokens.ts as at a5e59c3, prisma/ as at a5e59c3
+ *      plus exactly GTC-449's one field and its migration (word for word)
  *
  * Routes run over HTTP on the guarded dev server (DEMO_SANDBOX_BASE_URL, default
  * http://localhost:3000). The comparison server is a5e59c3's tree, exported by `git archive` into
@@ -75,6 +76,21 @@ const KEPT = [
   'src/app/api/p/[token]/ack/[assignmentId]/route.ts',
   'src/lib/demo/sample-board.ts',
 ];
+
+// ── [[GTC-449]]: the ONLY prisma change since the parent, typed by hand ──────────────────────
+// One field and its migration. The migration runs on the live database, so its text is pinned
+// word for word (a same-size change would pass a line count). Any later schema change updates this.
+const OUR_MIGRATION =
+  'prisma/migrations/20261102205933_gtc449_person_event_messaging_undecided/migration.sql';
+const OUR_MIGRATION_TEXT =
+  '-- AlterTable\n' +
+  'ALTER TABLE "PersonEvent" ADD COLUMN     "messagingUndecided" BOOLEAN NOT NULL DEFAULT false;\n';
+const OUR_FIELD_LINE = '  messagingUndecided   Boolean            @default(false)\n';
+/** `git diff --numstat --summary <parent> -- src/lib/tokens.ts prisma`: exactly these lines, so no tokens.ts. */
+const OUR_ZONE =
+  `2\t0\t${OUR_MIGRATION}\n` +
+  '10\t0\tprisma/schema.prisma\n' +
+  ` create mode 100644 ${OUR_MIGRATION}\n`;
 
 // ── Reporting ────────────────────────────────────────────────────────────────
 let passed = 0;
@@ -251,6 +267,15 @@ const sameStates = (a: States, b: States) =>
 
 // ── CHECKS: every condition, dry-runnable ────────────────────────────────────
 export const CHECKS = {
+  /** Z3 — tokens.ts untouched; prisma/ shows exactly GTC-449's field (10 lines) and migration (2 lines), no more; the migration is those two lines word for word; the field line is there once. */
+  zoneIsOurs(status: number | null, out: string, migration: string, schema: string) {
+    return (
+      status === 0 &&
+      out === OUR_ZONE &&
+      migration === OUR_MIGRATION_TEXT &&
+      schema.split(OUR_FIELD_LINE).length === 2
+    );
+  },
   /** W1: W49 to W56 in the words file are the plan's, character for character. */
   wordsAsPlanned(
     w: Words | null,
@@ -1482,14 +1507,16 @@ async function main() {
     movedTables.length === 0,
     movedTables.map((k) => `${k} ${start[k]} -> ${end[k]}`).join(', ')
   );
-  const zone = spawnSync('git', ['diff', '--quiet', PARENT, '--', 'src/lib/tokens.ts', 'prisma'], {
-    cwd: ROOT,
-  });
+  const zone = spawnSync(
+    'git',
+    ['diff', '--numstat', '--summary', PARENT, '--', 'src/lib/tokens.ts', 'prisma'],
+    { cwd: ROOT, encoding: 'utf8' }
+  );
   assert(
     'Z',
-    'Z3 src/lib/tokens.ts and prisma/ are as at a5e59c3 (no token or schema change)',
-    zone.status === 0,
-    `${zone.status}`
+    'Z3 src/lib/tokens.ts is as at a5e59c3, and prisma/ is as at a5e59c3 plus exactly GTC-449’s one field and its migration (word for word)',
+    CHECKS.zoneIsOurs(zone.status, zone.stdout, read(OUR_MIGRATION), read('prisma/schema.prisma')),
+    `${zone.status} ${String(zone.stdout).replace(/\n/g, ' | ').slice(0, 300)}`
   );
 }
 
