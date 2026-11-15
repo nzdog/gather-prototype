@@ -43,6 +43,8 @@ export default function ContactsScreen() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [refused, setRefused] = useState(false);
   const [asking, setAsking] = useState(false);
+  // W42 (ruling 172): the last Remove or Clear did not save. W16 (`refused`) is for loading only.
+  const [saveFailed, setSaveFailed] = useState(false);
 
   // Mounted: only now is the browser's address and storage looked at.
   useEffect(() => {
@@ -63,6 +65,7 @@ export default function ContactsScreen() {
     const read = readContacts(browserContactsStore(), viewerId);
     setContacts(read.contacts);
     setRefused(read.status === 'refused');
+    setSaveFailed(false);
     setAsking(false);
   }, [mounted, viewerId]);
 
@@ -76,6 +79,7 @@ export default function ContactsScreen() {
       const read = readContacts(browserContactsStore(), viewerId);
       setContacts(read.contacts);
       setRefused(read.status === 'refused');
+      setSaveFailed(false); // her list was read again: the old line is out of date
       setAsking(false);
     };
     window.addEventListener('storage', onStorage);
@@ -84,15 +88,21 @@ export default function ContactsScreen() {
 
   const remove = (id: string) => {
     const done = removeContact(browserContactsStore(), viewerId, id);
-    setContacts(done.contacts);
-    setRefused(done.status === 'refused');
+    // W42: if it did not save, whether the browser refused or was full, nothing changed, and the
+    // list on the screen stays as it is.
+    const removeFailed = done.status !== 'ok';
+    setSaveFailed(removeFailed);
+    if (!removeFailed) setContacts(done.contacts);
   };
 
   const clear = () => {
     const done = clearContacts(browserContactsStore(), browserTabStore(), viewerId);
+    // What is stored now is what is shown: if the browser would not remove, the list is still there.
     const read = readContacts(browserContactsStore(), viewerId);
     setContacts(read.contacts);
-    setRefused(done.status === 'refused' || read.status === 'refused');
+    setRefused(read.status === 'refused');
+    const clearFailed = done.status !== 'ok';
+    setSaveFailed(clearFailed);
     setAsking(false);
   };
 
@@ -137,6 +147,17 @@ export default function ContactsScreen() {
                 {W.REFUSED}
               </p>
             )}
+
+            <div aria-live="polite">
+              {saveFailed && !refused && (
+                <p
+                  data-contacts-state="save-failed"
+                  className="mt-6 rounded-lg border border-gray-200 bg-white px-4 py-3 text-gray-700"
+                >
+                  {W.SAVE_FAILED}
+                </p>
+              )}
+            </div>
 
             <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
               <p

@@ -97,6 +97,14 @@ class MemStore {
   calls = 0;
   failRead = false;
   failWrite = false;
+  failRemove = false;
+  /** What a failed write or remove throws: a plain refusal, or the browser's "no room left" error. */
+  failWith: 'refused' | 'full' = 'refused';
+  private boom(): Error {
+    const e = new Error(this.failWith === 'full' ? 'The quota has been exceeded.' : 'blocked');
+    if (this.failWith === 'full') e.name = 'QuotaExceededError';
+    return e;
+  }
   get length() {
     this.calls++;
     if (this.failRead) throw new Error('blocked');
@@ -114,11 +122,12 @@ class MemStore {
   }
   setItem(k: string, v: string) {
     this.calls++;
-    if (this.failWrite) throw new Error('blocked');
+    if (this.failWrite) throw this.boom();
     this.m.set(k, v);
   }
   removeItem(k: string) {
     this.calls++;
+    if (this.failRemove) throw this.boom();
     this.m.delete(k);
   }
 }
@@ -258,6 +267,19 @@ const DRAFT_SHIM = { ...FormDraft, browserDraftStore: () => activeDraftStore };
 // ── The live source, compiled; the three files under test get the stand-in React ──────
 const LIVE = new Set([SCREEN, PAGE, FORM]);
 const compiled = new Map<string, any>();
+/** Source text used instead of a file's own, in memory only (the break proofs); the real file is never edited. */
+const OVERRIDE = new Map<string, string>();
+/** Run `fn` with the screen's source replaced by `source`; the real file is read again afterwards. */
+function withScreenSource<T>(source: string, fn: () => T): T {
+  OVERRIDE.set(SCREEN, source);
+  compiled.delete(SCREEN);
+  try {
+    return fn();
+  } finally {
+    OVERRIDE.delete(SCREEN);
+    compiled.delete(SCREEN);
+  }
+}
 function resolveFile(target: string): string | null {
   for (const ext of ['.tsx', '.ts']) {
     if (fs.existsSync(path.join(ROOT, target + ext))) return target + ext;
@@ -266,7 +288,7 @@ function resolveFile(target: string): string | null {
 }
 function loadLive(rel: string): any {
   if (compiled.has(rel)) return compiled.get(rel);
-  const source = read(rel);
+  const source = OVERRIDE.get(rel) ?? read(rel);
   if (!source) throw new Error(`${rel} is not there yet`);
   const code = transformSync(source, {
     loader: rel.endsWith('x') ? 'tsx' : 'ts',
@@ -445,14 +467,14 @@ function main() {
   });
 
   // ══ W — THE WORDS ARE THE RULED WORDS ═══════════════════════════════════════
-  section('W — the words are the ruled W-lines (A5, W10 to W15, W16, W18, W20, W31, W41)');
+  section('W — the words are the ruled W-lines (A5, W10 to W16, W18, W20, W31, W41, W42)');
   check('W.1', 'the ticket section with the ruled W-lines was found', () => ({
     ok: wordsSection.length > 2000,
     got: wordsSection.length,
   }));
   check(
     'W.2',
-    'words.ts says A5, W10 to W16, W18, W20 and W31 exactly as the ticket rules them',
+    'words.ts says A5, W10 to W16, W18, W20, W31 and W42 exactly as the ticket rules them',
     () => {
       const {
         CONTACTS_WORDS: W,
@@ -477,6 +499,7 @@ function main() {
         ['W18', W.BACK],
         ['W20', W.REMOVE],
         ['W20 read out', removeLabel('{name}')],
+        ['W42', W.SAVE_FAILED],
         ['W31 sentence', W.ENTRY_LARGE],
         ['W31 button', W.ENTRY_LINK],
       ];
@@ -791,6 +814,187 @@ function main() {
       got: flat(textOf(confirmBlock(i))),
     };
   });
+
+  // ── A Remove or a Clear that cannot save (ruling 172, W42) ───────────────────
+  const stateLines = (i: Inst) =>
+    all(i.tree(), (e) => 'data-contacts-state' in e.props).map((e) => textOf(e));
+  const fireStorage = (i: Inst, key: string | null) =>
+    i.act(() => (i.win.listeners['storage'] ?? []).forEach((f) => f({ key })));
+  /** Remove one person while the browser will not save (refused) or has no room (full). */
+  const failedRemove = (mode: 'refused' | 'full') => {
+    const { CONTACTS_WORDS: W } = require('../src/lib/contacts/words');
+    const local = new MemStore();
+    seed(local, 'user-a', 3);
+    const before = local.m.get(LIST_KEY('user-a'));
+    const i = screen('user-a', { local });
+    local.failWrite = true;
+    local.failWith = mode;
+    press(i, buttons(rows(i)[1])[0]);
+    const lines = stateLines(i);
+    return {
+      ok:
+        lines.includes(W.SAVE_FAILED) &&
+        !lines.includes(W.REFUSED) &&
+        !lines.includes(W.EMPTY) &&
+        countOf(i) === '3 contacts' &&
+        rows(i).length === 3 &&
+        local.m.get(LIST_KEY('user-a')) === before,
+      got: [lines, countOf(i), rows(i).length],
+    };
+  };
+  /** Clear (and "Yes, clear") while the browser will not remove (refused) or answers "no room" (full). */
+  const failedClear = (mode: 'refused' | 'full') => {
+    const { CONTACTS_WORDS: W } = require('../src/lib/contacts/words');
+    const local = new MemStore();
+    seed(local, 'user-a', 3);
+    const before = local.m.get(LIST_KEY('user-a'));
+    const i = screen('user-a', { local });
+    press(i, clearButton(i));
+    local.failRemove = true;
+    local.failWith = mode;
+    press(i, buttonText(confirmBlock(i), W.CLEAR_YES));
+    const lines = stateLines(i);
+    return {
+      ok:
+        lines.includes(W.SAVE_FAILED) &&
+        !lines.includes(W.REFUSED) &&
+        !confirmBlock(i) &&
+        countOf(i) === '3 contacts' &&
+        rows(i).length === 3 &&
+        clearButton(i)?.props.disabled === false &&
+        local.m.get(LIST_KEY('user-a')) === before,
+      got: [lines, countOf(i), rows(i).length, !!confirmBlock(i)],
+    };
+  };
+  /** The line belongs to the last try: not there before, gone once a change saves or her list is read again. */
+  const lineComesAndGoes = () => {
+    const { CONTACTS_WORDS: W } = require('../src/lib/contacts/words');
+    const local = new MemStore();
+    seed(local, 'user-a', 4);
+    const i = screen('user-a', { local });
+    const notYet = !stateLines(i).includes(W.SAVE_FAILED);
+    local.failWrite = true;
+    press(i, buttons(rows(i)[0])[0]);
+    const shown = stateLines(i).includes(W.SAVE_FAILED);
+    local.failWrite = false;
+    press(i, buttons(rows(i)[0])[0]);
+    const goneAfterSave = !stateLines(i).includes(W.SAVE_FAILED) && countOf(i) === '3 contacts';
+    local.failWrite = true;
+    press(i, buttons(rows(i)[0])[0]);
+    const shownAgain = stateLines(i).includes(W.SAVE_FAILED);
+    local.failWrite = false;
+    fireStorage(i, LIST_KEY('user-a'));
+    const goneAfterRead = !stateLines(i).includes(W.SAVE_FAILED);
+    return {
+      ok: notYet && shown && goneAfterSave && shownAgain && goneAfterRead,
+      got: { notYet, shown, goneAfterSave, shownAgain, goneAfterRead },
+    };
+  };
+  check(
+    'R.6',
+    'Remove while the browser refuses to save: W42 is shown, not W16; the person is still listed; nothing stored changed',
+    () => failedRemove('refused')
+  );
+  check(
+    'R.7',
+    'Remove while the browser is full: the same W42, the person still listed, nothing stored changed',
+    () => failedRemove('full')
+  );
+  check(
+    'R.8',
+    'Clear while the browser refuses to remove: W42, the question closes, the whole list is still there, Clear is live again',
+    () => failedClear('refused')
+  );
+  check(
+    'R.9',
+    'Clear when the browser answers "no room": the same W42 and the same list (Clear never writes, so this is the one error the store reports as refused)',
+    () => failedClear('full')
+  );
+  check(
+    'R.10',
+    'W42 is not there before a failed try, goes when the next change saves, and goes when her list is read again',
+    lineComesAndGoes
+  );
+  check(
+    'R.11',
+    'break proofs (on in-memory copies of the screen): each fault below turns exactly the checks named red and leaves the others green',
+    () => {
+      const runs: Record<string, () => { ok: boolean }> = {
+        'R.6': () => failedRemove('refused'),
+        'R.7': () => failedRemove('full'),
+        'R.8': () => failedClear('refused'),
+        'R.9': () => failedClear('full'),
+        'R.10': lineComesAndGoes,
+      };
+      const verdict = (id: string) => {
+        try {
+          return runs[id]().ok ? 'green' : 'red';
+        } catch {
+          return 'threw';
+        }
+      };
+      // [what is wrong, the text it replaces (exactly once), the replacement, checks that go red]
+      const faults: Array<[string, string, string, string[]]> = [
+        [
+          'the line is never drawn',
+          '{saveFailed && !refused && (',
+          '{false && (',
+          ['R.6', 'R.7', 'R.8', 'R.9', 'R.10'],
+        ],
+        [
+          'the old W16 is drawn instead of W42',
+          '{W.SAVE_FAILED}',
+          '{W.REFUSED}',
+          ['R.6', 'R.7', 'R.8', 'R.9', 'R.10'],
+        ],
+        [
+          'a Remove that fails as "full" is not counted as a failure',
+          "const removeFailed = done.status !== 'ok';",
+          "const removeFailed = done.status === 'refused';",
+          ['R.7'],
+        ],
+        [
+          'the person leaves the screen though the save failed',
+          'if (!removeFailed) setContacts(done.contacts);',
+          'setContacts(contacts.filter((c) => c.id !== id));',
+          ['R.6', 'R.7', 'R.10'],
+        ],
+        [
+          'a failed Clear says nothing',
+          "const clearFailed = done.status !== 'ok';",
+          'const clearFailed = false;',
+          ['R.8', 'R.9'],
+        ],
+        [
+          'a good save does not take the line away',
+          'setSaveFailed(removeFailed);',
+          'if (removeFailed) setSaveFailed(true);',
+          ['R.10'],
+        ],
+        [
+          'reading her list again does not take the line away',
+          'setSaveFailed(false); // her list was read again: the old line is out of date',
+          '',
+          ['R.10'],
+        ],
+      ];
+      const src = read(SCREEN);
+      const report = faults.map(([what, from, to, red]) => {
+        const once = src.split(from).length === 2;
+        if (!once) return `${what}: its anchor is not in the screen exactly once`;
+        const bad = withScreenSource(
+          src.replace(from, () => to),
+          () =>
+            Object.keys(runs)
+              .map((id) => [id, verdict(id)] as const)
+              .filter(([id, v]) => v !== (red.includes(id) ? 'red' : 'green'))
+        );
+        return bad.length === 0 ? '' : `${what}: ${bad.map(([id, v]) => `${id} ${v}`).join(', ')}`;
+      });
+      const wrong = report.filter(Boolean);
+      return { ok: wrong.length === 0, got: wrong };
+    }
+  );
 
   // ══ T — TWO TABS ════════════════════════════════════════════════════════════
   section('T — two tabs of the page keep in step');

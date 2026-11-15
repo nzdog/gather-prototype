@@ -7,8 +7,10 @@
  * the ticket's list is not added here without the founder's ruling (ruling 7). Straight apostrophes,
  * as W2, W3 and W9 have them (ruling 103).
  *
- * Step 3a uses A5, W10 to W16, W18, W20, W31 and W41. The loading sentences (W17, W19, W21 to W30)
- * arrive with step 3b, and the placement and prompt sentences (W32 to W40) with 3c and 3d.
+ * Step 3a uses A5, W10 to W16, W18, W20, W31, W41 and W42 (W42 by ruling 172, 15 Nov 2026, for a
+ * Remove or a Clear that did not save; W16 stays for loading). The loading sentences (W17, W19,
+ * W21 to W30) arrive with step 3b, and the placement and prompt sentences (W32 to W40) with 3c
+ * and 3d.
  */
 export const CONTACTS_WORDS = {
   /** A5 (ruling 155): the line at the top of the page, not reworded. */
@@ -34,6 +36,8 @@ export const CONTACTS_WORDS = {
   BACK: 'Back to your households',
   /** W20: remove one person (read out as "Remove {name}"). */
   REMOVE: 'Remove',
+  /** W42 (ruling 172): a Remove or a Clear that did not save, whether the browser refused or was full. */
+  SAVE_FAILED: "That change didn't save. A private window can cause this. Try a normal window.",
   /** W31: the entry on the household form, large when only her own household is saved. */
   ENTRY_LARGE:
     'Got your guests in your phone or a spreadsheet? Load them as contacts, then pick them as you type.',
