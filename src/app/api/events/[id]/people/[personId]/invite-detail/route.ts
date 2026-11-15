@@ -73,10 +73,10 @@ export async function GET(
           },
           orderBy: { createdAt: 'desc' },
           take: 20,
+          // [[GTC-463]] (founder ruling, 15 Nov 2026): each log row goes as its type and time only.
           select: {
             type: true,
             createdAt: true,
-            metadata: true,
           },
         },
       },
@@ -177,7 +177,6 @@ export async function GET(
       inviteEvents: person.inviteEvents.map((e) => ({
         type: e.type,
         createdAt: e.createdAt.toISOString(),
-        metadata: e.metadata,
       })),
     });
   } catch (error) {

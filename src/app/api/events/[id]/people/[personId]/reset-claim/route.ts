@@ -44,7 +44,6 @@ export async function POST(
           select: {
             id: true,
             claimedAt: true,
-            claimedBy: true,
           },
         },
       },
@@ -64,8 +63,6 @@ export async function POST(
       return NextResponse.json({ error: 'Name is not claimed' }, { status: 400 });
     }
 
-    const previousClaimBy = accessToken.claimedBy;
-
     // Reset the claim
     await prisma.accessToken.update({
       where: { id: accessToken.id },
@@ -82,7 +79,6 @@ export async function POST(
       personId,
       type: 'CLAIM_RESET',
       metadata: {
-        previousClaimBy,
         personName: person.name,
       },
     });

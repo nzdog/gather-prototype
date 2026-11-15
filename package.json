@@ -195,7 +195,8 @@
     "test:demo-public": "tsx --tsconfig tests/tsconfig.json tests/demo-public-test.ts",
     "test:demo-delete-limits": "tsx tests/demo-delete-limits-test.ts",
     "test:glance-card-refresh": "NODE_OPTIONS=--experimental-websocket tsx tests/glance-card-refresh-test.ts",
-    "test:contact-import": "tsx --tsconfig tests/tsconfig.json tests/contact-import-test.ts"
+    "test:contact-import": "tsx --tsconfig tests/tsconfig.json tests/contact-import-test.ts",
+    "test:no-device-id": "tsx tests/no-device-id-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
