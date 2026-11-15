@@ -10,7 +10,8 @@
  * Step 3a uses A5, W10 to W16, W18, W20, W31, W41 and W42 (W42 by ruling 172, 15 Nov 2026, for a
  * Remove or a Clear that did not save; W16 stays for loading). Step 3b adds W17 and W21 to W30,
  * the loading sentences, with ruling 159's fix to W27, and W43 (ruling 173, 15 Nov 2026: odd letters
- * in a file). W19 and the placement and prompt sentences (W32 to W40) arrive with 3c and 3d.
+ * in a file). Step 3c adds W19 and W33 to W35 (the hand-off button, a contact already in this form,
+ * and the rows that take no pick). The placed and prompt sentences (W32, W36 to W40) arrive with 3d.
  */
 export const CONTACTS_WORDS = {
   /** A5 (ruling 155): the line at the top of the page, not reworded. */
@@ -79,6 +80,15 @@ export const CONTACTS_WORDS = {
   FIELD_PHONE: 'Phone',
   FIELD_OTHER: 'Another number or email',
   DONE: 'Done',
+  /** W19: the hand-off button on a person, from an event only. */
+  ADD_TO_HOUSEHOLD: 'Add to this household',
+  /** W33: a contact already in another row of this form (greyed). */
+  ALREADY_IN_FORM: 'Already added to this household',
+  /** W34: a saved row takes no pick (ruling 51); a partner, kid or guest also gets the second sentence. */
+  SAVED_ROW: "This person is already saved, so a contact can't replace them.",
+  SAVED_ROW_REMOVE: 'To use a contact instead, remove them and add a new person.',
+  /** W35: her own row takes no pick (ruling 51). */
+  OWN_ROW: "This is you, so a contact can't replace you.",
   /** W31: the entry on the household form, large when only her own household is saved. */
   ENTRY_LARGE:
     'Got your guests in your phone or a spreadsheet? Load them as contacts, then pick them as you type.',

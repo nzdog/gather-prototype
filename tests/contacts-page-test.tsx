@@ -170,7 +170,9 @@ function seed(store: MemStore, userId: string, n: number) {
 interface Win {
   localStorage: MemStore;
   sessionStorage: MemStore;
-  location: { search: string };
+  location: { search: string; assign(href: string): void };
+  /** Every address the page was sent to (window.location.assign). */
+  assigned: string[];
   listeners: Record<string, Array<(e: any) => void>>;
   confirmCalls: number;
   addEventListener(t: string, f: (e: any) => void): void;
@@ -194,7 +196,13 @@ function makeWindow(
   const w: Win = {
     localStorage: over.local ?? new MemStore(),
     sessionStorage: over.session ?? new MemStore(),
-    location: { search: over.search ?? '' },
+    location: {
+      search: over.search ?? '',
+      assign(href: string) {
+        w.assigned.push(href);
+      },
+    },
+    assigned: [],
     listeners: {},
     confirmCalls: 0,
     addEventListener(t, f) {
@@ -2177,6 +2185,87 @@ async function main() {
       };
     }
   );
+  const addButton = (r: El | undefined) => buttonText(r, WW().ADD_TO_HOUSEHOLD);
+  const seedList = (local: MemStore) => {
+    seed(local, 'user-a', 3);
+    return local;
+  };
+  await lcheck(
+    'L.23',
+    'from an event each person has "Add to this household" (W19), after Remove; with no event, or one that is not an id, none is drawn',
+    () => {
+      const withEvent = screen('user-a', { local: seedList(new MemStore()), search: '?event=ev1' });
+      const noEvent = screen('user-a', { local: seedList(new MemStore()) });
+      const badEvent = screen('user-a', { local: seedList(new MemStore()), search: '?event=../x' });
+      const first = rows(withEvent)[0];
+      const labels = buttons(first).map((b) => textOf(b).trim());
+      return {
+        ok:
+          rows(withEvent).length === 3 &&
+          rows(withEvent).every((r) => !!addButton(r)) &&
+          labels[0] === 'Remove' &&
+          labels[1] === WW().ADD_TO_HOUSEHOLD &&
+          WW().ADD_TO_HOUSEHOLD === 'Add to this household' &&
+          rows(noEvent).every((r) => !addButton(r)) &&
+          rows(badEvent).every((r) => !addButton(r)),
+        got: labels,
+      };
+    }
+  );
+  await lcheck(
+    'L.24',
+    'pressing it leaves one note in this tab (no name, email or number) for the right form and goes back to that form in the same tab, even if the note cannot be kept',
+    () => {
+      const trip = (search: string) => {
+        const local = seedList(new MemStore());
+        const session = new MemStore();
+        const win = makeWindow({ local, session, search });
+        const i = mount(SCREEN, SCREEN_PROPS, { viewerId: 'user-a', win });
+        press(i, addButton(rows(i)[1]));
+        return { win, notes: [...session.m.entries()], local };
+      };
+      const plain = trip('?event=ev1');
+      const host = trip('?event=ev1&form=host');
+      const edit = trip('?event=ev1&edit=hh7');
+      const parsed = (t: ReturnType<typeof trip>) =>
+        t.notes.length === 1 ? JSON.parse(t.notes[0][1]) : null;
+      const p = parsed(plain);
+      const refusing = new MemStore();
+      refusing.failWrite = true;
+      const winR = makeWindow({
+        local: seedList(new MemStore()),
+        session: refusing,
+        search: '?event=ev1',
+      });
+      const iR = mount(SCREEN, SCREEN_PROPS, { viewerId: 'user-a', win: winR });
+      press(iR, addButton(rows(iR)[0]));
+      const text = JSON.stringify(plain.notes);
+      return {
+        ok:
+          plain.notes.length === 1 &&
+          plain.notes[0][0] === 'gather:contact-handoff:v1:user-a:ev1' &&
+          p.contactId === 'c2' &&
+          p.form === 'new' &&
+          p.userId === 'user-a' &&
+          p.eventId === 'ev1' &&
+          Object.keys(p).sort().join() === 'at,contactId,eventId,form,userId,v' &&
+          !text.includes('Person 2') &&
+          !text.includes('@example.com') &&
+          !text.includes('021 555') &&
+          plain.win.assigned.join() === '/plan/ev1/setup?at=people' &&
+          parsed(host)?.form === 'host' &&
+          host.win.assigned.join() === '/plan/ev1/setup?at=people' &&
+          parsed(edit)?.form === 'edit:hh7' &&
+          edit.win.assigned.join() === '/plan/ev1/setup?at=people&edit=hh7' &&
+          storedList(plain.local).length === 3 &&
+          winR.assigned.join() === '/plan/ev1/setup?at=people',
+        got: {
+          notes: plain.notes.length,
+          assigned: [plain.win.assigned, host.win.assigned, edit.win.assigned, winR.assigned],
+        },
+      };
+    }
+  );
   await checkAsync(
     'L.21',
     'break proofs (on in-memory copies of the screen, the loading area and the row): each fault turns exactly the checks named red and leaves the others green',
@@ -2277,6 +2366,20 @@ async function main() {
           'disabled: refused,',
           'disabled: false,',
           ['L.2', 'L.15', 'L.20'],
+        ],
+        [
+          'the hand-off button is drawn without an event',
+          S,
+          'onAdd: back ? () => addToHousehold(c) : undefined,',
+          'onAdd: () => addToHousehold(c),',
+          ['L.10', 'L.23'],
+        ],
+        [
+          'the hand-off goes back to the wrong place',
+          S,
+          'window.location.assign(back);',
+          "window.location.assign('/plan');",
+          ['L.24'],
         ],
         ['W43 is left out of the loading area', LB, '{W.FILE_ODD_LETTERS}', '', ['L.22']],
       ];

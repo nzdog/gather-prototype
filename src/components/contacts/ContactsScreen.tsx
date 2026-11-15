@@ -50,6 +50,7 @@ import {
 } from '@/lib/contacts/load';
 import type { ReadResult } from '@/lib/contact-import/types';
 import { pickPeople, pickerAvailable, type PickerEnv } from '@/lib/contacts/picker';
+import { writeHandoff, type HandoffForm } from '@/lib/contacts/handoff';
 import { renderLoadBox } from '@/components/contacts/LoadBox';
 import { renderRow, type PanelField, type RowPanel } from '@/components/contacts/ContactRow';
 
@@ -260,6 +261,28 @@ export default function ContactsScreen() {
   };
 
   const back = mounted ? backHref(address) : null;
+
+  /**
+   * W19: "Add to this household". Leaves ONE note in this tab (no name, email or number), then goes back
+   * to the form she left, in the same tab. If the tab will not keep the note she still goes back, with
+   * her draft kept; the form simply has nothing to add.
+   */
+  const addToHousehold = (c: Contact) => {
+    if (!viewerId || !address.eventId || !back) return;
+    const form: HandoffForm = address.editId
+      ? `edit:${address.editId}`
+      : address.form === 'host'
+        ? 'host'
+        : 'new';
+    writeHandoff(browserTabStore(), {
+      userId: viewerId,
+      eventId: address.eventId,
+      form,
+      contactId: c.id,
+      now: Date.now(),
+    });
+    window.location.assign(back);
+  };
   const n = contacts.length;
   const openPanel = panel && contacts.some((c) => c.id === panel.id) ? panel : null;
   const liveFor = (c: Contact): string[] =>
@@ -392,6 +415,7 @@ export default function ContactsScreen() {
                     live: liveFor(c),
                     doneOff: openPanel?.kind === 'check' && openPanel.name.trim() === '',
                     onRemove: () => remove(c.id),
+                    onAdd: back ? () => addToHousehold(c) : undefined,
                     onOpen: (kind) => open(c, kind),
                     onSkip: () => save(skipIt(c)),
                     onType: typeInPanel,

@@ -12,6 +12,16 @@ import { moment1ChannelChoices } from '@/components/plan/household-channel-choic
 import { ViewerIdContext } from '@/components/shared/Providers';
 import { contactsHref } from '@/lib/contacts/address';
 import { CONTACTS_WORDS } from '@/lib/contacts/words';
+import ContactPicks from '@/components/contacts/ContactPicks';
+import { matchContacts } from '@/lib/contacts/match';
+import { fillFrom } from '@/lib/contacts/fill';
+import { takeHandoff } from '@/lib/contacts/handoff';
+import {
+  browserContactsStore,
+  browserTabStore,
+  readContacts,
+  type Contact,
+} from '@/lib/contacts/store';
 import {
   DRAFT_KEEP_WORDS,
   browserDraftStore,
@@ -166,6 +176,8 @@ interface GuestForm {
    * above is off, and never on together with it (the tick wins, ruling 20). Off by default.
    */
   decideLater?: boolean;
+  /** [[GTC-460]] (3c): the loaded contact this row was picked from (an id only; never sent). */
+  contactId?: string;
 }
 
 /**
@@ -354,6 +366,15 @@ export default function Moment1InputForm({
   const [guests, setGuests] = useState<GuestForm[]>([]);
   const [guestErrors, setGuestErrors] = useState<{ email?: string; phone?: string }[]>([]);
 
+  // [[GTC-460]] (3c): picking from her own loaded contacts. The list is read from this browser after
+  // the form has mounted; with none, nothing below draws anything.
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contactsLoaded, setContactsLoaded] = useState(false);
+  const [picking, setPicking] = useState<{ key: string; highlight: number } | null>(null);
+  const [mainFrom, setMainFrom] = useState<string | undefined>(undefined);
+  const [partnerFrom, setPartnerFrom] = useState<string | undefined>(undefined);
+  const handoffGuest = useRef<Contact | null>(null);
+
   // Unified ordering: newest-first across all named member types
   const [memberOrder, setMemberOrder] = useState<
     Array<{ type: 'partner' | 'helper' | 'guest'; id: string }>
@@ -474,18 +495,21 @@ export default function Moment1InputForm({
       email: r.email,
       phone: r.phone,
       ...(r.personEventId ? { personEventId: r.personEventId } : {}),
+      ...(r.contactId ? { contactId: r.contactId } : {}),
     });
     return {
       name,
       // Her own step's email is her account's, read from it each time, never kept.
       email: hostMode ? '' : email,
       phone,
+      ...(mainFrom ? { contactId: mainFrom } : {}),
       showPartner,
       partner: {
         name: partnerName,
         email: partnerEmail,
         phone: partnerPhone,
         ...(partnerPersonEventId ? { personEventId: partnerPersonEventId } : {}),
+        ...(partnerFrom ? { contactId: partnerFrom } : {}),
       },
       helpers: helpers.map((h) => ({
         ...row(h),
@@ -518,6 +542,8 @@ export default function Moment1InputForm({
     setPartnerEmail(s.partner.email);
     setPartnerPhone(s.partner.phone);
     setPartnerPersonEventId(s.partner.personEventId);
+    setMainFrom(s.contactId);
+    setPartnerFrom(s.partner.contactId);
     setPartnerEmailError('');
     setPartnerPhoneError('');
     const hs: GuestForm[] = s.helpers.map((h) => ({
@@ -529,6 +555,7 @@ export default function Moment1InputForm({
       adultRoled: h.adultRoled ?? false,
       // An older draft has no marker (off). If a draft ever held both, the tick wins (ruling 20).
       decideLater: onDecideLater(h),
+      contactId: h.contactId,
     }));
     const gs: GuestForm[] = s.guests.map((g) => ({
       id: `f-${++formIdCounter}`,
@@ -536,6 +563,7 @@ export default function Moment1InputForm({
       name: g.name,
       email: g.email,
       phone: g.phone,
+      contactId: g.contactId,
     }));
     setHelpers(hs);
     setHelperErrors(hs.map(() => ({})));
@@ -714,6 +742,8 @@ export default function Moment1InputForm({
   // Populate form when editingHousehold changes
   useEffect(() => {
     if (!editingHousehold) return;
+    setMainFrom(undefined);
+    setPartnerFrom(undefined);
     setName(editingHousehold.primaryContact.name);
     setEmail(editingHousehold.primaryContact.email || '');
     setPhone(editingHousehold.primaryContact.phone || '');
@@ -883,6 +913,9 @@ export default function Moment1InputForm({
     setGuestErrors([]);
     setFixPrompt(false);
     setMemberOrder([]);
+    setMainFrom(undefined);
+    setPartnerFrom(undefined);
+    setPicking(null);
     setReopened((n) => n + 1);
     nameInputRef.current?.focus();
   }, []);
@@ -1182,6 +1215,230 @@ export default function Moment1InputForm({
     setGuests((prev) => prev.map((g, i) => (i === index ? { ...g, [field]: value } : g)));
   };
 
+  /*
+   * [[GTC-460]] (Stage 3, 3c) — PICKING FROM HER OWN LOADED CONTACTS (D8 to D12, rulings 39, 51, 163, 175).
+   * The boxes stay the form's own (same hint text, ids and error markers). Typing in a name box that takes a
+   * pick drops a short list under it (`ContactPicks`); one tap fills the row exactly; a pick never ticks
+   * "Old enough to message directly" and a kid's row gets the name only (the child prompt is step 3d).
+   * Which rows take a pick is decided from the row, never from the name: a new or unsaved row takes one;
+   * a saved row and her own row take none and say why (W34, W35), and only when something would have
+   * matched. With no list loaded, none of this draws anything. Rows remember the contact they came from
+   * by id (the draft keeps it too); that is how a person already in another row is greyed (W33). The
+   * hand-off from the contacts page lands after the saved draft is checked, once.
+   */
+  useEffect(() => {
+    if (!viewerId) {
+      setContacts([]);
+      setContactsLoaded(true);
+      return;
+    }
+    const read = readContacts(browserContactsStore(), viewerId);
+    setContacts(read.status === 'ok' ? read.contacts : []);
+    setContactsLoaded(true);
+  }, [viewerId]);
+
+  useEffect(() => {
+    if (!showPartner) setPartnerFrom(undefined);
+  }, [showPartner]);
+
+  const usedIds = (except: string) => {
+    const ids = new Set<string>();
+    if (mainFrom && except !== 'main') ids.add(mainFrom);
+    if (partnerFrom && except !== 'partner') ids.add(partnerFrom);
+    for (const h of helpers) if (h.contactId && except !== `helper:${h.id}`) ids.add(h.contactId);
+    for (const g of guests) if (g.contactId && except !== `guest:${g.id}`) ids.add(g.contactId);
+    return ids;
+  };
+
+  const rowTakes = (key: string): 'adult' | 'kid' | 'own' | 'saved-main' | 'saved' => {
+    if (key === 'main') {
+      if (hostMode || editingHousehold?.isHostHousehold) return 'own';
+      return editingHousehold ? 'saved-main' : 'adult';
+    }
+    if (key === 'partner') {
+      return partnerPersonEventId ? 'saved' : 'adult';
+    }
+    if (key.startsWith('helper:')) {
+      const h = helpers.find((x) => `helper:${x.id}` === key);
+      return h?.personEventId ? 'saved' : 'kid';
+    }
+    const g = guests.find((x) => `guest:${x.id}` === key);
+    return g?.personEventId ? 'saved' : 'adult';
+  };
+
+  const pickLines = (key: string, value: string) =>
+    matchContacts(contacts, value, {
+      taken: (c) => (usedIds(key).has(c.id) ? CONTACTS_WORDS.ALREADY_IN_FORM : undefined),
+    });
+
+  const clearMark = (key: string) => {
+    if (key === 'main') setMainFrom(undefined);
+    else if (key === 'partner') setPartnerFrom(undefined);
+    else if (key.startsWith('helper:'))
+      setHelpers((prev) =>
+        prev.map((h) => (`helper:${h.id}` === key ? { ...h, contactId: undefined } : h))
+      );
+    else
+      setGuests((prev) =>
+        prev.map((g) => (`guest:${g.id}` === key ? { ...g, contactId: undefined } : g))
+      );
+  };
+
+  /** Called as a name box changes: opens the list for that box, or closes it and forgets the mark if the box is empty. */
+  const openPicks = (key: string, value: string) => {
+    if (value.trim() === '') {
+      setPicking(null);
+      clearMark(key);
+    } else {
+      setPicking({ key, highlight: 0 });
+    }
+  };
+
+  const applyPick = (key: string, c: Contact, takes: string) => {
+    const f = fillFrom(c, takes === 'kid' ? 'kid' : 'adult');
+    if (key === 'main') {
+      setName(f.name);
+      setEmail(f.email);
+      setPhone(f.phone);
+      setNameError('');
+      setEmailError('');
+      setPhoneError('');
+      setMainFrom(c.id);
+    } else if (key === 'partner') {
+      setPartnerName(f.name);
+      setPartnerEmail(f.email);
+      setPartnerPhone(f.phone);
+      setPartnerEmailError('');
+      setPartnerPhoneError('');
+      setPartnerFrom(c.id);
+    } else if (key.startsWith('helper:')) {
+      const at = helpers.findIndex((h) => `helper:${h.id}` === key);
+      setHelpers((prev) =>
+        prev.map((h) => (`helper:${h.id}` === key ? { ...h, ...f, contactId: c.id } : h))
+      );
+      setHelperErrors((prev) => prev.map((err, j) => (j === at ? {} : err)));
+    } else {
+      const at = guests.findIndex((g) => `guest:${g.id}` === key);
+      setGuests((prev) =>
+        prev.map((g) => (`guest:${g.id}` === key ? { ...g, ...f, contactId: c.id } : g))
+      );
+      setGuestErrors((prev) => prev.map((err, j) => (j === at ? {} : err)));
+    }
+    setPicking(null);
+  };
+
+  /** What goes under a name box: the list, or the quiet line saying why there is none, or nothing. */
+  const picksFor = (key: string, value: string) => {
+    if (picking?.key !== key) return null;
+    const takes = rowTakes(key);
+    const lines = pickLines(key, value);
+    if (lines.length === 0) return null;
+    const say = (text: string) => (
+      <p data-contacts-why className="mt-1 text-xs text-gray-500">
+        {text}
+      </p>
+    );
+    if (takes === 'own') return say(CONTACTS_WORDS.OWN_ROW);
+    if (takes === 'saved-main') return say(CONTACTS_WORDS.SAVED_ROW);
+    if (takes === 'saved') {
+      return say(`${CONTACTS_WORDS.SAVED_ROW} ${CONTACTS_WORDS.SAVED_ROW_REMOVE}`);
+    }
+    return (
+      <ContactPicks
+        lines={lines}
+        highlight={picking.highlight}
+        onPick={(c) => applyPick(key, c, takes)}
+      />
+    );
+  };
+
+  /** The keyboard on a name box: Down and Up move along the list, Enter picks, Escape closes. */
+  const picksKey = (key: string, value: string) => (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (picking?.key !== key) return;
+    const takes = rowTakes(key);
+    if (takes !== 'adult' && takes !== 'kid') return;
+    if (e.key === 'Escape') {
+      setPicking(null);
+      return;
+    }
+    const lines = pickLines(key, value);
+    if (lines.length === 0) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const next =
+        (picking.highlight + (e.key === 'ArrowDown' ? 1 : lines.length - 1)) % lines.length;
+      setPicking({ key, highlight: next });
+      return;
+    }
+    if (e.key === 'Enter') {
+      const l = lines[picking.highlight];
+      if (l && !l.taken) {
+        e.preventDefault();
+        applyPick(key, l.contact, takes);
+      }
+    }
+  };
+
+  // A tap, or focus moving, anywhere but the open box or its list closes the list.
+  useEffect(() => {
+    const doc = typeof window === 'undefined' ? undefined : window.document;
+    if (!picking || !doc) return;
+    const away = (e: Event) => {
+      const t = e.target as Element | null;
+      const owner = t?.closest?.('[data-pick-field]')?.getAttribute('data-pick-field');
+      if (owner === picking.key || t?.closest?.('[data-contacts-picks]')) return;
+      setPicking(null);
+    };
+    doc.addEventListener('mousedown', away);
+    doc.addEventListener('focusin', away);
+    return () => {
+      doc.removeEventListener('mousedown', away);
+      doc.removeEventListener('focusin', away);
+    };
+    // Set up when a list opens or moves to another box; the handler reads only what it is given.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picking?.key]);
+
+  // The hand-off from the contacts page: once, after the saved draft has been checked (and put back),
+  // into an empty main contact of a new household, else a new guest row, never a kid's row.
+  useEffect(() => {
+    if (!viewerId || !contactsLoaded || draftChecked !== draftForm) return;
+    const taken = takeHandoff(browserTabStore(), {
+      userId: viewerId,
+      eventId,
+      form: draftForm,
+      now: Date.now(),
+    });
+    if (!taken) return;
+    const c = contacts.find((x) => x.id === taken.contactId);
+    if (!c || usedIds('').has(c.id)) return;
+    const mainEmpty =
+      draftForm === 'new' && !name.trim() && !email.trim() && !phone.trim() && !mainFrom;
+    if (mainEmpty) {
+      const f = fillFrom(c, 'adult');
+      setName(f.name);
+      setEmail(f.email);
+      setPhone(f.phone);
+      setMainFrom(c.id);
+    } else {
+      handoffGuest.current = c;
+      addGuest();
+    }
+    // Runs when the draft check settles (or her list arrives); the note is taken once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewerId, contactsLoaded, draftChecked, draftForm]);
+
+  // ...and the new guest row that `addGuest` just made takes the person.
+  useEffect(() => {
+    const c = handoffGuest.current;
+    if (!c || guests.length === 0) return;
+    const g = guests[0];
+    if (g.name || g.email || g.phone || g.contactId) return;
+    handoffGuest.current = null;
+    const f = fillFrom(c, 'adult');
+    setGuests((prev) => prev.map((x, n) => (n === 0 ? { ...x, ...f, contactId: c.id } : x)));
+  }, [guests]);
+
   return (
     <div>
       <div className="max-w-[640px]">
@@ -1318,10 +1575,13 @@ export default function Moment1InputForm({
                 id="m1-name"
                 type="text"
                 value={name}
+                data-pick-field="main"
+                onKeyDown={picksKey('main', name)}
                 onChange={(e) => {
                   setName(e.target.value);
                   if (nameError) setNameError('');
                   if (saveError) setSaveError(false);
+                  openPicks('main', e.target.value);
                 }}
                 placeholder="e.g. Sarah Mitchell"
                 aria-invalid={nameError ? true : undefined}
@@ -1329,6 +1589,7 @@ export default function Moment1InputForm({
                   nameError ? 'border-red-400' : 'border-gray-300'
                 }`}
               />
+              {picksFor('main', name)}
               {nameError && <p className="text-sm text-red-500 mt-1">{nameError}</p>}
             </div>
 
@@ -1493,11 +1754,17 @@ export default function Moment1InputForm({
                     <input
                       type="text"
                       value={partnerName}
-                      onChange={(e) => setPartnerName(e.target.value)}
+                      data-pick-field="partner"
+                      onKeyDown={picksKey('partner', partnerName)}
+                      onChange={(e) => {
+                        setPartnerName(e.target.value);
+                        openPicks('partner', e.target.value);
+                      }}
                       placeholder="Partner's name"
                       autoFocus={orderIdx === 0}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                     />
+                    {picksFor('partner', partnerName)}
                     <div>
                       <input
                         type="email"
@@ -1568,7 +1835,10 @@ export default function Moment1InputForm({
                               prev.map((err, j) => (j === i ? { ...err, name: undefined } : err))
                             );
                           }
+                          openPicks(`helper:${helper.id}`, e.target.value);
                         }}
+                        data-pick-field={`helper:${helper.id}`}
+                        onKeyDown={picksKey(`helper:${helper.id}`, helper.name)}
                         placeholder="Kid's name"
                         autoFocus={orderIdx === 0}
                         aria-invalid={helperErrors[i]?.name ? true : undefined}
@@ -1576,6 +1846,7 @@ export default function Moment1InputForm({
                           helperErrors[i]?.name ? 'border-red-400' : 'border-gray-300'
                         }`}
                       />
+                      {picksFor(`helper:${helper.id}`, helper.name)}
                       {helperErrors[i]?.name && (
                         <p className="text-sm text-red-500 mt-1">{helperErrors[i].name}</p>
                       )}
@@ -1771,11 +2042,17 @@ export default function Moment1InputForm({
                     <input
                       type="text"
                       value={guest.name}
-                      onChange={(e) => updateGuest(i, 'name', e.target.value)}
+                      data-pick-field={`guest:${guest.id}`}
+                      onKeyDown={picksKey(`guest:${guest.id}`, guest.name)}
+                      onChange={(e) => {
+                        updateGuest(i, 'name', e.target.value);
+                        openPicks(`guest:${guest.id}`, e.target.value);
+                      }}
                       placeholder="Guest's name"
                       autoFocus={orderIdx === 0}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                     />
+                    {picksFor(`guest:${guest.id}`, guest.name)}
                     <div>
                       <input
                         type="email"

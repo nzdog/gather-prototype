@@ -39,6 +39,8 @@ export type RowProps = {
   live: string[];
   doneOff: boolean;
   onRemove: () => void;
+  /** From an event only: leaves a note for the household form and goes back to it (W19). */
+  onAdd?: () => void;
   onOpen: (kind: 'check' | 'other') => void;
   onSkip: () => void;
   onType: (field: PanelField, value: string) => void;
@@ -91,6 +93,14 @@ export function renderRow(p: RowProps) {
           {W.REMOVE}
         </button>
       </div>
+
+      {p.onAdd && (
+        <div className="mt-2">
+          <button type="button" onClick={p.onAdd} className={WAY}>
+            {W.ADD_TO_HOUSEHOLD}
+          </button>
+        </div>
+      )}
 
       {flagged && (
         <div className="mt-2 text-sm">
