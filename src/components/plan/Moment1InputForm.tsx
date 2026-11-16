@@ -16,6 +16,15 @@ import ContactPicks from '@/components/contacts/ContactPicks';
 import { matchContacts } from '@/lib/contacts/match';
 import { fillFrom } from '@/lib/contacts/fill';
 import { takeHandoff } from '@/lib/contacts/handoff';
+import type { PickedRow } from '@/lib/contacts/placed';
+import {
+  alreadyInWords,
+  promptAsk,
+  promptDont,
+  promptInfo,
+  promptMessage,
+  promptWarning,
+} from '@/lib/contacts/words';
 import {
   browserContactsStore,
   browserTabStore,
@@ -119,9 +128,13 @@ interface Moment1InputFormProps {
   eventId: string;
   eventName: string;
   onComplete: () => void;
-  onAddPerson: (person: Moment1PersonInput) => Promise<void>;
+  onAddPerson: (person: Moment1PersonInput, picked?: PickedRow[]) => Promise<void>;
   editingHousehold?: SavedHousehold | null;
-  onEditSave?: (householdId: string, person: Moment1PersonInput) => Promise<void>;
+  onEditSave?: (
+    householdId: string,
+    person: Moment1PersonInput,
+    picked?: PickedRow[]
+  ) => Promise<void>;
   onCancelEdit?: () => void;
   totalPeopleCount?: number;
   channelCandidates?: ChannelCandidateOption[];
@@ -132,7 +145,7 @@ interface Moment1InputFormProps {
    * is byte-for-byte what it was.
    */
   hostMode?: { name: string; email: string | null; phone: string | null };
-  onSaveHostHousehold?: (payload: HostHouseholdPayload) => Promise<void>;
+  onSaveHostHousehold?: (payload: HostHouseholdPayload, picked?: PickedRow[]) => Promise<void>;
   /**
    * [[GTC-365]] item 16 — told what is typed so far (`householdDraft`), or null, on every change, so
    * the column can show the household before Save. Never called in `hostMode`. Nothing is saved.
@@ -160,6 +173,11 @@ interface Moment1InputFormProps {
    * nowhere else, so every other use of this form is byte-for-byte what it was.
    */
   invitationsSent?: boolean;
+  /**
+   * [[GTC-460]] (3d): her contacts already placed in a household of this event that still holds, by the
+   * contact's id, with that household's main contact's name (W32). Optional; none means none are greyed.
+   */
+  contactsPlaced?: Record<string, string>;
 }
 
 interface GuestForm {
@@ -314,6 +332,7 @@ export default function Moment1InputForm({
   stripDoors,
   resumeEdit,
   invitationsSent,
+  contactsPlaced = {},
 }: Moment1InputFormProps) {
   // Primary contact
   const [name, setName] = useState('');
@@ -374,6 +393,10 @@ export default function Moment1InputForm({
   const [mainFrom, setMainFrom] = useState<string | undefined>(undefined);
   const [partnerFrom, setPartnerFrom] = useState<string | undefined>(undefined);
   const handoffGuest = useRef<Contact | null>(null);
+  // [[GTC-460]] (3d): the kid's row waiting for her answer to the child prompt, and the row whose details
+  // she has just let in (W37 shows until anything in that row changes).
+  const [prompt, setPrompt] = useState<string | null>(null);
+  const [told, setTold] = useState<{ id: string; key: string } | null>(null);
 
   // Unified ordering: newest-first across all named member types
   const [memberOrder, setMemberOrder] = useState<
@@ -916,6 +939,8 @@ export default function Moment1InputForm({
     setMainFrom(undefined);
     setPartnerFrom(undefined);
     setPicking(null);
+    setPrompt(null);
+    setTold(null);
     setReopened((n) => n + 1);
     nameInputRef.current?.focus();
   }, []);
@@ -1077,7 +1102,7 @@ export default function Moment1InputForm({
     setSaveError(false);
     try {
       const payload = buildPayload();
-      await onAddPerson(payload);
+      await onAddPerson(payload, pickedRows());
       if (totalPeopleCount === undefined) {
         setInternalPeopleAdded((prev) => prev + countMembers(payload));
       }
@@ -1097,7 +1122,7 @@ export default function Moment1InputForm({
     setSaveError(false);
     try {
       const payload = buildPayload();
-      await onEditSave(editingHousehold.id, payload);
+      await onEditSave(editingHousehold.id, payload, pickedRows());
       resetForm();
     } catch {
       // [[GTC-433]]: a failed save says so, as the other two Save buttons do, and keeps the form
@@ -1131,7 +1156,7 @@ export default function Moment1InputForm({
       setSaveError(false);
       try {
         const payload = buildPayload();
-        await onAddPerson(payload);
+        await onAddPerson(payload, pickedRows()); // ruling 179: Save & move on remembers its picks too
         if (totalPeopleCount === undefined) {
           setInternalPeopleAdded((prev) => prev + countMembers(payload));
         }
@@ -1178,16 +1203,19 @@ export default function Moment1InputForm({
     setSaveError(false);
     try {
       const base = buildPayload();
-      await onSaveHostHousehold({
-        alone: hostingAlone,
-        name: base.primaryContact.name,
-        phone: base.primaryContact.phone,
-        partner: hostingAlone ? undefined : base.partner,
-        helpers: hostingAlone ? undefined : base.helpers,
-        littleCount: hostingAlone ? 0 : base.littleCount,
-        guests: hostingAlone ? undefined : base.guests,
-        messagesMuted: hostingAlone ? true : messagesMuted,
-      });
+      await onSaveHostHousehold(
+        {
+          alone: hostingAlone,
+          name: base.primaryContact.name,
+          phone: base.primaryContact.phone,
+          partner: hostingAlone ? undefined : base.partner,
+          helpers: hostingAlone ? undefined : base.helpers,
+          littleCount: hostingAlone ? 0 : base.littleCount,
+          guests: hostingAlone ? undefined : base.guests,
+          messagesMuted: hostingAlone ? true : messagesMuted,
+        },
+        pickedRows()
+      );
       forgetDraft('host');
     } catch {
       setSaveError(true);
@@ -1266,9 +1294,13 @@ export default function Moment1InputForm({
     return g?.personEventId ? 'saved' : 'adult';
   };
 
+  /** W32: this contact is already in a household of this event (the main contact's name), or nothing. */
+  const placedNote = (id: string) =>
+    contactsPlaced[id] ? alreadyInWords(contactsPlaced[id]) : undefined;
+
   const pickLines = (key: string, value: string) =>
     matchContacts(contacts, value, {
-      taken: (c) => (usedIds(key).has(c.id) ? CONTACTS_WORDS.ALREADY_IN_FORM : undefined),
+      taken: (c) => (usedIds(key).has(c.id) ? CONTACTS_WORDS.ALREADY_IN_FORM : placedNote(c.id)),
     });
 
   const clearMark = (key: string) => {
@@ -1313,10 +1345,18 @@ export default function Moment1InputForm({
       setPartnerFrom(c.id);
     } else if (key.startsWith('helper:')) {
       const at = helpers.findIndex((h) => `helper:${h.id}` === key);
+      const row = helpers[at];
+      // A kid she has already decided about (the tick is on, or Decide later is chosen) takes the details
+      // at once (R7). An undecided kid with a number or an email is asked first (W36) and holds only the
+      // name until she chooses; with neither, there is nothing to ask.
+      const decided = Boolean(row && (row.adultRoled || onDecideLater(row)));
+      const ask = !decided && Boolean(c.email || c.phone);
+      const fill = decided ? fillFrom(c, 'adult') : f;
       setHelpers((prev) =>
-        prev.map((h) => (`helper:${h.id}` === key ? { ...h, ...f, contactId: c.id } : h))
+        prev.map((h) => (`helper:${h.id}` === key ? { ...h, ...fill, contactId: c.id } : h))
       );
       setHelperErrors((prev) => prev.map((err, j) => (j === at ? {} : err)));
+      setPrompt(ask && row ? row.id : null);
     } else {
       const at = guests.findIndex((g) => `guest:${g.id}` === key);
       setGuests((prev) =>
@@ -1379,6 +1419,111 @@ export default function Moment1InputForm({
     }
   };
 
+  /**
+   * The rows that came from a contact, named rows only, for the save to remember (step 3d, plan section 6):
+   * the contact's id, the name, adult or kid and a kid's outcome. Never the contact's details; the payload
+   * itself is unchanged.
+   */
+  const pickedRows = (): PickedRow[] => [
+    ...(mainFrom && name.trim()
+      ? [{ contactId: mainFrom, name: name.trim(), role: 'adult' as const }]
+      : []),
+    ...(showPartner && partnerFrom && partnerName.trim()
+      ? [{ contactId: partnerFrom, name: partnerName.trim(), role: 'adult' as const }]
+      : []),
+    ...helpers
+      .filter((h) => h.contactId && h.name.trim())
+      .map((h) => ({
+        contactId: h.contactId as string,
+        name: h.name.trim(),
+        role: 'kid' as const,
+        outcome: (h.adultRoled ? 'message' : onDecideLater(h) ? 'later' : 'plain') as
+          | 'message'
+          | 'later'
+          | 'plain',
+      })),
+    ...guests
+      .filter((g) => g.contactId && g.name.trim())
+      .map((g) => ({
+        contactId: g.contactId as string,
+        name: g.name.trim(),
+        role: 'adult' as const,
+      })),
+  ];
+
+  const contactOf = (id?: string) => (id ? contacts.find((x) => x.id === id) : undefined);
+  const rowKey = (h: GuestForm) =>
+    [h.name, h.email, h.phone, h.adultRoled, onDecideLater(h)].join('|');
+
+  /** Her answer to the child prompt (W36): Message, Don't message, or Decide later. */
+  const answerPrompt = (id: string, choice: 'message' | 'dont' | 'later') => {
+    const h = helpers.find((x) => x.id === id);
+    const c = contactOf(h?.contactId);
+    setPrompt(null);
+    if (!h || !c || choice === 'dont') return;
+    const next = {
+      ...h,
+      email: c.email ?? '',
+      phone: c.phone ?? '',
+      ...(choice === 'later' ? { decideLater: true } : {}),
+    };
+    setHelpers((prev) => prev.map((x) => (x.id === id ? next : x)));
+    if (choice === 'message') setTold({ id, key: rowKey(next) });
+  };
+
+  /** The child prompt under a kid's name box, while it waits for her answer. */
+  const promptFor = (h: GuestForm) => {
+    const c = contactOf(h.contactId);
+    if (prompt !== h.id || !c || !(c.email || c.phone)) return null;
+    const n = h.name.trim();
+    const button =
+      'px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white text-gray-800 hover:bg-gray-50';
+    return (
+      <div data-contacts-prompt className="mt-2 rounded-md border border-gray-200 bg-white p-3">
+        <p className="text-sm text-gray-700">{promptAsk(n, Boolean(c.phone), Boolean(c.email))}</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button type="button" onClick={() => answerPrompt(h.id, 'message')} className={button}>
+            {promptMessage(n)}
+          </button>
+          <button type="button" onClick={() => answerPrompt(h.id, 'dont')} className={button}>
+            {promptDont(n)}
+          </button>
+          <button type="button" onClick={() => answerPrompt(h.id, 'later')} className={button}>
+            {CONTACTS_WORDS.DECIDE_LATER}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  /**
+   * Under a kid's row: W37 right after "Message", until anything in the row changes; then the one-line
+   * warning (W38) while ruling 52's conditions hold, read from the row as it stands: it came from a pick in
+   * this sitting, the tick is off, Decide later is off, and an email or number box holds something. It
+   * informs and never stops the save.
+   */
+  const warningFor = (h: GuestForm) => {
+    const n = h.name.trim();
+    if (!n) return null;
+    if (told && told.id === h.id && told.key === rowKey(h)) {
+      return (
+        <p data-contacts-told className="mt-2 text-xs text-gray-500">
+          {promptInfo(n)}
+        </p>
+      );
+    }
+    const holdsDetails = Boolean(h.email.trim() || h.phone.trim());
+    const undecided = !h.adultRoled && !onDecideLater(h);
+    if (h.contactId && undecided && holdsDetails) {
+      return (
+        <p data-contacts-warning className="mt-2 text-xs text-gray-500">
+          {promptWarning(n)}
+        </p>
+      );
+    }
+    return null;
+  };
+
   // A tap, or focus moving, anywhere but the open box or its list closes the list.
   useEffect(() => {
     const doc = typeof window === 'undefined' ? undefined : window.document;
@@ -1411,7 +1556,7 @@ export default function Moment1InputForm({
     });
     if (!taken) return;
     const c = contacts.find((x) => x.id === taken.contactId);
-    if (!c || usedIds('').has(c.id)) return;
+    if (!c || usedIds('').has(c.id) || contactsPlaced[c.id]) return;
     const mainEmpty =
       draftForm === 'new' && !name.trim() && !email.trim() && !phone.trim() && !mainFrom;
     if (mainEmpty) {
@@ -1847,6 +1992,7 @@ export default function Moment1InputForm({
                         }`}
                       />
                       {picksFor(`helper:${helper.id}`, helper.name)}
+                      {promptFor(helper)}
                       {helperErrors[i]?.name && (
                         <p className="text-sm text-red-500 mt-1">{helperErrors[i].name}</p>
                       )}
@@ -2024,6 +2170,7 @@ export default function Moment1InputForm({
                           )}
                       </div>
                     )}
+                    {warningFor(helper)}
                   </SubForm>
                 );
               }

@@ -207,7 +207,8 @@
     "test:contacts-load": "tsx --tsconfig tests/tsconfig.json tests/contacts-load-test.ts",
     "test:contacts-picker": "tsx --tsconfig tests/tsconfig.json tests/contacts-picker-test.ts",
     "test:contacts-match": "tsx --tsconfig tests/tsconfig.json tests/contacts-match-test.ts",
-    "test:contacts-form": "tsx --tsconfig tests/tsconfig.json tests/contacts-form-test.tsx"
+    "test:contacts-form": "tsx --tsconfig tests/tsconfig.json tests/contacts-form-test.tsx",
+    "test:contacts-placed": "tsx --tsconfig tests/tsconfig.json tests/contacts-placed-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

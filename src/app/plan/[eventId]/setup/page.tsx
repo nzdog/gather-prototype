@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { ASK_FIELDS, fieldChanges } from '@/lib/ledger';
 import type { SerialisedEvent } from '@/lib/lifecycle';
@@ -14,6 +14,16 @@ import {
   type SetupStage,
 } from '@/lib/setup/entry-stage';
 import { quietChoices, type OwnPlanState } from '@/lib/setup/own-plan';
+import { ViewerIdContext } from '@/components/shared/Providers';
+import { browserContactsStore } from '@/lib/contacts/store';
+import {
+  liteFromSaved,
+  livePlacements,
+  readPlaced,
+  recordPlacements,
+  type PickedRow,
+  type Placement,
+} from '@/lib/contacts/placed';
 import { useToast } from '@/contexts/ToastContext';
 import { DemoBanner } from '@/components/demo/DemoBanner';
 import CrowdButton, { type CrowdState } from '@/components/demo/CrowdButton';
@@ -458,6 +468,27 @@ function EventSetupFlow() {
   // [[GTC-460]] (Stage 3, 3a) — the household the contacts page's way back asked to reopen (`?edit=`),
   // read once with the other address words and held here until the list of households has loaded.
   const [arriveAtEdit, setArriveAtEdit] = useState<string | null>(null);
+
+  // [[GTC-460]] (Stage 3, 3d) — who is signed in (the layout hands the id to Providers) and what this
+  // browser remembers of where her contacts were placed, for this event. Read after the page has mounted,
+  // never while drawing; written only after a save has come back good (`placeRows`).
+  const viewerId = useContext(ViewerIdContext);
+  const [placements, setPlacements] = useState<Placement[]>([]);
+  useEffect(() => {
+    if (!viewerId || !event) {
+      setPlacements([]);
+      return;
+    }
+    setPlacements(readPlaced(browserContactsStore(), viewerId, event.id));
+    // The event's id is what matters here, not the whole event.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewerId, event?.id]);
+  const placeRows = (householdId: string, rows: PickedRow[]) => {
+    if (!viewerId || !event) return;
+    if (recordPlacements(browserContactsStore(), viewerId, event.id, householdId, rows)) {
+      setPlacements(readPlaced(browserContactsStore(), viewerId, event.id));
+    }
+  };
 
   /**
    * [[GTC-360]] — "MOVE ON →" HOLDS THE PLAN, THEN GOES ON. Founder: *"On "Move on" from Moment 3
@@ -1228,7 +1259,10 @@ function EventSetupFlow() {
         );
       }
 
-      const handleSaveHostHousehold = async (payload: HostHouseholdPayload) => {
+      const handleSaveHostHousehold = async (
+        payload: HostHouseholdPayload,
+        picked: PickedRow[] = []
+      ) => {
         const res = await fetch(`/api/events/${event.id}/host-household`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1239,6 +1273,7 @@ function EventSetupFlow() {
           throw new Error(data.error || 'Failed to save your household');
         }
         const data = await res.json();
+        if (picked.length > 0) placeRows(data.household.id, picked);
         setHouseholds((prev) => [...prev, apiHouseholdToSaved(data.household)]);
         setMoment1Phase('input');
         jumpMoment1ToTop();
@@ -1279,7 +1314,7 @@ function EventSetupFlow() {
     }
 
     // Input phase
-    const handleAddHousehold = async (person: Moment1PersonInput) => {
+    const handleAddHousehold = async (person: Moment1PersonInput, picked: PickedRow[] = []) => {
       const res = await fetch(`/api/events/${event.id}/households`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1291,6 +1326,7 @@ function EventSetupFlow() {
       }
       const data = await res.json();
       const saved = apiHouseholdToSaved(data.household);
+      if (picked.length > 0) placeRows(saved.id, picked);
       setHouseholds((prev) => [...prev, saved]);
 
       // On mobile, scroll form back into view
@@ -1352,7 +1388,11 @@ function EventSetupFlow() {
       }
     };
 
-    const handleEditSave = async (householdId: string, person: Moment1PersonInput) => {
+    const handleEditSave = async (
+      householdId: string,
+      person: Moment1PersonInput,
+      picked: PickedRow[] = []
+    ) => {
       const res = await fetch(`/api/events/${event.id}/households/${householdId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -1364,6 +1404,7 @@ function EventSetupFlow() {
       }
       const data = await res.json();
       const saved = apiHouseholdToSaved(data.household);
+      if (picked.length > 0) placeRows(householdId, picked);
       // [[GTC-449]] (S2.3, ruling 35): a kid settled to "don't message" whose email the server kept
       // is told to the host as W9 on the saved card, from what was sent against what came back.
       const kept = keptEmailNames(
@@ -1403,6 +1444,13 @@ function EventSetupFlow() {
         }
       }
     };
+
+    // [[GTC-460]] (3d): her contacts already placed in a household of this event that still holds, by id, with
+    // that household's main contact's name, so the form can grey them (W32).
+    const contactsPlaced: Record<string, string> = {};
+    livePlacements(placements, liteFromSaved(households)).forEach((v, id) => {
+      contactsPlaced[id] = v.household.mainName;
+    });
 
     const totalPeopleCount = households.reduce((sum, h) => {
       return sum + 1 + (h.partner ? 1 : 0) + h.helpers.length + h.littleCount + h.guests.length;
@@ -1450,6 +1498,7 @@ function EventSetupFlow() {
                 totalPeopleCount={totalPeopleCount}
                 channelCandidates={channelCandidates}
                 invitationsSent={Boolean(event.sentAt)}
+                contactsPlaced={contactsPlaced}
                 onDraftChange={setMoment1Draft}
                 moveOnRef={moment1MoveOnRef}
                 onSavingChange={setMoment1Saving}

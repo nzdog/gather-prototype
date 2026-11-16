@@ -39,7 +39,9 @@ export type RowProps = {
   live: string[];
   doneOff: boolean;
   onRemove: () => void;
-  /** From an event only: leaves a note for the household form and goes back to it (W19). */
+  /** From an event, once the households are known: where this person is (W39, W40). */
+  badge?: string;
+  /** From an event only, and not on a person already placed: leaves a note for the form and goes back (W19). */
   onAdd?: () => void;
   onOpen: (kind: 'check' | 'other') => void;
   onSkip: () => void;
@@ -83,6 +85,11 @@ export function renderRow(p: RowProps) {
           <p className="font-medium text-gray-900 break-words">{c.name}</p>
           {c.email && <p className="text-sm text-gray-600 break-words">{c.email}</p>}
           {c.phone && <p className="text-sm text-gray-600 break-words">{c.phone}</p>}
+          {p.badge && (
+            <p data-contact-badge className="mt-1 text-sm text-gray-600">
+              {p.badge}
+            </p>
+          )}
         </div>
         <button
           type="button"

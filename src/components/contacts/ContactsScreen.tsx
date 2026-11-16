@@ -34,7 +34,13 @@ import {
   updateContact,
   type Contact,
 } from '@/lib/contacts/store';
-import { CONTACTS_WORDS as W, clearAsk, countWords } from '@/lib/contacts/words';
+import {
+  CONTACTS_WORDS as W,
+  clearAsk,
+  countWords,
+  placedWords,
+  type PlacedTail,
+} from '@/lib/contacts/words';
 import { backHref, readAddress, type ContactsAddress } from '@/lib/contacts/address';
 import {
   MAX_PASTE_CHARS,
@@ -51,6 +57,13 @@ import {
 import type { ReadResult } from '@/lib/contact-import/types';
 import { pickPeople, pickerAvailable, type PickerEnv } from '@/lib/contacts/picker';
 import { writeHandoff, type HandoffForm } from '@/lib/contacts/handoff';
+import {
+  liteFromApi,
+  livePlacements,
+  readPlaced,
+  type HouseholdLite,
+  type Placement,
+} from '@/lib/contacts/placed';
 import { renderLoadBox } from '@/components/contacts/LoadBox';
 import { renderRow, type PanelField, type RowPanel } from '@/components/contacts/ContactRow';
 
@@ -72,6 +85,10 @@ export default function ContactsScreen() {
   const [canPick, setCanPick] = useState(false);
   const [picking, setPicking] = useState(false);
   const [panel, setPanel] = useState<RowPanel | null>(null);
+  // 3d: from an event, where her people are: what this browser remembers, checked against the event's
+  // households as the server has them (null until they are known, or if they cannot be read).
+  const [placements, setPlacements] = useState<Placement[]>([]);
+  const [lite, setLite] = useState<HouseholdLite[] | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const pickingRef = useRef(false);
   const latestViewer = useRef<string | null>(viewerId);
@@ -105,7 +122,29 @@ export default function ContactsScreen() {
     setSummary([]);
     setPanel(null);
     setAsking(false);
-  }, [mounted, viewerId]);
+    setPlacements(
+      address.eventId ? readPlaced(browserContactsStore(), viewerId, address.eventId) : []
+    );
+    // Her list is read when she becomes known; the event's id is read from the address once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, viewerId, address.eventId]);
+
+  // The one request this page makes: a plain GET of this event's households, only from an event.
+  useEffect(() => {
+    if (!mounted || !viewerId || !address.eventId) return;
+    let current = true;
+    fetch(`/api/events/${address.eventId}/households`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (current) setLite(d ? liteFromApi(d.households) : null);
+      })
+      .catch(() => {
+        if (current) setLite(null);
+      });
+    return () => {
+      current = false;
+    };
+  }, [mounted, viewerId, address.eventId]);
 
   // Two tabs of this page keep in step: a change to her list elsewhere is read here too.
   useEffect(() => {
@@ -143,6 +182,7 @@ export default function ContactsScreen() {
     const clearFailed = done.status !== 'ok';
     setSaveFailed(clearFailed);
     setPanel(null);
+    setPlacements([]);
     setAsking(false);
   };
 
@@ -261,6 +301,15 @@ export default function ContactsScreen() {
   };
 
   const back = mounted ? backHref(address) : null;
+  const live = address.eventId && lite ? livePlacements(placements, lite) : null;
+  /** W39 or W40: where this person is. A kid also says whether Gather can message them; an adult with no details says so. */
+  const badgeFor = (c: Contact, placed?: { placement: Placement; household: HouseholdLite }) => {
+    if (!placed) return W.NOT_PLACED;
+    const p = placed.placement;
+    const tail: PlacedTail =
+      p.role === 'kid' ? (p.outcome ?? 'plain') : !c.email && !c.phone ? 'none' : '';
+    return placedWords(placed.household.mainName, tail);
+  };
 
   /**
    * W19: "Add to this household". Leaves ONE note in this tab (no name, email or number), then goes back
@@ -408,20 +457,22 @@ export default function ContactsScreen() {
                 data-contacts-list
                 className="mt-4 divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white"
               >
-                {contacts.map((c) =>
-                  renderRow({
+                {contacts.map((c) => {
+                  const placed = live?.get(c.id);
+                  return renderRow({
                     contact: c,
                     panel: openPanel && openPanel.id === c.id ? openPanel : null,
                     live: liveFor(c),
                     doneOff: openPanel?.kind === 'check' && openPanel.name.trim() === '',
                     onRemove: () => remove(c.id),
-                    onAdd: back ? () => addToHousehold(c) : undefined,
+                    badge: live ? badgeFor(c, placed) : undefined,
+                    onAdd: back && !placed ? () => addToHousehold(c) : undefined,
                     onOpen: (kind) => open(c, kind),
                     onSkip: () => save(skipIt(c)),
                     onType: typeInPanel,
                     onDone: donePanel,
-                  })
-                )}
+                  });
+                })}
               </ul>
             )}
           </>

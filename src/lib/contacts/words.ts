@@ -11,7 +11,8 @@
  * Remove or a Clear that did not save; W16 stays for loading). Step 3b adds W17 and W21 to W30,
  * the loading sentences, with ruling 159's fix to W27, and W43 (ruling 173, 15 Nov 2026: odd letters
  * in a file). Step 3c adds W19 and W33 to W35 (the hand-off button, a contact already in this form,
- * and the rows that take no pick). The placed and prompt sentences (W32, W36 to W40) arrive with 3d.
+ * and the rows that take no pick). Step 3d adds W32 (already placed), W36 to W38 (the child prompt and
+ * the warning) and W39, W40 (the badges on the contacts page).
  */
 export const CONTACTS_WORDS = {
   /** A5 (ruling 155): the line at the top of the page, not reworded. */
@@ -89,6 +90,10 @@ export const CONTACTS_WORDS = {
   SAVED_ROW_REMOVE: 'To use a contact instead, remove them and add a new person.',
   /** W35: her own row takes no pick (ruling 51). */
   OWN_ROW: "This is you, so a contact can't replace you.",
+  /** W36: the third choice of the child prompt (the same words as the form's own Decide later). */
+  DECIDE_LATER: 'Decide later',
+  /** W39: a person not placed, on the contacts page from an event. */
+  NOT_PLACED: "Not in a household yet, so Gather won't message them.",
   /** W31: the entry on the household form, large when only her own household is saved. */
   ENTRY_LARGE:
     'Got your guests in your phone or a spreadsheet? Load them as contacts, then pick them as you type.',
@@ -139,4 +144,49 @@ export function turnedWords(n: number): string {
   return n === 1
     ? 'We turned 1 name around from “Last, First” to “First Last”.'
     : `We turned ${n} names around from “Last, First” to “First Last”.`;
+}
+
+/** W32: a contact already placed in a household of this event (the household's main contact's name). */
+export function alreadyInWords(name: string): string {
+  return `Already in ${name}'s household`;
+}
+
+/** W36: what Gather asks when a kid's pick brings a number or an email. */
+export function promptAsk(name: string, hasPhone: boolean, hasEmail: boolean): string {
+  const what = hasPhone && hasEmail ? 'a number and an email' : hasPhone ? 'a number' : 'an email';
+  return `${name} has ${what} in your contacts. Kids don't get messages from Gather unless you say so. What should Gather do?`;
+}
+export function promptMessage(name: string): string {
+  return `Message ${name}`;
+}
+export function promptDont(name: string): string {
+  return `Don't message ${name}`;
+}
+
+/** W37: after "Message": the details are in, and the tick is hers to give. */
+export function promptInfo(name: string): string {
+  return `${name}'s details are in. Tick “Old enough to message directly” when you're ready for Gather to message ${name}.`;
+}
+
+/** W38: the one-line warning under a kid's row (rulings 43 and 52). */
+export function promptWarning(name: string): string {
+  return `Gather won't message ${name} unless you tick “Old enough to message directly”.`;
+}
+
+/** W40: the badge on a placed person: where they are, and for a kid or a person with no details, a tail. */
+export type PlacedTail = '' | 'plain' | 'message' | 'later' | 'none';
+export function placedWords(name: string, tail: PlacedTail): string {
+  const base = `In ${name}'s household.`;
+  switch (tail) {
+    case 'plain':
+      return `${base} Not messaged.`;
+    case 'message':
+      return `${base} Gather can message them.`;
+    case 'later':
+      return `${base} Decide later.`;
+    case 'none':
+      return `${base} No number or email yet.`;
+    default:
+      return base;
+  }
 }

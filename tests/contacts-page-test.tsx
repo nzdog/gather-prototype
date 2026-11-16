@@ -105,12 +105,18 @@ const stripComments = (s: string) =>
 const FORBIDDEN_CODE =
   /dangerouslySetInnerHTML|innerHTML|\beval\(|new RegExp|\bfetch\(|XMLHttpRequest|sendBeacon|\bconsole\./;
 
-// ── Nothing may reach the network ────────────────────────────────────────────
-let fetchCalls = 0;
-globalThis.fetch = (async () => {
-  fetchCalls++;
-  throw new Error('the contacts page must not call fetch');
-}) as typeof fetch;
+// ── Nothing may reach the network but ONE read: the screen's GET of the event's households ──
+const requests: Array<{ url: string; init: unknown }> = [];
+let nextAnswer: { status: number | 'throws'; body: unknown } = {
+  status: 200,
+  body: { households: [] },
+};
+globalThis.fetch = (async (url: unknown, init?: unknown) => {
+  requests.push({ url: String(url), init });
+  if (nextAnswer.status === 'throws') throw new Error('offline');
+  const status = nextAnswer.status as number;
+  return { ok: status === 200, status, json: async () => nextAnswer.body };
+}) as unknown as typeof fetch;
 
 // ── Browser storage, in memory, that can be told to fail ─────────────────────
 class MemStore {
@@ -539,8 +545,8 @@ async function main() {
   // The request spy sees a call, so "the page made no request" (F.3, at the end) is not green for nothing.
   void globalThis.fetch('spy').catch(() => {});
   check('F.0', 'the request spy sees a call (so F.3 means something)', () => {
-    const seen = fetchCalls === 1;
-    fetchCalls = 0;
+    const seen = requests.length === 1;
+    requests.length = 0;
     return { ok: seen, got: seen };
   });
 
@@ -2266,6 +2272,174 @@ async function main() {
       };
     }
   );
+  const sleep0 = () => new Promise((r) => setTimeout(r, 0));
+  const hhApi = (id: string, members: Array<[string, string, string?]>) => ({
+    id,
+    members: members.map(([role, name, email]) => ({
+      id: `pe-${name}`,
+      householdRole: role,
+      person: { name, email: email ?? null },
+    })),
+  });
+  const answerWith = (status: number | 'throws', body: unknown = { households: [] }) => {
+    nextAnswer = { status, body };
+  };
+  const PLACED_KEY = 'gather:contact-placed:v1:user-a:ev1';
+  const seedPeople = (local: MemStore, people: any[], placed: any[] = []) => {
+    local.m.set(LIST_KEY('user-a'), JSON.stringify({ v: 1, userId: 'user-a', contacts: people }));
+    if (placed.length)
+      local.m.set(
+        PLACED_KEY,
+        JSON.stringify({ v: 1, userId: 'user-a', eventId: 'ev1', placements: placed })
+      );
+  };
+  const BOOK3 = [
+    { id: 'p1', name: 'Mere Tane', email: 'mere@example.com', phone: '+64215550147' },
+    { id: 'p2', name: 'Kiri Kid', phone: '+64215550150' },
+    { id: 'p3', name: 'Hone Rata' },
+    { id: 'p4', name: 'Pip Kid', email: 'pip@example.com' },
+    { id: 'p5', name: 'Zed Free', email: 'zed@example.com' },
+  ];
+  const HH = [
+    hhApi('hh1', [
+      ['PRIMARY_CONTACT', 'Kate Smith', 'kate@example.com'],
+      ['PARTNER', 'Mere Tane'],
+      ['CHILD', 'Kiri Kid'],
+      ['CHILD', 'Pip Kid'],
+      ['GUEST', 'Hone Rata'],
+    ]),
+  ];
+  const PL = [
+    { contactId: 'p1', householdId: 'hh1', name: 'Mere Tane', role: 'adult' },
+    { contactId: 'p2', householdId: 'hh1', name: 'Kiri Kid', role: 'kid', outcome: 'plain' },
+    { contactId: 'p3', householdId: 'hh1', name: 'Hone Rata', role: 'adult' },
+    { contactId: 'p4', householdId: 'hh1', name: 'Pip Kid', role: 'kid', outcome: 'message' },
+  ];
+  const badgeOf = (r: El | undefined) => flat(textOf(byAttr(r, 'data-contact-badge')));
+  const opened = async (local: MemStore, search = '?event=ev1') => {
+    const i = screen('user-a', { local, search });
+    await i.actAsync(async () => {});
+    return i;
+  };
+  await lcheck(
+    'L.25',
+    "from an event the page makes ONE request, a plain GET of that event's households; with no event, a bad one, or nobody signed in it makes none",
+    async () => {
+      answerWith(200, { households: HH });
+      const asked = async (search: string, viewer: string | null = 'user-a') => {
+        requests.length = 0;
+        const local = new MemStore();
+        seedPeople(local, BOOK3);
+        const i = screen(viewer, { local, search });
+        await i.actAsync(async () => {});
+        return requests.map((r) => [r.url, r.init === undefined]);
+      };
+      const a = await asked('?event=ev1');
+      const b = await asked('');
+      const c = await asked('?event=../x');
+      const d = await asked('?event=ev1', null);
+      requests.length = 0;
+      return {
+        ok:
+          JSON.stringify(a) === JSON.stringify([['/api/events/ev1/households', true]]) &&
+          b.length === 0 &&
+          c.length === 0 &&
+          d.length === 0,
+        got: { a, b, c, d },
+      };
+    }
+  );
+  await lcheck(
+    'L.26',
+    'from an event, once the households are known: each person says where they are (W40; a kid also says whether Gather can message them, W40 suffixes) or that they are not placed (W39)',
+    async () => {
+      const w = WW();
+      const F = WD();
+      answerWith(200, { households: HH });
+      const local = new MemStore();
+      seedPeople(local, BOOK3, PL);
+      const i = await opened(local);
+      const got = BOOK3.map((p) => badgeOf(rowOf(i, p.name)));
+      const want = [
+        F.placedWords('Kate Smith', ''),
+        F.placedWords('Kate Smith', 'plain'),
+        F.placedWords('Kate Smith', 'none'),
+        F.placedWords('Kate Smith', 'message'),
+        w.NOT_PLACED,
+      ];
+      return {
+        ok:
+          JSON.stringify(got) === JSON.stringify(want) &&
+          got[0] === "In Kate Smith's household." &&
+          got[1] === "In Kate Smith's household. Not messaged." &&
+          got[2] === "In Kate Smith's household. No number or email yet." &&
+          got[3] === "In Kate Smith's household. Gather can message them." &&
+          got[4] === "Not in a household yet, so Gather won't message them.",
+        got,
+      };
+    }
+  );
+  await lcheck(
+    'L.27',
+    'the "Add to this household" button is for people not placed; if the households cannot be read there are no badges, quietly, and the button is on everyone',
+    async () => {
+      answerWith(200, { households: HH });
+      const a = new MemStore();
+      seedPeople(a, BOOK3, PL);
+      const ia = await opened(a);
+      const placedNoButton = ['Mere Tane', 'Kiri Kid', 'Hone Rata', 'Pip Kid'].every(
+        (n) => !addButton(rowOf(ia, n))
+      );
+      const freeHasButton = !!addButton(rowOf(ia, 'Zed Free'));
+      const fails = async (status: number | 'throws') => {
+        answerWith(status);
+        const l = new MemStore();
+        seedPeople(l, BOOK3, PL);
+        const i = await opened(l);
+        return rows(i).every((r) => !byAttr(r, 'data-contact-badge') && !!addButton(r));
+      };
+      const f500 = await fails(500);
+      const fThrow = await fails('throws');
+      return {
+        ok: placedNoButton && freeHasButton && f500 && fThrow,
+        got: { placedNoButton, freeHasButton, f500, fThrow },
+      };
+    }
+  );
+  await lcheck(
+    'L.28',
+    'NOT MATCHED BY EMAIL OR NAME: a household member with the same name and email as a contact does not place that contact; only a record made at the save does; a placement that no longer holds is ignored',
+    async () => {
+      const w = WW();
+      answerWith(200, {
+        households: [
+          hhApi('hh1', [
+            ['PRIMARY_CONTACT', 'Kate Smith'],
+            ['GUEST', 'Zed Free', 'zed@example.com'],
+            ['GUEST', 'Hone Renamed'],
+          ]),
+        ],
+      });
+      const local = new MemStore();
+      // p5 (Zed Free) has a twin typed by hand in the household; p3 was placed but the member was renamed
+      seedPeople(local, BOOK3, [
+        { contactId: 'p3', householdId: 'hh1', name: 'Hone Rata', role: 'adult' },
+        { contactId: 'p1', householdId: 'hh-gone', name: 'Mere Tane', role: 'adult' },
+      ]);
+      const i = await opened(local);
+      const zed = badgeOf(rowOf(i, 'Zed Free'));
+      const hone = badgeOf(rowOf(i, 'Hone Rata'));
+      const mere = badgeOf(rowOf(i, 'Mere Tane'));
+      return {
+        ok:
+          zed === w.NOT_PLACED &&
+          hone === w.NOT_PLACED &&
+          mere === w.NOT_PLACED &&
+          !!addButton(rowOf(i, 'Zed Free')),
+        got: [zed, hone, mere],
+      };
+    }
+  );
   await checkAsync(
     'L.21',
     'break proofs (on in-memory copies of the screen, the loading area and the row): each fault turns exactly the checks named red and leaves the others green',
@@ -2368,11 +2542,39 @@ async function main() {
           ['L.2', 'L.15', 'L.20'],
         ],
         [
+          'a placed person keeps the Add button',
+          S,
+          'onAdd: back && !placed ? () => addToHousehold(c) : undefined,',
+          'onAdd: back ? () => addToHousehold(c) : undefined,',
+          ['L.27'],
+        ],
+        [
+          'badges are drawn before the households are known',
+          S,
+          'badge: live ? badgeFor(c, placed) : undefined,',
+          'badge: badgeFor(c, placed),',
+          ['L.27'],
+        ],
+        [
+          'a person is placed because a household has someone of that name',
+          S,
+          'const placed = live?.get(c.id);',
+          "const placed = live?.get(c.id) ?? (lite?.find((h) => h.memberNames.includes(c.name)) ? { placement: { role: 'adult' }, household: lite.find((h) => h.memberNames.includes(c.name)) } : undefined);",
+          ['L.28'],
+        ],
+        [
+          'the page asks for the households with no event in the address',
+          S,
+          'if (!mounted || !viewerId || !address.eventId) return;',
+          'if (!mounted || !viewerId) return;',
+          ['L.25'],
+        ],
+        [
           'the hand-off button is drawn without an event',
           S,
-          'onAdd: back ? () => addToHousehold(c) : undefined,',
+          'onAdd: back && !placed ? () => addToHousehold(c) : undefined,',
           'onAdd: () => addToHousehold(c),',
-          ['L.10', 'L.23'],
+          ['L.10', 'L.23', 'L.27'],
         ],
         [
           'the hand-off goes back to the wrong place',
@@ -2428,7 +2630,9 @@ async function main() {
           continue;
         }
         const code = stripComments(raw);
-        if (FORBIDDEN_CODE.test(code)) bad.push(`${rel}: forbidden code`);
+        // The screen may make the one allowed GET of the households (checked by F.5); no other file may fetch.
+        const scan = rel === SCREEN ? code.replace(/\bfetch\(/, '') : code;
+        if (FORBIDDEN_CODE.test(scan)) bad.push(`${rel}: forbidden code`);
         if (raw.includes('households/form-draft')) bad.push(`${rel}: names the draft module`);
         if (raw.includes('@/lib/contact/contact-fix')) bad.push(`${rel}: names contact-fix`);
       }
@@ -2462,10 +2666,39 @@ async function main() {
     );
     return { ok: bad.length === 0 && read('src/lib/contacts/store.ts').length > 0, got: bad };
   });
-  check('F.3', 'through all of the above the page made no request', () => ({
-    ok: fetchCalls === 0,
-    got: fetchCalls,
-  }));
+  check(
+    'F.3',
+    "through all of the above the page made no request but plain GETs of an event's households",
+    () => ({
+      ok: requests.every(
+        (r) =>
+          /^\/api\/events\/[A-Za-z0-9_-]{1,64}\/households$/.test(r.url) && r.init === undefined
+      ),
+      got: requests
+        .filter(
+          (r) =>
+            !/^\/api\/events\/[A-Za-z0-9_-]{1,64}\/households$/.test(r.url) || r.init !== undefined
+        )
+        .slice(0, 3),
+    })
+  );
+  check(
+    'F.5',
+    "the screen makes exactly one request in its code: a plain GET (no method, no body, no options) of the event's households, and no other word of a write",
+    () => {
+      const code = stripComments(read(SCREEN));
+      const calls = code.match(/\bfetch\(/g) ?? [];
+      const at = code.indexOf('fetch(');
+      const call = at < 0 ? '' : code.slice(at, code.indexOf(')', at) + 1);
+      return {
+        ok:
+          calls.length === 1 &&
+          /^fetch\(`\/api\/events\/\$\{[A-Za-z.]+\}\/households`\)$/.test(call) &&
+          !/\b(POST|PUT|PATCH|DELETE|method|body|headers)\b/.test(code),
+        got: { calls: calls.length, call },
+      };
+    }
+  );
 
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);

@@ -596,21 +596,25 @@ async function main() {
     const win = makeWindow({ local, session });
     const sent: any[] = [];
     const edits: any[] = [];
+    const hosts: any[] = [];
+    const pickedArgs: any[] = [];
     const i = mount(
       FORM,
       {
         eventId: 'ev1',
         eventName: 'Boxing Day',
         onComplete() {},
-        onAddPerson: async (p: unknown) => void sent.push(p),
-        onEditSave: async (id: string, p: unknown) => void edits.push([id, p]),
-        onSaveHostHousehold: async () => {},
+        onAddPerson: async (p: unknown, picked?: unknown) =>
+          void (sent.push(p), pickedArgs.push(picked)),
+        onEditSave: async (id: string, p: unknown, picked?: unknown) =>
+          void edits.push([id, p, picked]),
+        onSaveHostHousehold: async (p: unknown, picked?: unknown) => void hosts.push([p, picked]),
         channelCandidates: [],
         ...over,
       },
       { viewerId: o.viewerId === undefined ? 'user-a' : o.viewerId, draftStore: drafts, win }
     );
-    return { i, local, session, drafts, win, sent, edits };
+    return { i, local, session, drafts, win, sent, edits, hosts, pickedArgs };
   };
   const boxes = (i: Inst, ph: string) =>
     all(i.tree(), (e) => e.type === 'input' && e.props.placeholder === ph);
@@ -1253,6 +1257,452 @@ async function main() {
   );
 
   section(
+    "Q, N, G, F — the child prompt, the warning, the greying with a household's name, the picked list"
+  );
+  const W3 = () => require('../src/lib/contacts/words');
+  const promptBox = (i: Inst) => byAttr(i.tree(), 'data-contacts-prompt');
+  const promptButtons = (i: Inst) => buttons(promptBox(i)).map((b) => textOf(b).trim());
+  const warning = (i: Inst) => byAttr(i.tree(), 'data-contacts-warning');
+  const told = (i: Inst) => byAttr(i.tree(), 'data-contacts-told');
+  const ticks = (i: Inst) =>
+    all(i.tree(), (e) => e.type === 'input' && e.props.type === 'checkbox');
+  const setTick = (i: Inst, at: number, checked: boolean) =>
+    i.act(() => ticks(i)[at].props.onChange({ target: { checked } }));
+  const press3 = (i: Inst, text: string) => press(i, buttonText(promptBox(i), text));
+  const kidPick = (i: Inst, typed: string, who: string) => {
+    addKid(i);
+    typeIn(i, KID, typed);
+    pickLine(i, who);
+  };
+  const saveWithHost = async (i: Inst) => {
+    typeIn(i, MAIN, 'Host Person');
+    await saveNew(i);
+  };
+  await fcheck(
+    'Q.1',
+    "a kid's pick that brings a number or an email asks first (W36), with the three choices; until she chooses, only the name is in the row",
+    () => {
+      const w = W3();
+      const out: Record<string, unknown> = {};
+      for (const [typed, who, n, e] of [
+        ['kir', 'Kiri Kid', true, true],
+        ['mar', 'Mārama Smith', true, false],
+        ['aro', 'Aroha Tane-Brown', false, true],
+      ] as const) {
+        const { i } = form();
+        kidPick(i, typed, who);
+        out[who] = [
+          flat(textOf(promptBox(i))).includes(w.promptAsk(who, n, e)),
+          promptButtons(i).join('|') ===
+            [w.promptMessage(who), w.promptDont(who), 'Decide later'].join('|'),
+          boxes(i, KID)[0].props.value === who &&
+            boxes(i, 'Email')[0].props.value === '' &&
+            boxes(i, 'Phone')[0].props.value === '',
+        ];
+      }
+      return { ok: Object.values(out).every((v: any) => v.every(Boolean)), got: out };
+    }
+  );
+  await fcheck(
+    'Q.2',
+    'Message: the number and email fill in, the tick stays off, and W37 tells her to tick it when she is ready; the prompt goes',
+    async () => {
+      const w = W3();
+      const { i, sent } = form();
+      kidPick(i, 'kir', 'Kiri Kid');
+      press3(i, w.promptMessage('Kiri Kid'));
+      const e = boxes(i, 'Email')[0].props.value;
+      const p = boxes(i, 'Phone')[0].props.value;
+      const note = flat(textOf(told(i)));
+      const tickOff = ticks(i).every((c) => c.props.checked === false);
+      const gone = !promptBox(i);
+      await saveWithHost(i);
+      const h = sent[0]?.helpers?.[0];
+      return {
+        ok:
+          e === 'kiri@example.com' &&
+          p === '+64215550150' &&
+          note === w.promptInfo('Kiri Kid') &&
+          tickOff &&
+          gone &&
+          !warning(i) &&
+          h?.adultRoled === false &&
+          h?.decideLater === false &&
+          h?.email === 'kiri@example.com',
+        got: { e, p, note, tickOff, gone, h },
+      };
+    }
+  );
+  await fcheck(
+    'Q.3',
+    "Don't message: the name only stays, no details, no tick, no warning, no prompt",
+    async () => {
+      const w = W3();
+      const { i, sent } = form();
+      kidPick(i, 'kir', 'Kiri Kid');
+      press3(i, w.promptDont('Kiri Kid'));
+      await saveWithHost(i);
+      const h = sent[0]?.helpers?.[0];
+      return {
+        ok:
+          !promptBox(i) &&
+          !told(i) &&
+          !warning(i) &&
+          h?.name === 'Kiri Kid' &&
+          !h?.email &&
+          !h?.phone &&
+          h?.adultRoled === false &&
+          h?.decideLater === false,
+        got: h,
+      };
+    }
+  );
+  await fcheck(
+    'Q.4',
+    'Decide later: the details are carried and the row is set to Decide later, so Save writes that choice; no tick, no warning',
+    async () => {
+      const { i, sent } = form();
+      kidPick(i, 'kir', 'Kiri Kid');
+      press3(i, 'Decide later');
+      const checked = ticks(i).map((c) => c.props.checked);
+      await saveWithHost(i);
+      const h = sent[0]?.helpers?.[0];
+      return {
+        ok:
+          !promptBox(i) &&
+          !warning(i) &&
+          h?.decideLater === true &&
+          h?.adultRoled === false &&
+          h?.email === 'kiri@example.com' &&
+          h?.phone === '+64215550150',
+        got: { h, checked },
+      };
+    }
+  );
+  await fcheck(
+    'Q.5',
+    'if she ignores the prompt and presses Save, the kid saves with the name only (the safe direction)',
+    async () => {
+      const { i, sent } = form();
+      kidPick(i, 'kir', 'Kiri Kid');
+      const asked = !!promptBox(i);
+      await saveWithHost(i);
+      const h = sent[0]?.helpers?.[0];
+      return {
+        ok:
+          asked &&
+          h?.name === 'Kiri Kid' &&
+          !h?.email &&
+          !h?.phone &&
+          h?.adultRoled === false &&
+          h?.decideLater === false,
+        got: h,
+      };
+    }
+  );
+  await fcheck(
+    'Q.6',
+    'no prompt when she has already decided (the tick is on, or Decide later is chosen: the details fill in) or when the contact has neither a number nor an email (the name only)',
+    async () => {
+      const a = form();
+      addKid(a.i);
+      setTick(a.i, 0, true);
+      typeIn(a.i, KID, 'kir');
+      pickLine(a.i, 'Kiri Kid');
+      const tickedFill = [
+        boxes(a.i, 'Email')[0].props.value,
+        boxes(a.i, 'Phone')[0].props.value,
+        !promptBox(a.i),
+        ticks(a.i)[0].props.checked,
+      ];
+      const b = form();
+      addKid(b.i);
+      setTick(b.i, 1, true);
+      typeIn(b.i, KID, 'kir');
+      pickLine(b.i, 'Kiri Kid');
+      const laterFill = [
+        boxes(b.i, 'Email')[0].props.value,
+        boxes(b.i, 'Phone')[0].props.value,
+        !promptBox(b.i),
+      ];
+      const c = form();
+      kidPick(c.i, 'hone', 'Hōne Rata');
+      const none = [
+        !promptBox(c.i),
+        boxes(c.i, KID)[0].props.value,
+        boxes(c.i, 'Email')[0].props.value,
+      ];
+      return {
+        ok:
+          tickedFill.join() === 'kiri@example.com,+64215550150,true,true' &&
+          laterFill.join() === 'kiri@example.com,+64215550150,true' &&
+          none.join() === 'true,Hōne Rata,',
+        got: { tickedFill, laterFill, none },
+      };
+    }
+  );
+
+  await fcheck(
+    'N.1',
+    "the warning (W38): after Message with the tick left off, W37 shows at first, and once she changes anything in the row the warning shows under the kid's row",
+    () => {
+      const w = W3();
+      const { i } = form();
+      kidPick(i, 'kir', 'Kiri Kid');
+      press3(i, w.promptMessage('Kiri Kid'));
+      const first = [!!told(i), !warning(i)];
+      i.act(() => boxes(i, 'Email')[0].props.onChange({ target: { value: 'kiri2@example.com' } }));
+      const after = [!told(i), flat(textOf(warning(i)))];
+      return {
+        ok: first.every(Boolean) && after[0] === true && after[1] === w.promptWarning('Kiri Kid'),
+        got: { first, after },
+      };
+    }
+  );
+  const warned = () => {
+    const w = W3();
+    const f = form();
+    kidPick(f.i, 'kir', 'Kiri Kid');
+    press3(f.i, w.promptMessage('Kiri Kid'));
+    f.i.act(() =>
+      boxes(f.i, 'Email')[0].props.onChange({ target: { value: 'kiri.changed@example.com' } })
+    );
+    return f;
+  };
+  await fcheck(
+    'N.2',
+    'the warning shows only for a kid picked in this sitting: not for a kid typed by hand, a kid saved before, a row on Decide later, or a ticked row',
+    () => {
+      const typed = form();
+      addKid(typed.i);
+      typeIn(typed.i, KID, 'Typed Kid');
+      typed.i.act(() =>
+        boxes(typed.i, 'Email')[0].props.onChange({ target: { value: 'k@example.com' } })
+      );
+      const savedKid = form({
+        editingHousehold: saved({
+          helpers: [{ personEventId: 'pe-h', name: 'Jo Smith', email: 'jo@example.com' }],
+        }),
+      });
+      const later = warned();
+      setTick(later.i, 1, true);
+      const ticked = warned();
+      setTick(ticked.i, 0, true);
+      const base = warned();
+      return {
+        ok:
+          !warning(typed.i) &&
+          !warning(savedKid.i) &&
+          !warning(later.i) &&
+          !warning(ticked.i) &&
+          !!warning(base.i),
+        got: [
+          !!warning(typed.i),
+          !!warning(savedKid.i),
+          !!warning(later.i),
+          !!warning(ticked.i),
+          !!warning(base.i),
+        ],
+      };
+    }
+  );
+  await fcheck(
+    'N.3',
+    'emptying both boxes removes the warning; editing a detail or changing the name keeps it; ticking removes it; removing the row removes it; picking someone else replaces the mark',
+    () => {
+      const w = W3();
+      const edit = (f: ReturnType<typeof warned>, ph: string, v: string) =>
+        f.i.act(() => boxes(f.i, ph)[0].props.onChange({ target: { value: v } }));
+      const a = warned();
+      edit(a, 'Email', 'other@example.com');
+      const editKeeps = !!warning(a.i);
+      typeIn(a.i, KID, 'Kiri Renamed');
+      const renameKeeps = flat(textOf(warning(a.i))) === w.promptWarning('Kiri Renamed');
+      const b = warned();
+      edit(b, 'Email', '');
+      const halfEmpty = !!warning(b.i);
+      edit(b, 'Phone', '');
+      const emptied = !warning(b.i);
+      const c = warned();
+      setTick(c.i, 0, true);
+      const ticked = !warning(c.i);
+      const d = warned();
+      press(
+        d.i,
+        buttons(d.i.tree()).find((x) => textOf(x).includes('remove'))
+      );
+      const removed = !warning(d.i) && boxes(d.i, KID).length === 0;
+      const e = warned();
+      addGuest(e.i);
+      typeIn(e.i, GUEST, 'kir');
+      const greyedBefore = flat(textOf(line(e.i, 'Kiri Kid'))).includes(
+        w.CONTACTS_WORDS.ALREADY_IN_FORM
+      );
+      typeIn(e.i, KID, 'aro');
+      pickLine(e.i, 'Aroha Tane-Brown');
+      typeIn(e.i, GUEST, 'kir');
+      const freed = !flat(textOf(line(e.i, 'Kiri Kid'))).includes(w.CONTACTS_WORDS.ALREADY_IN_FORM);
+      return {
+        ok:
+          editKeeps &&
+          renameKeeps &&
+          halfEmpty &&
+          emptied &&
+          ticked &&
+          removed &&
+          greyedBefore &&
+          freed,
+        got: { editKeeps, renameKeeps, halfEmpty, emptied, ticked, removed, greyedBefore, freed },
+      };
+    }
+  );
+  await fcheck(
+    'N.4',
+    'the warning informs and never stops the Save: the household saves with it showing',
+    async () => {
+      const f = warned();
+      const showing = !!warning(f.i);
+      await saveWithHost(f.i);
+      return { ok: showing && f.sent.length === 1, got: [showing, f.sent.length] };
+    }
+  );
+  await fcheck(
+    'G.1',
+    "a contact already placed in a household of this event is greyed with that household's main contact's name (W32) and cannot be picked; a person already in this form shows W33 instead",
+    () => {
+      const w = W3();
+      const { i } = form({ contactsPlaced: { zc1: 'Kate Smith' } });
+      typeIn(i, MAIN, 'mer');
+      const l = line(i, 'Mere Tane');
+      const text = flat(textOf(l));
+      const before = boxes(i, MAIN)[0].props.value;
+      buttons(l)[0].props.onClick?.({ preventDefault() {} });
+      const stuck = boxes(i, MAIN)[0].props.value === before;
+      // a contact that is in this form AND placed: the form's own row is the nearer reason
+      const j = form();
+      typeIn(j.i, MAIN, 'mer');
+      pickLine(j.i, 'Mere Tane');
+      j.i.f.props = { ...j.i.f.props, contactsPlaced: { zc1: 'Kate Smith' } };
+      j.i.act(() => {});
+      addGuest(j.i);
+      typeIn(j.i, GUEST, 'mer');
+      const both = flat(textOf(line(j.i, 'Mere Tane')));
+      return {
+        ok:
+          text.includes("Already in Kate Smith's household") &&
+          w.alreadyInWords('Kate Smith') === "Already in Kate Smith's household" &&
+          stuck &&
+          both.includes(w.CONTACTS_WORDS.ALREADY_IN_FORM) &&
+          !both.includes('Kate Smith'),
+        got: { text, both },
+      };
+    }
+  );
+  await fcheck(
+    'G.2',
+    'a hand-off for a contact that is already placed is ignored quietly, and the note is used up',
+    () => {
+      const session = new MemStore();
+      leaveNote(session);
+      const { i } = form({ contactsPlaced: { zc1: 'Kate Smith' } }, { session });
+      return {
+        ok:
+          boxes(i, MAIN)[0].props.value === '' &&
+          boxes(i, GUEST).length === 0 &&
+          session.m.size === 0,
+        got: session.m.size,
+      };
+    }
+  );
+  await fcheck(
+    'F.1',
+    "the new household: the rows that came from a contact, named rows only, go to the save as its second argument (adult or kid, and a kid's outcome); a typed row is not listed",
+    async () => {
+      const { i, pickedArgs, sent } = form();
+      typeIn(i, MAIN, 'mer');
+      pickLine(i, 'Mere Tane');
+      addPartner(i);
+      typeIn(i, PARTNER, 'aro');
+      pickLine(i, 'Aroha Tane-Brown');
+      kidPick(i, 'kir', 'Kiri Kid');
+      press3(i, 'Decide later');
+      addGuest(i);
+      typeIn(i, GUEST, 'mar');
+      pickLine(i, 'Mārama Smith');
+      addGuest(i);
+      typeIn(i, GUEST, 'Typed Guest');
+      await saveNew(i);
+      const want = [
+        { contactId: 'zc1', name: 'Mere Tane', role: 'adult' },
+        { contactId: 'zc4', name: 'Aroha Tane-Brown', role: 'adult' },
+        { contactId: 'zc6', name: 'Kiri Kid', role: 'kid', outcome: 'later' },
+        { contactId: 'zc2', name: 'Mārama Smith', role: 'adult' },
+      ];
+      return {
+        ok: sent.length === 1 && JSON.stringify(pickedArgs[0]) === JSON.stringify(want),
+        got: pickedArgs[0],
+      };
+    }
+  );
+  await fcheck(
+    'F.2',
+    '"Save & move on" (the fourth door) hands over the same list, and nothing when nothing was picked',
+    async () => {
+      const moveOnRef: { current: null | (() => Promise<void>) } = { current: null };
+      const a = form({ moveOnRef, onComplete() {} });
+      typeIn(a.i, MAIN, 'mer');
+      pickLine(a.i, 'Mere Tane');
+      await a.i.actAsync(() => moveOnRef.current!());
+      const refB: { current: null | (() => Promise<void>) } = { current: null };
+      const b = form({ moveOnRef: refB });
+      typeIn(b.i, MAIN, 'Typed Host');
+      await b.i.actAsync(() => refB.current!());
+      return {
+        ok:
+          a.sent.length === 1 &&
+          JSON.stringify(a.pickedArgs[0]) ===
+            JSON.stringify([{ contactId: 'zc1', name: 'Mere Tane', role: 'adult' }]) &&
+          b.sent.length === 1 &&
+          JSON.stringify(b.pickedArgs[0]) === '[]',
+        got: [a.pickedArgs[0], b.pickedArgs[0]],
+      };
+    }
+  );
+  await fcheck(
+    'F.3',
+    'a change of a household hands over the list as the third argument; her own first save hands it over as the second',
+    async () => {
+      const e = form({ editingHousehold: saved() });
+      addGuest(e.i);
+      typeIn(e.i, GUEST, 'aro');
+      pickLine(e.i, 'Aroha Tane-Brown');
+      await e.i.actAsync(() =>
+        buttonText(e.i.tree(), 'Save changes')!.props.onClick({ preventDefault() {} })
+      );
+      const h = form({ hostMode: { name: 'Kate', email: 'k@example.com', phone: null } });
+      addGuest(h.i);
+      typeIn(h.i, GUEST, 'mar');
+      pickLine(h.i, 'Mārama Smith');
+      await h.i.actAsync(() =>
+        buttonText(h.i.tree(), 'Save and add everyone else →')!.props.onClick({
+          preventDefault() {},
+        })
+      );
+      return {
+        ok:
+          e.edits.length === 1 &&
+          e.edits[0][0] === 'hh1' &&
+          JSON.stringify(e.edits[0][2]) ===
+            JSON.stringify([{ contactId: 'zc4', name: 'Aroha Tane-Brown', role: 'adult' }]) &&
+          h.hosts.length === 1 &&
+          JSON.stringify(h.hosts[0][1]) ===
+            JSON.stringify([{ contactId: 'zc2', name: 'Mārama Smith', role: 'adult' }]),
+        got: [e.edits[0]?.[2], h.hosts[0]?.[1]],
+      };
+    }
+  );
+
+  section(
     'B — break proofs: one rule broken in an in-memory copy of the form (or the dropdown), and the named checks go red'
   );
   await checkAsync(
@@ -1263,6 +1713,63 @@ async function main() {
       const PK = PICKS;
       // [what is wrong, the file, the text it replaces (exactly once), the replacement, checks that go red]
       const faults: Array<[string, string, string, string, string[]]> = [
+        [
+          'the prompt is skipped for an undecided kid',
+          F,
+          'const ask = !decided && Boolean(c.email || c.phone);',
+          'const ask = false;',
+          ['Q.1', 'Q.2', 'Q.3', 'Q.4', 'Q.5', 'N.1', 'N.2', 'N.3', 'N.4', 'F.1'],
+        ],
+        [
+          'Message also ticks the box',
+          F,
+          "...(choice === 'later' ? { decideLater: true } : {}),",
+          "...(choice === 'later' ? { decideLater: true } : { adultRoled: true }),",
+          ['Q.2', 'N.1', 'N.2', 'N.3', 'N.4'],
+        ],
+        [
+          'a kid typed by hand gets the warning',
+          F,
+          'if (h.contactId && undecided && holdsDetails) {',
+          'if (undecided && holdsDetails) {',
+          ['N.2'],
+        ],
+        [
+          'emptying both boxes keeps the warning',
+          F,
+          'const holdsDetails = Boolean(h.email.trim() || h.phone.trim());',
+          'const holdsDetails = true;',
+          ['N.3'],
+        ],
+        ['a placed contact is not greyed', F, ': placedNote(c.id)', ': undefined', ['G.1']],
+        [
+          'the hand-off ignores that a contact is placed',
+          F,
+          ' || contactsPlaced[c.id]) return;',
+          ') return;',
+          ['G.2'],
+        ],
+        [
+          'a typed guest is listed as picked',
+          F,
+          '.filter((g) => g.contactId && g.name.trim())',
+          '.filter((g) => g.name.trim())',
+          ['F.1', 'F.3'],
+        ],
+        [
+          '"Save & move on" forgets the list',
+          F,
+          'await onAddPerson(payload, pickedRows()); // ruling 179: Save & move on remembers its picks too',
+          'await onAddPerson(payload);',
+          ['F.2'],
+        ],
+        [
+          'a change of a household forgets the list',
+          F,
+          'await onEditSave(editingHousehold.id, payload, pickedRows());',
+          'await onEditSave(editingHousehold.id, payload);',
+          ['F.3'],
+        ],
         [
           'a saved partner takes a pick',
           F,
@@ -1289,14 +1796,14 @@ async function main() {
           F,
           "const f = fillFrom(c, takes === 'kid' ? 'kid' : 'adult');",
           "const f = fillFrom(c, 'adult');",
-          ['R.2', 'P.1'],
+          ['R.2', 'P.1', 'Q.1', 'Q.3', 'Q.5'],
         ],
         [
           'a contact already in a row is not greyed',
           F,
-          'usedIds(key).has(c.id) ? CONTACTS_WORDS.ALREADY_IN_FORM : undefined',
-          'undefined',
-          ['D.2', 'D.4', 'D.5', 'P.2'],
+          'usedIds(key).has(c.id) ? CONTACTS_WORDS.ALREADY_IN_FORM : placedNote(c.id)',
+          'placedNote(c.id)',
+          ['D.2', 'D.4', 'D.5', 'P.2', 'N.3', 'G.1'],
         ],
         [
           'a tap elsewhere does not close the list',
