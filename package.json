@@ -202,6 +202,7 @@
     "test:decide-later-settle": "tsx tests/decide-later-settle-test.ts",
     "test:decide-later-form": "tsx --tsconfig tests/tsconfig.json tests/decide-later-form-test.ts",
     "test:decide-later-preflight": "tsx --tsconfig tests/tsconfig.json tests/decide-later-preflight-test.ts",
+    "test:no-device-id": "tsx tests/no-device-id-test.ts",
     "test:contacts-store": "tsx --tsconfig tests/tsconfig.json tests/contacts-store-test.ts",
     "test:contacts-page": "tsx --tsconfig tests/tsconfig.json tests/contacts-page-test.tsx",
     "test:contacts-load": "tsx --tsconfig tests/tsconfig.json tests/contacts-load-test.ts",

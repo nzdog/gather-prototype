@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { isSent } from '@/lib/lifecycle';
 import { logInviteEvent } from '@/lib/invite-events';
-import { headers } from 'next/headers';
 import { isHostMembership } from '@/lib/eligibility/host-exclusion';
 import {
   isClaimableMembership,
@@ -82,7 +81,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
           token: true,
           scope: true,
           claimedAt: true,
-          claimedBy: true,
           openedAt: true,
         },
       },
@@ -182,11 +180,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
     );
   }
 
-  // Generate device identifier for audit
-  const headersList = await headers();
-  const userAgent = headersList.get('user-agent') || '';
-  const forwardedFor = headersList.get('x-forwarded-for') || '';
-  const deviceId = generateDeviceId(userAgent, forwardedFor);
+  // [[GTC-463]] (founder ruling, 15 Nov 2026): a claim keeps no device id. Nothing read it;
+  // claimedBy stays empty.
 
   // Claim the name (update token and set reachability tier)
   const now = new Date();
@@ -197,7 +192,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
       where: { id: accessToken.id },
       data: {
         claimedAt: now,
-        claimedBy: deviceId,
         openedAt: accessToken.openedAt || now, // Also mark as opened if not already
       },
     });
@@ -223,7 +217,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
         personId: person.id,
         type: 'NAME_CLAIMED',
         metadata: {
-          deviceId,
           sharedLinkToken: token,
           personName: person.name,
         },
@@ -237,22 +230,4 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
     participantToken: accessToken.token,
     personName: person.name,
   });
-}
-
-/**
- * Generate a semi-stable device identifier for audit purposes
- * This is NOT for security - just for tracking claims
- */
-function generateDeviceId(userAgent: string, ip: string): string {
-  const combined = `${userAgent.substring(0, 100)}-${ip.split(',')[0].trim()}`;
-
-  // Simple hash
-  let hash = 0;
-  for (let i = 0; i < combined.length; i++) {
-    const char = combined.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash; // Convert to 32-bit integer
-  }
-
-  return `device_${Math.abs(hash).toString(36)}`;
 }

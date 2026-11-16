@@ -83,29 +83,36 @@ async function readDirectory(eventId: string) {
 }
 
 /**
- * The claim route's two outcomes, as this suite can observe them in-process.
+ * The claim route's three outcomes, as this suite observes them in-process.
  *
- * ⚠ THE HAPPY PATH CANNOT BE DRIVEN IN-PROCESS, AND THAT IS NOT A GAP IN THE ASSERTION.
- * A successful claim builds an audit `deviceId` from `headers()` (`next/headers`), which
- * throws "`headers` was called outside a request scope" under `tsx`. That throw is itself
- * the observation this suite needs: it happens strictly AFTER both guards, so reaching it
- * proves the caller got past them. A refusal returns before it. So the two outcomes are
- * distinguishable and neither is inferred — 'refused' carries the real status and body, and
- * 'reached-claim' means the request was admitted to the claim machinery.
- * The claim's own writes are asserted over HTTP in the ticket's evidence, as GTC-256 did.
+ * [[GTC-463]] (founder ruling, 15 Nov 2026): A CLAIM KEEPS NO DEVICE ID, SO THE HAPPY PATH NOW
+ * RUNS HERE IN FULL. Until GTC-463 a successful claim built an audit `deviceId` from
+ * `headers()` (`next/headers`), which throws "`headers` was called outside a request scope"
+ * under `tsx`, and this suite read that throw as "admitted to the claim machinery". The route
+ * reads no request headers now, so an admitted guest is CLAIMED in this process and the suite
+ * reads the real answer instead of inferring it from an error:
+ *
+ *   'claimed'  200 with `success: true` (the token it hands back is checked at the site);
+ *   'refused'  any other answer, with its real status and body;
+ *   'threw'    any error at all, with its message. No throw is a pass any more: every site
+ *              asserts 'claimed' or 'refused', so a throw fails the one assertion it feeds
+ *              and the rest of the file still runs.
  */
-type ClaimOutcome = { kind: 'refused'; status: number; body: any } | { kind: 'reached-claim' };
+type ClaimOutcome =
+  | { kind: 'claimed'; status: number; body: any }
+  | { kind: 'refused'; status: number; body: any }
+  | { kind: 'threw'; message: string };
 
 async function postClaim(sharedToken: string, personId: string): Promise<ClaimOutcome> {
   const request = { json: async () => ({ personId }) } as any;
   try {
     const res = await claimPOST(request, { params: Promise.resolve({ token: sharedToken }) });
-    return { kind: 'refused', status: res.status, body: await res.json() };
+    const body = await res.json();
+    return res.status === 200 && body?.success === true
+      ? { kind: 'claimed', status: res.status, body }
+      : { kind: 'refused', status: res.status, body };
   } catch (e: any) {
-    if (String(e?.message ?? '').includes('outside a request scope')) {
-      return { kind: 'reached-claim' };
-    }
-    throw e;
+    return { kind: 'threw', message: String(e?.message ?? e) };
   }
 }
 
@@ -396,10 +403,20 @@ async function main() {
     );
 
     const guestClaim = await postClaim(sharedLinkToken, guestPerson.id);
+    if (guestClaim.kind === 'threw') console.log(`    threw: ${guestClaim.message}`);
+    const guestAsk = await prisma.accessToken.findFirst({
+      where: { eventId: event.id, personId: guestPerson.id, scope: 'PARTICIPANT' },
+      select: { token: true, claimedAt: true },
+    });
     assert(
-      'CONTROL: an ordinary guest is still admitted to the claim machinery — the refusal ' +
-        'is scoped to the coordinator and has not swallowed everybody',
-      guestClaim.kind === 'reached-claim'
+      'CONTROL: an ordinary guest is still admitted, and since [[GTC-463]] the claim runs in ' +
+        'full in this process — 200, their own PARTICIPANT token handed back, and that token ' +
+        'stamped claimed — so the refusal is scoped to the coordinator and has not swallowed ' +
+        'everybody',
+      guestClaim.kind === 'claimed' &&
+        !!guestAsk &&
+        guestClaim.body?.participantToken === guestAsk.token &&
+        guestAsk.claimedAt !== null
     );
 
     const hostClaim = await postClaim(sharedLinkToken, hostPerson.id);
