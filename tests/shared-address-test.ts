@@ -16,6 +16,8 @@
  *   B  edit: a partner at the primary's address — no demotion, and the next save works
  *   C  edit: moving a member, or the primary, onto an address another member holds
  *   D  cross-event: both readings of "a name typed at capture is kept" (Q1's trade)
+ *      [[GTC-465]] (founder ruling, 17 Nov 2026): a record is reused only among the same
+ *      host's own people, so on a second host's event the same first name is a NEW Person (D2)
  *   E  re-entry: the same first name at the same address is the same person
  *   F  the host's address, both arms (Q8); she herself is never addressable
  *   G  structural: no capture site finds a Person by a unique email any more
@@ -321,19 +323,57 @@ async function main() {
         kateAfter.name === 'Kate Henderson' && kateAfter.email === kate.email
       );
 
-      // D2 — the same first name at that address: the same Person, and the name already on
-      // that Person shows. The ruled trade (Q1), not a missed assertion.
+      // D2 — [[GTC-465]] (founder ruling, 17 Nov 2026): a record is reused only among the same
+      // host's own people. Kate's Person is on a second host's event, so here the same first
+      // name at her address is a NEW Person with exactly the name typed, and Kate's Person is
+      // unchanged. On the SAME host's other event it is still the same Person, and the name
+      // already on it shows: Q1's ruled trade, kept within one host.
       const d2 = await edit(event.id, household.id, {
         primaryContact: { name: 'Hine', email: hine.email! },
         guests: [...asInput(rows, 'GUEST'), { name: 'kate', email: kate.email! }],
       });
       rows = await members(household.id);
       rows.forEach((m) => recordedPersonIds.add(m.personId));
-      const kateHere = rows.find((m) => m.personId === kate.id);
+      const kateTyped = rows.find(
+        (m) =>
+          m.householdRole === 'GUEST' &&
+          m.person.email === kate.email &&
+          /^kate\b/i.test(m.person.name)
+      );
       assert(
-        'D2: the same first name at that address is the SAME Person — the name already on ' +
-          'that Person shows',
-        d2.ok && !!kateHere && kateHere.person.name === 'Kate Henderson',
+        'D2: on ANOTHER host’s event, the same first name at that address is a NEW Person ' +
+          'with exactly the typed name (GTC-465)',
+        d2.ok && !!kateTyped && kateTyped.personId !== kate.id && kateTyped.person.name === 'kate',
+        `guest typed "kate": ${kateTyped?.person.name} (${kateTyped?.personId === kate.id ? 'the other host’s Person' : 'own Person'})`
+      );
+      const kateStill = await prisma.person.findUniqueOrThrow({ where: { id: kate.id } });
+      assert(
+        'D2: and the other host’s Person is unchanged',
+        kateStill.name === 'Kate Henderson' && kateStill.email === kate.email
+      );
+
+      const sameHostOther = await prisma.event.create({
+        data: {
+          name: 'GTC-293 D same host, other event',
+          startDate: event.startDate,
+          endDate: event.endDate,
+          hostId: event.hostId,
+        },
+      });
+      eventIds.push(sameHostOther.id);
+      const mere = await makePerson('Mere Henderson', addr('d-mere'));
+      await makeHousehold(sameHostOther.id, { personId: mere.id });
+      const d2same = await edit(event.id, household.id, {
+        primaryContact: { name: 'Hine', email: hine.email! },
+        guests: [...asInput(rows, 'GUEST'), { name: 'mere', email: mere.email! }],
+      });
+      rows = await members(household.id);
+      rows.forEach((m) => recordedPersonIds.add(m.personId));
+      const mereHere = rows.find((m) => m.personId === mere.id);
+      assert(
+        'D2: on the SAME host’s other event, the same first name at that address is the SAME ' +
+          'Person, and the name already on it shows',
+        d2same.ok && !!mereHere && mereHere.person.name === 'Mere Henderson',
         `members: ${rows.map((m) => m.person.name).join(', ')}`
       );
     }
@@ -389,13 +429,21 @@ async function main() {
           sentAt: null,
           email: shared,
         };
+        // [[GTC-465]] Q9 (founder, 17 Nov 2026): each person the helper makes is added to the
+        // event first, as the real entry points do. A removed guest is not found again.
         const sam = await capture.findOrCreateCapturedPerson(prisma, { ...args, name: 'Sam Lee' });
         recordedPersonIds.add(sam.id);
+        await prisma.personEvent.create({
+          data: { personId: sam.id, eventId: event.id, role: 'PARTICIPANT' },
+        });
         const alex = await capture.findOrCreateCapturedPerson(prisma, {
           ...args,
           name: 'Alex Lee',
         });
         recordedPersonIds.add(alex.id);
+        await prisma.personEvent.create({
+          data: { personId: alex.id, eventId: event.id, role: 'PARTICIPANT' },
+        });
         assert('E3: two first names at one address are two Persons', sam.id !== alex.id);
         const samAgain = await capture.findOrCreateCapturedPerson(prisma, {
           ...args,
