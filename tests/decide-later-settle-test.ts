@@ -22,6 +22,11 @@
  * 12 pins it. Ruling 50: STOP belongs to the phone number and Stage 2 does not touch it; item 20
  * pins that.
  *
+ * [[GTC-465]] (founder ruling, 17 Nov 2026): a record is reused only among the same host's own
+ * people, so a second host who types the same child on their own event gets their OWN record;
+ * the first host's "don't message" wipe stays on the first host's record and the second host
+ * keeps the email and phone they typed. Item 12 (12.0, 12a.3, 12b.6) pins that now.
+ *
  * HOW THE ROUTES ARE CALLED — as in `decide-later-write-test.ts` (S2.1). `requireEventRole` reads
  * a session cookie from `next/headers`, which only exists inside a real request. So this file
  * calls the real route handlers in this process, with real signed-in Users, Sessions and
@@ -479,13 +484,17 @@ async function main() {
 
     // ════════════════════════════════════════════════════════════════════════════════════════
     // Item 12 — the shared person and the opt-out outcome (rulings 27, 30, 33, 34)
+    // [[GTC-465]] (founder ruling, 17 Nov 2026): the second host's typing makes the second
+    // host's own record, which the first host's settle does not touch.
     // ════════════════════════════════════════════════════════════════════════════════════════
-    section('Item 12 (a) — no opt-out anywhere: blanked, and the second host reads it (ruling 27)');
+    section(
+      "Item 12 (a) — no opt-out anywhere: blanked on the first host's record only (GTC-465 overrides ruling 27 across hosts)"
+    );
     const ka = await makeKid('i12a', { second: true });
     const pe2a0 = await peOf(ka.pe2Id!);
     assert(
-      "12.0 setup: one person record sits behind both hosts' rows (the matching rule, GTC-293)",
-      pe2a0?.personId === ka.personId && pe2a0?.eventId === E2,
+      "12.0 setup: the second host's row has its OWN person record (GTC-465 overrides GTC-449 ruling 27 across hosts)",
+      !!pe2a0 && pe2a0.personId !== ka.personId && pe2a0.eventId === E2,
       pe2a0 && { same: pe2a0.personId === ka.personId, ev: pe2a0.eventId === E2 }
     );
     const ra = await put(ka, { decideLater: false });
@@ -498,8 +507,8 @@ async function main() {
     );
     assert('12a.2 the first host\'s row: CHILD, marker "no"', isKidNo(ra1), state(ra1));
     assert(
-      "12a.3 the second host's row reads the person with neither (ruling 27: the shared person)",
-      ra2?.person.email === null && ra2?.person.phoneNumber === null,
+      "12a.3 the second host's own record keeps the email and phone the second host typed (GTC-465)",
+      ra2?.person.email === ka.email && ra2?.person.phoneNumber === phoneOf(ka.phone),
       state(ra2)
     );
     assert(
@@ -534,8 +543,8 @@ async function main() {
       obAfter.length
     );
     assert(
-      "12b.6 the second host's row still reads the email",
-      rb2?.person.email === kb.email && rb2?.person.phoneNumber === null,
+      "12b.6 the second host's own record keeps the email and phone the second host typed",
+      rb2?.person.email === kb.email && rb2?.person.phoneNumber === phoneOf(kb.phone),
       state(rb2)
     );
     assert('12b.7 nothing else on the person changed (the name)', rb1?.person.name === kb.name);
