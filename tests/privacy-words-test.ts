@@ -7,8 +7,12 @@
  * verbatim in docs/tickets/GTC-464.md. The founder checked Railway on 16 Nov 2026: no TWILIO
  * variables, so ruling 7 stands; a test cannot see Railway, so F13 reads the code only.
  *
+ * [[GTC-466]] (the founder's rulings of 19 Nov 2026, verbatim in docs/tickets/GTC-466.md): the
+ * visit count's words, W14 to W17, in the same commit as the counter. W17 is Railway's own record,
+ * which no test can see.
+ *
  * Layers:
- *   W  each ruled line (W0 to W13) is on the page, in its place.
+ *   W  each ruled line (W0 to W17) is on the page, in its place.
  *   O  the old claims are gone from the whole page.
  *   K  CONTROLS, green before and after the page changes: what stays.
  *   F  CONTROLS, green before and after the page changes: the code facts the words rest on, read
@@ -31,7 +35,8 @@ const ROOT = process.cwd();
 const DRY_RUN = process.env.PRIVACY_WORDS_DRY_RUN === '1';
 
 // ── The words, as ruled (16 Nov 2026) ────────────────────────────────────────────────────────
-const W0_DATE = 'Last updated: 16 November 2026';
+// [[GTC-466]] (founder, 19 Nov 2026): the deploy day, 20 November 2026.
+const W0_DATE = 'Last updated: 20 November 2026';
 const W1 = 'Usage data: when someone first opens a link we sent them, and when they answer';
 const W2 =
   'Browser details: when someone first opens a link we sent them, we keep the description their ' +
@@ -64,16 +69,38 @@ const W9 =
 const W10 =
   "Gather also saves some things in your own browser so you don't lose them: an unsaved household " +
   "form for up to 7 days, and a new event's details until you finish creating it.";
+// [[GTC-466]] (founder, 19 Nov 2026): W11's last sentence says it is Gather that does not store
+// the address, since W17 says Railway keeps one.
 const W11 =
   'Sample events: if you start one on the demo page, Gather keeps a short code made from your ' +
   'internet address with a secret key, to allow 3 samples an hour. It is deleted with the sample. ' +
-  'Your internet address itself is not stored.';
+  'Gather does not store your internet address itself.';
+const W11_OLD_SENTENCE = 'Your internet address itself is not stored.';
 const W12 =
   'Records of email addresses and phone numbers that cannot receive our messages are kept ' +
   'permanently, so we stop trying them.';
 const W13 =
   'Anthropic — AI plan making (event details and dietary needs; sometimes the names of guests ' +
   'bringing items)';
+// [[GTC-466]] (founder, 19 Nov 2026): the visit count's words.
+const W14 =
+  'Visit counts: each time the home page, the demo page or the new-event page is opened, Gather ' +
+  "writes one line to its server log with the page's name and where the visitor came from: the " +
+  'name of the website their browser reports (such as facebook.com), "internal" for one of ' +
+  'Gather\'s own pages, or "direct" if the browser does not say. Nothing else about the visitor is ' +
+  'written: no internet address, no browser description, no cookie and no full web address. If ' +
+  "the link carried one of Gather's own campaign labels (such as facebook), that label is written " +
+  'too.';
+const W15 =
+  'We only collect information needed to coordinate your events, and a count of visits to a few ' +
+  'of our pages:';
+const W15_OLD = 'We only collect information needed to coordinate your events:';
+const W16 =
+  "Visit-count lines are kept in our hosting provider's logs (Railway) for up to 90 days, then " +
+  'deleted. Daily totals, which say nothing about any visitor, may be kept longer.';
+const W17 =
+  'Our hosting provider (Railway) also keeps its own record of each request to the site, including ' +
+  "the visitor's internet address and browser description, for up to 90 days.";
 
 // ── What stays (the controls) ─────────────────────────────────────────────────────────────────
 const K1 = 'No tracking cookies';
@@ -224,7 +251,7 @@ const CHECKS: Check[] = [
     layer: 'W',
     label: `W0 the date reads "${W0_DATE}", and it is the page's only "Last updated"`,
     test: (i) => i.page.includes(W0_DATE) && count(i.page, 'Last updated:') === 1,
-    breakIt: (i) => withPage(i, i.page.replace('16 November 2026', '17 November 2026')),
+    breakIt: (i) => withPage(i, i.page.replace('20 November 2026', '21 November 2026')),
   },
   {
     layer: 'W',
@@ -290,10 +317,10 @@ const CHECKS: Check[] = [
   {
     layer: 'W',
     label:
-      'W11 "Sample events: ..." is the last item under What We Collect, after the Cookies item',
+      'W11 "Sample events: ..." is the last item under What We Collect, after the Cookies item; its old last sentence is gone (GTC-466)',
     test: (i) => {
       const c = collect(i.page);
-      return inOrder(c, [W3, W11]) && c.trim().endsWith(W11);
+      return inOrder(c, [W3, W11]) && c.trim().endsWith(W11) && !i.page.includes(W11_OLD_SENTENCE);
     },
     breakIt: (i) => without(i, W11),
   },
@@ -308,6 +335,39 @@ const CHECKS: Check[] = [
     label: 'W13 "Anthropic — AI plan making (event details and dietary needs; sometimes ...)"',
     test: (i) => share(i.page).includes(W13),
     breakIt: (i) => without(i, W13),
+  },
+  {
+    layer: 'W',
+    label:
+      'W14 "Visit counts: ..." (GTC-466), right after Browser details and right before Cookies',
+    test: (i) => collect(i.page).includes(`${W2} ${W14} ${W3}`),
+    breakIt: (i) => without(i, W14),
+  },
+  {
+    layer: 'W',
+    label:
+      'W15 "We only collect information needed to coordinate your events, and a count of visits to a few of our pages:" opens What We Collect; the old sentence is gone',
+    test: (i) =>
+      collect(i.page).includes(`What We Collect ${W15} Account information:`) &&
+      !i.page.includes(W15_OLD),
+    breakIt: (i) => withPage(i, i.page.replace(W15, W15_OLD)),
+  },
+  {
+    layer: 'W',
+    label:
+      'W16 "Visit-count lines are kept ... for up to 90 days ..." is the last Data Retention bullet, after the blocks bullet',
+    test: (i) => {
+      const r = retentionOnly(i.page);
+      return inOrder(r, [K2, W12, W16]) && r.trim().endsWith(W16);
+    },
+    breakIt: (i) => without(i, W16),
+  },
+  {
+    layer: 'W',
+    label:
+      'W17 "Our hosting provider (Railway) also keeps its own record of each request ..." under Who We Share It With, right after the providers, before "We do not sell"',
+    test: (i) => share(i.page).includes(`${W13} ${W17} We do not sell personal data.`),
+    breakIt: (i) => without(i, W17),
   },
 
   // O — the old claims, gone from the whole page.

@@ -7,7 +7,7 @@ export default function PrivacyPolicy() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
-        <p className="text-sm text-gray-500 mb-8">Last updated: 16 November 2026</p>
+        <p className="text-sm text-gray-500 mb-8">Last updated: 20 November 2026</p>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 space-y-8">
           {/* Who We Are */}
@@ -29,7 +29,8 @@ export default function PrivacyPolicy() {
           <section>
             <h2 className="text-xl font-bold text-gray-900 mb-3">What We Collect</h2>
             <p className="text-gray-700 mb-3">
-              We only collect information needed to coordinate your events:
+              We only collect information needed to coordinate your events, and a count of visits to
+              a few of our pages:
             </p>
 
             <div className="space-y-3 text-gray-700">
@@ -76,6 +77,17 @@ export default function PrivacyPolicy() {
               </div>
 
               <div>
+                <strong className="text-gray-900">Visit counts:</strong> each time the home page,
+                the demo page or the new-event page is opened, Gather writes one line to its server
+                log with the page&apos;s name and where the visitor came from: the name of the
+                website their browser reports (such as facebook.com), &quot;internal&quot; for one
+                of Gather&apos;s own pages, or &quot;direct&quot; if the browser does not say.
+                Nothing else about the visitor is written: no internet address, no browser
+                description, no cookie and no full web address. If the link carried one of
+                Gather&apos;s own campaign labels (such as facebook), that label is written too.
+              </div>
+
+              <div>
                 <strong className="text-gray-900">Cookies:</strong> a sign-in cookie, and a cookie
                 for the invitation link you opened (no tracking cookies)
               </div>
@@ -83,8 +95,8 @@ export default function PrivacyPolicy() {
               <div>
                 <strong className="text-gray-900">Sample events:</strong> if you start one on the
                 demo page, Gather keeps a short code made from your internet address with a secret
-                key, to allow 3 samples an hour. It is deleted with the sample. Your internet
-                address itself is not stored.
+                key, to allow 3 samples an hour. It is deleted with the sample. Gather does not
+                store your internet address itself.
               </div>
             </div>
           </section>
@@ -129,6 +141,12 @@ export default function PrivacyPolicy() {
                 sometimes the names of guests bringing items)
               </li>
             </ul>
+
+            <p className="text-gray-700 mb-3">
+              Our hosting provider (Railway) also keeps its own record of each request to the site,
+              including the visitor&apos;s internet address and browser description, for up to 90
+              days.
+            </p>
 
             <p className="text-gray-700 font-medium">
               We do not sell personal data. We do not share data with advertisers.
@@ -215,6 +233,11 @@ export default function PrivacyPolicy() {
               <li>
                 • Records of email addresses and phone numbers that cannot receive our messages are
                 kept permanently, so we stop trying them.
+              </li>
+              <li>
+                • Visit-count lines are kept in our hosting provider&apos;s logs (Railway) for up to
+                90 days, then deleted. Daily totals, which say nothing about any visitor, may be
+                kept longer.
               </li>
             </ul>
           </section>

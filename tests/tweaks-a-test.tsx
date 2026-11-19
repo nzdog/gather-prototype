@@ -253,6 +253,24 @@ const GTC461_HOME_PAIRS: Pairs = [
       '\nexport default async function LandingPage() {\n',
   ],
 ];
+/**
+ * [[GTC-466]] (founder rulings, 19 Nov 2026): the front page writes its one visit line. C2 still
+ * asks for the whole file byte for byte: these two pieces, typed here by hand, on top of the rest.
+ */
+const GTC466_HOME_PAIRS: Pairs = [
+  [
+    "import { sharePreview } from '@/lib/share-preview';\n",
+    "import { sharePreview } from '@/lib/share-preview';\n" +
+      "import { countPageVisit, type VisitPageProps } from '@/lib/page-visit';\n",
+  ],
+  [
+    'export default async function LandingPage() {\n' + '  const user = await getUser();\n',
+    'export default async function LandingPage(props: VisitPageProps) {\n' +
+      '  const user = await getUser();\n' +
+      '  // [[GTC-466]]: one line in the server log for a real load of this page (no cookie, no address).\n' +
+      "  await countPageVisit('home', props?.searchParams);\n",
+  ],
+];
 const PAYING_PAIRS: Pairs = [
   [
     "import { GATHER_CONTACT_EMAIL } from '@/lib/email-footer';\n",
@@ -456,6 +474,64 @@ const GTC464_PRIVACY_PAIRS: Pairs = [
       '                finish creating it.\n' +
       '              </li>\n',
   ],
+];
+/**
+ * [[GTC-466]] (founder rulings, 19 Nov 2026): the visit count's words, W14 to W17, each put in at
+ * its place exactly once; W11's last sentence ("Gather does not store your internet address
+ * itself."); and the date, the deploy day the founder gave: 20 November 2026.
+ */
+const GTC466_PRIVACY_PAIRS: Pairs = [
+  [
+    '              We only collect information needed to coordinate your events:\n',
+    '              We only collect information needed to coordinate your events, and a count of visits to\n' +
+      '              a few of our pages:\n',
+  ],
+  [
+    '                the browser and device type), cut to 200 characters. Hosts do not see it.\n' +
+      '              </div>\n',
+    '                the browser and device type), cut to 200 characters. Hosts do not see it.\n' +
+      '              </div>\n' +
+      '\n' +
+      '              <div>\n' +
+      '                <strong className="text-gray-900">Visit counts:</strong> each time the home page,\n' +
+      '                the demo page or the new-event page is opened, Gather writes one line to its server\n' +
+      '                log with the page&apos;s name and where the visitor came from: the name of the\n' +
+      '                website their browser reports (such as facebook.com), &quot;internal&quot; for one\n' +
+      '                of Gather&apos;s own pages, or &quot;direct&quot; if the browser does not say.\n' +
+      '                Nothing else about the visitor is written: no internet address, no browser\n' +
+      '                description, no cookie and no full web address. If the link carried one of\n' +
+      '                Gather&apos;s own campaign labels (such as facebook), that label is written too.\n' +
+      '              </div>\n',
+  ],
+  [
+    '            </ul>\n' + '\n' + '            <p className="text-gray-700 font-medium">\n',
+    '            </ul>\n' +
+      '\n' +
+      '            <p className="text-gray-700 mb-3">\n' +
+      '              Our hosting provider (Railway) also keeps its own record of each request to the site,\n' +
+      '              including the visitor&apos;s internet address and browser description, for up to 90\n' +
+      '              days.\n' +
+      '            </p>\n' +
+      '\n' +
+      '            <p className="text-gray-700 font-medium">\n',
+  ],
+  [
+    '                kept permanently, so we stop trying them.\n' + '              </li>\n',
+    '                kept permanently, so we stop trying them.\n' +
+      '              </li>\n' +
+      '              <li>\n' +
+      '                • Visit-count lines are kept in our hosting provider&apos;s logs (Railway) for up to\n' +
+      '                90 days, then deleted. Daily totals, which say nothing about any visitor, may be\n' +
+      '                kept longer.\n' +
+      '              </li>\n',
+  ],
+  [
+    '                key, to allow 3 samples an hour. It is deleted with the sample. Your internet\n' +
+      '                address itself is not stored.\n',
+    '                key, to allow 3 samples an hour. It is deleted with the sample. Gather does not\n' +
+      '                store your internet address itself.\n',
+  ],
+  ['Last updated: 16 November 2026', 'Last updated: 20 November 2026'],
 ];
 const NAV_IMPORT_OLD =
   "import { Plus, Calendar, CreditCard, LogOut, LogIn, Menu, X, ChevronDown } from 'lucide-react';\n";
@@ -829,8 +905,11 @@ function layerC() {
   );
   assert(
     'C',
-    'C2 the home page is T0’s file with exactly the "Browse event templates" block taken out (and exactly GTC-461’s two link-preview insertions put in)',
-    CHECKS.exactly(home, applyPairs(atRef(T0_TIP, HOME), [...HOME_PAIRS, ...GTC461_HOME_PAIRS]))
+    'C2 the home page is T0’s file with exactly the "Browse event templates" block taken out (and exactly GTC-461’s two link-preview insertions and GTC-466’s visit line put in)',
+    CHECKS.exactly(
+      home,
+      applyPairs(atRef(T0_TIP, HOME), [...HOME_PAIRS, ...GTC461_HOME_PAIRS, ...GTC466_HOME_PAIRS])
+    )
   );
   assert(
     'C',
@@ -995,10 +1074,12 @@ function layerF() {
       : null;
   // [[GTC-464]] (founder rulings, 16 Nov 2026): then the ruled words, each old piece exactly once.
   const expected464 = expected === null ? null : applyPairs(expected, GTC464_PRIVACY_PAIRS);
+  // [[GTC-466]] (founder rulings, 19 Nov 2026): then the visit count's words, each exactly once.
+  const expected466 = expected464 === null ? null : applyPairs(expected464, GTC466_PRIVACY_PAIRS);
   assert(
     'F',
-    'F3 nothing else on the page moves: it is T0’s file with only the two links, the import and GTC-464’s ruled words changed',
-    CHECKS.exactly(src, expected464)
+    'F3 nothing else on the page moves: it is T0’s file with only the two links, the import, GTC-464’s ruled words and GTC-466’s visit-count words changed',
+    CHECKS.exactly(src, expected466)
   );
 }
 
