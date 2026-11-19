@@ -204,7 +204,10 @@ export const CHECKS = {
    * its name, and no other setting (no process.env) ([[GTC-447]]).
    */
   readsAtRender(src: string): boolean {
-    const fn = src.indexOf('export default async function DemoLandingPage()');
+    const fn = Math.max(
+      src.indexOf('export default async function DemoLandingPage()'),
+      src.indexOf('export default async function DemoLandingPage(props: VisitPageProps)')
+    );
     const conn = src.indexOf('await connection();');
     const at = src.indexOf('isDemoStartOn()');
     const before = fn >= 0 ? src.slice(0, fn) : src;

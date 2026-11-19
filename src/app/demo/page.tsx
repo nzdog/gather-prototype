@@ -2,6 +2,7 @@ import { connection } from 'next/server';
 import DemoExplainer from '@/components/demo/DemoExplainer';
 import TryItYourselfButton from '@/components/demo/TryItYourselfButton';
 import { isDemoStartOn } from '@/lib/demo/start-switch';
+import { countPageVisit, type VisitPageProps } from '@/lib/page-visit';
 
 /**
  * [[GTC-394]] tweak 3 — the copy button's own label on this page (founder's words). GTC-392's
@@ -44,8 +45,10 @@ const UNDER_CONSTRUCTION = 'Under construction';
  * tokens route went with [[GTC-442]]. The reset route still exists, answers 404 in production, and
  * elsewhere force-resets whichever database the server points at; this page never calls it.
  */
-export default async function DemoLandingPage() {
+export default async function DemoLandingPage(props: VisitPageProps) {
   await connection();
+  // [[GTC-466]]: one line in the server log for a real load of this page (no cookie, no address).
+  await countPageVisit('demo', props?.searchParams);
   return (
     <div className="min-h-screen bg-warm-white">
       <div className="max-w-2xl mx-auto px-5 py-16 text-center">

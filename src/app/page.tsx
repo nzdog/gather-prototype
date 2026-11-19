@@ -4,12 +4,15 @@ import Image from 'next/image';
 import type { Metadata } from 'next';
 import { getUser } from '@/lib/auth/session';
 import { sharePreview } from '@/lib/share-preview';
+import { countPageVisit, type VisitPageProps } from '@/lib/page-visit';
 
 // [[GTC-461]]: the front page is the only page that names itself as og:url.
 export const metadata: Metadata = sharePreview('/');
 
-export default async function LandingPage() {
+export default async function LandingPage(props: VisitPageProps) {
   const user = await getUser();
+  // [[GTC-466]]: one line in the server log for a real load of this page (no cookie, no address).
+  await countPageVisit('home', props?.searchParams);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-accent-light/10 via-white to-accent/5">
