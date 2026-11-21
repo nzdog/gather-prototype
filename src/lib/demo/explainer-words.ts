@@ -115,11 +115,14 @@ export const EXPLAINER_STEPS: readonly ExplainerStep[] = [
       {
         kind: 'figure',
         src: '/explainer/m1-add-crowd.jpg',
-        width: 830,
-        height: 594,
-        alt: 'Moment 1 with the household form on the left and, on the right, a green “Add a crowd” button above a list that so far holds one household.',
+        width: 1015,
+        height: 741,
+        alt: 'Moment 1 with “1 person added.” and, under it, a grey box reading “Got your guests in your phone or a spreadsheet? Load them as contacts, then pick them as you type.” with a “Your contacts” button, then the household form. On the right, a green “Add a crowd” button above a list that so far holds one household.',
         caption: '“Add a crowd” sits above the list of households, on the right.',
       },
+      p(
+        'On a real event, “Your contacts” lets you load your guests from your phone or a spreadsheet and pick them as you type. It isn’t part of the demo.'
+      ),
       {
         kind: 'figure',
         src: '/explainer/m1-people-list.jpg',

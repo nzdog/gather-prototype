@@ -18,6 +18,8 @@ import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { COPY_WORDS, isCopyAddress } from '@/lib/demo/copy-address';
 import { GATHER_CONTACT_EMAIL } from '@/lib/email-footer';
+import { useToast } from '@/contexts/ToastContext';
+import { contactsPress } from '@/lib/demo/contacts-sample-words';
 
 type User = {
   id: string;
@@ -32,6 +34,10 @@ export default function Navigation({ user }: NavigationProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const toast = useToast();
+  // [[GTC-468]]: in a sample, "Your contacts" says it is not part of the demo (R2) and goes nowhere.
+  const sample = isCopyAddress(user?.email);
+  const pressContacts = (e: { preventDefault: () => void }) => contactsPress(sample, e, toast);
 
   /*
    * [[GTC-358]] — ON A PHONE, A MENU BUTTON. Founder R1, verbatim: *"On a phone the bar shows the
@@ -186,6 +192,7 @@ export default function Navigation({ user }: NavigationProps) {
                   <a
                     key={item.href}
                     href={item.href}
+                    onClick={item.href === '/plan/contacts' ? pressContacts : undefined}
                     className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                       isActive
                         ? 'bg-sage-50 text-accent'
@@ -301,7 +308,10 @@ export default function Navigation({ user }: NavigationProps) {
                 <a
                   key={item.href}
                   href={item.href}
-                  onClick={() => setMenuOpen(false)}
+                  onClick={(e) => {
+                    setMenuOpen(false);
+                    if (item.href === '/plan/contacts') pressContacts(e);
+                  }}
                   className={`flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium ${
                     isActive ? 'bg-sage-50 text-accent' : 'text-gray-700 hover:bg-gray-50'
                   }`}

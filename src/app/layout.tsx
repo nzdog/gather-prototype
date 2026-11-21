@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 import Navigation from '@/components/shared/Navigation';
 import Providers from '@/components/shared/Providers';
+import { SampleViewer } from '@/components/shared/SampleViewer';
+import { isCopyAddress } from '@/lib/demo/copy-address';
 import { getUser } from '@/lib/auth/session';
 import { SITE_URL, sharePreview } from '@/lib/share-preview';
 
@@ -24,8 +26,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         {/* [[GTC-435]]: the signed-in user's id only, for drafts kept in this browser. */}
         <Providers viewerId={user?.id ?? null}>
-          <Navigation user={user} />
-          {children}
+          {/* [[GTC-468]]: a sample visitor's account, for the contacts page's notice. */}
+          <SampleViewer isSample={isCopyAddress(user?.email)}>
+            <Navigation user={user} />
+            {children}
+          </SampleViewer>
         </Providers>
       </body>
     </html>

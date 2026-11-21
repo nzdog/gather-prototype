@@ -28,6 +28,7 @@ import { useToast } from '@/contexts/ToastContext';
 import { DemoBanner } from '@/components/demo/DemoBanner';
 import CrowdButton, { type CrowdState } from '@/components/demo/CrowdButton';
 import { isCopyAddress, isCrowdAddress } from '@/lib/demo/copy-address';
+import { showSampleContactsToast } from '@/lib/demo/contacts-sample-words';
 import SetupOpeningScreen from '@/components/plan/SetupOpeningScreen';
 import Moment1InputForm, {
   Moment1PersonInput,
@@ -1306,6 +1307,8 @@ function EventSetupFlow() {
                 hostMode={hostStep.host}
                 onSaveHostHousehold={handleSaveHostHousehold}
                 channelCandidates={[]}
+                // [[GTC-468]]: in a sample, "Your contacts" says it is not part of the demo.
+                onSampleContacts={event.isDemo ? () => showSampleContactsToast(toast) : undefined}
               />
             </div>
           </div>
@@ -1499,6 +1502,8 @@ function EventSetupFlow() {
                 channelCandidates={channelCandidates}
                 invitationsSent={Boolean(event.sentAt)}
                 contactsPlaced={contactsPlaced}
+                // [[GTC-468]]: in a sample, "Your contacts" says it is not part of the demo.
+                onSampleContacts={event.isDemo ? () => showSampleContactsToast(toast) : undefined}
                 onDraftChange={setMoment1Draft}
                 moveOnRef={moment1MoveOnRef}
                 onSavingChange={setMoment1Saving}

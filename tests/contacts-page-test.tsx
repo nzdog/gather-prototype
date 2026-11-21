@@ -623,16 +623,22 @@ async function main() {
 
   // ══ P — THE PAGE FILE AND ITS FIRST PAINT ═══════════════════════════════════
   section('P — the page and what it draws before it has mounted');
-  check('P.1', 'the page is a client page that draws the screen and nothing else', () => {
-    const src = read(PAGE);
-    const page = loadLive(PAGE).default;
-    const tree = page({});
-    const screenFn = loadLive(SCREEN).default;
-    return {
-      ok: /^\s*'use client';/.test(src) && isEl(tree) && tree.type === screenFn,
-      got: String(tree?.type?.name),
-    };
-  });
+  // [[GTC-468]] (ruling A, Q8, amendment T2): the page now reads the sample flag with React's
+  // `useContext`, which needs a draw, so the tree comes from `mount`, not a bare call. The flag's
+  // default is "not a sample", so anyone but a sample visitor is still given the screen.
+  check(
+    'P.1',
+    'the page is a client page that draws the screen for anyone but a sample visitor (a sample sees the sample note instead)',
+    () => {
+      const src = read(PAGE);
+      const tree = mount(PAGE, {}, { viewerId: 'user-a' }).first;
+      const screenFn = loadLive(SCREEN).default;
+      return {
+        ok: /^\s*'use client';/.test(src) && isEl(tree) && tree.type === screenFn,
+        got: String(tree?.type?.name),
+      };
+    }
+  );
   check(
     'P.2',
     'first paint: the title and the A5 line, then a loading state with no count, button, list or sentence',

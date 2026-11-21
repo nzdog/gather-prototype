@@ -624,6 +624,45 @@ const GTC460_NAV_PAIRS: Pairs = [
       "    { href: '/plan/contacts', label: 'Your contacts', icon: BookUser },\n  ];\n",
   ],
 ];
+/**
+ * [[GTC-468]] (ruling A, Q8, amendment T1: "Approve all seven"). The sample visitor's "Your contacts"
+ * press: in a sample the link shows R2 and goes nowhere. Four pairs typed here by hand, on top of
+ * Ticket A's pieces and GTC-460's two; nothing is copied from the built file. A2 stays a whole-file
+ * match: any other byte that moves in Navigation.tsx, a comment included, is still red. The two
+ * onClick anchors carry their neighbouring `href` line, so each old text occurs exactly once.
+ */
+const GTC468_NAV_PAIRS: Pairs = [
+  [
+    "import { GATHER_CONTACT_EMAIL } from '@/lib/email-footer';\n",
+    "import { GATHER_CONTACT_EMAIL } from '@/lib/email-footer';\n" +
+      "import { useToast } from '@/contexts/ToastContext';\n" +
+      "import { contactsPress } from '@/lib/demo/contacts-sample-words';\n",
+  ],
+  [
+    '  const [isSigningOut, setIsSigningOut] = useState(false);\n',
+    '  const [isSigningOut, setIsSigningOut] = useState(false);\n' +
+      '  const toast = useToast();\n' +
+      '  // [[GTC-468]]: in a sample, "Your contacts" says it is not part of the demo (R2) and goes nowhere.\n' +
+      '  const sample = isCopyAddress(user?.email);\n' +
+      '  const pressContacts = (e: { preventDefault: () => void }) => contactsPress(sample, e, toast);\n',
+  ],
+  [
+    '                    href={item.href}\n' +
+      '                    className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${\n',
+    '                    href={item.href}\n' +
+      "                    onClick={item.href === '/plan/contacts' ? pressContacts : undefined}\n" +
+      '                    className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${\n',
+  ],
+  [
+    '                  href={item.href}\n' +
+      '                  onClick={() => setMenuOpen(false)}\n',
+    '                  href={item.href}\n' +
+      '                  onClick={(e) => {\n' +
+      '                    setMenuOpen(false);\n' +
+      "                    if (item.href === '/plan/contacts') pressContacts(e);\n" +
+      '                  }}\n',
+  ],
+];
 /** T0's file with each pair put in; null when an old piece is not there exactly once. */
 function applyPairs(t0: string, pairs: Pairs): string | null {
   let s = t0;
@@ -893,8 +932,11 @@ function layerA() {
   const navNow = navExpected(atRef(T0_TIP, NAV));
   assert(
     'A',
-    'A2 Navigation is T0’s file with exactly this ticket’s pieces put in (the label, the three links, their import and constants) and exactly GTC-460’s one menu item and its icon (ruling 166); no other byte moves',
-    CHECKS.exactly(nav, navNow === null ? null : applyPairs(navNow, GTC460_NAV_PAIRS))
+    'A2 Navigation is T0’s file with exactly this ticket’s pieces put in (the label, the three links, their import and constants) and exactly GTC-460’s one menu item and its icon (ruling 166) and exactly GTC-468’s sample press (four pairs, ruling A); no other byte moves',
+    CHECKS.exactly(
+      nav,
+      navNow === null ? null : applyPairs(navNow, [...GTC460_NAV_PAIRS, ...GTC468_NAV_PAIRS])
+    )
   );
 }
 
