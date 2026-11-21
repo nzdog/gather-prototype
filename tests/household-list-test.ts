@@ -443,7 +443,12 @@ function runPrivacy() {
   const howEnd = page.indexOf('Who We Share It With');
   const how = howStart >= 0 && howEnd > howStart ? page.slice(howStart, howEnd) : '';
   assert('F', 'F1 the S5 sentence, verbatim, under "How We Use It"', how.includes(S5));
-  assert('F', 'F2 "Last updated: 3 October 2026"', page.includes('Last updated: 3 October 2026'));
+  // [[GTC-464]] (founder ruling, 16 Nov 2026): the date moves with the page's new words.
+  assert(
+    'F',
+    'F2 "Last updated: 20 November 2026"',
+    page.includes('Last updated: 20 November 2026')
+  );
   assert(
     'F',
     "F3 CONTROL: GTC-350's bullet about text replies is still there",

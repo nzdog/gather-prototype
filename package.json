@@ -210,7 +210,10 @@
     "test:contacts-match": "tsx --tsconfig tests/tsconfig.json tests/contacts-match-test.ts",
     "test:contacts-form": "tsx --tsconfig tests/tsconfig.json tests/contacts-form-test.tsx",
     "test:contacts-placed": "tsx --tsconfig tests/tsconfig.json tests/contacts-placed-test.ts",
-    "test:contacts-untouched": "tsx --tsconfig tests/tsconfig.json tests/contacts-untouched-test.ts"
+    "test:contacts-untouched": "tsx --tsconfig tests/tsconfig.json tests/contacts-untouched-test.ts",
+    "test:privacy-words": "tsx --tsconfig tests/tsconfig.json tests/privacy-words-test.ts",
+    "test:guest-per-host": "tsx tests/guest-per-host-test.ts",
+    "test:page-visit": "tsx --tsconfig tests/tsconfig.json tests/page-visit-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

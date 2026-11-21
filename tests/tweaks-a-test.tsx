@@ -253,6 +253,24 @@ const GTC461_HOME_PAIRS: Pairs = [
       '\nexport default async function LandingPage() {\n',
   ],
 ];
+/**
+ * [[GTC-466]] (founder rulings, 19 Nov 2026): the front page writes its one visit line. C2 still
+ * asks for the whole file byte for byte: these two pieces, typed here by hand, on top of the rest.
+ */
+const GTC466_HOME_PAIRS: Pairs = [
+  [
+    "import { sharePreview } from '@/lib/share-preview';\n",
+    "import { sharePreview } from '@/lib/share-preview';\n" +
+      "import { countPageVisit, type VisitPageProps } from '@/lib/page-visit';\n",
+  ],
+  [
+    'export default async function LandingPage() {\n' + '  const user = await getUser();\n',
+    'export default async function LandingPage(props: VisitPageProps) {\n' +
+      '  const user = await getUser();\n' +
+      '  // [[GTC-466]]: one line in the server log for a real load of this page (no cookie, no address).\n' +
+      "  await countPageVisit('home', props?.searchParams);\n",
+  ],
+];
 const PAYING_PAIRS: Pairs = [
   [
     "import { GATHER_CONTACT_EMAIL } from '@/lib/email-footer';\n",
@@ -351,6 +369,170 @@ const PRIVACY_IMPORT =
   "// [[GTC-415]]: the page's address is Gather's one contact address, written once, in\n" +
   '// src/lib/email-footer.ts.\n' +
   "import { GATHER_CONTACT_EMAIL } from '@/lib/email-footer';\n\n";
+// [[GTC-464]] (founder rulings, 16 Nov 2026): the privacy page's ruled words, W0 to W13, as exact
+// old-to-new pieces applied after GTC-415's, in this order. Each old piece must occur exactly
+// once, so nothing else on the page may move.
+const GTC464_PRIVACY_PAIRS: Pairs = [
+  // W0, the date
+  ['Last updated: 3 October 2026', 'Last updated: 16 November 2026'],
+  // W8, payment data
+  [
+    '                processing. We store only the Stripe session ID, not card details.\n',
+    '                processing. Card details go to Stripe, not to Gather. We keep Stripe&apos;s\n' +
+      '                reference numbers for your payment or subscription, the amount paid and the dates.\n',
+  ],
+  // W1, usage data
+  [
+    '                <strong className="text-gray-900">Usage data:</strong> page visits, link opens,\n' +
+      '                response timestamps\n',
+    '                <strong className="text-gray-900">Usage data:</strong> when someone first opens a\n' +
+      '                link we sent them, and when they answer\n',
+  ],
+  // W2, browser details (a new item after W1)
+  [
+    '                link we sent them, and when they answer\n' + '              </div>\n',
+    '                link we sent them, and when they answer\n' +
+      '              </div>\n' +
+      '\n' +
+      '              <div>\n' +
+      '                <strong className="text-gray-900">Browser details:</strong> when someone first opens\n' +
+      '                a link we sent them, we keep the description their browser sends of itself (such as\n' +
+      '                the browser and device type), cut to 200 characters. Hosts do not see it.\n' +
+      '              </div>\n',
+  ],
+  // W3, the cookies item
+  [
+    '                <strong className="text-gray-900">Cookies:</strong> a single session cookie for\n' +
+      '                authentication (no tracking cookies)\n',
+    '                <strong className="text-gray-900">Cookies:</strong> a sign-in cookie, and a cookie\n' +
+      '                for the invitation link you opened (no tracking cookies)\n',
+  ],
+  // W4 out, W11 in: the sample events item takes the analytics item's place
+  [
+    '                <strong className="text-gray-900">Analytics:</strong> usage data may be collected\n' +
+      '                via analytics services\n',
+    '                <strong className="text-gray-900">Sample events:</strong> if you start one on the\n' +
+      '                demo page, Gather keeps a short code made from your internet address with a secret\n' +
+      '                key, to allow 3 samples an hour. It is deleted with the sample. Your internet\n' +
+      '                address itself is not stored.\n',
+  ],
+  // W13, the Anthropic line
+  [
+    '                • <strong>Anthropic</strong> — AI plan generation (event details sent to generate\n' +
+      '                plans)\n',
+    '                • <strong>Anthropic</strong> — AI plan making (event details and dietary needs;\n' +
+      '                sometimes the names of guests bringing items)\n',
+  ],
+  // W9, which numbers are texted
+  [
+    '              <li>• We only send to New Zealand mobile numbers</li>\n',
+    '              <li>\n' +
+      '                • Invitations and reminders are texted only to New Zealand numbers. A thank-you\n' +
+      '                after the event can also go to an Australian number.\n' +
+      '              </li>\n',
+  ],
+  // W5, data retention (three bullets)
+  [
+    '              <li>• Event data is retained for 12 months after the event date, then deleted</li>\n',
+    '              <li>\n' +
+      '                • Event data is kept until the host deletes the event, or until you ask us to delete\n' +
+      '                it. Nothing deletes it automatically.\n' +
+      '              </li>\n' +
+      '              <li>\n' +
+      '                • Deleting an event removes its plan, guest list, answers, invitation links,\n' +
+      '                messages and text replies. People&apos;s names and contact details are kept.\n' +
+      '              </li>\n' +
+      '              <li>• Sample events made on the demo page are deleted by Gather the next day.</li>\n',
+  ],
+  // W12, blocks kept (a new bullet after the SMS opt-out one)
+  [
+    '              <li>• SMS opt-out records are retained permanently to respect opt-out preferences</li>\n',
+    '              <li>• SMS opt-out records are retained permanently to respect opt-out preferences</li>\n' +
+      '              <li>\n' +
+      '                • Records of email addresses and phone numbers that cannot receive our messages are\n' +
+      '                kept permanently, so we stop trying them.\n' +
+      '              </li>\n',
+  ],
+  // W6, the two cookie bullets
+  [
+    '              <li>• We use a single session cookie for authentication</li>\n',
+    '              <li>\n' +
+      '                • A sign-in cookie keeps you signed in. It lasts 30 days, or 2 hours for a sample\n' +
+      '                event. Signing out removes it.\n' +
+      '              </li>\n' +
+      '              <li>\n' +
+      '                • When you open an invitation link, your browser keeps that link&apos;s code in a\n' +
+      '                cookie for 8 hours. It is sent only to Gather&apos;s pages for that kind of link.\n' +
+      '              </li>\n',
+  ],
+  // W7 out, W10 in: the browser storage bullet takes the analytics cookies bullet's place
+  [
+    '              <li>• Analytics cookies may be used</li>\n',
+    '              <li>\n' +
+      '                • Gather also saves some things in your own browser so you don&apos;t lose them: an\n' +
+      '                unsaved household form for up to 7 days, and a new event&apos;s details until you\n' +
+      '                finish creating it.\n' +
+      '              </li>\n',
+  ],
+];
+/**
+ * [[GTC-466]] (founder rulings, 19 Nov 2026): the visit count's words, W14 to W17, each put in at
+ * its place exactly once; W11's last sentence ("Gather does not store your internet address
+ * itself."); and the date, the deploy day the founder gave: 20 November 2026.
+ */
+const GTC466_PRIVACY_PAIRS: Pairs = [
+  [
+    '              We only collect information needed to coordinate your events:\n',
+    '              We only collect information needed to coordinate your events, and a count of visits to\n' +
+      '              a few of our pages:\n',
+  ],
+  [
+    '                the browser and device type), cut to 200 characters. Hosts do not see it.\n' +
+      '              </div>\n',
+    '                the browser and device type), cut to 200 characters. Hosts do not see it.\n' +
+      '              </div>\n' +
+      '\n' +
+      '              <div>\n' +
+      '                <strong className="text-gray-900">Visit counts:</strong> each time the home page,\n' +
+      '                the demo page or the new-event page is opened, Gather writes one line to its server\n' +
+      '                log with the page&apos;s name and where the visitor came from: the name of the\n' +
+      '                website their browser reports (such as facebook.com), &quot;internal&quot; for one\n' +
+      '                of Gather&apos;s own pages, or &quot;direct&quot; if the browser does not say.\n' +
+      '                Nothing else about the visitor is written: no internet address, no browser\n' +
+      '                description, no cookie and no full web address. If the link carried one of\n' +
+      '                Gather&apos;s own campaign labels (such as facebook), that label is written too.\n' +
+      '              </div>\n',
+  ],
+  [
+    '            </ul>\n' + '\n' + '            <p className="text-gray-700 font-medium">\n',
+    '            </ul>\n' +
+      '\n' +
+      '            <p className="text-gray-700 mb-3">\n' +
+      '              Our hosting provider (Railway) also keeps its own record of each request to the site,\n' +
+      '              including the visitor&apos;s internet address and browser description, for up to 90\n' +
+      '              days.\n' +
+      '            </p>\n' +
+      '\n' +
+      '            <p className="text-gray-700 font-medium">\n',
+  ],
+  [
+    '                kept permanently, so we stop trying them.\n' + '              </li>\n',
+    '                kept permanently, so we stop trying them.\n' +
+      '              </li>\n' +
+      '              <li>\n' +
+      '                • Visit-count lines are kept in our hosting provider&apos;s logs (Railway) for up to\n' +
+      '                90 days, then deleted. Daily totals, which say nothing about any visitor, may be\n' +
+      '                kept longer.\n' +
+      '              </li>\n',
+  ],
+  [
+    '                key, to allow 3 samples an hour. It is deleted with the sample. Your internet\n' +
+      '                address itself is not stored.\n',
+    '                key, to allow 3 samples an hour. It is deleted with the sample. Gather does not\n' +
+      '                store your internet address itself.\n',
+  ],
+  ['Last updated: 16 November 2026', 'Last updated: 20 November 2026'],
+];
 const NAV_IMPORT_OLD =
   "import { Plus, Calendar, CreditCard, LogOut, LogIn, Menu, X, ChevronDown } from 'lucide-react';\n";
 const NAV_IMPORT_NEW =
@@ -743,8 +925,11 @@ function layerC() {
   );
   assert(
     'C',
-    'C2 the home page is T0’s file with exactly the "Browse event templates" block taken out (and exactly GTC-461’s two link-preview insertions put in)',
-    CHECKS.exactly(home, applyPairs(atRef(T0_TIP, HOME), [...HOME_PAIRS, ...GTC461_HOME_PAIRS]))
+    'C2 the home page is T0’s file with exactly the "Browse event templates" block taken out (and exactly GTC-461’s two link-preview insertions and GTC-466’s visit line put in)',
+    CHECKS.exactly(
+      home,
+      applyPairs(atRef(T0_TIP, HOME), [...HOME_PAIRS, ...GTC461_HOME_PAIRS, ...GTC466_HOME_PAIRS])
+    )
   );
   assert(
     'C',
@@ -907,10 +1092,14 @@ function layerF() {
           .join(PRIVACY_LINK_NEW)
           .replace(PRIVACY_HEAD, PRIVACY_IMPORT + PRIVACY_HEAD)
       : null;
+  // [[GTC-464]] (founder rulings, 16 Nov 2026): then the ruled words, each old piece exactly once.
+  const expected464 = expected === null ? null : applyPairs(expected, GTC464_PRIVACY_PAIRS);
+  // [[GTC-466]] (founder rulings, 19 Nov 2026): then the visit count's words, each exactly once.
+  const expected466 = expected464 === null ? null : applyPairs(expected464, GTC466_PRIVACY_PAIRS);
   assert(
     'F',
-    'F3 nothing else on the page moves: it is T0’s file with only the two links and the import changed',
-    CHECKS.exactly(src, expected)
+    'F3 nothing else on the page moves: it is T0’s file with only the two links, the import, GTC-464’s ruled words and GTC-466’s visit-count words changed',
+    CHECKS.exactly(src, expected466)
   );
 }
 
