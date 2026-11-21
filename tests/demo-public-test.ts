@@ -96,6 +96,23 @@ const CHANGED_SRC = [
   'M\tsrc/lib/glance/live.ts',
   'M\tsrc/app/api/events/[id]/route.ts',
 ];
+/**
+ * [[GTC-469]]: the sample page's old outcome block as it was at BASE (code lines, trimmed): the small
+ * grey line under the privacy line. It moved above the button as an amber box, so C2 lets exactly
+ * this run go, and is red unless it is found in the old page exactly once.
+ */
+export const OLD_OUTCOME_BLOCK = [
+  '{line && (',
+  '<p className="text-sm text-gray-700 text-center">',
+  "{line.words}{' '}",
+  '{line.href && (',
+  '<a href={line.href} className="underline underline-offset-2">',
+  '{DEMO_START_WORDS.GO_TO_IT}',
+  '</a>',
+  ')}',
+  '</p>',
+  ')}',
+] as const;
 const CONSTANTS = 'GATHER-BUILD-CONSTANTS.md';
 const GTC_452 = 'docs/tickets/GTC-452.md';
 const NEW_SCRIPT = 'test:demo-public';
@@ -307,7 +324,8 @@ export const CHECKS = {
   },
   /**
    * W58 drawn once, in one `<p data-privacy-line>`, the element right after the start button.
-   * In the page's code, the line sits after the button and before the outcome line.
+   * In the page's code, the outcome box sits above the start button ([[GTC-469]], founder, 22 Nov
+   * 2026: it moved up from under the privacy line), and the privacy line sits right after the button.
    */
   privacyUnderButton(html: string, src: string): boolean {
     const after = new RegExp(
@@ -325,7 +343,9 @@ export const CHECKS = {
       count(src, '</button>') === 1 &&
       button >= 0 &&
       marker > button &&
-      outcome > marker &&
+      count(src, '{line && (') === 1 &&
+      outcome >= 0 &&
+      outcome < button &&
       /<p data-privacy-line="" className="[^"]*">\s*\{PRIVACY_LINE\}\s*<\/p>/.test(src)
     );
   },
@@ -357,15 +377,27 @@ export const CHECKS = {
       src
     );
   },
-  /** Every non-empty code line of `before` is in `now`, in order: no line was taken away. */
-  onlyAdded(now: string, before: string): boolean {
+  /**
+   * Every non-empty code line of `before` is in `now`, in order: no line was taken away. Except
+   * `cut` ([[GTC-469]], founder, 22 Nov 2026): a run of lines that may go, named by its exact text.
+   * Unless that exact run is found in `before` exactly once, this is false.
+   */
+  onlyAdded(now: string, before: string, cut: readonly string[] = []): boolean {
     const lines = (s: string) =>
       s
         .split('\n')
         .map((l) => l.trim())
         .filter(Boolean);
-    const a = lines(before);
+    let a = lines(before);
     const b = lines(now);
+    if (cut.length > 0) {
+      const at: number[] = [];
+      for (let k = 0; k + cut.length <= a.length; k++) {
+        if (cut.every((l, j) => a[k + j] === l)) at.push(k);
+      }
+      if (at.length !== 1) return false;
+      a = [...a.slice(0, at[0]), ...a.slice(at[0] + cut.length)];
+    }
     let i = 0;
     for (const l of b) if (i < a.length && l === a[i]) i++;
     return a.length > 50 && i === a.length;
@@ -613,7 +645,7 @@ async function layerW() {
   const drawn = await drawNew('development', 'on');
   assert(
     'W',
-    'W1 /demo/new drawn: W58 once, in one <p data-privacy-line>, the element right after the start button and before any outcome line',
+    'W1 /demo/new drawn: W58 once, in one <p data-privacy-line>, the element right after the start button; the outcome box above the button, privacy line right under it',
     CHECKS.privacyUnderButton(drawn.html, code(NEW_PAGE)),
     show(drawn)
   );
@@ -663,8 +695,8 @@ function layerC() {
   const now = code(NEW_PAGE);
   assert(
     'C',
-    'C2 CONTROL: every code line of the sample page at 6bc9572 is still there, in order ("Go to it →" and its link included); no line was taken away',
-    CHECKS.onlyAdded(now, stripComments(atBase(NEW_PAGE))) &&
+    'C2 CONTROL: every code line of the sample page at 6bc9572 is still there, in order ("Go to it →" and its link included), except the old outcome block (10 lines, found exactly once), which GTC-469 moved above the button; no other line was taken away',
+    CHECKS.onlyAdded(now, stripComments(atBase(NEW_PAGE)), OLD_OUTCOME_BLOCK) &&
       now.includes('{DEMO_START_WORDS.GO_TO_IT}') &&
       /\{line\.href && \(\s*<a href=\{line\.href\}/.test(now)
   );

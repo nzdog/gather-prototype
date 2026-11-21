@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Calendar } from 'lucide-react';
 import EventDateFields from '@/components/plan/EventDateFields';
 import { DEMO_COPY_NAME, DEMO_HOST_NAME, demoCopyDay } from '@/lib/demo/copy';
@@ -27,6 +28,11 @@ import { dayOf, datePairProblem, type DatePairValue } from '@/lib/events/date-pa
  *
  * [[GTC-447]]: open where the demo start switch is on, in production too (this folder's layout
  * gives a plain not-found wherever it is off). Under the button, the privacy line W58.
+ *
+ * [[GTC-469]] (founder, 22 Nov 2026: "This error message needs to be more obvious."): the outcome
+ * line, whichever it is, is an amber box just above the button, in the style of the sample banner,
+ * announced to a screen reader and scrolled into view when it appears. "Go to it" is a link drawn
+ * like a button. No word changed.
  */
 
 /** [[GTC-392]] W58 under the start button; its words as ruled in [[GTC-452]] (4 Nov 2026). */
@@ -39,6 +45,9 @@ const SAVE_ERROR_PAUSE_MS = 3000;
 const LABEL = 'block text-sm font-medium text-gray-700 mb-2';
 const INPUT =
   'w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent text-lg';
+/** [[GTC-469]]: "Go to it →" is a link drawn like a button (dark amber, white words). */
+const GO_TO_IT_BUTTON =
+  'mt-3 inline-block rounded-lg bg-amber-800 px-4 py-2 font-semibold text-white hover:bg-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-800 focus:ring-offset-2';
 const LOCKED = `${INPUT} bg-gray-100 text-gray-500 cursor-not-allowed`;
 
 export default function DemoNewEventPage() {
@@ -52,6 +61,14 @@ export default function DemoNewEventPage() {
   const [venueTimingEnd, setVenueTimingEnd] = useState<string>(SAMPLE_DETAILS.venueTimingEnd);
   const [starting, setStarting] = useState(false);
   const [outcome, setOutcome] = useState<SampleStartOutcome | null>(null);
+  const noticeRef = useRef<HTMLDivElement>(null);
+
+  // [[GTC-469]]: each new outcome brings its box into view (no animation if she asked for none).
+  useEffect(() => {
+    if (!outcome) return;
+    const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    noticeRef.current?.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'center' });
+  }, [outcome]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -209,6 +226,21 @@ export default function DemoNewEventPage() {
             </div>
           </div>
 
+          {line && (
+            <div
+              ref={noticeRef}
+              role="status"
+              className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-base leading-snug text-amber-900"
+            >
+              <p>{line.words}</p>
+              {line.href && (
+                <a href={line.href} className={GO_TO_IT_BUTTON}>
+                  {DEMO_START_WORDS.GO_TO_IT}
+                </a>
+              )}
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={starting}
@@ -220,17 +252,6 @@ export default function DemoNewEventPage() {
           <p data-privacy-line="" className="-mt-3 text-sm text-gray-500 text-center">
             {PRIVACY_LINE}
           </p>
-
-          {line && (
-            <p className="text-sm text-gray-700 text-center">
-              {line.words}{' '}
-              {line.href && (
-                <a href={line.href} className="underline underline-offset-2">
-                  {DEMO_START_WORDS.GO_TO_IT}
-                </a>
-              )}
-            </p>
-          )}
         </form>
       </div>
     </div>

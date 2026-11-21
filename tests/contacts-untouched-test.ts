@@ -265,12 +265,15 @@ function main() {
     const EIGHT = ['store', 'page', 'load', 'picker', 'match', 'form', 'placed', 'untouched'].map(
       (n) => `test:contacts-${n}`
     );
+    // [[GTC-469]] (founder, 22 Nov 2026): exactly one other script may be added, by name. Any
+    // other added script, and a missing contacts script, still turn P2 red.
+    const ALLOWED_EXTRA = ['test:demo-new-notice'];
     report(
       'P2',
-      "the added script lines are this ticket's contacts tests, all eight of them, and nothing else",
+      "the added script lines are this ticket's contacts tests, all eight of them, and nothing else (but GTC-469's test:demo-new-notice)",
       newKeys.length >= EIGHT.length &&
         EIGHT.every((k) => newKeys.includes(k)) &&
-        newKeys.every((k) => k.startsWith('test:contacts-')),
+        newKeys.every((k) => k.startsWith('test:contacts-') || ALLOWED_EXTRA.includes(k)),
       { added: newKeys, missing: EIGHT.filter((k) => !newKeys.includes(k)) }
     );
   } else {
