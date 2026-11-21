@@ -178,6 +178,12 @@ interface Moment1InputFormProps {
    * contact's id, with that household's main contact's name (W32). Optional; none means none are greyed.
    */
   contactsPlaced?: Record<string, string>;
+  /**
+   * [[GTC-468]]: given only in a sample (an isDemo event). Both "Your contacts" links then stop the
+   * click and call this, which says the contacts list is not part of the demo (R2); nothing is kept
+   * and nothing opens. Absent everywhere else, so a real host's links are exactly as they were.
+   */
+  onSampleContacts?: () => void;
 }
 
 interface GuestForm {
@@ -333,6 +339,7 @@ export default function Moment1InputForm({
   resumeEdit,
   invitationsSent,
   contactsPlaced = {},
+  onSampleContacts,
 }: Moment1InputFormProps) {
   // Primary contact
   const [name, setName] = useState('');
@@ -904,6 +911,12 @@ export default function Moment1InputForm({
         leavingForContacts.current = false;
       }, 2000);
     }
+  };
+  // [[GTC-468]]: in a sample the click is stopped and the notice shown; otherwise the press as before.
+  const pressContactsLink = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!onSampleContacts) return leaveForContacts(e);
+    e.preventDefault();
+    onSampleContacts();
   };
   const savedHouseholdCount = resumeEdit?.savedIds?.length ?? null;
   const contactsLink = contactsHref({
@@ -1638,7 +1651,7 @@ export default function Moment1InputForm({
             <p className="mb-3 text-sm text-gray-700">{CONTACTS_WORDS.ENTRY_LARGE}</p>
             <a
               href={contactsLink}
-              onClick={leaveForContacts}
+              onClick={pressContactsLink}
               className="inline-block rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
             >
               {CONTACTS_WORDS.ENTRY_LINK}
@@ -1648,7 +1661,7 @@ export default function Moment1InputForm({
           <p data-contacts-entry="small" className="mb-6 text-sm">
             <a
               href={contactsLink}
-              onClick={leaveForContacts}
+              onClick={pressContactsLink}
               className="text-accent underline underline-offset-2"
             >
               {CONTACTS_WORDS.ENTRY_LINK}
