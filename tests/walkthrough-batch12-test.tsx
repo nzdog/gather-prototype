@@ -361,10 +361,10 @@ async function runInMemory() {
   const navItems = navItemsAt < 0 ? '' : nav.slice(navItemsAt, nav.indexOf('];', navItemsAt));
   assert(
     'S',
-    'S5 the bar: its list is Your Events and New Event, plain links (full page loads) and a plain logo link; no Home, no Past Events; the account panel under the email; both panels at z-[60]; Sign Out still calls the logout route (Q5, Q6)',
+    'S5 the bar: its list is Your Events, New Event and Your contacts (GTC-460, ruling 167), plain links (full page loads) and a plain logo link; no Home, no Past Events; the account panel under the email; both panels at z-[60]; Sign Out still calls the logout route (Q5, Q6)',
     navItems.length > 0 &&
       [...navItems.matchAll(/href:\s*'([^']*)'/g)].map((m) => m[1]).join() ===
-        '/plan/events,/plan/new' &&
+        '/plan/events,/plan/new,/plan/contacts' &&
       !nav.includes('/plan/templates') &&
       !/label:\s*'Home'/.test(nav) &&
       !/<Link\b/.test(nav) &&

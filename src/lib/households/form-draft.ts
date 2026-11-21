@@ -68,6 +68,8 @@ export interface DraftRow extends DraftPerson {
   adultRoled?: boolean;
   /** [[GTC-449]]: a kid on "Decide later". Absent in a draft written before this existed (off). */
   decideLater?: boolean;
+  /** [[GTC-460]] (3c): the loaded contact this row was picked from, an id only. Absent in an older draft (not picked). */
+  contactId?: string;
 }
 
 /** Everything she can type or choose in the form (formSnapshot's fields, and the row order). */
@@ -75,8 +77,10 @@ export interface FormDraftState {
   name: string;
   email: string;
   phone: string;
+  /** [[GTC-460]] (3c): the contact the main contact was picked from, an id only. */
+  contactId?: string;
   showPartner: boolean;
-  partner: DraftPerson & { personEventId?: string };
+  partner: DraftPerson & { personEventId?: string; contactId?: string };
   helpers: DraftRow[];
   showLittles: boolean;
   littleCount: number;
@@ -129,7 +133,8 @@ function isRow(r: unknown): r is DraftRow {
     isPerson(o) &&
     isOptText(o.personEventId) &&
     (o.adultRoled === undefined || typeof o.adultRoled === 'boolean') &&
-    (o.decideLater === undefined || typeof o.decideLater === 'boolean')
+    (o.decideLater === undefined || typeof o.decideLater === 'boolean') &&
+    isOptText(o.contactId)
   );
 }
 
@@ -139,7 +144,8 @@ export function isDraftState(s: unknown): s is FormDraftState {
   if (!o || typeof o !== 'object') return false;
   if (!isText(o.name) || !isText(o.email) || !isText(o.phone)) return false;
   if (typeof o.showPartner !== 'boolean' || !isPerson(o.partner)) return false;
-  if (!isOptText(o.partner.personEventId)) return false;
+  if (!isOptText(o.partner.personEventId) || !isOptText(o.partner.contactId)) return false;
+  if (!isOptText(o.contactId)) return false;
   if (!Array.isArray(o.helpers) || o.helpers.length > MAX_ROWS || !o.helpers.every(isRow))
     return false;
   if (!Array.isArray(o.guests) || o.guests.length > MAX_ROWS || !o.guests.every(isRow))

@@ -247,7 +247,7 @@ function layerS() {
   assert(
     'S',
     'S6 "Save changes" clears the failed-save words before it saves, and a failure sets them; the form is not reset (GTC-433)',
-    /const handleEditSave = async \(\) => \{[\s\S]{0,160}?setSaving\(true\);\s*setSaveError\(false\);\s*try \{\s*const payload = buildPayload\(\);\s*await onEditSave\(editingHousehold\.id, payload\);\s*resetForm\(\);\s*\} catch \{\s*setSaveError\(true\);\s*\} finally \{\s*setSaving\(false\);\s*\}\s*\};/.test(
+    /const handleEditSave = async \(\) => \{[\s\S]{0,160}?setSaving\(true\);\s*setSaveError\(false\);\s*try \{\s*const payload = buildPayload\(\);\s*await onEditSave\(editingHousehold\.id, payload(?:, pickedRows\(\))?\);\s*resetForm\(\);\s*\} catch \{\s*setSaveError\(true\);\s*\} finally \{\s*setSaving\(false\);\s*\}\s*\};/.test(
       code
     )
   );
@@ -549,6 +549,18 @@ function layerS8() {
     return at < 0 ? '' : src.slice(at, src.indexOf('\n  };\n', at) + 5);
   };
   const base = codeOnly(gitShow(BASE_435, FORM));
+  // [[GTC-460]] (ruling 180, amendment 8): Stage 3 hands the picked rows to the save as one more
+  // argument, `pickedRows()`. The old text is compared AFTER these two typed replacements and nothing
+  // else, so every other edit of either handler is still caught.
+  const GTC460_ARG: Array<[string, string]> = [
+    ['await onAddPerson(payload);', 'await onAddPerson(payload, pickedRows());'],
+    [
+      'await onEditSave(editingHousehold.id, payload);',
+      'await onEditSave(editingHousehold.id, payload, pickedRows());',
+    ],
+  ];
+  const withPicked = (text: string) =>
+    GTC460_ARG.reduce((t, [from, to]) => t.split(from).join(to), text);
   assert(
     'S',
     'S9 the draft is cleared where the form resets (after a good "Save & add another household" or "Save changes", and on Cancel), for the form checked at this opening; her own step and "Save & move on" clear theirs after a good save; no catch clears one; both Save handlers are 9ff914d’s, byte for byte',
@@ -562,14 +574,14 @@ function layerS8() {
       /setInternalPeopleAdded\(\(prev\) => prev \+ countMembers\(payload\)\); \} forgetDraft\('new'\); \} catch \{ setSaveError\(true\);/.test(
         flat
       ) &&
-      /messagesMuted: hostingAlone \? true : messagesMuted, \}\); forgetDraft\('host'\); \} catch \{/.test(
+      /messagesMuted: hostingAlone \? true : messagesMuted, \}(?:, pickedRows\(\))?\s*\); forgetDraft\('host'\); \} catch \{/.test(
         flat
       ) &&
       catches.length >= 4 &&
       catches.every((c) => !c.includes('forgetDraft') && !c.includes('removeDraft')) &&
       base.length > 0 &&
       ['handleAddAnother', 'handleEditSave'].every(
-        (h) => handler(code, h).length > 0 && handler(code, h) === handler(base, h)
+        (h) => handler(code, h).length > 0 && handler(code, h) === withPicked(handler(base, h))
       )
   );
   const draftCode = codeOnly(read(DRAFT_FILE));

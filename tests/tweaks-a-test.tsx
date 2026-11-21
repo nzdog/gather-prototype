@@ -606,6 +606,24 @@ function navExpected(t0: string) {
       phoneBillingClose + navLink('help', true) + navLink('feedback', true)
     );
 }
+/**
+ * [[GTC-460]] Stage 3, step 3a (the founder's ruling 166, amendment 1 of the S3.0 census: "Approve:
+ * two typed lines, item last"). One more item in the menu bar, "Your contacts", LAST in the list, and
+ * the picture it needs in the icon import. These two pairs are typed here by hand, on top of Ticket
+ * A's pieces; nothing is copied from the built file. A2 stays a whole-file match: any other byte that
+ * moves in Navigation.tsx, a comment included, is still red.
+ */
+const GTC460_NAV_PAIRS: Pairs = [
+  [
+    "  MessageSquare,\n} from 'lucide-react';\n",
+    "  MessageSquare,\n  BookUser,\n} from 'lucide-react';\n",
+  ],
+  [
+    "{ href: '/plan/new', label: 'New Event', icon: Plus },\n  ];\n",
+    "{ href: '/plan/new', label: 'New Event', icon: Plus },\n" +
+      "    { href: '/plan/contacts', label: 'Your contacts', icon: BookUser },\n  ];\n",
+  ],
+];
 /** T0's file with each pair put in; null when an old piece is not there exactly once. */
 function applyPairs(t0: string, pairs: Pairs): string | null {
   let s = t0;
@@ -871,10 +889,12 @@ function layerA() {
     `A1 the signed-out button reads "${HOST_SIGN_IN}" on the computer's bar and in the phone's menu, to /auth/signin as before`,
     CHECKS.signInLabel(nav)
   );
+  // [[GTC-460]] (ruling 166): Ticket A's pieces, then exactly GTC-460's two typed pairs on top.
+  const navNow = navExpected(atRef(T0_TIP, NAV));
   assert(
     'A',
-    'A2 Navigation is T0’s file with exactly this ticket’s pieces put in (the label, the three links, their import and constants); no other byte moves',
-    CHECKS.exactly(nav, navExpected(atRef(T0_TIP, NAV)))
+    'A2 Navigation is T0’s file with exactly this ticket’s pieces put in (the label, the three links, their import and constants) and exactly GTC-460’s one menu item and its icon (ruling 166); no other byte moves',
+    CHECKS.exactly(nav, navNow === null ? null : applyPairs(navNow, GTC460_NAV_PAIRS))
   );
 }
 

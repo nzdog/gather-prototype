@@ -12,6 +12,7 @@ import {
   ChevronDown,
   LifeBuoy,
   MessageSquare,
+  BookUser,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
@@ -137,6 +138,7 @@ export default function Navigation({ user }: NavigationProps) {
   const navItems = [
     { href: '/plan/events', label: 'Your Events', icon: Calendar },
     { href: '/plan/new', label: 'New Event', icon: Plus },
+    { href: '/plan/contacts', label: 'Your contacts', icon: BookUser },
   ];
   const billing = { href: '/billing', label: 'Billing', icon: CreditCard };
   // [[GTC-415]] tweak 2: the button names who signs in. Same address as before.
