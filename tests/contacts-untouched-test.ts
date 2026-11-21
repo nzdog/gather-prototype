@@ -8,9 +8,10 @@
  * sends, signs in, bills or reads the database for the first time. This file proves that by
  * comparing the working folder with the base commit and reading the new files.
  *
- * THE BASE. `290f828`, the main tip that was merged into the branch (ruling 186). It is not the
- * old `51eda95`: the GTC-463 fix that came in with that merge changed three routes under
- * `src/app/api`, and those changes belong to GTC-463, not to Stage 3. The checks compare the
+ * THE BASE. `03bab34`, main's tip, merged into the branch on 21 Nov 2026 (ruling 208). It is no
+ * longer `290f828` (ruling 186) or the old `51eda95`: main's twelve commits (GTC-464, GTC-465 and
+ * GTC-466) came in with the merge and are not Stage 3's work, just as the GTC-463 fix that came in
+ * with the earlier merge was not (it changed three routes under `src/app/api`). The checks compare the
  * working folder (committed, staged or loose) with the base, so they hold before and after any
  * commit. If the base is not in the checkout, the first check goes red and so does every check
  * that needs it: nothing here can pass by looking at nothing.
@@ -36,7 +37,7 @@ import { execFileSync, type ExecFileSyncOptions } from 'child_process';
 import { isDeepStrictEqual } from 'util';
 
 const ROOT = path.join(__dirname, '..');
-const BASE = '290f828';
+const BASE = '03bab34';
 
 // ── Reporting ────────────────────────────────────────────────────────────────
 let passed = 0;
