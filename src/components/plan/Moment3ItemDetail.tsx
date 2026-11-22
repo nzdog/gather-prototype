@@ -23,8 +23,10 @@
  */
 
 import { useEffect, useId, useRef, useState } from 'react';
-import { M3_DETAIL_WORDS } from '@/lib/moment3/words';
+import { M3_DETAIL_WORDS, M3_SHARE_WORDS } from '@/lib/moment3/words';
+import type { ShareAmountLine, SharePreview } from '@/lib/moment3/share-split';
 import { ANSWER_WORDS } from '@/lib/print/plan-lists';
+import Moment3ShareDish, { type ShareablePerson } from './Moment3ShareDish';
 
 /** What the box changes, each only when it changed. */
 export interface Moment3ItemDetailChanges {
@@ -69,8 +71,27 @@ export function answerWords(response: string | null | undefined): string | null 
   return (ANSWER_WORDS as Record<string, string>)[response] ?? null;
 }
 
+/**
+ * [[GTC-472]] — what the box needs to offer "Share with someone" (the founder's ruling D3 A): the
+ * people to pick from, whether the invitations have gone, and the two calls the view wires to the one
+ * share route. Absent: the box is as it was.
+ */
+export interface Moment3ItemShare {
+  people: ShareablePerson[];
+  sentAt: boolean;
+  onLoad: () => Promise<SharePreview | null>;
+  /** True when saved. The box closes on it. */
+  onConfirm: (
+    personId: string,
+    preview: SharePreview,
+    lines: ShareAmountLine[]
+  ) => Promise<boolean>;
+}
+
 interface Moment3ItemDetailProps {
   item: Moment3ItemDetailFacts;
+  /** [[GTC-472]] — sharing the dish with another person, from this box. */
+  share?: Moment3ItemShare;
   /** Who has it now, or null. */
   holderName: string | null;
   /** Their answer in the board's words, when it is already on this screen (after the send); else null. */
@@ -82,6 +103,7 @@ interface Moment3ItemDetailProps {
 
 export default function Moment3ItemDetail({
   item,
+  share,
   holderName,
   holderAnswer,
   onSave,
@@ -92,6 +114,8 @@ export default function Moment3ItemDetail({
   const [dropOffPlace, setDropOffPlace] = useState(item.dropOffLocation ?? '');
   const [dropOffTime, setDropOffTime] = useState(item.dropOffNote ?? '');
   const [saving, setSaving] = useState(false);
+  /** [[GTC-472]] — the share's picker and split are showing in this same sheet. */
+  const [sharing, setSharing] = useState(false);
   const savingRef = useRef(false);
   const boxRef = useRef<HTMLDivElement>(null);
   const headingId = useId();
@@ -162,81 +186,115 @@ export default function Moment3ItemDetail({
         <h2 id={headingId} className="text-lg font-semibold text-gray-900 break-words">
           {item.name}
         </h2>
-        <dl className="mt-3 space-y-2 text-sm">
-          {!isJob && (
-            <div data-m3-detail-amount>
-              <dt className="text-gray-500">{M3_DETAIL_WORDS.AMOUNT}</dt>
-              <dd className="text-gray-900 break-words">{item.detail || '—'}</dd>
-            </div>
-          )}
-          <div data-m3-detail-who>
-            <dt className="text-gray-500">{M3_DETAIL_WORDS.WHO}</dt>
-            <dd className="text-gray-900 break-words">{who}</dd>
-          </div>
-        </dl>
-
-        <label className="mt-4 flex items-start gap-2 text-sm text-gray-900">
-          <input
-            type="checkbox"
-            checked={critical}
-            onChange={(e) => setCritical(e.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 accent-accent"
+        {sharing && share ? (
+          <Moment3ShareDish
+            dishName={item.name}
+            people={share.people}
+            sentAt={share.sentAt}
+            onLoad={share.onLoad}
+            onBusy={(busy) => {
+              savingRef.current = busy;
+            }}
+            onConfirm={async (personId, preview, lines) => {
+              const saved = await share.onConfirm(personId, preview, lines);
+              if (saved) onClose();
+              return saved;
+            }}
+            onBack={() => setSharing(false)}
           />
-          <span>{M3_DETAIL_WORDS.CRITICAL}</span>
-        </label>
-        {needsAmount && (
-          <p data-m3-detail-needs-amount className="mt-2 text-sm text-amber-700">
-            {M3_DETAIL_WORDS.NEEDS_AMOUNT}
-          </p>
+        ) : (
+          <>
+            <dl className="mt-3 space-y-2 text-sm">
+              {!isJob && (
+                <div data-m3-detail-amount>
+                  <dt className="text-gray-500">{M3_DETAIL_WORDS.AMOUNT}</dt>
+                  <dd className="text-gray-900 break-words">{item.detail || '—'}</dd>
+                </div>
+              )}
+              <div data-m3-detail-who>
+                <dt className="text-gray-500">{M3_DETAIL_WORDS.WHO}</dt>
+                <dd className="text-gray-900 break-words">{who}</dd>
+              </div>
+            </dl>
+
+            <label className="mt-4 flex items-start gap-2 text-sm text-gray-900">
+              <input
+                type="checkbox"
+                checked={critical}
+                onChange={(e) => setCritical(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-accent"
+              />
+              <span>{M3_DETAIL_WORDS.CRITICAL}</span>
+            </label>
+            {needsAmount && (
+              <p data-m3-detail-needs-amount className="mt-2 text-sm text-amber-700">
+                {M3_DETAIL_WORDS.NEEDS_AMOUNT}
+              </p>
+            )}
+
+            {!isJob && (
+              <div className="mt-4 space-y-3">
+                <label className="block">
+                  <span className="block text-xs font-medium text-gray-600 mb-1">
+                    {M3_DETAIL_WORDS.DROP_OFF_PLACE}
+                  </span>
+                  <input
+                    type="text"
+                    value={dropOffPlace}
+                    onChange={(e) => setDropOffPlace(e.target.value)}
+                    placeholder={M3_DETAIL_WORDS.DROP_OFF_PLACE_HINT}
+                    className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                </label>
+                <label className="block">
+                  <span className="block text-xs font-medium text-gray-600 mb-1">
+                    {M3_DETAIL_WORDS.DROP_OFF_TIME}
+                  </span>
+                  <input
+                    type="text"
+                    value={dropOffTime}
+                    onChange={(e) => setDropOffTime(e.target.value)}
+                    placeholder={M3_DETAIL_WORDS.DROP_OFF_TIME_HINT}
+                    className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                </label>
+              </div>
+            )}
+
+            {/* [[GTC-472]] W1 — only when the dish has someone to share it from. */}
+            {share && holderName && (
+              <button
+                type="button"
+                data-m3-share-open
+                onClick={() => setSharing(true)}
+                className="mt-4 w-full min-h-[44px] text-sm px-4 py-2 text-gray-900 border border-gray-300 rounded hover:bg-gray-50"
+              >
+                {M3_SHARE_WORDS.SHARE_BUTTON}
+              </button>
+            )}
+          </>
         )}
 
-        {!isJob && (
-          <div className="mt-4 space-y-3">
-            <label className="block">
-              <span className="block text-xs font-medium text-gray-600 mb-1">
-                {M3_DETAIL_WORDS.DROP_OFF_PLACE}
-              </span>
-              <input
-                type="text"
-                value={dropOffPlace}
-                onChange={(e) => setDropOffPlace(e.target.value)}
-                placeholder={M3_DETAIL_WORDS.DROP_OFF_PLACE_HINT}
-                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
-              />
-            </label>
-            <label className="block">
-              <span className="block text-xs font-medium text-gray-600 mb-1">
-                {M3_DETAIL_WORDS.DROP_OFF_TIME}
-              </span>
-              <input
-                type="text"
-                value={dropOffTime}
-                onChange={(e) => setDropOffTime(e.target.value)}
-                placeholder={M3_DETAIL_WORDS.DROP_OFF_TIME_HINT}
-                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
-              />
-            </label>
+        {!(sharing && share) && (
+          <div className="mt-5 flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="text-sm px-3 py-1.5 text-gray-700 rounded hover:bg-gray-100"
+            >
+              {M3_DETAIL_WORDS.CLOSE}
+            </button>
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={saving || !changed}
+              className="text-sm px-4 py-1.5 bg-accent text-white rounded hover:bg-accent-dark disabled:opacity-50"
+            >
+              {M3_DETAIL_WORDS.SAVE}
+            </button>
           </div>
         )}
-
-        <div className="mt-5 flex items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={saving}
-            className="text-sm px-3 py-1.5 text-gray-700 rounded hover:bg-gray-100"
-          >
-            {M3_DETAIL_WORDS.CLOSE}
-          </button>
-          <button
-            type="button"
-            onClick={() => void save()}
-            disabled={saving || !changed}
-            className="text-sm px-4 py-1.5 bg-accent text-white rounded hover:bg-accent-dark disabled:opacity-50"
-          >
-            {M3_DETAIL_WORDS.SAVE}
-          </button>
-        </div>
       </div>
     </div>
   );
