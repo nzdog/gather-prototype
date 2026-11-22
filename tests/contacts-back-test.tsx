@@ -36,6 +36,8 @@ import { writeDraft, draftKey } from '../src/lib/households/form-draft';
 const ROOT = path.join(__dirname, '..');
 /** Main's tip when this ticket was planned (the merge of pull request 111). */
 const BASE = '2491795';
+/** [[GTC-474]] (ruling 3): this ticket's own code commit, where G3 reads its diff. */
+const GTC470_CODE = '0754b6e32889bccb97ed971c39f98a8662d28bcd';
 const TICKET = 'docs/tickets/GTC-460.md';
 const SCREEN = 'src/components/contacts/ContactsScreen.tsx';
 const NOTE = 'src/components/contacts/SampleContactsNote.tsx';
@@ -1597,16 +1599,21 @@ async function main() {
   );
   check(
     'G3',
-    'the files this ticket may not touch are not in the diff against main (and the diff is not empty: it holds the new bar)',
+    "the files this ticket may not touch are not in the diff against main (and the diff is not empty: it holds the new bar), read at GTC-470's code commit 0754b6e",
     () => {
       if (!baseOk) return { ok: false, got: `${BASE} is not in this checkout` };
+      try {
+        git(['cat-file', '-e', `${GTC470_CODE}^{commit}`]);
+      } catch {
+        return { ok: false, got: `${GTC470_CODE.slice(0, 7)} is not in this checkout` };
+      }
       const names = (s: string) => s.split('\0').filter(Boolean);
-      const changed = [
-        ...new Set([
-          ...names(git(['diff', '--no-renames', '--name-only', '-z', BASE, '--'])),
-          ...names(git(['ls-files', '--others', '--exclude-standard', '-z'])),
-        ]),
-      ];
+      // [[GTC-474]] re-base (ruling 3), as GTC-431 did for tweaks-b S4: GTC-470's own code commit,
+      // fixed, instead of the working folder, so a later ticket's edit to the form no longer turns
+      // this red. Same forbidden list and strictness, for the work this check was written about.
+      const changed = names(
+        git(['diff', '--no-renames', '--name-only', '-z', BASE, GTC470_CODE, '--'])
+      );
       const FORBIDDEN_PATHS = [
         'src/components/plan/MomentArc.tsx',
         'src/lib/moments/strip.ts',

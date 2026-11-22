@@ -310,6 +310,14 @@ export function validatePhone(raw: string): string {
   return '';
 }
 
+/** [[GTC-474]]: whole numbers only, because parseInt once let a typed 2.5 become a count of 2. */
+function littleCountFrom(typed: string): number | null {
+  const t = typed.trim();
+  if (!/^\d+$/.test(t)) return null;
+  const n = Number(t);
+  return n >= 1 && n <= 20 ? n : null;
+}
+
 let formIdCounter = 0;
 const emptyGuest = (): GuestForm => ({
   id: `f-${++formIdCounter}`,
@@ -365,6 +373,9 @@ export default function Moment1InputForm({
 
   const [showLittles, setShowLittles] = useState(false);
   const [littleCount, setLittleCount] = useState(1);
+  // [[GTC-474]]: what she has typed in the kids box, held apart from the count so the box can be
+  // empty while she types: a phone has no arrows, so clearing and retyping is the only way in.
+  const [littleTyped, setLittleTyped] = useState<string | null>(null);
 
   /**
    * GTC-172 (C1): the household contact picker (§10.7) — "who should Gather talk to
@@ -599,6 +610,7 @@ export default function Moment1InputForm({
     setHelperErrors(hs.map(() => ({})));
     setShowLittles(s.showLittles);
     setLittleCount(s.littleCount);
+    setLittleTyped(null);
     setGuests(gs);
     setGuestErrors(gs.map(() => ({})));
     setContactPersonEventId(s.contactPersonEventId);
@@ -826,6 +838,7 @@ export default function Moment1InputForm({
       setShowLittles(false);
       setLittleCount(1);
     }
+    setLittleTyped(null);
 
     if (editingHousehold.guests.length > 0) {
       const loadedGuests = editingHousehold.guests.map((g) => ({
@@ -945,6 +958,7 @@ export default function Moment1InputForm({
     setHelperErrors([]);
     setShowLittles(false);
     setLittleCount(1);
+    setLittleTyped(null);
     setGuests([]);
     setGuestErrors([]);
     setFixPrompt(false);
@@ -2286,6 +2300,7 @@ export default function Moment1InputForm({
                     onClick={() => {
                       setShowLittles(false);
                       setLittleCount(1);
+                      setLittleTyped(null);
                     }}
                     className="text-sm text-red-500 hover:text-red-700"
                   >
@@ -2293,19 +2308,49 @@ export default function Moment1InputForm({
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className="text-sm text-gray-600">How many kids without jobs?</label>
+                  <label htmlFor="m1-little-count" className="text-sm text-gray-600">
+                    How many kids without jobs?
+                  </label>
+                  {/* [[GTC-474]] ruling 1: a phone has no arrows, so one tap each way, 44 by 44. */}
+                  <button
+                    type="button"
+                    aria-label="One fewer kid without a job"
+                    disabled={littleCount <= 1}
+                    onClick={() => {
+                      setLittleTyped(null);
+                      setLittleCount((n) => Math.max(1, n - 1));
+                    }}
+                    className="min-h-[44px] min-w-[44px] text-lg text-gray-700 border border-gray-300 rounded-md bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    −
+                  </button>
                   <input
+                    id="m1-little-count"
                     type="number"
                     min={1}
                     max={20}
-                    value={littleCount}
+                    value={littleTyped ?? littleCount}
                     onChange={(e) => {
-                      const val = parseInt(e.target.value, 10);
-                      if (!isNaN(val) && val >= 1 && val <= 20) setLittleCount(val);
+                      setLittleTyped(e.target.value);
+                      const taken = littleCountFrom(e.target.value);
+                      if (taken !== null) setLittleCount(taken);
                     }}
+                    onBlur={() => setLittleTyped(null)}
                     autoFocus
                     className="w-20 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                   />
+                  <button
+                    type="button"
+                    aria-label="One more kid without a job"
+                    disabled={littleCount >= 20}
+                    onClick={() => {
+                      setLittleTyped(null);
+                      setLittleCount((n) => Math.min(20, n + 1));
+                    }}
+                    className="min-h-[44px] min-w-[44px] text-lg text-gray-700 border border-gray-300 rounded-md bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    +
+                  </button>
                 </div>
               </div>
             )}
