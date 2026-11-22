@@ -12,7 +12,8 @@
  * the loading sentences, with ruling 159's fix to W27, and W43 (ruling 173, 15 Nov 2026: odd letters
  * in a file). Step 3c adds W19 and W33 to W35 (the hand-off button, a contact already in this form,
  * and the rows that take no pick). Step 3d adds W32 (already placed), W36 to W38 (the child prompt and
- * the warning) and W39, W40 (the badges on the contacts page).
+ * the warning) and W39, W40 (the badges on the contacts page). [[GTC-471]] adds W44 and W45 (22 Nov 2026,
+ * the founder's words): what the Moments row says on this page while a household is half done.
  */
 export const CONTACTS_WORDS = {
   /** A5 (ruling 155): the line at the top of the page, not reworded. */
@@ -40,6 +41,13 @@ export const CONTACTS_WORDS = {
   REMOVE: 'Remove',
   /** W42 (ruling 172): a Remove or a Clear that did not save, whether the browser refused or was full. */
   SAVE_FAILED: "That change didn't save. A private window can cause this. Try a normal window.",
+  /**
+   * W44 ([[GTC-471]], 22 Nov 2026): a later Moment tapped while a household is being changed. This page has no
+   * Save or Cancel of its own, so it says where they are. Moment 1's own line (W9b) is not this one.
+   */
+  LOCKED_CHANGING: 'Go back and save your changes first, or press Cancel.',
+  /** W45 ([[GTC-471]]): the same while a household is half typed (a draft is kept). Moment 1's own is W9. */
+  LOCKED_TYPED: "Go back and save this household first, or clear what you've typed.",
   /** W17: a load the browser has no room for. Nothing was added. */
   FULL: "There's no room left in this browser for these contacts, so none were added.",
   /** W21: the paste box. */
