@@ -213,6 +213,7 @@
     "test:contacts-placed": "tsx --tsconfig tests/tsconfig.json tests/contacts-placed-test.ts",
     "test:contacts-untouched": "tsx --tsconfig tests/tsconfig.json tests/contacts-untouched-test.ts",
     "test:contacts-sample": "tsx --tsconfig tests/tsconfig.json tests/contacts-sample-test.tsx",
+    "test:contacts-back": "tsx --tsconfig tests/tsconfig.json tests/contacts-back-test.tsx",
     "test:privacy-words": "tsx --tsconfig tests/tsconfig.json tests/privacy-words-test.ts",
     "test:guest-per-host": "tsx tests/guest-per-host-test.ts",
     "test:page-visit": "tsx --tsconfig tests/tsconfig.json tests/page-visit-test.ts"

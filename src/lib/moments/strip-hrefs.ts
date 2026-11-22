@@ -22,6 +22,7 @@ import {
   setupHref,
   stripDoors,
   type MomentNumber,
+  type StripFacts,
   type StripTarget,
 } from './strip';
 
@@ -63,6 +64,36 @@ export function moment4Doors(
       'line' in door
         ? { locked: door.line, ...notNeeded }
         : { href: hrefOf(eventId, door.target), ...notNeeded };
+  }
+  return doors;
+}
+
+/**
+ * [[GTC-470]] — THE DOORS OF A MOMENT 1 SCREEN OUTSIDE THE SETUP PAGE: the contacts page. `moment4Doors` may
+ * say "everything before is open" because a Moment 4 screen exists only once the plan is held; a Moment 1
+ * screen cannot, so this takes the real facts and asks the same one rule (`stripDoors`), so the row
+ * says the same as the setup page's for the same event. Every Moment but `current` gets a door: open ones
+ * are the same addresses the pre-flight uses, locked ones carry the rule's own line.
+ *
+ * `blocked` is the setup page's own guard (W9, W9b: a household typed, or being changed): it locks every
+ * open door with that line and leaves a door the rule has already locked saying its own. That branch is the
+ * one line repeated from the setup page's `doorsFor`, which cannot be shared (that page is pinned).
+ */
+export function momentDoors(
+  eventId: string,
+  current: MomentNumber,
+  facts: StripFacts,
+  blocked: string | null = null
+): Partial<Record<MomentNumber, ArcDoor>> {
+  const all = stripDoors(facts);
+  const doors: Partial<Record<MomentNumber, ArcDoor>> = {};
+  for (const n of [1, 2, 3, 4] as const) {
+    if (n === current) continue;
+    const door = all[n];
+    const notNeeded = door.kind === 'not-needed' ? { notNeeded: true as const } : {};
+    if ('line' in door) doors[n] = { locked: door.line, ...notNeeded };
+    else if (blocked) doors[n] = { locked: blocked, ...notNeeded };
+    else doors[n] = { href: hrefOf(eventId, door.target), ...notNeeded };
   }
   return doors;
 }

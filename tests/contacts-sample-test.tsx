@@ -5,7 +5,7 @@
  * demo-copy.invalid, or any sample event) must not be able to load a contacts list, because the list
  * would stay in her browser after Gather deletes the sample (W58 says it deletes "everything you type
  * into it"). So, in a sample: the menu bar's "Your contacts" and Moment 1's two links show a notice
- * (R2, the founder's own words) and go nowhere; /plan/contacts shows only its title and that notice;
+ * (R2, the founder's own words) and go nowhere; /plan/contacts shows only its title and that notice (and, from [[GTC-470]], its top bar: "← Your events" and "Go back");
  * and the /demo explainer says a real event has contacts (ruling B). A real host sees none of this.
  *
  * Founder rulings, 22 Nov 2026: R1, R2, A (Q1, Q2, Q3, Q6 option 1, Q7, Q8, Q9), B (the explainer's
@@ -19,7 +19,8 @@
  *   S6  Moment 1 without the prop: as before (the draft is kept, the click is not stopped)
  *   S7  the setup page gives the prop on both mounts, only for an isDemo event
  *   S8  the contacts page: the note for a sample, the screen for anyone else
- *   S9  the note: title and R2 only; no loading box, no storage, no request
+ *   S9  the note: "← Your events", one "Go back" button, the title and R2; no loading box, no storage,
+ *       no request ([[GTC-470]], amendment A4: R3 reverses ruling A, Q3, which said title and R2 only)
  *   S10 the sample flag: default "not a sample"; the layout feeds it from the account
  *   S11 the explainer holds ruling B's sentence once, after the "Add a crowd" picture, and not W58
  *   S12 every explainer picture exists and its real pixel size is the size written for it
@@ -53,6 +54,9 @@ const EXPLAINER = 'src/lib/demo/explainer-words.ts';
 /** R2, the founder's words (22 Nov 2026), not to be reworded. */
 const R2 =
   "Your contacts isn't part of the demo. In a real event you can load your guests from your phone or a spreadsheet, then pick them as you type.";
+/** [[GTC-470]] (A4): the two words of the note's top bar, written here by hand (W1 of GTC-367, and W18 as ruled by R4). */
+const YOUR_EVENTS = '← Your events';
+const GO_BACK = 'Go back';
 /** Ruling B, the explainer's sentence, with the curly quotes and apostrophe the explainer file uses. */
 const RULING_B =
   'On a real event, “Your contacts” lets you load your guests from your phone or a spreadsheet and pick them as you type. It isn’t part of the demo.';
@@ -650,27 +654,38 @@ function main() {
   );
   check(
     'S9',
-    'the note: the title and R2 only; no paste box, file choice, button or list; no storage, no request',
+    'the note: "← Your events", one "Go back" button, the title and R2, in that order and with no other words; nothing to fill in or pick from (no input, textarea, select or list); no Moments row; no storage, no request',
     () => {
       const { CONTACTS_WORDS } = real('src/lib/contacts/words.ts');
       const tree = real(NOTE).default();
       const text = textOf(tree);
       const controls = all(tree, (e) =>
-        ['input', 'textarea', 'button', 'ul', 'li', 'select'].includes(e.type)
+        ['input', 'textarea', 'ul', 'li', 'select'].includes(e.type)
       );
+      const buttons = all(tree, (e) => e.type === 'button');
       const src = code(NOTE);
       const win = makeWindow();
       return {
         ok:
           text.includes(CONTACTS_WORDS.TITLE) &&
           text.includes(R2) &&
+          CONTACTS_WORDS.BACK === GO_BACK &&
+          text === `${YOUR_EVENTS}${GO_BACK}${CONTACTS_WORDS.TITLE}${R2}` &&
+          buttons.length === 1 &&
+          textOf(buttons[0]) === GO_BACK &&
+          !byAttr(tree, 'data-contacts-moments') &&
           controls.length === 0 &&
           !/localStorage|sessionStorage|fetch|readContacts|browserContactsStore|ViewerIdContext|ContactsScreen/.test(
             src
           ) &&
           requests.length === 0 &&
           win.localStorage.calls === 0,
-        got: { text: text.slice(0, 160), controls: controls.length, requests: requests.length },
+        got: {
+          text: text.slice(0, 160),
+          controls: controls.length,
+          buttons: buttons.length,
+          requests: requests.length,
+        },
       };
     }
   );

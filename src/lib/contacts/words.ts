@@ -34,8 +34,8 @@ export const CONTACTS_WORDS = {
   /** W16: the browser refuses storage (ruling 159's fix). */
   REFUSED:
     "This browser won't save your contacts, so they can't be loaded here. A private window can cause this. Try a normal window.",
-  /** W18: the way back (from an event only). */
-  BACK: 'Back to your households',
+  /** W18: the "Go back" button, drawn on every visit to the page ([[GTC-470]], R4; it replaces the small grey link that came from an event only). */
+  BACK: 'Go back',
   /** W20: remove one person (read out as "Remove {name}"). */
   REMOVE: 'Remove',
   /** W42 (ruling 172): a Remove or a Clear that did not save, whether the browser refused or was full. */
