@@ -55,6 +55,13 @@ const W7 = 'You’ll get to “Who’s on what?” once you’ve said the plan l
 const W8 = 'You’ll get to “Is everyone sorted?” when you finish “Who’s on what?” and move on.';
 const W9 = 'Save this household first, or clear what you’ve typed.';
 const W9B = 'Save your changes first, or press Cancel.';
+/**
+ * [[GTC-471]] W44 and W45, the founder's words (22 Nov 2026), straight apostrophe: what the contacts page says
+ * under the Moments row while a household is half done. It has no Save or Cancel of its own, so each sends her
+ * back first. Moment 1's own W9 and W9b above are unchanged and still say what they said.
+ */
+const W44 = 'Go back and save your changes first, or press Cancel.';
+const W45 = "Go back and save this household first, or clear what you've typed.";
 /** GTC-374 W8: a tap on a not-needed Moment after the press. */
 const AFTER_PRESS = 'The invitations have gone as invites only, so there’s no plan to make.';
 /** The classes of the seven "← Your events" links on the event screens. */
@@ -655,6 +662,34 @@ async function main() {
     }
   );
 
+  check(
+    'B4',
+    'W44 and W45 are exactly the two sentences ruled for the contacts page (straight apostrophe, each beginning "Go back and"), they are in the GTC-460 word list, and Moment 1\'s own two lines are exactly as they were',
+    () => {
+      const W = real(WORDS).CONTACTS_WORDS;
+      const strip = real('src/lib/moments/strip.ts').STRIP_WORDS;
+      const ticket = flat(read(TICKET));
+      const a = ticket.indexOf('#### 7. The W-lines, for the founder');
+      const b = ticket.indexOf('#### 8. The tests');
+      const section7 = a >= 0 && b > a ? ticket.slice(a, b) : '';
+      const rows: Array<[string, boolean]> = [
+        ['W44 in words.ts', W.LOCKED_CHANGING === W44],
+        ['W45 in words.ts', W.LOCKED_TYPED === W45],
+        ['no curly apostrophe in either', !/[‘’]/.test(`${W.LOCKED_CHANGING}${W.LOCKED_TYPED}`)],
+        [
+          'each begins "Go back and"',
+          W44.startsWith('Go back and ') && W45.startsWith('Go back and '),
+        ],
+        ['W44 in the ticket list', section7.includes(`*"${W44}"*`)],
+        ['W45 in the ticket list', section7.includes(`*"${W45}"*`)],
+        ['Moment 1 says W9b as before', strip.SAVE_CHANGES === W9B],
+        ['Moment 1 says W9 as before', strip.SAVE_NEW_HOUSEHOLD === W9],
+      ];
+      const wrong = rows.filter(([, good]) => !good).map(([n]) => n);
+      return { ok: wrong.length === 0, got: wrong };
+    }
+  );
+
   // ══ R — THE REAL SCREEN ═════════════════════════════════════════════════════
   section('R — the real screen');
   const ADDRESSES: Array<[string, string]> = [
@@ -1042,7 +1077,7 @@ async function main() {
   );
   check(
     'T3b',
-    "the guard's line: edit gives W9b (even with no draft), her own household's step none, the new-household form W9 only when a draft is kept, no event none",
+    "the guard's line: edit gives W44 (even with no draft), her own household's step none, the new-household form W45 only when a draft is kept, no event none",
     () => {
       const { blockedLine } = mod(FACTS);
       const a = (over: Record<string, unknown>) => ({
@@ -1052,11 +1087,11 @@ async function main() {
         ...over,
       });
       const rows: Array<[string, unknown, unknown]> = [
-        ['edit, no draft', blockedLine(a({ editId: 'hh1' }), false), W9B],
-        ['edit, draft kept: edit wins', blockedLine(a({ editId: 'hh1' }), true), W9B],
+        ['edit, no draft', blockedLine(a({ editId: 'hh1' }), false), W44],
+        ['edit, draft kept: edit wins', blockedLine(a({ editId: 'hh1' }), true), W44],
         ['host step, draft kept', blockedLine(a({ form: 'host' }), true), null],
         ['host step, none kept', blockedLine(a({ form: 'host' }), false), null],
-        ['plain, draft kept', blockedLine(a({}), true), W9],
+        ['plain, draft kept', blockedLine(a({}), true), W45],
         ['plain, none kept', blockedLine(a({}), false), null],
         ['no event', blockedLine({ eventId: null, form: null, editId: null }, true), null],
       ];
@@ -1151,7 +1186,7 @@ async function main() {
         await j.settleAsync();
         const r = arcOf(j.tree());
         const wrap = rowWrap(j.tree());
-        const noWords = ![W6, W7, W8, W9, W9B, AFTER_PRESS].some((w) =>
+        const noWords = ![W6, W7, W8, W9, W9B, W44, W45, AFTER_PRESS].some((w) =>
           flat(textOf(j.tree())).includes(w)
         );
         if (
@@ -1194,7 +1229,7 @@ async function main() {
   };
   await acheck(
     'T5',
-    "the guard: a household being changed gives W9b; her own household's step is not blocked; the new-household form gives W9 only while a draft is kept for this event; another event's or person's draft, a stale one and a malformed one do not block, and none of them is removed or rewritten",
+    "the guard: a household being changed gives W44; her own household's step is not blocked; the new-household form gives W45 only while a draft is kept for this event; another event's or person's draft, a stale one and a malformed one do not block, and none of them is removed or rewritten",
     async () => {
       const problems: unknown[] = [];
       const expect = async (
@@ -1217,15 +1252,15 @@ async function main() {
           problems.push({ label, doors, sets: local.sets - setsBefore, removes: local.removes });
         }
       };
-      const blockedW9 = lockedBy(W9);
-      const blockedW9b = lockedBy(W9B);
+      const blockedW45 = lockedBy(W45);
+      const blockedW44 = lockedBy(W44);
       const open = OPEN_DOORS;
-      await expect('edit, no draft', '?event=ev1&edit=hh1', () => {}, blockedW9b);
+      await expect('edit, no draft', '?event=ev1&edit=hh1', () => {}, blockedW44);
       await expect(
         'edit, a draft kept: edit wins',
         '?event=ev1&edit=hh1',
         (l) => keep(l, 'user-a', 'ev1', 'new'),
-        blockedW9b
+        blockedW44
       );
       await expect(
         "her own household's step, a draft kept",
@@ -1237,7 +1272,7 @@ async function main() {
         'plain, a new-household draft kept',
         '?event=ev1',
         (l) => keep(l, 'user-a', 'ev1', 'new'),
-        blockedW9
+        blockedW45
       );
       await expect('plain, none kept', '?event=ev1', () => {}, open);
       await expect(

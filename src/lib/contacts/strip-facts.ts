@@ -18,15 +18,18 @@
  * event has no Moments), gives `null`, and the row stays a plain display. A half-known fact would send her to
  * the wrong place.
  *
- * `blockedLine` is the setup page's own guard, in the setup page's own words (W9 and W9b of GTC-367): the
- * address says whether she left a household being changed or her own household's step; for the new-household
- * form it is told, by one read-only question, whether a draft is kept.
+ * `blockedLine` is the setup page's own guard (the same three cases, when each shows), in this page's own words
+ * (W44 and W45, [[GTC-471]]): Moment 1's lines (W9, W9b of GTC-367) tell her to press Save or Cancel, and this
+ * page has neither, so these two begin "Go back and". The address says whether she left a household being
+ * changed or her own household's step; for the new-household form it is told, by one read-only question,
+ * whether a draft is kept.
  *
  * CLIENT-SAFE and pure: no storage, no request, no hook.
  */
-import { STRIP_WORDS, type StripFacts } from '@/lib/moments/strip';
+import type { StripFacts } from '@/lib/moments/strip';
 import { hasAnyPlan, momentTwoBegun } from '@/lib/setup/entry-stage';
 import type { ContactsAddress } from '@/lib/contacts/address';
+import { CONTACTS_WORDS } from '@/lib/contacts/words';
 
 const isObject = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v === 'object' && !Array.isArray(v);
@@ -71,13 +74,13 @@ export function stripFactsFrom(input: {
 
 /**
  * The line that locks the Moments' doors while a household is half done, or null when nothing does.
- *   she left a household being changed (the address has `edit`)  W9b, as the setup page says it
+ *   she left a household being changed (the address has `edit`)  W44
  *   she left her own household's step (`form=host`)              nothing, as on the setup page
- *   she left the new-household form (a plain address)            W9 while a draft is kept, else nothing
+ *   she left the new-household form (a plain address)            W45 while a draft is kept, else nothing
  */
 export function blockedLine(a: ContactsAddress, draftKept: boolean): string | null {
   if (!a.eventId) return null;
-  if (a.editId) return STRIP_WORDS.SAVE_CHANGES;
+  if (a.editId) return CONTACTS_WORDS.LOCKED_CHANGING;
   if (a.form === 'host') return null;
-  return draftKept ? STRIP_WORDS.SAVE_NEW_HOUSEHOLD : null;
+  return draftKept ? CONTACTS_WORDS.LOCKED_TYPED : null;
 }
