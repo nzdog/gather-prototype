@@ -44,6 +44,8 @@
  * page code decides what the saved card carries. The real card (`HouseholdCardList`) is rendered
  * to markup to see W9 on it.
  *
+ * Layer 474 ([[GTC-474]]) runs the kids-without-jobs box the same way, key by key: see its section.
+ *
  * Run: npx tsx --tsconfig tests/tsconfig.json tests/decide-later-form-test.ts
  * Writes nothing: no rows, no files.
  */
@@ -577,6 +579,399 @@ const household = (members: any[]): any => ({
     ...members,
   ],
 });
+
+// ══ 474 — [[GTC-474]]: THE KIDS-WITHOUT-JOBS BOX ═════════════════════════════
+// The founder's words (22 Nov 2026): "On mobile kids without jobs number is on 1 and there is no way
+// to change it. Inputting 2 make the number 12". A phone has no up and down arrows, so keys are the
+// only way in: `key` adds one character to what the box shows, as a phone keyboard does, and hands
+// the result to the box's real onChange. Every label names the number the box starts at.
+const KIDS_Q = 'How many kids without jobs?';
+// Ruling 1 (22 Nov 2026): the two buttons' screen-reader names, as written in the plan.
+const FEWER = 'One fewer kid without a job';
+const MORE = 'One more kid without a job';
+/** The box's look at 4e7dfa1, typed by hand. */
+const BOX_LOOK =
+  'w-20 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent';
+
+const numberBoxes = (tree: any) =>
+  all(tree, (e) => e.type === 'input' && e.props.type === 'number');
+const kidsBox = (i: Inst) => numberBoxes(i.tree())[0];
+const shown = (i: Inst) => {
+  const b = kidsBox(i);
+  return b ? String(b.props.value) : '(no box)';
+};
+/** One key on a phone keyboard: what the box shows, plus one character. */
+function key(i: Inst, ch: string) {
+  const b = kidsBox(i);
+  if (!b) return void notOnScreen.push(`the kids box, to type "${ch}"`);
+  b.props.onChange({ target: { value: String(b.props.value) + ch } });
+  settle(i.f);
+}
+const keys = (i: Inst, s: string) => {
+  for (const ch of s) key(i, ch);
+};
+/** She deletes everything in the box. */
+function clearBox(i: Inst) {
+  const b = kidsBox(i);
+  if (!b) return void notOnScreen.push('the kids box, to clear it');
+  b.props.onChange({ target: { value: '' } });
+  settle(i.f);
+}
+/** One paste over the whole box: its onChange sees the pasted text in one go. */
+function pasteOver(i: Inst, text: string) {
+  const b = kidsBox(i);
+  if (!b) return void notOnScreen.push(`the kids box, to paste "${text}"`);
+  b.props.onChange({ target: { value: text } });
+  settle(i.f);
+}
+/** She leaves the box (taps away, Tab, Done). A box with no onBlur has nothing to call. */
+function leave(i: Inst) {
+  const b = kidsBox(i);
+  if (!b) return void notOnScreen.push('the kids box, to leave it');
+  if (typeof b.props.onBlur === 'function') b.props.onBlur({ target: {} });
+  settle(i.f);
+}
+const stepper = (i: Inst, name: string) =>
+  all(i.tree(), (e) => e.type === 'button' && e.props['aria-label'] === name)[0];
+async function tap(i: Inst, name: string) {
+  const b = stepper(i, name);
+  if (!b) return void notOnScreen.push(`the button named "${name}"`);
+  if (b.props.disabled) return void notOnScreen.push(`the button named "${name}", which is off`);
+  await i.press(b.props.onClick);
+}
+/** A new household's form, "Kate Smith" typed, the kids box opened: it starts at 1. */
+async function newWithKids() {
+  const i = mount();
+  type(i, primaryName(i), 'Kate Smith');
+  await pressButton(i, 'Kid without a job');
+  return i;
+}
+/** A saved household with `n` kids without jobs, as the setup page hands it to the form. */
+const savedKids = (id: string, n: number): any => ({
+  id,
+  primaryContact: { name: 'Kate Smith', email: 'kate@example.com', phone: '021 123 4567' },
+  helpers: [],
+  littleCount: n,
+  guests: [],
+  contactPersonEventId: null,
+});
+const editKids = (n: number) =>
+  mount({ editingHousehold: savedKids('hh-kids', n), onCancelEdit() {} });
+const addedKids = (i: Inst) => JSON.stringify(i.calls.added.map((p) => p.littleCount));
+const editedKids = (i: Inst) => JSON.stringify(i.calls.edited.map((c) => c.p.littleCount));
+
+/** The conditions that read attributes, kept pure so each is dry-run before RED. */
+const CHECK474 = {
+  /** 474.16: the box as it was: one number box, 1 to 20, focused when it opens, the same look. */
+  boxAsBefore(tree: any) {
+    const boxes = numberBoxes(tree);
+    const b = boxes[0];
+    return (
+      boxes.length === 1 &&
+      b.props.min === 1 &&
+      b.props.max === 20 &&
+      b.props.autoFocus === true &&
+      b.props.className === BOX_LOOK
+    );
+  },
+  /** 474.B1: "−", the box, "+", in that order in the box's own row; each a plain button, 44 by 44. */
+  steppersBeside(tree: any) {
+    const box = numberBoxes(tree)[0];
+    const row = box ? all(tree, (e) => [e.props.children].flat(Infinity).includes(box))[0] : null;
+    const inRow: El[] = row ? [row.props.children].flat(Infinity).filter(isEl) : [];
+    const minus = inRow.find((e) => e.type === 'button' && textOf(e) === '−');
+    const plus = inRow.find((e) => e.type === 'button' && textOf(e) === '+');
+    const big = (e?: El) =>
+      !!e &&
+      e.props.type === 'button' &&
+      /(^|\s)min-h-\[44px\](\s|$)/.test(String(e.props.className)) &&
+      /(^|\s)min-w-\[44px\](\s|$)/.test(String(e.props.className));
+    return (
+      !!minus &&
+      !!plus &&
+      inRow.indexOf(minus) < inRow.indexOf(box) &&
+      inRow.indexOf(box) < inRow.indexOf(plus) &&
+      big(minus) &&
+      big(plus)
+    );
+  },
+  /** 474.B2: each button's screen-reader name, word for word, and what it shows. */
+  stepperNames(tree: any) {
+    const named = (n: string) =>
+      all(tree, (e) => e.type === 'button' && e.props['aria-label'] === n);
+    return (
+      named(FEWER).length === 1 &&
+      textOf(named(FEWER)[0]) === '−' &&
+      named(MORE).length === 1 &&
+      textOf(named(MORE)[0]) === '+'
+    );
+  },
+  /** 474.B6: the question is the box's label. */
+  questionTied(tree: any) {
+    const box = numberBoxes(tree)[0];
+    const label = all(tree, (e) => e.type === 'label' && textOf(e).trim() === KIDS_Q)[0];
+    const id = box?.props.id;
+    return typeof id === 'string' && id.length > 0 && !!label && label.props.htmlFor === id;
+  },
+};
+
+async function layer474() {
+  section('474 — the kids-without-jobs box: cleared and retyped on a phone (GTC-474)');
+  const fetchesBefore = fetchCalls;
+
+  const a = await newWithKids();
+  assert(
+    '474.1',
+    'CONTROL: "Kid without a job" opens one kids box, at 1',
+    numberBoxes(a.tree()).length === 1 && shown(a) === '1',
+    shown(a)
+  );
+  clearBox(a);
+  assert('474.2', 'a new box (at 1), cleared: it shows empty', shown(a) === '', shown(a));
+  key(a, '2');
+  assert('474.3', 'then she types 2: it shows 2, not 12', shown(a) === '2', shown(a));
+  await pressButton(a, 'Save & add another household');
+  assert(
+    '474.4',
+    'then "Save & add another household" sends 2 kids without jobs',
+    addedKids(a) === '[2]',
+    addedKids(a)
+  );
+
+  const b = await newWithKids();
+  clearBox(b);
+  keys(b, '25');
+  const b25 = shown(b);
+  assert(
+    '474.5',
+    'a new box (at 1), cleared, she types 2 then 5: it shows 25 while she types',
+    b25 === '25',
+    b25
+  );
+  leave(b);
+  const bLeft = shown(b);
+  await pressButton(b, 'Save & add another household');
+  assert(
+    '474.6',
+    'she leaves at 25: it shows 2, as the 2 was taken (ruling 2); Save sends 2',
+    bLeft === '2' && addedKids(b) === '[2]',
+    { shown: bLeft, sent: addedKids(b) }
+  );
+
+  const c = await newWithKids();
+  clearBox(c);
+  leave(c);
+  const cLeft = shown(c);
+  await pressButton(c, 'Save & add another household');
+  assert(
+    '474.7',
+    'a new box (at 1), cleared, she leaves: it shows 1; Save sends 1',
+    cLeft === '1' && addedKids(c) === '[1]',
+    { shown: cLeft, sent: addedKids(c) }
+  );
+
+  const d = await newWithKids();
+  clearBox(d);
+  key(d, '0');
+  const d0 = shown(d);
+  leave(d);
+  const dLeft = shown(d);
+  await pressButton(d, 'Save & add another household');
+  assert(
+    '474.8',
+    'a new box (at 1), cleared, she types 0: it shows 0 and is not taken; leaving shows 1; Save sends 1',
+    d0 === '0' && dLeft === '1' && addedKids(d) === '[1]',
+    { typing: d0, shown: dLeft, sent: addedKids(d) }
+  );
+
+  const e = await newWithKids();
+  clearBox(e);
+  keys(e, '21');
+  const e21 = shown(e);
+  leave(e);
+  const eLeft = shown(e);
+  await pressButton(e, 'Save & add another household');
+  assert(
+    '474.9',
+    'a new box (at 1), cleared, she types 2 then 1: it shows 21 and 21 is not taken; leaving shows 2; Save sends 2',
+    e21 === '21' && eLeft === '2' && addedKids(e) === '[2]',
+    { typing: e21, shown: eLeft, sent: addedKids(e) }
+  );
+
+  // Ruling 5: by the rule, keys 2 . 5 take the 2 and not the .5; a part number pasted in one go
+  // never passes through a whole number, so the box keeps the number it started at.
+  const f = editKids(3);
+  clearBox(f);
+  keys(f, '2.5');
+  const f25 = shown(f);
+  leave(f);
+  const fLeft = shown(f);
+  await pressButton(f, 'Save changes');
+  assert(
+    '474.10',
+    'a saved household of 3, cleared, she types 2 . 5: the 2 is taken and the .5 is not; leaving shows 2; Save changes sends 2',
+    f25 === '2.5' && fLeft === '2' && editedKids(f) === '[2]',
+    { typing: f25, shown: fLeft, sent: editedKids(f) }
+  );
+  const f2 = editKids(3);
+  pasteOver(f2, '2.5');
+  const f2Typing = shown(f2);
+  leave(f2);
+  const f2Left = shown(f2);
+  await pressButton(f2, 'Save changes');
+  assert(
+    '474.10b',
+    'a saved household of 3, 2.5 pasted over it in one go: shown, not taken; leaving shows 3; Save changes sends 3',
+    f2Typing === '2.5' && f2Left === '3' && editedKids(f2) === '[3]',
+    { typing: f2Typing, shown: f2Left, sent: editedKids(f2) }
+  );
+
+  const g = await newWithKids();
+  clearBox(g);
+  await pressButton(g, 'Save & add another household');
+  assert(
+    '474.11',
+    'a new box (at 1), cleared, "Save & add another household" pressed without leaving the box: sends 1',
+    addedKids(g) === '[1]',
+    addedKids(g)
+  );
+  await pressButton(g, 'Kid without a job');
+  assert(
+    '474.14',
+    'and the next household’s kids box opens at 1, not at what was half typed',
+    shown(g) === '1',
+    shown(g)
+  );
+
+  const h = editKids(3);
+  const h3 = shown(h);
+  clearBox(h);
+  key(h, '4');
+  const h4 = shown(h);
+  await pressButton(h, 'Save changes');
+  assert(
+    '474.12',
+    'a saved household of 3: it shows 3; cleared, she types 4: it shows 4; Save changes sends 4',
+    h3 === '3' && h4 === '4' && editedKids(h) === '[4]',
+    { opened: h3, typing: h4, sent: editedKids(h) }
+  );
+
+  const k = await newWithKids();
+  clearBox(k);
+  key(k, '5');
+  await pressButton(k, '× remove');
+  const gone = numberBoxes(k.tree()).length === 0;
+  await pressButton(k, 'Kid without a job');
+  assert(
+    '474.13',
+    'a new box (at 1), cleared, she types 5, then "× remove", then "Kid without a job" again: it shows 1',
+    gone && shown(k) === '1',
+    { removed: gone, shown: shown(k) }
+  );
+
+  const m = editKids(3);
+  clearBox(m);
+  m.f.props = { ...m.f.props, editingHousehold: savedKids('hh-kids-2', 5) };
+  settle(m.f);
+  assert(
+    '474.15',
+    'a saved household of 3, cleared, then a saved household of 5 opened: it shows 5',
+    shown(m) === '5',
+    shown(m)
+  );
+
+  // A kept draft put back, then thrown away with the draft line's own button: the form goes back to
+  // how it opened, so the box closes, and a half-typed note must not come back with it.
+  const keptStore = new MemStore();
+  FormDraft.writeDraft(
+    keptStore,
+    'u1',
+    'ev-1',
+    'new',
+    draftOf([], { showLittles: true, littleCount: 4 })
+  );
+  const r = mount({}, { viewerId: 'u1', store: keptStore });
+  const rBack = shown(r);
+  clearBox(r);
+  await pressButton(r, FormDraft.DRAFT_KEEP_WORDS.DISCARD);
+  const rClosed = numberBoxes(r.tree()).length === 0;
+  await pressButton(r, 'Kid without a job');
+  assert(
+    '474.18',
+    'a kept draft of 4 put back: it shows 4; cleared, then the draft’s "Discard": the box closes, and reopened it shows 1',
+    rBack === '4' && rClosed && shown(r) === '1',
+    { putBack: rBack, closed: rClosed, reopened: shown(r) }
+  );
+
+  const n = await newWithKids();
+  assert(
+    '474.16',
+    'CONTROL: the box is as before: one number box, 1 to 20, focused when it opens, the same look',
+    CHECK474.boxAsBefore(n.tree()),
+    kidsBox(n)?.props
+  );
+
+  // Ruling 1, choice A: the minus and plus buttons, and the question tied to the box.
+  assert(
+    '474.B1',
+    'a "−" button before the box and a "+" button after it, in its row, each a plain button at least 44 by 44',
+    CHECK474.steppersBeside(n.tree())
+  );
+  assert(
+    '474.B2',
+    `their screen-reader names, word for word: "${FEWER}" and "${MORE}"`,
+    CHECK474.stepperNames(n.tree())
+  );
+  await tap(n, MORE);
+  await tap(n, MORE);
+  await tap(n, FEWER);
+  const nShown = shown(n);
+  await pressButton(n, 'Save & add another household');
+  assert(
+    '474.B3',
+    'a new box (at 1): +, +, then −: it shows 2; Save sends 2',
+    nShown === '2' && addedKids(n) === '[2]',
+    { shown: nShown, sent: addedKids(n) }
+  );
+
+  const p = await newWithKids();
+  const offAt1 = stepper(p, FEWER)?.props.disabled === true;
+  const onAt1 = !!stepper(p, MORE) && !stepper(p, MORE).props.disabled;
+  clearBox(p);
+  keys(p, '20');
+  leave(p);
+  const offAt20 = stepper(p, MORE)?.props.disabled === true;
+  const onAt20 = !!stepper(p, FEWER) && !stepper(p, FEWER).props.disabled;
+  assert(
+    '474.B4',
+    'a new box (at 1): "−" is off and "+" is on; cleared, she types 2 then 0 and leaves: at 20 "+" is off and "−" is on',
+    offAt1 && onAt1 && shown(p) === '20' && offAt20 && onAt20,
+    { offAt1, onAt1, shown: shown(p), offAt20, onAt20 }
+  );
+
+  const q = await newWithKids();
+  clearBox(q);
+  await tap(q, MORE);
+  assert(
+    '474.B5',
+    'a new box (at 1), cleared (empty, she is still in it), then "+": it shows 2, one more than the last good number',
+    shown(q) === '2',
+    shown(q)
+  );
+
+  assert(
+    '474.B6',
+    `the question "${KIDS_Q}" is the box’s label (its htmlFor is the box’s id)`,
+    CHECK474.questionTied(q.tree())
+  );
+
+  assert(
+    '474.17',
+    'CONTROL: nothing in this layer made a request',
+    fetchCalls === fetchesBefore,
+    fetchCalls - fetchesBefore
+  );
+}
 
 async function main() {
   // ══ W — THE WORDS ARE THE RULED WORDS ═══════════════════════════════════════
@@ -2396,6 +2791,8 @@ async function main() {
       JSON.stringify(held[1]?.keptEmailNames) === JSON.stringify(['Ann']),
     held.map((h: any) => [h.id, h.keptEmailNames])
   );
+
+  await layer474();
 
   globalThis.fetch = realFetch;
   console.log(`\n\x1b[33m=== Results: ${passed} passed, ${failed} failed ===\x1b[0m`);
