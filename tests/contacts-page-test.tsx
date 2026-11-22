@@ -50,6 +50,9 @@ const NEW_FILES = [
   'src/lib/contacts/load.ts',
   'src/lib/contacts/read-picked.ts',
   'src/lib/contacts/picker.ts',
+  // [[GTC-470]] (amendment A6): the new top bar and the facts file are scanned too.
+  'src/components/contacts/TopBar.tsx',
+  'src/lib/contacts/strip-facts.ts',
 ];
 
 // ── Reporting ────────────────────────────────────────────────────────────────
@@ -105,17 +108,26 @@ const stripComments = (s: string) =>
 const FORBIDDEN_CODE =
   /dangerouslySetInnerHTML|innerHTML|\beval\(|new RegExp|\bfetch\(|XMLHttpRequest|sendBeacon|\bconsole\./;
 
-// ── Nothing may reach the network but ONE read: the screen's GET of the event's households ──
+// ── Nothing may reach the network but THREE plain reads: the screen's GETs of the event's households, the
+// event and its summary ([[GTC-470]], amendment A10: the stand-in answers by address, and each can be made
+// to fail on its own; the event and the summary answer "not found" until a test says otherwise, so the
+// Moments row stays a plain display and every older check sees what it saw before) ──
 const requests: Array<{ url: string; init: unknown }> = [];
-let nextAnswer: { status: number | 'throws'; body: unknown } = {
-  status: 200,
-  body: { households: [] },
-};
+type Answer = { status: number | 'throws'; body: unknown };
+let nextAnswer: Answer = { status: 200, body: { households: [] } };
+let eventAnswer: Answer = { status: 404, body: {} };
+let summaryAnswer: Answer = { status: 404, body: {} };
 globalThis.fetch = (async (url: unknown, init?: unknown) => {
   requests.push({ url: String(url), init });
-  if (nextAnswer.status === 'throws') throw new Error('offline');
-  const status = nextAnswer.status as number;
-  return { ok: status === 200, status, json: async () => nextAnswer.body };
+  const u = String(url);
+  const a = /^\/api\/events\/[A-Za-z0-9_-]{1,64}\/summary$/.test(u)
+    ? summaryAnswer
+    : /^\/api\/events\/[A-Za-z0-9_-]{1,64}$/.test(u)
+      ? eventAnswer
+      : nextAnswer;
+  if (a.status === 'throws') throw new Error('offline');
+  const status = a.status as number;
+  return { ok: status === 200, status, json: async () => a.body };
 }) as unknown as typeof fetch;
 
 // ── Browser storage, in memory, that can be told to fail ─────────────────────
@@ -641,7 +653,7 @@ async function main() {
   );
   check(
     'P.2',
-    'first paint: the title and the A5 line, then a loading state with no count, button, list or sentence',
+    'first paint: "← Your events" and "Go back", then the title and the A5 line, then a loading state with no count, list, sentence or Moments row',
     () => {
       const { CONTACTS_WORDS: W } = require('../src/lib/contacts/words');
       const i = screen('user-a');
@@ -656,9 +668,11 @@ async function main() {
           loading?.props['data-contacts-state'] === 'loading' &&
           textOf(loading) === '' &&
           !byAttr(t, 'data-contacts-count') &&
-          buttons(t).length === 0 &&
+          !byAttr(t, 'data-contacts-moments') &&
+          buttons(t).length === 1 &&
+          textOf(buttons(t)[0]).trim() === 'Go back' &&
           rows({ tree: () => t } as Inst).length === 0 &&
-          flat(textOf(t)) === `${W.TITLE}${W.A5}`,
+          flat(textOf(t)) === `← Your eventsGo back${W.TITLE}${W.A5}`,
         got: flat(textOf(t)).slice(0, 160),
       };
     }
@@ -1115,45 +1129,57 @@ async function main() {
   section('E — the way back to the household list');
   check(
     'E.1',
-    'from an event: "Back to your households" goes to that event\'s Moment 1; with a household being changed, to it',
+    'from an event, "Go back" goes to that event\'s Moment 1; with a household being changed, to it ([[GTC-470]], amendment A1)',
     () => {
       const { CONTACTS_WORDS: W } = require('../src/lib/contacts/words');
-      const plain = screen('user-a', { search: '?event=ev1' });
-      const withEdit = screen('user-a', { search: '?event=ev1&edit=hh1' });
-      const host = screen('user-a', { search: '?event=ev1&form=host' });
-      const hrefOf = (i: Inst) => linkText(i.tree(), W.BACK)?.props.href;
+      const goes = (search: string) => {
+        const i = screen('user-a', { search });
+        press(i, buttonText(i.tree(), W.BACK));
+        return i.win.assigned;
+      };
+      const plain = goes('?event=ev1');
+      const withEdit = goes('?event=ev1&edit=hh1');
+      const host = goes('?event=ev1&form=host');
       return {
         ok:
-          hrefOf(plain) === '/plan/ev1/setup?at=people' &&
-          hrefOf(withEdit) === '/plan/ev1/setup?at=people&edit=hh1' &&
-          hrefOf(host) === '/plan/ev1/setup?at=people',
-        got: [hrefOf(plain), hrefOf(withEdit), hrefOf(host)],
+          W.BACK === 'Go back' &&
+          plain.join() === '/plan/ev1/setup?at=people' &&
+          withEdit.join() === '/plan/ev1/setup?at=people&edit=hh1' &&
+          host.join() === '/plan/ev1/setup?at=people',
+        got: [plain, withEdit, host],
       };
     }
   );
-  check('E.2', 'no event in the address, or one that is not an id: no way back is drawn', () => {
-    const { CONTACTS_WORDS: W } = require('../src/lib/contacts/words');
-    const none = screen('user-a');
-    const bad = [
-      '?event=',
-      '?event=../../x',
-      '?event=a b',
-      '?event=javascript:alert(1)',
-      '?event=ev1&edit=a@b.c',
-      '?edit=hh1',
-    ].map((s) => linkText(screen('user-a', { search: s }).tree(), W.BACK)?.props.href);
-    return {
-      ok:
-        !linkText(none.tree(), W.BACK) &&
-        bad[0] === undefined &&
-        bad[1] === undefined &&
-        bad[2] === undefined &&
-        bad[3] === undefined &&
-        bad[5] === undefined &&
-        bad[4] === '/plan/ev1/setup?at=people',
-      got: bad,
-    };
-  });
+  check(
+    'E.2',
+    'no event in the address, or one that is not an id: "Go back" is still drawn, with no Moments row, and goes to Your events ([[GTC-470]], amendment A2)',
+    () => {
+      const { CONTACTS_WORDS: W } = require('../src/lib/contacts/words');
+      const none = [
+        '',
+        '?event=',
+        '?event=../../x',
+        '?event=a b',
+        '?event=javascript:alert(1)',
+        '?edit=hh1',
+      ].map((search) => {
+        const i = screen('user-a', { search });
+        const b = buttonText(i.tree(), W.BACK);
+        const row = !!byAttr(i.tree(), 'data-contacts-moments');
+        if (b) press(i, b);
+        return { drawn: !!b, row, went: i.win.assigned.join() };
+      });
+      const withId = screen('user-a', { search: '?event=ev1&edit=a@b.c' });
+      press(withId, buttonText(withId.tree(), W.BACK));
+      return {
+        ok:
+          none.every((n) => n.drawn && !n.row && n.went === '/plan/events') &&
+          !!byAttr(withId.tree(), 'data-contacts-moments') &&
+          withId.win.assigned.join() === '/plan/ev1/setup?at=people',
+        got: { none, withId: withId.win.assigned },
+      };
+    }
+  );
   check('E.3', 'the address functions put ids and nothing else in an address', () => {
     const { contactsHref, readAddress } = require('../src/lib/contacts/address');
     const a = contactsHref({ eventId: 'ev1' });
@@ -1626,7 +1652,8 @@ async function main() {
           fileInput(i)?.props.accept?.includes('.csv') &&
           fileInput(i)?.props.accept?.includes('.vcf') &&
           !pickerButton(i) &&
-          flat(textOf(i.first)) === `${W.TITLE}${W.A5}`,
+          // [[GTC-470]] (amendment A12): the first paint now opens with the top bar, as P.2 says (A3).
+          flat(textOf(i.first)) === `← Your eventsGo back${W.TITLE}${W.A5}`,
         got: [!!area, !!label, !!pasteButton(i), !!fileButton(i)],
       };
     }
@@ -2329,7 +2356,7 @@ async function main() {
   };
   await lcheck(
     'L.25',
-    "from an event the page makes ONE request, a plain GET of that event's households; with no event, a bad one, or nobody signed in it makes none",
+    "from an event the page makes THREE requests, plain GETs of that event's households, the event and its summary; with no event, a bad one, or nobody signed in it makes none ([[GTC-470]], amendment A9)",
     async () => {
       answerWith(200, { households: HH });
       const asked = async (search: string, viewer: string | null = 'user-a') => {
@@ -2338,7 +2365,9 @@ async function main() {
         seedPeople(local, BOOK3);
         const i = screen(viewer, { local, search });
         await i.actAsync(async () => {});
-        return requests.map((r) => [r.url, r.init === undefined]);
+        return requests
+          .map((r): [string, boolean] => [r.url, r.init === undefined])
+          .sort((x, y) => (x[0] < y[0] ? -1 : 1));
       };
       const a = await asked('?event=ev1');
       const b = await asked('');
@@ -2347,7 +2376,12 @@ async function main() {
       requests.length = 0;
       return {
         ok:
-          JSON.stringify(a) === JSON.stringify([['/api/events/ev1/households', true]]) &&
+          JSON.stringify(a) ===
+            JSON.stringify([
+              ['/api/events/ev1', true],
+              ['/api/events/ev1/households', true],
+              ['/api/events/ev1/summary', true],
+            ]) &&
           b.length === 0 &&
           c.length === 0 &&
           d.length === 0,
@@ -2636,8 +2670,14 @@ async function main() {
           continue;
         }
         const code = stripComments(raw);
-        // The screen may make the one allowed GET of the households (checked by F.5); no other file may fetch.
-        const scan = rel === SCREEN ? code.replace(/\bfetch\(/, '') : code;
+        // The screen may make three plain GETs (checked by F.5, [[GTC-470]] amendment A6); no other file may fetch.
+        const scan =
+          rel === SCREEN
+            ? code.replace(
+                /\bfetch\(`\/api\/events\/\$\{[A-Za-z.]+\}(?:\/households|\/summary)?`\)/g,
+                ''
+              )
+            : code;
         if (FORBIDDEN_CODE.test(scan)) bad.push(`${rel}: forbidden code`);
         if (raw.includes('households/form-draft')) bad.push(`${rel}: names the draft module`);
         if (raw.includes('@/lib/contact/contact-fix')) bad.push(`${rel}: names contact-fix`);
@@ -2674,34 +2714,32 @@ async function main() {
   });
   check(
     'F.3',
-    "through all of the above the page made no request but plain GETs of an event's households",
-    () => ({
-      ok: requests.every(
-        (r) =>
-          /^\/api\/events\/[A-Za-z0-9_-]{1,64}\/households$/.test(r.url) && r.init === undefined
-      ),
-      got: requests
-        .filter(
-          (r) =>
-            !/^\/api\/events\/[A-Za-z0-9_-]{1,64}\/households$/.test(r.url) || r.init !== undefined
-        )
-        .slice(0, 3),
-    })
+    "through all of the above the page made no request but plain GETs of an event's households, the event and its summary ([[GTC-470]], amendment A7)",
+    () => {
+      const allowed = (r: { url: string; init: unknown }) =>
+        /^\/api\/events\/[A-Za-z0-9_-]{1,64}(?:\/households|\/summary)?$/.test(r.url) &&
+        r.init === undefined;
+      return { ok: requests.every(allowed), got: requests.filter((r) => !allowed(r)).slice(0, 3) };
+    }
   );
   check(
     'F.5',
-    "the screen makes exactly one request in its code: a plain GET (no method, no body, no options) of the event's households, and no other word of a write",
+    "the screen makes exactly three requests in its code: plain GETs (no method, no body, no options) of the event's households, the event and its summary, once each, and no other word of a write ([[GTC-470]], amendment A8)",
     () => {
       const code = stripComments(read(SCREEN));
       const calls = code.match(/\bfetch\(/g) ?? [];
-      const at = code.indexOf('fetch(');
-      const call = at < 0 ? '' : code.slice(at, code.indexOf(')', at) + 1);
+      const templates = [
+        /fetch\(`\/api\/events\/\$\{[A-Za-z.]+\}\/households`\)/g,
+        /fetch\(`\/api\/events\/\$\{[A-Za-z.]+\}`\)/g,
+        /fetch\(`\/api\/events\/\$\{[A-Za-z.]+\}\/summary`\)/g,
+      ];
+      const eachOnce = templates.map((re) => (code.match(re) ?? []).length);
       return {
         ok:
-          calls.length === 1 &&
-          /^fetch\(`\/api\/events\/\$\{[A-Za-z.]+\}\/households`\)$/.test(call) &&
+          calls.length === 3 &&
+          eachOnce.every((n) => n === 1) &&
           !/\b(POST|PUT|PATCH|DELETE|method|body|headers)\b/.test(code),
-        got: { calls: calls.length, call },
+        got: { calls: calls.length, householdsEventSummary: eachOnce },
       };
     }
   );

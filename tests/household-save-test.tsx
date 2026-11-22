@@ -100,6 +100,8 @@ const gitShow = (ref: string, rel: string) => {
 const SETUP = 'src/app/plan/[eventId]/setup/page.tsx';
 const LAYOUT = 'src/app/layout.tsx';
 const PROVIDERS = 'src/components/shared/Providers.tsx';
+/** [[GTC-470]] (amendment A11): the one other file that may name the draft module, to ask only whether a draft is kept. */
+const DRAFT_KEPT = 'src/lib/contacts/draft-kept.ts';
 const EVENT_D = 'GTC-435 household draft — her household saved';
 const EVENT_E = 'GTC-435 household draft — her own household first';
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -597,10 +599,10 @@ function layerS8() {
   walk('src');
   assert(
     'S',
-    'S10 nothing sends a draft: the module makes no request, the form makes none at all, and only the form and Providers use the module (no route, no server code)',
+    'S10 nothing sends a draft: the module makes no request, the form makes none at all, and only the form, Providers and one read-only helper (src/lib/contacts/draft-kept.ts, GTC-470) use the module (no route, no server code)',
     !/\bfetch\(|XMLHttpRequest|sendBeacon|navigator\./.test(draftCode) &&
       count(code, 'fetch(') === 0 &&
-      S0(importers.sort()) === S0([FORM, PROVIDERS].sort()),
+      S0(importers.sort()) === S0([FORM, PROVIDERS, DRAFT_KEPT].sort()),
     S0(importers)
   );
   const layout = codeOnly(read(LAYOUT)).replace(/\s+/g, ' ');

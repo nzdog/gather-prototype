@@ -12,10 +12,17 @@
  *
  * WHERE THE LIST COMES FROM. Only this browser's storage, through `@/lib/contacts/store`, under the
  * signed-in person's id (read from `ViewerIdContext`, as the household form's drafts are). Loading
- * calls GTC-448's readers (through `@/lib/contacts/load`) in this browser. This file makes no request
- * and holds nothing on a server. It reads storage only AFTER it has mounted, so the page the server
- * draws and the page the browser draws first are the same: a loading state with no words in it. The
- * phone's picker is looked for only after it has mounted, for the same reason.
+ * calls GTC-448's readers (through `@/lib/contacts/load`) in this browser. It holds nothing on a server
+ * and asks for nothing of one except, from an event only, three plain reads (GETs, no body): the event's
+ * households (3d, for the badges), and, [[GTC-470]], the event and its summary (for the Moments row).
+ * It reads storage only AFTER it has mounted, so the page the server draws and the page the browser
+ * draws first are the same: the top bar's link and button, the title, and a loading state with no words
+ * in it. The phone's picker is looked for only after it has mounted, for the same reason.
+ *
+ * [[GTC-470]] THE TOP BAR. "← Your events", "Go back" and, from an event, the four Moments row are
+ * drawn by `renderTopBar` (`./TopBar`), the same bar the sample note draws. The row is a plain display
+ * until all three reads are good; then its doors come from `momentDoors`, the one rule the setup page
+ * uses, and a household she left half done keeps the setup page's guard (`blockedLine`).
  *
  * KB-001. A page opened straight after sign-in can still be drawn with nobody signed in. As
  * `plan/events/page.tsx` does, this asks the router to refresh when the id is missing, once it has
@@ -65,6 +72,10 @@ import {
   type Placement,
 } from '@/lib/contacts/placed';
 import { renderLoadBox } from '@/components/contacts/LoadBox';
+import { goBack, renderTopBar } from '@/components/contacts/TopBar';
+import { blockedLine, stripFactsFrom } from '@/lib/contacts/strip-facts';
+import { newHouseholdDraftKept } from '@/lib/contacts/draft-kept';
+import { momentDoors } from '@/lib/moments/strip-hrefs';
 import { renderRow, type PanelField, type RowPanel } from '@/components/contacts/ContactRow';
 
 const NO_ADDRESS: ContactsAddress = { eventId: null, form: null, editId: null };
@@ -89,6 +100,11 @@ export default function ContactsScreen() {
   // households as the server has them (null until they are known, or if they cannot be read).
   const [placements, setPlacements] = useState<Placement[]>([]);
   const [lite, setLite] = useState<HouseholdLite[] | null>(null);
+  // [[GTC-470]] the Moments row's facts: the households as the server has them, and the event with its
+  // summary (each null until known, or if it cannot be read), and whether a new-household draft is kept.
+  const [householdsRaw, setHouseholdsRaw] = useState<unknown>(null);
+  const [eventReads, setEventReads] = useState<{ event: unknown; summary: unknown } | null>(null);
+  const [draftKept, setDraftKept] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const pickingRef = useRef(false);
   const latestViewer = useRef<string | null>(viewerId);
@@ -129,22 +145,58 @@ export default function ContactsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted, viewerId, address.eventId]);
 
-  // The one request this page makes: a plain GET of this event's households, only from an event.
+  // The households read: a plain GET of this event's households, only from an event.
   useEffect(() => {
     if (!mounted || !viewerId || !address.eventId) return;
     let current = true;
     fetch(`/api/events/${address.eventId}/households`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (current) setLite(d ? liteFromApi(d.households) : null);
+        if (current) {
+          setLite(d ? liteFromApi(d.households) : null);
+          setHouseholdsRaw(d ? d.households : null);
+        }
       })
       .catch(() => {
-        if (current) setLite(null);
+        if (current) {
+          setLite(null);
+          setHouseholdsRaw(null);
+        }
       });
     return () => {
       current = false;
     };
   }, [mounted, viewerId, address.eventId]);
+
+  // [[GTC-470]] The Moments row's other two reads, plain GETs, only from an event and when signed in, made
+  // at the same time as the households. If either cannot be read the row stays a plain display.
+  useEffect(() => {
+    if (!(mounted && viewerId && address.eventId)) return;
+    let current = true;
+    setEventReads(null);
+    Promise.all([
+      fetch(`/api/events/${address.eventId}`).then((r) => (r.ok ? r.json() : null)),
+      fetch(`/api/events/${address.eventId}/summary`).then((r) => (r.ok ? r.json() : null)),
+    ])
+      .then(([event, summary]) => {
+        if (current) setEventReads({ event, summary });
+      })
+      .catch(() => {
+        if (current) setEventReads(null);
+      });
+    return () => {
+      current = false;
+    };
+  }, [mounted, viewerId, address.eventId]);
+
+  // [[GTC-470]] Only from the new-household form (a plain address): is a draft kept for this event? The
+  // setup page locks the Moments while a household is typed; this tells the same from what is kept. A
+  // household being changed says so in the address, and her own household's step locks nothing.
+  useEffect(() => {
+    if (!mounted) return;
+    const plain = Boolean(address.eventId) && !address.editId && address.form !== 'host';
+    setDraftKept(plain ? newHouseholdDraftKept(viewerId, address.eventId) : false);
+  }, [mounted, viewerId, address.eventId, address.editId, address.form]);
 
   // Two tabs of this page keep in step: a change to her list elsewhere is read here too.
   useEffect(() => {
@@ -301,6 +353,19 @@ export default function ContactsScreen() {
   };
 
   const back = mounted ? backHref(address) : null;
+  // [[GTC-470]] The row's doors: only when all three reads are good; otherwise it stays a plain display.
+  const facts =
+    householdsRaw && eventReads
+      ? stripFactsFrom({
+          event: eventReads.event,
+          summary: eventReads.summary,
+          households: householdsRaw,
+        })
+      : null;
+  const doors =
+    address.eventId && facts
+      ? momentDoors(address.eventId, 1, facts, blockedLine(address, draftKept))
+      : null;
   const live = address.eventId && lite ? livePlacements(placements, lite) : null;
   /** W39 or W40: where this person is. A kid also says whether Gather can message them; an adult with no details says so. */
   const badgeFor = (c: Contact, placed?: { placement: Placement; household: HouseholdLite }) => {
@@ -342,14 +407,11 @@ export default function ContactsScreen() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-2xl mx-auto px-4 py-8">
-        {back && (
-          <a
-            href={back}
-            className="inline-block mb-4 text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2"
-          >
-            {W.BACK}
-          </a>
-        )}
+        {renderTopBar({
+          showMoments: Boolean(address.eventId),
+          doors,
+          onGoBack: () => goBack(address),
+        })}
         <h1 className="text-3xl font-bold text-gray-900">{W.TITLE}</h1>
         <p data-contacts-note className="mt-2 text-gray-600">
           {W.A5}

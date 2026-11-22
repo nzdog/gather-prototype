@@ -24,7 +24,8 @@
  *      hold those words as text)
  *   P  `package.json` differs from the base by the new script lines only (read as data)
  *   N  the new files import no server module (followed through their imports) and hold none of
- *      the plan's forbidden words, except the one allowed GET of the households
+ *      the plan's forbidden words, except three allowed plain GETs ([[GTC-470]], amendment A5: the
+ *      event's households, the event and its summary)
  *
  * No database, no network, no server. It reads git and files. Every check is green on arrival by
  * nature, so each was broken once on a scratch clone outside the repo (see the 3e evidence).
@@ -361,20 +362,32 @@ function main() {
     { reached: reached.size, newFiles: newSrc.length }
   );
 
-  // The one allowed GET: the contacts screen reads the host's households, with fetch of the
-  // event's households address and nothing else (no second argument, so no method and no body).
+  // The allowed GETs: the contacts screen reads, from an event, with plain fetch of three addresses
+  // and nothing else (no second argument, so no method and no body): the event's households (3d),
+  // and, [[GTC-470]] (amendment A5), the event itself and its summary, for the Moments row.
   const SCREEN = 'src/components/contacts/ContactsScreen.tsx';
   const FORBIDDEN =
     /\bfetch\b|XMLHttpRequest|sendBeacon|\bconsole\b|dangerouslySetInnerHTML|innerHTML|\beval\b|new\s+RegExp\b/g;
-  const ALLOWED_GET = /\bfetch\(\s*`\/api\/events\/\$\{[A-Za-z0-9_.]+\}\/households`\s*\)/g;
+  const ALLOWED_GET =
+    /\bfetch\(\s*`\/api\/events\/\$\{[A-Za-z0-9_.]+\}(?:\/households|\/summary)?`\s*\)/g;
+  const GET_EVENT = /\bfetch\(\s*`\/api\/events\/\$\{[A-Za-z0-9_.]+\}`\s*\)/g;
+  const GET_HOUSEHOLDS = /\bfetch\(\s*`\/api\/events\/\$\{[A-Za-z0-9_.]+\}\/households`\s*\)/g;
+  const GET_SUMMARY = /\bfetch\(\s*`\/api\/events\/\$\{[A-Za-z0-9_.]+\}\/summary`\s*\)/g;
   const screenText = newSrc.includes(SCREEN) ? read(SCREEN) : '';
   const screenFetches = (screenText.match(/\bfetch\b/g) ?? []).length;
   const screenAllowed = (screenText.match(ALLOWED_GET) ?? []).length;
+  const eachOnce = [GET_EVENT, GET_HOUSEHOLDS, GET_SUMMARY].map(
+    (re) => (screenText.match(re) ?? []).length
+  );
   report(
     'N3',
-    'the contacts screen holds exactly one fetch, and it is the plain GET of the event’s households',
-    baseOk && screenText.length > 0 && screenFetches === 1 && screenAllowed === 1,
-    { fetchWords: screenFetches, plainGets: screenAllowed }
+    'the contacts screen holds exactly three fetches, each a plain GET: the event’s households, the event, and its summary, once each',
+    baseOk &&
+      screenText.length > 0 &&
+      screenFetches === 3 &&
+      screenAllowed === 3 &&
+      eachOnce.every((n) => n === 1),
+    { fetchWords: screenFetches, plainGets: screenAllowed, eventHouseholdsSummary: eachOnce }
   );
   const wordHits: { file: string; word: string }[] = [];
   for (const f of newSrc) {
@@ -383,7 +396,7 @@ function main() {
   }
   report(
     'N4',
-    'the new files hold none of fetch, XMLHttpRequest, sendBeacon, console, dangerouslySetInnerHTML, innerHTML, eval or new RegExp (apart from that one GET)',
+    'the new files hold none of fetch, XMLHttpRequest, sendBeacon, console, dangerouslySetInnerHTML, innerHTML, eval or new RegExp (apart from those three plain GETs)',
     baseOk && newSrc.length >= 10 && wordHits.length === 0,
     wordHits.slice(0, 6)
   );
