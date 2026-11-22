@@ -198,8 +198,11 @@ const CROWD_CLASS =
 /** The form's other foot button, as at the tag (its class stays, mb-4 included). */
 // [[GTC-475]] (founder ruling C1, 23 Nov 2026): the look moves, the words do not. A solid full-strength outline
 // instead of faint dashes, and a plus drawn by the stylesheet (the last two classes, present unless it is saving).
+// [[GTC-475]] (founder ruling 4 at the look, 23 Nov 2026): the plus is silent to a screen reader. One class
+// moves, before:content-['+'] to before:content-['+'_/_''] (content: '+' / '', empty alternative text); every
+// other class as before.
 const ADD_ANOTHER_CLASS =
-  "w-full py-3 text-accent font-semibold bg-white border-2 border-accent rounded-lg hover:bg-accent/10 transition-colors disabled:opacity-50 mb-4 before:content-['+'] before:mr-2";
+  "w-full py-3 text-accent font-semibold bg-white border-2 border-accent rounded-lg hover:bg-accent/10 transition-colors disabled:opacity-50 mb-4 before:content-['+'_/_''] before:mr-2";
 const FORM_BASE = {
   eventId: 'e1',
   eventName: 'Boxing Day',

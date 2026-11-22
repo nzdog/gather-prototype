@@ -2489,12 +2489,15 @@ export default function Moment1InputForm({
               {/* [[GTC-475]] item 2 (founder, 22 Nov 2026: "Save and add another household button needs to
                   be more distinct from save and move on"; ruling C1, 23 Nov): a solid outline at full
                   strength instead of faint dashes, and a plus drawn before the words by the stylesheet
-                  (not in the text), so "keep adding" does not look like "finished". Words unchanged. */}
+                  (not in the text), so "keep adding" does not look like "finished". Words unchanged.
+                  [[GTC-475]] (founder ruling 4 at the look, 23 Nov 2026): the plus stays on screen but is
+                  silent to a screen reader, so the button's name is the ruled words alone: the stylesheet's
+                  alternative text for it is empty (content: '+' / ''). */}
               <button
                 type="button"
                 onClick={handleAddAnother}
                 disabled={saving}
-                className={`w-full py-3 text-accent font-semibold bg-white border-2 border-accent rounded-lg hover:bg-accent/10 transition-colors disabled:opacity-50 mb-4${saving ? '' : " before:content-['+'] before:mr-2"}`}
+                className={`w-full py-3 text-accent font-semibold bg-white border-2 border-accent rounded-lg hover:bg-accent/10 transition-colors disabled:opacity-50 mb-4${saving ? '' : " before:content-['+'_/_''] before:mr-2"}`}
               >
                 {saving ? 'Saving…' : 'Save & add another household'}
               </button>
