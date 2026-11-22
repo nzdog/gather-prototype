@@ -498,9 +498,57 @@ export const CHECKS = {
 function layerP(island: string, islandBase: string) {
   section('P — the sources, against Part A’s tip (4851b3f)');
   // [[GTC-423]]: the board as at Ticket H's code commit, and as at 4851b3f just before it.
+  // [[GTC-475]] (founder ruling F, 23 Nov 2026: F-b, "Yes to re-pointing ... and its siblings"): the old dashboard
+  // gained exactly these five insertions, 25 lines, for "Add the venue" (it reads ?edit=venue once and opens the
+  // Edit event box on its venue step). Each is named here in full and must occur exactly once; with them taken
+  // out the file must still be byte for byte the file at 4851b3f. Any other edit, and any of the five missing
+  // or changed, still turns P1 red. Nothing else in this list moves.
+  const GTC475_DASHBOARD_ADDED: string[] = [
+    ["import { EDIT_PARAM, EDIT_VENUE } from '@/lib/items/drop-off-words';"].join('\n') + '\n',
+    [
+      '  /** [[GTC-475]] item 5: the step the Edit event box opens on; 3 only for "Add the venue", else 1. */',
+      '  const [editEventStartStep, setEditEventStartStep] = useState(1);',
+      '  const venueDoorHandled = useRef(false);',
+    ].join('\n') + '\n',
+    [
+      '  /*',
+      '   * [[GTC-475]] item 5 (founder, 22 Nov 2026: "Drop off venue hasn\'t been added yet warning needs a button to',
+      '   * be able to add drop off venue"; ruling F, 23 Nov: F-b) \u2014 "Add the venue" on Moment 2\'s plan and Moment 3',
+      '   * comes here with `?edit=venue`. Once the event is loaded, open the Edit event box on its venue step and',
+      '   * take the setting out of the address, so a reload or a close does not open it again. It opens nothing but',
+      '   * the box, and writes nothing.',
+      '   */',
+      '  useEffect(() => {',
+      '    if (!event || venueDoorHandled.current || searchParams.get(EDIT_PARAM) !== EDIT_VENUE) return;',
+      '    venueDoorHandled.current = true;',
+      '    setEditEventStartStep(3);',
+      '    setEditEventModalOpen(true);',
+      '    const params = new URLSearchParams(searchParams.toString());',
+      '    params.delete(EDIT_PARAM);',
+      '    router.replace(params.toString() ? `${pathname}?${params.toString()}` : pathname, {',
+      '      scroll: false,',
+      '    });',
+      '  }, [event, searchParams, pathname, router]);',
+      '',
+    ].join('\n') + '\n',
+    ['    setEditEventStartStep(1);'].join('\n') + '\n',
+    ['            initialStep={editEventStartStep}'].join('\n') + '\n',
+  ];
+  const withoutGtc475 = (text: string): string => {
+    let out = text;
+    for (const hunk of GTC475_DASHBOARD_ADDED) {
+      if (out.split(hunk).length !== 2)
+        return '\u0000 a GTC-475 insertion is missing, repeated or changed';
+      out = out.replace(hunk, '');
+    }
+    return out;
+  };
   const changedSince = UNCHANGED.filter(
     (f) =>
-      !CHECKS.same(read(f), atRef(f === BOARD ? CODE_H : BASE, f)) ||
+      !CHECKS.same(
+        f === OLD_DASHBOARD ? withoutGtc475(read(f)) : read(f),
+        atRef(f === BOARD ? CODE_H : BASE, f)
+      ) ||
       (f === BOARD && !CHECKS.same(atRef(`${CODE_H}^`, f), atRef(BASE, f)))
   );
   assert(

@@ -9,7 +9,7 @@
  *      words the file held before GTC-394 tweak 2; Moment 2's opening page is not touched.
  *   T  item 2: Moment 1's overlay (the thing that scrolls) jumps to the top after the host's own
  *      household is saved and after an edit is saved or cancelled; one small helper.
- *   B  item 3: "Save & move on →" is one full-width accent button under both columns, drawn by the
+ *   B  item 3: "Save & move on to items →" (GTC-475 ruling D2; "Save & move on →" until then) is one full-width accent button under both columns, drawn by the
  *      setup page with the form's own handler and saving flag; the form's foot keeps "Save & add
  *      another household"; the edit mode and the host's step are untouched.
  *   L  item 4, REVERSED by GTC-398 item 1 (founder, 23 Oct 2026: "Lose it"): Moment 2's plan
@@ -186,14 +186,20 @@ const between = (src: string, from: string, to: string) => {
 // ── Item 3: "Save & move on →" under both columns, hand-written ──────────────
 const M1_FORM = 'src/components/plan/Moment1InputForm.tsx';
 const CROWD_FILE = 'src/components/demo/CrowdButton.tsx';
-const MOVE_ON = 'Save & move on →';
+// [[GTC-475]] (founder ruling D2, 23 Nov 2026): the button's words are now "Save & move on to items →", with the
+// line "Finished with people for now?" as text just above it (MOVE_ON_LINE). Every check below that asks for these
+// words to be absent from another screen or from the form reads the new words the same way.
+const MOVE_ON = 'Save & move on to items →';
+const MOVE_ON_LINE = 'Finished with people for now?';
 const ADD_ANOTHER = 'Save & add another household';
 /** "Add a crowd"'s filled accent style (CrowdButton.tsx), the founder's pick for the button. */
 const CROWD_CLASS =
   'w-full py-3 text-base font-semibold text-white bg-accent rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-50';
 /** The form's other foot button, as at the tag (its class stays, mb-4 included). */
+// [[GTC-475]] (founder ruling C1, 23 Nov 2026): the look moves, the words do not. A solid full-strength outline
+// instead of faint dashes, and a plus drawn by the stylesheet (the last two classes, present unless it is saving).
 const ADD_ANOTHER_CLASS =
-  'w-full py-3 text-accent font-medium border-2 border-dashed border-accent/30 rounded-lg hover:bg-accent/5 transition-colors disabled:opacity-50 mb-4';
+  "w-full py-3 text-accent font-semibold bg-white border-2 border-accent rounded-lg hover:bg-accent/10 transition-colors disabled:opacity-50 mb-4 before:content-['+'] before:mr-2";
 const FORM_BASE = {
   eventId: 'e1',
   eventName: 'Boxing Day',
@@ -634,7 +640,7 @@ export const CHECKS = {
   formFootGuest(html: string) {
     return (
       html.includes(`>${esc(ADD_ANOTHER)}</button>`) &&
-      html.includes(`class="${ADD_ANOTHER_CLASS}"`) &&
+      html.includes(`class="${esc(ADD_ANOTHER_CLASS)}"`) &&
       !html.includes(esc(MOVE_ON)) &&
       !html.includes('>Save changes</button>') &&
       !html.includes('>Cancel</button>')
@@ -685,10 +691,15 @@ export const CHECKS = {
     const hostBlock = between(src, "if (moment1Phase === 'host')", 'const handleAddHousehold');
     const inputBlock = between(src, 'const handleAddHousehold', 'if (showMoment3');
     const button_rx = new RegExp(
-      `\\{!editingHousehold && \\(\\s*<button\\s+type="button"\\s+onClick=\\{\\(\\) => void moment1MoveOnRef\\.current\\?\\.\\(\\)\\}\\s+disabled=\\{moment1Saving\\}\\s+className="mt-6 ${rx(CROWD_CLASS)}"\\s*>\\s*${rx(MOVE_ON)}\\s*</button>\\s*\\)\\}`
+      // [[GTC-475]] (ruling D2, and "Yes to rewriting demo-tweaks-3 B5 to the same strictness for the new
+      // shape"): the same exact button (its handler, saving flag and filled class, now without mt-6, which moves
+      // to the wrapper) and the new line above it, each with its exact class and words, in this order, drawn
+      // only when no household is being edited. The line is tied to the button as its description.
+      `\\{!editingHousehold && \\(\\s*<div className="mt-6">\\s*<p id="moment1-move-on-line" className="mb-2 text-base text-gray-700">\\s*${rx(MOVE_ON_LINE)}\\s*</p>\\s*<button\\s+type="button"\\s+onClick=\\{\\(\\) => void moment1MoveOnRef\\.current\\?\\.\\(\\)\\}\\s+disabled=\\{moment1Saving\\}\\s+aria-describedby="moment1-move-on-line"\\s+className="${rx(CROWD_CLASS)}"\\s*>\\s*${rx(MOVE_ON)}\\s*</button>\\s*</div>\\s*\\)\\}`
     );
     return (
       count(src, MOVE_ON) === 1 &&
+      count(src, MOVE_ON_LINE) === 1 &&
       row > 0 &&
       right > row &&
       button > right &&
@@ -701,7 +712,8 @@ export const CHECKS = {
       count(inputBlock, 'onSavingChange={setMoment1Saving}') === 1 &&
       !hostBlock.includes('moveOnRef=') &&
       !hostBlock.includes('onSavingChange=') &&
-      !hostBlock.includes(MOVE_ON)
+      !hostBlock.includes(MOVE_ON) &&
+      !hostBlock.includes(MOVE_ON_LINE)
     );
   },
   /** B6 CONTROL — the row, the phone list block and the column as at the tag; two forms still. */
@@ -1059,7 +1071,7 @@ async function layerB() {
   );
   assert(
     'B',
-    'B1 the form’s foot while adding people: "Save & add another household" where it was, with its class; no "Save & move on →" (moved, not copied)',
+    'B1 the form’s foot while adding people: "Save & add another household" where it was, with its class; no "Save & move on to items →" (moved, not copied)',
     CHECKS.formFootGuest(guest),
     guest.slice(guest.lastIndexOf('<button'), guest.lastIndexOf('<button') + 200)
   );
@@ -1084,7 +1096,7 @@ async function layerB() {
   const page = code(SETUP_PAGE);
   assert(
     'B',
-    'B5 the setup page draws the one "Save & move on →" after the two-column row and before Moment 3, full width, in "Add a crowd"’s filled accent style, running the form’s handler, disabled while the form saves, not while a household is being edited; the host’s step gets none of it',
+    'B5 the setup page draws the one "Save & move on to items →", with "Finished with people for now?" just above it, after the two-column row and before Moment 3, full width, in "Add a crowd"’s filled accent style, running the form’s handler, disabled while the form saves, not while a household is being edited; the host’s step gets none of it',
     CHECKS.pageDrawsIt(page, code(CROWD_FILE))
   );
   assert(

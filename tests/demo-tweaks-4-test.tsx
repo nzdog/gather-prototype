@@ -670,13 +670,18 @@ export const CHECKS = {
 
   // ── Item 2 ──
   /** D1 — the plan screen: the line is a box in the card style, larger, dark, semibold, its mb-4; straight above the heading. */
-  planLineBox(html: string, words: string) {
+  // [[GTC-475]] (founder ruling F, 23 Nov 2026): with no venue the line is followed by exactly one more element, the
+  // "Add the venue" door (`door` true); with a venue, by the heading alone, as before.
+  planLineBox(html: string, words: string, door = false) {
     const got = classesOf(html);
+    const doorRx = door
+      ? '<a data-add-venue="" href="/plan/e1\\?edit=venue" class="[^"]*">Add the venue</a>'
+      : '';
     return (
       !!got &&
       got.words === words &&
       sameSet(got.classes, PLAN_LINE_CLASSES) &&
-      new RegExp(`<p data-drop-off-line="" class="[^"]*">[^<]*</p><h1\\b`).test(html) &&
+      new RegExp(`<p data-drop-off-line="" class="[^"]*">[^<]*</p>${doorRx}<h1\\b`).test(html) &&
       count(html, 'data-drop-off-line') === 1
     );
   },
@@ -1063,7 +1068,7 @@ async function layerD() {
   assert(
     'D',
     'D1 the plan screen: the same words in a box (rounded-lg, border, border-gray-200, bg-white, px-4 py-3), text-base, font-semibold, text-gray-900, its mb-4; straight above the heading; with no venue too',
-    CHECKS.planLineBox(plan, VENUE_LINE) && CHECKS.planLineBox(planNoVenue, NO_VENUE_LINE),
+    CHECKS.planLineBox(plan, VENUE_LINE) && CHECKS.planLineBox(planNoVenue, NO_VENUE_LINE, true),
     JSON.stringify(classesOf(plan))
   );
   assert(

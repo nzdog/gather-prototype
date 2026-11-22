@@ -1629,18 +1629,12 @@ async function main() {
         'middleware.ts',
         'src/lib/auth',
       ];
-      // ⚠ THREE NAMED EXCEPTIONS AT [[GTC-472]] (22 Nov 2026, founder ruling on the report: "one named
-      // exception for the share route or its files"): the share route, the guest read route whose amount it
-      // changed (ruling D5), and the classification file's one new entry. Each is named in full; every other
-      // path under src/app/api/ and every other forbidden path is still a hit.
-      const GTC472_NAMED = [
-        'src/app/api/events/[id]/items/[itemId]/share/route.ts',
-        'src/app/api/p/[token]/route.ts',
-        'route-classifications.json',
-      ];
-      const hits = changed.filter(
-        (p) => !GTC472_NAMED.includes(p) && FORBIDDEN_PATHS.some((x) => p === x || p.startsWith(x))
-      );
+      // [[GTC-475]] (founder ruling A, 23 Nov 2026: "remove GTC-472's named list from G3 only if G3 is green
+      // without it"): GTC-472's three named exceptions (the share route, the guest read route and
+      // route-classifications.json) are gone. Since GTC-474 froze this check at GTC-470's code commit it reads
+      // that commit's diff, which touches none of the three, so the list excluded nothing. Same forbidden list,
+      // same strictness.
+      const hits = changed.filter((p) => FORBIDDEN_PATHS.some((x) => p === x || p.startsWith(x)));
       return {
         ok:
           hits.length === 0 &&

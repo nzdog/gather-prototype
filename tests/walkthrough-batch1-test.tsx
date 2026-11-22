@@ -751,6 +751,53 @@ async function main() {
       mainsTree.includes('placeholder="Specify dishes..."')
   );
 
+  // ══ GTC-475 item 4 — an "Add" button under every free-text box in Moment 2's questions ═══════════════
+  // (founder, 22 Nov 2026: "add a button to input it so the user has something to click"; ruling E, 23 Nov:
+  // "Add" and "Added", on every free-text box including Notes). New layer, inside this suite.
+  const withAdd = ok(() => !!CL.getCategoryLevels('Christmas', 'mains'))
+    ? renderToStaticMarkup(
+        createElement(OptionTree, {
+          levels: CL.getCategoryLevels('Christmas', 'mains')!,
+          selections: { 0: { options: ['Traditional roast'], freeText: 'a big one' } },
+          onChange: () => {},
+          onAdd: async () => true,
+        })
+      )
+    : '';
+  const addButtons = [
+    ...withAdd.matchAll(/<button[^>]*data-add-button=""[^>]*>([^<]*)<\/button>/g),
+  ];
+  assert(
+    '475',
+    '475a without the save handed over, the tree draws no "Add" (every other render of it is as it was); with it, one "Add" under each of Mains\' two "Other" boxes',
+    !mainsTree.includes('data-add-button') &&
+      addButtons.length === 2 &&
+      addButtons.every((b) => b[1] === 'Add')
+  );
+  assert(
+    '475',
+    '475b each "Add" is named for its box (a screen reader hears "Add Other, <the question>"); the one under the box with typing in it is on, the empty one greyed',
+    withAdd.includes('aria-label="Add Other, What style of mains?"') &&
+      withAdd.includes('aria-label="Add Other, Which dishes?"') &&
+      addButtons.filter((b) => /\bdisabled=""/.test(b[0])).length === 1
+  );
+  assert(
+    '475',
+    '475c "Added" is a status line, empty until the save comes back (nothing says "Added" before a press)',
+    (withAdd.match(/<span role="status" aria-live="polite"[^>]*><\/span>/g) ?? []).length === 2 &&
+      !withAdd.includes('>Added<')
+  );
+  const flush = modalSrc.slice(modalSrc.indexOf('const flushNow'), modalSrc.indexOf('const leave'));
+  assert(
+    '475',
+    '475d the questions hand every box the same save: the kind-of-event box, all three food call sites, the dietary box, Set up, Clean up, Other and Notes; it never presses Generate, fetches or makes a plan',
+    modalSrc.split('onAdd={flushNow}').length - 1 === 9 &&
+      modalSrc.split('<AddButton').length - 1 === 4 &&
+      flush.length > 100 &&
+      !/onGenerate|fetch\(|finalize|regenerate/i.test(flush) &&
+      /return running \? running : true;/.test(flush)
+  );
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (redAssertions.length) {
     console.log('\nRED:');

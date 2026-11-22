@@ -768,6 +768,22 @@ export const CHECKS = {
     );
   },
   /**
+   * E5 — [[GTC-475]] (founder ruling F, 23 Nov 2026: F-b, "Yes to re-pointing demo-tweaks-2 E5 and its siblings to
+   * 'the line, then one Add the venue door'"): with no venue, the line's paragraph, then exactly ONE door, then the
+   * plan's heading. The door is "Add the venue", to the old dashboard with ?edit=venue (the event's id is e1 here).
+   */
+  lineThenDoorBeforeHeading(html: string, words: string) {
+    const m = html.match(
+      /<p data-drop-off-line=""[^>]*>([^<]*)<\/p><a data-add-venue="" href="\/plan\/e1\?edit=venue" class="[^"]*">Add the venue<\/a><h1\b/
+    );
+    return (
+      !!m &&
+      m[1] === words.replace(/’/g, '’') &&
+      (html.match(/data-drop-off-line/g) ?? []).length === 1 &&
+      (html.match(/data-add-venue/g) ?? []).length === 1
+    );
+  },
+  /**
    * E4, E5 — Moment 3: the line in the TOP ROW, after W10 and before the event's details, ahead of
    * the strip, with no margin of its own (founder's ruling, 20 Oct 2026: on a computer it adds no
    * height above the lists; batch11 C7's row must rest where it did before item 7).
@@ -1277,13 +1293,56 @@ async function layerE() {
     const m = html.match(/<p data-drop-off-line=""[^>]*>([\s\S]*?)<\/p>/);
     return !!m && m[1] === NO_VENUE && !/<a\b|<button\b/.test(m[1]);
   };
+  // [[GTC-475]] (founder ruling F, 23 Nov 2026): E5 said "neither screen has a way to the venue step". Item 5 asks for
+  // exactly that way, so E5 now says: the line stays one plain line (words only, nothing inside its paragraph),
+  // then one "Add the venue" door; with a venue there is no door. Nothing else about the line moved.
+  const doorAt = (html: string) => html.indexOf('data-add-venue');
   assert(
     'E',
-    'E5 with no venue, both screens show one plain line that says so (neither screen has a way to the venue step)',
+    'E5 with no venue, both screens show the one plain line that says so, then one "Add the venue" door to the Edit event box (GTC-475, was: neither screen has a way to the venue step); with a venue, no door',
     plainNoVenue(planNoVenue) &&
       plainNoVenue(m3NoVenue) &&
-      CHECKS.lineBeforeHeading(planNoVenue, NO_VENUE) &&
-      CHECKS.lineInMoment3TopRow(m3NoVenue, NO_VENUE)
+      CHECKS.lineThenDoorBeforeHeading(planNoVenue, NO_VENUE) &&
+      CHECKS.lineInMoment3TopRow(m3NoVenue, NO_VENUE) &&
+      (m3NoVenue.match(/data-add-venue/g) ?? []).length === 1 &&
+      /<a data-add-venue="" href="\/plan\/e1\?edit=venue" class="[^"]*">Add the venue<\/a>/.test(
+        m3NoVenue
+      ) &&
+      doorAt(m3NoVenue) > m3NoVenue.indexOf('data-drop-off-line') &&
+      doorAt(m3NoVenue) < m3NoVenue.indexOf('data-event-details-button') &&
+      doorAt(plan) < 0 &&
+      doorAt(m3) < 0 &&
+      doorAt(planBare) < 0 &&
+      doorAt(m3Bare) < 0
+  );
+  // [[GTC-475]] item 5 (founder ruling F, 23 Nov 2026): where "Add the venue" lands. A new check in this layer.
+  const dashSrc = read('src/app/plan/[eventId]/page.tsx');
+  const venueEffect = dashSrc.slice(
+    dashSrc.indexOf('searchParams.get(EDIT_PARAM) !== EDIT_VENUE') - 120,
+    dashSrc.indexOf(
+      '}, [event, searchParams, pathname, router]);',
+      dashSrc.indexOf('searchParams.get(EDIT_PARAM) !== EDIT_VENUE')
+    )
+  );
+  assert(
+    'E',
+    'E5b "Add the venue" lands on the old dashboard (/plan/<id>?edit=venue, no new route); the dashboard opens the Edit event box on its venue step once, takes the setting out of the address, writes nothing; the box takes an optional step to open on',
+    DW?.addVenueHref?.('e1') === '/plan/e1?edit=venue' &&
+      DW?.EDIT_PARAM === 'edit' &&
+      DW?.EDIT_VENUE === 'venue' &&
+      venueEffect.length > 200 &&
+      /if \(!event \|\| venueDoorHandled\.current \|\| searchParams\.get\(EDIT_PARAM\) !== EDIT_VENUE\) return;/.test(
+        venueEffect
+      ) &&
+      /setEditEventStartStep\(3\);\s*setEditEventModalOpen\(true\);/.test(venueEffect) &&
+      /params\.delete\(EDIT_PARAM\);\s*router\.replace\(/.test(venueEffect) &&
+      !/fetch\(|PATCH|PUT|POST/.test(venueEffect) &&
+      dashSrc.includes('initialStep={editEventStartStep}') &&
+      /const handleEditEventModalClose = \(\) => \{\s*setEditEventModalOpen\(false\);\s*setEditEventStartStep\(1\);/.test(
+        dashSrc
+      ) &&
+      read(EDIT_BOX).includes('initialStep?: number;') &&
+      read(EDIT_BOX).includes('setStep(initialStep === 2 || initialStep === 3 ? initialStep : 1);')
   );
   assert(
     'E',

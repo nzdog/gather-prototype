@@ -120,11 +120,15 @@ function runList() {
     "B1 Your Events' row opens the event through eventHomeHref",
     /router\.push\(\s*eventHomeHref\(/.test(page) && /from '@\/lib\/events\/home-href'/.test(page)
   );
+  // [[GTC-475]] (founder ruling B, 23 Nov 2026, 'Yes to the three flips'): GTC-235's button is gone from Your
+  // Events. B2 was the control that it still opened the back room; it is now the control that it is gone while
+  // the row still opens through eventHomeHref (B1). The BOARD's own "Invites & people" door is C4, untouched.
   assert(
     'B',
-    'B2 CONTROL: "Invites & people" still opens the back room, /plan/[id] (GTC-235)',
-    /event\.setup && !event\.archived/.test(page) &&
-      /router\.push\(`\/plan\/\$\{event\.id\}`\);[\s\S]{0,400}Invites &amp; people/.test(page)
+    'B2 CONTROL: "Invites & people" is gone from Your Events; only the row opens the event (GTC-475, was GTC-235)',
+    !/event\.setup && !event\.archived/.test(page) &&
+      !/Invites &amp; people/.test(page) &&
+      !/router\.push\(`\/plan\/\$\{event\.id\}`\)/.test(page)
   );
   const wire = read('src/lib/events/wire-select.ts');
   const list = wire.slice(wire.indexOf('export const EVENT_LIST_WIRE_SELECT'));
