@@ -168,6 +168,16 @@ Some items may need multiple people. "Setup crew — 3 people"
 might need Sarah, Dave, and Tom. Kate taps the item and assigns
 multiple people. The item shows all names.
 
+> **Built, 22 Nov 2026 ([[GTC-472]]).** Not as one item with several names: each
+> row still has one person (GTC-355 Ruling 2 stands, because `Assignment.itemId`
+> is unique and the send, the nudges, the decide-by clock and the board rely on
+> it). On a dish that already has a person, the Details box offers "Share with
+> someone". Pressing it and picking a person makes a copy of the dish directly
+> under the original, gives the copy to that person, and divides the amount
+> between everyone sharing it, after Kate has seen the proposed split and been
+> able to change each number. A dish whose amount is only words, a placeholder or
+> a deferral is copied as it is and says so. See docs/tickets/GTC-472.md.
+
 ### One person, multiple items
 
 A person can be assigned to multiple items across categories.
