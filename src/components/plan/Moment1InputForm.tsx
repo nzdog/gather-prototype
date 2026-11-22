@@ -2337,7 +2337,9 @@ export default function Moment1InputForm({
                     }}
                     onBlur={() => setLittleTyped(null)}
                     autoFocus
-                    className="w-20 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                    // [[GTC-475]] (the look at 390, 23 Nov 2026): 42 px tall beside its 44 px buttons; a tap
+                    // target, so at least 44 px too (one added class; the box's look otherwise as before).
+                    className="w-20 min-h-[44px] px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                   />
                   <button
                     type="button"

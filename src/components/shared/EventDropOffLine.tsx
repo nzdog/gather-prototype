@@ -32,10 +32,13 @@ const PLACE_CLASS: Record<DropOffPlace, string> = {
  * paragraph and words are untouched. On Moment 2's plan the door is a button under the box (44 px high); in
  * Moment 3's top row it is an underlined link of the row's own size, padded for the tap and pulled back so it
  * adds no height. Still a plain link: no hook, no router.
+ * [[GTC-475]] (the look at 390, 23 Nov 2026): that padding gave a phone only a 40 px tap, and it could not grow
+ * without covering the event's name just below. Below md the row's door is now its own 44 px box (the row grows by
+ * that much on a phone); from md up it keeps the classes it had, so a computer's row adds no height, as before.
  */
 const DOOR_CLASS: Record<DropOffPlace, string> = {
   plan: '-mt-2 mb-4 inline-flex min-h-[44px] items-center rounded-md border border-accent bg-white px-4 text-sm font-medium text-accent hover:bg-accent/10',
-  row: '-my-2.5 py-2.5 text-sm font-semibold text-accent underline underline-offset-2 hover:text-accent-dark',
+  row: 'inline-flex min-h-[44px] items-center text-sm font-semibold text-accent underline underline-offset-2 hover:text-accent-dark md:min-h-0 md:-my-2.5 md:py-2.5',
 };
 
 export default function EventDropOffLine({

@@ -590,8 +590,10 @@ const KIDS_Q = 'How many kids without jobs?';
 const FEWER = 'One fewer kid without a job';
 const MORE = 'One more kid without a job';
 /** The box's look at 4e7dfa1, typed by hand. */
+// [[GTC-475]] (23 Nov 2026, the founder's Step 4: a tap target under 44 px found by the look at 390): the box
+// measured 42 px tall beside its 44 px buttons; ONE class added, min-h-[44px], every other class as at 4e7dfa1.
 const BOX_LOOK =
-  'w-20 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent';
+  'w-20 min-h-[44px] px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent';
 
 const numberBoxes = (tree: any) =>
   all(tree, (e) => e.type === 'input' && e.props.type === 'number');
