@@ -272,6 +272,14 @@
     "securityIssues": []
   },
   {
+    "filePath": "src/app/api/events/[id]/items/[itemId]/share/route.ts",
+    "apiPath": "/api/events/:id/items/:itemId/share",
+    "methods": ["POST"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
     "filePath": "src/app/api/events/[id]/items/mark-for-review/route.ts",
     "apiPath": "/api/events/:id/items/mark-for-review",
     "methods": ["POST"],

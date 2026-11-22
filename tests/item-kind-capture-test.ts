@@ -294,7 +294,11 @@ async function main() {
       'src/app/api/events/[id]/finalize-plan/route.ts': 'src/lib/ai/tasks.ts',
     };
     /** Puts back what was stored. A restore is not a capture, and must not tidy. */
-    const RESTORES = ['src/lib/workflow.ts'];
+    // ⚠ ONE NAMED FILE ADDED AT [[GTC-472]] (22 Nov 2026; the founder's ruling on the gate stop at position 80:
+    // "add src/lib/moment3/share-dish.ts to RESTORES"): the share makes a copy of a row that is already stored and
+    // carries its name and kind as stored, beside the original. That is not a capture, so it does not tidy. Found by
+    // the full gate ("unclassified: src/lib/moment3/share-dish.ts"). Nothing else in this suite changed.
+    const RESTORES = ['src/lib/workflow.ts', 'src/lib/moment3/share-dish.ts'];
     const NO_NAME = [
       'src/app/api/events/[id]/people/[personId]/route.ts',
       'src/app/api/c/[token]/items/[itemId]/assign/route.ts',

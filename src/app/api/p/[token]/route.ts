@@ -8,6 +8,7 @@ import { deriveAttendance, isAttendanceAskable, parseAttendanceBody } from '@/li
 import { resolveCarriedSubjects } from '@/lib/eligibility/carried-answer';
 import { firstNameOf } from '@/lib/messages/ask-register';
 import { isSampleCopy } from '@/lib/demo/sample-board';
+import { guestAmountText } from '@/lib/guest/guest-amount';
 
 /**
  * GET /api/p/[token]
@@ -86,7 +87,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ tok
           item: {
             id: a.item.id,
             name: a.item.name,
-            quantity: a.item.quantity,
+            // [[GTC-472]] D5: the amount from the number and its unit word, as the guest reads it.
+            quantity: guestAmountText(a.item),
             critical: a.item.critical,
             day: a.item.day ? { id: a.item.day.id, name: a.item.day.name } : null,
           },
@@ -281,6 +283,12 @@ function wireAssignment(a: {
     id: string;
     name: string;
     quantity: string | null;
+    // [[GTC-472]] D5: read to make the guest's amount; never sent on the wire as they are.
+    quantityAmount: number | null;
+    quantityUnit: string | null;
+    quantityUnitCustom: string | null;
+    quantityState: string | null;
+    placeholderAcknowledged: boolean;
     description: string | null;
     critical: boolean;
     glutenFree: boolean;
@@ -299,7 +307,8 @@ function wireAssignment(a: {
     item: {
       id: a.item.id,
       name: a.item.name,
-      quantity: a.item.quantity,
+      // [[GTC-472]] D5: the number and its unit word when the amount is settled, else the older text.
+      quantity: guestAmountText(a.item),
       description: a.item.description,
       critical: a.item.critical,
       glutenFree: a.item.glutenFree,

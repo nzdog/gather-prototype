@@ -443,12 +443,14 @@ async function runInMemory() {
     /<Moment3AssignView[\s\S]{0,800}?askForBatchReason=\{askForBatchReason\}/.test(page)
   );
   const viewFetches = view.match(/fetch\(\s*`[^`]*`/g) ?? [];
+  // ⚠ ONE NAMED EXCEPTION AT [[GTC-472]] (22 Nov 2026, founder ruling on the report): the view also posts
+  // to the one share route, `items/[itemId]/share` (ruling D2 A). Nothing else is added to the allowlist.
   assert(
     '4',
-    '4j CONTROL: every fetch in the view still goes to the assign, people or check route',
+    '4j CONTROL: every fetch in the view still goes to the assign, people or check route (and the one share route)',
     viewFetches.length > 0 &&
       viewFetches.every((f) =>
-        /`\/api\/events\/\$\{[^}]+\}\/(items\/\$\{[^}]+\}\/assign|people\/\$\{[^}]+\}|check)`/.test(
+        /`\/api\/events\/\$\{[^}]+\}\/(items\/\$\{[^}]+\}\/(assign|share)|people\/\$\{[^}]+\}|check)`/.test(
           f
         )
       )
@@ -458,10 +460,12 @@ async function runInMemory() {
       const p = join(dir, f);
       return n + (statSync(p).isDirectory() ? routes(p) : f === 'route.ts' ? 1 : 0);
     }, 0);
+  // ⚠ 112 → 113 AT [[GTC-472]] (22 Nov 2026, founder ruling on the report: "a count up by exactly one"):
+  // the share route, `items/[itemId]/share/route.ts`.
   assert(
     '4',
-    '4k CONTROL: no new API route — src/app/api still has 112 route.ts',
-    routes(join(process.cwd(), 'src/app/api')) === 112
+    '4k CONTROL: no new API route — src/app/api still has 113 route.ts (the share route, GTC-472, is the one added)',
+    routes(join(process.cwd(), 'src/app/api')) === 113
   );
   assert(
     '4',

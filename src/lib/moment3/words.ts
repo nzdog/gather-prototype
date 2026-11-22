@@ -134,3 +134,63 @@ export const M3_DETAIL_WORDS = {
 export function detailsLabel(name: string): string {
   return `Details for ${name}`;
 }
+
+/**
+ * [[GTC-472]] — SHARING ONE DISH BETWEEN SEVERAL PEOPLE. W1 to W10, the founder's rulings of
+ * 22 Nov 2026: "Words W1 to W9: every (recommended) option", and W10: "That's {sum} of {total}."
+ * (docs/tickets/GTC-472.md). tests/share-a-dish-test.ts types every one of them again by hand.
+ * Change none of them without a ruling.
+ *
+ * Reused as they are, not new: "That didn't save. Try again." (SAVE_FAILED) for every failure,
+ * "Details", "Close" and "Who's bringing it".
+ */
+export const M3_SHARE_WORDS = {
+  /** W1 — the button in the dish's box. */
+  SHARE_BUTTON: 'Share with someone',
+  /** W3 — beside a person who already has the dish. */
+  ALREADY_HAS: 'Already has it',
+  /** W4 — the split screen's heading. */
+  SPLIT_HEAD: "Here's the split. Change any number you like.",
+  /** W5 — the two buttons on the split screen, and the first while it saves. */
+  CONFIRM: 'Share it',
+  BACK: 'Back',
+  SHARING: 'Sharing…',
+  /** W6 — when the amount cannot be divided (one line; not shown for a job). */
+  NOT_DIVIDED: "This amount hasn't been divided. Each row keeps it as it is.",
+} as const;
+
+/** W2 — the picker's heading. */
+export function sharePickHeading(dish: string): string {
+  return `Who else is bringing ${dish}?`;
+}
+
+/**
+ * W7 — after the invitations have gone, and only when someone's amount went down. `names` are the
+ * people whose amount dropped. "was" for one, "were" for more.
+ */
+export function shareToldLine(names: readonly string[]): string {
+  const list =
+    names.length <= 1
+      ? (names[0] ?? '')
+      : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  return `No message goes out. ${list} ${names.length > 1 ? 'were' : 'was'} asked for the full amount, so you may want to tell them.`;
+}
+
+/** W8 — after a person is taken off a shared row. */
+export function shareUnassignedLine(dish: string): string {
+  return `${dish} is unassigned again. Nobody's amount has changed.`;
+}
+
+/** W9 — screen-reader names, not seen. */
+export function sharePersonLabel(dish: string, name: string): string {
+  return `Share ${dish} with ${name}`;
+}
+export function shareAmountLabel(name: string): string {
+  return `Amount for ${name}`;
+}
+
+/** W10 — when her numbers do not add up to the total. Plain numbers, two decimals at most. */
+export function shareTotalLine(sum: number, total: number): string {
+  const plain = (n: number) => String(Math.round(n * 100) / 100);
+  return `That's ${plain(sum)} of ${plain(total)}.`;
+}

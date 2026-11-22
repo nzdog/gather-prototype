@@ -1622,7 +1622,18 @@ async function main() {
         'middleware.ts',
         'src/lib/auth',
       ];
-      const hits = changed.filter((p) => FORBIDDEN_PATHS.some((x) => p === x || p.startsWith(x)));
+      // ⚠ THREE NAMED EXCEPTIONS AT [[GTC-472]] (22 Nov 2026, founder ruling on the report: "one named
+      // exception for the share route or its files"): the share route, the guest read route whose amount it
+      // changed (ruling D5), and the classification file's one new entry. Each is named in full; every other
+      // path under src/app/api/ and every other forbidden path is still a hit.
+      const GTC472_NAMED = [
+        'src/app/api/events/[id]/items/[itemId]/share/route.ts',
+        'src/app/api/p/[token]/route.ts',
+        'route-classifications.json',
+      ];
+      const hits = changed.filter(
+        (p) => !GTC472_NAMED.includes(p) && FORBIDDEN_PATHS.some((x) => p === x || p.startsWith(x))
+      );
       return {
         ok:
           hits.length === 0 &&

@@ -1136,10 +1136,14 @@ async function runLive() {
       return n + (statSync(p).isDirectory() ? routes(p) : f === 'route.ts' ? 1 : 0);
     }, 0);
   const classified = JSON.parse(read('route-classifications.json') || '[]');
+  // ⚠ 112 → 113 AND 86 → 87 AT [[GTC-472]] (the founder's standing word of 22 Nov 2026 on the gate stop: a check that
+  // goes red ONLY because this ticket added its route may be moved, "a count up by exactly one"): the share route,
+  // `items/[itemId]/share/route.ts`, and its one classification entry. Found by the full gate (pass 1, session 3:
+  // 61/1). Nothing else in this check changed.
   assert(
     'S',
-    'Z1 CONTROL: no new route — src/app/api still has 112 route.ts, and the classifications 86 (Zone 6 untouched)',
-    routes(join(process.cwd(), 'src/app/api')) === 112 && classified.length === 86
+    'Z1 CONTROL: no new route — src/app/api still has 113 route.ts, and the classifications 87 (the share route, GTC-472, is the one added; Zone 6 untouched but for its ruled counts)',
+    routes(join(process.cwd(), 'src/app/api')) === 113 && classified.length === 87
   );
 }
 

@@ -31,6 +31,14 @@
  * opens the dish's box (Moment3ItemDetail.tsx): Critical and the dish's own drop-off place and time,
  * saved through `onSaveItemDetail`, which the setup page wires to the save Moment 2's edit box uses.
  * This view calls no new address. A critical row shows the amber "critical" tag after its name.
+ *
+ * [[GTC-472]] (the founder, 22 Nov 2026: "Assign more than one item to several people - eg, both mum
+ * and Joanna bring salad", then "I want to divide the dish being shared"): a dish that has a person
+ * gets "Share with someone" in its Details box (ruling D3 A: nothing is added to the rows). The share
+ * makes a COPY of the row directly under it, gives it to the other person and divides the amount, in
+ * one save through the one share route; each row still has ONE person (GTC-355 Ruling 2). The copy is
+ * added to the rows below, and the counters count it like any row. After a person is taken off a row
+ * that has a same-named twin in its section, W8 says nobody's amount has changed.
  */
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
@@ -49,7 +57,9 @@ import {
   giveLabel,
   giveToLine,
   removeLabel,
+  shareUnassignedLine,
 } from '@/lib/moment3/words';
+import { amountDetail, type ShareAmountLine, type SharePreview } from '@/lib/moment3/share-split';
 import {
   assignedCounterLine,
   buildPeoplePanel,
@@ -83,6 +93,12 @@ import Moment3ItemDetail, {
   answerWords,
   type Moment3ItemDetailChanges,
 } from './Moment3ItemDetail';
+
+/** [[GTC-472]] — a copy made by a share this session: its row, and the row it sits directly under. */
+interface SharedCopy {
+  afterId: string;
+  item: Moment3Item;
+}
 
 export interface Moment3Item {
   id: string;
@@ -258,6 +274,11 @@ export default function Moment3AssignView({
   /** Items given, moved or taken back here: their loaded answer is no longer theirs to show. */
   const [regiven, setRegiven] = useState<Record<string, true>>({});
   const detailButtons = useRef<Record<string, HTMLButtonElement | null>>({});
+  /** [[GTC-472]] — copies made here (each under the row it was shared from), the amounts they changed,
+   *  and W8's line after a person is taken off a shared row. */
+  const [copies, setCopies] = useState<SharedCopy[]>([]);
+  const [amountText, setAmountText] = useState<Record<string, string>>({});
+  const [shareNote, setShareNote] = useState<string | null>(null);
   const recheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(
@@ -301,11 +322,23 @@ export default function Moment3AssignView({
   // [[GTC-406]] — the rows as loaded, with what a dish's box saved here (shown at once).
   const categories = useMemo(
     () =>
-      loadedCategories.map((c) => ({
-        ...c,
-        items: c.items.map((i) => (savedDetails[i.id] ? { ...i, ...savedDetails[i.id] } : i)),
-      })),
-    [loadedCategories, savedDetails]
+      loadedCategories.map((c) => {
+        const shown = (i: Moment3Item): Moment3Item => {
+          const merged = savedDetails[i.id] ? { ...i, ...savedDetails[i.id] } : i;
+          return amountText[i.id] !== undefined ? { ...merged, detail: amountText[i.id] } : merged;
+        };
+        // [[GTC-472]] — each copy directly under the row it was shared from; the newest first, as the
+        // server places it, and a copy of a copy under its own source.
+        const withCopies = (i: Moment3Item): Moment3Item[] => [
+          shown(i),
+          ...copies
+            .filter((x) => x.afterId === i.id)
+            .reverse()
+            .flatMap((x) => withCopies(x.item)),
+        ];
+        return { ...c, items: c.items.flatMap(withCopies) };
+      }),
+    [loadedCategories, savedDetails, copies, amountText]
   );
   const allItems = useMemo(() => categories.flatMap((c) => c.items), [categories]);
   // [[GTC-385]] (item 59, Q11): the key shows only when a dish is marked; here without "tap a dish".
@@ -411,7 +444,18 @@ export default function Moment3AssignView({
       event
     );
     asking.current = false;
-    if (answer.proceed) await save(itemId, personId, answer.reason);
+    if (answer.proceed) {
+      const saved = await save(itemId, personId, answer.reason);
+      // [[GTC-472]] W8 — a person taken off a row with a same-named twin in its section: no amount moves.
+      if (saved) {
+        const here = categories.find((c) => c.items.some((i) => i.id === itemId));
+        const mine = here?.items.find((i) => i.id === itemId);
+        const twin = here?.items.some((i) => i.id !== itemId && i.name === mine?.name);
+        setShareNote(
+          action === 'DELETE_ASSIGNMENT' && twin && mine ? shareUnassignedLine(mine.name) : null
+        );
+      }
+    }
     setPending((prev) => without(prev, itemId));
   };
 
@@ -529,6 +573,121 @@ export default function Moment3AssignView({
     return true;
   };
 
+  /** [[GTC-472]] — the dish's rows and whether its amount divides, read by the one share route (writes nothing). */
+  const loadShare = async (itemId: string): Promise<SharePreview | null> => {
+    try {
+      const res = await fetch(`/api/events/${eventId}/items/${itemId}/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preview: true }),
+      });
+      if (!res.ok) {
+        toast.error(M3_WORDS.SAVE_FAILED);
+        return null;
+      }
+      return ((await res.json()) as { preview: SharePreview }).preview;
+    } catch {
+      toast.error(M3_WORDS.SAVE_FAILED);
+      return null;
+    }
+  };
+
+  /**
+   * [[GTC-472]] — the share, saved: ONE why asked after the send for the whole of it (the new
+   * assignment, and any amount cut on a holder who has answered), then ONE save, all of it or none of
+   * it. True when saved.
+   */
+  const confirmShare = async (
+    item: Moment3Item,
+    personId: string,
+    preview: SharePreview,
+    lines: ShareAmountLine[]
+  ): Promise<boolean> => {
+    if (item.id in pending || asking.current) return false;
+    const cut = preview.rows.filter((r) => {
+      const line = lines.find((l) => l.itemId === r.itemId);
+      return line && r.amount !== null && line.amount < r.amount;
+    });
+    asking.current = true;
+    const answer = await askForBatchReason(
+      [
+        { action: 'CREATE_ASSIGNMENT', targetType: 'Assignment', targetId: item.id },
+        ...cut.map(
+          (r): PendingChange => ({
+            action: 'EDIT_ITEM',
+            targetType: 'Item',
+            targetId: r.itemId,
+            field: 'quantityAmount',
+            context: {
+              assignmentResponse: r.response as 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'MAYBE',
+            },
+          })
+        ),
+      ],
+      event
+    );
+    asking.current = false;
+    if (!answer.proceed) return false;
+    try {
+      const res = await fetch(`/api/events/${eventId}/items/${item.id}/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ personId, rows: lines, reason: answer.reason }),
+      });
+      if (!res.ok) {
+        toast.error(M3_WORDS.SAVE_FAILED);
+        return false;
+      }
+      const done = (await res.json()) as {
+        copyItemId: string;
+        divided: boolean;
+        rows: { itemId: string; personId: string; amount: number | null }[];
+      };
+      const detail = (amount: number | null) =>
+        done.divided ? amountDetail(amount, preview.unitWord) : item.detail;
+      const mine = done.rows.find((r) => r.itemId === done.copyItemId);
+      setCopies((prev) => [
+        ...prev,
+        {
+          afterId: item.id,
+          item: {
+            id: done.copyItemId,
+            name: item.name,
+            kind: item.kind,
+            detail: detail(mine?.amount ?? null),
+            marks: item.marks,
+            dropOffLocation: item.dropOffLocation,
+            dropOffNote: item.dropOffNote,
+            critical: item.critical,
+            placeholderAmount: item.placeholderAmount,
+            answer: null,
+          },
+        },
+      ]);
+      setHolders((prev) => ({
+        ...prev,
+        [done.copyItemId]: { personId, name: nameOf(personId) },
+      }));
+      if (done.divided) {
+        setAmountText((prev) => ({
+          ...prev,
+          ...Object.fromEntries(
+            done.rows
+              .filter((r) => r.itemId !== done.copyItemId)
+              .map((r) => [r.itemId, detail(r.amount)])
+          ),
+        }));
+      }
+      setGhosts((prev) => prev.filter((g) => g.itemId !== done.copyItemId));
+      setShareNote(null);
+      scheduleRecheck();
+      return true;
+    } catch {
+      toast.error(M3_WORDS.SAVE_FAILED);
+      return false;
+    }
+  };
+
   /*
    * [[GTC-406]] (18a) — the box for the dish whose Details was pressed. Who has it is the list's own
    * holder. Their answer is said only after the send, and only while the person the items read
@@ -548,6 +707,12 @@ export default function Moment3AssignView({
     <Moment3ItemDetail
       key={detailItem.id}
       item={detailItem}
+      share={{
+        people: rows.map((r) => ({ personId: r.personId, name: r.name })),
+        sentAt: Boolean(event.sentAt),
+        onLoad: () => loadShare(detailItem.id),
+        onConfirm: (personId, preview, lines) => confirmShare(detailItem, personId, preview, lines),
+      }}
       holderName={detailHolder?.name ?? null}
       holderAnswer={detailAnswer}
       onSave={(changes) => saveDetail(detailItem.id, changes)}
@@ -685,6 +850,12 @@ export default function Moment3AssignView({
               onKeyDown={(e) => panelKeys(e, () => setSelection(null))}
             >
               <p className="text-sm text-gray-600">{assignedCounterLine(panelItems)}</p>
+              {/* [[GTC-472]] W8 — after a person is taken off a shared row. */}
+              {shareNote && (
+                <p data-m3="share-note" className="mt-1 text-sm text-gray-600">
+                  {shareNote}
+                </p>
+              )}
               {accepting || onScreen.length > 0 ? (
                 /* [[GTC-365]] W4 and W5 — where "Want me to suggest?" was. */
                 <button

@@ -88,8 +88,23 @@ const baseHas = (p: string) => baseFiles.includes(p);
 const onDisk = (p: string) => path.join(ROOT, p);
 const read = (p: string) => fs.readFileSync(onDisk(p), 'utf8');
 const isCode = (p: string) => /\.(ts|tsx)$/.test(p);
-/** The new source files: added since the base, under src, that are code. */
-const newSrc = added.filter((p) => p.startsWith('src/') && isCode(p) && fs.existsSync(onDisk(p)));
+/**
+ * ⚠ NAMED EXCEPTIONS AT [[GTC-472]] (22 Nov 2026, founder ruling on the report: "one named exception for
+ * the share route or its files"). These five files are GTC-472's, not Stage 3's: the share route, its two
+ * libraries, its screen and the guest amount helper. Each is named in full. R1, R2, Z10, P2 and the new
+ * files' scans below carry the same ticket's other named exceptions, each beside its check.
+ */
+const GTC472_SRC = [
+  'src/app/api/events/[id]/items/[itemId]/share/route.ts',
+  'src/lib/moment3/share-split.ts',
+  'src/lib/moment3/share-dish.ts',
+  'src/components/plan/Moment3ShareDish.tsx',
+  'src/lib/guest/guest-amount.ts',
+];
+/** The new source files: added since the base, under src, that are code (GTC-472's five are named out). */
+const newSrc = added.filter(
+  (p) => p.startsWith('src/') && isCode(p) && !GTC472_SRC.includes(p) && fs.existsSync(onDisk(p))
+);
 
 /** True when the file now is exactly the file at the base, byte for byte. */
 function sameAsBase(p: string): boolean {
@@ -119,19 +134,41 @@ function main() {
 
   // ── R: no new route, no route classification ───────────────────────────────
   section('R — no new route');
-  const newApi = added.filter((p) => p.startsWith('src/app/api/'));
+  const SHARE_ROUTE = 'src/app/api/events/[id]/items/[itemId]/share/route.ts';
+  const newApi = added.filter((p) => p.startsWith('src/app/api/') && p !== SHARE_ROUTE);
   report(
     'R1',
     'no file is ADDED under src/app/api (a page under src/app is allowed, ruling 53)',
     baseOk && baseFiles.some((p) => p.startsWith('src/app/api/')) && newApi.length === 0,
     newApi
   );
+  // ⚠ ONE NAMED ENTRY AT [[GTC-472]] (founder ruling D2 A, 22 Nov 2026: "one new entry in
+  // route-classifications.json. Counts only."): the file is the base's byte for byte once the share
+  // route's one entry, written out here in full, is taken out of it. Any other change still turns R2 red.
+  const SHARE_ENTRY =
+    '  {\n' +
+    '    "filePath": "src/app/api/events/[id]/items/[itemId]/share/route.ts",\n' +
+    '    "apiPath": "/api/events/:id/items/:itemId/share",\n' +
+    '    "methods": ["POST"],\n' +
+    '    "authType": "SESSION",\n' +
+    '    "authEvidence": ["requireEventRole"],\n' +
+    '    "securityIssues": []\n' +
+    '  },\n';
+  const classNow =
+    baseOk && fs.existsSync(onDisk('route-classifications.json'))
+      ? read('route-classifications.json')
+      : '';
+  const classBase =
+    baseOk && baseHas('route-classifications.json')
+      ? git(['show', `${BASE}:route-classifications.json`])
+      : '';
   report(
     'R2',
-    'route-classifications.json is not changed (not listed, and byte for byte the base)',
+    "route-classifications.json is the base's, byte for byte, but for the one share-route entry (GTC-472)",
     baseOk &&
-      !changed.includes('route-classifications.json') &&
-      sameAsBase('route-classifications.json'),
+      classBase.length > 0 &&
+      classNow.split(SHARE_ENTRY).length === 2 &&
+      classNow.replace(SHARE_ENTRY, '') === classBase,
     changed.filter((p) => p.endsWith('route-classifications.json'))
   );
 
@@ -166,7 +203,12 @@ function main() {
   ];
   for (const z of ZONES) {
     const watch = [...z.prefixes, ...(z.alsoWatch ?? [])];
-    const hit = changed.filter((p) => watch.some((x) => p.startsWith(x)));
+    // ⚠ ONE NAMED FILE AT [[GTC-472]] (22 Nov 2026): Z10 passes over the scan control's counts, which the
+    // founder ruled (D2 A, "Counts only"); tests/tweaks-guard-test.ts pins that file's whole text by hash.
+    const NAMED: Record<string, string[]> = { Z10: ['tests/security-route-scan-control.ts'] };
+    const hit = changed.filter(
+      (p) => !(NAMED[z.id] ?? []).includes(p) && watch.some((x) => p.startsWith(x))
+    );
     const missing = z.prefixes.filter((x) => !baseFiles.some((p) => p.startsWith(x)));
     report(
       z.id,
@@ -268,7 +310,8 @@ function main() {
     );
     // [[GTC-469]] (founder, 22 Nov 2026): exactly one other script may be added, by name. Any
     // other added script, and a missing contacts script, still turn P2 red.
-    const ALLOWED_EXTRA = ['test:demo-new-notice'];
+    // [[GTC-472]] (founder, 22 Nov 2026: "one named exception"): and test:share-a-dish, the one new suite.
+    const ALLOWED_EXTRA = ['test:demo-new-notice', 'test:share-a-dish'];
     report(
       'P2',
       "the added script lines are this ticket's contacts tests, all eight of them, and nothing else (but GTC-469's test:demo-new-notice)",
