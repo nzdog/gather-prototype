@@ -991,10 +991,12 @@ async function runLive() {
       return acc + (statSync(p).isDirectory() ? routes(p) : f === 'route.ts' ? 1 : 0);
     }, 0);
   const classified = JSON.parse(read('route-classifications.json') || '[]');
+  // ⚠ 112 → 113 AND 86 → 87 AT [[GTC-472]] (22 Nov 2026, founder ruling on the report: "a count up by
+  // exactly one"): the share route and its one classification entry. Nothing else moved.
   assert(
     'S',
-    'Z1 CONTROL: no new route — src/app/api still has 112 route.ts, and the classifications 86 (Zone 6 untouched)',
-    routes(join(process.cwd(), 'src/app/api')) === 112 && classified.length === 86
+    'Z1 CONTROL: no new route — src/app/api still has 113 route.ts, and the classifications 87 (the share route, GTC-472, is the one added; Zone 6 untouched but for its ruled counts)',
+    routes(join(process.cwd(), 'src/app/api')) === 113 && classified.length === 87
   );
 }
 

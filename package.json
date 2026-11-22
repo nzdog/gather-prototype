@@ -133,6 +133,7 @@
     "test:tnz-status-poll": "tsx tests/tnz-status-poll-test.ts",
     "test:reply-board": "tsx tests/text-reply-board-test.ts",
     "test:moment-three": "tsx tests/moment-three-test.ts",
+    "test:share-a-dish": "tsx tests/share-a-dish-test.ts",
     "test:household-list": "tsx tests/household-list-test.ts",
     "test:board-door": "NODE_OPTIONS=--experimental-websocket tsx tests/board-door-test.ts",
     "test:phone-menu": "NODE_OPTIONS=--experimental-websocket tsx tests/phone-menu-test.ts",

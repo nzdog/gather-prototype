@@ -3253,11 +3253,16 @@ async function main() {
      *
      * ⚠ 85 → 86 AT [[GTC-290]] (founder approval, 2026-10-02): the TNZ status poll's cron route,
      * classified CUSTOM — the first cron route in the inventory. Named below, as the four before it are.
+     *
+     * ⚠ 86 → 87 AT [[GTC-472]] (founder ruling D2, 22 Nov 2026: "one new entry in
+     * route-classifications.json. Counts only."): the share route's POST, classified SESSION. Named
+     * below, as the five before it are. The count moves by that one entry and nothing else.
      */
     assert(
       'layer 4 / inventory',
-      'and the surface is 86 routes — 81 at phase 4, plus GTC-296’s unsubscribe handler, GTC-311’s chase-choice route, GTC-251’s hand-back, GTC-264’s TNZ webhook and GTC-290’s TNZ status poll',
-      classifications.length === 86 &&
+      'and the surface is 87 routes — 81 at phase 4, plus GTC-296’s unsubscribe handler, GTC-311’s chase-choice route, GTC-251’s hand-back, GTC-264’s TNZ webhook, GTC-290’s TNZ status poll and GTC-472’s share route',
+      classifications.length === 87 &&
+        classifications.some((e: any) => e.apiPath === '/api/events/:id/items/:itemId/share') &&
         classifications.some((e: any) => e.apiPath === '/api/cron/tnz-status-poll') &&
         classifications.some((e: any) => e.apiPath === '/api/unsubscribe/[token]') &&
         classifications.some((e: any) => e.apiPath === '/api/events/:id/pre-flight/chase') &&

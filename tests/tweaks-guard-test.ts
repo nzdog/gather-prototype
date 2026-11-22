@@ -241,7 +241,8 @@ const PROTECTED: Entry[] = [
     kind: 'path',
     path: 'tests/security-*',
     why: 'the security suite, its fixtures, its inventory gate and its route scan',
-    ruled: 'GTC-442: suite 11 on the copy shape; the scan pins for the sixth cron route',
+    ruled:
+      "GTC-442: suite 11 on the copy shape; the scan pins for the sixth cron route; GTC-472: the scan's counts for the share route",
     plus: [
       {
         file: 'tests/security-validation.ts',
@@ -249,8 +250,13 @@ const PROTECTED: Entry[] = [
         edited: true,
       },
       {
+        // ⚠ HASH MOVED AT [[GTC-472]] (22 Nov 2026, founder ruling D2 A: "moving the two Zone 6 counts from
+        // 112 and 144 to 113 and 145 ... Counts only. Show them red first. Weaken no assertion."): the one
+        // new route file `items/[itemId]/share` and its one handler. The file's text is pinned whole, as it
+        // was at GTC-442; this is that file's text with those counts and their dated note, and nothing else.
+        // The 09d976d7... it replaced was GTC-442's.
         file: 'tests/security-route-scan-control.ts',
-        sha256: '09d976d72d7687fb473a9075474c7fdfe41a9e2f13e4dd9ae16015cc70a54b79',
+        sha256: 'ccb1394b645da61fadd3e5cc53a9ffa1d10a8af27d55db77ebeb6d73ebb0b9c7',
         edited: true,
       },
     ],
@@ -386,11 +392,14 @@ const PROTECTED: Entry[] = [
     kind: 'path',
     path: 'route-classifications.json',
     why: 'every route and how it is guarded, as the security suite reads it',
-    ruled: 'GTC-442: the tokens route out, the demo clean-up in',
+    ruled: 'GTC-442: the tokens route out, the demo clean-up in; GTC-472: the share route in',
     plus: [
       {
+        // ⚠ HASH MOVED AT [[GTC-472]] (22 Nov 2026, founder ruling D2 A: "one new entry in
+        // route-classifications.json"): the share route's one entry (POST, SESSION, requireEventRole),
+        // and nothing else. The d7c96c75... it replaced was GTC-442's.
         file: 'route-classifications.json',
-        sha256: 'd7c96c75330ce41de513b3206f693591b865bdcfee83ffb0f805882f9a5c9d5d',
+        sha256: '415a363246567eceac1591a2d5707c235ebbe2b4def6b0730ebdb978886f577a',
         edited: true,
       },
     ],

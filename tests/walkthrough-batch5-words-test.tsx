@@ -1443,11 +1443,13 @@ async function runLive() {
       return acc + (statSync(p).isDirectory() ? routes(p) : f === 'route.ts' ? 1 : 0);
     }, 0);
   const classified = JSON.parse(read('route-classifications.json') || '[]');
+  // ⚠ 112 → 113 AND 86 → 87 AT [[GTC-472]] (22 Nov 2026, founder ruling on the report: "a count up by
+  // exactly one"): the share route and its one classification entry. Nothing else moved.
   assert(
     'S',
-    `Z1 CONTROL: no new route (112 route.ts, 86 classifications); aiCallsUsed 0 on every event; every row removed by id (${whileExists} while it existed); totals as found (${before.invite}/${before.outbound} -> ${after.invite}/${after.outbound})`,
-    routes(join(process.cwd(), 'src/app/api')) === 112 &&
-      classified.length === 86 &&
+    `Z1 CONTROL: no new route (113 route.ts, 87 classifications: the share route, GTC-472, is the one added); aiCallsUsed 0 on every event; every row removed by id (${whileExists} while it existed); totals as found (${before.invite}/${before.outbound} -> ${after.invite}/${after.outbound})`,
+    routes(join(process.cwd(), 'src/app/api')) === 113 &&
+      classified.length === 87 &&
       ai.length === 9 &&
       ai.every((e) => e.aiCallsUsed === 0) &&
       whileExists.length > 0 &&

@@ -427,16 +427,24 @@ function suite1_HeadShape(head: ScanResult) {
    * ⚠ 143 → 144 HANDLERS AT [[GTC-442]] (2026-11-01), FILES UNCHANGED AT 112 — one route file
    * deleted (`demo/tokens`, a `GET`) and one added (`cron/demo-cleanup`, a `GET` and a `POST`).
    * The unguarded count moves 28 → 29; see `GTC442_REMOVED` and `GTC442_ADDED`.
+   *
+   * ⚠ 112 → 113 FILES AND 144 → 145 HANDLERS AT [[GTC-472]] (founder ruling D2, 22 Nov 2026: "One
+   * new route file. Yes to moving the two Zone 6 counts from 112 and 144 to 113 and 145 ... Counts
+   * only. Show them red first. Weaken no assertion.") — one new route file, `items/[itemId]/share`,
+   * carrying one `POST` behind `requireEventRole(HOST, COHOST, COORDINATOR)`, like the assign route
+   * beside it. ✅ THE GUARD COUNT DID NOT MOVE — it is asserted unchanged below. The three counts
+   * were shown red on the new file first (the two here, and the inventory's denominator note), then
+   * moved; every other assertion in this suite is as it was.
    */
   logTest(
-    'the scanner discovers exactly 112 route files under src/app/api',
-    head.files.length === 112,
+    'the scanner discovers exactly 113 route files under src/app/api',
+    head.files.length === 113,
     `found ${head.files.length}`
   );
 
   logTest(
-    'the scanner enumerates exactly 144 exported HTTP handlers',
-    head.handlers.length === 144,
+    'the scanner enumerates exactly 145 exported HTTP handlers',
+    head.handlers.length === 145,
     `found ${head.handlers.length}`
   );
 
@@ -470,9 +478,10 @@ function suite1_HeadShape(head: ScanResult) {
   // first cron route in the inventory (the other four are GTC-354's).
   // ⚠ 112/143 → 112/144 and 86 stays 86 at [[GTC-442]]: the tokens route's entry out, the
   // clean-up's in (CUSTOM, as the TNZ status poll).
+  // ⚠ 112/144 → 113/145 and 86 → 87 at [[GTC-472]]: the share route, classified SESSION.
   logTest(
-    'the surface is larger than the retired inventory could express (86 entries)',
-    head.files.length === 112 && head.handlers.length === 144,
+    'the surface is larger than the retired inventory could express (87 entries)',
+    head.files.length === 113 && head.handlers.length === 145,
     `files ${head.files.length}, handlers ${head.handlers.length}`
   );
 }

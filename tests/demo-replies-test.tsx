@@ -69,10 +69,17 @@ const TOGGLE = 'src/components/demo/SampleViewToggle.tsx';
 const BUTTON = 'src/components/demo/GuestRepliesButton.tsx';
 const WORDS_FILE = 'src/lib/demo/replies-words.ts';
 const REPLIES = 'src/lib/demo/replies.ts';
+// ⚠ FIVE FILES → FOUR AT [[GTC-472]] (22 Nov 2026). `src/app/api/p/[token]/route.ts`, the guest's
+// read route, left this list: the founder's ruling D5/R2 ("A. The guest route leaves R2's list of five
+// files in tests/demo-replies-test.tsx. The other four stay byte for byte, and the rest of R2 is
+// unchanged. Your new suite pins the route's new state instead") — a guest now reads the amount on
+// their own row, so that route's wire changed on purpose. WHY: it was pinned byte for byte to
+// a5e59c3 and could not change at all. WHAT PINS IT NOW: tests/share-a-dish-test.ts layer P (what the
+// route selects, what it returns, its host check and its order of steps). The four below, and R2's
+// other conditions, are as they were.
 const KEPT = [
   'src/lib/assignment/answer.ts',
   'src/lib/workflow.ts',
-  'src/app/api/p/[token]/route.ts',
   'src/app/api/p/[token]/ack/[assignmentId]/route.ts',
   'src/lib/demo/sample-board.ts',
 ];

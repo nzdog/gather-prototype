@@ -150,6 +150,10 @@ const TIME = 'Drop-off time';
 const TIME_HINT = 'e.g. 11am';
 const SAVE = 'Save';
 const CLOSE = 'Close';
+// ⚠ ONE NAMED EXCEPTION AT [[GTC-472]] (22 Nov 2026, founder ruling on the report: "the Details box now also
+// holds "Share with someone""): W1, typed by hand. A box for a dish that has a person holds it, first,
+// before Close and Save. Only C3 and C7 expect it (`withShare`); every other box is as it was.
+const SHARE = 'Share with someone';
 const TAG = 'critical';
 const NEEDS_AMOUNT = 'This needs an amount before you move on.';
 /** The board's own words for an answer (W28), beside a holder's name. */
@@ -449,7 +453,8 @@ export const CHECKS = {
     who: string,
     ticked: boolean,
     place: string,
-    time: string
+    time: string,
+    withShare = false
   ) {
     return (
       !!b &&
@@ -464,11 +469,11 @@ export const CHECKS = {
         { label: PLACE, value: place, hint: PLACE_HINT },
         { label: TIME, value: time, hint: TIME_HINT },
       ]) &&
-      sameList(buttonsOf(b), [CLOSE, SAVE])
+      sameList(buttonsOf(b), withShare ? [SHARE, CLOSE, SAVE] : [CLOSE, SAVE])
     );
   },
   /** R5 — a job's box: its name, who has it and the tick; no Amount, no drop-off boxes. */
-  jobBox(b: BoxFacts | null, name: string, who: string, ticked: boolean) {
+  jobBox(b: BoxFacts | null, name: string, who: string, ticked: boolean, withShare = false) {
     return (
       !!b &&
       b.heading === name &&
@@ -480,7 +485,7 @@ export const CHECKS = {
       (b.boxes ?? []).length === 0 &&
       !b.text.includes(PLACE) &&
       !b.text.includes(TIME) &&
-      sameList(buttonsOf(b), [CLOSE, SAVE])
+      sameList(buttonsOf(b), withShare ? [SHARE, CLOSE, SAVE] : [CLOSE, SAVE])
     );
   },
   /** R7 — the ruling-4 sentence, said exactly when it should be. */
@@ -1340,7 +1345,7 @@ async function layerC() {
     assert(
       'C',
       'C3 Roast lamb’s box: its name, "Amount" 2 trays, "Who\'s bringing it" Ann Lowe, not ticked, "Drop-off place" holding "the shed", "Drop-off time" empty, each with its hint; "Save" idle until something changes (rulings 2 and 5)',
-      CHECKS.dishBox(lambBox, 'Roast lamb', '2 trays', 'Ann Lowe', false, 'the shed', '') &&
+      CHECKS.dishBox(lambBox, 'Roast lamb', '2 trays', 'Ann Lowe', false, 'the shed', '', true) &&
         CHECKS.saveIdle(lambBox),
       JSON.stringify(lambBox)
     );
@@ -1434,7 +1439,7 @@ async function layerC() {
     assert(
       'C',
       'C7 Set the tables (a job, critical, Bo Tane’s): its name, "Who\'s bringing it" Bo Tane, the tick ticked; no "Amount", no drop-off boxes (ruling 7)',
-      CHECKS.jobBox(tablesBox, 'Set the tables', 'Bo Tane', true),
+      CHECKS.jobBox(tablesBox, 'Set the tables', 'Bo Tane', true, true),
       JSON.stringify(tablesBox)
     );
 

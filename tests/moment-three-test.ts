@@ -773,12 +773,15 @@ async function main() {
       sourcesExist && /\/plan\/\$\{[^}]+\}\/pre-flight/.test(both)
     );
     const viewFetches = view.match(/fetch\(\s*`[^`]*`/g) ?? [];
+    // ⚠ ONE NAMED EXCEPTION AT [[GTC-472]] (22 Nov 2026, the founder's ruling on the report: "the fetch
+    // allowlist gains the share route"): `items/[itemId]/share`, the one new route sharing a dish needs
+    // (ruling D2 A). The assign route is still the only way a row is given; the check is otherwise as it was.
     assert(
-      'F6 it assigns only through the existing assign route (and writes only the routes it reuses)',
+      'F6 it assigns only through the existing assign route (and writes only the routes it reuses, and the one share route)',
       sourcesExist &&
         viewFetches.some((f) => /\/items\/\$\{[^}]+\}\/assign`/.test(f)) &&
         viewFetches.every((f) =>
-          /`\/api\/events\/\$\{[^}]+\}\/(items\/\$\{[^}]+\}\/assign|people\/\$\{[^}]+\}|check)`/.test(
+          /`\/api\/events\/\$\{[^}]+\}\/(items\/\$\{[^}]+\}\/(assign|share)|people\/\$\{[^}]+\}|check)`/.test(
             f
           )
         )
