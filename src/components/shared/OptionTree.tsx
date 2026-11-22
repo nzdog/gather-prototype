@@ -1,6 +1,6 @@
 'use client';
 
-import { ChangeEvent, useId } from 'react';
+import { ChangeEvent, useEffect, useId, useRef, useState } from 'react';
 import { withoutOrphanedChoices } from '@/lib/ai/config-loader';
 
 /**
@@ -30,6 +30,73 @@ export interface OptionTreeProps {
   selections: OptionTreeSelections;
   onChange: (next: OptionTreeSelections) => void;
   disabled?: boolean;
+  /**
+   * [[GTC-475]] item 4: when Moment 2's questions hand over their save, every "Other" box gets an "Add"
+   * button (`AddButton`). Without it nothing is drawn, so every other render of the tree is as it was.
+   */
+  onAdd?: () => Promise<boolean>;
+}
+
+/** [[GTC-475]] item 4 (founder ruling E, 23 Nov 2026): the words of the button under a free-text box. */
+export const ADD_WORDS = { ADD: 'Add', ADDED: 'Added' } as const;
+
+/**
+ * [[GTC-475]] item 4 (founder, 22 Nov 2026: "When inputting into other boxes, eg entree, other ... add a
+ * button to input it so the user has something to click"; ruling E, 23 Nov: "Add" and "Added", on every
+ * free-text box including Notes). Every box already keeps what is typed, key by key, and saves half a
+ * second later; this gives her something to press. The press saves what is typed right now, through the
+ * save the screen hands over (`onAdd`, true when it got in), and only then says "Added", until she types
+ * again. The text stays in the box. Greyed while the box is empty. 44 by 44 at least, below the box (the
+ * food boxes are already indented, so beside it would squeeze the box). It makes no plan, calls no AI
+ * and sends nothing. When the save fails it says nothing: the bar at the foot already says so.
+ * `name` is the box's own name, so a screen reader hears "Add" and then which box.
+ */
+export function AddButton({
+  text,
+  onAdd,
+  name,
+  disabled = false,
+}: {
+  text: string;
+  onAdd: () => Promise<boolean>;
+  name: string;
+  disabled?: boolean;
+}) {
+  const [state, setState] = useState<'idle' | 'working' | 'added'>('idle');
+  const latest = useRef(text);
+  latest.current = text;
+  // Typing again takes "Added" away: the newer words are not saved yet.
+  useEffect(() => {
+    setState('idle');
+  }, [text]);
+  const press = async () => {
+    const pressedWith = latest.current;
+    setState('working');
+    let saved = false;
+    try {
+      saved = await onAdd();
+    } catch {
+      saved = false;
+    }
+    setState(saved && latest.current === pressedWith ? 'added' : 'idle');
+  };
+  return (
+    <div className="mt-2 flex items-center justify-end gap-3">
+      <span role="status" aria-live="polite" className="text-sm text-gray-600">
+        {state === 'added' ? ADD_WORDS.ADDED : ''}
+      </span>
+      <button
+        type="button"
+        data-add-button=""
+        onClick={() => void press()}
+        disabled={disabled || state === 'working' || text.trim() === ''}
+        aria-label={`${ADD_WORDS.ADD} ${name}`}
+        className="min-h-[44px] min-w-[44px] px-4 text-sm font-medium text-accent bg-white border border-accent rounded-md hover:bg-accent/10 disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        {ADD_WORDS.ADD}
+      </button>
+    </div>
+  );
 }
 
 function readLevel(selections: OptionTreeSelections, levelIndex: number): OptionTreeLevelSelection {
@@ -134,6 +201,7 @@ export default function OptionTree({
   selections,
   onChange,
   disabled = false,
+  onAdd,
 }: OptionTreeProps) {
   // GTC-363 (item 20): ties each "Other" label to its box, unique per tree on the page.
   const idBase = useId();
@@ -251,6 +319,14 @@ export default function OptionTree({
           rows={2}
           className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent resize-none disabled:opacity-60 disabled:cursor-not-allowed"
         />
+        {onAdd && (
+          <AddButton
+            text={readLevel(selections, levelIndex).freeText}
+            onAdd={onAdd}
+            name={`Other, ${level.question}`}
+            disabled={disabled}
+          />
+        )}
       </>
     );
   }

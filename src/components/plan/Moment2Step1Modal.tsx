@@ -10,6 +10,7 @@ import {
   readStoredSelections,
 } from '@/lib/ai/config-loader';
 import OptionTree, {
+  AddButton,
   type OptionTreeLevel,
   type OptionTreeSelections,
 } from '@/components/shared/OptionTree';
@@ -261,6 +262,8 @@ export default function Moment2Step1Modal({
   const [saveError, setSaveError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRef = useRef<Step1State | null>(null);
+  /** [[GTC-475]] item 4: the save the half-second timer started, so "Add" can wait for it. */
+  const inflightRef = useRef<Promise<boolean> | null>(null);
 
   // Fetch household data for the feedback line headcount.
   useEffect(() => {
@@ -418,7 +421,11 @@ export default function Moment2Step1Modal({
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
         if (pendingRef.current) {
-          saveToApi(pendingRef.current);
+          const started = saveToApi(pendingRef.current);
+          inflightRef.current = started;
+          void started.finally(() => {
+            if (inflightRef.current === started) inflightRef.current = null;
+          });
           pendingRef.current = null;
         }
       }, 500);
@@ -524,6 +531,26 @@ export default function Moment2Step1Modal({
     }
     onGenerate();
   }, [onGenerate, saveToApi]);
+
+  /**
+   * [[GTC-475]] item 4 (founder ruling E, 23 Nov 2026) — what every "Add" button runs. It saves what is typed
+   * now, the same way every way out does, and says whether it got in: true when the answers are saved (a
+   * save the timer already started is waited for first), false when the save failed (the failure is already
+   * said in the footer, through saveError). It never presses Generate.
+   */
+  const flushNow = useCallback(async (): Promise<boolean> => {
+    const running = inflightRef.current;
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    if (pendingRef.current) {
+      const pending = pendingRef.current;
+      pendingRef.current = null;
+      return saveToApi(pending);
+    }
+    return running ? running : true;
+  }, [saveToApi]);
 
   /**
    * [[GTC-367]] (Q7) — EVERY WAY OUT SAVES FIRST. The questions save half a second after each
@@ -814,6 +841,11 @@ export default function Moment2Step1Modal({
                     }
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent/40"
                   />
+                  <AddButton
+                    text={state.eventTypeOther}
+                    onAdd={flushNow}
+                    name="What kind of event?"
+                  />
                 </div>
               )}
 
@@ -847,6 +879,7 @@ export default function Moment2Step1Modal({
                   onToggle={handleAccordionToggle}
                   data={state.dietaryData}
                   onChange={(d) => updateState((prev) => ({ ...prev, dietaryData: d }))}
+                  onAdd={flushNow}
                 />
                 {/* Canonical OptionTree food categories shown up front (GTC-363: the defaults,
                 plus any shown up front only). The rest are deferred to "Show more". */}
@@ -863,6 +896,7 @@ export default function Moment2Step1Modal({
                           id="mains"
                           label={`${meta.emoji} ${meta.label}`}
                           levels={levels}
+                          onAdd={flushNow}
                           selections={data.selections ?? {}}
                           stillDeciding={data.stillDeciding}
                           openSections={openSections}
@@ -900,6 +934,7 @@ export default function Moment2Step1Modal({
                         id={catKey}
                         label={`${meta.emoji} ${meta.label}`}
                         levels={levels}
+                        onAdd={flushNow}
                         selections={entry.selections}
                         stillDeciding={entry.stillDeciding}
                         openSections={openSections}
@@ -961,6 +996,7 @@ export default function Moment2Step1Modal({
                         id={catKey}
                         label={`${meta.emoji} ${meta.label}`}
                         levels={levels}
+                        onAdd={flushNow}
                         selections={entry.selections}
                         stillDeciding={entry.stillDeciding}
                         openSections={openSections}
@@ -1006,6 +1042,8 @@ export default function Moment2Step1Modal({
                   openSections={openSections}
                   onToggle={handleAccordionToggle}
                   onChange={(d) => updateState((prev) => ({ ...prev, setUpData: d }))}
+                  addName="Set up"
+                  onAdd={flushNow}
                 />
                 <FreeTextAccordion
                   id="cleanUp"
@@ -1015,6 +1053,8 @@ export default function Moment2Step1Modal({
                   openSections={openSections}
                   onToggle={handleAccordionToggle}
                   onChange={(d) => updateState((prev) => ({ ...prev, cleanUpData: d }))}
+                  addName="Clean up"
+                  onAdd={flushNow}
                 />
                 <FreeTextAccordion
                   id="otherJobsOther"
@@ -1024,6 +1064,8 @@ export default function Moment2Step1Modal({
                   openSections={openSections}
                   onToggle={handleAccordionToggle}
                   onChange={(d) => updateState((prev) => ({ ...prev, otherJobsOtherData: d }))}
+                  addName="Other"
+                  onAdd={flushNow}
                 />
                 {/* GTC-379 (item 41, ruling 4): the notes box last, under a thin line and some space,
                 no words. Still `otherNotes`, under the same id (GTC-363 item 25), so what the AI
@@ -1035,6 +1077,7 @@ export default function Moment2Step1Modal({
                   onToggle={handleAccordionToggle}
                   value={state.otherNotes}
                   onChange={(v) => updateState((prev) => ({ ...prev, otherNotes: v }))}
+                  onAdd={flushNow}
                 />
                 {/* GTC-379 (item 44, W4 to W9): what she has picked, under Notes and above the bar.
                 It grows with the page; nothing is added to the bar. */}
@@ -1119,6 +1162,7 @@ function FoodOptionTreeAccordion({
   onToggle,
   onSelectionsChange,
   onStillDecidingToggle,
+  onAdd,
 }: {
   id: string;
   label: string;
@@ -1129,6 +1173,7 @@ function FoodOptionTreeAccordion({
   onToggle: (id: string) => void;
   onSelectionsChange: (next: OptionTreeSelections) => void;
   onStillDecidingToggle: () => void;
+  onAdd: () => Promise<boolean>;
 }) {
   return (
     <AccordionShell
@@ -1139,7 +1184,12 @@ function FoodOptionTreeAccordion({
       stillDeciding={stillDeciding}
       onStillDecidingToggle={onStillDecidingToggle}
     >
-      <OptionTree levels={levels} selections={selections} onChange={onSelectionsChange} />
+      <OptionTree
+        levels={levels}
+        selections={selections}
+        onChange={onSelectionsChange}
+        onAdd={onAdd}
+      />
     </AccordionShell>
   );
 }
@@ -1154,6 +1204,8 @@ function FreeTextAccordion({
   openSections,
   onToggle,
   onChange,
+  addName,
+  onAdd,
 }: {
   id: string;
   label: string;
@@ -1162,6 +1214,9 @@ function FreeTextAccordion({
   openSections: string[];
   onToggle: (id: string) => void;
   onChange: (d: OtherJobsAccordionData) => void;
+  /** [[GTC-475]] item 4: the box's own name, for the "Add" button's screen-reader name. */
+  addName: string;
+  onAdd: () => Promise<boolean>;
 }) {
   return (
     <AccordionShell
@@ -1180,6 +1235,7 @@ function FreeTextAccordion({
         rows={5}
         className="w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 resize-y"
       />
+      <AddButton text={data.freeText} onAdd={onAdd} name={addName} />
     </AccordionShell>
   );
 }
@@ -1192,12 +1248,14 @@ function DietaryAccordion({
   onToggle,
   data,
   onChange,
+  onAdd,
 }: {
   id: string;
   openSections: string[];
   onToggle: (id: string) => void;
   data: DietaryData;
   onChange: (d: DietaryData) => void;
+  onAdd: () => Promise<boolean>;
 }) {
   // Status is derived, never stored independently: invalid combinations are
   // unrepresentable. Removing the last requirement returns to 'unanswered'
@@ -1293,6 +1351,7 @@ function DietaryAccordion({
             disabled={isNone}
             className="w-full px-3 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-50"
           />
+          <AddButton text={data.other} onAdd={onAdd} name="Other dietary needs" disabled={isNone} />
         </div>
       </div>
     </AccordionShell>
@@ -1434,12 +1493,14 @@ function NotesAccordion({
   onToggle,
   value,
   onChange,
+  onAdd,
 }: {
   id: string;
   openSections: string[];
   onToggle: (id: string) => void;
   value: string;
   onChange: (v: string) => void;
+  onAdd: () => Promise<boolean>;
 }) {
   return (
     <AccordionShell
@@ -1455,6 +1516,7 @@ function NotesAccordion({
         rows={4}
         className="w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-accent/40 resize-none"
       />
+      <AddButton text={value} onAdd={onAdd} name="Notes" />
     </AccordionShell>
   );
 }

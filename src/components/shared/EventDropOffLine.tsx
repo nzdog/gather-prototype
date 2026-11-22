@@ -1,4 +1,9 @@
-import { eventDropOffLine, type DropOffFacts } from '@/lib/items/drop-off-words';
+import {
+  addVenueHref,
+  DROP_OFF_WORDS,
+  eventDropOffLine,
+  type DropOffFacts,
+} from '@/lib/items/drop-off-words';
 
 /**
  * [[GTC-395]] item 7 — the event's where-and-when to drop off, one plain line at the top of Moment
@@ -20,6 +25,19 @@ const PLACE_CLASS: Record<DropOffPlace, string> = {
   row: 'text-sm font-semibold text-gray-900 break-words',
 };
 
+/**
+ * [[GTC-475]] item 5 (founder, 22 Nov 2026: "Drop off venue hasn't been added yet warning needs a button to be
+ * able to add drop off venue"; ruling F, 23 Nov: F-b): when there is no venue, one door straight after the
+ * line, "Add the venue", to the old dashboard with the Edit event box open at the venue step. The line's own
+ * paragraph and words are untouched. On Moment 2's plan the door is a button under the box (44 px high); in
+ * Moment 3's top row it is an underlined link of the row's own size, padded for the tap and pulled back so it
+ * adds no height. Still a plain link: no hook, no router.
+ */
+const DOOR_CLASS: Record<DropOffPlace, string> = {
+  plan: '-mt-2 mb-4 inline-flex min-h-[44px] items-center rounded-md border border-accent bg-white px-4 text-sm font-medium text-accent hover:bg-accent/10',
+  row: '-my-2.5 py-2.5 text-sm font-semibold text-accent underline underline-offset-2 hover:text-accent-dark',
+};
+
 export default function EventDropOffLine({
   facts,
   place,
@@ -27,9 +45,17 @@ export default function EventDropOffLine({
   facts: DropOffFacts;
   place: DropOffPlace;
 }) {
+  const noVenue = !facts.venueName?.trim();
   return (
-    <p data-drop-off-line="" className={PLACE_CLASS[place]}>
-      {eventDropOffLine(facts)}
-    </p>
+    <>
+      <p data-drop-off-line="" className={PLACE_CLASS[place]}>
+        {eventDropOffLine(facts)}
+      </p>
+      {noVenue && facts.id ? (
+        <a data-add-venue="" href={addVenueHref(facts.id)} className={DOOR_CLASS[place]}>
+          {DROP_OFF_WORDS.ADD_VENUE}
+        </a>
+      ) : null}
+    </>
   );
 }
