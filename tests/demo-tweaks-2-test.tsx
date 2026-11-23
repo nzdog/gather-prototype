@@ -778,7 +778,7 @@ export const CHECKS = {
     );
     return (
       !!m &&
-      m[1] === words.replace(/’/g, '’') &&
+      m[1] === words &&
       (html.match(/data-drop-off-line/g) ?? []).length === 1 &&
       (html.match(/data-add-venue/g) ?? []).length === 1
     );
