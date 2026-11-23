@@ -117,6 +117,20 @@ export async function POST(
       return NextResponse.json({ error: 'Team does not belong to this event' }, { status: 400 });
     }
 
+    // [[GTC-477]] — the host's Add item box sends a day, and until now it was thrown away. A day
+    // sent must be a day of this event, checked before anything is built or written: the same
+    // check as [[GTC-403]]'s three routes. No day (missing, empty or null) is not checked, and the
+    // dish is saved with no day, as before.
+    if (body.dayId !== undefined && body.dayId !== null && body.dayId !== '') {
+      const dayOnThisEvent =
+        typeof body.dayId === 'string'
+          ? await prisma.day.findFirst({ where: { id: body.dayId, eventId }, select: { id: true } })
+          : null;
+      if (!dayOnThisEvent) {
+        return NextResponse.json({ error: 'That day is not on this event' }, { status: 400 });
+      }
+    }
+
     // Create item
     const itemData: any = {
       name,
@@ -128,6 +142,9 @@ export async function POST(
       status: 'UNASSIGNED',
       teamId,
     };
+
+    // [[GTC-477]] — the day, checked above as a day of this event.
+    if (body.dayId) itemData.dayId = body.dayId;
 
     // Add quantity if provided — a dish's only. A job carries no quantity: kindFields has given it
     // quantityState NA, the shape a generated job has (GTC-171).

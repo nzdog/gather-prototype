@@ -30,7 +30,8 @@ const TRACKED_ITEM_FIELDS = [
   'notes',
   'critical',
   'dietaryTags',
-  'dayId',
+  // [[GTC-477]]: 'dayId' is an ask field now and comes in through ASK_FIELDS above; listing it
+  // here as well would write one day change into the history twice.
   'serveTime',
   'displayOrder',
 ] as const;

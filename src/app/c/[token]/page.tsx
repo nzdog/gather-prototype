@@ -109,6 +109,8 @@ interface CoordinatorData {
   teamMembers: TeamMember[];
   otherTeams: OtherTeam[];
   myAssignments: Assignment[];
+  // [[GTC-477]]: every day of the event, in date order. Optional: a page stub may carry none.
+  days?: { id: string; name: string; date: string }[];
 }
 
 function getFriendlyErrorMessage(error: string | null): string {
@@ -917,10 +919,12 @@ export default function CoordinatorView() {
                   onChange={(e) => setNewItem({ ...newItem, dayId: e.target.value })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
                 >
-                  <option value="">Select day...</option>
-                  {data.items[0]?.day && (
-                    <option value={data.items[0].day.id}>{data.items[0].day.name}</option>
-                  )}
+                  <option value="">All days</option>
+                  {(data.days ?? []).map((day) => (
+                    <option key={day.id} value={day.id}>
+                      {day.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
