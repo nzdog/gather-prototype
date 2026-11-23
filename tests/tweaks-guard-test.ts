@@ -180,40 +180,20 @@ const PROTECTED: Entry[] = [
     kind: 'path',
     path: 'prisma/schema.prisma',
     why: 'the schema',
-    ruled: 'GTC-426: the sample marker on Person; GTC-449: the decide-later marker on PersonEvent',
+    ruled:
+      'GTC-426: the sample marker on Person; GTC-449: the decide-later marker on PersonEvent; GTC-478: the session order and SessionAbsence',
     plus: [
       {
+        // ⚠ BY ITS HASH SINCE [[GTC-478]] (23 Nov 2026, the founder's ruling 2 on its plan, under the
+        // standing word on older pins): GTC-478 adds Day's `displayOrder` and the `SessionAbsence`
+        // model, and Prisma's formatter re-aligns Day's existing lines around the new column, so the
+        // change is no longer insertions only. The file is pinned whole, by the SHA-256 of its text at
+        // 422bf9c (GTC-478's migration commit): 21a9577's schema plus GTC-426's three insertions and
+        // GTC-449's one (the lines this entry listed until now, unchanged in the file), plus GTC-478's
+        // change, and nothing else. Any other edit still turns it red.
         file: 'prisma/schema.prisma',
-        insert: [
-          {
-            after: ['  nudge48hSentAt   DateTime?'],
-            lines: [
-              '  /// [[GTC-426]] — the sample event (a demo copy) this person was made for. NULL means a real',
-              '  /// person. No foreign key, on purpose (founder ruling, 30 Oct 2026): a plain tag that never',
-              '  /// blocks or cascades an event delete. Added in T1; nothing reads or writes it until T2.',
-              '  sampleEventId    String?',
-            ],
-          },
-          {
-            after: ['  @@index([userId])', '  @@index([email])'],
-            lines: ['  @@index([sampleEventId])'],
-          },
-          {
-            after: ['  isYoungPerson        Boolean            @default(false)'],
-            lines: [
-              '  /// GTC-449 (rulings 2, 15 and 23): the host\'s "decide later" for a CHILD — she has',
-              '  /// not yet decided whether Gather may message this child. ONLY MEANINGFUL WHILE',
-              '  /// `householdRole` IS CHILD. It is NEVER an input to messaging, links or counts:',
-              '  /// `householdRole` stays the sole gate (Moment 4 §10.6, absolute), so a child on',
-              '  /// decide later is excluded from every send, link, directory and headcount exactly',
-              '  /// as a plain child is. The contact details such a child may be holding on `Person`',
-              "  /// are held, never used, until she chooses to message. Read it for the host's own",
-              '  /// screens (the form, the card, pre-flight), never for a send decision. A yes/no,',
-              '  /// not an empty state: every row reads "no" until she chooses it.',
-              '  messagingUndecided   Boolean            @default(false)',
-            ],
-          },
-        ],
+        sha256: 'c8ee96b764080f0b6fe9557a16d4eaa11eddbfe82e9e84effe47277c8618af09',
+        edited: true,
       },
     ],
   },
@@ -223,7 +203,7 @@ const PROTECTED: Entry[] = [
     path: 'prisma/migrations',
     why: 'the migrations: never edited, deleted or reordered',
     ruled:
-      'GTC-426: one new migration, ADD COLUMN and CREATE INDEX; GTC-449: one new migration, ADD COLUMN',
+      'GTC-426: one new migration, ADD COLUMN and CREATE INDEX; GTC-449: one new migration, ADD COLUMN; GTC-478: one new migration, the session order and SessionAbsence',
     plus: [
       {
         file: 'prisma/migrations/20261029195430_gtc426_person_sample_event_id/migration.sql',
@@ -232,6 +212,12 @@ const PROTECTED: Entry[] = [
       {
         file: 'prisma/migrations/20261102205933_gtc449_person_event_messaging_undecided/migration.sql',
         sha256: '03bc7d24a8da0f5a1659cd9f262e5dbe96bd04175a6f17a1a06c9230a2583b53',
+      },
+      {
+        // [[GTC-478]] (23 Nov 2026, the founder's word at migration steps 2 to 4): the migration exactly
+        // as `prisma migrate dev --create-only` generated it, no hand edits.
+        file: 'prisma/migrations/20261123082013_gtc478_sessions_foundation/migration.sql',
+        sha256: '0185d8ee463533721fd8eaf2883274e93348986e7816440c2e8f26e3e5a352cd',
       },
     ],
   },
@@ -249,8 +235,12 @@ const PROTECTED: Entry[] = [
         // grows from 257 to 262 checks. Yes to moving tweaks-guard G19's fingerprint ... with a dated note.
         // No existing security check is changed or weakened."): suite 19 Part B gains the host's create, five
         // checks and their note, and nothing else. The d0a74ed5... it replaced was the text at 1372817.
+        // ⚠ HASH MOVED AGAIN AT [[GTC-478]] (23 Nov 2026, the founder's ruling 2 on its plan: "the G19
+        // fingerprint"): Suite 21, the session routes, 18 checks (262 to 280), and the cookie stand-in's
+        // import above the first import; no existing check changed. The ebccc90d... it replaced was the
+        // text at c686175.
         file: 'tests/security-validation.ts',
-        sha256: 'ebccc90d1f09791a12f42d901717d2130b59a5f12426b99a3ba894f6559ea58d',
+        sha256: '71cccc4810ebbd72ed252fe0e7f31c9937e7417b1097f038904f63fd20ad2a5b',
         edited: true,
       },
       {
@@ -259,8 +249,12 @@ const PROTECTED: Entry[] = [
         // new route file `items/[itemId]/share` and its one handler. The file's text is pinned whole, as it
         // was at GTC-442; this is that file's text with those counts and their dated note, and nothing else.
         // The 09d976d7... it replaced was GTC-442's.
+        // ⚠ HASH MOVED AGAIN AT [[GTC-478]] (23 Nov 2026, the founder's ruling 2 on its plan: "the counts
+        // going up by exactly this ticket's additions (route files 114, handlers 149, classifications
+        // 88)"): those counts and their dated notes, and nothing else. The ccb1394b... it replaced was
+        // GTC-472's.
         file: 'tests/security-route-scan-control.ts',
-        sha256: 'ccb1394b645da61fadd3e5cc53a9ffa1d10a8af27d55db77ebeb6d73ebb0b9c7',
+        sha256: 'fa277a9741c656796f97a7d2a73880fd514964f8229f3216d5ca0cae28bee7e8',
         edited: true,
       },
     ],
@@ -396,14 +390,20 @@ const PROTECTED: Entry[] = [
     kind: 'path',
     path: 'route-classifications.json',
     why: 'every route and how it is guarded, as the security suite reads it',
-    ruled: 'GTC-442: the tokens route out, the demo clean-up in; GTC-472: the share route in',
+    ruled:
+      'GTC-442: the tokens route out, the demo clean-up in; GTC-472: the share route in; GTC-478: the days entry corrected, the session route in',
     plus: [
       {
         // ⚠ HASH MOVED AT [[GTC-472]] (22 Nov 2026, founder ruling D2 A: "one new entry in
         // route-classifications.json"): the share route's one entry (POST, SESSION, requireEventRole),
         // and nothing else. The d7c96c75... it replaced was GTC-442's.
+        // ⚠ HASH MOVED AT [[GTC-478]] (23 Nov 2026, the founder's ruling 1 and 2 on its plan: "The days
+        // entry in route-classifications.json corrected to SESSION"; "classifications 88"): the days
+        // entry now GET, POST and PUT, SESSION, requireEventRole, and one new entry for days/:dayId
+        // (PATCH, DELETE, SESSION, requireEventRole), and nothing else. The 415a3632... it replaced was
+        // GTC-472's.
         file: 'route-classifications.json',
-        sha256: '415a363246567eceac1591a2d5707c235ebbe2b4def6b0730ebdb978886f577a',
+        sha256: '5f11f2c9e1c86f91c62e53cc9684f3b2228ab159e3473c1c660cea2400ff2788',
         edited: true,
       },
     ],

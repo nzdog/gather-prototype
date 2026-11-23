@@ -975,7 +975,19 @@ async function main() {
   );
 
   section('R — the writers’ source');
-  const kept = spawnSync('git', ['diff', '--quiet', PARENT, '--', ...KEPT], { cwd: ROOT });
+  // ⚠ workflow.ts ASKED AT A FIXED COMMIT SINCE [[GTC-478]] (23 Nov 2026, the founder's ruling 2 on
+  // its plan: fixed commits ending at c686175): GTC-478 edits it on purpose ("invites only" keeps
+  // sessions while the sessions switch is on). It must be as at a5e59c3 up to c686175, main's tip
+  // when GTC-478 began; the other three files of KEPT are still read in the working folder.
+  const WORKFLOW = 'src/lib/workflow.ts';
+  const liveKept = KEPT.filter((f) => f !== WORKFLOW);
+  const keptLive = spawnSync('git', ['diff', '--quiet', PARENT, '--', ...liveKept], { cwd: ROOT });
+  const keptFrozen = spawnSync('git', ['diff', '--quiet', PARENT, 'c686175', '--', WORKFLOW], {
+    cwd: ROOT,
+  });
+  const kept = {
+    status: KEPT.includes(WORKFLOW) && keptLive.status === 0 && keptFrozen.status === 0 ? 0 : 1,
+  };
   assert(
     'R',
     'R2 replies.ts answers through recordAssignmentAnswer and logAudit, writes no Assignment, AuditEntry, message, link or sentAt itself, under the row lock; the writers and the guest routes as at a5e59c3',
@@ -1514,15 +1526,26 @@ async function main() {
     movedTables.length === 0,
     movedTables.map((k) => `${k} ${start[k]} -> ${end[k]}`).join(', ')
   );
+  // ⚠ Z3 ASKED FROM THE PARENT TO c686175 SINCE [[GTC-478]] (23 Nov 2026, the founder's ruling 2 on
+  // its plan: "Yes to the older checks you listed being compared at fixed commits ending at
+  // c686175"). GTC-478 adds a migration and changes the schema on purpose. Z3 now reads the diff
+  // from the parent to c686175, main's tip when GTC-478 began, and the schema as it stands there:
+  // the same question, the same strictness, for the history up to c686175.
+  const Z3_AT = 'c686175';
   const zone = spawnSync(
     'git',
-    ['diff', '--numstat', '--summary', PARENT, '--', 'src/lib/tokens.ts', 'prisma'],
+    ['diff', '--numstat', '--summary', PARENT, Z3_AT, '--', 'src/lib/tokens.ts', 'prisma'],
     { cwd: ROOT, encoding: 'utf8' }
   );
   assert(
     'Z',
-    'Z3 src/lib/tokens.ts is as at a5e59c3, and prisma/ is as at a5e59c3 plus exactly GTC-449’s one field and its migration (word for word)',
-    CHECKS.zoneIsOurs(zone.status, zone.stdout, read(OUR_MIGRATION), read('prisma/schema.prisma')),
+    'Z3 src/lib/tokens.ts is as at a5e59c3, and prisma/ is as at a5e59c3 plus exactly GTC-449’s one field and its migration (word for word), read at c686175 (GTC-478)',
+    CHECKS.zoneIsOurs(
+      zone.status,
+      zone.stdout,
+      atRef(Z3_AT, OUR_MIGRATION),
+      atRef(Z3_AT, 'prisma/schema.prisma')
+    ),
     `${zone.status} ${String(zone.stdout).replace(/\n/g, ' | ').slice(0, 300)}`
   );
 }

@@ -283,6 +283,11 @@ for (const action of [
   'CREATE_TEAM',
   'EDIT_TEAM',
   'DELETE_TEAM',
+  // [[GTC-478]] (plan B, founder ruling 1, 23 Nov 2026): the session routes' three lines are
+  // versioned and never ask why. Three new checks; nothing above changed.
+  'CREATE_DAY',
+  'EDIT_DAY',
+  'DELETE_DAY',
   'GENERATE_PLAN',
   'REGENERATE_PLAN',
   'SEND_PRESSED',

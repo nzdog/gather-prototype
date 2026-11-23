@@ -1183,15 +1183,26 @@ async function main() {
     moved.length === 0,
     moved.map((k) => `${k} ${start[k]} -> ${end[k]}`).join(', ')
   );
+  // ⚠ Z3 ASKED FROM THE PARENT TO c686175 SINCE [[GTC-478]] (23 Nov 2026, the founder's ruling 2 on
+  // its plan: "Yes to the older checks you listed being compared at fixed commits ending at
+  // c686175"). GTC-478 adds a migration and changes the schema on purpose. Z3 now reads the diff
+  // from the parent to c686175, main's tip when GTC-478 began, and the schema as it stands there:
+  // the same question, the same strictness, for the history up to c686175.
+  const Z3_AT = 'c686175';
   const zone = spawnSync(
     'git',
-    ['diff', '--numstat', '--summary', PARENT, '--', 'src/lib/tokens.ts', 'prisma'],
+    ['diff', '--numstat', '--summary', PARENT, Z3_AT, '--', 'src/lib/tokens.ts', 'prisma'],
     { cwd: ROOT, encoding: 'utf8' }
   );
   assert(
     'Z',
-    'Z3 src/lib/tokens.ts is as at 5f64ce6, and prisma/ is as at 5f64ce6 plus exactly GTC-449’s one field and its migration (word for word)',
-    CHECKS.zoneIsOurs(zone.status, zone.stdout, read(OUR_MIGRATION), read('prisma/schema.prisma')),
+    'Z3 src/lib/tokens.ts is as at 5f64ce6, and prisma/ is as at 5f64ce6 plus exactly GTC-449’s one field and its migration (word for word), read at c686175 (GTC-478)',
+    CHECKS.zoneIsOurs(
+      zone.status,
+      zone.stdout,
+      atRef(Z3_AT, OUR_MIGRATION),
+      atRef(Z3_AT, 'prisma/schema.prisma')
+    ),
     `${zone.status} ${String(zone.stdout).replace(/\n/g, ' | ').slice(0, 300)}`
   );
 }

@@ -2,6 +2,7 @@ import { prisma } from './prisma';
 import type { Item, Assignment, Person, EventStatus, Prisma } from '@prisma/client';
 import { isSent } from './lifecycle';
 import { recordChange, type ActorKind } from './ledger';
+import { isSessionsOn } from './sessions/switch';
 
 // Type for items with assignment + person included
 type ItemWithAssignmentAndPerson = Item & {
@@ -1024,10 +1025,22 @@ async function rebuildPlan(
     where: { eventId },
   });
 
+  /*
+   * [[GTC-478]] (C, founder ruling 1, 23 Nov 2026; GTC-476 Q10, "sessions survive invites only"):
+   * with the sessions switch on, a bring-back KEEPS the event's sessions. Each session in the saved
+   * plan that is still on the event is used as it is (the same id, so its absence rows stay), and
+   * one that is not is made again from the saved plan. Sessions on the event that the saved plan
+   * does not hold are left alone. With the switch off, and for the old dashboard's own restore,
+   * the days are deleted and made again exactly as before.
+   */
+  const keepSessions = opts.bringBack === true && isSessionsOn();
+
   // Delete current days
-  await tx.day.deleteMany({
-    where: { eventId },
-  });
+  if (!keepSessions) {
+    await tx.day.deleteMany({
+      where: { eventId },
+    });
+  }
 
   // Clear conflicts (will be re-detected on next Check Plan)
   await tx.conflict.deleteMany({
@@ -1039,11 +1052,24 @@ async function rebuildPlan(
   const dayIdMap = new Map<string, string>(); // old ID -> new ID
 
   for (const dayData of days) {
+    if (keepSessions) {
+      const still = await tx.day.findFirst({
+        where: { id: dayData.id, eventId },
+        select: { id: true },
+      });
+      if (still) {
+        dayIdMap.set(dayData.id, still.id);
+        continue;
+      }
+    }
     const newDay = await tx.day.create({
       data: {
         name: dayData.name,
         date: new Date(dayData.date),
         eventId,
+        // [[GTC-478]]: the session's place comes back with it (a plan saved before GTC-478 holds
+        // none, and reads 0, the column's default).
+        displayOrder: typeof dayData.displayOrder === 'number' ? dayData.displayOrder : 0,
       },
     });
     dayIdMap.set(dayData.id, newDay.id);
@@ -1222,8 +1248,8 @@ export const PUT_AWAY_REASON = 'Put away: invites only';
 
 /**
  * Puts the plan away: saves it (the same snapshot as `createRevision`), then clears it: every team
- * (its rows, jobs included, and their assignments go with it), the days and the conflicts (their
- * acknowledgements with them; C1). People, households, roles, "Just attending" marks, Moment 2's
+ * (its rows, jobs included, and their assignments go with it), the days (kept while the sessions
+ * switch is on, [[GTC-478]]) and the conflicts (their acknowledgements with them; C1). People, households, roles, "Just attending" marks, Moment 2's
  * answers, `planApprovedAt` and `aiCallsUsed` stay. Nothing to put away writes nothing: an event
  * with no row and no team keeps its conflicts, so a flagged event's clash still holds it back.
  * Answers whether anything was put away.
@@ -1237,7 +1263,9 @@ export async function putAwayPlan(tx: Tx, eventId: string, actorId: string): Pro
   await snapshotPlan(tx, eventId, actorId, PUT_AWAY_REASON);
   await tx.item.deleteMany({ where: { team: { eventId } } });
   await tx.team.deleteMany({ where: { eventId } });
-  await tx.day.deleteMany({ where: { eventId } });
+  // [[GTC-478]] (C; GTC-476 Q10): with the sessions switch on, the sessions stay (and so do their
+  // absence rows); the saved plan still holds them, and the bring-back reuses them. Off: as before.
+  if (!isSessionsOn()) await tx.day.deleteMany({ where: { eventId } });
   await tx.conflict.deleteMany({ where: { eventId } });
   return true;
 }

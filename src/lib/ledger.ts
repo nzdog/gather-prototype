@@ -128,6 +128,10 @@ export type ChangeAction =
   | 'CREATE_TEAM'
   | 'EDIT_TEAM'
   | 'DELETE_TEAM'
+  // [[GTC-478]]: the session routes (a session is a Day row). Versioned, never interrogated.
+  | 'CREATE_DAY'
+  | 'EDIT_DAY'
+  | 'DELETE_DAY'
   | 'REGENERATE_PLAN'
   | 'GENERATE_PLAN'
   | 'SEND_PRESSED'
@@ -157,7 +161,9 @@ export type ChangeTargetType =
   | 'Team'
   // GTC-201: a conflict resolution can move or drop an ask, so it is a ledger target.
   | 'Conflict'
-  | 'Household';
+  | 'Household'
+  // [[GTC-478]]: a session.
+  | 'Day';
 
 /**
  * A single field-level change, before it becomes a row.
@@ -280,6 +286,15 @@ export function whyTrigger(change: PendingChange, event: LifecycleEvent): WhyTri
     case 'CREATE_TEAM':
     case 'EDIT_TEAM':
     case 'DELETE_TEAM':
+    /*
+     * [[GTC-478]] (plan B, founder ruling 1, 23 Nov 2026): a session made, renamed, moved to another
+     * date or place, or removed is versioned and never asks why. Whether a session's change after the
+     * send should ask is for the screens' tickets; a dish moved between sessions is EDIT_ITEM on
+     * `dayId`, an ask field (GTC-477), and still asks.
+     */
+    case 'CREATE_DAY':
+    case 'EDIT_DAY':
+    case 'DELETE_DAY':
     case 'REGENERATE_PLAN':
     case 'GENERATE_PLAN':
     case 'SEND_PRESSED':

@@ -24,6 +24,9 @@
  * Run with: npx tsx tests/security-validation.ts
  */
 
+// [[GTC-478]] FIRST, before anything that loads next/headers: Suite 21's in-process half calls the
+// session routes as a signed-in user. It hands back the real cookie reader to every other call.
+import { actAs, actAsNobody, standDown } from './helpers/session-stand-in';
 import { prisma } from '../src/lib/prisma';
 import { requireEventRole, requireTokenScope } from '../src/lib/auth/guards';
 import { isSent, isComplete, getEventPhase, SENT_AND_LIVE } from '../src/lib/lifecycle';
@@ -4153,6 +4156,290 @@ async function testSuite20_OneAccountPerAddress() {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Test Suite 21: [[GTC-478]] — the session routes: closed while the switch is off; host and
+// co-host only; every session id stays inside the event in its address.
+//
+// The founder's rulings on the plan, 23 Nov 2026 (docs/tickets/GTC-478.md): GATHER_SESSIONS, only
+// "on" counts, and while it is off the new routes refuse, so production behaves exactly as today
+// (ruling D); each address then answers what it answered before it existed. Every new route gets
+// the belongs-to-this-event check on every id.
+//
+// TWO HALVES. Over HTTP to the dev server, which runs with the switch off (it is never set in .env
+// or .env.local): the four new handlers answer as before and write nothing, and the GET is guarded
+// as before. In this process with the switch ON for this process only (tests/helpers/
+// session-stand-in.ts stands in for the cookie reader; the guard, the Session row, the EventRole and
+// the route are the real code): no session 401, a host of another event 403, and another event's
+// session refused on PATCH, DELETE and in PUT's list, with nothing written.
+//
+// Its own fixture: a session on the fixtures' draft event (A) and one on their past event (B), both
+// hosted by the fixtures' host; and a second signed-in user who hosts only an event of its own
+// (C). All removed by id at the end, and by name if a run was cut off.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const GTC478_TAG = 'gtc478-sec';
+const GTC478_EMAIL = 'security-gtc478-other@gather.test';
+
+async function gtc478RemoveOwnRows() {
+  await prisma.day.deleteMany({ where: { name: { startsWith: GTC478_TAG } } });
+  await prisma.event.deleteMany({ where: { name: { startsWith: GTC478_TAG } } });
+  const people = await prisma.person.findMany({
+    where: { name: { startsWith: GTC478_TAG } },
+    select: { id: true },
+  });
+  if (people.length > 0) {
+    await prisma.auditEntry.deleteMany({ where: { actorId: { in: people.map((p) => p.id) } } });
+    await prisma.person.deleteMany({ where: { id: { in: people.map((p) => p.id) } } });
+  }
+  await prisma.session.deleteMany({ where: { user: { email: GTC478_EMAIL } } });
+  await prisma.user.deleteMany({ where: { email: GTC478_EMAIL } });
+}
+
+async function testSuite21_SessionRoutesStayInTheirEvent(fixtures: Fixtures) {
+  logSection(
+    'Test Suite 21: GTC-478 — the session routes: closed while the switch is off, and inside their event'
+  );
+
+  const BASE = process.env.SECURITY_TEST_BASE_URL ?? 'http://localhost:3000';
+  const evA = fixtures.eventDraft;
+  const evB = fixtures.eventPast;
+  const HOST_COOKIE = fixtures.user.sessionCookie;
+  const DAYS = '../src/app/api/events/[id]/days/route';
+  const ONE = '../src/app/api/events/[id]/days/[dayId]/route';
+  const SWITCH = 'GATHER_SESSIONS';
+  // The shared fixtures carry no dates, so this suite's sessions and its event take one of their own.
+  const ON = new Date('2026-12-25T00:00:00.000Z');
+
+  await gtc478RemoveOwnRows();
+  try {
+    const dayA = await prisma.day.create({
+      data: { name: `${GTC478_TAG} session of A`, date: ON, eventId: evA.id },
+    });
+    const dayB = await prisma.day.create({
+      data: { name: `${GTC478_TAG} session of B`, date: ON, eventId: evB.id },
+    });
+    const other = await prisma.user.create({ data: { email: GTC478_EMAIL } });
+    const otherPerson = await prisma.person.create({
+      data: { name: `${GTC478_TAG} host of C`, email: GTC478_EMAIL, userId: other.id },
+    });
+    const otherToken = randomBytes(32).toString('hex');
+    await prisma.session.create({
+      data: { userId: other.id, token: otherToken, expiresAt: new Date(Date.now() + 864e5) },
+    });
+    const evC = await prisma.event.create({
+      data: {
+        name: `${GTC478_TAG} event C`,
+        startDate: ON,
+        endDate: ON,
+        status: 'DRAFT',
+        hostId: otherPerson.id,
+      },
+    });
+    await prisma.eventRole.create({ data: { userId: other.id, eventId: evC.id, role: 'HOST' } });
+
+    /** What any of these calls could have written: the sessions and the ledger, on A, B and C. */
+    const footprint = async () =>
+      JSON.stringify([
+        await prisma.day.findMany({
+          where: { eventId: { in: [evA.id, evB.id, evC.id] } },
+          orderBy: { id: 'asc' },
+        }),
+        await prisma.sessionAbsence.count(),
+        await prisma.auditEntry.count({ where: { eventId: { in: [evA.id, evB.id, evC.id] } } }),
+      ]);
+    const atStart = await footprint();
+
+    // ── The HTTP half: the dev server, switch off ─────────────────────────────
+    const http = async (method: string, url: string, cookie?: string, body?: unknown) => {
+      try {
+        const res = await fetch(`${BASE}${url}`, {
+          method,
+          headers: {
+            ...(cookie ? { Cookie: cookie } : {}),
+            ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+          },
+          ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+        });
+        return res.status;
+      } catch {
+        return 0;
+      }
+    };
+    const probe = await http('GET', `/api/events/${evA.id}/people`);
+    logTest(
+      `dev server healthy on ${BASE} — a guarded sibling answers 401, not 500 or ECONNREFUSED`,
+      probe === 401,
+      'Start it with `npm run dev`. These assertions cannot run without it.'
+    );
+    if (probe === 401) {
+      const daysA = `/api/events/${evA.id}/days`;
+      const oneA = `/api/events/${evA.id}/days/${dayA.id}`;
+      const post = await http('POST', daysA, HOST_COOKIE, { name: 'x', date: '2026-12-25' });
+      const put = await http('PUT', daysA, HOST_COOKIE, { dayIds: [dayA.id] });
+      const patch = await http('PATCH', oneA, HOST_COOKIE, { name: 'x' });
+      const del = await http('DELETE', oneA, HOST_COOKIE);
+      logTest(
+        'switch off: POST and PUT /api/events/:id/days answer the signed-in host 405, as before they existed',
+        post === 405 && put === 405,
+        `POST ${post}, PUT ${put}`
+      );
+      logTest(
+        'switch off: PATCH and DELETE /api/events/:id/days/:dayId answer the signed-in host 404, as before they existed',
+        patch === 404 && del === 404,
+        `PATCH ${patch}, DELETE ${del}`
+      );
+      const nPost = await http('POST', daysA, undefined, { name: 'x', date: '2026-12-25' });
+      const nPatch = await http('PATCH', oneA, undefined, { name: 'x' });
+      logTest(
+        'switch off: the same with no session (405 and 404) — closed before the guard, so nothing about the guard is told',
+        nPost === 405 && nPatch === 404,
+        `POST ${nPost}, PATCH ${nPatch}`
+      );
+      const getNone = await http('GET', daysA);
+      const getHost = await http('GET', daysA, HOST_COOKIE);
+      logTest(
+        'the days GET is guarded as before: 401 with no session, 200 to the host',
+        getNone === 401 && getHost === 200,
+        `${getNone}, ${getHost}`
+      );
+      logTest(
+        '  ...CONTROL: none of those wrote a session, an absence row or a ledger line',
+        (await footprint()) === atStart
+      );
+    }
+
+    // ── The in-process half: switch on, for this process only ─────────────────
+    const env = process.env as Record<string, string | undefined>;
+    const call = async (
+      mod: string,
+      method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+      params: Record<string, string>,
+      as: string | null,
+      body?: unknown,
+      switchOn = true
+    ) => {
+      if (switchOn) env[SWITCH] = 'on';
+      else delete env[SWITCH];
+      if (as === null) actAsNobody();
+      else actAs(as);
+      try {
+        // callRoute's type lists no PUT (no route before GTC-478 needed one); it calls mod[method] all the same.
+        return await callRoute(mod, method as any, `/api/events/${params.id}/days`, params, body);
+      } catch (e) {
+        return { status: -1, json: { threw: (e as Error).message } };
+      } finally {
+        standDown();
+        delete env[SWITCH];
+      }
+    };
+    const hostToken = fixtures.user.sessionToken;
+    const pA = { id: evA.id };
+    const pAA = { id: evA.id, dayId: dayA.id };
+    const pAB = { id: evA.id, dayId: dayB.id };
+    const ok = { name: `${GTC478_TAG} never made`, date: '2026-12-25' };
+
+    const shut = [
+      await call(DAYS, 'POST', pA, hostToken, ok, false),
+      await call(DAYS, 'PUT', pA, hostToken, { dayIds: [dayA.id] }, false),
+      await call(ONE, 'PATCH', pAA, hostToken, { name: 'x' }, false),
+      await call(ONE, 'DELETE', pAA, hostToken, undefined, false),
+    ];
+    logTest(
+      'switch unset in this process, the signed-in host: POST and PUT 405, PATCH and DELETE 404',
+      shut.map((r) => r.status).join(',') === '405,405,404,404',
+      shut.map((r) => r.status).join(', ')
+    );
+    const none = [
+      await call(DAYS, 'POST', pA, null, ok),
+      await call(DAYS, 'PUT', pA, null, { dayIds: [dayA.id] }),
+      await call(ONE, 'PATCH', pAA, null, { name: 'x' }),
+      await call(ONE, 'DELETE', pAA, null),
+    ];
+    logTest(
+      'switch on, no session: POST, PUT, PATCH and DELETE all 401',
+      none.every((r) => r.status === 401),
+      none.map((r) => r.status).join(', ')
+    );
+    const stranger = [
+      await call(DAYS, 'POST', pA, otherToken, ok),
+      await call(DAYS, 'PUT', pA, otherToken, { dayIds: [dayA.id] }),
+      await call(ONE, 'PATCH', pAA, otherToken, { name: 'x' }),
+      await call(ONE, 'DELETE', pAA, otherToken),
+    ];
+    logTest(
+      "switch on, a host of event C only, on A's address: POST, PUT, PATCH and DELETE all 403",
+      stranger.every((r) => r.status === 403),
+      stranger.map((r) => r.status).join(', ')
+    );
+    const intoC = [
+      await call(ONE, 'PATCH', { id: evC.id, dayId: dayA.id }, otherToken, { name: 'x' }),
+      await call(ONE, 'DELETE', { id: evC.id, dayId: dayA.id }, otherToken),
+      await call(DAYS, 'PUT', { id: evC.id }, otherToken, { dayIds: [dayA.id] }),
+    ];
+    logTest(
+      "switch on, C's host through C's own address with A's session: PATCH, DELETE and PUT all 400 \"That session is not on this event\"",
+      intoC.every((r) => r.status === 400 && r.json?.error === 'That session is not on this event'),
+      intoC.map((r) => `${r.status} ${r.json?.error}`).join('; ')
+    );
+    const crossPatch = await call(ONE, 'PATCH', pAB, hostToken, { name: 'taken over' });
+    logTest(
+      'switch on, the host of A and B: PATCH B\'s session through A\'s address — 400 "That session is not on this event"',
+      crossPatch.status === 400 && crossPatch.json?.error === 'That session is not on this event',
+      `${crossPatch.status} ${JSON.stringify(crossPatch.json)}`
+    );
+    const crossDel = await call(ONE, 'DELETE', pAB, hostToken);
+    logTest(
+      'switch on, the host of A and B: DELETE B\'s session through A\'s address — 400 "That session is not on this event"',
+      crossDel.status === 400 && crossDel.json?.error === 'That session is not on this event',
+      `${crossDel.status} ${JSON.stringify(crossDel.json)}`
+    );
+    const crossPut = await call(DAYS, 'PUT', pA, hostToken, { dayIds: [dayA.id, dayB.id] });
+    logTest(
+      'switch on, the host of A and B: PUT A\'s order with B\'s session in the list — 400 "That session is not on this event"',
+      crossPut.status === 400 && crossPut.json?.error === 'That session is not on this event',
+      `${crossPut.status} ${JSON.stringify(crossPut.json)}`
+    );
+    const ghost = await call(ONE, 'PATCH', { id: evA.id, dayId: 'no-such-session' }, hostToken, {
+      name: 'x',
+    });
+    logTest(
+      'switch on, the host: a made-up session id — 400 "That session is not on this event"',
+      ghost.status === 400 && ghost.json?.error === 'That session is not on this event',
+      `${ghost.status} ${JSON.stringify(ghost.json)}`
+    );
+    logTest(
+      '  ...CONTROL: no refusal above wrote a session, an absence row or a ledger line, on A, B or C',
+      (await footprint()) === atStart
+    );
+    const own = await call(ONE, 'PATCH', pAA, hostToken, { name: `${GTC478_TAG} session of A` });
+    logTest(
+      "  ...CONTROL: the same PATCH on A's own session by A's host, with its own name, answers 200 with the session (and so writes nothing), so the refusals above are the checks, not a broken route",
+      own.status === 200 && own.json?.day?.id === dayA.id && (await footprint()) === atStart,
+      `${own.status} ${JSON.stringify(own.json)}`
+    );
+    const after = (await prisma.day.findUnique({ where: { id: dayB.id } }))?.name;
+    logTest(
+      "  ...CONTROL: B's session still carries its own name, and the switch is unset again",
+      after === `${GTC478_TAG} session of B` && env[SWITCH] === undefined
+    );
+    logTest(
+      '  ...CONTROL: the cookie stand-in has stood down — a call outside it reaches the real reader, which needs a request',
+      await (async () => {
+        try {
+          await requireEventRole(evA.id, ['HOST']);
+          return false;
+        } catch {
+          return true;
+        }
+      })()
+    );
+  } finally {
+    standDown();
+    delete process.env[SWITCH];
+    await gtc478RemoveOwnRows();
+  }
+}
+
 async function main() {
   console.log(`${BOLD}${YELLOW}=== Security Validation Test Suite ===${RESET}\n`);
   console.log('Contract under test:');
@@ -4185,6 +4472,7 @@ async function main() {
     await testSuite18_LinkRoutesStayInTheirEvent(fixtures);
     await testSuite19_AnswerAndDayStayInTheirEvent(fixtures);
     await testSuite20_OneAccountPerAddress();
+    await testSuite21_SessionRoutesStayInTheirEvent(fixtures);
 
     console.log(`\n${BOLD}${YELLOW}=== Test Summary ===${RESET}`);
     console.log(`Total tests: ${testsRun}`);

@@ -1445,11 +1445,14 @@ async function runLive() {
   const classified = JSON.parse(read('route-classifications.json') || '[]');
   // ⚠ 112 → 113 AND 86 → 87 AT [[GTC-472]] (22 Nov 2026, founder ruling on the report: "a count up by
   // exactly one"): the share route and its one classification entry. Nothing else moved.
+  // ⚠ 113 → 114 AND 87 → 88 AT [[GTC-478]] (23 Nov 2026, the founder's ruling 2 on its plan: "route
+  // files 114, handlers 149, classifications 88"): the session route, `days/[dayId]/route.ts`, and its one
+  // classification entry. Nothing else in this check changed.
   assert(
     'S',
-    `Z1 CONTROL: no new route (113 route.ts, 87 classifications: the share route, GTC-472, is the one added); aiCallsUsed 0 on every event; every row removed by id (${whileExists} while it existed); totals as found (${before.invite}/${before.outbound} -> ${after.invite}/${after.outbound})`,
-    routes(join(process.cwd(), 'src/app/api')) === 113 &&
-      classified.length === 87 &&
+    `Z1 CONTROL: no new route (114 route.ts, 88 classifications: the share route, GTC-472, and the session route, GTC-478, are the ones added); aiCallsUsed 0 on every event; every row removed by id (${whileExists} while it existed); totals as found (${before.invite}/${before.outbound} -> ${after.invite}/${after.outbound})`,
+    routes(join(process.cwd(), 'src/app/api')) === 114 &&
+      classified.length === 88 &&
       ai.length === 9 &&
       ai.every((e) => e.aiCallsUsed === 0) &&
       whileExists.length > 0 &&

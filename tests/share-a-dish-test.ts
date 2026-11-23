@@ -1848,9 +1848,22 @@ async function main() {
       git(['cat-file', '-e', `${GTC477_BASE}^{commit}`]).status === 0 &&
       GTC477_FILES.every((f) => FORBIDDEN.includes(f)) &&
       git(['diff', '--quiet', GTC472_BASE, GTC477_BASE, '--', ...GTC477_FILES]).status === 0;
+    // ⚠ AND THE SCHEMA, ITS MIGRATIONS AND workflow.ts ASKED AT A FIXED COMMIT SINCE [[GTC-478]]
+    // (23 Nov 2026, the founder's ruling 2 on its plan: "Yes to the older checks you listed being
+    // compared at fixed commits ending at c686175"). GTC-478 edits them on purpose (the session
+    // order, the SessionAbsence table and its migration; "invites only" keeps sessions). They are
+    // taken out of the live list, and must be unchanged from this base to c686175, main's tip when
+    // GTC-478 began. Everything else on J2 stays live. J3 and J4 ask the same span.
+    const GTC478_AT = 'c686175';
+    const GTC478_PATHS = ['prisma', 'src/lib/workflow.ts'];
+    const isGtc478 = (f: string) => f === 'src/lib/workflow.ts' || f.startsWith('prisma/');
+    const gtc478Ok =
+      git(['cat-file', '-e', `${GTC478_AT}^{commit}`]).status === 0 &&
+      GTC478_PATHS.every((f) => FORBIDDEN.includes(f)) &&
+      git(['diff', '--quiet', GTC472_BASE, GTC478_AT, '--', ...GTC478_PATHS]).status === 0;
     const changed = git(['diff', '--name-only', GTC472_BASE, '--', ...FORBIDDEN])
       .stdout.split('\n')
-      .filter((f) => f !== '' && !GTC477_FILES.includes(f))
+      .filter((f) => f !== '' && !GTC477_FILES.includes(f) && !isGtc478(f))
       .join('\n');
     const untracked = git([
       'ls-files',
@@ -1862,16 +1875,18 @@ async function main() {
     assert('J1 the base commit is in this checkout, so the checks below mean something', baseOk);
     assert(
       'J2 nothing under the send, the nudges, the decide-by clock, the board, the assign and items routes, the ledger, auth, Stripe or the schema is changed or added',
-      baseOk && gtc477Ok && changed === '' && untracked === '',
+      baseOk && gtc477Ok && gtc478Ok && changed === '' && untracked === '',
       `${changed} ${untracked}`
     );
-    const files = git(['diff', '--name-only', GTC472_BASE]).stdout.split('\n').filter(Boolean);
+    const files = git(['diff', '--name-only', GTC472_BASE, GTC478_AT])
+      .stdout.split('\n')
+      .filter(Boolean);
     assert(
-      'J3 no migration is added',
+      'J3 no migration is added (from the base to c686175, GTC-478)',
       !files.some((f) => f.startsWith('prisma/')) && !untracked.includes('prisma')
     );
     assert(
-      'J4 the only file added under src/app/api is the share route',
+      'J4 the only file added under src/app/api is the share route (from the base to c686175, GTC-478)',
       (() => {
         const added = git(['ls-files', '--others', '--exclude-standard', '--', 'src/app/api'])
           .stdout.split('\n')
@@ -1881,6 +1896,7 @@ async function main() {
           '--name-only',
           '--diff-filter=A',
           GTC472_BASE,
+          GTC478_AT,
           '--',
           'src/app/api',
         ])

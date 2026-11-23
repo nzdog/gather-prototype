@@ -993,10 +993,13 @@ async function runLive() {
   const classified = JSON.parse(read('route-classifications.json') || '[]');
   // ⚠ 112 → 113 AND 86 → 87 AT [[GTC-472]] (22 Nov 2026, founder ruling on the report: "a count up by
   // exactly one"): the share route and its one classification entry. Nothing else moved.
+  // ⚠ 113 → 114 AND 87 → 88 AT [[GTC-478]] (23 Nov 2026, the founder's ruling 2 on its plan: "route
+  // files 114, handlers 149, classifications 88"): the session route, `days/[dayId]/route.ts`, and its one
+  // classification entry. Nothing else in this check changed.
   assert(
     'S',
-    'Z1 CONTROL: no new route — src/app/api still has 113 route.ts, and the classifications 87 (the share route, GTC-472, is the one added; Zone 6 untouched but for its ruled counts)',
-    routes(join(process.cwd(), 'src/app/api')) === 113 && classified.length === 87
+    'Z1 CONTROL: no new route — src/app/api still has 114 route.ts, and the classifications 88 (the share route, GTC-472, and the session route, GTC-478, are the ones added; Zone 6 untouched but for its ruled counts)',
+    routes(join(process.cwd(), 'src/app/api')) === 114 && classified.length === 88
   );
 }
 

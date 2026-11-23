@@ -218,9 +218,17 @@
   {
     "filePath": "src/app/api/events/[id]/days/route.ts",
     "apiPath": "/api/events/:id/days",
-    "methods": ["GET"],
-    "authType": "NONE",
-    "authEvidence": [],
+    "methods": ["GET", "POST", "PUT"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
+    "filePath": "src/app/api/events/[id]/days/[dayId]/route.ts",
+    "apiPath": "/api/events/:id/days/:dayId",
+    "methods": ["PATCH", "DELETE"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
     "securityIssues": []
   },
   {

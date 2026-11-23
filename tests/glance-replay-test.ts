@@ -3257,11 +3257,16 @@ async function main() {
      * ⚠ 86 → 87 AT [[GTC-472]] (founder ruling D2, 22 Nov 2026: "one new entry in
      * route-classifications.json. Counts only."): the share route's POST, classified SESSION. Named
      * below, as the five before it are. The count moves by that one entry and nothing else.
+     *
+     * ⚠ 87 → 88 AT [[GTC-478]] (23 Nov 2026, the founder's ruling 2 on its plan: "classifications
+     * 88"): the session route `days/:dayId` (PATCH, DELETE), classified SESSION. Named below, as the
+     * six before it are. The count moves by that one entry and nothing else.
      */
     assert(
       'layer 4 / inventory',
-      'and the surface is 87 routes — 81 at phase 4, plus GTC-296’s unsubscribe handler, GTC-311’s chase-choice route, GTC-251’s hand-back, GTC-264’s TNZ webhook, GTC-290’s TNZ status poll and GTC-472’s share route',
-      classifications.length === 87 &&
+      'and the surface is 88 routes — 81 at phase 4, plus GTC-296’s unsubscribe handler, GTC-311’s chase-choice route, GTC-251’s hand-back, GTC-264’s TNZ webhook, GTC-290’s TNZ status poll, GTC-472’s share route and GTC-478’s session route',
+      classifications.length === 88 &&
+        classifications.some((e: any) => e.apiPath === '/api/events/:id/days/:dayId') &&
         classifications.some((e: any) => e.apiPath === '/api/events/:id/items/:itemId/share') &&
         classifications.some((e: any) => e.apiPath === '/api/cron/tnz-status-poll') &&
         classifications.some((e: any) => e.apiPath === '/api/unsubscribe/[token]') &&
