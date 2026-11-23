@@ -239,8 +239,12 @@ const PROTECTED: Entry[] = [
         // fingerprint"): Suite 21, the session routes, 18 checks (262 to 280), and the cookie stand-in's
         // import above the first import; no existing check changed. The ebccc90d... it replaced was the
         // text at c686175.
+        // ⚠ HASH MOVED AGAIN AT [[GTC-479]] (24 Nov 2026, the founder's ruling 2 on its plan: "Suite 22
+        // (security 280 to 294), and the older pins you listed, each the narrowest move with a dated
+        // note"): Suite 22, who comes to which session, 14 checks, and its one call in main(); no
+        // existing check changed. The 71cccc48... it replaced was the text at 3d74d6d.
         file: 'tests/security-validation.ts',
-        sha256: '71cccc4810ebbd72ed252fe0e7f31c9937e7417b1097f038904f63fd20ad2a5b',
+        sha256: 'bcb8299c0c93540aa49c016b739b3fdbf321c0793782ea74b818782ae80dcad5',
         edited: true,
       },
       {
@@ -253,8 +257,11 @@ const PROTECTED: Entry[] = [
         // going up by exactly this ticket's additions (route files 114, handlers 149, classifications
         // 88)"): those counts and their dated notes, and nothing else. The ccb1394b... it replaced was
         // GTC-472's.
+        // ⚠ HASH MOVED AGAIN AT [[GTC-479]] (24 Nov 2026, the founder's ruling 2 on its plan): the counts
+        // 115 files, 151 handlers and 89 entries, their dated notes, and nothing else. The fa277a97...
+        // it replaced was the text at 3d74d6d.
         file: 'tests/security-route-scan-control.ts',
-        sha256: 'fa277a9741c656796f97a7d2a73880fd514964f8229f3216d5ca0cae28bee7e8',
+        sha256: '964b84f2678fcbabba864bec9afbb547c88670c7b5d2369febcc54cc5a34616f',
         edited: true,
       },
     ],
@@ -391,7 +398,7 @@ const PROTECTED: Entry[] = [
     path: 'route-classifications.json',
     why: 'every route and how it is guarded, as the security suite reads it',
     ruled:
-      'GTC-442: the tokens route out, the demo clean-up in; GTC-472: the share route in; GTC-478: the days entry corrected, the session route in',
+      'GTC-442: the tokens route out, the demo clean-up in; GTC-472: the share route in; GTC-478: the days entry corrected, the session route in; GTC-479: the sessions route in',
     plus: [
       {
         // ⚠ HASH MOVED AT [[GTC-472]] (22 Nov 2026, founder ruling D2 A: "one new entry in
@@ -402,8 +409,11 @@ const PROTECTED: Entry[] = [
         // entry now GET, POST and PUT, SESSION, requireEventRole, and one new entry for days/:dayId
         // (PATCH, DELETE, SESSION, requireEventRole), and nothing else. The 415a3632... it replaced was
         // GTC-472's.
+        // ⚠ HASH MOVED AT [[GTC-479]] (24 Nov 2026, the founder's ruling 2 on its plan: "the new
+        // sessions route"): one new entry for /api/events/:id/sessions (GET, PUT, SESSION,
+        // requireEventRole), and nothing else. The 5f11f2c9... it replaced was the text at 3d74d6d.
         file: 'route-classifications.json',
-        sha256: '5f11f2c9e1c86f91c62e53cc9684f3b2228ab159e3473c1c660cea2400ff2788',
+        sha256: '0f5925152ef74e7221a125c63e924f1b4e97e31fbc8e0e54551c9bf11b55cb4c',
         edited: true,
       },
     ],

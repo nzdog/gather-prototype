@@ -145,12 +145,28 @@ const GTC472_SRC = [
  * src files, src/lib/sessions/switch.ts and input.ts, import nothing and stay in the scans.
  */
 const GTC478_SRC = ['src/app/api/events/[id]/days/[dayId]/route.ts'];
+/*
+ * ⚠ FOUR NAMED FILES AT [[GTC-479]] (24 Nov 2026, the founder's ruling 2 on its plan: "the older pins
+ * you listed, each the narrowest move with a dated note"). The sessions route imports the server and
+ * logs its errors; the setup layout imports Next's `connection` to read the sessions switch on the
+ * server; the sessions card and "Coming to" read and write through fetch. So they are named out of
+ * the new files' scans (N) by their exact paths, as GTC-478's route is. GTC-479's three other new src
+ * files (src/lib/sessions/dates.ts, src/lib/sessions/card-words.ts and
+ * src/components/sessions/SessionsSwitch.tsx) stay in the scans.
+ */
+const GTC479_SRC = [
+  'src/app/api/events/[id]/sessions/route.ts',
+  'src/app/plan/[eventId]/setup/layout.tsx',
+  'src/components/sessions/Moment1Sessions.tsx',
+  'src/components/sessions/ComingTo.tsx',
+];
 const newSrc = added.filter(
   (p) =>
     p.startsWith('src/') &&
     isCode(p) &&
     !GTC472_SRC.includes(p) &&
     !GTC478_SRC.includes(p) &&
+    !GTC479_SRC.includes(p) &&
     fs.existsSync(onDisk(p))
 );
 

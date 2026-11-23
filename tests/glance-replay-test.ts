@@ -3261,11 +3261,17 @@ async function main() {
      * ⚠ 87 → 88 AT [[GTC-478]] (23 Nov 2026, the founder's ruling 2 on its plan: "classifications
      * 88"): the session route `days/:dayId` (PATCH, DELETE), classified SESSION. Named below, as the
      * six before it are. The count moves by that one entry and nothing else.
+     *
+     * ⚠ 88 → 89 AT [[GTC-479]] (24 Nov 2026, the founder's ruling 2 on its plan: "the older pins you
+     * listed, each the narrowest move with a dated note"): the sessions route `sessions` (GET, PUT),
+     * classified SESSION. Named below, as the seven before it are. The count moves by that one entry
+     * and nothing else.
      */
     assert(
       'layer 4 / inventory',
-      'and the surface is 88 routes — 81 at phase 4, plus GTC-296’s unsubscribe handler, GTC-311’s chase-choice route, GTC-251’s hand-back, GTC-264’s TNZ webhook, GTC-290’s TNZ status poll, GTC-472’s share route and GTC-478’s session route',
-      classifications.length === 88 &&
+      'and the surface is 89 routes — 81 at phase 4, plus GTC-296’s unsubscribe handler, GTC-311’s chase-choice route, GTC-251’s hand-back, GTC-264’s TNZ webhook, GTC-290’s TNZ status poll, GTC-472’s share route, GTC-478’s session route and GTC-479’s sessions route',
+      classifications.length === 89 &&
+        classifications.some((e: any) => e.apiPath === '/api/events/:id/sessions') &&
         classifications.some((e: any) => e.apiPath === '/api/events/:id/days/:dayId') &&
         classifications.some((e: any) => e.apiPath === '/api/events/:id/items/:itemId/share') &&
         classifications.some((e: any) => e.apiPath === '/api/cron/tnz-status-poll') &&
