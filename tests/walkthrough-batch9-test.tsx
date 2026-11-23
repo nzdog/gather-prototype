@@ -446,7 +446,16 @@ async function main() {
     'W37 the colour key’s grey row',
     ok(() => SP.COLOUR_KEY.find((r: any) => r.state === 'NOT_CHASED').words === W37)
   );
-  assert('W', 'W6 Your Events’ hover title', textsOf('src/app/plan/events/page.tsx').includes(W6));
+  // [[GTC-475]] (founder ruling B, 23 Nov 2026, 'Yes to the three flips'): the "Invites & people" button on Your
+  // Events is gone, and its hover title with it, so W6 now asks that the title is NOT in that file. It still reads
+  // the file (a known string of the page must be there), so it cannot pass by reading nothing. Moment 2's own door,
+  // W5, is untouched (R5 below).
+  assert(
+    'W',
+    'W6 Your Events’ hover title is gone with the button (GTC-475)',
+    !textsOf('src/app/plan/events/page.tsx').includes(W6) &&
+      textsOf('src/app/plan/events/page.tsx').includes('Create New Event')
+  );
   const pageTexts = textsOf(PAGE);
   assert('W', 'W10 step 4’s line', pageTexts.includes(W10));
   const pageSrc = read(PAGE);

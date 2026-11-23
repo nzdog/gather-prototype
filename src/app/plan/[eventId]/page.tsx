@@ -59,6 +59,7 @@ import { THANK_YOU_SENT_BY_EMAIL } from '@/lib/sms/text-failure-words';
 import { itemListHtml, printEventDate, toPrintItems, writePage } from '@/lib/print/item-list';
 import { whenLine, occasionLabel } from '@/components/shared/EventDetails';
 import { wayBack, hostsAndGuests } from '@/lib/moments/way-back';
+import { EDIT_PARAM, EDIT_VENUE } from '@/lib/items/drop-off-words';
 
 // Moment 2 plan view mappers ────────────────────────────────────────────────
 interface Event {
@@ -264,6 +265,9 @@ export default function PlanEditorPage() {
   const [manualTeamCount, _setManualTeamCount] = useState(0);
   const [manualItemCount, _setManualItemCount] = useState(0);
   const [editEventModalOpen, setEditEventModalOpen] = useState(false);
+  /** [[GTC-475]] item 5: the step the Edit event box opens on; 3 only for "Add the venue", else 1. */
+  const [editEventStartStep, setEditEventStartStep] = useState(1);
+  const venueDoorHandled = useRef(false);
   const [inviteLinks, setInviteLinks] = useState<any[]>([]);
   const [inviteLinksError, setInviteLinksError] = useState(false);
   const [personStatuses, setPersonStatuses] = useState<Map<string, any>>(new Map());
@@ -368,6 +372,25 @@ export default function PlanEditorPage() {
       loadInviteLinks();
     }
   }, [event?.status]);
+
+  /*
+   * [[GTC-475]] item 5 (founder, 22 Nov 2026: "Drop off venue hasn't been added yet warning needs a button to
+   * be able to add drop off venue"; ruling F, 23 Nov: F-b) — "Add the venue" on Moment 2's plan and Moment 3
+   * comes here with `?edit=venue`. Once the event is loaded, open the Edit event box on its venue step and
+   * take the setting out of the address, so a reload or a close does not open it again. It opens nothing but
+   * the box, and writes nothing.
+   */
+  useEffect(() => {
+    if (!event || venueDoorHandled.current || searchParams.get(EDIT_PARAM) !== EDIT_VENUE) return;
+    venueDoorHandled.current = true;
+    setEditEventStartStep(3);
+    setEditEventModalOpen(true);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete(EDIT_PARAM);
+    router.replace(params.toString() ? `${pathname}?${params.toString()}` : pathname, {
+      scroll: false,
+    });
+  }, [event, searchParams, pathname, router]);
 
   // Sync URL params to expanded section state
   useEffect(() => {
@@ -1504,6 +1527,7 @@ export default function PlanEditorPage() {
   // Clear checklist step context when modals close
   const handleEditEventModalClose = () => {
     setEditEventModalOpen(false);
+    setEditEventStartStep(1);
     setChecklistStepContext(null);
     setIsPostPayment(false);
     setModalBreadcrumbTrail([]);
@@ -2232,6 +2256,7 @@ export default function PlanEditorPage() {
             stepLabel={checklistStepContext || undefined}
             showPaymentConfirmation={isPostPayment}
             tabBar={buildTabBar('details')}
+            initialStep={editEventStartStep}
           />
         )}
 

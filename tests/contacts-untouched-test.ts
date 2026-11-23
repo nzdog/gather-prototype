@@ -294,17 +294,41 @@ function main() {
   } catch {
     pkgNow = pkgNow ?? null;
   }
-  if (pkgNow && pkgBase) {
-    const { scripts: sNow, ...restNow } = pkgNow;
+  // [[GTC-475]] (founder ruling G, 23 Nov 2026: "Freeze P1 the way GTC-474 froze G3: read package.json at
+  // that suite's own ticket commit instead of the working folder"). P1 asked whether Stage 3 changed
+  // package.json by anything but added scripts. It read the working folder, so main's Next.js bump
+  // (15.5.27 to 15.5.29, d80483d) turned it red for work that is not Stage 3's. It now reads the file at
+  // 55a9324, the commit that last edited this suite for its own ticket (ruling 208, 21 Nov 2026), where
+  // package.json differs from the base only by the eight added scripts. Same comparison, same strictness;
+  // a commit that is not in the checkout turns it red, so it cannot pass by looking at nothing. P2 below
+  // still reads the working folder: it is the one that watches which scripts are added later.
+  const P1_FROZEN = '55a932488edc2d0c140866893f43d4a607df48ed';
+  let pkgFrozen: any = null;
+  try {
+    git(['cat-file', '-e', `${P1_FROZEN}^{commit}`]);
+    pkgFrozen = JSON.parse(git(['show', `${P1_FROZEN}:package.json`]));
+  } catch {
+    pkgFrozen = null;
+  }
+  if (pkgFrozen && pkgBase) {
+    const { scripts: sFrozen, ...restFrozen } = pkgFrozen;
     const { scripts: sBase, ...restBase } = pkgBase;
-    const keptScripts = Object.keys(sBase).filter((k) => sNow[k] !== sBase[k]);
-    const newKeys = Object.keys(sNow).filter((k) => !(k in sBase));
+    const keptScripts = Object.keys(sBase).filter((k) => sFrozen[k] !== sBase[k]);
     report(
       'P1',
-      'package.json differs from the base only by added script lines (nothing else, no script changed or removed)',
-      isDeepStrictEqual(restNow, restBase) && keptScripts.length === 0,
-      { changedOrRemovedScripts: keptScripts, restSame: isDeepStrictEqual(restNow, restBase) }
+      "package.json differs from the base only by added script lines (nothing else, no script changed or removed), read at this suite's own ticket commit 55a9324",
+      isDeepStrictEqual(restFrozen, restBase) && keptScripts.length === 0,
+      { changedOrRemovedScripts: keptScripts, restSame: isDeepStrictEqual(restFrozen, restBase) }
     );
+  } else {
+    report(
+      'P1',
+      'package.json can be read at the base and at the frozen commit 55a9324 (both must be in this checkout)',
+      false
+    );
+  }
+  if (pkgNow && pkgBase) {
+    const newKeys = Object.keys(pkgNow.scripts).filter((k) => !(k in pkgBase.scripts));
     const EIGHT = ['store', 'page', 'load', 'picker', 'match', 'form', 'placed', 'untouched'].map(
       (n) => `test:contacts-${n}`
     );
@@ -321,7 +345,6 @@ function main() {
       { added: newKeys, missing: EIGHT.filter((k) => !newKeys.includes(k)) }
     );
   } else {
-    report('P1', 'package.json can be read now and at the base', false);
     report('P2', 'the added script lines can be read', false);
   }
 

@@ -36,6 +36,8 @@ import { writeDraft, draftKey } from '../src/lib/households/form-draft';
 const ROOT = path.join(__dirname, '..');
 /** Main's tip when this ticket was planned (the merge of pull request 111). */
 const BASE = '2491795';
+/** [[GTC-474]] (ruling 3): this ticket's own code commit, where G3 reads its diff. */
+const GTC470_CODE = '0754b6e32889bccb97ed971c39f98a8662d28bcd';
 const TICKET = 'docs/tickets/GTC-460.md';
 const SCREEN = 'src/components/contacts/ContactsScreen.tsx';
 const NOTE = 'src/components/contacts/SampleContactsNote.tsx';
@@ -1597,16 +1599,21 @@ async function main() {
   );
   check(
     'G3',
-    'the files this ticket may not touch are not in the diff against main (and the diff is not empty: it holds the new bar)',
+    "the files this ticket may not touch are not in the diff against main (and the diff is not empty: it holds the new bar), read at GTC-470's code commit 0754b6e",
     () => {
       if (!baseOk) return { ok: false, got: `${BASE} is not in this checkout` };
+      try {
+        git(['cat-file', '-e', `${GTC470_CODE}^{commit}`]);
+      } catch {
+        return { ok: false, got: `${GTC470_CODE.slice(0, 7)} is not in this checkout` };
+      }
       const names = (s: string) => s.split('\0').filter(Boolean);
-      const changed = [
-        ...new Set([
-          ...names(git(['diff', '--no-renames', '--name-only', '-z', BASE, '--'])),
-          ...names(git(['ls-files', '--others', '--exclude-standard', '-z'])),
-        ]),
-      ];
+      // [[GTC-474]] re-base (ruling 3), as GTC-431 did for tweaks-b S4: GTC-470's own code commit,
+      // fixed, instead of the working folder, so a later ticket's edit to the form no longer turns
+      // this red. Same forbidden list and strictness, for the work this check was written about.
+      const changed = names(
+        git(['diff', '--no-renames', '--name-only', '-z', BASE, GTC470_CODE, '--'])
+      );
       const FORBIDDEN_PATHS = [
         'src/components/plan/MomentArc.tsx',
         'src/lib/moments/strip.ts',
@@ -1622,18 +1629,12 @@ async function main() {
         'middleware.ts',
         'src/lib/auth',
       ];
-      // ⚠ THREE NAMED EXCEPTIONS AT [[GTC-472]] (22 Nov 2026, founder ruling on the report: "one named
-      // exception for the share route or its files"): the share route, the guest read route whose amount it
-      // changed (ruling D5), and the classification file's one new entry. Each is named in full; every other
-      // path under src/app/api/ and every other forbidden path is still a hit.
-      const GTC472_NAMED = [
-        'src/app/api/events/[id]/items/[itemId]/share/route.ts',
-        'src/app/api/p/[token]/route.ts',
-        'route-classifications.json',
-      ];
-      const hits = changed.filter(
-        (p) => !GTC472_NAMED.includes(p) && FORBIDDEN_PATHS.some((x) => p === x || p.startsWith(x))
-      );
+      // [[GTC-475]] (founder ruling A, 23 Nov 2026: "remove GTC-472's named list from G3 only if G3 is green
+      // without it"): GTC-472's three named exceptions (the share route, the guest read route and
+      // route-classifications.json) are gone. Since GTC-474 froze this check at GTC-470's code commit it reads
+      // that commit's diff, which touches none of the three, so the list excluded nothing. Same forbidden list,
+      // same strictness.
+      const hits = changed.filter((p) => FORBIDDEN_PATHS.some((x) => p === x || p.startsWith(x)));
       return {
         ok:
           hits.length === 0 &&

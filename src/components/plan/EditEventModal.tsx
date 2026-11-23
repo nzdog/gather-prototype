@@ -56,6 +56,11 @@ interface EditEventModalProps {
   showPaymentConfirmation?: boolean;
   /** Optional tab bar rendered between header and form content */
   tabBar?: React.ReactNode;
+  /**
+   * [[GTC-475]] item 5: the step to open on (1 to 3); anything else opens on step 1, as always. The venue
+   * is step 3, which "Add the venue" opens straight onto.
+   */
+  initialStep?: number;
 }
 
 const STEP_LABELS: Record<number, string> = {
@@ -77,6 +82,7 @@ export default function EditEventModal({
   stepLabel,
   showPaymentConfirmation,
   tabBar,
+  initialStep,
 }: EditEventModalProps) {
   const { openModal, closeModal } = useModal();
   const toast = useToast();
@@ -105,12 +111,12 @@ export default function EditEventModal({
     }
   }, [isOpen]);
 
-  // Reset to step 1 each time the modal opens
+  // Reset to step 1 each time the modal opens ([[GTC-475]]: or to the step it was asked to open on)
   useEffect(() => {
     if (isOpen) {
-      setStep(1);
+      setStep(initialStep === 2 || initialStep === 3 ? initialStep : 1);
     }
-  }, [isOpen]);
+  }, [isOpen, initialStep]);
 
   const [formData, setFormData] = useState({
     name: '',

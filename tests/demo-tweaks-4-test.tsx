@@ -670,13 +670,18 @@ export const CHECKS = {
 
   // ── Item 2 ──
   /** D1 — the plan screen: the line is a box in the card style, larger, dark, semibold, its mb-4; straight above the heading. */
-  planLineBox(html: string, words: string) {
+  // [[GTC-475]] (founder ruling F, 23 Nov 2026): with no venue the line is followed by exactly one more element, the
+  // "Add the venue" door (`door` true); with a venue, by the heading alone, as before.
+  planLineBox(html: string, words: string, door = false) {
     const got = classesOf(html);
+    const doorRx = door
+      ? '<a data-add-venue="" href="/plan/e1\\?edit=venue" class="[^"]*">Add the venue</a>'
+      : '';
     return (
       !!got &&
       got.words === words &&
       sameSet(got.classes, PLAN_LINE_CLASSES) &&
-      new RegExp(`<p data-drop-off-line="" class="[^"]*">[^<]*</p><h1\\b`).test(html) &&
+      new RegExp(`<p data-drop-off-line="" class="[^"]*">[^<]*</p>${doorRx}<h1\\b`).test(html) &&
       count(html, 'data-drop-off-line') === 1
     );
   },
@@ -706,6 +711,41 @@ export const CHECKS = {
       sameSet(got.classes, ROW_LINE_CLASSES) &&
       !got.classes.some((c) => /^(m|p)[xytblr]?-|^border|^bg-|^rounded/.test(c)) &&
       count(html, 'data-drop-off-line') === 1
+    );
+  },
+  /**
+   * D7 — [[GTC-475]] (the founder's Step 4, 23 Nov 2026: a tap target under 44 px found by the look at 390 may be
+   * fixed as layout). Moment 3's "Add the venue" measured 40 px tall at 390, and its padding could not grow without
+   * covering the event's name just below it. Below md it is now its own 44 px box (no pulled-back margin or padding);
+   * from md up it carries the classes it had (-my-2.5 py-2.5), so a computer's row is as before. Same words, same
+   * text classes.
+   */
+  rowDoorTap(html: string) {
+    const m =
+      /<a data-add-venue="" href="\/plan\/e1\?edit=venue" class="([^"]*)">Add the venue<\/a>/.exec(
+        html
+      );
+    const cls = m ? m[1].split(/\s+/) : [];
+    const has = (list: string[]) => list.every((c) => cls.includes(c));
+    return (
+      !!m &&
+      has([
+        'inline-flex',
+        'min-h-[44px]',
+        'items-center',
+        'md:min-h-0',
+        'md:-my-2.5',
+        'md:py-2.5',
+      ]) &&
+      has([
+        'text-sm',
+        'font-semibold',
+        'text-accent',
+        'underline',
+        'underline-offset-2',
+        'hover:text-accent-dark',
+      ]) &&
+      !cls.some((c) => /^-?(m|p)[ytb]?-/.test(c))
     );
   },
   /** D4 — one prop says which: the component takes facts and place ('plan' | 'row') and nothing else; no hook, router or fetch; the words from eventDropOffLine. */
@@ -1063,7 +1103,7 @@ async function layerD() {
   assert(
     'D',
     'D1 the plan screen: the same words in a box (rounded-lg, border, border-gray-200, bg-white, px-4 py-3), text-base, font-semibold, text-gray-900, its mb-4; straight above the heading; with no venue too',
-    CHECKS.planLineBox(plan, VENUE_LINE) && CHECKS.planLineBox(planNoVenue, NO_VENUE_LINE),
+    CHECKS.planLineBox(plan, VENUE_LINE) && CHECKS.planLineBox(planNoVenue, NO_VENUE_LINE, true),
     JSON.stringify(classesOf(plan))
   );
   assert(
@@ -1095,6 +1135,13 @@ async function layerD() {
     'D6 CONTROL: Moment 3’s top row otherwise as at the base (8a4f1bc): W10, the event’s details and their order unchanged, only the line’s prop',
     // [[GTC-414]]: the row compared is the file's at 21a9577, not the working folder's.
     CHECKS.topRowKept(stripComments(atT0(M3_VIEW)), stripComments(atRef(BASE, M3_VIEW)))
+  );
+  // [[GTC-475]] (23 Nov 2026): added after the look at 390 found Moment 3's door 40 px tall. See CHECKS.rowDoorTap.
+  assert(
+    'D',
+    'D7 Moment 3, no venue: "Add the venue" is a 44 px tall box below md (inline-flex, min-h-[44px], no pulled-back margin or padding) and as before from md up (md:-my-2.5 md:py-2.5); same words and text classes',
+    CHECKS.rowDoorTap(m3NoVenue),
+    (/<a data-add-venue=""[^>]*>/.exec(m3NoVenue) || ['(no door)'])[0]
   );
 }
 

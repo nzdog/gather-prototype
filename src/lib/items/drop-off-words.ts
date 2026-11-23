@@ -21,9 +21,25 @@ export const DROP_OFF_WORDS = {
   BY: 'by',
   /** No venue yet. */
   NO_VENUE: 'Drop off: the venue hasn’t been added yet.',
+  /** [[GTC-475]] item 5 (founder ruling F, 23 Nov 2026): the door beside the line above, when there is no venue. */
+  ADD_VENUE: 'Add the venue',
 } as const;
 
+/**
+ * [[GTC-475]] item 5 — WHERE "Add the venue" LANDS, no new route. The venue is set in one place only: the Edit
+ * event box on the old dashboard, at its step 3 of 3 ("Venue Details"). The door goes to that dashboard with
+ * `?edit=venue`; the dashboard reads it once on arrival, opens the box at that step and takes the setting out
+ * of the address again. Client-safe, like the rest of this file.
+ */
+export const EDIT_PARAM = 'edit';
+export const EDIT_VENUE = 'venue';
+export function addVenueHref(eventId: string): string {
+  return `/plan/${eventId}?${EDIT_PARAM}=${EDIT_VENUE}`;
+}
+
 export interface DropOffFacts {
+  /** [[GTC-475]]: the event's id, so the no-venue line can have its door (the guest page passes none). */
+  id?: string | null;
   venueName?: string | null;
   venueTimingStart?: string | null;
   venueTimingEnd?: string | null;

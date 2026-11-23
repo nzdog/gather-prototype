@@ -206,9 +206,15 @@ async function runTests() {
     );
 
     const list = readFileSync(join(process.cwd(), 'src/app/plan/events/page.tsx'), 'utf8');
+    // [[GTC-475]] (founder ruling B, 23 Nov 2026, 'Yes to the three flips'): GTC-235's second door, the
+    // "Invites & people" button, is gone from Your Events. A V2 row is still not a one-way door: the row opens
+    // the event through eventHomeHref, and the old dashboard stays reachable from the board, "Change these
+    // details" and Moment 2's plan view. So this asks for the row's rule and for the button's absence.
     assert(
-      'the events list is no longer a one-way door for V2 rows',
-      /event\.setup && !event\.archived/.test(list)
+      'the events list is no longer a one-way door for V2 rows (GTC-475: the row opens through eventHomeHref; the second door is gone)',
+      /router\.push\(\s*eventHomeHref\(/.test(list) &&
+        !/event\.setup && !event\.archived/.test(list) &&
+        !/Invites &amp; people/.test(list)
     );
   }
 

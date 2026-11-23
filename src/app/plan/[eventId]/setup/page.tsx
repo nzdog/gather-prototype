@@ -1560,19 +1560,28 @@ function EventSetupFlow() {
               </div>
             </div>
           </div>
-          {/* [[GTC-396]] item 3: the one "Save & move on →", across the foot of both columns and so
+          {/* [[GTC-396]] item 3: the one move-on button, across the foot of both columns and so
               directly under the list; the filled accent style "Add a crowd" uses; the form's own
-              handler, words and enabled rule, shown as before (not while a household is being
-              edited). On a phone it is the same button under the stacked columns. */}
+              handler, enabled rule and saving flag, shown as before (not while a household is being
+              edited). On a phone it is the same button under the stacked columns.
+              [[GTC-475]] item 3 (founder, 23 Nov 2026, ruling D2): its words are now "Save & move on
+              to items →", with his line "Finished with people for now?" as text just above it, tied
+              to the button as its description. */}
           {!editingHousehold && (
-            <button
-              type="button"
-              onClick={() => void moment1MoveOnRef.current?.()}
-              disabled={moment1Saving}
-              className="mt-6 w-full py-3 text-base font-semibold text-white bg-accent rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-50"
-            >
-              Save & move on →
-            </button>
+            <div className="mt-6">
+              <p id="moment1-move-on-line" className="mb-2 text-base text-gray-700">
+                Finished with people for now?
+              </p>
+              <button
+                type="button"
+                onClick={() => void moment1MoveOnRef.current?.()}
+                disabled={moment1Saving}
+                aria-describedby="moment1-move-on-line"
+                className="w-full py-3 text-base font-semibold text-white bg-accent rounded-lg hover:bg-accent-dark transition-colors disabled:opacity-50"
+              >
+                Save & move on to items →
+              </button>
+            </div>
           )}
         </div>
       </div>
